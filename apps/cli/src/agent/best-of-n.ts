@@ -201,9 +201,50 @@ async function git(args: string[], cwd: string): Promise<string> {
     });
     return stdout.trim();
   } catch (err) {
-    // `git apply`/`diff --no-index` exit non-zero with useful stdout; surface it.
+    // Some plumbing (e.g. `diff --no-index`) exits non-zero with useful stdout;
+    // surface it. Callers that need to know whether the command SUCCEEDED must
+    // not use this helper — it cannot distinguish "failed" from "no output".
     const e = err as { stdout?: string };
     return typeof e.stdout === "string" ? e.stdout.trim() : "";
+  }
+}
+
+/** Outcome of applying one candidate's patch to the real working tree. */
+interface ApplyResult {
+  ok: boolean;
+  /** git's combined diagnostics when the apply failed; "" on success. */
+  message: string;
+}
+
+/**
+ * Apply a patch file with `git apply --3way`, deciding success from the EXIT
+ * CODE. `git apply` writes its diagnostics to stderr and leaves stdout empty, so
+ * scanning stdout for an error string cannot tell a clean apply from a rejected
+ * one — every rejection would read as a success and the ranked-fallback loop
+ * would never run.
+ */
+async function gitApplyPatch(
+  patchFile: string,
+  cwd: string,
+): Promise<ApplyResult> {
+  try {
+    await execFileAsync("git", ["apply", "--3way", patchFile], {
+      cwd,
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    return { ok: true, message: "" };
+  } catch (err) {
+    const e = err as { stdout?: string; stderr?: string; message?: string };
+    const message =
+      [e.stderr, e.stdout]
+        .filter(
+          (s): s is string => typeof s === "string" && s.trim().length > 0,
+        )
+        .join("\n")
+        .trim() ||
+      e.message ||
+      "git apply failed";
+    return { ok: false, message };
   }
 }
 
@@ -406,8 +447,8 @@ export function routeSelection(
   if (decision.method === "selector-needed") {
     return {
       useSelector: true,
-      pool: candidates.filter((c) =>
-        decision.candidates.includes(candidates.indexOf(c)),
+      pool: candidates.filter((_c, index) =>
+        decision.candidates.includes(index),
       ),
     };
   }
@@ -826,8 +867,8 @@ async function runForkMode(opts: BestOfNOptions): Promise<BestOfNResult> {
       );
       emit({ type: "select-start", viable: viable.length });
 
-      const evidence: CandidateEvidence[] = candidates.map((c) => ({
-        index: candidates.indexOf(c),
+      const evidence: CandidateEvidence[] = candidates.map((c, index) => ({
+        index,
         diff: c.diff,
         testsPassed: c.testsPassed ?? null,
         evidenceScore: c.testsPassed === true ? 100 : c.testOutput ? 40 : 0,
@@ -916,9 +957,9 @@ async function runForkMode(opts: BestOfNOptions): Promise<BestOfNResult> {
                 : candidate.diff + "\n",
               "utf8",
             );
-            const out = await git(["apply", "--3way", patchFile], opts.cwd);
-            if (/error|cannot apply|does not apply/i.test(out)) {
-              lastError = out || "git apply failed";
+            const applied = await gitApplyPatch(patchFile, opts.cwd);
+            if (!applied.ok) {
+              lastError = applied.message;
               continue;
             }
             appliedCandidate = candidate;
@@ -1032,8 +1073,8 @@ async function runIndependentMode(
     );
     emit({ type: "select-start", viable: viable.length });
 
-    const evidence: CandidateEvidence[] = candidates.map((c) => ({
-      index: candidates.indexOf(c),
+    const evidence: CandidateEvidence[] = candidates.map((c, index) => ({
+      index,
       diff: c.diff,
       testsPassed: c.testsPassed ?? null,
       evidenceScore: c.testsPassed === true ? 100 : c.testOutput ? 40 : 0,
@@ -1119,9 +1160,9 @@ async function runIndependentMode(
               : candidate.diff + "\n",
             "utf8",
           );
-          const out = await git(["apply", "--3way", patchFile], opts.cwd);
-          if (/error|cannot apply|does not apply/i.test(out)) {
-            lastError = out || "git apply failed";
+          const applied = await gitApplyPatch(patchFile, opts.cwd);
+          if (!applied.ok) {
+            lastError = applied.message;
             continue;
           }
           appliedCandidate = candidate;

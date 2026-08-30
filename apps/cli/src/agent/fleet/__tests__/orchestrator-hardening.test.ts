@@ -30,7 +30,12 @@ vi.mock("../../../lib/config.js", () => ({
 }));
 
 beforeEach(() => {
-  for (const key of ["OXAGEN_LLM_FAST", "OXAGEN_LLM_BALANCED", "OXAGEN_LLM_PRECISE", "OXAGEN_MODEL"]) {
+  for (const key of [
+    "OXAGEN_LLM_FAST",
+    "OXAGEN_LLM_BALANCED",
+    "OXAGEN_LLM_PRECISE",
+    "OXAGEN_MODEL",
+  ]) {
     delete process.env[key];
   }
 });
@@ -64,7 +69,10 @@ const flush = async (): Promise<void> => {
   for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r));
 };
 
-function deferred<T = void>(): { promise: Promise<T>; resolve: (v: T) => void } {
+function deferred<T = void>(): {
+  promise: Promise<T>;
+  resolve: (v: T) => void;
+} {
   let resolve!: (v: T) => void;
   const promise = new Promise<T>((res) => {
     resolve = res;
@@ -97,8 +105,15 @@ describe("Fleet hardening — a throwing teardown never wedges the fleet", () =>
       cleanupAll: async () => undefined,
     };
     const schedErrors: Array<{ phase: string; message: string }> = [];
-    const fleet = new Fleet({ cwd: "/x", runner: okRunner, concurrency: 1, isolation });
-    fleet.on("scheduler-error", (e: { phase: string; message: string }) => schedErrors.push(e));
+    const fleet = new Fleet({
+      cwd: "/x",
+      runner: okRunner,
+      concurrency: 1,
+      isolation,
+    });
+    fleet.on("scheduler-error", (e: { phase: string; message: string }) =>
+      schedErrors.push(e),
+    );
 
     // Two independent tasks, one slot: the second only runs if the first's
     // slot was released despite dispose() throwing in its finally.
@@ -119,12 +134,15 @@ describe("Fleet hardening — a throwing teardown never wedges the fleet", () =>
       list: () => [],
       updateTask: () => undefined,
       setStatus: (_id, status) => {
-        if (status === "completed" || status === "failed") throw new Error("disk full");
+        if (status === "completed" || status === "failed")
+          throw new Error("disk full");
       },
     };
     const schedErrors: Array<{ phase: string; message: string }> = [];
     const fleet = new Fleet({ cwd: "/x", runner: okRunner, store });
-    fleet.on("scheduler-error", (e: { phase: string; message: string }) => schedErrors.push(e));
+    fleet.on("scheduler-error", (e: { phase: string; message: string }) =>
+      schedErrors.push(e),
+    );
 
     fleet.loadPlan(plan([task("a")]));
     await fleet.start(); // must resolve, not hang
@@ -140,7 +158,11 @@ describe("Fleet hardening — dynamic concurrencyProvider", () => {
     for (const id of ["a", "b", "c"]) gates.set(id, deferred());
     const runner: AgentRunner = async (o) => {
       await gates.get(o.prompt)!.promise;
-      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "ok",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
 
     let cap = 2;
@@ -182,7 +204,11 @@ describe("Fleet hardening — dynamic concurrencyProvider", () => {
     for (const id of ["a", "b", "c", "d", "e"]) gates.set(id, deferred());
     const runner: AgentRunner = async (o) => {
       await gates.get(o.prompt)!.promise;
-      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "ok",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
     // Provider asks for 99 but the ceiling is 3 → never more than 3 running.
     const fleet = new Fleet({
@@ -205,7 +231,11 @@ describe("Fleet hardening — dynamic concurrencyProvider", () => {
     for (const id of ["a", "b", "c"]) gates.set(id, deferred());
     const runner: AgentRunner = async (o) => {
       await gates.get(o.prompt)!.promise;
-      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "ok",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
     const fleet = new Fleet({
       cwd: "/x",

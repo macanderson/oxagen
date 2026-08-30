@@ -28,7 +28,10 @@ export const MAX_TRANSCRIPT_MESSAGES = 500;
  * Return at most `max` entries, keeping the most recent (drops from the front).
  * Returns the input array unchanged when it is already within `max`.
  */
-export function capTranscript<T>(list: T[], max: number = MAX_TRANSCRIPT_MESSAGES): T[] {
+export function capTranscript<T>(
+  list: T[],
+  max: number = MAX_TRANSCRIPT_MESSAGES,
+): T[] {
   if (max <= 0) return [];
   if (list.length <= max) return list;
   return list.slice(list.length - max);

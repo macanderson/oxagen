@@ -19,7 +19,11 @@ vi.mock("../prompt-enhancer.js", () => ({
 
 import { Fleet, type AgentRunner } from "../fleet/orchestrator.js";
 import { runFleetHeadless } from "../fleet/headless.js";
-import type { Isolation, IntegrationResult, Checkpoint } from "../fleet/git-isolation.js";
+import type {
+  Isolation,
+  IntegrationResult,
+  Checkpoint,
+} from "../fleet/git-isolation.js";
 import type { Plan, Task } from "../fleet/types.js";
 
 function task(id: string, over: Partial<Task> = {}): Task {
@@ -42,7 +46,10 @@ function plan(id: string, goal: string, tasks: Task[]): Plan {
   return { id, goal, createdAt: 1, tasks, status: "draft" };
 }
 
-function deferred<T = void>(): { promise: Promise<T>; resolve: (v: T) => void } {
+function deferred<T = void>(): {
+  promise: Promise<T>;
+  resolve: (v: T) => void;
+} {
   let resolve!: (v: T) => void;
   const promise = new Promise<T>((res) => {
     resolve = res;
@@ -55,9 +62,15 @@ const flush = async (): Promise<void> => {
 };
 
 /** Collects each JSONL line, pre-parsed, in emission order. */
-function lineSink(): { write: (line: string) => void; events: Array<Record<string, unknown>> } {
+function lineSink(): {
+  write: (line: string) => void;
+  events: Array<Record<string, unknown>>;
+} {
   const events: Array<Record<string, unknown>> = [];
-  return { write: (line) => events.push(JSON.parse(line) as Record<string, unknown>), events };
+  return {
+    write: (line) => events.push(JSON.parse(line) as Record<string, unknown>),
+    events,
+  };
 }
 
 // process is a shared EventEmitter across the whole worker — always let
@@ -76,7 +89,10 @@ describe("runFleetHeadless", () => {
       usage: { inputTokens: 10, outputTokens: 5 },
     });
     const fleet = new Fleet({ cwd: "/x", runner, concurrency: 4 });
-    const p = plan("p1", "ship the thing", [task("a"), task("b", { dependsOn: ["a"] })]);
+    const p = plan("p1", "ship the thing", [
+      task("a"),
+      task("b", { dependsOn: ["a"] }),
+    ]);
 
     const sink = lineSink();
     const snap = await runFleetHeadless({
@@ -102,8 +118,12 @@ describe("runFleetHeadless", () => {
     expect(statusesFor("b")).toEqual(["queued", "running", "done"]);
     // b's "running" event must come after a's "done" — proves the JSONL
     // stream reflects the real dependency order, not just insertion order.
-    const bRunningIdx = taskLines.findIndex((e) => e["taskId"] === "b" && e["status"] === "running");
-    const aDoneIdx = taskLines.findIndex((e) => e["taskId"] === "a" && e["status"] === "done");
+    const bRunningIdx = taskLines.findIndex(
+      (e) => e["taskId"] === "b" && e["status"] === "running",
+    );
+    const aDoneIdx = taskLines.findIndex(
+      (e) => e["taskId"] === "a" && e["status"] === "done",
+    );
     expect(aDoneIdx).toBeLessThan(bRunningIdx);
 
     const summary = sink.events.at(-1);
@@ -120,7 +140,11 @@ describe("runFleetHeadless", () => {
   });
 
   it("runs a fleet with a plan already loaded (no `plan` callback) and emits no plan line", async () => {
-    const runner: AgentRunner = async () => ({ text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } });
+    const runner: AgentRunner = async () => ({
+      text: "ok",
+      steps: 1,
+      usage: { inputTokens: 1, outputTokens: 1 },
+    });
     const fleet = new Fleet({ cwd: "/x", runner });
     fleet.loadPlan(plan("p2", "g", [task("solo")]));
 
@@ -136,7 +160,12 @@ describe("runFleetHeadless", () => {
     const iso: Isolation = {
       init: async () => undefined,
       spawn: async (id) => `/wt/${id}`,
-      checkpoint: async (id): Promise<Checkpoint> => ({ taskId: id, hash: "h", ref: "r", message: "m" }),
+      checkpoint: async (id): Promise<Checkpoint> => ({
+        taskId: id,
+        hash: "h",
+        ref: "r",
+        message: "m",
+      }),
       recordedCommits: () => [],
       integrate: async (id): Promise<IntegrationResult> => ({
         ok: false,
@@ -148,22 +177,39 @@ describe("runFleetHeadless", () => {
       dispose: async () => undefined,
       cleanupAll: async () => undefined,
     };
-    const runner: AgentRunner = async () => ({ text: "x", steps: 1, usage: {} });
-    const fleet = new Fleet({ cwd: "/repo", isolation: iso, runner, memory: null });
+    const runner: AgentRunner = async () => ({
+      text: "x",
+      steps: 1,
+      usage: {},
+    });
+    const fleet = new Fleet({
+      cwd: "/repo",
+      isolation: iso,
+      runner,
+      memory: null,
+    });
     fleet.loadPlan(plan("p3", "g", [task("t1")]));
 
     const sink = lineSink();
     await runFleetHeadless({ fleet, write: sink.write });
 
     const conflict = sink.events.find((e) => e["type"] === "conflict");
-    expect(conflict).toMatchObject({ taskId: "t1", ok: false, conflicts: ["base.txt"] });
+    expect(conflict).toMatchObject({
+      taskId: "t1",
+      ok: false,
+      conflicts: ["base.txt"],
+    });
   });
 
   it("cancel-drains on SIGINT: emits a draining line, stops new dispatch, and still finishes the in-flight task cleanly", async () => {
     const gate = deferred();
     const runner: AgentRunner = async (o) => {
       if (o.prompt === "running") await gate.promise;
-      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "ok",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
     // concurrency 1: "running" starts immediately, "queued" never gets a slot.
     const fleet = new Fleet({ cwd: "/x", runner, concurrency: 1 });
@@ -177,13 +223,17 @@ describe("runFleetHeadless", () => {
     await flush();
 
     expect(sink.events.some((e) => e["type"] === "draining")).toBe(true);
-    expect(fleet.snapshot().agents.find((a) => a.taskId === "queued")?.status).toBe("cancelled");
+    expect(
+      fleet.snapshot().agents.find((a) => a.taskId === "queued")?.status,
+    ).toBe("cancelled");
 
     gate.resolve(undefined);
     const snap = await resultPromise;
 
     expect(snap.doneCount).toBe(1); // "running" finished normally
-    expect(snap.agents.find((a) => a.taskId === "queued")?.status).toBe("cancelled");
+    expect(snap.agents.find((a) => a.taskId === "queued")?.status).toBe(
+      "cancelled",
+    );
     const summary = sink.events.at(-1);
     expect(summary).toMatchObject({ type: "summary", doneCount: 1 });
   });

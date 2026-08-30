@@ -25,7 +25,11 @@ describe("summarizeChecks", () => {
   it("is failing when any check failed, and lists exactly the failures", () => {
     const items: CheckRollupItem[] = [
       { name: "test", conclusion: "SUCCESS" },
-      { name: "checks", conclusion: "FAILURE", detailsUrl: "https://ci/checks" },
+      {
+        name: "checks",
+        conclusion: "FAILURE",
+        detailsUrl: "https://ci/checks",
+      },
       { name: "lint", conclusion: "TIMED_OUT" },
       { name: "e2e", conclusion: null, state: null }, // pending — doesn't hide the failure
     ];
@@ -33,7 +37,9 @@ describe("summarizeChecks", () => {
     expect(s.state).toBe("failing");
     expect(s.failed).toBe(2);
     expect(s.failing.map((f) => f.name).sort()).toEqual(["checks", "lint"]);
-    expect(s.failing.find((f) => f.name === "checks")?.url).toBe("https://ci/checks");
+    expect(s.failing.find((f) => f.name === "checks")?.url).toBe(
+      "https://ci/checks",
+    );
   });
 
   it("is pending when nothing failed but some are still running", () => {

@@ -25,7 +25,7 @@ import { join } from "node:path";
 import { extractCandidates, enhancePrompt } from "../prompt-enhancer.js";
 import { clearCodeGraphCache } from "../code-graph.js";
 import type { FleetMemory } from "../fleet/memory.js";
-import type { MemoryRecord } from "../fleet/types.js";
+import type { MemoryRecord } from "../fleet/memory.js";
 
 vi.mock("../env.js", () => ({
   ensureGatewayKey: () => null,
@@ -64,7 +64,10 @@ beforeAll(async () => {
   await fs.mkdir(join(root, "sub"), { recursive: true });
   await fs.writeFile(
     join(root, "sub", "gamma.ts"),
-    ['import { BetaEngine } from "../beta.js";', "export const g = new BetaEngine();"].join("\n"),
+    [
+      'import { BetaEngine } from "../beta.js";',
+      "export const g = new BetaEngine();",
+    ].join("\n"),
   );
 });
 
@@ -120,8 +123,16 @@ describe("enhancePrompt", () => {
       files: ["beta.ts"],
       outcome: "success",
     };
-    const memory: FleetMemory = { record: () => undefined, recall: () => [lesson], all: () => [] };
-    const res = await enhancePrompt({ prompt: "touch beta.ts", cwd: root, memory });
+    const memory: FleetMemory = {
+      record: () => undefined,
+      recall: () => [lesson],
+      all: () => [],
+    };
+    const res = await enhancePrompt({
+      prompt: "touch beta.ts",
+      cwd: root,
+      memory,
+    });
     expect(res.lessons).toHaveLength(1);
     // Header text comes from the shared @oxagen/agent-engine enhancePrompt this
     // adapter now delegates to, not a CLI-local "Lessons from past work" string.
@@ -145,7 +156,11 @@ describe("enhancePrompt", () => {
   });
 
   it("is a no-op when nothing is found", async () => {
-    const res = await enhancePrompt({ prompt: "hello there friend", cwd: root, memory: noMemory });
+    const res = await enhancePrompt({
+      prompt: "hello there friend",
+      cwd: root,
+      memory: noMemory,
+    });
     expect(res.context).toBe("");
     expect(res.prompt).toBe("hello there friend");
     expect(res.resolved).toHaveLength(0);
@@ -168,7 +183,9 @@ describe("enhancePrompt", () => {
       if (operation === "semantic_search") {
         return "apps/cli/oxagen.config.ts (0.81)\napps/cli/src/lib/config.ts (0.63)";
       }
-      return operation === "search" ? "No symbols matching." : "No file matching.";
+      return operation === "search"
+        ? "No symbols matching."
+        : "No file matching.";
     });
 
     const res = await enhancePrompt({
@@ -191,16 +208,19 @@ describe("enhancePrompt", () => {
   });
 
   it("skips the semantic fallback once literal candidates already resolved enough", async () => {
-    const queryFn = vi.fn(async (_cwd: string, operation: string, q: string) => {
-      if (operation === "search" && q === "computeAlpha") {
-        return "function computeAlpha — alpha.ts:1";
-      }
-      if (operation === "file_symbols" && q === "beta.ts") {
-        return "beta.ts:\nclass BetaEngine — beta.ts:2";
-      }
-      if (operation === "semantic_search") return "should-not-be-used.ts (0.99)";
-      return "No file matching.";
-    });
+    const queryFn = vi.fn(
+      async (_cwd: string, operation: string, q: string) => {
+        if (operation === "search" && q === "computeAlpha") {
+          return "function computeAlpha — alpha.ts:1";
+        }
+        if (operation === "file_symbols" && q === "beta.ts") {
+          return "beta.ts:\nclass BetaEngine — beta.ts:2";
+        }
+        if (operation === "semantic_search")
+          return "should-not-be-used.ts (0.99)";
+        return "No file matching.";
+      },
+    );
 
     const res = await enhancePrompt({
       prompt: "where is `computeAlpha` defined and what is in `beta.ts`?",
@@ -211,6 +231,8 @@ describe("enhancePrompt", () => {
 
     expect(res.usedSemanticFallback).toBe(false);
     expect(res.context).not.toContain("should-not-be-used.ts");
-    expect(queryFn.mock.calls.some((call) => call[1] === "semantic_search")).toBe(false);
+    expect(
+      queryFn.mock.calls.some((call) => call[1] === "semantic_search"),
+    ).toBe(false);
   });
 });

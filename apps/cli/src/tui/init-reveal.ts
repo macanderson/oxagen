@@ -15,7 +15,10 @@
  */
 import { WORDMARK } from "./banner.js";
 
-export const WORDMARK_WIDTH = Math.max(0, ...WORDMARK.map((line) => line.length));
+export const WORDMARK_WIDTH = Math.max(
+  0,
+  ...WORDMARK.map((line) => line.length),
+);
 
 /**
  * Every WORDMARK line, truncated to `revealedCols` characters and padded back

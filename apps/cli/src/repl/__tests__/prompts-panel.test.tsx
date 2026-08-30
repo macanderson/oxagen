@@ -29,9 +29,21 @@ async function until(
 }
 
 const PROMPTS: SavedPrompt[] = [
-  { name: "code-review", description: "review the current diff", body: "Please review this diff." },
-  { name: "explain", description: "explain a file", body: "Explain what this file does." },
-  { name: "long-doc", description: "a long prompt body", body: Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n") },
+  {
+    name: "code-review",
+    description: "review the current diff",
+    body: "Please review this diff.",
+  },
+  {
+    name: "explain",
+    description: "explain a file",
+    body: "Explain what this file does.",
+  },
+  {
+    name: "long-doc",
+    description: "a long prompt body",
+    body: Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n"),
+  },
 ];
 
 function renderPanel(
@@ -49,9 +61,13 @@ function renderPanel(
 describe("filterPrompts", () => {
   it("returns all prompts for an empty query and filters by name + description", () => {
     expect(filterPrompts(PROMPTS, "").length).toBe(3);
-    expect(filterPrompts(PROMPTS, "review").map((p) => p.name)).toEqual(["code-review"]);
+    expect(filterPrompts(PROMPTS, "review").map((p) => p.name)).toEqual([
+      "code-review",
+    ]);
     // Matches the description too ("explain a file").
-    expect(filterPrompts(PROMPTS, "file").map((p) => p.name)).toEqual(["explain"]);
+    expect(filterPrompts(PROMPTS, "file").map((p) => p.name)).toEqual([
+      "explain",
+    ]);
     expect(filterPrompts(PROMPTS, "ZZZ")).toEqual([]);
   });
 });
@@ -139,7 +155,7 @@ describe("PromptsPanel", () => {
     stdin.write(BACKSPACE);
     stdin.write(BACKSPACE);
     stdin.write(BACKSPACE);
-    await until(() => (stripAnsi(lastFrame() ?? "")).includes("code-review"));
+    await until(() => stripAnsi(lastFrame() ?? "").includes("code-review"));
   });
 
   it("shows a no-match state for a query that matches nothing", async () => {

@@ -20,7 +20,10 @@ import type { SessionMetaView, SessionStore } from "../../sessions/store.js";
 interface FakeStore {
   store: SessionStore;
   /** Deliver an event to the tail opened for `sid` (no-op if none / stopped). */
-  emit(sid: string, event: Partial<SessionEvent> & Pick<SessionEvent, "type">): void;
+  emit(
+    sid: string,
+    event: Partial<SessionEvent> & Pick<SessionEvent, "type">,
+  ): void;
   /** Push a roster snapshot to the single watchSessions subscriber. */
   pushRoster(sessions: SessionMetaView[]): void;
   tailStops: string[];
@@ -28,7 +31,10 @@ interface FakeStore {
 }
 
 function makeFakeStore(): FakeStore {
-  const tails = new Map<string, { cb: (e: SessionEvent) => void; stopped: boolean }>();
+  const tails = new Map<
+    string,
+    { cb: (e: SessionEvent) => void; stopped: boolean }
+  >();
   const state = {
     roster: null as ((s: SessionMetaView[]) => void) | null,
     tailStops: [] as string[],
@@ -76,7 +82,9 @@ function makeFakeStore(): FakeStore {
   };
 }
 
-function metaView(over: Partial<SessionMetaView> & Pick<SessionMetaView, "sid">): SessionMetaView {
+function metaView(
+  over: Partial<SessionMetaView> & Pick<SessionMetaView, "sid">,
+): SessionMetaView {
   return {
     v: 1,
     sid: over.sid,
@@ -95,7 +103,9 @@ function metaView(over: Partial<SessionMetaView> & Pick<SessionMetaView, "sid">)
     alive: over.alive ?? true,
     derivedState: over.derivedState ?? over.state ?? "running",
     ...(over.summary !== undefined ? { summary: over.summary } : {}),
-    ...(over.lastActivity !== undefined ? { lastActivity: over.lastActivity } : {}),
+    ...(over.lastActivity !== undefined
+      ? { lastActivity: over.lastActivity }
+      : {}),
   } as SessionMetaView;
 }
 
@@ -116,10 +126,24 @@ describe("formatFoldLine", () => {
 
   it("uses ✗ for failed and ◌ for cancelled and omits zero files/cost", () => {
     expect(
-      formatFoldLine({ sid: "s-x-aaaa", title: "t", outcome: "failed", summary: "boom", fileCount: 0, costUsd: 0 }),
+      formatFoldLine({
+        sid: "s-x-aaaa",
+        title: "t",
+        outcome: "failed",
+        summary: "boom",
+        fileCount: 0,
+        costUsd: 0,
+      }),
     ).toBe('✗ aaaa "t" — failed: boom');
     expect(
-      formatFoldLine({ sid: "s-x-bbbb", title: "t", outcome: "cancelled", summary: "", fileCount: 0, costUsd: 0 }),
+      formatFoldLine({
+        sid: "s-x-bbbb",
+        title: "t",
+        outcome: "cancelled",
+        summary: "",
+        fileCount: 0,
+        costUsd: 0,
+      }),
     ).toBe('◌ bbbb "t" — cancelled');
   });
 });
@@ -179,7 +203,11 @@ describe("createBackgroundTracker — fold-back on terminal events", () => {
     tracker.add("s-1-aaaa", "fix the login bug");
     expect(tracker.runningCount()).toBe(1);
 
-    fake.emit("s-1-aaaa", { type: "diff", changedFiles: ["a.ts", "b.ts"], changedLines: 4 });
+    fake.emit("s-1-aaaa", {
+      type: "diff",
+      changedFiles: ["a.ts", "b.ts"],
+      changedLines: 4,
+    });
     fake.emit("s-1-aaaa", {
       type: "session.end",
       state: "done",
@@ -209,8 +237,14 @@ describe("createBackgroundTracker — fold-back on terminal events", () => {
     });
     tracker.reserve();
     tracker.add("s-2-bbbb", "add headers");
-    fake.emit("s-2-bbbb", { type: "error", message: "no api key", fatal: true });
-    expect(notify.mock.calls[0]?.[0]).toBe('✗ bbbb "add headers" — failed: no api key');
+    fake.emit("s-2-bbbb", {
+      type: "error",
+      message: "no api key",
+      fatal: true,
+    });
+    expect(notify.mock.calls[0]?.[0]).toBe(
+      '✗ bbbb "add headers" — failed: no api key',
+    );
     expect(tracker.runningCount()).toBe(0);
     tracker.dispose();
   });
@@ -232,7 +266,9 @@ describe("createBackgroundTracker — fold-back on terminal events", () => {
       durationMs: 1,
       usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
     });
-    fake.pushRoster([metaView({ sid: "s-3-cccc", derivedState: "done", summary: "ok" })]);
+    fake.pushRoster([
+      metaView({ sid: "s-3-cccc", derivedState: "done", summary: "ok" }),
+    ]);
     expect(notify).toHaveBeenCalledTimes(1);
     tracker.dispose();
   });
@@ -250,12 +286,28 @@ describe("createBackgroundTracker — roster", () => {
     tracker.reserve();
     tracker.add("s-mine-dddd", "my task");
     fake.pushRoster([
-      metaView({ sid: "s-mine-dddd", title: "my task", derivedState: "running", lastActivity: "wrote a.ts", usage: { inputTokens: 0, outputTokens: 0, costUsd: 0.02 } }),
-      metaView({ sid: "s-stranger-eeee", title: "not mine", derivedState: "running" }),
+      metaView({
+        sid: "s-mine-dddd",
+        title: "my task",
+        derivedState: "running",
+        lastActivity: "wrote a.ts",
+        usage: { inputTokens: 0, outputTokens: 0, costUsd: 0.02 },
+      }),
+      metaView({
+        sid: "s-stranger-eeee",
+        title: "not mine",
+        derivedState: "running",
+      }),
     ]);
     const last = rosters.at(-1)!;
     expect(last).toHaveLength(1);
-    expect(last[0]).toMatchObject({ sid: "s-mine-dddd", title: "my task", state: "running", detail: "wrote a.ts", costUsd: 0.02 });
+    expect(last[0]).toMatchObject({
+      sid: "s-mine-dddd",
+      title: "my task",
+      state: "running",
+      detail: "wrote a.ts",
+      costUsd: 0.02,
+    });
     tracker.dispose();
   });
 

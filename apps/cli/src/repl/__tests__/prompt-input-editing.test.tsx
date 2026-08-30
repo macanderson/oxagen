@@ -30,7 +30,9 @@ describe("PromptInput — cursor movement", () => {
     // the plain buffer content, not the ANSI reverse-video wrapping the
     // renderer puts around whichever character the cursor currently sits on.
     const calls: string[] = [];
-    const { stdin, unmount } = render(<PromptInput onSubmit={(t) => calls.push(t)} busy={false} />);
+    const { stdin, unmount } = render(
+      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} />,
+    );
     stdin.write("ac");
     await tick();
     stdin.write(ARROW_LEFT); // cursor between 'a' and 'c'
@@ -45,7 +47,9 @@ describe("PromptInput — cursor movement", () => {
 
   it("Right arrow moves the cursor back toward the end", async () => {
     const calls: string[] = [];
-    const { stdin, unmount } = render(<PromptInput onSubmit={(t) => calls.push(t)} busy={false} />);
+    const { stdin, unmount } = render(
+      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} />,
+    );
     stdin.write("ac");
     await tick();
     stdin.write(ARROW_LEFT);
@@ -64,7 +68,9 @@ describe("PromptInput — cursor movement", () => {
 
   it("Right arrow is clamped at the end of the buffer (no overrun)", async () => {
     const calls: string[] = [];
-    const { stdin, unmount } = render(<PromptInput onSubmit={(t) => calls.push(t)} busy={false} />);
+    const { stdin, unmount } = render(
+      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} />,
+    );
     stdin.write("ab");
     await tick();
     stdin.write(ARROW_RIGHT); // already at the end — no-op
@@ -81,7 +87,9 @@ describe("PromptInput — cursor movement", () => {
 
   it("Backspace removes the character before the cursor, not always the last one", async () => {
     const calls: string[] = [];
-    const { stdin, unmount } = render(<PromptInput onSubmit={(t) => calls.push(t)} busy={false} />);
+    const { stdin, unmount } = render(
+      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} />,
+    );
     stdin.write("abc");
     await tick();
     stdin.write(ARROW_LEFT); // cursor between 'b' and 'c'
@@ -96,7 +104,9 @@ describe("PromptInput — cursor movement", () => {
 
   it("Delete removes the character after the cursor, leaving the cursor in place", async () => {
     const calls: string[] = [];
-    const { stdin, unmount } = render(<PromptInput onSubmit={(t) => calls.push(t)} busy={false} />);
+    const { stdin, unmount } = render(
+      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} />,
+    );
     stdin.write("abc");
     await tick();
     stdin.write(HOME); // cursor before 'a'
@@ -111,7 +121,9 @@ describe("PromptInput — cursor movement", () => {
 
   it("Home jumps the cursor to the start and End back to the end", async () => {
     const calls: string[] = [];
-    const { stdin, unmount } = render(<PromptInput onSubmit={(t) => calls.push(t)} busy={false} />);
+    const { stdin, unmount } = render(
+      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} />,
+    );
     stdin.write("bc");
     await tick();
     stdin.write(HOME);
@@ -151,7 +163,9 @@ describe("PromptInput — basic multiline (Ctrl-J)", () => {
 
   it("Enter submits the full multi-line buffer, newline included", async () => {
     const calls: string[] = [];
-    const { stdin, unmount } = render(<PromptInput onSubmit={(t) => calls.push(t)} busy={false} />);
+    const { stdin, unmount } = render(
+      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} />,
+    );
     stdin.write("line one");
     await tick();
     stdin.write(CTRL_J);
@@ -166,7 +180,9 @@ describe("PromptInput — basic multiline (Ctrl-J)", () => {
 
   it("a newline can be inserted mid-buffer via cursor movement, not just at the end", async () => {
     const calls: string[] = [];
-    const { stdin, unmount } = render(<PromptInput onSubmit={(t) => calls.push(t)} busy={false} />);
+    const { stdin, unmount } = render(
+      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} />,
+    );
     stdin.write("ab");
     await tick();
     stdin.write(ARROW_LEFT); // cursor between 'a' and 'b'

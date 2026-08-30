@@ -81,19 +81,33 @@ describe("adoptOrphans", () => {
     const o2 = await makeOrphan();
     await makeLive("done"); // ignored
 
-    const res = await adoptOrphans({ cwd: root, store, resume: resumerVia(store) });
+    const res = await adoptOrphans({
+      cwd: root,
+      store,
+      resume: resumerVia(store),
+    });
 
-    expect(res.adopted.map((a) => a.sid).sort()).toEqual([o1.sid, o2.sid].sort());
+    expect(res.adopted.map((a) => a.sid).sort()).toEqual(
+      [o1.sid, o2.sid].sort(),
+    );
     expect(res.adopted.every((a) => a.newSid && a.newSid !== a.sid)).toBe(true);
     expect(res.skipped).toEqual([]);
   });
 
   it("is idempotent — a second run never re-forks an already-adopted orphan", async () => {
     const o1 = await makeOrphan();
-    const first = await adoptOrphans({ cwd: root, store, resume: resumerVia(store) });
+    const first = await adoptOrphans({
+      cwd: root,
+      store,
+      resume: resumerVia(store),
+    });
     expect(first.adopted).toHaveLength(1);
 
-    const second = await adoptOrphans({ cwd: root, store, resume: resumerVia(store) });
+    const second = await adoptOrphans({
+      cwd: root,
+      store,
+      resume: resumerVia(store),
+    });
     expect(second.adopted).toEqual([]);
     expect(second.skipped).toContain(o1.sid);
   });
@@ -145,7 +159,11 @@ describe("adoptOrphans", () => {
     w.patchMeta({ pid: 999_999_999 });
     await w.flush();
 
-    const res = await adoptOrphans({ cwd: root, store, resume: resumerVia(store) });
+    const res = await adoptOrphans({
+      cwd: root,
+      store,
+      resume: resumerVia(store),
+    });
     expect(res.adopted.map((a) => a.sid)).toEqual([child.sid]);
     expect(res.skipped).toContain(o.sid);
   });
@@ -153,13 +171,22 @@ describe("adoptOrphans", () => {
   it("returns empty when there are no orphans", async () => {
     await makeLive("running");
     await makeLive("done");
-    const res = await adoptOrphans({ cwd: root, store, resume: resumerVia(store) });
+    const res = await adoptOrphans({
+      cwd: root,
+      store,
+      resume: resumerVia(store),
+    });
     expect(res).toEqual({ adopted: [], skipped: [] });
   });
 
   it("adopts nothing when the limit is 0", async () => {
     const o = await makeOrphan();
-    const res = await adoptOrphans({ cwd: root, store, resume: resumerVia(store), limit: 0 });
+    const res = await adoptOrphans({
+      cwd: root,
+      store,
+      resume: resumerVia(store),
+      limit: 0,
+    });
     expect(res.adopted).toEqual([]);
     expect(res.skipped).toEqual([o.sid]);
   });

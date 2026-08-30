@@ -93,9 +93,10 @@ export function queryTerminalBackground(
       const onData = (chunk: Buffer | string): void => {
         buffer += chunk.toString("utf8");
         // Reply shape: ESC ] 11 ; rgb:RRRR/GGGG/BBBB (ST|BEL)
-        const match = /rgb:([0-9a-fA-F]{2,4})\/([0-9a-fA-F]{2,4})\/([0-9a-fA-F]{2,4})/.exec(
-          buffer,
-        );
+        const match =
+          /rgb:([0-9a-fA-F]{2,4})\/([0-9a-fA-F]{2,4})\/([0-9a-fA-F]{2,4})/.exec(
+            buffer,
+          );
         if (!match) return;
         const [, rHex, gHex, bHex] = match;
         if (!rHex || !gHex || !bHex) return;
@@ -111,7 +112,10 @@ export function queryTerminalBackground(
         }
       };
 
-      const timer = setTimeout(() => finish(detectTerminalBackground()), timeoutMs);
+      const timer = setTimeout(
+        () => finish(detectTerminalBackground()),
+        timeoutMs,
+      );
       timer.unref?.();
 
       try {

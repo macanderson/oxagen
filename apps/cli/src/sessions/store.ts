@@ -556,7 +556,10 @@ export class SessionStore {
   }
 }
 
-/** Convenience: build a store rooted at the fleet root for `cwd`. */
+/**
+ * Convenience: build a store at an already-resolved fleet root. Callers that
+ * hold a cwd rather than a root pass `fleetRoot(cwd)` (paths.ts) in.
+ */
 export function openFleetStore(root: string): SessionStore {
   return new SessionStore({ root });
 }

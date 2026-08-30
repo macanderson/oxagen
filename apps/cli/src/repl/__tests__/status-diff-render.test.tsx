@@ -108,7 +108,9 @@ describe("DiffMessage — highlighted git diff (Feature B/C)", () => {
       changedFiles: ["a.ts", "b.ts", "c.ts"],
       timestamp: 0,
     };
-    const { lastFrame, unmount } = render(<DiffMessage msg={msg} theme={DARK_DIFF_THEME} />);
+    const { lastFrame, unmount } = render(
+      <DiffMessage msg={msg} theme={DARK_DIFF_THEME} />,
+    );
     expect(lastFrame() ?? "").toContain("3 files changed");
     unmount();
   });

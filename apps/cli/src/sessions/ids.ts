@@ -42,11 +42,15 @@ export function shortSid(sid: string): string {
  * prefix of either) against the known ids. Returns the single match, or null
  * when the reference is ambiguous or unknown.
  */
-export function resolveSidRef(ref: string, known: readonly string[]): string | null {
+export function resolveSidRef(
+  ref: string,
+  known: readonly string[],
+): string | null {
   const exact = known.find((k) => k === ref);
   if (exact) return exact;
   const matches = known.filter(
-    (k) => shortSid(k) === ref || k.startsWith(ref) || shortSid(k).startsWith(ref),
+    (k) =>
+      shortSid(k) === ref || k.startsWith(ref) || shortSid(k).startsWith(ref),
   );
   return matches.length === 1 ? (matches[0] as string) : null;
 }

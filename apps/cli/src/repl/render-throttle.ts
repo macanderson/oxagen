@@ -3,10 +3,10 @@
  *
  * Every streamed delta (a reasoning token, an assistant-text token, a tool
  * chip update — see interactive.tsx's `render()` closure inside the turn
- * handler) used to call `commit()` directly, which does
+ * handler) would otherwise call `commit()` directly, which does
  * `allRef.current = next; setMessages(next);` — i.e. one full Ink re-render
  * of the entire transcript PER TOKEN. A fast model call can stream dozens of
- * tokens a second, so that's dozens of Ink reconciliations a second for
+ * tokens a second, so that would be dozens of Ink reconciliations a second for
  * content the user perceives as a single smooth stream.
  *
  * This helper is a pure, framework-free coalescer (no Ink, no React — just

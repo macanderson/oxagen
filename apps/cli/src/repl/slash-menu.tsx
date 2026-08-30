@@ -68,14 +68,20 @@ export function SlashMenu({
 }): React.ReactElement | null {
   if (entries.length === 0) return null;
 
-  const { start, end } = visibleWindow(entries.length, selectedIndex, MAX_VISIBLE_SUGGESTIONS);
+  const { start, end } = visibleWindow(
+    entries.length,
+    selectedIndex,
+    MAX_VISIBLE_SUGGESTIONS,
+  );
   const visible = entries.slice(start, end);
   const innerWidth = Math.max(width - 4, 10); // border (2) + paddingX*2 (2)
 
   // Fixed column every visible row's args + description align to, sized to
   // the widest `/name` currently on screen (recomputed as the window
   // scrolls, so it never depends on off-screen entries).
-  const maxNameWidth = Math.max(...visible.map((entry) => entry.name.length + 1)); // +1 for "/"
+  const maxNameWidth = Math.max(
+    ...visible.map((entry) => entry.name.length + 1),
+  ); // +1 for "/"
   const argCol = PREFIX_WIDTH + maxNameWidth + GAP_WIDTH;
   const descWidth = Math.max(innerWidth - argCol, 0);
 

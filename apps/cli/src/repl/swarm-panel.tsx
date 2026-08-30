@@ -221,7 +221,8 @@ export function SwarmPanel({
               <Text>{model}</Text>
             </Box>
           ) : null}
-          {current.outputTokens !== undefined || current.costUsd !== undefined ? (
+          {current.outputTokens !== undefined ||
+          current.costUsd !== undefined ? (
             <Box gap={1}>
               <Text dimColor>usage</Text>
               {current.outputTokens !== undefined ? (
@@ -275,8 +276,8 @@ export function SwarmPanel({
       {agents.length === 0 ? (
         <Box marginTop={1}>
           <Text dimColor>
-            No agents yet — the turn agent and any dispatched workers will appear
-            here as they run.
+            No agents yet — the turn agent and any dispatched workers will
+            appear here as they run.
           </Text>
         </Box>
       ) : (
@@ -285,10 +286,15 @@ export function SwarmPanel({
             const idx = start + i;
             const isSelected = idx === clampedSelected;
             const { glyph, color } = agentStatusStyle(agent.status);
-            const model = agent.model ? tierLabel(tierForSlug(agent.model)) : null;
+            const model = agent.model
+              ? tierLabel(tierForSlug(agent.model))
+              : null;
             return (
               <Box key={agent.id} width={innerWidth}>
-                <Text color={isSelected ? theme.cyan : undefined} bold={isSelected}>
+                <Text
+                  color={isSelected ? theme.cyan : undefined}
+                  bold={isSelected}
+                >
                   {isSelected ? "❯ " : "  "}
                 </Text>
                 <Box width={2}>
@@ -297,7 +303,11 @@ export function SwarmPanel({
                   </Text>
                 </Box>
                 <Box width={9}>
-                  <Text color={theme.violet} dimColor={!isSelected} wrap="truncate-end">
+                  <Text
+                    color={theme.violet}
+                    dimColor={!isSelected}
+                    wrap="truncate-end"
+                  >
                     {agent.kind}
                   </Text>
                 </Box>

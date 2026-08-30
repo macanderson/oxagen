@@ -1,7 +1,13 @@
 /**
  * Code graph query API — answers structural questions about the codebase.
  */
-import type { CodeGraph, CodeNode, CodeEdge, CodeEdgeType, GraphQueryResult } from "./types";
+import type {
+  CodeGraph,
+  CodeNode,
+  CodeEdge,
+  CodeEdgeType,
+  GraphQueryResult,
+} from "./types";
 
 /**
  * Get k-hop neighbors of a node.
@@ -104,7 +110,11 @@ export function dependents(graph: CodeGraph, fileId: string): CodeNode[] {
 /**
  * Fuzzy symbol search across the code graph.
  */
-export function searchSymbols(graph: CodeGraph, pattern: string, limit = 20): CodeNode[] {
+export function searchSymbols(
+  graph: CodeGraph,
+  pattern: string,
+  limit = 20,
+): CodeNode[] {
   const lower = pattern.toLowerCase();
   const results: Array<{ node: CodeNode; score: number }> = [];
 

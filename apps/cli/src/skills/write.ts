@@ -1,7 +1,21 @@
+/**
+ * write.ts — scaffolding for a new skill bundle (`oxagen skill new`).
+ */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { serializeArtifactToml } from "@oxagen/agent-artifacts";
 
+/**
+ * Create `<dir|cwd/.oxagen/skills>/<name>/skill.toml` with a placeholder
+ * manifest and report where it landed. Never clobbers: the `wx` flag turns an
+ * existing manifest into `{ created: false }` rather than overwriting the
+ * developer's work; any other filesystem error is rethrown.
+ *
+ * PRECONDITION: `name` must already be a validated bare identifier — it is
+ * joined straight onto the skills root, so a caller that forwards raw user input
+ * can escape that root with `..`. `commands/skill.ts` enforces
+ * `/^[A-Za-z0-9][\w-]*$/` before calling; any new caller must do the same.
+ */
 export function scaffoldSkill(options: {
   name: string;
   cwd?: string;

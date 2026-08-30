@@ -20,7 +20,11 @@ vi.mock("../prompt-enhancer.js", () => ({
 }));
 
 import { Fleet, type AgentRunner } from "../fleet/orchestrator.js";
-import type { Isolation, IntegrationResult, Checkpoint } from "../fleet/git-isolation.js";
+import type {
+  Isolation,
+  IntegrationResult,
+  Checkpoint,
+} from "../fleet/git-isolation.js";
 import type { Plan, Task } from "../fleet/types.js";
 
 function task(id: string, over: Partial<Task> = {}): Task {
@@ -43,7 +47,10 @@ function plan(tasks: Task[]): Plan {
   return { id: "p1", goal: "g", createdAt: 1, tasks, status: "draft" };
 }
 
-function deferred<T = void>(): { promise: Promise<T>; resolve: (v: T) => void } {
+function deferred<T = void>(): {
+  promise: Promise<T>;
+  resolve: (v: T) => void;
+} {
   let resolve!: (v: T) => void;
   const promise = new Promise<T>((res) => {
     resolve = res;
@@ -63,7 +70,12 @@ function statusOf(fleet: Fleet, id: string): string | undefined {
 function fakeIsolation(): Isolation & { calls: string[] } {
   const calls: string[] = [];
   const spawned = new Set<string>();
-  const cp = (id: string): Checkpoint => ({ taskId: id, hash: "h", ref: "r", message: "m" });
+  const cp = (id: string): Checkpoint => ({
+    taskId: id,
+    hash: "h",
+    ref: "r",
+    message: "m",
+  });
   return {
     calls,
     init: async () => void calls.push("init"),
@@ -79,7 +91,11 @@ function fakeIsolation(): Isolation & { calls: string[] } {
     recordedCommits: () => [],
     integrate: async (id) => {
       calls.push(`integrate:${id}`);
-      return { ok: true, commit: "c", taskBranch: `b/${id}` } satisfies IntegrationResult;
+      return {
+        ok: true,
+        commit: "c",
+        taskBranch: `b/${id}`,
+      } satisfies IntegrationResult;
     },
     integrationRef: () => null,
     dispose: async (id, opts) => {
@@ -99,10 +115,20 @@ describe("Fleet cancel-drain", () => {
     const gate = deferred();
     const runner: AgentRunner = async (o) => {
       if (o.prompt === "running") await gate.promise;
-      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "ok",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
     // concurrency 1: "running" starts immediately, "queued" never gets a slot.
-    const fleet = new Fleet({ cwd: "/repo", isolation: iso, runner, memory: null, concurrency: 1 });
+    const fleet = new Fleet({
+      cwd: "/repo",
+      isolation: iso,
+      runner,
+      memory: null,
+      concurrency: 1,
+    });
     fleet.loadPlan(plan([task("running"), task("queued")]));
     const started = fleet.start();
     await flush();
@@ -139,9 +165,19 @@ describe("Fleet cancel-drain", () => {
       const g = gates.get(o.prompt) ?? deferred();
       gates.set(o.prompt, g);
       await g.promise;
-      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "ok",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
-    const fleet = new Fleet({ cwd: "/repo", isolation: iso, runner, memory: null, concurrency: 1 });
+    const fleet = new Fleet({
+      cwd: "/repo",
+      isolation: iso,
+      runner,
+      memory: null,
+      concurrency: 1,
+    });
     fleet.loadPlan(plan([task("a"), task("b"), task("c")]));
     const started = fleet.start();
     await flush();
@@ -162,11 +198,19 @@ describe("Fleet cancel-drain", () => {
     expect(iso.calls.some((c) => c.startsWith("spawn:b"))).toBe(false);
     expect(iso.calls.some((c) => c.startsWith("spawn:c"))).toBe(false);
     // Only "a" was ever spawned, and it was disposed — nothing orphaned.
-    expect(iso.calls).toEqual(["spawn:a", "checkpoint:a", "integrate:a", "dispose:a:keep=false"]);
+    expect(iso.calls).toEqual([
+      "spawn:a",
+      "checkpoint:a",
+      "integrate:a",
+      "dispose:a:keep=false",
+    ]);
   });
 
   it("resolves immediately when nothing was ever loaded or started", async () => {
-    const fleet = new Fleet({ cwd: "/repo", runner: async () => ({ text: "", steps: 0, usage: {} }) });
+    const fleet = new Fleet({
+      cwd: "/repo",
+      runner: async () => ({ text: "", steps: 0, usage: {} }),
+    });
     await expect(fleet.drain()).resolves.toBeUndefined();
   });
 
@@ -174,7 +218,11 @@ describe("Fleet cancel-drain", () => {
     const gate = deferred();
     const runner: AgentRunner = async () => {
       await gate.promise;
-      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "ok",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
     const fleet = new Fleet({ cwd: "/x", runner, concurrency: 1 });
     fleet.loadPlan(plan([task("a")]));

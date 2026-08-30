@@ -123,8 +123,13 @@ const DEFAULT_WORKER_MAX_LIFETIME_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_WORKER_MAX_RSS_BYTES = 4 * 1024 * 1024 * 1024;
 /** Disk-coalescing flush cadence for text/reasoning deltas. */
 const COALESCE_FLUSH_MS = 150;
-/** Disk-coalescing size cap: a buffered delta run this big flushes immediately. */
-const COALESCE_MAX_BYTES = 2048;
+/**
+ * Disk-coalescing size cap: a buffered delta run this long flushes immediately.
+ * Measured in JS string length (UTF-16 code units), not encoded bytes — the cap
+ * exists to bound log-line size, and a code-unit count is the cheap upper-bound
+ * proxy for it (multi-byte text flushes sooner than 2 KB, never later).
+ */
+const COALESCE_MAX_CHARS = 2048;
 
 /** ADR-028: sidecar recording is default-on; `OXAGEN_FLEET_RECORD=0|off` disables. */
 function isRecordingEnabled(): boolean {
@@ -272,7 +277,7 @@ export async function runSession(
     deltaKind = kind;
     deltaTurn = turn;
     deltaBuf += text;
-    if (deltaBuf.length >= COALESCE_MAX_BYTES) flushDeltaBuffer();
+    if (deltaBuf.length >= COALESCE_MAX_CHARS) flushDeltaBuffer();
     else scheduleFlush();
   };
 

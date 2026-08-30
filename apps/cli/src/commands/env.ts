@@ -75,12 +75,19 @@ export async function handleEnvCreate(
     },
     writer,
   );
-  writer.write(`✓ created environment ${environment.name} (${environment.slug}) ${environment.id}`);
+  writer.write(
+    `✓ created environment ${environment.name} (${environment.slug}) ${environment.id}`,
+  );
 }
 
 export async function handleEnvUpdate(
   idOrSlug: string,
-  opts: { name?: string; slug?: string; description?: string; active?: boolean },
+  opts: {
+    name?: string;
+    slug?: string;
+    description?: string;
+    active?: boolean;
+  },
   writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   const environmentId = await resolveEnvironmentId(idOrSlug);
@@ -95,7 +102,9 @@ export async function handleEnvUpdate(
     },
     writer,
   );
-  writer.write(`✓ updated environment ${environment.name} (${environment.slug})`);
+  writer.write(
+    `✓ updated environment ${environment.name} (${environment.slug})`,
+  );
 }
 
 export async function handleEnvRemove(
@@ -103,7 +112,11 @@ export async function handleEnvRemove(
   writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   const environmentId = await resolveEnvironmentId(idOrSlug);
-  await apiPost<{ ok: boolean }>("environment/delete", { environmentId }, writer);
+  await apiPost<{ ok: boolean }>(
+    "environment/delete",
+    { environmentId },
+    writer,
+  );
   writer.write(`✓ removed environment ${idOrSlug}`);
 }
 
@@ -117,5 +130,7 @@ export async function handleEnvSetDefault(
     { environmentId },
     writer,
   );
-  writer.write(`✓ default environment: ${environment.name} (${environment.slug})`);
+  writer.write(
+    `✓ default environment: ${environment.name} (${environment.slug})`,
+  );
 }

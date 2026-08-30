@@ -7,7 +7,12 @@
 import React, { useEffect, useReducer } from "react";
 import { Box, Text } from "ink";
 import { theme } from "./theme.js";
-import { createInitialGameState, gameReducer, buildGrid, type CellKind } from "./init-game.js";
+import {
+  createInitialGameState,
+  gameReducer,
+  buildGrid,
+  type CellKind,
+} from "./init-game.js";
 
 const TICK_MS = 120;
 
@@ -34,8 +39,15 @@ export interface InitGameViewProps {
   tickMs?: number;
 }
 
-export function InitGameView({ width = 34, tickMs = TICK_MS }: InitGameViewProps): React.ReactElement {
-  const [state, dispatch] = useReducer(gameReducer, width, createInitialGameState);
+export function InitGameView({
+  width = 34,
+  tickMs = TICK_MS,
+}: InitGameViewProps): React.ReactElement {
+  const [state, dispatch] = useReducer(
+    gameReducer,
+    width,
+    createInitialGameState,
+  );
 
   useEffect(() => {
     const id = setInterval(() => dispatch({ type: "tick" }), tickMs);
@@ -49,7 +61,11 @@ export function InitGameView({ width = 34, tickMs = TICK_MS }: InitGameViewProps
       {grid.map((row, r) => (
         <Box key={r}>
           {row.map((cell, c) => (
-            <Text key={c} color={cellColor(cell.kind)} bold={cell.kind === "player" || cell.kind === "invader"}>
+            <Text
+              key={c}
+              color={cellColor(cell.kind)}
+              bold={cell.kind === "player" || cell.kind === "invader"}
+            >
               {cell.ch}
             </Text>
           ))}

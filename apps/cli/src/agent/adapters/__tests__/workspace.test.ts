@@ -64,7 +64,9 @@ describe("createCwdWorkspace", () => {
     it("honors a 1-based offset + limit line range", async () => {
       const root = await makeRepo({ "n.txt": "l1\nl2\nl3\nl4\nl5" });
       const ws = createCwdWorkspace(root);
-      expect(await ws.readFile("n.txt", { offset: 2, limit: 2 })).toBe("l2\nl3");
+      expect(await ws.readFile("n.txt", { offset: 2, limit: 2 })).toBe(
+        "l2\nl3",
+      );
     });
 
     it("rejects when the file does not exist", async () => {
@@ -79,7 +81,9 @@ describe("createCwdWorkspace", () => {
       const root = await makeRepo();
       const ws = createCwdWorkspace(root);
       await ws.writeFile("nested/deep/x.txt", "content");
-      expect(await fs.readFile(join(root, "nested/deep/x.txt"), "utf-8")).toBe("content");
+      expect(await fs.readFile(join(root, "nested/deep/x.txt"), "utf-8")).toBe(
+        "content",
+      );
     });
   });
 
@@ -88,13 +92,17 @@ describe("createCwdWorkspace", () => {
       const root = await makeRepo({ "e.txt": "foo bar baz" });
       const ws = createCwdWorkspace(root);
       await ws.editFile("e.txt", "bar", "QUX");
-      expect(await fs.readFile(join(root, "e.txt"), "utf-8")).toBe("foo QUX baz");
+      expect(await fs.readFile(join(root, "e.txt"), "utf-8")).toBe(
+        "foo QUX baz",
+      );
     });
 
     it("throws when the string is not found", async () => {
       const root = await makeRepo({ "e.txt": "foo" });
       const ws = createCwdWorkspace(root);
-      await expect(ws.editFile("e.txt", "missing", "x")).rejects.toThrow("not found");
+      await expect(ws.editFile("e.txt", "missing", "x")).rejects.toThrow(
+        "not found",
+      );
     });
 
     it("throws when the string is not unique", async () => {
@@ -118,7 +126,9 @@ describe("createCwdWorkspace", () => {
     });
 
     it("names the closest line when the string is not found", async () => {
-      const root = await makeRepo({ "e.txt": "const foo = 1;\nconst bar = 2;" });
+      const root = await makeRepo({
+        "e.txt": "const foo = 1;\nconst bar = 2;",
+      });
       const ws = createCwdWorkspace(root);
       await expect(
         ws.editFile("e.txt", "const fooo = 1;", "x"),
@@ -309,7 +319,9 @@ describe("createCwdWorkspace", () => {
     it("returns a git diff for uncommitted changes", async () => {
       const root = await makeRepo({ "tracked.txt": "v1\n" });
       const ws = createCwdWorkspace(root);
-      await ws.exec("git init -q && git add -A && git -c user.email=a@b.c -c user.name=t commit -qm init");
+      await ws.exec(
+        "git init -q && git add -A && git -c user.email=a@b.c -c user.name=t commit -qm init",
+      );
       await ws.writeFile("tracked.txt", "v2\n");
       const diff = await ws.diff();
       expect(diff).toContain("tracked.txt");
@@ -319,7 +331,9 @@ describe("createCwdWorkspace", () => {
     it("includes untracked (newly created) files alongside tracked changes", async () => {
       const root = await makeRepo({ "tracked.txt": "v1\n" });
       const ws = createCwdWorkspace(root);
-      await ws.exec("git init -q && git add -A && git -c user.email=a@b.c -c user.name=t commit -qm init");
+      await ws.exec(
+        "git init -q && git add -A && git -c user.email=a@b.c -c user.name=t commit -qm init",
+      );
       // Modify a tracked file AND create a brand-new untracked file.
       await ws.writeFile("tracked.txt", "v2\n");
       await ws.writeFile("created.txt", "brand new\n");
@@ -335,7 +349,9 @@ describe("createCwdWorkspace", () => {
     it("skips untracked files larger than 1 MiB", async () => {
       const root = await makeRepo({ "tracked.txt": "v1\n" });
       const ws = createCwdWorkspace(root);
-      await ws.exec("git init -q && git add -A && git -c user.email=a@b.c -c user.name=t commit -qm init");
+      await ws.exec(
+        "git init -q && git add -A && git -c user.email=a@b.c -c user.name=t commit -qm init",
+      );
       // A small untracked file is included; a >1 MiB sibling is silently skipped.
       await ws.writeFile("small.txt", "keep me\n");
       await ws.writeFile("huge.bin", "x".repeat(1024 * 1024 + 1));
@@ -359,7 +375,9 @@ describe("parseRipgrepOutput", () => {
   });
 
   it("caps the number of hits", () => {
-    const lines = Array.from({ length: 10 }, (_, i) => `f.ts:${i + 1}:m`).join("\n");
+    const lines = Array.from({ length: 10 }, (_, i) => `f.ts:${i + 1}:m`).join(
+      "\n",
+    );
     expect(parseRipgrepOutput(lines, 3)).toHaveLength(3);
   });
 
@@ -369,6 +387,8 @@ describe("parseRipgrepOutput", () => {
   });
 
   it("skips lines without at least two colons", () => {
-    expect(parseRipgrepOutput("garbage line\na.ts:1:ok\n")).toEqual(["a.ts:1:ok"]);
+    expect(parseRipgrepOutput("garbage line\na.ts:1:ok\n")).toEqual([
+      "a.ts:1:ok",
+    ]);
   });
 });

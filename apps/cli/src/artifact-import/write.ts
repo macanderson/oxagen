@@ -21,7 +21,7 @@ import type {
   ConflictResolver,
   ImportScope,
   NormalizedImport,
-} from "./types";
+} from "./types.js";
 
 async function pathKind(
   path: string,

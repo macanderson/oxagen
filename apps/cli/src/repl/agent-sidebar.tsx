@@ -26,7 +26,11 @@ import {
   type AgentStatus,
   type RunningAgent,
 } from "../agent/agent-registry.js";
-import { taskRegistry, type TaskStatus, type TrackedTask } from "../agent/task-registry.js";
+import {
+  taskRegistry,
+  type TaskStatus,
+  type TrackedTask,
+} from "../agent/task-registry.js";
 
 /** How the sidebar decides whether to show: pinned on, forced off, or automatic. */
 export type PanelMode = "auto" | "on" | "off";
@@ -109,7 +113,9 @@ export function stepPanelFocus(
   current: PanelTarget,
   dir: 1 | -1,
 ): PanelTarget | null {
-  const idx = targets.findIndex((t) => t.zone === current.zone && t.id === current.id);
+  const idx = targets.findIndex(
+    (t) => t.zone === current.zone && t.id === current.id,
+  );
   if (idx === -1) return null; // stale highlight → back to the input bar
   const next = idx + dir;
   if (next < 0) return null; // up off the top → input bar
@@ -118,7 +124,10 @@ export function stepPanelFocus(
 }
 
 /** Glyph + color for an agent's run status (matches the `/hud` vocabulary). */
-function agentStatusStyle(status: AgentStatus): { glyph: string; color: string } {
+function agentStatusStyle(status: AgentStatus): {
+  glyph: string;
+  color: string;
+} {
   switch (status) {
     case "running":
       return { glyph: "●", color: theme.cyan };
@@ -233,7 +242,12 @@ function TaskRow({
         <Text color={color} bold>
           {glyph}
         </Text>
-        <Text dimColor={strike && !highlighted} bold={highlighted} inverse={highlighted} wrap="truncate-end">
+        <Text
+          dimColor={strike && !highlighted}
+          bold={highlighted}
+          inverse={highlighted}
+          wrap="truncate-end"
+        >
           {task.title}
         </Text>
       </Box>
@@ -308,8 +322,12 @@ export function AgentSidebar({
   const now = nowFn ?? (() => Date.now());
   const width = widthFn ?? (() => process.stdout.columns ?? 80);
   const [, setTick] = useState(0);
-  const [agents, setAgents] = useState<RunningAgent[]>(() => agentRegistry.snapshot());
-  const [tasks, setTasks] = useState<TrackedTask[]>(() => taskRegistry.snapshot());
+  const [agents, setAgents] = useState<RunningAgent[]>(() =>
+    agentRegistry.snapshot(),
+  );
+  const [tasks, setTasks] = useState<TrackedTask[]>(() =>
+    taskRegistry.snapshot(),
+  );
 
   useEffect(() => {
     const refreshAgents = (): void => setAgents(agentRegistry.snapshot());
@@ -334,7 +352,8 @@ export function AgentSidebar({
   // once work fans out (see hasFleetActivity). `/panel on` still pins it open.
   // `active` (the user has navigated into the dock) forces it visible even when
   // auto would hide it, so the highlight never lands on a hidden list.
-  if (mode === "auto" && !hasFleetActivity(agents, tasks) && !active) return null;
+  if (mode === "auto" && !hasFleetActivity(agents, tasks) && !active)
+    return null;
 
   const at = now();
   const runningAgents = agents.filter((a) => a.status === "running").length;
@@ -427,7 +446,9 @@ export function AgentFocusView({
 }): React.ReactElement | null {
   const now = nowFn ?? (() => Date.now());
   const [, setTick] = useState(0);
-  const [agents, setAgents] = useState<RunningAgent[]>(() => agentRegistry.snapshot());
+  const [agents, setAgents] = useState<RunningAgent[]>(() =>
+    agentRegistry.snapshot(),
+  );
   useEffect(() => {
     const refresh = (): void => setAgents(agentRegistry.snapshot());
     const unsub = agentRegistry.on(refresh);

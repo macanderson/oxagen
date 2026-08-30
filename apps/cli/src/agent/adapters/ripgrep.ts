@@ -38,7 +38,10 @@ export async function runRipgrep(
   cwd: string,
 ): Promise<{ ok: boolean; stdout: string }> {
   try {
-    const { stdout } = await execFileAsync("rg", args, { cwd, maxBuffer: RG_MAX_BUFFER });
+    const { stdout } = await execFileAsync("rg", args, {
+      cwd,
+      maxBuffer: RG_MAX_BUFFER,
+    });
     return { ok: true, stdout };
   } catch (err) {
     const e = err as { code?: number | string; stdout?: string };

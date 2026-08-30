@@ -12,8 +12,13 @@ import { DEFAULT_ADVISOR_MODEL } from "@oxagen/agent-engine";
 import { resolveModelRoles, persistRoleModel } from "../model-roles.js";
 import { clearSettingsCache } from "../../settings/resolve.js";
 
-const ENV_KEYS = ["OXAGEN_LLM_EVALUATOR", "OXAGEN_LLM_ADVISOR", "OXAGEN_JUDGE_PANEL"] as const;
-const saved: Partial<Record<(typeof ENV_KEYS)[number], string | undefined>> = {};
+const ENV_KEYS = [
+  "OXAGEN_LLM_EVALUATOR",
+  "OXAGEN_LLM_ADVISOR",
+  "OXAGEN_JUDGE_PANEL",
+] as const;
+const saved: Partial<Record<(typeof ENV_KEYS)[number], string | undefined>> =
+  {};
 
 beforeEach(() => {
   for (const k of ENV_KEYS) {
@@ -56,7 +61,8 @@ describe("resolveModelRoles", () => {
   });
 
   it("shows the cross-vendor panel when OXAGEN_JUDGE_PANEL is set", () => {
-    process.env["OXAGEN_JUDGE_PANEL"] = "openai/gpt-5.5-pro,google/gemini-2.5-pro";
+    process.env["OXAGEN_JUDGE_PANEL"] =
+      "openai/gpt-5.5-pro,google/gemini-2.5-pro";
     const roles = resolveModelRoles("anthropic/claude-sonnet-5");
     expect(roles.judge).toBe("panel(gpt-5.5-pro,gemini-2.5-pro)");
   });
@@ -91,10 +97,9 @@ describe("persistRoleModel", () => {
   });
 
   const localDoc = () =>
-    JSON.parse(readFileSync(join(dir, ".oxagen", "settings.local.json"), "utf8")) as Record<
-      string,
-      unknown
-    >;
+    JSON.parse(
+      readFileSync(join(dir, ".oxagen", "settings.local.json"), "utf8"),
+    ) as Record<string, unknown>;
 
   it("writes each role to its settings key in the local scope", () => {
     persistRoleModel("worker", "vendor/worker", dir);

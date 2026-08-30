@@ -8,7 +8,11 @@
 import React, { useEffect, useState } from "react";
 import { Box, Text } from "ink";
 import { theme } from "./theme.js";
-import { revealFrame, isRevealComplete, WORDMARK_WIDTH } from "./init-reveal.js";
+import {
+  revealFrame,
+  isRevealComplete,
+  WORDMARK_WIDTH,
+} from "./init-reveal.js";
 
 const REVEAL_TICK_MS = 45;
 const REVEAL_COLS_PER_TICK = 2;

@@ -26,7 +26,12 @@ vi.mock("../../lib/config.js", () => ({
 // Clear env-var tier overrides so the model router uses the catalog defaults,
 // not whatever the developer has pinned in their shell.
 beforeEach(() => {
-  for (const key of ["OXAGEN_LLM_FAST", "OXAGEN_LLM_BALANCED", "OXAGEN_LLM_PRECISE", "OXAGEN_MODEL"]) {
+  for (const key of [
+    "OXAGEN_LLM_FAST",
+    "OXAGEN_LLM_BALANCED",
+    "OXAGEN_LLM_PRECISE",
+    "OXAGEN_MODEL",
+  ]) {
     delete process.env[key];
   }
 });
@@ -61,7 +66,10 @@ const flush = async (): Promise<void> => {
   for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r));
 };
 
-function deferred<T = void>(): { promise: Promise<T>; resolve: (v: T) => void } {
+function deferred<T = void>(): {
+  promise: Promise<T>;
+  resolve: (v: T) => void;
+} {
   let resolve!: (v: T) => void;
   const promise = new Promise<T>((res) => {
     resolve = res;
@@ -84,7 +92,11 @@ describe("Fleet scheduling", () => {
       events.push(`start:${o.prompt}`);
       await Promise.resolve();
       events.push(`end:${o.prompt}`);
-      return { text: `did ${o.prompt}`, steps: 2, usage: { inputTokens: 100, outputTokens: 50 } };
+      return {
+        text: `did ${o.prompt}`,
+        steps: 2,
+        usage: { inputTokens: 100, outputTokens: 50 },
+      };
     };
     const fleet = new Fleet({ cwd: "/x", runner, concurrency: 4 });
     fleet.loadPlan(plan([task("t1"), task("t2", { dependsOn: ["t1"] })]));
@@ -106,7 +118,11 @@ describe("Fleet scheduling", () => {
       gates.set(o.prompt, g);
       await g.promise;
       active--;
-      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "ok",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
     // Pre-create gates so resolving them releases task "c" too, even though it
     // only starts (and would otherwise create its gate) after a/b complete.
@@ -134,11 +150,18 @@ describe("Fleet scheduling", () => {
       gates.set(o.prompt, g);
       await g.promise;
       active--;
-      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "ok",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
     const fleet = new Fleet({ cwd: "/x", runner, concurrency: 4 });
     fleet.loadPlan(
-      plan([task("t1", { files: ["shared.ts"] }), task("t2", { files: ["shared.ts"] })]),
+      plan([
+        task("t1", { files: ["shared.ts"] }),
+        task("t2", { files: ["shared.ts"] }),
+      ]),
     );
     const done = fleet.start();
     await flush();
@@ -158,7 +181,11 @@ describe("Fleet scheduling", () => {
     const memory = fakeMemory();
     const runner: AgentRunner = async (o) => {
       if (o.prompt === "t1") throw new Error("kaboom");
-      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "ok",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
     const fleet = new Fleet({ cwd: "/x", runner, memory });
     fleet.loadPlan(plan([task("t1"), task("t2", { dependsOn: ["t1"] })]));
@@ -180,11 +207,18 @@ describe("Fleet scheduling", () => {
       usage: { inputTokens: 1_000_000, outputTokens: 0 },
     });
     const fleet = new Fleet({ cwd: "/x", runner, memory });
-    fleet.loadPlan(plan([task("fix-bug", { title: "fix the bug", description: "fix the bug" })]));
+    fleet.loadPlan(
+      plan([
+        task("fix-bug", { title: "fix the bug", description: "fix the bug" }),
+      ]),
+    );
     await fleet.start();
 
     expect(memory.record).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: "success", memoryKind: "bug-root-cause" }),
+      expect.objectContaining({
+        outcome: "success",
+        memoryKind: "bug-root-cause",
+      }),
     );
     // 1M Haiku input tokens = $1.00.
     expect(fleet.snapshot().totals.costUsd).toBeCloseTo(1, 6);
@@ -213,10 +247,16 @@ describe("Fleet scheduling", () => {
         o.signal?.addEventListener("abort", () => reject(new Error("aborted")));
         void g.promise.then(() => resolve());
       });
-      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "ok",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
     const fleet = new Fleet({ cwd: "/x", runner, concurrency: 2 });
-    fleet.loadPlan(plan([task("a", { files: ["a.ts"] }), task("b", { files: ["b.ts"] })]));
+    fleet.loadPlan(
+      plan([task("a", { files: ["a.ts"] }), task("b", { files: ["b.ts"] })]),
+    );
     const done = fleet.start();
     await flush();
     expect(fleet.snapshot().runningCount).toBe(2);
@@ -224,7 +264,9 @@ describe("Fleet scheduling", () => {
     fleet.cancelAll();
     await done;
     expect(fleet.snapshot().doneCount).toBe(0);
-    expect(fleet.snapshot().agents.every((a) => a.status === "cancelled")).toBe(true);
+    expect(fleet.snapshot().agents.every((a) => a.status === "cancelled")).toBe(
+      true,
+    );
   });
 
   it("emits an update snapshot on changes", async () => {
@@ -242,9 +284,10 @@ describe("Fleet scheduling", () => {
   });
 });
 
-function fakeServer(
-  recallRows: RecalledMemory[] = [],
-): ServerMemory & { recall: ReturnType<typeof vi.fn>; remember: ReturnType<typeof vi.fn> } {
+function fakeServer(recallRows: RecalledMemory[] = []): ServerMemory & {
+  recall: ReturnType<typeof vi.fn>;
+  remember: ReturnType<typeof vi.fn>;
+} {
   return {
     recall: vi.fn().mockResolvedValue(recallRows),
     remember: vi.fn(),
@@ -270,7 +313,11 @@ describe("Fleet platform memory", () => {
     let recalledForRunner = "";
     const runner: AgentRunner = async (o) => {
       recalledForRunner = o.memory ? await o.memory.recallContext() : "";
-      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "ok",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
     const fleet = new Fleet({ cwd: "/x", runner, serverMemory: server });
     fleet.loadPlan(plan([task("t1", { description: "wire the db access" })]));
@@ -285,7 +332,11 @@ describe("Fleet platform memory", () => {
     const server = fakeServer();
     const runner: AgentRunner = async (o) => {
       if (o.prompt === "boom") throw new Error("kaboom");
-      return { text: "rewired the thing", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "rewired the thing",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
     const fleet = new Fleet({ cwd: "/x", runner, serverMemory: server });
     fleet.loadPlan(
@@ -305,7 +356,11 @@ describe("Fleet platform memory", () => {
     let sawMemory: unknown = "unset";
     const runner: AgentRunner = async (o) => {
       sawMemory = o.memory;
-      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "ok",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
     const fleet = new Fleet({ cwd: "/x", runner });
     fleet.loadPlan(plan([task("t1")]));

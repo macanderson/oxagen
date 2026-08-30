@@ -55,11 +55,16 @@ export interface CreatePrFixRunnerOptions {
 export interface PrFixRunnerHandle {
   runFixer: FixRunner;
   /** Mirror a lesson about this loop's final outcome. Best-effort; no-op when not authenticated. */
-  rememberOutcome: (kind: string, detail: { lesson: string; files: string[] }) => void;
+  rememberOutcome: (
+    kind: string,
+    detail: { lesson: string; files: string[] },
+  ) => void;
 }
 
 /** Build the real, engine-backed fixer + its memory mirror for `oxagen pr fix`. */
-export function createPrFixRunner(opts: CreatePrFixRunnerOptions): PrFixRunnerHandle {
+export function createPrFixRunner(
+  opts: CreatePrFixRunnerOptions,
+): PrFixRunnerHandle {
   const { session, cwd } = opts;
 
   const baseAi: AgentAi = session.synthetic
@@ -70,13 +75,21 @@ export function createPrFixRunner(opts: CreatePrFixRunnerOptions): PrFixRunnerHa
         orgSlug: session.orgSlug,
         workspaceSlug: session.workspaceSlug,
       });
-  const ai = createMeteredAi(baseAi, { onLog: (line) => void debugLog("timeout", line) });
+  const ai = createMeteredAi(baseAi, {
+    onLog: (line) => void debugLog("timeout", line),
+  });
 
   const settings = loadSettings({ cwd }).settings;
   // acceptEdits + no approver: file edits auto-allow, bash fails closed (see module docblock).
-  const broker = new PermissionBroker({ mode: "acceptEdits", cwd, permissions: settings.permissions });
+  const broker = new PermissionBroker({
+    mode: "acceptEdits",
+    cwd,
+    permissions: settings.permissions,
+  });
   const workspace = createGatedWorkspace(createCwdWorkspace(cwd), broker);
-  const codeGraph = createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l));
+  const codeGraph = createCodeGraphProvider((op, q, l) =>
+    queryCodeGraph(cwd, op, q, l),
+  );
 
   // Platform memory: recall prior lessons for this workspace before diagnosing,
   // mirror the outcome after. Only when authenticated and not the synthetic
@@ -90,14 +103,20 @@ export function createPrFixRunner(opts: CreatePrFixRunnerOptions): PrFixRunnerHa
         })
       : null;
 
-  const profile: "headless" | undefined = process.stdout.isTTY ? undefined : "headless";
+  const profile: "headless" | undefined = process.stdout.isTTY
+    ? undefined
+    : "headless";
 
-  const runFixer: FixRunner = async (prompt: string): Promise<FixTurnResult> => {
+  const runFixer: FixRunner = async (
+    prompt: string,
+  ): Promise<FixTurnResult> => {
     // No CI probe here: the fix loop's own poller (lib/pr-fix.ts waitForTerminal)
     // does the CI waiting OUTSIDE these turns; a fixer turn itself should never
     // sit silent — the runner's default shouldDefer (in-flight tool count > 0)
     // defers while a tool executes.
-    const runner = createTurnRunner({ turnInactivityMs: resolveTurnInactivityMs() });
+    const runner = createTurnRunner({
+      turnInactivityMs: resolveTurnInactivityMs(),
+    });
 
     try {
       const result = await runTurn({
@@ -110,7 +129,10 @@ export function createPrFixRunner(opts: CreatePrFixRunnerOptions): PrFixRunnerHa
         model: opts.model,
         maxSteps: FIX_TURN_MAX_STEPS,
         codeGraph,
-        memory: createCombinedMemory(null, null, { server: serverMemory, recallQuery: prompt }),
+        memory: createCombinedMemory(null, null, {
+          server: serverMemory,
+          recallQuery: prompt,
+        }),
         signal: runner.signal,
         onText: () => runner.noteProgress(),
         onToolCall: (name, input) => {

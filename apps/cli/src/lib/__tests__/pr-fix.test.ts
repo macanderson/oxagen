@@ -10,7 +10,10 @@ import { describe, it, expect, vi } from "vitest";
 import { runFixToGreen, type PrFixDeps, type FixPrView } from "../pr-fix.js";
 import type { CheckRollupItem } from "../pr-monitor.js";
 
-function makePr(statusCheckRollup: CheckRollupItem[], overrides: Partial<FixPrView> = {}): FixPrView {
+function makePr(
+  statusCheckRollup: CheckRollupItem[],
+  overrides: Partial<FixPrView> = {},
+): FixPrView {
   return {
     number: 1,
     title: "Test PR",
@@ -22,13 +25,23 @@ function makePr(statusCheckRollup: CheckRollupItem[], overrides: Partial<FixPrVi
 }
 
 const FAILING_CHECK: CheckRollupItem[] = [
-  { name: "test", conclusion: "FAILURE", detailsUrl: "https://github.com/acme/widgets/actions/runs/1/job/2" },
+  {
+    name: "test",
+    conclusion: "FAILURE",
+    detailsUrl: "https://github.com/acme/widgets/actions/runs/1/job/2",
+  },
 ];
-const GREEN_CHECK: CheckRollupItem[] = [{ name: "test", conclusion: "SUCCESS" }];
-const PENDING_CHECK: CheckRollupItem[] = [{ name: "test", conclusion: null, state: "PENDING" }];
+const GREEN_CHECK: CheckRollupItem[] = [
+  { name: "test", conclusion: "SUCCESS" },
+];
+const PENDING_CHECK: CheckRollupItem[] = [
+  { name: "test", conclusion: null, state: "PENDING" },
+];
 
 /** A `fetchPr` fake that returns each of `results` in order, then repeats the last one. */
-function fetchPrSequence(...results: Array<FixPrView | null>): PrFixDeps["fetchPr"] {
+function fetchPrSequence(
+  ...results: Array<FixPrView | null>
+): PrFixDeps["fetchPr"] {
   let i = 0;
   return vi.fn(async () => results[Math.min(i++, results.length - 1)] ?? null);
 }
@@ -37,7 +50,9 @@ function baseDeps(overrides: Partial<PrFixDeps> = {}): PrFixDeps {
   return {
     fetchPr: vi.fn(async () => null),
     fetchFailingContext: vi.fn(async () => "TypeError: boom at src/foo.ts:10"),
-    runFixer: vi.fn(async () => ({ text: "Fixed the type error in src/foo.ts." })),
+    runFixer: vi.fn(async () => ({
+      text: "Fixed the type error in src/foo.ts.",
+    })),
     changedFiles: vi.fn(async () => ["src/foo.ts"]),
     commitAndPush: vi.fn(async () => {}),
     confirmMerge: vi.fn(async () => true),
@@ -62,7 +77,10 @@ describe("runFixToGreen", () => {
     expect(deps.fetchFailingContext).toHaveBeenCalledTimes(1);
     expect(deps.runFixer).toHaveBeenCalledTimes(1);
     expect(deps.commitAndPush).toHaveBeenCalledTimes(1);
-    expect(deps.commitAndPush).toHaveBeenCalledWith(["src/foo.ts"], expect.stringContaining("PR #1"));
+    expect(deps.commitAndPush).toHaveBeenCalledWith(
+      ["src/foo.ts"],
+      expect.stringContaining("PR #1"),
+    );
     expect(deps.confirmMerge).toHaveBeenCalledTimes(1);
     expect(deps.mergePr).toHaveBeenCalledTimes(1);
   });
@@ -101,7 +119,9 @@ describe("runFixToGreen", () => {
   });
 
   it("stops at the max-rounds cap when still red, without ever merging", async () => {
-    const deps = baseDeps({ fetchPr: vi.fn(async () => makePr(FAILING_CHECK)) });
+    const deps = baseDeps({
+      fetchPr: vi.fn(async () => makePr(FAILING_CHECK)),
+    });
 
     const result = await runFixToGreen(deps, { number: "1", maxRounds: 3 });
 

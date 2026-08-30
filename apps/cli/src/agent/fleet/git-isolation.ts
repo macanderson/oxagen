@@ -64,7 +64,12 @@ export function defaultGitRunner(repoRoot: string): GitRunner {
       });
       return { stdout, stderr, code: 0 };
     } catch (e) {
-      const err = e as { stdout?: string; stderr?: string; code?: number | string; message?: string };
+      const err = e as {
+        stdout?: string;
+        stderr?: string;
+        code?: number | string;
+        message?: string;
+      };
       return {
         stdout: err.stdout ?? "",
         stderr: err.stderr ?? err.message ?? "",
@@ -80,7 +85,10 @@ export function defaultGitRunner(repoRoot: string): GitRunner {
  * shared-tree mode gracefully — a plain (non-git) directory should not make
  * every task fail at `spawn()` — rather than asserting a repo exists.
  */
-export async function isGitRepo(cwd: string, git: GitRunner = defaultGitRunner(cwd)): Promise<boolean> {
+export async function isGitRepo(
+  cwd: string,
+  git: GitRunner = defaultGitRunner(cwd),
+): Promise<boolean> {
   const res = await git(["rev-parse", "--is-inside-work-tree"]);
   return res.code === 0 && res.stdout.trim() === "true";
 }
@@ -167,7 +175,10 @@ export class WorktreeManager implements Isolation {
   private readonly seq = new Map<string, number>();
   private readonly commits = new Map<string, Checkpoint[]>();
   /** Worktrees handed out, by task id. */
-  private readonly worktrees = new Map<string, { path: string; branch: string }>();
+  private readonly worktrees = new Map<
+    string,
+    { path: string; branch: string }
+  >();
 
   /** Serializes `integrate` so concurrent finishers can't race the merge. */
   private integrateLock: Promise<unknown> = Promise.resolve();
@@ -189,13 +200,19 @@ export class WorktreeManager implements Isolation {
 
     const top = await this.git(["rev-parse", "--show-toplevel"]);
     if (top.code !== 0) {
-      throw new Error(`git isolation: not a git repository (${top.stderr.trim()})`);
+      throw new Error(
+        `git isolation: not a git repository (${top.stderr.trim()})`,
+      );
     }
     this.repoRoot = top.stdout.trim();
-    if (!this.opts.root) this.root = join(this.repoRoot, ".oxagen", "worktrees");
+    if (!this.opts.root)
+      this.root = join(this.repoRoot, ".oxagen", "worktrees");
 
     const head = await this.git(["rev-parse", "HEAD"]);
-    if (head.code !== 0) throw new Error(`git isolation: cannot resolve HEAD (${head.stderr.trim()})`);
+    if (head.code !== 0)
+      throw new Error(
+        `git isolation: cannot resolve HEAD (${head.stderr.trim()})`,
+      );
     this.baseRef = head.stdout.trim();
 
     // rerere makes repeated conflict resolutions idempotent — a resolver agent
@@ -226,9 +243,18 @@ export class WorktreeManager implements Isolation {
     await this.removeWorktree(path);
     await this.git(["branch", "-D", branch]); // ignore "not found"
 
-    const add = await this.git(["worktree", "add", "-b", branch, path, this.baseRef]);
+    const add = await this.git([
+      "worktree",
+      "add",
+      "-b",
+      branch,
+      path,
+      this.baseRef,
+    ]);
     if (add.code !== 0) {
-      throw new Error(`git isolation: worktree add failed for ${taskId}: ${add.stderr.trim()}`);
+      throw new Error(
+        `git isolation: worktree add failed for ${taskId}: ${add.stderr.trim()}`,
+      );
     }
     this.worktrees.set(taskId, { path, branch });
     return path;
@@ -239,9 +265,15 @@ export class WorktreeManager implements Isolation {
    * commit under `refs/oxagen/agents/<task>/<n>`. Returns the checkpoint, or
    * `null` when the agent changed nothing.
    */
-  async checkpoint(taskId: string, message: string): Promise<Checkpoint | null> {
+  async checkpoint(
+    taskId: string,
+    message: string,
+  ): Promise<Checkpoint | null> {
     const wt = this.worktrees.get(taskId);
-    if (!wt) throw new Error(`git isolation: no worktree for ${taskId} (call spawn first)`);
+    if (!wt)
+      throw new Error(
+        `git isolation: no worktree for ${taskId} (call spawn first)`,
+      );
 
     await this.git(["add", "-A"], wt.path);
     const status = await this.git(["status", "--porcelain"], wt.path);
@@ -249,9 +281,14 @@ export class WorktreeManager implements Isolation {
 
     // --no-verify: these are fine-grained per-step commits; the gate runs at
     // integration / CI, not on every micro-commit.
-    const commit = await this.git(["commit", "--no-verify", "-m", message], wt.path);
+    const commit = await this.git(
+      ["commit", "--no-verify", "-m", message],
+      wt.path,
+    );
     if (commit.code !== 0) {
-      throw new Error(`git isolation: commit failed for ${taskId}: ${commit.stderr.trim()}`);
+      throw new Error(
+        `git isolation: commit failed for ${taskId}: ${commit.stderr.trim()}`,
+      );
     }
     const rev = await this.git(["rev-parse", "HEAD"], wt.path);
     const hash = rev.stdout.trim();
@@ -282,13 +319,19 @@ export class WorktreeManager implements Isolation {
     return this.withIntegrateLock(() => this.doIntegrate(taskId, message));
   }
 
-  private async doIntegrate(taskId: string, message?: string): Promise<IntegrationResult> {
+  private async doIntegrate(
+    taskId: string,
+    message?: string,
+  ): Promise<IntegrationResult> {
     const wt = this.worktrees.get(taskId);
     if (!wt) throw new Error(`git isolation: no worktree for ${taskId}`);
     const int = await this.ensureIntegration();
     const msg = message ?? `fleet(${taskId}): integrate`;
 
-    const merge = await this.git(["merge", "--no-ff", "-m", msg, wt.branch], int.path);
+    const merge = await this.git(
+      ["merge", "--no-ff", "-m", msg, wt.branch],
+      int.path,
+    );
     if (merge.code === 0) {
       const tip = await this.git(["rev-parse", "HEAD"], int.path);
       return { ok: true, commit: tip.stdout.trim(), taskBranch: wt.branch };
@@ -296,21 +339,40 @@ export class WorktreeManager implements Isolation {
 
     // Conflict. rerere may already have replayed a recorded resolution — if no
     // files remain unmerged, commit it and report success.
-    const unmerged = await this.git(["diff", "--name-only", "--diff-filter=U"], int.path);
-    const conflicts = unmerged.stdout.split("\n").map((l) => l.trim()).filter(Boolean);
+    const unmerged = await this.git(
+      ["diff", "--name-only", "--diff-filter=U"],
+      int.path,
+    );
+    const conflicts = unmerged.stdout
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
 
     if (conflicts.length === 0) {
-      const done = await this.git(["commit", "--no-verify", "--no-edit"], int.path);
+      const done = await this.git(
+        ["commit", "--no-verify", "--no-edit"],
+        int.path,
+      );
       if (done.code === 0) {
         const tip = await this.git(["rev-parse", "HEAD"], int.path);
-        return { ok: true, commit: tip.stdout.trim(), taskBranch: wt.branch, autoResolved: true };
+        return {
+          ok: true,
+          commit: tip.stdout.trim(),
+          taskBranch: wt.branch,
+          autoResolved: true,
+        };
       }
     }
 
     // Real conflict: abort so the integration tree stays clean, and surface it.
     await this.git(["merge", "--abort"], int.path);
     const tip = await this.git(["rev-parse", wt.branch]);
-    return { ok: false, conflicts, taskBranch: wt.branch, taskTip: tip.stdout.trim() };
+    return {
+      ok: false,
+      conflicts,
+      taskBranch: wt.branch,
+      taskTip: tip.stdout.trim(),
+    };
   }
 
   /** The integration branch + its worktree path, once at least one integrate ran. */
@@ -351,9 +413,18 @@ export class WorktreeManager implements Isolation {
     const path = join(this.root, this.ns, "integration");
     await this.removeWorktree(path);
     await this.git(["branch", "-D", branch]);
-    const add = await this.git(["worktree", "add", "-b", branch, path, this.baseRef]);
+    const add = await this.git([
+      "worktree",
+      "add",
+      "-b",
+      branch,
+      path,
+      this.baseRef,
+    ]);
     if (add.code !== 0) {
-      throw new Error(`git isolation: integration worktree failed: ${add.stderr.trim()}`);
+      throw new Error(
+        `git isolation: integration worktree failed: ${add.stderr.trim()}`,
+      );
     }
     this.integration = { path, branch };
     return this.integration;

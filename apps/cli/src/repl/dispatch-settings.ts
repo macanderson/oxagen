@@ -31,7 +31,9 @@ export function loadDispatchSettings(cwd: string): DispatchSettings {
   return {
     mode: settings.dispatchMode === true,
     maxConcurrent:
-      typeof cap === "number" && cap > 0 ? Math.floor(cap) : DISPATCH_DEFAULT_CAP,
+      typeof cap === "number" && cap > 0
+        ? Math.floor(cap)
+        : DISPATCH_DEFAULT_CAP,
   };
 }
 

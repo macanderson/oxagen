@@ -180,7 +180,9 @@ describe("session event envelope — golden wire contract", () => {
   it("the golden set covers exactly the schema's discriminator types (additive-only guard)", () => {
     // If a type is added, removed, or renamed in the schema without touching
     // GOLDEN, these two sets diverge and this test fails.
-    const schemaTypes = sessionEventSchema.options.map((o) => o.shape.type.value).sort();
+    const schemaTypes = sessionEventSchema.options
+      .map((o) => o.shape.type.value)
+      .sort();
     const goldenTypes = GOLDEN.map((e) => e.type).sort();
     expect(goldenTypes).toEqual(schemaTypes);
     expect(GOLDEN).toHaveLength(14);
@@ -206,7 +208,9 @@ describe("session event envelope — golden wire contract", () => {
       owner: "worker",
       pid: 99,
     };
-    expect(parseSessionEventLine(serializeSessionEvent(minimalStart))).toEqual(minimalStart);
+    expect(parseSessionEventLine(serializeSessionEvent(minimalStart))).toEqual(
+      minimalStart,
+    );
   });
 });
 
@@ -228,46 +232,73 @@ describe("parseSessionEventLine — tolerance", () => {
     ];
     for (const line of bad) {
       expect(() => parseSessionEventLine(line)).not.toThrow();
-      expect(parseSessionEventLine(line), `line ${JSON.stringify(line)} must be null`).toBeNull();
+      expect(
+        parseSessionEventLine(line),
+        `line ${JSON.stringify(line)} must be null`,
+      ).toBeNull();
     }
   });
 
   it("rejects a wrong schema version", () => {
-    const v2 = '{"v":2,"sid":"x","seq":1,"ts":1,"type":"error","message":"m","fatal":false}';
+    const v2 =
+      '{"v":2,"sid":"x","seq":1,"ts":1,"type":"error","message":"m","fatal":false}';
     expect(parseSessionEventLine(v2)).toBeNull();
     // Same payload at v1 is the control — it must parse, proving only `v` differs.
-    const v1 = '{"v":1,"sid":"x","seq":1,"ts":1,"type":"error","message":"m","fatal":false}';
+    const v1 =
+      '{"v":1,"sid":"x","seq":1,"ts":1,"type":"error","message":"m","fatal":false}';
     expect(parseSessionEventLine(v1)).not.toBeNull();
   });
 
   it("rejects non-positive seq and non-positive ts", () => {
-    const control = '{"v":1,"sid":"x","seq":1,"ts":1,"type":"error","message":"m","fatal":false}';
+    const control =
+      '{"v":1,"sid":"x","seq":1,"ts":1,"type":"error","message":"m","fatal":false}';
     expect(parseSessionEventLine(control)).not.toBeNull();
     // seq must be a positive integer starting at 1.
-    expect(parseSessionEventLine(control.replace('"seq":1', '"seq":0'))).toBeNull();
-    expect(parseSessionEventLine(control.replace('"seq":1', '"seq":-1'))).toBeNull();
-    expect(parseSessionEventLine(control.replace('"seq":1', '"seq":1.5'))).toBeNull();
+    expect(
+      parseSessionEventLine(control.replace('"seq":1', '"seq":0')),
+    ).toBeNull();
+    expect(
+      parseSessionEventLine(control.replace('"seq":1', '"seq":-1')),
+    ).toBeNull();
+    expect(
+      parseSessionEventLine(control.replace('"seq":1', '"seq":1.5')),
+    ).toBeNull();
     // ts must be a positive integer.
-    expect(parseSessionEventLine(control.replace('"ts":1', '"ts":0'))).toBeNull();
-    expect(parseSessionEventLine(control.replace('"ts":1', '"ts":-1'))).toBeNull();
+    expect(
+      parseSessionEventLine(control.replace('"ts":1', '"ts":0')),
+    ).toBeNull();
+    expect(
+      parseSessionEventLine(control.replace('"ts":1', '"ts":-1')),
+    ).toBeNull();
   });
 
   it("rejects an empty sid", () => {
-    const control = '{"v":1,"sid":"x","seq":1,"ts":1,"type":"error","message":"m","fatal":false}';
-    expect(parseSessionEventLine(control.replace('"sid":"x"', '"sid":""'))).toBeNull();
+    const control =
+      '{"v":1,"sid":"x","seq":1,"ts":1,"type":"error","message":"m","fatal":false}';
+    expect(
+      parseSessionEventLine(control.replace('"sid":"x"', '"sid":""')),
+    ).toBeNull();
   });
 });
 
 describe("usage helpers", () => {
   it("emptyTurnUsage is all-zero and a fresh object each call", () => {
-    expect(emptyTurnUsage()).toEqual({ inputTokens: 0, outputTokens: 0, costUsd: 0 });
+    expect(emptyTurnUsage()).toEqual({
+      inputTokens: 0,
+      outputTokens: 0,
+      costUsd: 0,
+    });
     expect(emptyTurnUsage()).not.toBe(emptyTurnUsage());
   });
 
   it("addTurnUsage sums componentwise without mutating its inputs", () => {
     const a = { inputTokens: 1, outputTokens: 2, costUsd: 0.5 };
     const b = { inputTokens: 10, outputTokens: 20, costUsd: 1.5 };
-    expect(addTurnUsage(a, b)).toEqual({ inputTokens: 11, outputTokens: 22, costUsd: 2 });
+    expect(addTurnUsage(a, b)).toEqual({
+      inputTokens: 11,
+      outputTokens: 22,
+      costUsd: 2,
+    });
     expect(a).toEqual({ inputTokens: 1, outputTokens: 2, costUsd: 0.5 });
     expect(b).toEqual({ inputTokens: 10, outputTokens: 20, costUsd: 1.5 });
     // Adding the empty usage is the identity.

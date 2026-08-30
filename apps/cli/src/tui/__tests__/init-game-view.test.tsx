@@ -30,7 +30,9 @@ describe("InitGameView", () => {
   });
 
   it("advances frames on its own timer without throwing", async () => {
-    const { lastFrame, unmount } = render(<InitGameView width={30} tickMs={1} />);
+    const { lastFrame, unmount } = render(
+      <InitGameView width={30} tickMs={1} />,
+    );
     await new Promise((r) => setTimeout(r, 20));
     expect(lastFrame()).toBeTruthy();
     unmount();

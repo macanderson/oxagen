@@ -19,7 +19,11 @@
  * actuals (see telemetry.ts), so a drift here can never stick past the first
  * turn — but there should be none: keep this aligned with the engine.
  */
-import { pickAdvisorModel, pickJudgePanel, LOCAL_EVALUATOR } from "@oxagen/agent-engine";
+import {
+  pickAdvisorModel,
+  pickJudgePanel,
+  LOCAL_EVALUATOR,
+} from "@oxagen/agent-engine";
 import { writeSettingsValue } from "../settings/write.js";
 import type { TelemetryModels } from "./telemetry.js";
 
@@ -41,8 +45,17 @@ const ROLE_SETTINGS_KEY: Record<ModelRole, string> = {
  * mutation here — the run-time override stays an explicit argument, not global
  * state). Returns the settings file path written.
  */
-export function persistRoleModel(role: ModelRole, slug: string, cwd?: string): string {
-  return writeSettingsValue({ scope: "local", key: ROLE_SETTINGS_KEY[role], value: slug, cwd });
+export function persistRoleModel(
+  role: ModelRole,
+  slug: string,
+  cwd?: string,
+): string {
+  return writeSettingsValue({
+    scope: "local",
+    key: ROLE_SETTINGS_KEY[role],
+    value: slug,
+    cwd,
+  });
 }
 
 /**

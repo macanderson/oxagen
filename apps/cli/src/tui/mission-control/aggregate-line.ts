@@ -46,12 +46,23 @@ const firstLine = (s: string): string => {
   return line.trim();
 };
 
-const fmtDuration = (ms: number): string =>
-  ms >= 60_000
-    ? `${Math.round(ms / 60_000)}m${Math.round((ms % 60_000) / 1000)}s`
-    : ms >= 1000
-      ? `${(ms / 1000).toFixed(1)}s`
-      : `${Math.round(ms)}ms`;
+/**
+ * A short, human duration: `12ms` / `1.2s` / `2m31s`. The minute component
+ * FLOORS (rounding it would report 119_999ms as `2m60s`); the second component
+ * is the floored remainder, so the two parts always agree.
+ *
+ * This is the single implementation — Mission Control's `lib.ts` re-exports it
+ * as `formatDurationMs` so a tool chip reads the same in the Focus and
+ * Aggregate views. Kept here because this module is the leaf (no theme, no
+ * Ink), so the dependency points the safe way.
+ */
+export const formatDurationMs = (ms: number): string => {
+  if (ms >= 60_000) {
+    const total = Math.floor(ms / 1000);
+    return `${Math.floor(total / 60)}m${total % 60}s`;
+  }
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
+};
 
 /**
  * Map one session event to its aggregate-timeline line, or `null` when the
@@ -77,7 +88,9 @@ export function toAggregateLine(
     case "stage":
       if (!verbose && !SALIENT_STAGES.has(event.kind)) return null;
       return line(
-        event.detail ? `${event.label} — ${clip(event.detail, 80)}` : event.label,
+        event.detail
+          ? `${event.label} — ${clip(event.detail, 80)}`
+          : event.label,
         "dim",
       );
     case "message.delta":
@@ -92,8 +105,11 @@ export function toAggregateLine(
       return verbose ? line(`· ${event.name} …`, "dim") : null;
     case "tool.end":
       return event.ok
-        ? line(`· ${event.name} ${fmtDuration(event.durationMs)}`, "dim")
-        : line(`✗ ${event.name} failed after ${fmtDuration(event.durationMs)}`, "error");
+        ? line(`· ${event.name} ${formatDurationMs(event.durationMs)}`, "dim")
+        : line(
+            `✗ ${event.name} failed after ${formatDurationMs(event.durationMs)}`,
+            "error",
+          );
     case "diff": {
       const files = event.changedFiles.length;
       if (files === 0) return null;
@@ -106,19 +122,25 @@ export function toAggregateLine(
     case "usage":
       return null;
     case "session.state":
-      return event.state === "waiting" ? line("◇ waiting for input", "dim") : null;
+      return event.state === "waiting"
+        ? line("◇ waiting for input", "dim")
+        : null;
     case "error":
       return line(`✗ ${clip(event.message, 160)}`, "error");
     case "session.end":
       switch (event.state) {
         case "done":
           return line(
-            event.summary === "" ? "✔ done" : `✔ done — ${clip(event.summary, 120)}`,
+            event.summary === ""
+              ? "✔ done"
+              : `✔ done — ${clip(event.summary, 120)}`,
             "success",
           );
         case "failed":
           return line(
-            event.summary === "" ? "✖ failed" : `✖ failed — ${clip(event.summary, 120)}`,
+            event.summary === ""
+              ? "✖ failed"
+              : `✖ failed — ${clip(event.summary, 120)}`,
             "error",
           );
         case "cancelled":

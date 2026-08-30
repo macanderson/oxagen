@@ -26,7 +26,14 @@
  * Output: apps/cli/dist-standalone/oxagen.mjs  (runnable: `node oxagen.mjs "…"`)
  */
 import { build } from "esbuild";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -92,12 +99,13 @@ await build({
   platform: "node",
   format: "esm",
   target: "node20",
-  // Native, optional deps of the context engine (@oxagen/engram). They are loaded
-  // lazily and the CLI degrades gracefully when absent (see src/agent/memory.ts and
-  // the createRequire shim at the top of src/index.tsx), so a benchmark container
-  // without them still runs the full agent loop — it just skips persistent memory.
-  // Native, optional deps reached lazily via require() — safe to leave external
-  // (they are NOT eagerly imported, and the CLI degrades gracefully when absent).
+  // Native deps of the context engine (@oxagen/engram). esbuild cannot inline a
+  // .node addon, and they are reached lazily via require() (see src/agent/memory.ts
+  // and the createRequire shim at the top of src/index.tsx) rather than eagerly
+  // imported — so leaving them external is safe: a benchmark container without them
+  // still runs the full agent loop, it just skips persistent memory. A real
+  // `npm i -g` install DOES get them; scripts/prepare-standalone-publish.mjs puts
+  // this same list into the published manifest's `dependencies`.
   external: ["duckdb", "blake3"],
   // A real `require`, `__filename`, and `__dirname` for bundled CJS code reached
   // under ESM. Two distinct needs:

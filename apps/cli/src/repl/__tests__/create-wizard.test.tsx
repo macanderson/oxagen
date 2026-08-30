@@ -33,7 +33,10 @@ function renderWizard(
     kind: "command",
     onClose: () => {},
     onCreated: () => {},
-    scaffold: (): ScaffoldResult => ({ path: "/repo/.oxagen/commands/foo.md", created: true }),
+    scaffold: (): ScaffoldResult => ({
+      path: "/repo/.oxagen/commands/foo.md",
+      created: true,
+    }),
     ...overrides,
   };
   return render(<CreateWizard {...props} />);
@@ -83,7 +86,10 @@ describe("CreateWizard", () => {
   it("advances name → confirm → created result and fires onCreated", async () => {
     const onCreated = vi.fn();
     const scaffold = vi.fn(
-      (): ScaffoldResult => ({ path: "/repo/.oxagen/commands/deploy.md", created: true }),
+      (): ScaffoldResult => ({
+        path: "/repo/.oxagen/commands/deploy.md",
+        created: true,
+      }),
     );
     const { lastFrame, stdin } = renderWizard({ onCreated, scaffold });
     await until(() => (lastFrame() ?? "").includes("New slash command"));
@@ -113,8 +119,15 @@ describe("CreateWizard", () => {
   it("reports an already-existing artifact without firing onCreated, and opens it with o", async () => {
     const onCreated = vi.fn();
     const openInEditor = vi.fn();
-    const scaffold = (): ScaffoldResult => ({ path: "/repo/.oxagen/commands/foo.md", created: false });
-    const { lastFrame, stdin } = renderWizard({ onCreated, openInEditor, scaffold });
+    const scaffold = (): ScaffoldResult => ({
+      path: "/repo/.oxagen/commands/foo.md",
+      created: false,
+    });
+    const { lastFrame, stdin } = renderWizard({
+      onCreated,
+      openInEditor,
+      scaffold,
+    });
     await until(() => (lastFrame() ?? "").includes("New slash command"));
     stdin.write("foo");
     await until(() => (lastFrame() ?? "").includes("foo")); // let the input commit first

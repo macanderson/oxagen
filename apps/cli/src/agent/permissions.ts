@@ -1,33 +1,38 @@
 /**
  * The permission broker — the safety layer between the model and the host.
  *
- * Oxagen's coding tools (`write_file`, `edit_file`, `bash`) mutate the user's
- * filesystem and run arbitrary shell commands. Until now they executed with no
- * gate other than `--readonly` (which simply withholds them). That is fine for a
- * developer dogfooding their own repo, but it blocks every unattended / shared /
- * CI use case and offers no protection against a destructive command.
+ * Oxagen's coding tools (`write_file`, `edit_file`, `bash`) change the user's
+ * files and run shell commands. `--readonly` only withholds them entirely, which
+ * is useless for any unattended, shared, or CI run. This module is the gate that
+ * every mutating tool call passes through first.
  *
- * This module adds a deterministic decision layer that every mutating tool call
- * is routed through before it runs. It is intentionally framework-agnostic: the
- * broker decides `allow` / `deny`, and the *interactive* part (asking the human)
- * is a pluggable async {@link Approver} the REPL supplies. Non-interactive
- * callers (one-shot, CI) simply omit the approver and get the mode's safe
- * default.
+ * It is deliberately framework-agnostic: the broker returns `allow` or `deny`,
+ * and asking the human is a pluggable async {@link Approver} the REPL supplies.
+ * Non-interactive callers (one-shot, CI) omit the approver and get the mode's
+ * safe default, which is to deny.
  *
- * Decision order for a mutating call (most → least decisive):
- *   1. `bypass` mode → allow (the user explicitly opted out of the safety layer).
- *   2. First matching explicit rule (project/user/session) → allow | ask | deny.
- *   3. A catastrophic command pattern → forced to `ask` (never silently allowed).
- *   4. A write/edit outside the workspace root → forced to `ask`.
- *   5. Mode default: `acceptEdits` auto-allows file edits (bash still asks);
- *      `ask` asks for everything.
- *   6. Resolve an `ask`: call the approver if present; otherwise `deny`.
- *   7. On `remember`, persist the rule to settings.json for future sessions.
+ * Decision order for a mutating call, most decisive first — see
+ * {@link PermissionBroker.check}, which implements it in this order:
+ *   1. A `settings.json` `permissions.deny` rule → deny. This wins over
+ *      everything, `bypass` included.
+ *   2. `bypass` mode → allow (the user explicitly opted out of the gate).
+ *   3. Base decision, first match wins: a `settings.json` `permissions.allow`
+ *      rule → allow; else the first matching session/project/user rule →
+ *      allow | ask | deny; else the mode default (`acceptEdits` allows file
+ *      changes and asks for shell; `ask` asks for everything).
+ *   4. Safety escalations turn a base `allow` back into `ask`: a catastrophic
+ *      command pattern, or a write/edit outside the workspace root.
+ *   5. Resolve an `ask` through the approver; with no approver, deny.
+ *   6. When the human answers with `remember`, persist the rule to
+ *      `.oxagen/settings.json` so future sessions decide the same way.
  */
 import { isAbsolute, relative, resolve } from "node:path";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { canonicalToolName, evaluateLocalPermission } from "../settings/permissions-gate.js";
+import {
+  canonicalToolName,
+  evaluateLocalPermission,
+} from "../settings/permissions-gate.js";
 import type { Permissions } from "../settings/schema.js";
 
 /** The tools that can change the host. Read/search tools are never gated. */
@@ -167,13 +172,30 @@ function subjectOf(req: PermissionRequest, cwd: string): string {
   return req.path ? relative(cwd, req.path) : "";
 }
 
-function ruleMatches(rule: PermissionRule, req: PermissionRequest, cwd: string): boolean {
+/**
+ * Does an in-memory rule (a remembered session rule, or one from `BrokerOptions.rules`)
+ * cover this request?
+ *
+ * WARNING — a bash rule here matches by PREFIX, so a remembered `allow` for
+ * `git log` also covers `git log && <anything>`. The same rule persisted to
+ * `settings.json` is matched by {@link evaluateLocalPermission} as a literal
+ * glob, which does NOT prefix-match. A remembered allow is therefore broader
+ * for the rest of this session than it is on the next run.
+ */
+function ruleMatches(
+  rule: PermissionRule,
+  req: PermissionRequest,
+  cwd: string,
+): boolean {
   if (rule.tool && rule.tool !== "*" && rule.tool !== req.tool) return false;
   if (rule.pattern) {
     const subject = subjectOf(req, cwd);
     // A command rule matches as a prefix or a glob; a path rule as a glob.
     if (req.tool === "bash") {
-      if (!subject.startsWith(rule.pattern) && !globToRegExp(rule.pattern).test(subject))
+      if (
+        !subject.startsWith(rule.pattern) &&
+        !globToRegExp(rule.pattern).test(subject)
+      )
         return false;
     } else if (!globToRegExp(rule.pattern).test(subject)) {
       return false;
@@ -191,7 +213,9 @@ export function isOutsideWorkspace(cwd: string, absPath: string): boolean {
 function summarize(req: PermissionRequest): string {
   if (req.tool === "bash") return `Run: ${req.command ?? ""}`;
   const verb = req.tool === "write_file" ? "Write" : "Edit";
-  const shown = req.path ? relative(req.cwd, req.path) || req.path : "(unknown path)";
+  const shown = req.path
+    ? relative(req.cwd, req.path) || req.path
+    : "(unknown path)";
   return `${verb} ${shown}`;
 }
 
@@ -233,7 +257,11 @@ export class PermissionBroker {
   /** Record a rule so an identical future call resolves the same way silently. */
   private remember(req: PermissionRequest, decision: "allow" | "deny"): void {
     const pattern =
-      req.tool === "bash" ? (req.command ?? "") : (req.path ? relative(this.cwd, req.path) : undefined);
+      req.tool === "bash"
+        ? (req.command ?? "")
+        : req.path
+          ? relative(this.cwd, req.path)
+          : undefined;
     const rule: PermissionRule = { tool: req.tool, pattern, decision };
     this.sessionRules.unshift(rule);
     // Persist to settings.json for future sessions
@@ -281,7 +309,11 @@ export class PermissionBroker {
 
     settings.permissions = permissions;
     mkdirSync(dirname(settingsPath), { recursive: true });
-    writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf8");
+    writeFileSync(
+      settingsPath,
+      JSON.stringify(settings, null, 2) + "\n",
+      "utf8",
+    );
   }
 
   /**
@@ -295,7 +327,9 @@ export class PermissionBroker {
   private settingsMatch(req: PermissionRequest): "allow" | "deny" | "none" {
     if (!this.permissions) return "none";
     const input =
-      req.tool === "bash" ? { command: req.command ?? "" } : { path: req.path ?? "" };
+      req.tool === "bash"
+        ? { command: req.command ?? "" }
+        : { path: req.path ?? "" };
     const result = evaluateLocalPermission(req.tool, input, this.permissions);
     // A decision with no `rule` came from `defaultMode`, not an explicit
     // allow/deny entry — leave that to the session mode below.
@@ -319,12 +353,16 @@ export class PermissionBroker {
     //    fallthrough (no matching rule) is ignored so it never shadows the mode.
     const settings = this.settingsMatch(req);
     if (settings === "deny") {
-      return { decision: "deny", reason: "denied by a settings.json deny rule" };
+      return {
+        decision: "deny",
+        reason: "denied by a settings.json deny rule",
+      };
     }
 
     // 2. Explicit opt-out — the user has accepted full responsibility. (A
     //    settings deny above still wins; a settings allow is redundant here.)
-    if (this.mode === "bypass") return { decision: "allow", reason: "bypass mode" };
+    if (this.mode === "bypass")
+      return { decision: "allow", reason: "bypass mode" };
 
     // 3. Base decision: a settings allow, else the first matching rule, else the
     //    mode default.
@@ -342,7 +380,10 @@ export class PermissionBroker {
       reason = "acceptEdits: file change auto-approved";
     } else {
       decision = "ask";
-      reason = this.mode === "acceptEdits" ? "shell command needs approval" : "approval required";
+      reason =
+        this.mode === "acceptEdits"
+          ? "shell command needs approval"
+          : "approval required";
     }
 
     // 4. Safety escalations downgrade an `allow` to `ask` so a catastrophic
@@ -353,7 +394,11 @@ export class PermissionBroker {
       if (req.tool === "bash" && req.command && matchesDangerous(req.command)) {
         decision = "ask";
         reason = "command matches a dangerous pattern";
-      } else if (req.tool !== "bash" && req.path && isOutsideWorkspace(this.cwd, req.path)) {
+      } else if (
+        req.tool !== "bash" &&
+        req.path &&
+        isOutsideWorkspace(this.cwd, req.path)
+      ) {
         decision = "ask";
         reason = "writes outside the workspace root";
       }
@@ -364,16 +409,26 @@ export class PermissionBroker {
     return this.ask(req, reason);
   }
 
-  private async ask(req: PermissionRequest, reason: string): Promise<PermissionDecision> {
+  private async ask(
+    req: PermissionRequest,
+    reason: string,
+  ): Promise<PermissionDecision> {
     if (!this.approver) {
       // Fail closed: no human available to approve.
       return { decision: "deny", reason: `${reason} (no approver — denied)` };
     }
-    const response = await this.approver({ ...req, summary: summarize(req), reason });
+    const response = await this.approver({
+      ...req,
+      summary: summarize(req),
+      reason,
+    });
     if (response.remember) this.remember(req, response.decision);
     return {
       decision: response.decision,
-      reason: response.decision === "allow" ? `approved (${reason})` : `denied by user (${reason})`,
+      reason:
+        response.decision === "allow"
+          ? `approved (${reason})`
+          : `denied by user (${reason})`,
     };
   }
 }
@@ -450,7 +505,11 @@ export function toRequest(
   if (!isMutatingTool(tool)) return null;
   const obj = (input ?? {}) as { path?: unknown; command?: unknown };
   if (tool === "bash") {
-    return { tool, command: typeof obj.command === "string" ? obj.command : "", cwd };
+    return {
+      tool,
+      command: typeof obj.command === "string" ? obj.command : "",
+      cwd,
+    };
   }
   const p = typeof obj.path === "string" ? obj.path : "";
   const abs = p ? (isAbsolute(p) ? p : resolve(cwd, p)) : "";

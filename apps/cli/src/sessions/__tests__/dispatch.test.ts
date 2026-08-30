@@ -41,7 +41,9 @@ describe("titleFromPrompt", () => {
 
 describe("parseAmpersandDispatch (REPL trailing-& idiom)", () => {
   it("strips the marker and returns the prompt", () => {
-    expect(parseAmpersandDispatch("fix the login bug &")).toBe("fix the login bug");
+    expect(parseAmpersandDispatch("fix the login bug &")).toBe(
+      "fix the login bug",
+    );
     expect(parseAmpersandDispatch("fix it\t&")).toBe("fix it");
   });
 
@@ -59,7 +61,8 @@ describe("parseAmpersandDispatch (REPL trailing-& idiom)", () => {
 
 describe("dispatchDetachedSession", () => {
   it("creates a worker-owned session and spawns the detached worker", async () => {
-    const calls: Array<{ command: string; args: string[]; options: object }> = [];
+    const calls: Array<{ command: string; args: string[]; options: object }> =
+      [];
     let unrefed = false;
     const { sid, title } = await dispatchDetachedSession({
       cwd: "/some/project",
@@ -97,7 +100,11 @@ describe("dispatchDetachedSession", () => {
     const call = calls[0] as (typeof calls)[0];
     expect(call.command).toBe(process.execPath);
     expect(call.args.slice(-3)).toEqual(["fleet", "worker", sid]);
-    expect(call.options).toEqual({ cwd: "/some/project", detached: true, stdio: "ignore" });
+    expect(call.options).toEqual({
+      cwd: "/some/project",
+      detached: true,
+      stdio: "ignore",
+    });
     expect(unrefed).toBe(true);
   });
 

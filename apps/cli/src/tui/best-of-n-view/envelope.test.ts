@@ -18,8 +18,23 @@ const result: BestOfNResult = {
     steps: 9,
   },
   candidates: [
-    { id: "candidate-1", model: "m", diff: "", summary: "", changedFiles: [], steps: 3, failed: true },
-    { id: "candidate-2", model: "m", diff: "d", summary: "s", changedFiles: ["a.py", "b.py"], steps: 9 },
+    {
+      id: "candidate-1",
+      model: "m",
+      diff: "",
+      summary: "",
+      changedFiles: [],
+      steps: 3,
+      failed: true,
+    },
+    {
+      id: "candidate-2",
+      model: "m",
+      diff: "d",
+      summary: "s",
+      changedFiles: ["a.py", "b.py"],
+      steps: 9,
+    },
   ],
   selection: {
     winnerId: "candidate-2",
@@ -41,8 +56,20 @@ describe("resultEnvelope", () => {
       winnerFiles: ["a.py", "b.py"],
     });
     expect(env["candidates"]).toEqual([
-      { id: "candidate-1", model: "m", changedFiles: [], steps: 3, failed: true },
-      { id: "candidate-2", model: "m", changedFiles: ["a.py", "b.py"], steps: 9, failed: false },
+      {
+        id: "candidate-1",
+        model: "m",
+        changedFiles: [],
+        steps: 3,
+        failed: true,
+      },
+      {
+        id: "candidate-2",
+        model: "m",
+        changedFiles: ["a.py", "b.py"],
+        steps: 9,
+        failed: false,
+      },
     ]);
     expect(env).not.toHaveProperty("usage");
   });
@@ -61,6 +88,11 @@ describe("resultEnvelope", () => {
     const env = resultEnvelope(result, usage);
     expect(env["usage"]).toEqual(usage);
     // The exact keys oxagen_agent.py reads.
-    expect(env["usage"]).toMatchObject({ costUsd: 0.42, totalTokens: 105_000, wallSec: 640.2, steps: 12 });
+    expect(env["usage"]).toMatchObject({
+      costUsd: 0.42,
+      totalTokens: 105_000,
+      wallSec: 640.2,
+      steps: 12,
+    });
   });
 });

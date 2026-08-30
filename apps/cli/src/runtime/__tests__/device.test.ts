@@ -11,7 +11,14 @@ import type { DeviceProfile } from "../types.js";
 
 const GB = 1024 ** 3;
 
-function deps(over: Partial<{ mem: number; cores: number; plat: NodeJS.Platform; arch: string }>): DetectDeps {
+function deps(
+  over: Partial<{
+    mem: number;
+    cores: number;
+    plat: NodeJS.Platform;
+    arch: string;
+  }>,
+): DetectDeps {
   return {
     totalmemBytes: () => (over.mem ?? 16) * GB,
     cpuCount: () => over.cores ?? 8,
@@ -22,7 +29,9 @@ function deps(over: Partial<{ mem: number; cores: number; plat: NodeJS.Platform;
 
 describe("detectDevice", () => {
   it("treats Apple Silicon as unified memory with usable VRAM", () => {
-    const d = detectDevice(deps({ mem: 32, plat: "darwin", arch: "arm64", cores: 12 }));
+    const d = detectDevice(
+      deps({ mem: 32, plat: "darwin", arch: "arm64", cores: 12 }),
+    );
     expect(d.unifiedMemory).toBe(true);
     expect(d.gpu).toBe("metal");
     expect(d.ramGB).toBe(32);
@@ -60,13 +69,23 @@ describe("paramsBillions", () => {
 
 describe("estimateModelRamGB", () => {
   it("grows with params and with quantization quality", () => {
-    expect(estimateModelRamGB("7B", "q8")).toBeGreaterThan(estimateModelRamGB("7B", "q4"));
-    expect(estimateModelRamGB("32B", "q4")).toBeGreaterThan(estimateModelRamGB("7B", "q4"));
+    expect(estimateModelRamGB("7B", "q8")).toBeGreaterThan(
+      estimateModelRamGB("7B", "q4"),
+    );
+    expect(estimateModelRamGB("32B", "q4")).toBeGreaterThan(
+      estimateModelRamGB("7B", "q4"),
+    );
   });
 });
 
 describe("memoryBudgetGB", () => {
-  const base: DeviceProfile = { ramGB: 32, vramGB: 0, gpu: null, cpuCores: 8, unifiedMemory: false };
+  const base: DeviceProfile = {
+    ramGB: 32,
+    vramGB: 0,
+    gpu: null,
+    cpuCores: 8,
+    unifiedMemory: false,
+  };
 
   it("reserves RAM headroom on CPU-only hosts", () => {
     expect(memoryBudgetGB(base)).toBeCloseTo(32 * 0.65, 1);
@@ -77,14 +96,26 @@ describe("memoryBudgetGB", () => {
   });
 
   it("uses the larger of RAM-headroom and VRAM on unified memory", () => {
-    const d: DeviceProfile = { ramGB: 64, vramGB: 44.8, gpu: "metal", cpuCores: 12, unifiedMemory: true };
+    const d: DeviceProfile = {
+      ramGB: 64,
+      vramGB: 44.8,
+      gpu: "metal",
+      cpuCores: 12,
+      unifiedMemory: true,
+    };
     expect(memoryBudgetGB(d)).toBeCloseTo(44.8, 1);
   });
 });
 
 describe("fitsDevice", () => {
   it("fits a 7B q4 on a small laptop but not a 32B q8", () => {
-    const laptop: DeviceProfile = { ramGB: 16, vramGB: 0, gpu: null, cpuCores: 8, unifiedMemory: false };
+    const laptop: DeviceProfile = {
+      ramGB: 16,
+      vramGB: 0,
+      gpu: null,
+      cpuCores: 8,
+      unifiedMemory: false,
+    };
     expect(fitsDevice(laptop, "7B", "q4")).toBe(true);
     expect(fitsDevice(laptop, "32B", "q8")).toBe(false);
   });

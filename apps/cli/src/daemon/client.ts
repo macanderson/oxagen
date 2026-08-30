@@ -21,7 +21,11 @@ export class DaemonClient {
   async isRunning(): Promise<boolean> {
     if (!fs.existsSync(this.socketPath)) return false;
     try {
-      const result = await this.send({ id: "ping", method: "health", params: {} });
+      const result = await this.send({
+        id: "ping",
+        method: "health",
+        params: {},
+      });
       return result?.result !== undefined;
     } catch {
       return false;
@@ -51,7 +55,9 @@ export class DaemonClient {
             socket.destroy();
             resolve(response);
             return;
-          } catch { /* incomplete line */ }
+          } catch {
+            /* incomplete line */
+          }
         }
       });
 
@@ -83,7 +89,10 @@ export class DaemonClient {
   /**
    * Query memories via the daemon.
    */
-  async query(namespace: { org: string; workspace: string }, limit = 50): Promise<unknown> {
+  async query(
+    namespace: { org: string; workspace: string },
+    limit = 50,
+  ): Promise<unknown> {
     const response = await this.send({
       id: crypto.randomUUID(),
       method: "query",
@@ -108,7 +117,11 @@ export class DaemonClient {
   }
 
   /** Fuzzy symbol search across the persisted code graph. */
-  async searchCodeGraph(pattern: string, limit = 20, root?: string): Promise<unknown> {
+  async searchCodeGraph(
+    pattern: string,
+    limit = 20,
+    root?: string,
+  ): Promise<unknown> {
     const response = await this.send({
       id: crypto.randomUUID(),
       method: "search_graph",
@@ -177,6 +190,10 @@ export class DaemonClient {
    * Ask the daemon to shut down gracefully.
    */
   async shutdown(): Promise<void> {
-    await this.send({ id: crypto.randomUUID(), method: "shutdown", params: {} });
+    await this.send({
+      id: crypto.randomUUID(),
+      method: "shutdown",
+      params: {},
+    });
   }
 }

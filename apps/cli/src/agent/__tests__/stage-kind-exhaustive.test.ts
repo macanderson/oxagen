@@ -68,6 +68,8 @@ describe("PHASE_LABEL exhaustiveness", () => {
   });
 
   it("exposes exactly the known stage kinds — no stragglers, none missing", () => {
-    expect(Object.keys(PHASE_LABEL).sort()).toEqual([...KNOWN_STAGE_KINDS].sort());
+    expect(Object.keys(PHASE_LABEL).sort()).toEqual(
+      [...KNOWN_STAGE_KINDS].sort(),
+    );
   });
 });

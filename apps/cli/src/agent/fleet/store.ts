@@ -16,7 +16,13 @@ function projectKey(cwd: string): string {
 }
 
 function storePath(cwd: string): string {
-  return join(homedir(), ".config", "oxagen", "fleet", `${projectKey(cwd)}.json`);
+  return join(
+    homedir(),
+    ".config",
+    "oxagen",
+    "fleet",
+    `${projectKey(cwd)}.json`,
+  );
 }
 
 interface StoreShape {

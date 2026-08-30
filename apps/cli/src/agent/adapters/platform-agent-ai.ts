@@ -2,10 +2,15 @@
  * Platform `AgentAi` adapter for the CLI — routes every coding-engine LLM call
  * through the platform's OpenAI-compatible endpoint (`/v1/agent/llm`) so
  * turns are metered, credit-charged, and telemetry-instrumented server-side,
- * with the session token as the API key (ADR-019: no CLI-side BYOK).
+ * with the session token as the API key — no provider key ever leaves the
+ * machine on this path. The BYOK / not-logged-in alternative is a separate
+ * adapter ({@link createGatewayAgentAi} in `gateway-agent-ai.ts`); a caller
+ * picks one or the other, and this one never reads a local provider key.
  *
- * The endpoint routes by model slug (which encodes the tier), so reasoning
- * `effort` is applied server-side and is not forwarded as a request field.
+ * The endpoint routes by model slug (which encodes the tier), so the server
+ * always has a per-slug reasoning default. A caller-supplied `effort` is
+ * forwarded on top of it as the OpenAI-canonical `reasoning_effort` body field
+ * (see `stream` below); omitting `effort` leaves the server default in charge.
  */
 import type {
   AgentAi,
@@ -80,7 +85,9 @@ export function createPlatformAgentAi(opts: PlatformAgentAiOptions): AgentAi {
       });
     },
 
-    async generateObject<T>(args: ObjectRunArgs<T>): Promise<ObjectRunResult<T>> {
+    async generateObject<T>(
+      args: ObjectRunArgs<T>,
+    ): Promise<ObjectRunResult<T>> {
       const common = {
         model: provider(args.model),
         schema: args.schema,

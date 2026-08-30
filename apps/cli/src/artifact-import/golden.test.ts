@@ -10,8 +10,8 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import { importArtifacts } from "./index";
-import type { ImportPlatform } from "./types";
+import { importArtifacts } from "./index.js";
+import type { ImportPlatform } from "./types.js";
 
 /**
  * Golden conversion tests.

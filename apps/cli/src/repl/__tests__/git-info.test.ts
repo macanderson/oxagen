@@ -10,7 +10,12 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
-import { resolveGitInfo, truncatePathStart, abbreviateHome, abbreviatePath } from "../git-info.js";
+import {
+  resolveGitInfo,
+  truncatePathStart,
+  abbreviateHome,
+  abbreviatePath,
+} from "../git-info.js";
 
 let base: string;
 
@@ -62,11 +67,20 @@ describe("resolveGitInfo — git WORKTREE (the bug this module fixes)", () => {
     // naming the real gitdir, which lives elsewhere (typically under the main
     // checkout's .git/worktrees/<name>) and has its own HEAD.
     const worktree = join(base, "worktree");
-    const realGitDir = join(base, "main-repo", ".git", "worktrees", "my-worktree");
+    const realGitDir = join(
+      base,
+      "main-repo",
+      ".git",
+      "worktrees",
+      "my-worktree",
+    );
     mkdirSync(worktree, { recursive: true });
     mkdirSync(realGitDir, { recursive: true });
     writeFileSync(join(worktree, ".git"), `gitdir: ${realGitDir}\n`);
-    writeFileSync(join(realGitDir, "HEAD"), "ref: refs/heads/feat/cli-fullscreen-tui-redesign\n");
+    writeFileSync(
+      join(realGitDir, "HEAD"),
+      "ref: refs/heads/feat/cli-fullscreen-tui-redesign\n",
+    );
 
     const info = resolveGitInfo(worktree);
     // The WORKTREE's own directory is the root (not the main repo's location).
@@ -81,8 +95,14 @@ describe("resolveGitInfo — git WORKTREE (the bug this module fixes)", () => {
     const realGitDir = join(base, "main-repo", ".git", "worktrees", "w2");
     mkdirSync(worktree, { recursive: true });
     mkdirSync(realGitDir, { recursive: true });
-    writeFileSync(join(worktree, ".git"), "gitdir: ../main-repo/.git/worktrees/w2\n");
-    writeFileSync(join(realGitDir, "HEAD"), "ref: refs/heads/relative-pointer-branch\n");
+    writeFileSync(
+      join(worktree, ".git"),
+      "gitdir: ../main-repo/.git/worktrees/w2\n",
+    );
+    writeFileSync(
+      join(realGitDir, "HEAD"),
+      "ref: refs/heads/relative-pointer-branch\n",
+    );
 
     expect(resolveGitInfo(worktree)?.branch).toBe("relative-pointer-branch");
   });
@@ -142,7 +162,9 @@ describe("abbreviateHome", () => {
   const home = homedir();
 
   it("replaces a leading $HOME with ~", () => {
-    expect(abbreviateHome(join(home, "Workspaces", "oxagen-repl2"))).toBe("~/Workspaces/oxagen-repl2");
+    expect(abbreviateHome(join(home, "Workspaces", "oxagen-repl2"))).toBe(
+      "~/Workspaces/oxagen-repl2",
+    );
   });
 
   it("abbreviates $HOME itself to exactly ~", () => {
@@ -155,7 +177,9 @@ describe("abbreviateHome", () => {
 
   it("doesn't false-positive on a sibling directory that merely SHARES $HOME's prefix", () => {
     // e.g. $HOME=/Users/mac must not treat /Users/mac2/... as inside it.
-    expect(abbreviateHome(home + "2/not-actually-home")).toBe(home + "2/not-actually-home");
+    expect(abbreviateHome(home + "2/not-actually-home")).toBe(
+      home + "2/not-actually-home",
+    );
   });
 });
 
@@ -168,19 +192,38 @@ describe("abbreviatePath", () => {
   });
 
   it("elides the middle down to the last segment when even the abbreviated form is too long", () => {
-    const path = join(home, "Workspaces", "some", "deeply", "nested", "path", "oxagen-repl2");
+    const path = join(
+      home,
+      "Workspaces",
+      "some",
+      "deeply",
+      "nested",
+      "path",
+      "oxagen-repl2",
+    );
     const result = abbreviatePath(path, 20);
     expect(result).toBe("~/…/oxagen-repl2");
   });
 
   it("prefers keeping 2 trailing segments over 1 when both fit", () => {
-    const path = join(home, "Workspaces", "some", "deeply", "nested", "oxagen-repl2", "apps");
+    const path = join(
+      home,
+      "Workspaces",
+      "some",
+      "deeply",
+      "nested",
+      "oxagen-repl2",
+      "apps",
+    );
     const result = abbreviatePath(path, 30);
     expect(result).toBe("~/…/oxagen-repl2/apps");
   });
 
   it("falls back to plain character truncation when not even one segment fits", () => {
-    const path = join(home, "a-genuinely-extremely-long-directory-name-that-cannot-fit");
+    const path = join(
+      home,
+      "a-genuinely-extremely-long-directory-name-that-cannot-fit",
+    );
     const result = abbreviatePath(path, 10);
     expect(result.length).toBe(10);
     expect(result.startsWith("…")).toBe(true);
@@ -190,7 +233,10 @@ describe("abbreviatePath", () => {
     // One character narrower than the ~-prefixed form (no "~" to budget for),
     // so at the same maxLen the last-2-segments form now fits where it didn't
     // for the $HOME case above.
-    const result = abbreviatePath("/var/data/some/deeply/nested/path/oxagen-repl2", 20);
+    const result = abbreviatePath(
+      "/var/data/some/deeply/nested/path/oxagen-repl2",
+      20,
+    );
     expect(result).toBe("/…/path/oxagen-repl2");
   });
 });

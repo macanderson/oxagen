@@ -30,7 +30,12 @@ const CLI_SRC = resolve(HERE, "../..");
 // Clear per-env tier overrides so we test the code's catalog default, not a
 // developer's shell pin (OXAGEN_LLM_BALANCED etc. legitimately override it).
 beforeEach(() => {
-  for (const key of ["OXAGEN_LLM_FAST", "OXAGEN_LLM_BALANCED", "OXAGEN_LLM_PRECISE", "OXAGEN_MODEL"]) {
+  for (const key of [
+    "OXAGEN_LLM_FAST",
+    "OXAGEN_LLM_BALANCED",
+    "OXAGEN_LLM_PRECISE",
+    "OXAGEN_MODEL",
+  ]) {
     delete process.env[key];
   }
 });
@@ -73,7 +78,8 @@ describe("no stale Sonnet slug survives anywhere in the CLI source", () => {
 
   function* walk(dir: string): Generator<string> {
     for (const name of readdirSync(dir)) {
-      if (name === "node_modules" || name === "dist" || name === "__tests__") continue;
+      if (name === "node_modules" || name === "dist" || name === "__tests__")
+        continue;
       const full = join(dir, name);
       if (statSync(full).isDirectory()) yield* walk(full);
       else if (/\.(ts|tsx|json)$/.test(name)) yield full;
@@ -85,9 +91,13 @@ describe("no stale Sonnet slug survives anywhere in the CLI source", () => {
     for (const file of walk(CLI_SRC)) {
       const text = readFileSync(file, "utf8");
       for (const bad of FORBIDDEN) {
-        if (text.includes(bad)) offenders.push(`${file.replace(CLI_SRC, "src")} → ${bad}`);
+        if (text.includes(bad))
+          offenders.push(`${file.replace(CLI_SRC, "src")} → ${bad}`);
       }
     }
-    expect(offenders, `stale Sonnet slugs found:\n${offenders.join("\n")}`).toEqual([]);
+    expect(
+      offenders,
+      `stale Sonnet slugs found:\n${offenders.join("\n")}`,
+    ).toEqual([]);
   });
 });

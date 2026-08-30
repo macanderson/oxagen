@@ -19,7 +19,11 @@ const execFileMock = vi.hoisted(() => vi.fn());
 vi.mock("node:child_process", () => ({ execFile: execFileMock }));
 
 const sessionMock = vi.hoisted(() => ({
-  requireSession: vi.fn(() => ({ token: "t", orgSlug: "o", workspaceSlug: "w" })),
+  requireSession: vi.fn(() => ({
+    token: "t",
+    orgSlug: "o",
+    workspaceSlug: "w",
+  })),
 }));
 vi.mock("../lib/session.js", () => sessionMock);
 
@@ -247,7 +251,12 @@ describe("handlePrFix", () => {
     fixMock.runFixToGreen.mockResolvedValueOnce(
       fixResult("merged", {
         rounds: [
-          { round: 1, failing: ["test"], diagnosis: "the fix", filesChanged: ["a.ts"] },
+          {
+            round: 1,
+            failing: ["test"],
+            diagnosis: "the fix",
+            filesChanged: ["a.ts"],
+          },
         ],
       }),
     );
@@ -348,9 +357,10 @@ describe("handlePrFix", () => {
 
     // A PR whose URL is not github.com/<owner>/<repo>/pull/ yields nothing.
     expect(
-      await deps.fetchFailingContext({ number: 7, url: "https://example.test" }, [
-        { name: "test", url: FAIL.detailsUrl },
-      ]),
+      await deps.fetchFailingContext(
+        { number: 7, url: "https://example.test" },
+        [{ name: "test", url: FAIL.detailsUrl }],
+      ),
     ).toBe("");
   });
 });

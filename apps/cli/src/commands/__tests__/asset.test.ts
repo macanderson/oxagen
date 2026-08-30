@@ -6,7 +6,15 @@
  * call); an API failure is a uniform stderr error line (exit 1). Nothing but
  * the result ever reaches stdout.
  */
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from "vitest";
 import type { CommandWriter } from "../../lib/capture-writer.js";
 
 vi.mock("../../lib/api.js", () => ({
@@ -30,7 +38,10 @@ function makeWriter(): { writer: CommandWriter; out: string[]; err: string[] } {
   const out: string[] = [];
   const err: string[] = [];
   return {
-    writer: { write: (l) => void out.push(l), writeErr: (l) => void err.push(l) },
+    writer: {
+      write: (l) => void out.push(l),
+      writeErr: (l) => void err.push(l),
+    },
     out,
     err,
   };
@@ -80,7 +91,11 @@ describe("handleAssetUpload", () => {
   it("defaults kind to image and forwards conversation attachments", async () => {
     mockPost.mockResolvedValueOnce(RESULT);
     const { writer } = makeWriter();
-    await handleAssetUpload("https://x/img.png", { conversation: "cnv_1" }, writer);
+    await handleAssetUpload(
+      "https://x/img.png",
+      { conversation: "cnv_1" },
+      writer,
+    );
     expect(mockPost).toHaveBeenCalledWith("asset/upload", {
       sourceUrl: "https://x/img.png",
       kind: "image",
@@ -91,7 +106,11 @@ describe("handleAssetUpload", () => {
 
   it("rejects an invalid --kind as a usage error (exit 2, no API call)", async () => {
     const { writer, out, err } = makeWriter();
-    await handleAssetUpload("https://x/img.png", { kind: "spreadsheet" }, writer);
+    await handleAssetUpload(
+      "https://x/img.png",
+      { kind: "spreadsheet" },
+      writer,
+    );
     expect(out).toEqual([]);
     expect(err).toHaveLength(1);
     expect(err[0]).toMatch(/^✗ /);
@@ -101,7 +120,9 @@ describe("handleAssetUpload", () => {
   });
 
   it("routes an API failure to a uniform stderr error (exit 1)", async () => {
-    mockPost.mockRejectedValueOnce(new ApiError("Error 500 from asset/upload: boom", 500));
+    mockPost.mockRejectedValueOnce(
+      new ApiError("Error 500 from asset/upload: boom", 500),
+    );
     const { writer, out, err } = makeWriter();
     await handleAssetUpload("https://x/img.png", {}, writer);
     expect(out).toEqual([]);
@@ -114,7 +135,11 @@ describe("handleAssetUpload", () => {
     const { writer, out, err } = makeWriter();
     await handleAssetUpload("https://x/img.png", { json: true }, writer);
     expect(out).toEqual([]);
-    expect(JSON.parse(err[0] as string)).toEqual({ type: "error", code: "api", message: "nope" });
+    expect(JSON.parse(err[0] as string)).toEqual({
+      type: "error",
+      code: "api",
+      message: "nope",
+    });
     expect(process.exitCode).toBe(1);
   });
 });

@@ -750,11 +750,10 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
   // createCodeGraphStore() itself can throw synchronously — its constructor
   // does a bare `require("duckdb")` (see daemon/code-graph/store.ts), which
   // throws if the native module isn't installed (e.g. a bench/CI container
-  // that didn't opt into OXAGEN_INSTALL_DUCKDB). Construct it INSIDE the try,
-  // mirroring the agent's own loadOrBuildCodeGraph() in agent/code-graph.ts —
-  // previously the store was constructed before the try block, so a missing/
-  // failed duckdb binding crashed `runInit()` uncaught instead of degrading to
-  // the in-memory fallback below.
+  // that didn't opt into OXAGEN_INSTALL_DUCKDB). It must be constructed INSIDE
+  // the try, mirroring the agent's own loadOrBuildCodeGraph() in
+  // agent/code-graph.ts, so a missing/failed duckdb binding degrades to the
+  // in-memory fallback below instead of crashing `runInit()` uncaught.
   let store: CodeGraphStore | null = null;
   try {
     store = createCodeGraphStore({ duckdbPath });

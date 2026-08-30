@@ -10,7 +10,14 @@
 import { describe, it, expect } from "vitest";
 import React from "react";
 import { render } from "ink-testing-library";
-import { HeaderBar, TranscriptViewport, TelemetryDock, formatClock, formatElapsed, dockPanelWidth } from "../fullscreen-chrome.js";
+import {
+  HeaderBar,
+  TranscriptViewport,
+  TelemetryDock,
+  formatClock,
+  formatElapsed,
+  dockPanelWidth,
+} from "../fullscreen-chrome.js";
 import { INITIAL_SCROLL_STATE, type ScrollState } from "../scroll.js";
 import { INITIAL_TELEMETRY_STATE, type TelemetryState } from "../telemetry.js";
 import type { Message } from "../components.js";
@@ -39,7 +46,12 @@ function emptyMetrics(): SessionMetrics {
 }
 
 function fixtureRepo(overrides: Partial<RepoInfo> = {}): RepoInfo {
-  return { root: "/Users/mac/Workspaces/oxagen-repl2", branch: "feat/x", prNumber: 486, ...overrides };
+  return {
+    root: "/Users/mac/Workspaces/oxagen-repl2",
+    branch: "feat/x",
+    prNumber: 486,
+    ...overrides,
+  };
 }
 
 describe("formatClock", () => {
@@ -92,7 +104,12 @@ describe("TranscriptViewport", () => {
       { role: "assistant", content: "hi back", timestamp: 2 },
     ];
     const { lastFrame } = render(
-      <TranscriptViewport committedMessages={messages} width={80} height={10} scroll={scroll} />,
+      <TranscriptViewport
+        committedMessages={messages}
+        width={80}
+        height={10}
+        scroll={scroll}
+      />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("hello there");
@@ -100,10 +117,23 @@ describe("TranscriptViewport", () => {
   });
 
   it("renders the live (streaming) message alongside committed ones", () => {
-    const committed: Message[] = [{ role: "user", content: "do the thing", timestamp: 1 }];
-    const live: Message = { role: "assistant", content: "working on it", timestamp: 2, streaming: true };
+    const committed: Message[] = [
+      { role: "user", content: "do the thing", timestamp: 1 },
+    ];
+    const live: Message = {
+      role: "assistant",
+      content: "working on it",
+      timestamp: 2,
+      streaming: true,
+    };
     const { lastFrame } = render(
-      <TranscriptViewport committedMessages={committed} liveMessage={live} width={80} height={10} scroll={scroll} />,
+      <TranscriptViewport
+        committedMessages={committed}
+        liveMessage={live}
+        width={80}
+        height={10}
+        scroll={scroll}
+      />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("do the thing");
@@ -120,7 +150,12 @@ describe("TranscriptViewport", () => {
     }));
     const scrolledUp: ScrollState = { rawOffset: 0, stickyBottom: false };
     const { lastFrame } = render(
-      <TranscriptViewport committedMessages={messages} width={80} height={5} scroll={scrolledUp} />,
+      <TranscriptViewport
+        committedMessages={messages}
+        width={80}
+        height={5}
+        scroll={scrolledUp}
+      />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("lines above");
@@ -128,7 +163,14 @@ describe("TranscriptViewport", () => {
   });
 
   it("renders nothing but empty space for an empty transcript, without crashing", () => {
-    const { lastFrame } = render(<TranscriptViewport committedMessages={[]} width={80} height={5} scroll={scroll} />);
+    const { lastFrame } = render(
+      <TranscriptViewport
+        committedMessages={[]}
+        width={80}
+        height={5}
+        scroll={scroll}
+      />,
+    );
     expect(lastFrame()).toBeDefined();
   });
 
@@ -138,7 +180,10 @@ describe("TranscriptViewport", () => {
   // the expected visible rows are exact, not estimates.
   const tallMessage: Message = {
     role: "reasoning",
-    content: Array.from({ length: 10 }, (_, i) => `row-${String(i).padStart(2, "0")}`).join("\n"),
+    content: Array.from(
+      { length: 10 },
+      (_, i) => `row-${String(i).padStart(2, "0")}`,
+    ).join("\n"),
     timestamp: 1,
   };
 
@@ -148,7 +193,12 @@ describe("TranscriptViewport", () => {
     // message-granularity window could only ever show a tall message's TOP.
     const midScroll: ScrollState = { rawOffset: 3, stickyBottom: false };
     const { lastFrame } = render(
-      <TranscriptViewport committedMessages={[tallMessage]} width={80} height={5} scroll={midScroll} />,
+      <TranscriptViewport
+        committedMessages={[tallMessage]}
+        width={80}
+        height={5}
+        scroll={midScroll}
+      />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("row-03");
@@ -162,7 +212,12 @@ describe("TranscriptViewport", () => {
     // rows 6..9. Before the flex-end anchor this rendered rows 0..3 — the
     // newest output was unreachable even at End.
     const { lastFrame } = render(
-      <TranscriptViewport committedMessages={[tallMessage]} width={80} height={5} scroll={INITIAL_SCROLL_STATE} />,
+      <TranscriptViewport
+        committedMessages={[tallMessage]}
+        width={80}
+        height={5}
+        scroll={INITIAL_SCROLL_STATE}
+      />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("row-09");
@@ -177,7 +232,12 @@ describe("TranscriptViewport", () => {
       timestamp: i,
     }));
     const { lastFrame } = render(
-      <TranscriptViewport committedMessages={messages} width={80} height={5} scroll={INITIAL_SCROLL_STATE} />,
+      <TranscriptViewport
+        committedMessages={messages}
+        width={80}
+        height={5}
+        scroll={INITIAL_SCROLL_STATE}
+      />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("m-29");
@@ -189,7 +249,12 @@ describe("TranscriptViewport", () => {
       { role: "reasoning", content: "only-line", timestamp: 1 },
     ];
     const { lastFrame } = render(
-      <TranscriptViewport committedMessages={messages} width={80} height={8} scroll={INITIAL_SCROLL_STATE} />,
+      <TranscriptViewport
+        committedMessages={messages}
+        width={80}
+        height={8}
+        scroll={INITIAL_SCROLL_STATE}
+      />,
     );
     const frame = lastFrame() ?? "";
     // First content row (after the 1-row indicator slot) holds the message —
@@ -209,8 +274,21 @@ describe("TelemetryDock", () => {
     // which always sources `cols` from the real useTerminalSize()).
     const telemetry: TelemetryState = {
       models: { planner: "haiku", worker: "sonnet", judge: "opus" },
-      turn: { phase: "execute", step: 7, maxStep: 256, reviseRound: 1, turnStartedAt: 0 },
-      tools: { code_graph: 2, edit_file: 3, write_file: 1, read_file: 4, bash: 5, grep: 6 },
+      turn: {
+        phase: "execute",
+        step: 7,
+        maxStep: 256,
+        reviseRound: 1,
+        turnStartedAt: 0,
+      },
+      tools: {
+        code_graph: 2,
+        edit_file: 3,
+        write_file: 1,
+        read_file: 4,
+        bash: 5,
+        grep: 6,
+      },
     };
     const metrics: SessionMetrics = {
       ...emptyMetrics(),
@@ -226,7 +304,11 @@ describe("TelemetryDock", () => {
         isStreaming={true}
         now={5000}
         cols={100}
-        repo={fixtureRepo({ root: "/Users/mac/oxagen-repl2", branch: "main", prNumber: 42 })}
+        repo={fixtureRepo({
+          root: "/Users/mac/oxagen-repl2",
+          branch: "main",
+          prNumber: 42,
+        })}
       />,
     );
     // The panel captions are painted with the OXAGEN sunset gradient, so each
@@ -282,7 +364,10 @@ describe("TelemetryDock", () => {
     };
     // Mid-stream: no model call has settled yet (turnTokensOut 0), only the
     // live estimate is non-zero — the burn readout must still move.
-    const metrics: SessionMetrics = { ...emptyMetrics(), streamTokensOut: 1000 };
+    const metrics: SessionMetrics = {
+      ...emptyMetrics(),
+      streamTokensOut: 1000,
+    };
     const { lastFrame } = render(
       <TelemetryDock
         telemetry={telemetry}
@@ -316,7 +401,9 @@ describe("TelemetryDock", () => {
       />,
     );
     const frame = lastFrame() ?? "";
-    expect(frame).not.toContain("some-vendor/a-very-long-model-slug-name-indeed");
+    expect(frame).not.toContain(
+      "some-vendor/a-very-long-model-slug-name-indeed",
+    );
     // Ink's wrap="truncate-end" ellipsis — proves it degrades gracefully
     // instead of wrapping or blowing out the panel's fixed width.
     expect(frame).toContain("…");
@@ -372,11 +459,15 @@ describe("TelemetryDock", () => {
         isStreaming={false}
         now={0}
         cols={100}
-        repo={fixtureRepo({ root: "/Users/mac/Workspaces/some/deeply/nested/path/oxagen-repl2" })}
+        repo={fixtureRepo({
+          root: "/Users/mac/Workspaces/some/deeply/nested/path/oxagen-repl2",
+        })}
       />,
     );
     const frame = lastFrame() ?? "";
-    expect(frame).not.toContain("/Users/mac/Workspaces/some/deeply/nested/path/oxagen-repl2");
+    expect(frame).not.toContain(
+      "/Users/mac/Workspaces/some/deeply/nested/path/oxagen-repl2",
+    );
     expect(frame).toContain("…");
     expect(frame).toContain("oxagen-repl2"); // the informative tail survives truncation
   });

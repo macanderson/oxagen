@@ -46,7 +46,11 @@ export function borderPhaseFor(turnPhase: TelemetryTurn["phase"]): BorderPhase {
 }
 
 /** Rainbow flash cycle order. */
-export const RAINBOW_FLASH_COLORS: readonly string[] = [theme.red, theme.fuchsia, theme.orange];
+export const RAINBOW_FLASH_COLORS: readonly string[] = [
+  theme.red,
+  theme.fuchsia,
+  theme.orange,
+];
 
 /** Flash frame interval, ms — a "rapid flash" per the design (110-130ms band). */
 export const RAINBOW_FLASH_INTERVAL_MS = 120;

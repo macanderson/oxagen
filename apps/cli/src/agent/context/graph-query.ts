@@ -20,7 +20,11 @@ import type { CodeGraph, CodeNode } from "../../daemon/code-graph/types.js";
 import type { CodeGraphStore } from "../../daemon/code-graph/store.js";
 import type { EmbeddingClient } from "./embedding.js";
 import type { GraphConfig } from "./config.js";
-import { ensureFileEmbeddings, rankFilesBySimilarity, type RankedFile } from "./semantic-index.js";
+import {
+  ensureFileEmbeddings,
+  rankFilesBySimilarity,
+  type RankedFile,
+} from "./semantic-index.js";
 import {
   resolveSeeds,
   expandNeighbourhood,
@@ -65,7 +69,7 @@ export interface GraphContextResult {
   source: "graph";
 }
 
-/** Options accepted by the resolver (a superset of the graph-tools.json input). */
+/** Options accepted by the query core (a superset of the resolver's input). */
 export interface GraphQueryOptions {
   query: string;
   focusSymbols?: string[];
@@ -104,15 +108,25 @@ function labelOf(node: CodeNode | undefined): string | null {
  * Run the query and return the structured subgraph. Never throws for an empty
  * graph — it returns `coverage: 0` so the caller falls back cleanly.
  */
-export async function runGraphQuery(params: RunGraphQueryParams): Promise<GraphContextResult> {
+export async function runGraphQuery(
+  params: RunGraphQueryParams,
+): Promise<GraphContextResult> {
   const { input, graph, root, client, store, config } = params;
-  const maxNodes = Math.max(1, Math.min(input.maxNodes ?? config.maxNodes, config.maxNodes));
+  const maxNodes = Math.max(
+    1,
+    Math.min(input.maxNodes ?? config.maxNodes, config.maxNodes),
+  );
   const hops = Math.max(1, input.hops ?? DEFAULT_HOPS);
 
   // ── Semantic signal: rank file nodes by cosine to the query embedding. ──────
   let rankedFiles: RankedFile[] = [];
   if (client) {
-    const { vectors } = await ensureFileEmbeddings({ graph, root, client, store });
+    const { vectors } = await ensureFileEmbeddings({
+      graph,
+      root,
+      client,
+      store,
+    });
     if (vectors.size > 0) {
       const queryVec = await client.embed(input.query);
       rankedFiles = rankFilesBySimilarity(graph, queryVec, vectors, maxNodes);
@@ -193,7 +207,12 @@ export async function runGraphQuery(params: RunGraphQueryParams): Promise<GraphC
   const symbols: GraphSymbolRef[] = subgraph.nodes
     .filter((n) => n.kind !== "file")
     .slice(0, maxNodes)
-    .map((n) => ({ name: n.name, kind: n.kind, file: n.path, line: n.range.start }));
+    .map((n) => ({
+      name: n.name,
+      kind: n.kind,
+      file: n.path,
+      line: n.range.start,
+    }));
 
   const edges: GraphEdgeRef[] = [];
   for (const e of subgraph.edges) {
@@ -207,7 +226,8 @@ export async function runGraphQuery(params: RunGraphQueryParams): Promise<GraphC
   // ── Coverage: max of structural (name-anchored, high confidence) & semantic. ─
   const structural =
     seeds.length > 0 ? Math.min(0.95, 0.55 + 0.08 * seeds.length) : 0;
-  const coverage = impactedFiles.length === 0 ? 0 : clamp01(Math.max(structural, topSemantic));
+  const coverage =
+    impactedFiles.length === 0 ? 0 : clamp01(Math.max(structural, topSemantic));
 
   return { impactedFiles, symbols, edges, coverage, source: "graph" };
 }

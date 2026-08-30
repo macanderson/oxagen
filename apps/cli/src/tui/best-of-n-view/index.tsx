@@ -36,15 +36,25 @@ export interface LaunchBestOfNOptions extends Omit<BestOfNOptions, "onEvent"> {
   usageTotals?: () => SolveUsageTotals;
 }
 
-export async function launchBestOfN(opts: LaunchBestOfNOptions): Promise<BestOfNResult> {
+export async function launchBestOfN(
+  opts: LaunchBestOfNOptions,
+): Promise<BestOfNResult> {
   const headless = opts.headless || !process.stdout.isTTY;
   const startedAt = Date.now();
 
   if (headless) {
-    const emit = (o: unknown): void => void process.stdout.write(JSON.stringify(o) + "\n");
-    const result = await runBestOfN({ ...opts, onEvent: (e: BestOfNEvent) => emit(e) });
+    const emit = (o: unknown): void =>
+      void process.stdout.write(JSON.stringify(o) + "\n");
+    const result = await runBestOfN({
+      ...opts,
+      onEvent: (e: BestOfNEvent) => emit(e),
+    });
     const usage = opts.usageTotals
-      ? buildSolveUsageSummary(opts.usageTotals(), result, Date.now() - startedAt)
+      ? buildSolveUsageSummary(
+          opts.usageTotals(),
+          result,
+          Date.now() - startedAt,
+        )
       : undefined;
     emit(resultEnvelope(result, usage));
     // Human-readable roll-up in the one-shot `--verbose` format, AFTER the
@@ -59,18 +69,22 @@ export async function launchBestOfN(opts: LaunchBestOfNOptions): Promise<BestOfN
   const emitter = new EventEmitter();
   emitter.setMaxListeners(64);
   const { waitUntilExit } = render(
-    <BestOfNApp emitter={emitter} total={opts.candidates} prompt={opts.prompt} />,
+    <BestOfNApp
+      emitter={emitter}
+      total={opts.candidates}
+      prompt={opts.prompt}
+    />,
   );
 
   const result = await new Promise<BestOfNResult>((resolve, reject) => {
     setImmediate(() => {
-      runBestOfN({ ...opts, onEvent: (e: BestOfNEvent) => emitter.emit("event", e) }).then(
-        (r) => {
-          emitter.emit("done", r);
-          resolve(r);
-        },
-        reject,
-      );
+      runBestOfN({
+        ...opts,
+        onEvent: (e: BestOfNEvent) => emitter.emit("event", e),
+      }).then((r) => {
+        emitter.emit("done", r);
+        resolve(r);
+      }, reject);
     });
   });
 
@@ -79,7 +93,11 @@ export async function launchBestOfN(opts: LaunchBestOfNOptions): Promise<BestOfN
   // Same cost roll-up the headless stream gets, printed once the live view has
   // torn down so it lands cleanly below the final frame.
   if (opts.usageTotals) {
-    const usage = buildSolveUsageSummary(opts.usageTotals(), result, Date.now() - startedAt);
+    const usage = buildSolveUsageSummary(
+      opts.usageTotals(),
+      result,
+      Date.now() - startedAt,
+    );
     process.stdout.write("\n" + formatSolveRollup(usage) + "\n");
   }
   return result;

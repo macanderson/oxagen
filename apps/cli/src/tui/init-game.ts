@@ -86,7 +86,12 @@ function makeInvaders(): Invader[] {
   const list: Invader[] = [];
   for (let r = 0; r < GRID.invaderRows; r++) {
     for (let c = 0; c < GRID.invaderCols; c++) {
-      list.push({ id: `${r}-${c}`, col: c * GRID.colSpacing, row: r, alive: true });
+      list.push({
+        id: `${r}-${c}`,
+        col: c * GRID.colSpacing,
+        row: r,
+        alive: true,
+      });
     }
   }
   return list;
@@ -135,7 +140,11 @@ function aliveInvaders(s: GameState): readonly Invader[] {
 }
 
 /** An invader's absolute (col, row) given the formation's current origin. */
-export function absolute(originCol: number, originRow: number, inv: Invader): Bolt {
+export function absolute(
+  originCol: number,
+  originRow: number,
+  inv: Invader,
+): Bolt {
   return { col: originCol + inv.col, row: originRow + inv.row };
 }
 
@@ -184,7 +193,10 @@ export function tickGame(s: GameState): GameState {
     const cols = alive.map((i) => i.col);
     const minCol = originCol + Math.min(...cols);
     const maxCol = originCol + Math.max(...cols);
-    if ((dir === 1 && maxCol + 1 >= s.width) || (dir === -1 && minCol - 1 < 0)) {
+    if (
+      (dir === 1 && maxCol + 1 >= s.width) ||
+      (dir === -1 && minCol - 1 < 0)
+    ) {
       dir = dir === 1 ? -1 : 1;
       originRow += 1;
     } else {
@@ -224,7 +236,11 @@ export function tickGame(s: GameState): GameState {
     if (hitIdx >= 0) {
       invaders = invaders.slice();
       invaders[hitIdx] = { ...invaders[hitIdx]!, alive: false };
-      explosions.push({ col: playerBolt.col, row: nextRow, ttl: EXPLOSION_TTL });
+      explosions.push({
+        col: playerBolt.col,
+        row: nextRow,
+        ttl: EXPLOSION_TTL,
+      });
       score += 10;
       playerBolt = null;
     } else if (nextRow < 0) {
@@ -258,9 +274,14 @@ export function tickGame(s: GameState): GameState {
     // Deterministic shooter pick: cycle through alive columns by tick, firing
     // from the front-most (highest row offset) invader in that column — no
     // coin flip, matching renderInvadersLane's "pure function of tick" rule.
-    const columns = [...new Set(stillAlive.map((i) => i.col))].sort((a, b) => a - b);
-    const col = columns[Math.floor(tick / INVADER_FIRE_INTERVAL) % columns.length]!;
-    const front = [...stillAlive].filter((i) => i.col === col).sort((a, b) => b.row - a.row)[0]!;
+    const columns = [...new Set(stillAlive.map((i) => i.col))].sort(
+      (a, b) => a - b,
+    );
+    const col =
+      columns[Math.floor(tick / INVADER_FIRE_INTERVAL) % columns.length]!;
+    const front = [...stillAlive]
+      .filter((i) => i.col === col)
+      .sort((a, b) => b.row - a.row)[0]!;
     const a = absolute(originCol, originRow, front);
     invaderBolts = [...invaderBolts, { col: a.col, row: a.row + 1 }];
   }
@@ -314,7 +335,10 @@ const EXPLOSION_GLYPH = "✳";
 /** Render `state` into a fixed-size (height x width) grid of {ch, kind} cells. */
 export function buildGrid(state: GameState): Cell[][] {
   const rows: Cell[][] = Array.from({ length: state.height }, () =>
-    Array.from({ length: state.width }, () => ({ ch: " ", kind: "empty" as const })),
+    Array.from({ length: state.width }, () => ({
+      ch: " ",
+      kind: "empty" as const,
+    })),
   );
 
   const set = (col: number, row: number, cell: Cell): void => {
@@ -332,11 +356,17 @@ export function buildGrid(state: GameState): Cell[][] {
 
   const playerCol = playerColAt(state.width, state.tick);
   for (let i = 0; i < PLAYER_GLYPHS.length; i++) {
-    set(playerCol - 1 + i, state.playerRow, { ch: PLAYER_GLYPHS[i]!, kind: "player" });
+    set(playerCol - 1 + i, state.playerRow, {
+      ch: PLAYER_GLYPHS[i]!,
+      kind: "player",
+    });
   }
 
   if (state.playerBolt) {
-    set(state.playerBolt.col, state.playerBolt.row, { ch: "•", kind: "playerBolt" });
+    set(state.playerBolt.col, state.playerBolt.row, {
+      ch: "•",
+      kind: "playerBolt",
+    });
   }
   for (const b of state.invaderBolts) {
     set(b.col, b.row, { ch: "•", kind: "enemyBolt" });

@@ -29,7 +29,12 @@ describe("PromptInput — mouse click/drag selection", () => {
   it("click positions the cursor (no drag = no visible selection) — typing inserts there, not at the end", async () => {
     const calls: string[] = [];
     const { stdin, unmount } = render(
-      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} mouseRow={ROW} mouseEnabled />,
+      <PromptInput
+        onSubmit={(t) => calls.push(t)}
+        busy={false}
+        mouseRow={ROW}
+        mouseEnabled
+      />,
     );
     stdin.write("ac");
     await tick();
@@ -48,7 +53,12 @@ describe("PromptInput — mouse click/drag selection", () => {
   it("drag selects a range, and Backspace deletes the WHOLE selection in one keystroke", async () => {
     const calls: string[] = [];
     const { stdin, unmount } = render(
-      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} mouseRow={ROW} mouseEnabled />,
+      <PromptInput
+        onSubmit={(t) => calls.push(t)}
+        busy={false}
+        mouseRow={ROW}
+        mouseEnabled
+      />,
     );
     stdin.write("abcdef");
     await tick();
@@ -70,7 +80,12 @@ describe("PromptInput — mouse click/drag selection", () => {
   it("drag selects a range, and Delete removes the WHOLE selection the same as Backspace", async () => {
     const calls: string[] = [];
     const { stdin, unmount } = render(
-      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} mouseRow={ROW} mouseEnabled />,
+      <PromptInput
+        onSubmit={(t) => calls.push(t)}
+        busy={false}
+        mouseRow={ROW}
+        mouseEnabled
+      />,
     );
     stdin.write("abcdef");
     await tick();
@@ -91,7 +106,12 @@ describe("PromptInput — mouse click/drag selection", () => {
   it("typing over a drag-made selection REPLACES it, same as pasting or Backspace-then-type", async () => {
     const calls: string[] = [];
     const { stdin, unmount } = render(
-      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} mouseRow={ROW} mouseEnabled />,
+      <PromptInput
+        onSubmit={(t) => calls.push(t)}
+        busy={false}
+        mouseRow={ROW}
+        mouseEnabled
+      />,
     );
     stdin.write("abcdef");
     await tick();
@@ -112,7 +132,12 @@ describe("PromptInput — mouse click/drag selection", () => {
   it("a backward drag (dragging left of the press) selects the same range as forward", async () => {
     const calls: string[] = [];
     const { stdin, unmount } = render(
-      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} mouseRow={ROW} mouseEnabled />,
+      <PromptInput
+        onSubmit={(t) => calls.push(t)}
+        busy={false}
+        mouseRow={ROW}
+        mouseEnabled
+      />,
     );
     stdin.write("abcdef");
     await tick();
@@ -134,7 +159,12 @@ describe("PromptInput — mouse click/drag selection", () => {
   it("Left/Right arrow after a drag collapses the selection instead of moving relative to it", async () => {
     const calls: string[] = [];
     const { stdin, unmount } = render(
-      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} mouseRow={ROW} mouseEnabled />,
+      <PromptInput
+        onSubmit={(t) => calls.push(t)}
+        busy={false}
+        mouseRow={ROW}
+        mouseEnabled
+      />,
     );
     stdin.write("abcdef");
     await tick();
@@ -160,7 +190,12 @@ describe("PromptInput — mouse click/drag selection", () => {
   it("a click on a DIFFERENT row than mouseRow is ignored — never steals a click meant for the transcript/dock", async () => {
     const calls: string[] = [];
     const { stdin, unmount } = render(
-      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} mouseRow={ROW} mouseEnabled />,
+      <PromptInput
+        onSubmit={(t) => calls.push(t)}
+        busy={false}
+        mouseRow={ROW}
+        mouseEnabled
+      />,
     );
     stdin.write("abcdef");
     await tick();
@@ -182,7 +217,12 @@ describe("PromptInput — mouse click/drag selection", () => {
   it("mouseEnabled=false ignores mouse bytes entirely — the /mouse toggle's off state", async () => {
     const calls: string[] = [];
     const { stdin, unmount } = render(
-      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} mouseRow={ROW} mouseEnabled={false} />,
+      <PromptInput
+        onSubmit={(t) => calls.push(t)}
+        busy={false}
+        mouseRow={ROW}
+        mouseEnabled={false}
+      />,
     );
     stdin.write("abcdef");
     await tick();

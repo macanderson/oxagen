@@ -38,12 +38,22 @@ import { z } from "zod";
 
 // ── Shared enums ──────────────────────────────────────────────────────────────
 
-/** The four config scopes, precedence-ordered lowest-authority-index-first is NOT implied — see resolve.ts CONFIG_SCOPE_ORDER for authority/specificity ordering. */
+/**
+ * The four config scopes. This array's order carries no precedence meaning —
+ * `CONFIG_SCOPE_ORDER` in resolve.ts is the single source of truth for
+ * authority and specificity ordering.
+ */
 export const CONFIG_SCOPES = ["org", "user", "workspace", "repo"] as const;
 export type ConfigScope = (typeof CONFIG_SCOPES)[number];
 export const configScopeSchema = z.enum(CONFIG_SCOPES);
 
-export const LANGUAGE_ITEM_KINDS = ["rule", "preference", "policy", "convention", "reference"] as const;
+export const LANGUAGE_ITEM_KINDS = [
+  "rule",
+  "preference",
+  "policy",
+  "convention",
+  "reference",
+] as const;
 export type LanguageItemKind = (typeof LANGUAGE_ITEM_KINDS)[number];
 
 export const LANGUAGE_ITEM_ORIGINS = ["manual", "scan", "research"] as const;
@@ -420,9 +430,11 @@ export const workspaceConfigSchema = z
   // already be present in a user's file; pass them through rather than
   // failing validation, matching settings/schema.ts's convention.
   .passthrough()
-  // Dead-key guard (see RUNTIME_DEAD_KEYS above): reject the four CLI
-  // runtime/session keys specifically, while every other passthrough key
-  // (including genuinely unknown future sections) still validates fine.
+  // Dead-key guard (see RUNTIME_DEAD_KEYS at the foot of this file): reject
+  // the four CLI runtime/session keys specifically, while every other
+  // passthrough key (including genuinely unknown future sections) still
+  // validates fine. The list is read at parse time, not at definition time,
+  // so declaring it below this schema is safe.
   .superRefine((doc, ctx) => {
     for (const key of RUNTIME_DEAD_KEYS) {
       if (key in doc) {
@@ -447,16 +459,21 @@ export type WorkspaceConfig = z.infer<typeof workspaceConfigSchema>;
  * (`~/.config/oxagen/config.json`, see `lib/config.ts`'s `CliConfig`) or to
  * `settings.json` (`../settings/schema.ts`) — NOT to this Workspace Config
  * schema. Nothing in `resolveWorkspaceConfig`/`explain`/the agent's project
- * context ever reads these paths off a `WorkspaceConfig`, so historically the
- * root `.passthrough()` below let `oxagen config set model <x>` (etc.) write a
- * value here that printed a confident "✓" and then was silently never read by
- * anything — a dead-key write. `workspaceConfigParseIssues` below rejects
+ * context ever reads these paths off a `WorkspaceConfig`. Without this list,
+ * the root `.passthrough()` would let `oxagen config set model <x>` (etc.)
+ * write a value here that prints a confident "✓" and is then never read by
+ * anything — a dead-key write. `workspaceConfigSchema`'s `superRefine` rejects
  * exactly these keys at the schema layer (defense in depth alongside the
  * command-layer redirect in `commands/config.ts`'s `configSet`), while still
  * passing through genuinely-unknown future keys so forward-compat is
  * preserved.
  */
-export const RUNTIME_DEAD_KEYS = ["model", "apiUrl", "effort", "token"] as const;
+export const RUNTIME_DEAD_KEYS = [
+  "model",
+  "apiUrl",
+  "effort",
+  "token",
+] as const;
 export type RuntimeDeadKey = (typeof RUNTIME_DEAD_KEYS)[number];
 
 /** The actual `oxagen config <key>` legacy-command spelling for each dead key ("api-url" is hyphenated there, unlike the `apiUrl` field name). */

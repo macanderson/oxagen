@@ -11,9 +11,13 @@
  *      both try to write the same file see each other as conflicting holders
  *      (the engine's `withFileLock` then retries briefly and, failing that,
  *      surfaces a "Blocked" tool result instead of clobbering).
- *   2. **Lock file** under `<root>/.oxagen/locks/` — a create-exclusive JSON
- *      file per resource so a SECOND `oxagen` process on the same machine also
- *      sees the lock. Stale files (past their expiry) are taken over.
+ *   2. **Lock file** under `<root>/.oxagen/locks/` — an advisory JSON file per
+ *      resource so a SECOND `oxagen` process on the same machine also sees the
+ *      lock. Stale files (past their expiry) are taken over. This layer is
+ *      read-then-write, NOT create-exclusive: two processes that check at the
+ *      same instant can both grant. It is a courtesy signal between separate
+ *      `oxagen` invocations, not a mutual-exclusion primitive — the in-process
+ *      Map above is the guard the fleet actually relies on.
  *
  * Fencing tokens are monotonic per resource: a durable `<hash>.fence` counter
  * file (never deleted on release) is bumped on every successful acquire, so a
@@ -46,7 +50,13 @@ interface LockFilePayload {
   resourceKey: string;
 }
 
-const DENIED: FileLockGrant = { granted: false, lockId: "", heldBy: null, blockedUntil: null, fencingToken: null };
+const DENIED: FileLockGrant = {
+  granted: false,
+  lockId: "",
+  heldBy: null,
+  blockedUntil: null,
+  fencingToken: null,
+};
 
 export interface LocalFileLockProviderOptions {
   /** Directory whose `.oxagen/locks/` holds the on-disk lock + fence files. */
@@ -57,7 +67,9 @@ export interface LocalFileLockProviderOptions {
   now?: () => number;
 }
 
-export function createLocalFileLockProvider(opts: LocalFileLockProviderOptions): FileLockProvider {
+export function createLocalFileLockProvider(
+  opts: LocalFileLockProviderOptions,
+): FileLockProvider {
   const ttlMs = opts.ttlMs ?? DEFAULT_TTL_MS;
   const now = opts.now ?? Date.now;
   const locksDir = join(opts.root, ".oxagen", "locks");
@@ -137,24 +149,56 @@ export function createLocalFileLockProvider(opts: LocalFileLockProviderOptions):
         // 1. In-process guard (the fleet's real concurrency model).
         const live = inProcess.get(key);
         if (live && live.expiresAt > nowMs && live.holder !== agentId) {
-          return { granted: false, lockId: "", heldBy: live.holder, blockedUntil: live.expiresAt, fencingToken: null };
+          return {
+            granted: false,
+            lockId: "",
+            heldBy: live.holder,
+            blockedUntil: live.expiresAt,
+            fencingToken: null,
+          };
         }
 
         // 2. Cross-process guard: a live lock file owned by a DIFFERENT holder blocks.
         if (!live) {
           const onDisk = readLockFile(key);
           if (onDisk && onDisk.expiresAt > nowMs && onDisk.holder !== agentId) {
-            return { granted: false, lockId: "", heldBy: onDisk.holder, blockedUntil: onDisk.expiresAt, fencingToken: null };
+            return {
+              granted: false,
+              lockId: "",
+              heldBy: onDisk.holder,
+              blockedUntil: onDisk.expiresAt,
+              fencingToken: null,
+            };
           }
         }
 
         // Grant / renew (same holder reuses its lockId).
         const token = nextFence(key);
-        const lockId = live && live.holder === agentId ? live.lockId : randomUUID();
+        const lockId =
+          live && live.holder === agentId ? live.lockId : randomUUID();
         const expiresAt = nowMs + ttlMs;
-        inProcess.set(key, { lockId, holder: agentId, executionId, expiresAt, fencingToken: token });
-        writeLockFile(key, { lockId, holder: agentId, executionId, expiresAt, fencingToken: token, resourceKey: key });
-        return { granted: true, lockId, heldBy: null, blockedUntil: null, fencingToken: token };
+        inProcess.set(key, {
+          lockId,
+          holder: agentId,
+          executionId,
+          expiresAt,
+          fencingToken: token,
+        });
+        writeLockFile(key, {
+          lockId,
+          holder: agentId,
+          executionId,
+          expiresAt,
+          fencingToken: token,
+          resourceKey: key,
+        });
+        return {
+          granted: true,
+          lockId,
+          heldBy: null,
+          blockedUntil: null,
+          fencingToken: token,
+        };
       } catch {
         // Never crash a tool call on a lock error — deny (the safe direction).
         return DENIED;

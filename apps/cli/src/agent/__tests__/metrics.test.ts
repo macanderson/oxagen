@@ -11,7 +11,12 @@
  *   - metricsEventFor: prices an event via the rate card, zero tokens -> zero cost
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { createMetricsBus, metricsEventFor, type MetricsEvent, type SessionMetrics } from "../metrics.js";
+import {
+  createMetricsBus,
+  metricsEventFor,
+  type MetricsEvent,
+  type SessionMetrics,
+} from "../metrics.js";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -37,9 +42,30 @@ function ev(overrides: Partial<MetricsEvent> = {}): MetricsEvent {
 describe("record", () => {
   it("accumulates turn + session + byModel totals across multiple models", () => {
     const bus = createMetricsBus();
-    bus.record(ev({ model: "anthropic/claude-sonnet-5", tokensIn: 100, tokensOut: 50, costUsd: 0.1 }));
-    bus.record(ev({ model: "openai/gpt-4o", tokensIn: 20, tokensOut: 10, costUsd: 0.02 }));
-    bus.record(ev({ model: "anthropic/claude-sonnet-5", tokensIn: 30, tokensOut: 15, costUsd: 0.03 }));
+    bus.record(
+      ev({
+        model: "anthropic/claude-sonnet-5",
+        tokensIn: 100,
+        tokensOut: 50,
+        costUsd: 0.1,
+      }),
+    );
+    bus.record(
+      ev({
+        model: "openai/gpt-4o",
+        tokensIn: 20,
+        tokensOut: 10,
+        costUsd: 0.02,
+      }),
+    );
+    bus.record(
+      ev({
+        model: "anthropic/claude-sonnet-5",
+        tokensIn: 30,
+        tokensOut: 15,
+        costUsd: 0.03,
+      }),
+    );
 
     const snap = bus.snapshot();
     expect(snap.turnTokensIn).toBe(150);
@@ -49,17 +75,51 @@ describe("record", () => {
     expect(snap.sessionTokensOut).toBe(75);
     expect(snap.sessionCostUsd).toBeCloseTo(0.15);
 
-    expect(snap.byModel["anthropic/claude-sonnet-5"]).toEqual({ tokensIn: 130, tokensOut: 65, cachedTokens: 0, costUsd: 0.13 });
-    expect(snap.byModel["openai/gpt-4o"]).toEqual({ tokensIn: 20, tokensOut: 10, cachedTokens: 0, costUsd: 0.02 });
+    expect(snap.byModel["anthropic/claude-sonnet-5"]).toEqual({
+      tokensIn: 130,
+      tokensOut: 65,
+      cachedTokens: 0,
+      costUsd: 0.13,
+    });
+    expect(snap.byModel["openai/gpt-4o"]).toEqual({
+      tokensIn: 20,
+      tokensOut: 10,
+      cachedTokens: 0,
+      costUsd: 0.02,
+    });
   });
 
   it("sums cachedTokens into turn + session + byModel, same as tokensIn/tokensOut — this is the LIVE per-step figure the dock reads, not a one-shot total", () => {
     const bus = createMetricsBus();
     // Simulates three real per-step model_call events within one turn — the
     // exact shape metered-ai.ts emits as each step's usage settles.
-    bus.record(ev({ model: "anthropic/claude-sonnet-5", tokensIn: 1000, tokensOut: 50, cachedTokens: 800, costUsd: 0.001 }));
-    bus.record(ev({ model: "anthropic/claude-sonnet-5", tokensIn: 1000, tokensOut: 50, cachedTokens: 900, costUsd: 0.0005 }));
-    bus.record(ev({ model: "anthropic/claude-sonnet-5", tokensIn: 500, tokensOut: 20, cachedTokens: 0, costUsd: 0.0015 }));
+    bus.record(
+      ev({
+        model: "anthropic/claude-sonnet-5",
+        tokensIn: 1000,
+        tokensOut: 50,
+        cachedTokens: 800,
+        costUsd: 0.001,
+      }),
+    );
+    bus.record(
+      ev({
+        model: "anthropic/claude-sonnet-5",
+        tokensIn: 1000,
+        tokensOut: 50,
+        cachedTokens: 900,
+        costUsd: 0.0005,
+      }),
+    );
+    bus.record(
+      ev({
+        model: "anthropic/claude-sonnet-5",
+        tokensIn: 500,
+        tokensOut: 20,
+        cachedTokens: 0,
+        costUsd: 0.0015,
+      }),
+    );
 
     const snap = bus.snapshot();
     expect(snap.turnCachedTokens).toBe(1700);
@@ -84,7 +144,14 @@ describe("record", () => {
 describe("startTurn", () => {
   it("resets turn totals but preserves session totals and byModel", () => {
     const bus = createMetricsBus();
-    bus.record(ev({ model: "anthropic/claude-sonnet-5", tokensIn: 100, tokensOut: 50, costUsd: 0.1 }));
+    bus.record(
+      ev({
+        model: "anthropic/claude-sonnet-5",
+        tokensIn: 100,
+        tokensOut: 50,
+        costUsd: 0.1,
+      }),
+    );
 
     bus.startTurn();
 
@@ -95,7 +162,12 @@ describe("startTurn", () => {
     expect(snap.sessionTokensIn).toBe(100);
     expect(snap.sessionTokensOut).toBe(50);
     expect(snap.sessionCostUsd).toBeCloseTo(0.1);
-    expect(snap.byModel["anthropic/claude-sonnet-5"]).toEqual({ tokensIn: 100, tokensOut: 50, cachedTokens: 0, costUsd: 0.1 });
+    expect(snap.byModel["anthropic/claude-sonnet-5"]).toEqual({
+      tokensIn: 100,
+      tokensOut: 50,
+      cachedTokens: 0,
+      costUsd: 0.1,
+    });
   });
 
   it("notifies subscribers so the status line clears the per-turn figure", () => {
@@ -117,12 +189,24 @@ describe("startTurn", () => {
 describe("snapshot", () => {
   it("returns a deep copy that cannot mutate internal bus state", () => {
     const bus = createMetricsBus();
-    bus.record(ev({ model: "anthropic/claude-sonnet-5", tokensIn: 10, tokensOut: 5, costUsd: 0.01 }));
+    bus.record(
+      ev({
+        model: "anthropic/claude-sonnet-5",
+        tokensIn: 10,
+        tokensOut: 5,
+        costUsd: 0.01,
+      }),
+    );
 
     const snap = bus.snapshot();
     snap.turnTokensIn = 999_999;
     snap.byModel["anthropic/claude-sonnet-5"]!.tokensIn = 999_999;
-    snap.byModel["new-model"] = { tokensIn: 1, tokensOut: 1, cachedTokens: 0, costUsd: 1 };
+    snap.byModel["new-model"] = {
+      tokensIn: 1,
+      tokensOut: 1,
+      cachedTokens: 0,
+      costUsd: 1,
+    };
 
     const snap2 = bus.snapshot();
     expect(snap2.turnTokensIn).toBe(10);
@@ -259,7 +343,9 @@ describe("noteStreamChars", () => {
   it("keeps the estimate across tool_call records — only a settled model call supersedes it", () => {
     const bus = createMetricsBus();
     bus.noteStreamChars(400);
-    bus.record(ev({ kind: "tool_call", tokensIn: 0, tokensOut: 0, costUsd: 0 }));
+    bus.record(
+      ev({ kind: "tool_call", tokensIn: 0, tokensOut: 0, costUsd: 0 }),
+    );
     expect(bus.snapshot().streamTokensOut).toBe(100);
   });
 
@@ -315,7 +401,13 @@ describe("metricsEventFor", () => {
   });
 
   it("defaults missing token directions to zero and prices to zero cost", () => {
-    const event = metricsEventFor("call-43", "tool_call", "anthropic/claude-sonnet-5", {}, 1);
+    const event = metricsEventFor(
+      "call-43",
+      "tool_call",
+      "anthropic/claude-sonnet-5",
+      {},
+      1,
+    );
     expect(event.tokensIn).toBe(0);
     expect(event.tokensOut).toBe(0);
     expect(event.costUsd).toBe(0);

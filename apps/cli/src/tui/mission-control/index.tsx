@@ -29,7 +29,9 @@ export interface MissionControlOptions {
   focusSid?: string;
 }
 
-export async function launchMissionControl(opts: MissionControlOptions): Promise<void> {
+export async function launchMissionControl(
+  opts: MissionControlOptions,
+): Promise<void> {
   const { store, manager, cwd, focusSid } = opts;
 
   const isTTY = Boolean(process.stdout.isTTY);

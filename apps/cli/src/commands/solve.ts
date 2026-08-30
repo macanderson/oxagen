@@ -12,7 +12,10 @@
  *   oxagen solve "…" --pipeline                                      # each candidate runs evaluate/enhance/judge too
  */
 import { requireSession } from "../lib/session.js";
-import { createGatewayAgentAi, createPlatformAgentAi } from "../agent/adapters/index.js";
+import {
+  createGatewayAgentAi,
+  createPlatformAgentAi,
+} from "../agent/adapters/index.js";
 import { createMeteredAi } from "../agent/metered-ai.js";
 import { createSolveUsageAccumulator } from "../agent/solve-usage.js";
 import { loadProjectContext } from "../agent/project-context.js";
@@ -65,7 +68,9 @@ export interface SolveOptions {
  * so this branch is unit-testable without standing up `handleSolve`'s full
  * session/AI-port machinery.
  */
-export function resolveFullPipeline(opts: Pick<SolveOptions, "pipeline">): boolean {
+export function resolveFullPipeline(
+  opts: Pick<SolveOptions, "pipeline">,
+): boolean {
   return opts.pipeline ?? process.env["OXAGEN_BEST_OF_N_PIPELINE"] === "1";
 }
 
@@ -80,11 +85,16 @@ export function resolveFullPipeline(opts: Pick<SolveOptions, "pipeline">): boole
  * is unit-testable without standing up `handleSolve`'s full session/AI-port
  * machinery.
  */
-export function resolveVerifyAuto(opts: Pick<SolveOptions, "verifyAuto">): boolean {
+export function resolveVerifyAuto(
+  opts: Pick<SolveOptions, "verifyAuto">,
+): boolean {
   return opts.verifyAuto ?? process.env["OXAGEN_BEST_OF_N_VERIFY"] === "1";
 }
 
-export async function handleSolve(prompt: string, opts: SolveOptions): Promise<void> {
+export async function handleSolve(
+  prompt: string,
+  opts: SolveOptions,
+): Promise<void> {
   const session = requireSession();
   const cwd = process.cwd();
 
@@ -107,7 +117,10 @@ export async function handleSolve(prompt: string, opts: SolveOptions): Promise<v
   });
 
   const models = opts.models
-    ? opts.models.split(",").map((s) => s.trim()).filter(Boolean)
+    ? opts.models
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
     : opts.model
       ? [opts.model]
       : undefined;
@@ -116,7 +129,14 @@ export async function handleSolve(prompt: string, opts: SolveOptions): Promise<v
   const fullPipeline = resolveFullPipeline(opts);
   const verifyAuto = resolveVerifyAuto(opts);
 
-  void debugLog("turn", "solve.start", { prompt, candidates, verify: opts.verify, models, fullPipeline, verifyAuto });
+  void debugLog("turn", "solve.start", {
+    prompt,
+    candidates,
+    verify: opts.verify,
+    models,
+    fullPipeline,
+    verifyAuto,
+  });
 
   const result = await launchBestOfN({
     prompt,

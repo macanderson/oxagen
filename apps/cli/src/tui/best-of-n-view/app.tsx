@@ -43,10 +43,23 @@ interface State {
   frame: number;
 }
 
-type Action = { kind: "event"; e: BestOfNEvent } | { kind: "tick" } | { kind: "finish" };
+type Action =
+  | { kind: "event"; e: BestOfNEvent }
+  | { kind: "tick" }
+  | { kind: "finish" };
 
 function laneOf(s: State, id: string, model = ""): Lane {
-  return s.lanes.get(id) ?? { id, model, status: "running", label: "starting…", steps: 0, files: 0, testsPassed: null };
+  return (
+    s.lanes.get(id) ?? {
+      id,
+      model,
+      status: "running",
+      label: "starting…",
+      steps: 0,
+      files: 0,
+      testsPassed: null,
+    }
+  );
 }
 
 function reducer(s: State, a: Action): State {
@@ -58,7 +71,12 @@ function reducer(s: State, a: Action): State {
     case "start":
       return { ...s, total: e.candidates, prompt: e.prompt };
     case "candidate-start":
-      lanes.set(e.id, { ...laneOf(s, e.id, e.model), model: e.model, status: "running", label: "starting…" });
+      lanes.set(e.id, {
+        ...laneOf(s, e.id, e.model),
+        model: e.model,
+        status: "running",
+        label: "starting…",
+      });
       return { ...s, lanes };
     case "candidate-progress": {
       const l = laneOf(s, e.id);
@@ -66,7 +84,11 @@ function reducer(s: State, a: Action): State {
       return { ...s, lanes };
     }
     case "candidate-verify":
-      lanes.set(e.id, { ...laneOf(s, e.id), status: "verifying", label: `verifying · ${e.command}` });
+      lanes.set(e.id, {
+        ...laneOf(s, e.id),
+        status: "verifying",
+        label: `verifying · ${e.command}`,
+      });
       return { ...s, lanes };
     case "candidate-done":
       lanes.set(e.id, {
@@ -79,12 +101,22 @@ function reducer(s: State, a: Action): State {
       });
       return { ...s, lanes };
     case "candidate-failed":
-      lanes.set(e.id, { ...laneOf(s, e.id), status: "failed", label: "failed", error: e.error });
+      lanes.set(e.id, {
+        ...laneOf(s, e.id),
+        status: "failed",
+        label: "failed",
+        error: e.error,
+      });
       return { ...s, lanes };
     case "select-start":
       return { ...s, phase: "selecting", viable: e.viable };
     case "select-done":
-      return { ...s, winnerId: e.winnerId, reasoning: e.reasoning, ranking: e.ranking };
+      return {
+        ...s,
+        winnerId: e.winnerId,
+        reasoning: e.reasoning,
+        ranking: e.ranking,
+      };
     case "applied":
       return { ...s, applied: true };
     case "apply-failed":
@@ -96,14 +128,32 @@ function reducer(s: State, a: Action): State {
   }
 }
 
-function StatusGlyph({ lane, frame }: { lane: Lane; frame: number }): React.JSX.Element {
+function StatusGlyph({
+  lane,
+  frame,
+}: {
+  lane: Lane;
+  frame: number;
+}): React.JSX.Element {
   if (lane.status === "done")
-    return <Text color={lane.testsPassed === false ? "yellow" : "green"}>{lane.testsPassed === false ? "✗" : "✓"}</Text>;
+    return (
+      <Text color={lane.testsPassed === false ? "yellow" : "green"}>
+        {lane.testsPassed === false ? "✗" : "✓"}
+      </Text>
+    );
   if (lane.status === "failed") return <Text color="red">✗</Text>;
   return <Text color={theme.cyan}>{SPINNER[frame % SPINNER.length]}</Text>;
 }
 
-function LaneRow({ index, lane, frame }: { index: number; lane: Lane; frame: number }): React.JSX.Element {
+function LaneRow({
+  index,
+  lane,
+  frame,
+}: {
+  index: number;
+  lane: Lane;
+  frame: number;
+}): React.JSX.Element {
   const tag =
     lane.status === "done"
       ? `${lane.files} file${lane.files === 1 ? "" : "s"} · ${lane.steps} steps${lane.testsPassed === true ? " · tests ✓" : lane.testsPassed === false ? " · tests ✗" : ""}`
@@ -118,7 +168,9 @@ function LaneRow({ index, lane, frame }: { index: number; lane: Lane; frame: num
       <Text> </Text>
       <StatusGlyph lane={lane} frame={frame} />
       <Text color={dim ? theme.dim : undefined}> {tag}</Text>
-      <Text color={theme.dim}>{lane.model ? `   ${lane.model.split("/").pop()}` : ""}</Text>
+      <Text color={theme.dim}>
+        {lane.model ? `   ${lane.model.split("/").pop()}` : ""}
+      </Text>
     </Box>
   );
 }
@@ -129,7 +181,11 @@ export interface BestOfNAppProps {
   prompt: string;
 }
 
-export function BestOfNApp({ emitter, total, prompt }: BestOfNAppProps): React.JSX.Element {
+export function BestOfNApp({
+  emitter,
+  total,
+  prompt,
+}: BestOfNAppProps): React.JSX.Element {
   const { exit } = useApp();
   const [state, dispatch] = useReducer(reducer, {
     total,
@@ -167,8 +223,9 @@ export function BestOfNApp({ emitter, total, prompt }: BestOfNAppProps): React.J
     return () => clearInterval(t);
   }, [state.phase]);
 
-  const lanes = Array.from({ length: Math.max(state.total, state.lanes.size) }, (_, i) =>
-    state.lanes.get(`candidate-${i + 1}`),
+  const lanes = Array.from(
+    { length: Math.max(state.total, state.lanes.size) },
+    (_, i) => state.lanes.get(`candidate-${i + 1}`),
   );
 
   return (
@@ -180,9 +237,14 @@ export function BestOfNApp({ emitter, total, prompt }: BestOfNAppProps): React.J
       </Box>
       <Box flexDirection="column" marginTop={1}>
         {lanes.map((lane, i) =>
-          lane ? <LaneRow key={i} index={i} lane={lane} frame={state.frame} /> : (
+          lane ? (
+            <LaneRow key={i} index={i} lane={lane} frame={state.frame} />
+          ) : (
             <Box key={i}>
-              <Text color={theme.dim}>{"  "}{CIRCLED[i] ?? `(${i + 1})`} ⋯ queued…</Text>
+              <Text color={theme.dim}>
+                {"  "}
+                {CIRCLED[i] ?? `(${i + 1})`} ⋯ queued…
+              </Text>
             </Box>
           ),
         )}
@@ -197,8 +259,13 @@ export function BestOfNApp({ emitter, total, prompt }: BestOfNAppProps): React.J
       {state.phase === "selecting" && !state.winnerId && (
         <Box marginTop={1}>
           <Text color={theme.cyan}>⚖ </Text>
-          <Text>judging {state.viable} viable candidate{state.viable === 1 ? "" : "s"}… </Text>
-          <Text color={theme.cyan}>{SPINNER[state.frame % SPINNER.length]}</Text>
+          <Text>
+            judging {state.viable} viable candidate
+            {state.viable === 1 ? "" : "s"}…{" "}
+          </Text>
+          <Text color={theme.cyan}>
+            {SPINNER[state.frame % SPINNER.length]}
+          </Text>
         </Box>
       )}
 
@@ -212,12 +279,21 @@ export function BestOfNApp({ emitter, total, prompt }: BestOfNAppProps): React.J
             <Box>
               <Text color={theme.dim}>
                 {"   "}
-                {[...state.ranking].sort((a, b) => b.score - a.score).map((r) => `${r.id.replace("candidate-", "#")}:${r.score}`).join("  ")}
+                {[...state.ranking]
+                  .sort((a, b) => b.score - a.score)
+                  .map((r) => `${r.id.replace("candidate-", "#")}:${r.score}`)
+                  .join("  ")}
               </Text>
             </Box>
           )}
-          {state.applied && <Text color="green">{"   "}✓ applied to your working tree</Text>}
-          {state.applyError && <Text color="yellow">{"   "}⚠ could not apply cleanly — see the winning diff</Text>}
+          {state.applied && (
+            <Text color="green">{"   "}✓ applied to your working tree</Text>
+          )}
+          {state.applyError && (
+            <Text color="yellow">
+              {"   "}⚠ could not apply cleanly — see the winning diff
+            </Text>
+          )}
         </Box>
       )}
 

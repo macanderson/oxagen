@@ -19,8 +19,17 @@
  * The neighbourhood/flow primitives ({@link callers}, {@link callees}) come from
  * the daemon's `query.ts`; this module composes them and bounds the result.
  */
-import { callers, callees, searchSymbols } from "../../daemon/code-graph/query.js";
-import type { CodeGraph, CodeNode, CodeEdge, CodeEdgeType } from "../../daemon/code-graph/types.js";
+import {
+  callers,
+  callees,
+  searchSymbols,
+} from "../../daemon/code-graph/query.js";
+import type {
+  CodeGraph,
+  CodeNode,
+  CodeEdge,
+  CodeEdgeType,
+} from "../../daemon/code-graph/types.js";
 
 /** A bounded subgraph: the nodes reached and the edges that connect them. */
 export interface Subgraph {
@@ -76,7 +85,10 @@ export function resolveSeeds(
 }
 
 /** The file node that contains a symbol (via the reverse `contains` edge). */
-function containingFile(graph: CodeGraph, symbolId: string): CodeNode | undefined {
+function containingFile(
+  graph: CodeGraph,
+  symbolId: string,
+): CodeNode | undefined {
   for (const e of graph.edges) {
     if (e.type === "contains" && e.target === symbolId) {
       const f = graph.nodes.get(e.source);
@@ -117,7 +129,8 @@ export function expandNeighbourhood(
     if (file && addNode(file.id)) frontier.push(file.id);
   }
 
-  const typeOk = (t: CodeEdgeType): boolean => !opts.edgeTypes || opts.edgeTypes.includes(t);
+  const typeOk = (t: CodeEdgeType): boolean =>
+    !opts.edgeTypes || opts.edgeTypes.includes(t);
   const recordEdge = (e: CodeEdge): void => {
     const key = `${e.source}->${e.target}:${e.type}`;
     if (!edgeSeen.has(key)) {
@@ -148,7 +161,8 @@ export function expandNeighbourhood(
   // Backfill any edge whose BOTH endpoints are already included (so the subgraph
   // is internally complete, not just a spanning tree).
   for (const e of graph.edges) {
-    if (typeOk(e.type) && included.has(e.source) && included.has(e.target)) recordEdge(e);
+    if (typeOk(e.type) && included.has(e.source) && included.has(e.target))
+      recordEdge(e);
   }
 
   const nodes: CodeNode[] = [];

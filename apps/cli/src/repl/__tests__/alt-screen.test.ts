@@ -40,7 +40,9 @@ describe("enterFullscreen", () => {
     const joined = writes.join("");
     expect(joined).toContain("\x1b[?25h");
     expect(joined).toContain("\x1b[?1049l");
-    expect(joined.indexOf("\x1b[?25h")).toBeLessThan(joined.indexOf("\x1b[?1049l"));
+    expect(joined.indexOf("\x1b[?25h")).toBeLessThan(
+      joined.indexOf("\x1b[?1049l"),
+    );
   });
 
   it("leave() ALSO disarms SGR mouse tracking (modes 1000/1002/1006) — a signal-kill (SIGTERM/SIGINT) tears the process down before React's own use-mouse-wheel cleanup ever runs, so this is the only backstop that keeps a killed CLI from stranding the user's terminal reporting raw mouse escapes into their shell", () => {
@@ -88,8 +90,12 @@ describe("parseMouseWheelEvents", () => {
 
   it("classifies modified wheel events (shift/meta/ctrl bits) by the same up/down bit", () => {
     // 64 + 4 (shift) = 68 → still "up"; 65 + 16 (ctrl) = 81 → still "down".
-    expect(parseMouseWheelEvents("\x1b[<68;1;1M")).toEqual([{ direction: "up" }]);
-    expect(parseMouseWheelEvents("\x1b[<81;1;1M")).toEqual([{ direction: "down" }]);
+    expect(parseMouseWheelEvents("\x1b[<68;1;1M")).toEqual([
+      { direction: "up" },
+    ]);
+    expect(parseMouseWheelEvents("\x1b[<81;1;1M")).toEqual([
+      { direction: "down" },
+    ]);
   });
 
   it("ignores non-wheel mouse reports (clicks, drags, plain moves)", () => {
@@ -104,29 +110,45 @@ describe("parseMouseWheelEvents", () => {
   });
 
   it("extracts multiple wheel events from a single chunk", () => {
-    const events = parseMouseWheelEvents("\x1b[<64;1;1M\x1b[<65;2;2M\x1b[<64;3;3M");
-    expect(events).toEqual([{ direction: "up" }, { direction: "down" }, { direction: "up" }]);
+    const events = parseMouseWheelEvents(
+      "\x1b[<64;1;1M\x1b[<65;2;2M\x1b[<64;3;3M",
+    );
+    expect(events).toEqual([
+      { direction: "up" },
+      { direction: "down" },
+      { direction: "up" },
+    ]);
   });
 
   it("handles the release form (lowercase m) the same as press", () => {
-    expect(parseMouseWheelEvents("\x1b[<64;1;1m")).toEqual([{ direction: "up" }]);
+    expect(parseMouseWheelEvents("\x1b[<64;1;1m")).toEqual([
+      { direction: "up" },
+    ]);
   });
 });
 
 describe("parseMouseButtonEvents", () => {
   it("recognizes a left-button press (Cb=0)", () => {
-    expect(parseMouseButtonEvents("\x1b[<0;12;5M")).toEqual([{ type: "press", col: 12, row: 5 }]);
+    expect(parseMouseButtonEvents("\x1b[<0;12;5M")).toEqual([
+      { type: "press", col: 12, row: 5 },
+    ]);
   });
 
   it("recognizes a left-button drag (Cb=32 — button 0 + the motion bit)", () => {
-    expect(parseMouseButtonEvents("\x1b[<32;20;5M")).toEqual([{ type: "drag", col: 20, row: 5 }]);
+    expect(parseMouseButtonEvents("\x1b[<32;20;5M")).toEqual([
+      { type: "drag", col: 20, row: 5 },
+    ]);
   });
 
   it("recognizes a release (lowercase m) regardless of the reported button bits", () => {
-    expect(parseMouseButtonEvents("\x1b[<0;12;5m")).toEqual([{ type: "release", col: 12, row: 5 }]);
+    expect(parseMouseButtonEvents("\x1b[<0;12;5m")).toEqual([
+      { type: "release", col: 12, row: 5 },
+    ]);
     // Some terminals report 3 ("no button") on release rather than the
     // originally-pressed button — must still finalize the drag.
-    expect(parseMouseButtonEvents("\x1b[<3;12;5m")).toEqual([{ type: "release", col: 12, row: 5 }]);
+    expect(parseMouseButtonEvents("\x1b[<3;12;5m")).toEqual([
+      { type: "release", col: 12, row: 5 },
+    ]);
   });
 
   it("ignores middle/right-button press and drag — left for native terminal handling", () => {
@@ -142,11 +164,14 @@ describe("parseMouseButtonEvents", () => {
 
   it("classifies a modified press (shift/meta/ctrl bits set) the same as a plain one", () => {
     // 0 + 4 (shift) = 4 — still button 0, no motion bit.
-    expect(parseMouseButtonEvents("\x1b[<4;1;1M")).toEqual([{ type: "press", col: 1, row: 1 }]);
+    expect(parseMouseButtonEvents("\x1b[<4;1;1M")).toEqual([
+      { type: "press", col: 1, row: 1 },
+    ]);
   });
 
   it("extracts a full press -> drag -> drag -> release sequence from one chunk, in order", () => {
-    const chunk = "\x1b[<0;5;10M" + "\x1b[<32;8;10M" + "\x1b[<32;12;10M" + "\x1b[<0;12;10m";
+    const chunk =
+      "\x1b[<0;5;10M" + "\x1b[<32;8;10M" + "\x1b[<32;12;10M" + "\x1b[<0;12;10m";
     expect(parseMouseButtonEvents(chunk)).toEqual([
       { type: "press", col: 5, row: 10 },
       { type: "drag", col: 8, row: 10 },

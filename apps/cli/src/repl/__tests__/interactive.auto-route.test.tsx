@@ -183,6 +183,8 @@ describe("REPL worker-model auto-routing", () => {
 
     await submit(stdin, "fix the login bug");
     await until(() => runTurnSpy.mock.calls.length > 0);
-    expect(runTurnSpy.mock.calls[0]?.[0]?.model).toBe("anthropic/claude-fable-5");
+    expect(runTurnSpy.mock.calls[0]?.[0]?.model).toBe(
+      "anthropic/claude-fable-5",
+    );
   });
 });

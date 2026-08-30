@@ -22,11 +22,17 @@
  * platform knowledge graph is reachable it can augment this, but enhancement
  * never depends on the network and degrades to a no-op if the graph can't build.
  */
-import { enhancePrompt as engineEnhancePrompt, type MemoryProvider } from "@oxagen/agent-engine";
+import {
+  enhancePrompt as engineEnhancePrompt,
+  type MemoryProvider,
+} from "@oxagen/agent-engine";
 import { queryCodeGraph } from "./code-graph.js";
 import { createCodeGraphProvider } from "./adapters/code-graph-provider.js";
-import { formatLessons, type FleetMemory } from "./fleet/memory.js";
-import type { MemoryRecord } from "./fleet/types.js";
+import {
+  formatLessons,
+  type FleetMemory,
+  type MemoryRecord,
+} from "./fleet/memory.js";
 import type { ContextRetrieval } from "./trace.js";
 
 export { extractCandidates } from "@oxagen/agent-engine";
@@ -97,7 +103,9 @@ function memoryProviderFor(lessons: MemoryRecord[]): MemoryProvider | null {
   };
 }
 
-export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult> {
+export async function enhancePrompt(
+  opts: EnhanceOptions,
+): Promise<EnhanceResult> {
   const { prompt, cwd } = opts;
   const runQuery = opts.queryCodeGraph ?? queryCodeGraph;
 

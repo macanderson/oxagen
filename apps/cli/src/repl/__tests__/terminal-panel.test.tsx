@@ -5,7 +5,11 @@
  */
 import { describe, it, expect } from "vitest";
 import { render } from "ink-testing-library";
-import { TerminalPanel, TerminalRunCard, type TerminalRun } from "../terminal-panel.js";
+import {
+  TerminalPanel,
+  TerminalRunCard,
+  type TerminalRun,
+} from "../terminal-panel.js";
 
 const at = 1_000_000;
 const base: TerminalRun = {
@@ -18,7 +22,9 @@ const base: TerminalRun = {
 
 describe("TerminalPanel", () => {
   it("renders the command behind a $ shell prompt", () => {
-    const { lastFrame } = render(<TerminalPanel run={base} nowFn={() => at + 5000} />);
+    const { lastFrame } = render(
+      <TerminalPanel run={base} nowFn={() => at + 5000} />,
+    );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("$ ");
     expect(frame).toContain("pnpm build");
@@ -43,7 +49,9 @@ describe("TerminalPanel", () => {
   });
 
   it("tails long output and notes how many lines were hidden", () => {
-    const lines = Array.from({ length: 40 }, (_, i) => `line ${i + 1}`).join("\n");
+    const lines = Array.from({ length: 40 }, (_, i) => `line ${i + 1}`).join(
+      "\n",
+    );
     const run: TerminalRun = { ...base, output: lines };
     const { lastFrame } = render(<TerminalPanel run={run} nowFn={() => at} />);
     const frame = lastFrame() ?? "";
@@ -54,23 +62,35 @@ describe("TerminalPanel", () => {
   });
 
   it("reports a clean exit", () => {
-    const run: TerminalRun = { ...base, status: "exited", exitCode: 0, endedAt: at + 8000 };
-    const { lastFrame } = render(<TerminalPanel run={run} nowFn={() => at + 9000} />);
+    const run: TerminalRun = {
+      ...base,
+      status: "exited",
+      exitCode: 0,
+      endedAt: at + 8000,
+    };
+    const { lastFrame } = render(
+      <TerminalPanel run={run} nowFn={() => at + 9000} />,
+    );
     expect(lastFrame() ?? "").toContain("exit 0");
   });
 
   it("reports a non-zero exit", () => {
-    const run: TerminalRun = { ...base, status: "exited", exitCode: 2, endedAt: at + 1000 };
-    expect((render(<TerminalPanel run={run} nowFn={() => at} />).lastFrame() ?? "")).toContain(
-      "exit 2",
-    );
+    const run: TerminalRun = {
+      ...base,
+      status: "exited",
+      exitCode: 2,
+      endedAt: at + 1000,
+    };
+    expect(
+      render(<TerminalPanel run={run} nowFn={() => at} />).lastFrame() ?? "",
+    ).toContain("exit 2");
   });
 
   it("reports a killed run", () => {
     const run: TerminalRun = { ...base, status: "killed", endedAt: at + 1000 };
-    expect((render(<TerminalPanel run={run} nowFn={() => at} />).lastFrame() ?? "")).toContain(
-      "killed",
-    );
+    expect(
+      render(<TerminalPanel run={run} nowFn={() => at} />).lastFrame() ?? "",
+    ).toContain("killed");
   });
 });
 
@@ -86,7 +106,9 @@ describe("TerminalRunCard (folded accordion)", () => {
   };
 
   it("collapsed: shows a one-line header with command, status, and line count — no output body", () => {
-    const { lastFrame } = render(<TerminalRunCard run={finished} expanded={false} />);
+    const { lastFrame } = render(
+      <TerminalRunCard run={finished} expanded={false} />,
+    );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("▸"); // collapsed toggle glyph
     expect(frame).toContain("$ "); // shell prompt (dim, separate node from command)
@@ -99,14 +121,18 @@ describe("TerminalRunCard (folded accordion)", () => {
   });
 
   it("collapsed: is NOT the red live panel (no round border)", () => {
-    const { lastFrame } = render(<TerminalRunCard run={finished} expanded={false} />);
+    const { lastFrame } = render(
+      <TerminalRunCard run={finished} expanded={false} />,
+    );
     const frame = lastFrame() ?? "";
     expect(frame).not.toContain("╭");
     expect(frame).not.toContain("╰");
   });
 
   it("expanded: reveals the captured output under an open toggle", () => {
-    const { lastFrame } = render(<TerminalRunCard run={finished} expanded={true} />);
+    const { lastFrame } = render(
+      <TerminalRunCard run={finished} expanded={true} />,
+    );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("▾"); // expanded toggle glyph
     expect(frame).toContain("line a");
@@ -114,7 +140,9 @@ describe("TerminalRunCard (folded accordion)", () => {
   });
 
   it("expanded: tails very long output", () => {
-    const lines = Array.from({ length: 80 }, (_, i) => `row ${i + 1}`).join("\n");
+    const lines = Array.from({ length: 80 }, (_, i) => `row ${i + 1}`).join(
+      "\n",
+    );
     const run: TerminalRun = { ...finished, output: lines };
     const { lastFrame } = render(<TerminalRunCard run={run} expanded={true} />);
     const frame = lastFrame() ?? "";
@@ -124,14 +152,18 @@ describe("TerminalRunCard (folded accordion)", () => {
 
   it("singular line count for one output line", () => {
     const run: TerminalRun = { ...finished, output: "only\n" };
-    const { lastFrame } = render(<TerminalRunCard run={run} expanded={false} />);
+    const { lastFrame } = render(
+      <TerminalRunCard run={run} expanded={false} />,
+    );
     expect(lastFrame() ?? "").toContain("1 line");
     expect(lastFrame() ?? "").not.toContain("1 lines");
   });
 
   it("no-output run omits the line-count suffix", () => {
     const run: TerminalRun = { ...finished, output: "" };
-    const { lastFrame } = render(<TerminalRunCard run={run} expanded={false} />);
+    const { lastFrame } = render(
+      <TerminalRunCard run={run} expanded={false} />,
+    );
     expect(lastFrame() ?? "").not.toMatch(/\d+ lines?/);
   });
 });

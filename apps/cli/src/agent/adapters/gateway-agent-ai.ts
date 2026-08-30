@@ -196,7 +196,10 @@ export function createGatewayAgentAi(
         // The engine's step loop owns retries (classified retryable-vs-fatal,
         // jittered backoff, maxRetries 4) — leaving the SDK default (2) under
         // it multiplies upstream attempts on a flaky gateway and blocks abort
-        // while the inner retries spin. Same treatment as generateObject.
+        // while the inner retries spin. NOTE the asymmetry: `generateObject`
+        // below deliberately leaves the SDK default in place, because that path
+        // is a single bounded call retried by `createMeteredAi`'s per-call
+        // timeout rather than by a step loop.
         maxRetries: 0,
         ...(providerOptions ? { providerOptions } : {}),
         onError: args.onError,

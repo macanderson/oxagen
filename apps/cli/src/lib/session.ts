@@ -95,7 +95,8 @@ export function requireSession(): Session {
   // Explicit local BYOK (OXAGEN_LOCAL=1 / `--local`): use the user's own key
   // (gateway or Anthropic) even when logged in — the user wants their own
   // key/models, not the platform.
-  if (forceLocalByok() && resolveAiCredential() !== null) return localByokSession();
+  if (forceLocalByok() && resolveAiCredential() !== null)
+    return localByokSession();
 
   if (!token || !orgSlug || !workspaceSlug) {
     // Benchmark bypass (OXAGEN_ALLOW_NO_SESSION=1): headless bench containers

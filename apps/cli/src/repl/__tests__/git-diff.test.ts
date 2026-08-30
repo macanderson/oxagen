@@ -38,10 +38,18 @@ describe("parseStatusPorcelain", () => {
     // Renames put the NEW path on the status line and the OLD path in the next
     // NUL-separated field. A following untracked entry proves the OLD field was
     // consumed (not misread as its own record).
-    const out = ["R  src/new-name.ts", "src/old-name.ts", rec("??", "junk.txt")].join("\0") + "\0";
+    const out =
+      ["R  src/new-name.ts", "src/old-name.ts", rec("??", "junk.txt")].join(
+        "\0",
+      ) + "\0";
     const files = parseStatusPorcelain(out);
     expect(files).toEqual<ChangedFile[]>([
-      { path: "src/new-name.ts", status: "R", renamedFrom: "src/old-name.ts", untracked: false },
+      {
+        path: "src/new-name.ts",
+        status: "R",
+        renamedFrom: "src/old-name.ts",
+        untracked: false,
+      },
       { path: "junk.txt", status: "?", untracked: true },
     ]);
   });
@@ -49,7 +57,9 @@ describe("parseStatusPorcelain", () => {
   it("flags untracked entries and returns [] for empty output", () => {
     expect(parseStatusPorcelain("")).toEqual([]);
     const files = parseStatusPorcelain(rec("??", "new.txt") + "\0");
-    expect(files).toEqual<ChangedFile[]>([{ path: "new.txt", status: "?", untracked: true }]);
+    expect(files).toEqual<ChangedFile[]>([
+      { path: "new.txt", status: "?", untracked: true },
+    ]);
   });
 });
 
@@ -60,7 +70,7 @@ describe("parseNumstat", () => {
     expect(map.get("src/b.ts")).toEqual({ insertions: 10, deletions: 0 });
   });
 
-  it("records binary files (\"-\" counts) as zero", () => {
+  it('records binary files ("-" counts) as zero', () => {
     const map = parseNumstat("-\t-\tassets/logo.png\n");
     expect(map.get("assets/logo.png")).toEqual({ insertions: 0, deletions: 0 });
   });
@@ -91,7 +101,8 @@ function fakeExec(handlers: {
 }): ExecFn {
   return async (_file, args) => {
     const argv = [...args];
-    if (argv[0] === "status") return handlers.status ?? { stdout: "", stderr: "" };
+    if (argv[0] === "status")
+      return handlers.status ?? { stdout: "", stderr: "" };
     if (argv[0] === "diff" && argv[1] === "--numstat") {
       const n = handlers.numstat ?? { stdout: "", stderr: "" };
       return typeof n === "function" ? n() : n;
@@ -105,14 +116,21 @@ describe("listChangedFiles", () => {
   it("merges numstat counts into the matching status entries and sorts untracked last", () => {
     const exec = fakeExec({
       status: {
-        stdout: [rec(" M", "src/a.ts"), rec("??", "z-new.txt")].join("\0") + "\0",
+        stdout:
+          [rec(" M", "src/a.ts"), rec("??", "z-new.txt")].join("\0") + "\0",
         stderr: "",
       },
       numstat: { stdout: "3\t1\tsrc/a.ts\n", stderr: "" },
     });
     return listChangedFiles("/repo", exec).then((files) => {
       expect(files).toEqual<ChangedFile[]>([
-        { path: "src/a.ts", status: "M", untracked: false, insertions: 3, deletions: 1 },
+        {
+          path: "src/a.ts",
+          status: "M",
+          untracked: false,
+          insertions: 3,
+          deletions: 1,
+        },
         { path: "z-new.txt", status: "?", untracked: true },
       ]);
     });
@@ -130,29 +148,46 @@ describe("listChangedFiles", () => {
       numstat: () => Promise.reject(new Error("no HEAD")),
     });
     const files = await listChangedFiles("/repo", exec);
-    expect(files).toEqual<ChangedFile[]>([{ path: "first.ts", status: "A", untracked: false }]);
+    expect(files).toEqual<ChangedFile[]>([
+      { path: "first.ts", status: "A", untracked: false },
+    ]);
   });
 });
 
 describe("getFileDiff", () => {
-  const tracked: ChangedFile = { path: "src/a.ts", status: "M", untracked: false };
-  const untracked: ChangedFile = { path: "new.ts", status: "?", untracked: true };
+  const tracked: ChangedFile = {
+    path: "src/a.ts",
+    status: "M",
+    untracked: false,
+  };
+  const untracked: ChangedFile = {
+    path: "new.ts",
+    status: "?",
+    untracked: true,
+  };
 
   it("returns the diff for a tracked file (git diff HEAD)", async () => {
-    const exec = fakeExec({ diff: { stdout: "@@ -1 +1 @@\n-old\n+new\n", stderr: "" } });
-    expect(await getFileDiff("/repo", tracked, exec)).toBe("@@ -1 +1 @@\n-old\n+new\n");
+    const exec = fakeExec({
+      diff: { stdout: "@@ -1 +1 @@\n-old\n+new\n", stderr: "" },
+    });
+    expect(await getFileDiff("/repo", tracked, exec)).toBe(
+      "@@ -1 +1 @@\n-old\n+new\n",
+    );
   });
 
   it("treats git diff --no-index exit code 1 (files differ) as success with stdout", async () => {
     const exec: ExecFn = vi.fn(async () => {
-      const err = Object.assign(new Error("differ"), { code: 1, stdout: "+added line\n" });
+      const err = Object.assign(new Error("differ"), {
+        code: 1,
+        stdout: "+added line\n",
+      });
       throw err;
     });
     expect(await getFileDiff("/repo", untracked, exec)).toBe("+added line\n");
     expect(exec).toHaveBeenCalledOnce();
   });
 
-  it("returns \"\" for a non-1 error and for a tracked-diff failure", async () => {
+  it('returns "" for a non-1 error and for a tracked-diff failure', async () => {
     const nonOne: ExecFn = async () => {
       throw Object.assign(new Error("boom"), { code: 2, stdout: "ignored" });
     };

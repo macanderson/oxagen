@@ -39,7 +39,10 @@ describe("linker", () => {
 
       expect(mockUserApiPostOrThrow).toHaveBeenCalledWith("organizations", {});
       // Verify it was NOT called with the double-path
-      expect(mockUserApiPostOrThrow).not.toHaveBeenCalledWith("user/organizations", {});
+      expect(mockUserApiPostOrThrow).not.toHaveBeenCalledWith(
+        "user/organizations",
+        {},
+      );
     });
 
     it("returns the single organization when there is only one", async () => {
@@ -81,11 +84,16 @@ describe("linker", () => {
 
       await resolveWorkspace({ orgSlug: "acme", isTTY: false });
 
-      expect(mockUserApiPostOrThrow).toHaveBeenCalledWith("workspaces", { orgSlug: "acme" });
-      // Verify it was NOT called with the double-path
-      expect(mockUserApiPostOrThrow).not.toHaveBeenCalledWith("user/workspaces", {
+      expect(mockUserApiPostOrThrow).toHaveBeenCalledWith("workspaces", {
         orgSlug: "acme",
       });
+      // Verify it was NOT called with the double-path
+      expect(mockUserApiPostOrThrow).not.toHaveBeenCalledWith(
+        "user/workspaces",
+        {
+          orgSlug: "acme",
+        },
+      );
     });
 
     it("returns the workspace and org when there is one workspace", async () => {

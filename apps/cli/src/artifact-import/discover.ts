@@ -3,7 +3,7 @@ import { readdir, readFile, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import type { ImportCandidate, ImportPlatform, ImportScope } from "./types";
+import type { ImportCandidate, ImportPlatform, ImportScope } from "./types.js";
 
 interface SourceSpec {
   platform: ImportPlatform;

@@ -53,7 +53,9 @@ describe("listSourceFiles — honors .gitignore", () => {
 
   it("never descends into an ignored nested worktree dir (e.g. .claude/worktrees)", async () => {
     writeFileSync(join(repo, ".gitignore"), ".claude/\n");
-    mkdirSync(join(repo, ".claude", "worktrees", "wt", "src"), { recursive: true });
+    mkdirSync(join(repo, ".claude", "worktrees", "wt", "src"), {
+      recursive: true,
+    });
     writeFileSync(
       join(repo, ".claude", "worktrees", "wt", "src", "deep.ts"),
       "export const x = 1;\n",

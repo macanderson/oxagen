@@ -86,7 +86,11 @@ describe("DispatchInput", () => {
     stdin.write("ab");
     await until(() => plain().includes("ab"), 3000, plain);
     stdin.write("\u007f"); // DEL — ink reports key.delete/backspace
-    await until(() => !plain().includes("ab") && plain().includes("a"), 3000, plain);
+    await until(
+      () => !plain().includes("ab") && plain().includes("a"),
+      3000,
+      plain,
+    );
     unmount();
   });
 

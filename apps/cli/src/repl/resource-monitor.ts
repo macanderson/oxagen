@@ -81,14 +81,22 @@ export interface ResourceMonitor {
   onChange(cb: (snap: ResourceSnapshot) => void): () => void;
   /** Take one reading now (also driven by the internal timer). Returns the committed reading. */
   sample(): ResourceSnapshot;
-  /** Stop the internal timer. Idempotent. */
+  /**
+   * Stop the internal timer AND drop every `onChange` subscriber. Idempotent,
+   * and terminal — re-subscribing after `stop()` gets you nothing, because
+   * nothing samples any more. `sample()` still works if called by hand.
+   */
   stop(): void;
 }
 
 /** Free-memory band thresholds (fraction of total). */
 const MEM_ELEVATED_BELOW = 0.15;
 const MEM_CRITICAL_BELOW = 0.07;
-/** CPU-saturation band thresholds (load1 relative to cores). */
+/**
+ * CPU-saturation band thresholds (load1 relative to cores). Note that
+ * `os.loadavg()` always returns [0, 0, 0] on Windows, so on that platform the
+ * CPU band is permanently "ok" and only the memory band can clamp.
+ */
 const CPU_ELEVATED_FACTOR = 1.25;
 const CPU_CRITICAL_FACTOR = 2.0;
 

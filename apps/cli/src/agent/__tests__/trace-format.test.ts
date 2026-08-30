@@ -56,7 +56,10 @@ function trace(over: Partial<TurnTrace> = {}): TurnTrace {
     response: "added it",
     filesTouched: ["src/billing/refund.ts"],
     commandsRun: ["pnpm test"],
-    judgeRounds: [judge(), judge({ complete: true, findings: [], remainingWork: [] })],
+    judgeRounds: [
+      judge(),
+      judge({ complete: true, findings: [], remainingWork: [] }),
+    ],
     finalComplete: true,
     steps: 7,
     usage: { inputTokens: 100, outputTokens: 50, costUsd: 0.0123 },
@@ -87,8 +90,20 @@ describe("formatTraceText", () => {
   it("omits the refined-prompt section when unchanged, and shows bare-mode judging", () => {
     const out = formatTraceText(
       trace({
-        evaluation: { ...trace().evaluation, refinedPrompt: "add a refund route", missing: [], removed: [], reasoning: "" },
-        enhancement: { prompt: "p", context: "", resolved: [], lessonCount: 0, source: "none" },
+        evaluation: {
+          ...trace().evaluation,
+          refinedPrompt: "add a refund route",
+          missing: [],
+          removed: [],
+          reasoning: "",
+        },
+        enhancement: {
+          prompt: "p",
+          context: "",
+          resolved: [],
+          lessonCount: 0,
+          source: "none",
+        },
         judgeRounds: [],
       }),
     );

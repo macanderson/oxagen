@@ -47,7 +47,10 @@ export interface ConfigPanelRow {
  * order of the suggestion block (after all set rows).
  */
 export const SUGGESTED_PATHS: ReadonlyArray<{ path: string; hint: string }> = [
-  { path: "vision.statement", hint: "one-line product vision agents anchor to" },
+  {
+    path: "vision.statement",
+    hint: "one-line product vision agents anchor to",
+  },
   { path: "packageManagers.primary", hint: 'e.g. "pnpm"' },
   { path: "vcs.commit.convention", hint: 'e.g. "conventional-commits"' },
   { path: "vcs.branch.convention", hint: 'e.g. "type/slug"' },
@@ -57,7 +60,10 @@ export const SUGGESTED_PATHS: ReadonlyArray<{ path: string; hint: string }> = [
 ];
 
 /** Read a dotted path out of the merged config. Returns undefined when any hop is missing. */
-export function getValueAtPath(config: WorkspaceConfig, dottedPath: string): unknown {
+export function getValueAtPath(
+  config: WorkspaceConfig,
+  dottedPath: string,
+): unknown {
   let cur: unknown = config;
   for (const part of dottedPath.split(".")) {
     if (cur === null || typeof cur !== "object") return undefined;
@@ -82,7 +88,11 @@ function isHidden(path: string): boolean {
   return HIDDEN_PREFIXES.some((p) => path === p || path.startsWith(`${p}.`));
 }
 
-function findItem(config: WorkspaceConfig, lang: string, id: string): LanguageItem | undefined {
+function findItem(
+  config: WorkspaceConfig,
+  lang: string,
+  id: string,
+): LanguageItem | undefined {
   return config.languages?.[lang]?.items?.find((i) => i.id === id);
 }
 
@@ -91,14 +101,21 @@ function findItem(config: WorkspaceConfig, lang: string, id: string): LanguageIt
  * (sorted by path, generated/meta paths hidden), then the SUGGESTED_PATHS
  * that aren't set anywhere, as editable "(not set)" placeholders.
  */
-export function buildConfigRows(resolved: ResolvedWorkspaceConfig): ConfigPanelRow[] {
+export function buildConfigRows(
+  resolved: ResolvedWorkspaceConfig,
+): ConfigPanelRow[] {
   const rows: ConfigPanelRow[] = [];
 
   const paths = Object.keys(resolved.provenance).sort();
   for (const path of paths) {
     if (isHidden(path)) continue;
     const prov = resolved.provenance[path]!;
-    const base = { path, scope: prov.scope, locked: prov.locked, reason: prov.reason };
+    const base = {
+      path,
+      scope: prov.scope,
+      locked: prov.locked,
+      reason: prov.reason,
+    };
 
     const itemMatch = ITEM_PATH.exec(path);
     if (itemMatch) {
@@ -116,7 +133,12 @@ export function buildConfigRows(resolved: ResolvedWorkspaceConfig): ConfigPanelR
     }
 
     if (path.startsWith(LIST_VALUE_PREFIX)) {
-      rows.push({ ...base, kind: "list-value", value: path.split(".").pop(), display: "✓" });
+      rows.push({
+        ...base,
+        kind: "list-value",
+        value: path.split(".").pop(),
+        display: "✓",
+      });
       continue;
     }
 

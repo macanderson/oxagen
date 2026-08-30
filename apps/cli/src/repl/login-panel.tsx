@@ -1,8 +1,8 @@
 /**
- * login-panel.tsx — the REPL's Ink-native `/login` panel (PR C item 12).
+ * login-panel.tsx — the REPL's Ink-native `/login` panel.
  *
  * The one-shot `oxagen login` CLI defaults to a browser-based PKCE flow
- * (lib/loopback-login.ts) that needs zero typed input — the browser handles
+ * (auth/loopback-login.ts) that needs zero typed input — the browser handles
  * auth, a loopback HTTP server on 127.0.0.1 receives the callback. That makes
  * it the right flow to drive from inside the REPL too: unlike the headless
  * `--token` paste fallback (which uses `node:readline` and would conflict
@@ -23,7 +23,10 @@ import { Box, Text, useInput } from "ink";
 import React, { useEffect, useRef, useState } from "react";
 import { theme } from "../tui/theme.js";
 import { SPINNER_FRAMES } from "../tui/activity.js";
-import { runBrowserLogin, type InteractiveLoginResult } from "../commands/auth.js";
+import {
+  runBrowserLogin,
+  type InteractiveLoginResult,
+} from "../commands/auth.js";
 
 function maskToken(token: string): string {
   if (token.length <= 8) return "****";
@@ -73,7 +76,10 @@ export function LoginPanel({
         setState({ kind: "success", result });
         onLoggedIn(result);
       } catch (err) {
-        setState({ kind: "error", message: err instanceof Error ? err.message : String(err) });
+        setState({
+          kind: "error",
+          message: err instanceof Error ? err.message : String(err),
+        });
       }
     })();
     return () => controller.abort();
@@ -86,7 +92,10 @@ export function LoginPanel({
 
   useEffect(() => {
     if (state.kind !== "running") return;
-    const timer = setInterval(() => setFrame((f) => (f + 1) % SPINNER_FRAMES.length), 100);
+    const timer = setInterval(
+      () => setFrame((f) => (f + 1) % SPINNER_FRAMES.length),
+      100,
+    );
     return () => clearInterval(timer);
   }, [state.kind]);
 
@@ -106,7 +115,13 @@ export function LoginPanel({
   );
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={theme.violet} paddingX={1} width={width}>
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={theme.violet}
+      paddingX={1}
+      width={width}
+    >
       <Box>
         <Text color={theme.violet} bold>
           {"⚿ login "}

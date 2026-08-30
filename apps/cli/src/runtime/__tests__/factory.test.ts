@@ -42,7 +42,10 @@ describe("buildProvider", () => {
     expect(haiku).toBeInstanceOf(AnthropicProvider);
     expect(haiku).toBeInstanceOf(GatewayCloudProvider);
 
-    const openai = buildProvider("openai-most-capable-coding-model", CLOUD_DEPS);
+    const openai = buildProvider(
+      "openai-most-capable-coding-model",
+      CLOUD_DEPS,
+    );
     expect(openai).toBeInstanceOf(OpenAiProvider);
     expect(openai).toBeInstanceOf(GatewayCloudProvider);
   });
@@ -74,7 +77,9 @@ describe("role helpers", () => {
     // local runtime class; worker/judge resolve to the cloud vendor classes.
     process.env["OXAGEN_COORDINATOR"] = "on-device";
     expect(coordinatorProvider()).toBeInstanceOf(OnDeviceProvider);
-    expect(workerProvider("defaultCode", CLOUD_DEPS)).toBeInstanceOf(GatewayCloudProvider);
+    expect(workerProvider("defaultCode", CLOUD_DEPS)).toBeInstanceOf(
+      GatewayCloudProvider,
+    );
     expect(judgeProvider(CLOUD_DEPS)).toBeInstanceOf(OpenAiProvider);
   });
 });

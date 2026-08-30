@@ -24,13 +24,33 @@ const ROW: CapabilityRow = {
   quantizations: ["q4", "q8"],
   license: "Apache-2.0",
   sources: {
-    q4: { url: "https://x.test/q4.gguf", sha256: "", sizeBytes: CONTENT.length },
-    q8: { url: "https://x.test/q8.gguf", sha256: "", sizeBytes: CONTENT.length },
+    q4: {
+      url: "https://x.test/q4.gguf",
+      sha256: "",
+      sizeBytes: CONTENT.length,
+    },
+    q8: {
+      url: "https://x.test/q8.gguf",
+      sha256: "",
+      sizeBytes: CONTENT.length,
+    },
   },
 };
 
-const BIG: DeviceProfile = { ramGB: 128, vramGB: 0, gpu: null, cpuCores: 16, unifiedMemory: false };
-const TINY: DeviceProfile = { ramGB: 2, vramGB: 0, gpu: null, cpuCores: 2, unifiedMemory: false };
+const BIG: DeviceProfile = {
+  ramGB: 128,
+  vramGB: 0,
+  gpu: null,
+  cpuCores: 16,
+  unifiedMemory: false,
+};
+const TINY: DeviceProfile = {
+  ramGB: 2,
+  vramGB: 0,
+  gpu: null,
+  cpuCores: 2,
+  unifiedMemory: false,
+};
 const PREF: Quantization[] = ["q8", "q4"];
 
 function fakeFetch(): FetchImpl {
@@ -101,7 +121,9 @@ describe("resolution", () => {
 
 describe("isAvailable", () => {
   it("is false when the optional dep is missing", async () => {
-    expect(await build({ loadRuntime: async () => null }).isAvailable()).toBe(false);
+    expect(await build({ loadRuntime: async () => null }).isAvailable()).toBe(
+      false,
+    );
   });
 
   it("is false before the weights are cached, true after a pull", async () => {
@@ -114,19 +136,21 @@ describe("isAvailable", () => {
 
 describe("ensureReady — never a silent fallback", () => {
   it("throws NoFittingModelError when nothing fits the device", async () => {
-    await expect(build({ device: TINY }).ensureReady()).rejects.toBeInstanceOf(NoFittingModelError);
+    await expect(build({ device: TINY }).ensureReady()).rejects.toBeInstanceOf(
+      NoFittingModelError,
+    );
   });
 
   it("throws OptionalDepMissingError when the runtime is absent", async () => {
-    await expect(build({ loadRuntime: async () => null }).ensureReady()).rejects.toBeInstanceOf(
-      OptionalDepMissingError,
-    );
+    await expect(
+      build({ loadRuntime: async () => null }).ensureReady(),
+    ).rejects.toBeInstanceOf(OptionalDepMissingError);
   });
 
   it("throws AutoDownloadDisabledError when not cached and auto-download is off", async () => {
-    await expect(build({ autoDownload: false }).ensureReady()).rejects.toBeInstanceOf(
-      AutoDownloadDisabledError,
-    );
+    await expect(
+      build({ autoDownload: false }).ensureReady(),
+    ).rejects.toBeInstanceOf(AutoDownloadDisabledError);
   });
 
   it("downloads the weights when auto-download is on", async () => {
@@ -151,14 +175,18 @@ describe("pull", () => {
 
   it("errors when the resolved model has no download source", async () => {
     const noSrc: CapabilityRow = { ...ROW, sources: {} };
-    await expect(build({ table: [noSrc] }).pull()).rejects.toThrow(/No download source/);
+    await expect(build({ table: [noSrc] }).pull()).rejects.toThrow(
+      /No download source/,
+    );
   });
 });
 
 describe("complete", () => {
   it("runs the on-device runtime and reports zero cloud cost", async () => {
     const p = build();
-    const res = await p.complete({ messages: [{ role: "user", content: "solve fizzbuzz" }] });
+    const res = await p.complete({
+      messages: [{ role: "user", content: "solve fizzbuzz" }],
+    });
     expect(res.text).toBe("def solution(): pass");
     expect(res.kind).toBe("on-device");
     expect(res.model).toBe("small-7b");
@@ -168,7 +196,10 @@ describe("complete", () => {
   });
 
   it("estimateCost is always zero for local inference", () => {
-    const est = build().estimateCost({ messages: [{ role: "user", content: "hi" }], maxOutputTokens: 50 });
+    const est = build().estimateCost({
+      messages: [{ role: "user", content: "hi" }],
+      maxOutputTokens: 50,
+    });
     expect(est.usd).toBe(0);
     expect(est.tokens).toBeGreaterThan(0);
   });

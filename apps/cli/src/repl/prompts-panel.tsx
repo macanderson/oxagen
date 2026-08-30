@@ -70,7 +70,10 @@ export function PromptsPanel({
   const [previewing, setPreviewing] = useState(false);
   const [scrollTop, setScrollTop] = useState(0);
 
-  const filtered = useMemo(() => filterPrompts(prompts, query), [prompts, query]);
+  const filtered = useMemo(
+    () => filterPrompts(prompts, query),
+    [prompts, query],
+  );
   const clampedSelected = Math.min(selected, Math.max(0, filtered.length - 1));
   const current = filtered[clampedSelected];
 
@@ -214,7 +217,9 @@ export function PromptsPanel({
         </Text>
         <Text dimColor>
           · {filtered.length}
-          {query ? ` match "${query}"` : ` prompt${prompts.length === 1 ? "" : "s"}`}
+          {query
+            ? ` match "${query}"`
+            : ` prompt${prompts.length === 1 ? "" : "s"}`}
         </Text>
       </Box>
 
@@ -236,7 +241,10 @@ export function PromptsPanel({
             const isSelected = idx === clampedSelected;
             return (
               <Box key={prompt.name} width={innerWidth}>
-                <Text color={isSelected ? theme.violet : undefined} bold={isSelected}>
+                <Text
+                  color={isSelected ? theme.violet : undefined}
+                  bold={isSelected}
+                >
                   {isSelected ? "❯ " : "  "}
                 </Text>
                 <Box width={nameWidth} flexShrink={0}>

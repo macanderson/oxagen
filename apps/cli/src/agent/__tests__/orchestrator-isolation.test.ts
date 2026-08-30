@@ -18,7 +18,11 @@ vi.mock("../prompt-enhancer.js", () => ({
 }));
 
 import { Fleet, type AgentRunner } from "../fleet/orchestrator.js";
-import type { Isolation, IntegrationResult, Checkpoint } from "../fleet/git-isolation.js";
+import type {
+  Isolation,
+  IntegrationResult,
+  Checkpoint,
+} from "../fleet/git-isolation.js";
 import type { Plan, Task } from "../fleet/types.js";
 
 function task(id: string, over: Partial<Task> = {}): Task {
@@ -41,7 +45,10 @@ function plan(tasks: Task[]): Plan {
   return { id: "p1", goal: "g", createdAt: 1, tasks, status: "draft" };
 }
 
-function deferred<T = void>(): { promise: Promise<T>; resolve: (v: T) => void } {
+function deferred<T = void>(): {
+  promise: Promise<T>;
+  resolve: (v: T) => void;
+} {
   let resolve!: (v: T) => void;
   const promise = new Promise<T>((res) => {
     resolve = res;
@@ -54,7 +61,12 @@ function fakeIsolation(
   integrate?: (id: string) => IntegrationResult,
 ): Isolation & { calls: string[] } {
   const calls: string[] = [];
-  const cp = (id: string): Checkpoint => ({ taskId: id, hash: "h", ref: "r", message: "m" });
+  const cp = (id: string): Checkpoint => ({
+    taskId: id,
+    hash: "h",
+    ref: "r",
+    message: "m",
+  });
   return {
     calls,
     init: async () => void calls.push("init"),
@@ -69,10 +81,13 @@ function fakeIsolation(
     recordedCommits: () => [],
     integrate: async (id) => {
       calls.push(`integrate:${id}`);
-      return integrate?.(id) ?? { ok: true, commit: "c", taskBranch: `b/${id}` };
+      return (
+        integrate?.(id) ?? { ok: true, commit: "c", taskBranch: `b/${id}` }
+      );
     },
     integrationRef: () => null,
-    dispose: async (id, opts) => void calls.push(`dispose:${id}:keep=${opts?.keep ?? false}`),
+    dispose: async (id, opts) =>
+      void calls.push(`dispose:${id}:keep=${opts?.keep ?? false}`),
     cleanupAll: async () => void calls.push("cleanupAll"),
   };
 }
@@ -83,10 +98,19 @@ describe("Fleet with git isolation", () => {
     let seenCwd = "";
     const runner: AgentRunner = async (o) => {
       seenCwd = o.cwd;
-      return { text: "done", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "done",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
 
-    const fleet = new Fleet({ cwd: "/repo", isolation: iso, runner, memory: null });
+    const fleet = new Fleet({
+      cwd: "/repo",
+      isolation: iso,
+      runner,
+      memory: null,
+    });
     fleet.loadPlan(plan([task("t1")]));
     await fleet.start();
 
@@ -108,10 +132,21 @@ describe("Fleet with git isolation", () => {
       taskTip: "tip",
     }));
     const events: Array<{ taskId: string; conflicts?: string[] }> = [];
-    const runner: AgentRunner = async () => ({ text: "x", steps: 1, usage: {} });
+    const runner: AgentRunner = async () => ({
+      text: "x",
+      steps: 1,
+      usage: {},
+    });
 
-    const fleet = new Fleet({ cwd: "/repo", isolation: iso, runner, memory: null });
-    fleet.on("conflict", (e: { taskId: string; conflicts?: string[] }) => events.push(e));
+    const fleet = new Fleet({
+      cwd: "/repo",
+      isolation: iso,
+      runner,
+      memory: null,
+    });
+    fleet.on("conflict", (e: { taskId: string; conflicts?: string[] }) =>
+      events.push(e),
+    );
     fleet.loadPlan(plan([task("t1")]));
     await fleet.start();
 
@@ -138,9 +173,17 @@ describe("Fleet with git isolation", () => {
       return { text: "x", steps: 1, usage: {} };
     };
 
-    const fleet = new Fleet({ cwd: "/repo", concurrency: 4, isolation: iso, runner, memory: null });
+    const fleet = new Fleet({
+      cwd: "/repo",
+      concurrency: 4,
+      isolation: iso,
+      runner,
+      memory: null,
+    });
     // Both predict the SAME file — without isolation this would serialize.
-    fleet.loadPlan(plan([task("t1", { files: ["x.ts"] }), task("t2", { files: ["x.ts"] })]));
+    fleet.loadPlan(
+      plan([task("t1", { files: ["x.ts"] }), task("t2", { files: ["x.ts"] })]),
+    );
     const done = fleet.start();
 
     await bothRunning.promise;

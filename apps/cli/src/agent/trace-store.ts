@@ -21,7 +21,13 @@ function projectKey(cwd: string): string {
 }
 
 function storePath(cwd: string): string {
-  return join(homedir(), ".config", "oxagen", "traces", `${projectKey(cwd)}.json`);
+  return join(
+    homedir(),
+    ".config",
+    "oxagen",
+    "traces",
+    `${projectKey(cwd)}.json`,
+  );
 }
 
 interface StoreShape {
@@ -32,7 +38,9 @@ function read(cwd: string): StoreShape {
   const path = storePath(cwd);
   if (!existsSync(path)) return { traces: [] };
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as Partial<StoreShape>;
+    const parsed = JSON.parse(
+      readFileSync(path, "utf8"),
+    ) as Partial<StoreShape>;
     return { traces: Array.isArray(parsed.traces) ? parsed.traces : [] };
   } catch {
     return { traces: [] };

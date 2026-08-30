@@ -6,7 +6,14 @@
  * building is covered by the daemon/code-graph builder tests.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
+import {
+  mkdtempSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+  writeFileSync,
+  mkdirSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -31,7 +38,8 @@ vi.mock("../../agent/env.js", () => ({
 // duckdb module being unavailable (e.g. a bench/CI container that skipped
 // OXAGEN_INSTALL_DUCKDB) — see the "resilience" describe block below.
 vi.mock("../../daemon/code-graph/store.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../daemon/code-graph/store.js")>();
+  const actual =
+    await importOriginal<typeof import("../../daemon/code-graph/store.js")>();
   return {
     ...actual,
     createCodeGraphStore: () => {
@@ -89,7 +97,10 @@ function makeResult(overrides: Partial<InitResult> = {}): InitResult {
 describe("ensureSettingsFiles", () => {
   it("creates both project and user settings files when they do not exist", () => {
     const userPath = join(tmpDir, "user-settings.json");
-    const result = ensureSettingsFiles({ cwd: tmpDir, userSettingsPath: userPath });
+    const result = ensureSettingsFiles({
+      cwd: tmpDir,
+      userSettingsPath: userPath,
+    });
 
     expect(result.userCreated).toBe(true);
     expect(result.projectCreated).toBe(true);
@@ -101,7 +112,10 @@ describe("ensureSettingsFiles", () => {
     const userPath = join(tmpDir, "user-settings.json");
     ensureSettingsFiles({ cwd: tmpDir, userSettingsPath: userPath });
 
-    const projectRaw = readFileSync(join(tmpDir, ".oxagen", "settings.json"), "utf8");
+    const projectRaw = readFileSync(
+      join(tmpDir, ".oxagen", "settings.json"),
+      "utf8",
+    );
     const userRaw = readFileSync(userPath, "utf8");
 
     const project = JSON.parse(projectRaw) as Record<string, unknown>;
@@ -128,7 +142,10 @@ describe("ensureSettingsFiles", () => {
     });
     writeFileSync(projectPath, customContent, "utf8");
 
-    const result = ensureSettingsFiles({ cwd: tmpDir, userSettingsPath: userPath });
+    const result = ensureSettingsFiles({
+      cwd: tmpDir,
+      userSettingsPath: userPath,
+    });
 
     expect(result.projectCreated).toBe(false);
     // Original content must be preserved
@@ -147,7 +164,10 @@ describe("ensureSettingsFiles", () => {
     });
     writeFileSync(userPath, customUserContent, "utf8");
 
-    const result = ensureSettingsFiles({ cwd: tmpDir, userSettingsPath: userPath });
+    const result = ensureSettingsFiles({
+      cwd: tmpDir,
+      userSettingsPath: userPath,
+    });
 
     expect(result.userCreated).toBe(false);
     const after = readFileSync(userPath, "utf8");
@@ -157,7 +177,10 @@ describe("ensureSettingsFiles", () => {
 
   it("returns correct paths", () => {
     const userPath = join(tmpDir, "user-settings.json");
-    const result = ensureSettingsFiles({ cwd: tmpDir, userSettingsPath: userPath });
+    const result = ensureSettingsFiles({
+      cwd: tmpDir,
+      userSettingsPath: userPath,
+    });
 
     expect(result.projectPath).toBe(join(tmpDir, ".oxagen", "settings.json"));
     expect(result.userPath).toBe(userPath);
@@ -166,7 +189,10 @@ describe("ensureSettingsFiles", () => {
   it("is idempotent — second call reports created:false for both", () => {
     const userPath = join(tmpDir, "user-settings.json");
     ensureSettingsFiles({ cwd: tmpDir, userSettingsPath: userPath });
-    const second = ensureSettingsFiles({ cwd: tmpDir, userSettingsPath: userPath });
+    const second = ensureSettingsFiles({
+      cwd: tmpDir,
+      userSettingsPath: userPath,
+    });
 
     expect(second.projectCreated).toBe(false);
     expect(second.userCreated).toBe(false);
@@ -214,13 +240,17 @@ describe("formatInitSummary", () => {
   });
 
   it("shows graceful 'skipped' message when domainsSkipped=true", () => {
-    const summary = formatInitSummary(makeResult({ domains: null, domainsSkipped: true }));
+    const summary = formatInitSummary(
+      makeResult({ domains: null, domainsSkipped: true }),
+    );
     expect(summary).toContain("skipped");
     expect(summary).toContain("oxagen login");
   });
 
   it("shows 'none inferred' when domains empty + not skipped", () => {
-    const summary = formatInitSummary(makeResult({ domains: [], domainsSkipped: false }));
+    const summary = formatInitSummary(
+      makeResult({ domains: [], domainsSkipped: false }),
+    );
     expect(summary).toContain("none inferred");
   });
 
@@ -280,7 +310,11 @@ describe("runInit", () => {
     // The core assertion IS that this resolves at all: createCodeGraphStore is
     // mocked to always throw, so the only way runInit() can return (rather
     // than reject) is via the in-memory fallback's catch block.
-    const result = await runInit({ cwd: tmpDir, userSettingsPath: userPath, noLink: true });
+    const result = await runInit({
+      cwd: tmpDir,
+      userSettingsPath: userPath,
+      noLink: true,
+    });
 
     // tmpDir has no source files, so the in-memory fallback (buildCodeGraph)
     // finds an empty graph — nothing persisted, so nothing "skipped" either.
@@ -304,7 +338,11 @@ describe("runInit", () => {
     writeFileSync(join(tmpDir, "b.ts"), 'import { foo } from "./a";\n', "utf8");
     const userPath = join(tmpDir, "user-settings.json");
 
-    const result = await runInit({ cwd: tmpDir, userSettingsPath: userPath, noLink: true });
+    const result = await runInit({
+      cwd: tmpDir,
+      userSettingsPath: userPath,
+      noLink: true,
+    });
 
     expect(result.graph.files).toBe(2);
     expect(result.graph.totalSymbols).toBe(2); // foo, bar
@@ -357,7 +395,9 @@ describe("runInit onProgress", () => {
     });
 
     const graphDone = events.find(
-      (e): e is Extract<InitProgressEvent, { phase: "graph"; status: "done" }> =>
+      (
+        e,
+      ): e is Extract<InitProgressEvent, { phase: "graph"; status: "done" }> =>
         e.phase === "graph" && e.status === "done",
     );
     expect(graphDone?.stats.files).toBe(0); // empty tmpDir
@@ -407,7 +447,11 @@ describe("runInit onProgress", () => {
 
   it("behaves identically when onProgress is omitted", async () => {
     const userPath = join(tmpDir, "user-settings.json");
-    const result = await runInit({ cwd: tmpDir, userSettingsPath: userPath, noLink: true });
+    const result = await runInit({
+      cwd: tmpDir,
+      userSettingsPath: userPath,
+      noLink: true,
+    });
     expect(result.domainsSkipped).toBe(true);
   });
 });

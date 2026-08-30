@@ -44,7 +44,9 @@ const {
   worktreeCtor: vi.fn(),
   isGitRepoMock: vi.fn(async () => false),
   resolveApiContextMock: vi.fn(() => null),
-  createServerMemoryMock: vi.fn((_opts: unknown) => ({ kind: "server-memory" })),
+  createServerMemoryMock: vi.fn((_opts: unknown) => ({
+    kind: "server-memory",
+  })),
   renderMock: vi.fn(),
   waitUntilExitMock: vi.fn(async () => {}),
 }));
@@ -124,7 +126,8 @@ const setTty = (isTTY: boolean | undefined): void => {
 
 const originalTty = process.stdout.isTTY;
 // Named helper so the spy's overloaded type is inferred, not hand-spelled.
-const spyOnStderr = () => vi.spyOn(process.stderr, "write").mockReturnValue(true);
+const spyOnStderr = () =>
+  vi.spyOn(process.stderr, "write").mockReturnValue(true);
 let stderrSpy: ReturnType<typeof spyOnStderr>;
 
 beforeEach(() => {
@@ -154,7 +157,10 @@ describe("launchFleetView", () => {
   it("headless with a goal runs the headless fleet and plans exactly once", async () => {
     setTty(false);
     isGitRepoMock.mockResolvedValue(true);
-    const snap = await launchFleetView({ cwd: "/repo/proj", goal: "add rate limiting" });
+    const snap = await launchFleetView({
+      cwd: "/repo/proj",
+      goal: "add rate limiting",
+    });
     expect(snap).toBe(fleetSnapshot);
     expect(runHeadlessMock).toHaveBeenCalledTimes(1);
 

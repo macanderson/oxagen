@@ -42,7 +42,10 @@ const view = (over: Partial<SessionMetaView>): SessionMetaView =>
 
 describe("parseAtRef", () => {
   it("splits @ref from the message", () => {
-    expect(parseAtRef("@7f2q add tests")).toEqual({ ref: "7f2q", rest: "add tests" });
+    expect(parseAtRef("@7f2q add tests")).toEqual({
+      ref: "7f2q",
+      rest: "add tests",
+    });
   });
   it("bare @ref focuses (empty rest)", () => {
     expect(parseAtRef("@7f2q")).toEqual({ ref: "7f2q", rest: "" });
@@ -100,9 +103,12 @@ describe("roster math", () => {
 describe("hasLiveTimers", () => {
   it("is true while any session is active (queued/running/waiting)", () => {
     for (const s of ["queued", "running", "waiting"] as const) {
-      expect(hasLiveTimers([view({ derivedState: "done" }), view({ derivedState: s })], false)).toBe(
-        true,
-      );
+      expect(
+        hasLiveTimers(
+          [view({ derivedState: "done" }), view({ derivedState: s })],
+          false,
+        ),
+      ).toBe(true);
     }
   });
   it("is false when every session is inert and not draining", () => {
@@ -126,7 +132,15 @@ describe("presentation helpers", () => {
     expect(colorForSid("s-a-1111")).toBe(colorForSid("s-a-1111"));
   });
   it("every state has a glyph character and a color", () => {
-    for (const s of ["queued", "running", "waiting", "done", "failed", "cancelled", "orphaned"] as const) {
+    for (const s of [
+      "queued",
+      "running",
+      "waiting",
+      "done",
+      "failed",
+      "cancelled",
+      "orphaned",
+    ] as const) {
       const g = stateGlyph(s);
       expect(g.ch.length).toBeGreaterThan(0);
       expect(g.color.length).toBeGreaterThan(0);

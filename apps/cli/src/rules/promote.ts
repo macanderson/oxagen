@@ -80,10 +80,49 @@ export interface MineInput {
 }
 
 const STOPWORDS = new Set([
-  "the", "a", "an", "and", "or", "to", "of", "in", "on", "for", "with", "is",
-  "are", "be", "this", "that", "it", "as", "at", "by", "from", "into", "we",
-  "you", "i", "was", "were", "has", "have", "had", "not", "but", "if", "so",
-  "then", "than", "when", "where", "which", "will", "would", "should", "did",
+  "the",
+  "a",
+  "an",
+  "and",
+  "or",
+  "to",
+  "of",
+  "in",
+  "on",
+  "for",
+  "with",
+  "is",
+  "are",
+  "be",
+  "this",
+  "that",
+  "it",
+  "as",
+  "at",
+  "by",
+  "from",
+  "into",
+  "we",
+  "you",
+  "i",
+  "was",
+  "were",
+  "has",
+  "have",
+  "had",
+  "not",
+  "but",
+  "if",
+  "so",
+  "then",
+  "than",
+  "when",
+  "where",
+  "which",
+  "will",
+  "would",
+  "should",
+  "did",
 ]);
 
 /** Split text into lowercased, de-stopped terms for lexical clustering. */
@@ -184,19 +223,36 @@ function observationsFromMemory(records: MemoryRecord[]): RawObservation[] {
     }));
 }
 
-/** The longest common leading directory across every path, or null if they share none. */
+/**
+ * The longest common leading directory across every path, or null if they share
+ * none.
+ *
+ * Comparison is per path SEGMENT, not per character: `src/foo` and `src/foobar`
+ * share `src`, not `src/foo`. A raw `startsWith` would answer `src/foo` (or
+ * `src`, depending on which path happened to come first), producing a
+ * `src/foo/**` guard that silently fails to cover `src/foobar` — and a different
+ * guard for the same evidence in a different order.
+ */
 function commonDirPrefix(paths: string[]): string | null {
-  const dirs = paths.map((p) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : ""));
+  const dirs = paths.map((p) =>
+    p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "",
+  );
   if (dirs.length === 0 || dirs.some((d) => !d)) return null; // a bare filename can't anchor a safe glob
-  let prefix = dirs[0]!;
+  let prefix = dirs[0]!.split("/");
   for (const d of dirs.slice(1)) {
-    while (!d.startsWith(prefix)) {
-      const cut = prefix.lastIndexOf("/");
-      if (cut === -1) return null;
-      prefix = prefix.slice(0, cut);
+    const segments = d.split("/");
+    let shared = 0;
+    while (
+      shared < prefix.length &&
+      shared < segments.length &&
+      prefix[shared] === segments[shared]
+    ) {
+      shared++;
     }
+    if (shared === 0) return null;
+    prefix = prefix.slice(0, shared);
   }
-  return prefix || null;
+  return prefix.join("/") || null;
 }
 
 /**
@@ -207,7 +263,9 @@ function commonDirPrefix(paths: string[]): string | null {
  * rather than guessing a guard that could wrongly hard-block unrelated work.
  */
 function inferGuard(cluster: RawObservation[]): RuleGuard | undefined {
-  const gotchas = cluster.filter((o) => o.memoryKind === "gotcha" && o.files.length > 0);
+  const gotchas = cluster.filter(
+    (o) => o.memoryKind === "gotcha" && o.files.length > 0,
+  );
   if (gotchas.length === 0) return undefined;
   const prefix = commonDirPrefix(gotchas.flatMap((o) => o.files));
   return prefix ? { denyPathGlob: `${prefix}/**` } : undefined;
@@ -220,7 +278,10 @@ function representativeText(cluster: RawObservation[]): string {
   let best = cluster[0]!.text;
   let bestCount = 0;
   for (const [text, count] of counts) {
-    if (count > bestCount || (count === bestCount && text.length > best.length)) {
+    if (
+      count > bestCount ||
+      (count === bestCount && text.length > best.length)
+    ) {
       best = text;
       bestCount = count;
     }
@@ -229,9 +290,15 @@ function representativeText(cluster: RawObservation[]): string {
 }
 
 /** True when an existing rule already says essentially the same thing. */
-function alreadyCaptured(text: string, existingRules: Rule[], minSimilarity: number): boolean {
+function alreadyCaptured(
+  text: string,
+  existingRules: Rule[],
+  minSimilarity: number,
+): boolean {
   const t = new Set(terms(text));
-  return existingRules.some((r) => jaccard(t, new Set(terms(r.text))) >= minSimilarity);
+  return existingRules.some(
+    (r) => jaccard(t, new Set(terms(r.text))) >= minSimilarity,
+  );
 }
 
 /**
@@ -242,7 +309,10 @@ function alreadyCaptured(text: string, existingRules: Rule[], minSimilarity: num
  * Candidates that duplicate an existing rule's text are dropped, so a promoted
  * (or hand-authored) rule naturally stops resurfacing as a candidate.
  */
-export function mineCandidates(input: MineInput, config: MineConfig = {}): RuleCandidate[] {
+export function mineCandidates(
+  input: MineInput,
+  config: MineConfig = {},
+): RuleCandidate[] {
   const cfg = { ...DEFAULT_CONFIG, ...config };
   const observations = [
     ...input.traces.flatMap(observationsFromTrace),
@@ -250,19 +320,22 @@ export function mineCandidates(input: MineInput, config: MineConfig = {}): RuleC
   ];
 
   // Greedy single-pass clustering: each observation joins the first cluster its
-  // term set overlaps enough with, else starts a new one. O(n × clusters), fine
-  // at CLI-local data volumes (hundreds of turns, tens of memories).
-  const clusters: RawObservation[][] = [];
+  // term set overlaps enough with, else starts a new one. Each cluster caches
+  // its head's term set, so tokenizing is O(n) rather than O(n × clusters).
+  const clusters: Array<{ members: RawObservation[]; headTerms: Set<string> }> =
+    [];
   for (const obs of observations) {
     const obsTerms = new Set(terms(obs.text));
-    const home = clusters.find((c) => jaccard(obsTerms, new Set(terms(c[0]!.text))) >= cfg.minSimilarity);
-    if (home) home.push(obs);
-    else clusters.push([obs]);
+    const home = clusters.find(
+      (c) => jaccard(obsTerms, c.headTerms) >= cfg.minSimilarity,
+    );
+    if (home) home.members.push(obs);
+    else clusters.push({ members: [obs], headTerms: obsTerms });
   }
 
   const existingRules = input.existingRules ?? [];
   const candidates: RuleCandidate[] = [];
-  for (const cluster of clusters) {
+  for (const { members: cluster } of clusters) {
     const salient = cluster.some((o) => o.salient);
     if (cluster.length < cfg.minOccurrences && !salient) continue;
 
@@ -273,7 +346,12 @@ export function mineCandidates(input: MineInput, config: MineConfig = {}): RuleC
     const evidence: RuleEvidence[] = cluster
       .slice()
       .sort((a, b) => b.occurredAt - a.occurredAt)
-      .map((o) => ({ source: o.source, ref: o.ref, occurredAt: o.occurredAt, snippet: o.text.slice(0, 160) }));
+      .map((o) => ({
+        source: o.source,
+        ref: o.ref,
+        occurredAt: o.occurredAt,
+        snippet: o.text.slice(0, 160),
+      }));
 
     candidates.push({
       id: `${slugify(text)}-${hash8(text)}`,
@@ -316,15 +394,21 @@ export interface PromoteResult {
  * a file already at that path (idempotent re-promotion, and it protects any
  * hand-edits a human made to a previously-promoted rule).
  */
-export function promoteCandidate(candidate: RuleCandidate, opts: PromoteOptions): PromoteResult {
+export function promoteCandidate(
+  candidate: RuleCandidate,
+  opts: PromoteOptions,
+): PromoteResult {
   const path = join(opts.dir, `${candidate.id}.md`);
   if (!opts.approve) return { path, status: "declined" };
   if (existsSync(path)) return { path, status: "already-exists" };
 
   const frontmatter = ["---", `description: ${candidate.description}`];
-  if (candidate.guard?.tool) frontmatter.push(`guard-tool: ${candidate.guard.tool}`);
-  if (candidate.guard?.denyPathGlob) frontmatter.push(`guard-deny-path: ${candidate.guard.denyPathGlob}`);
-  if (candidate.guard?.denyCommandGlob) frontmatter.push(`guard-deny-command: ${candidate.guard.denyCommandGlob}`);
+  if (candidate.guard?.tool)
+    frontmatter.push(`guard-tool: ${candidate.guard.tool}`);
+  if (candidate.guard?.denyPathGlob)
+    frontmatter.push(`guard-deny-path: ${candidate.guard.denyPathGlob}`);
+  if (candidate.guard?.denyCommandGlob)
+    frontmatter.push(`guard-deny-command: ${candidate.guard.denyCommandGlob}`);
   frontmatter.push("---", "", candidate.text, "");
 
   mkdirSync(opts.dir, { recursive: true });

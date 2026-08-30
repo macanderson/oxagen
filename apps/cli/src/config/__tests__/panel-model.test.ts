@@ -1,12 +1,23 @@
 import { describe, it, expect } from "vitest";
-import { mergeWorkspaceConfigs, type ResolvedWorkspaceConfig, type WorkspaceConfigScopeFile } from "../resolve.js";
+import {
+  mergeWorkspaceConfigs,
+  type ResolvedWorkspaceConfig,
+  type WorkspaceConfigScopeFile,
+} from "../resolve.js";
 import type { WorkspaceConfig, ConfigScope } from "../schema.js";
-import { buildConfigRows, formatRowValue, getValueAtPath, SUGGESTED_PATHS } from "../panel-model.js";
+import {
+  buildConfigRows,
+  formatRowValue,
+  getValueAtPath,
+  SUGGESTED_PATHS,
+} from "../panel-model.js";
 
-function resolved(files: Partial<Record<ConfigScope, WorkspaceConfig>>): ResolvedWorkspaceConfig {
-  const scopeFiles: WorkspaceConfigScopeFile[] = (["org", "user", "workspace", "repo"] as const).map(
-    (scope) => ({ scope, path: `/${scope}.json`, config: files[scope] }),
-  );
+function resolved(
+  files: Partial<Record<ConfigScope, WorkspaceConfig>>,
+): ResolvedWorkspaceConfig {
+  const scopeFiles: WorkspaceConfigScopeFile[] = (
+    ["org", "user", "workspace", "repo"] as const
+  ).map((scope) => ({ scope, path: `/${scope}.json`, config: files[scope] }));
   return { ...mergeWorkspaceConfigs(scopeFiles), scopes: scopeFiles };
 }
 
@@ -43,12 +54,23 @@ describe("buildConfigRows", () => {
       resolved({
         workspace: {
           languages: {
-            typescript: { items: [{ id: "no-any", kind: "rule", text: "no any", origin: "manual" }] },
+            typescript: {
+              items: [
+                {
+                  id: "no-any",
+                  kind: "rule",
+                  text: "no any",
+                  origin: "manual",
+                },
+              ],
+            },
           },
         },
       }),
     );
-    const item = rows.find((r) => r.path === "languages.typescript.items.no-any");
+    const item = rows.find(
+      (r) => r.path === "languages.typescript.items.no-any",
+    );
     expect(item?.kind).toBe("item");
     expect(item?.item).toEqual({ lang: "typescript", id: "no-any" });
     expect(item?.display).toContain("no any");
@@ -61,24 +83,32 @@ describe("buildConfigRows", () => {
           version: 1,
           locked: ["vision"],
           vision: { statement: "ship" },
-          consolidated: { skills: [{ name: "s", scope: "workspace", path: "p" }] },
+          consolidated: {
+            skills: [{ name: "s", scope: "workspace", path: "p" }],
+          },
         },
       }),
     );
     expect(rows.some((r) => r.path.startsWith("consolidated"))).toBe(false);
-    expect(rows.some((r) => r.path === "version" || r.path === "locked")).toBe(false);
+    expect(rows.some((r) => r.path === "version" || r.path === "locked")).toBe(
+      false,
+    );
     expect(rows.some((r) => r.path === "vision.statement")).toBe(true);
   });
 
   it("appends unset suggested paths as editable placeholders", () => {
     const rows = buildConfigRows(resolved({}));
     expect(rows.length).toBe(SUGGESTED_PATHS.length);
-    expect(rows.every((r) => r.scope === null && r.value === undefined)).toBe(true);
+    expect(rows.every((r) => r.scope === null && r.value === undefined)).toBe(
+      true,
+    );
     expect(rows[0]!.display).toContain("not set");
   });
 
   it("does not suggest a path that is already set", () => {
-    const rows = buildConfigRows(resolved({ user: { vision: { statement: "ship" } } }));
+    const rows = buildConfigRows(
+      resolved({ user: { vision: { statement: "ship" } } }),
+    );
     const visionRows = rows.filter((r) => r.path === "vision.statement");
     expect(visionRows).toHaveLength(1);
     expect(visionRows[0]!.scope).toBe("user");

@@ -29,7 +29,9 @@ describe("toDirectAnthropicModelId", () => {
   });
 
   it("passes bare ids through unchanged", () => {
-    expect(toDirectAnthropicModelId("claude-haiku-4.5")).toBe("claude-haiku-4.5");
+    expect(toDirectAnthropicModelId("claude-haiku-4.5")).toBe(
+      "claude-haiku-4.5",
+    );
   });
 
   it("throws AnthropicOnlyModelError for other vendors", () => {
@@ -68,8 +70,9 @@ describe("installDirectAnthropicProvider", () => {
 
   it("fails embeddings and image models with clear messages", () => {
     installDirectAnthropicProvider("sk-ant-test");
-    expect(() => globalProvider()!.embeddingModel("openai/text-embedding-3-small"))
-      .toThrow(/no.*embeddings endpoint/i);
+    expect(() =>
+      globalProvider()!.embeddingModel("openai/text-embedding-3-small"),
+    ).toThrow(/no.*embeddings endpoint/i);
     expect(() => globalProvider()!.imageModel("openai/gpt-image-1")).toThrow(
       /no.*image-generation endpoint/i,
     );

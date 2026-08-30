@@ -9,7 +9,10 @@
 import type { BestOfNResult } from "../../agent/best-of-n.js";
 import type { SolveUsageSummary } from "../../agent/solve-usage.js";
 
-export function resultEnvelope(result: BestOfNResult, usage?: SolveUsageSummary): Record<string, unknown> {
+export function resultEnvelope(
+  result: BestOfNResult,
+  usage?: SolveUsageSummary,
+): Record<string, unknown> {
   return {
     type: "result",
     winnerId: result.selection.winnerId,

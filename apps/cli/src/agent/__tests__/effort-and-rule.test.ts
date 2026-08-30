@@ -32,7 +32,8 @@ describe("reasoning effort", () => {
   });
 
   it("isReasoningEffort accepts every level and rejects others", () => {
-    for (const level of EFFORT_LEVELS) expect(isReasoningEffort(level)).toBe(true);
+    for (const level of EFFORT_LEVELS)
+      expect(isReasoningEffort(level)).toBe(true);
     expect(isReasoningEffort("ultra")).toBe(false);
     expect(isReasoningEffort("")).toBe(false);
     expect(isReasoningEffort("HIGH")).toBe(false);
@@ -112,12 +113,20 @@ describe("persistedRuleString", () => {
   });
 
   it("formats a write rule with a workspace-relative path", () => {
-    const req: PermissionRequest = { tool: "write_file", path: "/repo/src/a.ts", cwd };
+    const req: PermissionRequest = {
+      tool: "write_file",
+      path: "/repo/src/a.ts",
+      cwd,
+    };
     expect(persistedRuleString(req, "allow", cwd)).toBe("Write(src/a.ts)");
   });
 
   it("formats an edit rule and carries the decision through", () => {
-    const req: PermissionRequest = { tool: "edit_file", path: "/repo/pkg/x.ts", cwd };
+    const req: PermissionRequest = {
+      tool: "edit_file",
+      path: "/repo/pkg/x.ts",
+      cwd,
+    };
     expect(persistedRuleString(req, "deny", cwd)).toBe("Edit(pkg/x.ts)");
   });
 });

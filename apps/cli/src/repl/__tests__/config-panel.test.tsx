@@ -1,7 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render } from "ink-testing-library";
 import React from "react";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConfigPanel } from "../config-panel.js";
@@ -11,7 +18,10 @@ import {
   type ResolveWorkspaceConfigOptions,
 } from "../../config/resolve.js";
 import type { WorkspaceConfig, ConfigScope } from "../../config/schema.js";
-import { getScopePaths as getSettingsScopePaths, clearSettingsCache } from "../../settings/resolve.js";
+import {
+  getScopePaths as getSettingsScopePaths,
+  clearSettingsCache,
+} from "../../settings/resolve.js";
 
 const ESC = String.fromCharCode(27);
 const ARROW_UP = `${ESC}[A`;
@@ -19,10 +29,15 @@ const ARROW_DOWN = `${ESC}[B`;
 const ENTER = "\r";
 
 /** Poll until `cond` holds — Ink delivers stdin/state asynchronously (never fixed sleeps). */
-async function until(cond: () => boolean, timeoutMs = 4000, stepMs = 10): Promise<void> {
+async function until(
+  cond: () => boolean,
+  timeoutMs = 4000,
+  stepMs = 10,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!cond()) {
-    if (Date.now() > deadline) throw new Error("until(): condition not met before deadline");
+    if (Date.now() > deadline)
+      throw new Error("until(): condition not met before deadline");
     await new Promise((r) => setTimeout(r, stepMs));
   }
 }
@@ -39,14 +54,15 @@ function write(scope: ConfigScope, body: WorkspaceConfig): void {
 }
 
 function readDoc(scope: ConfigScope): Record<string, unknown> {
-  return JSON.parse(readFileSync(getConfigScopePaths(cwd, resolveOpts)[scope], "utf8")) as Record<
-    string,
-    unknown
-  >;
+  return JSON.parse(
+    readFileSync(getConfigScopePaths(cwd, resolveOpts)[scope], "utf8"),
+  ) as Record<string, unknown>;
 }
 
 /** Reads `.oxagen/settings.json` (project scope) — a different file from workspace.json. */
-function readSettingsDoc(scope: "user" | "project" | "local" = "project"): Record<string, unknown> {
+function readSettingsDoc(
+  scope: "user" | "project" | "local" = "project",
+): Record<string, unknown> {
   const path = getSettingsScopePaths({ cwd, ...settingsResolveOpts })[scope];
   return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
 }
@@ -58,7 +74,9 @@ beforeEach(() => {
     managedConfigPath: join(homeDir, "managed.json"),
     userConfigPath: join(homeDir, "user.json"),
   };
-  settingsResolveOpts = { userSettingsPath: join(homeDir, "settings-user.json") };
+  settingsResolveOpts = {
+    userSettingsPath: join(homeDir, "settings-user.json"),
+  };
   clearWorkspaceConfigCache();
   clearSettingsCache();
 });
@@ -90,7 +108,10 @@ describe("ConfigPanel — rendering", () => {
 
 describe("ConfigPanel — navigation and keys", () => {
   it("moves the highlight with the arrow keys", async () => {
-    write("repo", { vision: { statement: "ship" }, packageManagers: { primary: "pnpm" } });
+    write("repo", {
+      vision: { statement: "ship" },
+      packageManagers: { primary: "pnpm" },
+    });
     const { lastFrame, stdin } = render(
       <ConfigPanel cwd={cwd} onClose={() => {}} resolveOpts={resolveOpts} />,
     );
@@ -104,13 +125,18 @@ describe("ConfigPanel — navigation and keys", () => {
   });
 
   it("x unsets the highlighted value from the scope file that set it", async () => {
-    write("repo", { vision: { statement: "ship" }, packageManagers: { primary: "pnpm" } });
+    write("repo", {
+      vision: { statement: "ship" },
+      packageManagers: { primary: "pnpm" },
+    });
     const { lastFrame, stdin } = render(
       <ConfigPanel cwd={cwd} onClose={() => {}} resolveOpts={resolveOpts} />,
     );
     await until(() => (lastFrame() ?? "").includes("❯ "));
     stdin.write("x"); // highlighted: packageManagers.primary
-    await until(() => (lastFrame() ?? "").includes("✓ unset packageManagers.primary"));
+    await until(() =>
+      (lastFrame() ?? "").includes("✓ unset packageManagers.primary"),
+    );
     expect(readDoc("repo")["packageManagers"]).toBeUndefined();
     expect(readDoc("repo")["vision"]).toEqual({ statement: "ship" });
   });
@@ -225,7 +251,11 @@ describe("ConfigPanel — confirmScope (settings.json row)", () => {
   it("x resets confirmScope back to false in project scope", async () => {
     // Pre-seed confirmScope: true directly in the project settings file.
     mkdirSync(join(cwd, ".oxagen"), { recursive: true });
-    writeFileSync(join(cwd, ".oxagen", "settings.json"), JSON.stringify({ confirmScope: true }), "utf8");
+    writeFileSync(
+      join(cwd, ".oxagen", "settings.json"),
+      JSON.stringify({ confirmScope: true }),
+      "utf8",
+    );
 
     const { lastFrame, stdin } = render(
       <ConfigPanel
@@ -263,7 +293,9 @@ describe("ConfigPanel — confirmScope (settings.json row)", () => {
     stdin.write("maybe");
     await until(() => (lastFrame() ?? "").includes("= maybe"));
     stdin.write(ENTER);
-    await until(() => (lastFrame() ?? "").includes('confirmScope must be "true" or "false"'));
+    await until(() =>
+      (lastFrame() ?? "").includes('confirmScope must be "true" or "false"'),
+    );
     expect(existsSync(join(cwd, ".oxagen", "settings.json"))).toBe(false);
   });
 });

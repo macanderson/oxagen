@@ -42,7 +42,8 @@ const defaultDeps: DetectDeps = {
 export function detectDevice(deps: DetectDeps = defaultDeps): DeviceProfile {
   const ramGB = round1(deps.totalmemBytes() / GB);
   const cpuCores = Math.max(1, deps.cpuCount());
-  const isAppleSilicon = deps.platform() === "darwin" && deps.arch() === "arm64";
+  const isAppleSilicon =
+    deps.platform() === "darwin" && deps.arch() === "arm64";
 
   if (isAppleSilicon) {
     // Metal on unified memory. macOS lets the GPU address roughly ~70% of RAM
@@ -86,7 +87,10 @@ export function paramsBillions(params: string): number {
  * plus a fixed runtime/KV overhead. Used both for the fit check and for the
  * `models status` device-fit column.
  */
-export function estimateModelRamGB(params: string, quant: Quantization): number {
+export function estimateModelRamGB(
+  params: string,
+  quant: Quantization,
+): number {
   const billions = paramsBillions(params);
   const weightsGB = (billions * 1e9 * (BITS_PER_WEIGHT[quant] / 8)) / GB;
   return round1(weightsGB + RUNTIME_OVERHEAD_GB);
@@ -98,7 +102,8 @@ export function estimateModelRamGB(params: string, quant: Quantization): number 
  * slice of RAM for the OS and everything else.
  */
 export function memoryBudgetGB(device: DeviceProfile): number {
-  if (device.unifiedMemory) return round1(Math.max(device.ramGB * 0.7, device.vramGB));
+  if (device.unifiedMemory)
+    return round1(Math.max(device.ramGB * 0.7, device.vramGB));
   if (device.vramGB > 0) return device.vramGB;
   // CPU-only: leave ~35% of RAM for the OS, editor, and the CLI itself.
   return round1(device.ramGB * 0.65);

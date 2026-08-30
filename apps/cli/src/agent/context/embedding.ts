@@ -5,7 +5,7 @@
  * by semantic similarity to a natural-language query. The gateway client uses
  * `text-embedding-3-small` (1536-d) via the Vercel AI Gateway, with embed text
  * built by `@oxagen/code-graph`'s shared `renderFileText`/`renderSymbolText`
- * (see {@link ../../../packages/code-graph/src/embed.ts}).
+ * (see `packages/code-graph/src/embed.ts`).
  *
  * Two LOCAL, free, AI-SDK-free backends sit alongside the gateway so embeddings
  * work fully offline with no key: {@link OllamaEmbeddingClient}

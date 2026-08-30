@@ -21,7 +21,10 @@ function write(rel: string, content: string): void {
 
 describe("grepFallback", () => {
   it("ranks files by match count and skips vendor dirs", async () => {
-    write("src/telemetry.ts", "export function drainTelemetry() {} // telemetry telemetry");
+    write(
+      "src/telemetry.ts",
+      "export function drainTelemetry() {} // telemetry telemetry",
+    );
     write("src/other.ts", "export const x = 1;");
     write("node_modules/pkg/index.ts", "telemetry telemetry telemetry");
 

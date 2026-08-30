@@ -23,7 +23,7 @@ export function isProjectInitialized(cwd: string): boolean {
   return existsSync(oxagenDir);
 }
 
-/** Initialize a project's .oxagen directory and code graph. */
+/** Initialize a project's `.oxagen` directory with a default `settings.json`. */
 export async function initializeProject(
   opts: ProjectInitOptions,
 ): Promise<boolean> {
@@ -37,8 +37,8 @@ export async function initializeProject(
   // Prompt user
   const approved = await opts.approver(
     `Initialize project? This will:\n` +
-      `  · Create .oxagen/ directory with settings and graphs\n` +
-      `  · Keep the working code graph local to this checkout\n` +
+      `  · Create a .oxagen/ directory in this checkout\n` +
+      `  · Write a default .oxagen/settings.json (model, permissions, hooks)\n` +
       `\nContinue? (y/n)`,
   );
 

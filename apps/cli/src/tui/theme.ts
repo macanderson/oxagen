@@ -30,7 +30,9 @@ export const theme = {
   amber: AMBER, // queued / caution
   red: "#F87171", // failed / destructive
   fuchsia: FUCHSIA, // rainbow-flash tone (repl/border-phase.ts) — not a status color
-  orange: ORANGE, // rainbow-flash tone (repl/border-phase.ts) — not a status color
+  orange: ORANGE, // rainbow-flash tone, and the "orphaned" session status
+  //                (tui/mission-control/lib.ts stateGlyph) — a warning tone
+  //                deliberately distinct from red (failed) and amber (queued)
   // Curated palette for productized builtin slash commands (see
   // slash/catalog.ts's BUILTIN_SLASH_COMMANDS + repl/slash-menu.tsx). Each
   // builtin command is assigned one tone below, grouped by feature area, so

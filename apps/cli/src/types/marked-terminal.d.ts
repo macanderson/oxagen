@@ -44,6 +44,9 @@ declare module "marked-terminal" {
 
   /** Legacy renderer class (marked <12 `setOptions({ renderer })` path). */
   export default class TerminalRenderer {
-    constructor(options?: TerminalRendererOptions, highlightOptions?: Record<string, unknown>);
+    constructor(
+      options?: TerminalRendererOptions,
+      highlightOptions?: Record<string, unknown>,
+    );
   }
 }

@@ -25,7 +25,11 @@ function writeProject(body: OxagenSettings): void {
 }
 
 function apply() {
-  return applySettingsToEnv({ cwd: dir, userSettingsPath: userPath, noCache: true });
+  return applySettingsToEnv({
+    cwd: dir,
+    userSettingsPath: userPath,
+    noCache: true,
+  });
 }
 
 beforeEach(() => {

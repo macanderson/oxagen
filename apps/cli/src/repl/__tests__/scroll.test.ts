@@ -1,10 +1,14 @@
 /**
  * Unit tests for the full-screen transcript viewport's pure scroll math:
  * offset clamping, sticky-bottom auto-follow, line/page/half-page stepping,
- * row estimation, and message-window computation. No Ink, no terminal, no
- * timers — see scroll.ts's own doc comment for why this is pure.
+ * row estimation, and message-window computation. Pure — no terminal, no
+ * timers; see scroll.ts's own doc comment for why. The one exception renders
+ * DiffView, because the diff row estimate mirrors a constant that only that
+ * component's real output exposes.
  */
 import { describe, it, expect } from "vitest";
+import { createElement } from "react";
+import { render } from "ink-testing-library";
 import {
   scrollReducer,
   effectiveOffset,
@@ -17,6 +21,8 @@ import {
   type ScrollState,
   type ScrollCtx,
 } from "../scroll.js";
+import { DiffView } from "../diff-view.js";
+import { DARK_DIFF_THEME } from "../../tui/terminal-theme.js";
 import type { Message } from "../components.js";
 
 function msg(overrides: Partial<Message>): Message {
@@ -25,8 +31,12 @@ function msg(overrides: Partial<Message>): Message {
 
 describe("estimateMessageRows", () => {
   it("gives compact chips/badges a single row", () => {
-    expect(estimateMessageRows(msg({ role: "tool", content: "read(a.ts)" }), 80)).toBe(1);
-    expect(estimateMessageRows(msg({ role: "stage", content: "evaluated" }), 80)).toBe(1);
+    expect(
+      estimateMessageRows(msg({ role: "tool", content: "read(a.ts)" }), 80),
+    ).toBe(1);
+    expect(
+      estimateMessageRows(msg({ role: "stage", content: "evaluated" }), 80),
+    ).toBe(1);
   });
 
   it("wraps long text content across multiple rows at the given width", () => {
@@ -44,14 +54,26 @@ describe("estimateMessageRows", () => {
     const collapsed = msg({
       role: "terminal",
       terminalExpanded: false,
-      terminalRun: { id: 1, command: "ls", output: "a\nb\nc", status: "exited", startedAt: 0 },
+      terminalRun: {
+        id: 1,
+        command: "ls",
+        output: "a\nb\nc",
+        status: "exited",
+        startedAt: 0,
+      },
     });
     expect(estimateMessageRows(collapsed, 80)).toBe(1);
 
     const expanded = msg({
       role: "terminal",
       terminalExpanded: true,
-      terminalRun: { id: 1, command: "ls", output: "a\nb\nc", status: "exited", startedAt: 0 },
+      terminalRun: {
+        id: 1,
+        command: "ls",
+        output: "a\nb\nc",
+        status: "exited",
+        startedAt: 0,
+      },
     });
     expect(estimateMessageRows(expanded, 80)).toBeGreaterThan(1);
   });
@@ -63,17 +85,26 @@ describe("estimateMessageRows", () => {
     // A large diff must be estimated at its FULL rendered height (DiffView
     // renders every line up to its 500-line cap) — the old 60-row cap made
     // scroll positions above a big diff unreachable.
-    const bigDiff = msg({ role: "diff", diff: Array.from({ length: 200 }, () => "x").join("\n") });
+    const bigDiff = msg({
+      role: "diff",
+      diff: Array.from({ length: 200 }, () => "x").join("\n"),
+    });
     expect(estimateMessageRows(bigDiff, 80)).toBe(203);
 
     // Past DiffView's own truncation cap, the estimate tracks the cap + its
     // one-line "… more lines" note instead of growing unboundedly.
-    const hugeDiff = msg({ role: "diff", diff: Array.from({ length: 800 }, () => "x").join("\n") });
+    const hugeDiff = msg({
+      role: "diff",
+      diff: Array.from({ length: 800 }, () => "x").join("\n"),
+    });
     expect(estimateMessageRows(hugeDiff, 80)).toBe(500 + 1 + 3);
   });
 
   it("caps a user prompt at its 4-line preview + expand hint (MessageView truncates it)", () => {
-    const longPrompt = msg({ role: "user", content: Array.from({ length: 30 }, (_, i) => `l${i}`).join("\n") });
+    const longPrompt = msg({
+      role: "user",
+      content: Array.from({ length: 30 }, (_, i) => `l${i}`).join("\n"),
+    });
     expect(estimateMessageRows(longPrompt, 80)).toBe(5);
     const shortPrompt = msg({ role: "user", content: "one\ntwo" });
     expect(estimateMessageRows(shortPrompt, 80)).toBe(2);
@@ -82,20 +113,72 @@ describe("estimateMessageRows", () => {
   it("gives a summary card a fixed small height and a replay trace a fixed tall one", () => {
     expect(
       estimateMessageRows(
-        msg({ summary: { complete: true, filesTouched: [], costUsd: 0, judged: false } }),
+        msg({
+          summary: {
+            complete: true,
+            filesTouched: [],
+            costUsd: 0,
+            judged: false,
+          },
+        }),
         80,
       ),
     ).toBe(6);
   });
 
   it("never returns zero even for empty content", () => {
-    expect(estimateMessageRows(msg({ content: "" }), 80)).toBeGreaterThanOrEqual(1);
+    expect(
+      estimateMessageRows(msg({ content: "" }), 80),
+    ).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("estimateMessageRows — diff cap tracks DiffView's real truncation point", () => {
+  // scroll.ts holds its own DIFF_VIEW_MAX_LINES copy of diff-view.tsx's private
+  // DEFAULT_MAX_LINES, and neither constant is exported. Nothing links them but
+  // these two assertions: they observe where DiffView (rendered with NO explicit
+  // maxLines, exactly as DiffMessage renders it) actually starts truncating, and
+  // fail loudly if either side moves independently. Drift here silently makes
+  // scroll positions above a large diff unreachable.
+  const diffOf = (lineCount: number): string =>
+    Array.from({ length: lineCount }, (_, i) => `+line ${i}`).join("\n");
+  const truncates = (lineCount: number): boolean => {
+    const { lastFrame, unmount } = render(
+      createElement(DiffView, {
+        diff: diffOf(lineCount),
+        theme: DARK_DIFF_THEME,
+      }),
+    );
+    const truncated = (lastFrame() ?? "").includes("more lines");
+    unmount();
+    return truncated;
+  };
+
+  it("renders a diff of exactly the estimated cap in full", () => {
+    // 500 lines estimate to cap + header(1) + marginY(2) with no truncation note.
+    expect(
+      estimateMessageRows(msg({ role: "diff", diff: diffOf(500) }), 80),
+    ).toBe(503);
+    expect(truncates(500)).toBe(false);
+  });
+
+  it("truncates one line past the cap, exactly where the estimate adds its note row", () => {
+    // 501 lines: DiffView renders 500 + a "… more lines" row, and the estimate
+    // stops growing at cap + note + header + marginY.
+    expect(
+      estimateMessageRows(msg({ role: "diff", diff: diffOf(501) }), 80),
+    ).toBe(504);
+    expect(truncates(501)).toBe(true);
   });
 });
 
 describe("totalEstimatedRows", () => {
   it("sums row estimates across the transcript", () => {
-    const messages = [msg({ role: "tool" }), msg({ role: "stage" }), msg({ content: "hi" })];
+    const messages = [
+      msg({ role: "tool" }),
+      msg({ role: "stage" }),
+      msg({ content: "hi" }),
+    ];
     expect(totalEstimatedRows(messages, 80)).toBe(3);
   });
 
@@ -115,16 +198,24 @@ describe("maxOffsetFor / effectiveOffset", () => {
 
   it("sticky-bottom always resolves to the current max, tracking growing content", () => {
     const state: ScrollState = { rawOffset: 0, stickyBottom: true };
-    expect(effectiveOffset(state, { totalLines: 100, viewportHeight: 20 })).toBe(80);
+    expect(
+      effectiveOffset(state, { totalLines: 100, viewportHeight: 20 }),
+    ).toBe(80);
     // Content grew (more streamed in) — sticky-bottom follows without a dispatch.
-    expect(effectiveOffset(state, { totalLines: 140, viewportHeight: 20 })).toBe(120);
+    expect(
+      effectiveOffset(state, { totalLines: 140, viewportHeight: 20 }),
+    ).toBe(120);
   });
 
   it("a non-sticky raw offset clamps into [0, max]", () => {
     const tooHigh: ScrollState = { rawOffset: 999, stickyBottom: false };
-    expect(effectiveOffset(tooHigh, { totalLines: 100, viewportHeight: 20 })).toBe(80);
+    expect(
+      effectiveOffset(tooHigh, { totalLines: 100, viewportHeight: 20 }),
+    ).toBe(80);
     const negative: ScrollState = { rawOffset: -5, stickyBottom: false };
-    expect(effectiveOffset(negative, { totalLines: 100, viewportHeight: 20 })).toBe(0);
+    expect(
+      effectiveOffset(negative, { totalLines: 100, viewportHeight: 20 }),
+    ).toBe(0);
   });
 });
 
@@ -180,7 +271,11 @@ describe("scrollReducer", () => {
 
   it("when content fits entirely in the viewport, every action lands at offset 0 and stays sticky", () => {
     const smallCtx: ScrollCtx = { totalLines: 5, viewportHeight: 20 };
-    const result = scrollReducer(INITIAL_SCROLL_STATE, { type: "line-up" }, smallCtx);
+    const result = scrollReducer(
+      INITIAL_SCROLL_STATE,
+      { type: "line-up" },
+      smallCtx,
+    );
     expect(result).toEqual({ rawOffset: 0, stickyBottom: true });
   });
 
@@ -234,14 +329,17 @@ describe("computeVisibleWindow", () => {
   });
 
   it("covers clipTop + viewport when the offset starts mid-message", () => {
-    const heights = [10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+    const heights = [
+      10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    ];
     // offset 8 → clipTop 8 of the first message; the window must still cover
     // 8 (clipped) + 4 (viewport) rows before stopping, not just 4.
     const win = computeVisibleWindow(heights, 8, 4);
     expect(win.startIndex).toBe(0);
     expect(win.clipTop).toBe(8);
     let covered = 0;
-    for (let i = win.startIndex; i < win.endIndex; i++) covered += heights[i] ?? 0;
+    for (let i = win.startIndex; i < win.endIndex; i++)
+      covered += heights[i] ?? 0;
     expect(covered).toBeGreaterThanOrEqual(8 + 4);
   });
 
@@ -277,7 +375,8 @@ describe("computeBottomWindow", () => {
     // The included tail covers viewport + overscan, and no more than one
     // message past that (the loop stops at the first message crossing it).
     let acc = 0;
-    for (let i = win.startIndex; i < heights.length; i++) acc += heights[i] ?? 0;
+    for (let i = win.startIndex; i < heights.length; i++)
+      acc += heights[i] ?? 0;
     expect(acc).toBeGreaterThanOrEqual(10);
   });
 
@@ -290,6 +389,9 @@ describe("computeBottomWindow", () => {
   });
 
   it("returns an empty top-down window for an empty transcript", () => {
-    expect(computeBottomWindow([], 10)).toEqual({ startIndex: 0, anchorBottom: false });
+    expect(computeBottomWindow([], 10)).toEqual({
+      startIndex: 0,
+      anchorBottom: false,
+    });
   });
 });

@@ -27,8 +27,15 @@
  */
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join, parse as parsePath, relative } from "node:path";
-import { resolveWorkspaceConfig, type ResolveWorkspaceConfigOptions } from "../config/resolve.js";
-import type { WorkspaceConfig, CommandEntry, CommandsConfig } from "../config/schema.js";
+import {
+  resolveWorkspaceConfig,
+  type ResolveWorkspaceConfigOptions,
+} from "../config/resolve.js";
+import type {
+  WorkspaceConfig,
+  CommandEntry,
+  CommandsConfig,
+} from "../config/schema.js";
 
 /** Files we treat as project instructions, in priority order within a directory. */
 const RULE_FILES = [
@@ -66,7 +73,8 @@ function renderCommandLines(commands: CommandsConfig | undefined): string[] {
   if (!commands) return [];
   const lines: string[] = [];
   const add = (label: string, entries: CommandEntry[] | undefined) => {
-    for (const entry of entries ?? []) lines.push(renderCommandLine(label, entry));
+    for (const entry of entries ?? [])
+      lines.push(renderCommandLine(label, entry));
   };
   add("dev", commands.dev);
   add("build", commands.build);
@@ -76,7 +84,8 @@ function renderCommandLines(commands: CommandsConfig | undefined): string[] {
   add("migrate", commands.migrate);
   add("release", commands.release);
   add("gate", commands.gate);
-  for (const [name, entries] of Object.entries(commands.custom ?? {})) add(name, entries);
+  for (const [name, entries] of Object.entries(commands.custom ?? {}))
+    add(name, entries);
   return lines;
 }
 
@@ -85,17 +94,32 @@ function renderCommandLines(commands: CommandsConfig | undefined): string[] {
  * WorkspaceConfig as markdown sections (design.md §9). Returns "" when none
  * of those sections are populated.
  */
-function renderWorkspaceConfigSections(config: WorkspaceConfig): { text: string; sources: string[] } {
+function renderWorkspaceConfigSections(config: WorkspaceConfig): {
+  text: string;
+  sources: string[];
+} {
   const sections: string[] = [];
   const sources: string[] = [];
 
   const vision = config.vision;
-  if (vision?.statement || vision?.goals?.length || vision?.nonGoals?.length || vision?.principles?.length) {
+  if (
+    vision?.statement ||
+    vision?.goals?.length ||
+    vision?.nonGoals?.length ||
+    vision?.principles?.length
+  ) {
     const lines = ["### Vision", ""];
     if (vision.statement) lines.push(vision.statement, "");
-    if (vision.principles?.length) lines.push("Principles:", ...vision.principles.map((p) => `- ${p}`), "");
-    if (vision.goals?.length) lines.push("Goals:", ...vision.goals.map((g) => `- ${g}`), "");
-    if (vision.nonGoals?.length) lines.push("Non-goals — do not pursue these:", ...vision.nonGoals.map((g) => `- ${g}`), "");
+    if (vision.principles?.length)
+      lines.push("Principles:", ...vision.principles.map((p) => `- ${p}`), "");
+    if (vision.goals?.length)
+      lines.push("Goals:", ...vision.goals.map((g) => `- ${g}`), "");
+    if (vision.nonGoals?.length)
+      lines.push(
+        "Non-goals — do not pursue these:",
+        ...vision.nonGoals.map((g) => `- ${g}`),
+        "",
+      );
     sections.push(lines.join("\n").trimEnd());
     sources.push("workspace config: vision");
   }
@@ -109,13 +133,23 @@ function renderWorkspaceConfigSections(config: WorkspaceConfig): { text: string;
     }
   }
   if (enforced.length > 0) {
-    sections.push(["### Hard rules (enforced) — do not violate", "", ...enforced].join("\n"));
+    sections.push(
+      ["### Hard rules (enforced) — do not violate", "", ...enforced].join(
+        "\n",
+      ),
+    );
     sources.push("workspace config: enforced rules");
   }
 
   const commandLines = renderCommandLines(config.commands);
   if (commandLines.length > 0) {
-    sections.push(["### Commands — run these exact scripts instead of guessing", "", ...commandLines].join("\n"));
+    sections.push(
+      [
+        "### Commands — run these exact scripts instead of guessing",
+        "",
+        ...commandLines,
+      ].join("\n"),
+    );
     sources.push("workspace config: commands");
   }
 
@@ -131,7 +165,10 @@ function renderWorkspaceConfigSections(config: WorkspaceConfig): { text: string;
  * paths (testing only — real call sites never pass it, so resolution defaults
  * to `~/.oxagen/managed.json` / `~/.oxagen/user.json` as usual).
  */
-export function loadProjectContext(cwd: string, configOpts: ResolveWorkspaceConfigOptions = {}): ProjectContext {
+export function loadProjectContext(
+  cwd: string,
+  configOpts: ResolveWorkspaceConfigOptions = {},
+): ProjectContext {
   const chunks: string[] = [];
   const sources: string[] = [];
   let total = 0;
@@ -175,7 +212,9 @@ export function loadProjectContext(cwd: string, configOpts: ResolveWorkspaceConf
       const rendered = renderWorkspaceConfigSections(config);
       if (rendered.text) {
         const clipped =
-          rendered.text.length > remaining ? rendered.text.slice(0, remaining) + "\n… [truncated]" : rendered.text;
+          rendered.text.length > remaining
+            ? rendered.text.slice(0, remaining) + "\n… [truncated]"
+            : rendered.text;
         chunks.push(clipped);
         sources.push(...rendered.sources);
         total += clipped.length;

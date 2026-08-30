@@ -3,11 +3,11 @@
  * spawned (docs/specs/repl-async-dispatch.md §2.2, §2.3, §3.2).
  *
  * A `&`-suffixed or mode-triaged prompt is handed to a detached worker via
- * `dispatchDetachedSession` and then runs headless — today the REPL dispatches
- * and forgets (§1.2). This tracker closes that loop WITHOUT inventing a second
- * transport: it reuses the ADR-023 `SessionStore` wire format —
- * `tailEvents(sid)` for a per-session live stream and `watchSessions` for the
- * roster — filtered to the set of sessions this REPL started.
+ * `dispatchDetachedSession` and then runs headless. This tracker closes the
+ * loop back to the REPL WITHOUT inventing a second transport: it reuses the
+ * ADR-023 `SessionStore` wire format — `tailEvents(sid)` for a per-session live
+ * stream and `watchSessions` for the roster — filtered to the set of sessions
+ * this REPL started.
  *
  * Two things it provides the REPL:
  *   1. Fold-back — on a session's terminal event it calls `onNotify` with a
@@ -27,7 +27,19 @@
  * `finish()` when the session reaches a terminal/orphaned state. `finish()` is
  * idempotent per sid and can be driven by EITHER the event tail (rich data:
  * summary, files, cost) OR the roster backstop (a worker that crashed without
- * writing `session.end` still derives to `orphaned`), so a slot can never leak.
+ * writing `session.end` still derives to `orphaned`).
+ *
+ * The balance therefore rests on ONE caller contract: every `reserve()` that
+ * returns true must be followed by exactly one `add()` with a sid never seen
+ * before, or by one `release()`. `add()` no-ops on a repeat sid (and after
+ * `dispose()`), which would strand that slot for the life of the REPL — sids
+ * come from `dispatchDetachedSession`, so a repeat should be impossible, but
+ * that is the assumption the counter depends on rather than something it
+ * enforces.
+ *
+ * `entries` is append-only: a finished dispatch keeps its row so the panel can
+ * still show it. That is bounded by how many dispatches one REPL session
+ * starts, not by time.
  */
 import type { SessionEvent, SessionState } from "../sessions/events.js";
 import { shortSid } from "../sessions/ids.js";

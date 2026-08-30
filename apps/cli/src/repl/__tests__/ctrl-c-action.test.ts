@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { resolveCtrlC, CTRL_C_EXIT_WINDOW_MS, type CtrlCContext } from "../ctrl-c-action.js";
+import {
+  resolveCtrlC,
+  CTRL_C_EXIT_WINDOW_MS,
+  type CtrlCContext,
+} from "../ctrl-c-action.js";
 
 const NOW = 1_000_000;
 
@@ -18,14 +22,21 @@ describe("resolveCtrlC", () => {
     // Even while streaming with text and armed, the terminal child wins.
     expect(
       resolveCtrlC(
-        ctx({ terminalRunning: true, streaming: true, inputEmpty: false, lastCtrlCMs: NOW - 10 }),
+        ctx({
+          terminalRunning: true,
+          streaming: true,
+          inputEmpty: false,
+          lastCtrlCMs: NOW - 10,
+        }),
         NOW,
       ),
     ).toBe("kill-terminal");
   });
 
   it("cancels a streaming turn when no terminal child is running", () => {
-    expect(resolveCtrlC(ctx({ streaming: true, inputEmpty: false }), NOW)).toBe("cancel-turn");
+    expect(resolveCtrlC(ctx({ streaming: true, inputEmpty: false }), NOW)).toBe(
+      "cancel-turn",
+    );
   });
 
   it("clears the input (never exits) when idle with text in the buffer", () => {

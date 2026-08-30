@@ -61,7 +61,8 @@ export function parseDiffLines(diff: string): DiffLine[] {
   // A diff ending in "\n" produces a trailing "" element from split() that
   // doesn't correspond to a real line; drop it so we don't render a phantom
   // blank context row.
-  if (diff.endsWith("\n") && rawLines[rawLines.length - 1] === "") rawLines.pop();
+  if (diff.endsWith("\n") && rawLines[rawLines.length - 1] === "")
+    rawLines.pop();
 
   return rawLines.map((text): DiffLine => {
     if (META_PREFIXES.some((prefix) => text.startsWith(prefix))) {
@@ -223,7 +224,9 @@ function inferLanguageFromDiff(diff: string): string | undefined {
  * `cli-highlight` `Theme`. Accepts an already-concrete token map as-is, or
  * resolves the two named built-ins.
  */
-export function resolveHighlightTheme(selection: DiffTheme["highlightjs"]): HighlightJsTheme {
+export function resolveHighlightTheme(
+  selection: DiffTheme["highlightjs"],
+): HighlightJsTheme {
   if (selection === "github") return GITHUB_HIGHLIGHT_THEME;
   if (selection === "monokai") return MONOKAI_HIGHLIGHT_THEME;
   return selection;
@@ -308,7 +311,11 @@ export function DiffLineRow({
         ? theme.delEmphasis
         : theme.context;
   const codeColor =
-    line.kind === "add" ? theme.add : line.kind === "del" ? theme.del : theme.context;
+    line.kind === "add"
+      ? theme.add
+      : line.kind === "del"
+        ? theme.del
+        : theme.context;
   const highlighted = safeHighlight(line.code, language, hlTheme);
 
   return (
@@ -368,7 +375,8 @@ export function DiffView({
       ))}
       {truncated && (
         <Text dimColor>
-          … ({lines.length - maxLines} more lines — scroll or /replay to see all)
+          … ({lines.length - maxLines} more lines — scroll or /replay to see
+          all)
         </Text>
       )}
     </Box>

@@ -36,7 +36,9 @@ export interface TrackedTask {
 }
 
 /** The mutable fields a producer may patch on a task. */
-export type TaskPatch = Partial<Pick<TrackedTask, "title" | "status" | "detail">>;
+export type TaskPatch = Partial<
+  Pick<TrackedTask, "title" | "status" | "detail">
+>;
 
 /** Aggregate counts for the panel header. */
 export interface TaskSummary {
@@ -47,7 +49,10 @@ export interface TaskSummary {
   failed: number;
 }
 
-const TERMINAL: ReadonlySet<TaskStatus> = new Set<TaskStatus>(["done", "failed"]);
+const TERMINAL: ReadonlySet<TaskStatus> = new Set<TaskStatus>([
+  "done",
+  "failed",
+]);
 
 export interface TaskRegistryOptions {
   /** Injectable clock (ms epoch) for deterministic tests. Default Date.now. */

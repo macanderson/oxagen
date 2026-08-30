@@ -37,7 +37,14 @@ const frameOf = (el: React.ReactElement): string => {
 describe("RosterHeader", () => {
   it("renders every column heading", () => {
     const frame = frameOf(<RosterHeader />);
-    for (const heading of ["TASK", "MODEL", "STEPS", "ACTIVITY", "TOKENS", "COST"]) {
+    for (const heading of [
+      "TASK",
+      "MODEL",
+      "STEPS",
+      "ACTIVITY",
+      "TOKENS",
+      "COST",
+    ]) {
       expect(frame).toContain(heading);
     }
   });

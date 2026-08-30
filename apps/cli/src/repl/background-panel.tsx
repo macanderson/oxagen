@@ -15,7 +15,10 @@ import { shortSid } from "../sessions/ids.js";
 import type { BackgroundRow } from "./background-tracker.js";
 
 /** Glyph + color for a row's lifecycle state. */
-function stateGlyph(state: BackgroundRow["state"]): { glyph: string; color: string } {
+function stateGlyph(state: BackgroundRow["state"]): {
+  glyph: string;
+  color: string;
+} {
   switch (state) {
     case "done":
       return { glyph: "✓", color: theme.green };
@@ -35,7 +38,11 @@ function isRunning(state: BackgroundRow["state"]): boolean {
   return state === "queued" || state === "running" || state === "waiting";
 }
 
-function BackgroundRowView({ row }: { row: BackgroundRow }): React.ReactElement {
+function BackgroundRowView({
+  row,
+}: {
+  row: BackgroundRow;
+}): React.ReactElement {
   const { glyph, color } = stateGlyph(row.state);
   return (
     <Box>
@@ -76,7 +83,12 @@ export function BackgroundPanel({
   const running = rows.filter((r) => isRunning(r.state)).length;
   const done = rows.length - running;
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={theme.violet} paddingX={1}>
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={theme.violet}
+      paddingX={1}
+    >
       <Box>
         <Text color={theme.violet} bold>
           {"⇉ Background "}

@@ -155,7 +155,10 @@ function runNode(args, { cwd = CLI_ROOT, env = {}, timeoutMs = 30_000 } = {}) {
  * stdout until `expected` have arrived, then SIGTERM it — mirroring how a
  * consumer kills `fleet watch`. Resolves with whatever was collected.
  */
-function collectStream(args, { cwd = CLI_ROOT, env = {}, expected, timeoutMs = 12_000 }) {
+function collectStream(
+  args,
+  { cwd = CLI_ROOT, env = {}, expected, timeoutMs = 12_000 },
+) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, args, {
       cwd,
@@ -203,22 +206,22 @@ function collectStream(args, { cwd = CLI_ROOT, env = {}, expected, timeoutMs = 1
 const HELPER_SRC = [
   'import { pathToFileURL } from "node:url";',
   'import { join } from "node:path";',
-  'const store = await import(pathToFileURL(process.env.SMOKE_STORE).href);',
-  'const paths = await import(pathToFileURL(process.env.SMOKE_PATHS).href);',
-  'const ids = await import(pathToFileURL(process.env.SMOKE_IDS).href);',
-  'const { openFleetStore } = store;',
-  'const { fleetRoot, sessionDir } = paths;',
-  'const { newSessionId } = ids;',
-  'const cmd = process.argv[2];',
-  'const root = fleetRoot(process.cwd());',
-  'const st = openFleetStore(root);',
+  "const store = await import(pathToFileURL(process.env.SMOKE_STORE).href);",
+  "const paths = await import(pathToFileURL(process.env.SMOKE_PATHS).href);",
+  "const ids = await import(pathToFileURL(process.env.SMOKE_IDS).href);",
+  "const { openFleetStore } = store;",
+  "const { fleetRoot, sessionDir } = paths;",
+  "const { newSessionId } = ids;",
+  "const cmd = process.argv[2];",
+  "const root = fleetRoot(process.cwd());",
+  "const st = openFleetStore(root);",
   'if (cmd === "seed") {',
-  '  const before = await st.listSessions();',
-  '  const sid = newSessionId();',
-  '  const started = Date.now();',
+  "  const before = await st.listSessions();",
+  "  const sid = newSessionId();",
+  "  const started = Date.now();",
   '  const meta = await st.createSession({ sid, title: "pipe-smoke seed", prompt: "seed a session for the pipe smoke", owner: "worker", pid: process.pid, cwd: process.cwd(), mode: "once" });',
-  '  const w = st.openWriter(meta);',
-  '  const usage = { inputTokens: 120, outputTokens: 45, costUsd: 0.002 };',
+  "  const w = st.openWriter(meta);",
+  "  const usage = { inputTokens: 120, outputTokens: 45, costUsd: 0.002 };",
   '  w.append({ type: "session.start", title: meta.title, prompt: meta.prompt, cwd: meta.cwd, mode: "once", owner: "worker", pid: process.pid });',
   '  w.append({ type: "session.state", state: "running" });',
   '  w.append({ type: "message", role: "user", text: meta.prompt, turn: 1 });',
@@ -230,28 +233,28 @@ const HELPER_SRC = [
   '  w.append({ type: "usage", cumulative: usage });',
   '  const end = w.append({ type: "session.end", state: "done", summary: "pipe-smoke seeded session", durationMs: Date.now() - started, usage });',
   '  w.patchMeta({ state: "done", turns: 1, endedAt: Date.now(), summary: "pipe-smoke seeded session", usage });',
-  '  await w.flush();',
-  '  const after = await st.listSessions();',
-  '  const dir = sessionDir(root, sid);',
+  "  await w.flush();",
+  "  const after = await st.listSessions();",
+  "  const dir = sessionDir(root, sid);",
   '  process.stdout.write("' + SENTINEL + '" + JSON.stringify({',
-  '    sid, seqCount: end.seq, root, dir,',
+  "    sid, seqCount: end.seq, root, dir,",
   '    eventsFile: join(dir, "events.ndjson"),',
   '    metaFile: join(dir, "meta.json"),',
-  '    beforeLen: before.length,',
-  '    after: after.map((s) => ({ sid: s.sid, state: s.derivedState })),',
+  "    beforeLen: before.length,",
+  "    after: after.map((s) => ({ sid: s.sid, state: s.derivedState })),",
   '  }) + "\\n");',
-  '  process.exit(0);',
+  "  process.exit(0);",
   '} else if (cmd === "tail") {',
-  '  const sid = process.argv[3];',
+  "  const sid = process.argv[3];",
   '  const fromSeq = Number(process.argv[4] || "1");',
   '  const handle = st.tailEvents(sid, (e) => { process.stdout.write(JSON.stringify(e) + "\\n"); }, { fromSeq, intervalMs: 30 });',
-  '  // The store\'s tail timers are unref\'d; this ref\'d deadline keeps us alive',
-  '  // (and guarantees no zombie if the parent fails to SIGTERM us).',
-  '  setTimeout(() => { handle.stop(); process.exit(0); }, 15000);',
-  '} else {',
+  "  // The store's tail timers are unref'd; this ref'd deadline keeps us alive",
+  "  // (and guarantees no zombie if the parent fails to SIGTERM us).",
+  "  setTimeout(() => { handle.stop(); process.exit(0); }, 15000);",
+  "} else {",
   '  process.stderr.write("unknown helper command: " + String(cmd) + "\\n");',
-  '  process.exit(2);',
-  '}',
+  "  process.exit(2);",
+  "}",
 ].join("\n");
 
 function helperEnv(fleetBase) {
@@ -271,7 +274,9 @@ async function seedSession(helperPath, fleetBase) {
   });
   const line = res.stdout.split("\n").find((l) => l.startsWith(SENTINEL));
   if (!line) {
-    throw new Error("seed helper produced no result. stderr:\n" + res.stderr.slice(-800));
+    throw new Error(
+      "seed helper produced no result. stderr:\n" + res.stderr.slice(-800),
+    );
   }
   return JSON.parse(line.slice(SENTINEL.length));
 }
@@ -290,13 +295,21 @@ async function legStoreLevel(helperPath) {
 
     // ls-equivalent: the store's roster was empty, then holds exactly our
     // terminal session (this is what `fleet ls --json | jq length` will read).
-    check(seed.beforeLen === 0, "roster empty before seeding", `roster not empty before seeding (len=${seed.beforeLen})`);
+    check(
+      seed.beforeLen === 0,
+      "roster empty before seeding",
+      `roster not empty before seeding (len=${seed.beforeLen})`,
+    );
     check(
       seed.after.length === 1 && seed.after[0].sid === seed.sid,
       "fleet ls-equivalent → exactly 1 session, sid matches",
       `roster after seeding wrong: ${JSON.stringify(seed.after)}`,
     );
-    check(seed.after[0]?.state === "done", "seeded session reads back terminal (done)", `unexpected derived state ${seed.after[0]?.state}`);
+    check(
+      seed.after[0]?.state === "done",
+      "seeded session reads back terminal (done)",
+      `unexpected derived state ${seed.after[0]?.state}`,
+    );
 
     // logs-replay-equivalent: read events.ndjson from the OUTSIDE and parse it
     // as the envelope wire format with monotonic seq — the pipe contract.
@@ -307,7 +320,11 @@ async function legStoreLevel(helperPath) {
       `events.ndjson replays ${events.length} parseable envelope lines`,
       `expected ${seed.seqCount} envelope lines, parsed ${events.length}`,
     );
-    check(isMonotonic(events), "replayed seq is monotonic 1..N", `replayed seq not monotonic: ${events.map((e) => e.seq).join(",")}`);
+    check(
+      isMonotonic(events),
+      "replayed seq is monotonic 1..N",
+      `replayed seq not monotonic: ${events.map((e) => e.seq).join(",")}`,
+    );
     check(
       events.every((e) => e.sid === seed.sid),
       "every replayed line carries the session sid",
@@ -319,18 +336,28 @@ async function legStoreLevel(helperPath) {
     let metaOk = false;
     try {
       const meta = JSON.parse(metaRaw);
-      metaOk = meta.sid === seed.sid && meta.state === "done" && meta.lastSeq === seed.seqCount;
+      metaOk =
+        meta.sid === seed.sid &&
+        meta.state === "done" &&
+        meta.lastSeq === seed.seqCount;
     } catch {
       metaOk = false;
     }
-    check(metaOk, "meta.json is complete and consistent with the log", "meta.json missing/torn or inconsistent with the log");
+    check(
+      metaOk,
+      "meta.json is complete and consistent with the log",
+      "meta.json missing/torn or inconsistent with the log",
+    );
 
     // watch-equivalent: tail the live log in a separate process and kill it
     // once the seeded events stream out.
-    const streamed = await collectStream(["--import", "tsx", helperPath, "tail", seed.sid, "1"], {
-      env: helperEnv(fleetBase),
-      expected: seed.seqCount,
-    });
+    const streamed = await collectStream(
+      ["--import", "tsx", helperPath, "tail", seed.sid, "1"],
+      {
+        env: helperEnv(fleetBase),
+        expected: seed.seqCount,
+      },
+    );
     check(
       streamed.length >= seed.seqCount,
       `fleet watch-equivalent streamed ${streamed.length} envelope lines then was killed`,
@@ -354,10 +381,13 @@ async function legStoreLevel(helperPath) {
 
 /** True once `oxagen fleet ls --json` is a real command that emits a JSON array. */
 async function fleetCliWired(fleetBase) {
-  const res = await runNode(["--import", "tsx", CLI_ENTRY, "fleet", "ls", "--json"], {
-    env: helperEnv(fleetBase),
-    timeoutMs: 30_000,
-  });
+  const res = await runNode(
+    ["--import", "tsx", CLI_ENTRY, "fleet", "ls", "--json"],
+    {
+      env: helperEnv(fleetBase),
+      timeoutMs: 30_000,
+    },
+  );
   if (res.timedOut || res.code !== 0) return false;
   try {
     return Array.isArray(JSON.parse(res.stdout.trim()));
@@ -372,33 +402,64 @@ async function legCliSubprocess(helperPath) {
   const fleetBase = await mkdtemp(join(tmpdir(), "oxa-smoke-cli-"));
   try {
     if (!(await fleetCliWired(fleetBase))) {
-      skip("`oxagen fleet` command tree unavailable in this environment — CLI pipe legs deferred");
+      skip(
+        "`oxagen fleet` command tree unavailable in this environment — CLI pipe legs deferred",
+      );
       return;
     }
     // Empty roster: `fleet ls --json | jq length` == 0.
-    const lsEmpty = await runNode(["--import", "tsx", CLI_ENTRY, "fleet", "ls", "--json"], { env: helperEnv(fleetBase) });
+    const lsEmpty = await runNode(
+      ["--import", "tsx", CLI_ENTRY, "fleet", "ls", "--json"],
+      { env: helperEnv(fleetBase) },
+    );
     const emptyLen = JSON.parse(lsEmpty.stdout.trim()).length;
-    check(emptyLen === 0, "fleet ls --json → jq length == 0 (empty)", `expected 0, got ${emptyLen}`);
+    check(
+      emptyLen === 0,
+      "fleet ls --json → jq length == 0 (empty)",
+      `expected 0, got ${emptyLen}`,
+    );
 
     // Seed one session (via the store) into the SAME fleet dir the CLI reads.
     const seed = await seedSession(helperPath, fleetBase);
 
     // `fleet ls --json | jq length` == 1.
-    const lsOne = await runNode(["--import", "tsx", CLI_ENTRY, "fleet", "ls", "--json"], { env: helperEnv(fleetBase) });
+    const lsOne = await runNode(
+      ["--import", "tsx", CLI_ENTRY, "fleet", "ls", "--json"],
+      { env: helperEnv(fleetBase) },
+    );
     const roster = JSON.parse(lsOne.stdout.trim());
-    check(roster.length === 1, "fleet ls --json → jq length == 1 after seed", `expected 1, got ${roster.length}`);
+    check(
+      roster.length === 1,
+      "fleet ls --json → jq length == 1 after seed",
+      `expected 1, got ${roster.length}`,
+    );
 
     // `fleet logs <sid>` replays the log as parseable envelope lines.
-    const logs = await runNode(["--import", "tsx", CLI_ENTRY, "fleet", "logs", seed.sid, "--json"], { env: helperEnv(fleetBase) });
+    const logs = await runNode(
+      ["--import", "tsx", CLI_ENTRY, "fleet", "logs", seed.sid, "--json"],
+      { env: helperEnv(fleetBase) },
+    );
     const logged = parseEnvelopeLines(logs.stdout);
-    check(logged.length === seed.seqCount && isMonotonic(logged), "fleet logs → monotonic envelope lines", `fleet logs replay mismatch (${logged.length}/${seed.seqCount})`);
+    check(
+      logged.length === seed.seqCount && isMonotonic(logged),
+      "fleet logs → monotonic envelope lines",
+      `fleet logs replay mismatch (${logged.length}/${seed.seqCount})`,
+    );
 
     // `fleet watch --json` streams envelope lines; kill after the seeded events.
-    const watched = await collectStream(["--import", "tsx", CLI_ENTRY, "fleet", "watch", seed.sid, "--json"], {
-      env: helperEnv(fleetBase),
-      expected: seed.seqCount,
-    });
-    check(watched.length >= seed.seqCount && isMonotonic(watched.slice(0, seed.seqCount)), "fleet watch --json → monotonic envelope stream", `fleet watch stream mismatch (${watched.length}/${seed.seqCount})`);
+    const watched = await collectStream(
+      ["--import", "tsx", CLI_ENTRY, "fleet", "watch", seed.sid, "--json"],
+      {
+        env: helperEnv(fleetBase),
+        expected: seed.seqCount,
+      },
+    );
+    check(
+      watched.length >= seed.seqCount &&
+        isMonotonic(watched.slice(0, seed.seqCount)),
+      "fleet watch --json → monotonic envelope stream",
+      `fleet watch stream mismatch (${watched.length}/${seed.seqCount})`,
+    );
   } catch (err) {
     fail("Leg B threw: " + (err instanceof Error ? err.message : String(err)));
   } finally {
@@ -414,7 +475,9 @@ async function legLiveDispatch() {
   say("");
   say("Leg C · live detached dispatch");
   if (process.env.OXAGEN_SMOKE_LIVE !== "1") {
-    skip("live dispatch gated behind OXAGEN_SMOKE_LIVE=1 (real worker/model calls; needs task #4/#6)");
+    skip(
+      "live dispatch gated behind OXAGEN_SMOKE_LIVE=1 (makes real worker/model calls)",
+    );
     return;
   }
   const fleetBase = await mkdtemp(join(tmpdir(), "oxa-smoke-live-"));
@@ -423,22 +486,43 @@ async function legLiveDispatch() {
     //   1) dispatch a trivial prompt, capture the printed sid,
     //   2) follow (`fleet dispatch --follow` / `fleet watch <sid> --json`),
     //   3) assert a terminal session.end envelope and a 0/1 exit matching its fate.
-    const disp = await runNode(["--import", "tsx", CLI_ENTRY, "fleet", "dispatch", "say hi", "--once", "--json"], {
-      env: helperEnv(fleetBase),
-      timeoutMs: 120_000,
-    });
+    const disp = await runNode(
+      [
+        "--import",
+        "tsx",
+        CLI_ENTRY,
+        "fleet",
+        "dispatch",
+        "say hi",
+        "--once",
+        "--json",
+      ],
+      {
+        env: helperEnv(fleetBase),
+        timeoutMs: 120_000,
+      },
+    );
     const sid = disp.stdout.trim().split("\n").pop();
     if (disp.code !== 0 || !sid || !sid.startsWith("s-")) {
-      fail(`live dispatch did not print a sid (code=${disp.code}); worker command likely not wired`);
+      fail(
+        `live dispatch did not print a sid (code=${disp.code}); worker command likely not wired`,
+      );
       return;
     }
-    const streamed = await collectStream(["--import", "tsx", CLI_ENTRY, "fleet", "watch", sid, "--json"], {
-      env: helperEnv(fleetBase),
-      expected: 1,
-      timeoutMs: 120_000,
-    });
+    const streamed = await collectStream(
+      ["--import", "tsx", CLI_ENTRY, "fleet", "watch", sid, "--json"],
+      {
+        env: helperEnv(fleetBase),
+        expected: 1,
+        timeoutMs: 120_000,
+      },
+    );
     const ended = streamed.some((e) => e.type === "session.end");
-    check(ended, `live session ${sid} reached session.end`, `live session ${sid} never reached session.end`);
+    check(
+      ended,
+      `live session ${sid} reached session.end`,
+      `live session ${sid} never reached session.end`,
+    );
   } catch (err) {
     fail("Leg C threw: " + (err instanceof Error ? err.message : String(err)));
   } finally {
@@ -467,7 +551,10 @@ async function main() {
   }
 
   say("");
-  if (failures === 0) say("SUMMARY: all required legs passed (skips are deferred, not failures).");
+  if (failures === 0)
+    say(
+      "SUMMARY: all required legs passed (skips are deferred, not failures).",
+    );
   else say(`SUMMARY: ${failures} check(s) FAILED.`);
 
   const out = process.env.OXAGEN_SMOKE_OUT;
@@ -476,7 +563,9 @@ async function main() {
       await writeFile(out, transcript.join("\n") + "\n");
       process.stderr.write("transcript written to " + out + "\n");
     } catch (err) {
-      process.stderr.write("could not write OXAGEN_SMOKE_OUT: " + String(err) + "\n");
+      process.stderr.write(
+        "could not write OXAGEN_SMOKE_OUT: " + String(err) + "\n",
+      );
     }
   }
 
@@ -486,6 +575,10 @@ async function main() {
 }
 
 main().catch((err) => {
-  process.stderr.write("smoke harness crashed: " + (err instanceof Error ? err.stack : String(err)) + "\n");
+  process.stderr.write(
+    "smoke harness crashed: " +
+      (err instanceof Error ? err.stack : String(err)) +
+      "\n",
+  );
   process.exitCode = 1;
 });

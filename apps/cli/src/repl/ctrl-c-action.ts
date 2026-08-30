@@ -43,7 +43,10 @@ export function resolveCtrlC(ctx: CtrlCContext, now: number): CtrlCAction {
   if (ctx.streaming) return "cancel-turn";
   // Idle from here down.
   if (!ctx.inputEmpty) return "clear-input";
-  if (ctx.lastCtrlCMs !== null && now - ctx.lastCtrlCMs <= CTRL_C_EXIT_WINDOW_MS) {
+  if (
+    ctx.lastCtrlCMs !== null &&
+    now - ctx.lastCtrlCMs <= CTRL_C_EXIT_WINDOW_MS
+  ) {
     return "exit";
   }
   return "arm-exit";

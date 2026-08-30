@@ -120,7 +120,10 @@ export async function handleFileLockAcquire(
   if (opts.action !== undefined) {
     if (opts.action !== "read" && opts.action !== "write") {
       process.exitCode = 2;
-      out.error(`Invalid --action "${opts.action}". Use "read" or "write".`, "usage");
+      out.error(
+        `Invalid --action "${opts.action}". Use "read" or "write".`,
+        "usage",
+      );
       return;
     }
     action = opts.action;
@@ -137,15 +140,18 @@ export async function handleFileLockAcquire(
 
   let result: FileLockAcquireResult;
   try {
-    result = await apiPostOrThrow<FileLockAcquireResult>("agent/file/lock/acquire", {
-      path,
-      owner: opts.owner,
-      repo: opts.repo,
-      action,
-      ttlMs,
-      agentId: opts.agentId,
-      executionId: opts.executionId,
-    });
+    result = await apiPostOrThrow<FileLockAcquireResult>(
+      "agent/file/lock/acquire",
+      {
+        path,
+        owner: opts.owner,
+        repo: opts.repo,
+        action,
+        ttlMs,
+        agentId: opts.agentId,
+        executionId: opts.executionId,
+      },
+    );
   } catch (err) {
     out.error(err, "api");
     return;
@@ -156,7 +162,9 @@ export async function handleFileLockAcquire(
   if (!result.granted) process.exitCode = 1;
   out.data(result, () => {
     if (result.granted) return `✓ Lock granted — lockId ${result.lockId}.`;
-    const until = result.blockedUntil ? new Date(result.blockedUntil).toISOString() : "unknown";
+    const until = result.blockedUntil
+      ? new Date(result.blockedUntil).toISOString()
+      : "unknown";
     return `✗ Lock not granted — held by ${result.heldBy ?? "another agent"} until ${until}.`;
   });
 }
@@ -181,9 +189,12 @@ export async function handleFileLockRelease(
   const out = createOutput({ json: opts.json }, writer);
   let result: FileLockReleaseResult;
   try {
-    result = await apiPostOrThrow<FileLockReleaseResult>("agent/file/lock/release", {
-      lockId,
-    });
+    result = await apiPostOrThrow<FileLockReleaseResult>(
+      "agent/file/lock/release",
+      {
+        lockId,
+      },
+    );
   } catch (err) {
     out.error(err, "api");
     return;

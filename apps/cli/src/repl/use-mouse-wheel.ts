@@ -14,9 +14,16 @@
  */
 import { useEffect, useRef } from "react";
 import { useStdin } from "ink";
-import { enableMouseReporting, disableMouseReporting, parseMouseWheelEvents } from "./alt-screen.js";
+import {
+  enableMouseReporting,
+  disableMouseReporting,
+  parseMouseWheelEvents,
+} from "./alt-screen.js";
 
-export function useMouseWheel(onWheel: (direction: "up" | "down") => void, enabled: boolean): void {
+export function useMouseWheel(
+  onWheel: (direction: "up" | "down") => void,
+  enabled: boolean,
+): void {
   const { stdin, isRawModeSupported } = useStdin();
   // Mirrors the latest callback into a ref (same pattern as interactive.tsx's
   // modelRef/effortRef) so the effect below can stay subscribed to the SAME
@@ -30,7 +37,8 @@ export function useMouseWheel(onWheel: (direction: "up" | "down") => void, enabl
     const stream = process.stdout;
     enableMouseReporting(stream);
     const onData = (chunk: Buffer | string): void => {
-      for (const e of parseMouseWheelEvents(String(chunk))) onWheelRef.current(e.direction);
+      for (const e of parseMouseWheelEvents(String(chunk)))
+        onWheelRef.current(e.direction);
     };
     stdin.on("data", onData);
     return () => {

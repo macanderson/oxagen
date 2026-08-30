@@ -192,7 +192,9 @@ export function MarketplacePanel({
   const current = entries[clampedSelected];
 
   function cycleTab(delta: number): void {
-    setTab((t) => (t + delta + MARKETPLACE_TABS.length) % MARKETPLACE_TABS.length);
+    setTab(
+      (t) => (t + delta + MARKETPLACE_TABS.length) % MARKETPLACE_TABS.length,
+    );
     setOffset(0);
   }
 
@@ -333,7 +335,9 @@ export function MarketplacePanel({
           <Text color={theme.cyan} bold wrap="truncate-end">
             {current.title ?? current.name}
           </Text>
-          <Text color={theme.violet}>[{pluginTypeLabel(current.pluginType)}]</Text>
+          <Text color={theme.violet}>
+            [{pluginTypeLabel(current.pluginType)}]
+          </Text>
         </Box>
         <Box marginTop={1} flexDirection="column" width={innerWidth}>
           <Box gap={1}>
@@ -422,9 +426,7 @@ export function MarketplacePanel({
           {search || (searchFocused ? "" : "")}
           {searchFocused ? <Text color={theme.cyan}>█</Text> : null}
         </Text>
-        {!search && !searchFocused ? (
-          <Text dimColor>/ to search</Text>
-        ) : null}
+        {!search && !searchFocused ? <Text dimColor>/ to search</Text> : null}
       </Box>
 
       <Box flexDirection="column" marginTop={1}>
@@ -445,11 +447,18 @@ export function MarketplacePanel({
             const isSelected = idx === clampedSelected;
             return (
               <Box key={entry.id} width={innerWidth}>
-                <Text color={isSelected ? theme.cyan : undefined} bold={isSelected}>
+                <Text
+                  color={isSelected ? theme.cyan : undefined}
+                  bold={isSelected}
+                >
                   {isSelected ? "❯ " : "  "}
                 </Text>
                 <Box width={13}>
-                  <Text color={theme.violet} dimColor={!isSelected} wrap="truncate-end">
+                  <Text
+                    color={theme.violet}
+                    dimColor={!isSelected}
+                    wrap="truncate-end"
+                  >
                     [{pluginTypeLabel(entry.pluginType)}]
                   </Text>
                 </Box>

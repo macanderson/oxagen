@@ -11,7 +11,15 @@
  * a file-write confirmation is progress → stderr; a bad --format is a usage
  * error (exit 2); an API failure is a uniform `✗ …` stderr line (exit 1).
  */
-import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  vi,
+  type Mock,
+} from "vitest";
 
 vi.mock("../../lib/api.js", () => ({
   apiGetOrThrow: vi.fn(),
@@ -44,18 +52,18 @@ beforeEach(() => {
   out = "";
   err = "";
   process.exitCode = undefined;
-  const outSpy = vi
-    .spyOn(process.stdout, "write")
-    .mockImplementation(((s: unknown) => {
-      out += String(s);
-      return true;
-    }) as never);
-  const errSpy = vi
-    .spyOn(process.stderr, "write")
-    .mockImplementation(((s: unknown) => {
-      err += String(s);
-      return true;
-    }) as never);
+  const outSpy = vi.spyOn(process.stdout, "write").mockImplementation(((
+    s: unknown,
+  ) => {
+    out += String(s);
+    return true;
+  }) as never);
+  const errSpy = vi.spyOn(process.stderr, "write").mockImplementation(((
+    s: unknown,
+  ) => {
+    err += String(s);
+    return true;
+  }) as never);
   restorers.push(
     () => outSpy.mockRestore(),
     () => errSpy.mockRestore(),
@@ -105,8 +113,15 @@ describe("handleConversationExport", () => {
 
   it("writes markdown to a file with --output and reports the write on stderr", async () => {
     mockGet.mockResolvedValueOnce(MD_RESPONSE);
-    await handleConversationExport("cnv_1", { format: "markdown", output: "chat.md" });
-    expect(mockWrite).toHaveBeenCalledWith("chat.md", "# Planning\n\nhello\n", "utf8");
+    await handleConversationExport("cnv_1", {
+      format: "markdown",
+      output: "chat.md",
+    });
+    expect(mockWrite).toHaveBeenCalledWith(
+      "chat.md",
+      "# Planning\n\nhello\n",
+      "utf8",
+    );
     // Document went to the file; stdout stays machine-pure, confirmation → stderr.
     expect(out).toBe("");
     expect(err).toContain("Exported 4 messages to chat.md");
@@ -148,9 +163,8 @@ describe("handleConversationExport", () => {
   it("url-encodes the conversation id", async () => {
     mockGet.mockResolvedValueOnce(MD_RESPONSE);
     await handleConversationExport("cnv/../1", {});
-    expect(mockGet).toHaveBeenCalledWith(
-      "conversations/cnv%2F..%2F1/export",
-      { format: "markdown" },
-    );
+    expect(mockGet).toHaveBeenCalledWith("conversations/cnv%2F..%2F1/export", {
+      format: "markdown",
+    });
   });
 });

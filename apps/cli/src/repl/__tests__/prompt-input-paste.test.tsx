@@ -25,11 +25,15 @@ const PASTE_START = `${ESC}[200~`;
 const PASTE_END = `${ESC}[201~`;
 
 /** Wrap `text` as a single bracketed-paste stdin chunk, exactly like a real terminal. */
-const bracketedPaste = (text: string): string => `${PASTE_START}${text}${PASTE_END}`;
+const bracketedPaste = (text: string): string =>
+  `${PASTE_START}${text}${PASTE_END}`;
 
 /** A multi-line pasted blob (collapses to a preview chip). */
 const bigPaste = (label: string): string =>
-  Array.from({ length: 10 }, (_, i) => `${label} line ${i} ${"x".repeat(50)}`).join("\n");
+  Array.from(
+    { length: 10 },
+    (_, i) => `${label} line ${i} ${"x".repeat(50)}`,
+  ).join("\n");
 
 interface Submission {
   text: string;
@@ -46,7 +50,9 @@ function captureSubmits(): {
 
 describe("PromptInput — text paste (bracketed paste → usePaste)", () => {
   it("inserts a single-line paste inline, unchanged, however long", async () => {
-    const { lastFrame, stdin } = render(<PromptInput onSubmit={() => {}} busy={false} />);
+    const { lastFrame, stdin } = render(
+      <PromptInput onSubmit={() => {}} busy={false} />,
+    );
     stdin.write(bracketedPaste("a single long line without any newline"));
     await tick();
     const frame = lastFrame() ?? "";
@@ -55,7 +61,9 @@ describe("PromptInput — text paste (bracketed paste → usePaste)", () => {
   });
 
   it("collapses a multi-line paste to its preview chip", async () => {
-    const { lastFrame, stdin } = render(<PromptInput onSubmit={() => {}} busy={false} />);
+    const { lastFrame, stdin } = render(
+      <PromptInput onSubmit={() => {}} busy={false} />,
+    );
     const big = bigPaste("A");
     stdin.write(bracketedPaste(big));
     await tick();
@@ -66,7 +74,9 @@ describe("PromptInput — text paste (bracketed paste → usePaste)", () => {
   });
 
   it("shows a distinct preview chip for a second multi-line paste in the same prompt", async () => {
-    const { lastFrame, stdin } = render(<PromptInput onSubmit={() => {}} busy={false} />);
+    const { lastFrame, stdin } = render(
+      <PromptInput onSubmit={() => {}} busy={false} />,
+    );
     const a = bigPaste("A");
     const b = bigPaste("B");
     stdin.write(bracketedPaste(a));
@@ -84,7 +94,9 @@ describe("PromptInput — text paste (bracketed paste → usePaste)", () => {
 
   it("expands every placeholder back to full content, in order, on submit", async () => {
     const captured = captureSubmits();
-    const { stdin } = render(<PromptInput onSubmit={captured.onSubmit} busy={false} />);
+    const { stdin } = render(
+      <PromptInput onSubmit={captured.onSubmit} busy={false} />,
+    );
     const a = bigPaste("A");
     const b = bigPaste("B");
     stdin.write(bracketedPaste(a));
@@ -106,17 +118,23 @@ describe("PromptInput — text paste (bracketed paste → usePaste)", () => {
 
   it("passes no `paste` argument when the submission held no placeholders", async () => {
     const captured = captureSubmits();
-    const { stdin } = render(<PromptInput onSubmit={captured.onSubmit} busy={false} />);
+    const { stdin } = render(
+      <PromptInput onSubmit={captured.onSubmit} busy={false} />,
+    );
     stdin.write("just a normal short prompt");
     await tick();
     stdin.write("\r");
     await tick();
-    expect(captured.calls).toEqual([{ text: "just a normal short prompt", paste: undefined }]);
+    expect(captured.calls).toEqual([
+      { text: "just a normal short prompt", paste: undefined },
+    ]);
   });
 
   it("re-registers pastes fresh after submit (no stale registry across prompts)", async () => {
     const captured = captureSubmits();
-    const { stdin } = render(<PromptInput onSubmit={captured.onSubmit} busy={false} />);
+    const { stdin } = render(
+      <PromptInput onSubmit={captured.onSubmit} busy={false} />,
+    );
     const a = bigPaste("A");
     stdin.write(bracketedPaste(a));
     await tick();
@@ -139,14 +157,22 @@ describe("PromptInput — text paste (bracketed paste → usePaste)", () => {
     const a = bigPaste("A");
     const b = bigPaste("B");
     const { lastFrame, stdin, rerender } = render(
-      <PromptInput onSubmit={captured.onSubmit} busy={false} inject={{ text: "", nonce: 0 }} />,
+      <PromptInput
+        onSubmit={captured.onSubmit}
+        busy={false}
+        inject={{ text: "", nonce: 0 }}
+      />,
     );
     stdin.write(bracketedPaste(a));
     await tick();
 
     // Parent wholesale-replaces the buffer (recall/task-edit/clear) WITHOUT a submit.
     rerender(
-      <PromptInput onSubmit={captured.onSubmit} busy={false} inject={{ text: "recalled text", nonce: 1 }} />,
+      <PromptInput
+        onSubmit={captured.onSubmit}
+        busy={false}
+        inject={{ text: "recalled text", nonce: 1 }}
+      />,
     );
     await tick();
 
@@ -160,7 +186,9 @@ describe("PromptInput — text paste (bracketed paste → usePaste)", () => {
 
 describe("PromptInput — atomic token deletion", () => {
   it("backspacing right after a chip deletes the WHOLE chip in one keystroke", async () => {
-    const { lastFrame, stdin } = render(<PromptInput onSubmit={() => {}} busy={false} />);
+    const { lastFrame, stdin } = render(
+      <PromptInput onSubmit={() => {}} busy={false} />,
+    );
     const big = bigPaste("A");
     stdin.write(bracketedPaste(big));
     await tick();
@@ -175,7 +203,9 @@ describe("PromptInput — atomic token deletion", () => {
 
   it("dropping a chip's registry entry means retyping the same chip by hand is NOT expanded", async () => {
     const captured = captureSubmits();
-    const { stdin } = render(<PromptInput onSubmit={captured.onSubmit} busy={false} />);
+    const { stdin } = render(
+      <PromptInput onSubmit={captured.onSubmit} busy={false} />,
+    );
     const big = bigPaste("SECRET");
     const chip = textChip(big);
     stdin.write(bracketedPaste(big));
@@ -205,7 +235,11 @@ describe("PromptInput — image paste (Ctrl-V + injectable clipboard reader)", (
 
   it("Ctrl-V with an image on the clipboard inserts [Image #1] and stores its path", async () => {
     const { lastFrame, stdin } = render(
-      <PromptInput onSubmit={() => {}} busy={false} readClipboardImage={async () => fakeAttachment} />,
+      <PromptInput
+        onSubmit={() => {}}
+        busy={false}
+        readClipboardImage={async () => fakeAttachment}
+      />,
     );
     stdin.write(CTRL_V);
     await tick(50);
@@ -215,7 +249,11 @@ describe("PromptInput — image paste (Ctrl-V + injectable clipboard reader)", (
   it("submitting after an image paste produces an image content part with the stored path", async () => {
     const captured = captureSubmits();
     const { stdin } = render(
-      <PromptInput onSubmit={captured.onSubmit} busy={false} readClipboardImage={async () => fakeAttachment} />,
+      <PromptInput
+        onSubmit={captured.onSubmit}
+        busy={false}
+        readClipboardImage={async () => fakeAttachment}
+      />,
     );
     stdin.write("check this out: ");
     await tick();
@@ -228,12 +266,18 @@ describe("PromptInput — image paste (Ctrl-V + injectable clipboard reader)", (
     expect(submission.text).toBe("check this out: [Image #1]");
     expect(submission.paste).toBeDefined();
     expect(submission.paste!.images).toEqual([fakeAttachment]);
-    expect(submission.paste!.expandedText).toBe("check this out: (attached image)");
+    expect(submission.paste!.expandedText).toBe(
+      "check this out: (attached image)",
+    );
   });
 
   it("numbers image tokens independently from text pastes", async () => {
     const { lastFrame, stdin } = render(
-      <PromptInput onSubmit={() => {}} busy={false} readClipboardImage={async () => fakeAttachment} />,
+      <PromptInput
+        onSubmit={() => {}}
+        busy={false}
+        readClipboardImage={async () => fakeAttachment}
+      />,
     );
     const big = bigPaste("A");
     stdin.write(bracketedPaste(big)); // preview chip
@@ -247,7 +291,11 @@ describe("PromptInput — image paste (Ctrl-V + injectable clipboard reader)", (
 
   it("gracefully no-ops when there is no image on the clipboard", async () => {
     const { lastFrame, stdin } = render(
-      <PromptInput onSubmit={() => {}} busy={false} readClipboardImage={async () => null} />,
+      <PromptInput
+        onSubmit={() => {}}
+        busy={false}
+        readClipboardImage={async () => null}
+      />,
     );
     stdin.write("typed before");
     await tick();
@@ -263,7 +311,11 @@ describe("PromptInput — image paste (Ctrl-V + injectable clipboard reader)", (
     // tool missing) without shelling out — that path is unit-tested directly
     // in lib/__tests__/clipboard-image.test.ts.
     const { lastFrame, stdin } = render(
-      <PromptInput onSubmit={() => {}} busy={false} readClipboardImage={async () => null} />,
+      <PromptInput
+        onSubmit={() => {}}
+        busy={false}
+        readClipboardImage={async () => null}
+      />,
     );
     stdin.write(CTRL_V);
     await tick(50);

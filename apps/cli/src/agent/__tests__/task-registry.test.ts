@@ -28,7 +28,11 @@ describe("TaskRegistry", () => {
   it("upserts an existing id in place instead of duplicating", () => {
     const reg = fresh();
     reg.upsert("execute", { title: "Execute the work", status: "pending" });
-    reg.upsert("execute", { title: "Execute the work", status: "in_progress", detail: "editing" });
+    reg.upsert("execute", {
+      title: "Execute the work",
+      status: "in_progress",
+      detail: "editing",
+    });
     const snap = reg.snapshot();
     expect(snap).toHaveLength(1);
     expect(snap[0]?.status).toBe("in_progress");
@@ -51,7 +55,9 @@ describe("TaskRegistry", () => {
     reg.upsert("b", { title: "B", status: "in_progress" });
     reg.upsert("c", { title: "C", status: "pending" });
     reg.finalizeOpen("done");
-    const byId = Object.fromEntries(reg.snapshot().map((t) => [t.id, t.status]));
+    const byId = Object.fromEntries(
+      reg.snapshot().map((t) => [t.id, t.status]),
+    );
     expect(byId).toEqual({ a: "done", b: "done", c: "done" });
   });
 
@@ -61,7 +67,13 @@ describe("TaskRegistry", () => {
     reg.upsert("b", { title: "B", status: "in_progress" });
     reg.upsert("c", { title: "C", status: "pending" });
     reg.upsert("d", { title: "D", status: "failed" });
-    expect(reg.summary()).toEqual({ total: 4, pending: 1, running: 1, done: 1, failed: 1 });
+    expect(reg.summary()).toEqual({
+      total: 4,
+      pending: 1,
+      running: 1,
+      done: 1,
+      failed: 1,
+    });
   });
 
   it("clear empties the registry and resets ordering", () => {

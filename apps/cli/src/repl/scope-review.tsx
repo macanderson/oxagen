@@ -22,7 +22,10 @@ import { Box, Text, useInput } from "ink";
 import React, { useState } from "react";
 import { theme } from "../tui/theme.js";
 import { formatUsd } from "../agent/rate-card.js";
-import type { ScopeReviewInfo, ScopeReviewDecision } from "@oxagen/agent-engine";
+import type {
+  ScopeReviewInfo,
+  ScopeReviewDecision,
+} from "@oxagen/agent-engine";
 
 export interface ScopeReviewProps {
   info: ScopeReviewInfo;
@@ -39,7 +42,10 @@ const AFFORDANCE = "… (Ctrl+O for full)";
 /** Split on lines, cap to `max` lines, and note truncation — shared by the
  *  original-prompt preview (fixed 3 lines) and the enhanced-prompt preview
  *  (6 lines, or unlimited when `expanded`). */
-function previewLines(text: string, max: number): { lines: string[]; truncated: boolean } {
+function previewLines(
+  text: string,
+  max: number,
+): { lines: string[]; truncated: boolean } {
   const all = text.split(/\r?\n/);
   if (all.length <= max) return { lines: all, truncated: false };
   return { lines: all.slice(0, max), truncated: true };
@@ -105,7 +111,10 @@ export function ScopeReview({
       }
       if (key.return) {
         const trimmed = buffer.trim();
-        onDecision({ proceed: true, prompt: trimmed.length > 0 ? trimmed : info.enhancedPrompt });
+        onDecision({
+          proceed: true,
+          prompt: trimmed.length > 0 ? trimmed : info.enhancedPrompt,
+        });
         return;
       }
       // Ctrl-J inserts a literal newline — same convention as the main
@@ -130,7 +139,13 @@ export function ScopeReview({
 
   if (mode === "edit") {
     return (
-      <Box flexDirection="column" borderStyle="round" borderColor={theme.violet} paddingX={1} width={width}>
+      <Box
+        flexDirection="column"
+        borderStyle="round"
+        borderColor={theme.violet}
+        paddingX={1}
+        width={width}
+      >
         <Text color={theme.violet} bold>
           {"✎ Edit the prompt — Enter runs · Ctrl+J newline · Esc cancels edit"}
         </Text>
@@ -145,14 +160,24 @@ export function ScopeReview({
   const hasContext = info.context.trim().length > 0;
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={theme.cyan} paddingX={1} width={width}>
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={theme.cyan}
+      paddingX={1}
+      width={width}
+    >
       <Text color={theme.cyan} bold>
         {`${theme.ring} Review scope & cost`}
       </Text>
 
       <Box flexDirection="column" marginTop={1}>
         <Text dimColor>You asked:</Text>
-        <TruncatablePreview text={info.originalPrompt} maxLines={3} width={innerWidth} />
+        <TruncatablePreview
+          text={info.originalPrompt}
+          maxLines={3}
+          width={innerWidth}
+        />
       </Box>
 
       <Box flexDirection="column" marginTop={1}>
@@ -162,7 +187,9 @@ export function ScopeReview({
           maxLines={expanded ? Number.POSITIVE_INFINITY : 6}
           width={innerWidth}
         />
-        {!hasContext ? <Text dimColor>no extra context was injected</Text> : null}
+        {!hasContext ? (
+          <Text dimColor>no extra context was injected</Text>
+        ) : null}
       </Box>
 
       <Box marginTop={1}>

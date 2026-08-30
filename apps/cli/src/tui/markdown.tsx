@@ -32,7 +32,11 @@ const terminalMarked = new Marked(
  * headings, links. Parsing is memoized on the source string, so committed
  * transcript messages (rendered once via <Static>) pay the parse exactly once.
  */
-export function Markdown({ children }: { children: string }): React.ReactElement {
+export function Markdown({
+  children,
+}: {
+  children: string;
+}): React.ReactElement {
   const rendered = useMemo(() => {
     try {
       return terminalMarked.parse(children, { async: false }).trimEnd();

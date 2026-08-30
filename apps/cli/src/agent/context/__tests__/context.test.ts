@@ -1,15 +1,34 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { makeGraph, FakeEmbeddingClient, embedFixtureFiles } from "./fixtures.js";
-import { mergeGraphConfig, DEFAULT_GRAPH_CONFIG, MIN_COVERAGE } from "../config.js";
-import { tokenize, resolveSeeds, expandNeighbourhood, callFlow } from "../traversal.js";
-import { ensureFileEmbeddings, rankFilesBySimilarity } from "../semantic-index.js";
+import {
+  makeGraph,
+  FakeEmbeddingClient,
+  embedFixtureFiles,
+} from "./fixtures.js";
+import {
+  mergeGraphConfig,
+  DEFAULT_GRAPH_CONFIG,
+  MIN_COVERAGE,
+} from "../config.js";
+import {
+  tokenize,
+  resolveSeeds,
+  expandNeighbourhood,
+  callFlow,
+} from "../traversal.js";
+import {
+  ensureFileEmbeddings,
+  rankFilesBySimilarity,
+} from "../semantic-index.js";
 import { runGraphQuery } from "../graph-query.js";
 import {
   GraphContextResolver,
   type GraphLogEvent,
   type GraphResult,
 } from "../context-resolver.js";
-import { formatGraphResultJson, formatGraphContextForPrompt } from "../format.js";
+import {
+  formatGraphResultJson,
+  formatGraphContextForPrompt,
+} from "../format.js";
 import { resolveEmbeddingClient } from "../embedding.js";
 import type { CodeGraphStore } from "../../../daemon/code-graph/store.js";
 
@@ -20,7 +39,7 @@ afterEach(() => {
 
 // ── config ────────────────────────────────────────────────────────────────
 describe("graph config", () => {
-  it("defaults mirror graph-tools.json", () => {
+  it("defaults match DEFAULT_GRAPH_CONFIG", () => {
     const c = mergeGraphConfig();
     expect(c).toEqual({
       enabled: true,
@@ -32,7 +51,9 @@ describe("graph config", () => {
   });
 
   it("layers a partial patch over defaults", () => {
-    expect(mergeGraphConfig({ maxNodes: 50, fallbackToGrep: false })).toMatchObject({
+    expect(
+      mergeGraphConfig({ maxNodes: 50, fallbackToGrep: false }),
+    ).toMatchObject({
       maxNodes: 50,
       fallbackToGrep: false,
       enabled: true,
@@ -46,12 +67,16 @@ describe("graph config", () => {
 
   it("embedProvider defaults to auto and honours a patch", () => {
     expect(mergeGraphConfig().embedProvider).toBe("auto");
-    expect(mergeGraphConfig({ embedProvider: "ollama" }).embedProvider).toBe("ollama");
+    expect(mergeGraphConfig({ embedProvider: "ollama" }).embedProvider).toBe(
+      "ollama",
+    );
   });
 
   it("OXAGEN_EMBED_PROVIDER overrides both the default and a patch", () => {
     process.env["OXAGEN_EMBED_PROVIDER"] = "off";
-    expect(mergeGraphConfig({ embedProvider: "ollama" }).embedProvider).toBe("off");
+    expect(mergeGraphConfig({ embedProvider: "ollama" }).embedProvider).toBe(
+      "off",
+    );
   });
 
   it("OXAGEN_EMBED_PROVIDER accepts 'local' as an alias for 'onnx'", () => {
@@ -110,7 +135,11 @@ describe("traversal", () => {
 
   it("callFlow(callers) finds who invokes a function", () => {
     const g = makeGraph();
-    const sub = callFlow(g, "S1", { direction: "callers", depth: 2, maxNodes: 200 });
+    const sub = callFlow(g, "S1", {
+      direction: "callers",
+      depth: 2,
+      maxNodes: 200,
+    });
     const names = sub.nodes.map((n) => n.name);
     expect(names).toContain("handleCheckout"); // caller of processPayment
     expect(names).not.toContain("routeByCardType"); // that's a callee, not a caller
@@ -118,7 +147,11 @@ describe("traversal", () => {
 
   it("callFlow(callees) finds what a function invokes", () => {
     const g = makeGraph();
-    const sub = callFlow(g, "S1", { direction: "callees", depth: 2, maxNodes: 200 });
+    const sub = callFlow(g, "S1", {
+      direction: "callees",
+      depth: 2,
+      maxNodes: 200,
+    });
     expect(sub.nodes.map((n) => n.name)).toContain("routeByCardType");
   });
 });
@@ -128,13 +161,24 @@ describe("semantic index", () => {
   it("embeds file nodes once, then reuses persisted vectors", async () => {
     const g = makeGraph();
     const client = new FakeEmbeddingClient();
-    const readFileText = async (abs: string): Promise<string> => `telemetry drain ${abs}`;
+    const readFileText = async (abs: string): Promise<string> =>
+      `telemetry drain ${abs}`;
 
-    const first = await ensureFileEmbeddings({ graph: g, root: "/repo", client, readFileText });
+    const first = await ensureFileEmbeddings({
+      graph: g,
+      root: "/repo",
+      client,
+      readFileText,
+    });
     expect(first.embedded).toBe(4); // 4 file nodes
     expect(first.vectors.size).toBe(4);
 
-    const second = await ensureFileEmbeddings({ graph: g, root: "/repo", client, readFileText });
+    const second = await ensureFileEmbeddings({
+      graph: g,
+      root: "/repo",
+      client,
+      readFileText,
+    });
     expect(second.embedded).toBe(0);
     expect(second.reused).toBe(4);
   });
@@ -159,7 +203,9 @@ describe("semantic index", () => {
     const client = new FakeEmbeddingClient();
     embedFixtureFiles(g, client);
     const vectors = new Map(
-      [...g.nodes.values()].filter((n) => n.kind === "file").map((n) => [n.id, n.embedding!]),
+      [...g.nodes.values()]
+        .filter((n) => n.kind === "file")
+        .map((n) => [n.id, n.embedding!]),
     );
     // "telemetry drain" query vector.
     const q = [0, 0, 0, 1, 1, 0];
@@ -179,7 +225,9 @@ describe("runGraphQuery", () => {
       client: null,
       config: DEFAULT_GRAPH_CONFIG,
     });
-    expect(res.impactedFiles.some((f) => f.path.endsWith("processor.ts"))).toBe(true);
+    expect(res.impactedFiles.some((f) => f.path.endsWith("processor.ts"))).toBe(
+      true,
+    );
     expect(res.symbols.some((s) => s.name === "processPayment")).toBe(true);
     expect(res.coverage).toBeGreaterThanOrEqual(MIN_COVERAGE);
   });
@@ -209,7 +257,9 @@ describe("runGraphQuery", () => {
       config: DEFAULT_GRAPH_CONFIG,
     });
     expect(res.symbols.some((s) => s.name === "handleCheckout")).toBe(true);
-    expect(res.edges.some((e) => e.to === "processPayment" && e.type === "calls")).toBe(true);
+    expect(
+      res.edges.some((e) => e.to === "processPayment" && e.type === "calls"),
+    ).toBe(true);
   });
 
   it("honours maxNodes", async () => {
@@ -240,11 +290,15 @@ describe("runGraphQuery", () => {
 
 // ── resolver: graph-first with logged fallback ──────────────────────────────
 describe("GraphContextResolver", () => {
-  const build = (over: Partial<ConstructorParameters<typeof GraphContextResolver>[0]> = {}) => {
+  const build = (
+    over: Partial<ConstructorParameters<typeof GraphContextResolver>[0]> = {},
+  ) => {
     const logs: GraphLogEvent[] = [];
-    const grep = vi.fn(async (): Promise<GraphResult["impactedFiles"]> => [
-      { path: "grepped.ts", reason: "grep match (1 hit)" },
-    ]);
+    const grep = vi.fn(
+      async (): Promise<GraphResult["impactedFiles"]> => [
+        { path: "grepped.ts", reason: "grep match (1 hit)" },
+      ],
+    );
     const resolver = new GraphContextResolver({
       cwd: "/repo",
       config: DEFAULT_GRAPH_CONFIG,
@@ -262,7 +316,9 @@ describe("GraphContextResolver", () => {
     const res = await resolver.query({ query: "processPayment" });
     expect(grep).not.toHaveBeenCalled();
     expect(resolver.usedGraph()).toBe(true);
-    expect(res.impactedFiles.some((f) => f.path.endsWith("processor.ts"))).toBe(true);
+    expect(res.impactedFiles.some((f) => f.path.endsWith("processor.ts"))).toBe(
+      true,
+    );
     expect(logs.find((l) => l.kind === "hit")).toBeTruthy();
   });
 
@@ -282,7 +338,11 @@ describe("GraphContextResolver", () => {
     });
     await resolver.query({ query: "processPayment" });
     expect(grep).toHaveBeenCalledOnce();
-    expect(logs.find((l) => l.kind === "fallback" && /enabled is false/.test(l.reason))).toBeTruthy();
+    expect(
+      logs.find(
+        (l) => l.kind === "fallback" && /enabled is false/.test(l.reason),
+      ),
+    ).toBeTruthy();
   });
 
   it("falls back (logged) on an empty graph", async () => {
@@ -291,7 +351,9 @@ describe("GraphContextResolver", () => {
     });
     await resolver.query({ query: "processPayment" });
     expect(grep).toHaveBeenCalledOnce();
-    expect(logs.find((l) => l.kind === "fallback" && /empty/.test(l.reason))).toBeTruthy();
+    expect(
+      logs.find((l) => l.kind === "fallback" && /empty/.test(l.reason)),
+    ).toBeTruthy();
   });
 
   it("does not grep when fallbackToGrep is off", async () => {
@@ -307,15 +369,33 @@ describe("GraphContextResolver", () => {
 // ── formatters (worker prompt includes the graph context) ───────────────────
 describe("formatters", () => {
   const result: GraphResult = {
-    impactedFiles: [{ path: "src/payment/processor.ts", reason: "defines processPayment", rank: 1 }],
-    symbols: [{ name: "processPayment", kind: "function", file: "src/payment/processor.ts", line: 10 }],
+    impactedFiles: [
+      {
+        path: "src/payment/processor.ts",
+        reason: "defines processPayment",
+        rank: 1,
+      },
+    ],
+    symbols: [
+      {
+        name: "processPayment",
+        kind: "function",
+        file: "src/payment/processor.ts",
+        line: 10,
+      },
+    ],
     edges: [{ from: "handleCheckout", to: "processPayment", type: "calls" }],
     coverage: 0.8,
   };
 
   it("formatGraphResultJson emits the contract shape", () => {
     const parsed = JSON.parse(formatGraphResultJson(result));
-    expect(Object.keys(parsed)).toEqual(["impactedFiles", "symbols", "edges", "coverage"]);
+    expect(Object.keys(parsed)).toEqual([
+      "impactedFiles",
+      "symbols",
+      "edges",
+      "coverage",
+    ]);
     expect(parsed.coverage).toBe(0.8);
   });
 
@@ -328,7 +408,14 @@ describe("formatters", () => {
   });
 
   it("formatGraphContextForPrompt is empty for an empty result", () => {
-    expect(formatGraphContextForPrompt({ impactedFiles: [], symbols: [], edges: [], coverage: 0 })).toBe("");
+    expect(
+      formatGraphContextForPrompt({
+        impactedFiles: [],
+        symbols: [],
+        edges: [],
+        coverage: 0,
+      }),
+    ).toBe("");
   });
 });
 
@@ -336,8 +423,12 @@ describe("formatters", () => {
 describe("resolveEmbeddingClient", () => {
   it("returns an injected client verbatim regardless of mode", async () => {
     const fake = new FakeEmbeddingClient();
-    await expect(resolveEmbeddingClient("/repo", { client: fake })).resolves.toBe(fake);
-    await expect(resolveEmbeddingClient("/repo", { client: fake, mode: "off" })).resolves.toBe(fake);
+    await expect(
+      resolveEmbeddingClient("/repo", { client: fake }),
+    ).resolves.toBe(fake);
+    await expect(
+      resolveEmbeddingClient("/repo", { client: fake, mode: "off" }),
+    ).resolves.toBe(fake);
   });
 
   it("mode: off always returns null, even with a gateway key present", async () => {
@@ -349,12 +440,18 @@ describe("resolveEmbeddingClient", () => {
   describe("mode: gateway", () => {
     it("returns null when no gateway key is available", async () => {
       await expect(
-        resolveEmbeddingClient("/repo", { mode: "gateway", hasKey: () => false }),
+        resolveEmbeddingClient("/repo", {
+          mode: "gateway",
+          hasKey: () => false,
+        }),
       ).resolves.toBeNull();
     });
 
     it("builds a gateway client when a key is present", async () => {
-      const client = await resolveEmbeddingClient("/repo", { mode: "gateway", hasKey: () => true });
+      const client = await resolveEmbeddingClient("/repo", {
+        mode: "gateway",
+        hasKey: () => true,
+      });
       expect(client?.providerId).toBe("openai/text-embedding-3-small");
       expect(client?.dimensions).toBe(1536);
     });

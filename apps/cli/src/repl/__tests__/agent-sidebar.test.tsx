@@ -69,7 +69,11 @@ describe("AgentSidebar", () => {
       title: "add rate limiting",
       model: "anthropic/claude-sonnet-5",
     });
-    agentRegistry.register({ kind: "subagent", title: "break-fix", detail: "fixing loop.ts" });
+    agentRegistry.register({
+      kind: "subagent",
+      title: "break-fix",
+      detail: "fixing loop.ts",
+    });
     const { lastFrame, unmount } = render(
       <AgentSidebar mode="auto" nowFn={nowFn} widthFn={wide} />,
     );
@@ -84,8 +88,15 @@ describe("AgentSidebar", () => {
   });
 
   it("renders the task checklist with a done-count from the task registry", () => {
-    taskRegistry.upsert("evaluate", { title: "Evaluate the request", status: "done" });
-    taskRegistry.upsert("execute", { title: "Execute the work", status: "in_progress", detail: "editing" });
+    taskRegistry.upsert("evaluate", {
+      title: "Evaluate the request",
+      status: "done",
+    });
+    taskRegistry.upsert("execute", {
+      title: "Execute the work",
+      status: "in_progress",
+      detail: "editing",
+    });
     const { lastFrame, unmount } = render(
       <AgentSidebar mode="auto" nowFn={nowFn} widthFn={wide} />,
     );

@@ -46,7 +46,9 @@ export interface FleetViewOptions {
   headless?: boolean;
 }
 
-export async function launchFleetView(opts: FleetViewOptions): Promise<FleetSnapshot> {
+export async function launchFleetView(
+  opts: FleetViewOptions,
+): Promise<FleetSnapshot> {
   const { cwd } = opts;
   // `loadProjectContext` is synchronous (it just reads CLAUDE.md/AGENTS.md).
   const projectContext = loadProjectContext(cwd);
@@ -74,7 +76,10 @@ export async function launchFleetView(opts: FleetViewOptions): Promise<FleetSnap
   // instead of failing every task at spawn().
   const isolation =
     opts.isolate !== false && !opts.readOnly && (await isGitRepo(cwd))
-      ? new WorktreeManager({ repoRoot: cwd, namespace: `session-${Date.now()}` })
+      ? new WorktreeManager({
+          repoRoot: cwd,
+          namespace: `session-${Date.now()}`,
+        })
       : null;
 
   const fleet = new Fleet({
@@ -94,7 +99,13 @@ export async function launchFleetView(opts: FleetViewOptions): Promise<FleetSnap
   const goal = opts.goal;
   const plan = goal
     ? async (signal: AbortSignal): Promise<Plan> => {
-        const planned = await planTasks({ goal, cwd, memory, agents: [...agents.values()], signal });
+        const planned = await planTasks({
+          goal,
+          cwd,
+          memory,
+          agents: [...agents.values()],
+          signal,
+        });
         store.save(planned);
         return planned;
       }
@@ -106,7 +117,7 @@ export async function launchFleetView(opts: FleetViewOptions): Promise<FleetSnap
     // give it work.
     if (!plan) {
       process.stderr.write(
-        "oxagen agents --json requires a goal, e.g. `oxagen agents --json \"add rate limiting\"`.\n",
+        'oxagen agents --json requires a goal, e.g. `oxagen agents --json "add rate limiting"`.\n',
       );
       process.exitCode = 1;
       if (isolation) await isolation.cleanupAll();

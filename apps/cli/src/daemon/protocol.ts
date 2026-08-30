@@ -12,16 +12,49 @@ import type { TaskFrame, TokenBudget } from "@oxagen/engram";
 // ---------------------------------------------------------------------------
 
 export type DaemonRequest =
-  | { id: string; method: "compile"; params: { taskFrame: TaskFrame; budget: TokenBudget } }
-  | { id: string; method: "query"; params: { namespace: { org: string; workspace: string }; kinds?: string[]; limit?: number } }
+  | {
+      id: string;
+      method: "compile";
+      params: { taskFrame: TaskFrame; budget: TokenBudget };
+    }
+  | {
+      id: string;
+      method: "query";
+      params: {
+        namespace: { org: string; workspace: string };
+        kinds?: string[];
+        limit?: number;
+      };
+    }
   | { id: string; method: "recall"; params: { recordId: string } }
-  | { id: string; method: "remember"; params: { event: unknown; opts: unknown } }
-  | { id: string; method: "session.fork"; params: { sessionId: string; forkPoint: number } }
+  | {
+      id: string;
+      method: "remember";
+      params: { event: unknown; opts: unknown };
+    }
+  | {
+      id: string;
+      method: "session.fork";
+      params: { sessionId: string; forkPoint: number };
+    }
   | { id: string; method: "session.replay"; params: { sessionId: string } }
   | { id: string; method: "session.list"; params: Record<string, never> }
   | { id: string; method: "graph.build"; params: { root?: string } }
-  | { id: string; method: "graph.query"; params: { nodeId: string; hops?: number; edgeTypes?: string[]; root?: string } }
-  | { id: string; method: "search_graph"; params: { pattern: string; limit?: number; root?: string } }
+  | {
+      id: string;
+      method: "graph.query";
+      params: {
+        nodeId: string;
+        hops?: number;
+        edgeTypes?: string[];
+        root?: string;
+      };
+    }
+  | {
+      id: string;
+      method: "search_graph";
+      params: { pattern: string; limit?: number; root?: string };
+    }
   | { id: string; method: "health"; params: Record<string, never> }
   | { id: string; method: "shutdown"; params: Record<string, never> };
 

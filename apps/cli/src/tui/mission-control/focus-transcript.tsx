@@ -32,19 +32,28 @@ export interface FocusEventBus {
   off(event: "event", listener: (e: SessionEvent) => void): unknown;
 }
 
-function ToolChip({ item }: { item: Extract<FocusItem, { kind: "tool" }> }): React.ReactElement {
+function ToolChip({
+  item,
+}: {
+  item: Extract<FocusItem, { kind: "tool" }>;
+}): React.ReactElement {
   if (item.running) return <Text dimColor>· {item.name} …</Text>;
   if (item.ok === false) {
     return (
       <Text color={theme.red}>
-        ✗ {item.name} failed{item.durationMs !== undefined ? ` after ${formatDurationMs(item.durationMs)}` : ""}
+        ✗ {item.name} failed
+        {item.durationMs !== undefined
+          ? ` after ${formatDurationMs(item.durationMs)}`
+          : ""}
       </Text>
     );
   }
   return (
     <Text dimColor>
       · {item.name}
-      {item.durationMs !== undefined ? ` ${formatDurationMs(item.durationMs)}` : ""}
+      {item.durationMs !== undefined
+        ? ` ${formatDurationMs(item.durationMs)}`
+        : ""}
     </Text>
   );
 }
@@ -79,7 +88,8 @@ function TranscriptItem({ item }: { item: FocusItem }): React.ReactElement {
       );
     case "diff": {
       const shown = item.changedFiles.slice(0, 3).join(", ");
-      const more = item.changedFiles.length > 3 ? ` +${item.changedFiles.length - 3}` : "";
+      const more =
+        item.changedFiles.length > 3 ? ` +${item.changedFiles.length - 3}` : "";
       return (
         <Text color={theme.green}>
           ± {item.changedLines} lines · {shown}
@@ -91,8 +101,13 @@ function TranscriptItem({ item }: { item: FocusItem }): React.ReactElement {
       return <Text color={theme.red}>✗ {item.message}</Text>;
     case "end": {
       const color =
-        item.state === "done" ? theme.green : item.state === "failed" ? theme.red : theme.dim;
-      const mark = item.state === "done" ? "✔" : item.state === "failed" ? "✖" : "◼";
+        item.state === "done"
+          ? theme.green
+          : item.state === "failed"
+            ? theme.red
+            : theme.dim;
+      const mark =
+        item.state === "done" ? "✔" : item.state === "failed" ? "✖" : "◼";
       return (
         <Box marginTop={1}>
           <Text color={color} bold>
@@ -119,7 +134,9 @@ export function FocusTranscript({
 }): React.ReactElement {
   const eventsRef = useRef<SessionEvent[]>([]);
   const [, setTick] = useState(0);
-  const throttleRef = useRef(createRenderThrottle<void>(() => setTick((t) => t + 1)));
+  const throttleRef = useRef(
+    createRenderThrottle<void>(() => setTick((t) => t + 1)),
+  );
 
   useEffect(() => {
     const throttle = throttleRef.current;

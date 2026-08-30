@@ -1,7 +1,7 @@
 /**
  * `oxagen recover` — find and restore agent work from the commit ledger.
  *
- * Every commit an agent makes is recorded (see lib/commit-ledger.ts), so work is
+ * Every commit an agent makes is recorded (see ./commit-ledger.ts), so work is
  * never lost even if a branch was force-moved or a worktree removed — the commit
  * object survives until git gc.
  *

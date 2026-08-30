@@ -52,7 +52,9 @@ describe("tail abort-listener hygiene", () => {
     await mkdir(join(root, "sessions", "s2"), { recursive: true });
     await writeFile(join(root, "sessions", "s2", "events.ndjson"), "");
 
-    const handle = store.tailEvents("s2", () => {}, { signal: controller.signal });
+    const handle = store.tailEvents("s2", () => {}, {
+      signal: controller.signal,
+    });
     controller.abort();
     expect(getEventListeners(controller.signal, "abort")).toHaveLength(0);
     handle.stop(); // idempotent after abort

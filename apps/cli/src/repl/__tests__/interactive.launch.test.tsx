@@ -6,16 +6,9 @@
  * in-app scroll (see scroll.ts, fullscreen-chrome.tsx), so it no longer needs
  * the terminal's native scrollback the way the classic inline mode does. Off a
  * TTY (tests, pipes) `useTerminalSize` reports `fullscreen: false` and ReplApp
- * falls back to the original inline render — finished output committed via
- * Ink's `<Static>` into the terminal's own scrollback — so `launchRepl` must
- * still never touch the alternate screen there.
- *
- * This file locked the OPPOSITE contract before full-screen mode existed (see
- * git history): inline rendering was the REPL's only mode, and the alternate
- * buffer's lack of native scrollback was a bug this test locked against
- * re-introducing. That trade is now made deliberately — full-screen mode
- * replaces native scrollback with its own bounded, in-app-scrollable viewport
- * — so the assertion flips for the TTY case; the off-TTY case is unchanged.
+ * falls back to the inline render — finished output committed via Ink's
+ * `<Static>` into the terminal's own scrollback — so `launchRepl` must never
+ * touch the alternate screen there.
  *
  * This test locks the contract deterministically by driving `process.stdout`'s
  * `isTTY` and capturing writes, rather than scraping Ink's frames (which
@@ -85,7 +78,9 @@ describe("launchRepl render mode", () => {
     expect(joined).toContain(ENTER_ALT_SCREEN);
     expect(joined).toContain(LEAVE_ALT_SCREEN);
     // Entered before it was left.
-    expect(joined.indexOf(ENTER_ALT_SCREEN)).toBeLessThan(joined.indexOf(LEAVE_ALT_SCREEN));
+    expect(joined.indexOf(ENTER_ALT_SCREEN)).toBeLessThan(
+      joined.indexOf(LEAVE_ALT_SCREEN),
+    );
     expect(renderSpy).toHaveBeenCalledTimes(1);
   });
 

@@ -11,8 +11,11 @@
  *   - {@link ServerMemory} — the PLATFORM two-axis AgentMemory store (Neo4j),
  *     reached over the /v1 API. Only present when the CLI is authenticated; it is
  *     what lets a lesson learned in one session steer a task in another. Every
- *     server call is best-effort with a short timeout so an unreachable API never
- *     stalls the run.
+ *     server call is best-effort: `remember` is fire-and-forget (never awaited),
+ *     and `recall` is wall-clock bounded by {@link createCombinedMemory}
+ *     ({@link DEFAULT_SERVER_TIMEOUT_MS}) so an unreachable API never stalls a
+ *     run. A caller that holds a bare {@link ServerMemory} and awaits `recall`
+ *     directly gets no such bound — go through the combined provider.
  *
  * `recallContext` returns the session tail followed by the semantically relevant
  * workspace memories. `remember` writes to the session store always, mirrors the
@@ -100,7 +103,9 @@ function lessonText(content: unknown): string {
 /** Pull the touched-files list out of the engine's `remember` content payload. */
 function contentFiles(content: unknown): string[] {
   const c = (content ?? {}) as { files?: unknown };
-  return Array.isArray(c.files) ? c.files.filter((f): f is string => typeof f === "string") : [];
+  return Array.isArray(c.files)
+    ? c.files.filter((f): f is string => typeof f === "string")
+    : [];
 }
 
 /**
@@ -109,11 +114,13 @@ function contentFiles(content: unknown): string[] {
  * touched-files context so recall in another session can match it, then fires
  * without awaiting (errors swallowed — memory must never break a run).
  */
-export function createServerMemory(opts: ServerMemoryOptions = {}): ServerMemory {
+export function createServerMemory(
+  opts: ServerMemoryOptions = {},
+): ServerMemory {
   return {
     async recall(query) {
-      // Respect the kill switch even on the direct (non-combined) call path used
-      // by the fleet orchestrator's per-task recall.
+      // Guard the kill switch here too, not only in the combined provider: a
+      // caller holding a bare ServerMemory must not reach the API either.
       if (memoryDisabled()) return [];
       const res = await recallMemories({
         query,
@@ -125,13 +132,17 @@ export function createServerMemory(opts: ServerMemoryOptions = {}): ServerMemory
     },
 
     remember(kind, content) {
-      // Direct call path (fleet lesson mirror) also honors the kill switch.
+      // The fleet orchestrator mirrors lessons through this handle directly
+      // (orchestrator.ts's `serverMemory?.remember`), so the kill switch has to
+      // be checked here as well as in the combined provider.
       if (memoryDisabled()) return;
       const lesson = lessonText(content);
       if (!lesson.trim()) return;
       const files = contentFiles(content);
       const prefix = opts.projectName ? `[${opts.projectName}] ` : "";
-      const filesSuffix = files.length ? ` (files: ${files.slice(0, 5).join(", ")})` : "";
+      const filesSuffix = files.length
+        ? ` (files: ${files.slice(0, 5).join(", ")})`
+        : "";
       const text = `${prefix}${lesson}${filesSuffix}`;
       void rememberMemory({ text, memoryKind: kind, source: "fix" }).catch(
         (err: unknown) => {
@@ -160,7 +171,10 @@ export function formatServerMemories(memories: RecalledMemory[]): string {
   const seen = new Set<string>();
   const rows = memories
     .slice()
-    .sort((a, b) => classRank(a) - classRank(b) || b.confidenceScore - a.confidenceScore)
+    .sort(
+      (a, b) =>
+        classRank(a) - classRank(b) || b.confidenceScore - a.confidenceScore,
+    )
     .filter((m) => {
       const key = m.lesson.replace(/\s+/g, " ").trim().toLowerCase();
       if (!key || seen.has(key)) return false;
@@ -172,13 +186,18 @@ export function formatServerMemories(memories: RecalledMemory[]): string {
         `- [${m.memoryClass}/${m.memoryKind}] ${m.lesson} (confidence ${Math.round(m.confidenceScore)})`,
     );
   if (rows.length === 0) return "";
-  return "## Lessons from prior sessions (workspace memory)\n" + rows.join("\n");
+  return (
+    "## Lessons from prior sessions (workspace memory)\n" + rows.join("\n")
+  );
 }
 
 /** Resolve `p` but reject once `ms` elapses, so a hung API call can't stall a run. */
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("server memory timeout")), ms);
+    const timer = setTimeout(
+      () => reject(new Error("server memory timeout")),
+      ms,
+    );
     p.then(
       (v) => {
         clearTimeout(timer);
@@ -220,7 +239,10 @@ export function createCombinedMemory(
   async function recallServer(): Promise<string> {
     if (!serverEnabled || !server || !recallQuery?.trim()) return "";
     try {
-      const memories = await withTimeout(server.recall(recallQuery), serverTimeoutMs);
+      const memories = await withTimeout(
+        server.recall(recallQuery),
+        serverTimeoutMs,
+      );
       return formatServerMemories(memories);
     } catch {
       // Best-effort: an unreachable/slow API degrades to local-only, never fatal.
@@ -247,9 +269,9 @@ export function createCombinedMemory(
     remember(kind, content, status) {
       // Episodic write (best-effort; the store swallows its own errors but guard
       // the call itself so a thrown rejection can never escape the turn).
-      void Promise.resolve(session?.remember(kind, content, toOutcome(status))).catch(
-        () => {},
-      );
+      void Promise.resolve(
+        session?.remember(kind, content, toOutcome(status)),
+      ).catch(() => {});
 
       // Mirror two-axis lesson kinds into the guaranteed fleet store.
       if (fleet && FLEET_KINDS.has(kind as MemoryRecord["memoryKind"])) {

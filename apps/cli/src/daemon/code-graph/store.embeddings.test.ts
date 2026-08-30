@@ -15,7 +15,10 @@ let dbPath: string;
 let store: CodeGraphStore;
 
 beforeEach(() => {
-  dbPath = join(mkdtempSync(join(tmpdir(), "oxagen-emb-db-")), "code-graph.duckdb");
+  dbPath = join(
+    mkdtempSync(join(tmpdir(), "oxagen-emb-db-")),
+    "code-graph.duckdb",
+  );
   store = createCodeGraphStore({ duckdbPath: dbPath });
 });
 afterEach(async () => {
@@ -54,11 +57,17 @@ describe("CodeGraphStore embeddings", () => {
   });
 
   it("persists vectors via updateNodeEmbeddings after the node exists", async () => {
-    await store.replaceFile(ROOT, "a.ts", { contentHash: "h1", nodes: [fileNode()], edges: [] });
+    await store.replaceFile(ROOT, "a.ts", {
+      contentHash: "h1",
+      nodes: [fileNode()],
+      edges: [],
+    });
 
     await store.updateNodeEmbeddings(
       ROOT,
-      new Map([["F1", { vector: [1, 2], provider: "openai/text-embedding-3-small" }]]),
+      new Map([
+        ["F1", { vector: [1, 2], provider: "openai/text-embedding-3-small" }],
+      ]),
     );
 
     const graph = await store.loadGraph(ROOT);
@@ -66,14 +75,22 @@ describe("CodeGraphStore embeddings", () => {
   });
 
   it("updateNodeEmbeddings is a no-op for an empty map", async () => {
-    await store.replaceFile(ROOT, "a.ts", { contentHash: "h1", nodes: [fileNode()], edges: [] });
+    await store.replaceFile(ROOT, "a.ts", {
+      contentHash: "h1",
+      nodes: [fileNode()],
+      edges: [],
+    });
     await store.updateNodeEmbeddings(ROOT, new Map());
     const graph = await store.loadGraph(ROOT);
     expect(graph.nodes.get("F1")?.embedding).toBeUndefined();
   });
 
   it("leaves embedding undefined when never set", async () => {
-    await store.replaceFile(ROOT, "a.ts", { contentHash: "h1", nodes: [fileNode()], edges: [] });
+    await store.replaceFile(ROOT, "a.ts", {
+      contentHash: "h1",
+      nodes: [fileNode()],
+      edges: [],
+    });
     const graph = await store.loadGraph(ROOT);
     expect(graph.nodes.get("F1")?.embedding).toBeUndefined();
     expect(graph.nodes.get("F1")?.embeddingProvider).toBeUndefined();

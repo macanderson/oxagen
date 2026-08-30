@@ -19,7 +19,14 @@ import type { StageEvent } from "../agent/trace.js";
 export const ENGINE_DEFAULT_MAX_STEPS = 256;
 
 /** The six tools the TOOLS panel always shows, in display order; anything else tallies under "other". */
-export const TRACKED_TOOLS = ["code_graph", "edit_file", "write_file", "read_file", "bash", "grep"] as const;
+export const TRACKED_TOOLS = [
+  "code_graph",
+  "edit_file",
+  "write_file",
+  "read_file",
+  "bash",
+  "grep",
+] as const;
 export type TrackedTool = (typeof TRACKED_TOOLS)[number];
 /** Bucket key for any tool call outside {@link TRACKED_TOOLS} (list_dir, glob, subagent dispatch, MCP tools…). */
 export const OTHER_TOOLS_KEY = "other";
@@ -55,7 +62,13 @@ export interface TelemetryState {
 
 export const INITIAL_TELEMETRY_STATE: TelemetryState = {
   models: {},
-  turn: { phase: "idle", step: 0, maxStep: ENGINE_DEFAULT_MAX_STEPS, reviseRound: 0, turnStartedAt: null },
+  turn: {
+    phase: "idle",
+    step: 0,
+    maxStep: ENGINE_DEFAULT_MAX_STEPS,
+    reviseRound: 0,
+    turnStartedAt: null,
+  },
   tools: {},
 };
 
@@ -98,11 +111,16 @@ export function parseJudgeModel(stage: StageEvent): string | undefined {
 
 /** Bucket a tool name into one of {@link TRACKED_TOOLS} or {@link OTHER_TOOLS_KEY}. */
 export function toolBucket(name: string): string {
-  return (TRACKED_TOOLS as readonly string[]).includes(name) ? name : OTHER_TOOLS_KEY;
+  return (TRACKED_TOOLS as readonly string[]).includes(name)
+    ? name
+    : OTHER_TOOLS_KEY;
 }
 
 /** Pure reducer — mirrors the shape of scroll.ts's `scrollReducer`. */
-export function telemetryReducer(state: TelemetryState, action: TelemetryAction): TelemetryState {
+export function telemetryReducer(
+  state: TelemetryState,
+  action: TelemetryAction,
+): TelemetryState {
   switch (action.type) {
     case "turn-start":
       return {
@@ -130,7 +148,10 @@ export function telemetryReducer(state: TelemetryState, action: TelemetryAction)
         turn: {
           ...state.turn,
           phase: stage.kind,
-          reviseRound: stage.kind === "revise" ? state.turn.reviseRound + 1 : state.turn.reviseRound,
+          reviseRound:
+            stage.kind === "revise"
+              ? state.turn.reviseRound + 1
+              : state.turn.reviseRound,
         },
       };
     }

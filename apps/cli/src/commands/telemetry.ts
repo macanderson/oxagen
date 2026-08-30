@@ -18,7 +18,7 @@
  * no options object to carry `json` — and program.tsx declares none. `status`
  * is nonetheless routed through `out.data` so it is single-line-JSON-ready the
  * moment a flag can be threaded (which needs both a program.tsx `--json` option
- * and a signature able to carry it without breaking the bridge). See the report.
+ * and a signature able to carry it without breaking the bridge).
  */
 import { readConfig, writeConfig, getApiUrl } from "../lib/config.js";
 import { isTelemetryEnabled } from "../telemetry/usage.js";
@@ -57,7 +57,9 @@ export function telemetryOn(writer: CommandWriter = stdoutWriter): void {
 export function telemetryOff(writer: CommandWriter = stdoutWriter): void {
   const config = readConfig();
   writeConfig({ telemetry: { ...config.telemetry, enabled: false } });
-  createOutput({}, writer).info("✓ Telemetry disabled — no usage data will be sent.");
+  createOutput({}, writer).info(
+    "✓ Telemetry disabled — no usage data will be sent.",
+  );
 }
 
 const SUBCOMMANDS = ["on", "off", "status"] as const;

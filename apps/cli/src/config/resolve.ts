@@ -54,7 +54,12 @@ import {
  * > ORG); as-is, it is "most authoritative wins" order for locked conflicts
  * (ORG > USER > WORKSPACE > REPO) — see design.md §3.
  */
-export const CONFIG_SCOPE_ORDER: readonly ConfigScope[] = ["org", "user", "workspace", "repo"];
+export const CONFIG_SCOPE_ORDER: readonly ConfigScope[] = [
+  "org",
+  "user",
+  "workspace",
+  "repo",
+];
 
 const SCOPE_FILE_LABEL: Record<ConfigScope, string> = {
   org: "managed.json",
@@ -121,13 +126,20 @@ export function getConfigScopePaths(
   };
 }
 
-function loadConfigScope(scope: ConfigScope, path: string): WorkspaceConfigScopeFile {
+function loadConfigScope(
+  scope: ConfigScope,
+  path: string,
+): WorkspaceConfigScopeFile {
   if (!existsSync(path)) return { scope, path };
   let raw: string;
   try {
     raw = readFileSync(path, "utf8");
   } catch (err) {
-    return { scope, path, error: err instanceof Error ? err.message : String(err) };
+    return {
+      scope,
+      path,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
   let json: unknown;
   try {
@@ -144,7 +156,9 @@ function loadConfigScope(scope: ConfigScope, path: string): WorkspaceConfigScope
     return {
       scope,
       path,
-      error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
+      error: parsed.error.issues
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; "),
     };
   }
   return { scope, path, config: parsed.data };
@@ -172,7 +186,11 @@ function resolveContributions<T>(
   const authoritative = contributions.filter((c) => c.authority !== undefined);
   if (authoritative.length > 0) {
     const winner = authoritative[0]!;
-    return { value: winner.value, scope: winner.scope, reason: winner.authority! };
+    return {
+      value: winner.value,
+      scope: winner.scope,
+      reason: winner.authority!,
+    };
   }
   const winner = contributions[contributions.length - 1]!;
   return { value: winner.value, scope: winner.scope, reason: "most-specific" };
@@ -183,7 +201,11 @@ function resolveContributions<T>(
  * (managed.json is implicitly locked in full), otherwise true when `path` or
  * one of its ancestor paths appears in that scope's `locked` declaration.
  */
-function isPathLocked(scope: ConfigScope, path: string, scopeConfig: WorkspaceConfig): boolean {
+function isPathLocked(
+  scope: ConfigScope,
+  path: string,
+  scopeConfig: WorkspaceConfig,
+): boolean {
   if (scope === "org") return true;
   const locked = scopeConfig.locked;
   if (!locked || locked.length === 0) return false;
@@ -218,14 +240,25 @@ function mergeAtPath(
   if (contributions.every((c) => isPlainObject(c.value))) {
     const subKeys = new Set<string>();
     for (const c of contributions) {
-      for (const k of Object.keys(c.value as Record<string, unknown>)) subKeys.add(k);
+      for (const k of Object.keys(c.value as Record<string, unknown>))
+        subKeys.add(k);
     }
     const result: Record<string, unknown> = {};
     for (const subKey of subKeys) {
       const subContributions = contributions
-        .filter((c) => (c.value as Record<string, unknown>)[subKey] !== undefined)
-        .map((c) => ({ scope: c.scope, value: (c.value as Record<string, unknown>)[subKey] }));
-      const subResult = mergeAtPath(`${path}.${subKey}`, subContributions, scopeConfigs, provenance);
+        .filter(
+          (c) => (c.value as Record<string, unknown>)[subKey] !== undefined,
+        )
+        .map((c) => ({
+          scope: c.scope,
+          value: (c.value as Record<string, unknown>)[subKey],
+        }));
+      const subResult = mergeAtPath(
+        `${path}.${subKey}`,
+        subContributions,
+        scopeConfigs,
+        provenance,
+      );
       if (subResult !== undefined) result[subKey] = subResult;
     }
     return result;
@@ -234,12 +267,20 @@ function mergeAtPath(
   const withAuthority: Contribution<unknown>[] = contributions.map((c) => {
     const scopeConfig = scopeConfigs.get(c.scope)!;
     const authority: WinReason | undefined =
-      c.scope === "org" ? "managed" : isPathLocked(c.scope, path, scopeConfig) ? "locked" : undefined;
+      c.scope === "org"
+        ? "managed"
+        : isPathLocked(c.scope, path, scopeConfig)
+          ? "locked"
+          : undefined;
     return { scope: c.scope, value: c.value, authority };
   });
   const resolved = resolveContributions(withAuthority);
   if (resolved) {
-    provenance[path] = { scope: resolved.scope, locked: resolved.reason !== "most-specific", reason: resolved.reason };
+    provenance[path] = {
+      scope: resolved.scope,
+      locked: resolved.reason !== "most-specific",
+      reason: resolved.reason,
+    };
   }
   return resolved?.value;
 }
@@ -256,7 +297,8 @@ function mergeLanguages(
 ): void {
   const languageNames = new Set<string>();
   for (const sf of valid) {
-    for (const lang of Object.keys(sf.config.languages ?? {})) languageNames.add(lang);
+    for (const lang of Object.keys(sf.config.languages ?? {}))
+      languageNames.add(lang);
   }
   if (languageNames.size === 0) return;
 
@@ -267,14 +309,23 @@ function mergeLanguages(
     const voiceContributions: { scope: ConfigScope; value: unknown }[] = [];
     for (const sf of valid) {
       const voice = sf.config.languages?.[lang]?.voice;
-      if (voice !== undefined) voiceContributions.push({ scope: sf.scope, value: voice });
+      if (voice !== undefined)
+        voiceContributions.push({ scope: sf.scope, value: voice });
     }
     if (voiceContributions.length > 0) {
-      const voice = mergeAtPath(`languages.${lang}.voice`, voiceContributions, scopeConfigs, provenance);
+      const voice = mergeAtPath(
+        `languages.${lang}.voice`,
+        voiceContributions,
+        scopeConfigs,
+        provenance,
+      );
       if (voice !== undefined) entry.voice = voice as LanguageVoice;
     }
 
-    const itemsById = new Map<string, { scope: ConfigScope; item: LanguageItem }[]>();
+    const itemsById = new Map<
+      string,
+      { scope: ConfigScope; item: LanguageItem }[]
+    >();
     for (const sf of valid) {
       for (const item of sf.config.languages?.[lang]?.items ?? []) {
         const arr = itemsById.get(item.id) ?? [];
@@ -285,17 +336,19 @@ function mergeLanguages(
     if (itemsById.size > 0) {
       const items: LanguageItem[] = [];
       for (const [id, contributions] of itemsById) {
-        const withAuthority: Contribution<LanguageItem>[] = contributions.map((c) => ({
-          scope: c.scope,
-          value: c.item,
-          authority: c.item.locked
-            ? "locked"
-            : c.item.enforced
-              ? "enforced"
-              : c.scope === "org"
-                ? "managed"
-                : undefined,
-        }));
+        const withAuthority: Contribution<LanguageItem>[] = contributions.map(
+          (c) => ({
+            scope: c.scope,
+            value: c.item,
+            authority: c.item.locked
+              ? "locked"
+              : c.item.enforced
+                ? "enforced"
+                : c.scope === "org"
+                  ? "managed"
+                  : undefined,
+          }),
+        );
         const resolved = resolveContributions(withAuthority);
         if (resolved) {
           items.push(resolved.value);
@@ -325,7 +378,11 @@ function mergeStringListByValue(
   for (const sf of valid) {
     for (const v of getList(sf.config) ?? []) {
       const arr = byValue.get(v) ?? [];
-      arr.push({ scope: sf.scope, value: v, authority: sf.scope === "org" ? "managed" : undefined });
+      arr.push({
+        scope: sf.scope,
+        value: v,
+        authority: sf.scope === "org" ? "managed" : undefined,
+      });
       byValue.set(v, arr);
     }
   }
@@ -346,7 +403,14 @@ function mergeStringListByValue(
   return result;
 }
 
-const SOURCE_CATEGORIES = ["conventions", "skills", "agents", "mcp", "commands", "tools"] as const;
+const SOURCE_CATEGORIES = [
+  "conventions",
+  "skills",
+  "agents",
+  "mcp",
+  "commands",
+  "tools",
+] as const;
 
 function mergeSources(
   valid: ValidScopeFile[],
@@ -356,7 +420,12 @@ function mergeSources(
   if (!valid.some((sf) => sf.config.sources !== undefined)) return;
 
   const sources: Record<string, unknown> = {};
-  const scan = mergeStringListByValue(valid, (c) => c.sources?.scan, "sources.scan", provenance);
+  const scan = mergeStringListByValue(
+    valid,
+    (c) => c.sources?.scan,
+    "sources.scan",
+    provenance,
+  );
   if (scan) sources.scan = scan;
 
   for (const scopeKey of ["workspace", "user"] as const) {
@@ -392,18 +461,26 @@ export function mergeWorkspaceConfigs(scopeFiles: WorkspaceConfigScopeFile[]): {
   provenance: Record<string, FieldProvenance>;
 } {
   const provenance: Record<string, FieldProvenance> = {};
-  const valid = scopeFiles.filter((sf): sf is ValidScopeFile => sf.config !== undefined);
-  const scopeConfigs = new Map<ConfigScope, WorkspaceConfig>(valid.map((sf) => [sf.scope, sf.config]));
+  const valid = scopeFiles.filter(
+    (sf): sf is ValidScopeFile => sf.config !== undefined,
+  );
+  const scopeConfigs = new Map<ConfigScope, WorkspaceConfig>(
+    valid.map((sf) => [sf.scope, sf.config]),
+  );
   const merged: Record<string, unknown> = {};
 
   const topKeys = new Set<string>();
-  for (const sf of valid) for (const k of Object.keys(sf.config)) topKeys.add(k);
+  for (const sf of valid)
+    for (const k of Object.keys(sf.config)) topKeys.add(k);
 
   for (const key of topKeys) {
     if (key === "locked" || ACCUMULATE_KEYS.has(key)) continue;
     const contributions = valid
       .filter((sf) => (sf.config as Record<string, unknown>)[key] !== undefined)
-      .map((sf) => ({ scope: sf.scope, value: (sf.config as Record<string, unknown>)[key] }));
+      .map((sf) => ({
+        scope: sf.scope,
+        value: (sf.config as Record<string, unknown>)[key],
+      }));
     const value = mergeAtPath(key, contributions, scopeConfigs, provenance);
     if (value !== undefined) merged[key] = value;
   }
@@ -445,7 +522,9 @@ export function resolveWorkspaceConfig(
     if (hit) return hit;
   }
 
-  const scopes = CONFIG_SCOPE_ORDER.map((scope) => loadConfigScope(scope, paths[scope]));
+  const scopes = CONFIG_SCOPE_ORDER.map((scope) =>
+    loadConfigScope(scope, paths[scope]),
+  );
   const { config, provenance } = mergeWorkspaceConfigs(scopes);
   const result: ResolvedWorkspaceConfig = { config, scopes, provenance };
   if (!opts.noCache) cache.set(cacheKey, result);
@@ -470,11 +549,25 @@ function reasonText(scope: ConfigScope, reason: WinReason): string {
  * "languages.typescript.items.no-any") and whether that win was governed
  * (locked/enforced/managed) or simply the most specific scope that set it.
  */
-export function explain(cwd: string, path: string, opts: ResolveWorkspaceConfigOptions = {}): ExplainResult {
+export function explain(
+  cwd: string,
+  path: string,
+  opts: ResolveWorkspaceConfigOptions = {},
+): ExplainResult {
   const { provenance } = resolveWorkspaceConfig(cwd, opts);
   const hit = provenance[path];
   if (!hit) {
-    return { path, scope: null, locked: false, reason: `${path} is not set in any scope` };
+    return {
+      path,
+      scope: null,
+      locked: false,
+      reason: `${path} is not set in any scope`,
+    };
   }
-  return { path, scope: hit.scope, locked: hit.locked, reason: reasonText(hit.scope, hit.reason) };
+  return {
+    path,
+    scope: hit.scope,
+    locked: hit.locked,
+    reason: reasonText(hit.scope, hit.reason),
+  };
 }

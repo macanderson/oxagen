@@ -30,7 +30,12 @@ export function ActivityPanel({
   lines: ActivityLine[];
 }): React.ReactElement {
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={theme.dim} paddingX={1}>
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={theme.dim}
+      paddingX={1}
+    >
       <Box marginBottom={1} justifyContent="space-between">
         <Box>
           <Text bold color={theme.amber}>

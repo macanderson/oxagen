@@ -7,7 +7,11 @@
  * that routed one path around the port would drop its event — asserted here.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import type { AgentAi, ObjectRunArgs, ObjectRunResult } from "@oxagen/agent-engine";
+import type {
+  AgentAi,
+  ObjectRunArgs,
+  ObjectRunResult,
+} from "@oxagen/agent-engine";
 
 // Mock the CLI debug channel so we can assert an onMetrics failure is surfaced
 // (not swallowed) while an aborted-turn usage rejection stays silent.
@@ -30,15 +34,18 @@ function fakeStream(usage: { inputTokens: number; outputTokens: number }): {
 }
 
 /** Build a fake AgentAi whose behaviour the test controls. */
-function makeFakeAi(
-  overrides: Partial<AgentAi> = {},
-): AgentAi {
+function makeFakeAi(overrides: Partial<AgentAi> = {}): AgentAi {
   const base: AgentAi = {
     // The wrapper only reads `.usage` off the stream result; the fake exposes
     // just that, cast through `unknown` since it isn't a full StreamRunResult.
     stream: ((_args) =>
-      fakeStream({ inputTokens: 500, outputTokens: 200 }) as unknown) as AgentAi["stream"],
-    generateObject: (async <T,>(args: ObjectRunArgs<T>): Promise<ObjectRunResult<T>> => ({
+      fakeStream({
+        inputTokens: 500,
+        outputTokens: 200,
+      }) as unknown) as AgentAi["stream"],
+    generateObject: (async <T>(
+      args: ObjectRunArgs<T>,
+    ): Promise<ObjectRunResult<T>> => ({
       object: {} as T,
       usage: { inputTokens: 100, outputTokens: 50 },
     })) as AgentAi["generateObject"],
@@ -74,7 +81,9 @@ describe("createMeteredAi", () => {
 
   it("emits a metrics event when a stream's usage settles", async () => {
     const events: MetricsEvent[] = [];
-    const ai = createMeteredAi(makeFakeAi(), { onMetrics: (ev) => events.push(ev) });
+    const ai = createMeteredAi(makeFakeAi(), {
+      onMetrics: (ev) => events.push(ev),
+    });
     const result = ai.stream({
       model: "anthropic/claude-opus-4",
       system: "s",
@@ -85,7 +94,12 @@ describe("createMeteredAi", () => {
     await result.usage; // let the settle handler run
     await Promise.resolve();
     expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ tokensIn: 500, tokensOut: 200, cachedTokens: 0, kind: "model_call" });
+    expect(events[0]).toMatchObject({
+      tokensIn: 500,
+      tokensOut: 200,
+      cachedTokens: 0,
+      kind: "model_call",
+    });
   });
 
   it("flattens a stream's nested cache-read usage into the metrics event, priced at the discounted rate (Bug: live dock was missing cache tokens)", async () => {
@@ -123,7 +137,9 @@ describe("createMeteredAi", () => {
     const events: MetricsEvent[] = [];
     const ai = createMeteredAi(
       makeFakeAi({
-        generateObject: (async <T,>(_args: ObjectRunArgs<T>): Promise<ObjectRunResult<T>> => ({
+        generateObject: (async <T>(
+          _args: ObjectRunArgs<T>,
+        ): Promise<ObjectRunResult<T>> => ({
           object: {} as T,
           usage: {
             inputTokens: 1_000_000,
@@ -134,7 +150,11 @@ describe("createMeteredAi", () => {
       }),
       { onMetrics: (ev) => events.push(ev) },
     );
-    await ai.generateObject({ model: "anthropic/claude-sonnet-4.6", schema: {} as never, prompt: "x" });
+    await ai.generateObject({
+      model: "anthropic/claude-sonnet-4.6",
+      schema: {} as never,
+      prompt: "x",
+    });
     expect(events).toHaveLength(1);
     expect(events[0]!.cachedTokens).toBe(1_000_000);
     expect(events[0]!.costUsd).toBeCloseTo(0.3);
@@ -142,10 +162,16 @@ describe("createMeteredAi", () => {
 
   it("records evaluator + worker + judge — every path contributes", async () => {
     const events: MetricsEvent[] = [];
-    const ai = createMeteredAi(makeFakeAi(), { onMetrics: (ev) => events.push(ev) });
+    const ai = createMeteredAi(makeFakeAi(), {
+      onMetrics: (ev) => events.push(ev),
+    });
 
     // Simulate a turn: evaluate (generateObject) → worker (stream) → judge (generateObject).
-    await ai.generateObject({ model: "eval/model", schema: {} as never, prompt: "e" });
+    await ai.generateObject({
+      model: "eval/model",
+      schema: {} as never,
+      prompt: "e",
+    });
     await ai.stream({
       model: "worker/model",
       system: "s",
@@ -153,7 +179,11 @@ describe("createMeteredAi", () => {
       tools: {},
       stopWhen: (() => false) as never,
     }).usage;
-    await ai.generateObject({ model: "judge/model", schema: {} as never, prompt: "j" });
+    await ai.generateObject({
+      model: "judge/model",
+      schema: {} as never,
+      prompt: "j",
+    });
     await Promise.resolve();
 
     const models = events.map((e) => e.model).sort();
@@ -180,7 +210,9 @@ describe("createMeteredAi", () => {
     await result.usage;
     await Promise.resolve();
 
-    const call = debugLogMock.mock.calls.find((c) => c[1] === "metrics.emit-failed");
+    const call = debugLogMock.mock.calls.find(
+      (c) => c[1] === "metrics.emit-failed",
+    );
     expect(call).toBeDefined();
     expect(call?.[0]).toBe("error");
     expect((call?.[2] as { message: string }).message).toContain("emit boom");
@@ -192,7 +224,9 @@ describe("createMeteredAi", () => {
     const ai = createMeteredAi(
       makeFakeAi({
         stream: ((_args) =>
-          ({ usage: Promise.reject(new Error("aborted")) }) as unknown) as AgentAi["stream"],
+          ({
+            usage: Promise.reject(new Error("aborted")),
+          }) as unknown) as AgentAi["stream"],
       }),
       { onMetrics },
     );
@@ -211,7 +245,9 @@ describe("createMeteredAi", () => {
     await Promise.resolve();
 
     expect(onMetrics).not.toHaveBeenCalled();
-    expect(debugLogMock.mock.calls.find((c) => c[1] === "metrics.emit-failed")).toBeUndefined();
+    expect(
+      debugLogMock.mock.calls.find((c) => c[1] === "metrics.emit-failed"),
+    ).toBeUndefined();
   });
 
   it("bounds a generateObject call per-call and retries on timeout", async () => {
@@ -220,7 +256,9 @@ describe("createMeteredAi", () => {
     let attempts = 0;
     const ai = createMeteredAi(
       makeFakeAi({
-        generateObject: (async <T,>(args: ObjectRunArgs<T>): Promise<ObjectRunResult<T>> => {
+        generateObject: (async <T>(
+          args: ObjectRunArgs<T>,
+        ): Promise<ObjectRunResult<T>> => {
           attempts++;
           if (attempts === 1) {
             // First attempt hangs until its per-call deadline aborts the signal.
@@ -232,20 +270,34 @@ describe("createMeteredAi", () => {
               );
             });
           }
-          return { object: {} as T, usage: { inputTokens: 10, outputTokens: 5 } };
+          return {
+            object: {} as T,
+            usage: { inputTokens: 10, outputTokens: 5 },
+          };
         }) as AgentAi["generateObject"],
       }),
       {
-        timeouts: { perModelCallMs: 1_000, retry: { maxRetries: 2, backoffMs: 0 } },
+        timeouts: {
+          perModelCallMs: 1_000,
+          retry: { maxRetries: 2, backoffMs: 0 },
+        },
         onLog: (l) => logs.push(l),
       },
     );
 
-    const promise = ai.generateObject({ model: "m", schema: {} as never, prompt: "p" });
+    const promise = ai.generateObject({
+      model: "m",
+      schema: {} as never,
+      prompt: "p",
+    });
     await vi.advanceTimersByTimeAsync(1_001); // trip attempt 1's deadline
     const res = await promise;
     expect(attempts).toBe(2);
     expect(res.usage.inputTokens).toBe(10);
-    expect(logs.some((l) => l.includes("scope=model_call") && l.includes("action=retry"))).toBe(true);
+    expect(
+      logs.some(
+        (l) => l.includes("scope=model_call") && l.includes("action=retry"),
+      ),
+    ).toBe(true);
   });
 });

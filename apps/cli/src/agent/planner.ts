@@ -26,7 +26,12 @@ import {
   createTurnRunner,
   withTimeout,
 } from "./timeouts.js";
-import { emptyUsage, type ModelTier, type Plan, type Task } from "./fleet/types.js";
+import {
+  emptyUsage,
+  type ModelTier,
+  type Plan,
+  type Task,
+} from "./fleet/types.js";
 import type { FleetMemory } from "./fleet/memory.js";
 import type { AgentDefinition } from "../agents/types.js";
 
@@ -36,7 +41,11 @@ import type { AgentDefinition } from "../agents/types.js";
  */
 const ENHANCE_TIMEOUT_MS = 30_000; // 30s
 
-const TIER_RANK: Record<ModelTier, number> = { fast: 0, balanced: 1, precise: 2 };
+const TIER_RANK: Record<ModelTier, number> = {
+  fast: 0,
+  balanced: 1,
+  precise: 2,
+};
 
 /** The more capable of two tiers (never under-spend on a risky task). */
 function maxTier(a: ModelTier, b: ModelTier): ModelTier {
@@ -49,7 +58,9 @@ const planSchema = z.object({
       z.object({
         id: z
           .string()
-          .describe("Short kebab-case id, unique within the plan (e.g. 'add-route')."),
+          .describe(
+            "Short kebab-case id, unique within the plan (e.g. 'add-route').",
+          ),
         title: z.string().describe("Imperative one-line title."),
         description: z
           .string()
@@ -59,10 +70,14 @@ const planSchema = z.object({
           ),
         dependsOn: z
           .array(z.string())
-          .describe("ids of tasks that must finish first (empty if independent)."),
+          .describe(
+            "ids of tasks that must finish first (empty if independent).",
+          ),
         files: z
           .array(z.string())
-          .describe("Relative paths this task will create or edit, as best you can predict."),
+          .describe(
+            "Relative paths this task will create or edit, as best you can predict.",
+          ),
         tier: z
           .enum(["fast", "balanced", "precise"])
           .describe(
@@ -164,7 +179,12 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
         startedAt: Date.now(),
         finishedAt: Date.now(),
         durationMs: 0,
-        retrieval: { symbolsQueried: [], pathsQueried: [], resolved: [], unresolved: [] },
+        retrieval: {
+          symbolsQueried: [],
+          pathsQueried: [],
+          resolved: [],
+          unresolved: [],
+        },
       };
     } else {
       throw err;
@@ -238,7 +258,8 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
 
   // Drop dependencies that point at ids no task actually has (model hallucination).
   const ids = new Set(tasks.map((t) => t.id));
-  for (const t of tasks) t.dependsOn = t.dependsOn.filter((d) => ids.has(d) && d !== t.id);
+  for (const t of tasks)
+    t.dependsOn = t.dependsOn.filter((d) => ids.has(d) && d !== t.id);
 
   return {
     id: newPlanId(),

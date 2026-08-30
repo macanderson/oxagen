@@ -23,12 +23,18 @@ const { FleetSessionManager } = await import("../manager.js");
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
 
-const tick = (ms = 10): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const tick = (ms = 10): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
-async function until(cond: () => boolean, timeoutMs = 4000, stepMs = 10): Promise<void> {
+async function until(
+  cond: () => boolean,
+  timeoutMs = 4000,
+  stepMs = 10,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!cond()) {
-    if (Date.now() > deadline) throw new Error("until(): condition not met before deadline");
+    if (Date.now() > deadline)
+      throw new Error("until(): condition not met before deadline");
     await tick(stepMs);
   }
 }
@@ -51,7 +57,9 @@ function controlledRunner(): {
 }
 
 /** A `runSession` that emits one bus event then completes — for observation tests. */
-const emittingRunner: FleetSessionManagerOptions["runSessionImpl"] = async (opts) => {
+const emittingRunner: FleetSessionManagerOptions["runSessionImpl"] = async (
+  opts,
+) => {
   opts.onLocalEvent?.({
     v: EVENT_SCHEMA_VERSION,
     sid: opts.meta.sid,
@@ -90,7 +98,8 @@ beforeEach(async () => {
 
 afterEach(async () => {
   manager?.stop();
-  if (savedDisableMemory === undefined) delete process.env["OXAGEN_DISABLE_MEMORY"];
+  if (savedDisableMemory === undefined)
+    delete process.env["OXAGEN_DISABLE_MEMORY"];
   else process.env["OXAGEN_DISABLE_MEMORY"] = savedDisableMemory;
   vi.restoreAllMocks();
   await rm(join(root, ".."), { recursive: true, force: true }).catch(() => {});
@@ -101,18 +110,26 @@ afterEach(async () => {
 describe("FleetSessionManager — dispatch, cap, queue", () => {
   it("returns a sid synchronously and respects the concurrency cap (1 running, 2 queued)", async () => {
     const { impl, started, releasers } = controlledRunner();
-    manager = new FleetSessionManager({ store, cwd, concurrency: 1, runSessionImpl: impl });
+    manager = new FleetSessionManager({
+      store,
+      cwd,
+      concurrency: 1,
+      runSessionImpl: impl,
+    });
 
     const s1 = manager.dispatch({ prompt: "one" });
     const s2 = manager.dispatch({ prompt: "two" });
     const s3 = manager.dispatch({ prompt: "three" });
 
     // Synchronous, distinct, well-formed sids.
-    for (const s of [s1, s2, s3]) expect(s).toMatch(/^s-[0-9a-z]+-[0-9a-z]{4}$/);
+    for (const s of [s1, s2, s3])
+      expect(s).toMatch(/^s-[0-9a-z]+-[0-9a-z]{4}$/);
     expect(new Set([s1, s2, s3]).size).toBe(3);
 
     // Cap: exactly one runner, two queued.
-    await until(() => manager!.runningCount === 1 && manager!.queuedCount === 2);
+    await until(
+      () => manager!.runningCount === 1 && manager!.queuedCount === 2,
+    );
 
     // Release each running session in turn; the next dequeues (FIFO) and starts.
     for (let i = 0; i < 3; i++) {
@@ -121,21 +138,30 @@ describe("FleetSessionManager — dispatch, cap, queue", () => {
       if (i < 2) await until(() => started.length >= i + 2);
     }
 
-    await until(() => manager!.runningCount === 0 && manager!.queuedCount === 0);
+    await until(
+      () => manager!.runningCount === 0 && manager!.queuedCount === 0,
+    );
     expect(started.length).toBe(3);
     expect(new Set(started)).toEqual(new Set([s1, s2, s3]));
   });
 
   it("drain cancels queued sessions and waits for the running one to settle", async () => {
     const { impl, started, releasers } = controlledRunner();
-    manager = new FleetSessionManager({ store, cwd, concurrency: 1, runSessionImpl: impl });
+    manager = new FleetSessionManager({
+      store,
+      cwd,
+      concurrency: 1,
+      runSessionImpl: impl,
+    });
 
     const sids = [
       manager.dispatch({ prompt: "one" }),
       manager.dispatch({ prompt: "two" }),
       manager.dispatch({ prompt: "three" }),
     ];
-    await until(() => manager!.runningCount === 1 && manager!.queuedCount === 2);
+    await until(
+      () => manager!.runningCount === 1 && manager!.queuedCount === 2,
+    );
 
     // dispatch's createSession is async, so whichever won the race is the one running.
     const runningSid = started[0] as string;
@@ -173,13 +199,21 @@ describe("FleetSessionManager — control channel", () => {
     const tail = store.tailInbox(meta.sid, (m) => inbox.push(m));
 
     await manager.send(meta.sid, "please also add tests");
-    await until(() => inbox.some((m) => m.type === "message" && m.text === "please also add tests"));
+    await until(() =>
+      inbox.some(
+        (m) => m.type === "message" && m.text === "please also add tests",
+      ),
+    );
     tail.stop();
   });
 
   it("cancel appends a cancel and never signals an in-process session", async () => {
     const killSpy = vi.spyOn(process, "kill");
-    manager = new FleetSessionManager({ store, cwd, runSessionImpl: emittingRunner });
+    manager = new FleetSessionManager({
+      store,
+      cwd,
+      runSessionImpl: emittingRunner,
+    });
     const sid = manager.dispatch({ prompt: "own work" });
     await pollMetaExists(store, sid);
 
@@ -230,7 +264,11 @@ describe("FleetSessionManager — control channel", () => {
 describe("FleetSessionManager — detached dispatch", () => {
   it("delegates to dispatchDetachedSession, spawning a worker with the sid", async () => {
     const spawnCalls: Array<[string, string[], unknown]> = [];
-    const spawnImpl: FleetSessionManagerOptions["spawnImpl"] = (command, args, options) => {
+    const spawnImpl: FleetSessionManagerOptions["spawnImpl"] = (
+      command,
+      args,
+      options,
+    ) => {
       spawnCalls.push([command, args, options]);
       return { unref: () => {} };
     };
@@ -258,7 +296,11 @@ describe("FleetSessionManager — detached dispatch", () => {
 describe("FleetSessionManager — aggregate observation", () => {
   it("adopts a foreign session's events + roster, and never tails its own", async () => {
     const tailSpy = vi.spyOn(store, "tailEvents");
-    manager = new FleetSessionManager({ store, cwd, runSessionImpl: emittingRunner });
+    manager = new FleetSessionManager({
+      store,
+      cwd,
+      runSessionImpl: emittingRunner,
+    });
 
     const events: SessionEvent[] = [];
     const rosters: SessionMetaView[][] = [];
@@ -293,11 +335,18 @@ describe("FleetSessionManager — aggregate observation", () => {
       pid: process.pid,
     });
     writer.append({ type: "session.state", state: "running" });
-    writer.append({ type: "message", role: "user", text: "foreign prompt", turn: 1 });
+    writer.append({
+      type: "message",
+      role: "user",
+      text: "foreign prompt",
+      turn: 1,
+    });
     await writer.flush();
 
     // Adoption: the foreign session's events flow onto the merged stream.
-    await until(() => events.some((e) => e.sid === fsid && e.type === "message"));
+    await until(() =>
+      events.some((e) => e.sid === fsid && e.type === "message"),
+    );
     // Its roster entry appears.
     await until(() => manager!.rosterSnapshot().some((s) => s.sid === fsid));
     // Both sessions are observed by the watcher (so the tail decision has run for each).
@@ -309,7 +358,9 @@ describe("FleetSessionManager — aggregate observation", () => {
     expect(tailedSids).not.toContain(ownSid);
 
     // No double-emission for the foreign session's session.start either.
-    const foreignStarts = events.filter((e) => e.sid === fsid && e.type === "session.start");
+    const foreignStarts = events.filter(
+      (e) => e.sid === fsid && e.type === "session.start",
+    );
     expect(foreignStarts.length).toBe(1);
     expect(rosters.length).toBeGreaterThan(0);
   });
@@ -324,7 +375,8 @@ async function pollMetaExists(
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     if ((await s.readMeta(sid)) !== null) return;
-    if (Date.now() > deadline) throw new Error("meta did not appear before deadline");
+    if (Date.now() > deadline)
+      throw new Error("meta did not appear before deadline");
     await tick(10);
   }
 }

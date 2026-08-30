@@ -25,9 +25,9 @@ import { basename, dirname, join } from "node:path";
  * (memoryKind + memoryClass/enforcementScore + lesson) so the same lessons can
  * be promoted to the knowledge graph.
  *
- * This type lives here (with its only store) rather than in the deleted
- * `fleet/types.ts` — task/plan/snapshot types now come from `@oxagen/agent-engine`,
- * but `MemoryRecord` is specific to this local lesson store and stays CLI-side.
+ * It lives here, with its only store, rather than in `fleet/types.ts` — that
+ * module forwards the engine's task/plan/snapshot shapes, and this record is
+ * specific to the CLI's local lesson store.
  */
 export interface MemoryRecord {
   id: string;
@@ -58,13 +58,47 @@ function projectKey(cwd: string): string {
 }
 
 function memoryPath(cwd: string): string {
-  return join(homedir(), ".config", "oxagen", "memories", `${projectKey(cwd)}.jsonl`);
+  return join(
+    homedir(),
+    ".config",
+    "oxagen",
+    "memories",
+    `${projectKey(cwd)}.jsonl`,
+  );
 }
 
 const STOPWORDS = new Set([
-  "the", "a", "an", "and", "or", "to", "of", "in", "on", "for", "with", "is",
-  "are", "be", "this", "that", "it", "as", "at", "by", "from", "into", "we",
-  "you", "i", "fix", "add", "the", "use", "code", "file", "files",
+  "the",
+  "a",
+  "an",
+  "and",
+  "or",
+  "to",
+  "of",
+  "in",
+  "on",
+  "for",
+  "with",
+  "is",
+  "are",
+  "be",
+  "this",
+  "that",
+  "it",
+  "as",
+  "at",
+  "by",
+  "from",
+  "into",
+  "we",
+  "you",
+  "i",
+  "fix",
+  "add",
+  "use",
+  "code",
+  "file",
+  "files",
 ]);
 
 /** Split text into lowercased, de-stopped terms for lexical scoring. */
@@ -78,7 +112,10 @@ export interface FleetMemory {
   /** Append a weighted lesson. Never throws — recording must not break a run. */
   record(rec: Omit<MemoryRecord, "id" | "createdAt">): void;
   /** Return the most relevant lessons for a query, best first. */
-  recall(query: string, opts?: { limit?: number; files?: string[] }): MemoryRecord[];
+  recall(
+    query: string,
+    opts?: { limit?: number; files?: string[] },
+  ): MemoryRecord[];
   /** All records, newest first (for the agents screen memory panel). */
   all(): MemoryRecord[];
 }
@@ -143,7 +180,7 @@ export function openFleetMemory(cwd: string): FleetMemory {
     recall(query, opts = {}) {
       const limit = opts.limit ?? 5;
       const qTerms = new Set(terms(query));
-      const qFiles = new Set((opts.files ?? []).map((f) => f));
+      const qFiles = new Set(opts.files ?? []);
 
       const scored = load()
         .map((r) => {
@@ -168,10 +205,9 @@ export function openFleetMemory(cwd: string): FleetMemory {
 }
 
 /**
- * Recall boost from a lesson's epistemic class + enforcement — mirrors the old
- * weight tiers (low=0, high=1, critical=2): OBSERVATION never boosts, a RULE
- * boosts by its enforcement strength, and FACT (always enforcement 100) boosts
- * like a strong RULE.
+ * Recall boost from a lesson's epistemic class + enforcement, on a 0–2 scale:
+ * OBSERVATION never boosts, a RULE boosts by its enforcement strength (2 at
+ * ≥90, else 1), and FACT (always enforcement 100) boosts like a strong RULE.
  */
 function classBoost(r: MemoryRecord): number {
   if (r.memoryClass === "OBSERVATION") return 0;
@@ -179,7 +215,7 @@ function classBoost(r: MemoryRecord): number {
   return (r.enforcementScore ?? 0) >= 90 ? 2 : 1;
 }
 
-/** Marker glyph for a lesson's class/enforcement, mirroring the old weight marks. */
+/** Marker glyph for a lesson's class/enforcement: `·` / `!` / `‼` by strength. */
 function classMark(r: MemoryRecord): string {
   if (r.memoryClass === "OBSERVATION") return "·";
   return classBoost(r) >= 2 ? "‼" : "!";
@@ -191,7 +227,9 @@ export function formatLessons(records: MemoryRecord[]): string {
   return records
     .map((r) => {
       const mark = classMark(r);
-      const files = r.files.length ? ` [${r.files.slice(0, 3).join(", ")}]` : "";
+      const files = r.files.length
+        ? ` [${r.files.slice(0, 3).join(", ")}]`
+        : "";
       return `${mark} (${r.memoryKind}) ${r.lesson}${files}`;
     })
     .join("\n");

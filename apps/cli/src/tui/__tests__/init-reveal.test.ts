@@ -6,7 +6,11 @@
  */
 import { describe, it, expect } from "vitest";
 import { WORDMARK } from "../banner.js";
-import { revealFrame, isRevealComplete, WORDMARK_WIDTH } from "../init-reveal.js";
+import {
+  revealFrame,
+  isRevealComplete,
+  WORDMARK_WIDTH,
+} from "../init-reveal.js";
 
 describe("WORDMARK_WIDTH", () => {
   it("matches the longest banner.tsx WORDMARK line", () => {

@@ -27,7 +27,11 @@ import { WORDMARK } from "../banner.js";
  * completes in ~350ms in isolation; the deadline is generous so a saturated
  * runner still passes, while the happy path returns the instant `cond` holds.
  */
-async function until(cond: () => boolean, timeoutMs = 20000, stepMs = 10): Promise<void> {
+async function until(
+  cond: () => boolean,
+  timeoutMs = 20000,
+  stepMs = 10,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!cond() && Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, stepMs));
@@ -48,7 +52,9 @@ describe("InitRevealView", () => {
 
   it("calls onDone once the reveal completes and holds", async () => {
     const onDone = vi.fn();
-    const { unmount } = render(<InitRevealView onDone={onDone} tickMs={1} holdMs={5} />);
+    const { unmount } = render(
+      <InitRevealView onDone={onDone} tickMs={1} holdMs={5} />,
+    );
 
     await until(() => onDone.mock.calls.length >= 1);
     expect(onDone).toHaveBeenCalledTimes(1);
@@ -57,7 +63,9 @@ describe("InitRevealView", () => {
 
   it("does not call onDone before the reveal completes", async () => {
     const onDone = vi.fn();
-    const { unmount } = render(<InitRevealView onDone={onDone} tickMs={1000} holdMs={1000} />);
+    const { unmount } = render(
+      <InitRevealView onDone={onDone} tickMs={1000} holdMs={1000} />,
+    );
     await new Promise((r) => setTimeout(r, 20));
     expect(onDone).not.toHaveBeenCalled();
     unmount();

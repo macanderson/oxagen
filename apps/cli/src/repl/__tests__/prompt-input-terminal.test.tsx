@@ -12,7 +12,9 @@ const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 30));
 
 describe("PromptInput terminal mode (!command)", () => {
   it("shows the normal ❯ prompt with no bang", async () => {
-    const { lastFrame, stdin } = render(<PromptInput onSubmit={() => {}} busy={false} />);
+    const { lastFrame, stdin } = render(
+      <PromptInput onSubmit={() => {}} busy={false} />,
+    );
     stdin.write("ls");
     await tick();
     const frame = lastFrame() ?? "";
@@ -21,7 +23,9 @@ describe("PromptInput terminal mode (!command)", () => {
   });
 
   it("flips to a $ shell prompt + hint the instant the buffer opens with !", async () => {
-    const { lastFrame, stdin } = render(<PromptInput onSubmit={() => {}} busy={false} />);
+    const { lastFrame, stdin } = render(
+      <PromptInput onSubmit={() => {}} busy={false} />,
+    );
     stdin.write("!pnpm build");
     await tick();
     const frame = lastFrame() ?? "";
@@ -34,7 +38,9 @@ describe("PromptInput terminal mode (!command)", () => {
 
   it("submits the raw text including the bang so the container can route it", async () => {
     const calls: string[] = [];
-    const { stdin } = render(<PromptInput onSubmit={(t) => calls.push(t)} busy={false} />);
+    const { stdin } = render(
+      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} />,
+    );
     stdin.write("!echo hi");
     await tick();
     stdin.write("\r");

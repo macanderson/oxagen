@@ -24,15 +24,24 @@ import {
 
 describe("selectionRange", () => {
   it("normalizes a forward drag (anchor before head) unchanged", () => {
-    expect(selectionRange({ anchor: 2, head: 5 })).toEqual({ start: 2, end: 5 });
+    expect(selectionRange({ anchor: 2, head: 5 })).toEqual({
+      start: 2,
+      end: 5,
+    });
   });
 
   it("normalizes a backward drag (anchor after head)", () => {
-    expect(selectionRange({ anchor: 5, head: 2 })).toEqual({ start: 2, end: 5 });
+    expect(selectionRange({ anchor: 5, head: 2 })).toEqual({
+      start: 2,
+      end: 5,
+    });
   });
 
   it("collapses a zero-width selection to a single point", () => {
-    expect(selectionRange({ anchor: 3, head: 3 })).toEqual({ start: 3, end: 3 });
+    expect(selectionRange({ anchor: 3, head: 3 })).toEqual({
+      start: 3,
+      end: 3,
+    });
   });
 });
 
@@ -124,7 +133,11 @@ describe("replaceSelectionWith", () => {
   });
 
   it("typing a single character over a selection behaves like backspace-then-type", () => {
-    const result = replaceSelectionWith("hello world", { anchor: 0, head: 5 }, "goodbye");
+    const result = replaceSelectionWith(
+      "hello world",
+      { anchor: 0, head: 5 },
+      "goodbye",
+    );
     expect(result.text).toBe("goodbye world");
     expect(result.cursorPos).toBe(7);
   });

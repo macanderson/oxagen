@@ -32,9 +32,16 @@ function makeTools(calls: string[]): ToolSet {
 }
 
 type Exec = NonNullable<ToolSet[string]["execute"]>;
-const CALL_OPTS = { toolCallId: "test", messages: [] } as unknown as Parameters<Exec>[1];
+const CALL_OPTS = {
+  toolCallId: "test",
+  messages: [],
+} as unknown as Parameters<Exec>[1];
 
-async function call(tools: ToolSet, name: string, input: unknown): Promise<unknown> {
+async function call(
+  tools: ToolSet,
+  name: string,
+  input: unknown,
+): Promise<unknown> {
   const exec = tools[name]?.execute;
   if (!exec) throw new Error(`no execute for ${name}`);
   return exec(input as never, CALL_OPTS);
@@ -86,7 +93,10 @@ describe("wrapToolsWithGate", () => {
   it("passes an allowed tool through to the original execute", async () => {
     const calls: string[] = [];
     const permissions: Permissions = { deny: ["Bash(rm -rf*)"] };
-    const gated = wrapToolsWithGate(makeTools(calls), { cwd: CWD, permissions });
+    const gated = wrapToolsWithGate(makeTools(calls), {
+      cwd: CWD,
+      permissions,
+    });
     const result = await call(gated, "bash", { command: "git status" });
     expect(result).toBe("ran: git status");
     expect(calls).toEqual(["bash:git status"]);
@@ -98,11 +108,16 @@ describe("wrapToolsWithGate", () => {
     const gated = wrapToolsWithGate(makeTools(calls), {
       cwd: CWD,
       permissions: { deny: ["Bash(rm -rf*)"] },
-      denyReasons: { "Bash(rm -rf*)": 'rule "no-rm-rf" — Never run destructive recursive deletes.' },
+      denyReasons: {
+        "Bash(rm -rf*)":
+          'rule "no-rm-rf" — Never run destructive recursive deletes.',
+      },
       onBlocked: (_n, reason) => blocked.push(reason),
     });
     const result = await call(gated, "bash", { command: "rm -rf /tmp/x" });
-    expect(String(result)).toContain("Never run destructive recursive deletes.");
+    expect(String(result)).toContain(
+      "Never run destructive recursive deletes.",
+    );
     expect(String(result)).toContain('rule "no-rm-rf"');
     expect(calls).toEqual([]);
     expect(blocked[0]).toContain("no-rm-rf");
@@ -112,7 +127,14 @@ describe("wrapToolsWithGate", () => {
     const calls: string[] = [];
     const blocked: string[] = [];
     const hooks: Hooks = {
-      PreToolUse: [{ matcher: "bash", hooks: [{ type: "command", command: 'echo "denied by policy" >&2; exit 1' }] }],
+      PreToolUse: [
+        {
+          matcher: "bash",
+          hooks: [
+            { type: "command", command: 'echo "denied by policy" >&2; exit 1' },
+          ],
+        },
+      ],
     };
     const gated = wrapToolsWithGate(makeTools(calls), {
       cwd: CWD,
@@ -137,10 +159,18 @@ describe("wrapToolsWithGate", () => {
       const calls: string[] = [];
       const marker = join(dir, "post.ran");
       const hooks: Hooks = {
-        PostToolUse: [{ matcher: "write_file", hooks: [{ type: "command", command: `touch '${marker}'` }] }],
+        PostToolUse: [
+          {
+            matcher: "write_file",
+            hooks: [{ type: "command", command: `touch '${marker}'` }],
+          },
+        ],
       };
       const gated = wrapToolsWithGate(makeTools(calls), { cwd: CWD, hooks });
-      const result = await call(gated, "write_file", { path: "a.txt", content: "x" });
+      const result = await call(gated, "write_file", {
+        path: "a.txt",
+        content: "x",
+      });
       expect(result).toBe("wrote a.txt");
       expect(calls).toEqual(["write:a.txt"]);
       expect(existsSync(marker)).toBe(true);

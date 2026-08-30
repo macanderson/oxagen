@@ -3,7 +3,15 @@
  * the full report, and an unresolved turn errors to stderr with a non-zero exit.
  * The trace store and formatter are mocked, so no filesystem is touched.
  */
-import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  vi,
+  type Mock,
+} from "vitest";
 
 vi.mock("../../agent/trace-store.js", () => ({ openTraceStore: vi.fn() }));
 vi.mock("../../agent/trace-format.js", () => ({
@@ -35,19 +43,22 @@ beforeEach(() => {
   out = "";
   err = "";
   process.exitCode = undefined;
-  const outSpy = vi
-    .spyOn(process.stdout, "write")
-    .mockImplementation(((s: unknown) => {
-      out += String(s);
-      return true;
-    }) as never);
-  const errSpy = vi
-    .spyOn(process.stderr, "write")
-    .mockImplementation(((s: unknown) => {
-      err += String(s);
-      return true;
-    }) as never);
-  restorers.push(() => outSpy.mockRestore(), () => errSpy.mockRestore());
+  const outSpy = vi.spyOn(process.stdout, "write").mockImplementation(((
+    s: unknown,
+  ) => {
+    out += String(s);
+    return true;
+  }) as never);
+  const errSpy = vi.spyOn(process.stderr, "write").mockImplementation(((
+    s: unknown,
+  ) => {
+    err += String(s);
+    return true;
+  }) as never);
+  restorers.push(
+    () => outSpy.mockRestore(),
+    () => errSpy.mockRestore(),
+  );
 });
 
 afterEach(() => {
@@ -63,7 +74,9 @@ describe("handleReplay", () => {
   });
 
   it("prints the full report for a resolved turn", async () => {
-    storeWith({ resolve: (arg: string) => (arg === "2" ? { id: "x" } : undefined) });
+    storeWith({
+      resolve: (arg: string) => (arg === "2" ? { id: "x" } : undefined),
+    });
     await handleReplay("2", {});
     expect(out).toContain("FULL REPORT");
     expect(process.exitCode).toBeUndefined();

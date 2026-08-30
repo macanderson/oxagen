@@ -3,11 +3,22 @@
  * graph and a deterministic fake embedding client (keyword-axis vectors) so the
  * semantic path is testable without the gateway.
  */
-import type { CodeGraph, CodeNode, CodeEdge } from "../../../daemon/code-graph/types.js";
+import type {
+  CodeGraph,
+  CodeNode,
+  CodeEdge,
+} from "../../../daemon/code-graph/types.js";
 import type { EmbeddingClient } from "../embedding.js";
 
 function file(id: string, path: string): CodeNode {
-  return { id, kind: "file", name: path, path, range: { start: 1, end: 1 }, language: "typescript" };
+  return {
+    id,
+    kind: "file",
+    name: path,
+    path,
+    range: { start: 1, end: 1 },
+    language: "typescript",
+  };
 }
 function fn(id: string, name: string, path: string, line: number): CodeNode {
   return {
@@ -52,7 +63,14 @@ export function makeGraph(): CodeGraph {
 }
 
 /** Keyword axes for the deterministic fake embedder. */
-export const AXES = ["payment", "card", "checkout", "telemetry", "drain", "route"];
+export const AXES = [
+  "payment",
+  "card",
+  "checkout",
+  "telemetry",
+  "drain",
+  "route",
+];
 
 function keywordVector(text: string): number[] {
   const lower = text.toLowerCase();
@@ -78,7 +96,10 @@ export class FakeEmbeddingClient implements EmbeddingClient {
 }
 
 /** Pre-populate file-node embeddings so the semantic path reuses them (no I/O). */
-export function embedFixtureFiles(graph: CodeGraph, client: FakeEmbeddingClient): void {
+export function embedFixtureFiles(
+  graph: CodeGraph,
+  client: FakeEmbeddingClient,
+): void {
   const textFor: Record<string, string> = {
     F1: "src payment processor processPayment card",
     F2: "src payment router routeByCardType route card",

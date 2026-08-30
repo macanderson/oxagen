@@ -15,7 +15,11 @@ const { fetchPrNumber, GH_PR_TIMEOUT_MS } = await import("../gh-pr.js");
 /** Wires the mock's callback-style API: the last arg is `(err, stdout, stderr) => void`. */
 function respondWith(err: Error | null, stdout = ""): void {
   execFileMock.mockImplementationOnce((..._args: unknown[]) => {
-    const cb = _args[_args.length - 1] as (e: Error | null, out: string, err: string) => void;
+    const cb = _args[_args.length - 1] as (
+      e: Error | null,
+      out: string,
+      err: string,
+    ) => void;
     cb(err, stdout, "");
   });
 }
@@ -34,9 +38,21 @@ describe("fetchPrNumber", () => {
   it("invokes gh pr view with the branch and the expected json/jq flags", async () => {
     respondWith(null, "1\n");
     await fetchPrNumber("/repo", "feat/x");
-    const [cmd, args, opts] = execFileMock.mock.calls[0] as [string, string[], Record<string, unknown>];
+    const [cmd, args, opts] = execFileMock.mock.calls[0] as [
+      string,
+      string[],
+      Record<string, unknown>,
+    ];
     expect(cmd).toBe("gh");
-    expect(args).toEqual(["pr", "view", "feat/x", "--json", "number", "--jq", ".number"]);
+    expect(args).toEqual([
+      "pr",
+      "view",
+      "feat/x",
+      "--json",
+      "number",
+      "--jq",
+      ".number",
+    ]);
     expect(opts).toMatchObject({ cwd: "/repo", timeout: GH_PR_TIMEOUT_MS });
   });
 
@@ -46,13 +62,18 @@ describe("fetchPrNumber", () => {
   });
 
   it("resolves null when gh isn't installed (ENOENT)", async () => {
-    const enoent = Object.assign(new Error("spawn gh ENOENT"), { code: "ENOENT" });
+    const enoent = Object.assign(new Error("spawn gh ENOENT"), {
+      code: "ENOENT",
+    });
     respondWith(enoent);
     await expect(fetchPrNumber("/repo", "feat/x")).resolves.toBeNull();
   });
 
   it("resolves null on a timeout (execFile reports it as an error)", async () => {
-    const timeoutErr = Object.assign(new Error("Command timed out"), { killed: true, signal: "SIGTERM" });
+    const timeoutErr = Object.assign(new Error("Command timed out"), {
+      killed: true,
+      signal: "SIGTERM",
+    });
     respondWith(timeoutErr);
     await expect(fetchPrNumber("/repo", "feat/x")).resolves.toBeNull();
   });

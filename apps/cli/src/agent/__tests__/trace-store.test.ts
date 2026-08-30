@@ -49,7 +49,13 @@ function trace(id: string, prompt = "do a thing"): TurnTrace {
       model: "m",
       usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
     },
-    enhancement: { prompt, context: "", resolved: [], lessonCount: 0, source: "none" },
+    enhancement: {
+      prompt,
+      context: "",
+      resolved: [],
+      lessonCount: 0,
+      source: "none",
+    },
     selectedModel: "anthropic/claude-sonnet-5",
     selectedTier: "balanced",
     selectionRationale: "test",
@@ -67,7 +73,9 @@ function trace(id: string, prompt = "do a thing"): TurnTrace {
 const cwd = "/tmp/proj-trace-store-test";
 
 beforeEach(() => {
-  rmSync(`${TEST_HOME}/.config/oxagen/traces/${"proj-trace-store-test"}.json`, { force: true });
+  rmSync(`${TEST_HOME}/.config/oxagen/traces/${"proj-trace-store-test"}.json`, {
+    force: true,
+  });
 });
 
 describe("openTraceStore", () => {

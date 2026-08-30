@@ -12,7 +12,9 @@
  * Security notes:
  * - The code_verifier is NEVER logged.
  * - The returned token is NEVER logged.
- * - State is verified byte-for-exact-byte before code exchange (CSRF guard).
+ * - The state nonce must match exactly before the code is exchanged (CSRF guard).
+ * - The token-exchange response is shape-checked before it is returned, so a
+ *   malformed 200 can never be persisted as a broken credential.
  * - The server only binds to 127.0.0.1 (loopback) — never 0.0.0.0.
  * - A 5-minute timeout closes the server and rejects the promise if the user
  *   doesn't complete the flow.
@@ -34,6 +36,37 @@ import {
 import { openBrowser } from "./open-browser.js";
 
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
+
+/** The credential triple the token-exchange endpoint returns on success. */
+interface TokenExchangeResponse {
+  token: string;
+  orgSlug: string;
+  workspaceSlug: string;
+}
+
+/**
+ * Narrow an already-parsed token-exchange body to {@link TokenExchangeResponse}.
+ * A 200 whose body is missing any of the three strings would otherwise be cast
+ * straight through and persisted as `undefined` credentials — a session that
+ * looks logged in and 401s on every call. Fail loudly at the exchange instead.
+ */
+function asTokenExchangeResponse(body: unknown): TokenExchangeResponse {
+  const record =
+    body !== null && typeof body === "object"
+      ? (body as Record<string, unknown>)
+      : {};
+  const nonEmpty = (v: unknown): string | undefined =>
+    typeof v === "string" && v.length > 0 ? v : undefined;
+  const token = nonEmpty(record["token"]);
+  const orgSlug = nonEmpty(record["orgSlug"]);
+  const workspaceSlug = nonEmpty(record["workspaceSlug"]);
+  if (!token || !orgSlug || !workspaceSlug) {
+    throw new Error(
+      "Token exchange returned an unexpected response (expected token, orgSlug, workspaceSlug).",
+    );
+  }
+  return { token, orgSlug, workspaceSlug };
+}
 
 const SUCCESS_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -269,11 +302,7 @@ export async function browserLogin({
               return;
             }
 
-            const data = (await exchangeRes.json()) as {
-              token: string;
-              orgSlug: string;
-              workspaceSlug: string;
-            };
+            const data = asTokenExchangeResponse(await exchangeRes.json());
             await sendHtml(SUCCESS_HTML);
             closeAndSettle(() => resolve(data));
           } catch (err) {

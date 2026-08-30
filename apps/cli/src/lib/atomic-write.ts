@@ -22,7 +22,10 @@ import { dirname, join } from "node:path";
  */
 export function atomicWriteFileSync(path: string, data: string): void {
   const dir = dirname(path);
-  const tmp = join(dir, `.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`);
+  const tmp = join(
+    dir,
+    `.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`,
+  );
   try {
     writeFileSync(tmp, data, "utf8");
     renameSync(tmp, path);

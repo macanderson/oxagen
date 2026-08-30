@@ -3,15 +3,23 @@ import { render } from "ink-testing-library";
 import React from "react";
 import { ScopeReview } from "../scope-review.js";
 import { formatUsd } from "../../agent/rate-card.js";
-import type { ScopeReviewInfo, ScopeReviewDecision } from "@oxagen/agent-engine";
+import type {
+  ScopeReviewInfo,
+  ScopeReviewDecision,
+} from "@oxagen/agent-engine";
 
 const ESC = String.fromCharCode(27);
 
 /** Poll until `cond` holds — Ink delivers stdin/state asynchronously (never fixed sleeps). */
-async function until(cond: () => boolean, timeoutMs = 4000, stepMs = 10): Promise<void> {
+async function until(
+  cond: () => boolean,
+  timeoutMs = 4000,
+  stepMs = 10,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!cond()) {
-    if (Date.now() > deadline) throw new Error("until(): condition not met before deadline");
+    if (Date.now() > deadline)
+      throw new Error("until(): condition not met before deadline");
     await new Promise((r) => setTimeout(r, stepMs));
   }
 }
@@ -20,7 +28,8 @@ function makeInfo(overrides: Partial<ScopeReviewInfo> = {}): ScopeReviewInfo {
   return {
     originalPrompt: "fix the login bug",
     refinedPrompt: "fix the login bug",
-    enhancedPrompt: "fix the login bug\n\nContext: auth.ts handles session tokens.",
+    enhancedPrompt:
+      "fix the login bug\n\nContext: auth.ts handles session tokens.",
     context: "auth.ts handles session tokens.",
     model: "anthropic/claude-sonnet-5",
     tier: "balanced",
@@ -51,7 +60,9 @@ describe("ScopeReview", () => {
     const onDecision = vi.fn((d: ScopeReviewDecision) => {
       decision = d;
     });
-    const { stdin } = render(<ScopeReview info={info} onDecision={onDecision} width={80} />);
+    const { stdin } = render(
+      <ScopeReview info={info} onDecision={onDecision} width={80} />,
+    );
     stdin.write("\r");
     await until(() => onDecision.mock.calls.length > 0);
     expect(onDecision).toHaveBeenCalledTimes(1);
@@ -61,7 +72,9 @@ describe("ScopeReview", () => {
   it("pressing n calls onDecision with proceed: false", async () => {
     const info = makeInfo();
     const onDecision = vi.fn();
-    const { stdin } = render(<ScopeReview info={info} onDecision={onDecision} width={80} />);
+    const { stdin } = render(
+      <ScopeReview info={info} onDecision={onDecision} width={80} />,
+    );
     stdin.write("n");
     await until(() => onDecision.mock.calls.length > 0);
     expect(onDecision).toHaveBeenCalledWith({ proceed: false });
@@ -70,7 +83,9 @@ describe("ScopeReview", () => {
   it("pressing Esc calls onDecision with proceed: false", async () => {
     const info = makeInfo();
     const onDecision = vi.fn();
-    const { stdin } = render(<ScopeReview info={info} onDecision={onDecision} width={80} />);
+    const { stdin } = render(
+      <ScopeReview info={info} onDecision={onDecision} width={80} />,
+    );
     stdin.write(ESC);
     await until(() => onDecision.mock.calls.length > 0);
     expect(onDecision).toHaveBeenCalledWith({ proceed: false });

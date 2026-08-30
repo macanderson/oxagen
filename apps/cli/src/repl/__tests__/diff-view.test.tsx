@@ -16,7 +16,7 @@ const SAMPLE_DIFF = [
   "@@ -1,3 +1,3 @@",
   " function greet(name: string) {",
   '-  return "hi " + name;',
-  '+  return `hello ${name}`;',
+  "+  return `hello ${name}`;",
   " }",
 ].join("\n");
 
@@ -48,8 +48,8 @@ describe("parseDiffLines", () => {
     const added = lines.find((l) => l.kind === "add");
     expect(added).toEqual({
       kind: "add",
-      text: '+  return `hello ${name}`;',
-      code: '  return `hello ${name}`;',
+      text: "+  return `hello ${name}`;",
+      code: "  return `hello ${name}`;",
     });
   });
 
@@ -67,7 +67,11 @@ describe("parseDiffLines", () => {
     const lines = parseDiffLines(SAMPLE_DIFF);
     const context = lines.filter((l) => l.kind === "context");
     expect(context).toEqual([
-      { kind: "context", text: " function greet(name: string) {", code: "function greet(name: string) {" },
+      {
+        kind: "context",
+        text: " function greet(name: string) {",
+        code: "function greet(name: string) {",
+      },
       { kind: "context", text: " }", code: "}" },
     ]);
   });
@@ -143,7 +147,10 @@ describe("numberDiffLines", () => {
     expect(add.oldLine).toBeUndefined();
     // The trailing context line advanced past the change: old 3 / new 3.
     const contexts = numbered.filter((l) => l.kind === "context");
-    expect(contexts[contexts.length - 1]).toMatchObject({ oldLine: 3, newLine: 3 });
+    expect(contexts[contexts.length - 1]).toMatchObject({
+      oldLine: 3,
+      newLine: 3,
+    });
   });
 
   it("resets counters across multiple hunks and handles the omitted-count form", () => {
@@ -157,14 +164,20 @@ describe("numberDiffLines", () => {
     ].join("\n");
     const numbered = numberDiffLines(parseDiffLines(twoHunks));
     // First hunk (omitted counts) starts both counters at 5.
-    expect(numbered.find((l) => l.kind === "context")).toMatchObject({ oldLine: 5, newLine: 5 });
+    expect(numbered.find((l) => l.kind === "context")).toMatchObject({
+      oldLine: 5,
+      newLine: 5,
+    });
     // Second hunk reset to old 20 / new 21.
     const del = numbered.find((l) => l.kind === "del")!;
     expect(del.oldLine).toBe(20);
     const add = numbered.find((l) => l.kind === "add")!;
     expect(add.newLine).toBe(21);
     const trailing = numbered.filter((l) => l.kind === "context");
-    expect(trailing[trailing.length - 1]).toMatchObject({ oldLine: 21, newLine: 22 });
+    expect(trailing[trailing.length - 1]).toMatchObject({
+      oldLine: 21,
+      newLine: 22,
+    });
   });
 });
 
@@ -185,14 +198,18 @@ describe("DiffView — showLineNumbers", () => {
   });
 
   it("omits the gutter by default (existing usages unchanged)", () => {
-    const { lastFrame } = render(<DiffView diff={SAMPLE_DIFF} theme={DARK_DIFF_THEME} />);
+    const { lastFrame } = render(
+      <DiffView diff={SAMPLE_DIFF} theme={DARK_DIFF_THEME} />,
+    );
     expect(lastFrame() ?? "").not.toContain("│");
   });
 });
 
 describe("DiffView", () => {
   it("renders without throwing and shows added/removed code content", () => {
-    const { lastFrame } = render(<DiffView diff={SAMPLE_DIFF} theme={DARK_DIFF_THEME} />);
+    const { lastFrame } = render(
+      <DiffView diff={SAMPLE_DIFF} theme={DARK_DIFF_THEME} />,
+    );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("hello");
     expect(frame).toContain("hi");
@@ -206,12 +223,16 @@ describe("DiffView", () => {
   });
 
   it("renders with the light theme without throwing", () => {
-    const { lastFrame } = render(<DiffView diff={SAMPLE_DIFF} theme={LIGHT_DIFF_THEME} />);
+    const { lastFrame } = render(
+      <DiffView diff={SAMPLE_DIFF} theme={LIGHT_DIFF_THEME} />,
+    );
     expect(lastFrame() ?? "").toContain("hello");
   });
 
   it("infers the language from the +++ b/<path> header when none is supplied", () => {
-    const { lastFrame } = render(<DiffView diff={SAMPLE_DIFF} theme={DARK_DIFF_THEME} />);
+    const { lastFrame } = render(
+      <DiffView diff={SAMPLE_DIFF} theme={DARK_DIFF_THEME} />,
+    );
     // Just asserting it renders cleanly with inference on — token colors aren't
     // asserted since they're an implementation detail of cli-highlight.
     expect(lastFrame()).toBeTruthy();
@@ -219,7 +240,13 @@ describe("DiffView", () => {
 
   it("never throws on an unrecognized/unsupported language", () => {
     expect(() =>
-      render(<DiffView diff={SAMPLE_DIFF} theme={DARK_DIFF_THEME} language="not-a-real-lang" />),
+      render(
+        <DiffView
+          diff={SAMPLE_DIFF}
+          theme={DARK_DIFF_THEME}
+          language="not-a-real-lang"
+        />,
+      ),
     ).not.toThrow();
   });
 
@@ -231,7 +258,9 @@ describe("DiffView", () => {
       "@@ -1,5 +1,5 @@",
       ...Array.from({ length: 20 }, (_, i) => `+line ${i}`),
     ].join("\n");
-    const { lastFrame } = render(<DiffView diff={bigDiff} theme={DARK_DIFF_THEME} maxLines={5} />);
+    const { lastFrame } = render(
+      <DiffView diff={bigDiff} theme={DARK_DIFF_THEME} maxLines={5} />,
+    );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("more lines — scroll or /replay to see all");
     expect(frame).not.toContain("line 19");

@@ -31,7 +31,9 @@ async function until(
   }
 }
 
-function entry(over: Partial<MarketplaceEntry> & { id: string }): MarketplaceEntry {
+function entry(
+  over: Partial<MarketplaceEntry> & { id: string },
+): MarketplaceEntry {
   return {
     id: over.id,
     name: over.name ?? over.id,
@@ -45,9 +47,26 @@ function entry(over: Partial<MarketplaceEntry> & { id: string }): MarketplaceEnt
 }
 
 const CATALOG: MarketplaceEntry[] = [
-  entry({ id: "github", title: "GitHub", pluginType: "mcp_server", description: "GitHub MCP server", categories: ["dev", "vcs"] }),
-  entry({ id: "slack", title: "Slack", pluginType: "integration", description: "Slack integration", installed: true }),
-  entry({ id: "code-review", title: "Code Review", pluginType: "agent_skill", description: "reviews diffs" }),
+  entry({
+    id: "github",
+    title: "GitHub",
+    pluginType: "mcp_server",
+    description: "GitHub MCP server",
+    categories: ["dev", "vcs"],
+  }),
+  entry({
+    id: "slack",
+    title: "Slack",
+    pluginType: "integration",
+    description: "Slack integration",
+    installed: true,
+  }),
+  entry({
+    id: "code-review",
+    title: "Code Review",
+    pluginType: "agent_skill",
+    description: "reviews diffs",
+  }),
 ];
 
 /** A catalog-backed client that filters by type/search and installs by mutating a clone. */
@@ -58,7 +77,8 @@ function makeCatalogClient(seed: MarketplaceEntry[] = CATALOG): {
   const rows = seed.map((e) => ({ ...e }));
   const browse = vi.fn(async (opts: MarketplaceBrowseOptions) => {
     let filtered = rows;
-    if (opts.pluginType) filtered = filtered.filter((e) => e.pluginType === opts.pluginType);
+    if (opts.pluginType)
+      filtered = filtered.filter((e) => e.pluginType === opts.pluginType);
     if (opts.search) {
       const q = opts.search.toLowerCase();
       filtered = filtered.filter(
@@ -68,7 +88,11 @@ function makeCatalogClient(seed: MarketplaceEntry[] = CATALOG): {
           e.description.toLowerCase().includes(q),
       );
     }
-    return { entries: filtered.map((e) => ({ ...e })), total: filtered.length, nextOffset: null };
+    return {
+      entries: filtered.map((e) => ({ ...e })),
+      total: filtered.length,
+      nextOffset: null,
+    };
   });
   const install = vi.fn(async (id: string) => {
     const row = rows.find((e) => e.id === id);
@@ -119,14 +143,27 @@ describe("MarketplacePanel", () => {
   });
 
   it("shows a loading state before the first page resolves", async () => {
-    let resolve!: (r: { entries: MarketplaceEntry[]; total: number; nextOffset: null }) => void;
+    let resolve!: (r: {
+      entries: MarketplaceEntry[];
+      total: number;
+      nextOffset: null;
+    }) => void;
     const client: MarketplaceClient = {
-      browse: () => new Promise((r) => { resolve = r; }),
+      browse: () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
       install: async () => ({ ok: true }),
     };
-    const { lastFrame } = render(<MarketplacePanel onClose={() => {}} client={client} />);
+    const { lastFrame } = render(
+      <MarketplacePanel onClose={() => {}} client={client} />,
+    );
     await until(() => (lastFrame() ?? "").includes("loading…"));
-    resolve({ entries: [entry({ id: "x", title: "Xt" })], total: 1, nextOffset: null });
+    resolve({
+      entries: [entry({ id: "x", title: "Xt" })],
+      total: 1,
+      nextOffset: null,
+    });
     await until(() => (lastFrame() ?? "").includes("Xt"));
   });
 
@@ -158,9 +195,7 @@ describe("MarketplacePanel", () => {
     stdin.write("/"); // focus search
     await until(() => (lastFrame() ?? "").includes("█"));
     stdin.write("slack"); // typed as one chunk → one debounced browse
-    await until(() =>
-      browse.mock.calls.some((c) => c[0]?.search === "slack"),
-    );
+    await until(() => browse.mock.calls.some((c) => c[0]?.search === "slack"));
     await until(() => {
       const f = stripAnsi(lastFrame() ?? "");
       return f.includes("Slack") && !f.includes("GitHub");
@@ -212,24 +247,44 @@ describe("MarketplacePanel", () => {
 
   it("surfaces an install failure as a readable notice", async () => {
     const client: MarketplaceClient = {
-      browse: async () => ({ entries: [entry({ id: "z", title: "Zed" })], total: 1, nextOffset: null }),
-      install: async () => ({ ok: false, error: "already installed elsewhere" }),
+      browse: async () => ({
+        entries: [entry({ id: "z", title: "Zed" })],
+        total: 1,
+        nextOffset: null,
+      }),
+      install: async () => ({
+        ok: false,
+        error: "already installed elsewhere",
+      }),
     };
     const { lastFrame, stdin } = render(
       <MarketplacePanel onClose={() => {}} client={client} debounceMs={20} />,
     );
     await until(() => (lastFrame() ?? "").includes("Zed"));
     stdin.write("i");
-    await until(() => (lastFrame() ?? "").includes("already installed elsewhere"));
+    await until(() =>
+      (lastFrame() ?? "").includes("already installed elsewhere"),
+    );
   });
 
   it("pages forward with n and back with p when nextOffset is present", async () => {
     const browse = vi.fn(async (opts: MarketplaceBrowseOptions) => {
       if ((opts.offset ?? 0) === 0)
-        return { entries: [entry({ id: "p1", title: "Page One" })], total: 2, nextOffset: 1 };
-      return { entries: [entry({ id: "p2", title: "Page Two" })], total: 2, nextOffset: null };
+        return {
+          entries: [entry({ id: "p1", title: "Page One" })],
+          total: 2,
+          nextOffset: 1,
+        };
+      return {
+        entries: [entry({ id: "p2", title: "Page Two" })],
+        total: 2,
+        nextOffset: null,
+      };
     });
-    const client: MarketplaceClient = { browse, install: async () => ({ ok: true }) };
+    const client: MarketplaceClient = {
+      browse,
+      install: async () => ({ ok: true }),
+    };
     const { lastFrame, stdin } = render(
       <MarketplacePanel onClose={() => {}} client={client} debounceMs={20} />,
     );
@@ -245,9 +300,16 @@ describe("MarketplacePanel", () => {
     let fail = true;
     const browse = vi.fn(async () => {
       if (fail) throw new Error("network down");
-      return { entries: [entry({ id: "ok", title: "Recovered" })], total: 1, nextOffset: null };
+      return {
+        entries: [entry({ id: "ok", title: "Recovered" })],
+        total: 1,
+        nextOffset: null,
+      };
     });
-    const client: MarketplaceClient = { browse, install: async () => ({ ok: true }) };
+    const client: MarketplaceClient = {
+      browse,
+      install: async () => ({ ok: true }),
+    };
     const { lastFrame, stdin } = render(
       <MarketplacePanel onClose={() => {}} client={client} debounceMs={20} />,
     );

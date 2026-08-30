@@ -19,7 +19,10 @@ import {
   type Message,
 } from "../components.js";
 import type { SlashCatalogEntry } from "../../slash/catalog.js";
-import type { ApprovalRequest, ApprovalResponse } from "../../agent/permissions.js";
+import type {
+  ApprovalRequest,
+  ApprovalResponse,
+} from "../../agent/permissions.js";
 import type { StageKind } from "../../agent/trace.js";
 
 /**
@@ -168,7 +171,12 @@ describe("StatusLine (permission line)", () => {
 
 describe("PromptInput typeahead", () => {
   const catalog: SlashCatalogEntry[] = [
-    { name: "help", description: "Show the slash-command help", source: "builtin", productized: true },
+    {
+      name: "help",
+      description: "Show the slash-command help",
+      source: "builtin",
+      productized: true,
+    },
     {
       name: "pipeline",
       description: "Toggle prompt evaluation and completeness judging",
@@ -176,13 +184,32 @@ describe("PromptInput typeahead", () => {
       source: "builtin",
       productized: true,
     },
-    { name: "model", description: "Show or set the gateway model", argumentHint: "[slug]", source: "builtin", productized: true },
-    { name: "mode", description: "Show or set the permission posture", argumentHint: "[ask]", source: "builtin", productized: true },
-    { name: "cost", description: "Project model cost", source: "cli", productized: true },
+    {
+      name: "model",
+      description: "Show or set the gateway model",
+      argumentHint: "[slug]",
+      source: "builtin",
+      productized: true,
+    },
+    {
+      name: "mode",
+      description: "Show or set the permission posture",
+      argumentHint: "[ask]",
+      source: "builtin",
+      productized: true,
+    },
+    {
+      name: "cost",
+      description: "Project model cost",
+      source: "cli",
+      productized: true,
+    },
   ];
 
   it("stays closed until a slash command is being typed", () => {
-    const { lastFrame } = render(<PromptInput onSubmit={() => {}} busy={false} catalog={catalog} />);
+    const { lastFrame } = render(
+      <PromptInput onSubmit={() => {}} busy={false} catalog={catalog} />,
+    );
     expect(lastFrame() ?? "").not.toContain("navigate");
   });
 
@@ -217,7 +244,11 @@ describe("PromptInput typeahead", () => {
   it("submits a fully-typed argument-free command on Enter", async () => {
     const calls: string[] = [];
     const { stdin, unmount } = render(
-      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} catalog={catalog} />,
+      <PromptInput
+        onSubmit={(t) => calls.push(t)}
+        busy={false}
+        catalog={catalog}
+      />,
     );
     stdin.write("/help");
     await tick();
@@ -277,11 +308,15 @@ describe("PromptInput typeahead", () => {
 
 describe("PromptInput focus + injection", () => {
   it("shows the block cursor while focused and drops it when the panel owns focus", () => {
-    const focused = render(<PromptInput onSubmit={() => {}} busy={false} focused />);
+    const focused = render(
+      <PromptInput onSubmit={() => {}} busy={false} focused />,
+    );
     expect(focused.lastFrame() ?? "").toContain("█");
     focused.unmount();
 
-    const blurred = render(<PromptInput onSubmit={() => {}} busy={false} focused={false} />);
+    const blurred = render(
+      <PromptInput onSubmit={() => {}} busy={false} focused={false} />,
+    );
     expect(blurred.lastFrame() ?? "").not.toContain("█");
     blurred.unmount();
   });
@@ -289,7 +324,11 @@ describe("PromptInput focus + injection", () => {
   it("ignores keystrokes while not focused (the panel handler owns them)", async () => {
     const calls: string[] = [];
     const { lastFrame, stdin, unmount } = render(
-      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} focused={false} />,
+      <PromptInput
+        onSubmit={(t) => calls.push(t)}
+        busy={false}
+        focused={false}
+      />,
     );
     stdin.write("hello");
     await tick();
@@ -303,11 +342,19 @@ describe("PromptInput focus + injection", () => {
 
   it("replaces the buffer when the parent bumps the injection nonce", async () => {
     const { lastFrame, rerender, unmount } = render(
-      <PromptInput onSubmit={() => {}} busy={false} inject={{ text: "", nonce: 0 }} />,
+      <PromptInput
+        onSubmit={() => {}}
+        busy={false}
+        inject={{ text: "", nonce: 0 }}
+      />,
     );
     await tick();
     rerender(
-      <PromptInput onSubmit={() => {}} busy={false} inject={{ text: "recall these prompts", nonce: 1 }} />,
+      <PromptInput
+        onSubmit={() => {}}
+        busy={false}
+        inject={{ text: "recall these prompts", nonce: 1 }}
+      />,
     );
     await tick();
     expect(lastFrame() ?? "").toContain("recall these prompts");
@@ -317,7 +364,12 @@ describe("PromptInput focus + injection", () => {
   it("reports menu open/close to the parent via onMenuOpenChange", async () => {
     const states: boolean[] = [];
     const catalog = [
-      { name: "help", description: "help", source: "builtin" as const, productized: true },
+      {
+        name: "help",
+        description: "help",
+        source: "builtin" as const,
+        productized: true,
+      },
     ];
     const { stdin, unmount } = render(
       <PromptInput
@@ -387,7 +439,13 @@ describe("MessageView", () => {
 
   it("renders a tool call as an [emoji Tool] chip with the arg (no bolt gutter)", () => {
     const { lastFrame } = render(
-      <MessageView msg={msg({ role: "tool", toolName: "Bash", content: "git push origin main" })} />,
+      <MessageView
+        msg={msg({
+          role: "tool",
+          toolName: "Bash",
+          content: "git push origin main",
+        })}
+      />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).not.toContain("⚡");
@@ -397,7 +455,9 @@ describe("MessageView", () => {
 
   it("renders unmapped tools as a bare [name] chip — no wrench, no stray space", () => {
     const { lastFrame } = render(
-      <MessageView msg={msg({ role: "tool", toolName: "totally.unknown", content: "arg" })} />,
+      <MessageView
+        msg={msg({ role: "tool", toolName: "totally.unknown", content: "arg" })}
+      />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("[totally.unknown]");
@@ -407,7 +467,13 @@ describe("MessageView", () => {
 
   it("keeps dotted capability tool names verbatim in the chip", () => {
     const { lastFrame } = render(
-      <MessageView msg={msg({ role: "tool", toolName: "knowledge.query", content: "who owns billing" })} />,
+      <MessageView
+        msg={msg({
+          role: "tool",
+          toolName: "knowledge.query",
+          content: "who owns billing",
+        })}
+      />,
     );
     expect(lastFrame() ?? "").toContain("[🔍 knowledge.query]");
   });
@@ -429,7 +495,9 @@ describe("MessageView", () => {
 
   it("gutters assistant prose with the ◆ Oxagen marker", () => {
     const { lastFrame } = render(
-      <MessageView msg={msg({ role: "assistant", content: "Found and fixed the spot." })} />,
+      <MessageView
+        msg={msg({ role: "assistant", content: "Found and fixed the spot." })}
+      />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("◆");
@@ -439,7 +507,10 @@ describe("MessageView", () => {
   it("renders committed assistant prose as markdown (markers consumed)", () => {
     const { lastFrame } = render(
       <MessageView
-        msg={msg({ role: "assistant", content: "use **exact** pins and `pnpm i`" })}
+        msg={msg({
+          role: "assistant",
+          content: "use **exact** pins and `pnpm i`",
+        })}
       />,
     );
     const frame = (lastFrame() ?? "").replace(/\u001b\[[0-9;]*m/g, "");
@@ -454,7 +525,11 @@ describe("MessageView", () => {
   it("keeps streaming assistant prose as raw text with the cursor", () => {
     const { lastFrame } = render(
       <MessageView
-        msg={msg({ role: "assistant", content: "half a **sentence", streaming: true })}
+        msg={msg({
+          role: "assistant",
+          content: "half a **sentence",
+          streaming: true,
+        })}
       />,
     );
     const frame = lastFrame() ?? "";
@@ -465,7 +540,9 @@ describe("MessageView", () => {
 
   it("labels reasoning as thinking", () => {
     const { lastFrame } = render(
-      <MessageView msg={msg({ role: "reasoning", content: "weighing two approaches" })} />,
+      <MessageView
+        msg={msg({ role: "reasoning", content: "weighing two approaches" })}
+      />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("💭 thinking");
@@ -486,7 +563,9 @@ describe("MessageView", () => {
   it("uses the default shallow prop comparison (no custom compare that could defeat it)", () => {
     // A null/undefined `compare` means React.memo bails whenever every prop is
     // referentially equal — exactly the "unchanged msg object" case.
-    expect((MessageView as unknown as { compare?: unknown }).compare ?? null).toBeNull();
+    expect(
+      (MessageView as unknown as { compare?: unknown }).compare ?? null,
+    ).toBeNull();
   });
 
   // Count the memoized component's ACTUAL renders by spying on the inner render
@@ -501,7 +580,10 @@ describe("MessageView", () => {
     const spy = vi.fn(original);
     handle.type = spy;
     try {
-      const stable = msg({ role: "assistant", content: "an unchanged committed row" });
+      const stable = msg({
+        role: "assistant",
+        content: "an unchanged committed row",
+      });
       function Harness({ tick }: { tick: number }): React.ReactElement {
         return (
           <Box flexDirection="column">
@@ -547,7 +629,13 @@ describe("MessageView", () => {
 describe("StageBadge", () => {
   it("renders the pipeline stage as a bracketed chip with its label", () => {
     const { lastFrame } = render(
-      <StageBadge stage={{ kind: "judge", label: "reviewing completeness", detail: "advisor" }} />,
+      <StageBadge
+        stage={{
+          kind: "judge",
+          label: "reviewing completeness",
+          detail: "advisor",
+        }}
+      />,
     );
     const frame = lastFrame() ?? "";
     // The judge stage reads as "Review" in the chip.
@@ -567,14 +655,22 @@ describe("StageKind render maps (exhaustiveness)", () => {
   });
 
   it("expose exactly the known stage kinds — no stragglers, none missing", () => {
-    expect(Object.keys(STAGE_GLYPH).sort()).toEqual([...KNOWN_STAGE_KINDS].sort());
-    expect(Object.keys(STAGE_COLOR).sort()).toEqual([...KNOWN_STAGE_KINDS].sort());
-    expect(Object.keys(STAGE_LABEL).sort()).toEqual([...KNOWN_STAGE_KINDS].sort());
+    expect(Object.keys(STAGE_GLYPH).sort()).toEqual(
+      [...KNOWN_STAGE_KINDS].sort(),
+    );
+    expect(Object.keys(STAGE_COLOR).sort()).toEqual(
+      [...KNOWN_STAGE_KINDS].sort(),
+    );
+    expect(Object.keys(STAGE_LABEL).sort()).toEqual(
+      [...KNOWN_STAGE_KINDS].sort(),
+    );
   });
 
   it("StageBadge renders every known stage without falling through to undefined", () => {
     for (const kind of KNOWN_STAGE_KINDS) {
-      const { lastFrame } = render(<StageBadge stage={{ kind, label: `${kind} stage` }} />);
+      const { lastFrame } = render(
+        <StageBadge stage={{ kind, label: `${kind} stage` }} />,
+      );
       const frame = lastFrame() ?? "";
       expect(frame).toContain(`[${STAGE_LABEL[kind]}]`);
       expect(frame).not.toContain("undefined");
@@ -609,7 +705,8 @@ describe("TurnSummaryView", () => {
         summary={{
           complete: true,
           quality: 88,
-          qualityReason: "All requested edits landed and the tests cover the new branch.",
+          qualityReason:
+            "All requested edits landed and the tests cover the new branch.",
           filesTouched: [],
           costUsd: 0.01,
           judged: true,
@@ -642,7 +739,12 @@ describe("TurnSummaryView", () => {
   it("marks gaps and omits the quality score in bare mode", () => {
     const { lastFrame } = render(
       <TurnSummaryView
-        summary={{ complete: false, filesTouched: [], costUsd: 0, judged: false }}
+        summary={{
+          complete: false,
+          filesTouched: [],
+          costUsd: 0,
+          judged: false,
+        }}
       />,
     );
     const frame = lastFrame() ?? "";
@@ -691,7 +793,8 @@ describe("renderInvadersLane", () => {
   });
 
   it("advances the bolt frame over frame as it streaks across the lane", () => {
-    const boltAt = (tick: number): number => renderInvadersLane(tick, W, true).indexOf("•");
+    const boltAt = (tick: number): number =>
+      renderInvadersLane(tick, W, true).indexOf("•");
     // Ticks 0-2 are the opening flight of the first volley at this width —
     // the bolt moves BOLT_SPEED (3) cells closer to the UFO each tick.
     expect(boltAt(0)).toBe(3);
@@ -717,7 +820,9 @@ describe("renderInvadersLane", () => {
     // Verified fixture: at W=24 (fire cycle 9, weave period 10 — coprime, so
     // the phase drifts volley to volley) the 9th volley (ticks 72-80) never
     // lines up — the bolt streaks past and the UFO is never touched.
-    const frames = Array.from({ length: 9 }, (_, i) => renderInvadersLane(72 + i, W, true));
+    const frames = Array.from({ length: 9 }, (_, i) =>
+      renderInvadersLane(72 + i, W, true),
+    );
     expect(frames.some((f) => /[✳✸]/.test(f))).toBe(false);
     expect(frames.some((f) => f.includes("•"))).toBe(true); // the rocket still fired
     expect(frames.every((f) => /<[●○]>/.test(f))).toBe(true); // the UFO is untouched throughout
@@ -725,15 +830,21 @@ describe("renderInvadersLane", () => {
 
   it("is deterministic: the same tick always renders the same frame", () => {
     expect(renderInvadersLane(5, W, true)).toBe(renderInvadersLane(5, W, true));
-    expect(renderInvadersLane(37, W, true)).toBe(renderInvadersLane(37, W, true));
+    expect(renderInvadersLane(37, W, true)).toBe(
+      renderInvadersLane(37, W, true),
+    );
     // Adjacent ticks differ — the scene actually moves.
-    expect(renderInvadersLane(1, W, true)).not.toBe(renderInvadersLane(2, W, true));
+    expect(renderInvadersLane(1, W, true)).not.toBe(
+      renderInvadersLane(2, W, true),
+    );
   });
 
   it("loops cleanly: the rocket-fire cadence and UFO weave realign after one full beat", () => {
     // lcm(fire cycle 9, weave period 10) = 90 for this width.
     for (const t of [0, 1, 6, 7, 15, 37]) {
-      expect(renderInvadersLane(t, W, true)).toBe(renderInvadersLane(t + 90, W, true));
+      expect(renderInvadersLane(t, W, true)).toBe(
+        renderInvadersLane(t + 90, W, true),
+      );
     }
   });
 

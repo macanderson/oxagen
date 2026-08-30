@@ -24,7 +24,9 @@ vi.mock("../agent/adapters/index.js", () => ({
   createGatewayAgentAi: mocks.createGatewayAgentAi,
   createPlatformAgentAi: mocks.createPlatformAgentAi,
 }));
-vi.mock("../agent/metered-ai.js", () => ({ createMeteredAi: mocks.createMeteredAi }));
+vi.mock("../agent/metered-ai.js", () => ({
+  createMeteredAi: mocks.createMeteredAi,
+}));
 vi.mock("../agent/solve-usage.js", () => ({
   createSolveUsageAccumulator: mocks.createSolveUsageAccumulator,
 }));
@@ -90,7 +92,9 @@ afterEach(() => {
 describe("handleSolve — AI port selection", () => {
   it("a synthetic session races through the gateway AI, metered", async () => {
     await handleSolve("fix the test", {});
-    expect(mocks.createGatewayAgentAi).toHaveBeenCalledWith({ cwd: process.cwd() });
+    expect(mocks.createGatewayAgentAi).toHaveBeenCalledWith({
+      cwd: process.cwd(),
+    });
     expect(mocks.createPlatformAgentAi).not.toHaveBeenCalled();
     expect(mocks.createMeteredAi.mock.calls[0]?.[0]).toBe(gatewayAi);
     expect(launchArg()["ai"]).toBe(meteredAi);

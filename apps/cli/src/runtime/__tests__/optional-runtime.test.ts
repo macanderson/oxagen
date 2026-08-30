@@ -9,7 +9,9 @@ function fakeLlamaModule() {
   return {
     getLlama: async () => ({
       loadModel: async (_opts: { modelPath: string }) => ({
-        tokenize: (t: string) => ({ length: t.trim() ? t.trim().split(/\s+/).length : 0 }),
+        tokenize: (t: string) => ({
+          length: t.trim() ? t.trim().split(/\s+/).length : 0,
+        }),
         createContext: async () => ({ getSequence: () => ({}) }),
         dispose: async () => {},
       }),
@@ -62,6 +64,8 @@ describe("isOptionalDepInstalled", () => {
     expect(await isOptionalDepInstalled(async () => null)).toBe(false);
   });
   it("is true when a valid runtime loads", async () => {
-    expect(await isOptionalDepInstalled(async () => fakeLlamaModule())).toBe(true);
+    expect(await isOptionalDepInstalled(async () => fakeLlamaModule())).toBe(
+      true,
+    );
   });
 });

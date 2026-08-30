@@ -7,7 +7,9 @@ const strip = (s: string): string => s.replace(/\u001b\[[0-9;]*m/g, "");
 
 describe("Markdown", () => {
   it("renders emphasis with the markers consumed", () => {
-    const { lastFrame } = render(<Markdown>{"this is **important** and *subtle*"}</Markdown>);
+    const { lastFrame } = render(
+      <Markdown>{"this is **important** and *subtle*"}</Markdown>,
+    );
     const frame = strip(lastFrame() ?? "");
     expect(frame).toContain("important");
     expect(frame).toContain("subtle");
@@ -15,7 +17,9 @@ describe("Markdown", () => {
   });
 
   it("renders inline code with the backticks consumed", () => {
-    const { lastFrame } = render(<Markdown>{"run `pnpm dev` locally"}</Markdown>);
+    const { lastFrame } = render(
+      <Markdown>{"run `pnpm dev` locally"}</Markdown>,
+    );
     const frame = strip(lastFrame() ?? "");
     expect(frame).toContain("pnpm dev");
     expect(frame).not.toContain("`");
@@ -31,7 +35,9 @@ describe("Markdown", () => {
   });
 
   it("renders list items", () => {
-    const { lastFrame } = render(<Markdown>{"- first thing\n- second thing"}</Markdown>);
+    const { lastFrame } = render(
+      <Markdown>{"- first thing\n- second thing"}</Markdown>,
+    );
     const frame = strip(lastFrame() ?? "");
     expect(frame).toContain("first thing");
     expect(frame).toContain("second thing");

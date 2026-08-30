@@ -241,7 +241,9 @@ describe("REPL panel keybindings + slash wiring", () => {
     await waitFor(() => !(lastFrame() ?? "").includes("Saved Prompts"));
 
     await submit(stdin, "/create-command");
-    await waitFor(() => (lastFrame() ?? "").toLowerCase().includes("slash command"));
+    await waitFor(() =>
+      (lastFrame() ?? "").toLowerCase().includes("slash command"),
+    );
     stdin.write("");
   });
 
@@ -273,9 +275,9 @@ describe("REPL panel keybindings + slash wiring", () => {
     // The backgrounded prompt must never ALSO run inline.
     pending[0]?.finish();
     await tick(100);
-    expect(
-      runTurnSpy.mock.calls.map((c) => c[0].prompt),
-    ).not.toContain("independent second task");
+    expect(runTurnSpy.mock.calls.map((c) => c[0].prompt)).not.toContain(
+      "independent second task",
+    );
   });
 
   it("a queue triage verdict leaves the FIFO untouched", async () => {

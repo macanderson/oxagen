@@ -39,7 +39,9 @@ export function FleetApp({
   const { exit } = useApp();
   const [snap, setSnap] = useState<FleetSnapshot>(() => fleet.snapshot());
   const [frame, setFrame] = useState(0);
-  const [phase, setPhase] = useState<Phase>(goal && plan ? "planning" : "running");
+  const [phase, setPhase] = useState<Phase>(
+    goal && plan ? "planning" : "running",
+  );
   const [error, setError] = useState("");
   const [showDetail, setShowDetail] = useState(false);
   const [draining, setDraining] = useState(false);
@@ -144,7 +146,8 @@ export function FleetApp({
           </Text>
           <Text color="#FBBF24">Draining </Text>
           <Text dimColor>
-            — waiting for {snap.runningCount} agent{snap.runningCount === 1 ? "" : "s"} to finish…
+            — waiting for {snap.runningCount} agent
+            {snap.runningCount === 1 ? "" : "s"} to finish…
           </Text>
         </Box>
       ) : null}
@@ -152,7 +155,9 @@ export function FleetApp({
       {agents.length > 0 ? <RosterHeader /> : null}
       {agents.length === 0 && phase !== "planning" ? (
         <Box paddingX={1} marginBottom={1}>
-          <Text dimColor>No agents yet — type a task below and press Enter.</Text>
+          <Text dimColor>
+            No agents yet — type a task below and press Enter.
+          </Text>
         </Box>
       ) : null}
       {agents.map((a) => (

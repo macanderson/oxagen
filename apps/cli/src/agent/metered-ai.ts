@@ -8,8 +8,8 @@
  *
  * Wrapping that one port therefore covers evaluator + worker + judge in a single
  * place, so the CLI status line's token/cost totals update as EACH call
- * completes (Group 8, Bug 2), and each structured call is bounded per-call and
- * retried on timeout (Group 8, Bug 1) — never a turn-level wall-clock cap.
+ * completes, and each structured call is bounded per-call and retried on
+ * timeout — never a turn-level wall-clock cap.
  *
  * Streaming worker calls are NOT retried (replaying a partially-streamed call is
  * unsafe); their metrics are emitted when the stream's usage settles, and a hung
@@ -52,7 +52,10 @@ function nextCallId(): string {
  * into a metrics event. The wrapper is transparent: it returns exactly what the
  * base port returns, only instrumented.
  */
-export function createMeteredAi(base: AgentAi, opts: MeteredAiOptions = {}): AgentAi {
+export function createMeteredAi(
+  base: AgentAi,
+  opts: MeteredAiOptions = {},
+): AgentAi {
   const cfg = opts.timeouts ?? DEFAULT_TIMEOUTS;
   const now = opts.now ?? Date.now;
 
@@ -69,14 +72,19 @@ export function createMeteredAi(base: AgentAi, opts: MeteredAiOptions = {}): Age
           // engine.ts's identical read) — flatten to the rate card's
           // `cachedTokens` so this step's cache hit is priced at the
           // discounted rate instead of as fresh input.
-          const usage = { ...u, cachedTokens: u.inputTokenDetails?.cacheReadTokens ?? 0 };
+          const usage = {
+            ...u,
+            cachedTokens: u.inputTokenDetails?.cacheReadTokens ?? 0,
+          };
           // Isolate the metrics emit: an `onMetrics` throw is a real failure
           // (IO/bug) that would otherwise leave this call silently unmetered.
           // Log it instead of letting the shared `.catch` below — which exists
           // only to swallow the *usage-promise* rejection of an aborted turn —
           // absorb it too.
           try {
-            opts.onMetrics?.(metricsEventFor(callId, "model_call", args.model, usage, now()));
+            opts.onMetrics?.(
+              metricsEventFor(callId, "model_call", args.model, usage, now()),
+            );
           } catch (err) {
             void debugLog("error", "metrics.emit-failed", {
               message: err instanceof Error ? err.message : String(err),
@@ -89,7 +97,9 @@ export function createMeteredAi(base: AgentAi, opts: MeteredAiOptions = {}): Age
       return result;
     },
 
-    async generateObject<T>(args: ObjectRunArgs<T>): Promise<ObjectRunResult<T>> {
+    async generateObject<T>(
+      args: ObjectRunArgs<T>,
+    ): Promise<ObjectRunResult<T>> {
       const callId = nextCallId();
       // Per-call timeout + retry. The per-attempt signal aborts the in-flight
       // request on timeout; the caller's abortSignal (user cancel) propagates
@@ -103,8 +113,13 @@ export function createMeteredAi(base: AgentAi, opts: MeteredAiOptions = {}): Age
       // The port names this `cachedInputTokens` (ObjectRunResult.usage); the
       // rate card names the same concept `cachedTokens` — map at this seam
       // so the evaluator/judge's cache reads are priced, not dropped.
-      const usage = { ...res.usage, cachedTokens: res.usage.cachedInputTokens ?? 0 };
-      opts.onMetrics?.(metricsEventFor(callId, "model_call", args.model, usage, now()));
+      const usage = {
+        ...res.usage,
+        cachedTokens: res.usage.cachedInputTokens ?? 0,
+      };
+      opts.onMetrics?.(
+        metricsEventFor(callId, "model_call", args.model, usage, now()),
+      );
       return res;
     },
   };

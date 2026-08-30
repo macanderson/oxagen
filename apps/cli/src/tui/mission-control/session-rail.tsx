@@ -56,7 +56,12 @@ function RailRow({
         </Text>
       </Box>
       <Box flexGrow={1} minWidth={0}>
-        <Text color={selected ? "white" : undefined} bold={selected} dimColor={!selected} wrap="truncate">
+        <Text
+          color={selected ? "white" : undefined}
+          bold={selected}
+          dimColor={!selected}
+          wrap="truncate"
+        >
           {session.title || "untitled"}
         </Text>
       </Box>
@@ -84,7 +89,12 @@ export function SessionRail({
     <Box flexDirection="column" width={width} paddingX={1}>
       <Text dimColor>SESSIONS</Text>
       {sessions.map((s) => (
-        <RailRow key={s.sid} session={s} selected={s.sid === selectedSid} now={now} />
+        <RailRow
+          key={s.sid}
+          session={s}
+          selected={s.sid === selectedSid}
+          now={now}
+        />
       ))}
     </Box>
   );

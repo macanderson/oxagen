@@ -22,9 +22,13 @@ function BottomStack(): React.ReactElement {
         <StatusLine
           model="anthropic/claude-sonnet-5"
           branch="main"
-          inputTokens={6100} outputTokens={472}
-          cacheHit={0} cacheMiss={6100} costUsd={0.03}
-          pipelineOn mode="ask"
+          inputTokens={6100}
+          outputTokens={472}
+          cacheHit={0}
+          cacheMiss={6100}
+          costUsd={0.03}
+          pipelineOn
+          mode="ask"
         />
       </Box>
     </Box>

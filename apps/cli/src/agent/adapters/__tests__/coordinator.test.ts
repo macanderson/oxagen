@@ -15,7 +15,9 @@ import type { ModelProvider } from "../../../runtime/types.js";
 
 // A metered/gateway port stand-in: stream() resolves text + usage; generateObject
 // is unused here. `usage` settling is what drives createMeteredAi's metrics emit.
-function fakeBaseAi(over: { text?: string; inputTokens?: number; outputTokens?: number } = {}): {
+function fakeBaseAi(
+  over: { text?: string; inputTokens?: number; outputTokens?: number } = {},
+): {
   ai: AgentAi;
   stream: ReturnType<typeof vi.fn>;
 } {
@@ -71,7 +73,10 @@ function fakeOnDeviceProvider(): ModelProvider {
 describe("resolveCoordinatorAi", () => {
   it("cloud id → keeps the caller's native metered port and resolves the concrete slug", async () => {
     const { ai } = fakeBaseAi();
-    const resolved = await resolveCoordinatorAi({ baseAi: ai, coordinatorId: "haiku" });
+    const resolved = await resolveCoordinatorAi({
+      baseAi: ai,
+      coordinatorId: "haiku",
+    });
     expect(resolved.kind).toBe("cloud");
     // The engine keeps streaming through the caller's metered port (native tools).
     expect(resolved.ai).toBe(ai);
@@ -133,7 +138,11 @@ describe("resolveCoordinatorAi", () => {
 
 describe("meteredCloudGenerate", () => {
   it("routes a cloud completion through the base port (system split out, text + usage returned)", async () => {
-    const { ai, stream } = fakeBaseAi({ text: "hi", inputTokens: 3, outputTokens: 5 });
+    const { ai, stream } = fakeBaseAi({
+      text: "hi",
+      inputTokens: 3,
+      outputTokens: 5,
+    });
     const generate = meteredCloudGenerate(ai);
     const out = await generate({
       model: "anthropic/claude-haiku-4.5",
@@ -142,9 +151,16 @@ describe("meteredCloudGenerate", () => {
         { role: "user", content: "hello" },
       ],
     });
-    expect(out).toEqual({ text: "hi", usage: { inputTokens: 3, outputTokens: 5 } });
+    expect(out).toEqual({
+      text: "hi",
+      usage: { inputTokens: 3, outputTokens: 5 },
+    });
     // system-role message is lifted into `system`, not left in `messages`.
-    const call = stream.mock.calls[0]?.[0] as { system: string; messages: unknown[]; tools: unknown };
+    const call = stream.mock.calls[0]?.[0] as {
+      system: string;
+      messages: unknown[];
+      tools: unknown;
+    };
     expect(call.system).toBe("be brief");
     expect(call.messages).toEqual([{ role: "user", content: "hello" }]);
     expect(call.tools).toEqual({});

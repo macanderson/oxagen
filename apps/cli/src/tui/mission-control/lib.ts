@@ -9,7 +9,11 @@
  * terminal — the components are then thin presentational shells over these.
  */
 import { theme } from "../theme.js";
-import type { SessionEvent, SessionState, TurnUsage } from "../../sessions/events.js";
+import type {
+  SessionEvent,
+  SessionState,
+  TurnUsage,
+} from "../../sessions/events.js";
 import { emptyTurnUsage } from "../../sessions/events.js";
 import { isActiveState, type SessionMetaView } from "../../sessions/store.js";
 
@@ -29,7 +33,8 @@ export const SESSION_COLORS: readonly string[] = theme.commandPalette;
  */
 export function colorForSid(sid: string): string {
   let h = 5381;
-  for (let i = 0; i < sid.length; i++) h = ((h << 5) + h + sid.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < sid.length; i++)
+    h = ((h << 5) + h + sid.charCodeAt(i)) >>> 0;
   return SESSION_COLORS[h % SESSION_COLORS.length] as string;
 }
 
@@ -53,15 +58,11 @@ export function formatClock(ts: number): string {
 }
 
 /**
- * A short, human duration: `12ms` / `1.2s` / `2m31s`. Mirrors the aggregate
- * formatter's wording so a tool chip reads the same in the Focus and Aggregate
- * views.
+ * A short, human duration: `12ms` / `1.2s` / `2m31s`. Re-exported from the
+ * aggregate-line leaf rather than reimplemented, so a tool chip reads the same
+ * in the Focus and Aggregate views by construction instead of by convention.
  */
-export function formatDurationMs(ms: number): string {
-  if (ms >= 60_000) return `${Math.round(ms / 60_000)}m${Math.round((ms % 60_000) / 1000)}s`;
-  if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.round(ms)}ms`;
-}
+export { formatDurationMs } from "./aggregate-line.js";
 
 // ── State glyphs ─────────────────────────────────────────────────────────────
 
@@ -103,7 +104,9 @@ export interface StateCounts {
 }
 
 /** Tally the roster by derived state — the vitals bar's headline numbers. */
-export function countByState(sessions: readonly SessionMetaView[]): StateCounts {
+export function countByState(
+  sessions: readonly SessionMetaView[],
+): StateCounts {
   const counts: StateCounts = {
     running: 0,
     waiting: 0,
@@ -197,7 +200,10 @@ export function editLine(state: LineState, edit: LineEdit): LineState {
     case "backspace":
       return cursor === 0
         ? state
-        : { value: value.slice(0, cursor - 1) + value.slice(cursor), cursor: cursor - 1 };
+        : {
+            value: value.slice(0, cursor - 1) + value.slice(cursor),
+            cursor: cursor - 1,
+          };
     case "delete":
       return cursor >= value.length
         ? state
@@ -220,7 +226,13 @@ export function editLine(state: LineState, edit: LineEdit): LineState {
 export type FocusItem =
   | { kind: "user"; text: string }
   | { kind: "assistant"; text: string; streaming: boolean }
-  | { kind: "tool"; name: string; running: boolean; ok?: boolean; durationMs?: number }
+  | {
+      kind: "tool";
+      name: string;
+      running: boolean;
+      ok?: boolean;
+      durationMs?: number;
+    }
   | { kind: "stage"; label: string; detail?: string }
   | { kind: "diff"; changedFiles: string[]; changedLines: number }
   | { kind: "error"; message: string; fatal: boolean }
@@ -240,7 +252,8 @@ export function foldFocusEvents(events: readonly SessionEvent[]): FocusItem[] {
 
   const finalizeStreaming = (): void => {
     const last = items[items.length - 1];
-    if (last && last.kind === "assistant" && last.streaming) last.streaming = false;
+    if (last && last.kind === "assistant" && last.streaming)
+      last.streaming = false;
   };
   const openAssistant = (): Extract<FocusItem, { kind: "assistant" }> => {
     const last = items[items.length - 1];
@@ -276,23 +289,39 @@ export function foldFocusEvents(events: readonly SessionEvent[]): FocusItem[] {
         items.push({ kind: "tool", name: e.name, running: true });
         break;
       case "tool.end": {
-        const open = [...items]
-          .reverse()
-          .find((it): it is Extract<FocusItem, { kind: "tool" }> =>
-            it.kind === "tool" && it.running && it.name === e.name,
-          );
+        // Scan backwards in place: copying + reversing `items` on every
+        // tool.end made the fold O(n²) in allocation, and this fold re-runs
+        // over a session's WHOLE event log on each Focus-view refresh.
+        let open: Extract<FocusItem, { kind: "tool" }> | undefined;
+        for (let i = items.length - 1; i >= 0; i--) {
+          const it = items[i];
+          if (it && it.kind === "tool" && it.running && it.name === e.name) {
+            open = it;
+            break;
+          }
+        }
         if (open) {
           open.running = false;
           open.ok = e.ok;
           open.durationMs = e.durationMs;
         } else {
-          items.push({ kind: "tool", name: e.name, running: false, ok: e.ok, durationMs: e.durationMs });
+          items.push({
+            kind: "tool",
+            name: e.name,
+            running: false,
+            ok: e.ok,
+            durationMs: e.durationMs,
+          });
         }
         break;
       }
       case "diff":
         if (e.changedFiles.length > 0) {
-          items.push({ kind: "diff", changedFiles: e.changedFiles, changedLines: e.changedLines });
+          items.push({
+            kind: "diff",
+            changedFiles: e.changedFiles,
+            changedLines: e.changedLines,
+          });
         }
         break;
       case "turn.end":

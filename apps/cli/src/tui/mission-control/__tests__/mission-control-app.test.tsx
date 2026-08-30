@@ -13,7 +13,10 @@ import { join } from "node:path";
 import { render } from "ink-testing-library";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { MissionControlApp, type ManagerHandle } from "../mission-control-app.js";
+import {
+  MissionControlApp,
+  type ManagerHandle,
+} from "../mission-control-app.js";
 import { SessionStore, type SessionMetaView } from "../../../sessions/store.js";
 import type { SessionEvent } from "../../../sessions/events.js";
 
@@ -32,7 +35,10 @@ async function until(
   }
 }
 
-const metaView = (sid: string, over: Partial<SessionMetaView> = {}): SessionMetaView =>
+const metaView = (
+  sid: string,
+  over: Partial<SessionMetaView> = {},
+): SessionMetaView =>
   ({
     v: 1,
     sid,
@@ -126,7 +132,9 @@ const ev = (sid: string, seq: number, partial: object): SessionEvent =>
 describe("MissionControlApp", () => {
   it("shows the empty-state invitation before any session exists", async () => {
     const { lastFrame, unmount } = mount();
-    await until(() => (lastFrame() ?? "").includes("every line becomes an agent"));
+    await until(() =>
+      (lastFrame() ?? "").includes("every line becomes an agent"),
+    );
     unmount();
   });
 
@@ -140,7 +148,11 @@ describe("MissionControlApp", () => {
     expect(manager.dispatched[0]?.prompt).toBe("fix the login bug");
     // The dispatch notice lands in the timeline and the roster paints the rail.
     await until(() => (lastFrame() ?? "").includes("◇ dispatched"));
-    await until(() => (lastFrame() ?? "").includes("task") || (lastFrame() ?? "").includes("0001"));
+    await until(
+      () =>
+        (lastFrame() ?? "").includes("task") ||
+        (lastFrame() ?? "").includes("0001"),
+    );
     unmount();
   });
 
@@ -151,10 +163,21 @@ describe("MissionControlApp", () => {
     stdin.write("@7f2q add more tests");
     // Wait for the composer to commit the text before Enter — back-to-back
     // writes would let the return handler read a not-yet-rendered buffer.
-    await until(() => (lastFrame() ?? "").includes("@7f2q add more tests"), 3000, () => lastFrame() ?? "");
+    await until(
+      () => (lastFrame() ?? "").includes("@7f2q add more tests"),
+      3000,
+      () => lastFrame() ?? "",
+    );
     stdin.write("\r");
-    await until(() => manager.sent.length === 1, 3000, () => lastFrame() ?? "");
-    expect(manager.sent[0]).toEqual({ sid: "s-test-7f2q", text: "add more tests" });
+    await until(
+      () => manager.sent.length === 1,
+      3000,
+      () => lastFrame() ?? "",
+    );
+    expect(manager.sent[0]).toEqual({
+      sid: "s-test-7f2q",
+      text: "add more tests",
+    });
     expect(manager.dispatched).toHaveLength(0);
     unmount();
   });
@@ -162,9 +185,22 @@ describe("MissionControlApp", () => {
   it("bus events render as aggregate lines", async () => {
     manager.seedRoster([metaView("s-test-aaaa")]);
     const { lastFrame, unmount } = mount();
-    manager.emitEvent(ev("s-test-aaaa", 1, { type: "message.end", text: "Deployed the fix.", turn: 1 }));
+    manager.emitEvent(
+      ev("s-test-aaaa", 1, {
+        type: "message.end",
+        text: "Deployed the fix.",
+        turn: 1,
+      }),
+    );
     await until(() => (lastFrame() ?? "").includes("Deployed the fix."));
-    manager.emitEvent(ev("s-test-aaaa", 2, { type: "tool.end", name: "bash", ok: false, durationMs: 100 }));
+    manager.emitEvent(
+      ev("s-test-aaaa", 2, {
+        type: "tool.end",
+        name: "bash",
+        ok: false,
+        durationMs: 100,
+      }),
+    );
     await until(() => (lastFrame() ?? "").includes("bash failed"));
     unmount();
   });
@@ -186,12 +222,23 @@ describe("MissionControlApp", () => {
   it("focus mode: enter sends a follow-up to the selected session", async () => {
     manager.seedRoster([metaView("s-test-cccc")]);
     const { stdin, lastFrame, unmount } = mount("s-test-cccc");
-    await until(() => (lastFrame() ?? "").includes("reply to cccc"), 3000, () => lastFrame() ?? "");
+    await until(
+      () => (lastFrame() ?? "").includes("reply to cccc"),
+      3000,
+      () => lastFrame() ?? "",
+    );
     stdin.write("also update the docs");
     await until(() => (lastFrame() ?? "").includes("also update the docs"));
     stdin.write("\r");
-    await until(() => manager.sent.length === 1, 3000, () => lastFrame() ?? "");
-    expect(manager.sent[0]).toEqual({ sid: "s-test-cccc", text: "also update the docs" });
+    await until(
+      () => manager.sent.length === 1,
+      3000,
+      () => lastFrame() ?? "",
+    );
+    expect(manager.sent[0]).toEqual({
+      sid: "s-test-cccc",
+      text: "also update the docs",
+    });
     unmount();
   });
 
@@ -200,9 +247,17 @@ describe("MissionControlApp", () => {
     const { stdin, lastFrame, unmount } = mount();
     // Wait for the rail to PAINT (not just the fake's snapshot) so Ink has
     // mounted its stdin listener — a keystroke before that is dropped.
-    await until(() => (lastFrame() ?? "").includes("dddd"), 3000, () => lastFrame() ?? "");
+    await until(
+      () => (lastFrame() ?? "").includes("dddd"),
+      3000,
+      () => lastFrame() ?? "",
+    );
     stdin.write("c");
-    await until(() => (lastFrame() ?? "").includes("press c again"), 3000, () => lastFrame() ?? "");
+    await until(
+      () => (lastFrame() ?? "").includes("press c again"),
+      3000,
+      () => lastFrame() ?? "",
+    );
     expect(manager.cancelled).toHaveLength(0);
     stdin.write("c");
     await until(() => manager.cancelled.length === 1);

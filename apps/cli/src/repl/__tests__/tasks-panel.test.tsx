@@ -45,8 +45,20 @@ function task(over: Partial<TrackedTask> & { id: string }): TrackedTask {
 }
 
 const PLAN: TrackedTask[] = [
-  task({ id: "evaluate", title: "Evaluate the request", status: "done", createdAt: 1000, updatedAt: 4000 }),
-  task({ id: "execute", title: "Execute the work", status: "in_progress", createdAt: 5000, detail: "editing loop.ts" }),
+  task({
+    id: "evaluate",
+    title: "Evaluate the request",
+    status: "done",
+    createdAt: 1000,
+    updatedAt: 4000,
+  }),
+  task({
+    id: "execute",
+    title: "Execute the work",
+    status: "in_progress",
+    createdAt: 5000,
+    detail: "editing loop.ts",
+  }),
   task({ id: "judge", title: "Judge the result", status: "pending" }),
 ];
 
@@ -84,15 +96,26 @@ describe("formatElapsed", () => {
 describe("taskElapsedMs", () => {
   it("counts up for running, shows duration for finished, nothing for pending", () => {
     expect(
-      taskElapsedMs(task({ id: "a", status: "in_progress", createdAt: 5000 }), 12_000),
+      taskElapsedMs(
+        task({ id: "a", status: "in_progress", createdAt: 5000 }),
+        12_000,
+      ),
     ).toBe(7000);
     expect(
-      taskElapsedMs(task({ id: "b", status: "done", createdAt: 1000, updatedAt: 4000 }), 99_000),
+      taskElapsedMs(
+        task({ id: "b", status: "done", createdAt: 1000, updatedAt: 4000 }),
+        99_000,
+      ),
     ).toBe(3000);
     expect(
-      taskElapsedMs(task({ id: "c", status: "failed", createdAt: 1000, updatedAt: 2500 }), 99_000),
+      taskElapsedMs(
+        task({ id: "c", status: "failed", createdAt: 1000, updatedAt: 2500 }),
+        99_000,
+      ),
     ).toBe(1500);
-    expect(taskElapsedMs(task({ id: "d", status: "pending" }), 12_000)).toBeNull();
+    expect(
+      taskElapsedMs(task({ id: "d", status: "pending" }), 12_000),
+    ).toBeNull();
   });
 });
 
@@ -165,13 +188,20 @@ describe("TasksPanel", () => {
   });
 
   it("live-updates as the snapshot changes", async () => {
-    let plan: TrackedTask[] = [task({ id: "one", title: "First stage", status: "in_progress" })];
+    let plan: TrackedTask[] = [
+      task({ id: "one", title: "First stage", status: "in_progress" }),
+    ];
     const { lastFrame } = renderPanel({ snapshot: () => plan });
     await until(() => (lastFrame() ?? "").includes("First stage"));
     expect(lastFrame()).toContain("1 task");
     plan = [
       task({ id: "one", title: "First stage", status: "done" }),
-      task({ id: "two", title: "Second stage", status: "in_progress", order: 1 }),
+      task({
+        id: "two",
+        title: "Second stage",
+        status: "in_progress",
+        order: 1,
+      }),
     ];
     await until(() => (lastFrame() ?? "").includes("Second stage"));
     expect(lastFrame()).toContain("2 tasks · 1 done");

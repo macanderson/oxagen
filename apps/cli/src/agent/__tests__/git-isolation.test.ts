@@ -12,7 +12,13 @@
  *   4. Durable log — cleanup removes worktrees but keeps the pins.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  readFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -61,7 +67,12 @@ describe("WorktreeManager", () => {
     expect(cpA?.hash).toMatch(/^[0-9a-f]{40}$/);
     expect(cpB?.hash).toMatch(/^[0-9a-f]{40}$/);
     expect(cpA!.hash).not.toBe(cpB!.hash);
-    const pins = git(repo, "for-each-ref", "--format=%(objectname)", "refs/oxagen/agents");
+    const pins = git(
+      repo,
+      "for-each-ref",
+      "--format=%(objectname)",
+      "refs/oxagen/agents",
+    );
     expect(pins).toContain(cpA!.hash);
     expect(pins).toContain(cpB!.hash);
   });
@@ -134,7 +145,12 @@ describe("WorktreeManager", () => {
 
     expect(existsSync(a)).toBe(false); // worktree gone
     // Pin survives — the commit is still reachable by hash.
-    const pins = git(repo, "for-each-ref", "--format=%(objectname)", "refs/oxagen/agents");
+    const pins = git(
+      repo,
+      "for-each-ref",
+      "--format=%(objectname)",
+      "refs/oxagen/agents",
+    );
     expect(pins).toContain(cp!.hash);
     expect(git(repo, "cat-file", "-t", cp!.hash)).toBe("commit");
   });

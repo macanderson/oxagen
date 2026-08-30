@@ -49,7 +49,14 @@ import { fileGraphFromContent, listSourceFiles } from "../builder";
 function makeParseResult(
   symbols: Array<{
     name: string;
-    kind: "function" | "class" | "method" | "interface" | "type" | "arrow_function" | "heading";
+    kind:
+      | "function"
+      | "class"
+      | "method"
+      | "interface"
+      | "type"
+      | "arrow_function"
+      | "heading";
     startLine: number;
     endLine: number;
     signature?: string;
@@ -81,11 +88,16 @@ describe("builder — unified tree-sitter extraction", () => {
   it("extracts arrow_function symbols (which the old regex missed)", async () => {
     mockParseSourceFile.mockResolvedValueOnce(
       makeParseResult([
-        { name: "fetchData",    kind: "arrow_function", startLine: 0, endLine: 1 },
-        { name: "processItems", kind: "arrow_function", startLine: 2, endLine: 2 },
-        { name: "namedFn",      kind: "function",       startLine: 4, endLine: 4 },
-        { name: "MyService",    kind: "class",          startLine: 6, endLine: 8 },
-        { name: "doWork",       kind: "method",         startLine: 7, endLine: 7 },
+        { name: "fetchData", kind: "arrow_function", startLine: 0, endLine: 1 },
+        {
+          name: "processItems",
+          kind: "arrow_function",
+          startLine: 2,
+          endLine: 2,
+        },
+        { name: "namedFn", kind: "function", startLine: 4, endLine: 4 },
+        { name: "MyService", kind: "class", startLine: 6, endLine: 8 },
+        { name: "doWork", kind: "method", startLine: 7, endLine: 7 },
       ]),
     );
 
@@ -115,7 +127,9 @@ describe("builder — unified tree-sitter extraction", () => {
 
     // Named function
     expect(kinds).toContain("function");
-    expect(symbolNodes.find((n) => n.kind === "function")!.name).toBe("namedFn");
+    expect(symbolNodes.find((n) => n.kind === "function")!.name).toBe(
+      "namedFn",
+    );
 
     // Class and method — old regex missed methods
     expect(kinds).toContain("class");
@@ -127,12 +141,16 @@ describe("builder — unified tree-sitter extraction", () => {
   it("creates contains edges from file node to each symbol", async () => {
     mockParseSourceFile.mockResolvedValueOnce(
       makeParseResult([
-        { name: "alpha", kind: "function",       startLine: 0, endLine: 0 },
-        { name: "beta",  kind: "arrow_function", startLine: 2, endLine: 2 },
+        { name: "alpha", kind: "function", startLine: 0, endLine: 0 },
+        { name: "beta", kind: "arrow_function", startLine: 2, endLine: 2 },
       ]),
     );
 
-    const fg = await fileGraphFromContent("src/ab.ts", "/* content */", "/root");
+    const fg = await fileGraphFromContent(
+      "src/ab.ts",
+      "/* content */",
+      "/root",
+    );
 
     const fileNode = fg.nodes.find((n) => n.kind === "file")!;
     const containsEdges = fg.edges.filter((e) => e.type === "contains");
@@ -154,7 +172,11 @@ describe("builder — unified tree-sitter extraction", () => {
       ],
     });
 
-    const fg = await fileGraphFromContent("src/code.ts", "/* content */", "/root");
+    const fg = await fileGraphFromContent(
+      "src/code.ts",
+      "/* content */",
+      "/root",
+    );
 
     const symbolNodes = fg.nodes.filter((n) => n.kind !== "file");
     // heading is filtered; only getRealFn is included
@@ -169,7 +191,7 @@ describe("builder — unified tree-sitter extraction", () => {
         {
           name: "compute",
           kind: "function",
-          startLine: 2,  // 0-indexed
+          startLine: 2, // 0-indexed
           endLine: 5,
           signature: "export function compute(x: number): number",
           docComment: "Computes the result.",
@@ -192,14 +214,19 @@ describe("builder — unified tree-sitter extraction", () => {
     expect(computeNode).toBeDefined();
     expect(computeNode.kind).toBe("function");
     // Builder adds 1 to convert from 0-indexed (tree-sitter) to 1-indexed (CodeNode)
-    expect(computeNode.range.start).toBe(3);  // startLine 2 → 3
-    expect(computeNode.range.end).toBe(6);    // endLine 5 → 6
-    expect(computeNode.signature).toBe("export function compute(x: number): number");
+    expect(computeNode.range.start).toBe(3); // startLine 2 → 3
+    expect(computeNode.range.end).toBe(6); // endLine 5 → 6
+    expect(computeNode.signature).toBe(
+      "export function compute(x: number): number",
+    );
     expect(computeNode.docstring).toBe("Computes the result.");
   });
 
   it("returns a content hash in the FileGraph", async () => {
-    mockParseSourceFile.mockResolvedValueOnce({ language: "typescript", symbols: [] });
+    mockParseSourceFile.mockResolvedValueOnce({
+      language: "typescript",
+      symbols: [],
+    });
 
     const content = "export const x = 1;\n";
     const fg = await fileGraphFromContent("src/x.ts", content, "/root");
@@ -209,7 +236,10 @@ describe("builder — unified tree-sitter extraction", () => {
   });
 
   it("passes the file path and content to parseSourceFile", async () => {
-    mockParseSourceFile.mockResolvedValueOnce({ language: "typescript", symbols: [] });
+    mockParseSourceFile.mockResolvedValueOnce({
+      language: "typescript",
+      symbols: [],
+    });
 
     const content = "const a = 1;";
     await fileGraphFromContent("lib/utils.ts", content, "/root");
@@ -241,7 +271,11 @@ describe("builder — CALLS edge extraction (same-file resolution)", () => {
       calls,
     } as ParseResult);
 
-    const fg = await fileGraphFromContent("src/work.ts", "/* content */", "/root");
+    const fg = await fileGraphFromContent(
+      "src/work.ts",
+      "/* content */",
+      "/root",
+    );
 
     const callEdges = fg.edges.filter((e) => e.type === "calls");
     expect(callEdges).toHaveLength(1);
@@ -271,17 +305,25 @@ describe("builder — CALLS edge extraction (same-file resolution)", () => {
   });
 
   it("emits no same-file edge for an external callee, and stays silent by default", async () => {
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const consoleSpy = vi
+      .spyOn(console, "log")
+      .mockImplementation(() => undefined);
     const calls: CallSite[] = [
       { callee: "externalFn", line: 2, enclosingSymbol: "localFn" },
     ];
     mockParseSourceFile.mockResolvedValueOnce({
       language: "typescript",
-      symbols: [{ name: "localFn", kind: "function", startLine: 0, endLine: 5 }],
+      symbols: [
+        { name: "localFn", kind: "function", startLine: 0, endLine: 5 },
+      ],
       calls,
     } as ParseResult);
 
-    const fg = await fileGraphFromContent("src/caller.ts", "/* content */", "/root");
+    const fg = await fileGraphFromContent(
+      "src/caller.ts",
+      "/* content */",
+      "/root",
+    );
 
     const callEdges = fg.edges.filter((e) => e.type === "calls");
     expect(callEdges).toHaveLength(0); // external callee — no same-file edge
@@ -293,13 +335,17 @@ describe("builder — CALLS edge extraction (same-file resolution)", () => {
 
   it("surfaces an external-call diagnostic only under OXAGEN_CODE_GRAPH_DEBUG", async () => {
     vi.stubEnv("OXAGEN_CODE_GRAPH_DEBUG", "1");
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const consoleSpy = vi
+      .spyOn(console, "log")
+      .mockImplementation(() => undefined);
     const calls: CallSite[] = [
       { callee: "externalFn", line: 2, enclosingSymbol: "localFn" },
     ];
     mockParseSourceFile.mockResolvedValueOnce({
       language: "typescript",
-      symbols: [{ name: "localFn", kind: "function", startLine: 0, endLine: 5 }],
+      symbols: [
+        { name: "localFn", kind: "function", startLine: 0, endLine: 5 },
+      ],
       calls,
     } as ParseResult);
 
@@ -327,7 +373,11 @@ describe("builder — CALLS edge extraction (same-file resolution)", () => {
       calls,
     } as ParseResult);
 
-    const fg = await fileGraphFromContent("src/dup-call.ts", "/* content */", "/root");
+    const fg = await fileGraphFromContent(
+      "src/dup-call.ts",
+      "/* content */",
+      "/root",
+    );
 
     const callEdges = fg.edges.filter((e) => e.type === "calls");
     expect(callEdges).toHaveLength(1); // deduplicated
@@ -340,7 +390,11 @@ describe("builder — CALLS edge extraction (same-file resolution)", () => {
       // no calls field
     } as ParseResult);
 
-    const fg = await fileGraphFromContent("src/nocalls.ts", "/* content */", "/root");
+    const fg = await fileGraphFromContent(
+      "src/nocalls.ts",
+      "/* content */",
+      "/root",
+    );
     expect(fg.edges.filter((e) => e.type === "calls")).toHaveLength(0);
   });
 });
@@ -365,27 +419,36 @@ describe("builder — workspace-alias IMPORTS (@oxagen/*)", () => {
   it("resolves @oxagen/<pkg> to packages/<pkg>/src/index.ts and emits an imports edge", async () => {
     // Create the target file so statSync resolves it
     mkdirSync(join(tmpDir, "packages", "ai", "src"), { recursive: true });
-    writeFileSync(join(tmpDir, "packages", "ai", "src", "index.ts"), "// ai index");
+    writeFileSync(
+      join(tmpDir, "packages", "ai", "src", "index.ts"),
+      "// ai index",
+    );
 
-    const imports: ImportSite[] = [
-      { specifier: "@oxagen/ai", line: 0 },
-    ];
+    const imports: ImportSite[] = [{ specifier: "@oxagen/ai", line: 0 }];
     mockParseSourceFile.mockResolvedValueOnce({
       language: "typescript",
       symbols: [],
       imports,
     } as ParseResult);
 
-    const fg = await fileGraphFromContent("src/consumer.ts", "/* content */", tmpDir);
+    const fg = await fileGraphFromContent(
+      "src/consumer.ts",
+      "/* content */",
+      tmpDir,
+    );
 
     const importEdges = fg.edges.filter((e) => e.type === "imports");
     // Should have one edge from the consumer file to packages/ai/src/index.ts
     expect(importEdges).toHaveLength(1);
-    expect(importEdges[0]!.source).toBe(fg.nodes.find((n) => n.kind === "file")!.id);
+    expect(importEdges[0]!.source).toBe(
+      fg.nodes.find((n) => n.kind === "file")!.id,
+    );
   });
 
   it("emits no alias edge for an unresolvable @oxagen/<pkg>: silent by default, logs under debug", async () => {
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const consoleSpy = vi
+      .spyOn(console, "log")
+      .mockImplementation(() => undefined);
     const imports: ImportSite[] = [
       { specifier: "@oxagen/nonexistent-pkg-xyz", line: 0 },
     ];
@@ -396,7 +459,11 @@ describe("builder — workspace-alias IMPORTS (@oxagen/*)", () => {
       symbols: [],
       imports,
     } as ParseResult);
-    const fg = await fileGraphFromContent("src/consumer.ts", "/* content */", tmpDir);
+    const fg = await fileGraphFromContent(
+      "src/consumer.ts",
+      "/* content */",
+      tmpDir,
+    );
     expect(fg.edges.filter((e) => e.type === "imports")).toHaveLength(0);
     expect(consoleSpy).not.toHaveBeenCalled();
 
@@ -410,7 +477,9 @@ describe("builder — workspace-alias IMPORTS (@oxagen/*)", () => {
     await fileGraphFromContent("src/consumer.ts", "/* content */", tmpDir);
     expect(consoleSpy).toHaveBeenCalledOnce();
     expect(consoleSpy.mock.calls[0]![0]).toMatch(/unresolved workspace alias/);
-    expect(consoleSpy.mock.calls[0]![0]).toMatch(/@oxagen\/nonexistent-pkg-xyz/);
+    expect(consoleSpy.mock.calls[0]![0]).toMatch(
+      /@oxagen\/nonexistent-pkg-xyz/,
+    );
 
     consoleSpy.mockRestore();
     vi.unstubAllEnvs();
@@ -423,7 +492,11 @@ describe("builder — workspace-alias IMPORTS (@oxagen/*)", () => {
       // no imports field
     } as ParseResult);
 
-    const fg = await fileGraphFromContent("src/noimports.ts", "/* content */", tmpDir);
+    const fg = await fileGraphFromContent(
+      "src/noimports.ts",
+      "/* content */",
+      tmpDir,
+    );
     expect(fg.edges.filter((e) => e.type === "imports")).toHaveLength(0);
   });
 
@@ -438,7 +511,11 @@ describe("builder — workspace-alias IMPORTS (@oxagen/*)", () => {
       imports,
     } as ParseResult);
 
-    const fg = await fileGraphFromContent("src/bare.ts", "/* content */", tmpDir);
+    const fg = await fileGraphFromContent(
+      "src/bare.ts",
+      "/* content */",
+      tmpDir,
+    );
 
     // Relative imports go through extractImports() (existing logic), not the alias resolver.
     // Bare specifiers like "react" are skipped by both paths.

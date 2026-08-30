@@ -4,14 +4,21 @@
  * through — and its plain-text formatter for non-Ink surfaces (one-shot).
  */
 import { describe, it, expect } from "vitest";
-import { activityGlyph, formatActivityLine, type ActivityStatus } from "../activity.js";
+import {
+  activityGlyph,
+  formatActivityLine,
+  type ActivityStatus,
+} from "../activity.js";
 import { theme } from "../theme.js";
 
 describe("activityGlyph", () => {
   it("gives every status its own glyph + color", () => {
     expect(activityGlyph("queued")).toEqual({ glyph: "⧗", color: theme.amber });
     expect(activityGlyph("blocked")).toEqual({ glyph: "⊘", color: theme.red });
-    expect(activityGlyph("cancelled")).toEqual({ glyph: "⊘", color: theme.dim });
+    expect(activityGlyph("cancelled")).toEqual({
+      glyph: "⊘",
+      color: theme.dim,
+    });
     expect(activityGlyph("done")).toEqual({ glyph: "✓", color: theme.green });
     expect(activityGlyph("failed")).toEqual({ glyph: "✗", color: theme.red });
   });
@@ -70,9 +77,9 @@ describe("formatActivityLine", () => {
   });
 
   it("joins label and detail with a middle dot", () => {
-    expect(formatActivityLine({ label: "editing…", detail: "src/foo.ts" })).toBe(
-      "editing… · src/foo.ts",
-    );
+    expect(
+      formatActivityLine({ label: "editing…", detail: "src/foo.ts" }),
+    ).toBe("editing… · src/foo.ts");
   });
 
   it("omits the dot entirely for an empty-string detail", () => {
@@ -82,7 +89,11 @@ describe("formatActivityLine", () => {
   it("composes directly with a StageEvent-shaped object (kind + label + detail)", () => {
     // No adapter object needed — a StageEvent (kind/label/detail) satisfies
     // the { label, detail? } shape structurally.
-    const stageLike = { kind: "execute", label: "running the agent", detail: "step 4" };
+    const stageLike = {
+      kind: "execute",
+      label: "running the agent",
+      detail: "step 4",
+    };
     expect(formatActivityLine(stageLike)).toBe("running the agent · step 4");
   });
 });

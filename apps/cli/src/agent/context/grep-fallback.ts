@@ -17,14 +17,28 @@ import { join, relative } from "node:path";
 import { tokenize } from "./traversal.js";
 import type { ImpactedFileRef } from "./graph-query.js";
 
-/** Directories never worth scanning. */
-const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "build", ".next", "coverage", ".turbo"]);
+/**
+ * Directories never worth scanning. Only these exact names are skipped — any
+ * other dot-directory (`.venv`, `.cache`, `.pnpm-store`, …) is still walked.
+ */
+const SKIP_DIRS = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  ".next",
+  "coverage",
+  ".turbo",
+]);
 
 /** Cap on files opened and matches returned, so a fallback can't run away. */
 const MAX_FILES_SCANNED = 4000;
 const MAX_RESULTS = 50;
 
-async function* walk(dir: string, root: string): AsyncGenerator<{ abs: string; rel: string }> {
+async function* walk(
+  dir: string,
+  root: string,
+): AsyncGenerator<{ abs: string; rel: string }> {
   let entries: import("node:fs").Dirent[];
   try {
     entries = await readdir(dir, { withFileTypes: true });
@@ -32,9 +46,6 @@ async function* walk(dir: string, root: string): AsyncGenerator<{ abs: string; r
     return; // unreadable dir — skip
   }
   for (const entry of entries) {
-    if (entry.name.startsWith(".") && entry.name !== ".env.example") {
-      if (SKIP_DIRS.has(entry.name)) continue;
-    }
     if (SKIP_DIRS.has(entry.name)) continue;
     const abs = join(dir, entry.name);
     if (entry.isDirectory()) {
@@ -68,7 +79,9 @@ export async function grepFallback(
     });
 
   // Case-insensitive OR of the escaped terms.
-  const pattern = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const pattern = terms
+    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
   const re = new RegExp(pattern, "gi");
 
   const hits: { path: string; count: number }[] = [];
@@ -79,7 +92,8 @@ export async function grepFallback(
     const text = await read(abs);
     if (text === null) continue;
     const matches = text.match(re);
-    if (matches && matches.length > 0) hits.push({ path: rel, count: matches.length });
+    if (matches && matches.length > 0)
+      hits.push({ path: rel, count: matches.length });
   }
 
   hits.sort((a, b) => b.count - a.count);

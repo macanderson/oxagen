@@ -28,10 +28,18 @@
 import { Box, Text, useApp, useInput } from "ink";
 import React, { useEffect, useRef, useState } from "react";
 import { theme } from "../theme.js";
-import { toAggregateLine, type AggregateEmphasis, type AggregateLine } from "./aggregate-line.js";
+import {
+  toAggregateLine,
+  type AggregateEmphasis,
+  type AggregateLine,
+} from "./aggregate-line.js";
 import { VitalsBar } from "./vitals-bar.js";
 import { SessionRail } from "./session-rail.js";
-import { AggregateTimeline, type LiveTail, type RenderableLine } from "./aggregate-timeline.js";
+import {
+  AggregateTimeline,
+  type LiveTail,
+  type RenderableLine,
+} from "./aggregate-timeline.js";
 import { FocusTranscript } from "./focus-transcript.js";
 import { RosterView } from "./roster-view.js";
 import { Composer } from "./composer.js";
@@ -68,7 +76,12 @@ export interface ManagerHandle {
   on(event: "roster", listener: (s: SessionMetaView[]) => void): unknown;
   off(event: "event", listener: (e: SessionEvent) => void): unknown;
   off(event: "roster", listener: (s: SessionMetaView[]) => void): unknown;
-  dispatch(opts: { prompt: string; model?: string; agent?: string; mode?: "conversation" | "once" }): string;
+  dispatch(opts: {
+    prompt: string;
+    model?: string;
+    agent?: string;
+    mode?: "conversation" | "once";
+  }): string;
   send(sid: string, text: string): Promise<void>;
   cancel(sid: string): Promise<void>;
   drain(): Promise<void>;
@@ -86,9 +99,23 @@ function projectName(cwd: string): string {
   return cwd.split("/").filter(Boolean).pop() ?? cwd;
 }
 
-function ModeHeader({ mode, verbose }: { mode: Mode; verbose: boolean }): React.ReactElement {
-  const tab = (key: string, label: string, active: boolean): React.ReactElement => (
-    <Text color={active ? theme.cyan : undefined} bold={active} dimColor={!active}>
+function ModeHeader({
+  mode,
+  verbose,
+}: {
+  mode: Mode;
+  verbose: boolean;
+}): React.ReactElement {
+  const tab = (
+    key: string,
+    label: string,
+    active: boolean,
+  ): React.ReactElement => (
+    <Text
+      color={active ? theme.cyan : undefined}
+      bold={active}
+      dimColor={!active}
+    >
       [{key}]{label}
     </Text>
   );
@@ -112,7 +139,9 @@ export function MissionControlApp({
   const { rows, cols, fullscreen } = useTerminalSize();
 
   const [roster, setRoster] = useState<SessionMetaView[]>([]);
-  const [selectedSid, setSelectedSid] = useState<string | null>(focusSid ?? null);
+  const [selectedSid, setSelectedSid] = useState<string | null>(
+    focusSid ?? null,
+  );
   const [mode, setMode] = useState<Mode>(focusSid ? "focus" : "aggregate");
   const [verbose, setVerbose] = useState(false);
   const [line, setLine] = useState<LineState>(emptyLine);
@@ -141,7 +170,9 @@ export function MissionControlApp({
   const verboseRef = useRef(verbose);
   verboseRef.current = verbose;
   const [, setTick] = useState(0);
-  const throttleRef = useRef(createRenderThrottle<void>(() => setTick((t) => t + 1)));
+  const throttleRef = useRef(
+    createRenderThrottle<void>(() => setTick((t) => t + 1)),
+  );
 
   const appendLine = (l: AggregateLine): void => {
     keyRef.current += 1;
@@ -150,7 +181,11 @@ export function MissionControlApp({
       linesRef.current = linesRef.current.slice(-MAX_TIMELINE_LINES);
     }
   };
-  const notice = (sid: string, text: string, emphasis: AggregateEmphasis): void => {
+  const notice = (
+    sid: string,
+    text: string,
+    emphasis: AggregateEmphasis,
+  ): void => {
     appendLine({ sid, ts: Date.now(), text, emphasis });
     throttleRef.current.flush(() => undefined);
   };
@@ -165,7 +200,10 @@ export function MissionControlApp({
       if (al) appendLine(al);
       if (e.type === "message.delta") {
         const prev = tailsRef.current.get(e.sid) ?? "";
-        tailsRef.current.set(e.sid, (prev + e.text).replace(/\s+/g, " ").slice(-200));
+        tailsRef.current.set(
+          e.sid,
+          (prev + e.text).replace(/\s+/g, " ").slice(-200),
+        );
       } else if (
         e.type === "message.end" ||
         e.type === "turn.end" ||
@@ -230,7 +268,8 @@ export function MissionControlApp({
     setSelectedSid((roster[next] as SessionMetaView).sid);
   };
   const jumpSelection = (index: number): void => {
-    if (index >= 0 && index < roster.length) setSelectedSid((roster[index] as SessionMetaView).sid);
+    if (index >= 0 && index < roster.length)
+      setSelectedSid((roster[index] as SessionMetaView).sid);
   };
 
   // ── Composer submit ──────────────────────────────────────────────────────────
@@ -245,9 +284,17 @@ export function MissionControlApp({
     notice(sid, `◇ sent → ${shortSid(sid)}`, "dim");
   };
   const routeAt = (ref: string, rest: string): void => {
-    const resolved = resolveSidRef(ref, roster.map((s) => s.sid));
+    const resolved = resolveSidRef(
+      ref,
+      roster.map((s) => s.sid),
+    );
     if (!resolved) {
-      appendLine({ sid: "-", ts: Date.now(), text: `✗ no session matches @${ref}`, emphasis: "error" });
+      appendLine({
+        sid: "-",
+        ts: Date.now(),
+        text: `✗ no session matches @${ref}`,
+        emphasis: "error",
+      });
       throttleRef.current.flush(() => undefined);
       return;
     }
@@ -327,11 +374,15 @@ export function MissionControlApp({
     }
     // Line editing (always operates on the buffer).
     if (key.leftArrow) return void applyLine((l) => editLine(l, { t: "left" }));
-    if (key.rightArrow) return void applyLine((l) => editLine(l, { t: "right" }));
-    if (key.backspace) return void applyLine((l) => editLine(l, { t: "backspace" }));
+    if (key.rightArrow)
+      return void applyLine((l) => editLine(l, { t: "right" }));
+    if (key.backspace)
+      return void applyLine((l) => editLine(l, { t: "backspace" }));
     if (key.delete) return void applyLine((l) => editLine(l, { t: "delete" }));
-    if (key.ctrl && input === "a") return void applyLine((l) => editLine(l, { t: "home" }));
-    if (key.ctrl && input === "e") return void applyLine((l) => editLine(l, { t: "end" }));
+    if (key.ctrl && input === "a")
+      return void applyLine((l) => editLine(l, { t: "home" }));
+    if (key.ctrl && input === "e")
+      return void applyLine((l) => editLine(l, { t: "end" }));
     if (key.ctrl && input === "u") return void applyLine(emptyLine());
 
     // Bare-letter view commands — only on an EMPTY composer (see module doc).
@@ -353,7 +404,8 @@ export function MissionControlApp({
           setMode("aggregate");
           return;
         default:
-          if (input >= "1" && input <= "9") return void jumpSelection(Number(input) - 1);
+          if (input >= "1" && input <= "9")
+            return void jumpSelection(Number(input) - 1);
       }
     }
 
@@ -374,12 +426,16 @@ export function MissionControlApp({
     .map(([sid, text]) => ({ sid, text }));
 
   const railWidth = 28;
-  const chromeRows = 1 /* vitals */ + 1 /* mode header */ + 4 /* composer + hint + notice */;
+  const chromeRows =
+    1 /* vitals */ + 1 /* mode header */ + 4 /* composer + hint + notice */;
   const mainRows = Math.max(3, (fullscreen ? rows : 24) - chromeRows);
 
   const focusTarget =
     mode === "focus" && selectedSid
-      ? { targetLabel: `focus ${shortSid(selectedSid)}`, targetColor: colorForSid(selectedSid) }
+      ? {
+          targetLabel: `focus ${shortSid(selectedSid)}`,
+          targetColor: colorForSid(selectedSid),
+        }
       : undefined;
 
   const placeholder =
@@ -393,7 +449,11 @@ export function MissionControlApp({
   const showEmptyState = roster.length === 0 && linesRef.current.length === 0;
 
   return (
-    <Box flexDirection="column" width={cols} {...(fullscreen ? { height: rows } : {})}>
+    <Box
+      flexDirection="column"
+      width={cols}
+      {...(fullscreen ? { height: rows } : {})}
+    >
       <VitalsBar
         counts={counts}
         usage={usage}
@@ -405,20 +465,41 @@ export function MissionControlApp({
 
       <Box flexGrow={1}>
         {roster.length > 0 ? (
-          <SessionRail sessions={roster} selectedSid={selectedSid} width={railWidth} now={now} />
+          <SessionRail
+            sessions={roster}
+            selectedSid={selectedSid}
+            width={railWidth}
+            now={now}
+          />
         ) : null}
 
         <Box flexDirection="column" flexGrow={1}>
           <ModeHeader mode={mode} verbose={verbose} />
           {showEmptyState ? (
-            <Box flexGrow={1} alignItems="center" justifyContent="center" paddingX={1}>
-              <Text dimColor>type a task and press enter — every line becomes an agent</Text>
+            <Box
+              flexGrow={1}
+              alignItems="center"
+              justifyContent="center"
+              paddingX={1}
+            >
+              <Text dimColor>
+                type a task and press enter — every line becomes an agent
+              </Text>
             </Box>
           ) : mode === "aggregate" ? (
-            <AggregateTimeline lines={linesRef.current} tails={tails} rows={mainRows} />
+            <AggregateTimeline
+              lines={linesRef.current}
+              tails={tails}
+              rows={mainRows}
+            />
           ) : mode === "focus" ? (
             selectedSid ? (
-              <FocusTranscript sid={selectedSid} store={store} bus={manager} rows={mainRows} />
+              <FocusTranscript
+                sid={selectedSid}
+                store={store}
+                bus={manager}
+                rows={mainRows}
+              />
             ) : (
               <Box paddingX={1}>
                 <Text dimColor>No session selected — tab to pick one.</Text>
@@ -432,7 +513,9 @@ export function MissionControlApp({
 
       {cancelArmed ? (
         <Box paddingX={1}>
-          <Text color={theme.red}>press c again to cancel {shortSid(cancelArmed)}</Text>
+          <Text color={theme.red}>
+            press c again to cancel {shortSid(cancelArmed)}
+          </Text>
         </Box>
       ) : null}
 

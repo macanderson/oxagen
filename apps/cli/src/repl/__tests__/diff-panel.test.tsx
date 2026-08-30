@@ -2,24 +2,45 @@ import { describe, it, expect, vi } from "vitest";
 import { render } from "ink-testing-library";
 import React from "react";
 import { DiffPanel } from "../diff-panel.js";
-import type { ChangedFile, listChangedFiles, getFileDiff } from "../git-diff.js";
+import type {
+  ChangedFile,
+  listChangedFiles,
+  getFileDiff,
+} from "../git-diff.js";
 
 const ESC = String.fromCharCode(27);
 const ARROW_DOWN = `${ESC}[B`;
 const ENTER = "\r";
 
 /** Poll until `cond` holds — Ink delivers stdin/state asynchronously (never fixed sleeps). */
-async function until(cond: () => boolean, timeoutMs = 4000, stepMs = 10): Promise<void> {
+async function until(
+  cond: () => boolean,
+  timeoutMs = 4000,
+  stepMs = 10,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!cond()) {
-    if (Date.now() > deadline) throw new Error("until(): condition not met before deadline");
+    if (Date.now() > deadline)
+      throw new Error("until(): condition not met before deadline");
     await new Promise((r) => setTimeout(r, stepMs));
   }
 }
 
 const FILES: ChangedFile[] = [
-  { path: "src/alpha.ts", status: "M", untracked: false, insertions: 3, deletions: 1 },
-  { path: "src/bravo.ts", status: "A", untracked: false, insertions: 5, deletions: 0 },
+  {
+    path: "src/alpha.ts",
+    status: "M",
+    untracked: false,
+    insertions: 3,
+    deletions: 1,
+  },
+  {
+    path: "src/bravo.ts",
+    status: "A",
+    untracked: false,
+    insertions: 5,
+    deletions: 0,
+  },
 ];
 
 const DIFF_BY_PATH: Record<string, string> = {
@@ -42,12 +63,18 @@ const DIFF_BY_PATH: Record<string, string> = {
 };
 
 const fakeList: typeof listChangedFiles = async () => FILES;
-const fakeLoad: typeof getFileDiff = async (_root, file) => DIFF_BY_PATH[file.path] ?? "";
+const fakeLoad: typeof getFileDiff = async (_root, file) =>
+  DIFF_BY_PATH[file.path] ?? "";
 
 describe("DiffPanel — list mode", () => {
   it("renders each changed file with its status char and +/- counts", async () => {
     const { lastFrame } = render(
-      <DiffPanel cwd="/repo" onClose={() => {}} listFiles={fakeList} loadDiff={fakeLoad} />,
+      <DiffPanel
+        cwd="/repo"
+        onClose={() => {}}
+        listFiles={fakeList}
+        loadDiff={fakeLoad}
+      />,
     );
     await until(() => (lastFrame() ?? "").includes("src/alpha.ts"));
     const frame = lastFrame()!;
@@ -60,7 +87,12 @@ describe("DiffPanel — list mode", () => {
 
   it("shows the empty state when the working tree is clean", async () => {
     const { lastFrame } = render(
-      <DiffPanel cwd="/repo" onClose={() => {}} listFiles={async () => []} loadDiff={fakeLoad} />,
+      <DiffPanel
+        cwd="/repo"
+        onClose={() => {}}
+        listFiles={async () => []}
+        loadDiff={fakeLoad}
+      />,
     );
     await until(() => (lastFrame() ?? "").includes("Working tree clean"));
     expect(lastFrame()).toContain("no changes vs HEAD");
@@ -68,7 +100,12 @@ describe("DiffPanel — list mode", () => {
 
   it("moves the selection with the arrow keys", async () => {
     const { lastFrame, stdin } = render(
-      <DiffPanel cwd="/repo" onClose={() => {}} listFiles={fakeList} loadDiff={fakeLoad} />,
+      <DiffPanel
+        cwd="/repo"
+        onClose={() => {}}
+        listFiles={fakeList}
+        loadDiff={fakeLoad}
+      />,
     );
     await until(() => (lastFrame() ?? "").includes("❯ "));
     expect(lastFrame()).toMatch(/❯.*src\/alpha\.ts/);
@@ -79,7 +116,12 @@ describe("DiffPanel — list mode", () => {
   it("Esc from the list closes the panel", async () => {
     const onClose = vi.fn();
     const { lastFrame, stdin } = render(
-      <DiffPanel cwd="/repo" onClose={onClose} listFiles={fakeList} loadDiff={fakeLoad} />,
+      <DiffPanel
+        cwd="/repo"
+        onClose={onClose}
+        listFiles={fakeList}
+        loadDiff={fakeLoad}
+      />,
     );
     await until(() => (lastFrame() ?? "").includes("src/alpha.ts"));
     stdin.write(ESC);
@@ -90,7 +132,12 @@ describe("DiffPanel — list mode", () => {
 describe("DiffPanel — diff mode", () => {
   it("Enter opens the diff with a line-number gutter and the file's content", async () => {
     const { lastFrame, stdin } = render(
-      <DiffPanel cwd="/repo" onClose={() => {}} listFiles={fakeList} loadDiff={fakeLoad} />,
+      <DiffPanel
+        cwd="/repo"
+        onClose={() => {}}
+        listFiles={fakeList}
+        loadDiff={fakeLoad}
+      />,
     );
     await until(() => (lastFrame() ?? "").includes("❯ "));
     stdin.write(ENTER);
@@ -103,7 +150,12 @@ describe("DiffPanel — diff mode", () => {
 
   it("[ and ] cycle to the next/previous file's diff (wrapping)", async () => {
     const { lastFrame, stdin } = render(
-      <DiffPanel cwd="/repo" onClose={() => {}} listFiles={fakeList} loadDiff={fakeLoad} />,
+      <DiffPanel
+        cwd="/repo"
+        onClose={() => {}}
+        listFiles={fakeList}
+        loadDiff={fakeLoad}
+      />,
     );
     await until(() => (lastFrame() ?? "").includes("❯ "));
     stdin.write(ENTER);
@@ -119,7 +171,12 @@ describe("DiffPanel — diff mode", () => {
   it("Esc returns from the diff to the list without closing", async () => {
     const onClose = vi.fn();
     const { lastFrame, stdin } = render(
-      <DiffPanel cwd="/repo" onClose={onClose} listFiles={fakeList} loadDiff={fakeLoad} />,
+      <DiffPanel
+        cwd="/repo"
+        onClose={onClose}
+        listFiles={fakeList}
+        loadDiff={fakeLoad}
+      />,
     );
     await until(() => (lastFrame() ?? "").includes("❯ "));
     stdin.write(ENTER);
@@ -133,7 +190,9 @@ describe("DiffPanel — diff mode", () => {
 });
 
 describe("DiffPanel — scrolling", () => {
-  const LONG_FILES: ChangedFile[] = [{ path: "src/long.ts", status: "M", untracked: false }];
+  const LONG_FILES: ChangedFile[] = [
+    { path: "src/long.ts", status: "M", untracked: false },
+  ];
   const LONG_DIFF = [
     "diff --git a/src/long.ts b/src/long.ts",
     "--- a/src/long.ts",

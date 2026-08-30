@@ -71,7 +71,11 @@ export async function handleSandboxList(
   if (opts.status) body.status = opts.status;
   if (opts.limit !== undefined) body.limit = parseInt(opts.limit, 10);
 
-  const res = await apiPost<SandboxListResponse>("agent/sandbox/list", body, writer);
+  const res = await apiPost<SandboxListResponse>(
+    "agent/sandbox/list",
+    body,
+    writer,
+  );
 
   if (opts.json) {
     writer.write(JSON.stringify(res, null, 2));
@@ -101,7 +105,11 @@ export async function handleSandboxFiles(
   if (opts.path) body.path = opts.path;
   if (opts.depth !== undefined) body.depth = parseInt(opts.depth, 10);
 
-  const res = await apiPost<SandboxFilesResponse>("agent/sandbox/files", body, writer);
+  const res = await apiPost<SandboxFilesResponse>(
+    "agent/sandbox/files",
+    body,
+    writer,
+  );
 
   if (opts.json) {
     writer.write(JSON.stringify(res, null, 2));
@@ -129,7 +137,11 @@ export async function handleSandboxCat(
   const body: Record<string, unknown> = { sessionId, path };
   if (opts.maxBytes !== undefined) body.maxBytes = parseInt(opts.maxBytes, 10);
 
-  const res = await apiPost<SandboxFileReadResponse>("agent/sandbox/file", body, writer);
+  const res = await apiPost<SandboxFileReadResponse>(
+    "agent/sandbox/file",
+    body,
+    writer,
+  );
 
   if (opts.json) {
     writer.write(JSON.stringify(res, null, 2));
@@ -162,7 +174,11 @@ export async function handleSandboxLogs(
   if (!opts.debug) body.level = "normal";
   if (opts.limit !== undefined) body.limit = parseInt(opts.limit, 10);
 
-  const res = await apiPost<SandboxLogsResponse>("agent/sandbox/logs", body, writer);
+  const res = await apiPost<SandboxLogsResponse>(
+    "agent/sandbox/logs",
+    body,
+    writer,
+  );
 
   if (opts.json) {
     writer.write(JSON.stringify(res, null, 2));

@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+  existsSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -14,7 +21,11 @@ import {
   writeConsolidated,
   type ConfigWriteCtx,
 } from "../write.js";
-import { getConfigScopePaths, clearWorkspaceConfigCache, resolveWorkspaceConfig } from "../resolve.js";
+import {
+  getConfigScopePaths,
+  clearWorkspaceConfigCache,
+  resolveWorkspaceConfig,
+} from "../resolve.js";
 import type { WorkspaceConfig } from "../schema.js";
 
 let cwd: string;
@@ -28,7 +39,11 @@ function readDoc(path: string): Record<string, unknown> {
 beforeEach(() => {
   cwd = mkdtempSync(join(tmpdir(), "oxagen-config-write-cwd-"));
   homeDir = mkdtempSync(join(tmpdir(), "oxagen-config-write-home-"));
-  ctx = { cwd, managedConfigPath: join(homeDir, "managed.json"), userConfigPath: join(homeDir, "user.json") };
+  ctx = {
+    cwd,
+    managedConfigPath: join(homeDir, "managed.json"),
+    userConfigPath: join(homeDir, "user.json"),
+  };
   clearWorkspaceConfigCache();
 });
 
@@ -50,7 +65,12 @@ describe("assertWritableScope", () => {
 
 describe("setValueAtPath / setPath — round-trip + sibling preservation", () => {
   it("writes a scalar and reads it back via resolveWorkspaceConfig", () => {
-    const path = setValueAtPath("workspace", "packageManagers.primary", "pnpm", ctx);
+    const path = setValueAtPath(
+      "workspace",
+      "packageManagers.primary",
+      "pnpm",
+      ctx,
+    );
     expect(path).toBe(getConfigScopePaths(cwd, ctx).workspace);
     const { config } = resolveWorkspaceConfig(cwd, { ...ctx, noCache: true });
     expect(config.packageManagers?.primary).toBe("pnpm");
@@ -67,9 +87,16 @@ describe("setValueAtPath / setPath — round-trip + sibling preservation", () =>
   });
 
   it("creates intermediate objects as needed", () => {
-    setValueAtPath("workspace", "database.migrations.dir", "packages/database/migrations", ctx);
+    setValueAtPath(
+      "workspace",
+      "database.migrations.dir",
+      "packages/database/migrations",
+      ctx,
+    );
     const { config } = resolveWorkspaceConfig(cwd, { ...ctx, noCache: true });
-    expect(config.database?.migrations?.dir).toBe("packages/database/migrations");
+    expect(config.database?.migrations?.dir).toBe(
+      "packages/database/migrations",
+    );
   });
 
   it("never clobbers sibling keys already in the file (deep-merge-by-read)", () => {
@@ -77,26 +104,36 @@ describe("setValueAtPath / setPath — round-trip + sibling preservation", () =>
     mkdirSync(join(cwd, ".oxagen"), { recursive: true });
     writeFileSync(
       path,
-      JSON.stringify({ orgSlug: "acme", workspaceSlug: "main", vision: { statement: "existing" } }),
+      JSON.stringify({
+        orgSlug: "acme",
+        workspaceSlug: "main",
+        vision: { statement: "existing" },
+      }),
     );
     setValueAtPath("workspace", "packageManagers.primary", "pnpm", ctx);
     const doc = readDoc(path);
     expect(doc["orgSlug"]).toBe("acme");
     expect(doc["workspaceSlug"]).toBe("main");
     expect((doc["vision"] as { statement: string }).statement).toBe("existing");
-    expect((doc["packageManagers"] as { primary: string }).primary).toBe("pnpm");
+    expect((doc["packageManagers"] as { primary: string }).primary).toBe(
+      "pnpm",
+    );
   });
 
   it("throws a clear error when a path segment is not an object", () => {
     // `customField` isn't a declared schema key, so schema `.passthrough()`
     // accepts the raw string — this isolates setAtPath's own guard from zod's.
     setValueAtPath("workspace", "customField", "not-an-object", ctx);
-    expect(() => setValueAtPath("workspace", "customField.nested", "x", ctx)).toThrow(/not an object/i);
+    expect(() =>
+      setValueAtPath("workspace", "customField.nested", "x", ctx),
+    ).toThrow(/not an object/i);
   });
 
   it("refuses to write org scope (managed.json) and never touches the file", () => {
     expect(existsSync(ctx.managedConfigPath!)).toBe(false);
-    expect(() => setValueAtPath("org", "vision.statement", "nope", ctx)).toThrow(/read-only/i);
+    expect(() =>
+      setValueAtPath("org", "vision.statement", "nope", ctx),
+    ).toThrow(/read-only/i);
     expect(existsSync(ctx.managedConfigPath!)).toBe(false);
   });
 });
@@ -106,7 +143,9 @@ describe("scope isolation", () => {
     setValueAtPath("workspace", "packageManagers.primary", "pnpm", ctx);
     setValueAtPath("user", "packageManagers.primary", "npm", ctx);
     const paths = getConfigScopePaths(cwd, ctx);
-    expect(readDoc(paths.workspace)["packageManagers"]).toEqual({ primary: "pnpm" });
+    expect(readDoc(paths.workspace)["packageManagers"]).toEqual({
+      primary: "pnpm",
+    });
     expect(readDoc(paths.user)["packageManagers"]).toEqual({ primary: "npm" });
   });
 
@@ -120,19 +159,33 @@ describe("scope isolation", () => {
 
 describe("addLanguageItem / removeItem", () => {
   it("adds a new item, then upserts (replaces) by id rather than duplicating", () => {
-    addLanguageItem("workspace", "typescript", { id: "no-any", kind: "rule", text: "No any.", origin: "manual" }, ctx);
+    addLanguageItem(
+      "workspace",
+      "typescript",
+      { id: "no-any", kind: "rule", text: "No any.", origin: "manual" },
+      ctx,
+    );
     let { config } = resolveWorkspaceConfig(cwd, { ...ctx, noCache: true });
     expect(config.languages?.typescript?.items).toHaveLength(1);
 
     addLanguageItem(
       "workspace",
       "typescript",
-      { id: "no-any", kind: "rule", text: "No any. Ever.", origin: "manual", enforced: true },
+      {
+        id: "no-any",
+        kind: "rule",
+        text: "No any. Ever.",
+        origin: "manual",
+        enforced: true,
+      },
       ctx,
     );
     ({ config } = resolveWorkspaceConfig(cwd, { ...ctx, noCache: true }));
     expect(config.languages?.typescript?.items).toHaveLength(1);
-    expect(config.languages?.typescript?.items?.[0]).toMatchObject({ text: "No any. Ever.", enforced: true });
+    expect(config.languages?.typescript?.items?.[0]).toMatchObject({
+      text: "No any. Ever.",
+      enforced: true,
+    });
   });
 
   it("validates the item shape before writing (rejects an invalid kind)", () => {
@@ -148,8 +201,18 @@ describe("addLanguageItem / removeItem", () => {
   });
 
   it("removes an item by id, searching every language in the scope", () => {
-    addLanguageItem("workspace", "typescript", { id: "no-any", kind: "rule", origin: "manual" }, ctx);
-    addLanguageItem("workspace", "english", { id: "oxford", kind: "convention", origin: "manual" }, ctx);
+    addLanguageItem(
+      "workspace",
+      "typescript",
+      { id: "no-any", kind: "rule", origin: "manual" },
+      ctx,
+    );
+    addLanguageItem(
+      "workspace",
+      "english",
+      { id: "oxford", kind: "convention", origin: "manual" },
+      ctx,
+    );
 
     const result = removeItem("workspace", "oxford", ctx);
     expect(result.removed).toBe(true);
@@ -161,7 +224,12 @@ describe("addLanguageItem / removeItem", () => {
   });
 
   it("returns removed:false and does not write when the id is not found", () => {
-    addLanguageItem("workspace", "typescript", { id: "no-any", kind: "rule", origin: "manual" }, ctx);
+    addLanguageItem(
+      "workspace",
+      "typescript",
+      { id: "no-any", kind: "rule", origin: "manual" },
+      ctx,
+    );
     const path = getConfigScopePaths(cwd, ctx).workspace;
     const before = readFileSync(path, "utf8");
 
@@ -171,12 +239,26 @@ describe("addLanguageItem / removeItem", () => {
   });
 
   it("only removes from the targeted scope, leaving the same id in another scope alone", () => {
-    addLanguageItem("workspace", "typescript", { id: "no-any", kind: "rule", origin: "manual" }, ctx);
-    addLanguageItem("user", "typescript", { id: "no-any", kind: "rule", origin: "manual" }, ctx);
+    addLanguageItem(
+      "workspace",
+      "typescript",
+      { id: "no-any", kind: "rule", origin: "manual" },
+      ctx,
+    );
+    addLanguageItem(
+      "user",
+      "typescript",
+      { id: "no-any", kind: "rule", origin: "manual" },
+      ctx,
+    );
     removeItem("workspace", "no-any", ctx);
     const paths = getConfigScopePaths(cwd, ctx);
-    const workspaceDoc = readDoc(paths.workspace) as { languages?: { typescript?: { items?: unknown[] } } };
-    const userDoc = readDoc(paths.user) as { languages?: { typescript?: { items?: unknown[] } } };
+    const workspaceDoc = readDoc(paths.workspace) as {
+      languages?: { typescript?: { items?: unknown[] } };
+    };
+    const userDoc = readDoc(paths.user) as {
+      languages?: { typescript?: { items?: unknown[] } };
+    };
     expect(workspaceDoc.languages?.typescript?.items ?? []).toHaveLength(0);
     expect(userDoc.languages?.typescript?.items).toHaveLength(1);
   });
@@ -192,11 +274,24 @@ describe("setVision / setVoice / setWorktreeSeed — shallow merge", () => {
   });
 
   it("setVoice merges into languages[lang].voice without disturbing that language's items", () => {
-    addLanguageItem("workspace", "english", { id: "oxford", kind: "convention", origin: "manual" }, ctx);
-    setVoice("workspace", "english", { tone: "confident", audience: "engineers" }, ctx);
+    addLanguageItem(
+      "workspace",
+      "english",
+      { id: "oxford", kind: "convention", origin: "manual" },
+      ctx,
+    );
+    setVoice(
+      "workspace",
+      "english",
+      { tone: "confident", audience: "engineers" },
+      ctx,
+    );
     setVoice("workspace", "english", { audience: "senior engineers" }, ctx);
     const { config } = resolveWorkspaceConfig(cwd, { ...ctx, noCache: true });
-    expect(config.languages?.english?.voice).toEqual({ tone: "confident", audience: "senior engineers" });
+    expect(config.languages?.english?.voice).toEqual({
+      tone: "confident",
+      audience: "senior engineers",
+    });
     expect(config.languages?.english?.items).toHaveLength(1);
   });
 
@@ -211,20 +306,30 @@ describe("setVision / setVoice / setWorktreeSeed — shallow merge", () => {
   });
 
   it("every shallow-merge writer refuses org scope", () => {
-    expect(() => setVision("org", { statement: "x" }, ctx)).toThrow(/read-only/i);
-    expect(() => setVoice("org", "english", { tone: "x" }, ctx)).toThrow(/read-only/i);
-    expect(() => setWorktreeSeed("org", { include: ["x"] }, ctx)).toThrow(/read-only/i);
+    expect(() => setVision("org", { statement: "x" }, ctx)).toThrow(
+      /read-only/i,
+    );
+    expect(() => setVoice("org", "english", { tone: "x" }, ctx)).toThrow(
+      /read-only/i,
+    );
+    expect(() => setWorktreeSeed("org", { include: ["x"] }, ctx)).toThrow(
+      /read-only/i,
+    );
     expect(existsSync(ctx.managedConfigPath!)).toBe(false);
   });
 });
 
 describe("dead-key guard — defense in depth (item 5)", () => {
   it("setValueAtPath rejects a runtime dead key even bypassing the command-layer redirect", () => {
-    expect(() => setValueAtPath("workspace", "model", "vendor/x", ctx)).toThrow(/oxagen config model/i);
+    expect(() => setValueAtPath("workspace", "model", "vendor/x", ctx)).toThrow(
+      /oxagen config model/i,
+    );
   });
 
   it("never writes the dead key to disk when the schema rejects it", () => {
-    expect(() => setValueAtPath("workspace", "apiUrl", "https://evil.example", ctx)).toThrow();
+    expect(() =>
+      setValueAtPath("workspace", "apiUrl", "https://evil.example", ctx),
+    ).toThrow();
     const path = getConfigScopePaths(cwd, ctx).workspace;
     expect(existsSync(path)).toBe(false);
   });
@@ -235,7 +340,9 @@ describe("writeConsolidated", () => {
     setValueAtPath("workspace", "vision.statement", "keep me", ctx);
     const consolidated: NonNullable<WorkspaceConfig["consolidated"]> = {
       generatedAt: "2026-01-01T00:00:00.000Z",
-      skills: [{ name: "coss-ui", scope: "workspace", path: ".agents/skills/coss-ui" }],
+      skills: [
+        { name: "coss-ui", scope: "workspace", path: ".agents/skills/coss-ui" },
+      ],
     };
     const path = writeConsolidated(consolidated, ctx);
     expect(path).toBe(getConfigScopePaths(cwd, ctx).workspace);

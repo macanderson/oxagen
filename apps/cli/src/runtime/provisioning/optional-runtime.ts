@@ -18,7 +18,9 @@ import type { CompletionRequest, CompletionUsage } from "../types.js";
 
 /** A model loaded into memory and ready to generate. */
 export interface LoadedModel {
-  complete(req: CompletionRequest): Promise<{ text: string; usage: CompletionUsage }>;
+  complete(
+    req: CompletionRequest,
+  ): Promise<{ text: string; usage: CompletionUsage }>;
   dispose(): Promise<void>;
 }
 
@@ -33,7 +35,10 @@ export interface OnDeviceRuntime {
 export const OPTIONAL_DEP = "node-llama-cpp";
 
 /** Flatten chat messages into a single prompt for a single-turn completion. */
-function renderPrompt(req: CompletionRequest): { system?: string; prompt: string } {
+function renderPrompt(req: CompletionRequest): {
+  system?: string;
+  prompt: string;
+} {
   const system = req.messages
     .filter((m) => m.role === "system")
     .map((m) => m.content)
@@ -78,7 +83,9 @@ export async function isOptionalDepInstalled(
 // the package's types (it may be absent). See https://node-llama-cpp.withcat.ai.
 
 interface LlamaChatSessionCtor {
-  new (opts: { contextSequence: unknown }): {
+  new (opts: {
+    contextSequence: unknown;
+  }): {
     prompt(
       text: string,
       opts?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
@@ -104,14 +111,20 @@ function adaptLlama(mod: LlamaModule): OnDeviceRuntime {
       const llama = await mod.getLlama();
       const model = await llama.loadModel({ modelPath });
       const context = await model.createContext();
-      const session = new mod.LlamaChatSession({ contextSequence: context.getSequence() });
+      const session = new mod.LlamaChatSession({
+        contextSequence: context.getSequence(),
+      });
 
       return {
         async complete(req: CompletionRequest) {
           const { prompt } = renderPrompt(req);
           const text = await session.prompt(prompt, {
-            ...(req.maxOutputTokens !== undefined ? { maxTokens: req.maxOutputTokens } : {}),
-            ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
+            ...(req.maxOutputTokens !== undefined
+              ? { maxTokens: req.maxOutputTokens }
+              : {}),
+            ...(req.temperature !== undefined
+              ? { temperature: req.temperature }
+              : {}),
             ...(req.signal ? { signal: req.signal } : {}),
           });
           return {

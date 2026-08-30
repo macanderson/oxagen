@@ -17,7 +17,10 @@ import {
   stepPanelFocus,
   type PanelTarget,
 } from "../agent-sidebar.js";
-import { agentRegistry, type RunningAgent } from "../../agent/agent-registry.js";
+import {
+  agentRegistry,
+  type RunningAgent,
+} from "../../agent/agent-registry.js";
 import { taskRegistry, type TrackedTask } from "../../agent/task-registry.js";
 
 const NOW = 200_000;
@@ -26,9 +29,23 @@ const wide = (): number => 160;
 
 // Minimal registry shapes for the pure helpers (only id/zone are read).
 const agent = (id: string): RunningAgent =>
-  ({ id, kind: "turn", title: id, status: "running", startedAt: 0, updatedAt: 0 }) as RunningAgent;
+  ({
+    id,
+    kind: "turn",
+    title: id,
+    status: "running",
+    startedAt: 0,
+    updatedAt: 0,
+  }) as RunningAgent;
 const task = (id: string): TrackedTask =>
-  ({ id, title: id, status: "pending", order: 0, createdAt: 0, updatedAt: 0 }) as TrackedTask;
+  ({
+    id,
+    title: id,
+    status: "pending",
+    order: 0,
+    createdAt: 0,
+    updatedAt: 0,
+  }) as TrackedTask;
 
 beforeEach(() => {
   agentRegistry.clear();
@@ -62,8 +79,14 @@ describe("stepPanelFocus", () => {
   ];
 
   it("moves down through agents into tasks", () => {
-    expect(stepPanelFocus(targets, { zone: "agent", id: "a1" }, 1)).toEqual({ zone: "agent", id: "a2" });
-    expect(stepPanelFocus(targets, { zone: "agent", id: "a2" }, 1)).toEqual({ zone: "task", id: "t1" });
+    expect(stepPanelFocus(targets, { zone: "agent", id: "a1" }, 1)).toEqual({
+      zone: "agent",
+      id: "a2",
+    });
+    expect(stepPanelFocus(targets, { zone: "agent", id: "a2" }, 1)).toEqual({
+      zone: "task",
+      id: "t1",
+    });
   });
 
   it("stays put stepping down past the last row (returns the same ref)", () => {
@@ -76,20 +99,34 @@ describe("stepPanelFocus", () => {
   });
 
   it("moves up from a task back into agents", () => {
-    expect(stepPanelFocus(targets, { zone: "task", id: "t1" }, -1)).toEqual({ zone: "agent", id: "a2" });
+    expect(stepPanelFocus(targets, { zone: "task", id: "t1" }, -1)).toEqual({
+      zone: "agent",
+      id: "a2",
+    });
   });
 
   it("returns null when the current row no longer exists (stale highlight)", () => {
     expect(stepPanelFocus(targets, { zone: "task", id: "gone" }, 1)).toBeNull();
-    expect(stepPanelFocus(targets, { zone: "task", id: "gone" }, -1)).toBeNull();
+    expect(
+      stepPanelFocus(targets, { zone: "task", id: "gone" }, -1),
+    ).toBeNull();
   });
 });
 
 describe("AgentSidebar focus + active", () => {
   it("marks the focused agent row with the pointer glyph", () => {
-    agentRegistry.register({ kind: "turn", title: "add rate limiting", id: "agent-1" });
+    agentRegistry.register({
+      kind: "turn",
+      title: "add rate limiting",
+      id: "agent-1",
+    });
     const { lastFrame, unmount } = render(
-      <AgentSidebar mode="on" nowFn={nowFn} widthFn={wide} focus={{ zone: "agent", id: "agent-1" }} />,
+      <AgentSidebar
+        mode="on"
+        nowFn={nowFn}
+        widthFn={wide}
+        focus={{ zone: "agent", id: "agent-1" }}
+      />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("add rate limiting");
@@ -101,7 +138,11 @@ describe("AgentSidebar focus + active", () => {
   });
 
   it("shows no pointer and no legend when focus is null", () => {
-    agentRegistry.register({ kind: "turn", title: "idle agent", id: "agent-1" });
+    agentRegistry.register({
+      kind: "turn",
+      title: "idle agent",
+      id: "agent-1",
+    });
     const { lastFrame, unmount } = render(
       <AgentSidebar mode="on" nowFn={nowFn} widthFn={wide} focus={null} />,
     );
@@ -130,7 +171,9 @@ describe("AgentFocusView", () => {
       id: "agent-9",
       detail: "editing loop.ts",
     });
-    const { lastFrame, unmount } = render(<AgentFocusView agentId="agent-9" nowFn={nowFn} />);
+    const { lastFrame, unmount } = render(
+      <AgentFocusView agentId="agent-9" nowFn={nowFn} />,
+    );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("Agent log");
     expect(frame).toContain("break-fix loop.ts");
@@ -139,7 +182,9 @@ describe("AgentFocusView", () => {
   });
 
   it("renders nothing for an unknown / pruned agent id", () => {
-    const { lastFrame, unmount } = render(<AgentFocusView agentId="ghost" nowFn={nowFn} />);
+    const { lastFrame, unmount } = render(
+      <AgentFocusView agentId="ghost" nowFn={nowFn} />,
+    );
     expect(lastFrame()).toBe("");
     unmount();
   });

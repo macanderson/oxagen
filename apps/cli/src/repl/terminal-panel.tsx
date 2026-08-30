@@ -46,9 +46,16 @@ function elapsed(from: number, to: number): string {
 }
 
 /** Header status glyph + label + color for the current run state. */
-function statusStyle(run: TerminalRun, frame: number): { glyph: string; label: string; color: string } {
+function statusStyle(
+  run: TerminalRun,
+  frame: number,
+): { glyph: string; label: string; color: string } {
   if (run.status === "running")
-    return { glyph: SPINNER[frame % SPINNER.length] as string, label: "running", color: TERMINAL_RED };
+    return {
+      glyph: SPINNER[frame % SPINNER.length] as string,
+      label: "running",
+      color: TERMINAL_RED,
+    };
   if (run.status === "killed")
     return { glyph: "⏹", label: "killed", color: "#FBBF24" };
   return run.exitCode === 0
@@ -86,7 +93,13 @@ export function TerminalPanel({
   const hasOutput = run.output.trim().length > 0;
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={TERMINAL_RED} paddingX={1} marginBottom={1}>
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={TERMINAL_RED}
+      paddingX={1}
+      marginBottom={1}
+    >
       {/* Header — the shell prompt, the command, live status + elapsed. */}
       <Box>
         <Text color={TERMINAL_RED} bold>
@@ -103,20 +116,30 @@ export function TerminalPanel({
         {collapsed ? (
           <Text dimColor>
             {" · "}
-            {allLines.length} line{allLines.length === 1 ? "" : "s"} · Ctrl-O to expand
+            {allLines.length} line{allLines.length === 1 ? "" : "s"} · Ctrl-O to
+            expand
           </Text>
         ) : null}
       </Box>
       {/* Body — the tailed output. Hidden in the folded (collapsed) accordion form. */}
       {collapsed ? null : (
-        <Box flexDirection="column" marginTop={hasOutput || run.status === "running" ? 1 : 0}>
-          {elided > 0 ? <Text dimColor>… {elided} earlier line{elided === 1 ? "" : "s"} hidden</Text> : null}
+        <Box
+          flexDirection="column"
+          marginTop={hasOutput || run.status === "running" ? 1 : 0}
+        >
+          {elided > 0 ? (
+            <Text dimColor>
+              … {elided} earlier line{elided === 1 ? "" : "s"} hidden
+            </Text>
+          ) : null}
           {shown.map((line, i) => (
             <Text key={i} wrap="truncate-end">
               {line}
             </Text>
           ))}
-          {run.status === "running" && !hasOutput ? <Text dimColor>waiting for output…</Text> : null}
+          {run.status === "running" && !hasOutput ? (
+            <Text dimColor>waiting for output…</Text>
+          ) : null}
         </Box>
       )}
     </Box>
@@ -138,7 +161,13 @@ const CARD_MAX_LINES = 40;
  * captured output. Deliberately NOT red: the red outline means "live", and a
  * folded card is history, not a running process.
  */
-export function TerminalRunCard({ run, expanded }: { run: TerminalRun; expanded: boolean }): React.ReactElement {
+export function TerminalRunCard({
+  run,
+  expanded,
+}: {
+  run: TerminalRun;
+  expanded: boolean;
+}): React.ReactElement {
   const { glyph, label, color } = statusStyle(run, 0);
   const at = run.endedAt ?? run.startedAt;
   const allLines = run.output.replace(/\n$/, "").split("\n");
@@ -170,7 +199,11 @@ export function TerminalRunCard({ run, expanded }: { run: TerminalRun; expanded:
       {/* Body — only when expanded. A dim left gutter marks it as shell output. */}
       {expanded && lineCount > 0 ? (
         <Box flexDirection="column" paddingLeft={2}>
-          {elided > 0 ? <Text dimColor>… {elided} earlier line{elided === 1 ? "" : "s"} hidden</Text> : null}
+          {elided > 0 ? (
+            <Text dimColor>
+              … {elided} earlier line{elided === 1 ? "" : "s"} hidden
+            </Text>
+          ) : null}
           {shown.map((line, i) => (
             <Text key={i} dimColor wrap="truncate-end">
               {line}

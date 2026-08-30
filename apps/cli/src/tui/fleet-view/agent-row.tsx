@@ -46,7 +46,10 @@ function tierColor(tier: ModelTier): string {
  * (`TaskStatus` is a literal subset of `ActivityStatus`) — running animates
  * through the shared frame counter, matching the HUD and best-of-N lanes.
  */
-function glyphFor(status: TaskStatus, frame: number): { ch: string; color: string } {
+function glyphFor(
+  status: TaskStatus,
+  frame: number,
+): { ch: string; color: string } {
   const { glyph, color } = activityGlyph(status, frame);
   return { ch: glyph, color };
 }

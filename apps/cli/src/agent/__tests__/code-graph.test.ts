@@ -121,7 +121,9 @@ describe("code-graph retrieval", () => {
 
   it("warmCodeGraph swallows errors for an unbuildable path (fire-and-forget)", () => {
     // A path that cannot be indexed must not surface an unhandled rejection.
-    expect(() => warmCodeGraph("/nonexistent/oxagen-warm-test-path")).not.toThrow();
+    expect(() =>
+      warmCodeGraph("/nonexistent/oxagen-warm-test-path"),
+    ).not.toThrow();
   });
 });
 
@@ -129,9 +131,15 @@ describe("code-graph semantic_search", () => {
   it("degrades gracefully (never throws) when no embedding client is available", async () => {
     // `client: null` simulates the offline / no-gateway-key case directly,
     // without needing to fake out AI_GATEWAY_API_KEY resolution.
-    const out = await queryCodeGraph(root, "semantic_search", "project level configuration", 5, {
-      client: null,
-    });
+    const out = await queryCodeGraph(
+      root,
+      "semantic_search",
+      "project level configuration",
+      5,
+      {
+        client: null,
+      },
+    );
     expect(out).toContain("No file matching semantic query");
   });
 
@@ -148,7 +156,9 @@ describe("code-graph semantic_search", () => {
         return text.toLowerCase().includes("alpha") ? [1, 0] : [0, 1];
       },
       async embedBatch(texts) {
-        return texts.map((t) => (t.toLowerCase().includes("alpha.ts") ? [1, 0] : [0, 1]));
+        return texts.map((t) =>
+          t.toLowerCase().includes("alpha.ts") ? [1, 0] : [0, 1],
+        );
       },
     };
 

@@ -23,9 +23,16 @@ import {
 import type { CommandWriter } from "../../lib/capture-writer.js";
 import { fleetRoot, sessionDir } from "../../sessions/paths.js";
 import { SessionStore, type SessionMeta } from "../../sessions/store.js";
-import { parseSessionEventLine, type SessionEventInput } from "../../sessions/events.js";
+import {
+  parseSessionEventLine,
+  type SessionEventInput,
+} from "../../sessions/events.js";
 
-function memoryWriter(): { writer: CommandWriter; out: string[]; err: string[] } {
+function memoryWriter(): {
+  writer: CommandWriter;
+  out: string[];
+  err: string[];
+} {
   const out: string[] = [];
   const err: string[] = [];
   return {
@@ -63,7 +70,9 @@ afterEach(async () => {
 });
 
 /** Seed one session with a few events; returns its meta. */
-async function seedSession(over: Partial<SessionMeta> & { sid: string }): Promise<SessionMeta> {
+async function seedSession(
+  over: Partial<SessionMeta> & { sid: string },
+): Promise<SessionMeta> {
   const meta = await store.createSession({
     sid: over.sid,
     title: over.title ?? "seeded",
@@ -162,17 +171,33 @@ describe("fleet send", () => {
       state: "waiting",
     });
     const { writer, out } = memoryWriter();
-    await handleFleetSend(meta.sid, ["please", "add", "tests"], { json: true, cwd: projectCwd }, writer);
-    const inbox = await readFile(join(sessionDir(fleetRoot(projectCwd), meta.sid), "inbox.ndjson"), "utf8");
+    await handleFleetSend(
+      meta.sid,
+      ["please", "add", "tests"],
+      { json: true, cwd: projectCwd },
+      writer,
+    );
+    const inbox = await readFile(
+      join(sessionDir(fleetRoot(projectCwd), meta.sid), "inbox.ndjson"),
+      "utf8",
+    );
     expect(inbox).toContain('"type":"message"');
     expect(inbox).toContain("please add tests");
-    expect(JSON.parse(out.join("")) as object).toMatchObject({ sid: meta.sid, ok: true });
+    expect(JSON.parse(out.join("")) as object).toMatchObject({
+      sid: meta.sid,
+      ok: true,
+    });
   });
 
   it("refuses a terminal session with a uniform error", async () => {
     const meta = await seedSession({ sid: "s-ccc-0003", state: "done" });
     const { writer, err } = memoryWriter();
-    await handleFleetSend(meta.sid, ["late"], { json: true, cwd: projectCwd }, writer);
+    await handleFleetSend(
+      meta.sid,
+      ["late"],
+      { json: true, cwd: projectCwd },
+      writer,
+    );
     expect(JSON.parse(err.join("")) as object).toMatchObject({ type: "error" });
     expect(process.exitCode).toBe(1);
   });
@@ -185,8 +210,16 @@ describe("fleet send", () => {
       state: "running",
     });
     const { writer } = memoryWriter();
-    await handleFleetSend("0004", ["hi"], { json: true, cwd: projectCwd }, writer);
-    const inbox = await readFile(join(sessionDir(fleetRoot(projectCwd), meta.sid), "inbox.ndjson"), "utf8");
+    await handleFleetSend(
+      "0004",
+      ["hi"],
+      { json: true, cwd: projectCwd },
+      writer,
+    );
+    const inbox = await readFile(
+      join(sessionDir(fleetRoot(projectCwd), meta.sid), "inbox.ndjson"),
+      "utf8",
+    );
     expect(inbox).toContain('"hi"');
   });
 });
@@ -203,19 +236,39 @@ describe("fleet cancel", () => {
     const { writer, out } = memoryWriter();
     await handleFleetCancel(
       meta.sid,
-      { json: true, cwd: projectCwd, killImpl: (pid, sig) => kills.push([pid, sig]) },
+      {
+        json: true,
+        cwd: projectCwd,
+        killImpl: (pid, sig) => kills.push([pid, sig]),
+      },
       writer,
     );
-    const inbox = await readFile(join(sessionDir(fleetRoot(projectCwd), meta.sid), "inbox.ndjson"), "utf8");
+    const inbox = await readFile(
+      join(sessionDir(fleetRoot(projectCwd), meta.sid), "inbox.ndjson"),
+      "utf8",
+    );
     expect(inbox).toContain('"type":"cancel"');
     expect(kills).toEqual([[process.pid, "SIGTERM"]]);
-    const results = JSON.parse(out.join("")) as Array<{ sid: string; cancelled: boolean }>;
+    const results = JSON.parse(out.join("")) as Array<{
+      sid: string;
+      cancelled: boolean;
+    }>;
     expect(results[0]).toMatchObject({ sid: meta.sid, cancelled: true });
   });
 
   it("--all cancels every active session and skips terminal ones", async () => {
-    await seedSession({ sid: "s-fff-0006", owner: "tui", pid: process.pid, state: "running" });
-    await seedSession({ sid: "s-ggg-0007", owner: "tui", pid: process.pid, state: "waiting" });
+    await seedSession({
+      sid: "s-fff-0006",
+      owner: "tui",
+      pid: process.pid,
+      state: "running",
+    });
+    await seedSession({
+      sid: "s-ggg-0007",
+      owner: "tui",
+      pid: process.pid,
+      state: "waiting",
+    });
     await seedSession({ sid: "s-hhh-0008", state: "done" });
     const { writer, out } = memoryWriter();
     await handleFleetCancel(
@@ -224,7 +277,10 @@ describe("fleet cancel", () => {
       writer,
     );
     const results = JSON.parse(out.join("")) as Array<{ sid: string }>;
-    expect(results.map((r) => r.sid).sort()).toEqual(["s-fff-0006", "s-ggg-0007"]);
+    expect(results.map((r) => r.sid).sort()).toEqual([
+      "s-fff-0006",
+      "s-ggg-0007",
+    ]);
   });
 
   it("no sid and no --all is a usage error", async () => {
@@ -244,7 +300,11 @@ describe("fleet logs", () => {
     expect(events.map((e) => e?.seq)).toEqual([1, 2, 3]);
 
     const fromTwo = memoryWriter();
-    await handleFleetLogs(meta.sid, { json: true, fromSeq: "3", cwd: projectCwd }, fromTwo.writer);
+    await handleFleetLogs(
+      meta.sid,
+      { json: true, fromSeq: "3", cwd: projectCwd },
+      fromTwo.writer,
+    );
     expect(fromTwo.out).toHaveLength(1);
     expect(parseSessionEventLine(fromTwo.out[0] as string)?.seq).toBe(3);
   });
@@ -253,12 +313,22 @@ describe("fleet logs", () => {
 describe("fleet clean", () => {
   it("prunes terminal sessions with --all and reports them", async () => {
     const meta = await seedSession({ sid: "s-jjj-0010", state: "done" });
-    await seedSession({ sid: "s-kkk-0011", owner: "tui", pid: process.pid, state: "running" });
+    await seedSession({
+      sid: "s-kkk-0011",
+      owner: "tui",
+      pid: process.pid,
+      state: "running",
+    });
     const { writer, out } = memoryWriter();
     await handleFleetClean({ all: true, json: true, cwd: projectCwd }, writer);
-    const result = JSON.parse(out.join("")) as { removed: string[]; count: number };
+    const result = JSON.parse(out.join("")) as {
+      removed: string[];
+      count: number;
+    };
     expect(result.removed).toEqual([meta.sid]);
-    expect((await store.listSessions()).map((s) => s.sid)).toEqual(["s-kkk-0011"]);
+    expect((await store.listSessions()).map((s) => s.sid)).toEqual([
+      "s-kkk-0011",
+    ]);
   });
 });
 
@@ -296,7 +366,9 @@ describe("fleet watch", () => {
     const deadline = Date.now() + 10_000;
     while (!sawLive()) {
       if (Date.now() > deadline) {
-        throw new Error("fleet watch never emitted an event appended after adoption");
+        throw new Error(
+          "fleet watch never emitted an event appended after adoption",
+        );
       }
       w.append({ type: "message.delta", text: "live!", turn: 2 });
       await w.flush();
@@ -330,7 +402,11 @@ describe("fleet root", () => {
 describe("fleet worker", () => {
   it("exits 1 for an unknown session", async () => {
     const { writer, err } = memoryWriter();
-    const { code } = await handleFleetWorker("s-zzz-9999", { cwd: projectCwd }, writer);
+    const { code } = await handleFleetWorker(
+      "s-zzz-9999",
+      { cwd: projectCwd },
+      writer,
+    );
     expect(code).toBe(1);
     expect(err.join(" ")).toContain("no session");
   });

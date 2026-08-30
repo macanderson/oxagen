@@ -1,19 +1,17 @@
 /**
  * Solve-path usage aggregation — makes `oxagen solve` cost-observable.
  *
- * The one-shot path reports cost via the `--verbose` efficiency roll-up that
- * the bench adapter parses (`bench/terminal-bench/src/oxagen_terminal_bench/
- * oxagen_agent.py`, regex `([\d.]+)s total\D+([\d,]+)\s*tok\D+\$([\d.]+)`).
- * The best-of-N path had no equivalent: none of its model calls — candidate
- * turns, per-candidate pipeline judges, the comparative selector — were
- * aggregated anywhere, so solve runs reported null cost/tokens.
+ * A best-of-N run spends model calls in three places — the candidate turns, the
+ * per-candidate pipeline judges, and the comparative selector — and all three go
+ * through the injected `AgentAi` port, where `createMeteredAi` already prices
+ * each call into a {@link MetricsEvent}. This module folds that stream into
+ * totals and renders them two ways: as structured fields on the headless result
+ * envelope, and as a one-line roll-up in the same textual shape as the one-shot
+ * `--verbose` summary.
  *
- * The fix leans on the existing single seam: EVERY model call the engine makes
- * flows through the injected `AgentAi` port, and `createMeteredAi` already
- * prices each call into a {@link MetricsEvent}. This module just folds that
- * stream into totals and renders them as (a) structured fields on the headless
- * result envelope and (b) a one-line roll-up in the SAME textual shape as the
- * one-shot summary, so both of the adapter's existing parse strategies work.
+ * Keep that line's shape. The bench adapter (`bench/terminal-bench/src/
+ * oxagen_terminal_bench/oxagen_agent.py`) parses it with the regexes
+ * `([\d.]+)s total\D+([\d,]+)\s*tok\D+\$([\d.]+)` and `(\d+)\s*steps`.
  */
 import type { MetricsEvent } from "./metrics.js";
 import type { BestOfNResult } from "./best-of-n.js";
@@ -39,7 +37,13 @@ export interface SolveUsageAccumulator {
 
 /** Create a fresh accumulator; wire `record` into `createMeteredAi`'s `onMetrics`. */
 export function createSolveUsageAccumulator(): SolveUsageAccumulator {
-  const t: SolveUsageTotals = { tokensIn: 0, tokensOut: 0, cachedTokens: 0, costUsd: 0, modelCalls: 0 };
+  const t: SolveUsageTotals = {
+    tokensIn: 0,
+    tokensOut: 0,
+    cachedTokens: 0,
+    costUsd: 0,
+    modelCalls: 0,
+  };
   return {
     record(ev: MetricsEvent): void {
       if (ev.kind !== "model_call") return;
@@ -65,7 +69,10 @@ export interface SolveUsageSummary extends SolveUsageTotals {
 
 /** Sum tool-loop steps across all candidates, plus fork mode's trunk turn. */
 export function totalSolveSteps(result: BestOfNResult): number {
-  const candidateSteps = result.candidates.reduce((sum, c) => sum + (c.steps || 0), 0);
+  const candidateSteps = result.candidates.reduce(
+    (sum, c) => sum + (c.steps || 0),
+    0,
+  );
   return candidateSteps + (result.forkTelemetry?.trunkSteps ?? 0);
 }
 

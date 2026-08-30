@@ -16,14 +16,31 @@ function trace(over: Partial<TurnTrace> = {}): TurnTrace {
     cwd: "/proj",
     originalPrompt: "fix the login bug",
     evaluation: {
-      completeness: 60, complexity: 55, recommendedTier: "balanced", missing: [], contextQueries: [],
-      refinedPrompt: "fix the login bug", removed: [], reasoning: "", fallback: false,
-      model: "anthropic/claude-haiku-4.5", usage: { inputTokens: 5, outputTokens: 1, costUsd: 0.001 },
+      completeness: 60,
+      complexity: 55,
+      recommendedTier: "balanced",
+      missing: [],
+      contextQueries: [],
+      refinedPrompt: "fix the login bug",
+      removed: [],
+      reasoning: "",
+      fallback: false,
+      model: "anthropic/claude-haiku-4.5",
+      usage: { inputTokens: 5, outputTokens: 1, costUsd: 0.001 },
     },
     enhancement: {
-      prompt: "p", context: "Definitions of `Login`:\n  src/auth.ts", resolved: ["Login"], lessonCount: 1,
-      source: "code-graph", durationMs: 42,
-      retrieval: { symbolsQueried: ["Login", "Ghost"], pathsQueried: [], resolved: ["Login"], unresolved: ["Ghost"] },
+      prompt: "p",
+      context: "Definitions of `Login`:\n  src/auth.ts",
+      resolved: ["Login"],
+      lessonCount: 1,
+      source: "code-graph",
+      durationMs: 42,
+      retrieval: {
+        symbolsQueried: ["Login", "Ghost"],
+        pathsQueried: [],
+        resolved: ["Login"],
+        unresolved: ["Ghost"],
+      },
     },
     selectedModel: "anthropic/claude-sonnet-5",
     selectedTier: "balanced",
@@ -38,13 +55,52 @@ function trace(over: Partial<TurnTrace> = {}): TurnTrace {
     durationMs: 3000,
     verbose: true,
     phases: [
-      { phase: "evaluate", round: 0, startedAt: 0, finishedAt: 30, durationMs: 30, model: "anthropic/claude-haiku-4.5", usage: { inputTokens: 5, outputTokens: 1, costUsd: 0.001 } },
-      { phase: "enhance", round: 0, startedAt: 30, finishedAt: 72, durationMs: 42, usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 } },
-      { phase: "execute", round: 0, startedAt: 72, finishedAt: 2500, durationMs: 2428, model: "anthropic/claude-sonnet-5", usage: { inputTokens: 100, outputTokens: 50, costUsd: 0.049 } },
-      { phase: "judge", round: 0, startedAt: 2500, finishedAt: 3000, durationMs: 500, model: "anthropic/claude-opus-4.8", usage: { inputTokens: 3, outputTokens: 1, costUsd: 0.002 } },
+      {
+        phase: "evaluate",
+        round: 0,
+        startedAt: 0,
+        finishedAt: 30,
+        durationMs: 30,
+        model: "anthropic/claude-haiku-4.5",
+        usage: { inputTokens: 5, outputTokens: 1, costUsd: 0.001 },
+      },
+      {
+        phase: "enhance",
+        round: 0,
+        startedAt: 30,
+        finishedAt: 72,
+        durationMs: 42,
+        usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+      },
+      {
+        phase: "execute",
+        round: 0,
+        startedAt: 72,
+        finishedAt: 2500,
+        durationMs: 2428,
+        model: "anthropic/claude-sonnet-5",
+        usage: { inputTokens: 100, outputTokens: 50, costUsd: 0.049 },
+      },
+      {
+        phase: "judge",
+        round: 0,
+        startedAt: 2500,
+        finishedAt: 3000,
+        durationMs: 500,
+        model: "anthropic/claude-opus-4.8",
+        usage: { inputTokens: 3, outputTokens: 1, costUsd: 0.002 },
+      },
     ],
     toolEvents: [
-      { name: "edit_file", input: '{"path":"src/auth.ts"}', result: "ok", startedAt: 100, finishedAt: 320, durationMs: 220, ok: true },
+      {
+        name: "edit_file",
+        input: '{"path":"src/auth.ts"}',
+        result: "ok",
+        startedAt: 100,
+        finishedAt: 320,
+        durationMs: 220,
+        ok: true,
+      },
     ],
     ...over,
   };
@@ -77,7 +133,15 @@ describe("formatVerboseSection", () => {
     const text = formatVerboseSection(
       trace({
         toolEvents: [
-          { name: "bash", input: '{"command":"pnpm test"}', result: "1 failed", startedAt: 0, finishedAt: 50, durationMs: 50, ok: false },
+          {
+            name: "bash",
+            input: '{"command":"pnpm test"}',
+            result: "1 failed",
+            startedAt: 0,
+            finishedAt: 50,
+            durationMs: 50,
+            ok: false,
+          },
         ],
       }),
     ).join("\n");
@@ -85,7 +149,9 @@ describe("formatVerboseSection", () => {
   });
 
   it("returns nothing when there is no telemetry", () => {
-    expect(formatVerboseSection(trace({ phases: [], toolEvents: [] }))).toEqual([]);
+    expect(formatVerboseSection(trace({ phases: [], toolEvents: [] }))).toEqual(
+      [],
+    );
   });
 });
 
@@ -95,7 +161,11 @@ describe("formatTraceText", () => {
   });
 
   it("omits the verbose section for a normal turn", () => {
-    const normal = trace({ verbose: undefined, phases: undefined, toolEvents: undefined });
+    const normal = trace({
+      verbose: undefined,
+      phases: undefined,
+      toolEvents: undefined,
+    });
     expect(formatTraceText(normal)).not.toContain("verbose telemetry");
   });
 });

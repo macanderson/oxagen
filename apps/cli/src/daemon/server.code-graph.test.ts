@@ -18,7 +18,10 @@ let client: DaemonClient;
 
 beforeEach(async () => {
   repo = mkdtempSync(join(tmpdir(), "oxagen-cgd-repo-"));
-  writeFileSync(join(repo, "a.ts"), "export function alpha() {}\nexport class Beta {}\n");
+  writeFileSync(
+    join(repo, "a.ts"),
+    "export function alpha() {}\nexport class Beta {}\n",
+  );
   dir = mkdtempSync(join(tmpdir(), "oxagen-cgd-dir-"));
   // Keep the socket path short (macOS caps Unix socket paths at ~104 bytes).
   socketPath = join(tmpdir(), `oxcgd${process.pid}.sock`);
@@ -70,16 +73,23 @@ describe("daemon graph.* handlers", () => {
     const beta = search.results.find((r) => r.name === "Beta");
     expect(beta).toBeDefined();
 
-    const neighborhood = (await client.queryCodeGraph(beta!.id, { hops: 1 })) as {
+    const neighborhood = (await client.queryCodeGraph(beta!.id, {
+      hops: 1,
+    })) as {
       nodes: Array<{ name: string; kind: string }>;
     };
     // Beta's only neighbor is its containing file via the `contains` edge.
-    expect(neighborhood.nodes.some((n) => n.kind === "file" && n.name === "a.ts")).toBe(true);
+    expect(
+      neighborhood.nodes.some((n) => n.kind === "file" && n.name === "a.ts"),
+    ).toBe(true);
   });
 
   it("a second graph.build is fully incremental (nothing re-parsed)", async () => {
     await client.buildCodeGraph();
-    const second = (await client.buildCodeGraph()) as { indexed: number; skipped: number };
+    const second = (await client.buildCodeGraph()) as {
+      indexed: number;
+      skipped: number;
+    };
     expect(second).toMatchObject({ indexed: 0, skipped: 1 });
   });
 });

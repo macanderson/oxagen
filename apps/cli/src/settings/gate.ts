@@ -36,7 +36,10 @@ type ToolExecute = NonNullable<ToolSet[string]["execute"]>;
  * Return a copy of `tools` whose executes are gated. Tools without an `execute`
  * (none today, but the type allows it) pass through untouched.
  */
-export function wrapToolsWithGate(tools: ToolSet, ctx: ToolGateContext): ToolSet {
+export function wrapToolsWithGate(
+  tools: ToolSet,
+  ctx: ToolGateContext,
+): ToolSet {
   // Nothing to enforce → hand back the original set (zero overhead).
   if (!ctx.permissions && !ctx.hooks) return tools;
 
@@ -51,7 +54,9 @@ export function wrapToolsWithGate(tools: ToolSet, ctx: ToolGateContext): ToolSet
     const gated: ToolExecute = async (input, options) => {
       const perm = evaluateLocalPermission(name, input, ctx.permissions);
       if (perm.decision === "deny") {
-        const ruleMessage = perm.rule ? ctx.denyReasons?.[perm.rule] : undefined;
+        const ruleMessage = perm.rule
+          ? ctx.denyReasons?.[perm.rule]
+          : undefined;
         const reason = ruleMessage
           ? `Blocked by ${ruleMessage}`
           : `Permission denied: \`${name}\` ${perm.reason}.`;
@@ -81,7 +86,8 @@ export function wrapToolsWithGate(tools: ToolSet, ctx: ToolGateContext): ToolSet
           event: "PostToolUse",
           cwd: ctx.cwd,
           tool: { name, input },
-          toolResult: typeof result === "string" ? result.slice(0, 2000) : undefined,
+          toolResult:
+            typeof result === "string" ? result.slice(0, 2000) : undefined,
         },
         ctx.signal,
       );

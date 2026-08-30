@@ -1,6 +1,6 @@
 import type { Artifact } from "@oxagen/agent-artifacts";
-import { mapForeignTools } from "./tool-mappings";
-import type { ImportCandidate, NormalizedImport } from "./types";
+import { mapForeignTools, TOOL_MAPPING_VERSION } from "./tool-mappings.js";
+import type { ImportCandidate, NormalizedImport } from "./types.js";
 
 export function normalizeArtifactSlug(value: string): string {
   return (
@@ -35,7 +35,11 @@ export function normalizeImportCandidate(
 ): NormalizedImport {
   const name = normalizeArtifactSlug(candidate.name);
   let artifact: Artifact;
-  let mappingVersion = "2026-07-21.1";
+  // Skills and commands carry no tool mapping, so they record the catalogue's
+  // current version verbatim; agents overwrite it with the version the mapper
+  // actually applied. Never re-spell the literal here — a bump in
+  // tool-mappings.ts must reach every receipt.
+  let mappingVersion: string = TOOL_MAPPING_VERSION;
   const diagnostics = [...candidate.diagnostics];
 
   if (candidate.kind === "agent") {

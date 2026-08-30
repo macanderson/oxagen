@@ -49,7 +49,9 @@ describe("textChip — the [first 12…N Lines…last 12] preview grammar", () =
   it("uses CHIP_EDGE characters of head and tail", () => {
     const text = `${"x".repeat(40)}\n${"y".repeat(40)}`;
     const chip = textChip(text);
-    expect(chip).toBe(`[${"x".repeat(CHIP_EDGE)}...2 Lines...${"y".repeat(CHIP_EDGE)}]`);
+    expect(chip).toBe(
+      `[${"x".repeat(CHIP_EDGE)}...2 Lines...${"y".repeat(CHIP_EDGE)}]`,
+    );
   });
 
   it("does not duplicate characters when head and tail would overlap", () => {
@@ -105,24 +107,36 @@ describe("registry — chip keying, dedupe, and image counter", () => {
   it("numbers image tokens starting at 1, independently of text pastes", () => {
     const registry = createPasteRegistry();
     registerPastedText(registry, "a\nb"); // does not touch the image counter
-    expect(registerPastedImage(registry, { path: "/tmp/a.png", mediaType: "image/png" })).toBe(
-      "[Image #1]",
-    );
-    expect(registerPastedImage(registry, { path: "/tmp/b.png", mediaType: "image/png" })).toBe(
-      "[Image #2]",
-    );
+    expect(
+      registerPastedImage(registry, {
+        path: "/tmp/a.png",
+        mediaType: "image/png",
+      }),
+    ).toBe("[Image #1]");
+    expect(
+      registerPastedImage(registry, {
+        path: "/tmp/b.png",
+        mediaType: "image/png",
+      }),
+    ).toBe("[Image #2]");
   });
 
   it("resetPasteRegistry clears entries and restarts the image counter at 1", () => {
     const registry = createPasteRegistry();
     registerPastedText(registry, "x\ny");
-    registerPastedImage(registry, { path: "/tmp/a.png", mediaType: "image/png" });
+    registerPastedImage(registry, {
+      path: "/tmp/a.png",
+      mediaType: "image/png",
+    });
     resetPasteRegistry(registry);
     expect(registry.texts.size).toBe(0);
     expect(registry.images.size).toBe(0);
-    expect(registerPastedImage(registry, { path: "/tmp/c.png", mediaType: "image/png" })).toBe(
-      "[Image #1]",
-    );
+    expect(
+      registerPastedImage(registry, {
+        path: "/tmp/c.png",
+        mediaType: "image/png",
+      }),
+    ).toBe("[Image #1]");
   });
 
   it("imageToken formats the exact grammar (space before #)", () => {
@@ -141,9 +155,15 @@ describe("tokenEndingAt / tokenStartingAt — atomic deletion spans", () => {
 
   it("finds an image token ending exactly at the cursor", () => {
     const registry = createPasteRegistry();
-    registerPastedImage(registry, { path: "/tmp/a.png", mediaType: "image/png" });
+    registerPastedImage(registry, {
+      path: "/tmp/a.png",
+      mediaType: "image/png",
+    });
     const text = "look [Image #1]";
-    expect(tokenEndingAt(registry, text, text.length)).toEqual({ start: 5, end: text.length });
+    expect(tokenEndingAt(registry, text, text.length)).toEqual({
+      start: 5,
+      end: text.length,
+    });
   });
 
   it("returns null when the cursor is mid-chip, not at its end", () => {
@@ -162,7 +182,10 @@ describe("tokenEndingAt / tokenStartingAt — atomic deletion spans", () => {
     const registry = createPasteRegistry();
     const chip = registerPastedText(registry, "one\ntwo");
     const text = `${chip} trailing`;
-    expect(tokenStartingAt(registry, text, 0)).toEqual({ start: 0, end: chip.length });
+    expect(tokenStartingAt(registry, text, 0)).toEqual({
+      start: 0,
+      end: chip.length,
+    });
   });
 
   it("returns null when no token starts at the cursor", () => {
@@ -182,7 +205,10 @@ describe("dropTokenAt — removing the registry entry for a deleted token", () =
 
   it("drops the matching image entry", () => {
     const registry = createPasteRegistry();
-    registerPastedImage(registry, { path: "/tmp/a.png", mediaType: "image/png" });
+    registerPastedImage(registry, {
+      path: "/tmp/a.png",
+      mediaType: "image/png",
+    });
     const text = "[Image #1]";
     dropTokenAt(registry, text, { start: 0, end: text.length });
     expect(registry.images.has(1)).toBe(false);
@@ -202,7 +228,10 @@ describe("pruneMissingTokens — the 'at minimum, drop at submit' contract", () 
     const gone = registerPastedText(registry, "gone\nblock");
     const kept = registerPastedText(registry, "kept\nblock");
     // The first chip was mangled by mid-token editing and no longer reads intact.
-    pruneMissingTokens(registry, `some ${gone.slice(0, 4)} mangled and ${kept} intact`);
+    pruneMissingTokens(
+      registry,
+      `some ${gone.slice(0, 4)} mangled and ${kept} intact`,
+    );
     expect(registry.texts.has(gone)).toBe(false);
     expect(registry.texts.get(kept)).toBe("kept\nblock");
   });
@@ -218,9 +247,14 @@ describe("pruneMissingTokens — the 'at minimum, drop at submit' contract", () 
 describe("expandPasteSubmission — the model-bound expansion", () => {
   it("expands a single text chip inline", () => {
     const registry = createPasteRegistry();
-    const chip = registerPastedText(registry, "the FULL pasted body\nacross lines");
+    const chip = registerPastedText(
+      registry,
+      "the FULL pasted body\nacross lines",
+    );
     const result = expandPasteSubmission(registry, `please review ${chip} now`);
-    expect(result.expandedText).toBe("please review the FULL pasted body\nacross lines now");
+    expect(result.expandedText).toBe(
+      "please review the FULL pasted body\nacross lines now",
+    );
     expect(result.images).toEqual([]);
   });
 
@@ -246,7 +280,10 @@ describe("expandPasteSubmission — the model-bound expansion", () => {
     const registry = createPasteRegistry();
     const attachment = { path: "/tmp/shot.png", mediaType: "image/png" };
     registerPastedImage(registry, attachment);
-    const result = expandPasteSubmission(registry, "what's wrong here: [Image #1]");
+    const result = expandPasteSubmission(
+      registry,
+      "what's wrong here: [Image #1]",
+    );
     expect(result.expandedText).toBe("what's wrong here: (attached image)");
     expect(result.images).toEqual([attachment]);
   });
@@ -257,14 +294,20 @@ describe("expandPasteSubmission — the model-bound expansion", () => {
     const second = { path: "/tmp/2.png", mediaType: "image/png" };
     registerPastedImage(registry, first); // #1
     registerPastedImage(registry, second); // #2
-    const result = expandPasteSubmission(registry, "[Image #2] before [Image #1]");
+    const result = expandPasteSubmission(
+      registry,
+      "[Image #2] before [Image #1]",
+    );
     expect(result.images).toEqual([second, first]);
   });
 
   it("handles a mix of text and image tokens together", () => {
     const registry = createPasteRegistry();
     const chip = registerPastedText(registry, "stack\ntrace here");
-    registerPastedImage(registry, { path: "/tmp/a.png", mediaType: "image/png" });
+    registerPastedImage(registry, {
+      path: "/tmp/a.png",
+      mediaType: "image/png",
+    });
     const result = expandPasteSubmission(registry, `${chip} and [Image #1]`);
     expect(result.expandedText).toBe("stack\ntrace here and (attached image)");
     expect(result.images).toHaveLength(1);
@@ -272,7 +315,10 @@ describe("expandPasteSubmission — the model-bound expansion", () => {
 
   it("leaves a token with no registry entry as literal text (never silently dropped)", () => {
     const registry = createPasteRegistry();
-    const result = expandPasteSubmission(registry, "please handle ticket [Image #99]");
+    const result = expandPasteSubmission(
+      registry,
+      "please handle ticket [Image #99]",
+    );
     expect(result.expandedText).toBe("please handle ticket [Image #99]");
     expect(result.images).toEqual([]);
   });
@@ -280,7 +326,10 @@ describe("expandPasteSubmission — the model-bound expansion", () => {
   it("is a no-op on plain text with no tokens at all", () => {
     const registry = createPasteRegistry();
     const result = expandPasteSubmission(registry, "just a normal prompt");
-    expect(result).toEqual({ expandedText: "just a normal prompt", images: [] });
+    expect(result).toEqual({
+      expandedText: "just a normal prompt",
+      images: [],
+    });
   });
 
   it("prunes stale entries as part of expansion", () => {

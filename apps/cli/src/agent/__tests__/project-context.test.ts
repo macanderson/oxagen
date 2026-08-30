@@ -9,7 +9,10 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadProjectContext } from "../project-context.js";
-import { clearWorkspaceConfigCache, type ResolveWorkspaceConfigOptions } from "../../config/resolve.js";
+import {
+  clearWorkspaceConfigCache,
+  type ResolveWorkspaceConfigOptions,
+} from "../../config/resolve.js";
 
 let cwd: string;
 let homeDir: string;
@@ -30,7 +33,10 @@ function loadContext() {
 beforeEach(() => {
   cwd = mkdtempSync(join(tmpdir(), "oxagen-project-context-"));
   homeDir = mkdtempSync(join(tmpdir(), "oxagen-project-context-home-"));
-  configOpts = { managedConfigPath: join(homeDir, "managed.json"), userConfigPath: join(homeDir, "user.json") };
+  configOpts = {
+    managedConfigPath: join(homeDir, "managed.json"),
+    userConfigPath: join(homeDir, "user.json"),
+  };
   clearWorkspaceConfigCache();
 });
 
@@ -71,7 +77,9 @@ describe("loadProjectContext — vision anchor block", () => {
     );
     const result = loadContext();
     expect(result.text).toContain("### Vision");
-    expect(result.text).toContain("Ship a reliable knowledge-graph context engine.");
+    expect(result.text).toContain(
+      "Ship a reliable knowledge-graph context engine.",
+    );
     expect(result.text).toContain("Fix root cause");
     expect(result.text).toContain("Ship v2");
     expect(result.text).toContain("Replace settings.json");
@@ -93,8 +101,19 @@ describe("loadProjectContext — enforced hard rules", () => {
         languages: {
           typescript: {
             items: [
-              { id: "no-any", kind: "rule", text: "No `any`.", enforced: true, origin: "manual" },
-              { id: "prefer-const", kind: "preference", text: "Prefer const.", origin: "manual" }, // not enforced
+              {
+                id: "no-any",
+                kind: "rule",
+                text: "No `any`.",
+                enforced: true,
+                origin: "manual",
+              },
+              {
+                id: "prefer-const",
+                kind: "preference",
+                text: "Prefer const.",
+                origin: "manual",
+              }, // not enforced
             ],
           },
         },
@@ -113,7 +132,15 @@ describe("loadProjectContext — enforced hard rules", () => {
       JSON.stringify({
         languages: {
           typescript: {
-            items: [{ id: "ui-import", kind: "convention", doc: "docs/ui-imports.md", enforced: true, origin: "scan" }],
+            items: [
+              {
+                id: "ui-import",
+                kind: "convention",
+                doc: "docs/ui-imports.md",
+                enforced: true,
+                origin: "scan",
+              },
+            ],
           },
         },
       }),
@@ -129,7 +156,13 @@ describe("loadProjectContext — commands", () => {
       ".oxagen/workspace.json",
       JSON.stringify({
         commands: {
-          dev: [{ run: "pnpm dev", description: "web app on :3000", background: true }],
+          dev: [
+            {
+              run: "pnpm dev",
+              description: "web app on :3000",
+              background: true,
+            },
+          ],
           test: [{ run: "pnpm test:unit" }],
           custom: { kill: [{ run: "pnpm kill" }] },
         },
@@ -137,7 +170,9 @@ describe("loadProjectContext — commands", () => {
     );
     const result = loadContext();
     expect(result.text).toContain("### Commands");
-    expect(result.text).toContain("- dev: `pnpm dev` — web app on :3000 (background)");
+    expect(result.text).toContain(
+      "- dev: `pnpm dev` — web app on :3000 (background)",
+    );
     expect(result.text).toContain("- test: `pnpm test:unit`");
     expect(result.text).toContain("- kill: `pnpm kill`");
     expect(result.sources).toContain("workspace config: commands");
@@ -147,7 +182,10 @@ describe("loadProjectContext — commands", () => {
 describe("loadProjectContext — combines prose + workspace config", () => {
   it("appends workspace config sections after prose rules, sharing one budget", () => {
     write("CLAUDE.md", "# Prose rules");
-    write(".oxagen/workspace.json", JSON.stringify({ vision: { statement: "Anchor." } }));
+    write(
+      ".oxagen/workspace.json",
+      JSON.stringify({ vision: { statement: "Anchor." } }),
+    );
     const result = loadContext();
     const proseIdx = result.text.indexOf("### CLAUDE.md");
     const visionIdx = result.text.indexOf("### Vision");

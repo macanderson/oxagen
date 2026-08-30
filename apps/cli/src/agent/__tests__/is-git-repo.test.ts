@@ -12,15 +12,21 @@ function fakeGit(result: { code: number; stdout: string }): GitRunner {
 }
 
 describe("isGitRepo", () => {
-  it("is true when git exits 0 and reports \"true\"", async () => {
-    await expect(isGitRepo("/repo", fakeGit({ code: 0, stdout: "true\n" }))).resolves.toBe(true);
+  it('is true when git exits 0 and reports "true"', async () => {
+    await expect(
+      isGitRepo("/repo", fakeGit({ code: 0, stdout: "true\n" })),
+    ).resolves.toBe(true);
   });
 
   it("is false on a non-zero exit (not a git repository)", async () => {
-    await expect(isGitRepo("/tmp/scratch", fakeGit({ code: 128, stdout: "" }))).resolves.toBe(false);
+    await expect(
+      isGitRepo("/tmp/scratch", fakeGit({ code: 128, stdout: "" })),
+    ).resolves.toBe(false);
   });
 
-  it("is false when stdout doesn't say \"true\" even on exit 0", async () => {
-    await expect(isGitRepo("/repo", fakeGit({ code: 0, stdout: "false\n" }))).resolves.toBe(false);
+  it('is false when stdout doesn\'t say "true" even on exit 0', async () => {
+    await expect(
+      isGitRepo("/repo", fakeGit({ code: 0, stdout: "false\n" })),
+    ).resolves.toBe(false);
   });
 });

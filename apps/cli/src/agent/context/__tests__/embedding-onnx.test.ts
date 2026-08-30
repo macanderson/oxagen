@@ -16,7 +16,9 @@ import {
 } from "../embedding-onnx.js";
 
 /** A minimal fake shaped exactly like the real `fastembed` module's public surface. */
-function fakeFastEmbedModule(overrides: { init?: ReturnType<typeof vi.fn> } = {}) {
+function fakeFastEmbedModule(
+  overrides: { init?: ReturnType<typeof vi.fn> } = {},
+) {
   const instance = {
     queryEmbed: vi.fn(async (text: string) => [text.length, 0, 0]),
     passageEmbed: vi.fn(async function* (texts: string[]) {
@@ -24,7 +26,9 @@ function fakeFastEmbedModule(overrides: { init?: ReturnType<typeof vi.fn> } = {}
       yield texts.slice(0, 1).map((t) => [t.length, 1, 1]);
       if (texts.length > 1) yield texts.slice(1).map((t) => [t.length, 1, 1]);
     }),
-    listSupportedModels: vi.fn(() => [{ model: "fast-bge-small-en-v1.5", dim: 384 }]),
+    listSupportedModels: vi.fn(() => [
+      { model: "fast-bge-small-en-v1.5", dim: 384 },
+    ]),
   };
   const init = overrides.init ?? vi.fn(async () => instance);
   return {
@@ -37,9 +41,20 @@ function fakeFastEmbedModule(overrides: { init?: ReturnType<typeof vi.fn> } = {}
   };
 }
 
-let tmpCacheDir: string;
+// Every temp dir a test makes is registered here so afterEach removes ALL of
+// them — a single `let` binding silently leaked the dirs made after the last
+// assignment (and the parent of a nested cacheDir) into /tmp on every run.
+let tmpDirs: string[] = [];
+function makeTmpDir(): string {
+  const dir = mkdtempSync(join(tmpdir(), "oxagen-onnx-test-"));
+  tmpDirs.push(dir);
+  return dir;
+}
 afterEach(() => {
-  if (tmpCacheDir && existsSync(tmpCacheDir)) rmSync(tmpCacheDir, { recursive: true, force: true });
+  for (const dir of tmpDirs) {
+    if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+  }
+  tmpDirs = [];
 });
 
 describe("isOnnxAvailable", () => {
@@ -57,7 +72,9 @@ describe("isOnnxAvailable", () => {
   });
 
   it("false when the loader resolves something not shaped like fastembed", async () => {
-    await expect(isOnnxAvailable(async () => ({ nope: true }))).resolves.toBe(false);
+    await expect(isOnnxAvailable(async () => ({ nope: true }))).resolves.toBe(
+      false,
+    );
   });
 
   it("false when the loader resolves null", async () => {
@@ -74,7 +91,9 @@ describe("createOnnxEmbeddingClient", () => {
   });
 
   it("returns null when the resolved module isn't fastembed-shaped", async () => {
-    await expect(createOnnxEmbeddingClient({ loader: async () => ({}) })).resolves.toBeNull();
+    await expect(
+      createOnnxEmbeddingClient({ loader: async () => ({}) }),
+    ).resolves.toBeNull();
   });
 
   it("returns null when FlagEmbedding.init throws (e.g. offline on first download)", async () => {
@@ -82,13 +101,18 @@ describe("createOnnxEmbeddingClient", () => {
       throw new Error("ENOTFOUND huggingface.co");
     });
     const { module } = fakeFastEmbedModule({ init });
-    await expect(createOnnxEmbeddingClient({ loader: async () => module })).resolves.toBeNull();
+    await expect(
+      createOnnxEmbeddingClient({ loader: async () => module }),
+    ).resolves.toBeNull();
   });
 
   it("builds a working client with providerId local-onnx:bge-small-en-v1.5 and dim from listSupportedModels()", async () => {
-    tmpCacheDir = mkdtempSync(join(tmpdir(), "oxagen-onnx-test-"));
+    const cacheDir = makeTmpDir();
     const { module, init } = fakeFastEmbedModule();
-    const client = await createOnnxEmbeddingClient({ loader: async () => module, cacheDir: tmpCacheDir });
+    const client = await createOnnxEmbeddingClient({
+      loader: async () => module,
+      cacheDir,
+    });
 
     expect(client).not.toBeNull();
     expect(client?.providerId).toBe(`${ONNX_PROVIDER_PREFIX}bge-small-en-v1.5`);
@@ -96,23 +120,23 @@ describe("createOnnxEmbeddingClient", () => {
     expect(client?.dimensions).toBe(384);
 
     expect(init).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "fast-bge-small-en-v1.5", cacheDir: tmpCacheDir }),
+      expect.objectContaining({ model: "fast-bge-small-en-v1.5", cacheDir }),
     );
   });
 
   it("creates the cache dir before loading the model", async () => {
-    tmpCacheDir = join(mkdtempSync(join(tmpdir(), "oxagen-onnx-test-")), "nested", "cache");
-    expect(existsSync(tmpCacheDir)).toBe(false);
+    const cacheDir = join(makeTmpDir(), "nested", "cache");
+    expect(existsSync(cacheDir)).toBe(false);
     const { module } = fakeFastEmbedModule();
-    await createOnnxEmbeddingClient({ loader: async () => module, cacheDir: tmpCacheDir });
-    expect(existsSync(tmpCacheDir)).toBe(true);
+    await createOnnxEmbeddingClient({ loader: async () => module, cacheDir });
+    expect(existsSync(cacheDir)).toBe(true);
   });
 
   it("embed() delegates to queryEmbed()", async () => {
     const { module, instance } = fakeFastEmbedModule();
     const client = await createOnnxEmbeddingClient({
       loader: async () => module,
-      cacheDir: mkdtempSync(join(tmpdir(), "oxagen-onnx-test-")),
+      cacheDir: makeTmpDir(),
     });
     await expect(client?.embed("hello")).resolves.toEqual([5, 0, 0]);
     expect(instance.queryEmbed).toHaveBeenCalledWith("hello");
@@ -122,7 +146,7 @@ describe("createOnnxEmbeddingClient", () => {
     const { module } = fakeFastEmbedModule();
     const client = await createOnnxEmbeddingClient({
       loader: async () => module,
-      cacheDir: mkdtempSync(join(tmpdir(), "oxagen-onnx-test-")),
+      cacheDir: makeTmpDir(),
     });
     await expect(client?.embedBatch(["aa", "bbb", "c"])).resolves.toEqual([
       [2, 1, 1],
@@ -135,7 +159,7 @@ describe("createOnnxEmbeddingClient", () => {
     const { module, instance } = fakeFastEmbedModule();
     const client = await createOnnxEmbeddingClient({
       loader: async () => module,
-      cacheDir: mkdtempSync(join(tmpdir(), "oxagen-onnx-test-")),
+      cacheDir: makeTmpDir(),
     });
     await expect(client?.embedBatch([])).resolves.toEqual([]);
     expect(instance.passageEmbed).not.toHaveBeenCalled();
@@ -143,6 +167,8 @@ describe("createOnnxEmbeddingClient", () => {
 
   it("returns null when the model key is missing from EmbeddingModel", async () => {
     const module = { EmbeddingModel: {}, FlagEmbedding: { init: vi.fn() } };
-    await expect(createOnnxEmbeddingClient({ loader: async () => module })).resolves.toBeNull();
+    await expect(
+      createOnnxEmbeddingClient({ loader: async () => module }),
+    ).resolves.toBeNull();
   });
 });

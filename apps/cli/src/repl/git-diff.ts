@@ -135,7 +135,9 @@ function normalizeNumstatPath(raw: string): string {
  * Lines are `<ins>\t<del>\t<path>`; a binary file reports "-" for both counts
  * (recorded as 0). Rename paths are normalized to their new form. Pure.
  */
-export function parseNumstat(out: string): Map<string, { insertions: number; deletions: number }> {
+export function parseNumstat(
+  out: string,
+): Map<string, { insertions: number; deletions: number }> {
   const map = new Map<string, { insertions: number; deletions: number }>();
   for (const line of out.split("\n")) {
     if (line.trim() === "") continue;
@@ -167,14 +169,19 @@ function sortChangedFiles(files: ChangedFile[]): ChangedFile[] {
  * numstat line counts. Never throws: any git failure (not a repo, no HEAD)
  * yields `[]`.
  */
-export async function listChangedFiles(root: string, exec: ExecFn = defaultExec): Promise<ChangedFile[]> {
+export async function listChangedFiles(
+  root: string,
+  exec: ExecFn = defaultExec,
+): Promise<ChangedFile[]> {
   try {
-    const status = await exec("git", ["status", "--porcelain=v1", "-z"], { cwd: root });
+    const status = await exec("git", ["status", "--porcelain=v1", "-z"], {
+      cwd: root,
+    });
     // numstat can fail independently (e.g. a repo with no commits yet has no
     // HEAD to diff against) — treat that as "no counts", not a hard failure.
-    const numstat = await exec("git", ["diff", "--numstat", "HEAD"], { cwd: root }).catch(
-      () => ({ stdout: "", stderr: "" }) as ExecResult,
-    );
+    const numstat = await exec("git", ["diff", "--numstat", "HEAD"], {
+      cwd: root,
+    }).catch(() => ({ stdout: "", stderr: "" }) as ExecResult);
     const files = parseStatusPorcelain(status.stdout);
     const counts = parseNumstat(numstat.stdout);
     for (const file of files) {
@@ -212,17 +219,24 @@ export async function getFileDiff(
   try {
     if (file.untracked) {
       try {
-        const { stdout } = await exec("git", ["diff", "--no-index", "--", "/dev/null", file.path], {
-          cwd: root,
-        });
+        const { stdout } = await exec(
+          "git",
+          ["diff", "--no-index", "--", "/dev/null", file.path],
+          {
+            cwd: root,
+          },
+        );
         return capDiff(stdout);
       } catch (err) {
         const e = err as { code?: number | string; stdout?: string };
-        if (e && e.code === 1 && typeof e.stdout === "string") return capDiff(e.stdout);
+        if (e && e.code === 1 && typeof e.stdout === "string")
+          return capDiff(e.stdout);
         return "";
       }
     }
-    const { stdout } = await exec("git", ["diff", "HEAD", "--", file.path], { cwd: root });
+    const { stdout } = await exec("git", ["diff", "HEAD", "--", file.path], {
+      cwd: root,
+    });
     return capDiff(stdout);
   } catch {
     return "";

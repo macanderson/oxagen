@@ -1,11 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render } from "ink-testing-library";
 import React from "react";
-import {
-  SwarmPanel,
-  resolveCtrlX,
-  agentStatusStyle,
-} from "../swarm-panel.js";
+import { SwarmPanel, resolveCtrlX, agentStatusStyle } from "../swarm-panel.js";
 import type { RunningAgent } from "../../agent/agent-registry.js";
 
 const ESC = String.fromCharCode(27);
@@ -41,7 +37,9 @@ function agent(over: Partial<RunningAgent> & { id: string }): RunningAgent {
     updatedAt: over.updatedAt ?? 1000,
     ...(over.model !== undefined ? { model: over.model } : {}),
     ...(over.detail !== undefined ? { detail: over.detail } : {}),
-    ...(over.outputTokens !== undefined ? { outputTokens: over.outputTokens } : {}),
+    ...(over.outputTokens !== undefined
+      ? { outputTokens: over.outputTokens }
+      : {}),
     ...(over.costUsd !== undefined ? { costUsd: over.costUsd } : {}),
   };
 }
@@ -160,7 +158,9 @@ describe("SwarmPanel", () => {
     stdin.write(CTRL_X);
     await until(() => (lastFrame() ?? "").includes("ctrl+x again to kill"));
     stdin.write(CTRL_X);
-    await until(() => (lastFrame() ?? "").includes("no kill handle — dismissed"));
+    await until(() =>
+      (lastFrame() ?? "").includes("no kill handle — dismissed"),
+    );
   });
 
   it("any other key disarms the kill chain", async () => {

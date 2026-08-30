@@ -17,7 +17,9 @@ import {
 /** A mutable os stub: memory is set by ratio, load/cores directly. */
 function fakeOs(init: { ratio: number; load1: number; cores: number }): {
   os: ResourceMonitorOsPort;
-  set: (patch: Partial<{ ratio: number; load1: number; cores: number }>) => void;
+  set: (
+    patch: Partial<{ ratio: number; load1: number; cores: number }>,
+  ) => void;
 } {
   const total = 16_000;
   const state = { ...init };
@@ -66,11 +68,15 @@ describe("clampConcurrency — the clamp table", () => {
   it("takes the tightest of the memory and CPU constraints", () => {
     // Elevated mem → memCap 2; mild CPU (budget 5, load 6.25 → factor 0.8 →
     // floor(4×0.8)=3). min(4,2,3) = 2.
-    expect(clampConcurrency(snap({ freeMemRatio: 0.1, cores: 4, load1: 6.25 }), 4)).toBe(2);
+    expect(
+      clampConcurrency(snap({ freeMemRatio: 0.1, cores: 4, load1: 6.25 }), 4),
+    ).toBe(2);
   });
 
   it("never returns below 1", () => {
-    expect(clampConcurrency(snap({ freeMemRatio: 0.01, cores: 1, load1: 99 }), 4)).toBe(1);
+    expect(
+      clampConcurrency(snap({ freeMemRatio: 0.01, cores: 1, load1: 99 }), 4),
+    ).toBe(1);
     expect(clampConcurrency(snap(), 1)).toBe(1);
   });
 

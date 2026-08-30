@@ -31,18 +31,33 @@ describe("borderPhaseFor", () => {
   });
 
   it("maps every other in-flight pipeline stage to active", () => {
-    const activeStages: TelemetryTurn["phase"][] = ["enhance", "route", "execute", "judge", "revise"];
+    const activeStages: TelemetryTurn["phase"][] = [
+      "enhance",
+      "route",
+      "execute",
+      "judge",
+      "revise",
+    ];
     for (const stage of activeStages) {
       expect(borderPhaseFor(stage)).toBe("active");
     }
   });
 
   it("degrades an unrecognized stage kind to active rather than falling back to idle mid-turn", () => {
-    expect(borderPhaseFor("some-future-stage" as TelemetryTurn["phase"])).toBe("active");
+    expect(borderPhaseFor("some-future-stage" as TelemetryTurn["phase"])).toBe(
+      "active",
+    );
   });
 
   it("follows the full submit -> evaluate -> active -> idle sequence in order", () => {
-    const sequence: TelemetryTurn["phase"][] = ["idle", "evaluate", "route", "execute", "judge", "complete"];
+    const sequence: TelemetryTurn["phase"][] = [
+      "idle",
+      "evaluate",
+      "route",
+      "execute",
+      "judge",
+      "complete",
+    ];
     expect(sequence.map(borderPhaseFor)).toEqual([
       "idle",
       "evaluating",
@@ -65,7 +80,9 @@ describe("rainbowColorAt", () => {
 
   it("matches RAINBOW_FLASH_COLORS's own declared order", () => {
     for (let i = 0; i < RAINBOW_FLASH_COLORS.length * 2; i++) {
-      expect(rainbowColorAt(i)).toBe(RAINBOW_FLASH_COLORS[i % RAINBOW_FLASH_COLORS.length]);
+      expect(rainbowColorAt(i)).toBe(
+        RAINBOW_FLASH_COLORS[i % RAINBOW_FLASH_COLORS.length],
+      );
     }
   });
 
@@ -103,7 +120,9 @@ describe("borderColorFor", () => {
   it("every phase resolves to a distinct steady-state color (idle vs active never collide)", () => {
     const idlePhase: BorderPhase = "idle";
     const activePhase: BorderPhase = "active";
-    expect(borderColorFor(idlePhase, 0)).not.toBe(borderColorFor(activePhase, 0));
+    expect(borderColorFor(idlePhase, 0)).not.toBe(
+      borderColorFor(activePhase, 0),
+    );
   });
 });
 
@@ -111,14 +130,20 @@ describe("promptBorderColorFor (motion-aware)", () => {
   it("at full motion it delegates to borderColorFor, rainbow flash included", () => {
     for (const phase of ["idle", "active", "evaluating"] as const) {
       for (const tick of [0, 1, 2, 7]) {
-        expect(promptBorderColorFor(phase, tick, "full")).toBe(borderColorFor(phase, tick));
+        expect(promptBorderColorFor(phase, tick, "full")).toBe(
+          borderColorFor(phase, tick),
+        );
       }
     }
   });
 
   it("at reduced motion the evaluating flash is suppressed to the static active amber", () => {
     // Same color for every tick — the border must never animate.
-    const colors = new Set([0, 1, 2, 3, 9].map((t) => promptBorderColorFor("evaluating", t, "reduced")));
+    const colors = new Set(
+      [0, 1, 2, 3, 9].map((t) =>
+        promptBorderColorFor("evaluating", t, "reduced"),
+      ),
+    );
     expect(colors).toEqual(new Set([theme.amber]));
   });
 

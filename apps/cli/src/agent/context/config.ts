@@ -1,17 +1,12 @@
 /**
- * Context-layer config — the slice Group 3 owns (graph before grep).
- *
- * The unified `pipeline-config.json` is Group 6's single source of truth; each
- * earlier group ships the slice of config it owns and Group 6 merges them. This
- * module owns the `graph.*` settings that govern the code-graph context path:
- * whether it is on, where the GraphRAG backend lives, how large a subgraph the
- * `graph_query` tool may return, whether a graph miss may fall back to grep, and
- * which embedding backend powers the semantic half of `semantic_search`.
+ * Context-layer config — the `graph.*` settings that govern the code-graph
+ * context path: whether it is on, where the GraphRAG backend lives, how large a
+ * subgraph the `graph_query` tool may return, whether a graph miss may fall back
+ * to grep, and which embedding backend powers the semantic half of the search.
  *
  * Values are read from `~/.config/oxagen/config.json` under a `graph` key and
  * layered over {@link DEFAULT_GRAPH_CONFIG}, so an unset field always falls back
- * to a sane default rather than `undefined`. Mirrors Group 7's
- * `contracts/config.ts` `GraphConfig`.
+ * to a sane default rather than `undefined`.
  */
 import { readConfig } from "../../lib/config.js";
 import {

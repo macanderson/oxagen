@@ -155,7 +155,10 @@ describe("resolveAiCredential", () => {
   it("gateway always wins, and the direct provider is NOT installed", () => {
     process.env["AI_GATEWAY_API_KEY"] = "vck_1";
     process.env["ANTHROPIC_API_KEY"] = "sk-ant-1";
-    expect(resolveAiCredential(bareCwd)).toEqual({ source: "gateway", key: "vck_1" });
+    expect(resolveAiCredential(bareCwd)).toEqual({
+      source: "gateway",
+      key: "vck_1",
+    });
     expect(installMock).not.toHaveBeenCalled();
   });
 
@@ -188,12 +191,16 @@ describe("credentialSupportsModel", () => {
   it("gateway credentials run any vendor", () => {
     const cred = { source: "gateway" as const, key: "vck_1" };
     expect(credentialSupportsModel(cred, "openai/gpt-5.5-pro")).toBe(true);
-    expect(credentialSupportsModel(cred, "anthropic/claude-sonnet-5")).toBe(true);
+    expect(credentialSupportsModel(cred, "anthropic/claude-sonnet-5")).toBe(
+      true,
+    );
   });
 
   it("anthropic credentials run only anthropic/* or bare slugs", () => {
     const cred = { source: "anthropic" as const, key: "sk-ant-1" };
-    expect(credentialSupportsModel(cred, "anthropic/claude-sonnet-5")).toBe(true);
+    expect(credentialSupportsModel(cred, "anthropic/claude-sonnet-5")).toBe(
+      true,
+    );
     expect(credentialSupportsModel(cred, "claude-sonnet-5")).toBe(true);
     expect(credentialSupportsModel(cred, "openai/gpt-5.5-pro")).toBe(false);
   });

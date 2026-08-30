@@ -12,8 +12,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { importArtifacts } from "./index";
-import type { ConflictContext, ImportPlatform } from "./types";
+import { importArtifacts } from "./index.js";
+import type { ConflictContext, ImportPlatform } from "./types.js";
 
 const FIXTURES = join(__dirname, "fixtures");
 

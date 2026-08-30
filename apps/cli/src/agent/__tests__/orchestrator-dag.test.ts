@@ -43,7 +43,10 @@ function plan(tasks: Task[]): Plan {
   return { id: "p1", goal: "g", createdAt: 1, tasks, status: "draft" };
 }
 
-function deferred<T = void>(): { promise: Promise<T>; resolve: (v: T) => void } {
+function deferred<T = void>(): {
+  promise: Promise<T>;
+  resolve: (v: T) => void;
+} {
   let resolve!: (v: T) => void;
   const promise = new Promise<T>((res) => {
     resolve = res;
@@ -69,7 +72,11 @@ describe("Fleet DAG scheduling", () => {
       gates.set(o.prompt, g);
       await g.promise;
       events.push(`end:${o.prompt}`);
-      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "ok",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
     const fleet = new Fleet({ cwd: "/x", runner, concurrency: 4 });
     fleet.loadPlan(
@@ -123,11 +130,20 @@ describe("Fleet DAG scheduling", () => {
       gates.set(o.prompt, g);
       await g.promise;
       active--;
-      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "ok",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
     const fleet = new Fleet({ cwd: "/x", runner, concurrency: 2 });
     fleet.loadPlan(
-      plan([task("a"), task("b"), task("c"), task("join", { dependsOn: ["a", "b", "c"] })]),
+      plan([
+        task("a"),
+        task("b"),
+        task("c"),
+        task("join", { dependsOn: ["a", "b", "c"] }),
+      ]),
     );
     const done = fleet.start();
     await flush();
@@ -159,7 +175,11 @@ describe("Fleet DAG scheduling", () => {
   it("blocks every dependent transitively when a shared dependency fails", async () => {
     const runner: AgentRunner = async (o) => {
       if (o.prompt === "root") throw new Error("kaboom");
-      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "ok",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
     const fleet = new Fleet({ cwd: "/x", runner, concurrency: 4 });
     fleet.loadPlan(
@@ -180,7 +200,11 @@ describe("Fleet DAG scheduling", () => {
   it("cascades a multi-level block to completion within one pump, even when a task is listed before its transitive blocker", async () => {
     const runner: AgentRunner = async (o) => {
       if (o.prompt === "root") throw new Error("kaboom");
-      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+      return {
+        text: "ok",
+        steps: 1,
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
     };
     const fleet = new Fleet({ cwd: "/x", runner, concurrency: 4 });
     // "leaf" (depends on "mid") is inserted BEFORE "mid" (depends on "root") —
@@ -189,7 +213,11 @@ describe("Fleet DAG scheduling", () => {
     // the fixed-point loop in pump() must still resolve both, or fleet.start()
     // would hang forever (leaf stuck at "queued", never terminal).
     fleet.loadPlan(
-      plan([task("root"), task("leaf", { dependsOn: ["mid"] }), task("mid", { dependsOn: ["root"] })]),
+      plan([
+        task("root"),
+        task("leaf", { dependsOn: ["mid"] }),
+        task("mid", { dependsOn: ["root"] }),
+      ]),
     );
     await fleet.start(); // must settle — a regression here hangs the test until timeout
 

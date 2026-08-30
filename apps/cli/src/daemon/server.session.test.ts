@@ -30,7 +30,10 @@ let client: DaemonClient;
 
 const NS = { org: "test-org", workspace: "test-ws" };
 
-function taskFrame(sessionId: string, overrides: Partial<TaskFrame> = {}): TaskFrame {
+function taskFrame(
+  sessionId: string,
+  overrides: Partial<TaskFrame> = {},
+): TaskFrame {
   return {
     namespace: NS,
     taskDescription: "investigate a failing test",
@@ -76,31 +79,34 @@ describe("session RPCs", () => {
   // the default 5000ms vitest timeout doesn't reliably cover under a loaded CI
   // runner (subsequent compiles in this file/process reuse the warmed module
   // cache and stay fast). A longer ceiling here, not a sleep, absorbs that.
-  it(
-    "compile() with a sessionId records a turn, visible via session.list",
-    async () => {
-      await client.compile(taskFrame("sess-1"));
+  it("compile() with a sessionId records a turn, visible via session.list", async () => {
+    await client.compile(taskFrame("sess-1"));
 
-      const result = (await client.listSessions()) as {
-        sessions: { sessionId: string; status: string; eventCount: number; parentId: string | null }[];
-      };
-      expect(result.sessions).toHaveLength(1);
-      expect(result.sessions[0]).toMatchObject({
-        sessionId: "sess-1",
-        status: "active",
-        parentId: null,
-      });
-      // session_start + turn_start + context_compiled + turn_end
-      expect(result.sessions[0]!.eventCount).toBe(4);
-    },
-    20_000,
-  );
+    const result = (await client.listSessions()) as {
+      sessions: {
+        sessionId: string;
+        status: string;
+        eventCount: number;
+        parentId: string | null;
+      }[];
+    };
+    expect(result.sessions).toHaveLength(1);
+    expect(result.sessions[0]).toMatchObject({
+      sessionId: "sess-1",
+      status: "active",
+      parentId: null,
+    });
+    // session_start + turn_start + context_compiled + turn_end
+    expect(result.sessions[0]!.eventCount).toBe(4);
+  }, 20_000);
 
   it("compile() called twice on the same sessionId accumulates turns", async () => {
     await client.compile(taskFrame("sess-2"));
     await client.compile(taskFrame("sess-2"));
 
-    const result = (await client.listSessions()) as { sessions: { eventCount: number }[] };
+    const result = (await client.listSessions()) as {
+      sessions: { eventCount: number }[];
+    };
     expect(result.sessions).toHaveLength(1);
     expect(result.sessions[0]!.eventCount).toBe(7); // 1 session_start + 2x3 turn events
   });
@@ -110,7 +116,12 @@ describe("session RPCs", () => {
 
     const result = (await client.replaySession("sess-3")) as {
       replay: { deterministic: boolean; stepsReplayed: number };
-      turns: { compileMs: number; tokens: number; toolCalls: number; outcome: string }[];
+      turns: {
+        compileMs: number;
+        tokens: number;
+        toolCalls: number;
+        outcome: string;
+      }[];
       inheritedEventCount: number;
     };
     expect(result.replay.deterministic).toBe(true);
@@ -135,7 +146,9 @@ describe("session RPCs", () => {
     await client.compile(taskFrame("sess-4"));
     await client.compile(taskFrame("sess-4"));
 
-    const listBefore = (await client.listSessions()) as { sessions: { eventCount: number }[] };
+    const listBefore = (await client.listSessions()) as {
+      sessions: { eventCount: number }[];
+    };
     const parentEventCount = listBefore.sessions[0]!.eventCount;
 
     const forked = (await client.forkSession("sess-4", 2)) as {
@@ -149,15 +162,23 @@ describe("session RPCs", () => {
     expect(forked.status).toBe("active");
 
     const list = (await client.listSessions()) as {
-      sessions: { sessionId: string; parentId: string | null; forkPoint: number | null }[];
+      sessions: {
+        sessionId: string;
+        parentId: string | null;
+        forkPoint: number | null;
+      }[];
     };
     expect(list.sessions).toHaveLength(2);
-    const forkedSummary = list.sessions.find((s) => s.sessionId === forked.sessionId);
+    const forkedSummary = list.sessions.find(
+      (s) => s.sessionId === forked.sessionId,
+    );
     expect(forkedSummary).toMatchObject({ parentId: "sess-4", forkPoint: 2 });
 
     // The forked session's replay should report the parent's prefix as
     // inherited (getFullHistory), proving the fork lineage is queryable.
-    const replay = (await client.replaySession(forked.sessionId)) as { inheritedEventCount: number };
+    const replay = (await client.replaySession(forked.sessionId)) as {
+      inheritedEventCount: number;
+    };
     expect(replay.inheritedEventCount).toBe(3); // events 0,1,2 of the parent
     expect(parentEventCount).toBeGreaterThan(3);
   });

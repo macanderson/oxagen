@@ -54,8 +54,22 @@ beforeEach(() => {
 describe("planTasks", () => {
   it("builds a draft plan from the model's tasks", async () => {
     resolveWith([
-      { id: "a", title: "Do A", description: "first", dependsOn: [], files: ["a.ts"], tier: "fast" },
-      { id: "b", title: "Do B", description: "second", dependsOn: ["a"], files: ["b.ts"], tier: "balanced" },
+      {
+        id: "a",
+        title: "Do A",
+        description: "first",
+        dependsOn: [],
+        files: ["a.ts"],
+        tier: "fast",
+      },
+      {
+        id: "b",
+        title: "Do B",
+        description: "second",
+        dependsOn: ["a"],
+        files: ["b.ts"],
+        tier: "balanced",
+      },
     ]);
     const plan = await planTasks({ goal: "do the thing", cwd: tmpdir() });
     expect(plan.status).toBe("draft");
@@ -64,7 +78,11 @@ describe("planTasks", () => {
     expect(plan.tasks.every((t) => t.status === "queued")).toBe(true);
     expect(plan.tasks[1]?.dependsOn).toEqual(["a"]);
     expect(plan.tasks[0]?.model).toContain("haiku");
-    expect(plan.tasks[0]?.usage).toEqual({ inputTokens: 0, outputTokens: 0, costUsd: 0 });
+    expect(plan.tasks[0]?.usage).toEqual({
+      inputTokens: 0,
+      outputTokens: 0,
+      costUsd: 0,
+    });
   });
 
   it("escalates a task's tier when its description is high-stakes", async () => {
@@ -85,7 +103,14 @@ describe("planTasks", () => {
 
   it("never downgrades a precise task the model already flagged", async () => {
     resolveWith([
-      { id: "x", title: "tiny", description: "rename a local var", dependsOn: [], files: [], tier: "precise" },
+      {
+        id: "x",
+        title: "tiny",
+        description: "rename a local var",
+        dependsOn: [],
+        files: [],
+        tier: "precise",
+      },
     ]);
     const plan = await planTasks({ goal: "g", cwd: tmpdir() });
     expect(plan.tasks[0]?.tier).toBe("precise");
@@ -93,8 +118,22 @@ describe("planTasks", () => {
 
   it("de-duplicates repeated ids", async () => {
     resolveWith([
-      { id: "x", title: "One", description: "d", dependsOn: [], files: [], tier: "fast" },
-      { id: "x", title: "Two", description: "d", dependsOn: [], files: [], tier: "fast" },
+      {
+        id: "x",
+        title: "One",
+        description: "d",
+        dependsOn: [],
+        files: [],
+        tier: "fast",
+      },
+      {
+        id: "x",
+        title: "Two",
+        description: "d",
+        dependsOn: [],
+        files: [],
+        tier: "fast",
+      },
     ]);
     const plan = await planTasks({ goal: "g", cwd: tmpdir() });
     const ids = plan.tasks.map((t) => t.id);
@@ -104,8 +143,22 @@ describe("planTasks", () => {
 
   it("drops dependencies that point at nonexistent or self ids", async () => {
     resolveWith([
-      { id: "a", title: "A", description: "d", dependsOn: ["ghost", "b", "a"], files: [], tier: "fast" },
-      { id: "b", title: "B", description: "d", dependsOn: [], files: [], tier: "fast" },
+      {
+        id: "a",
+        title: "A",
+        description: "d",
+        dependsOn: ["ghost", "b", "a"],
+        files: [],
+        tier: "fast",
+      },
+      {
+        id: "b",
+        title: "B",
+        description: "d",
+        dependsOn: [],
+        files: [],
+        tier: "fast",
+      },
     ]);
     const plan = await planTasks({ goal: "g", cwd: tmpdir() });
     expect(plan.tasks[0]?.dependsOn).toEqual(["b"]);
@@ -114,9 +167,9 @@ describe("planTasks", () => {
   it("throws MissingAiKeyError when neither a gateway nor an Anthropic key is resolvable", async () => {
     delete process.env["AI_GATEWAY_API_KEY"];
     // cwd in the OS temp dir → no .env.local up the tree, and config is mocked empty.
-    await expect(planTasks({ goal: "g", cwd: tmpdir() })).rejects.toBeInstanceOf(
-      MissingAiKeyError,
-    );
+    await expect(
+      planTasks({ goal: "g", cwd: tmpdir() }),
+    ).rejects.toBeInstanceOf(MissingAiKeyError);
     expect(mockGen).not.toHaveBeenCalled();
   });
 
@@ -124,7 +177,14 @@ describe("planTasks", () => {
     delete process.env["AI_GATEWAY_API_KEY"];
     process.env["ANTHROPIC_API_KEY"] = "sk-ant-test";
     resolveWith([
-      { id: "a", title: "A", description: "d", dependsOn: [], files: [], tier: "fast" },
+      {
+        id: "a",
+        title: "A",
+        description: "d",
+        dependsOn: [],
+        files: [],
+        tier: "fast",
+      },
     ]);
     const plan = await planTasks({ goal: "g", cwd: tmpdir() });
     expect(plan.tasks).toHaveLength(1);

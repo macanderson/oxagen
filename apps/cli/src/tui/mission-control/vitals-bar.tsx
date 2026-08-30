@@ -45,12 +45,16 @@ export function VitalsBar({
           <Text dimColor> running</Text>
         </Text>
         <Text dimColor>◐ {counts.waiting} waiting</Text>
-        {counts.queued > 0 ? <Text dimColor>◔ {counts.queued} queued</Text> : null}
+        {counts.queued > 0 ? (
+          <Text dimColor>◔ {counts.queued} queued</Text>
+        ) : null}
         <Text>
           <Text color={theme.green}>✓ {counts.done}</Text>
           <Text dimColor> done</Text>
         </Text>
-        {counts.failed > 0 ? <Text color={theme.red}>✖ {counts.failed} failed</Text> : null}
+        {counts.failed > 0 ? (
+          <Text color={theme.red}>✖ {counts.failed} failed</Text>
+        ) : null}
         {counts.orphaned > 0 ? (
           <Text color={theme.orange}>⚠ {counts.orphaned} orphaned</Text>
         ) : null}
@@ -64,9 +68,7 @@ export function VitalsBar({
 
       <Box gap={2}>
         {draining ? (
-          <Text color={theme.amber}>
-            draining… {drainingCount} running
-          </Text>
+          <Text color={theme.amber}>draining… {drainingCount} running</Text>
         ) : null}
         <Text dimColor wrap="truncate">
           {project}

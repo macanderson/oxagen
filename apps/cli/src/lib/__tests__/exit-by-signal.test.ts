@@ -14,9 +14,11 @@ import { exitBySignal, signalExitCode } from "../exit-by-signal.js";
 
 // Every spy is a no-op double: really removing vitest's own listeners or
 // re-raising SIGINT at the worker would kill the test run itself.
-const spyRemoveAll = () => vi.spyOn(process, "removeAllListeners").mockReturnValue(process);
+const spyRemoveAll = () =>
+  vi.spyOn(process, "removeAllListeners").mockReturnValue(process);
 const spyKill = () => vi.spyOn(process, "kill").mockReturnValue(true);
-const spyExit = () => vi.spyOn(process, "exit").mockReturnValue(undefined as never);
+const spyExit = () =>
+  vi.spyOn(process, "exit").mockReturnValue(undefined as never);
 let removeAll: ReturnType<typeof spyRemoveAll>;
 let kill: ReturnType<typeof spyKill>;
 let exit: ReturnType<typeof spyExit>;

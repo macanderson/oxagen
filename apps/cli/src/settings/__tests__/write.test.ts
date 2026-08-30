@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, readFileSync, existsSync, readdirSync } from "node:fs";
+import {
+  mkdtempSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+  readdirSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -25,61 +31,136 @@ afterEach(() => {
 
 describe("writeSettingsValue", () => {
   it("writes a scalar into the project scope and round-trips through loadSettings", () => {
-    const path = writeSettingsValue({ scope: "project", key: "model", value: "a/b", cwd: dir });
+    const path = writeSettingsValue({
+      scope: "project",
+      key: "model",
+      value: "a/b",
+      cwd: dir,
+    });
     expect(existsSync(path)).toBe(true);
     expect(path).toBe(getScopePaths({ cwd: dir }).project);
-    const reread = loadSettings({ cwd: dir, userSettingsPath: userPath, noCache: true }).settings;
+    const reread = loadSettings({
+      cwd: dir,
+      userSettingsPath: userPath,
+      noCache: true,
+    }).settings;
     expect(reread.model).toBe("a/b");
   });
 
   it("writes an env var via the env.NAME form", () => {
-    writeSettingsValue({ scope: "local", key: "env.MY_TOKEN", value: "sek", cwd: dir });
-    const reread = loadSettings({ cwd: dir, userSettingsPath: userPath, noCache: true }).settings;
+    writeSettingsValue({
+      scope: "local",
+      key: "env.MY_TOKEN",
+      value: "sek",
+      cwd: dir,
+    });
+    const reread = loadSettings({
+      cwd: dir,
+      userSettingsPath: userPath,
+      noCache: true,
+    }).settings;
     expect(reread.env?.MY_TOKEN).toBe("sek");
   });
 
   it("merges into an existing file rather than clobbering it", () => {
-    writeSettingsValue({ scope: "project", key: "model", value: "a/b", cwd: dir });
-    writeSettingsValue({ scope: "project", key: "env.K", value: "v", cwd: dir });
-    const reread = loadSettings({ cwd: dir, userSettingsPath: userPath, noCache: true }).settings;
+    writeSettingsValue({
+      scope: "project",
+      key: "model",
+      value: "a/b",
+      cwd: dir,
+    });
+    writeSettingsValue({
+      scope: "project",
+      key: "env.K",
+      value: "v",
+      cwd: dir,
+    });
+    const reread = loadSettings({
+      cwd: dir,
+      userSettingsPath: userPath,
+      noCache: true,
+    }).settings;
     expect(reread.model).toBe("a/b");
     expect(reread.env?.K).toBe("v");
   });
 
   it("rejects an unsupported key", () => {
-    expect(() => writeSettingsValue({ scope: "project", key: "permissions", value: "x", cwd: dir })).toThrow(
-      /cannot set/,
-    );
+    expect(() =>
+      writeSettingsValue({
+        scope: "project",
+        key: "permissions",
+        value: "x",
+        cwd: dir,
+      }),
+    ).toThrow(/cannot set/);
   });
 
   it("rejects an empty env name", () => {
-    expect(() => writeSettingsValue({ scope: "project", key: "env.", value: "x", cwd: dir })).toThrow();
+    expect(() =>
+      writeSettingsValue({
+        scope: "project",
+        key: "env.",
+        value: "x",
+        cwd: dir,
+      }),
+    ).toThrow();
   });
 });
 
 describe("writeSettingsValue — confirmScope (boolean)", () => {
-  it("writes a real JSON boolean, not the string \"true\"", () => {
-    const path = writeSettingsValue({ scope: "project", key: "confirmScope", value: "true", cwd: dir });
-    const doc = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+  it('writes a real JSON boolean, not the string "true"', () => {
+    const path = writeSettingsValue({
+      scope: "project",
+      key: "confirmScope",
+      value: "true",
+      cwd: dir,
+    });
+    const doc = JSON.parse(readFileSync(path, "utf8")) as Record<
+      string,
+      unknown
+    >;
     expect(doc["confirmScope"]).toBe(true);
     expect(typeof doc["confirmScope"]).toBe("boolean");
   });
 
   it("round-trips false through loadSettings", () => {
-    writeSettingsValue({ scope: "project", key: "confirmScope", value: "false", cwd: dir });
-    const reread = loadSettings({ cwd: dir, userSettingsPath: userPath, noCache: true }).settings;
+    writeSettingsValue({
+      scope: "project",
+      key: "confirmScope",
+      value: "false",
+      cwd: dir,
+    });
+    const reread = loadSettings({
+      cwd: dir,
+      userSettingsPath: userPath,
+      noCache: true,
+    }).settings;
     expect(reread.confirmScope).toBe(false);
   });
 
   it("accepts case-insensitive / whitespace-padded boolean text", () => {
-    writeSettingsValue({ scope: "project", key: "confirmScope", value: "  TRUE  ", cwd: dir });
-    const reread = loadSettings({ cwd: dir, userSettingsPath: userPath, noCache: true }).settings;
+    writeSettingsValue({
+      scope: "project",
+      key: "confirmScope",
+      value: "  TRUE  ",
+      cwd: dir,
+    });
+    const reread = loadSettings({
+      cwd: dir,
+      userSettingsPath: userPath,
+      noCache: true,
+    }).settings;
     expect(reread.confirmScope).toBe(true);
   });
 
   it("rejects a non-boolean value", () => {
     expect(() =>
-      writeSettingsValue({ scope: "project", key: "confirmScope", value: "yes", cwd: dir }),
+      writeSettingsValue({
+        scope: "project",
+        key: "confirmScope",
+        value: "yes",
+        cwd: dir,
+      }),
     ).toThrow(/invalid boolean value/);
   });
 });
@@ -88,7 +169,10 @@ describe("writeStarterSettings", () => {
   it("creates a valid starter file and is idempotent", () => {
     const first = writeStarterSettings({ scope: "project", cwd: dir });
     expect(first.created).toBe(true);
-    const doc = JSON.parse(readFileSync(first.path, "utf8")) as Record<string, unknown>;
+    const doc = JSON.parse(readFileSync(first.path, "utf8")) as Record<
+      string,
+      unknown
+    >;
     expect(doc["$schema"]).toBeTruthy();
     expect(doc["permissions"]).toBeTruthy();
 
@@ -98,8 +182,14 @@ describe("writeStarterSettings", () => {
 
   it("starter file passes validation via loadSettings", () => {
     writeStarterSettings({ scope: "project", cwd: dir });
-    const resolved = loadSettings({ cwd: dir, userSettingsPath: userPath, noCache: true });
-    expect(resolved.scopes.find((s) => s.scope === "project")?.error).toBeUndefined();
+    const resolved = loadSettings({
+      cwd: dir,
+      userSettingsPath: userPath,
+      noCache: true,
+    });
+    expect(
+      resolved.scopes.find((s) => s.scope === "project")?.error,
+    ).toBeUndefined();
   });
 
   // Item 6a: the starter file used to plant DEFAULT_CODING_MODEL, which meant
@@ -109,9 +199,16 @@ describe("writeStarterSettings", () => {
   // resolveModelId checks OXAGEN_MODEL before ever consulting store #2.
   it("does NOT seed a default model — store #2 / built-in default governs until the user opts in", () => {
     const { path } = writeStarterSettings({ scope: "project", cwd: dir });
-    const doc = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    const doc = JSON.parse(readFileSync(path, "utf8")) as Record<
+      string,
+      unknown
+    >;
     expect(doc["model"]).toBeUndefined();
-    const resolved = loadSettings({ cwd: dir, userSettingsPath: userPath, noCache: true });
+    const resolved = loadSettings({
+      cwd: dir,
+      userSettingsPath: userPath,
+      noCache: true,
+    });
     expect(resolved.settings.model).toBeUndefined();
   });
 });
@@ -163,7 +260,12 @@ describe("envVarForSettingsKey / shellShadowsSettingsKey (item 7a)", () => {
 
 describe("atomic writes (item 9) — writeScopeDoc/writeStarterSettings never leave a partial file", () => {
   it("writeSettingsValue leaves no stray .tmp files behind after a successful write", () => {
-    writeSettingsValue({ scope: "project", key: "model", value: "a/b", cwd: dir });
+    writeSettingsValue({
+      scope: "project",
+      key: "model",
+      value: "a/b",
+      cwd: dir,
+    });
     const projectDir = join(dir, ".oxagen");
     const entries = readdirSync(projectDir);
     expect(entries.some((f) => f.endsWith(".tmp"))).toBe(false);
@@ -173,7 +275,14 @@ describe("atomic writes (item 9) — writeScopeDoc/writeStarterSettings never le
   it("a write that fails schema validation never touches the target file (temp-write-then-rename semantics)", () => {
     // apiUrl must be a valid URL — an invalid one fails oxagenSettingsSchema.parse
     // before writeScopeDoc ever calls atomicWriteFileSync, so no rename happens.
-    expect(() => writeSettingsValue({ scope: "project", key: "apiUrl", value: "not-a-url", cwd: dir })).toThrow();
+    expect(() =>
+      writeSettingsValue({
+        scope: "project",
+        key: "apiUrl",
+        value: "not-a-url",
+        cwd: dir,
+      }),
+    ).toThrow();
     const path = getScopePaths({ cwd: dir }).project;
     expect(existsSync(path)).toBe(false);
   });

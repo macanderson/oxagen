@@ -46,7 +46,11 @@ import {
   type LanguageItem,
   type ResolveWorkspaceConfigOptions,
 } from "../config/index.js";
-import { loadSettings, writeSettingsValue, type ResolveSettingsOptions } from "../settings/index.js";
+import {
+  loadSettings,
+  writeSettingsValue,
+  type ResolveSettingsOptions,
+} from "../settings/index.js";
 import { visibleWindow } from "./slash-menu.js";
 
 /** Max rows shown at once; the window scrolls to keep the selection visible. */
@@ -80,7 +84,10 @@ export interface ConfigPanelProps {
    * ../settings/resolve.ts). Defaults to the real user file (`~/.oxagen/settings.json`)
    * — pass `userSettingsPath` in tests so they never touch the developer's home dir.
    */
-  settingsResolveOpts?: Pick<ResolveSettingsOptions, "userSettingsPath" | "projectDirName">;
+  settingsResolveOpts?: Pick<
+    ResolveSettingsOptions,
+    "userSettingsPath" | "projectDirName"
+  >;
   width?: number;
 }
 
@@ -103,7 +110,8 @@ function loadConfirmScopeRow(
   settingsResolveOpts?: ConfigPanelProps["settingsResolveOpts"],
 ): ConfigPanelRow {
   const enabled =
-    loadSettings({ cwd, ...settingsResolveOpts, noCache: true }).settings.confirmScope === true;
+    loadSettings({ cwd, ...settingsResolveOpts, noCache: true }).settings
+      .confirmScope === true;
   return {
     path: CONFIRM_SCOPE_PATH,
     kind: "leaf",
@@ -121,15 +129,22 @@ function loadRows(
   resolveOpts?: ResolveWorkspaceConfigOptions,
   settingsResolveOpts?: ConfigPanelProps["settingsResolveOpts"],
 ): ConfigPanelRow[] {
-  const rows = buildConfigRows(resolveWorkspaceConfig(cwd, { ...resolveOpts, noCache: true }));
+  const rows = buildConfigRows(
+    resolveWorkspaceConfig(cwd, { ...resolveOpts, noCache: true }),
+  );
   rows.push(loadConfirmScopeRow(cwd, settingsResolveOpts));
   return rows;
 }
 
 /** The scope a row's edit/unset should target, or null with a notice when refused. */
-function writableTarget(row: ConfigPanelRow): { scope: ConfigScope } | { refusal: string } {
+function writableTarget(
+  row: ConfigPanelRow,
+): { scope: ConfigScope } | { refusal: string } {
   if (row.kind === "list-value") {
-    return { refusal: "list entries are managed via `oxagen config set` with an explicit --scope." };
+    return {
+      refusal:
+        "list entries are managed via `oxagen config set` with an explicit --scope.",
+    };
   }
   if (row.scope === "org") return { refusal: ORG_READONLY_NOTICE };
   return { scope: row.scope ?? "workspace" };
@@ -167,7 +182,9 @@ export function ConfigPanel({
             key: "confirmScope",
             value: "false",
           });
-          setNotice("✓ confirmScope reset to false (default) in project scope (.oxagen/settings.json).");
+          setNotice(
+            "✓ confirmScope reset to false (default) in project scope (.oxagen/settings.json).",
+          );
           refresh();
         } catch (err) {
           setNotice(err instanceof Error ? err.message : String(err));
@@ -185,14 +202,20 @@ export function ConfigPanel({
       }
       try {
         if (row.kind === "item" && row.item) {
-          const result = removeItem(target.scope, row.item.id, { cwd, ...resolveOpts });
+          const result = removeItem(target.scope, row.item.id, {
+            cwd,
+            ...resolveOpts,
+          });
           setNotice(
             result.removed
               ? `✓ removed ${row.item.id} from ${target.scope} scope.`
               : `${row.item.id} isn't in the ${target.scope} file (it may come from another tier).`,
           );
         } else {
-          const result = unsetPath(target.scope, row.path, { cwd, ...resolveOpts });
+          const result = unsetPath(target.scope, row.path, {
+            cwd,
+            ...resolveOpts,
+          });
           setNotice(
             result.removed
               ? `✓ unset ${row.path} from ${target.scope} scope — a lower-tier value may resurface.`
@@ -246,7 +269,9 @@ export function ConfigPanel({
             key: "confirmScope",
             value: normalized,
           });
-          setNotice(`✓ confirmScope = ${normalized} (project: .oxagen/settings.json).`);
+          setNotice(
+            `✓ confirmScope = ${normalized} (project: .oxagen/settings.json).`,
+          );
           refresh();
         } catch (err) {
           setNotice(err instanceof Error ? err.message : String(err));
@@ -265,8 +290,16 @@ export function ConfigPanel({
           const existing = state.row.value as LanguageItem | undefined;
           const item: LanguageItem = existing
             ? { ...existing, text: value }
-            : { id: state.row.item.id, kind: "rule", text: value, origin: "manual" };
-          addLanguageItem(target.scope, state.row.item.lang, item, { cwd, ...resolveOpts });
+            : {
+                id: state.row.item.id,
+                kind: "rule",
+                text: value,
+                origin: "manual",
+              };
+          addLanguageItem(target.scope, state.row.item.lang, item, {
+            cwd,
+            ...resolveOpts,
+          });
         } else {
           setPath(target.scope, state.row.path, value, { cwd, ...resolveOpts });
         }
@@ -296,7 +329,14 @@ export function ConfigPanel({
           setEdit((e) => (e ? { ...e, buffer: e.buffer.slice(0, -1) } : e));
           return;
         }
-        if (input && !key.ctrl && !key.meta && !key.upArrow && !key.downArrow && !key.tab) {
+        if (
+          input &&
+          !key.ctrl &&
+          !key.meta &&
+          !key.upArrow &&
+          !key.downArrow &&
+          !key.tab
+        ) {
           setEdit((e) => (e ? { ...e, buffer: e.buffer + input } : e));
         }
         return;
@@ -328,28 +368,44 @@ export function ConfigPanel({
     { isActive: active },
   );
 
-  const { start, end } = visibleWindow(rows.length, selected, MAX_VISIBLE_CONFIG_ROWS);
+  const { start, end } = visibleWindow(
+    rows.length,
+    selected,
+    MAX_VISIBLE_CONFIG_ROWS,
+  );
   const visible = rows.slice(start, end);
   const innerWidth = Math.max(width - 4, 20);
   const pathWidth = Math.min(
-    Math.max(...(visible.length > 0 ? visible.map((r) => r.path.length) : [10])) + 1,
+    Math.max(
+      ...(visible.length > 0 ? visible.map((r) => r.path.length) : [10]),
+    ) + 1,
     Math.floor(innerWidth * 0.5),
   );
   // pointer(2) + lock(2) + path + gap(2) + scope chip(11 incl. brackets)
   const valueWidth = Math.max(innerWidth - 2 - 2 - pathWidth - 2 - 11, 8);
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={theme.violet} paddingX={1} width={width}>
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={theme.violet}
+      paddingX={1}
+      width={width}
+    >
       <Box>
         <Text color={theme.violet} bold>
           {"⚙ config "}
         </Text>
-        <Text dimColor>· tiers: repo ▸ workspace ▸ user ▸ org (managed, enforced)</Text>
+        <Text dimColor>
+          · tiers: repo ▸ workspace ▸ user ▸ org (managed, enforced)
+        </Text>
       </Box>
 
       {rows.length === 0 ? (
         <Box marginTop={1}>
-          <Text dimColor>No config found. Run `oxagen config init` to create a scope file.</Text>
+          <Text dimColor>
+            No config found. Run `oxagen config init` to create a scope file.
+          </Text>
         </Box>
       ) : (
         <Box flexDirection="column" marginTop={1}>
@@ -358,14 +414,21 @@ export function ConfigPanel({
             const isSelected = idx === selected;
             return (
               <Box key={row.path} width={innerWidth}>
-                <Text color={isSelected ? theme.cyan : undefined} bold={isSelected}>
+                <Text
+                  color={isSelected ? theme.cyan : undefined}
+                  bold={isSelected}
+                >
                   {isSelected ? "❯ " : "  "}
                 </Text>
                 <Box width={2}>
                   <Text dimColor>{row.locked ? LOCK : ""}</Text>
                 </Box>
                 <Box width={pathWidth}>
-                  <Text color={theme.amber} bold={isSelected} wrap="truncate-end">
+                  <Text
+                    color={theme.amber}
+                    bold={isSelected}
+                    wrap="truncate-end"
+                  >
                     {row.path}
                   </Text>
                 </Box>
@@ -379,7 +442,10 @@ export function ConfigPanel({
                   {row.path === CONFIRM_SCOPE_PATH ? (
                     <Text color={theme.cyan}>[settings]</Text>
                   ) : (
-                    <Text color={row.scope ? SCOPE_COLOR[row.scope] : undefined} dimColor={!row.scope}>
+                    <Text
+                      color={row.scope ? SCOPE_COLOR[row.scope] : undefined}
+                      dimColor={!row.scope}
+                    >
                       [{row.scope ?? "unset"}]
                     </Text>
                   )}
@@ -410,8 +476,12 @@ export function ConfigPanel({
 
       <Box marginTop={1}>
         <Text dimColor>
-          {rows.length > MAX_VISIBLE_CONFIG_ROWS ? `${selected + 1}/${rows.length} · ` : ""}
-          {edit ? "↵ save · esc cancel" : `↑↓ navigate · e edit · x unset · esc close · ${LOCK} = enforced`}
+          {rows.length > MAX_VISIBLE_CONFIG_ROWS
+            ? `${selected + 1}/${rows.length} · `
+            : ""}
+          {edit
+            ? "↵ save · esc cancel"
+            : `↑↓ navigate · e edit · x unset · esc close · ${LOCK} = enforced`}
         </Text>
       </Box>
     </Box>

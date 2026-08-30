@@ -1,15 +1,15 @@
 /**
  * Timeout policy for the CLI agent turn.
  *
- * ## The rule (Group 8, Bug 1)
+ * ## The rule
  *
  * **Timeouts live on the individual model call, not on the turn.** A single turn
  * can legitimately make hundreds of model calls — a plan with many tasks, a
- * worker→judge revise loop, background context queries. Capping the *turn* by
- * total wall-clock time (the old `TIMEOUTS.turnMs = 300_000`) killed valid
- * long-running work mid-flight, so it is gone.
+ * worker→judge revise loop, background context queries — so there is no
+ * wall-clock cap on a turn at all; one would kill valid long-running work
+ * mid-flight.
  *
- * What replaces it:
+ * What bounds a turn instead:
  *
  *   - **Per model call** — every model call is raced against
  *     {@link TimeoutConfig.perModelCallMs}. A call that hangs is aborted and
@@ -64,8 +64,7 @@ export class AgentTimeoutError extends Error {
 
 /**
  * The timeout policy. Timeouts belong on the model call; the turn is guarded by
- * progress, never by total elapsed time. Mirrors the Group 7 `timeouts.ts`
- * contract.
+ * progress, never by total elapsed time.
  */
 export interface TimeoutConfig {
   /** Applied to each individual model call — the real timeout. */
@@ -112,7 +111,11 @@ function envPositiveMs(name: string): number | undefined {
  * `probe` and lib/ci-wait.ts).
  */
 export function resolveTurnInactivityMs(): number {
-  return envPositiveMs("OXAGEN_TURN_INACTIVITY_MS") ?? DEFAULT_TIMEOUTS.turnInactivityMs ?? 300_000;
+  return (
+    envPositiveMs("OXAGEN_TURN_INACTIVITY_MS") ??
+    DEFAULT_TIMEOUTS.turnInactivityMs ??
+    300_000
+  );
 }
 
 /**
@@ -273,13 +276,16 @@ export async function callModelWithTimeout<T>(
   const backoffMs = Math.max(0, cfg.retry.backoffMs);
 
   for (let attempt = 0; ; attempt++) {
-    if (outerSignal?.aborted) throw new AgentTimeoutError(label, cfg.perModelCallMs);
+    if (outerSignal?.aborted)
+      throw new AgentTimeoutError(label, cfg.perModelCallMs);
 
     const callController = new AbortController();
     const onOuterAbort = (): void => {
-      if (!callController.signal.aborted) callController.abort(outerSignal?.reason);
+      if (!callController.signal.aborted)
+        callController.abort(outerSignal?.reason);
     };
-    if (outerSignal) outerSignal.addEventListener("abort", onOuterAbort, { once: true });
+    if (outerSignal)
+      outerSignal.addEventListener("abort", onOuterAbort, { once: true });
 
     const timer = setTimeout(() => {
       if (!callController.signal.aborted) {
@@ -349,7 +355,9 @@ export function makeTurnController(
       }
     }, ceiling);
     unref(timer);
-    controller.signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
+    controller.signal.addEventListener("abort", () => clearTimeout(timer), {
+      once: true,
+    });
   }
 
   return controller;
@@ -592,7 +600,10 @@ export function createTurnRunner(
   controller.signal.addEventListener(
     "abort",
     () => {
-      if (endReason === null && controller.signal.reason instanceof AgentTimeoutError) {
+      if (
+        endReason === null &&
+        controller.signal.reason instanceof AgentTimeoutError
+      ) {
         endReason = "hard_ceiling";
       }
     },
@@ -609,7 +620,9 @@ export function createTurnRunner(
       () => {
         if (!controller.signal.aborted) {
           const idleMs = Date.now() - lastProgressAt;
-          opts?.onLog?.(`[timeout] scope=turn reason=inactivity idle_ms=${idleMs}`);
+          opts?.onLog?.(
+            `[timeout] scope=turn reason=inactivity idle_ms=${idleMs}`,
+          );
           endReason = "inactivity";
           controller.abort(new AgentTimeoutError("turn inactivity", window));
         }
@@ -617,7 +630,9 @@ export function createTurnRunner(
       {
         shouldDefer: opts?.stall?.shouldDefer ?? (() => inFlightTools > 0),
         ...(opts?.stall?.probe ? { probe: opts.stall.probe } : {}),
-        ...(opts?.stall?.probeCapMs !== undefined ? { probeCapMs: opts.stall.probeCapMs } : {}),
+        ...(opts?.stall?.probeCapMs !== undefined
+          ? { probeCapMs: opts.stall.probeCapMs }
+          : {}),
         ...(opts?.onLog ? { onLog: opts.onLog } : {}),
       },
     );
@@ -648,7 +663,10 @@ export function createTurnRunner(
   async function run(work: () => Promise<void>): Promise<TurnEndReason> {
     const aborted = new Promise<"aborted">((resolve) => {
       if (controller.signal.aborted) resolve("aborted");
-      else controller.signal.addEventListener("abort", () => resolve("aborted"), { once: true });
+      else
+        controller.signal.addEventListener("abort", () => resolve("aborted"), {
+          once: true,
+        });
     });
 
     let workErr: unknown = null;
@@ -672,7 +690,15 @@ export function createTurnRunner(
     }
   }
 
-  return { onProgress, noteProgress, noteToolStart, noteToolEnd, run, stop, signal: controller.signal };
+  return {
+    onProgress,
+    noteProgress,
+    noteToolStart,
+    noteToolEnd,
+    run,
+    stop,
+    signal: controller.signal,
+  };
 }
 
 // ── Tool timeout wrapping ─────────────────────────────────────────────────────
@@ -693,9 +719,8 @@ export function toolTimeoutCategory(toolName: string): ToolTimeoutCategory {
  * timeout via `timeout_ms` — the tool's INTERNAL timeout (which kills the
  * process group and returns a real message) is authoritative, so the wrapper
  * sits a grace period above the declared/default value and never contradicts
- * it. Before this, the wrapper raced bash at a fixed 240s while the tool
- * advertised `timeout_ms` up to 600s — a model that asked for a 10-minute test
- * run was killed at 4 with a misleading message. Exported for tests.
+ * it — a model that asks for a 10-minute test run must not be killed at 4
+ * minutes by a fixed wrapper deadline. Exported for tests.
  */
 export function toolWrapperTimeoutMs(name: string, input: unknown): number {
   if (toolTimeoutCategory(name) === "long") {
@@ -737,7 +762,9 @@ export function wrapToolsWithTimeout(
       execute: (input: unknown, options: unknown): Promise<unknown> => {
         const ms = toolWrapperTimeoutMs(name, input);
         return withTimeout(
-          Promise.resolve((exec as (i: unknown, o: unknown) => unknown)(input, options)),
+          Promise.resolve(
+            (exec as (i: unknown, o: unknown) => unknown)(input, options),
+          ),
           ms,
           signal,
           `tool:${name}`,

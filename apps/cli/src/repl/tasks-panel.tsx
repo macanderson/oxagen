@@ -17,7 +17,13 @@
  * against a canned plan without touching the process-wide registry singleton.
  */
 import { Box, Text, useInput } from "ink";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { theme } from "../tui/theme.js";
 import {
   taskRegistry,
@@ -228,7 +234,8 @@ export function TasksPanel({
           {"Task Progress "}
         </Text>
         <Text dimColor>
-          · {tasks.length} task{tasks.length === 1 ? "" : "s"} · {doneCount} done
+          · {tasks.length} task{tasks.length === 1 ? "" : "s"} · {doneCount}{" "}
+          done
         </Text>
       </Box>
 
@@ -249,7 +256,10 @@ export function TasksPanel({
             const strike = task.status === "done" && !isSelected;
             return (
               <Box key={task.id} width={innerWidth}>
-                <Text color={isSelected ? theme.violet : undefined} bold={isSelected}>
+                <Text
+                  color={isSelected ? theme.violet : undefined}
+                  bold={isSelected}
+                >
                   {isSelected ? "❯ " : "  "}
                 </Text>
                 <Box width={2}>

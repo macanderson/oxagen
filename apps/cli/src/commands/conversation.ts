@@ -52,7 +52,10 @@ export async function handleConversationExport(
   const format = normalizeFormat(opts.format);
   if (!format) {
     process.exitCode = 2;
-    out.error(`Invalid --format "${opts.format}". Use one of: md, markdown, pdf.`, "usage");
+    out.error(
+      `Invalid --format "${opts.format}". Use one of: md, markdown, pdf.`,
+      "usage",
+    );
     return;
   }
 

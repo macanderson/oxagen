@@ -27,7 +27,9 @@ describe("formatFatalError", () => {
   });
 
   it("stringifies a non-Error object rather than throwing", () => {
-    expect(formatFatalError({ code: 42 }, true)).toBe("Error: [object Object]\n");
+    expect(formatFatalError({ code: 42 }, true)).toBe(
+      "Error: [object Object]\n",
+    );
   });
 
   it("falls back to the message when a debug Error carries no stack", () => {

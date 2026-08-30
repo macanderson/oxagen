@@ -91,7 +91,10 @@ describe("project roots and fleet paths", () => {
     const top = join(tmp, "wt");
     const inner = join(top, "nested", "deep");
     await mkdir(inner, { recursive: true });
-    await writeFile(join(top, ".git"), "gitdir: /elsewhere/.git/worktrees/wt\n"); // .git as a FILE
+    await writeFile(
+      join(top, ".git"),
+      "gitdir: /elsewhere/.git/worktrees/wt\n",
+    ); // .git as a FILE
     expect(projectRoot(inner)).toBe(resolve(top));
   });
 

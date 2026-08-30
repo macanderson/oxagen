@@ -1,6 +1,6 @@
 /**
  * `oxagen budget …` — CLI parity surface for `get_spend_budget` /
- * `set_spend_budget` (Linear #1079). Reads and writes the hard period-to-date
+ * `set_spend_budget`. Reads and writes the hard period-to-date
  * spend ceilings that gate agent runs — the org-level ceiling (all
  * workspaces) and the active workspace's own ceiling — with their live burn:
  * period-to-date spend, projection to the period end, percent of ceiling, and

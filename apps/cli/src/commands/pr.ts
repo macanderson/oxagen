@@ -154,8 +154,8 @@ export async function handlePrWatch(
       if (summary.state === "green") {
         out(`PR #${pr.number} is GREEN — all ${summary.passed} checks passed.`);
         if (opts.merge) {
-          // mergePr throws on failure — don't let a fixed `process.exitCode = 0`
-          // below stomp a real merge failure into a false success (it used to).
+          // mergePr throws on failure — the exit code must follow the merge, not
+          // the green checks, or a failed merge reports as a success.
           try {
             await mergePr(prNumber);
             process.exitCode = 0;

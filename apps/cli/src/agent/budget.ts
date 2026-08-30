@@ -66,7 +66,12 @@ export function resolveBudgetFlags(
   }
 
   return {
-    policy: { enabled: true, limitUsd, mode, graceOveragePct: DEFAULT_GRACE_OVERAGE_PCT },
+    policy: {
+      enabled: true,
+      limitUsd,
+      mode,
+      graceOveragePct: DEFAULT_GRACE_OVERAGE_PCT,
+    },
   };
 }
 
@@ -116,7 +121,12 @@ export function parseBudgetCommand(argsRaw: string): BudgetCommandResult {
 
   return {
     kind: "set",
-    policy: { enabled: true, limitUsd, mode, graceOveragePct: DEFAULT_GRACE_OVERAGE_PCT },
+    policy: {
+      enabled: true,
+      limitUsd,
+      mode,
+      graceOveragePct: DEFAULT_GRACE_OVERAGE_PCT,
+    },
   };
 }
 

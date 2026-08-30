@@ -60,7 +60,9 @@ describe("prepareOnDeviceCoordinator", () => {
   });
 
   it("generates a structured object through the local model", async () => {
-    const { provider, complete } = fakeProvider({ completeText: '{"answer":"42"}' });
+    const { provider, complete } = fakeProvider({
+      completeText: '{"answer":"42"}',
+    });
     const coord = await prepareOnDeviceCoordinator({ provider });
     const res = await coord.ai.generateObject({
       model: "ignored",
@@ -73,7 +75,9 @@ describe("prepareOnDeviceCoordinator", () => {
 
   it("propagates the runtime's typed errors (never falls back silently)", async () => {
     const { provider, ensureReady } = fakeProvider();
-    ensureReady.mockRejectedValueOnce(new Error("on-device runtime is not installed"));
+    ensureReady.mockRejectedValueOnce(
+      new Error("on-device runtime is not installed"),
+    );
     await expect(prepareOnDeviceCoordinator({ provider })).rejects.toThrow(
       /not installed/,
     );

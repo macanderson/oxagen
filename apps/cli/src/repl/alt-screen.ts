@@ -180,13 +180,11 @@ export function parseMouseButtonEvents(chunk: string): MouseButtonEvent[] {
 // use-input.js then sets `input = keypress.sequence` and strips just the
 // leading ESC byte — so EVERY wheel/press/drag/release report, having
 // nowhere else to go, arrives at a `useInput` consumer's generic "insert
-// whatever's left" catch-all as literal garbage text. This is a real,
-// pre-existing gap (the wheel-scroll feature has always been exposed to it,
-// just never noticed since scrolling rarely coincides with a focused text
-// field) that Task 3's click/drag reports make impossible to ignore, since
-// clicking the input is the whole point. Ink provides no hook to suppress
-// this upstream, so PromptInput filters the remnant out at its own
-// `useInput` catch-all instead — see components.tsx.
+// whatever's left" catch-all as literal garbage text. Click-to-position makes
+// this unavoidable: clicking the input is exactly when a report coincides with
+// a focused text field. Ink provides no hook to suppress it upstream, so
+// PromptInput filters the remnant out at its own `useInput` catch-all
+// instead — see components.tsx.
 const SGR_MOUSE_REPORT_REMNANT_RE = /^\[<\d+;\d+;\d+[Mm]$/;
 
 /**

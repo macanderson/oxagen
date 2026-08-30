@@ -32,11 +32,40 @@ function fakeResult(over: Partial<BestOfNResult> = {}): BestOfNResult {
   return {
     winner: null,
     candidates: [
-      { id: "candidate-1", model: "m", diff: "", summary: "", changedFiles: [], steps: 12 },
-      { id: "candidate-2", model: "m", diff: "", summary: "", changedFiles: [], steps: 8 },
-      { id: "candidate-3", model: "m", diff: "", summary: "", changedFiles: [], steps: 0, failed: true },
+      {
+        id: "candidate-1",
+        model: "m",
+        diff: "",
+        summary: "",
+        changedFiles: [],
+        steps: 12,
+      },
+      {
+        id: "candidate-2",
+        model: "m",
+        diff: "",
+        summary: "",
+        changedFiles: [],
+        steps: 8,
+      },
+      {
+        id: "candidate-3",
+        model: "m",
+        diff: "",
+        summary: "",
+        changedFiles: [],
+        steps: 0,
+        failed: true,
+      },
     ],
-    selection: { winnerId: "candidate-1", reasoning: "", ranking: [], model: "m", fallback: false, usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 } },
+    selection: {
+      winnerId: "candidate-1",
+      reasoning: "",
+      ranking: [],
+      model: "m",
+      fallback: false,
+      usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+    },
     mode: "independent",
     ...over,
   };
@@ -46,9 +75,26 @@ describe("createSolveUsageAccumulator", () => {
   it("sums tokens, cache reads, and cost across every model call", () => {
     const acc = createSolveUsageAccumulator();
     // Candidate turns + a pipeline judge + the comparative selector.
-    acc.record(ev({ tokensIn: 10_000, tokensOut: 2_000, cachedTokens: 4_000, costUsd: 0.12 }));
-    acc.record(ev({ tokensIn: 8_000, tokensOut: 1_500, cachedTokens: 0, costUsd: 0.09 }));
-    acc.record(ev({ tokensIn: 3_000, tokensOut: 400, cachedTokens: 1_000, costUsd: 0.03, model: "openai/gpt-5.5-pro" }));
+    acc.record(
+      ev({
+        tokensIn: 10_000,
+        tokensOut: 2_000,
+        cachedTokens: 4_000,
+        costUsd: 0.12,
+      }),
+    );
+    acc.record(
+      ev({ tokensIn: 8_000, tokensOut: 1_500, cachedTokens: 0, costUsd: 0.09 }),
+    );
+    acc.record(
+      ev({
+        tokensIn: 3_000,
+        tokensOut: 400,
+        cachedTokens: 1_000,
+        costUsd: 0.03,
+        model: "openai/gpt-5.5-pro",
+      }),
+    );
     expect(acc.totals()).toEqual({
       tokensIn: 21_000,
       tokensOut: 3_900,
@@ -60,8 +106,16 @@ describe("createSolveUsageAccumulator", () => {
 
   it("ignores tool_call events (they carry no token usage)", () => {
     const acc = createSolveUsageAccumulator();
-    acc.record(ev({ kind: "tool_call", tokensIn: 999, tokensOut: 999, costUsd: 9 }));
-    expect(acc.totals()).toEqual({ tokensIn: 0, tokensOut: 0, cachedTokens: 0, costUsd: 0, modelCalls: 0 });
+    acc.record(
+      ev({ kind: "tool_call", tokensIn: 999, tokensOut: 999, costUsd: 9 }),
+    );
+    expect(acc.totals()).toEqual({
+      tokensIn: 0,
+      tokensOut: 0,
+      cachedTokens: 0,
+      costUsd: 0,
+      modelCalls: 0,
+    });
   });
 
   it("totals() returns a snapshot copy, not live internal state", () => {
@@ -82,7 +136,12 @@ describe("totalSolveSteps", () => {
   it("includes fork mode's trunk steps", () => {
     const result = fakeResult({
       mode: "fork",
-      forkTelemetry: { trunkSteps: 7, hypothesesCount: 2, fallbackToIndependent: false, selectionMethod: "consensus" },
+      forkTelemetry: {
+        trunkSteps: 7,
+        hypothesesCount: 2,
+        fallbackToIndependent: false,
+        selectionMethod: "consensus",
+      },
     });
     expect(totalSolveSteps(result)).toBe(27);
   });
@@ -90,7 +149,13 @@ describe("totalSolveSteps", () => {
 
 describe("buildSolveUsageSummary", () => {
   it("derives totalTokens, steps, and wallSec from the settled totals", () => {
-    const totals = { tokensIn: 80_000, tokensOut: 3_086, cachedTokens: 20_000, costUsd: 0.2714, modelCalls: 9 };
+    const totals = {
+      tokensIn: 80_000,
+      tokensOut: 3_086,
+      cachedTokens: 20_000,
+      costUsd: 0.2714,
+      modelCalls: 9,
+    };
     const s = buildSolveUsageSummary(totals, fakeResult(), 815_530);
     expect(s).toMatchObject({
       ...totals,
@@ -101,7 +166,13 @@ describe("buildSolveUsageSummary", () => {
   });
 
   it("clamps a negative wall duration to zero", () => {
-    const totals = { tokensIn: 0, tokensOut: 0, cachedTokens: 0, costUsd: 0, modelCalls: 0 };
+    const totals = {
+      tokensIn: 0,
+      tokensOut: 0,
+      cachedTokens: 0,
+      costUsd: 0,
+      modelCalls: 0,
+    };
     expect(buildSolveUsageSummary(totals, fakeResult(), -50).wallSec).toBe(0);
   });
 });
@@ -119,7 +190,9 @@ describe("formatSolveRollup", () => {
   };
 
   it("renders the one-shot efficiency format", () => {
-    expect(formatSolveRollup(summary)).toBe("815.53s total · 83086 tok · $0.2714 · 37 steps");
+    expect(formatSolveRollup(summary)).toBe(
+      "815.53s total · 83086 tok · $0.2714 · 37 steps",
+    );
   });
 
   it("matches the bench adapter's parse regexes exactly (oxagen_agent.py)", () => {

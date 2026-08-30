@@ -21,7 +21,10 @@ import { BUILTIN_SLASH_NAMES } from "../../slash/catalog.js";
 import { HELP } from "../components.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const INTERACTIVE_SOURCE = readFileSync(join(here, "../interactive.tsx"), "utf8");
+const INTERACTIVE_SOURCE = readFileSync(
+  join(here, "../interactive.tsx"),
+  "utf8",
+);
 
 // The dispatcher lives between these two existing comments in interactive.tsx.
 // If either moves, the "canary" test below fails loudly (empty/tiny extracted
@@ -65,13 +68,17 @@ describe("slash command parity — catalog (menu/help) vs REPL dispatcher", () =
 
   it("every catalog built-in is actually handled by the dispatcher", () => {
     const dispatched = dispatchedCommandNames();
-    const missing = [...BUILTIN_SLASH_NAMES].filter((name) => !dispatched.has(name));
+    const missing = [...BUILTIN_SLASH_NAMES].filter(
+      (name) => !dispatched.has(name),
+    );
     expect(missing).toEqual([]);
   });
 
   it("the dispatcher handles no command absent from the catalog (so /help and the menu can't omit a real command)", () => {
     const dispatched = dispatchedCommandNames();
-    const extra = [...dispatched].filter((name) => !BUILTIN_SLASH_NAMES.has(name));
+    const extra = [...dispatched].filter(
+      (name) => !BUILTIN_SLASH_NAMES.has(name),
+    );
     expect(extra).toEqual([]);
   });
 });
@@ -82,12 +89,16 @@ describe("slash command parity — /help text lists every shipped built-in", () 
   // contract, and catches a regression if someone ever hand-writes HELP again.
   it("every dispatched built-in appears in the /help text as /name", () => {
     const dispatched = dispatchedCommandNames();
-    const missing = [...dispatched].filter((name) => !HELP.includes(`/${name}`));
+    const missing = [...dispatched].filter(
+      (name) => !HELP.includes(`/${name}`),
+    );
     expect(missing).toEqual([]);
   });
 
   it("every catalog built-in appears in the /help text as /name", () => {
-    const missing = [...BUILTIN_SLASH_NAMES].filter((name) => !HELP.includes(`/${name}`));
+    const missing = [...BUILTIN_SLASH_NAMES].filter(
+      (name) => !HELP.includes(`/${name}`),
+    );
     expect(missing).toEqual([]);
   });
 });

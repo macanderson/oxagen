@@ -21,7 +21,9 @@ vi.mock("os", async (importOriginal) => {
   return { ...actual, homedir: (): string => FAKE_HOME };
 });
 
-const { getMotionMode, setMotionMode, writeConfig, readConfig } = await import("../config.js");
+const { getMotionMode, setMotionMode, writeConfig, readConfig } = await import(
+  "../config.js"
+);
 
 const CONFIG_DIR = join(FAKE_HOME, ".config", "oxagen");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
@@ -93,7 +95,11 @@ describe("getMotionMode", () => {
 
   it("ignores a corrupt motion value in the config file", () => {
     mkdirSync(CONFIG_DIR, { recursive: true });
-    writeFileSync(CONFIG_FILE, JSON.stringify({ motion: "hyperspeed" }), "utf8");
+    writeFileSync(
+      CONFIG_FILE,
+      JSON.stringify({ motion: "hyperspeed" }),
+      "utf8",
+    );
     expect(getMotionMode()).toBe("full");
   });
 });

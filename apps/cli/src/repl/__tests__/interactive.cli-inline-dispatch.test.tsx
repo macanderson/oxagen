@@ -1,12 +1,10 @@
 /**
- * Regression coverage for PR C item 11 — the REPL's slash-menu → inline
- * CLI-command execution seam.
+ * The REPL's slash-menu → inline CLI-command execution seam.
  *
- * Before this fix, `/cost` (any CLI-sourced slash command) dead-ended with
- * "This is an oxagen CLI command — run it from your shell", even though
- * `cost` is a fast, read-only, dependency-free command perfectly safe to run
- * inline. This test drives the REAL REPL (`ReplApp`, real catalog built from
- * the real Commander tree) end to end: submits `/cost`, and asserts —
+ * A CLI-sourced slash command that is fast, read-only, and dependency-free
+ * (`/cost`) must run inside the REPL rather than sending the user to a shell.
+ * This test drives the REAL REPL (`ReplApp`, real catalog built from the real
+ * Commander tree) end to end: submits `/cost`, and asserts —
  *
  *   1. the output appears as an assistant message in the transcript, and
  *   2. NOT ONE byte reached the real `process.stdout.write` / `console.log`

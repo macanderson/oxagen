@@ -23,17 +23,29 @@
  */
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { buildCodeGraph, buildAndPersistCodeGraph } from "../daemon/code-graph/builder.js";
+import {
+  buildCodeGraph,
+  buildAndPersistCodeGraph,
+} from "../daemon/code-graph/builder.js";
 import {
   searchSymbols,
   dependents,
   imports as importsOf,
 } from "../daemon/code-graph/query.js";
-import { createCodeGraphStore, defaultCodeGraphDbPath } from "../daemon/code-graph/store.js";
+import {
+  createCodeGraphStore,
+  defaultCodeGraphDbPath,
+} from "../daemon/code-graph/store.js";
 import type { CodeGraphStore } from "../daemon/code-graph/store.js";
 import type { CodeGraph, CodeNode } from "../daemon/code-graph/types.js";
-import { resolveEmbeddingClient, type EmbeddingClient } from "./context/embedding.js";
-import { ensureFileEmbeddings, rankFilesBySimilarity } from "./context/semantic-index.js";
+import {
+  resolveEmbeddingClient,
+  type EmbeddingClient,
+} from "./context/embedding.js";
+import {
+  ensureFileEmbeddings,
+  rankFilesBySimilarity,
+} from "./context/semantic-index.js";
 import type { CodeGraphProvider } from "@oxagen/agent-engine";
 
 /**
@@ -121,9 +133,7 @@ function fileNodeFor(graph: CodeGraph, query: string): CodeNode | null {
   for (const node of graph.nodes.values()) {
     if (node.kind !== "file") continue;
     if (node.path === q) return node;
-    if (!suffixMatch && (node.path === q || node.path.endsWith(`/${q}`))) {
-      suffixMatch = node;
-    }
+    if (!suffixMatch && node.path.endsWith(`/${q}`)) suffixMatch = node;
   }
   return suffixMatch;
 }
@@ -185,7 +195,8 @@ export async function queryCodeGraph(
       const file = fileNodeFor(graph, query);
       if (!file) return `No file matching "${query}".`;
       const imps = importsOf(graph, file.id);
-      if (imps.length === 0) return `${file.path} has no resolved local imports.`;
+      if (imps.length === 0)
+        return `${file.path} has no resolved local imports.`;
       const paths = imps
         .map((n) => n.path)
         .sort()
@@ -193,7 +204,10 @@ export async function queryCodeGraph(
       return `${file.path} imports (${imps.length}):\n${paths.join("\n")}`;
     }
     case "semantic_search": {
-      const client = deps.client !== undefined ? deps.client : await resolveEmbeddingClient(cwd);
+      const client =
+        deps.client !== undefined
+          ? deps.client
+          : await resolveEmbeddingClient(cwd);
       if (!client) {
         return `No file matching semantic query "${query}" (embeddings unavailable — no gateway key).`;
       }
@@ -208,7 +222,9 @@ export async function queryCodeGraph(
         store = deps.store;
       } else {
         try {
-          store = createCodeGraphStore({ duckdbPath: defaultCodeGraphDbPath() });
+          store = createCodeGraphStore({
+            duckdbPath: defaultCodeGraphDbPath(),
+          });
           await store.whenReady();
           ownsStore = true;
         } catch {
@@ -217,12 +233,26 @@ export async function queryCodeGraph(
       }
 
       try {
-        const { vectors } = await ensureFileEmbeddings({ graph, root: cwd, client, store });
-        if (vectors.size === 0) return `No file matching semantic query "${query}".`;
+        const { vectors } = await ensureFileEmbeddings({
+          graph,
+          root: cwd,
+          client,
+          store,
+        });
+        if (vectors.size === 0)
+          return `No file matching semantic query "${query}".`;
         const queryVector = await client.embed(query);
-        const ranked = rankFilesBySimilarity(graph, queryVector, vectors, limit);
-        if (ranked.length === 0) return `No file matching semantic query "${query}".`;
-        return ranked.map((r) => `${r.path} (${r.score.toFixed(2)})`).join("\n");
+        const ranked = rankFilesBySimilarity(
+          graph,
+          queryVector,
+          vectors,
+          limit,
+        );
+        if (ranked.length === 0)
+          return `No file matching semantic query "${query}".`;
+        return ranked
+          .map((r) => `${r.path} (${r.score.toFixed(2)})`)
+          .join("\n");
       } catch {
         // Network/gateway failure mid-embed — degrade like a miss, never throw.
         return `No file matching semantic query "${query}" (embeddings unavailable).`;

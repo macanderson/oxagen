@@ -152,7 +152,8 @@ export class Fleet extends EventEmitter {
     super();
     this.cwd = opts.cwd;
     this.concurrency = Math.max(1, opts.concurrency ?? 4);
-    this.concurrencyProvider = opts.concurrencyProvider ?? (() => this.concurrency);
+    this.concurrencyProvider =
+      opts.concurrencyProvider ?? (() => this.concurrency);
     this.memory = opts.memory ?? null;
     this.serverMemory = opts.serverMemory ?? null;
     this.store = opts.store ?? null;
@@ -184,20 +185,29 @@ export class Fleet extends EventEmitter {
     this.emitUpdate();
   }
 
-  /** Add one ad-hoc task (e.g. typed into the agents screen). Returns its id. */
+  /**
+   * Add one ad-hoc task (e.g. typed into the agents screen). Returns its id.
+   *
+   * While {@link drain}ing the task is born `cancelled`, not `queued`: pump()
+   * dispatches nothing once draining, so a queued task would never reach a
+   * terminal state and `drain()`/`start()`'s promise would never settle —
+   * wedging the caller (the agents screen waits on it to exit) forever.
+   */
   dispatchPrompt(prompt: string): string {
     const id = `adhoc-${++this.adhocCounter}`;
     const decision = routeModel({ text: prompt });
+    const now = Date.now();
     const task: Task = {
       id,
       title: prompt.length > 64 ? prompt.slice(0, 61) + "…" : prompt,
       description: prompt,
-      status: "queued",
+      status: this.draining ? "cancelled" : "queued",
+      ...(this.draining ? { finishedAt: now } : {}),
       dependsOn: [],
       files: [],
       tier: decision.tier,
       model: decision.model,
-      createdAt: Date.now(),
+      createdAt: now,
       usage: emptyUsage(),
     };
     this.tasks.set(id, task);
@@ -205,6 +215,7 @@ export class Fleet extends EventEmitter {
     this.emitTask(task);
     this.emitUpdate();
     this.pump();
+    this.checkDone();
     return id;
   }
 

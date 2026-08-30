@@ -29,11 +29,12 @@ import type { ContextWindow } from "@oxagen/engram";
 const MAX_RECORDED_SESSIONS = 200;
 
 /**
- * Per-connection line-buffer cap. A client that streams bytes without a
- * newline would otherwise grow `buffer` forever; 8 MB comfortably exceeds any
- * legitimate single JSON-RPC request (compile taskFrames are KBs).
+ * Per-connection line-buffer cap, in JS string units (UTF-16 code units, not
+ * bytes — the buffer is decoded text). A client that streams data without a
+ * newline would otherwise grow `buffer` forever; 8M chars comfortably exceeds
+ * any legitimate single JSON-RPC request (compile taskFrames are KBs).
  */
-const MAX_SOCKET_BUFFER_BYTES = 8 * 1024 * 1024;
+const MAX_SOCKET_BUFFER_CHARS = 8 * 1024 * 1024;
 
 /** Default daemon RSS ceiling (2 GB); override via OXAGEN_DAEMON_MAX_RSS_MB. */
 const DEFAULT_DAEMON_MAX_RSS_BYTES = 2 * 1024 * 1024 * 1024;
@@ -113,7 +114,10 @@ export class ContextDaemon {
     // caches beats an OOM-killed daemon holding the DuckDB write lock.
     const maxRssBytes =
       this.config.maxRssBytes ??
-      resolveBoundBytes("OXAGEN_DAEMON_MAX_RSS_MB", DEFAULT_DAEMON_MAX_RSS_BYTES);
+      resolveBoundBytes(
+        "OXAGEN_DAEMON_MAX_RSS_MB",
+        DEFAULT_DAEMON_MAX_RSS_BYTES,
+      );
     this.rssWatchdog = startRssWatchdog({
       maxRssBytes,
       onWarn: (rss, max) => {
@@ -146,8 +150,16 @@ export class ContextDaemon {
       this.server = null;
     }
     // Clean up socket and PID files
-    try { fs.unlinkSync(this.config.socketPath); } catch { /* ignore */ }
-    try { fs.unlinkSync(this.config.pidFile); } catch { /* ignore */ }
+    try {
+      fs.unlinkSync(this.config.socketPath);
+    } catch {
+      /* ignore */
+    }
+    try {
+      fs.unlinkSync(this.config.pidFile);
+    } catch {
+      /* ignore */
+    }
   }
 
   private handleConnection(socket: net.Socket): void {
@@ -158,7 +170,7 @@ export class ContextDaemon {
       buffer += data.toString();
       // A newline-free flood must not grow the buffer without limit: reject
       // the oversized request and drop the connection (protocol violation).
-      if (buffer.length > MAX_SOCKET_BUFFER_BYTES) {
+      if (buffer.length > MAX_SOCKET_BUFFER_CHARS) {
         buffer = "";
         // Stop reading first so continued flood bytes can't re-buffer, then
         // flush the error and half-close; end() (unlike destroy()) lets the
@@ -169,7 +181,7 @@ export class ContextDaemon {
           id: "unknown",
           error: {
             code: DAEMON_ERRORS.PARSE_ERROR,
-            message: `Request exceeds ${MAX_SOCKET_BUFFER_BYTES} bytes without a newline`,
+            message: `Request exceeds ${MAX_SOCKET_BUFFER_CHARS} characters without a newline`,
           },
         });
         socket.end();
@@ -191,7 +203,9 @@ export class ContextDaemon {
       }
     });
 
-    socket.on("error", () => { /* client disconnected */ });
+    socket.on("error", () => {
+      /* client disconnected */
+    });
   }
 
   private async handleRequest(raw: string, socket: net.Socket): Promise<void> {
@@ -215,7 +229,10 @@ export class ContextDaemon {
       this.sendResponse(socket, {
         id: request.id,
         error: {
-          code: err instanceof DaemonRpcError ? err.code : DAEMON_ERRORS.INTERNAL_ERROR,
+          code:
+            err instanceof DaemonRpcError
+              ? err.code
+              : DAEMON_ERRORS.INTERNAL_ERROR,
           message: err instanceof Error ? err.message : String(err),
         },
       });
@@ -253,13 +270,21 @@ export class ContextDaemon {
     }
   }
 
-  private async handleCompile(params: { taskFrame: unknown; budget: unknown }): Promise<unknown> {
+  private async handleCompile(params: {
+    taskFrame: unknown;
+    budget: unknown;
+  }): Promise<unknown> {
     // Lazy import to avoid loading at daemon startup
-    const { compile, computeBudget, createStore, TemporalRetrievalEngine } = await import("@oxagen/engram");
-    const store = createStore({ adapter: "duckdb", duckdbPath: this.config.dbPath });
+    const { compile, computeBudget, createStore, TemporalRetrievalEngine } =
+      await import("@oxagen/engram");
+    const store = createStore({
+      adapter: "duckdb",
+      duckdbPath: this.config.dbPath,
+    });
     const engines = [new TemporalRetrievalEngine(store)];
     const taskFrame = params.taskFrame as Parameters<typeof compile>[0];
-    const budget = (params.budget ?? computeBudget(taskFrame.modelId)) as Parameters<typeof compile>[1];
+    const budget = (params.budget ??
+      computeBudget(taskFrame.modelId)) as Parameters<typeof compile>[1];
     const window = await compile(taskFrame, budget, { engines, store });
     await store.close();
     // Record this compile as one turn of the taskFrame's session, if it names
@@ -311,10 +336,16 @@ export class ContextDaemon {
    * forkSession). The new session is registered so it can itself be listed,
    * replayed, or forked again.
    */
-  private async handleSessionFork(params: { sessionId: string; forkPoint: number }): Promise<unknown> {
+  private async handleSessionFork(params: {
+    sessionId: string;
+    forkPoint: number;
+  }): Promise<unknown> {
     const parent = this.sessions.get(params.sessionId);
     if (!parent) {
-      throw new DaemonRpcError(DAEMON_ERRORS.SESSION_NOT_FOUND, `Session not found: ${params.sessionId}`);
+      throw new DaemonRpcError(
+        DAEMON_ERRORS.SESSION_NOT_FOUND,
+        `Session not found: ${params.sessionId}`,
+      );
     }
     const { forkSession } = await import("@oxagen/engram");
     const newSessionId = crypto.randomUUID();
@@ -334,15 +365,25 @@ export class ContextDaemon {
    * including the parent-prefix history if the session was forked
    * (getFullHistory).
    */
-  private async handleSessionReplay(params: { sessionId: string }): Promise<unknown> {
+  private async handleSessionReplay(params: {
+    sessionId: string;
+  }): Promise<unknown> {
     const session = this.sessions.get(params.sessionId);
     if (!session) {
-      throw new DaemonRpcError(DAEMON_ERRORS.SESSION_NOT_FOUND, `Session not found: ${params.sessionId}`);
+      throw new DaemonRpcError(
+        DAEMON_ERRORS.SESSION_NOT_FOUND,
+        `Session not found: ${params.sessionId}`,
+      );
     }
-    const { analyzeReplay, extractTurnMetrics, getFullHistory } = await import("@oxagen/engram");
+    const { analyzeReplay, extractTurnMetrics, getFullHistory } = await import(
+      "@oxagen/engram"
+    );
     const replay = analyzeReplay(session);
     const turns = extractTurnMetrics(session);
-    const history = getFullHistory(session, (id) => this.sessions.get(id) ?? null);
+    const history = getFullHistory(
+      session,
+      (id) => this.sessions.get(id) ?? null,
+    );
     return { replay, turns, inheritedEventCount: history.inherited };
   }
 
@@ -360,17 +401,31 @@ export class ContextDaemon {
     };
   }
 
-  private async handleQuery(params: { namespace: { org: string; workspace: string }; kinds?: string[]; limit?: number }): Promise<unknown> {
+  private async handleQuery(params: {
+    namespace: { org: string; workspace: string };
+    kinds?: string[];
+    limit?: number;
+  }): Promise<unknown> {
     const { createStore } = await import("@oxagen/engram");
-    const store = createStore({ adapter: "duckdb", duckdbPath: this.config.dbPath });
-    const records = await store.query({ namespace: params.namespace, kinds: params.kinds as never, limit: params.limit ?? 50 });
+    const store = createStore({
+      adapter: "duckdb",
+      duckdbPath: this.config.dbPath,
+    });
+    const records = await store.query({
+      namespace: params.namespace,
+      kinds: params.kinds as never,
+      limit: params.limit ?? 50,
+    });
     await store.close();
     return { records };
   }
 
   private async handleRecall(params: { recordId: string }): Promise<unknown> {
     const { createStore } = await import("@oxagen/engram");
-    const store = createStore({ adapter: "duckdb", duckdbPath: this.config.dbPath });
+    const store = createStore({
+      adapter: "duckdb",
+      duckdbPath: this.config.dbPath,
+    });
     const record = await store.getById(params.recordId);
     await store.close();
     return { record };
@@ -384,10 +439,17 @@ export class ContextDaemon {
    * short so a co-located `oxagen` agent process can use the same store between
    * requests instead of being starved.
    */
-  private async withCodeGraph<T>(root: string, fn: (graph: CodeGraph) => T): Promise<T> {
+  private async withCodeGraph<T>(
+    root: string,
+    fn: (graph: CodeGraph) => T,
+  ): Promise<T> {
     const { createCodeGraphStore } = await import("./code-graph/store.js");
-    const { buildAndPersistCodeGraph } = await import("./code-graph/builder.js");
-    const store = createCodeGraphStore({ duckdbPath: this.config.codeGraphDbPath });
+    const { buildAndPersistCodeGraph } = await import(
+      "./code-graph/builder.js"
+    );
+    const store = createCodeGraphStore({
+      duckdbPath: this.config.codeGraphDbPath,
+    });
     try {
       if ((await store.stats(root)).files === 0) {
         await buildAndPersistCodeGraph(root, store);
@@ -402,8 +464,12 @@ export class ContextDaemon {
   private async handleGraphBuild(params: { root?: string }): Promise<unknown> {
     const root = params.root ?? this.config.workspaceRoot;
     const { createCodeGraphStore } = await import("./code-graph/store.js");
-    const { buildAndPersistCodeGraph } = await import("./code-graph/builder.js");
-    const store = createCodeGraphStore({ duckdbPath: this.config.codeGraphDbPath });
+    const { buildAndPersistCodeGraph } = await import(
+      "./code-graph/builder.js"
+    );
+    const store = createCodeGraphStore({
+      duckdbPath: this.config.codeGraphDbPath,
+    });
     try {
       const delta = await buildAndPersistCodeGraph(root, store);
       return { root, ...delta, ...(await store.stats(root)) };
@@ -412,15 +478,29 @@ export class ContextDaemon {
     }
   }
 
-  private async handleGraphQuery(params: { nodeId: string; hops?: number; edgeTypes?: string[]; root?: string }): Promise<unknown> {
+  private async handleGraphQuery(params: {
+    nodeId: string;
+    hops?: number;
+    edgeTypes?: string[];
+    root?: string;
+  }): Promise<unknown> {
     const root = params.root ?? this.config.workspaceRoot;
     const { neighbors } = await import("./code-graph/query.js");
     return this.withCodeGraph(root, (graph) =>
-      neighbors(graph, params.nodeId, params.hops ?? 1, params.edgeTypes as CodeEdgeType[] | undefined),
+      neighbors(
+        graph,
+        params.nodeId,
+        params.hops ?? 1,
+        params.edgeTypes as CodeEdgeType[] | undefined,
+      ),
     );
   }
 
-  private async handleGraphSearch(params: { pattern: string; limit?: number; root?: string }): Promise<unknown> {
+  private async handleGraphSearch(params: {
+    pattern: string;
+    limit?: number;
+    root?: string;
+  }): Promise<unknown> {
     const root = params.root ?? this.config.workspaceRoot;
     const { searchSymbols } = await import("./code-graph/query.js");
     return this.withCodeGraph(root, (graph) => ({
@@ -431,6 +511,8 @@ export class ContextDaemon {
   private sendResponse(socket: net.Socket, response: DaemonResponse): void {
     try {
       socket.write(JSON.stringify(response) + "\n");
-    } catch { /* client may have disconnected */ }
+    } catch {
+      /* client may have disconnected */
+    }
   }
 }

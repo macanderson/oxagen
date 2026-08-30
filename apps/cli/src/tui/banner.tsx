@@ -26,7 +26,9 @@ const GLYPH_ROWS = 5;
 
 /** Compose a word into its 5-row block-letter form. Unknown chars are skipped. */
 function compose(text: string): string[] {
-  const letters = [...text.toUpperCase()].map((ch) => GLYPHS[ch]).filter(Boolean) as ReadonlyArray<readonly string[]>;
+  const letters = [...text.toUpperCase()]
+    .map((ch) => GLYPHS[ch])
+    .filter(Boolean) as ReadonlyArray<readonly string[]>;
   return Array.from({ length: GLYPH_ROWS }, (_, row) =>
     letters.map((g) => g[row]).join(" "),
   );
@@ -62,7 +64,9 @@ export function sunsetColorAt(t: number): string {
   const from = SUNSET_STOPS[idx] ?? SUNSET_STOPS[0];
   const to = SUNSET_STOPS[idx + 1] ?? from;
   const mix = (i: number): number =>
-    Math.round(hexChannel(from, i) + (hexChannel(to, i) - hexChannel(from, i)) * local);
+    Math.round(
+      hexChannel(from, i) + (hexChannel(to, i) - hexChannel(from, i)) * local,
+    );
   return `#${[0, 1, 2].map((i) => mix(i).toString(16).padStart(2, "0")).join("")}`;
 }
 
@@ -71,7 +75,10 @@ export function sunsetColorAt(t: number): string {
  * column by its position along the gradient. Adjacent columns that resolve to
  * the same hex merge into one run so the element count stays small.
  */
-function gradientRuns(line: string, width: number): Array<{ text: string; color: string }> {
+function gradientRuns(
+  line: string,
+  width: number,
+): Array<{ text: string; color: string }> {
   const runs: Array<{ text: string; color: string }> = [];
   let text = "";
   let color = "";
@@ -151,15 +158,13 @@ export const Banner = React.memo(function Banner({
     <Box flexDirection="column" paddingX={1} marginBottom={1}>
       {WORDMARK.map((line, i) => (
         <Text key={i} bold>
-          {i < revealed ? (
-            gradientRuns(line, width).map((run, j) => (
-              <Text key={j} color={run.color} bold>
-                {run.text}
-              </Text>
-            ))
-          ) : (
-            " ".repeat(width)
-          )}
+          {i < revealed
+            ? gradientRuns(line, width).map((run, j) => (
+                <Text key={j} color={run.color} bold>
+                  {run.text}
+                </Text>
+              ))
+            : " ".repeat(width)}
         </Text>
       ))}
     </Box>

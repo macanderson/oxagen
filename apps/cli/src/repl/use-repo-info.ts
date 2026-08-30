@@ -25,7 +25,10 @@ export interface RepoInfo {
 /** How often to re-read git state and re-check for a PR. */
 const REFRESH_MS = 30_000;
 
-function readGitInfo(cwd: string): { root: string; branch: string | undefined } {
+function readGitInfo(cwd: string): {
+  root: string;
+  branch: string | undefined;
+} {
   const resolved = resolveGitInfo(cwd);
   return { root: resolved?.root ?? cwd, branch: resolved?.branch };
 }
@@ -36,7 +39,10 @@ function readGitInfo(cwd: string): { root: string; branch: string | undefined } 
  * to `gh` in the common (inline/test) case.
  */
 export function useRepoInfo(cwd: string, enabled: boolean): RepoInfo {
-  const [info, setInfo] = useState<RepoInfo>(() => ({ ...readGitInfo(cwd), prNumber: undefined }));
+  const [info, setInfo] = useState<RepoInfo>(() => ({
+    ...readGitInfo(cwd),
+    prNumber: undefined,
+  }));
   // Bumped on every PR fetch kicked off; a resolving fetch checks it's still
   // the LATEST one before applying its result, so a slow lookup for a branch
   // the user has since moved on from can never clobber a newer one (or apply
@@ -49,7 +55,11 @@ export function useRepoInfo(cwd: string, enabled: boolean): RepoInfo {
 
     const refresh = (): void => {
       const { root, branch } = readGitInfo(cwd);
-      setInfo((prev) => (prev.root === root && prev.branch === branch ? prev : { ...prev, root, branch }));
+      setInfo((prev) =>
+        prev.root === root && prev.branch === branch
+          ? prev
+          : { ...prev, root, branch },
+      );
 
       const gen = ++fetchGenRef.current;
       if (!branch) {

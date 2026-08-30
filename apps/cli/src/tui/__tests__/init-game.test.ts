@@ -84,7 +84,9 @@ describe("determinism", () => {
   it("ignores unrecognized actions and returns state unchanged", () => {
     const s = createInitialGameState(34);
     // Defensive default branch — exercised via a deliberately invalid action.
-    const result = gameReducer(s, { type: "unknown" } as unknown as { type: "tick" });
+    const result = gameReducer(s, { type: "unknown" } as unknown as {
+      type: "tick";
+    });
     expect(result).toBe(s);
   });
 
@@ -267,15 +269,23 @@ describe("invader bolts", () => {
     const s = baseState({ invaderBolts: [{ col, row: s0.playerRow - 1 }] });
 
     const result = tickGame(s);
-    expect(result.invaderBolts.some((b) => b.col === col && b.row === s0.playerRow)).toBe(false);
-    expect(result.explosions).toContainEqual({ col, row: s0.playerRow, ttl: 2 });
+    expect(
+      result.invaderBolts.some((b) => b.col === col && b.row === s0.playerRow),
+    ).toBe(false);
+    expect(result.explosions).toContainEqual({
+      col,
+      row: s0.playerRow,
+      ttl: 2,
+    });
   });
 
   it("misses and clears past the player row without an explosion when columns differ", () => {
     const s0 = createInitialGameState(30);
     const tick = 1;
     const missCol = (playerColAt(s0.width, tick) + 5) % s0.width;
-    const s = baseState({ invaderBolts: [{ col: missCol, row: s0.playerRow }] });
+    const s = baseState({
+      invaderBolts: [{ col: missCol, row: s0.playerRow }],
+    });
 
     const result = tickGame(s);
     expect(result.invaderBolts).toEqual([]);
@@ -301,7 +311,13 @@ describe("invader bolts", () => {
 
   it("does not fire off the cadence", () => {
     const invaders: Invader[] = [{ id: "0-0", col: 0, row: 0, alive: true }];
-    const s = baseState({ tick: 0, originCol: 5, originRow: 0, invaders, invaderBolts: [] });
+    const s = baseState({
+      tick: 0,
+      originCol: 5,
+      originRow: 0,
+      invaders,
+      invaderBolts: [],
+    });
     const result = tickGame(s); // -> tick 1, not a multiple of 7
     expect(result.invaderBolts).toEqual([]);
   });
@@ -310,14 +326,22 @@ describe("invader bolts", () => {
 describe("explosions", () => {
   it("decays ttl by 1 per tick and stays visible above 0", () => {
     const s = createInitialGameState(30);
-    const withExplosion: GameState = { ...s, tick: 0, explosions: [{ col: 1, row: 1, ttl: 2 }] };
+    const withExplosion: GameState = {
+      ...s,
+      tick: 0,
+      explosions: [{ col: 1, row: 1, ttl: 2 }],
+    };
     const result = tickGame(withExplosion);
     expect(result.explosions).toContainEqual({ col: 1, row: 1, ttl: 1 });
   });
 
   it("clears once ttl reaches 0", () => {
     const s = createInitialGameState(30);
-    const withExplosion: GameState = { ...s, tick: 0, explosions: [{ col: 1, row: 1, ttl: 1 }] };
+    const withExplosion: GameState = {
+      ...s,
+      tick: 0,
+      explosions: [{ col: 1, row: 1, ttl: 1 }],
+    };
     const result = tickGame(withExplosion);
     expect(result.explosions).toEqual([]);
   });
@@ -385,7 +409,9 @@ describe("buildGrid", () => {
 
   it("does not render a dead invader", () => {
     const s = createInitialGameState(30);
-    const invaders = s.invaders.map((i, idx) => (idx === 0 ? { ...i, alive: false } : i));
+    const invaders = s.invaders.map((i, idx) =>
+      idx === 0 ? { ...i, alive: false } : i,
+    );
     const grid = buildGrid({ ...s, invaders });
     const a = absolute(s.originCol, s.originRow, invaders[0]!);
     expect(grid[a.row]?.[a.col]?.kind).toBe("empty");

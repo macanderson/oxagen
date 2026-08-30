@@ -172,7 +172,12 @@ function deterministicRoute(text: string): TriageDecision | null {
  * never surprise the user with an unrequested background dispatch.
  */
 export function fallbackTriage(text: string): TriageDecision {
-  return deterministicRoute(text) ?? { route: "queue", reason: defaultReason("queue") };
+  return (
+    deterministicRoute(text) ?? {
+      route: "queue",
+      reason: defaultReason("queue"),
+    }
+  );
 }
 
 /**

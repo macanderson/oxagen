@@ -27,7 +27,11 @@ const cannedAi: AgentAi = {
         yield { type: "text-delta", text: "Completed the task." };
       })(),
       steps: Promise.resolve([{}]),
-      usage: Promise.resolve({ inputTokens: 5, outputTokens: 7, totalTokens: 12 }),
+      usage: Promise.resolve({
+        inputTokens: 5,
+        outputTokens: 7,
+        totalTokens: 12,
+      }),
       response: Promise.resolve({ messages: [] }),
     }) as unknown as ReturnType<AgentAi["stream"]>,
   generateObject: async <T,>() =>
@@ -72,7 +76,10 @@ vi.mock("../../agent/adapters/index.js", async (importOriginal) => ({
 }));
 
 // Keep the harness hermetic: no tree-sitter build, no disk stores, no MCP.
-vi.mock("../../agent/code-graph.js", () => ({ queryCodeGraph: async () => "", warmCodeGraph: () => {} }));
+vi.mock("../../agent/code-graph.js", () => ({
+  queryCodeGraph: async () => "",
+  warmCodeGraph: () => {},
+}));
 vi.mock("../../slash/expand.js", () => ({ loadAndExpand: () => null }));
 vi.mock("../../project/init.js", () => ({
   isProjectInitialized: () => true,
@@ -90,7 +97,11 @@ vi.mock("../../agent/trace-store.js", () => ({
 vi.mock("../../agent/fleet/memory.js", async (importOriginal) => ({
   // Real module first: the subagent prompt enhancer uses formatLessons etc.
   ...(await importOriginal<typeof import("../../agent/fleet/memory.js")>()),
-  openFleetMemory: () => ({ record: () => {}, recall: () => [], all: () => [] }),
+  openFleetMemory: () => ({
+    record: () => {},
+    recall: () => [],
+    all: () => [],
+  }),
 }));
 vi.mock("../../agent/fleet/store.js", () => ({
   openPlanStore: () => ({
@@ -135,7 +146,11 @@ const tick = (ms = 15): Promise<void> => new Promise((r) => setTimeout(r, ms));
 // on a loaded 2-core CI runner, where 20s was not enough headroom for the
 // fan-out to settle. Raise the per-milestone deadline (and the per-test ceiling
 // below) generously.
-async function waitFor(cond: () => boolean, frame: () => string, ms = 30_000): Promise<void> {
+async function waitFor(
+  cond: () => boolean,
+  frame: () => string,
+  ms = 30_000,
+): Promise<void> {
   const start = Date.now();
   while (!cond()) {
     if (Date.now() - start > ms) {
@@ -147,7 +162,9 @@ async function waitFor(cond: () => boolean, frame: () => string, ms = 30_000): P
 
 describe("TUI fleet fan-out (real planner path + real Fleet, canned AI)", () => {
   it("plans a multi-task prompt and runs it as parallel subagents", async () => {
-    const { stdin, lastFrame } = render(<ReplApp options={{ session: SESSION, readOnly: true }} />);
+    const { stdin, lastFrame } = render(
+      <ReplApp options={{ session: SESSION, readOnly: true }} />,
+    );
     await tick();
 
     const proof: string[] = [];
@@ -161,25 +178,38 @@ describe("TUI fleet fan-out (real planner path + real Fleet, canned AI)", () => 
     stdin.write("\r");
 
     // The ☰ [Plan] stage chip appears while the planner call runs.
-    await waitFor(() => (lastFrame() ?? "").includes("Planning the work"), () => lastFrame() ?? "");
+    await waitFor(
+      () => (lastFrame() ?? "").includes("Planning the work"),
+      () => lastFrame() ?? "",
+    );
     snap("planning stage");
 
     // The real plan (3 tasks) is announced and dispatched to subagents.
-    await waitFor(() => (lastFrame() ?? "").includes("Planned 3 tasks — dispatching subagents"), () => lastFrame() ?? "");
+    await waitFor(
+      () =>
+        (lastFrame() ?? "").includes("Planned 3 tasks — dispatching subagents"),
+      () => lastFrame() ?? "",
+    );
     snap("plan announced");
 
     // Every subagent finishes and reports into the transcript.
-    await waitFor(() => {
-      const f = lastFrame() ?? "";
-      return (
-        f.includes("Write the alpha module — done") &&
-        f.includes("Write the beta module — done") &&
-        f.includes("Write the gamma module — done")
-      );
-    }, () => lastFrame() ?? "");
+    await waitFor(
+      () => {
+        const f = lastFrame() ?? "";
+        return (
+          f.includes("Write the alpha module — done") &&
+          f.includes("Write the beta module — done") &&
+          f.includes("Write the gamma module — done")
+        );
+      },
+      () => lastFrame() ?? "",
+    );
 
     // The end-of-fleet summary lands as the assistant reply.
-    await waitFor(() => (lastFrame() ?? "").includes("3/3 tasks done"), () => lastFrame() ?? "");
+    await waitFor(
+      () => (lastFrame() ?? "").includes("3/3 tasks done"),
+      () => lastFrame() ?? "",
+    );
     snap("fleet complete");
 
     const final = lastFrame() ?? "";

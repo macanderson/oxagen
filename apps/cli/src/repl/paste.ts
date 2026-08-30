@@ -83,7 +83,10 @@ export function textChip(fullText: string): string {
   const lines = countLines(fullText);
   const flat = flattenForChip(fullText);
   const head = flat.slice(0, CHIP_EDGE);
-  const tail = flat.length <= CHIP_EDGE * 2 ? flat.slice(head.length) : flat.slice(-CHIP_EDGE);
+  const tail =
+    flat.length <= CHIP_EDGE * 2
+      ? flat.slice(head.length)
+      : flat.slice(-CHIP_EDGE);
   return `[${head}...${lines} Lines...${tail}]`;
 }
 
@@ -104,12 +107,18 @@ function withCounter(chip: string, k: number): string {
  * discriminator so the registry stays 1:1 and neither paste can expand to the
  * other's text.
  */
-export function registerPastedText(registry: PasteRegistry, fullText: string): string {
+export function registerPastedText(
+  registry: PasteRegistry,
+  fullText: string,
+): string {
   let chip = textChip(fullText);
   const existing = registry.texts.get(chip);
   if (existing !== undefined && existing !== fullText) {
     let k = 2;
-    while (registry.texts.has(withCounter(chip, k)) && registry.texts.get(withCounter(chip, k)) !== fullText) {
+    while (
+      registry.texts.has(withCounter(chip, k)) &&
+      registry.texts.get(withCounter(chip, k)) !== fullText
+    ) {
       k++;
     }
     chip = withCounter(chip, k);
@@ -119,7 +128,10 @@ export function registerPastedText(registry: PasteRegistry, fullText: string): s
 }
 
 /** Register a pasted image; returns the compact token to insert at the cursor. */
-export function registerPastedImage(registry: PasteRegistry, attachment: PastedImageAttachment): string {
+export function registerPastedImage(
+  registry: PasteRegistry,
+  attachment: PastedImageAttachment,
+): string {
   const n = registry.nextImageId++;
   registry.images.set(n, attachment);
   return imageToken(n);
@@ -129,19 +141,27 @@ const IMAGE_TOKEN_AT_END_RE = /\[Image #\d+\]$/;
 const IMAGE_TOKEN_AT_START_RE = /^\[Image #\d+\]/;
 
 /** The longest registered text chip that `slice` ends with, or null. */
-function textChipEndingAt(registry: PasteRegistry, slice: string): string | null {
+function textChipEndingAt(
+  registry: PasteRegistry,
+  slice: string,
+): string | null {
   let best: string | null = null;
   for (const chip of registry.texts.keys()) {
-    if (slice.endsWith(chip) && (best === null || chip.length > best.length)) best = chip;
+    if (slice.endsWith(chip) && (best === null || chip.length > best.length))
+      best = chip;
   }
   return best;
 }
 
 /** The longest registered text chip that `slice` starts with, or null. */
-function textChipStartingAt(registry: PasteRegistry, slice: string): string | null {
+function textChipStartingAt(
+  registry: PasteRegistry,
+  slice: string,
+): string | null {
   let best: string | null = null;
   for (const chip of registry.texts.keys()) {
-    if (slice.startsWith(chip) && (best === null || chip.length > best.length)) best = chip;
+    if (slice.startsWith(chip) && (best === null || chip.length > best.length))
+      best = chip;
   }
   return best;
 }
@@ -196,7 +216,10 @@ export function dropTokenAt(
  * isn't intact in the buffer at submit time can't resurrect stale content or
  * leak a dangling temp-file reference.
  */
-export function pruneMissingTokens(registry: PasteRegistry, text: string): void {
+export function pruneMissingTokens(
+  registry: PasteRegistry,
+  text: string,
+): void {
   for (const chip of [...registry.texts.keys()]) {
     if (!text.includes(chip)) registry.texts.delete(chip);
   }
@@ -224,10 +247,12 @@ export interface PasteSubmission {
  * the longest registered chip that starts there, and otherwise copies one
  * character. Spliced-in content is NEVER rescanned, so pasted text that happens
  * to contain another token's literal string (`[Image #N]`, or a chip from an
- * earlier paste) can't trigger a spurious second expansion — matching the
- * original single-pass regex semantics while supporting arbitrary chip strings.
+ * earlier paste) can't trigger a spurious second expansion.
  */
-export function expandPasteSubmission(registry: PasteRegistry, text: string): PasteSubmission {
+export function expandPasteSubmission(
+  registry: PasteRegistry,
+  text: string,
+): PasteSubmission {
   pruneMissingTokens(registry, text);
   const images: PastedImageAttachment[] = [];
   // Longest chip first so a chip that is a prefix of another wins the match.

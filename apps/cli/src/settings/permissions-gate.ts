@@ -18,9 +18,23 @@
  *   4. defaultMode "deny"               → deny  (deny-by-default; only allow-listed pass)
  *   5. otherwise (default/acceptEdits)  → allow
  *
- * When no `permissions` block is configured, every call is allowed — this
- * preserves the CLI's historical "runs against your own repo" behavior until a
- * user opts into gating.
+ * When no `permissions` block is configured, every call is allowed. Gating is
+ * opt-in: you get it by writing a `permissions` block.
+ *
+ * MATCHING IS LITERAL, NOT SEMANTIC. The pattern is glob-matched against the
+ * raw subject string exactly as the model supplied it — no path resolution, no
+ * shell parsing. Two consequences a rule author must plan for:
+ *
+ *   - A path rule matches text, not a file. `Write(.env*)` does not stop a
+ *     write to `./.env`, `src/../.env`, or `/abs/path/.env`; write the rule as
+ *     a set of patterns (`Write(*.env*)`) or deny the directory.
+ *   - A Bash rule matches the command line, not the commands in it.
+ *     `Bash(rm -rf*)` only matches a command that STARTS with `rm -rf`;
+ *     `cd /tmp && rm -rf .` sails through.
+ *
+ * So a deny rule is a guardrail against the model's habitual phrasing, not a
+ * sandbox. Anything that must not happen belongs behind `defaultMode: "deny"`
+ * with a narrow allow list, or a PreToolUse hook that inspects the real input.
  */
 import { matchGlob } from "@oxagen/mcp-config/permissions";
 import type { Permissions } from "./schema.js";
@@ -78,10 +92,17 @@ export function parseRule(rule: string): ParsedRule {
   const trimmed = rule.trim();
   const open = trimmed.indexOf("(");
   if (open === -1 || !trimmed.endsWith(")")) return { tool: trimmed };
-  return { tool: trimmed.slice(0, open).trim(), pattern: trimmed.slice(open + 1, -1).trim() };
+  return {
+    tool: trimmed.slice(0, open).trim(),
+    pattern: trimmed.slice(open + 1, -1).trim(),
+  };
 }
 
-function ruleMatches(rule: string, canonical: string, subject: string): boolean {
+function ruleMatches(
+  rule: string,
+  canonical: string,
+  subject: string,
+): boolean {
   const parsed = parseRule(rule);
   // The tool token is glob-matched against the canonical name. For local tools
   // this is an exact compare ("Bash" === "Bash"); for MCP tools it lets a rule
@@ -97,7 +118,8 @@ export function evaluateLocalPermission(
   input: unknown,
   permissions: Permissions | undefined,
 ): LocalPermissionResult {
-  if (!permissions) return { decision: "allow", reason: "no permissions configured" };
+  if (!permissions)
+    return { decision: "allow", reason: "no permissions configured" };
 
   const canonical = CANONICAL[toolName] ?? toolName;
   const subject = subjectOf(toolName, input);
@@ -118,7 +140,10 @@ export function evaluateLocalPermission(
     return { decision: "allow", reason: "defaultMode: bypassPermissions" };
   }
   if (mode === "deny") {
-    return { decision: "deny", reason: "defaultMode: deny (no allow rule matched)" };
+    return {
+      decision: "deny",
+      reason: "defaultMode: deny (no allow rule matched)",
+    };
   }
   return { decision: "allow", reason: `defaultMode: ${mode}` };
 }

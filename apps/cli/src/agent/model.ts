@@ -42,7 +42,9 @@ export function resolveModelId(override?: string): string {
  * into a pinned default that defeats routing.
  */
 export function explicitModelId(override?: string): string | undefined {
-  return override ?? process.env["OXAGEN_MODEL"] ?? readConfig().model ?? undefined;
+  return (
+    override ?? process.env["OXAGEN_MODEL"] ?? readConfig().model ?? undefined
+  );
 }
 
 export interface ModelMask {
@@ -69,9 +71,13 @@ export interface FindModelMaskOptions {
  * nothing would mask `newValue`. Best-effort/offline: reads settings files
  * fresh via `loadSettings`, never throws.
  */
-export function findModelMask(newValue: string, opts: FindModelMaskOptions = {}): ModelMask | null {
+export function findModelMask(
+  newValue: string,
+  opts: FindModelMaskOptions = {},
+): ModelMask | null {
   const envValue = process.env["OXAGEN_MODEL"];
-  if (envValue === undefined || envValue === "" || envValue === newValue) return null;
+  if (envValue === undefined || envValue === "" || envValue === newValue)
+    return null;
 
   const cwd = opts.cwd ?? process.cwd();
   const { settings, scopes } = loadSettings({
@@ -85,15 +91,32 @@ export function findModelMask(newValue: string, opts: FindModelMaskOptions = {})
     // likely it got there via applySettingsToEnv's projection. Identify the
     // most-specific scope that actually declares `model` (local > project > user).
     const order: SettingsScope[] = ["local", "project", "user"];
-    const winner = scopes.find((s) => s.scope === order[0] && s.settings?.model !== undefined) ??
-      scopes.find((s) => s.scope === order[1] && s.settings?.model !== undefined) ??
-      scopes.find((s) => s.scope === order[2] && s.settings?.model !== undefined);
+    const winner =
+      scopes.find(
+        (s) => s.scope === order[0] && s.settings?.model !== undefined,
+      ) ??
+      scopes.find(
+        (s) => s.scope === order[1] && s.settings?.model !== undefined,
+      ) ??
+      scopes.find(
+        (s) => s.scope === order[2] && s.settings?.model !== undefined,
+      );
     if (winner) {
-      return { value: envValue, source: `${winner.scope} settings.json (${winner.path}), projected to OXAGEN_MODEL` };
+      return {
+        value: envValue,
+        source: `${winner.scope} settings.json (${winner.path}), projected to OXAGEN_MODEL`,
+      };
     }
-    return { value: envValue, source: "settings.json, projected to OXAGEN_MODEL" };
+    return {
+      value: envValue,
+      source: "settings.json, projected to OXAGEN_MODEL",
+    };
   }
-  return { value: envValue, source: "the OXAGEN_MODEL environment variable already exported in your shell" };
+  return {
+    value: envValue,
+    source:
+      "the OXAGEN_MODEL environment variable already exported in your shell",
+  };
 }
 
 /**

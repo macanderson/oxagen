@@ -79,7 +79,10 @@ export function AggregateTimeline({
   /** Max feed rows the viewport can show; the newest lines win. */
   rows: number;
 }): React.ReactElement {
-  const feedRows = Math.max(1, rows - (tails.length > 0 ? tails.length + 1 : 0));
+  const feedRows = Math.max(
+    1,
+    rows - (tails.length > 0 ? tails.length + 1 : 0),
+  );
   const visible = lines.slice(-feedRows);
 
   return (

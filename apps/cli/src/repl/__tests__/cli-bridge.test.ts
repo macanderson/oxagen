@@ -1,7 +1,7 @@
 /**
- * cli-bridge.ts unit coverage (PR C item 11) — the REPL's inline
- * capture-execution seam that replaced the old "This is an oxagen CLI
- * command — run it from your shell" dead-end.
+ * cli-bridge.ts unit coverage — the REPL's inline capture-execution seam:
+ * which CLI commands may run inside the REPL, which must open outside it, and
+ * how a dispatched command's output and usage errors come back.
  */
 import { describe, it, expect } from "vitest";
 import {

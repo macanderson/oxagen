@@ -1,10 +1,13 @@
 /**
  * Typed accessors for the model-runtime config keys (deliverable 5).
  *
- * Precedence for every key: explicit env override → user config
- * (`~/.config/oxagen/config.json` under `runtime`) → the baked-in defaults in
- * `models.json`. Keeping the fallbacks in the registry means the shipped
- * defaults live next to the capability table, not scattered through code.
+ * Precedence: user config (`~/.config/oxagen/config.json` under `runtime`) →
+ * the baked-in defaults in `models.json`. Three keys additionally take an env
+ * override ahead of both — `OXAGEN_COORDINATOR`, `OXAGEN_ONDEVICE_MODEL`, and
+ * `OXAGEN_MODELS_CACHE_DIR`; the rest (auto-download, checksum verification,
+ * quantization preference) are config-only. Keeping the fallbacks in the
+ * registry means the shipped defaults live next to the capability table, not
+ * scattered through code.
  *
  * Requirement 2: on-device is *always* a valid coordinator — nothing here ever
  * rewrites the coordinator to a cloud model. The provider layer decides whether
@@ -29,7 +32,9 @@ export function getCoordinator(): string {
 
 /** Whether to auto-download the on-device model on first coordinator use. */
 export function getAutoDownload(): boolean {
-  return cfg().onDevice?.autoDownload ?? registryDefaults().onDevice.autoDownload;
+  return (
+    cfg().onDevice?.autoDownload ?? registryDefaults().onDevice.autoDownload
+  );
 }
 
 /** The on-device model id: "auto" (resolve best) or a pinned modelId. */
@@ -52,7 +57,9 @@ export function getCacheDir(): string {
 
 /** Whether downloads are checksum-verified before caching. */
 export function getVerifyChecksum(): boolean {
-  return cfg().onDevice?.verifyChecksum ?? registryDefaults().onDevice.verifyChecksum;
+  return (
+    cfg().onDevice?.verifyChecksum ?? registryDefaults().onDevice.verifyChecksum
+  );
 }
 
 /** Quantization preference, best quality first. */
@@ -70,7 +77,11 @@ export function setCoordinator(coordinator: string): void {
 }
 
 /** Merge a patch into the on-device config block. */
-export function setOnDeviceConfig(patch: NonNullable<RuntimeConfig["onDevice"]>): void {
+export function setOnDeviceConfig(
+  patch: NonNullable<RuntimeConfig["onDevice"]>,
+): void {
   const current = cfg();
-  writeConfig({ runtime: { ...current, onDevice: { ...current.onDevice, ...patch } } });
+  writeConfig({
+    runtime: { ...current, onDevice: { ...current.onDevice, ...patch } },
+  });
 }

@@ -4,15 +4,15 @@
  * Scans `sources` at BOTH workspace and user scope and produces the
  * read-only `consolidated` index: every skill, custom agent definition, MCP
  * server (+ the tools it exposes), command, custom tool, and the
- * CLAUDE.md/.cursorrules/AGENTS.md convention files — across Claude Code,
- * Cursor, and Oxagen's own dialects. Deduped with precedence (workspace
- * beats user on a name clash); every file actually scanned is still recorded
- * in `sourceFiles` regardless of which entry won the dedup.
+ * CLAUDE.md/.cursorrules/AGENTS.md convention files. Deduped with precedence
+ * (workspace beats user on a name clash); every file actually scanned is
+ * still recorded in `sourceFiles` regardless of which entry won the dedup.
  *
- * Reuses existing discovery code instead of re-scanning by hand:
- *   - `parseFrontmatter` / `parseToolList` (../agents/loader.js) — the same
- *     frontmatter parser `loadAgents`/`loadCommands` already use for
- *     `.claude/agents`, `.oxagen/agents`, `.claude/commands`, `.oxagen/commands`.
+ * Reuses existing code instead of re-scanning by hand:
+ *   - `parseArtifactToml` (@oxagen/agent-artifacts) — the one canonical reader
+ *     for the `skill.toml` / `<name>.toml` artifact manifests that skills,
+ *     agents, and commands are all stored as. Non-TOML dialects are NOT read
+ *     here; `oxagen import` converts those first (see ../artifact-import).
  *   - `resolveWorkspaceConfig` (./resolve.js) — for the effective `sources`
  *     config and for deriving `conventionsByLanguage` from already-resolved
  *     `languages[*].items`.
@@ -30,7 +30,13 @@
  * it's safely idempotent — the caller (config/write.ts's `writeConsolidated`,
  * driven by `oxagen config build`) is the only place that touches disk.
  */
-import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
+import {
+  readFileSync,
+  readdirSync,
+  existsSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
 import { join, basename } from "node:path";
 import { homedir } from "node:os";
 import { parseArtifactToml } from "@oxagen/agent-artifacts";
@@ -141,11 +147,27 @@ function listDirs(dir: string): string[] {
     .sort();
 }
 
-/** All files under `dir`, recursive, sorted. */
-function walkFiles(dir: string): string[] {
+/**
+ * All files under `dir`, recursive, sorted.
+ *
+ * `listDirs` stats through symlinks, so a symlinked directory that points back
+ * at an ancestor (`.cursor/rules/self -> .cursor/rules`) would otherwise
+ * recurse until the stack blows. `seen` holds the realpath of every directory
+ * already descended into, which makes a cycle terminate instead of hanging the
+ * `oxagen config build` a hostile or merely sloppy checkout triggers.
+ */
+function walkFiles(dir: string, seen: Set<string> = new Set()): string[] {
   if (!existsSync(dir)) return [];
+  let key: string;
+  try {
+    key = realpathSync(dir);
+  } catch {
+    key = dir;
+  }
+  if (seen.has(key)) return [];
+  seen.add(key);
   const out: string[] = [];
-  for (const entry of listDirs(dir)) out.push(...walkFiles(entry));
+  for (const entry of listDirs(dir)) out.push(...walkFiles(entry, seen));
   out.push(...listFiles(dir));
   return out.sort();
 }

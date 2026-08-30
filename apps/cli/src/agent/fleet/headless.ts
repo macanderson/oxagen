@@ -31,9 +31,13 @@ export interface FleetHeadlessOptions {
  * Resolves with the final snapshot once the run settles — either every task
  * reached a terminal state, or a SIGINT/SIGTERM drained it early.
  */
-export async function runFleetHeadless(opts: FleetHeadlessOptions): Promise<FleetSnapshot> {
+export async function runFleetHeadless(
+  opts: FleetHeadlessOptions,
+): Promise<FleetSnapshot> {
   const { fleet } = opts;
-  const emit = opts.write ?? ((line: string): void => void process.stdout.write(line + "\n"));
+  const emit =
+    opts.write ??
+    ((line: string): void => void process.stdout.write(line + "\n"));
 
   // AgentSnapshot (used for the live TUI) doesn't carry `summary`/`agent` —
   // track each task's latest lifecycle event instead, so the final summary

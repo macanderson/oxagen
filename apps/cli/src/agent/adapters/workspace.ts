@@ -86,7 +86,9 @@ async function* walk(
   dir: string,
   cwd: string,
 ): AsyncGenerator<{ abs: string; rel: string }> {
-  const dirents = await fs.readdir(dir, { withFileTypes: true }).catch(() => null);
+  const dirents = await fs
+    .readdir(dir, { withFileTypes: true })
+    .catch(() => null);
   if (!dirents) return; // unreadable directory — skip
   for (const entry of dirents) {
     if (entry.isDirectory() && isIgnoredDir(entry.name)) continue;
@@ -101,7 +103,8 @@ async function* walk(
 
 /** Build a {@link Workspace} rooted at `cwd`. */
 export function createCwdWorkspace(cwd: string): Workspace {
-  const abs = (p: string): string => (path.isAbsolute(p) ? p : path.resolve(cwd, p));
+  const abs = (p: string): string =>
+    path.isAbsolute(p) ? p : path.resolve(cwd, p);
 
   return {
     root: cwd,
@@ -128,20 +131,36 @@ export function createCwdWorkspace(cwd: string): Workspace {
       const count = oldString === "" ? 0 : content.split(oldString).length - 1;
       if (opts?.replaceAll) {
         if (count === 0)
-          throw new Error(describeEditFailure(content, oldString) ?? `String not found in ${filePath}`);
-        await fs.writeFile(target, content.split(oldString).join(newString), "utf-8");
+          throw new Error(
+            describeEditFailure(content, oldString) ??
+              `String not found in ${filePath}`,
+          );
+        await fs.writeFile(
+          target,
+          content.split(oldString).join(newString),
+          "utf-8",
+        );
         return count;
       }
       // Structured feedback on a miss (closest line / ambiguous matches) so the
       // model can self-correct instead of blindly retrying the same string.
       if (count !== 1)
-        throw new Error(describeEditFailure(content, oldString) ?? `String not found in ${filePath}`);
-      await fs.writeFile(target, content.replace(oldString, newString), "utf-8");
+        throw new Error(
+          describeEditFailure(content, oldString) ??
+            `String not found in ${filePath}`,
+        );
+      await fs.writeFile(
+        target,
+        content.replace(oldString, newString),
+        "utf-8",
+      );
       return 1;
     },
 
     async list(dirPath) {
-      const dirents = await fs.readdir(abs(dirPath ?? "."), { withFileTypes: true });
+      const dirents = await fs.readdir(abs(dirPath ?? "."), {
+        withFileTypes: true,
+      });
       return dirents
         .filter((e) => !isIgnoredDir(e.name))
         .map((e) => e.name + (e.isDirectory() ? "/" : ""))
@@ -217,7 +236,12 @@ export function createCwdWorkspace(cwd: string): Workspace {
       // grandchild that keeps the stdout pipe open (e.g. `npm run test | tail`)
       // would leave the streams open and hang this promise forever. The turn
       // signal is threaded through so an aborted turn kills the subtree too.
-      return runShellCommandBuffered({ command, cwd, timeoutMs, signal: opts?.signal });
+      return runShellCommandBuffered({
+        command,
+        cwd,
+        timeoutMs,
+        signal: opts?.signal,
+      });
     },
 
     async diff() {
@@ -327,14 +351,18 @@ export function createGatedWorkspace(
     ...workspace,
 
     async writeFile(filePath, content) {
-      const { allowed, reason } = await decide("write_file", { path: filePath });
-      if (!allowed) throw new Error(`Permission denied: ${reason || "write_file blocked"}`);
+      const { allowed, reason } = await decide("write_file", {
+        path: filePath,
+      });
+      if (!allowed)
+        throw new Error(`Permission denied: ${reason || "write_file blocked"}`);
       return workspace.writeFile(filePath, content);
     },
 
     async editFile(filePath, oldString, newString, opts) {
       const { allowed, reason } = await decide("edit_file", { path: filePath });
-      if (!allowed) throw new Error(`Permission denied: ${reason || "edit_file blocked"}`);
+      if (!allowed)
+        throw new Error(`Permission denied: ${reason || "edit_file blocked"}`);
       return workspace.editFile(filePath, oldString, newString, opts);
     },
 

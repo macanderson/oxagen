@@ -30,7 +30,7 @@ export const EMBED_PROVIDER_MODES = [
 ] as const;
 export type EmbedProviderMode = (typeof EMBED_PROVIDER_MODES)[number];
 
-/** The context-layer config slice. Mirrors `contracts/config.ts` GraphConfig. */
+/** The context-layer config slice. */
 export interface GraphConfig {
   /** Master switch. When false, the resolver goes straight to grep (logged). */
   enabled: boolean;
@@ -51,7 +51,7 @@ export interface GraphConfig {
 /** A partial override written into `config.json` under `graph`. */
 export type GraphConfigPatch = Partial<GraphConfig>;
 
-/** Baked-in defaults. Mirrors `graph-tools.json -> config.graph`. */
+/** Baked-in defaults. */
 export const DEFAULT_GRAPH_CONFIG: GraphConfig = {
   enabled: true,
   endpoint: "http://localhost:0/graphrag",

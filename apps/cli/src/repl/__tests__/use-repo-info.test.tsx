@@ -23,7 +23,13 @@ vi.mock("../gh-pr.js", () => ({
 
 const { useRepoInfo } = await import("../use-repo-info.js");
 
-function Probe({ cwd, enabled }: { cwd: string; enabled: boolean }): React.ReactElement {
+function Probe({
+  cwd,
+  enabled,
+}: {
+  cwd: string;
+  enabled: boolean;
+}): React.ReactElement {
   const info = useRepoInfo(cwd, enabled);
   return (
     <Text>
@@ -32,7 +38,8 @@ function Probe({ cwd, enabled }: { cwd: string; enabled: boolean }): React.React
   );
 }
 
-const tick = (ms = 10): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const tick = (ms = 10): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Poll the rendered frame until it contains `needle`. The assertions that use
@@ -42,7 +49,11 @@ const tick = (ms = 10): Promise<void> => new Promise((resolve) => setTimeout(res
  * 32949930979 went red with the frame still reading `pr=pending`. On timeout it
  * reports the frame it gave up on, so a real regression says what it saw.
  */
-async function waitForFrame(frame: () => string | undefined, needle: string, timeoutMs = 3000): Promise<void> {
+async function waitForFrame(
+  frame: () => string | undefined,
+  needle: string,
+  timeoutMs = 3000,
+): Promise<void> {
   const start = Date.now();
   while (!(frame() ?? "").includes(needle)) {
     if (Date.now() - start > timeoutMs) {
@@ -67,7 +78,9 @@ describe("useRepoInfo", () => {
   it("resolves git info synchronously on mount, before any PR data arrives", () => {
     resolveGitInfoMock.mockReturnValue({ root: "/repo", branch: "main" });
     fetchPrNumberMock.mockReturnValue(new Promise(() => {})); // never resolves in this test
-    const { lastFrame, unmount } = render(<Probe cwd="/repo/sub" enabled={true} />);
+    const { lastFrame, unmount } = render(
+      <Probe cwd="/repo/sub" enabled={true} />,
+    );
     expect(lastFrame()).toContain("root=/repo");
     expect(lastFrame()).toContain("branch=main");
     expect(lastFrame()).toContain("pr=pending"); // still in flight — never blocks the initial render
@@ -77,7 +90,9 @@ describe("useRepoInfo", () => {
   it("falls back to cwd as root when outside a repo, and shows no branch", () => {
     resolveGitInfoMock.mockReturnValue(undefined);
     fetchPrNumberMock.mockReturnValue(Promise.resolve(null));
-    const { lastFrame, unmount } = render(<Probe cwd="/not/a/repo" enabled={true} />);
+    const { lastFrame, unmount } = render(
+      <Probe cwd="/not/a/repo" enabled={true} />,
+    );
     expect(lastFrame()).toContain("root=/not/a/repo");
     expect(lastFrame()).toContain("branch=none");
     unmount();
@@ -86,7 +101,9 @@ describe("useRepoInfo", () => {
   it("updates with the PR number once the async gh lookup resolves", async () => {
     resolveGitInfoMock.mockReturnValue({ root: "/repo", branch: "feat/x" });
     let resolveFetch: (n: number | null) => void = () => {};
-    fetchPrNumberMock.mockReturnValue(new Promise<number | null>((r) => (resolveFetch = r)));
+    fetchPrNumberMock.mockReturnValue(
+      new Promise<number | null>((r) => (resolveFetch = r)),
+    );
 
     const { lastFrame, unmount } = render(<Probe cwd="/repo" enabled={true} />);
     expect(lastFrame()).toContain("pr=pending");
@@ -107,7 +124,9 @@ describe("useRepoInfo", () => {
 
   it("does nothing at all when disabled — no subprocess, no timer, static initial state", async () => {
     resolveGitInfoMock.mockReturnValue({ root: "/repo", branch: "main" });
-    const { lastFrame, unmount } = render(<Probe cwd="/repo" enabled={false} />);
+    const { lastFrame, unmount } = render(
+      <Probe cwd="/repo" enabled={false} />,
+    );
     await tick();
     // Still shows the ONE synchronous read from the initial useState — but no
     // effect ever ran, so the PR fetch (which only the effect kicks off) never fires.
@@ -119,7 +138,9 @@ describe("useRepoInfo", () => {
   it("never applies a PR result that resolves after the component unmounted", async () => {
     resolveGitInfoMock.mockReturnValue({ root: "/repo", branch: "feat/x" });
     let resolveFetch: (n: number | null) => void = () => {};
-    fetchPrNumberMock.mockReturnValue(new Promise<number | null>((r) => (resolveFetch = r)));
+    fetchPrNumberMock.mockReturnValue(
+      new Promise<number | null>((r) => (resolveFetch = r)),
+    );
 
     const { unmount } = render(<Probe cwd="/repo" enabled={true} />);
     unmount();

@@ -18,7 +18,9 @@ describe("createRenderThrottle", () => {
 
   it("coalesces rapid schedule() calls within one frame window into exactly one commit", () => {
     const commits: number[] = [];
-    const throttle = createRenderThrottle<number>((v) => commits.push(v), { frameMs: 33 });
+    const throttle = createRenderThrottle<number>((v) => commits.push(v), {
+      frameMs: 33,
+    });
 
     // 20 rapid-fire schedule() calls, each a few ms apart, all within one
     // 33ms frame window — simulates a burst of streamed tokens.
@@ -40,7 +42,9 @@ describe("createRenderThrottle", () => {
 
   it("commits the latest state at flush time, not a snapshot captured at schedule time", () => {
     const commits: string[] = [];
-    const throttle = createRenderThrottle<string>((v) => commits.push(v), { frameMs: 33 });
+    const throttle = createRenderThrottle<string>((v) => commits.push(v), {
+      frameMs: 33,
+    });
 
     // The closure passed to schedule() reads a mutable variable that keeps
     // changing between schedule() and the timer firing — mirrors `turn`
@@ -61,7 +65,9 @@ describe("createRenderThrottle", () => {
 
   it("flush() commits immediately and cancels any pending timer", () => {
     const commits: number[] = [];
-    const throttle = createRenderThrottle<number>((v) => commits.push(v), { frameMs: 33 });
+    const throttle = createRenderThrottle<number>((v) => commits.push(v), {
+      frameMs: 33,
+    });
 
     throttle.schedule(() => 1);
     vi.advanceTimersByTime(10); // still inside the frame window — nothing committed yet
@@ -85,7 +91,9 @@ describe("createRenderThrottle", () => {
 
   it("cancel() prevents a pending commit from ever firing", () => {
     const commits: number[] = [];
-    const throttle = createRenderThrottle<number>((v) => commits.push(v), { frameMs: 33 });
+    const throttle = createRenderThrottle<number>((v) => commits.push(v), {
+      frameMs: 33,
+    });
 
     throttle.schedule(() => 1);
     throttle.cancel();
@@ -107,7 +115,9 @@ describe("createRenderThrottle", () => {
 
   it("a schedule() after a flush arms a fresh timer for the next frame", () => {
     const commits: number[] = [];
-    const throttle = createRenderThrottle<number>((v) => commits.push(v), { frameMs: 33 });
+    const throttle = createRenderThrottle<number>((v) => commits.push(v), {
+      frameMs: 33,
+    });
 
     throttle.schedule(() => 1);
     throttle.flush(() => 1);

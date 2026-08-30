@@ -822,7 +822,13 @@ export function buildProgram(): Command {
     )
     .option("--quiet", "Suppress progress chrome (stderr)", false)
     .action(
-      async (opts: { query: string; labels?: string; limit?: string }) => {
+      async (opts: {
+        query: string;
+        labels?: string;
+        limit?: string;
+        json?: boolean;
+        quiet?: boolean;
+      }) => {
         const { handleGraphSearch } = await import(
           "./commands/graph.search.js"
         );

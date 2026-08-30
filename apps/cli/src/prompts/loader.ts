@@ -53,11 +53,7 @@ export function loadPrompts(
   const userDir =
     opts.userPromptsDir ?? join(homedir(), ".config", "oxagen", "prompts");
   return loadMarkdownRegistry(
-    [
-      userDir,
-      join(cwd, ".claude", "prompts"),
-      join(cwd, ".oxagen", "prompts"),
-    ],
+    [userDir, join(cwd, ".claude", "prompts"), join(cwd, ".oxagen", "prompts")],
     promptFromFile,
   );
 }

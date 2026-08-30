@@ -6,7 +6,7 @@
  * degrades to a genuine router-derived single-task plan (never a canned
  * checklist), and a user cancel propagates instead of "planning".
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModelMessage } from "ai";
 import { isSingleTaskGoal } from "@oxagen/agent-engine";
 import {
@@ -204,6 +204,21 @@ describe("planReplTurn", () => {
     expect(plan.tasks[0]!.description).toBe("slow thing");
   });
 
+  it("keeps a planner that finishes inside the bound", async () => {
+    const planFn: PlanFn = () =>
+      new Promise((resolve) =>
+        setTimeout(() => resolve(makePlan(2) as never), 5),
+      );
+    const plan = await planReplTurn({
+      goal: "prompt one",
+      history: [],
+      ai: AI_STUB,
+      planFn,
+      timeoutMs: 500,
+    });
+    expect(plan.tasks).toHaveLength(2);
+  });
+
   it("re-throws when the signal is aborted (user cancel is not a fallback)", async () => {
     const controller = new AbortController();
     const planFn: PlanFn = async () => {
@@ -219,5 +234,67 @@ describe("planReplTurn", () => {
         signal: controller.signal,
       }),
     ).rejects.toThrow("aborted");
+  });
+});
+
+describe("planReplTurn — OXAGEN_PLAN_TIMEOUT_MS", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  /** A planner that settles after `ms`, so a bound below it degrades and one above it doesn't. */
+  const slowPlanner =
+    (ms: number): PlanFn =>
+    () =>
+      new Promise((resolve) =>
+        setTimeout(() => resolve(makePlan(2) as never), ms),
+      );
+
+  it("bounds the planner at the env value when no explicit timeout is passed", async () => {
+    vi.stubEnv("OXAGEN_PLAN_TIMEOUT_MS", "10");
+    const plan = await planReplTurn({
+      goal: "slow thing",
+      history: [],
+      ai: AI_STUB,
+      planFn: slowPlanner(200),
+    });
+    expect(plan.tasks).toHaveLength(1); // the routed fallback, not the 2-task plan
+    expect(plan.tasks[0]!.description).toBe("slow thing");
+  });
+
+  it("lets an explicit timeoutMs override the env value", async () => {
+    // The env would have cut this off at 10ms; the caller's bound wins.
+    vi.stubEnv("OXAGEN_PLAN_TIMEOUT_MS", "10");
+    const plan = await planReplTurn({
+      goal: "slow thing",
+      history: [],
+      ai: AI_STUB,
+      planFn: slowPlanner(30),
+      timeoutMs: 2_000,
+    });
+    expect(plan.tasks).toHaveLength(2);
+  });
+
+  it("disables the bound entirely at 0, so a slow planner still returns its real plan", async () => {
+    vi.stubEnv("OXAGEN_PLAN_TIMEOUT_MS", "0");
+    const plan = await planReplTurn({
+      goal: "slow thing",
+      history: [],
+      ai: AI_STUB,
+      planFn: slowPlanner(30),
+    });
+    expect(plan.tasks).toHaveLength(2);
+  });
+
+  it("falls back to the built-in default when the env value is not a number", async () => {
+    vi.stubEnv("OXAGEN_PLAN_TIMEOUT_MS", "soon");
+    const plan = await planReplTurn({
+      goal: "quick thing",
+      history: [],
+      ai: AI_STUB,
+      planFn: slowPlanner(5),
+    });
+    // The default bound is 60s, so a 5ms planner is nowhere near it.
+    expect(plan.tasks).toHaveLength(2);
   });
 });

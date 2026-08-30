@@ -1,8 +1,8 @@
 /**
- * ContextResolver — the graph-before-grep entry point (Group 3).
+ * ContextResolver — the graph-before-grep entry point.
  *
- * The orchestrator (Group 2) injects this as its context collaborator and calls
- * `query()` FIRST for every context need. The resolver:
+ * A caller injects this as its context collaborator and calls `query()` before
+ * reaching for a text scan. The resolver:
  *
  *   1. queries the code graph (semantic + structural) for a bounded subgraph,
  *   2. returns it as structured JSON when coverage clears the threshold, and
@@ -11,9 +11,12 @@
  *
  * Every fallback is logged with its reason (`[graph] fallback=grep reason="…"`),
  * and every graph hit is logged too (`[graph] query="…" returned_files=N
- * coverage=… source=graphrag`), so Group 6's debug stream shows exactly which
- * path served each request. `usedGraph()` reports whether the last query was
- * answered by the graph or fell back.
+ * coverage=… source=graphrag`), so the debug stream shows exactly which path
+ * served each request. `usedGraph()` reports whether the last query was answered
+ * by the graph or fell back.
+ *
+ * NOTE: nothing in the shipped agent loop constructs this yet — the `graph_query`
+ * tool it backs is not registered in any tool set. Treat it as staged, not live.
  */
 import { getCodeGraph } from "../code-graph.js";
 import { debugLog, isDebugEnabled } from "../../lib/debug-log.js";
@@ -21,7 +24,11 @@ import type { CodeGraph } from "../../daemon/code-graph/types.js";
 import type { CodeGraphStore } from "../../daemon/code-graph/store.js";
 import { readGraphConfig, MIN_COVERAGE, type GraphConfig } from "./config.js";
 import { resolveEmbeddingClient, type EmbeddingClient } from "./embedding.js";
-import { runGraphQuery, type GraphContextResult, type GraphQueryOptions } from "./graph-query.js";
+import {
+  runGraphQuery,
+  type GraphContextResult,
+  type GraphQueryOptions,
+} from "./graph-query.js";
 import { grepFallback } from "./grep-fallback.js";
 
 /** The orchestrator's structured context input (mirrors orchestrator/types.ts). */
@@ -44,7 +51,13 @@ export interface GraphResult {
 
 /** A structured log event for the two graph outcomes. Injectable for tests. */
 export type GraphLogEvent =
-  | { kind: "hit"; query: string; returnedFiles: number; coverage: number; source: string }
+  | {
+      kind: "hit";
+      query: string;
+      returnedFiles: number;
+      coverage: number;
+      source: string;
+    }
   | { kind: "fallback"; to: "grep" | "none"; reason: string; query: string };
 
 export type GraphLogFn = (event: GraphLogEvent) => void;
@@ -71,7 +84,9 @@ function defaultGraphLog(event: GraphLogEvent): void {
       query: event.query,
     });
     if (isDebugEnabled()) {
-      process.stderr.write(`[graph] fallback=${event.to} reason="${event.reason}"\n`);
+      process.stderr.write(
+        `[graph] fallback=${event.to} reason="${event.reason}"\n`,
+      );
     }
   }
 }
@@ -98,9 +113,14 @@ export class GraphContextResolver {
   private readonly cwd: string;
   private readonly config: GraphConfig;
   private readonly loadGraph: (cwd: string) => Promise<CodeGraph>;
-  private readonly resolveClient: (cwd: string) => Promise<EmbeddingClient | null>;
+  private readonly resolveClient: (
+    cwd: string,
+  ) => Promise<EmbeddingClient | null>;
   private readonly store: CodeGraphStore | null;
-  private readonly grep: (cwd: string, query: string) => Promise<GraphResult["impactedFiles"]>;
+  private readonly grep: (
+    cwd: string,
+    query: string,
+  ) => Promise<GraphResult["impactedFiles"]>;
   private readonly log: GraphLogFn;
   private lastUsedGraph = false;
 
@@ -108,7 +128,8 @@ export class GraphContextResolver {
     this.cwd = deps.cwd ?? process.cwd();
     this.config = deps.config ?? readGraphConfig();
     this.loadGraph = deps.loadGraph ?? getCodeGraph;
-    this.resolveClient = deps.resolveClient ?? ((c) => resolveEmbeddingClient(c));
+    this.resolveClient =
+      deps.resolveClient ?? ((c) => resolveEmbeddingClient(c));
     this.store = deps.store ?? null;
     this.grep = deps.grep ?? ((c, q) => grepFallback(c, q));
     this.log = deps.log ?? defaultGraphLog;
@@ -130,7 +151,10 @@ export class GraphContextResolver {
     try {
       graph = await this.loadGraph(this.cwd);
     } catch (err) {
-      return this.fallback(input, `graph load failed: ${err instanceof Error ? err.message : String(err)}`);
+      return this.fallback(
+        input,
+        `graph load failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
     if (graph.nodes.size === 0) {
       return this.fallback(input, "code graph is empty (not indexed)");
@@ -200,6 +224,8 @@ function emptyResult(): GraphResult {
 }
 
 /** Convenience factory used by the orchestrator wiring and the tool. */
-export function createContextResolver(deps: GraphContextResolverDeps = {}): GraphContextResolver {
+export function createContextResolver(
+  deps: GraphContextResolverDeps = {},
+): GraphContextResolver {
   return new GraphContextResolver(deps);
 }

@@ -6,9 +6,7 @@ import {
 } from "./escape-action";
 
 // Convenience builders.
-const idle = (
-  overrides: Partial<EscapeState> = {},
-): EscapeState => ({
+const idle = (overrides: Partial<EscapeState> = {}): EscapeState => ({
   isStreaming: false,
   resetPending: false,
   lastEscapeMs: null,
@@ -50,32 +48,35 @@ describe("resolveEscapeAction", () => {
 
   it("returns 'prompt-reset' when a second idle Esc arrives within the window", () => {
     const lastEsc = BASE_NOW - Math.floor(DOUBLE_ESC_WINDOW_MS / 2); // well inside
-    expect(
-      resolveEscapeAction(idle({ lastEscapeMs: lastEsc }), BASE_NOW),
-    ).toBe("prompt-reset");
+    expect(resolveEscapeAction(idle({ lastEscapeMs: lastEsc }), BASE_NOW)).toBe(
+      "prompt-reset",
+    );
   });
 
   it("returns 'prompt-reset' when the second Esc arrives exactly at the window boundary", () => {
     const lastEsc = BASE_NOW - DOUBLE_ESC_WINDOW_MS; // exactly on the boundary
-    expect(
-      resolveEscapeAction(idle({ lastEscapeMs: lastEsc }), BASE_NOW),
-    ).toBe("prompt-reset");
+    expect(resolveEscapeAction(idle({ lastEscapeMs: lastEsc }), BASE_NOW)).toBe(
+      "prompt-reset",
+    );
   });
 
   // ── Second idle Esc outside the window — treated as a new first Esc ────────
 
   it("returns 'none' when the second Esc arrives after the window has elapsed", () => {
     const lastEsc = BASE_NOW - (DOUBLE_ESC_WINDOW_MS + 1);
-    expect(
-      resolveEscapeAction(idle({ lastEscapeMs: lastEsc }), BASE_NOW),
-    ).toBe("none");
+    expect(resolveEscapeAction(idle({ lastEscapeMs: lastEsc }), BASE_NOW)).toBe(
+      "none",
+    );
   });
 
   // ── Esc while resetPending is true — always 'none' ─────────────────────────
 
   it("returns 'none' when a reset confirmation is already pending (not streaming)", () => {
     expect(
-      resolveEscapeAction(idle({ resetPending: true, lastEscapeMs: 0 }), BASE_NOW),
+      resolveEscapeAction(
+        idle({ resetPending: true, lastEscapeMs: 0 }),
+        BASE_NOW,
+      ),
     ).toBe("none");
   });
 
@@ -98,17 +99,15 @@ describe("resolveEscapeAction", () => {
     const t1 = BASE_NOW;
     const t2 = t1 + 800; // 800 ms later — well within DOUBLE_ESC_WINDOW_MS
     // State after the 'stop': streaming has ended, lastEscapeMs = t1.
-    expect(
-      resolveEscapeAction(idle({ lastEscapeMs: t1 }), t2),
-    ).toBe("prompt-reset");
+    expect(resolveEscapeAction(idle({ lastEscapeMs: t1 }), t2)).toBe(
+      "prompt-reset",
+    );
   });
 
   it("returns 'none' if too much time passes between stop and the next Esc", () => {
     const t1 = BASE_NOW;
     const t2 = t1 + DOUBLE_ESC_WINDOW_MS + 500; // past the window
-    expect(
-      resolveEscapeAction(idle({ lastEscapeMs: t1 }), t2),
-    ).toBe("none");
+    expect(resolveEscapeAction(idle({ lastEscapeMs: t1 }), t2)).toBe("none");
   });
 
   // ── Confirmation response logic (handled in the caller, not here, but

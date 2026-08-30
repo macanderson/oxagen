@@ -1,7 +1,7 @@
 /**
- * Group 3 — the context layer (graph before grep).
+ * The context layer (graph before grep).
  *
- * Public surface: the resolver the orchestrator injects, the `graph_query` core,
+ * Public surface: the resolver a caller injects, the `graph_query` core,
  * the config slice, and the prompt/JSON formatters. Everything else in this
  * directory is an implementation detail.
  */
@@ -51,5 +51,8 @@ export {
   isOnnxAvailable,
   ONNX_PROVIDER_PREFIX,
 } from "./embedding-onnx.js";
-export { formatGraphResultJson, formatGraphContextForPrompt } from "./format.js";
+export {
+  formatGraphResultJson,
+  formatGraphContextForPrompt,
+} from "./format.js";
 export { grepFallback } from "./grep-fallback.js";

@@ -6,7 +6,9 @@ const CWD = process.cwd();
 
 describe("runHooks", () => {
   it("returns a no-op outcome when there are no hooks", async () => {
-    expect(await runHooks(undefined, { event: "SessionStart", cwd: CWD })).toEqual({
+    expect(
+      await runHooks(undefined, { event: "SessionStart", cwd: CWD }),
+    ).toEqual({
       blocked: false,
       output: "",
     });
@@ -14,7 +16,9 @@ describe("runHooks", () => {
 
   it("captures SessionStart stdout as context", async () => {
     const hooks: Hooks = {
-      SessionStart: [{ hooks: [{ type: "command", command: "echo 'on-call: alice'" }] }],
+      SessionStart: [
+        { hooks: [{ type: "command", command: "echo 'on-call: alice'" }] },
+      ],
     };
     const out = await runHooks(hooks, { event: "SessionStart", cwd: CWD });
     expect(out.blocked).toBe(false);
@@ -23,7 +27,9 @@ describe("runHooks", () => {
 
   it("feeds the event payload to the hook on stdin", async () => {
     const hooks: Hooks = {
-      PreToolUse: [{ matcher: "*", hooks: [{ type: "command", command: "cat" }] }],
+      PreToolUse: [
+        { matcher: "*", hooks: [{ type: "command", command: "cat" }] },
+      ],
     };
     const out = await runHooks(hooks, {
       event: "PreToolUse",
@@ -36,7 +42,14 @@ describe("runHooks", () => {
 
   it("blocks a PreToolUse tool when a hook exits non-zero, surfacing stderr", async () => {
     const hooks: Hooks = {
-      PreToolUse: [{ matcher: "bash", hooks: [{ type: "command", command: 'echo "no shell here" >&2; exit 1' }] }],
+      PreToolUse: [
+        {
+          matcher: "bash",
+          hooks: [
+            { type: "command", command: 'echo "no shell here" >&2; exit 1' },
+          ],
+        },
+      ],
     };
     const out = await runHooks(hooks, {
       event: "PreToolUse",
@@ -49,7 +62,9 @@ describe("runHooks", () => {
 
   it("does not block when the PreToolUse hook exits zero", async () => {
     const hooks: Hooks = {
-      PreToolUse: [{ matcher: "bash", hooks: [{ type: "command", command: "true" }] }],
+      PreToolUse: [
+        { matcher: "bash", hooks: [{ type: "command", command: "true" }] },
+      ],
     };
     const out = await runHooks(hooks, {
       event: "PreToolUse",
@@ -61,7 +76,12 @@ describe("runHooks", () => {
 
   it("only runs hooks whose matcher globs the tool name", async () => {
     const hooks: Hooks = {
-      PreToolUse: [{ matcher: "write_file", hooks: [{ type: "command", command: "exit 1" }] }],
+      PreToolUse: [
+        {
+          matcher: "write_file",
+          hooks: [{ type: "command", command: "exit 1" }],
+        },
+      ],
     };
     // tool is bash → matcher write_file does not apply → not blocked
     const bash = await runHooks(hooks, {
@@ -81,7 +101,12 @@ describe("runHooks", () => {
 
   it("never blocks on PostToolUse, even on a non-zero exit", async () => {
     const hooks: Hooks = {
-      PostToolUse: [{ matcher: "*", hooks: [{ type: "command", command: "echo done; exit 3" }] }],
+      PostToolUse: [
+        {
+          matcher: "*",
+          hooks: [{ type: "command", command: "echo done; exit 3" }],
+        },
+      ],
     };
     const out = await runHooks(hooks, {
       event: "PostToolUse",
@@ -94,7 +119,12 @@ describe("runHooks", () => {
 
   it("kills and blocks a PreToolUse hook that exceeds its timeout", async () => {
     const hooks: Hooks = {
-      PreToolUse: [{ matcher: "*", hooks: [{ type: "command", command: "sleep 5", timeoutMs: 50 }] }],
+      PreToolUse: [
+        {
+          matcher: "*",
+          hooks: [{ type: "command", command: "sleep 5", timeoutMs: 50 }],
+        },
+      ],
     };
     const out = await runHooks(hooks, {
       event: "PreToolUse",
@@ -106,8 +136,15 @@ describe("runHooks", () => {
   });
 
   it("returns a no-op when the event has no registered matchers", async () => {
-    const hooks: Hooks = { SessionStart: [{ hooks: [{ type: "command", command: "echo x" }] }] };
-    expect(await runHooks(hooks, { event: "PreToolUse", cwd: CWD, tool: { name: "bash", input: {} } }))
-      .toEqual({ blocked: false, output: "" });
+    const hooks: Hooks = {
+      SessionStart: [{ hooks: [{ type: "command", command: "echo x" }] }],
+    };
+    expect(
+      await runHooks(hooks, {
+        event: "PreToolUse",
+        cwd: CWD,
+        tool: { name: "bash", input: {} },
+      }),
+    ).toEqual({ blocked: false, output: "" });
   });
 });

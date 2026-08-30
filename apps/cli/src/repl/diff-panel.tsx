@@ -22,9 +22,18 @@
  * central useInput yields the keyboard entirely (diffOpenRef gate).
  */
 import { Box, Text, useInput } from "ink";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { theme } from "../tui/theme.js";
-import { detectTerminalBackground, diffThemeFor } from "../tui/terminal-theme.js";
+import {
+  detectTerminalBackground,
+  diffThemeFor,
+} from "../tui/terminal-theme.js";
 import {
   parseDiffLines,
   numberDiffLines,
@@ -70,7 +79,9 @@ type Mode = "list" | "diff";
 
 /** Does `path` end with `needle` at a path boundary (exact, or `.../needle`)? */
 function pathMatches(path: string, needle: string): boolean {
-  return path === needle || path.endsWith("/" + needle) || path.endsWith(needle);
+  return (
+    path === needle || path.endsWith("/" + needle) || path.endsWith(needle)
+  );
 }
 
 export function DiffPanel({
@@ -106,7 +117,10 @@ export function DiffPanel({
   const diffReqRef = useRef(0);
 
   const diffTheme = useMemo(() => diffThemeFor(detectTerminalBackground()), []);
-  const hlTheme = useMemo(() => resolveHighlightTheme(diffTheme.highlightjs), [diffTheme]);
+  const hlTheme = useMemo(
+    () => resolveHighlightTheme(diffTheme.highlightjs),
+    [diffTheme],
+  );
 
   /** Load (or reload) the changed-file list. */
   const refresh = useCallback(async (): Promise<ChangedFile[]> => {
@@ -148,7 +162,9 @@ export function DiffPanel({
         if (idx >= 0) {
           await openDiff(list, idx);
         } else {
-          setNotice(`No changed file matches "${initialPath}" — showing the full list.`);
+          setNotice(
+            `No changed file matches "${initialPath}" — showing the full list.`,
+          );
         }
       }
     })();
@@ -162,7 +178,10 @@ export function DiffPanel({
     if (diffText === null || diffText.trim() === "") return [];
     return numberDiffLines(parseDiffLines(diffText));
   }, [diffText]);
-  const gutter = useMemo(() => computeGutterWidths(numberedLines), [numberedLines]);
+  const gutter = useMemo(
+    () => computeGutterWidths(numberedLines),
+    [numberedLines],
+  );
 
   const total = numberedLines.length;
   const maxTop = Math.max(0, total - maxBodyRows);
@@ -275,8 +294,7 @@ export function DiffPanel({
         <Box>
           <Text color={theme.cyan} bold>
             {"± "}
-            {file?.path ?? "(no file)"}
-            {" "}
+            {file?.path ?? "(no file)"}{" "}
           </Text>
           <Text dimColor>
             · {selected + 1}/{files.length}
@@ -304,7 +322,8 @@ export function DiffPanel({
 
         <Box marginTop={1}>
           <Text dimColor wrap="truncate-end">
-            ↑↓ scroll · PgUp/PgDn page · ^U/^D half · g/G top/bottom · [ ] Tab file · ← back
+            ↑↓ scroll · PgUp/PgDn page · ^U/^D half · g/G top/bottom · [ ] Tab
+            file · ← back
             {total > 0 ? ` · line ${from}–${to} of ${total}` : ""}
           </Text>
         </Box>
@@ -313,7 +332,11 @@ export function DiffPanel({
   }
 
   // list mode
-  const { start, end } = visibleWindow(files.length, selected, MAX_VISIBLE_DIFF_FILES);
+  const { start, end } = visibleWindow(
+    files.length,
+    selected,
+    MAX_VISIBLE_DIFF_FILES,
+  );
   const visibleFiles = files.slice(start, end);
   const countsWidth = 12;
   const pathWidth = Math.max(innerWidth - 2 - 2 - countsWidth, 10); // pointer(2) + status(2)
@@ -347,10 +370,14 @@ export function DiffPanel({
             const idx = start + i;
             const isSelected = idx === selected;
             const statusColor = STATUS_COLOR[file.status] ?? theme.dim;
-            const known = file.insertions !== undefined || file.deletions !== undefined;
+            const known =
+              file.insertions !== undefined || file.deletions !== undefined;
             return (
               <Box key={file.path} width={innerWidth}>
-                <Text color={isSelected ? theme.cyan : undefined} bold={isSelected}>
+                <Text
+                  color={isSelected ? theme.cyan : undefined}
+                  bold={isSelected}
+                >
                   {isSelected ? "❯ " : "  "}
                 </Text>
                 <Box width={2}>
@@ -359,7 +386,11 @@ export function DiffPanel({
                   </Text>
                 </Box>
                 <Box width={pathWidth}>
-                  <Text color={isSelected ? theme.cyan : undefined} bold={isSelected} wrap="truncate-end">
+                  <Text
+                    color={isSelected ? theme.cyan : undefined}
+                    bold={isSelected}
+                    wrap="truncate-end"
+                  >
                     {file.path}
                   </Text>
                 </Box>
@@ -390,7 +421,9 @@ export function DiffPanel({
 
       <Box marginTop={1}>
         <Text dimColor>
-          {files.length > MAX_VISIBLE_DIFF_FILES ? `${selected + 1}/${files.length} · ` : ""}
+          {files.length > MAX_VISIBLE_DIFF_FILES
+            ? `${selected + 1}/${files.length} · `
+            : ""}
           ↑↓ navigate · ↵/→ view diff · r refresh · esc close
         </Text>
       </Box>

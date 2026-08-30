@@ -79,22 +79,41 @@ describe("parseBudgetCommand", () => {
   });
 
   it("parses 'mode <mode>' without touching the limit", () => {
-    expect(parseBudgetCommand("mode enforce")).toEqual({ kind: "mode", mode: "enforce" });
-    expect(parseBudgetCommand("mode hard")).toEqual({ kind: "mode", mode: "enforce" });
-    expect(parseBudgetCommand("mode bogus")).toEqual({ kind: "invalid", raw: "mode bogus" });
+    expect(parseBudgetCommand("mode enforce")).toEqual({
+      kind: "mode",
+      mode: "enforce",
+    });
+    expect(parseBudgetCommand("mode hard")).toEqual({
+      kind: "mode",
+      mode: "enforce",
+    });
+    expect(parseBudgetCommand("mode bogus")).toEqual({
+      kind: "invalid",
+      raw: "mode bogus",
+    });
   });
 
   it("parses '<usd>' with the default mode", () => {
     expect(parseBudgetCommand("2.5")).toEqual({
       kind: "set",
-      policy: { enabled: true, limitUsd: 2.5, mode: DEFAULT_TURN_BUDGET_MODE, graceOveragePct: 0.25 },
+      policy: {
+        enabled: true,
+        limitUsd: 2.5,
+        mode: DEFAULT_TURN_BUDGET_MODE,
+        graceOveragePct: 0.25,
+      },
     });
   });
 
   it("parses '<usd> <mode>' with an explicit mode", () => {
     expect(parseBudgetCommand("1 grace")).toEqual({
       kind: "set",
-      policy: { enabled: true, limitUsd: 1, mode: "grace", graceOveragePct: 0.25 },
+      policy: {
+        enabled: true,
+        limitUsd: 1,
+        mode: "grace",
+        graceOveragePct: 0.25,
+      },
     });
   });
 
@@ -105,11 +124,17 @@ describe("parseBudgetCommand", () => {
   });
 
   it("rejects an unknown mode after the amount", () => {
-    expect(parseBudgetCommand("2 bogus")).toEqual({ kind: "invalid", raw: "2 bogus" });
+    expect(parseBudgetCommand("2 bogus")).toEqual({
+      kind: "invalid",
+      raw: "2 bogus",
+    });
   });
 
   it("rejects extra tokens", () => {
-    expect(parseBudgetCommand("2 grace extra")).toEqual({ kind: "invalid", raw: "2 grace extra" });
+    expect(parseBudgetCommand("2 grace extra")).toEqual({
+      kind: "invalid",
+      raw: "2 grace extra",
+    });
   });
 });
 

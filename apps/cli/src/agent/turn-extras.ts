@@ -49,7 +49,7 @@ export interface TurnExtrasOptions {
   agentTools?: string[];
   /**
    * Named-agent skill selection (AgentDefinition.skills): these skills'
-   * Full selected skill instructions are injected into the system prompt; every other
+   * instructions are injected into the system prompt in full; every other
    * discovered skill still appears in the compact name+description list.
    * Undefined ⇒ list-only awareness (no full bodies).
    */

@@ -10,7 +10,15 @@
  * error (exit 2), an API failure is a uniform `✗ …` stderr line (exit 1); a
  * denied lock is a real result printed to stdout with a non-zero exit.
  */
-import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  vi,
+  type Mock,
+} from "vitest";
 
 vi.mock("../../lib/api.js", () => ({
   apiGetOrThrow: vi.fn(),
@@ -48,18 +56,18 @@ beforeEach(() => {
   err = "";
   process.exitCode = undefined;
 
-  const outSpy = vi
-    .spyOn(process.stdout, "write")
-    .mockImplementation(((s: unknown) => {
-      out += String(s);
-      return true;
-    }) as never);
-  const errSpy = vi
-    .spyOn(process.stderr, "write")
-    .mockImplementation(((s: unknown) => {
-      err += String(s);
-      return true;
-    }) as never);
+  const outSpy = vi.spyOn(process.stdout, "write").mockImplementation(((
+    s: unknown,
+  ) => {
+    out += String(s);
+    return true;
+  }) as never);
+  const errSpy = vi.spyOn(process.stderr, "write").mockImplementation(((
+    s: unknown,
+  ) => {
+    err += String(s);
+    return true;
+  }) as never);
 
   restorers.push(
     () => outSpy.mockRestore(),
@@ -108,7 +116,11 @@ describe("handleFileLockList", () => {
   it("forwards path/owner/repo filters as query params", async () => {
     mockGet.mockResolvedValueOnce({ locks: [] });
 
-    await handleFileLockList({ path: "src/foo.ts", owner: "acme", repo: "repo" });
+    await handleFileLockList({
+      path: "src/foo.ts",
+      owner: "acme",
+      repo: "repo",
+    });
 
     expect(mockGet).toHaveBeenCalledWith("agent/file/lock/list", {
       path: "src/foo.ts",
@@ -248,7 +260,9 @@ describe("handleFileLockRelease", () => {
 
     await handleFileLockRelease("lock-1", {});
 
-    expect(mockPost).toHaveBeenCalledWith("agent/file/lock/release", { lockId: "lock-1" });
+    expect(mockPost).toHaveBeenCalledWith("agent/file/lock/release", {
+      lockId: "lock-1",
+    });
     expect(out).toContain("Released lock lock-1");
   });
 

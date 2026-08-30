@@ -20,7 +20,11 @@ function formatUptime(seconds: number): string {
   return `${s}s`;
 }
 
-function DaemonIndicator({ daemon }: { daemon: DaemonStatus }): React.ReactElement {
+function DaemonIndicator({
+  daemon,
+}: {
+  daemon: DaemonStatus;
+}): React.ReactElement {
   if (!daemon.running) {
     return (
       <Text>
@@ -29,7 +33,10 @@ function DaemonIndicator({ daemon }: { daemon: DaemonStatus }): React.ReactEleme
       </Text>
     );
   }
-  const up = daemon.uptimeSeconds !== undefined ? ` up ${formatUptime(daemon.uptimeSeconds)}` : "";
+  const up =
+    daemon.uptimeSeconds !== undefined
+      ? ` up ${formatUptime(daemon.uptimeSeconds)}`
+      : "";
   return (
     <Text>
       <Text color={theme.green} bold>
@@ -40,7 +47,11 @@ function DaemonIndicator({ daemon }: { daemon: DaemonStatus }): React.ReactEleme
   );
 }
 
-function graphLabel(status: CodeGraphStatus): { glyph: string; color: string; text: string } {
+function graphLabel(status: CodeGraphStatus): {
+  glyph: string;
+  color: string;
+  text: string;
+} {
   switch (status.state) {
     case "ready":
       return { glyph: "●", color: theme.green, text: "graph ready" };
@@ -76,7 +87,9 @@ export function StatusBar({
         </Text>
         <Text dimColor>│</Text>
         <Text>
-          <Text color={auth.ok ? theme.green : theme.amber}>{auth.ok ? "✓" : "✗"}</Text>
+          <Text color={auth.ok ? theme.green : theme.amber}>
+            {auth.ok ? "✓" : "✗"}
+          </Text>
           <Text dimColor> {auth.label}</Text>
         </Text>
       </Box>

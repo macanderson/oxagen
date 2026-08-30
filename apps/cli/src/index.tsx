@@ -25,7 +25,8 @@ import { formatFatalError } from "./lib/fatal-error.js";
 // code path dynamically imports the context engine.
 {
   const g = globalThis as { require?: unknown };
-  if (typeof g.require === "undefined") g.require = createRequire(import.meta.url);
+  if (typeof g.require === "undefined")
+    g.require = createRequire(import.meta.url);
 }
 
 // Top-level safety net. Without this, a common file error (e.g.

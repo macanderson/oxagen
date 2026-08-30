@@ -8,10 +8,21 @@
  * an unknown prompt exits 1. A fake CommandWriter captures stdout/stderr.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  existsSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { promptList, promptShow, promptNew, type PromptCmdCtx } from "../prompt.js";
+import {
+  promptList,
+  promptShow,
+  promptNew,
+  type PromptCmdCtx,
+} from "../prompt.js";
 import type { CommandWriter } from "../../lib/capture-writer.js";
 
 let dir: string;
@@ -27,7 +38,10 @@ function makeWriter(): { writer: CommandWriter; out: string[]; err: string[] } {
   const out: string[] = [];
   const err: string[] = [];
   return {
-    writer: { write: (l) => void out.push(l), writeErr: (l) => void err.push(l) },
+    writer: {
+      write: (l) => void out.push(l),
+      writeErr: (l) => void err.push(l),
+    },
     out,
     err,
   };
@@ -52,7 +66,10 @@ describe("prompt handlers — pretty mode", () => {
   });
 
   it("lists prompts with hint and description", () => {
-    writePrompt("triage", "---\ndescription: Triage a bug\nargument-hint: <ticket>\n---\nTriage it.");
+    writePrompt(
+      "triage",
+      "---\ndescription: Triage a bug\nargument-hint: <ticket>\n---\nTriage it.",
+    );
     const { writer, out } = makeWriter();
     promptList(ctx, writer);
     const text = out.join("\n");
@@ -61,7 +78,10 @@ describe("prompt handlers — pretty mode", () => {
   });
 
   it("shows a prompt's body", () => {
-    writePrompt("triage", "---\ndescription: Triage a bug\n---\nTriage the ticket carefully.");
+    writePrompt(
+      "triage",
+      "---\ndescription: Triage a bug\n---\nTriage the ticket carefully.",
+    );
     const { writer, out } = makeWriter();
     promptShow("triage", ctx, writer);
     const text = out.join("\n");
@@ -84,7 +104,9 @@ describe("prompt handlers — pretty mode", () => {
     const first = makeWriter();
     promptNew("standup", ctx, first.writer);
     expect(first.out.join("\n")).toContain("Created prompt");
-    expect(existsSync(join(dir, ".oxagen", "prompts", "standup.md"))).toBe(true);
+    expect(existsSync(join(dir, ".oxagen", "prompts", "standup.md"))).toBe(
+      true,
+    );
     const second = makeWriter();
     promptNew("standup", ctx, second.writer);
     expect(second.out.join("\n")).toContain("already exists");
@@ -109,7 +131,10 @@ describe("prompt handlers — pretty mode", () => {
 
 describe("prompt handlers — --json mode", () => {
   it("list emits one single-line JSON array preserving the summary shape", () => {
-    writePrompt("triage", "---\ndescription: Triage a bug\nargument-hint: <ticket>\n---\nTriage it.");
+    writePrompt(
+      "triage",
+      "---\ndescription: Triage a bug\nargument-hint: <ticket>\n---\nTriage it.",
+    );
     const { writer, out, err } = makeWriter();
     promptList({ ...ctx, json: true }, writer);
     expect(out).toHaveLength(1);
@@ -132,7 +157,10 @@ describe("prompt handlers — --json mode", () => {
   });
 
   it("show emits one single-line JSON object round-tripping the body", () => {
-    writePrompt("triage", "---\ndescription: Triage a bug\n---\nTriage the ticket carefully.");
+    writePrompt(
+      "triage",
+      "---\ndescription: Triage a bug\n---\nTriage the ticket carefully.",
+    );
     const { writer, out } = makeWriter();
     promptShow("triage", { ...ctx, json: true }, writer);
     expect(out).toHaveLength(1);

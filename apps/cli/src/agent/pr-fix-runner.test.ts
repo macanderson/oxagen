@@ -7,10 +7,20 @@
  * with the inactivity runner stopped on every exit path. Everything heavy is
  * mocked — no model, no network, no filesystem.
  */
-import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  vi,
+  type Mock,
+} from "vitest";
 
 const runTurnMock = vi.fn();
-vi.mock("@oxagen/agent-engine", () => ({ runTurn: (a: unknown) => runTurnMock(a) }));
+vi.mock("@oxagen/agent-engine", () => ({
+  runTurn: (a: unknown) => runTurnMock(a),
+}));
 
 const cwdWorkspace = { id: "cwd-workspace" };
 const gatedWorkspace = { id: "gated-workspace" };
@@ -42,7 +52,9 @@ vi.mock("./permissions.js", () => ({
 
 const permissionsSentinel = { allow: ["Edit"] };
 vi.mock("../settings/resolve.js", () => ({
-  loadSettings: vi.fn(() => ({ settings: { permissions: permissionsSentinel } })),
+  loadSettings: vi.fn(() => ({
+    settings: { permissions: permissionsSentinel },
+  })),
 }));
 
 vi.mock("../lib/api.js", () => ({ resolveApiContext: vi.fn() }));
@@ -93,7 +105,9 @@ const realSession: Session = {
 
 const syntheticSession: Session = { ...realSession, synthetic: true };
 
-function makeRunner(over: Partial<Parameters<typeof createPrFixRunner>[0]> = {}) {
+function makeRunner(
+  over: Partial<Parameters<typeof createPrFixRunner>[0]> = {},
+) {
   return createPrFixRunner({
     session: realSession,
     cwd: "/work/repo",
@@ -157,7 +171,10 @@ describe("createPrFixRunner wiring", () => {
       permissions: permissionsSentinel,
     });
     expect(createCwdWorkspace).toHaveBeenCalledWith("/work/repo");
-    expect(createGatedWorkspace).toHaveBeenCalledWith(cwdWorkspace, brokerSentinel);
+    expect(createGatedWorkspace).toHaveBeenCalledWith(
+      cwdWorkspace,
+      brokerSentinel,
+    );
   });
 
   it("creates server memory for an authenticated real session, stamped with the execution ref and project name", () => {
@@ -191,7 +208,12 @@ describe("createPrFixRunner wiring", () => {
       l: number,
     ) => unknown;
     query("callers", "runTurn", 5);
-    expect(queryCodeGraph).toHaveBeenCalledWith("/work/repo", "callers", "runTurn", 5);
+    expect(queryCodeGraph).toHaveBeenCalledWith(
+      "/work/repo",
+      "callers",
+      "runTurn",
+      5,
+    );
   });
 });
 
@@ -203,7 +225,9 @@ describe("runFixer", () => {
 
     const result = await runFixer("fix the failing lint check");
 
-    expect(createTurnRunner).toHaveBeenCalledWith({ turnInactivityMs: 111_000 });
+    expect(createTurnRunner).toHaveBeenCalledWith({
+      turnInactivityMs: 111_000,
+    });
     expect(runTurnMock).toHaveBeenCalledTimes(1);
     const args = runTurnMock.mock.calls[0]![0] as Record<string, unknown>;
     expect(args["prompt"]).toBe("fix the failing lint check");
@@ -255,7 +279,9 @@ describe("runFixer", () => {
 
     await runFixer("p");
 
-    expect(formatToolCallWithSpacing).toHaveBeenCalledWith("edit_file", { path: "a.ts" });
+    expect(formatToolCallWithSpacing).toHaveBeenCalledWith("edit_file", {
+      path: "a.ts",
+    });
     expect(stderrSpy).toHaveBeenCalledWith("[tool edit_file]");
     expect(turnRunner.noteToolStart).toHaveBeenCalledTimes(1);
     expect(turnRunner.noteToolEnd).toHaveBeenCalledTimes(1);
@@ -274,7 +300,10 @@ describe("rememberOutcome", () => {
   it("mirrors a non-empty lesson to server memory", () => {
     asMock(resolveApiContext).mockReturnValue({ token: "tok" });
     const { rememberOutcome } = makeRunner();
-    const detail = { lesson: "re-run CI, never trust the model's test run", files: ["a.ts"] };
+    const detail = {
+      lesson: "re-run CI, never trust the model's test run",
+      files: ["a.ts"],
+    };
     rememberOutcome("ci-green", detail);
     expect(serverMemoryMock.remember).toHaveBeenCalledTimes(1);
     expect(serverMemoryMock.remember).toHaveBeenCalledWith("ci-green", detail);
@@ -289,7 +318,9 @@ describe("rememberOutcome", () => {
 
   it("is a safe no-op when there is no server memory", () => {
     const { rememberOutcome } = makeRunner();
-    expect(() => rememberOutcome("ci-red", { lesson: "l", files: [] })).not.toThrow();
+    expect(() =>
+      rememberOutcome("ci-red", { lesson: "l", files: [] }),
+    ).not.toThrow();
     expect(serverMemoryMock.remember).not.toHaveBeenCalled();
   });
 });

@@ -5,9 +5,12 @@
  * Uses parseSourceFile() from @oxagen/code-graph, backed by tree-sitter WASM.
  * The resulting graph remains checkout-local in DuckDB.
  *
- * Language coverage: TypeScript, JavaScript, JSX/TSX, Python.
- * Go/Rust/Java: file nodes are created but symbols are skipped (parseSourceFile
- * returns language "unknown" — the outer loop still walks the files).
+ * Language coverage (symbols extracted): TypeScript, JavaScript, JSX/TSX,
+ * Python. Markdown/MDX parse into headings, which the code graph skips, so a
+ * doc contributes only its file node. Go, Rust, Java, and Kotlin files are
+ * walked and get a file node, but `parseSourceFile` reports language "unknown"
+ * for them and returns no symbols — see `SUPPORTED_EXTENSIONS` below and
+ * `ParsedLanguage` in @oxagen/code-graph.
  */
 import * as fs from "node:fs";
 import * as path from "node:path";

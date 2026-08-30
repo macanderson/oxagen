@@ -19,7 +19,7 @@ const CTRL_O = "\x0f";
  * The ops badge and package label colorize characters INDIVIDUALLY, so escape
  * codes sit between "[", "C", "," … — strip them before content assertions.
  */
- 
+
 const stripAnsi = (s: string): string => s.replace(/\u001b\[[0-9;]*m/g, "");
 
 /** Poll until `cond` holds — Ink delivers stdin/state asynchronously (never fixed sleeps). */

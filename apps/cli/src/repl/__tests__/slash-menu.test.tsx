@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { render } from "ink-testing-library";
-import { SlashMenu, visibleWindow, MAX_VISIBLE_SUGGESTIONS } from "../slash-menu.js";
+import {
+  SlashMenu,
+  visibleWindow,
+  MAX_VISIBLE_SUGGESTIONS,
+} from "../slash-menu.js";
 import type { SlashCatalogEntry } from "../../slash/catalog.js";
 
 const ANSI_ESCAPE = new RegExp("\\u001b\\[[0-9;]*m", "g");
@@ -33,7 +37,9 @@ function hexToAnsiFg(hex: string): string {
 /** True when `text` is immediately preceded by `hex`'s truecolor SGR code —
  *  i.e. `text` itself is styled that color, not some unrelated run on the row. */
 function isColoredText(frame: string, text: string, hex: string): boolean {
-  return new RegExp(`${escapeRegExp(hexToAnsiFg(hex))}${escapeRegExp(text)}`).test(frame);
+  return new RegExp(
+    `${escapeRegExp(hexToAnsiFg(hex))}${escapeRegExp(text)}`,
+  ).test(frame);
 }
 
 /** True when `text` is immediately preceded by a bold-on code and then `hex`'s
@@ -107,7 +113,11 @@ describe("SlashMenu", () => {
 
   it("renders every /name in bold amber, uniformly across builtin/cli/custom commands", () => {
     const { lastFrame } = render(
-      <SlashMenu entries={entries} selectedIndex={entries.length} width={100} />,
+      <SlashMenu
+        entries={entries}
+        selectedIndex={entries.length}
+        width={100}
+      />,
     );
     const frame = lastFrame() ?? "";
     for (const entry of entries) {
@@ -116,15 +126,23 @@ describe("SlashMenu", () => {
   });
 
   it("renders argument hints in green, not bold", () => {
-    const { lastFrame } = render(<SlashMenu entries={entries} selectedIndex={0} width={100} />);
+    const { lastFrame } = render(
+      <SlashMenu entries={entries} selectedIndex={0} width={100} />,
+    );
     const frame = lastFrame() ?? "";
-    expect(isColoredText(frame, "[ask|auto-edit|bypass|readonly]", "#34D399")).toBe(true);
+    expect(
+      isColoredText(frame, "[ask|auto-edit|bypass|readonly]", "#34D399"),
+    ).toBe(true);
     expect(isColoredText(frame, "[remote|local]", "#34D399")).toBe(true);
-    expect(isBoldColoredText(frame, "[ask|auto-edit|bypass|readonly]", "#34D399")).toBe(false);
+    expect(
+      isBoldColoredText(frame, "[ask|auto-edit|bypass|readonly]", "#34D399"),
+    ).toBe(false);
   });
 
   it("renders the description as plain default-color text, never dim or colored", () => {
-    const { lastFrame } = render(<SlashMenu entries={entries} selectedIndex={0} width={100} />);
+    const { lastFrame } = render(
+      <SlashMenu entries={entries} selectedIndex={0} width={100} />,
+    );
     const frame = lastFrame() ?? "";
     // A colored or dim run would insert an SGR code immediately before/after
     // the text, breaking it up as a contiguous substring of the raw frame.
@@ -134,7 +152,9 @@ describe("SlashMenu", () => {
   });
 
   it("puts the description on its own line directly below the command line", () => {
-    const { lastFrame } = render(<SlashMenu entries={entries} selectedIndex={0} width={100} />);
+    const { lastFrame } = render(
+      <SlashMenu entries={entries} selectedIndex={0} width={100} />,
+    );
     const lines = (lastFrame() ?? "").split("\n");
     const modeLine = lines.find((l) => l.includes("/mode")) ?? "";
     expect(modeLine).not.toContain(entries[0]!.description);
@@ -143,7 +163,9 @@ describe("SlashMenu", () => {
   });
 
   it("aligns every row's argument hint and description on one fixed column, keyed to the widest /name on screen", () => {
-    const { lastFrame } = render(<SlashMenu entries={entries} selectedIndex={0} width={100} />);
+    const { lastFrame } = render(
+      <SlashMenu entries={entries} selectedIndex={0} width={100} />,
+    );
     const lines = (lastFrame() ?? "")
       .split("\n")
       .map(innerRowContent)
@@ -174,16 +196,27 @@ describe("SlashMenu", () => {
   });
 
   it("still indents the description to the arg column for a command with no argument hint", () => {
-    const { lastFrame } = render(<SlashMenu entries={entries} selectedIndex={0} width={100} />);
-    const lines = (lastFrame() ?? "").split("\n").map(innerRowContent).map(normalizeLockWidth);
+    const { lastFrame } = render(
+      <SlashMenu entries={entries} selectedIndex={0} width={100} />,
+    );
+    const lines = (lastFrame() ?? "")
+      .split("\n")
+      .map(innerRowContent)
+      .map(normalizeLockWidth);
     const shipitIdx = lines.findIndex((l) => l.includes("/shipit"));
     const modeIdx = lines.findIndex((l) => l.includes("/mode"));
-    expect(lines[shipitIdx + 1]!.search(/\S/)).toBe(lines[modeIdx + 1]!.search(/\S/));
+    expect(lines[shipitIdx + 1]!.search(/\S/)).toBe(
+      lines[modeIdx + 1]!.search(/\S/),
+    );
   });
 
   it("marks only productized commands with the monochrome lock, reserving the same width for custom ones", () => {
     const { lastFrame } = render(
-      <SlashMenu entries={entries} selectedIndex={entries.length} width={100} />,
+      <SlashMenu
+        entries={entries}
+        selectedIndex={entries.length}
+        width={100}
+      />,
     );
     const frame = lastFrame() ?? "";
     const lines = frame.split("\n");
@@ -194,7 +227,9 @@ describe("SlashMenu", () => {
   });
 
   it("renders the lock marker dim, never as a color emoji", () => {
-    const { lastFrame } = render(<SlashMenu entries={[entries[0]!]} selectedIndex={0} width={100} />);
+    const { lastFrame } = render(
+      <SlashMenu entries={[entries[0]!]} selectedIndex={0} width={100} />,
+    );
     const frame = lastFrame() ?? "";
     const dimOn = `${ESC}[2m`;
     const dimOff = `${ESC}[22m`;
@@ -205,24 +240,32 @@ describe("SlashMenu", () => {
   });
 
   it("marks the selected row with a pointer", () => {
-    const { lastFrame } = render(<SlashMenu entries={entries} selectedIndex={1} width={70} />);
+    const { lastFrame } = render(
+      <SlashMenu entries={entries} selectedIndex={1} width={70} />,
+    );
     const frame = lastFrame() ?? "";
     const costLine = frame.split("\n").find((l) => l.includes("/cost")) ?? "";
     expect(costLine).toContain("❯");
   });
 
   it("never renders a horizontal rule between or around commands", () => {
-    const { lastFrame } = render(<SlashMenu entries={entries} selectedIndex={0} width={100} />);
+    const { lastFrame } = render(
+      <SlashMenu entries={entries} selectedIndex={0} width={100} />,
+    );
     const frame = lastFrame() ?? "";
     const lines = frame.split("\n");
     // Exclude the outer round border's own top/bottom edges (also drawn with
     // "─"), which carry a corner glyph no interior rule would.
-    const interiorRules = lines.filter((l) => l.includes("─") && !/[╭╮╰╯]/.test(l));
+    const interiorRules = lines.filter(
+      (l) => l.includes("─") && !/[╭╮╰╯]/.test(l),
+    );
     expect(interiorRules).toHaveLength(0);
   });
 
   it("puts exactly one blank line between cells, and none before the first or after the last", () => {
-    const { lastFrame } = render(<SlashMenu entries={entries} selectedIndex={0} width={100} />);
+    const { lastFrame } = render(
+      <SlashMenu entries={entries} selectedIndex={0} width={100} />,
+    );
     const lines = (lastFrame() ?? "").split("\n").map(innerRowContent);
     const modeIdx = lines.findIndex((l) => l.includes("/mode"));
     // No blank padding row between the top border and the first command.
@@ -230,19 +273,29 @@ describe("SlashMenu", () => {
     // Each command's 2 content lines + 1 blank separator = the next command
     // starts exactly 3 rows later, for every consecutive pair.
     for (let i = 0; i < entries.length - 1; i++) {
-      const thisIdx = lines.findIndex((l) => l.includes(`/${entries[i]!.name}`));
-      const nextIdx = lines.findIndex((l) => l.includes(`/${entries[i + 1]!.name}`));
+      const thisIdx = lines.findIndex((l) =>
+        l.includes(`/${entries[i]!.name}`),
+      );
+      const nextIdx = lines.findIndex((l) =>
+        l.includes(`/${entries[i + 1]!.name}`),
+      );
       expect(nextIdx - thisIdx).toBe(3);
     }
   });
 
   it("keeps every cell the same height no matter which row is selected", () => {
-    const heights = [0, 1, entries.length - 1, entries.length].map((selectedIndex) => {
-      const { lastFrame } = render(
-        <SlashMenu entries={entries} selectedIndex={selectedIndex} width={100} />,
-      );
-      return (lastFrame() ?? "").split("\n").length;
-    });
+    const heights = [0, 1, entries.length - 1, entries.length].map(
+      (selectedIndex) => {
+        const { lastFrame } = render(
+          <SlashMenu
+            entries={entries}
+            selectedIndex={selectedIndex}
+            width={100}
+          />,
+        );
+        return (lastFrame() ?? "").split("\n").length;
+      },
+    );
     expect(new Set(heights).size).toBe(1);
   });
 
@@ -255,7 +308,9 @@ describe("SlashMenu", () => {
       source: "builtin",
       productized: true,
     };
-    const { lastFrame } = render(<SlashMenu entries={[long]} selectedIndex={0} width={50} />);
+    const { lastFrame } = render(
+      <SlashMenu entries={[long]} selectedIndex={0} width={50} />,
+    );
     const frame = lastFrame() ?? "";
     const lines = frame.split("\n");
     const nameIdx = lines.findIndex((l) => l.includes("/verbose"));
@@ -267,13 +322,18 @@ describe("SlashMenu", () => {
   });
 
   it("shows a position counter when the catalog exceeds the visible window", () => {
-    const many: SlashCatalogEntry[] = Array.from({ length: MAX_VISIBLE_SUGGESTIONS + 4 }, (_, i) => ({
-      name: `cmd${i}`,
-      description: `description number ${i}`,
-      source: "cli" as const,
-      productized: true,
-    }));
-    const { lastFrame } = render(<SlashMenu entries={many} selectedIndex={0} width={70} />);
+    const many: SlashCatalogEntry[] = Array.from(
+      { length: MAX_VISIBLE_SUGGESTIONS + 4 },
+      (_, i) => ({
+        name: `cmd${i}`,
+        description: `description number ${i}`,
+        source: "cli" as const,
+        productized: true,
+      }),
+    );
+    const { lastFrame } = render(
+      <SlashMenu entries={many} selectedIndex={0} width={70} />,
+    );
     expect(lastFrame() ?? "").toContain(`1/${many.length}`);
   });
 });

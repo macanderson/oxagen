@@ -16,7 +16,11 @@ vi.mock("node:os", async (importOriginal) => {
   return { ...actual, homedir: () => HOME };
 });
 
-import { appendVerboseLog, readVerboseLog, verboseLogPath } from "../verbose-log.js";
+import {
+  appendVerboseLog,
+  readVerboseLog,
+  verboseLogPath,
+} from "../verbose-log.js";
 import type { TurnTrace } from "../trace.js";
 
 function trace(id: string): TurnTrace {
@@ -38,7 +42,13 @@ function trace(id: string): TurnTrace {
       model: "anthropic/claude-haiku-4.5",
       usage: { inputTokens: 1, outputTokens: 1, costUsd: 0.001 },
     },
-    enhancement: { prompt: "p", context: "", resolved: [], lessonCount: 0, source: "none" },
+    enhancement: {
+      prompt: "p",
+      context: "",
+      resolved: [],
+      lessonCount: 0,
+      source: "none",
+    },
     selectedModel: "anthropic/claude-sonnet-5",
     selectedTier: "balanced",
     selectionRationale: "r",

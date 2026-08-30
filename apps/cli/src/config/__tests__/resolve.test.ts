@@ -18,11 +18,18 @@ let managedPath: string;
 let userPath: string;
 
 function opts(): ResolveWorkspaceConfigOptions {
-  return { managedConfigPath: managedPath, userConfigPath: userPath, noCache: true };
+  return {
+    managedConfigPath: managedPath,
+    userConfigPath: userPath,
+    noCache: true,
+  };
 }
 
 function write(scope: ConfigScope, body: WorkspaceConfig): void {
-  const paths = getConfigScopePaths(cwd, { managedConfigPath: managedPath, userConfigPath: userPath });
+  const paths = getConfigScopePaths(cwd, {
+    managedConfigPath: managedPath,
+    userConfigPath: userPath,
+  });
   mkdirSync(join(paths[scope], ".."), { recursive: true });
   writeFileSync(paths[scope], JSON.stringify(body), "utf8");
 }
@@ -49,7 +56,9 @@ describe("resolveWorkspaceConfig — no files", () => {
   it("returns an empty config when no scope files exist", () => {
     const r = resolve();
     expect(r.config).toEqual({});
-    expect(r.scopes.every((s) => s.config === undefined && s.error === undefined)).toBe(true);
+    expect(
+      r.scopes.every((s) => s.config === undefined && s.error === undefined),
+    ).toBe(true);
   });
 });
 
@@ -90,15 +99,26 @@ describe("resolveWorkspaceConfig — locked / managed authority", () => {
     write("workspace", { packageManagers: { primary: "npm" } });
     const r = resolve();
     expect(r.config.packageManagers?.primary).toBe("pnpm");
-    expect(r.provenance["packageManagers.primary"]).toEqual({ scope: "org", locked: true, reason: "managed" });
+    expect(r.provenance["packageManagers.primary"]).toEqual({
+      scope: "org",
+      locked: true,
+      reason: "managed",
+    });
   });
 
   it("an explicit locked declaration at user scope beats a more specific unlocked workspace value", () => {
-    write("user", { packageManagers: { primary: "yarn" }, locked: ["packageManagers.primary"] });
+    write("user", {
+      packageManagers: { primary: "yarn" },
+      locked: ["packageManagers.primary"],
+    });
     write("workspace", { packageManagers: { primary: "pnpm" } });
     const r = resolve();
     expect(r.config.packageManagers?.primary).toBe("yarn");
-    expect(r.provenance["packageManagers.primary"]).toEqual({ scope: "user", locked: true, reason: "locked" });
+    expect(r.provenance["packageManagers.primary"]).toEqual({
+      scope: "user",
+      locked: true,
+      reason: "locked",
+    });
   });
 
   it("locking a parent path locks every leaf beneath it", () => {
@@ -109,11 +129,18 @@ describe("resolveWorkspaceConfig — locked / managed authority", () => {
     write("workspace", { vcs: { branch: { protected: ["main", "develop"] } } });
     const r = resolve();
     expect(r.config.vcs?.branch?.protected).toEqual(["main"]);
-    expect(r.provenance["vcs.branch.protected"]).toMatchObject({ scope: "user", locked: true, reason: "locked" });
+    expect(r.provenance["vcs.branch.protected"]).toMatchObject({
+      scope: "user",
+      locked: true,
+      reason: "locked",
+    });
   });
 
   it("does not let an unrelated lock declaration affect a different path", () => {
-    write("user", { vcs: { commit: { convention: "conventional" } }, locked: ["vcs.branch"] });
+    write("user", {
+      vcs: { commit: { convention: "conventional" } },
+      locked: ["vcs.branch"],
+    });
     write("workspace", { vcs: { commit: { convention: "custom" } } });
     // "vcs.branch" is locked, not "vcs.commit.convention" — workspace should still win here.
     expect(resolve().config.vcs?.commit?.convention).toBe("custom");
@@ -123,24 +150,67 @@ describe("resolveWorkspaceConfig — locked / managed authority", () => {
 describe("resolveWorkspaceConfig — languages[*].items accumulate", () => {
   it("unions items across scopes by id when there is no collision", () => {
     write("user", {
-      languages: { typescript: { items: [{ id: "prefer-const", kind: "preference", text: "Prefer const.", origin: "manual" }] } },
+      languages: {
+        typescript: {
+          items: [
+            {
+              id: "prefer-const",
+              kind: "preference",
+              text: "Prefer const.",
+              origin: "manual",
+            },
+          ],
+        },
+      },
     });
     write("workspace", {
-      languages: { typescript: { items: [{ id: "no-any", kind: "rule", text: "No any.", origin: "manual" }] } },
+      languages: {
+        typescript: {
+          items: [
+            { id: "no-any", kind: "rule", text: "No any.", origin: "manual" },
+          ],
+        },
+      },
     });
-    const ids = resolve().config.languages?.typescript?.items?.map((i) => i.id).sort();
+    const ids = resolve()
+      .config.languages?.typescript?.items?.map((i) => i.id)
+      .sort();
     expect(ids).toEqual(["no-any", "prefer-const"]);
   });
 
   it("collision: most specific wins when neither entry is locked/enforced", () => {
     write("user", {
-      languages: { typescript: { items: [{ id: "quotes", kind: "convention", text: "single (user)", origin: "manual" }] } },
+      languages: {
+        typescript: {
+          items: [
+            {
+              id: "quotes",
+              kind: "convention",
+              text: "single (user)",
+              origin: "manual",
+            },
+          ],
+        },
+      },
     });
     write("workspace", {
-      languages: { typescript: { items: [{ id: "quotes", kind: "convention", text: "double (workspace)", origin: "manual" }] } },
+      languages: {
+        typescript: {
+          items: [
+            {
+              id: "quotes",
+              kind: "convention",
+              text: "double (workspace)",
+              origin: "manual",
+            },
+          ],
+        },
+      },
     });
     const r = resolve();
-    const item = r.config.languages?.typescript?.items?.find((i) => i.id === "quotes");
+    const item = r.config.languages?.typescript?.items?.find(
+      (i) => i.id === "quotes",
+    );
     expect(item?.text).toBe("double (workspace)");
     expect(r.provenance["languages.typescript.items.quotes"]).toEqual({
       scope: "workspace",
@@ -152,29 +222,79 @@ describe("resolveWorkspaceConfig — languages[*].items accumulate", () => {
   it("collision: a locked item beats a more specific unlocked item", () => {
     write("user", {
       languages: {
-        typescript: { items: [{ id: "no-any", kind: "rule", text: "no any (user, locked)", origin: "manual", locked: true }] },
+        typescript: {
+          items: [
+            {
+              id: "no-any",
+              kind: "rule",
+              text: "no any (user, locked)",
+              origin: "manual",
+              locked: true,
+            },
+          ],
+        },
       },
     });
     write("workspace", {
-      languages: { typescript: { items: [{ id: "no-any", kind: "rule", text: "no any (workspace)", origin: "manual" }] } },
+      languages: {
+        typescript: {
+          items: [
+            {
+              id: "no-any",
+              kind: "rule",
+              text: "no any (workspace)",
+              origin: "manual",
+            },
+          ],
+        },
+      },
     });
     const r = resolve();
-    const item = r.config.languages?.typescript?.items?.find((i) => i.id === "no-any");
+    const item = r.config.languages?.typescript?.items?.find(
+      (i) => i.id === "no-any",
+    );
     expect(item?.text).toBe("no any (user, locked)");
-    expect(r.provenance["languages.typescript.items.no-any"]).toEqual({ scope: "user", locked: true, reason: "locked" });
+    expect(r.provenance["languages.typescript.items.no-any"]).toEqual({
+      scope: "user",
+      locked: true,
+      reason: "locked",
+    });
   });
 
   it("collision: an enforced item beats a more specific non-enforced item", () => {
     write("user", {
       languages: {
-        typescript: { items: [{ id: "strict-null", kind: "rule", text: "strict (user, enforced)", origin: "manual", enforced: true }] },
+        typescript: {
+          items: [
+            {
+              id: "strict-null",
+              kind: "rule",
+              text: "strict (user, enforced)",
+              origin: "manual",
+              enforced: true,
+            },
+          ],
+        },
       },
     });
     write("workspace", {
-      languages: { typescript: { items: [{ id: "strict-null", kind: "rule", text: "strict (workspace)", origin: "manual" }] } },
+      languages: {
+        typescript: {
+          items: [
+            {
+              id: "strict-null",
+              kind: "rule",
+              text: "strict (workspace)",
+              origin: "manual",
+            },
+          ],
+        },
+      },
     });
     const r = resolve();
-    const item = r.config.languages?.typescript?.items?.find((i) => i.id === "strict-null");
+    const item = r.config.languages?.typescript?.items?.find(
+      (i) => i.id === "strict-null",
+    );
     expect(item?.text).toBe("strict (user, enforced)");
     expect(r.provenance["languages.typescript.items.strict-null"]).toEqual({
       scope: "user",
@@ -184,35 +304,80 @@ describe("resolveWorkspaceConfig — languages[*].items accumulate", () => {
   });
 
   it("collision: managed.json wins even without an explicit locked/enforced flag on its own item", () => {
-    write("org", { languages: { typescript: { items: [{ id: "no-any", kind: "rule", text: "no any (org)", origin: "manual" }] } } });
+    write("org", {
+      languages: {
+        typescript: {
+          items: [
+            {
+              id: "no-any",
+              kind: "rule",
+              text: "no any (org)",
+              origin: "manual",
+            },
+          ],
+        },
+      },
+    });
     write("workspace", {
-      languages: { typescript: { items: [{ id: "no-any", kind: "rule", text: "no any (workspace)", origin: "manual", enforced: true }] } },
+      languages: {
+        typescript: {
+          items: [
+            {
+              id: "no-any",
+              kind: "rule",
+              text: "no any (workspace)",
+              origin: "manual",
+              enforced: true,
+            },
+          ],
+        },
+      },
     });
     const r = resolve();
-    const item = r.config.languages?.typescript?.items?.find((i) => i.id === "no-any");
+    const item = r.config.languages?.typescript?.items?.find(
+      (i) => i.id === "no-any",
+    );
     expect(item?.text).toBe("no any (org)");
-    expect(r.provenance["languages.typescript.items.no-any"]).toEqual({ scope: "org", locked: true, reason: "managed" });
+    expect(r.provenance["languages.typescript.items.no-any"]).toEqual({
+      scope: "org",
+      locked: true,
+      reason: "managed",
+    });
   });
 
   it("merges voice most-specifically per language, independent of items", () => {
     write("user", { languages: { english: { voice: { tone: "casual" } } } });
-    write("workspace", { languages: { english: { voice: { tone: "confident, concise, technical" } } } });
-    expect(resolve().config.languages?.english?.voice?.tone).toBe("confident, concise, technical");
+    write("workspace", {
+      languages: {
+        english: { voice: { tone: "confident, concise, technical" } },
+      },
+    });
+    expect(resolve().config.languages?.english?.voice?.tone).toBe(
+      "confident, concise, technical",
+    );
   });
 });
 
 describe("resolveWorkspaceConfig — sources.* accumulate", () => {
   it("unions sources.workspace.<category> string lists by value across scopes", () => {
-    write("workspace", { sources: { workspace: { skills: [".agents/skills"] } } });
+    write("workspace", {
+      sources: { workspace: { skills: [".agents/skills"] } },
+    });
     write("user", { sources: { workspace: { skills: [".claude/skills"] } } });
     const skills = resolve().config.sources?.workspace?.skills;
-    expect([...(skills ?? [])].sort()).toEqual([".agents/skills", ".claude/skills"]);
+    expect([...(skills ?? [])].sort()).toEqual([
+      ".agents/skills",
+      ".claude/skills",
+    ]);
   });
 
   it("does not duplicate a value contributed by multiple scopes", () => {
     write("org", { sources: { scan: ["workspace"] } });
     write("user", { sources: { scan: ["workspace", "user"] } });
-    expect(resolve().config.sources?.scan?.sort()).toEqual(["user", "workspace"]);
+    expect(resolve().config.sources?.scan?.sort()).toEqual([
+      "user",
+      "workspace",
+    ]);
   });
 });
 
@@ -248,9 +413,27 @@ describe("explain", () => {
 
   it("reports a locked-by-user reason for a language item", () => {
     write("user", {
-      languages: { typescript: { items: [{ id: "no-any", kind: "rule", text: "t", origin: "manual", locked: true }] } },
+      languages: {
+        typescript: {
+          items: [
+            {
+              id: "no-any",
+              kind: "rule",
+              text: "t",
+              origin: "manual",
+              locked: true,
+            },
+          ],
+        },
+      },
     });
-    write("workspace", { languages: { typescript: { items: [{ id: "no-any", kind: "rule", text: "t2", origin: "manual" }] } } });
+    write("workspace", {
+      languages: {
+        typescript: {
+          items: [{ id: "no-any", kind: "rule", text: "t2", origin: "manual" }],
+        },
+      },
+    });
     expect(explain(cwd, "languages.typescript.items.no-any", opts())).toEqual({
       path: "languages.typescript.items.no-any",
       scope: "user",
@@ -263,33 +446,52 @@ describe("explain", () => {
 describe("resolveWorkspaceConfig — invalid files", () => {
   it("records a scope error but still merges the valid scopes", () => {
     write("workspace", { packageManagers: { primary: "pnpm" } });
-    const paths = getConfigScopePaths(cwd, { managedConfigPath: managedPath, userConfigPath: userPath });
+    const paths = getConfigScopePaths(cwd, {
+      managedConfigPath: managedPath,
+      userConfigPath: userPath,
+    });
     mkdirSync(join(paths.repo, ".."), { recursive: true });
-    writeFileSync(paths.repo, JSON.stringify({ repos: [{ provider: "gitlab", fullName: "x/y" }] }), "utf8");
+    writeFileSync(
+      paths.repo,
+      JSON.stringify({ repos: [{ provider: "gitlab", fullName: "x/y" }] }),
+      "utf8",
+    );
     const r = resolve();
     expect(r.config.packageManagers?.primary).toBe("pnpm");
     expect(r.scopes.find((s) => s.scope === "repo")?.error).toBeTruthy();
   });
 
   it("records an error for malformed JSON", () => {
-    const paths = getConfigScopePaths(cwd, { managedConfigPath: managedPath, userConfigPath: userPath });
+    const paths = getConfigScopePaths(cwd, {
+      managedConfigPath: managedPath,
+      userConfigPath: userPath,
+    });
     mkdirSync(join(paths.workspace, ".."), { recursive: true });
     writeFileSync(paths.workspace, "{ not json", "utf8");
     const r = resolve();
-    expect(r.scopes.find((s) => s.scope === "workspace")?.error).toContain("invalid JSON");
+    expect(r.scopes.find((s) => s.scope === "workspace")?.error).toContain(
+      "invalid JSON",
+    );
   });
 });
 
 describe("resolveWorkspaceConfig — cache", () => {
   it("caches by scope paths and clears on demand", () => {
     write("workspace", { packageManagers: { primary: "pnpm" } });
-    const cacheOpts = { managedConfigPath: managedPath, userConfigPath: userPath };
+    const cacheOpts = {
+      managedConfigPath: managedPath,
+      userConfigPath: userPath,
+    };
     const first = resolveWorkspaceConfig(cwd, cacheOpts);
     expect(first.config.packageManagers?.primary).toBe("pnpm");
     write("workspace", { packageManagers: { primary: "npm" } });
-    expect(resolveWorkspaceConfig(cwd, cacheOpts).config.packageManagers?.primary).toBe("pnpm");
+    expect(
+      resolveWorkspaceConfig(cwd, cacheOpts).config.packageManagers?.primary,
+    ).toBe("pnpm");
     clearWorkspaceConfigCache();
-    expect(resolveWorkspaceConfig(cwd, cacheOpts).config.packageManagers?.primary).toBe("npm");
+    expect(
+      resolveWorkspaceConfig(cwd, cacheOpts).config.packageManagers?.primary,
+    ).toBe("npm");
   });
 });
 
@@ -307,16 +509,26 @@ describe("resolveWorkspaceConfig — back-compat with today's workspace.json", (
     const r = resolve();
     expect(r.config.orgSlug).toBe("acme");
     expect(r.config.workspaceId).toBe("ws_xyz789");
-    expect(r.scopes.find((s) => s.scope === "workspace")?.error).toBeUndefined();
+    expect(
+      r.scopes.find((s) => s.scope === "workspace")?.error,
+    ).toBeUndefined();
   });
 });
 
 describe("mergeWorkspaceConfigs — in-memory (no fs)", () => {
   it("merges scope files passed directly, org winning an unlocked-elsewhere leaf", () => {
     const { config, provenance } = mergeWorkspaceConfigs([
-      { scope: "org", path: "managed.json", config: { packageManagers: { primary: "pnpm" } } },
+      {
+        scope: "org",
+        path: "managed.json",
+        config: { packageManagers: { primary: "pnpm" } },
+      },
       { scope: "user", path: "user.json" },
-      { scope: "workspace", path: "workspace.json", config: { packageManagers: { primary: "npm" } } },
+      {
+        scope: "workspace",
+        path: "workspace.json",
+        config: { packageManagers: { primary: "npm" } },
+      },
       { scope: "repo", path: "repo.json" },
     ]);
     expect(config.packageManagers?.primary).toBe("pnpm");

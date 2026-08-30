@@ -32,7 +32,11 @@ import {
   stopDaemon,
 } from "./lifecycle.js";
 
-function memoryWriter(): { writer: CommandWriter; out: string[]; err: string[] } {
+function memoryWriter(): {
+  writer: CommandWriter;
+  out: string[];
+  err: string[];
+} {
   const out: string[] = [];
   const err: string[] = [];
   return {
@@ -72,10 +76,16 @@ describe("daemon status", () => {
 
   it("running: health envelope with pid + uptime", async () => {
     client.isRunning.mockResolvedValue(true);
-    client.send.mockResolvedValue({ result: { status: "ok", uptime: 3725, pid: 999 } });
+    client.send.mockResolvedValue({
+      result: { status: "ok", uptime: 3725, pid: 999 },
+    });
     const { writer, out } = memoryWriter();
     await daemonStatus({ json: true }, writer);
-    expect(JSON.parse(out[0] as string)).toMatchObject({ running: true, pid: 999, uptimeSeconds: 3725 });
+    expect(JSON.parse(out[0] as string)).toMatchObject({
+      running: true,
+      pid: 999,
+      uptimeSeconds: 3725,
+    });
 
     const pretty = memoryWriter();
     await daemonStatus({}, pretty.writer);
@@ -99,14 +109,20 @@ describe("daemon start/stop (non-forking paths)", () => {
     client.isRunning.mockResolvedValue(true);
     const { writer, out } = memoryWriter();
     await startDaemon({ foreground: false, json: true }, writer);
-    expect(JSON.parse(out[0] as string)).toMatchObject({ running: true, started: false });
+    expect(JSON.parse(out[0] as string)).toMatchObject({
+      running: true,
+      started: false,
+    });
   });
 
   it("stop when not running is a no-op result, not an error", async () => {
     client.isRunning.mockResolvedValue(false);
     const { writer, out, err } = memoryWriter();
     await stopDaemon({ json: true }, writer);
-    expect(JSON.parse(out[0] as string)).toMatchObject({ running: false, stopped: false });
+    expect(JSON.parse(out[0] as string)).toMatchObject({
+      running: false,
+      stopped: false,
+    });
     expect(err).toEqual([]);
   });
 
@@ -126,14 +142,24 @@ describe("daemon session verbs", () => {
     process.exitCode = 0;
     await sessionList({ json: true }, writer);
     expect(out).toEqual([]);
-    expect(JSON.parse(err[0] as string)).toMatchObject({ type: "error", code: "daemon_down" });
+    expect(JSON.parse(err[0] as string)).toMatchObject({
+      type: "error",
+      code: "daemon_down",
+    });
     expect(process.exitCode).toBe(1);
   });
 
   it("list --json preserves the legacy {sessions:[…]} envelope on one line", async () => {
     client.isRunning.mockResolvedValue(true);
     const sessions = [
-      { sessionId: "s1", parentId: null, forkPoint: null, status: "active", eventCount: 3, createdAt: 1 },
+      {
+        sessionId: "s1",
+        parentId: null,
+        forkPoint: null,
+        status: "active",
+        eventCount: 3,
+        createdAt: 1,
+      },
     ];
     client.listSessions.mockResolvedValue({ sessions });
     const { writer, out } = memoryWriter();
@@ -146,12 +172,21 @@ describe("daemon session verbs", () => {
     client.isRunning.mockResolvedValue(true);
     client.listSessions.mockResolvedValue({
       sessions: [
-        { sessionId: "s2", parentId: "s1", forkPoint: 4, status: "active", eventCount: 7, createdAt: 1 },
+        {
+          sessionId: "s2",
+          parentId: "s1",
+          forkPoint: 4,
+          status: "active",
+          eventCount: 7,
+          createdAt: 1,
+        },
       ],
     });
     const { writer, out } = memoryWriter();
     await sessionList({}, writer);
-    expect(out.join("\n")).toContain("s2  active  7 event(s) (forked from s1 @4)");
+    expect(out.join("\n")).toContain(
+      "s2  active  7 event(s) (forked from s1 @4)",
+    );
 
     client.listSessions.mockResolvedValue({ sessions: [] });
     const empty = memoryWriter();
@@ -161,10 +196,18 @@ describe("daemon session verbs", () => {
 
   it("fork emits the result envelope; failure is exit 1 on stderr", async () => {
     client.isRunning.mockResolvedValue(true);
-    client.forkSession.mockResolvedValue({ sessionId: "s3", parentId: "s1", forkPoint: 2 });
+    client.forkSession.mockResolvedValue({
+      sessionId: "s3",
+      parentId: "s1",
+      forkPoint: 2,
+    });
     const { writer, out } = memoryWriter();
     await sessionFork("s1", 2, { json: true }, writer);
-    expect(JSON.parse(out[0] as string)).toEqual({ sessionId: "s3", parentId: "s1", forkPoint: 2 });
+    expect(JSON.parse(out[0] as string)).toEqual({
+      sessionId: "s3",
+      parentId: "s1",
+      forkPoint: 2,
+    });
 
     client.forkSession.mockRejectedValue(new Error("no such session"));
     const bad = memoryWriter();
@@ -179,7 +222,14 @@ describe("daemon session verbs", () => {
     const payload = {
       replay: { deterministic: true, stepsReplayed: 5, divergences: [] },
       turns: [
-        { turnId: "t1", compileMs: 12, tokens: 900, cacheHitRate: 0.5, toolCalls: 2, outcome: "ok" },
+        {
+          turnId: "t1",
+          compileMs: 12,
+          tokens: 900,
+          cacheHitRate: 0.5,
+          toolCalls: 2,
+          outcome: "ok",
+        },
       ],
     };
     client.replaySession.mockResolvedValue(payload);

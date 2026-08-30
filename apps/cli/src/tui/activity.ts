@@ -3,14 +3,11 @@
  *
  * Several surfaces show "what's running right now": the REPL's `/hud`, the
  * fleet roster, and the best-of-N lane view, plus one-shot mode's plain-text
- * progress lines. Each grew its own status→glyph/color mapping independently
- * (a static bullet here, an animated spinner there, "green" in one file and
- * "#34D399" in another for the same outcome) — so the same underlying state,
- * a task finishing, could look different depending which screen you were
- * reading. This module is the one canonical mapping: every surface's own
- * narrower status type (HUD's `AgentStatus`, the fleet's `TaskStatus`,
+ * progress lines. This module is their one canonical status→glyph/color
+ * mapping, so a task finishing looks the same on every screen. Each surface's
+ * own narrower status type (HUD's `AgentStatus`, the fleet's `TaskStatus`,
  * best-of-N's lane status) is a literal subset of {@link ActivityStatus}, so
- * they all resolve through {@link activityGlyph} and render the same way.
+ * they all resolve through {@link activityGlyph} with no translation layer.
  *
  * {@link formatActivityLine} is the matching text formatter for surfaces
  * without a renderer (one-shot's stderr / stream-json output).
@@ -43,7 +40,18 @@ export interface ActivityEvent {
 }
 
 /** Braille spinner frames — shared by every animated "running" glyph. */
-export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+export const SPINNER_FRAMES = [
+  "⠋",
+  "⠙",
+  "⠹",
+  "⠸",
+  "⠼",
+  "⠴",
+  "⠦",
+  "⠧",
+  "⠇",
+  "⠏",
+];
 
 export interface ActivityGlyph {
   glyph: string;
@@ -56,14 +64,20 @@ export interface ActivityGlyph {
  * spinner; omit it for a static bullet (the HUD's non-animated style, which
  * ticks its own clock only for elapsed-time display).
  */
-export function activityGlyph(status: ActivityStatus, frame?: number): ActivityGlyph {
+export function activityGlyph(
+  status: ActivityStatus,
+  frame?: number,
+): ActivityGlyph {
   switch (status) {
     case "queued":
       return { glyph: "⧗", color: theme.amber };
     case "running":
     case "verifying":
       return {
-        glyph: frame === undefined ? "●" : (SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "⠋"),
+        glyph:
+          frame === undefined
+            ? "●"
+            : (SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "⠋"),
         color: theme.cyan,
       };
     case "blocked":
@@ -92,6 +106,8 @@ export function activityGlyph(status: ActivityStatus, frame?: number): ActivityG
  * composes directly with anything that already carries those two fields —
  * a `StageEvent`, a `ToolEvent`-ish record — with no adapter object needed.
  */
-export function formatActivityLine(event: Pick<ActivityEvent, "label" | "detail">): string {
+export function formatActivityLine(
+  event: Pick<ActivityEvent, "label" | "detail">,
+): string {
   return event.detail ? `${event.label} · ${event.detail}` : event.label;
 }

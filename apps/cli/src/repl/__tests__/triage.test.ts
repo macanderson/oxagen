@@ -18,7 +18,8 @@ import { modelForTier } from "../../agent/model-router.js";
 // The cheap-tier slug the router resolves to must be stable across the suite —
 // clear any shell/pinned override so `modelForTier("fast")` uses the catalog.
 beforeEach(() => {
-  for (const key of ["OXAGEN_LLM_FAST", "OXAGEN_MODEL"]) delete process.env[key];
+  for (const key of ["OXAGEN_LLM_FAST", "OXAGEN_MODEL"])
+    delete process.env[key];
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -89,12 +90,22 @@ describe("triagePrompt — LLM path", () => {
   it("returns the model's queue decision and reason", async () => {
     const ai = ok({ route: "queue", reason: "follows up the current edit" });
     const d = await triagePrompt({ ...base, text: "now add a test", ai });
-    expect(d).toEqual({ route: "queue", reason: "follows up the current edit" });
+    expect(d).toEqual({
+      route: "queue",
+      reason: "follows up the current edit",
+    });
   });
 
   it("returns background for an independent task", async () => {
-    const ai = ok({ route: "background", reason: "unrelated to the active work" });
-    const d = await triagePrompt({ ...base, text: "bump the changelog too", ai });
+    const ai = ok({
+      route: "background",
+      reason: "unrelated to the active work",
+    });
+    const d = await triagePrompt({
+      ...base,
+      text: "bump the changelog too",
+      ai,
+    });
     expect(d.route).toBe("background");
   });
 
@@ -106,7 +117,11 @@ describe("triagePrompt — LLM path", () => {
 
   it("defaults an empty model reason to a route-specific default", async () => {
     const ai = ok({ route: "background", reason: "   " });
-    const d = await triagePrompt({ ...base, text: "do the unrelated thing", ai });
+    const d = await triagePrompt({
+      ...base,
+      text: "do the unrelated thing",
+      ai,
+    });
     expect(d.route).toBe("background");
     expect(d.reason.length).toBeGreaterThan(0);
   });
@@ -126,7 +141,12 @@ describe("triagePrompt — LLM path", () => {
 
   it("honours an explicit model override", async () => {
     const ai = ok({ route: "queue", reason: "ok" });
-    await triagePrompt({ ...base, text: "carry on", ai, model: "anthropic/claude-fable" });
+    await triagePrompt({
+      ...base,
+      text: "carry on",
+      ai,
+      model: "anthropic/claude-fable",
+    });
     expect(ai.calls[0]?.model).toBe("anthropic/claude-fable");
   });
 
@@ -164,14 +184,24 @@ describe("triagePrompt — always degrades safely, never throws", () => {
       captured = args.abortSignal;
       return new Promise(() => {}); // never resolves
     });
-    const d = await triagePrompt({ ...base, text: "long running classify", ai, timeoutMs: 10 });
+    const d = await triagePrompt({
+      ...base,
+      text: "long running classify",
+      ai,
+      timeoutMs: 10,
+    });
     expect(d).toEqual({ route: "queue", reason: TRIAGE_UNAVAILABLE_REASON });
     expect(captured?.aborted).toBe(true);
   });
 
   it("bypasses the timeout bound when timeoutMs <= 0", async () => {
     const ai = ok({ route: "background", reason: "unbounded ok" });
-    const d = await triagePrompt({ ...base, text: "an unrelated job", ai, timeoutMs: 0 });
+    const d = await triagePrompt({
+      ...base,
+      text: "an unrelated job",
+      ai,
+      timeoutMs: 0,
+    });
     expect(d.route).toBe("background");
   });
 

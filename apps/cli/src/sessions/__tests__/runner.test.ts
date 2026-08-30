@@ -14,7 +14,11 @@ import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ModelMessage } from "ai";
-import type { AgentAi, RunTurnOptions, RunTurnResult } from "@oxagen/agent-engine";
+import type {
+  AgentAi,
+  RunTurnOptions,
+  RunTurnResult,
+} from "@oxagen/agent-engine";
 import type { SessionEvent } from "../events.js";
 import type { SessionMeta } from "../store.js";
 
@@ -52,12 +56,18 @@ vi.setConfig({ testTimeout: 60_000 });
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
 
-const tick = (ms = 10): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const tick = (ms = 10): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
-async function until(cond: () => boolean, timeoutMs = 30_000, stepMs = 10): Promise<void> {
+async function until(
+  cond: () => boolean,
+  timeoutMs = 30_000,
+  stepMs = 10,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!cond()) {
-    if (Date.now() > deadline) throw new Error("until(): condition not met before deadline");
+    if (Date.now() > deadline)
+      throw new Error("until(): condition not met before deadline");
     await tick(stepMs);
   }
 }
@@ -79,7 +89,8 @@ async function untilDisk(
   for (;;) {
     const events = await store.readEvents(sid);
     if (cond(events)) return events;
-    if (Date.now() > deadline) throw new Error("untilDisk(): condition not met before deadline");
+    if (Date.now() > deadline)
+      throw new Error("untilDisk(): condition not met before deadline");
     await tick(stepMs);
   }
 }
@@ -131,7 +142,10 @@ function makeFakeRunTurn(cfg: {
   return async (options: RunTurnOptions): Promise<RunTurnResult> => {
     index++;
     cfg.calls.push(options);
-    const c: FakeTurnConfig = { ...(cfg.base ?? {}), ...(cfg.perCall?.(index) ?? {}) };
+    const c: FakeTurnConfig = {
+      ...(cfg.base ?? {}),
+      ...(cfg.perCall?.(index) ?? {}),
+    };
 
     options.onStage?.({ kind: "execute", label: "coding" });
     for (const r of c.reasoning ?? []) options.onReasoning?.(r);
@@ -141,7 +155,11 @@ function makeFakeRunTurn(cfg: {
       options.onToolEvent?.({ name: "bash", ok: true, durationMs: 5 });
     }
     if (c.emitDiff) options.onFileChange?.(c.emitDiff.diff, c.emitDiff.files);
-    if (c.invokeOnError) options.onError?.({ phase: "memory-recall", error: new Error("recall failed") });
+    if (c.invokeOnError)
+      options.onError?.({
+        phase: "memory-recall",
+        error: new Error("recall failed"),
+      });
     if (c.invokeBudget) await options.budgetGuard?.(c.invokeBudget);
     if (c.throwRaw !== undefined) throw c.throwRaw;
     if (c.throwError) throw new Error(c.throwError);
@@ -151,12 +169,16 @@ function makeFakeRunTurn(cfg: {
           reject(abortError());
           return;
         }
-        options.signal?.addEventListener("abort", () => reject(abortError()), { once: true });
+        options.signal?.addEventListener("abort", () => reject(abortError()), {
+          once: true,
+        });
       });
     }
 
     const text = c.text ?? "Hello world";
-    const messages: ModelMessage[] = c.messages ?? [{ role: "assistant", content: text }];
+    const messages: ModelMessage[] = c.messages ?? [
+      { role: "assistant", content: text },
+    ];
     cfg.returnedMessages?.push(messages);
     return {
       text,
@@ -174,7 +196,9 @@ function makeFakeRunTurn(cfg: {
 
 /** Label an event by type, folding session.state's state in for order assertions. */
 function label(event: SessionEvent): string {
-  return event.type === "session.state" ? `session.state:${event.state}` : event.type;
+  return event.type === "session.state"
+    ? `session.state:${event.state}`
+    : event.type;
 }
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
@@ -196,14 +220,17 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  if (savedDisableMemory === undefined) delete process.env["OXAGEN_DISABLE_MEMORY"];
+  if (savedDisableMemory === undefined)
+    delete process.env["OXAGEN_DISABLE_MEMORY"];
   else process.env["OXAGEN_DISABLE_MEMORY"] = savedDisableMemory;
   vi.restoreAllMocks();
   await rm(join(root, ".."), { recursive: true, force: true }).catch(() => {});
 });
 
 async function createMeta(
-  overrides: Partial<Parameters<InstanceType<typeof SessionStore>["createSession"]>[0]> = {},
+  overrides: Partial<
+    Parameters<InstanceType<typeof SessionStore>["createSession"]>[0]
+  > = {},
 ): Promise<SessionMeta> {
   const sid = newSessionId();
   return store.createSession({
@@ -226,7 +253,10 @@ describe("runSession — event order and coalescing", () => {
     const meta = await createMeta({ mode: "conversation" });
     const bus: SessionEvent[] = [];
     const calls: RunTurnOptions[] = [];
-    const fake = makeFakeRunTurn({ calls, base: { emitTool: true, deltas: ["Hel", "lo world"] } });
+    const fake = makeFakeRunTurn({
+      calls,
+      base: { emitTool: true, deltas: ["Hel", "lo world"] },
+    });
 
     const runPromise = runSession({
       store,
@@ -239,7 +269,9 @@ describe("runSession — event order and coalescing", () => {
 
     // Wait until the session parks in `waiting` (turn 1 fully settled) on the
     // bus, THEN separately poll the disk log to catch up (see `untilDisk`).
-    await until(() => bus.some((e) => e.type === "session.state" && e.state === "waiting"));
+    await until(() =>
+      bus.some((e) => e.type === "session.state" && e.state === "waiting"),
+    );
 
     // Disk order is the canonical, coalesced sequence.
     const disk = await untilDisk(meta.sid, (events) =>
@@ -263,12 +295,17 @@ describe("runSession — event order and coalescing", () => {
     // The raw bus is a side-channel not gated by the disk `waiting` signal, so
     // under load the 2nd raw delta can still be in flight when `waiting` lands —
     // poll for both raw deltas first so the count assertion is deterministic.
-    await until(() => bus.filter((e) => e.type === "message.delta").length >= 2);
+    await until(
+      () => bus.filter((e) => e.type === "message.delta").length >= 2,
+    );
     const busDeltas = bus.filter((e) => e.type === "message.delta");
     const diskDeltas = disk.filter((e) => e.type === "message.delta");
     expect(busDeltas.length).toBe(2);
     expect(diskDeltas.length).toBe(1);
-    expect(diskDeltas[0]).toMatchObject({ type: "message.delta", text: "Hello world" });
+    expect(diskDeltas[0]).toMatchObject({
+      type: "message.delta",
+      text: "Hello world",
+    });
 
     // seq is strictly monotonic on disk.
     const seqs = disk.map((e) => e.seq);
@@ -295,7 +332,12 @@ describe("runSession — event order and coalescing", () => {
       base: { usage: { inputTokens: 200, outputTokens: 80 } },
     });
 
-    const result = await runSession({ store, meta, ai: fakeAi, runTurnImpl: fake });
+    const result = await runSession({
+      store,
+      meta,
+      ai: fakeAi,
+      runTurnImpl: fake,
+    });
     expect(result.state).toBe("done");
 
     const disk = await store.readEvents(meta.sid);
@@ -336,11 +378,17 @@ describe("runSession — conversation loop", () => {
     });
 
     // Turn 1 settles → waiting.
-    await until(() => bus.some((e) => e.type === "session.state" && e.state === "waiting"));
+    await until(() =>
+      bus.some((e) => e.type === "session.state" && e.state === "waiting"),
+    );
     expect(calls[0]?.history).toBeUndefined();
 
     // Send a follow-up; turn 2 runs.
-    await store.appendInbox(meta.sid, { type: "message", text: "and again", ts: Date.now() });
+    await store.appendInbox(meta.sid, {
+      type: "message",
+      text: "and again",
+      ts: Date.now(),
+    });
     await until(() => calls.length === 2);
 
     // The second call's history is exactly the first turn's returned messages.
@@ -406,11 +454,17 @@ describe("runSession — conversation loop", () => {
       onLocalEvent: (e) => bus.push(e),
     });
 
-    await until(() => bus.some((e) => e.type === "session.state" && e.state === "waiting"));
+    await until(() =>
+      bus.some((e) => e.type === "session.state" && e.state === "waiting"),
+    );
     // Every turn gets a non-null cross-process file lock (ADR-021 §5).
     expect(calls[0]?.fileLock).toBeTruthy();
 
-    await store.appendInbox(meta.sid, { type: "message", text: "again", ts: Date.now() });
+    await store.appendInbox(meta.sid, {
+      type: "message",
+      text: "again",
+      ts: Date.now(),
+    });
     await until(() => calls.length === 2);
     // The SAME lock instance is reused — built once per session, not per turn.
     expect(calls[1]?.fileLock).toBe(calls[0]?.fileLock);
@@ -424,11 +478,18 @@ describe("runSession — conversation loop", () => {
     const calls: RunTurnOptions[] = [];
     const fake = makeFakeRunTurn({ calls });
 
-    const result = await runSession({ store, meta, ai: fakeAi, runTurnImpl: fake });
+    const result = await runSession({
+      store,
+      meta,
+      ai: fakeAi,
+      runTurnImpl: fake,
+    });
     expect(result.state).toBe("done");
 
     const disk = await store.readEvents(meta.sid);
-    expect(disk.some((e) => e.type === "session.state" && e.state === "waiting")).toBe(false);
+    expect(
+      disk.some((e) => e.type === "session.state" && e.state === "waiting"),
+    ).toBe(false);
     expect(label(disk[disk.length - 1]!)).toBe("session.end");
     expect(calls.length).toBe(1);
   });
@@ -459,7 +520,10 @@ describe("runSession — meta", () => {
     const calls: RunTurnOptions[] = [];
     const fake = makeFakeRunTurn({
       calls,
-      base: { text: "the final answer", usage: { inputTokens: 42, outputTokens: 7 } },
+      base: {
+        text: "the final answer",
+        usage: { inputTokens: 42, outputTokens: 7 },
+      },
     });
 
     await runSession({ store, meta, ai: fakeAi, runTurnImpl: fake });
@@ -503,7 +567,8 @@ describe("runSession — streaming, budget, errors", () => {
     }
     // turn.end's changedFiles is sourced from the diff round when the trace has none.
     const turnEnd = disk.find((e) => e.type === "turn.end");
-    if (turnEnd?.type === "turn.end") expect(turnEnd.changedFiles).toEqual(["x.ts"]);
+    if (turnEnd?.type === "turn.end")
+      expect(turnEnd.changedFiles).toEqual(["x.ts"]);
   });
 
   it("emits a non-fatal error when the per-turn budget stops the turn", async () => {
@@ -511,7 +576,9 @@ describe("runSession — streaming, budget, errors", () => {
     const calls: RunTurnOptions[] = [];
     const fake = makeFakeRunTurn({
       calls,
-      base: { invokeBudget: { inputTokens: 5_000_000, outputTokens: 5_000_000 } },
+      base: {
+        invokeBudget: { inputTokens: 5_000_000, outputTokens: 5_000_000 },
+      },
     });
 
     const result = await runSession({
@@ -519,7 +586,12 @@ describe("runSession — streaming, budget, errors", () => {
       meta,
       ai: fakeAi,
       runTurnImpl: fake,
-      budgetPolicy: { enabled: true, limitUsd: 0.0001, mode: "enforce", graceOveragePct: 0 },
+      budgetPolicy: {
+        enabled: true,
+        limitUsd: 0.0001,
+        mode: "enforce",
+        graceOveragePct: 0,
+      },
     });
     expect(result.state).toBe("done"); // the guard stops spending, the turn still settles
 
@@ -534,9 +606,17 @@ describe("runSession — streaming, budget, errors", () => {
   it("fails in once mode when a turn throws (fatal error event)", async () => {
     const meta = await createMeta({ mode: "once" });
     const calls: RunTurnOptions[] = [];
-    const fake = makeFakeRunTurn({ calls, base: { throwError: "engine exploded" } });
+    const fake = makeFakeRunTurn({
+      calls,
+      base: { throwError: "engine exploded" },
+    });
 
-    const result = await runSession({ store, meta, ai: fakeAi, runTurnImpl: fake });
+    const result = await runSession({
+      store,
+      meta,
+      ai: fakeAi,
+      runTurnImpl: fake,
+    });
     expect(result.state).toBe("failed");
 
     const disk = await store.readEvents(meta.sid);
@@ -605,7 +685,9 @@ describe("runSession — streaming, budget, errors", () => {
     const calls: RunTurnOptions[] = [];
     const fake = makeFakeRunTurn({
       calls,
-      base: { invokeBudget: { inputTokens: 5_000_000, outputTokens: 5_000_000 } },
+      base: {
+        invokeBudget: { inputTokens: 5_000_000, outputTokens: 5_000_000 },
+      },
     });
 
     const result = await runSession({
@@ -615,7 +697,12 @@ describe("runSession — streaming, budget, errors", () => {
       runTurnImpl: fake,
       // prompt mode: the guard would ask a human, but a session has no approver,
       // so onPause returns false and the guard stops (surfaced as a non-fatal error).
-      budgetPolicy: { enabled: true, limitUsd: 0.0001, mode: "prompt", graceOveragePct: 0 },
+      budgetPolicy: {
+        enabled: true,
+        limitUsd: 0.0001,
+        mode: "prompt",
+        graceOveragePct: 0,
+      },
     });
     expect(result.state).toBe("done");
 
@@ -631,28 +718,46 @@ describe("runSession — streaming, budget, errors", () => {
     const calls: RunTurnOptions[] = [];
     const circular: Record<string, unknown> = { command: "x" };
     circular["self"] = circular;
-    const fake = makeFakeRunTurn({ calls, base: { emitTool: true, toolInput: circular } });
+    const fake = makeFakeRunTurn({
+      calls,
+      base: { emitTool: true, toolInput: circular },
+    });
 
-    const result = await runSession({ store, meta, ai: fakeAi, runTurnImpl: fake });
+    const result = await runSession({
+      store,
+      meta,
+      ai: fakeAi,
+      runTurnImpl: fake,
+    });
     expect(result.state).toBe("done");
 
     const disk = await store.readEvents(meta.sid);
     const toolStart = disk.find((e) => e.type === "tool.start");
     expect(toolStart).toBeTruthy();
-    if (toolStart?.type === "tool.start") expect(typeof toolStart.input).toBe("string");
+    if (toolStart?.type === "tool.start")
+      expect(typeof toolStart.input).toBe("string");
   });
 
   it("fails on a non-Error throw in once mode (String(err) branch)", async () => {
     const meta = await createMeta({ mode: "once" });
     const calls: RunTurnOptions[] = [];
-    const fake = makeFakeRunTurn({ calls, base: { throwRaw: "raw string failure" } });
+    const fake = makeFakeRunTurn({
+      calls,
+      base: { throwRaw: "raw string failure" },
+    });
 
-    const result = await runSession({ store, meta, ai: fakeAi, runTurnImpl: fake });
+    const result = await runSession({
+      store,
+      meta,
+      ai: fakeAi,
+      runTurnImpl: fake,
+    });
     expect(result.state).toBe("failed");
 
     const disk = await store.readEvents(meta.sid);
     const err = disk.find((e) => e.type === "error");
-    if (err?.type === "error") expect(err.message).toContain("raw string failure");
+    if (err?.type === "error")
+      expect(err.message).toContain("raw string failure");
   });
 
   it("times out a hung turn via the inactivity guard (fails in once mode)", async () => {
@@ -666,7 +771,12 @@ describe("runSession — streaming, budget, errors", () => {
       const calls: RunTurnOptions[] = [];
       const fake = makeFakeRunTurn({ calls, base: { gate: true } });
 
-      const result = await runSession({ store, meta, ai: fakeAi, runTurnImpl: fake });
+      const result = await runSession({
+        store,
+        meta,
+        ai: fakeAi,
+        runTurnImpl: fake,
+      });
       expect(result.state).toBe("failed");
 
       const disk = await store.readEvents(meta.sid);
@@ -677,7 +787,8 @@ describe("runSession — streaming, budget, errors", () => {
         expect(err.message).toMatch(/timed out|inactivity/i);
       }
     } finally {
-      if (savedInactivity === undefined) delete process.env["OXAGEN_TURN_INACTIVITY_MS"];
+      if (savedInactivity === undefined)
+        delete process.env["OXAGEN_TURN_INACTIVITY_MS"];
       else process.env["OXAGEN_TURN_INACTIVITY_MS"] = savedInactivity;
     }
   });
@@ -711,10 +822,13 @@ describe("runSession — worker lifecycle bounds", () => {
       expect(err).toBeTruthy();
       if (err?.type === "error") {
         expect(err.fatal).toBe(false);
-        expect(err.message).toMatch(/max lifetime|OXAGEN_WORKER_MAX_LIFETIME_MS/i);
+        expect(err.message).toMatch(
+          /max lifetime|OXAGEN_WORKER_MAX_LIFETIME_MS/i,
+        );
       }
     } finally {
-      if (saved === undefined) delete process.env["OXAGEN_WORKER_MAX_LIFETIME_MS"];
+      if (saved === undefined)
+        delete process.env["OXAGEN_WORKER_MAX_LIFETIME_MS"];
       else process.env["OXAGEN_WORKER_MAX_LIFETIME_MS"] = saved;
     }
   });
@@ -742,7 +856,8 @@ describe("runSession — worker lifecycle bounds", () => {
       const disk = await store.readEvents(meta.sid);
       expect(disk.some((e) => e.type === "error")).toBe(false);
     } finally {
-      if (saved === undefined) delete process.env["OXAGEN_WORKER_MAX_LIFETIME_MS"];
+      if (saved === undefined)
+        delete process.env["OXAGEN_WORKER_MAX_LIFETIME_MS"];
       else process.env["OXAGEN_WORKER_MAX_LIFETIME_MS"] = saved;
     }
   });

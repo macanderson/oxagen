@@ -50,14 +50,12 @@ type CliAdapter = (
  * solve). Matched against the *first* path segment, so every subcommand under
  * `daemon` (`daemon:start`, `daemon:session:list`, …) is covered too.
  *
- * NOTE on the audit's original "(daemon, solve, view, agent)" list: `agent`
- * (singular — `oxagen agent list/show/new`, named *agent definition* CRUD) is
- * NOT long-running or interactive — it is fast, synchronous config-file
- * management, same shape as `settings` or `mcp`. It is intentionally left out
- * of this set; it just isn't wired into REGISTRY yet (falls through to the
- * generic "not yet available inline" message like the rest of the unwired CLI
- * surface). `agents` (plural — the live fleet dashboard) is the one that
- * actually needs this treatment, and is included below.
+ * `agents` (plural — the live fleet dashboard) belongs here. `agent`
+ * (singular — `oxagen agent list/show/new`, named *agent definition* CRUD)
+ * deliberately does NOT: it is fast, synchronous config-file management, the
+ * same shape as `settings` or `mcp`. It simply isn't wired into REGISTRY yet,
+ * so it falls through to the generic "not yet available inline" message like
+ * the rest of the unwired CLI surface.
  */
 const EXTERNAL_ONLY_TOP_LEVEL: ReadonlySet<string> = new Set([
   "daemon",
@@ -108,7 +106,13 @@ function findCommandNode(
 
 /** Parse `raw` against `node`'s declared options (coercion, negation,
  * `collect`, defaults all apply — same definitions `--help` reads). Returns
- * the parsed options plus the leftover positional operands, in order. */
+ * the parsed options plus the leftover positional operands, in order.
+ *
+ * LIMITATION: tokenization is a plain whitespace split, so quoting is NOT
+ * honored — `--rationale "two words"` arrives as the two tokens `"two` and
+ * `words"`, not one value. Any adapter below whose usage string shows a quoted
+ * argument therefore only works for single-word values inline; the shell form
+ * (`oxagen …`) handles quotes correctly because the shell splits the line. */
 function parseArgs(
   node: Command,
   raw: string,

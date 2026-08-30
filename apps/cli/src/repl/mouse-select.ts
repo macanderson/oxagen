@@ -39,7 +39,9 @@ export function selectionRange(sel: Selection): { start: number; end: number } {
  * cursor placement, not a highlighted selection, so callers should treat it
  * the same as no selection at all for rendering and delete/replace purposes.
  */
-export function hasSelection(sel: Selection | null | undefined): sel is Selection {
+export function hasSelection(
+  sel: Selection | null | undefined,
+): sel is Selection {
   if (!sel) return false;
   const { start, end } = selectionRange(sel);
   return end > start;
@@ -60,7 +62,10 @@ export function dragTo(sel: Selection, offset: number): Selection {
  * start — where the deleted text used to begin, matching how Backspace/
  * Delete already position the cursor on a single-character delete.
  */
-export function deleteSelectionFrom(text: string, sel: Selection): { text: string; cursorPos: number } {
+export function deleteSelectionFrom(
+  text: string,
+  sel: Selection,
+): { text: string; cursorPos: number } {
   const { start, end } = selectionRange(sel);
   return { text: text.slice(0, start) + text.slice(end), cursorPos: start };
 }
@@ -76,7 +81,10 @@ export function replaceSelectionWith(
   insert: string,
 ): { text: string; cursorPos: number } {
   const { start, end } = selectionRange(sel);
-  return { text: text.slice(0, start) + insert + text.slice(end), cursorPos: start + insert.length };
+  return {
+    text: text.slice(0, start) + insert + text.slice(end),
+    cursorPos: start + insert.length,
+  };
 }
 
 // ── Mouse column -> buffer offset (single-line) ─────────────────────────────
@@ -105,7 +113,11 @@ export function textStartColumn(glyphWidth: number): number {
  * character clamps to `textLength` — so a click ANYWHERE on the input's row
  * lands somewhere sane rather than being silently dropped.
  */
-export function charOffsetForColumn(col: number, textStartCol: number, textLength: number): number {
+export function charOffsetForColumn(
+  col: number,
+  textStartCol: number,
+  textLength: number,
+): number {
   return Math.max(0, Math.min(textLength, col - textStartCol));
 }
 

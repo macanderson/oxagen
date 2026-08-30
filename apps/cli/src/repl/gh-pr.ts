@@ -17,7 +17,10 @@ export const GH_PR_TIMEOUT_MS = 5000;
  * when there isn't one / `gh` isn't installed or authenticated / the call
  * fails or times out. Always resolves (never rejects).
  */
-export function fetchPrNumber(cwd: string, branch: string): Promise<number | null> {
+export function fetchPrNumber(
+  cwd: string,
+  branch: string,
+): Promise<number | null> {
   return new Promise((resolve) => {
     execFile(
       "gh",

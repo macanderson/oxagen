@@ -26,7 +26,11 @@ vi.mock("../lib/api.js", () => apiMock);
 import { handleTrace } from "./trace.js";
 
 /** A writer that keeps stdout and stderr apart (captureWriter interleaves them). */
-function splitWriter(): { writer: CommandWriter; out: string[]; err: string[] } {
+function splitWriter(): {
+  writer: CommandWriter;
+  out: string[];
+  err: string[];
+} {
   const out: string[] = [];
   const err: string[] = [];
   return {

@@ -6,7 +6,13 @@
  * (cold-start reload). Each test gets its own temp repo + db file.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  existsSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -23,7 +29,10 @@ let store: CodeGraphStore;
 
 beforeEach(() => {
   repo = mkdtempSync(join(tmpdir(), "oxagen-cg-repo-"));
-  dbPath = join(mkdtempSync(join(tmpdir(), "oxagen-cg-db-")), "code-graph.duckdb");
+  dbPath = join(
+    mkdtempSync(join(tmpdir(), "oxagen-cg-db-")),
+    "code-graph.duckdb",
+  );
   store = createCodeGraphStore({ duckdbPath: dbPath });
 });
 
@@ -41,9 +50,15 @@ function write(rel: string, content: string): void {
 
 describe("pure helpers", () => {
   it("computeEdgeId is deterministic and order-sensitive", () => {
-    expect(computeEdgeId("a", "b", "imports")).toBe(computeEdgeId("a", "b", "imports"));
-    expect(computeEdgeId("a", "b", "imports")).not.toBe(computeEdgeId("b", "a", "imports"));
-    expect(computeEdgeId("a", "b", "imports")).not.toBe(computeEdgeId("a", "b", "contains"));
+    expect(computeEdgeId("a", "b", "imports")).toBe(
+      computeEdgeId("a", "b", "imports"),
+    );
+    expect(computeEdgeId("a", "b", "imports")).not.toBe(
+      computeEdgeId("b", "a", "imports"),
+    );
+    expect(computeEdgeId("a", "b", "imports")).not.toBe(
+      computeEdgeId("a", "b", "contains"),
+    );
   });
 
   it("hashContent changes with content", () => {
@@ -55,7 +70,10 @@ describe("pure helpers", () => {
 describe("buildAndPersistCodeGraph", () => {
   it("indexes files + symbols + edges and persists them", async () => {
     write("a.ts", "export function foo() { return 1; }\nexport class Bar {}\n");
-    write("b.ts", 'import { foo } from "./a";\nexport function baz() { return foo(); }\n');
+    write(
+      "b.ts",
+      'import { foo } from "./a";\nexport function baz() { return foo(); }\n',
+    );
 
     const delta = await buildAndPersistCodeGraph(repo, store);
     expect(delta).toEqual({ indexed: 2, skipped: 0, removed: 0 });
@@ -190,7 +208,9 @@ describe("loadGraph + replaceFile", () => {
     const graph = await store.loadGraph(repo);
     const file = [...graph.nodes.values()].find((n) => n.kind === "file");
     expect(file?.path).toBe("a.ts");
-    const containsTargets = graph.edges.filter((e) => e.type === "contains").length;
+    const containsTargets = graph.edges.filter(
+      (e) => e.type === "contains",
+    ).length;
     expect(containsTargets).toBe(2);
   });
 

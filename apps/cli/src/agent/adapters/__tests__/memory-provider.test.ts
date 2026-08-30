@@ -6,11 +6,16 @@ const { recallMemories, rememberMemory } = vi.hoisted(() => ({
   recallMemories: vi.fn(),
   rememberMemory: vi.fn(),
 }));
-vi.mock("../../../lib/memory-client.js", () => ({ recallMemories, rememberMemory }));
+vi.mock("../../../lib/memory-client.js", () => ({
+  recallMemories,
+  rememberMemory,
+}));
 
 // Mock the CLI debug channel so the non-blocking failure paths can be asserted
 // (a dropped remember/recall must log, not silently swallow).
-const { debugLog } = vi.hoisted(() => ({ debugLog: vi.fn(async () => undefined) }));
+const { debugLog } = vi.hoisted(() => ({
+  debugLog: vi.fn(async () => undefined),
+}));
 vi.mock("../../../lib/debug-log.js", () => ({ debugLog }));
 
 import {
@@ -58,7 +63,8 @@ function fakeFleet(): FleetMemory {
 const ORIGINAL_DISABLE = process.env["OXAGEN_DISABLE_MEMORY"];
 
 afterEach(() => {
-  if (ORIGINAL_DISABLE === undefined) delete process.env["OXAGEN_DISABLE_MEMORY"];
+  if (ORIGINAL_DISABLE === undefined)
+    delete process.env["OXAGEN_DISABLE_MEMORY"];
   else process.env["OXAGEN_DISABLE_MEMORY"] = ORIGINAL_DISABLE;
   vi.useRealTimers();
 });
@@ -66,9 +72,26 @@ afterEach(() => {
 describe("formatServerMemories", () => {
   it("orders FACT and RULE ahead of OBSERVATION and renders class/kind + confidence", () => {
     const out = formatServerMemories([
-      recalled({ id: "o", memoryClass: "OBSERVATION", lesson: "obs", confidenceScore: 40 }),
-      recalled({ id: "r", memoryClass: "RULE", memoryKind: "constraint", lesson: "rule", confidenceScore: 88 }),
-      recalled({ id: "f", memoryClass: "FACT", memoryKind: "gotcha", lesson: "fact", confidenceScore: 99 }),
+      recalled({
+        id: "o",
+        memoryClass: "OBSERVATION",
+        lesson: "obs",
+        confidenceScore: 40,
+      }),
+      recalled({
+        id: "r",
+        memoryClass: "RULE",
+        memoryKind: "constraint",
+        lesson: "rule",
+        confidenceScore: 88,
+      }),
+      recalled({
+        id: "f",
+        memoryClass: "FACT",
+        memoryKind: "gotcha",
+        lesson: "fact",
+        confidenceScore: 99,
+      }),
     ]);
     expect(out).toContain("## Lessons from prior sessions (workspace memory)");
     const factLine = out.indexOf("fact");
@@ -93,13 +116,21 @@ describe("formatServerMemories", () => {
 describe("createCombinedMemory.recallContext", () => {
   it("merges the session tail with the server lessons section", async () => {
     const server: ServerMemory = {
-      recall: vi.fn().mockResolvedValue([recalled({ memoryClass: "RULE", lesson: "server rule" })]),
+      recall: vi
+        .fn()
+        .mockResolvedValue([
+          recalled({ memoryClass: "RULE", lesson: "server rule" }),
+        ]),
       remember: vi.fn(),
     };
-    const mem = createCombinedMemory(fakeSession("recent activity"), fakeFleet(), {
-      server,
-      recallQuery: "do a task",
-    });
+    const mem = createCombinedMemory(
+      fakeSession("recent activity"),
+      fakeFleet(),
+      {
+        server,
+        recallQuery: "do a task",
+      },
+    );
     const out = await mem.recallContext();
     expect(out).toContain("recent activity");
     expect(out).toContain("## Lessons from prior sessions");
@@ -134,7 +165,9 @@ describe("createCombinedMemory.recallContext", () => {
     expect(debugLog).toHaveBeenCalledWith(
       "error",
       "memory.recall-failed",
-      expect.objectContaining({ message: expect.stringContaining("duckdb closed") }),
+      expect.objectContaining({
+        message: expect.stringContaining("duckdb closed"),
+      }),
     );
   });
 
@@ -192,7 +225,9 @@ describe("createCombinedMemory.remember", () => {
     mem.remember("assistant_reply", "done");
     mem.remember("coding_turn", { text: "…" });
 
-    expect((server.remember as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0])).toEqual([
+    expect(
+      (server.remember as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]),
+    ).toEqual([
       "gotcha",
       "bug-root-cause",
       "convention-deviation",
@@ -269,7 +304,9 @@ describe("createServerMemory", () => {
     expect(debugLog).toHaveBeenCalledWith(
       "error",
       "memory.remember-failed",
-      expect.objectContaining({ message: expect.stringContaining("api unreachable") }),
+      expect.objectContaining({
+        message: expect.stringContaining("api unreachable"),
+      }),
     );
   });
 });

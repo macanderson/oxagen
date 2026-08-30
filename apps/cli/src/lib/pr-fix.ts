@@ -76,7 +76,10 @@ export interface PrFixDeps {
    * "nothing concrete to diagnose" (e.g. an infra flake with no real log) —
    * the loop stops rather than guessing.
    */
-  fetchFailingContext: (pr: FixPrView, failing: ChecksSummary["failing"]) => Promise<string>;
+  fetchFailingContext: (
+    pr: FixPrView,
+    failing: ChecksSummary["failing"],
+  ) => Promise<string>;
   /** Run ONE bounded engine-agent turn with the given prompt. */
   runFixer: FixRunner;
   /** Relative paths with pending changes in the working tree (e.g. `git status --porcelain`). */
@@ -141,7 +144,9 @@ async function waitForTerminal(
 }
 
 /** Classify a terminal(-ish) summary into an early-exit outcome, or `null` when it's failing (keep going). */
-function classifyTerminal(summary: ChecksSummary): "timed-out" | "green" | "no-checks" | null {
+function classifyTerminal(
+  summary: ChecksSummary,
+): "timed-out" | "green" | "no-checks" | null {
   if (!isTerminal(summary)) return "timed-out";
   if (summary.state === "green") return "green";
   if (summary.state === "none") return "no-checks";
@@ -149,7 +154,11 @@ function classifyTerminal(summary: ChecksSummary): "timed-out" | "green" | "no-c
 }
 
 /** Build the bounded fixer prompt from the failing checks + fetched log context. */
-export function buildFixPrompt(pr: FixPrView, summary: ChecksSummary, context: string): string {
+export function buildFixPrompt(
+  pr: FixPrView,
+  summary: ChecksSummary,
+  context: string,
+): string {
   return [
     `PR #${pr.number} "${pr.title}" is failing CI on: ${summary.failing.map((f) => f.name).join(", ")}.`,
     "",
@@ -174,7 +183,9 @@ async function resolveMerge(
   try {
     await deps.mergePr(pr);
   } catch (e) {
-    deps.onStatus?.(`Merge failed: ${e instanceof Error ? e.message : String(e)}`);
+    deps.onStatus?.(
+      `Merge failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
     return { outcome: "merge-failed", rounds, pr: prRef };
   }
   return { outcome: "merged", rounds, pr: prRef };
@@ -198,7 +209,12 @@ export async function runFixToGreen(
   const pollTimeoutMs = options.pollTimeoutMs ?? DEFAULT_POLL_TIMEOUT_MS;
   const rounds: FixRound[] = [];
 
-  const first = await waitForTerminal(deps, options.number, pollIntervalMs, pollTimeoutMs);
+  const first = await waitForTerminal(
+    deps,
+    options.number,
+    pollIntervalMs,
+    pollTimeoutMs,
+  );
   if (!first) return { outcome: "no-pr", rounds };
   let { pr, summary } = first;
   const prRef = { number: pr.number, url: pr.url };
@@ -211,7 +227,9 @@ export async function runFixToGreen(
     // summary.state === "failing" here.
     const context = await deps.fetchFailingContext(pr, summary.failing);
     if (!context.trim()) {
-      deps.onStatus?.("No failing-check log context available — nothing concrete to diagnose; stopping.");
+      deps.onStatus?.(
+        "No failing-check log context available — nothing concrete to diagnose; stopping.",
+      );
       return { outcome: "unfixable", rounds, pr: prRef };
     }
 
@@ -234,14 +252,23 @@ export async function runFixToGreen(
     }
 
     const names = summary.failing.map((f) => f.name).join(", ");
-    await deps.commitAndPush(filesChanged, `fix(ci): round ${round} - address failing ${names} on PR #${pr.number}`);
+    await deps.commitAndPush(
+      filesChanged,
+      `fix(ci): round ${round} - address failing ${names} on PR #${pr.number}`,
+    );
 
-    const next = await waitForTerminal(deps, String(pr.number), pollIntervalMs, pollTimeoutMs);
+    const next = await waitForTerminal(
+      deps,
+      String(pr.number),
+      pollIntervalMs,
+      pollTimeoutMs,
+    );
     if (!next) return { outcome: "no-pr", rounds, pr: prRef };
     ({ pr, summary } = next);
   }
 
   const finalOutcome = classifyTerminal(summary);
-  if (finalOutcome === "green") return await resolveMerge(deps, pr, rounds, prRef);
+  if (finalOutcome === "green")
+    return await resolveMerge(deps, pr, rounds, prRef);
   return { outcome: finalOutcome ?? "max-rounds", rounds, pr: prRef };
 }

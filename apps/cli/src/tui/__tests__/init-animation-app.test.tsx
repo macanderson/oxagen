@@ -19,7 +19,12 @@ import type { InitProgressEvent } from "../../commands/init.js";
 
 // Fast, deterministic timers throughout — see init-reveal-view.test.tsx for
 // why this codebase's Ink tests use tiny real-timer overrides over fake timers.
-const FAST = { gameTickMs: 1000, spinnerTickMs: 1000, revealTickMs: 1, revealHoldMs: 5 };
+const FAST = {
+  gameTickMs: 1000,
+  spinnerTickMs: 1000,
+  revealTickMs: 1,
+  revealHoldMs: 5,
+};
 
 /**
  * Poll until `cond` holds (or the deadline passes — the caller's assertion
@@ -27,7 +32,11 @@ const FAST = { gameTickMs: 1000, spinnerTickMs: 1000, revealTickMs: 1, revealHol
  * fixed flush() sleeps: a loaded CI runner can take far longer than a
  * "generous" sleep to land Ink's re-render, and fixed sleeps were flaking.
  */
-async function until(cond: () => boolean, timeoutMs = 4000, stepMs = 10): Promise<void> {
+async function until(
+  cond: () => boolean,
+  timeoutMs = 4000,
+  stepMs = 10,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!cond() && Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, stepMs));
@@ -39,10 +48,18 @@ describe("InitAnimationApp", () => {
     const emitter = new EventEmitter();
     const onReady = vi.fn();
     const { lastFrame, unmount } = render(
-      <InitAnimationApp emitter={emitter} onReady={onReady} width={30} {...FAST} />,
+      <InitAnimationApp
+        emitter={emitter}
+        onReady={onReady}
+        width={30}
+        {...FAST}
+      />,
     );
 
-    emitter.emit("progress", { phase: "graph", status: "start" } satisfies InitProgressEvent);
+    emitter.emit("progress", {
+      phase: "graph",
+      status: "start",
+    } satisfies InitProgressEvent);
     await until(() => (lastFrame() ?? "").includes("Building code graph…"));
     expect(lastFrame() ?? "").toContain("Building code graph…");
 
@@ -68,7 +85,12 @@ describe("InitAnimationApp", () => {
     const emitter = new EventEmitter();
     const total = 200;
     const { lastFrame, unmount } = render(
-      <InitAnimationApp emitter={emitter} onReady={() => {}} width={30} {...FAST} />,
+      <InitAnimationApp
+        emitter={emitter}
+        onReady={() => {}}
+        width={30}
+        {...FAST}
+      />,
     );
 
     for (let done = 1; done <= total; done++) {
@@ -88,7 +110,12 @@ describe("InitAnimationApp", () => {
   it("still shows the game while working", () => {
     const emitter = new EventEmitter();
     const { lastFrame, unmount } = render(
-      <InitAnimationApp emitter={emitter} onReady={() => {}} width={30} {...FAST} />,
+      <InitAnimationApp
+        emitter={emitter}
+        onReady={() => {}}
+        width={30}
+        {...FAST}
+      />,
     );
     expect(/[▲◆●]/.test(lastFrame() ?? "")).toBe(true);
     unmount();
@@ -98,7 +125,12 @@ describe("InitAnimationApp", () => {
     const emitter = new EventEmitter();
     const onReady = vi.fn();
     const { lastFrame, unmount } = render(
-      <InitAnimationApp emitter={emitter} onReady={onReady} width={30} {...FAST} />,
+      <InitAnimationApp
+        emitter={emitter}
+        onReady={onReady}
+        width={30}
+        {...FAST}
+      />,
     );
 
     emitter.emit("progress", {
@@ -118,10 +150,18 @@ describe("InitAnimationApp", () => {
   it("hands off to the OXAGEN reveal when domains resolves as skipped (no AI credential)", async () => {
     const emitter = new EventEmitter();
     const { lastFrame, unmount } = render(
-      <InitAnimationApp emitter={emitter} onReady={() => {}} width={30} {...FAST} />,
+      <InitAnimationApp
+        emitter={emitter}
+        onReady={() => {}}
+        width={30}
+        {...FAST}
+      />,
     );
 
-    emitter.emit("progress", { phase: "domains", status: "skipped" } satisfies InitProgressEvent);
+    emitter.emit("progress", {
+      phase: "domains",
+      status: "skipped",
+    } satisfies InitProgressEvent);
     await until(() => !/[▲◆●]/.test(lastFrame() ?? ""));
     expect(lastFrame() ?? "").not.toMatch(/[▲◆●]/);
     unmount();
@@ -130,7 +170,12 @@ describe("InitAnimationApp", () => {
   it("does not reveal on domains:start — the phase has only just begun", async () => {
     const emitter = new EventEmitter();
     const { lastFrame, unmount } = render(
-      <InitAnimationApp emitter={emitter} onReady={() => {}} width={30} {...FAST} />,
+      <InitAnimationApp
+        emitter={emitter}
+        onReady={() => {}}
+        width={30}
+        {...FAST}
+      />,
     );
 
     emitter.emit("progress", {
@@ -148,7 +193,12 @@ describe("InitAnimationApp", () => {
   it("stops listening after unmount", () => {
     const emitter = new EventEmitter();
     const { unmount } = render(
-      <InitAnimationApp emitter={emitter} onReady={() => {}} width={30} {...FAST} />,
+      <InitAnimationApp
+        emitter={emitter}
+        onReady={() => {}}
+        width={30}
+        {...FAST}
+      />,
     );
     expect(emitter.listenerCount("progress")).toBeGreaterThan(0);
     unmount();
