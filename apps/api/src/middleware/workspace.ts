@@ -14,7 +14,10 @@ import type { AppEnv } from "../app";
  * resources within the same org, independent of IAM enforcement state.
  * API-key requests already carry a pre-bound workspaceId and skip this path.
  */
-export const workspaceMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
+export const workspaceMiddleware: MiddlewareHandler<AppEnv> = async (
+  c,
+  next,
+) => {
   // API-key auth pre-bound the scope — skip slug resolution.
   if (c.get("workspaceId")) return next();
 
@@ -22,11 +25,15 @@ export const workspaceMiddleware: MiddlewareHandler<AppEnv> = async (c, next) =>
   if (!orgId) throw new HTTPException(400, { message: "Tenant scope missing" });
 
   const slug = c.req.param("workspace_slug");
-  if (!slug) throw new HTTPException(400, { message: "Missing workspace slug" });
+  if (!slug)
+    throw new HTTPException(400, { message: "Missing workspace slug" });
 
-  // Pass userId so the resolver enforces workspace membership. A null/absent
-  // userId (shouldn't occur here — authMiddleware runs first) degrades
-  // gracefully to a slug-only lookup (no membership check).
+  // Pass userId so the resolver enforces workspace membership. API-key auth
+  // leaves userId null by design, but it also pre-binds workspaceId — which the
+  // early return above already consumed — so this line is only reached on the
+  // session path, where userId is always set. A null here would degrade to a
+  // slug-only lookup with no membership check, so keep that invariant: any
+  // future auth mode that sets orgId without workspaceId must set userId too.
   const userId = c.get("userId");
   const result = await resolveWorkspaceScope(orgId, slug, userId);
   if (!result.ok) {

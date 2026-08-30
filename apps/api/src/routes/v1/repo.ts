@@ -22,9 +22,11 @@ export const repoRoute = new Hono<AppEnv>();
 
 // PATCH /repos/:id/configure — update repo-specific ingestion config
 repoRoute.patch("/:id/configure", async (c) => {
+  // Path param LAST: the URL identifies the resource, so a `repoId` in the body
+  // must never redirect the write to a different repo than the one addressed.
   const body = repoConfigure.input.parse({
+    ...((await c.req.json()) as Record<string, unknown>),
     repoId: c.req.param("id"),
-    ...(await c.req.json() as Record<string, unknown>),
   });
   const ctx = capabilityContext(c);
   const out = await invoke(repoConfigure.name, body, ctx, { surface: "api" });
@@ -33,9 +35,10 @@ repoRoute.patch("/:id/configure", async (c) => {
 
 // POST /repos/:id/sync — trigger incremental or full re-index
 repoRoute.post("/:id/sync", async (c) => {
+  // Path param LAST — see the note on /:id/configure above.
   const body = repoSync.input.parse({
+    ...((await c.req.json()) as Record<string, unknown>),
     repoId: c.req.param("id"),
-    ...(await c.req.json() as Record<string, unknown>),
   });
   const ctx = capabilityContext(c);
   const out = await invoke(repoSync.name, body, ctx, { surface: "api" });
@@ -68,7 +71,9 @@ repoRoute.get("/:id/metrics", async (c) => {
 
 // POST /repos — create a new GitHub repository
 repoRoute.post("/", async (c) => {
-  const body = repoCreate.input.parse(await c.req.json() as Record<string, unknown>);
+  const body = repoCreate.input.parse(
+    (await c.req.json()) as Record<string, unknown>,
+  );
   const ctx = capabilityContext(c);
   const out = await invoke(repoCreate.name, body, ctx, { surface: "api" });
   return c.json(out, 201);
@@ -76,7 +81,9 @@ repoRoute.post("/", async (c) => {
 
 // POST /repos/fork — fork a GitHub repository into user account or organisation
 repoRoute.post("/fork", async (c) => {
-  const body = repoFork.input.parse(await c.req.json() as Record<string, unknown>);
+  const body = repoFork.input.parse(
+    (await c.req.json()) as Record<string, unknown>,
+  );
   const ctx = capabilityContext(c);
   const out = await invoke(repoFork.name, body, ctx, { surface: "api" });
   return c.json(out, 201);
@@ -84,7 +91,9 @@ repoRoute.post("/fork", async (c) => {
 
 // PUT /repos/file — commit a file (create or update) in a GitHub repository
 repoRoute.put("/file", async (c) => {
-  const body = repoFilePut.input.parse(await c.req.json() as Record<string, unknown>);
+  const body = repoFilePut.input.parse(
+    (await c.req.json()) as Record<string, unknown>,
+  );
   const ctx = capabilityContext(c);
   const out = await invoke(repoFilePut.name, body, ctx, { surface: "api" });
   return c.json(out);
@@ -92,9 +101,13 @@ repoRoute.put("/file", async (c) => {
 
 // POST /repos/branch — create a new branch in a GitHub repository
 repoRoute.post("/branch", async (c) => {
-  const body = repoBranchCreate.input.parse(await c.req.json() as Record<string, unknown>);
+  const body = repoBranchCreate.input.parse(
+    (await c.req.json()) as Record<string, unknown>,
+  );
   const ctx = capabilityContext(c);
-  const out = await invoke(repoBranchCreate.name, body, ctx, { surface: "api" });
+  const out = await invoke(repoBranchCreate.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out, 201);
 });
 
@@ -111,7 +124,9 @@ repoRoute.get("/branches", async (c) => {
 
 // POST /repos/pulls — open a pull request in a GitHub repository
 repoRoute.post("/pulls", async (c) => {
-  const body = repoPrOpen.input.parse(await c.req.json() as Record<string, unknown>);
+  const body = repoPrOpen.input.parse(
+    (await c.req.json()) as Record<string, unknown>,
+  );
   const ctx = capabilityContext(c);
   const out = await invoke(repoPrOpen.name, body, ctx, { surface: "api" });
   return c.json(out, 201);
@@ -155,7 +170,9 @@ repoRoute.get("/pulls/:number/diff", async (c) => {
 
 // POST /repos/agent/edit — run the coding agent against a repo and open a PR
 repoRoute.post("/agent/edit", async (c) => {
-  const body = agentRepoEdit.input.parse(await c.req.json() as Record<string, unknown>);
+  const body = agentRepoEdit.input.parse(
+    (await c.req.json()) as Record<string, unknown>,
+  );
   const ctx = capabilityContext(c);
   const out = await invoke(agentRepoEdit.name, body, ctx, { surface: "api" });
   return c.json(out, 201);

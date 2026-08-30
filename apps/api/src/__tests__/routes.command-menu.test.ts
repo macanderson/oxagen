@@ -71,7 +71,9 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -104,12 +106,18 @@ describe("command.menu.suggest route", () => {
   it("happy path: invoke called once, returns 200 JSON result", async () => {
     const invokeResult = {
       suggestions: [
-        { text: "Summarize this run's failure", category: "investigate", confidence: 0.9 },
+        {
+          text: "Summarize this run's failure",
+          category: "investigate",
+          confidence: 0.9,
+        },
       ],
     };
     mocks.invoke.mockResolvedValue(invokeResult);
 
-    const res = await app.fetch(post(PATH, { route: "/acme/prod/activity/runs/run_1" }));
+    const res = await app.fetch(
+      post(PATH, { route: "/acme/prod/activity/runs/run_1" }),
+    );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(invokeResult);
   });
@@ -125,7 +133,11 @@ describe("command.menu.suggest route", () => {
     await app.fetch(
       post(PATH, {
         route: "/acme/prod/activity/runs/run_42",
-        pageEntity: { kind: "run", id: "run_42", summary: "Failed during step 3" },
+        pageEntity: {
+          kind: "run",
+          id: "run_42",
+          summary: "Failed during step 3",
+        },
       }),
     );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
@@ -188,7 +200,9 @@ describe("command.menu.search route", () => {
   });
 
   it("calls invoke with contract name 'search_command_menu' and surface 'api'", async () => {
-    await app.fetch(post(PATH, { query: "run", orgSlug: "acme", workspaceSlug: "prod" }));
+    await app.fetch(
+      post(PATH, { query: "run", orgSlug: "acme", workspaceSlug: "prod" }),
+    );
     expect(mocks.invoke).toHaveBeenCalledOnce();
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("search_command_menu");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
@@ -196,7 +210,12 @@ describe("command.menu.search route", () => {
 
   it("forwards query, kind filter, and slugs to invoke", async () => {
     await app.fetch(
-      post(PATH, { query: "alice", kind: "principal", orgSlug: "acme", workspaceSlug: "prod" }),
+      post(PATH, {
+        query: "alice",
+        kind: "principal",
+        orgSlug: "acme",
+        workspaceSlug: "prod",
+      }),
     );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.query).toBe("alice");
@@ -206,7 +225,9 @@ describe("command.menu.search route", () => {
   });
 
   it("missing orgSlug → 400, invoke not called", async () => {
-    const res = await app.fetch(post(PATH, { query: "run", workspaceSlug: "prod" }));
+    const res = await app.fetch(
+      post(PATH, { query: "run", workspaceSlug: "prod" }),
+    );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -219,7 +240,12 @@ describe("command.menu.search route", () => {
 
   it("invalid kind enum → 400, invoke not called", async () => {
     const res = await app.fetch(
-      post(PATH, { query: "run", kind: "spaceship", orgSlug: "acme", workspaceSlug: "prod" }),
+      post(PATH, {
+        query: "run",
+        kind: "spaceship",
+        orgSlug: "acme",
+        workspaceSlug: "prod",
+      }),
     );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();

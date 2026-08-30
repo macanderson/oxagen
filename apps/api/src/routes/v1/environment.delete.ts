@@ -9,6 +9,8 @@ export const environmentDeleteRoute = new Hono<AppEnv>();
 environmentDeleteRoute.post("/", async (c) => {
   const body = environmentDelete.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(environmentDelete.name, body, ctx, { surface: "api" });
+  const out = await invoke(environmentDelete.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

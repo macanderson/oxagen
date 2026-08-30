@@ -86,7 +86,9 @@ beforeEach(() => {
   // Default: everything succeeds
   mocks.consumeCliAuthCode.mockResolvedValue(VALID_CODE_DATA);
   mocks.verifyPkceS256.mockReturnValue(true);
-  mocks.withSystemDb.mockImplementation(async (fn: (tx: typeof FAKE_TX) => Promise<void>) => fn(FAKE_TX));
+  mocks.withSystemDb.mockImplementation(
+    async (fn: (tx: typeof FAKE_TX) => Promise<void>) => fn(FAKE_TX),
+  );
   mocks.generateApiKey.mockReturnValue({
     rawKey: RAW_KEY,
     keyPrefix: "ox_testrawke",
@@ -110,7 +112,10 @@ describe("POST /token — happy path", () => {
   it("calls consumeCliAuthCode with the code and a numeric timestamp", async () => {
     await authCliTokenRoute.fetch(makeRequest(VALID_BODY));
     expect(mocks.consumeCliAuthCode).toHaveBeenCalledOnce();
-    const [calledCode, calledNow] = mocks.consumeCliAuthCode.mock.calls[0] as [string, number];
+    const [calledCode, calledNow] = mocks.consumeCliAuthCode.mock.calls[0] as [
+      string,
+      number,
+    ];
     expect(calledCode).toBe(VALID_BODY.code);
     expect(typeof calledNow).toBe("number");
     expect(calledNow).toBeGreaterThan(0);
@@ -180,7 +185,9 @@ describe("POST /token — invalid or expired code (consumeCliAuthCode returns nu
     expect(res.status).toBe(400);
     const body = (await res.json()) as Record<string, string>;
     expect(body.error).toBe("invalid_grant");
-    expect(body.error_description).toBe("Authorization code is invalid or expired");
+    expect(body.error_description).toBe(
+      "Authorization code is invalid or expired",
+    );
   });
 
   it("does NOT insert a DB row or emit an event", async () => {
@@ -195,7 +202,10 @@ describe("POST /token — invalid or expired code (consumeCliAuthCode returns nu
 describe("POST /token — redirect_uri mismatch", () => {
   it("returns 400 invalid_grant when redirect_uri doesn't match stored value", async () => {
     const res = await authCliTokenRoute.fetch(
-      makeRequest({ ...VALID_BODY, redirect_uri: "http://127.0.0.1:9999/callback" }),
+      makeRequest({
+        ...VALID_BODY,
+        redirect_uri: "http://127.0.0.1:9999/callback",
+      }),
     );
     expect(res.status).toBe(400);
     const body = (await res.json()) as Record<string, string>;
@@ -204,7 +214,10 @@ describe("POST /token — redirect_uri mismatch", () => {
 
   it("does NOT insert a DB row or emit an event on mismatch", async () => {
     await authCliTokenRoute.fetch(
-      makeRequest({ ...VALID_BODY, redirect_uri: "http://127.0.0.1:9999/callback" }),
+      makeRequest({
+        ...VALID_BODY,
+        redirect_uri: "http://127.0.0.1:9999/callback",
+      }),
     );
     expect(mocks.withSystemDb).not.toHaveBeenCalled();
     expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
@@ -237,7 +250,10 @@ describe("POST /token — PKCE verification fails", () => {
 describe("POST /token — invalid request body", () => {
   it("returns 400 invalid_request for missing code field", async () => {
     const res = await authCliTokenRoute.fetch(
-      makeRequest({ code_verifier: VALID_BODY.code_verifier, redirect_uri: VALID_BODY.redirect_uri }),
+      makeRequest({
+        code_verifier: VALID_BODY.code_verifier,
+        redirect_uri: VALID_BODY.redirect_uri,
+      }),
     );
     expect(res.status).toBe(400);
     const body = (await res.json()) as Record<string, string>;
@@ -246,7 +262,10 @@ describe("POST /token — invalid request body", () => {
 
   it("returns 400 invalid_request for missing code_verifier", async () => {
     const res = await authCliTokenRoute.fetch(
-      makeRequest({ code: VALID_BODY.code, redirect_uri: VALID_BODY.redirect_uri }),
+      makeRequest({
+        code: VALID_BODY.code,
+        redirect_uri: VALID_BODY.redirect_uri,
+      }),
     );
     expect(res.status).toBe(400);
     const body = (await res.json()) as Record<string, string>;
@@ -255,7 +274,10 @@ describe("POST /token — invalid request body", () => {
 
   it("returns 400 invalid_request for missing redirect_uri", async () => {
     const res = await authCliTokenRoute.fetch(
-      makeRequest({ code: VALID_BODY.code, code_verifier: VALID_BODY.code_verifier }),
+      makeRequest({
+        code: VALID_BODY.code,
+        code_verifier: VALID_BODY.code_verifier,
+      }),
     );
     expect(res.status).toBe(400);
     const body = (await res.json()) as Record<string, string>;

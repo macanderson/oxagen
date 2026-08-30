@@ -11,6 +11,8 @@ export const agentMemoryImportParseRoute = new Hono<AppEnv>();
 agentMemoryImportParseRoute.post("/", async (c) => {
   const body = agentMemoryImportParse.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(agentMemoryImportParse.name, body, ctx, { surface: "api" });
+  const out = await invoke(agentMemoryImportParse.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out, 200);
 });

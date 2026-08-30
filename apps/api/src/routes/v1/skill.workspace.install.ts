@@ -9,6 +9,8 @@ export const skillWorkspaceInstallRoute = new Hono<AppEnv>();
 skillWorkspaceInstallRoute.post("/", async (c) => {
   const input = skillWorkspaceInstall.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(skillWorkspaceInstall.name, input, ctx, { surface: "api" });
+  const out = await invoke(skillWorkspaceInstall.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

@@ -64,7 +64,9 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -105,9 +107,7 @@ describe("conversation.archive route", () => {
   });
 
   it("calls invoke with 'archive_conversation' and surface 'api'", async () => {
-    await app.fetch(
-      post(PATH, { conversationIds: ["c1"], archived: false }),
-    );
+    await app.fetch(post(PATH, { conversationIds: ["c1"], archived: false }));
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("archive_conversation");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
@@ -133,9 +133,7 @@ describe("conversation.archive route", () => {
   });
 
   it("missing archived field → 400", async () => {
-    const res = await app.fetch(
-      post(PATH, { conversationIds: ["c1"] }),
-    );
+    const res = await app.fetch(post(PATH, { conversationIds: ["c1"] }));
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -163,9 +161,7 @@ describe("conversation.delete route", () => {
   });
 
   it("empty conversationIds → 400", async () => {
-    const res = await app.fetch(
-      post(PATH, { conversationIds: [] }),
-    );
+    const res = await app.fetch(post(PATH, { conversationIds: [] }));
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });

@@ -9,6 +9,8 @@ export const agentDefinitionReviseRoute = new Hono<AppEnv>();
 agentDefinitionReviseRoute.post("/", async (c) => {
   const input = agentDefinitionRevise.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(agentDefinitionRevise.name, input, ctx, { surface: "api" });
+  const out = await invoke(agentDefinitionRevise.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

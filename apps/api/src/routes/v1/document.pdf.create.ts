@@ -11,6 +11,8 @@ export const documentsPdfCreateRoute = new Hono<AppEnv>();
 documentsPdfCreateRoute.post("/", async (c) => {
   const body = documentsPdfCreate.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(documentsPdfCreate.name, body, ctx, { surface: "api" });
+  const out = await invoke(documentsPdfCreate.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out, 200);
 });

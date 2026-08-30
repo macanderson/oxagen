@@ -9,6 +9,8 @@ export const workspaceBudgetPolicyReadRoute = new Hono<AppEnv>();
 workspaceBudgetPolicyReadRoute.get("/", async (c) => {
   const input = workspaceBudgetPolicyRead.input.parse({});
   const ctx = capabilityContext(c);
-  const out = await invoke(workspaceBudgetPolicyRead.name, input, ctx, { surface: "api" });
+  const out = await invoke(workspaceBudgetPolicyRead.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

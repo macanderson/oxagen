@@ -71,7 +71,9 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 // Spread the real module so new module-level `schema.<table>` projections in
@@ -110,7 +112,9 @@ beforeEach(() => {
   mocks.resolveApiKey.mockResolvedValue(makeApiKeyOk());
   // runInTenantScope runs its callback directly; resync tests override the rows
   // returned by withTenantDb, and eventClient.send resolves by default.
-  mocks.runInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn());
+  mocks.runInTenantScope.mockImplementation(
+    (_scope: unknown, fn: () => unknown) => fn(),
+  );
   mocks.eventSend.mockResolvedValue(undefined);
 });
 
@@ -122,7 +126,9 @@ function txReturning(rows: unknown[]) {
     where: () => builder,
     limit: () => rows,
   };
-  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) => fn(builder));
+  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+    fn(builder),
+  );
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -148,7 +154,10 @@ function post(path: string, body: unknown) {
 
 function del(path: string) {
   return app.fetch(
-    makeRequest(path, { method: "DELETE", headers: { authorization: bearerHeader("oxk_key") } }),
+    makeRequest(path, {
+      method: "DELETE",
+      headers: { authorization: bearerHeader("oxk_key") },
+    }),
   );
 }
 
@@ -233,7 +242,11 @@ describe("POST /connections", () => {
   });
 
   it("returns 400 when displayName is empty", async () => {
-    const res = await post(BASE, { connectorId: "github", displayName: "", authCredential: {} });
+    const res = await post(BASE, {
+      connectorId: "github",
+      displayName: "",
+      authCredential: {},
+    });
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -373,7 +386,9 @@ describe("GET /connections/:id/mappings", () => {
 
 describe("PUT /connections/:id/mappings", () => {
   const validMappings = {
-    mappings: [{ sourceRecordType: "pull_request", oxagenEntityType: "code_change" }],
+    mappings: [
+      { sourceRecordType: "pull_request", oxagenEntityType: "code_change" },
+    ],
   };
 
   it("saves mappings and returns result", async () => {
@@ -395,7 +410,11 @@ describe("PUT /connections/:id/mappings", () => {
   });
 
   it("merges path connectionId with body", async () => {
-    mocks.invoke.mockResolvedValue({ mappingsCreated: 1, mappingsUpdated: 0, connectionStatus: "active" });
+    mocks.invoke.mockResolvedValue({
+      mappingsCreated: 1,
+      mappingsUpdated: 0,
+      connectionStatus: "active",
+    });
     await put(`${BASE}/con_ABC/mappings`, validMappings);
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.connectionId).toBe("con_ABC");
@@ -414,7 +433,11 @@ describe("POST /connections/:id/resync", () => {
         workspaceId: "test-ws",
         connectorId: "github",
         status: "connected",
-        deliveryConfig: { owner: "acme", repo: "api", defaultBranch: "develop" },
+        deliveryConfig: {
+          owner: "acme",
+          repo: "api",
+          defaultBranch: "develop",
+        },
       },
     ]);
     const res = await post(`${BASE}/con_ABC/resync`, {});
@@ -453,7 +476,9 @@ describe("POST /connections/:id/resync", () => {
     ]);
     const res = await post(`${BASE}/con_ABC/resync`, {});
     expect(res.status).toBe(200);
-    const evt = mocks.eventSend.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    const evt = mocks.eventSend.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
     expect(evt.data.owner).toBe("");
     expect(evt.data.repo).toBe("");
     expect(evt.data.defaultBranch).toBe("main");
@@ -464,7 +489,10 @@ describe("POST /connections/:id/resync", () => {
 
 describe("PATCH /connections/:id", () => {
   it("forwards the rename to connection.update with the path id", async () => {
-    mocks.invoke.mockResolvedValue({ connectionId: "con_ABC", displayName: "Renamed" });
+    mocks.invoke.mockResolvedValue({
+      connectionId: "con_ABC",
+      displayName: "Renamed",
+    });
     const res = await app.fetch(
       makeRequest(`${BASE}/con_ABC`, {
         method: "PATCH",
@@ -477,7 +505,10 @@ describe("PATCH /connections/:id", () => {
     );
     expect(res.status).toBe(200);
     expect(mocks.invoke).toHaveBeenCalledTimes(1);
-    const [name, input] = mocks.invoke.mock.calls[0] as [string, Record<string, unknown>];
+    const [name, input] = mocks.invoke.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
     expect(name).toBe("update_connection");
     expect(input.connectionId).toBe("con_ABC");
     expect(input.displayName).toBe("Renamed");
@@ -488,17 +519,26 @@ describe("PATCH /connections/:id", () => {
 
 describe("POST /connections/:id/pause", () => {
   it("forwards paused=true to connection.pause with the path id", async () => {
-    mocks.invoke.mockResolvedValue({ connectionId: "con_ABC", status: "paused" });
+    mocks.invoke.mockResolvedValue({
+      connectionId: "con_ABC",
+      status: "paused",
+    });
     const res = await post(`${BASE}/con_ABC/pause`, { paused: true });
     expect(res.status).toBe(200);
-    const [name, input] = mocks.invoke.mock.calls[0] as [string, Record<string, unknown>];
+    const [name, input] = mocks.invoke.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
     expect(name).toBe("pause_connection");
     expect(input.connectionId).toBe("con_ABC");
     expect(input.paused).toBe(true);
   });
 
   it("forwards paused=false to resume", async () => {
-    mocks.invoke.mockResolvedValue({ connectionId: "con_ABC", status: "connected" });
+    mocks.invoke.mockResolvedValue({
+      connectionId: "con_ABC",
+      status: "connected",
+    });
     await post(`${BASE}/con_ABC/pause`, { paused: false });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.paused).toBe(false);

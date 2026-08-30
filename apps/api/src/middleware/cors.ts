@@ -37,7 +37,10 @@ function withWwwTwin(origin: string): string[] {
     const twinHost = url.hostname.startsWith("www.")
       ? url.hostname.slice(4)
       : `www.${url.hostname}`;
-    return [origin, `${url.protocol}//${twinHost}${url.port ? `:${url.port}` : ""}`];
+    return [
+      origin,
+      `${url.protocol}//${twinHost}${url.port ? `:${url.port}` : ""}`,
+    ];
   } catch {
     return [origin];
   }

@@ -151,12 +151,19 @@ interface MintOpts {
  * Mint a fresh active code for a lead, revoking any other active code first so
  * the lead holds exactly one live link. Runs inside the caller's tx.
  */
-async function mintCodeTx(tx: Tx, leadId: string, opts: MintOpts): Promise<string> {
+async function mintCodeTx(
+  tx: Tx,
+  leadId: string,
+  opts: MintOpts,
+): Promise<string> {
   await tx
     .update(bookAccessCodes)
     .set({ status: "revoked", updatedAt: sql`now()` })
     .where(
-      and(eq(bookAccessCodes.leadId, leadId), eq(bookAccessCodes.status, "active")),
+      and(
+        eq(bookAccessCodes.leadId, leadId),
+        eq(bookAccessCodes.status, "active"),
+      ),
     );
   const code = generateAccessCode();
   await tx.insert(bookAccessCodes).values({
@@ -240,7 +247,10 @@ export type RedeemResult =
       editions: { slug: string; title: string; format: string }[];
       leadEmail: string;
     }
-  | { ok: false; reason: "invalid" | "consumed" | "expired" | "unknown_edition" };
+  | {
+      ok: false;
+      reason: "invalid" | "consumed" | "expired" | "unknown_edition";
+    };
 
 /**
  * Validate → consume → rotate a code, returning the book HTML for `edition`.
@@ -253,7 +263,8 @@ export async function redeemAndRotate(
   code: string,
   ctx: { ip?: string | null; userAgent?: string | null } = {},
 ): Promise<RedeemResult> {
-  if (!isEditionSlug(editionSlug)) return { ok: false, reason: "unknown_edition" };
+  if (!isEditionSlug(editionSlug))
+    return { ok: false, reason: "unknown_edition" };
 
   return withSystemDb(async (tx): Promise<RedeemResult> => {
     const [edition] = await tx
@@ -262,7 +273,12 @@ export async function redeemAndRotate(
         title: bookEditions.title,
       })
       .from(bookEditions)
-      .where(and(eq(bookEditions.slug, editionSlug), eq(bookEditions.published, true)))
+      .where(
+        and(
+          eq(bookEditions.slug, editionSlug),
+          eq(bookEditions.published, true),
+        ),
+      )
       .limit(1);
     if (!edition) return { ok: false, reason: "unknown_edition" };
 
@@ -281,7 +297,10 @@ export async function redeemAndRotate(
 
     if (!codeRow) return { ok: false, reason: "invalid" };
     if (codeRow.status !== "active") {
-      return { ok: false, reason: codeRow.status === "consumed" ? "consumed" : "invalid" };
+      return {
+        ok: false,
+        reason: codeRow.status === "consumed" ? "consumed" : "invalid",
+      };
     }
     if (codeRow.expiresAt && codeRow.expiresAt.getTime() < Date.now()) {
       return { ok: false, reason: "expired" };

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { a2aCardGet } from "@oxagen/oxagen/contracts/a2a.card.get";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
+import { logger } from "../../middleware/logger";
 import { requestBaseUrl } from "./base-url";
 import type { AppEnv } from "../../app";
 import {
@@ -56,13 +57,20 @@ a2aRpcRoute.post("/", async (c) => {
   try {
     rawBody = await c.req.json();
   } catch {
-    return c.json(jsonRpcError(null, A2A_ERROR.parseError, "Invalid JSON"), 200);
+    return c.json(
+      jsonRpcError(null, A2A_ERROR.parseError, "Invalid JSON"),
+      200,
+    );
   }
 
   // JSON-RPC batching is not supported by the A2A binding.
   if (Array.isArray(rawBody)) {
     return c.json(
-      jsonRpcError(null, A2A_ERROR.invalidRequest, "Batch requests are not supported"),
+      jsonRpcError(
+        null,
+        A2A_ERROR.invalidRequest,
+        "Batch requests are not supported",
+      ),
       200,
     );
   }
@@ -70,13 +78,18 @@ a2aRpcRoute.post("/", async (c) => {
   const envelope = jsonRpcRequest.safeParse(rawBody);
   if (!envelope.success) {
     return c.json(
-      jsonRpcError(null, A2A_ERROR.invalidRequest, "Malformed JSON-RPC request"),
+      jsonRpcError(
+        null,
+        A2A_ERROR.invalidRequest,
+        "Malformed JSON-RPC request",
+      ),
       200,
     );
   }
 
-  const { id = null, method, params } = envelope.data;
-  const rpcId: JsonRpcId = id ?? null;
+  const { method, params } = envelope.data;
+  // A notification (no `id`) and an explicit `"id": null` both echo back null.
+  const rpcId: JsonRpcId = envelope.data.id ?? null;
 
   // capabilityContext throws 400 when the API key did not bind org+workspace.
   const ctx = capabilityContext(c);
@@ -97,10 +110,18 @@ a2aRpcRoute.post("/", async (c) => {
           );
         }
         const contextId = parsed.data.message.contextId ?? mintContextId();
-        const userMessage = normalizeUserMessage(parsed.data.message, contextId);
+        const userMessage = normalizeUserMessage(
+          parsed.data.message,
+          contextId,
+        );
         const task = await createTask(ctx, { contextId, userMessage });
         const history = await loadContextHistory(ctx, contextId);
-        const final = await runA2ATask({ ctx, task, history, message: userMessage });
+        const final = await runA2ATask({
+          ctx,
+          task,
+          history,
+          message: userMessage,
+        });
         return c.json(jsonRpcResult(rpcId, toA2ATask(final)), 200);
       }
 
@@ -118,7 +139,10 @@ a2aRpcRoute.post("/", async (c) => {
           );
         }
         const contextId = parsed.data.message.contextId ?? mintContextId();
-        const userMessage = normalizeUserMessage(parsed.data.message, contextId);
+        const userMessage = normalizeUserMessage(
+          parsed.data.message,
+          contextId,
+        );
         const task = await createTask(ctx, { contextId, userMessage });
         const history = await loadContextHistory(ctx, contextId);
 
@@ -168,7 +192,11 @@ a2aRpcRoute.post("/", async (c) => {
         const parsed = a2aTaskQueryParams.safeParse(params);
         if (!parsed.success) {
           return c.json(
-            jsonRpcError(rpcId, A2A_ERROR.invalidParams, "Invalid tasks/get params"),
+            jsonRpcError(
+              rpcId,
+              A2A_ERROR.invalidParams,
+              "Invalid tasks/get params",
+            ),
             200,
           );
         }
@@ -189,7 +217,11 @@ a2aRpcRoute.post("/", async (c) => {
         const parsed = a2aTaskIdParams.safeParse(params);
         if (!parsed.success) {
           return c.json(
-            jsonRpcError(rpcId, A2A_ERROR.invalidParams, "Invalid tasks/cancel params"),
+            jsonRpcError(
+              rpcId,
+              A2A_ERROR.invalidParams,
+              "Invalid tasks/cancel params",
+            ),
             200,
           );
         }
@@ -213,17 +245,18 @@ a2aRpcRoute.post("/", async (c) => {
         const canceled = await updateTask(ctx, parsed.data.id, {
           state: "canceled",
         });
-        return c.json(
-          jsonRpcResult(rpcId, toA2ATask(canceled ?? row)),
-          200,
-        );
+        return c.json(jsonRpcResult(rpcId, toA2ATask(canceled ?? row)), 200);
       }
 
       case A2A_METHODS.tasksResubscribe: {
         const parsed = a2aTaskIdParams.safeParse(params);
         if (!parsed.success) {
           return c.json(
-            jsonRpcError(rpcId, A2A_ERROR.invalidParams, "Invalid tasks/resubscribe params"),
+            jsonRpcError(
+              rpcId,
+              A2A_ERROR.invalidParams,
+              "Invalid tasks/resubscribe params",
+            ),
             200,
           );
         }
@@ -313,7 +346,11 @@ a2aRpcRoute.post("/", async (c) => {
           );
         }
         return c.json(
-          jsonRpcError(rpcId, A2A_ERROR.methodNotFound, `Unknown method: ${method}`),
+          jsonRpcError(
+            rpcId,
+            A2A_ERROR.methodNotFound,
+            `Unknown method: ${method}`,
+          ),
           200,
         );
       }
@@ -321,11 +358,19 @@ a2aRpcRoute.post("/", async (c) => {
   } catch (err) {
     if (err instanceof z.ZodError) {
       return c.json(
-        jsonRpcError(rpcId, A2A_ERROR.invalidParams, "Invalid params", err.issues),
+        jsonRpcError(
+          rpcId,
+          A2A_ERROR.invalidParams,
+          "Invalid params",
+          err.issues,
+        ),
         200,
       );
     }
-    console.error("[a2a.rpc] internal error:", err);
+    logger.error(
+      { err, method, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "[a2a.rpc] internal error",
+    );
     return c.json(
       jsonRpcError(
         rpcId,

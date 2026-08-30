@@ -63,7 +63,9 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -185,9 +187,7 @@ describe("plugin.credential.reauth route", () => {
     mocks.invoke.mockResolvedValue({
       authorizeUrl: "https://accounts.google.com/o/oauth2/auth?...",
     });
-    const res = await app.fetch(
-      post(PATH, { orgListingId: "lst-1" }),
-    );
+    const res = await app.fetch(post(PATH, { orgListingId: "lst-1" }));
     expect(res.status).toBe(200);
   });
 
@@ -206,9 +206,7 @@ describe("plugin.credential.revoke route", () => {
 
   it("happy path: 200 with revoked flag", async () => {
     mocks.invoke.mockResolvedValue({ revoked: true });
-    const res = await app.fetch(
-      post(PATH, { orgListingId: "lst-1" }),
-    );
+    const res = await app.fetch(post(PATH, { orgListingId: "lst-1" }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ revoked: true });
   });
@@ -246,7 +244,11 @@ describe("plugin.credential.set_secret route", () => {
 
   it("calls invoke with 'set_plugin_secret'", async () => {
     await app.fetch(
-      post(PATH, { orgListingId: "lst-1", authKind: "oauth", accessToken: "tok" }),
+      post(PATH, {
+        orgListingId: "lst-1",
+        authKind: "oauth",
+        accessToken: "tok",
+      }),
     );
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("set_plugin_secret");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
@@ -268,7 +270,9 @@ describe("plugin.org.install route", () => {
   });
 
   it("calls invoke with 'install_plugin'", async () => {
-    await app.fetch(post(PATH, { pluginType: "agent_capability", pluginId: "srv-1" }));
+    await app.fetch(
+      post(PATH, { pluginType: "agent_capability", pluginId: "srv-1" }),
+    );
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("install_plugin");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.pluginType).toBe("agent_capability");
@@ -291,7 +295,9 @@ describe("plugin.org.install_bulk route", () => {
 
   it("calls invoke with 'install_plugins_bulk'", async () => {
     await app.fetch(
-      post(PATH, { items: [{ catalogServerId: "s1" }, { catalogServerId: "s2" }] }),
+      post(PATH, {
+        items: [{ catalogServerId: "s1" }, { catalogServerId: "s2" }],
+      }),
     );
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("install_plugins_bulk");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
@@ -339,7 +345,9 @@ describe("set_plugin_enabled route", () => {
   });
 
   it("calls invoke with 'set_plugin_enabled' (scope=org)", async () => {
-    await app.fetch(post(PATH, { scope: "org", orgListingId: "lst-1", enabled: false }));
+    await app.fetch(
+      post(PATH, { scope: "org", orgListingId: "lst-1", enabled: false }),
+    );
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("set_plugin_enabled");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.scope).toBe("org");
@@ -348,7 +356,9 @@ describe("set_plugin_enabled route", () => {
 
   it("calls invoke with 'set_plugin_enabled' (scope=workspace)", async () => {
     mocks.invoke.mockResolvedValue({ ok: true, workspaceServerId: "ws-srv-1" });
-    await app.fetch(post(PATH, { scope: "workspace", orgListingId: "lst-1", enabled: true }));
+    await app.fetch(
+      post(PATH, { scope: "workspace", orgListingId: "lst-1", enabled: true }),
+    );
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("set_plugin_enabled");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.scope).toBe("workspace");
@@ -363,9 +373,7 @@ describe("plugin.org.uninstall route", () => {
 
   it("happy path: 200", async () => {
     mocks.invoke.mockResolvedValue({ ok: true });
-    const res = await app.fetch(
-      post(PATH, { orgListingId: "lst-1" }),
-    );
+    const res = await app.fetch(post(PATH, { orgListingId: "lst-1" }));
     expect(res.status).toBe(200);
   });
 
@@ -404,7 +412,10 @@ describe("plugin.registry.add route", () => {
   it("happy path: 201 with registryId", async () => {
     mocks.invoke.mockResolvedValue({ registryId: "reg-1" });
     const res = await app.fetch(
-      post(PATH, { name: "My Registry", baseUrl: "https://registry.example.com" }),
+      post(PATH, {
+        name: "My Registry",
+        baseUrl: "https://registry.example.com",
+      }),
     );
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ registryId: "reg-1" });
@@ -420,7 +431,9 @@ describe("plugin.registry.add route", () => {
   });
 
   it("invalid baseUrl → 400", async () => {
-    const res = await app.fetch(post(PATH, { name: "X", baseUrl: "not-a-url" }));
+    const res = await app.fetch(
+      post(PATH, { name: "X", baseUrl: "not-a-url" }),
+    );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -469,9 +482,7 @@ describe("plugin.settings.set_auth_alerts route", () => {
   });
 
   it("empty roles array → 400", async () => {
-    const res = await app.fetch(
-      post(PATH, { sendEmail: true, roles: [] }),
-    );
+    const res = await app.fetch(post(PATH, { sendEmail: true, roles: [] }));
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });

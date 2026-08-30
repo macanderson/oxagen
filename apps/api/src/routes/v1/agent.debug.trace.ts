@@ -19,13 +19,17 @@ agentDebugTraceRoute.get("/:executionId", async (c) => {
   });
   const ctx = capabilityContext(c);
   try {
-    const out = await invoke(agentDebugTrace.name, input, ctx, { surface: "api" });
+    const out = await invoke(agentDebugTrace.name, input, ctx, {
+      surface: "api",
+    });
     return c.json(out);
   } catch (err) {
     // Unknown or cross-tenant executionId is a clean 404, never a 500 — matched
     // structurally (typed error), not via a brittle message regex.
     if (isExecutionNotFoundError(err)) {
-      throw new HTTPException(404, { message: `Execution not found: ${input.executionId}` });
+      throw new HTTPException(404, {
+        message: `Execution not found: ${input.executionId}`,
+      });
     }
     throw err;
   }

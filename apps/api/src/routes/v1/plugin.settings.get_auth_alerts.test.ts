@@ -9,7 +9,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mocks.invoke }));
-vi.mock("../../lib/context", () => ({ capabilityContext: mocks.capabilityContext }));
+vi.mock("../../lib/context", () => ({
+  capabilityContext: mocks.capabilityContext,
+}));
 
 import { pluginSettingsGetAuthAlertsRoute } from "./plugin.settings.get_auth_alerts";
 
@@ -38,11 +40,8 @@ describe("GET plugin/settings/auth-alerts", () => {
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(OUTPUT);
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "get_auth_alerts",
-      {},
-      fakeCtx,
-      { surface: "api" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("get_auth_alerts", {}, fakeCtx, {
+      surface: "api",
+    });
   });
 });

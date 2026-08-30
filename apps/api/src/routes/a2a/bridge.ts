@@ -399,11 +399,34 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
         }),
     );
     if (authzCtx === null) {
-      throw new Error(
+      const reason =
         `A2A task rejected: agent "${resolvedAgent.publicId}" could not be ` +
-          `resolved to a live agent principal — failing closed (an A2A task ` +
-          `never executes without its delegation ceiling)`,
-      );
+        `resolved to a live agent principal — failing closed (an A2A task ` +
+        `never executes without its delegation ceiling)`;
+      // Fail closed WITHOUT stranding the task: land a terminal row + a final
+      // status-update before rethrowing. Without this the task stayed
+      // 'submitted' forever — tasks/get never reached a terminal state and a
+      // polling or resubscribed A2A client waited on a task that would never
+      // run.
+      await updateTask(ctx, taskId, {
+        state: "rejected",
+        errorMessage: reason,
+      });
+      statusUpdate("rejected", true, {
+        kind: "message",
+        role: "agent",
+        messageId: crypto.randomUUID(),
+        taskId,
+        contextId,
+        parts: [{ kind: "text", text: reason }],
+      });
+      await emitLifecycle(ctx, "a2a.task.failed", {
+        taskId,
+        contextId,
+        error: reason,
+        durationMs: Date.now() - startedAt,
+      });
+      throw new Error(reason);
     }
     agentRun = {
       principalKind: "agent",
@@ -468,8 +491,9 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
 
   // The current turn's text becomes the engine `instruction`; the rest of the
   // conversation is `history`. `history` already includes the inbound turn as
-  // its last entry (the bridge appends before calling), so drop a trailing user
-  // message that duplicates the instruction — the engine appends it itself.
+  // its last entry — createTask seeds the new row's messageHistory with it, and
+  // loadContextHistory (called after) reads that row back — so drop a trailing
+  // user message that duplicates the instruction; the engine appends it itself.
   const instruction = messageText(inboundMessage);
   const engineHistory = toModelMessages(history);
   const lastHist = engineHistory[engineHistory.length - 1];

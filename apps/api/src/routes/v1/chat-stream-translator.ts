@@ -291,7 +291,8 @@ export function createApiStreamTranslator(args: {
       };
       if (totalUsage) {
         collectedInputTokens = totalUsage.inputTokens ?? collectedInputTokens;
-        collectedOutputTokens = totalUsage.outputTokens ?? collectedOutputTokens;
+        collectedOutputTokens =
+          totalUsage.outputTokens ?? collectedOutputTokens;
       }
     } else if (pType === "error") {
       // Defensive backstop: the engine THROWS provider/stream errors to the

@@ -62,7 +62,9 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -117,9 +119,7 @@ describe("organization.create route", () => {
   });
 
   it("calls invoke with 'create_org'", async () => {
-    await app.fetch(
-      post(PATH, { name: "Acme Corp", slug: "acme-corp" }, V1),
-    );
+    await app.fetch(post(PATH, { name: "Acme Corp", slug: "acme-corp" }, V1));
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_org");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.name).toBe("Acme Corp");
@@ -127,17 +127,13 @@ describe("organization.create route", () => {
   });
 
   it("invalid slug (uppercase) → 400", async () => {
-    const res = await app.fetch(
-      post(PATH, { name: "Acme", slug: "Acme" }, V1),
-    );
+    const res = await app.fetch(post(PATH, { name: "Acme", slug: "Acme" }, V1));
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
   it("slug too short → 400", async () => {
-    const res = await app.fetch(
-      post(PATH, { name: "X", slug: "x" }, V1),
-    );
+    const res = await app.fetch(post(PATH, { name: "X", slug: "x" }, V1));
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -149,7 +145,11 @@ describe("workspace.create route", () => {
   const PATH = "/workspaces";
 
   it("happy path: 201 with workspace", async () => {
-    const invokeResult = { publicId: "ws-1", name: "Dev Workspace", slug: "dev" };
+    const invokeResult = {
+      publicId: "ws-1",
+      name: "Dev Workspace",
+      slug: "dev",
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
     const res = await app.fetch(
       post(PATH, { name: "Dev Workspace", slug: "dev" }),
@@ -290,9 +290,7 @@ describe("org.member.invite.accept route", () => {
       joinedAt: "2024-01-01T00:00:00Z",
     };
     mocks.invoke.mockResolvedValue(invokeResult);
-    const res = await app.fetch(
-      post(PATH, { invitationPublicId: "inv_abc" }),
-    );
+    const res = await app.fetch(post(PATH, { invitationPublicId: "inv_abc" }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(invokeResult);
   });
@@ -315,9 +313,7 @@ describe("org.member.invite.decline route", () => {
       invitationPublicId: "inv_abc",
       status: "declined",
     });
-    const res = await app.fetch(
-      post(PATH, { invitationPublicId: "inv_abc" }),
-    );
+    const res = await app.fetch(post(PATH, { invitationPublicId: "inv_abc" }));
     expect(res.status).toBe(200);
   });
 
@@ -528,9 +524,7 @@ describe("notifications.mark route", () => {
 
   it("happy path: 200", async () => {
     mocks.invoke.mockResolvedValue({ ok: true });
-    const res = await app.fetch(
-      post(PATH, { id: "ntf_abc", read: true }),
-    );
+    const res = await app.fetch(post(PATH, { id: "ntf_abc", read: true }));
     expect(res.status).toBe(200);
   });
 

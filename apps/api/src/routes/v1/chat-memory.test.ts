@@ -45,7 +45,9 @@ describe("formatRecalledMemories", () => {
     const body = formatRecalledMemories([memory()])!;
     expect(body).toContain("## Recalled workspace memory (prior sessions)");
     expect(body).toContain("NOT user input");
-    expect(body).toContain("- [RULE·convention] Always use withTenantDb (enforcement 5)");
+    expect(body).toContain(
+      "- [RULE·convention] Always use withTenantDb (enforcement 5)",
+    );
   });
 
   it("omits enforcement for non-RULE classes", () => {
@@ -66,7 +68,9 @@ describe("stripRecalledMemoryHeading", () => {
   });
 
   it("returns the body unchanged when it has no heading", () => {
-    expect(stripRecalledMemoryHeading("no heading here")).toBe("no heading here");
+    expect(stripRecalledMemoryHeading("no heading here")).toBe(
+      "no heading here",
+    );
   });
 });
 
@@ -94,11 +98,16 @@ describe("recallWorkspaceMemoryMessage", () => {
     expect(invokeFn).toHaveBeenCalledOnce();
     const call = invokeFn.mock.calls[0] as unknown as unknown[];
     expect(call[0]).toBe("recall_memory");
-    expect(call[1]).toMatchObject({ query: "how do I query the db", executionRef: "req_1" });
+    expect(call[1]).toMatchObject({
+      query: "how do I query the db",
+      executionRef: "req_1",
+    });
     expect(call[3]).toEqual({ surface: "agent" });
     expect(msg).not.toBeNull();
     expect(msg!.role).toBe("user");
-    expect(typeof msg!.content === "string" && msg!.content).toContain("[RULE·convention]");
+    expect(typeof msg!.content === "string" && msg!.content).toContain(
+      "[RULE·convention]",
+    );
   });
 
   it("degrades to null when the invoke rejects (best-effort)", async () => {
@@ -127,7 +136,10 @@ describe("recallWorkspaceMemoryMessage", () => {
 
   it("degrades to null on timeout", async () => {
     const invokeFn = vi.fn(
-      () => new Promise((resolve) => setTimeout(() => resolve({ memories: [] }), 50)),
+      () =>
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ memories: [] }), 50),
+        ),
     );
     const msg = await recallWorkspaceMemoryMessage({
       query: "x",

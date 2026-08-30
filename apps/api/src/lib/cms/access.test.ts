@@ -17,7 +17,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return {
     ...actual,
     // Run access.ts's transaction body against the per-test scripted fake tx.
-    withSystemDb: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(h.tx),
+    withSystemDb: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
+      fn(h.tx),
   };
 });
 
@@ -102,14 +103,18 @@ describe("pure helpers", () => {
 describe("captureLeadAndIssueCode", () => {
   it("upserts the lead, mints a code, returns the reader url", async () => {
     process.env.MARKETING_URL = "https://oxagen.sh";
-    h.tx = makeFakeTx({ inserts: [[{ id: "lead_1", email: "ada@example.com" }], []] });
+    h.tx = makeFakeTx({
+      inserts: [[{ id: "lead_1", email: "ada@example.com" }], []],
+    });
     const out = await captureLeadAndIssueCode(
       { email: "ada@example.com", firstName: "Ada", lastName: "Lovelace" },
       "page-flip-reader",
       "signup",
     );
     expect(out.leadId).toBe("lead_1");
-    expect(out.readUrl).toMatch(/^https:\/\/oxagen\.sh\/read\?e=page-flip-reader&c=/);
+    expect(out.readUrl).toMatch(
+      /^https:\/\/oxagen\.sh\/read\?e=page-flip-reader&c=/,
+    );
   });
 
   it("throws if the upsert returns no row", async () => {
@@ -126,7 +131,9 @@ describe("captureLeadAndIssueCode", () => {
 
 describe("findLeadByEmail", () => {
   it("returns the lead when present", async () => {
-    h.tx = makeFakeTx({ selects: [[{ id: "lead_1", email: "ada@example.com" }]] });
+    h.tx = makeFakeTx({
+      selects: [[{ id: "lead_1", email: "ada@example.com" }]],
+    });
     expect(await findLeadByEmail("ada@example.com")).toEqual({
       id: "lead_1",
       email: "ada@example.com",
@@ -175,7 +182,10 @@ describe("redeemAndRotate — single-use enforcement", () => {
 
   it("returns consumed for an already-used code (the single-use guarantee)", async () => {
     h.tx = makeFakeTx({
-      selects: [editionRow, [{ id: "c1", leadId: "l1", status: "consumed", expiresAt: null }]],
+      selects: [
+        editionRow,
+        [{ id: "c1", leadId: "l1", status: "consumed", expiresAt: null }],
+      ],
     });
     expect(await redeemAndRotate("page-flip-reader", "used")).toEqual({
       ok: false,
@@ -187,7 +197,14 @@ describe("redeemAndRotate — single-use enforcement", () => {
     h.tx = makeFakeTx({
       selects: [
         editionRow,
-        [{ id: "c1", leadId: "l1", status: "active", expiresAt: new Date(Date.now() - 1000) }],
+        [
+          {
+            id: "c1",
+            leadId: "l1",
+            status: "active",
+            expiresAt: new Date(Date.now() - 1000),
+          },
+        ],
       ],
     });
     expect(await redeemAndRotate("page-flip-reader", "old")).toEqual({

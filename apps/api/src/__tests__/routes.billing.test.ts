@@ -60,7 +60,9 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -99,7 +101,11 @@ describe("billing.subscription.read route", () => {
   const PATH = "/billing/subscription";
 
   it("happy path GET: 200 with subscription", async () => {
-    const invokeResult = { subscription: null, creditBalanceCents: 500, periodUsage: {} };
+    const invokeResult = {
+      subscription: null,
+      creditBalanceCents: 500,
+      periodUsage: {},
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
 
     const res = await app.fetch(get(PATH));

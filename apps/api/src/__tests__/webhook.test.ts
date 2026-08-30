@@ -81,7 +81,9 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -106,7 +108,8 @@ vi.mock("@oxagen/ingestion/connectors", () => ({
 
 vi.mock("@oxagen/crypto", () => ({
   decrypt: mocks.decrypt,
-  resolveIngestionCryptoAdapterForKeyId: mocks.resolveIngestionCryptoAdapterForKeyId,
+  resolveIngestionCryptoAdapterForKeyId:
+    mocks.resolveIngestionCryptoAdapterForKeyId,
 }));
 
 import { app } from "../app";
@@ -146,7 +149,10 @@ const DEFAULT_ROW = {
   secretEnc: null,
 };
 
-function makePost(body: string, extraHeaders: Record<string, string> = {}): Request {
+function makePost(
+  body: string,
+  extraHeaders: Record<string, string> = {},
+): Request {
   return makeRequest(BASE_PATH, {
     method: "POST",
     headers: { "content-type": "application/json", ...extraHeaders },
@@ -161,8 +167,8 @@ beforeEach(() => {
   mocks.verifyWebhook.mockReturnValue(true);
   // Default: one connection row, no HMAC secret.
   // Call through so the drizzle query body inside the callback is exercised.
-  mocks.withSystemDb.mockImplementation(
-    (fn: Parameters<WithDbFn>[0]) => fn(makeMockTx([DEFAULT_ROW]) as TxLike),
+  mocks.withSystemDb.mockImplementation((fn: Parameters<WithDbFn>[0]) =>
+    fn(makeMockTx([DEFAULT_ROW]) as TxLike),
   );
   // Default: inngest sends successfully
   mocks.inngestSend.mockResolvedValue({});
@@ -173,7 +179,10 @@ beforeEach(() => {
 describe("MS Graph lifecycle validation", () => {
   it("echoes validationToken back as text/plain with 200", async () => {
     const res = await app.fetch(
-      makeRequest(`${BASE_PATH}?validationToken=abc123`, { method: "POST", body: "" }),
+      makeRequest(`${BASE_PATH}?validationToken=abc123`, {
+        method: "POST",
+        body: "",
+      }),
     );
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/plain");
@@ -183,7 +192,10 @@ describe("MS Graph lifecycle validation", () => {
 
   it("skips DB and inngest for validation requests", async () => {
     await app.fetch(
-      makeRequest(`${BASE_PATH}?validationToken=xyz`, { method: "POST", body: "" }),
+      makeRequest(`${BASE_PATH}?validationToken=xyz`, {
+        method: "POST",
+        body: "",
+      }),
     );
     expect(mocks.withSystemDb).not.toHaveBeenCalled();
     expect(mocks.inngestSend).not.toHaveBeenCalled();
@@ -208,8 +220,8 @@ describe("unknown connector", () => {
 
 describe("connection not found", () => {
   it("returns 404 when DB returns empty rows", async () => {
-    mocks.withSystemDb.mockImplementation(
-      (fn: Parameters<WithDbFn>[0]) => fn(makeMockTx([]) as TxLike),
+    mocks.withSystemDb.mockImplementation((fn: Parameters<WithDbFn>[0]) =>
+      fn(makeMockTx([]) as TxLike),
     );
     const res = await app.fetch(makePost("{}"));
     expect(res.status).toBe(404);
@@ -265,13 +277,18 @@ describe("happy path — no secretEnc", () => {
   it("sends ingestion/entity.received event to inngest", async () => {
     await app.fetch(makePost('{"type":"push"}'));
     expect(mocks.inngestSend).toHaveBeenCalledOnce();
-    const event = mocks.inngestSend.mock.calls[0]?.[0] as Record<string, unknown>;
+    const event = mocks.inngestSend.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(event.name).toBe("ingestion/entity.received");
   });
 
   it("event data includes connectionId, orgId, workspaceId, connectorType", async () => {
     await app.fetch(makePost("{}"));
-    const event = mocks.inngestSend.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    const event = mocks.inngestSend.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
     expect(event.data.connectionId).toBe(DEFAULT_ROW.connectionId);
     expect(event.data.orgId).toBe(DEFAULT_ROW.orgId);
     expect(event.data.workspaceId).toBe(DEFAULT_ROW.workspaceId);
@@ -290,14 +307,19 @@ describe("happy path — no secretEnc", () => {
 describe("happy path — with secretEnc (HMAC decryption)", () => {
   const ENC_ROW = {
     ...DEFAULT_ROW,
-    secretEnc: { keyId: "key-1", ciphertext: Buffer.from("encrypted").toString("base64") },
+    secretEnc: {
+      keyId: "key-1",
+      ciphertext: Buffer.from("encrypted").toString("base64"),
+    },
   };
 
   beforeEach(() => {
-    mocks.withSystemDb.mockImplementation(
-      (fn: Parameters<WithDbFn>[0]) => fn(makeMockTx([ENC_ROW]) as TxLike),
+    mocks.withSystemDb.mockImplementation((fn: Parameters<WithDbFn>[0]) =>
+      fn(makeMockTx([ENC_ROW]) as TxLike),
     );
-    mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValue({ adapter: {} });
+    mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValue({
+      adapter: {},
+    });
     mocks.decrypt.mockResolvedValue(Buffer.from("my-webhook-secret"));
   });
 
@@ -337,25 +359,33 @@ describe("happy path — with secretEnc (HMAC decryption)", () => {
 describe("sourceRecordType resolution", () => {
   it("uses x-github-event header when present", async () => {
     await app.fetch(makePost("{}", { "x-github-event": "pull_request" }));
-    const event = mocks.inngestSend.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    const event = mocks.inngestSend.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
     expect(event.data.sourceRecordType).toBe("pull_request");
   });
 
   it("uses x-linear-event header when present", async () => {
     await app.fetch(makePost("{}", { "x-linear-event": "Issue" }));
-    const event = mocks.inngestSend.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    const event = mocks.inngestSend.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
     expect(event.data.sourceRecordType).toBe("Issue");
   });
 
   it("falls back to body type field when no event headers", async () => {
     await app.fetch(makePost('{"type":"event_callback"}'));
-    const event = mocks.inngestSend.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    const event = mocks.inngestSend.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
     expect(event.data.sourceRecordType).toBe("event_callback");
   });
 
   it("falls back to 'event' when no headers or body type", async () => {
     await app.fetch(makePost("{}"));
-    const event = mocks.inngestSend.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    const event = mocks.inngestSend.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
     expect(event.data.sourceRecordType).toBe("event");
   });
 });

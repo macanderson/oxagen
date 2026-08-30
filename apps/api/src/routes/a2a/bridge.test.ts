@@ -735,6 +735,35 @@ describe("runA2ATask — agent RBAC delegation (Q2)", () => {
         message: { ...USER_MESSAGE, metadata: { skillId: "billing-bot" } },
       }),
     ).rejects.toThrow(/failing closed/);
+
+    // Failing closed must still LAND the task terminally — otherwise the row
+    // stays 'submitted' and a polling client waits on a task that never runs.
+    const rejectedPatch = updateTask.mock.calls
+      .map((call) => call[2] as { state?: string })
+      .find((patch) => patch.state === "rejected");
+    expect(rejectedPatch).toBeDefined();
+    expect(runCodingAgent).not.toHaveBeenCalled();
+  });
+
+  it("emits a final status-update when it fails a skill-addressed task closed", async () => {
+    resolveAgentForA2A.mockResolvedValueOnce(AGENT_ROW as never);
+    h.resolveAgentRunAuthzContext.mockResolvedValueOnce(null as never);
+    const events: Array<A2AStatusUpdateEvent | A2AArtifactUpdateEvent> = [];
+
+    await expect(
+      runA2ATask({
+        ctx: CTX,
+        task: TASK,
+        history: HISTORY,
+        message: { ...USER_MESSAGE, metadata: { skillId: "billing-bot" } },
+        onEvent: (e) => events.push(e),
+      }),
+    ).rejects.toThrow(/failing closed/);
+
+    const last = events[events.length - 1];
+    expect(last?.kind).toBe("status-update");
+    expect((last as A2AStatusUpdateEvent).final).toBe(true);
+    expect((last as A2AStatusUpdateEvent).status.state).toBe("rejected");
   });
 
   it("attaches no agentRun for a generic non-agent-addressed task", async () => {
@@ -742,7 +771,12 @@ describe("runA2ATask — agent RBAC delegation (Q2)", () => {
     const { materializeTools } = await import("@oxagen/agent");
     vi.mocked(materializeTools).mockClear();
 
-    await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, message: USER_MESSAGE });
+    await runA2ATask({
+      ctx: CTX,
+      task: TASK,
+      history: HISTORY,
+      message: USER_MESSAGE,
+    });
 
     const matCtx = vi.mocked(materializeTools).mock.calls[0]?.[0] as {
       agentRun?: unknown;

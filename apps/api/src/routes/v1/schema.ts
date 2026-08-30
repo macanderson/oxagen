@@ -67,7 +67,9 @@ schemaRoute.get("/registry", async (c) => {
     versionId: query.versionId,
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(schemaRegistryGet.name, body, ctx, { surface: "api" });
+  const out = await invoke(schemaRegistryGet.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
@@ -76,7 +78,9 @@ schemaRoute.put("/registry/config", async (c) => {
   const json = (await c.req.json()) as Record<string, unknown>;
   const body = schemaRegistryConfig.input.parse(json);
   const ctx = capabilityContext(c);
-  const out = await invoke(schemaRegistryConfig.name, body, ctx, { surface: "api" });
+  const out = await invoke(schemaRegistryConfig.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
@@ -95,9 +99,11 @@ schemaRoute.get("/", async (c) => {
 // POST /schema/:schemaName/toggle — enable/disable a schema
 schemaRoute.post("/:schemaName/toggle", async (c) => {
   const json = (await c.req.json()) as Record<string, unknown>;
+  // Path params LAST throughout this file: the URL identifies the resource, so a
+  // matching key in the body must never redirect the write somewhere else.
   const body = schemaToggle.input.parse({
-    schemaName: c.req.param("schemaName"),
     ...json,
+    schemaName: c.req.param("schemaName"),
   });
   const ctx = capabilityContext(c);
   const out = await invoke(schemaToggle.name, body, ctx, { surface: "api" });
@@ -110,12 +116,14 @@ schemaRoute.post("/:schemaName/toggle", async (c) => {
 schemaRoute.put("/:schemaName/labels/:labelName", async (c) => {
   const json = (await c.req.json()) as Record<string, unknown>;
   const body = schemaLabelUpsert.input.parse({
+    ...json,
     schemaName: c.req.param("schemaName"),
     name: c.req.param("labelName"),
-    ...json,
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(schemaLabelUpsert.name, body, ctx, { surface: "api" });
+  const out = await invoke(schemaLabelUpsert.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
@@ -126,7 +134,9 @@ schemaRoute.delete("/:schemaName/labels/:labelName", async (c) => {
     name: c.req.param("labelName"),
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(schemaLabelDelete.name, body, ctx, { surface: "api" });
+  const out = await invoke(schemaLabelDelete.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
@@ -136,53 +146,78 @@ schemaRoute.delete("/:schemaName/labels/:labelName", async (c) => {
 schemaRoute.put("/:schemaName/relationships/:relationshipName", async (c) => {
   const json = (await c.req.json()) as Record<string, unknown>;
   const body = schemaRelationshipUpsert.input.parse({
+    ...json,
     schemaName: c.req.param("schemaName"),
     name: c.req.param("relationshipName"),
-    ...json,
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(schemaRelationshipUpsert.name, body, ctx, { surface: "api" });
+  const out = await invoke(schemaRelationshipUpsert.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
 // DELETE /schema/:schemaName/relationships/:relationshipName — remove relationship type from draft
-schemaRoute.delete("/:schemaName/relationships/:relationshipName", async (c) => {
-  const body = schemaRelationshipDelete.input.parse({
-    schemaName: c.req.param("schemaName"),
-    name: c.req.param("relationshipName"),
-  });
-  const ctx = capabilityContext(c);
-  const out = await invoke(schemaRelationshipDelete.name, body, ctx, { surface: "api" });
-  return c.json(out);
-});
+schemaRoute.delete(
+  "/:schemaName/relationships/:relationshipName",
+  async (c) => {
+    const body = schemaRelationshipDelete.input.parse({
+      schemaName: c.req.param("schemaName"),
+      name: c.req.param("relationshipName"),
+    });
+    const ctx = capabilityContext(c);
+    const out = await invoke(schemaRelationshipDelete.name, body, ctx, {
+      surface: "api",
+    });
+    return c.json(out);
+  },
+);
 
 // ── Properties ────────────────────────────────────────────────────────────────
 
 // PUT /schema/:schemaName/properties/:ownerKind/:ownerName/:key — create/update a property
-schemaRoute.put("/:schemaName/properties/:ownerKind/:ownerName/:key", async (c) => {
-  const json = (await c.req.json()) as Record<string, unknown>;
-  const body = schemaPropertyUpsert.input.parse({
-    ownerKind: c.req.param("ownerKind"),
-    ownerName: c.req.param("ownerName"),
-    key: c.req.param("key"),
-    ...json,
-  });
-  const ctx = capabilityContext(c);
-  const out = await invoke(schemaPropertyUpsert.name, body, ctx, { surface: "api" });
-  return c.json(out);
-});
+//
+// KNOWN DIVERGENCE: `:schemaName` is accepted by the path but NOT forwarded —
+// the schema.property.upsert contract keys a property on (ownerKind, ownerName,
+// key) within the workspace draft and declares no `schemaName` input. Two URLs
+// that differ only in `:schemaName` therefore address the SAME property. Closing
+// this needs a contract change (add `schemaName`) or a path change; do not
+// "fix" it here by passing a field the contract would strip.
+schemaRoute.put(
+  "/:schemaName/properties/:ownerKind/:ownerName/:key",
+  async (c) => {
+    const json = (await c.req.json()) as Record<string, unknown>;
+    const body = schemaPropertyUpsert.input.parse({
+      ...json,
+      ownerKind: c.req.param("ownerKind"),
+      ownerName: c.req.param("ownerName"),
+      key: c.req.param("key"),
+    });
+    const ctx = capabilityContext(c);
+    const out = await invoke(schemaPropertyUpsert.name, body, ctx, {
+      surface: "api",
+    });
+    return c.json(out);
+  },
+);
 
 // DELETE /schema/:schemaName/properties/:ownerKind/:ownerName/:key — remove a property from draft
-schemaRoute.delete("/:schemaName/properties/:ownerKind/:ownerName/:key", async (c) => {
-  const body = schemaPropertyDelete.input.parse({
-    ownerKind: c.req.param("ownerKind"),
-    ownerName: c.req.param("ownerName"),
-    key: c.req.param("key"),
-  });
-  const ctx = capabilityContext(c);
-  const out = await invoke(schemaPropertyDelete.name, body, ctx, { surface: "api" });
-  return c.json(out);
-});
+// Same `:schemaName` divergence as the PUT above.
+schemaRoute.delete(
+  "/:schemaName/properties/:ownerKind/:ownerName/:key",
+  async (c) => {
+    const body = schemaPropertyDelete.input.parse({
+      ownerKind: c.req.param("ownerKind"),
+      ownerName: c.req.param("ownerName"),
+      key: c.req.param("key"),
+    });
+    const ctx = capabilityContext(c);
+    const out = await invoke(schemaPropertyDelete.name, body, ctx, {
+      surface: "api",
+    });
+    return c.json(out);
+  },
+);
 
 // ── Versions ──────────────────────────────────────────────────────────────────
 
@@ -194,7 +229,9 @@ schemaRoute.get("/versions", async (c) => {
     offset: query.offset !== undefined ? Number(query.offset) : undefined,
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(schemaVersionList.name, body, ctx, { surface: "api" });
+  const out = await invoke(schemaVersionList.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
@@ -203,7 +240,9 @@ schemaRoute.post("/versions", async (c) => {
   const json = (await c.req.json()) as Record<string, unknown>;
   const body = schemaVersionCreate.input.parse(json);
   const ctx = capabilityContext(c);
-  const out = await invoke(schemaVersionCreate.name, body, ctx, { surface: "api" });
+  const out = await invoke(schemaVersionCreate.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out, 201);
 });
 
@@ -213,19 +252,25 @@ schemaRoute.post("/versions/:versionId/pin", async (c) => {
     versionId: c.req.param("versionId"),
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(schemaVersionPin.name, body, ctx, { surface: "api" });
+  const out = await invoke(schemaVersionPin.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
 // GET /schema/versions/diff — structural diff of two versions (?fromVersionId=&toVersionId=)
-// Note: must be registered BEFORE /versions/:versionId/pin to avoid :versionId shadowing "diff"
+// No ordering constraint against /versions/:versionId/pin: that route is a POST
+// and this one a GET, and Hono dispatches on method+path, so :versionId can
+// never shadow "diff" here regardless of registration order.
 schemaRoute.get("/versions/diff", async (c) => {
   const body = schemaVersionDiff.input.parse({
     fromVersionId: c.req.query("fromVersionId"),
     toVersionId: c.req.query("toVersionId"),
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(schemaVersionDiff.name, body, ctx, { surface: "api" });
+  const out = await invoke(schemaVersionDiff.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
@@ -247,7 +292,8 @@ schemaRoute.get("/export", async (c) => {
 schemaRoute.get("/recommend", async (c) => {
   const query = c.req.query();
   const body = schemaRecommend.input.parse({
-    sampleLimit: query.sampleLimit !== undefined ? Number(query.sampleLimit) : undefined,
+    sampleLimit:
+      query.sampleLimit !== undefined ? Number(query.sampleLimit) : undefined,
   });
   const ctx = capabilityContext(c);
   const out = await invoke(schemaRecommend.name, body, ctx, { surface: "api" });
@@ -270,7 +316,9 @@ schemaRoute.post("/validate/node", async (c) => {
   const json = (await c.req.json()) as Record<string, unknown>;
   const body = schemaValidateNode.input.parse(json);
   const ctx = capabilityContext(c);
-  const out = await invoke(schemaValidateNode.name, body, ctx, { surface: "api" });
+  const out = await invoke(schemaValidateNode.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
@@ -279,7 +327,9 @@ schemaRoute.post("/validate/relationship", async (c) => {
   const json = (await c.req.json()) as Record<string, unknown>;
   const body = schemaValidateRelationship.input.parse(json);
   const ctx = capabilityContext(c);
-  const out = await invoke(schemaValidateRelationship.name, body, ctx, { surface: "api" });
+  const out = await invoke(schemaValidateRelationship.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
@@ -290,7 +340,9 @@ schemaRoute.post("/reconcile/dispatch", async (c) => {
   const json = (await c.req.json()) as Record<string, unknown>;
   const body = schemaReconcileDispatch.input.parse(json);
   const ctx = capabilityContext(c);
-  const out = await invoke(schemaReconcileDispatch.name, body, ctx, { surface: "api" });
+  const out = await invoke(schemaReconcileDispatch.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out, 202);
 });
 
@@ -300,7 +352,9 @@ schemaRoute.get("/reconcile/status", async (c) => {
     executionId: c.req.query("executionId"),
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(schemaReconcileStatus.name, body, ctx, { surface: "api" });
+  const out = await invoke(schemaReconcileStatus.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 

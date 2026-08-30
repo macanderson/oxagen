@@ -112,7 +112,9 @@ const BodySchema = z.object({
   // Reasoning effort for models with a thinking mode (OpenAI's canonical field).
   // Forwarded by the Oxagen CLI via provider options; streamAgentReply applies it
   // per-model and it is a no-op for models without a reasoning mode.
-  reasoning_effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional(),
+  reasoning_effort: z
+    .enum(["low", "medium", "high", "xhigh", "max"])
+    .optional(),
 });
 
 type OpenAiMessage = z.infer<typeof MessageSchema>;
@@ -170,7 +172,9 @@ function toOpenAiUsage(u: {
     prompt_tokens,
     completion_tokens,
     total_tokens: u.totalTokens ?? prompt_tokens + completion_tokens,
-    ...(cacheReadTokens ? { prompt_tokens_details: { cached_tokens: cacheReadTokens } } : {}),
+    ...(cacheReadTokens
+      ? { prompt_tokens_details: { cached_tokens: cacheReadTokens } }
+      : {}),
   };
 }
 
@@ -223,10 +227,11 @@ function contentToText(content: OpenAiContent): string {
 function toUserContent(content: OpenAiContent): string | UserPart[] {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
-    return content.map((p): UserPart =>
-      p.type === "text"
-        ? { type: "text", text: p.text }
-        : { type: "image", image: p.image_url.url },
+    return content.map(
+      (p): UserPart =>
+        p.type === "text"
+          ? { type: "text", text: p.text }
+          : { type: "image", image: p.image_url.url },
     );
   }
   return "";
@@ -262,7 +267,10 @@ function convertMessages(messages: OpenAiMessage[]): {
         systemParts.push(contentToText(msg.content));
         break;
       case "user":
-        modelMessages.push({ role: "user", content: toUserContent(msg.content) });
+        modelMessages.push({
+          role: "user",
+          content: toUserContent(msg.content),
+        });
         break;
       case "assistant": {
         const toolCalls = msg.tool_calls ?? [];
@@ -319,7 +327,9 @@ function convertTools(tools: OpenAiTool[] | undefined): ToolSet | undefined {
   const set: ToolSet = {};
   for (const t of tools) {
     set[t.function.name] = tool({
-      ...(t.function.description ? { description: t.function.description } : {}),
+      ...(t.function.description
+        ? { description: t.function.description }
+        : {}),
       inputSchema: jsonSchema(
         (t.function.parameters as JSONSchema7 | undefined) ??
           EMPTY_OBJECT_SCHEMA,
@@ -432,10 +442,15 @@ agentLlmRoute.post("/chat/completions", async (c) => {
   // The single AI chokepoint: every call is metered/billed via onFinish and
   // routed through the Vercel AI Gateway. Surface "agent" tags these turns as
   // agent-loop inference in the token-usage analytics.
+  //
+  // `abortSignal` is the request's own signal, so a CLI that Ctrl-C's or drops
+  // the socket aborts the in-flight model call instead of streaming — and
+  // billing — tokens to nobody. Same wiring chat.stream.ts gives the engine.
   function startReply() {
     return streamAgentReply({
       messages: modelMessages,
       model: selectModel({ model }),
+      abortSignal: c.req.raw.signal,
       ...(tools ? { tools } : {}),
       ...(mergedSystem ? { system: mergedSystem } : {}),
       ...(body.reasoning_effort ? { effort: body.reasoning_effort } : {}),
@@ -493,7 +508,12 @@ agentLlmRoute.post("/chat/completions", async (c) => {
     } catch (err) {
       const reason = errorText(err);
       logger.error(
-        { reason, requestId: ctx.requestId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+        {
+          reason,
+          requestId: ctx.requestId,
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+        },
         "[agent.llm] non-stream generation failed",
       );
       return c.json(openAiError(reason, "upstream_error"), 502);
@@ -504,8 +524,21 @@ agentLlmRoute.post("/chat/completions", async (c) => {
   const encoder = new TextEncoder();
   const responseStream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      // Latch on the first failed write instead of throwing out of the loop: a
+      // client disconnect closes the controller, and an unguarded enqueue would
+      // surface as a bogus "[agent.llm] stream failed" error entry. Same latch
+      // chat.stream.ts and agent.run.ts use.
+      let closed = false;
+      function write(payload: string): void {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(payload));
+        } catch {
+          closed = true;
+        }
+      }
       function emit(chunk: OpenAiChunk): void {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+        write(`data: ${JSON.stringify(chunk)}\n\n`);
       }
       function chunkOf(
         delta: OpenAiDelta,
@@ -543,7 +576,12 @@ agentLlmRoute.post("/chat/completions", async (c) => {
           chunkOf(
             {
               tool_calls: [
-                { index, id, type: "function", function: { name, arguments: "" } },
+                {
+                  index,
+                  id,
+                  type: "function",
+                  function: { name, arguments: "" },
+                },
               ],
             },
             null,
@@ -600,7 +638,10 @@ agentLlmRoute.post("/chat/completions", async (c) => {
                   chunkOf(
                     {
                       tool_calls: [
-                        { index, function: { arguments: stringifyArgs(input) } },
+                        {
+                          index,
+                          function: { arguments: stringifyArgs(input) },
+                        },
                       ],
                     },
                     null,
@@ -630,13 +671,16 @@ agentLlmRoute.post("/chat/completions", async (c) => {
               // an unparseable chunk into an error stream part.
               const message = errorText((raw as { error?: unknown }).error);
               logger.error(
-                { message, requestId: ctx.requestId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+                {
+                  message,
+                  requestId: ctx.requestId,
+                  orgId: ctx.orgId,
+                  workspaceId: ctx.workspaceId,
+                },
                 "[agent.llm] stream error part",
               );
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify(openAiError(message, "upstream_error"))}\n\n`,
-                ),
+              write(
+                `data: ${JSON.stringify(openAiError(message, "upstream_error"))}\n\n`,
               );
               break;
             }
@@ -659,21 +703,25 @@ agentLlmRoute.post("/chat/completions", async (c) => {
       } catch (err) {
         const message = errorText(err);
         logger.error(
-          { message, requestId: ctx.requestId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+          {
+            message,
+            requestId: ctx.requestId,
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+          },
           "[agent.llm] stream failed",
         );
-        controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify(openAiError(message, "upstream_error"))}\n\n`,
-          ),
+        write(
+          `data: ${JSON.stringify(openAiError(message, "upstream_error"))}\n\n`,
         );
       } finally {
+        write("data: [DONE]\n\n");
+        closed = true;
         try {
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
         } catch {
           // Controller may already be closed.
         }
-        controller.close();
       }
     },
   });

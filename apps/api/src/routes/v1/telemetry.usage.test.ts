@@ -18,9 +18,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@oxagen/telemetry", async () => {
-  const real = await vi.importActual<typeof import("@oxagen/telemetry/usage-events")>(
-    "@oxagen/telemetry/usage-events",
-  );
+  const real = await vi.importActual<
+    typeof import("@oxagen/telemetry/usage-events")
+  >("@oxagen/telemetry/usage-events");
   return {
     parseUsageEventPayload: real.parseUsageEventPayload,
     insertUsageEvents: mocks.insertUsageEvents,
@@ -52,7 +52,10 @@ const VALID_PAYLOAD = {
   exit_status: "success",
 };
 
-function makeRequest(body: unknown, headers: Record<string, string> = {}): Request {
+function makeRequest(
+  body: unknown,
+  headers: Record<string, string> = {},
+): Request {
   return new Request("http://localhost/usage", {
     method: "POST",
     headers: { "content-type": "application/json", ...headers },
@@ -84,11 +87,15 @@ describe("POST /usage — happy path", () => {
 
   it("inserts exactly one row, stamped with a server-side timestamp", async () => {
     const before = Date.now();
-    await telemetryUsageRoute.fetch(makeRequest(VALID_PAYLOAD, { "x-forwarded-for": freshIp() }));
+    await telemetryUsageRoute.fetch(
+      makeRequest(VALID_PAYLOAD, { "x-forwarded-for": freshIp() }),
+    );
     const after = Date.now();
 
     expect(mocks.insertUsageEvents).toHaveBeenCalledOnce();
-    const rows = mocks.insertUsageEvents.mock.calls[0]?.[0] as Array<Record<string, unknown>>;
+    const rows = mocks.insertUsageEvents.mock.calls[0]?.[0] as Array<
+      Record<string, unknown>
+    >;
     expect(rows).toHaveLength(1);
     const row = rows[0]!;
     expect(row.command).toBe("solve");
@@ -118,7 +125,10 @@ describe("POST /usage — validation rejects malformed input", () => {
     const res = await telemetryUsageRoute.fetch(
       new Request("http://localhost/usage", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-forwarded-for": freshIp() },
+        headers: {
+          "content-type": "application/json",
+          "x-forwarded-for": freshIp(),
+        },
         body: "{not json",
       }),
     );
@@ -152,7 +162,10 @@ describe("POST /usage — validation rejects malformed input", () => {
 
   it("returns 400 for an out-of-range field (best_of_n > UInt8)", async () => {
     const res = await telemetryUsageRoute.fetch(
-      makeRequest({ ...VALID_PAYLOAD, best_of_n: 999 }, { "x-forwarded-for": freshIp() }),
+      makeRequest(
+        { ...VALID_PAYLOAD, best_of_n: 999 },
+        { "x-forwarded-for": freshIp() },
+      ),
     );
     expect(res.status).toBe(400);
     expect(mocks.insertUsageEvents).not.toHaveBeenCalled();
@@ -161,7 +174,9 @@ describe("POST /usage — validation rejects malformed input", () => {
 
 describe("POST /usage — insert failure", () => {
   it("returns 500 when the ClickHouse insert throws, without leaking the error detail", async () => {
-    mocks.insertUsageEvents.mockRejectedValueOnce(new Error("connection refused at 10.0.0.1"));
+    mocks.insertUsageEvents.mockRejectedValueOnce(
+      new Error("connection refused at 10.0.0.1"),
+    );
     const res = await telemetryUsageRoute.fetch(
       makeRequest(VALID_PAYLOAD, { "x-forwarded-for": freshIp() }),
     );

@@ -9,6 +9,8 @@ export const agentMemoryUpdateRoute = new Hono<AppEnv>();
 agentMemoryUpdateRoute.post("/", async (c) => {
   const body = agentMemoryUpdate.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(agentMemoryUpdate.name, body, ctx, { surface: "api" });
+  const out = await invoke(agentMemoryUpdate.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out, 200);
 });

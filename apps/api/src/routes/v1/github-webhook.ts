@@ -65,7 +65,8 @@ function verifySignature(
   secret: string,
 ): boolean {
   if (!signatureHeader) return false;
-  const expected = "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
+  const expected =
+    "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
   const got = Buffer.from(signatureHeader, "utf8");
   const exp = Buffer.from(expected, "utf8");
   // Equal length is required before timingSafeEqual (which throws on a length
@@ -78,7 +79,8 @@ function verifySignature(
 function recordKey(record: unknown): string {
   const r = (record ?? {}) as Record<string, unknown>;
   if (typeof r["sha"] === "string") return r["sha"];
-  if (typeof r["id"] === "number" || typeof r["id"] === "string") return String(r["id"]);
+  if (typeof r["id"] === "number" || typeof r["id"] === "string")
+    return String(r["id"]);
   if (typeof r["number"] === "number") return String(r["number"]);
   return "record";
 }
@@ -155,7 +157,11 @@ githubAppWebhookRoute.post("/", async (c) => {
         "acking with 200 to stop GitHub retries; set GITHUB_APP_WEBHOOK_SECRET in Vercel to process events",
     );
     return c.json(
-      { received: true, dispatched: 0, reason: "webhook secret not configured" },
+      {
+        received: true,
+        dispatched: 0,
+        reason: "webhook secret not configured",
+      },
       200,
     );
   }
@@ -172,7 +178,10 @@ githubAppWebhookRoute.post("/", async (c) => {
 
   let body: Record<string, unknown>;
   try {
-    body = JSON.parse(Buffer.from(payload).toString("utf8")) as Record<string, unknown>;
+    body = JSON.parse(Buffer.from(payload).toString("utf8")) as Record<
+      string,
+      unknown
+    >;
   } catch {
     return c.json({ error: "Invalid JSON payload" }, 400);
   }
@@ -182,13 +191,19 @@ githubAppWebhookRoute.post("/", async (c) => {
     return c.json({ received: true, pong: true }, 200);
   }
 
-  const installation = body["installation"] as { id?: number | string } | null | undefined;
+  const installation = body["installation"] as
+    | { id?: number | string }
+    | null
+    | undefined;
   const installationId =
     installation && installation.id != null ? String(installation.id) : null;
 
   // ── Installation lifecycle ────────────────────────────────────────────────
   // GitHub delivers these to the App webhook automatically (no subscription).
-  if (eventName === "installation" || eventName === "installation_repositories") {
+  if (
+    eventName === "installation" ||
+    eventName === "installation_repositories"
+  ) {
     const action = typeof body["action"] === "string" ? body["action"] : "";
     const now = new Date();
 
@@ -196,7 +211,11 @@ githubAppWebhookRoute.post("/", async (c) => {
       // The installation payload (present on both event types) carries the
       // account + app details we keep in the registry.
       const inst = (body["installation"] ?? {}) as {
-        account?: { login?: string; id?: number | string; type?: string } | null;
+        account?: {
+          login?: string;
+          id?: number | string;
+          type?: string;
+        } | null;
         app_slug?: string;
         repository_selection?: string;
       };
@@ -225,7 +244,11 @@ githubAppWebhookRoute.post("/", async (c) => {
         // connections — without a paused-reason column we cannot distinguish an
         // app-suspend pause from a user pause, so the user re-activates after an
         // unsuspend rather than risk silently un-pausing a user-paused connection.
-        await upsertGithubInstallation({ installationId, ...meta, reactivate: true });
+        await upsertGithubInstallation({
+          installationId,
+          ...meta,
+          reactivate: true,
+        });
       }
     }
 
@@ -238,7 +261,10 @@ githubAppWebhookRoute.post("/", async (c) => {
   }
 
   // ── Resolve target connection(s) ──────────────────────────────────────────
-  const repository = body["repository"] as { full_name?: string } | null | undefined;
+  const repository = body["repository"] as
+    | { full_name?: string }
+    | null
+    | undefined;
   const repoFullName = repository?.full_name ?? null; // "owner/repo"
 
   const rows = await withSystemDb((tx) =>
@@ -278,7 +304,10 @@ githubAppWebhookRoute.post("/", async (c) => {
   const connector = getConnector("github");
   const extractions = connector.parseWebhookEvent?.(eventName, body) ?? [];
   if (extractions.length === 0) {
-    return c.json({ received: true, dispatched: 0, reason: "no_ingestable_records" }, 200);
+    return c.json(
+      { received: true, dispatched: 0, reason: "no_ingestable_records" },
+      200,
+    );
   }
 
   const receivedAt = new Date().toISOString();

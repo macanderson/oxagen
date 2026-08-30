@@ -96,7 +96,9 @@ describe("a2a JSON-RPC dispatcher", () => {
     expect(h.runA2ATask).toHaveBeenCalledOnce();
     // The bridge receives the normalized inbound message (skillId/referenceTaskIds
     // addressing — spec §3.1/§3.2), not just the flattened history.
-    const call = h.runA2ATask.mock.calls[0]![0] as { message: { messageId: string } };
+    const call = h.runA2ATask.mock.calls[0]![0] as {
+      message: { messageId: string };
+    };
     expect(call.message.messageId).toBe("m1");
   });
 
@@ -299,7 +301,11 @@ describe("a2a JSON-RPC dispatcher", () => {
   });
 
   it("tasks/resubscribe unregisters its listener when the client disconnects before a terminal event", async () => {
-    h.loadTask.mockResolvedValue({ ...rowCompleted, publicId: "a2a_dropped", state: "working" });
+    h.loadTask.mockResolvedValue({
+      ...rowCompleted,
+      publicId: "a2a_dropped",
+      state: "working",
+    });
     const res = await rpc({
       jsonrpc: "2.0",
       id: 17,
@@ -326,7 +332,12 @@ describe("a2a JSON-RPC dispatcher", () => {
   });
 
   it("returns -32602 for invalid tasks/get params", async () => {
-    const res = await rpc({ jsonrpc: "2.0", id: 14, method: "tasks/get", params: {} });
+    const res = await rpc({
+      jsonrpc: "2.0",
+      id: 14,
+      method: "tasks/get",
+      params: {},
+    });
     const body = await res.json();
     expect(body.error.code).toBe(-32602);
   });

@@ -9,6 +9,8 @@ export const notificationsMarkRoute = new Hono<AppEnv>();
 notificationsMarkRoute.post("/", async (c) => {
   const input = notificationsMark.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(notificationsMark.name, input, ctx, { surface: "api" });
+  const out = await invoke(notificationsMark.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

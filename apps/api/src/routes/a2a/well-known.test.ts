@@ -30,7 +30,11 @@ const fullCard = {
   url: "https://api.example.test/a2a",
   preferredTransport: "JSONRPC",
   version: "1.2.3",
-  capabilities: { streaming: true, pushNotifications: false, stateTransitionHistory: true },
+  capabilities: {
+    streaming: true,
+    pushNotifications: false,
+    stateTransitionHistory: true,
+  },
   defaultInputModes: ["text/plain"],
   defaultOutputModes: ["text/plain"],
   skills: [
@@ -69,7 +73,9 @@ describe("GET /.well-known/agent-card.json", () => {
     const res = await get({ authorization: "Bearer ox_valid" });
     expect(res.status).toBe(200);
     const card = await res.json();
-    expect(card.skills.map((s: { id: string }) => s.id)).toContain("researcher");
+    expect(card.skills.map((s: { id: string }) => s.id)).toContain(
+      "researcher",
+    );
     expect(h.invoke).toHaveBeenCalledOnce();
   });
 

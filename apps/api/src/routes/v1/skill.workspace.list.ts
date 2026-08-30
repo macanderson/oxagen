@@ -10,6 +10,8 @@ skillWorkspaceListRoute.get("/", async (c) => {
   const workspace_id = c.req.query("workspace_id");
   const input = skillWorkspaceList.input.parse({ workspace_id });
   const ctx = capabilityContext(c);
-  const out = await invoke(skillWorkspaceList.name, input, ctx, { surface: "api" });
+  const out = await invoke(skillWorkspaceList.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

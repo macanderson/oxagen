@@ -9,6 +9,8 @@ export const billingSubscriptionReadRoute = new Hono<AppEnv>();
 billingSubscriptionReadRoute.get("/", async (c) => {
   const input = billingSubscriptionRead.input.parse({});
   const ctx = capabilityContext(c);
-  const out = await invoke(billingSubscriptionRead.name, input, ctx, { surface: "api" });
+  const out = await invoke(billingSubscriptionRead.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

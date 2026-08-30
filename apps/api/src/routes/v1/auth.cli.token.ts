@@ -38,7 +38,10 @@ authCliTokenRoute.post("/token", async (c) => {
   try {
     body = BodySchema.parse(await c.req.json());
   } catch {
-    return c.json({ error: "invalid_request", error_description: "Invalid request body" }, 400);
+    return c.json(
+      { error: "invalid_request", error_description: "Invalid request body" },
+      400,
+    );
   }
 
   const { code, code_verifier, redirect_uri } = body;

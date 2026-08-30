@@ -10,7 +10,9 @@ export const pluginSchemaRoute = new Hono<AppEnv>();
 
 // GET /plugin-schema/:pluginId — fetch the typed config schema for a connector plugin
 pluginSchemaRoute.get("/:pluginId", async (c) => {
-  const body = pluginSchemaGet.input.parse({ pluginId: c.req.param("pluginId") });
+  const body = pluginSchemaGet.input.parse({
+    pluginId: c.req.param("pluginId"),
+  });
   const ctx = capabilityContext(c);
   const out = await invoke(pluginSchemaGet.name, body, ctx, { surface: "api" });
   return c.json(out);
@@ -18,12 +20,16 @@ pluginSchemaRoute.get("/:pluginId", async (c) => {
 
 // POST /plugin-schema/:pluginId/validate — validate config against schema before install
 pluginSchemaRoute.post("/:pluginId/validate", async (c) => {
+  // Path param LAST: the URL identifies the plugin, so a `pluginId` in the body
+  // must never validate against a different schema than the one addressed.
   const body = pluginSchemaValidate.input.parse({
+    ...((await c.req.json()) as Record<string, unknown>),
     pluginId: c.req.param("pluginId"),
-    ...(await c.req.json() as Record<string, unknown>),
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(pluginSchemaValidate.name, body, ctx, { surface: "api" });
+  const out = await invoke(pluginSchemaValidate.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
@@ -38,6 +44,8 @@ pluginVersionRoute.get("/:pluginId", async (c) => {
     includeChangelog: query.includeChangelog === "true",
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(pluginVersionList.name, body, ctx, { surface: "api" });
+  const out = await invoke(pluginVersionList.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

@@ -66,7 +66,9 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -127,7 +129,9 @@ describe("agent.code.execute route", () => {
   });
 
   it("invalid language → 400, invoke not called", async () => {
-    const res = await app.fetch(post(PATH, { language: "ruby", code: "puts 1" }));
+    const res = await app.fetch(
+      post(PATH, { language: "ruby", code: "puts 1" }),
+    );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -215,7 +219,9 @@ describe("agent.execution.record route", () => {
   });
 
   it("invalid status enum → 400, invoke not called", async () => {
-    const res = await app.fetch(post(PATH, { ...VALID_BODY, status: "unknown_status" }));
+    const res = await app.fetch(
+      post(PATH, { ...VALID_BODY, status: "unknown_status" }),
+    );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -257,7 +263,10 @@ describe("agent.mcp.consent.resolve route", () => {
   const VALID_BODY = { approvalId: "appr-consent-1", decision: "granted" };
 
   it("happy path POST: returns 200", async () => {
-    const invokeResult = { approvalId: "appr-consent-1", resolution: "granted" };
+    const invokeResult = {
+      approvalId: "appr-consent-1",
+      resolution: "granted",
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
 
     const res = await app.fetch(post(PATH, VALID_BODY));
@@ -273,7 +282,13 @@ describe("agent.mcp.consent.resolve route", () => {
   });
 
   it("passes approvalId and decision to invoke", async () => {
-    await app.fetch(post(PATH, { approvalId: "appr-2", decision: "denied", grantAllTools: false }));
+    await app.fetch(
+      post(PATH, {
+        approvalId: "appr-2",
+        decision: "denied",
+        grantAllTools: false,
+      }),
+    );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.approvalId).toBe("appr-2");
     expect(body.decision).toBe("denied");
@@ -281,7 +296,9 @@ describe("agent.mcp.consent.resolve route", () => {
   });
 
   it("invalid decision → 400, invoke not called", async () => {
-    const res = await app.fetch(post(PATH, { approvalId: "appr-1", decision: "maybe" }));
+    const res = await app.fetch(
+      post(PATH, { approvalId: "appr-1", decision: "maybe" }),
+    );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -327,10 +344,16 @@ describe("agent.mcp.set_enabled route", () => {
   const PATH = "/agent/mcp-servers/set-enabled";
 
   it("happy path POST: returns 200", async () => {
-    const invokeResult = { mcpServerId: "srv-1", enabled: false, snapshotCount: 3 };
+    const invokeResult = {
+      mcpServerId: "srv-1",
+      enabled: false,
+      snapshotCount: 3,
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
 
-    const res = await app.fetch(post(PATH, { mcpServerId: "srv-1", enabled: false }));
+    const res = await app.fetch(
+      post(PATH, { mcpServerId: "srv-1", enabled: false }),
+    );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(invokeResult);
   });
@@ -458,7 +481,11 @@ describe("agent.memory.policy.write route", () => {
   const PATH = "/agent/memory/policy";
 
   it("happy path POST: returns 200", async () => {
-    const invokeResult = { halfLifeLowDays: 30, halfLifeHighDays: 90, recallThreshold: 0.1 };
+    const invokeResult = {
+      halfLifeLowDays: 30,
+      halfLifeHighDays: 90,
+      recallThreshold: 0.1,
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
 
     const res = await app.fetch(post(PATH, { halfLifeLowDays: 30 }));
@@ -632,7 +659,11 @@ describe("agent.subagent.cancel route", () => {
   const PATH = `/agent/subagent/cancel/${fanoutId}`;
 
   it("happy path POST /:fanoutId: returns 200 with cancel result", async () => {
-    const invokeResult = { fanoutId, status: "cancelled", cancelledChildren: 2 };
+    const invokeResult = {
+      fanoutId,
+      status: "cancelled",
+      cancelledChildren: 2,
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
 
     const res = await app.fetch(
@@ -741,7 +772,9 @@ describe("agent.subagent.logs route", () => {
   });
 
   it("calls invoke with 'get_subagent_logs' and surface 'api'", async () => {
-    await app.fetch(post(PATH, { fanoutId: "fan-logs-2", title: "Research Run Logs" }));
+    await app.fetch(
+      post(PATH, { fanoutId: "fan-logs-2", title: "Research Run Logs" }),
+    );
     expect(mocks.invoke).toHaveBeenCalledOnce();
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_subagent_logs");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });

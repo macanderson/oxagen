@@ -9,6 +9,8 @@ export const ontologyNeighborsRoute = new Hono<AppEnv>();
 ontologyNeighborsRoute.post("/", async (c) => {
   const body = ontologyNeighbors.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(ontologyNeighbors.name, body, ctx, { surface: "api" });
+  const out = await invoke(ontologyNeighbors.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out, 200);
 });

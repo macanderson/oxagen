@@ -34,10 +34,13 @@ export async function upsertGithubInstallation(input: {
   // (fresh install / unsuspend) clears both; else the flags are left untouched
   // (a metadata refresh from a listing must never un-suspend an installation).
   const lifecycle: { suspendedAt?: Date | null; deletedAt?: Date | null } = {};
-  if (input.suspendedAt !== undefined) lifecycle.suspendedAt = input.suspendedAt;
+  if (input.suspendedAt !== undefined)
+    lifecycle.suspendedAt = input.suspendedAt;
   if (input.deletedAt !== undefined) lifecycle.deletedAt = input.deletedAt;
-  if (input.reactivate && input.suspendedAt === undefined) lifecycle.suspendedAt = null;
-  if (input.reactivate && input.deletedAt === undefined) lifecycle.deletedAt = null;
+  if (input.reactivate && input.suspendedAt === undefined)
+    lifecycle.suspendedAt = null;
+  if (input.reactivate && input.deletedAt === undefined)
+    lifecycle.deletedAt = null;
 
   await withSystemDb((tx) =>
     tx
@@ -60,9 +63,13 @@ export async function upsertGithubInstallation(input: {
           // Never null out a known value with an unknown one — only overwrite
           // metadata when this caller actually has it (the callback leg carries
           // only the id; the listing/webhook legs carry account details).
-          ...(input.accountLogin != null ? { accountLogin: input.accountLogin } : {}),
+          ...(input.accountLogin != null
+            ? { accountLogin: input.accountLogin }
+            : {}),
           ...(input.accountId != null ? { accountId: input.accountId } : {}),
-          ...(input.accountType != null ? { accountType: input.accountType } : {}),
+          ...(input.accountType != null
+            ? { accountType: input.accountType }
+            : {}),
           ...(input.appSlug != null ? { appSlug: input.appSlug } : {}),
           ...(input.repositorySelection != null
             ? { repositorySelection: input.repositorySelection }

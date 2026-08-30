@@ -12,7 +12,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mocks.invoke }));
-vi.mock("../../lib/context", () => ({ capabilityContext: mocks.capabilityContext }));
+vi.mock("../../lib/context", () => ({
+  capabilityContext: mocks.capabilityContext,
+}));
 
 import { capabilityRegistryListRoute } from "./capability.registry.list";
 
@@ -42,7 +44,9 @@ beforeEach(() => {
 });
 
 async function get(qs = ""): Promise<Response> {
-  return capabilityRegistryListRoute.fetch(new Request(`http://localhost/?${qs}`));
+  return capabilityRegistryListRoute.fetch(
+    new Request(`http://localhost/?${qs}`),
+  );
 }
 
 describe("GET capability/registry/list", () => {
@@ -59,7 +63,9 @@ describe("GET capability/registry/list", () => {
   });
 
   it("threads filters and coerces numeric params", async () => {
-    await get("domain=billing&q=usage&surface=mcp&missingLayer=app&sensitivity=high&limit=10&offset=20");
+    await get(
+      "domain=billing&q=usage&surface=mcp&missingLayer=app&sensitivity=high&limit=10&offset=20",
+    );
     expect(mocks.invoke).toHaveBeenCalledWith(
       "list_capability_registry",
       {

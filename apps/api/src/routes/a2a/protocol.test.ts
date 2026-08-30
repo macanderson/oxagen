@@ -135,15 +135,15 @@ describe("A2A protocol wire types", () => {
     };
 
     it("reads a non-empty string skillId from metadata", () => {
-      expect(getSkillId({ ...base, metadata: { skillId: "billing-bot" } })).toBe(
-        "billing-bot",
-      );
+      expect(
+        getSkillId({ ...base, metadata: { skillId: "billing-bot" } }),
+      ).toBe("billing-bot");
     });
 
     it("trims surrounding whitespace", () => {
-      expect(getSkillId({ ...base, metadata: { skillId: "  qa-chat  " } })).toBe(
-        "qa-chat",
-      );
+      expect(
+        getSkillId({ ...base, metadata: { skillId: "  qa-chat  " } }),
+      ).toBe("qa-chat");
     });
 
     it("returns undefined when metadata is absent", () => {
@@ -151,11 +151,15 @@ describe("A2A protocol wire types", () => {
     });
 
     it("returns undefined for a non-string skillId (never throws)", () => {
-      expect(getSkillId({ ...base, metadata: { skillId: 42 } })).toBeUndefined();
+      expect(
+        getSkillId({ ...base, metadata: { skillId: 42 } }),
+      ).toBeUndefined();
     });
 
     it("returns undefined for an empty/whitespace-only skillId", () => {
-      expect(getSkillId({ ...base, metadata: { skillId: "   " } })).toBeUndefined();
+      expect(
+        getSkillId({ ...base, metadata: { skillId: "   " } }),
+      ).toBeUndefined();
     });
   });
 });

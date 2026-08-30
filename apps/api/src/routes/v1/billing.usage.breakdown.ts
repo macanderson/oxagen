@@ -14,6 +14,8 @@ billingUsageBreakdownRoute.get("/", async (c) => {
     workspaceId: c.req.query("workspace_id"),
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(billingUsageBreakdown.name, input, ctx, { surface: "api" });
+  const out = await invoke(billingUsageBreakdown.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

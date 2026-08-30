@@ -9,6 +9,8 @@ export const workspaceSettingsReadRoute = new Hono<AppEnv>();
 workspaceSettingsReadRoute.get("/", async (c) => {
   const input = workspaceSettingsRead.input.parse({});
   const ctx = capabilityContext(c);
-  const out = await invoke(workspaceSettingsRead.name, input, ctx, { surface: "api" });
+  const out = await invoke(workspaceSettingsRead.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
