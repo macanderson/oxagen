@@ -42,12 +42,58 @@ Vercel serves this directory as-is (framework preset: Other, root directory
   `packages/ui/src/styles/fonts/`), plus Literata variable serif
   (normal + italic, latin subset, from Google Fonts) for the book reader —
   all cached immutable for a year.
-- `favicon.svg` — the Oxagen hexagon mark.
+- `favicon.svg` — the Oxagen hexagon mark, solid gold (it carried a
+  three-stop ember gradient until the palette change described below).
 - `og.png` / `research-assets/book-og.png` — social share cards referenced by
   the Open Graph tags on `index.html` and `read/index.html` respectively.
 - `overview-video.html` — a standalone Stella overview page. Nothing on the
   site links to it and it is not in `sitemap.xml`; it is reachable only if you
   already know the URL.
+
+## The palette, and the four rules
+
+`assets/oxagen.css` holds the palette in **two layers**, and the split is the
+whole discipline:
+
+- **Primitives** — the `--st-*` table, Stella's canonical colours byte-for-byte.
+  This is the only place in the site a hex may appear.
+- **Semantics** — `--ground`, `--gold`, `--ink-3` and the rest, each aliasing a
+  primitive. Rules and pages name these.
+
+Reskinning means repointing an alias. It never means re-hexing a primitive, and
+it never means writing a colour into a rule or a page.
+
+The same table is what `assets/tui/*.svg` is drawn in, which is the point: the
+product screenshots and the page around them are one surface. Gold (`--gold`,
+`#EFC53F`) is identity and action only, never a state; `--pass` and `--fail`
+carry state.
+
+Four rules hold the look together. Breaking one is a review question, not a
+matter of taste:
+
+1. **No gradients.** Not in CSS, not in the wordmark, not in the favicon. The
+   `--tex-*` textures are hard-stop repeating patterns, which read as texture
+   rather than as a fade. A `mask-image` is not a paint and does not count.
+2. **Corners are 2px** (`--r`). Circles (`50%`) are exempt.
+3. **Texture never sits behind body copy.** A `.tex` layer paints at
+   `z-index:-1` beneath a solid panel, so contrast is a property of the layout
+   rather than of an opacity guess.
+4. **`--faint` and `--muted` are terminal tokens.** They measure roughly 2.3
+   and 4.3 against the canvas and fail WCAG AA for small text. They belong to
+   the mock terminal chrome; real copy uses `--ink-3` or lighter. Every page
+   currently measures zero contrast failures — keep it that way.
+
+`.reveal` is gated on a `.js` class set by a one-line script in each page's
+`<head>`. Without it nothing is hidden, so a script that fails to load costs
+the animation rather than the content.
+
+`assets/` is excluded from the root ESLint config: this directory has no
+tsconfig, so the TypeScript project service reports its browser JS as a parse
+error rather than as findings.
+
+**`read/index.html` is not on this system yet** — it still carries its own
+`:root` block of hardcoded hexes rather than consuming `assets/oxagen.css`.
+The colours match, but nothing keeps them matching (#1437).
 
 ## Lead capture
 

@@ -148,7 +148,28 @@ tools/eval-out/
 
 # Stella agent local state (context/memory DBs; the agent now lives in its
 # own repo — accidentally git-tracked in the past, pruned with crates/)
-.stella/
+# Stella agent workspace. The root `.stella/` is per-workspace scratch
+# (sessions, exports, private evidence) and stays ignored -- with one tracked
+# exception: `commands/`. A custom slash command only steers a teammate's
+# session if it travels with the repository, so commands are reviewed through
+# the same pull requests as the code. Mirrors the exception macanderson/stella
+# makes for `.stella/rules/`.
+#
+# Note the shape: a bare `.stella/` excludes the DIRECTORY, and git cannot
+# re-include a file whose parent directory is excluded -- so the exclusion has
+# to be `/.stella/*` for the negations below to take effect at all.
+!/.stella/
+/.stella/*
+# Commands are opt-in, one command per line, rather than a blanket negation:
+# `.stella/commands/` is also where locally-generated scratch commands land,
+# and a command only belongs in review if someone meant it to travel. Four
+# lines are required, in this order -- git cannot re-include a file whose
+# parent directory is excluded, so dropping the first makes the rest inert.
+!/.stella/commands/
+/.stella/commands/*
+!/.stella/commands/triage-sweep.md
+!/.stella/commands/triage-sweep.toml
+!/.stella/commands/go-green.toml
 
 # Python bytecode caches (orphaned .pyc files were git-tracked in bench/
 # after their sources were removed)
