@@ -4,11 +4,24 @@
 
 The platform's agent engine gets its upgrade by adopting the
 [Stella](https://github.com/macanderson/stella) Rust engine core
-(`stella-protocol` + `stella-core` + `stella-pipeline`, MIT OR Apache-2.0) as
-the turn driver — embedded via napi-rs in a new durable worker — while the
+(`stella-protocol` + `stella-core` + `stella-serve`, MIT OR Apache-2.0) as
+the turn driver — driven as a loopback sidecar from a durable worker — while the
 capability kernel, sandbox, engram, approvals, and billing remain sovereign and
 implement the engine's ports. Every tool call the engine dispatches still
 re-enters `kernel.invoke()`.
+
+Two things in that sentence changed after this spec was written, and the
+original wording survives in `spec.md`'s older sections:
+
+- **`stella-pipeline` no longer exists.** Upstream deleted the built-in staged
+  verification pipeline (stella#3865); verification there is now an installed
+  plugin whose evidence is self-reported. Nothing in this spec's verification
+  plane can assume a host-run oracle.
+- **The binding is a sidecar, not napi.** `stella-serve` over loopback replaced
+  the `stella-engine-node` napi binding this spec assumed. See
+  [`plan.md`](./plan.md) § "Phase 3" for why — stella's process-global
+  credential state makes one engine process per worker slot the containment
+  boundary.
 
 - [`spec.md`](./spec.md) — the full design: current-state audit (with
   file:line evidence), the Stella reference bar, options analysis, target
