@@ -1545,3 +1545,202 @@ export const agentRunFinalizationObligations = agentSchema.table(
     ),
   }),
 );
+
+// ── Workspace agent-asset registry (stella-cutover Wave 4) ───────────────────
+//
+// Tool declarations + context records, mirroring the skills/skill_versions
+// pattern above exactly: a logical identity row keyed (workspace_id, slug)
+// plus immutable version snapshots, an explicitly pinned active_version_id,
+// and soft delete on the identity row only. Migration
+// 20260831120000_agent_asset_registry.sql.
+
+// Declared tool contracts (Stella ToolContract vocabulary): the JSON schema,
+// read_only flag, risk grade and policy group live on the version row; the
+// identity row carries the source discriminator and the enable toggle.
+export const tools = agentSchema.table(
+  "tools",
+  {
+    ...idMixin("tol"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    ...softDeleteMixin(),
+    name: text("name").notNull(),
+    slug: citext("slug").notNull(),
+    description: text("description"),
+    // builtin = shipped built-in; custom = workspace-authored script tool;
+    // mcp = an MCP server's advertised tool; foundry = tool-foundry authored.
+    source: citext("source").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    // Explicitly pinned active version, decoupled from tool_versions.is_latest.
+    activeVersionId: uuid("active_version_id").references(
+      (): AnyPgColumn => toolVersions.id,
+    ),
+    activatedByUserId: uuid("activated_by_user_id"),
+    activatedAt: timestamp("activated_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+  },
+  (t) => ({
+    workspaceSlugIdx: uniqueIndex("tools_workspace_slug_idx").on(
+      t.workspaceId,
+      t.slug,
+    ),
+    orgIdx: index("tools_org_idx").on(t.orgId, t.workspaceId),
+    activeVersionIdx: index("tools_active_version_idx").on(t.activeVersionId),
+    sourceCheck: check(
+      "tools_source_check",
+      sql`${t.source} IN ('builtin', 'custom', 'mcp', 'foundry')`,
+    ),
+  }),
+);
+
+export const toolVersions = agentSchema.table(
+  "tool_versions",
+  {
+    ...idMixin("tlv"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    ...versionMixin(),
+    toolId: uuid("tool_id").notNull(),
+    // The tool's JSON Schema for its input parameters.
+    inputSchema: jsonb("input_schema").notNull(),
+    readOnly: boolean("read_only").notNull().default(false),
+    riskGrade: text("risk_grade").notNull(),
+    policyGroup: text("policy_group"),
+    // The full declared manifest body, verbatim.
+    manifest: jsonb("manifest").notNull(),
+    // SHA-256 hex over the canonical (sorted-key) manifest JSON — immutability
+    // contract (see skill_versions.checksum).
+    checksum: text("checksum").notNull(),
+  },
+  (t) => ({
+    toolIdx: index("tool_versions_tool_idx").on(t.toolId),
+    toolLatestIdx: uniqueIndex("tool_versions_tool_latest_idx")
+      .on(t.toolId)
+      .where(sql`is_latest = true`),
+    toolVersionIdx: uniqueIndex("tool_versions_tool_version_idx").on(
+      t.toolId,
+      t.versionNumber,
+    ),
+    orgIdx: index("tool_versions_org_idx").on(t.orgId, t.workspaceId),
+    riskGradeCheck: check(
+      "tool_versions_risk_grade_check",
+      sql`${t.riskGrade} IN ('low', 'medium', 'high', 'critical')`,
+    ),
+    checksumCheck: check(
+      "tool_versions_checksum_check",
+      sql`${t.checksum} ~ '^[0-9a-f]{64}$'`,
+    ),
+  }),
+);
+
+// Steering/context records — Stella keeps these as .stella/rules/*.toml, one
+// record per file; the slug is the file stem. Lifecycle (status) is driven by
+// the append-only contextPromotions ledger below, never edited directly.
+export const contextRecords = agentSchema.table(
+  "context_records",
+  {
+    ...idMixin("ctr"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    ...softDeleteMixin(),
+    slug: citext("slug").notNull(),
+    title: text("title").notNull(),
+    // promote → active, retire → retired, supersede → superseded.
+    status: text("status").notNull().default("active"),
+    activeVersionId: uuid("active_version_id").references(
+      (): AnyPgColumn => contextRecordVersions.id,
+    ),
+    activatedByUserId: uuid("activated_by_user_id"),
+    activatedAt: timestamp("activated_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+  },
+  (t) => ({
+    workspaceSlugIdx: uniqueIndex("context_records_workspace_slug_idx").on(
+      t.workspaceId,
+      t.slug,
+    ),
+    orgIdx: index("context_records_org_idx").on(t.orgId, t.workspaceId),
+    activeVersionIdx: index("context_records_active_version_idx").on(
+      t.activeVersionId,
+    ),
+    statusCheck: check(
+      "context_records_status_check",
+      sql`${t.status} IN ('active', 'retired', 'superseded')`,
+    ),
+  }),
+);
+
+export const contextRecordVersions = agentSchema.table(
+  "context_record_versions",
+  {
+    ...idMixin("crv"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    ...versionMixin(),
+    recordId: uuid("record_id").notNull(),
+    // The canonical record body (one TOML record per file in Stella).
+    body: text("body").notNull(),
+    // SHA-256 hex over body — immutability contract (see skill_versions).
+    checksum: text("checksum").notNull(),
+    // ContextProvenanceV1 vocabulary (packages/run-evidence contextgraph.ts):
+    // [{ type, uri?, range?, digest?, method?, by? }].
+    provenance: jsonb("provenance").notNull().default(sql`'[]'::jsonb`),
+  },
+  (t) => ({
+    recordIdx: index("context_record_versions_record_idx").on(t.recordId),
+    recordLatestIdx: uniqueIndex("context_record_versions_record_latest_idx")
+      .on(t.recordId)
+      .where(sql`is_latest = true`),
+    recordVersionIdx: uniqueIndex(
+      "context_record_versions_record_version_idx",
+    ).on(t.recordId, t.versionNumber),
+    orgIdx: index("context_record_versions_org_idx").on(t.orgId, t.workspaceId),
+    checksumCheck: check(
+      "context_record_versions_checksum_check",
+      sql`${t.checksum} ~ '^[0-9a-f]{64}$'`,
+    ),
+  }),
+);
+
+// Append-only hash-chained ledger of context-record lifecycle actions,
+// mirroring Stella's promotions.jsonl: chain_digest = sha256(prev_digest +
+// canonical row), seq monotonic per record starting at 1. INSERT-only at the
+// grant level (no UPDATE/DELETE for oxagen_app) — a promotion is evidence.
+export const contextPromotions = agentSchema.table(
+  "context_promotions",
+  {
+    ...idMixin("ctp"),
+    ...appendOnlyAuditMixin(),
+    ...orgScopeMixin(),
+    recordId: uuid("record_id").notNull(),
+    // The version being promoted/superseded-by; NULL for a retire.
+    versionId: uuid("version_id"),
+    seq: integer("seq").notNull(),
+    action: text("action").notNull(),
+    approverUserId: uuid("approver_user_id"),
+    policyVersion: text("policy_version").notNull(),
+    // The previous entry's chain_digest; NULL only for seq = 1.
+    prevChainDigest: text("prev_chain_digest"),
+    chainDigest: text("chain_digest").notNull(),
+  },
+  (t) => ({
+    recordSeqIdx: uniqueIndex("context_promotions_record_seq_idx").on(
+      t.recordId,
+      t.seq,
+    ),
+    orgIdx: index("context_promotions_org_idx").on(t.orgId, t.workspaceId),
+    actionCheck: check(
+      "context_promotions_action_check",
+      sql`${t.action} IN ('promote', 'retire', 'supersede')`,
+    ),
+    seqCheck: check("context_promotions_seq_check", sql`${t.seq} > 0`),
+    chainCheck: check(
+      "context_promotions_chain_check",
+      sql`${t.chainDigest} ~ '^[0-9a-f]{64}$' AND (${t.prevChainDigest} IS NULL OR ${t.prevChainDigest} ~ '^[0-9a-f]{64}$') AND ((${t.seq} = 1) = (${t.prevChainDigest} IS NULL))`,
+    ),
+  }),
+);

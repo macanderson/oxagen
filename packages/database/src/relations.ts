@@ -35,6 +35,11 @@ import {
   agentPlans,
   skills,
   skillVersions,
+  tools,
+  toolVersions,
+  contextRecords,
+  contextRecordVersions,
+  contextPromotions,
   backgroundTasks,
   approvalRequests,
   subagentFanouts,
@@ -211,6 +216,71 @@ export const skillVersionsRelations = relations(skillVersions, ({ one }) => ({
     relationName: "skill_version_parent",
   }),
 }));
+
+// Workspace agent-asset registry (stella-cutover Wave 4): same shape as the
+// skills relations above — identity ↔ versions, plus the append-only
+// promotions ledger for context records.
+
+export const toolsRelations = relations(tools, ({ one, many }) => ({
+  workspace: one(workspaces, {
+    fields: [tools.workspaceId],
+    references: [workspaces.id],
+  }),
+  versions: many(toolVersions),
+}));
+
+export const toolVersionsRelations = relations(toolVersions, ({ one }) => ({
+  tool: one(tools, {
+    fields: [toolVersions.toolId],
+    references: [tools.id],
+  }),
+  parentVersion: one(toolVersions, {
+    fields: [toolVersions.parentVersionId],
+    references: [toolVersions.id],
+    relationName: "tool_version_parent",
+  }),
+}));
+
+export const contextRecordsRelations = relations(
+  contextRecords,
+  ({ one, many }) => ({
+    workspace: one(workspaces, {
+      fields: [contextRecords.workspaceId],
+      references: [workspaces.id],
+    }),
+    versions: many(contextRecordVersions),
+    promotions: many(contextPromotions),
+  }),
+);
+
+export const contextRecordVersionsRelations = relations(
+  contextRecordVersions,
+  ({ one }) => ({
+    record: one(contextRecords, {
+      fields: [contextRecordVersions.recordId],
+      references: [contextRecords.id],
+    }),
+    parentVersion: one(contextRecordVersions, {
+      fields: [contextRecordVersions.parentVersionId],
+      references: [contextRecordVersions.id],
+      relationName: "context_record_version_parent",
+    }),
+  }),
+);
+
+export const contextPromotionsRelations = relations(
+  contextPromotions,
+  ({ one }) => ({
+    record: one(contextRecords, {
+      fields: [contextPromotions.recordId],
+      references: [contextRecords.id],
+    }),
+    version: one(contextRecordVersions, {
+      fields: [contextPromotions.versionId],
+      references: [contextRecordVersions.id],
+    }),
+  }),
+);
 
 export const backgroundTasksRelations = relations(
   backgroundTasks,
