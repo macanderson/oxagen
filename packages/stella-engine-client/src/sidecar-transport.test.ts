@@ -16,7 +16,7 @@
  */
 import { describe, expect, test } from "vitest";
 
-import { StellaSidecarClient } from "./sidecar-transport.js";
+import { StellaSidecarClient } from "./sidecar-transport";
 import {
   isCompleteEvent,
   isTerminalTurnEvent,
@@ -29,7 +29,7 @@ import {
   isToolStartEvent,
   isTurnCompleteFrame,
   type ServerFrame,
-} from "./wire-types.js";
+} from "./wire-types";
 
 const TURN_ID = "turn-0123456789abcdef0123456789abcdef";
 

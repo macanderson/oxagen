@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./run-spec-v2": "./src/run-spec-v2.ts",
     "./run-spec-v1-legacy": "./src/run-spec-v1-legacy.ts",
-    "./run-errors": "./src/run-errors.ts"
+    "./run-errors": "./src/run-errors.ts",
+    "./stella": "./src/stella/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -20,6 +21,8 @@
   "dependencies": {
     "@oxagen/agent-engine": "workspace:*",
     "@oxagen/database": "workspace:*",
+    "@oxagen/stella-engine-client": "workspace:*",
+    "ai": "7.0.14",
     "drizzle-orm": "0.45.2",
     "typescript": "6.0.3",
     "zod": "3.25.76"

@@ -25,15 +25,15 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
-import { StellaSidecarClient } from "./sidecar-transport.js";
-import { readSidecarConfig, resolveStellaBinary } from "./stella-binary.js";
-import { isTerminalTurnEvent } from "./wire-types.js";
+import { StellaSidecarClient } from "./sidecar-transport";
+import { readSidecarConfig, resolveStellaBinary } from "./stella-binary";
+import { isTerminalTurnEvent } from "./wire-types";
 import type {
   CompletionRequest,
   CompletionResult,
   ToolOutput,
   TurnRequest,
-} from "./wire-types.js";
+} from "./wire-types";
 
 /** 32+ chars so the server does not warn about a guessable token. */
 const TOKEN = "oxagen-smoke-test-bearer-token-0123456789";

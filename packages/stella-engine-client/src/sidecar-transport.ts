@@ -31,12 +31,13 @@ import type {
   AgentEventEnvelope,
   CompletionRequest,
   CompletionResult,
+  ProviderError,
   ServerFrame,
   ToolOutput,
   TurnCreated,
   TurnOutcome,
   TurnRequest,
-} from "./wire-types.js";
+} from "./wire-types";
 
 export interface SidecarClientOptions {
   /** Base URL of a running `stella-serve` process, e.g. http://127.0.0.1:8137. */
@@ -65,11 +66,64 @@ export type ToolHandler = (
   input: Record<string, unknown>,
 ) => Promise<ToolOutput>;
 
+/**
+ * What {@link StellaSidecarClient.runTurn} does when a reverse-request handler
+ * rejects.
+ *
+ * - `"throw"` (default) — collect the rejection and rethrow it once the stream
+ *   ends. Right for a test or a script driving a scripted turn, where a handler
+ *   rejection is a bug in the harness and should surface as itself.
+ * - `"report"` — tell the engine. A provider rejection is classified into a
+ *   {@link ProviderError} and POSTed as the error arm; a tool rejection is
+ *   POSTed as the `error` arm of {@link ToolOutput}. Right for a production
+ *   host, because both failures are ones the engine is built to handle: a
+ *   `transport`/`rate_limited` provider error is retried with backoff, and a
+ *   failed tool is surfaced to the model as text it can react to. Under
+ *   `"throw"` the engine learns nothing and the turn stalls until its
+ *   reverse-request deadline, converting a retryable blip into a dead turn.
+ */
+export type ReverseRequestFailureMode = "throw" | "report";
+
 export interface DriveTurnHandlers {
   onProviderRequest: ProviderHandler;
   onToolRequest: ToolHandler;
   /** Optional observer for UI events. Never required to respond. */
   onEvent?: (event: AgentEventEnvelope) => void;
+  /** See {@link ReverseRequestFailureMode}. Defaults to `"throw"`. */
+  onFailure?: ReverseRequestFailureMode;
+  /**
+   * Classifies a rejected {@link ProviderHandler} into the taxonomy the engine
+   * retries on. Consulted only under `onFailure: "report"`; defaults to
+   * {@link classifyProviderFailure}.
+   *
+   * The host owns this decision because only the host's own model adapter knows
+   * whether a failure was a 429, a bad key, or a socket reset — and the engine's
+   * behaviour forks on exactly that.
+   */
+  classifyProviderError?: (error: unknown) => ProviderError;
+}
+
+/**
+ * Default classification for a model-call failure with no host-supplied
+ * classifier: `transport`, which the engine retries with backoff.
+ *
+ * Retryable is the safe default in only one direction. Misclassifying a
+ * terminal failure as `transport` costs a bounded number of retries that each
+ * fail the same way; misclassifying a blip as `terminal` kills a turn the
+ * engine could have completed. A host that can tell the difference should say
+ * so via {@link DriveTurnHandlers.classifyProviderError} rather than rely on
+ * this.
+ */
+export function classifyProviderFailure(error: unknown): ProviderError {
+  const message = error instanceof Error ? error.message : String(error);
+  if (isAbortLike(error)) return { kind: "cancelled" };
+  return { kind: "transport", message };
+}
+
+function isAbortLike(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const name = (error as { name?: unknown }).name;
+  return name === "AbortError" || name === "TimeoutError";
 }
 
 export interface TurnRunResult {
@@ -188,6 +242,27 @@ export class StellaSidecarClient {
     });
   }
 
+  /**
+   * `POST /v1/turns/{id}/provider-result` — fail a model call.
+   *
+   * The error arm of the same route {@link resolveProvider} uses. `kind` is
+   * load-bearing rather than cosmetic: the engine reconstructs a real
+   * `ProviderError` from it, so `transport` and `rate_limited` re-enter its
+   * retry-with-backoff path while `auth`, `unknown_model`, `malformed`,
+   * `cancelled` and `terminal` fail the turn at once.
+   */
+  async rejectProvider(
+    turnId: string,
+    requestId: string,
+    error: ProviderError,
+  ): Promise<void> {
+    await this.post(turnId, "provider-result", {
+      request_id: requestId,
+      status: "error",
+      error,
+    });
+  }
+
   /** `POST /v1/turns/{id}/tool-result` — answer a tool call. */
   async resolveTool(
     turnId: string,
@@ -240,15 +315,15 @@ export class StellaSidecarClient {
    * the engine may have several read-only tool calls outstanding at once and
    * serializing them here would stall the group.
    *
-   * Two limits of the failure path are worth knowing before you rely on it:
+   * A rejecting handler is governed by {@link ReverseRequestFailureMode}: by
+   * default the rejection is collected and rethrown once the stream ends, so a
+   * handler bug surfaces as itself rather than as a wedged turn; under
+   * `onFailure: "report"` it is POSTed back to the engine instead, which is
+   * what a production host wants.
    *
-   * - A failing handler is never reported *to the engine*. This client only
-   *   ever POSTs `status: "ok"`; the `error` arm of `ProviderResultIn` has no
-   *   method here. So the engine's parked step is released by the turn's
-   *   `reverse_request_timeout_ms` (five minutes by default), and `runTurn`
-   *   only returns once that deadline produces a terminal frame.
-   * - Only the first collected failure is rethrown. With several tool calls
-   *   outstanding, the later errors are dropped.
+   * One limit of the default arm: only the first collected failure is
+   * rethrown. With several tool calls outstanding, the later errors are
+   * dropped.
    */
   async runTurn(
     request: TurnRequest,
@@ -256,6 +331,7 @@ export class StellaSidecarClient {
   ): Promise<TurnRunResult> {
     const { turnId } = await this.createTurn(request);
     const frames = await this.openFrameStream(turnId);
+    const reportFailures = (handlers.onFailure ?? "throw") === "report";
 
     const events: AgentEventEnvelope[] = [];
     const inFlight: Promise<void>[] = [];
@@ -286,7 +362,16 @@ export class StellaSidecarClient {
               .onProviderRequest(completion)
               .then((result) =>
                 this.resolveProvider(turnId, request_id, result),
-              ),
+              )
+              .catch((err: unknown) => {
+                if (!reportFailures) throw err;
+                // Reporting is itself a POST that can fail; let THAT rejection
+                // propagate, because a host that can neither answer nor report
+                // has lost the turn and must say so.
+                const classify =
+                  handlers.classifyProviderError ?? classifyProviderFailure;
+                return this.rejectProvider(turnId, request_id, classify(err));
+              }),
           );
           break;
         }
@@ -296,6 +381,15 @@ export class StellaSidecarClient {
           track(
             handlers
               .onToolRequest(name, input)
+              .catch((err: unknown): ToolOutput => {
+                if (!reportFailures) throw err;
+                // A failed tool is ordinary: the engine hands the message to
+                // the model as text it can react to, exactly as it would a
+                // tool that returned an error of its own accord.
+                const message =
+                  err instanceof Error ? err.message : String(err);
+                return { error: { message } };
+              })
               .then((output) => this.resolveTool(turnId, request_id, output)),
           );
           break;
