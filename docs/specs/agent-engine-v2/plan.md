@@ -76,7 +76,7 @@ moving it is a separate decision (#2548), earned by the parity gate below.
 
 ### Where the shipped engine differs from the sketch above
 
-Three things landed differently from what this phase specified. Each is a
+Four things landed differently from what this phase specified. Each is a
 decision, not an implementation detail, so it is recorded here rather than left
 to be inferred from the diff.
 
@@ -88,11 +88,24 @@ to be inferred from the diff.
   config knobs are process-global — two tenants sharing one engine process
   would share that state (`serve-surface.md` § "Containment posture"). A
   sidecar per slot keeps them apart.
-- **The flag is `OXAGEN_ENGINE`, not `ENGINE`**, and a run's own
-  `enginePolicy.requested_engine` takes precedence over it
-  (`stella/engine-choice.ts`). An unrecognised value throws rather than falling
-  back to `ts`: a deployment that believes it cut over and did not is worse
-  than a loud failure.
+- **The flag is `OXAGEN_ENGINE`, not `ENGINE`**, and a run's own engine ask
+  takes precedence over it (`stella/engine-choice.ts`). An unrecognised value
+  throws rather than falling back to `ts`: a deployment that believes it cut
+  over and did not is worse than a loud failure. What the driver reads today
+  is RunSpec **v1**'s optional `engine` (`turn-driver.ts`, the one
+  `executeTurn` call site); RunSpec v2's `engine_policy.requested_engine` is
+  declared in the schema but not yet read there, so a v2 run asking for an
+  engine still takes the process default. Wiring it is #2544's remaining item.
+- **The engine's own budget is armed only when the host can price a call.**
+  `configureStellaEngine({ price })` at worker boot injects an
+  `@oxagen/billing`-backed pricer, so `CompletionResult.cost_usd` carries real
+  dollars and `buildBudgetSpec` sends `observed` instead of `off`
+  (`stella/provider-bridge.ts`, `stella/run-stella-turn.ts`). Deliberately not
+  `enforced`: the host's `RunCodingAgentOptions.budgetGuard` remains the
+  spend authority and metering does not move (§3), so the engine's ceiling is
+  a cross-check rather than a second gate. `@oxagen/agent-runner` never
+  imports billing — the pricer arrives as an injected function, the same split
+  `budgetGuard` already makes.
 - **Phase 0 item 2's interim dispatch guard is now engine-owned**, as that item
   anticipated. Stella partitions a step's calls on the `read_only` bit each
   advertised schema carries, derived from the host's
