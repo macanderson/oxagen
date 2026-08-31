@@ -9,12 +9,12 @@ import {
 describe("scanContent", () => {
   it("flags a loader that reintroduces the legacy skill manifest", () => {
     const violations = scanContent(
-      "apps/cli/src/skills/loader.ts",
+      "packages/skills/src/loader.ts",
       'const manifest = join(dir, "SKILL.md");\n',
     );
     expect(violations).toHaveLength(1);
     expect(violations[0]).toMatchObject({
-      file: "apps/cli/src/skills/loader.ts",
+      file: "packages/skills/src/loader.ts",
       line: 1,
       label: "SKILL.md (legacy skill manifest)",
     });
@@ -27,7 +27,7 @@ describe("scanContent", () => {
       ["Authored as YAML frontmatter.", "YAML frontmatter (legacy format)"],
     ] as const;
     for (const [line, label] of labels) {
-      const violations = scanContent("apps/cli/src/skills/loader.ts", line);
+      const violations = scanContent("packages/skills/src/loader.ts", line);
       expect(violations.map((v) => v.label)).toContain(label);
     }
   });
@@ -44,7 +44,7 @@ describe("scanContent", () => {
   it("passes canonical TOML loader code", () => {
     expect(
       scanContent(
-        "apps/cli/src/skills/loader.ts",
+        "packages/skills/src/loader.ts",
         'const manifest = join(dir, "skill.toml");\n',
       ),
     ).toEqual([]);
@@ -122,7 +122,20 @@ describe("allowlist", () => {
     expect(
       allowlistEntryFor("docs/guides/import-agent-artifacts.md.bak"),
     ).toBeUndefined();
-    expect(allowlistEntryFor("apps/cli/src/skills/loader.ts")).toBeUndefined();
+    // A scanned source file with no entry of its own stays unexempt.
+    expect(allowlistEntryFor("packages/skills/src/loader.ts")).toBeUndefined();
+  });
+
+  it("exempts the CLI skill loader, whose SKILL.md mention is contrastive", () => {
+    // The doc comment names the foreign format only to say discovery does not
+    // read it. Exempting the file is what lets that sentence stay written.
+    expect(allowlistEntryFor("apps/cli/src/skills/loader.ts")).toBeDefined();
+    expect(
+      scanContent(
+        "apps/cli/src/skills/loader.ts",
+        'const manifest = join(dir, "SKILL.md");\n',
+      ),
+    ).toEqual([]);
   });
 
   it("requires every exemption to carry a reason", () => {
