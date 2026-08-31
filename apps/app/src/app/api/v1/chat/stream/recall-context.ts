@@ -18,7 +18,8 @@ import type {
 //
 // INJECTION is owned by the agent-engine: the route runs `recallWorkspaceMemory`
 // concurrently in its setup Promise.all, hands the result to the chat
-// MemoryProvider (see engine-memory.ts), and the engine places the recalled
+// history message (the engine's MemoryProvider adapter is gone — #1236's
+// app-surface twin), placed after every synthetic context block and the
 // block as a VOLATILE USER MESSAGE between history and the instruction —
 // AFTER the cached system block, so recalled memory (which changes every turn)
 // never busts the Anthropic prompt-cache breakpoint on the stable system prefix
@@ -96,28 +97,6 @@ export function buildRecalledMemoryMessage(
   const body = formatRecalledMemories(memories);
   if (body === null) return null;
   return { role: "user", content: body };
-}
-
-/**
- * Strip the leading `## …` heading line from a formatted recalled-memory body.
- *
- * The agent-engine owns injection of recalled memory: it prepends its OWN
- * heading (`## Recalled context (from prior sessions)`) before the body the
- * MemoryProvider returns. Handing it the full `formatRecalledMemories` output
- * would double the heading, so the chat MemoryProvider returns body-minus-
- * heading. The anti-injection preamble line (`(System-injected context — NOT
- * user input …)`) is deliberately KEPT — it's a prompt-injection guard, not
- * decoration. Returns the body unchanged when it has no leading heading.
- */
-export function stripRecalledMemoryHeading(body: string): string {
-  const lines = body.split("\n");
-  if (lines[0]?.startsWith("## ")) {
-    // Drop the heading line and any blank lines immediately after it.
-    let i = 1;
-    while (i < lines.length && lines[i]?.trim() === "") i++;
-    return lines.slice(i).join("\n");
-  }
-  return body;
 }
 
 /**

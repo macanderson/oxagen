@@ -1,7 +1,6 @@
 import type { ModelMessage } from "ai";
 import { invoke, type CapabilityContext } from "@oxagen/oxagen";
 import { agentMemoryRecall } from "@oxagen/oxagen/contracts/agent.memory.recall";
-import type { MemoryProvider } from "@oxagen/agent-engine";
 
 // Deterministic per-turn memory recall for the REST chat + A2A agent surfaces.
 //
@@ -72,23 +71,6 @@ export function formatRecalledMemories(
 }
 
 /**
- * Strip the leading `## …` heading line from a formatted recalled-memory body.
- * The agent-engine prepends its OWN heading (`## Recalled context (from prior
- * sessions)`) before the body the MemoryProvider returns, so handing it the full
- * `formatRecalledMemories` output would double the heading. The anti-injection
- * preamble line is deliberately KEPT — it is a prompt-injection guard.
- */
-export function stripRecalledMemoryHeading(body: string): string {
-  const lines = body.split("\n");
-  if (lines[0]?.startsWith("## ")) {
-    let i = 1;
-    while (i < lines.length && lines[i]?.trim() === "") i++;
-    return lines.slice(i).join("\n");
-  }
-  return body;
-}
-
-/**
  * Best-effort deterministic recall for the current turn. Queries workspace
  * memory via the kernel, passing `executionRef` so recalled memories are
  * auto-cited as CONSIDERED. Never throws and never blocks longer than
@@ -144,36 +126,4 @@ export async function recallWorkspaceMemoryMessage(args: {
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
-}
-
-/**
- * MemoryProvider for the agent-engine over an already-started recall promise.
- *
- * The engine calls `recallContext()` sequentially at turn start. To avoid adding
- * recall's time-boxed latency BEFORE the first model token, the caller keeps
- * `recallWorkspaceMemoryMessage(...)` running CONCURRENTLY with tool
- * materialization / prompt config inside its existing `Promise.all`, and hands
- * the already-started promise here. `recallContext()` just awaits it. The engine
- * prepends its own `## Recalled context …` heading, so this returns the body
- * with that leading heading stripped (the anti-injection preamble is kept).
- *
- * `remember` is a no-op: chat memory writes happen through the metered,
- * IAM-gated `agent.memory.record` capability the model can call — not the
- * engine's terminal `remember("coding_turn", …)`, which is a CLI/filesystem
- * episodic-store convention.
- */
-export function createRecalledMemoryProvider(args: {
-  recalledPromise: Promise<ModelMessage | null>;
-}): MemoryProvider {
-  return {
-    async recallContext(): Promise<string> {
-      const msg = await args.recalledPromise;
-      if (msg === null) return "";
-      const body = typeof msg.content === "string" ? msg.content : "";
-      return stripRecalledMemoryHeading(body);
-    },
-    remember(): void {
-      // Intentional no-op — see the doc comment.
-    },
-  };
 }
