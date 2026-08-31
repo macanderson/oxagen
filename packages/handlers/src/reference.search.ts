@@ -47,7 +47,10 @@ interface SearchArgs {
   limit: number;
 }
 
-function containsInsensitive(haystack: string | null | undefined, needle: string): boolean {
+function containsInsensitive(
+  haystack: string | null | undefined,
+  needle: string,
+): boolean {
   return (haystack ?? "").toLowerCase().includes(needle.toLowerCase());
 }
 
@@ -69,13 +72,17 @@ function parseRepoEntries(
 ): RepoEntry[] {
   if (!deliveryConfig || typeof deliveryConfig !== "object") return [];
   const cfg = deliveryConfig as Record<string, unknown>;
-  const defaultBranch = typeof cfg["defaultBranch"] === "string" ? cfg["defaultBranch"] : null;
+  const defaultBranch =
+    typeof cfg["defaultBranch"] === "string" ? cfg["defaultBranch"] : null;
 
   const owner = typeof cfg["owner"] === "string" ? cfg["owner"] : undefined;
   const repo = typeof cfg["repo"] === "string" ? cfg["repo"] : undefined;
-  if (owner && repo) return [{ connectionId, status, owner, name: repo, defaultBranch }];
+  if (owner && repo)
+    return [{ connectionId, status, owner, name: repo, defaultBranch }];
 
-  const selected = Array.isArray(cfg["selectedRepos"]) ? cfg["selectedRepos"] : [];
+  const selected = Array.isArray(cfg["selectedRepos"])
+    ? cfg["selectedRepos"]
+    : [];
   const out: RepoEntry[] = [];
   for (const full of selected) {
     if (typeof full !== "string") continue;
@@ -92,7 +99,10 @@ function parseRepoEntries(
   return out;
 }
 
-async function loadRepoEntries(orgId: string, workspaceId: string): Promise<RepoEntry[]> {
+async function loadRepoEntries(
+  orgId: string,
+  workspaceId: string,
+): Promise<RepoEntry[]> {
   const rows = await withTenantDb(async (tx) => {
     return tx
       .select({
@@ -111,7 +121,9 @@ async function loadRepoEntries(orgId: string, workspaceId: string): Promise<Repo
       )
       .limit(100);
   });
-  return rows.flatMap((r) => parseRepoEntries(r.publicId, r.status, r.deliveryConfig));
+  return rows.flatMap((r) =>
+    parseRepoEntries(r.publicId, r.status, r.deliveryConfig),
+  );
 }
 
 function repoRow(entry: RepoEntry): ReferenceResultRow {
@@ -140,7 +152,9 @@ async function searchRepositories(
   const matched = args.slug
     ? entries.filter((e) => e.connectionId === args.slug)
     : entries.filter(
-        (e) => !args.query.trim() || containsInsensitive(`${e.owner}/${e.name}`, args.query),
+        (e) =>
+          !args.query.trim() ||
+          containsInsensitive(`${e.owner}/${e.name}`, args.query),
       );
   return matched.slice(0, args.limit).map(repoRow);
 }
@@ -158,7 +172,9 @@ async function searchBranches(
     (e): e is RepoEntry & { defaultBranch: string } => e.defaultBranch !== null,
   );
   const matched = args.slug
-    ? entries.filter((e) => `${e.connectionId}#${e.defaultBranch}` === args.slug)
+    ? entries.filter(
+        (e) => `${e.connectionId}#${e.defaultBranch}` === args.slug,
+      )
     : entries.filter(
         (e) =>
           !args.query.trim() ||
@@ -257,9 +273,11 @@ async function searchEdges(
 ): Promise<ReferenceResultRow[]> {
   // Resolve mode uses the composite identity `<srcPublicId>:<TYPE>:<dstPublicId>`
   // (same identity graph.relationship.upsert merges by).
-  let resolveParts: { srcId: string; relType: string; dstId: string } | null = null;
+  let resolveParts: { srcId: string; relType: string; dstId: string } | null =
+    null;
   if (args.slug) {
-    const [srcId, relType, dstId, ...rest] = args.slug.split(EDGE_SLUG_SEPARATOR);
+    const [srcId, relType, dstId, ...rest] =
+      args.slug.split(EDGE_SLUG_SEPARATOR);
     if (!srcId || !relType || !dstId || rest.length > 0) return [];
     resolveParts = { srcId, relType, dstId };
   } else if (!args.query.trim()) {
@@ -490,7 +508,10 @@ function searchCapabilities(args: SearchArgs): ReferenceResultRow[] {
     slug: c.name,
     location: `docs/capabilities/${c.name}`,
     label: humanizeCapabilityName(c.name),
-    description: c.description.length > 160 ? `${c.description.slice(0, 157)}…` : c.description,
+    description:
+      c.description.length > 160
+        ? `${c.description.slice(0, 157)}…`
+        : c.description,
     properties: {
       domain: c.domain,
       mode: c.mode,
@@ -520,7 +541,9 @@ async function searchTools(
         location: "",
         label: humanizeCapabilityName(c.name),
         description:
-          c.description.length > 160 ? `${c.description.slice(0, 157)}…` : c.description,
+          c.description.length > 160
+            ? `${c.description.slice(0, 157)}…`
+            : c.description,
         properties: {
           domain: c.domain,
           category: c.agent?.category ?? null,
@@ -555,7 +578,9 @@ async function searchTools(
     (Array.isArray(s.discoveredTools) ? (s.discoveredTools as string[]) : [])
       .map((t) => `${s.name}.${t}`)
       .filter((full) =>
-        args.slug ? full === args.slug : !args.query.trim() || containsInsensitive(full, args.query),
+        args.slug
+          ? full === args.slug
+          : !args.query.trim() || containsInsensitive(full, args.query),
       )
       .map(
         (full): ReferenceResultRow => ({
@@ -564,7 +589,11 @@ async function searchTools(
           location: "",
           label: full,
           description: `External tool on MCP server ${s.name}`,
-          properties: { server: s.name, serverConnectionId: s.publicId, external: true },
+          properties: {
+            server: s.name,
+            serverConnectionId: s.publicId,
+            external: true,
+          },
         }),
       ),
   );
@@ -574,10 +603,9 @@ async function searchTools(
 
 // ── main handler ─────────────────────────────────────────────────────────────
 
-export const referenceSearchHandler: CapabilityHandler<typeof referenceSearch> = async (
-  input,
-  ctx,
-) => {
+export const referenceSearchHandler: CapabilityHandler<
+  typeof referenceSearch
+> = async (input, ctx) => {
   const { orgId, workspaceId } = ctx;
   const args: SearchArgs = {
     query: input.query ?? "",
@@ -614,8 +642,11 @@ export const referenceSearchHandler: CapabilityHandler<typeof referenceSearch> =
   const resultsByType = await Promise.all([
     safe("repository", () => searchRepositories(args, repoEntries())),
     safe("branch", () => searchBranches(args, repoEntries())),
-    safe("file", () => graphNodeRows(args, ctx, { type: "file", labels: ["SourceFile"] })),
-    safe("directory", () => graphNodeRows(args, ctx, { type: "directory", labels: ["Directory"] })),
+    // `file`/`directory` @-mention sources are gone with the server-side code
+    // graph: nothing has written a :SourceFile or :Directory node since
+    // schema.cypher retired those labels ("detailed source-code graphs stay
+    // checkout-local"), so the two arms queried labels that cannot exist and
+    // silently returned zero rows on every search.
     safe("agent", () => searchAgents(args, orgId, workspaceId)),
     safe("skill", () => searchSkills(args, orgId, workspaceId)),
     safe("tool", () => searchTools(args, orgId, workspaceId)),
