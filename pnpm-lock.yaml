@@ -463,9 +463,6 @@ importers:
       '@oxagen/mcp-config':
         specifier: workspace:*
         version: link:../../packages/mcp-config
-      '@oxagen/replay':
-        specifier: workspace:*
-        version: link:../../packages/replay
       ai:
         specifier: 7.0.14
         version: 7.0.14(zod@3.25.76)
@@ -1746,25 +1743,6 @@ importers:
       yaml:
         specifier: 2.9.0
         version: 2.9.0
-
-  packages/replay:
-    dependencies:
-      ai:
-        specifier: 7.0.14
-        version: 7.0.14(zod@3.25.76)
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
-    devDependencies:
-      '@vitest/coverage-v8':
-        specifier: 2.1.9
-        version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0))
-      typescript:
-        specifier: 6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: 2.1.9
-        version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0)
 
   packages/rules:
     dependencies:

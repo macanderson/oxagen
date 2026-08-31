@@ -51,7 +51,6 @@
     "@oxagen/code-graph": "workspace:*",
     "@oxagen/engram": "workspace:*",
     "@oxagen/mcp-config": "workspace:*",
-    "@oxagen/replay": "workspace:*",
     "ai": "7.0.14",
     "cli-highlight": "2.1.11",
     "commander": "12.1.0",
