@@ -1,7 +1,7 @@
 {
   "name": "@oxagen/cli",
   "version": "2.1.1",
-  "description": "Oxagen CLI — agentic coding powered by Oxagen's knowledge-graph context engine",
+  "description": "Oxagen platform CLI — workspace, context engine, and ops (agentic coding lives in the stella CLI)",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
@@ -48,30 +48,20 @@
     "@oxagen/ai": "workspace:*",
     "@oxagen/agent-artifacts": "workspace:*",
     "@oxagen/billing": "workspace:*",
-    "@oxagen/code-graph": "workspace:*",
-    "@oxagen/engram": "workspace:*",
     "@oxagen/mcp-config": "workspace:*",
     "ai": "7.0.14",
-    "cli-highlight": "2.1.11",
     "commander": "12.1.0",
-    "ink": "7.1.0",
-    "marked": "15.0.12",
-    "marked-terminal": "7.3.0",
-    "react": "19.2.6",
     "yaml": "2.9.0",
     "zod": "3.25.76"
   },
   "optionalDependencies": {
-    "fastembed": "2.1.0",
     "node-llama-cpp": "3.19.0"
   },
   "devDependencies": {
     "@oxagen/telemetry": "workspace:*",
     "@types/node": "25.9.1",
-    "@types/react": "19.2.15",
     "@vitest/coverage-v8": "2.1.9",
     "esbuild": "0.28.0",
-    "ink-testing-library": "4.0.0",
     "tsx": "4.22.3",
     "typescript": "6.0.3",
     "vitest": "2.1.9"
