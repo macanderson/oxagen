@@ -10,8 +10,27 @@
 export {
   executeTurn,
   executePipelineTurn,
+  type ExecuteTurnOptions,
   type PlatformSurface,
 } from "./execute-turn";
+
+// Phase C — the Stella engine path (docs/specs/agent-engine-v2/stella-adoption-plan.md).
+// `executeTurn` selects it; these are the process-wide wiring points a worker
+// needs at boot and shutdown, plus the engine vocabulary itself. The adapter
+// internals stay behind `./stella` and are deliberately not re-exported — a
+// surface has no reason to reach them.
+export {
+  configureStellaEngine,
+  DEFAULT_ENGINE,
+  ENGINE_ENV_VAR,
+  isEngineChoice,
+  resolveEngineChoice,
+  runTurnOnStella,
+  shutdownStellaEngine,
+  stellaSidecarPool,
+  UnknownEngineError,
+  type EngineChoice,
+} from "./stella/index";
 
 // Phase 2b — durable-run persistence (docs/specs/agent-engine-v2/plan.md,
 // Phase 2). run-store.ts is the only writer of agent.agent_runs /

@@ -864,6 +864,38 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: DEPLOYED,
     valueOrigin: "manual",
   },
+  OXAGEN_ENGINE: {
+    group: "Inngest",
+    description:
+      "Which engine runs an agent turn (agent-engine v2 Phase C — " +
+      "docs/specs/agent-engine-v2/stella-adoption-plan.md): `ts` for the TypeScript step loop, " +
+      "`stella` to hand the turn to a `stella-serve` sidecar over loopback. Defaults to `ts`. " +
+      "A run's own RunSpec v2 enginePolicy.requested_engine wins over this, which is what makes " +
+      "a shadow slice a property of the run rather than of the deployment. An unrecognised " +
+      "value fails the process at boot rather than silently running `ts`.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "ts",
+  },
+  STELLA_SERVE_BIN: {
+    group: "Inngest",
+    description:
+      "Absolute path to the `stella-serve` binary the Stella engine path boots (agent-engine v2 " +
+      "Phase C). Falls back to `stella-serve` on PATH. Needed on a worker running " +
+      "OXAGEN_ENGINE=stella — there is deliberately no fallback to the TS engine when the " +
+      "binary is missing, so a turn that asked for Stella fails rather than quietly running the " +
+      "other one. One sidecar is spawned per worker slot, bound to loopback with a per-process " +
+      "token.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "/usr/local/bin/stella-serve",
+  },
   OXAGEN_WORKER_CONCURRENCY: {
     group: "Inngest",
     description:

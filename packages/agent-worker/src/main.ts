@@ -29,7 +29,10 @@
  * `createPostgresRunStore().claimNextRun(workerId)` (no engine options) is
  * exactly what does. PR 1B flips it on behind `OXAGEN_RUN_V2_CLAIMS_ENABLED`.
  */
-import { createPostgresRunStore } from "@oxagen/agent-runner";
+import {
+  createPostgresRunStore,
+  shutdownStellaEngine,
+} from "@oxagen/agent-runner";
 import { createPlatformTurnDriver } from "@oxagen/agent";
 import { createAgentWorker } from "./worker";
 import { bootstrap } from "./bootstrap";
@@ -85,6 +88,11 @@ async function main(): Promise<void> {
     );
     worker
       .stop()
+      // Runs AFTER the drain, not beside it: an in-flight turn on the Stella
+      // engine is mid-conversation with a sidecar, and killing the engine out
+      // from under it would abort the very run the drain exists to finish.
+      // A no-op on a worker that never ran a Stella turn.
+      .then(() => shutdownStellaEngine())
       .then(() => {
         console.log("@oxagen/agent-worker: drained, exiting.");
         process.exit(0);
