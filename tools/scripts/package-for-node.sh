@@ -21,7 +21,7 @@
 set -euo pipefail
 
 if [[ $# -ne 1 ]]; then
-  echo "usage: $0 <docs|app|api|mcp>" >&2
+  echo "usage: $0 <docs|app|api|mcp|worker>" >&2
   exit 2
 fi
 
@@ -47,10 +47,11 @@ fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
 # started by hand from a checkout lands where a developer expects.
 port_for() {
   case $1 in
-    app)  echo 3000 ;;
-    docs) echo 3002 ;;
-    api)  echo 4000 ;;
-    mcp)  echo 4100 ;;
+    app)    echo 3000 ;;
+    docs)   echo 3002 ;;
+    api)    echo 4000 ;;
+    mcp)    echo 4100 ;;
+    worker) echo 4200 ;;
     *)    fail "unknown service '$1'" ;;
   esac
 }
@@ -58,6 +59,10 @@ port_for() {
 # Write the manifest. `config_prefix` is omitted for `docs`, which renders MDX
 # and holds no credentials — a service that reads no secrets should not be
 # handed 26 of them.
+# `WRITE_MANIFEST_IMAGE` overrides the container image for one service.
+# alpine is the default; a service that ships a glibc-linked binary in its
+# tarball (the worker carries stella-serve, built on the glibc arm runner)
+# must run on a glibc image or that binary fails to load at first spawn.
 write_manifest() {
   local port=$1 memory=$2 health=$3 config=$4
   shift 4
@@ -66,7 +71,7 @@ write_manifest() {
 
   jq -n \
     --argjson port "$port" \
-    --arg image "node:22-alpine" \
+    --arg image "${WRITE_MANIFEST_IMAGE:-node:22-alpine}" \
     --argjson command "$command_json" \
     --arg memory "$memory" \
     --arg health "$health" \
@@ -195,8 +200,37 @@ case $SERVICE in
     mv "$tmp" "$OUT/oxagen-run.json"
     ;;
 
+  worker)
+    log "building @oxagen/agent-worker for node"
+    pnpm --filter @oxagen/agent-worker build:node
+    cp -R packages/agent-worker/dist/. "$OUT/"
+
+    # The Stella engine binary rides in the tarball when the caller built one
+    # (the deploy job compiles it from macanderson/stella at the pin in
+    # packages/stella-engine-client/sidecar.config.json, on this same arm64
+    # runner). Optional so a local packaging run without a Rust toolchain
+    # still produces a runnable worker — it just cannot take
+    # OXAGEN_ENGINE=stella until the binary exists at STELLA_SERVE_BIN.
+    if [[ -n ${STELLA_SERVE_ARTIFACT:-} && -f ${STELLA_SERVE_ARTIFACT:-} ]]; then
+      install -m 0755 "$STELLA_SERVE_ARTIFACT" "$OUT/stella-serve"
+      log "bundled stella-serve ($(du -h "$OUT/stella-serve" | cut -f1))"
+    else
+      log "no STELLA_SERVE_ARTIFACT — packaging without the Stella engine binary"
+    fi
+
+    # glibc, not alpine: stella-serve is linked against glibc (see
+    # write_manifest's image note). /healthz is the worker's own liveness
+    # route — see packages/agent-worker/src/health.ts for why a queue worker
+    # carries one at all.
+    WRITE_MANIFEST_IMAGE="node:22-bookworm-slim" \
+      write_manifest "$(port_for worker)" 1g "/healthz" "/oxagen/production" node worker.cjs
+    tmp=$(mktemp)
+    jq '.env.STELLA_SERVE_BIN = "/app/stella-serve"' "$OUT/oxagen-run.json" > "$tmp"
+    mv "$tmp" "$OUT/oxagen-run.json"
+    ;;
+
   *)
-    fail "unknown service '$SERVICE' — expected docs, app, api or mcp"
+    fail "unknown service '$SERVICE' — expected docs, app, api, mcp or worker"
     ;;
 esac
 

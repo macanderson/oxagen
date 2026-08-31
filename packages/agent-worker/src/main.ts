@@ -37,7 +37,18 @@ import { shutdownStellaEngine } from "@oxagen/agent-runner/stella";
 import { createPlatformTurnDriver } from "@oxagen/agent";
 import { createAgentWorker } from "./worker";
 import { bootstrap } from "./bootstrap";
+import { startHealthServer, type HealthState } from "./health";
 import type { AttemptRunStore, RunStore } from "./types";
+
+/**
+ * Loopback liveness port. `PORT` is what the shared node's deploy contract
+ * passes (oxagen-run.json's `port`, polled as the post-start health check);
+ * the fallback is for a worker run by hand from a checkout.
+ */
+function readHealthPort(): number {
+  const raw = Number(process.env.PORT);
+  return Number.isInteger(raw) && raw > 0 ? raw : 4200;
+}
 
 function readConcurrency(): number | undefined {
   const raw = process.env.OXAGEN_WORKER_CONCURRENCY;
@@ -80,10 +91,16 @@ async function main(): Promise<void> {
     },
   });
 
+  const healthState: HealthState = { draining: false };
+  const health = startHealthServer(readHealthPort(), healthState);
+
   let shuttingDown = false;
   function shutdown(signal: NodeJS.Signals): void {
     if (shuttingDown) return;
     shuttingDown = true;
+    // Report draining rather than closing the listener: a 503 tells the next
+    // deploy's health poll the truth, while a vanished socket reads as a crash.
+    healthState.draining = true;
     console.log(
       `@oxagen/agent-worker: ${signal} received, draining in-flight runs...`,
     );
@@ -95,6 +112,7 @@ async function main(): Promise<void> {
       // A no-op on a worker that never ran a Stella turn.
       .then(() => shutdownStellaEngine())
       .then(() => {
+        health.close();
         console.log("@oxagen/agent-worker: drained, exiting.");
         process.exit(0);
       })

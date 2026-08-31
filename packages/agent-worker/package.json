@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
     "test:unit": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "build:node": "node build-node.mjs"
   },
   "dependencies": {
     "@oxagen/agent": "workspace:*",
@@ -30,6 +31,7 @@
   "devDependencies": {
     "@types/node": "25.9.1",
     "@vitest/coverage-v8": "2.1.9",
+    "esbuild": "0.28.0",
     "eslint": "9.39.4",
     "vitest": "2.1.9"
   }
