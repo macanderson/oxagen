@@ -26,7 +26,7 @@ import {
   type ResolveResult,
   type TraceStep,
 } from "@oxagen/oxagen/iam";
-import { digestOfCanonicalJson } from "@oxagen/agent-runner/run-spec-v2";
+import { digestJcs } from "@oxagen/run-evidence";
 import { fetchAuthz } from "./fetch-authz";
 import {
   evaluateAgentRunAuthorization,
@@ -255,7 +255,7 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
  * the decision row needs.
  */
 function inputDigestOf(rawInputJson: string): string {
-  return digestOfCanonicalJson(rawInputJson);
+  return digestJcs(rawInputJson);
 }
 
 /**

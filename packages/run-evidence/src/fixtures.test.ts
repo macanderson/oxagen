@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { sha256Digest } from "./digest.js";
+import { sha256Digest } from "./digest";
 
 interface FixtureManifest {
   protocol_version: string;

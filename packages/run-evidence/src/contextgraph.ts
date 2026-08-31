@@ -5,7 +5,7 @@ import {
   type ContextQuery as SdkContextQuery,
 } from "@contextgraphprotocol/typescript-sdk";
 import { z } from "zod";
-import { snapshotJsonWire } from "./json-wire.js";
+import { snapshotJsonWire } from "./json-wire";
 
 // The canonical SDK is the single source of the protocol version string; a
 // divergence between this package and the SDK cannot compile.

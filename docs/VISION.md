@@ -130,12 +130,22 @@ Work that strengthens the wedge:
   permission-scoped graph retrieval.
 - Reseller ergonomics: anything that makes it easier for a customer to package,
   govern, meter, and bill *their* agents to *their* customers.
+- External-agent governance: Oxagen governs ANY agent, first- or third-party
+  (ADR-040). Work on the run-evidence ingress (`runner_observed` and
+  `client_attested` evidence), the governed tool gateway, third-party agent
+  identity and registration, wrapper SDKs/shims that make external agents
+  observable, permission-requesting, and CGP-conformant, and evidence
+  exports for auditors advances the wedge directly.
 
 ## What is drift
 
 - Building standalone eval tooling, connector breadth for its own sake, or framework
   mindshare plays **as the front line** (they are permitted as fast-follows once the
   wedge is won, and as thin layers in service of the wedge).
+- Deepening the first-party in-process agent runtime as a product surface
+  (ADR-040): Oxagen is the governance plane, not the agent. Engine work
+  belongs behind the `execute-turn` seam or upstream in Stella; removing or
+  extracting runtime code in service of the refocus is advancing, not drift.
 - New capabilities or tool surfaces that bypass typed contracts, IAM/entitlement
   gates, or metering ("just this once" untyped/unmetered paths).
 - Agent answers or UI surfaces that present ungrounded, citation-free output where

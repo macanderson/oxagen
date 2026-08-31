@@ -7,7 +7,6 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./bench-client": "./src/bench-client.ts",
     "./client": "./src/client.ts",
     "./migrate": "./src/migrate.ts",
     "./tenant": "./src/tenant.ts",

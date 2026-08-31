@@ -55,7 +55,7 @@ import {
   type PinnedRoleGrant,
 } from "@oxagen/oxagen/iam";
 import type { CapabilityEffect } from "@oxagen/oxagen";
-import { digestOfCanonicalJson } from "@oxagen/agent-runner/run-spec-v2";
+import { digestJcs } from "@oxagen/run-evidence";
 import { logger } from "./logger";
 
 // ---------------------------------------------------------------------------
@@ -376,10 +376,8 @@ function digestSnapshot(args: {
   nextValidityBoundaryAt: string | null;
   resolvedAt: string;
 }): { grantCeilingDigest: string; snapshotDigest: string } {
-  const grantCeilingDigest = digestOfCanonicalJson(
-    canonicalGrantCeiling(args.ceiling),
-  );
-  const snapshotDigest = digestOfCanonicalJson({
+  const grantCeilingDigest = digestJcs(canonicalGrantCeiling(args.ceiling));
+  const snapshotDigest = digestJcs({
     version: 1,
     org_id: args.orgId,
     workspace_id: args.workspaceId,
