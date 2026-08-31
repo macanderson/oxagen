@@ -331,6 +331,28 @@ export const baseEnvSchema = z.object({
   VERCEL_SANDBOX_TEAM_ID: z.string().min(1).optional(),
   VERCEL_SANDBOX_PROJECT_ID: z.string().min(1).optional(),
 
+  // Which engine runs an agent turn (agent-engine v2 Phase C;
+  // docs/specs/agent-engine-v2/plan.md). `ts` is the
+  // TypeScript step loop; `stella` hands the turn to a `stella-serve` sidecar
+  // over loopback. Unset = `ts`.
+  //
+  // Validated here, unlike its OXAGEN_* siblings (SPECULATIVE_TOOLS,
+  // DISPATCH_GUARD), because those are kill switches whose off-by-typo state
+  // is the safe one, and this is a selector whose off-by-typo state is a
+  // deployment that believes it cut over and did not. A rejected value fails
+  // the process at boot rather than at the first turn.
+  //
+  // Selecting `stella` needs a `stella-serve` binary on the worker —
+  // STELLA_SERVE_BIN, else `stella-serve` on PATH. There is deliberately no
+  // "fall back to ts when the binary is missing": a shadow comparison whose
+  // Stella arm quietly ran the control is worse than no comparison.
+  OXAGEN_ENGINE: z.enum(["ts", "stella"]).optional(),
+  STELLA_SERVE_BIN: z.string().min(1).optional(),
+  // Sidecars run one per worker slot, never one per worker process — several
+  // of stella's credential/config knobs are process-global, so two tenants
+  // sharing one engine process share that state.
+  OXAGEN_WORKER_CONCURRENCY: z.coerce.number().int().positive().optional(),
+
   // Vercel-native master key (KEK) used to wrap OAuth token data
   // encryption keys. Base64-encoded 256-bit (32-byte) key. Required in
   // production (enforced by the auth startup guard); optional in

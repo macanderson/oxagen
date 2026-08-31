@@ -10,8 +10,26 @@
 export {
   executeTurn,
   executePipelineTurn,
+  type ExecuteTurnOptions,
   type PlatformSurface,
 } from "./execute-turn";
+
+// Phase C — the engine vocabulary (docs/specs/agent-engine-v2/plan.md).
+// Deliberately ONLY the flag-resolution half, which is pure. The Stella
+// adapter itself lives behind the `@oxagen/agent-runner/stella` subpath and is
+// NOT re-exported here: it reaches for `node:child_process`, `node:crypto` and
+// `node:fs` to supervise sidecar processes, and this barrel is imported by
+// `apps/app`, whose bundler must not be handed those through a path it can
+// reach statically. `executeTurn` loads the adapter with a dynamic import, so
+// a deployment on the TS engine never pulls it in at all.
+export {
+  DEFAULT_ENGINE,
+  ENGINE_ENV_VAR,
+  isEngineChoice,
+  resolveEngineChoice,
+  UnknownEngineError,
+  type EngineChoice,
+} from "./stella/engine-choice";
 
 // Phase 2b — durable-run persistence (docs/specs/agent-engine-v2/plan.md,
 // Phase 2). run-store.ts is the only writer of agent.agent_runs /
