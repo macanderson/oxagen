@@ -6,7 +6,7 @@
  * so the full chain of thought is inspectable in a pipe, a log, or CI. Kept pure
  * (no Ink, no AI SDK) so it is trivially testable.
  */
-import { formatUsd } from "./model-router.js";
+import { formatUsd } from "./rate-card.js";
 import type { PhaseStat, ToolEvent, TurnTrace } from "./trace.js";
 
 function bar(score: number): string {
@@ -24,7 +24,7 @@ function fmtMs(ms: number): string {
 }
 
 function shortModel(model: string | undefined): string {
-  return model ? model.split("/").pop() ?? model : "—";
+  return model ? (model.split("/").pop() ?? model) : "—";
 }
 
 // Exported so a test can assert this Record<StageKind, ...> map stays exhaustive
@@ -56,14 +56,20 @@ function rollupByModel(phases: PhaseStat[]): ModelRollup[] {
   const byModel = new Map<string, ModelRollup>();
   for (const p of phases) {
     if (!p.model) continue; // non-LLM phases (enhance/route) have no model
-    const r =
-      byModel.get(p.model) ??
-      { model: p.model, inputTokens: 0, outputTokens: 0, costUsd: 0, durationMs: 0, phases: [] };
+    const r = byModel.get(p.model) ?? {
+      model: p.model,
+      inputTokens: 0,
+      outputTokens: 0,
+      costUsd: 0,
+      durationMs: 0,
+      phases: [],
+    };
     r.inputTokens += p.usage.inputTokens;
     r.outputTokens += p.usage.outputTokens;
     r.costUsd += p.usage.costUsd;
     r.durationMs += p.durationMs;
-    if (!r.phases.includes(PHASE_LABEL[p.phase])) r.phases.push(PHASE_LABEL[p.phase]);
+    if (!r.phases.includes(PHASE_LABEL[p.phase]))
+      r.phases.push(PHASE_LABEL[p.phase]);
     byModel.set(p.model, r);
   }
   return [...byModel.values()].sort((a, b) => b.costUsd - a.costUsd);
@@ -92,7 +98,8 @@ export function formatVerboseSection(trace: TurnTrace): string[] {
   if (phases.length) {
     lines.push("", "phases (time · model · tokens in→out · cost)");
     for (const p of phases) {
-      const round = p.phase === "execute" || p.phase === "judge" ? ` #${p.round + 1}` : "";
+      const round =
+        p.phase === "execute" || p.phase === "judge" ? ` #${p.round + 1}` : "";
       const tok =
         p.usage.inputTokens || p.usage.outputTokens
           ? ` · ${p.usage.inputTokens}→${p.usage.outputTokens} tok · ${formatUsd(p.usage.costUsd)}`
@@ -118,13 +125,20 @@ export function formatVerboseSection(trace: TurnTrace): string[] {
   // Context-gather detail.
   const en = trace.enhancement;
   if (en.retrieval || en.durationMs != null) {
-    lines.push("", `context gathering${en.durationMs != null ? ` · ${fmtMs(en.durationMs)}` : ""}`);
+    lines.push(
+      "",
+      `context gathering${en.durationMs != null ? ` · ${fmtMs(en.durationMs)}` : ""}`,
+    );
     if (en.retrieval) {
       const r = en.retrieval;
-      if (r.symbolsQueried.length) lines.push(`    symbols queried: ${r.symbolsQueried.join(", ")}`);
-      if (r.pathsQueried.length) lines.push(`    paths queried:   ${r.pathsQueried.join(", ")}`);
-      if (r.resolved.length) lines.push(`    resolved:        ${r.resolved.join(", ")}`);
-      if (r.unresolved.length) lines.push(`    unresolved:      ${r.unresolved.join(", ")}`);
+      if (r.symbolsQueried.length)
+        lines.push(`    symbols queried: ${r.symbolsQueried.join(", ")}`);
+      if (r.pathsQueried.length)
+        lines.push(`    paths queried:   ${r.pathsQueried.join(", ")}`);
+      if (r.resolved.length)
+        lines.push(`    resolved:        ${r.resolved.join(", ")}`);
+      if (r.unresolved.length)
+        lines.push(`    unresolved:      ${r.unresolved.join(", ")}`);
     }
     if (en.context) {
       lines.push("    injected context:");
@@ -174,12 +188,18 @@ export function formatTraceText(trace: TurnTrace): string {
     `    completeness ${bar(ev.completeness)} ${ev.completeness}/100`,
     `    complexity   ${bar(ev.complexity)} ${ev.complexity}/100`,
   );
-  if (ev.missing.length) lines.push("    missing from prompt:", bullets(ev.missing, "?"));
-  if (ev.removed.length) lines.push("    pruned as low-value:", bullets(ev.removed, "−"));
+  if (ev.missing.length)
+    lines.push("    missing from prompt:", bullets(ev.missing, "?"));
+  if (ev.removed.length)
+    lines.push("    pruned as low-value:", bullets(ev.removed, "−"));
   if (ev.reasoning) lines.push(`    ${ev.reasoning}`);
 
   if (ev.refinedPrompt !== trace.originalPrompt) {
-    lines.push("", "3 · Refined prompt (noise removed)", `    ${ev.refinedPrompt}`);
+    lines.push(
+      "",
+      "3 · Refined prompt (noise removed)",
+      `    ${ev.refinedPrompt}`,
+    );
   }
 
   lines.push("", `4 · Injected context · ${en.source}`);
@@ -216,7 +236,9 @@ export function formatTraceText(trace: TurnTrace): string {
   lines.push(
     "",
     `${trace.steps} steps · ${trace.filesTouched.length} file(s) touched` +
-      (trace.filesTouched.length ? `: ${trace.filesTouched.slice(0, 5).join(", ")}` : ""),
+      (trace.filesTouched.length
+        ? `: ${trace.filesTouched.slice(0, 5).join(", ")}`
+        : ""),
   );
 
   // Verbose turns carry the full per-phase / per-model / tool telemetry.
@@ -234,7 +256,9 @@ export function formatTraceList(traces: TurnTrace[]): string {
     .map((t, i) => {
       const mark = t.finalComplete ? "✓" : "✗";
       const prompt =
-        t.originalPrompt.length > 56 ? t.originalPrompt.slice(0, 56) + "…" : t.originalPrompt;
+        t.originalPrompt.length > 56
+          ? t.originalPrompt.slice(0, 56) + "…"
+          : t.originalPrompt;
       return `${i + 1}. ${mark} ${prompt}  [${t.selectedModel.split("/").pop()} · ${formatUsd(t.usage.costUsd)}]`;
     })
     .join("\n");

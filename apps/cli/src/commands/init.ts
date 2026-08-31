@@ -1,9 +1,9 @@
 /**
- * `oxagen init` — scaffold project + global settings, build the code graph,
- * link the project to an Oxagen workspace, and optionally connect GitHub.
+ * `oxagen init` — scaffold project + global settings, link the project to an
+ * Oxagen workspace, and optionally connect GitHub.
  *
  * This module is the COMMAND HANDLER only. All of init's real work — settings
- * scaffolding, code-graph build, domain inference, and the workspace linker —
+ * scaffolding and the workspace linker —
  * lives in the side-effect-free engine leaf, ./init-engine.ts. The engine's
  * public API (runInit, ensureSettingsFiles, formatInitSummary, and the Init*
  * types) is re-exported below so existing importers can keep importing from

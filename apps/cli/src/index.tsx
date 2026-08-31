@@ -3,30 +3,18 @@
  * oxagen — agentic coding CLI powered by the Oxagen context engine.
  *
  * Usage:
- *   oxagen                     Interactive REPL (default)
- *   oxagen "fix the login bug" One-shot prompt
- *   oxagen agents [goal...]    Agents screen — plan, dispatch & watch a fleet
- *   oxagen view                Audit agent work — runs, cost, code-graph, health
- *   oxagen daemon start|stop|status
  *   oxagen config [key] [value]
+ *   oxagen models list
+ *   oxagen graph search -q "…"
  *
- * The Commander command tree lives in ./program.tsx so the REPL's slash-command
- * menu can introspect the exact same command set without re-running anything.
- * This entry stays thin: shim, settings projection, then hand off to the tree.
+ * The coding agent itself was retired in the Stella cutover — agentic work
+ * lives in the `stella` CLI, which talks to Oxagen over MCP/API. The Commander
+ * command tree lives in ./program.tsx. This entry stays thin: settings
+ * projection, then hand off to the tree.
  */
-import { createRequire } from "node:module";
 import { buildProgram } from "./program.js";
 import { debugLog, isDebugEnabled } from "./lib/debug-log.js";
 import { formatFatalError } from "./lib/fatal-error.js";
-
-// The Oxagen context engine pulls in DuckDB, a native CommonJS dependency that
-// references a bare `require`. Under pure-ESM execution that global is absent, so
-// loading the store throws "require is not defined". Provide the shim before any
-// code path dynamically imports the context engine.
-{
-  const g = globalThis as { require?: unknown };
-  if (typeof g.require === "undefined") g.require = createRequire(import.meta.url);
-}
 
 // Top-level safety net. Without this, a common file error (e.g.
 // `oxagen code diff missing.txt`) prints a raw Node stack trace. Instead, write a

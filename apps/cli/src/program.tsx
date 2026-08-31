@@ -1185,18 +1185,18 @@ export function buildProgram(): Command {
       },
     );
 
-  // ── init: scaffold project + global settings, build code graph ──────────────
+  // ── init: scaffold project + global settings, link the workspace ────────────
 
   program
     .command("init")
     .description(
-      "Scaffold .oxagen/ project settings + global user settings, build the local code graph, " +
-        "link the project to an Oxagen workspace, and print graph statistics + inferred domains",
+      "Scaffold .oxagen/ project settings + global user settings and " +
+        "link the project to an Oxagen workspace",
     )
     .option("--json", "Output JSON instead of human-readable text")
     .option(
       "--no-link",
-      "Skip the workspace linker step — only scaffold settings + build the code graph",
+      "Skip the workspace linker step — only scaffold settings",
     )
     .action(async (opts: { json?: boolean; link?: boolean }) => {
       const { handleInit } = await import("./commands/init.js");
@@ -1362,13 +1362,13 @@ export function buildProgram(): Command {
     .command("logs")
     .description(
       "See and debug the CLI's log (~/.oxagen/logs/cli.output). Captures invocations, " +
-        "LLM telemetry, and local code-graph activity when OXAGEN_CLI_DEBUG=1.",
+        "and LLM telemetry when OXAGEN_CLI_DEBUG=1.",
     )
     .option("--path", "Print the log file path and exit", false)
     .option("-n, --lines <n>", "Number of recent entries to show (default 50)")
     .option(
       "--category <category>",
-      "Filter by category: invoke | turn | api | code-graph | llm | error",
+      "Filter by category: invoke | api | llm | error",
     )
     .option("-f, --follow", "Follow the log live (like tail -f)", false)
     .option("--clear", "Truncate the log to empty and exit", false)
@@ -1673,7 +1673,7 @@ export function buildProgram(): Command {
   command
     .command("run")
     .description(
-      "Expand a slash command's template with args and run it as a turn",
+      "Validate a slash command invocation (running turns moved to the stella CLI)",
     )
     .argument("<name>", "Command name")
     .argument("[args...]", "Arguments substituted into the template")

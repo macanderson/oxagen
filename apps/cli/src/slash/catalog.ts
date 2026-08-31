@@ -58,7 +58,7 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
   // Project
   {
     name: "init",
-    description: "Scaffold .oxagen/ and build the local code graph",
+    description: "Scaffold .oxagen/ settings and link the workspace",
   },
 
   // Turn configuration

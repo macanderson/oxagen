@@ -2,7 +2,7 @@
  * Fleet memory — a local, dependency-free record of what the agent army builds
  * and fixes, with lexical recall.
  *
- * This complements the engram/DuckDB episodic store ({@link openSessionMemory}).
+
  * That store is best-effort and silently disables itself when its optional native
  * dependency is missing; this one is plain JSON Lines on disk, so memory
  * recording is *guaranteed* — which is what the user asked for ("record the
