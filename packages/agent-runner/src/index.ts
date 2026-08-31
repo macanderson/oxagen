@@ -14,23 +14,22 @@ export {
   type PlatformSurface,
 } from "./execute-turn";
 
-// Phase C — the Stella engine path (docs/specs/agent-engine-v2/stella-adoption-plan.md).
-// `executeTurn` selects it; these are the process-wide wiring points a worker
-// needs at boot and shutdown, plus the engine vocabulary itself. The adapter
-// internals stay behind `./stella` and are deliberately not re-exported — a
-// surface has no reason to reach them.
+// Phase C — the engine vocabulary (docs/specs/agent-engine-v2/stella-adoption-plan.md).
+// Deliberately ONLY the flag-resolution half, which is pure. The Stella
+// adapter itself lives behind the `@oxagen/agent-runner/stella` subpath and is
+// NOT re-exported here: it reaches for `node:child_process`, `node:crypto` and
+// `node:fs` to supervise sidecar processes, and this barrel is imported by
+// `apps/app`, whose bundler must not be handed those through a path it can
+// reach statically. `executeTurn` loads the adapter with a dynamic import, so
+// a deployment on the TS engine never pulls it in at all.
 export {
-  configureStellaEngine,
   DEFAULT_ENGINE,
   ENGINE_ENV_VAR,
   isEngineChoice,
   resolveEngineChoice,
-  runTurnOnStella,
-  shutdownStellaEngine,
-  stellaSidecarPool,
   UnknownEngineError,
   type EngineChoice,
-} from "./stella/index";
+} from "./stella/engine-choice";
 
 // Phase 2b — durable-run persistence (docs/specs/agent-engine-v2/plan.md,
 // Phase 2). run-store.ts is the only writer of agent.agent_runs /

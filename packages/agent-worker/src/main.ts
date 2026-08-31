@@ -29,10 +29,11 @@
  * `createPostgresRunStore().claimNextRun(workerId)` (no engine options) is
  * exactly what does. PR 1B flips it on behind `OXAGEN_RUN_V2_CLAIMS_ENABLED`.
  */
-import {
-  createPostgresRunStore,
-  shutdownStellaEngine,
-} from "@oxagen/agent-runner";
+import { createPostgresRunStore } from "@oxagen/agent-runner";
+// The subpath, not the barrel: this module supervises sidecar processes and so
+// reaches for node builtins, which the barrel must stay clear of for the app's
+// bundler. A worker is a long-lived Node process, so it can take them.
+import { shutdownStellaEngine } from "@oxagen/agent-runner/stella";
 import { createPlatformTurnDriver } from "@oxagen/agent";
 import { createAgentWorker } from "./worker";
 import { bootstrap } from "./bootstrap";
