@@ -79,6 +79,7 @@ import type {
   CodingEvent,
   ImageAttachment,
   EngineNonFatalError,
+  RunCodingAgentOptions,
   RunCodingAgentResult,
   AskUserCallback,
 } from "../types";
@@ -153,6 +154,20 @@ function composeAgentSystem(
 }
 
 export interface RunTurnOptions {
+  /**
+   * Runs one execution segment — the seam through which the pipeline reaches
+   * whatever engine executes a turn. Defaults to `runCodingAgent`, the
+   * in-process TS loop. A caller that wants engine selection passes
+   * `@oxagen/agent-runner`'s `executeTurn` closed over its surface; injected
+   * rather than imported because the dependency points the other way —
+   * agent-runner depends on this package, so the pipeline can never name it.
+   *
+   * One seam covers both the judged rounds and the bare path: they build the
+   * same options shape. The pipeline itself — evaluate, enhance, route, judge,
+   * revise — stays host-side regardless of engine, which is the disposition
+   * the Stella adoption plan gives it: it wraps turns, it is not inside one.
+   */
+  execute?: (options: RunCodingAgentOptions) => Promise<RunCodingAgentResult>;
   /** The user's prompt for this turn, exactly as typed. */
   prompt: string;
   /**
@@ -485,6 +500,9 @@ function captureToolEvent(
  * is invalid; otherwise always produces a trace.
  */
 export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
+  // The engine seam, resolved once so both the judged rounds and the bare
+  // path run segments through the same function. See RunTurnOptions.execute.
+  const execute = opts.execute ?? runCodingAgent;
   const cwd = opts.workspace.root;
   const startedAt = Date.now();
   const filesTouched = new Set<string>();
@@ -826,7 +844,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     segCommandOutputs: Array<{ command: string; output: string; ok: boolean }>,
   ) {
     let segReasoning = "";
-    const segResult = await runCodingAgent({
+    const segResult = await execute({
       workspace: opts.workspace,
       ai: opts.ai,
       instruction: segPrompt,
@@ -922,7 +940,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       ok: boolean;
     }> = [];
 
-    let result: Awaited<ReturnType<typeof runCodingAgent>>;
+    let result: RunCodingAgentResult;
 
     // Round 0 with mid-session judge: run the first half, judge, then continue.
     // The combined result is returned with merged usage/steps so the standard
@@ -1766,6 +1784,7 @@ async function runBare(
   toolEvents: ToolEvent[],
   thinkingLog: Array<{ round: number; text: string }>,
 ): Promise<RunTurnResult> {
+  const execute = opts.execute ?? runCodingAgent;
   // Bare mode has no full router, but an unpinned bare turn should still not
   // hard-default to the frontier tier (DEFAULT_AGENT_MODEL) — a trivial "explain
   // this file" would pay Fable pricing for nothing. Perf #8: route the unpinned
@@ -1787,7 +1806,7 @@ async function runBare(
   const lockContext = opts.fileLock
     ? { agentId: bareLockId, executionId: bareLockId }
     : undefined;
-  const result = await runCodingAgent({
+  const result = await execute({
     workspace: opts.workspace,
     ai: opts.ai,
     instruction: opts.prompt,
