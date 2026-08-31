@@ -38,21 +38,22 @@ import {
 import { evaluateLocalPermission } from "../settings/permissions-gate.js";
 import { openTraceStore } from "../agent/trace-store.js";
 import { readVerboseLog } from "../agent/verbose-log.js";
-import { openFleetMemory } from "../agent/fleet/memory.js";
+import { openFleetMemory } from "../rules/fleet-memory.js";
 import { createOutput } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 import type { TurnTrace } from "../agent/trace.js";
-import type { MemoryRecord } from "../agent/fleet/memory.js";
+import type { MemoryRecord } from "../rules/fleet-memory.js";
 
 export type RulesCmdCtx = Pick<LoadRulesOptions, "cwd" | "userRulesDir">;
 
 /** Map the friendly `check` tool arg to a CLI tool id + the input field. */
-const TOOL_ALIAS: Record<string, { tool: string; field: "path" | "command" }> = {
-  bash: { tool: "bash", field: "command" },
-  edit: { tool: "edit_file", field: "path" },
-  write: { tool: "write_file", field: "path" },
-  read: { tool: "read_file", field: "path" },
-};
+const TOOL_ALIAS: Record<string, { tool: string; field: "path" | "command" }> =
+  {
+    bash: { tool: "bash", field: "command" },
+    edit: { tool: "edit_file", field: "path" },
+    write: { tool: "write_file", field: "path" },
+    read: { tool: "read_file", field: "path" },
+  };
 
 export function rulesList(
   ctx: RulesCmdCtx = {},
@@ -60,7 +61,9 @@ export function rulesList(
 ): void {
   const rules = loadRules(ctx).sort((a, b) => a.id.localeCompare(b.id));
   if (rules.length === 0) {
-    writer.write("No rules defined. Create one with `oxagen rules new <name>`.");
+    writer.write(
+      "No rules defined. Create one with `oxagen rules new <name>`.",
+    );
     return;
   }
   const lines = ["Workspace rules:", ""];
@@ -79,7 +82,10 @@ export function rulesShow(
   const out = createOutput({}, writer);
   const rule = loadRules(ctx).find((r) => r.id === name);
   if (!rule) {
-    out.error(`Unknown rule "${name}". Run \`oxagen rules list\`.`, "not_found");
+    out.error(
+      `Unknown rule "${name}". Run \`oxagen rules list\`.`,
+      "not_found",
+    );
     return;
   }
   const lines = [`# ${rule.id}`];
@@ -109,7 +115,10 @@ export function rulesNew(
   const out = createOutput({}, writer);
   if (!/^[A-Za-z0-9][\w-]*$/.test(name)) {
     process.exitCode = 2;
-    out.error(`Invalid rule name "${name}". Use letters, digits, dashes, underscores.`, "usage");
+    out.error(
+      `Invalid rule name "${name}". Use letters, digits, dashes, underscores.`,
+      "usage",
+    );
     return;
   }
   const { path, created } = scaffoldRule({ name, cwd: ctx.cwd });
@@ -144,7 +153,9 @@ export function rulesCheck(
   const input = { [alias.field]: subject };
   const result = evaluateLocalPermission(alias.tool, input, { deny });
   if (result.decision === "deny") {
-    const why = result.rule ? reasons[result.rule] ?? result.reason : result.reason;
+    const why = result.rule
+      ? (reasons[result.rule] ?? result.reason)
+      : result.reason;
     // The verdict IS the answer of a dry-run check → stdout; a matched guard is a
     // non-zero (blocked) result, not a failure, so it sets exit 1 without out.error.
     writer.write(`⛔ BLOCKED: ${tool} ${subject}`);
@@ -175,11 +186,15 @@ function dedupeTraces(traces: TurnTrace[]): TurnTrace[] {
 }
 
 /** Gather the local mining input for `cwd` — the one seam both candidates + promote share. */
-function gatherMineInput(
-  ctx: RulesCandidatesCtx,
-): { traces: TurnTrace[]; memories: MemoryRecord[]; existingRules: ReturnType<typeof loadRules> } {
+function gatherMineInput(ctx: RulesCandidatesCtx): {
+  traces: TurnTrace[];
+  memories: MemoryRecord[];
+  existingRules: ReturnType<typeof loadRules>;
+} {
   const cwd = ctx.cwd ?? process.cwd();
-  const traces = ctx._traces ?? dedupeTraces([...openTraceStore(cwd).list(), ...readVerboseLog(cwd)]);
+  const traces =
+    ctx._traces ??
+    dedupeTraces([...openTraceStore(cwd).list(), ...readVerboseLog(cwd)]);
   const memories = ctx._memories ?? openFleetMemory(cwd).all();
   return { traces, memories, existingRules: loadRules(ctx) };
 }
@@ -202,7 +217,10 @@ export function rulesCandidates(
   const out = createOutput({ json: opts.json }, writer);
   const { traces, memories, existingRules } = gatherMineInput(ctx);
   const limit = opts.limit ? parseInt(opts.limit, 10) : undefined;
-  const candidates = mineCandidates({ traces, memories, existingRules }, limit ? { limit } : {});
+  const candidates = mineCandidates(
+    { traces, memories, existingRules },
+    limit ? { limit } : {},
+  );
 
   if (out.isJson) {
     out.data(candidates);
@@ -270,11 +288,15 @@ export function rulesPromote(
   }
   if (result.status === "declined") {
     writer.write(`Not written (preview only):\n\n  ${candidate.text}\n`);
-    writer.write(`Re-run with --yes to promote this to an enforced rule at ${result.path}.`);
+    writer.write(
+      `Re-run with --yes to promote this to an enforced rule at ${result.path}.`,
+    );
     return;
   }
   if (result.status === "already-exists") {
-    writer.write(`${result.path} already exists — left untouched (already promoted).`);
+    writer.write(
+      `${result.path} already exists — left untouched (already promoted).`,
+    );
     return;
   }
   writer.write(`✓ Promoted to rule: ${result.path}`);

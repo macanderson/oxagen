@@ -1,11 +1,8 @@
 /**
- * pr.test.ts — unit tests for `oxagen pr status|watch|fix`.
+ * pr.test.ts — unit tests for `oxagen pr status|watch`.
  *
- * Everything external is mocked at its module seam: `gh` calls via ./gh.js,
- * git via node:child_process, the engine session, the fix runner, and the
- * fix loop itself (../lib/pr-fix.js) — whose captured `deps` argument is also
- * how the real `fetchFailingContext` / git callbacks get exercised. The
- * pr-monitor fold is pure and runs real.
+ * Everything external is mocked at its module seam: `gh` calls via ./gh.js
+ * and git via node:child_process. The pr-monitor fold is pure and runs real.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -18,26 +15,7 @@ vi.mock("./gh.js", () => ghMock);
 const execFileMock = vi.hoisted(() => vi.fn());
 vi.mock("node:child_process", () => ({ execFile: execFileMock }));
 
-const sessionMock = vi.hoisted(() => ({
-  requireSession: vi.fn(() => ({ token: "t", orgSlug: "o", workspaceSlug: "w" })),
-}));
-vi.mock("../lib/session.js", () => sessionMock);
-
-const runnerMock = vi.hoisted(() => ({
-  runFixer: vi.fn(),
-  rememberOutcome: vi.fn(),
-}));
-vi.mock("../agent/pr-fix-runner.js", () => ({
-  createPrFixRunner: vi.fn(() => runnerMock),
-}));
-
-const fixMock = vi.hoisted(() => ({
-  runFixToGreen: vi.fn(),
-  MAX_FAILING_CHECKS_TO_DIAGNOSE: 3,
-}));
-vi.mock("../lib/pr-fix.js", () => fixMock);
-
-import { fetchPr, handlePrFix, handlePrStatus, handlePrWatch } from "./pr.js";
+import { fetchPr, handlePrStatus, handlePrWatch } from "./pr.js";
 
 const PASS = { name: "build", conclusion: "SUCCESS" };
 const FAIL = {
@@ -212,145 +190,5 @@ describe("handlePrWatch", () => {
     expect(stdout.join("")).toContain("PR #7 is GREEN");
     expect(ghMock.ghJson).toHaveBeenCalledTimes(2);
     expect(process.exitCode).toBe(0);
-  });
-});
-
-describe("handlePrFix", () => {
-  const fixResult = (outcome: string, extra: Record<string, unknown> = {}) => ({
-    outcome,
-    pr: { number: 7, url: "https://github.com/acme/repo/pull/7" },
-    rounds: [],
-    ...extra,
-  });
-
-  beforeEach(() => {
-    execOk("fix/thing\n"); // every git call in these paths reads the branch
-    ghMock.ghJson.mockResolvedValue(prView([FAIL]));
-  });
-
-  it("refuses to run from a checkout that is not the PR's branch", async () => {
-    execOk("main\n");
-    await handlePrFix(undefined, {});
-    expect(stderr.join("")).toContain('current checkout is on "main"');
-    expect(fixMock.runFixToGreen).not.toHaveBeenCalled();
-    expect(process.exitCode).toBe(1);
-  });
-
-  it("exits 1 with the standard message when there is no PR", async () => {
-    ghMock.ghJson.mockReset().mockResolvedValueOnce(null);
-    await handlePrFix(undefined, {});
-    expect(stderr.join("")).toContain("No pull request found");
-    expect(process.exitCode).toBe(1);
-  });
-
-  it("a merged outcome mirrors a bug-root-cause lesson and exits 0", async () => {
-    fixMock.runFixToGreen.mockResolvedValueOnce(
-      fixResult("merged", {
-        rounds: [
-          { round: 1, failing: ["test"], diagnosis: "the fix", filesChanged: ["a.ts"] },
-        ],
-      }),
-    );
-    await handlePrFix(undefined, {});
-    expect(stdout.join("")).toContain("green and merged");
-    expect(runnerMock.rememberOutcome).toHaveBeenCalledWith(
-      "bug-root-cause",
-      expect.objectContaining({ files: ["a.ts"] }),
-    );
-    expect(process.exitCode).toBe(0);
-  });
-
-  it.each([
-    ["merge-declined", 0, "Not merged (declined)"],
-    ["merge-failed", 1, "merge failed"],
-    ["no-change", 1, "no changes"],
-    ["timed-out", 2, "gave up waiting"],
-    ["no-checks", 0, "no checks to fix"],
-    ["no-pr", 1, "No pull request found"],
-  ] as const)("outcome %s exits %i", async (outcome, code, phrase) => {
-    fixMock.runFixToGreen.mockResolvedValueOnce(fixResult(outcome));
-    await handlePrFix(undefined, {});
-    expect((stdout.join("") + stderr.join("")).toLowerCase()).toContain(
-      phrase.toLowerCase(),
-    );
-    expect(process.exitCode).toBe(code);
-  });
-
-  it.each([["max-rounds"], ["unfixable"]] as const)(
-    "outcome %s mirrors a gotcha lesson and exits 1",
-    async (outcome) => {
-      fixMock.runFixToGreen.mockResolvedValueOnce(fixResult(outcome));
-      await handlePrFix(undefined, {});
-      expect(runnerMock.rememberOutcome).toHaveBeenCalledWith(
-        "gotcha",
-        expect.anything(),
-      );
-      expect(process.exitCode).toBe(1);
-    },
-  );
-
-  it("hands the loop working callbacks: onRound prints, fetchFailingContext pulls gh logs", async () => {
-    interface CapturedDeps {
-      fetchFailingContext: (
-        pr: { number: number; url: string },
-        failing: Array<{ name: string; url?: string }>,
-      ) => Promise<string>;
-      onStatus: (line: string) => void;
-      onRound: (round: {
-        round: number;
-        failing: string[];
-        diagnosis: string;
-        filesChanged: string[];
-      }) => void;
-    }
-    let deps!: CapturedDeps;
-    fixMock.runFixToGreen.mockImplementationOnce(async (d: unknown) => {
-      deps = d as CapturedDeps;
-      deps.onStatus("polling");
-      deps.onRound({
-        round: 1,
-        failing: ["test"],
-        diagnosis: "root cause\nsecond line",
-        filesChanged: [],
-      });
-      return fixResult("no-checks");
-    });
-    await handlePrFix(undefined, {});
-    expect(stderr.join("")).toContain("polling");
-    expect(stdout.join("")).toContain("Round 1: fixing test");
-    expect(stdout.join("")).toContain("  root cause");
-    expect(stdout.join("")).toContain("no files changed");
-
-    // fetchFailingContext: annotations + failed log via gh, bounded and joined.
-    ghMock.ghJson.mockResolvedValueOnce([
-      { message: "boom", path: "src/x.ts", start_line: 3 },
-    ]);
-    ghMock.runGh.mockResolvedValueOnce({ stdout: "log tail here", stderr: "" });
-    const context = await deps.fetchFailingContext(
-      { number: 7, url: "https://github.com/acme/repo/pull/7" },
-      [{ name: "test", url: FAIL.detailsUrl }],
-    );
-    expect(context).toContain("### test");
-    expect(context).toContain("src/x.ts:3: boom");
-    expect(context).toContain("log tail here");
-    expect(ghMock.ghJson).toHaveBeenCalledWith([
-      "api",
-      "repos/acme/repo/check-runs/22/annotations",
-    ]);
-
-    // A check with no parsable run/job URL contributes nothing.
-    expect(
-      await deps.fetchFailingContext(
-        { number: 7, url: "https://github.com/acme/repo/pull/7" },
-        [{ name: "vercel", url: "https://vercel.com/deploy/123" }],
-      ),
-    ).toBe("");
-
-    // A PR whose URL is not github.com/<owner>/<repo>/pull/ yields nothing.
-    expect(
-      await deps.fetchFailingContext({ number: 7, url: "https://example.test" }, [
-        { name: "test", url: FAIL.detailsUrl },
-      ]),
-    ).toBe("");
   });
 });

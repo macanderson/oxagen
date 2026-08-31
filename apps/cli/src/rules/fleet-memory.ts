@@ -58,13 +58,48 @@ function projectKey(cwd: string): string {
 }
 
 function memoryPath(cwd: string): string {
-  return join(homedir(), ".config", "oxagen", "memories", `${projectKey(cwd)}.jsonl`);
+  return join(
+    homedir(),
+    ".config",
+    "oxagen",
+    "memories",
+    `${projectKey(cwd)}.jsonl`,
+  );
 }
 
 const STOPWORDS = new Set([
-  "the", "a", "an", "and", "or", "to", "of", "in", "on", "for", "with", "is",
-  "are", "be", "this", "that", "it", "as", "at", "by", "from", "into", "we",
-  "you", "i", "fix", "add", "the", "use", "code", "file", "files",
+  "the",
+  "a",
+  "an",
+  "and",
+  "or",
+  "to",
+  "of",
+  "in",
+  "on",
+  "for",
+  "with",
+  "is",
+  "are",
+  "be",
+  "this",
+  "that",
+  "it",
+  "as",
+  "at",
+  "by",
+  "from",
+  "into",
+  "we",
+  "you",
+  "i",
+  "fix",
+  "add",
+  "the",
+  "use",
+  "code",
+  "file",
+  "files",
 ]);
 
 /** Split text into lowercased, de-stopped terms for lexical scoring. */
@@ -78,7 +113,10 @@ export interface FleetMemory {
   /** Append a weighted lesson. Never throws — recording must not break a run. */
   record(rec: Omit<MemoryRecord, "id" | "createdAt">): void;
   /** Return the most relevant lessons for a query, best first. */
-  recall(query: string, opts?: { limit?: number; files?: string[] }): MemoryRecord[];
+  recall(
+    query: string,
+    opts?: { limit?: number; files?: string[] },
+  ): MemoryRecord[];
   /** All records, newest first (for the agents screen memory panel). */
   all(): MemoryRecord[];
 }
@@ -191,7 +229,9 @@ export function formatLessons(records: MemoryRecord[]): string {
   return records
     .map((r) => {
       const mark = classMark(r);
-      const files = r.files.length ? ` [${r.files.slice(0, 3).join(", ")}]` : "";
+      const files = r.files.length
+        ? ` [${r.files.slice(0, 3).join(", ")}]`
+        : "";
       return `${mark} (${r.memoryKind}) ${r.lesson}${files}`;
     })
     .join("\n");

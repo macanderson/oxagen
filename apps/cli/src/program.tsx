@@ -2,17 +2,21 @@
  * program.ts — The Commander command tree for the `oxagen` CLI.
  *
  * Extracted from index.tsx so the exact same command set that drives
- * `oxagen --help` is the single source of truth for the REPL's slash-command
- * menu (see slash/catalog.ts + commands/meta.ts describeCliCommands). Building
- * the program has no side effects — every handler is a dynamic `import()`
- * inside its action — so the REPL can construct it purely to introspect
- * command names + descriptions without running anything. Command-tree
- * introspection helpers live in commands/meta.ts so leaf modules never need
- * to import this composition root.
+ * `oxagen --help` is the single source of truth for command introspection
+ * (commands/meta.ts describeCliCommands). Building the program has no side
+ * effects — every handler is a dynamic `import()` inside its action — so a
+ * caller can construct it purely to introspect command names + descriptions
+ * without running anything.
+ *
+ * The interactive coding agent (REPL, one-shot turns, fleet, solve) was
+ * retired in the Stella cutover — Stella owns all things agentic, and the
+ * `stella` CLI talks to Oxagen over MCP/API. The retired entry points remain
+ * registered as stubs (commands/retired.ts) so an old invocation fails with
+ * guidance instead of an unknown-command error.
  */
 import { Command } from "commander";
 import pkg from "../package.json" with { type: "json" };
-import { parseModeArg, type PermissionMode } from "./agent/permissions.js";
+import { printRetiredNotice } from "./commands/retired.js";
 
 const { version } = pkg;
 
@@ -36,469 +40,46 @@ export function buildProgram(): Command {
 
   program
     .name("oxagen")
-    .description(
-      "Agentic coding assistant — powered by the Oxagen context engine",
-    )
+    .description("Oxagen platform CLI — context engine, workspace, and ops")
     .version(version)
-    .argument("[prompt...]", "One-shot prompt (runs and exits)")
+    .argument("[prompt...]", "(retired) agent turns moved to the `stella` CLI")
+    .allowExcessArguments(true)
+    // Kept for subcommands that read merged globals via optsWithGlobals()
+    // (`cost -m <slug>` prices a model from the rate card).
     .option(
       "-m, --model <slug>",
-      "Worker (executor) model slug (overrides config/default)",
+      "Model slug for subcommands that price or filter by model (e.g. cost)",
     )
-    .option(
-      "--worker-model <slug>",
-      "Worker (executor) model slug — alias for --model",
-    )
-    .option("--judge-model <slug>", "Judge (completeness advisor) model slug")
-    .option(
-      "--triage-model <slug>",
-      "Triage/coordinator (planner + evaluator) model slug",
-    )
-    .option(
-      "--effort <level>",
-      "Reasoning effort for models that support it: low | medium | high | xhigh | max (omit = model default / adaptive)",
-    )
-    .option(
-      "--agent <name>",
-      "Run the one-shot prompt as a named agent definition",
-    )
-    .option(
-      "--readonly",
-      "Read-only mode: read/search/explain only — no file edits or commands",
-      false,
-    )
-    .option(
-      "--mode <mode>",
-      "Permission mode: ask | accept-edits | bypass | readonly (REPL default: ask; one-shot ungated unless set)",
-    )
-    .option(
-      "--local",
-      "Run locally with your own key (BYOK) — AI_GATEWAY_API_KEY (any vendor, preferred) or ANTHROPIC_API_KEY (Anthropic models only), no Oxagen account",
-      false,
-    )
-    .option(
-      "--no-pipeline",
-      "Skip prompt evaluation, context injection, and completeness judging",
-    )
-    .option(
-      "--verbose",
-      "Capture + emit full per-turn telemetry (per-phase timing, model+token+cost, tool results)",
-      false,
-    )
-    .option(
-      "--output-format <format>",
-      "One-shot output format: text | json (single result envelope) | stream-json (JSONL events)",
-    )
-    .option(
-      "--max-steps <n>",
-      "Cap the agent tool loop at n steps per execution round (default 256)",
-    )
-    .option(
-      "--budget <usd>",
-      "Enable a per-turn dollar budget, e.g. --budget 2.50 (session-scoped; unset = unbounded)",
-    )
-    .option(
-      "--budget-mode <mode>",
-      "What happens at the budget limit: grace | prompt | enforce (default: prompt; ignored without --budget)",
-    )
-    .action(
-      async (
-        promptWords: string[],
-        opts: {
-          model?: string;
-          workerModel?: string;
-          judgeModel?: string;
-          triageModel?: string;
-          effort?: string;
-          readonly?: boolean;
-          mode?: string;
-          local?: boolean;
-          pipeline?: boolean;
-          verbose?: boolean;
-          agent?: string;
-          outputFormat?: string;
-          maxSteps?: string;
-          budget?: string;
-          budgetMode?: string;
-        },
-      ) => {
-        const prompt = promptWords.join(" ").trim();
-        let mode: PermissionMode | undefined;
-        if (opts.mode) {
-          mode = parseModeArg(opts.mode);
-          if (!mode) {
-            process.stderr.write(
-              `Error: invalid --mode "${opts.mode}". Use ask, accept-edits, bypass, or readonly.\n`,
-            );
-            process.exitCode = 1;
-            return;
-          }
-        }
-        let outputFormat: "text" | "json" | "stream-json" | undefined;
-        if (opts.outputFormat) {
-          if (!["text", "json", "stream-json"].includes(opts.outputFormat)) {
-            process.stderr.write(
-              `Error: invalid --output-format "${opts.outputFormat}". Use text, json, or stream-json.\n`,
-            );
-            process.exitCode = 1;
-            return;
-          }
-          outputFormat = opts.outputFormat as "text" | "json" | "stream-json";
-        }
-        let maxSteps: number | undefined;
-        if (opts.maxSteps !== undefined) {
-          maxSteps = Number.parseInt(opts.maxSteps, 10);
-          if (!Number.isFinite(maxSteps) || maxSteps < 1) {
-            process.stderr.write(
-              `Error: invalid --max-steps "${opts.maxSteps}". Use a positive integer.\n`,
-            );
-            process.exitCode = 1;
-            return;
-          }
-        }
-        // --budget/--budget-mode: a per-turn dollar budget, session-scoped (no
-        // platform persistence — the CLI runs BYOK/offline). Dynamic import so
-        // @oxagen/billing only loads when the flag is actually used, matching
-        // this file's "no side effects until an action runs" contract.
-        let budget:
-          | import("@oxagen/billing/turn-budget").TurnBudgetPolicy
-          | undefined;
-        if (opts.budget !== undefined) {
-          const { resolveBudgetFlags } = await import("./agent/budget.js");
-          const resolved = resolveBudgetFlags(opts.budget, opts.budgetMode);
-          if (resolved.error) {
-            process.stderr.write(`Error: ${resolved.error}\n`);
-            process.exitCode = 1;
-            return;
-          }
-          budget = resolved.policy;
-        }
-        // --local forces BYOK: run against the shell's AI_GATEWAY_API_KEY (or
-        // ANTHROPIC_API_KEY fallback), not the platform account (requireSession
-        // reads OXAGEN_LOCAL).
-        if (opts.local) process.env["OXAGEN_LOCAL"] = "1";
-        // ADR-019 §4: require an Oxagen account before any agent-path command —
-        // UNLESS BYOK applies: `--local`/OXAGEN_LOCAL, or (when not logged in) an
-        // AI_GATEWAY_API_KEY or ANTHROPIC_API_KEY is present, in which case the
-        // CLI runs locally instead of exiting. Non-agent utility commands (config,
-        // settings, login, logout, etc.) bypass this gate automatically.
-        const { requireSession } = await import("./lib/session.js");
-        const session = requireSession();
-
-        const runOpts = {
-          session,
-          // Worker: --worker-model is a synonym for -m/--model (the executor).
-          model: opts.workerModel ?? opts.model,
-          judgeModel: opts.judgeModel,
-          triageModel: opts.triageModel,
-          effort: opts.effort,
-          readOnly: opts.readonly,
-          mode,
-          bare: opts.pipeline === false,
-          verbose: opts.verbose,
-          outputFormat,
-          maxSteps,
-          budget,
-        };
-
-        // Feed the anonymous usage-telemetry accumulator (index.tsx emits the
-        // event after this action resolves): pipeline_used and byok are known
-        // right here from data already destructured above, so record them
-        // directly rather than re-deriving them generically at the exit hook.
-        {
-          const { markPipelineUsed, setByok } = await import(
-            "./telemetry/usage.js"
-          );
-          markPipelineUsed(!runOpts.bare);
-          setByok(session.orgSlug === "local");
-        }
-
-        // --agent: run the prompt as a named agent (its prompt, tools, model).
-        if (opts.agent) {
-          if (!prompt) {
-            process.stderr.write(
-              'Error: --agent requires a prompt, e.g. `oxagen --agent reviewer "…"`.\n',
-            );
-            process.exitCode = 1;
-            return;
-          }
-          if (outputFormat && outputFormat !== "text") {
-            process.stderr.write(
-              "Error: --output-format json/stream-json is not supported with --agent (text only).\n",
-            );
-            process.exitCode = 1;
-            return;
-          }
-          const { runAgentOneShot } = await import("./repl/one-shot.js");
-          await runAgentOneShot(prompt, opts.agent, runOpts);
-          return;
-        }
-
-        if (prompt) {
-          // One-shot mode: run prompt, stream response, exit
-          const { runOneShot } = await import("./repl/one-shot.js");
-          await runOneShot(prompt, runOpts);
-        } else if (process.stdout.isTTY) {
-          // Interactive REPL mode. The import below drags in Ink, the agent
-          // engine, and native DuckDB/onnxruntime modules — seconds cold, far
-          // longer on a loaded machine — during which nothing else paints, so
-          // animate a dependency-free splash until the REPL can own the screen.
-          const { startStartupSplash } = await import(
-            "./tui/startup-splash.js"
-          );
-          const splash = startStartupSplash();
-          let repl: typeof import("./repl/interactive.js");
-          try {
-            repl = await import("./repl/interactive.js");
-          } finally {
-            // Stop before launchRepl: the REPL enters the alternate screen
-            // buffer, and the splash line must be gone from the primary buffer
-            // first (an import error must also never strand a spinner frame).
-            splash.stop();
-          }
-          // Inject the program factory: the REPL introspects/dispatches CLI
-          // commands through it without ever importing this composition root.
-          await repl.launchRepl({ ...runOpts, buildProgram });
-        } else {
-          // Piped input — read from stdin
-          const { runFromStdin } = await import("./repl/one-shot.js");
-          await runFromStdin(runOpts);
-        }
-      },
-    );
-
-  // ── view: agent dashboard ───────────────────────────────────────────────────
-
-  program
-    .command("view")
-    .description("Audit agent work — recent runs, cost, code-graph, and health")
     .action(async () => {
-      const { launchAgentView } = await import("./tui/agent-view/index.js");
-      await launchAgentView({ cwd: process.cwd() });
+      // The interactive REPL and one-shot agent turns were retired in the
+      // Stella cutover; only the platform subcommands remain.
+      printRetiredNotice("The oxagen coding agent (REPL / one-shot prompt)");
     });
 
-  // ── agents: the agents screen (fleet) ───────────────────────────────────────
+  /**
+   * Register a retired agent-surface command: same name, no behavior — one
+   * shared notice pointing at the `stella` CLI. Accepts and ignores whatever
+   * arguments/flags the old command took so stale scripts fail with guidance
+   * rather than a Commander parse error.
+   */
+  function retiredCommand(name: string, what: string): void {
+    program
+      .command(name)
+      .description(`(retired) ${what} — use the \`stella\` CLI`)
+      .argument("[args...]")
+      .allowUnknownOption(true)
+      .allowExcessArguments(true)
+      .action(async () => {
+        printRetiredNotice(what);
+      });
+  }
 
-  program
-    .command("agents")
-    .description(
-      "Launch the agents screen — plan a goal, dispatch a fleet, watch it work",
-    )
-    .argument("[goal...]", "Goal to plan into tasks and run immediately")
-    .option(
-      "--concurrency <n>",
-      "Max agents running at once",
-      (v) => parseInt(v, 10),
-      4,
-    )
-    .option(
-      "--readonly",
-      "Read-only agents: read/search/explain only — no file edits or commands",
-      false,
-    )
-    .option(
-      "--no-isolate",
-      "Run all agents directly against the working tree instead of one git worktree per task (default: isolated, commit + merge back)",
-    )
-    .option(
-      "--json",
-      "Headless: stream JSONL task events instead of the live view",
-      false,
-    )
-    .action(
-      async (
-        goal: string[],
-        opts: {
-          concurrency: number;
-          readonly: boolean;
-          isolate: boolean;
-          json: boolean;
-        },
-      ) => {
-        const { launchFleetView } = await import("./tui/fleet-view/index.js");
-        const snap = await launchFleetView({
-          cwd: process.cwd(),
-          goal: goal.join(" ").trim() || undefined,
-          concurrency: opts.concurrency,
-          readOnly: opts.readonly,
-          isolate: opts.isolate,
-          headless: opts.json,
-        });
-        // Non-zero exit when anything failed, so scripts/CI can branch on it.
-        if (snap.failedCount > 0) process.exitCode = 1;
-      },
-    );
-
-  // ── solve: best-of-N task solving ───────────────────────────────────────────
-
-  program
-    .command("solve")
-    .description(
-      "Solve a task best-of-N — run N candidates in parallel, keep the winner",
-    )
-    .argument("<prompt...>", "The task to solve")
-    .option(
-      "-n, --candidates <n>",
-      "How many candidates to run (default 3, max 10)",
-      (v) => parseInt(v, 10),
-    )
-    .option(
-      "--verify <cmd>",
-      "Command run in each candidate; its output decides the winner (e.g. 'pnpm test:unit')",
-    )
-    .option(
-      "--models <slugs>",
-      "Comma-separated gateway slugs cycled across candidates for diversity",
-    )
-    .option("--selector <slug>", "Model that picks the winning candidate")
-    .option("-m, --model <slug>", "Pin every candidate to one model")
-    .option("--readonly", "Read-only candidates: do not apply a winner", false)
-    .option(
-      "--json",
-      "Headless: stream JSONL events instead of the live view",
-      false,
-    )
-    .option(
-      "--pipeline",
-      "Run each candidate through the full evaluate/enhance/judge/revise pipeline, not just bare " +
-        "(default: OXAGEN_BEST_OF_N_PIPELINE env var if set, else bare — the selector still judges across all N either way)",
-    )
-    .option(
-      "--verify-auto",
-      "Union the test/lint/build commands every candidate actually ran and re-run them in every " +
-        "surviving candidate's worktree before selection, so the selector's tests-pass signal is real, " +
-        "executed evidence across the whole pool (default: OXAGEN_BEST_OF_N_VERIFY env var if set, else off)",
-    )
-    .action(
-      async (
-        promptWords: string[],
-        opts: {
-          candidates?: number;
-          verify?: string;
-          models?: string;
-          selector?: string;
-          model?: string;
-          readonly?: boolean;
-          json?: boolean;
-          pipeline?: boolean;
-          verifyAuto?: boolean;
-        },
-      ) => {
-        const prompt = promptWords.join(" ").trim();
-        if (!prompt) {
-          process.stderr.write(
-            'Error: solve requires a task, e.g. `oxagen solve "fix the failing test"`.\n',
-          );
-          process.exitCode = 1;
-          return;
-        }
-        const { handleSolve } = await import("./commands/solve.js");
-        await handleSolve(prompt, opts);
-      },
-    );
-
-  // ── daemon: context daemon lifecycle ────────────────────────────────────────
-
-  const daemon = program
-    .command("daemon")
-    .description("Manage the persistent context daemon");
-
-  daemon
-    .command("start")
-    .description("Start the context daemon (warm indexes, code graph)")
-    .option("--foreground", "Run in foreground (don't daemonize)", false)
-    .option("--json", "Output the start result as JSON", false)
-    .action(async (opts: { foreground: boolean; json: boolean }) => {
-      const { startDaemon } = await import("./daemon/lifecycle.js");
-      await startDaemon({ foreground: opts.foreground, json: opts.json });
-    });
-
-  daemon
-    .command("stop")
-    .description("Stop the running context daemon")
-    .option("--json", "Output the stop result as JSON", false)
-    .action(async (opts: { json: boolean }) => {
-      const { stopDaemon } = await import("./daemon/lifecycle.js");
-      await stopDaemon({ json: opts.json });
-    });
-
-  daemon
-    .command("status")
-    .description("Show daemon health and uptime")
-    .option("--json", "Output the health envelope as JSON", false)
-    .action(async (opts: { json: boolean }) => {
-      const { daemonStatus } = await import("./daemon/lifecycle.js");
-      await daemonStatus({ json: opts.json });
-    });
-
-  const daemonSession = daemon
-    .command("session")
-    .description(
-      "Inspect and fork the daemon's recorded compile sessions (in-memory event log, resets on restart)",
-    );
-
-  daemonSession
-    .command("list")
-    .description("List sessions recorded by the running daemon")
-    .option("--json", "Output JSON", false)
-    .action(async (opts: { json: boolean }) => {
-      const { sessionList } = await import("./daemon/lifecycle.js");
-      await sessionList(opts);
-    });
-
-  daemonSession
-    .command("fork")
-    .description("Fork a recorded session at a given event index")
-    .argument("<sessionId>", "Session ID to fork from")
-    .argument("<forkPoint>", "Event index to fork at (integer)")
-    .option("--json", "Output JSON", false)
-    .action(
-      async (
-        sessionId: string,
-        forkPointArg: string,
-        opts: { json: boolean },
-      ) => {
-        const forkPoint = parseInt(forkPointArg, 10);
-        if (Number.isNaN(forkPoint)) {
-          process.stderr.write(
-            `Invalid fork point "${forkPointArg}". Use an integer event index.\n`,
-          );
-          process.exitCode = 1;
-          return;
-        }
-        const { sessionFork } = await import("./daemon/lifecycle.js");
-        await sessionFork(sessionId, forkPoint, opts);
-      },
-    );
-
-  daemonSession
-    .command("replay")
-    .description(
-      "Check a recorded session's determinism and print its per-turn metrics",
-    )
-    .argument("<sessionId>", "Session ID to replay")
-    .option("--json", "Output JSON", false)
-    .action(async (sessionId: string, opts: { json: boolean }) => {
-      const { sessionReplay } = await import("./daemon/lifecycle.js");
-      await sessionReplay(sessionId, opts);
-    });
-
-  // ── replay: inspect how a past turn was handled ─────────────────────────────
-
-  program
-    .command("replay")
-    .description(
-      "Show how a past turn was handled (prompt, scores, context, model, judge)",
-    )
-    .argument(
-      "[turn]",
-      "Turn index (1 = most recent) or id; omit for the latest",
-    )
-    .option("--list", "List recent turns instead of replaying one", false)
-    .action(async (turn: string | undefined, opts: { list?: boolean }) => {
-      const { handleReplay } = await import("./commands/replay.js");
-      await handleReplay(turn, opts);
-    });
+  retiredCommand("view", "The agent-work dashboard");
+  retiredCommand("agents", "The fleet agents screen");
+  retiredCommand("solve", "Best-of-N task solving");
+  retiredCommand("daemon", "The local context daemon");
+  retiredCommand("replay", "Local turn replay");
+  retiredCommand("fleet", "The session fleet");
 
   // ── pr: watch a PR's CI, report, merge when green ───────────────────────────
 
@@ -546,38 +127,12 @@ export function buildProgram(): Command {
         },
       );
     pr.command("fix")
-      // The root's global `-m, --model` is reused (commander binds it to the
-      // parent), so the action reads merged opts via optsWithGlobals().
-      .description(
-        "Actively fix a failing PR: diagnose, patch, push, repeat until green — then ask before merging",
-      )
-      .argument("[number]", "PR number; omit for the current branch's PR")
-      .option(
-        "--max-rounds <n>",
-        "Max fix attempts before giving up (default 3)",
-        (v) => parseInt(v, 10),
-      )
-      .option(
-        "--interval <seconds>",
-        "Poll interval seconds while waiting on checks (default 30)",
-        (v) => parseInt(v, 10),
-      )
-      .option(
-        "--timeout <minutes>",
-        "Give up waiting on a single check run after this many minutes (default 60)",
-        (v) => parseInt(v, 10),
-      )
-      .option("--yes", "Merge once green without an interactive prompt", false)
-      .action(async (number: string | undefined, _opts, command: Command) => {
-        const merged = command.optsWithGlobals() as {
-          maxRounds?: number;
-          interval?: number;
-          timeout?: number;
-          yes?: boolean;
-          model?: string;
-        };
-        const { handlePrFix } = await import("./commands/pr.js");
-        await handlePrFix(number, merged);
+      .description("(retired) agentic PR fixing — use the `stella` CLI")
+      .argument("[args...]")
+      .allowUnknownOption(true)
+      .allowExcessArguments(true)
+      .action(async () => {
+        printRetiredNotice("Agentic PR fixing (`pr fix`)");
       });
   }
 
@@ -2891,289 +2446,6 @@ export function buildProgram(): Command {
     .action(async (opts: { env?: string; out?: string }) => {
       const { handleSecretExport } = await import("./commands/secret.js");
       await handleSecretExport(opts);
-    });
-
-  // ── fleet: the session fleet (ADR-023) ──────────────────────────────────────
-
-  // Shared output flags live ONLY on this parent: Commander's non-positional
-  // parsing lets the parent claim `--json`/`--quiet` wherever they appear in a
-  // `fleet …` invocation (even after the subcommand), so re-declaring them on
-  // subcommands would shadow the parsed value with a default-false copy — the
-  // parent wins the parse, the child's default wins the read, and the flag is
-  // silently lost. Every fleet action therefore reads
-  // `command.optsWithGlobals()` (the `pr fix`/`cost` pattern), which also
-  // surfaces the program-wide `--verbose`. Subcommands declare only their OWN
-  // flags, which no ancestor duplicates.
-  const fleet = program
-    .command("fleet")
-    .description(
-      "Mission Control for many agent sessions (piped: streams the fleet as NDJSON). " +
-        "--json and --quiet here apply to every fleet subcommand.",
-    )
-    .option(
-      "--json",
-      "Machine output for any fleet subcommand (NDJSON for streams)",
-      false,
-    )
-    .option(
-      "--quiet",
-      "Suppress progress chrome (stderr); data still emits",
-      false,
-    )
-    .addHelpText(
-      "after",
-      "\nInside the interactive REPL, `/dispatch` mode routes plain prompts through\n" +
-        "this same detached-worker mechanism (trailing ` &` forces background, a\n" +
-        "leading `=` forces inline), with completions folded back into the REPL\n" +
-        "transcript and a live Background panel roster — see\n" +
-        "docs/specs/repl-async-dispatch.md.",
-    )
-    .action(async (_opts: unknown, command: Command) => {
-      const { handleFleetRoot } = await import("./commands/fleet.js");
-      await handleFleetRoot(command.optsWithGlobals());
-    });
-
-  fleet
-    .command("dispatch")
-    .description("Start a detached session, print its sid, exit")
-    .argument(
-      "[prompt...]",
-      'The task ("-" or empty with piped stdin reads the prompt from stdin)',
-    )
-    .option("-m, --model <slug>", "Gateway model slug for the session")
-    .option("--agent <name>", "Run the session as a named agent definition")
-    .option(
-      "--once",
-      "End after the first turn (default: a conversation session)",
-      false,
-    )
-    .option(
-      "--follow",
-      "Stream the session's events to completion; exit code is its fate",
-      false,
-    )
-    .action(async (promptWords: string[], _opts: unknown, command: Command) => {
-      // The worker this spawns runs the engine — gate on an account (BYOK
-      // auto-applies), exactly like the root one-shot action.
-      const { requireSession } = await import("./lib/session.js");
-      requireSession();
-      const { handleFleetDispatch } = await import("./commands/fleet.js");
-      await handleFleetDispatch(promptWords, command.optsWithGlobals());
-    });
-
-  fleet
-    .command("ls")
-    .description("List sessions from their meta.json snapshots")
-    .action(async (_opts: unknown, command: Command) => {
-      const { handleFleetLs } = await import("./commands/fleet.js");
-      await handleFleetLs(command.optsWithGlobals());
-    });
-
-  fleet
-    .command("watch")
-    .description("Merged live stream; no sids means all non-terminal sessions")
-    .argument("[sids...]", "Sessions to watch; omit for all active sessions")
-    .action(async (sids: string[], _opts: unknown, command: Command) => {
-      const { handleFleetWatch } = await import("./commands/fleet.js");
-      await handleFleetWatch(sids, command.optsWithGlobals());
-    });
-
-  fleet
-    .command("attach")
-    .description(
-      "Mission Control focused on one session (TTY), or its NDJSON from the start plus live follow",
-    )
-    .argument("<sid>", "Session id (full, short tail, or unique prefix)")
-    .action(async (sid: string, _opts: unknown, command: Command) => {
-      const { handleFleetAttach } = await import("./commands/fleet.js");
-      await handleFleetAttach(sid, command.optsWithGlobals());
-    });
-
-  fleet
-    .command("send")
-    .description("Append a follow-up message to a session's inbox")
-    .argument("<sid>", "Session id (full, short tail, or unique prefix)")
-    .argument("<message...>", 'The follow-up turn ("-" reads from stdin)')
-    .action(
-      async (
-        sid: string,
-        messageWords: string[],
-        _opts: unknown,
-        command: Command,
-      ) => {
-        const { handleFleetSend } = await import("./commands/fleet.js");
-        await handleFleetSend(sid, messageWords, command.optsWithGlobals());
-      },
-    );
-
-  fleet
-    .command("cancel")
-    .description("Cancel a session, or all of them")
-    .argument("[sid]", "Session id to cancel; omit with --all")
-    .option("--all", "Cancel every non-terminal session", false)
-    .action(
-      async (sid: string | undefined, _opts: unknown, command: Command) => {
-        const { handleFleetCancel } = await import("./commands/fleet.js");
-        await handleFleetCancel(sid, command.optsWithGlobals());
-      },
-    );
-
-  fleet
-    .command("logs")
-    .description("Dump a session's raw events.ndjson")
-    .argument("<sid>", "Session id (full, short tail, or unique prefix)")
-    .option("--from-seq <n>", "Resume the replay at this sequence number")
-    .option("--follow", "Keep tailing after the replay", false)
-    .action(async (sid: string, _opts: unknown, command: Command) => {
-      const { handleFleetLogs } = await import("./commands/fleet.js");
-      await handleFleetLogs(sid, command.optsWithGlobals());
-    });
-
-  fleet
-    .command("clean")
-    .description("Prune terminal sessions")
-    .option(
-      "--older-than <age>",
-      "Age cutoff: days (7) or a duration (1d, 12h) — default 7",
-      "7",
-    )
-    .option("--all", "Prune every terminal session regardless of age", false)
-    .action(async (_opts: unknown, command: Command) => {
-      const { handleFleetClean } = await import("./commands/fleet.js");
-      await handleFleetClean(command.optsWithGlobals());
-    });
-
-  fleet
-    .command("replay")
-    .description(
-      "Time-travel view of a recorded session (ADR-028): per-turn prompts, tool calls, diffs, usage",
-    )
-    .argument("<sid>", "Session id (full, short tail, or unique prefix)")
-    .option("--turn <n>", "Show this turn's FULL tool input/output payloads")
-    .option(
-      "--verify",
-      "Check record integrity (refs resolve + hash clean); exit 1 on failure",
-      false,
-    )
-    .action(async (sid: string, _opts: unknown, command: Command) => {
-      const { handleFleetReplay } = await import("./commands/fleet.js");
-      await handleFleetReplay(sid, command.optsWithGlobals());
-    });
-
-  fleet
-    .command("bisect")
-    .description(
-      "Binary-search the first bad turn of a recorded session by restoring the tree " +
-        "at each probed turn and running --cmd there (exit 0 = good). Assumes monotonic " +
-        "badness — once a turn dooms the run, later turns stay bad (like git bisect).",
-    )
-    .argument("<sid>", "Session id (full, short tail, or unique prefix)")
-    .requiredOption(
-      "--cmd <shell>",
-      "Predicate run via sh -c in the restored tree",
-    )
-    .option("--good <n>", "Known-good turn (default 0 = session start)")
-    .option("--bad <n>", "Known-bad turn (default: the last settled turn)")
-    .action(async (sid: string, _opts: unknown, command: Command) => {
-      const { handleFleetBisect } = await import("./commands/fleet.js");
-      await handleFleetBisect(sid, command.optsWithGlobals());
-    });
-
-  fleet
-    .command("resume")
-    .description(
-      "Fork a recorded session from the state after --turn N: restored scratch worktree + " +
-        "reconstructed history, dispatched as a new detached session",
-    )
-    .argument("<sid>", "Session id (full, short tail, or unique prefix)")
-    .requiredOption(
-      "--turn <n>",
-      "Fork point: resume from the state AFTER this turn (0 = start)",
-    )
-    .option(
-      "-m, --model <slug>",
-      "Model for the fork (default: the source run's)",
-    )
-    .option(
-      "-p, --prompt <text>",
-      "Prompt for the fork (default: the source's next-turn prompt)",
-    )
-    .action(async (sid: string, _opts: unknown, command: Command) => {
-      // The fork spawns a detached worker running the engine — gate like dispatch.
-      const { requireSession } = await import("./lib/session.js");
-      requireSession();
-      const { handleFleetResume } = await import("./commands/fleet.js");
-      await handleFleetResume(sid, command.optsWithGlobals());
-    });
-
-  fleet
-    .command("feedback")
-    .description(
-      "Record a human verdict on a finished session (thumbs-down auto-distills it to an eval item)",
-    )
-    .argument("<sid>", "Session id (full, short tail, or unique prefix)")
-    .argument("<verdict>", '"up" or "down"')
-    .option(
-      "-m, --message <comment>",
-      "Optional comment attached to the verdict",
-    )
-    .action(
-      async (
-        sid: string,
-        verdict: string,
-        _opts: unknown,
-        command: Command,
-      ) => {
-        const merged = command.optsWithGlobals<{
-          message?: string;
-          model?: unknown;
-        }>();
-        // The root program's global `-m, --model` claims `-m` before this
-        // subcommand can (commander parses ancestor options non-positionally —
-        // the same gotcha the fleet parent documents for --json). Feedback has
-        // no model semantics, so a swallowed `-m` value was meant as the
-        // message; `--message` always wins when both are present.
-        if (merged.message === undefined && typeof merged.model === "string") {
-          merged.message = merged.model;
-        }
-        const { handleFleetFeedback } = await import("./commands/fleet.js");
-        await handleFleetFeedback(sid, verdict, merged);
-      },
-    );
-
-  fleet
-    .command("distill")
-    .description(
-      "Distill a recorded session into an evals-v1 dataset item (local record/distilled.json; " +
-        "--push adds it to the platform dataset)",
-    )
-    .argument("<sid>", "Session id (full, short tail, or unique prefix)")
-    .option(
-      "--push",
-      "Push the item to the platform via the eval.* capabilities",
-      false,
-    )
-    .option(
-      "--dataset <slug>",
-      "Target dataset slug (default: fleet-distilled-failures, created on demand)",
-    )
-    .action(async (sid: string, _opts: unknown, command: Command) => {
-      const { handleFleetDistill } = await import("./commands/fleet.js");
-      await handleFleetDistill(sid, command.optsWithGlobals());
-    });
-
-  fleet
-    .command("worker <sid>", { hidden: true })
-    .description(
-      "[internal] Run a detached session worker (spawned by dispatch)",
-    )
-    .action(async (sid: string) => {
-      // The worker is what actually needs credentials — gate it like dispatch.
-      const { requireSession } = await import("./lib/session.js");
-      requireSession();
-      const { handleFleetWorker } = await import("./commands/fleet.js");
-      const { code } = await handleFleetWorker(sid);
-      process.exit(code);
     });
 
   return program;

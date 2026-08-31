@@ -8,8 +8,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
-import { openFleetMemory, formatLessons } from "../fleet/memory.js";
-import type { MemoryRecord } from "../fleet/types.js";
+import { openFleetMemory, formatLessons } from "../fleet-memory.js";
+import type { MemoryRecord } from "../fleet-memory.js";
 
 let home = "";
 let prevHome = "";
@@ -50,7 +50,9 @@ describe("record + all", () => {
     expect(all.map((r) => r.lesson)).toContain("first lesson");
     expect(all.map((r) => r.lesson)).toContain("second lesson");
     // ids and timestamps are assigned by the store.
-    expect(all.every((r) => r.id.startsWith("mem_") && r.createdAt > 0)).toBe(true);
+    expect(all.every((r) => r.id.startsWith("mem_") && r.createdAt > 0)).toBe(
+      true,
+    );
   });
 
   it("persists across separate openFleetMemory instances (reads the file)", () => {
@@ -63,7 +65,9 @@ describe("record + all", () => {
       outcome: "success",
     });
     const reopened = openFleetMemory(cwd);
-    expect(reopened.all().some((r) => r.lesson === "keep the cache warm")).toBe(true);
+    expect(reopened.all().some((r) => r.lesson === "keep the cache warm")).toBe(
+      true,
+    );
   });
 
   it("HOME isolation actually points the store under the temp home", () => {
@@ -168,7 +172,11 @@ describe("recall", () => {
       files: [],
       outcome: "success",
     };
-    writeFileSync(join(dir, "myproj.jsonl"), `not json\n${JSON.stringify(good)}\n`, "utf8");
+    writeFileSync(
+      join(dir, "myproj.jsonl"),
+      `not json\n${JSON.stringify(good)}\n`,
+      "utf8",
+    );
     const mem = openFleetMemory(cwd);
     expect(mem.recall("widgets")[0]?.lesson).toBe("real lesson about widgets");
   });
