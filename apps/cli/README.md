@@ -39,9 +39,9 @@ pnpm add -g @oxagen/cli
 oxagen --version
 ```
 
-> The published npm package is not yet fully standalone-installable outside
-> the monorepo (it expects `tsx` on `PATH`). Prefer the monorepo or standalone
-> bundle methods until that lands.
+> The published npm package expects `tsx` on `PATH`, so it does not run
+> standalone outside the monorepo. Use the monorepo or standalone bundle
+> methods instead.
 
 See https://docs.oxagen.sh/docs/cli/installation for the full walkthrough.
 

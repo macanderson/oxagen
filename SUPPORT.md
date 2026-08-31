@@ -7,7 +7,7 @@ Start with the docs — they cover the platform, every capability, and the CLI:
 - **Product & API docs**: <https://docs.oxagen.sh>
 - **Vision & positioning**: [`docs/VISION.md`](docs/VISION.md)
 - **Capability registry**: [`docs/capabilities/`](docs/capabilities/)
-- **Architecture guide**: [`AGENTS.md`](AGENTS.md) and [`docs/adr/`](docs/adr/)
+- **How the agent works**: <https://docs.oxagen.sh/docs/agent/overview>
 - **CLI reference**: [`apps/cli/README.md`](apps/cli/README.md)
 
 ## Getting Help
