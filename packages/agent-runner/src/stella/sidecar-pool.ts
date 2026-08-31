@@ -1,6 +1,6 @@
 /**
  * Sidecar process management — Phase C item 1 of
- * docs/specs/agent-engine-v2/stella-adoption-plan.md.
+ * docs/specs/agent-engine-v2/plan.md.
  *
  * **One `stella-serve` process per worker slot, never one per worker
  * process.** That is a containment requirement, not a tuning choice. Stella's

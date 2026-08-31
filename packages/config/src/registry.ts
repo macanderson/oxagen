@@ -868,7 +868,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "Inngest",
     description:
       "Which engine runs an agent turn (agent-engine v2 Phase C — " +
-      "docs/specs/agent-engine-v2/stella-adoption-plan.md): `ts` for the TypeScript step loop, " +
+      "docs/specs/agent-engine-v2/plan.md): `ts` for the TypeScript step loop, " +
       "`stella` to hand the turn to a `stella-serve` sidecar over loopback. Defaults to `ts`. " +
       "A run's own RunSpec v2 enginePolicy.requested_engine wins over this, which is what makes " +
       "a shadow slice a property of the run rather than of the deployment. An unrecognised " +

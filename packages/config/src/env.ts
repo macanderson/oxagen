@@ -332,7 +332,7 @@ export const baseEnvSchema = z.object({
   VERCEL_SANDBOX_PROJECT_ID: z.string().min(1).optional(),
 
   // Which engine runs an agent turn (agent-engine v2 Phase C;
-  // docs/specs/agent-engine-v2/stella-adoption-plan.md). `ts` is the
+  // docs/specs/agent-engine-v2/plan.md). `ts` is the
   // TypeScript step loop; `stella` hands the turn to a `stella-serve` sidecar
   // over loopback. Unset = `ts`.
   //

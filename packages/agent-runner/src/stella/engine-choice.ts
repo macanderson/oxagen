@@ -1,6 +1,6 @@
 /**
  * Which engine runs a turn (agent-engine v2 Phase C;
- * docs/specs/agent-engine-v2/stella-adoption-plan.md §6 "Phase C").
+ * docs/specs/agent-engine-v2/plan.md § "Phase 3").
  *
  * The vocabulary is `RUN_ENGINES` — the same closed enum a RunSpec v2 admits
  * through `enginePolicySchema.requested_engine`, imported rather than

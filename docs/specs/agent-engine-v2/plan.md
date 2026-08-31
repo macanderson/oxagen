@@ -23,7 +23,8 @@ traffic on the platform, with resolve-rate ≥ baseline and cost/turn ≤ baseli
    `run-tools-transformation.ts`). Interim guard in
    `engine.ts`/tool wrapping: concurrency cap (8) + serialize
    `MUTATING_TOOL_NAMES` behind a barrier (Stella dispatch semantics,
-   `driver.rs:702-759`). This becomes engine-owned in Phase 3.
+   `driver.rs:702-759`). This becomes engine-owned in Phase 3 — it now has;
+   see that phase.
 3. **Mark `read_only` on materialized tools** (from capability
    sensitivity/mutation metadata) — needed by item 2 now and by the engine's
    partitioned dispatch later.
@@ -60,14 +61,44 @@ a projection.
 
 ## Phase 3 — Embedded Stella core behind a flag (Track 2)
 
-- Upstream: `stella-engine` facade + `run_step` + `stella-engine-node` (napi)
-  + `AgentEvent` TS codegen (work items §6 of spec.md).
+Flag-selected execution landed in #2549. The default engine is still `ts`;
+moving it is a separate decision (#2548), earned by the parity gate below.
+
+- Upstream: `stella-engine` facade + `run_step` + `AgentEvent` TS codegen (work
+  items §6 of spec.md).
 - Platform: port adapters (Provider ← streamAgentReply, ToolExecutor ←
   materialized tools + speculation wrap, recall ← engram, CommandRunner ←
-  sandbox, ApprovalGate ← approvals), `ENGINE=stella` flag in `agent-runner`.
+  sandbox, ApprovalGate ← approvals), engine flag in `agent-runner`.
 - Conformance: `validate_stream` over recorded platform event streams in CI.
+  **Not built.**
 - Shadow mode: mirror a slice of real runs through the new engine (no user
-  visibility), diff outcomes + cost.
+  visibility), diff outcomes + cost. **Not built** — #2548.
+
+### Where the shipped engine differs from the sketch above
+
+Three things landed differently from what this phase specified. Each is a
+decision, not an implementation detail, so it is recorded here rather than left
+to be inferred from the diff.
+
+- **The engine runs as a `stella-serve` sidecar over loopback HTTP, not as
+  `stella-engine-node` (napi).** One sidecar per worker *slot*, bound
+  `127.0.0.1:0` so the kernel picks the port, with a fresh per-process token
+  and `STELLA_SERVE_TOOLS=remote` (`stella/sidecar-pool.ts`). A napi binding
+  would have put the engine in-process, and several of stella's credential and
+  config knobs are process-global — two tenants sharing one engine process
+  would share that state (`serve-surface.md` § "Containment posture"). A
+  sidecar per slot keeps them apart.
+- **The flag is `OXAGEN_ENGINE`, not `ENGINE`**, and a run's own
+  `enginePolicy.requested_engine` takes precedence over it
+  (`stella/engine-choice.ts`). An unrecognised value throws rather than falling
+  back to `ts`: a deployment that believes it cut over and did not is worse
+  than a loud failure.
+- **Phase 0 item 2's interim dispatch guard is now engine-owned**, as that item
+  anticipated. Stella partitions a step's calls on the `read_only` bit each
+  advertised schema carries, derived from the host's
+  `MaterializedTools.mutatingToolNames` (`stella/tool-mapping.ts`); the TS
+  guard is not applied on the Stella path, since running both would serialize
+  twice against a decision the engine has already made.
 
 Exit: parity gate passes; flag flips for internal org; no P0 for two weeks.
 

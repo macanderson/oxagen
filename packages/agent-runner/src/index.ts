@@ -14,7 +14,7 @@ export {
   type PlatformSurface,
 } from "./execute-turn";
 
-// Phase C — the engine vocabulary (docs/specs/agent-engine-v2/stella-adoption-plan.md).
+// Phase C — the engine vocabulary (docs/specs/agent-engine-v2/plan.md).
 // Deliberately ONLY the flag-resolution half, which is pure. The Stella
 // adapter itself lives behind the `@oxagen/agent-runner/stella` subpath and is
 // NOT re-exported here: it reaches for `node:child_process`, `node:crypto` and
