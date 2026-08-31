@@ -1,5 +1,5 @@
 {
-  "name": "@oxagen/agent-worker",
+  "name": "@oxagen/rules",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -15,18 +15,12 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@oxagen/agent": "workspace:*",
-    "@oxagen/agent-runner": "workspace:*",
-    "@oxagen/billing": "workspace:*",
-    "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
-    "@oxagen/handlers": "workspace:*",
-    "@oxagen/iam": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
-    "@oxagen/plugins": "workspace:*",
-    "@oxagen/rules": "workspace:*",
-    "@oxagen/telemetry": "workspace:*",
-    "typescript": "6.0.3"
+    "drizzle-orm": "0.45.2",
+    "pino": "9.14.0",
+    "typescript": "6.0.3",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/node": "25.9.1",
