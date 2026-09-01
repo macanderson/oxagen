@@ -15,7 +15,7 @@ import { loadRules } from "../loader.js";
 import { guardsToDeny } from "../enforce.js";
 import type { Rule } from "../types.js";
 import type { TurnTrace, JudgeVerdict } from "../../agent/trace.js";
-import type { MemoryRecord } from "../../agent/fleet/memory.js";
+import type { MemoryRecord } from "../fleet-memory.js";
 
 function judge(over: Partial<JudgeVerdict> = {}): JudgeVerdict {
   return {
@@ -58,7 +58,6 @@ function trace(
     enhancement: {
       prompt: "do work",
       context: "",
-      resolved: [],
       lessonCount: 0,
       source: "none",
     },

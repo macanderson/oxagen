@@ -15,6 +15,7 @@ import type { AgentAi, RunCodingAgentOptions } from "@oxagen/agent-engine";
 import { createFakeSidecar, type FakeStep } from "./fake-sidecar";
 import {
   buildBudgetSpec,
+  REVERSE_REQUEST_TIMEOUT_MS,
   runStellaTurn,
   StellaTurnAbortedError,
   stopReasonFor,
@@ -176,6 +177,20 @@ describe("runStellaTurn", () => {
         ok: true,
       }),
     );
+  });
+
+  test("gives the engine a deadline longer than the host's approval TTL", async () => {
+    // Stella's default is five minutes, which is EXACTLY the host's approval
+    // TTL — so with the default, an approval granted near its own limit can
+    // find the engine already gave up on the request it was answering. The
+    // engine's deadline is a backstop against a host that stopped answering
+    // at all, not a competitor to the host's own bounds.
+    const { fake, lease } = leaseFor([{ kind: "complete", text: "" }]);
+    await runStellaTurn(baseOptions(), { lease });
+    const declared = fake.turnRequest!.reverse_request_timeout_ms as number;
+    const APPROVAL_TTL_MS = 5 * 60 * 1000; // materialize-tools.ts
+    expect(declared).toBeGreaterThan(APPROVAL_TTL_MS);
+    expect(declared).toBe(REVERSE_REQUEST_TIMEOUT_MS);
   });
 
   test("advertises tools with read_only derived from the mutating list", async () => {
@@ -422,5 +437,106 @@ describe("sumUsage", () => {
         },
       ]),
     ).toMatchObject({ cachedInputTokens: 8 });
+  });
+});
+
+// ── The per-turn dollar ceiling (#2608) ──────────────────────────────────────
+
+describe("runStellaTurn — the host's per-turn budget guard", () => {
+  // These exist because the guard was built, threaded, wrapped for cumulative
+  // accounting, and then never called: the deleted TypeScript loop was its only
+  // caller, and nothing replaced it. Every budget test in the repo either
+  // exercised the guard's policy in isolation or replaced the engine with a
+  // fake, so none of them could notice. These assert the thing whose absence
+  // hid it — that a real engine consults the guard it was handed.
+
+  test("consults the guard before buying a completion, with what the turn has spent", async () => {
+    const ai = scriptedAi([
+      {
+        text: "",
+        toolCalls: [{ toolCallId: "t1", toolName: "noop", input: {} }],
+        usage: { inputTokens: 100, outputTokens: 10 },
+      },
+      { text: "done", usage: { inputTokens: 40, outputTokens: 5 } },
+    ]);
+    const seen: unknown[] = [];
+    const budgetGuard = vi.fn(async (usage: unknown) => {
+      seen.push(usage);
+      return "continue" as const;
+    });
+    const { lease } = leaseFor([
+      { kind: "provider_request" },
+      { kind: "provider_request" },
+      { kind: "complete", text: "done" },
+    ]);
+
+    await runStellaTurn(baseOptions({ ai, budgetGuard }), { lease });
+
+    // Once per completion, and the FIRST call sees zero — the ceiling is
+    // checked before the first call is bought, not after.
+    expect(budgetGuard).toHaveBeenCalledTimes(2);
+    expect(seen[0]).toMatchObject({ totalTokens: 0 });
+    // The second sees what the first completion actually spent.
+    expect(seen[1]).toMatchObject({
+      inputTokens: 100,
+      outputTokens: 10,
+      totalTokens: 110,
+    });
+  });
+
+  test("stops the turn when the guard says stop, and never buys the call", async () => {
+    const ai = scriptedAi([
+      { text: "partial answer", usage: { inputTokens: 100, outputTokens: 10 } },
+      {
+        text: "SHOULD NOT BE BOUGHT",
+        usage: { inputTokens: 999, outputTokens: 999 },
+      },
+    ]);
+    let calls = 0;
+    const budgetGuard = vi.fn(
+      async () => (++calls > 1 ? "stop" : "continue") as "stop" | "continue",
+    );
+    const { lease } = leaseFor([
+      { kind: "provider_request" },
+      // A real engine sends the conversation so far with every request, which
+      // is where the answer the model already gave survives a declined call.
+      {
+        kind: "provider_request",
+        request: {
+          messages: [
+            { role: "user", content: "hello" },
+            { role: "assistant", content: "partial answer" },
+          ],
+        },
+      },
+      { kind: "complete", text: "unreachable" },
+    ]);
+
+    const result = await runStellaTurn(baseOptions({ ai, budgetGuard }), {
+      lease,
+    });
+
+    // The refusal is what makes this a ceiling rather than a report: the second
+    // completion was declined, so the model was never asked and its tokens were
+    // never spent.
+    expect(ai.calls).toHaveLength(1);
+    expect(result.usage.totalTokens).toBe(110);
+    // The surface can say WHY the turn ended.
+    expect(result.stopReason).toBe("budget");
+    // And the user still sees what the model had already said.
+    expect(result.text).toBe("partial answer");
+  });
+
+  test("a turn with no guard is unaffected", async () => {
+    const ai = scriptedAi([
+      { text: "fine", usage: { inputTokens: 1, outputTokens: 1 } },
+    ]);
+    const { lease } = leaseFor([
+      { kind: "provider_request" },
+      { kind: "complete", text: "fine" },
+    ]);
+    const result = await runStellaTurn(baseOptions({ ai }), { lease });
+    expect(result.stopReason).toBeUndefined();
+    expect(result.text).toBe("fine");
   });
 });

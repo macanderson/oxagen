@@ -329,6 +329,7 @@ import "./contracts/skill.workspace.list";
 import "./contracts/svg.generate";
 import "./contracts/system.install.instructions";
 import "./contracts/telemetry.error.cluster";
+import "./contracts/telemetry.stella.enroll";
 import "./contracts/telemetry.stella.ingest";
 import "./contracts/tool.declaration.list";
 import "./contracts/tool.declaration.publish";

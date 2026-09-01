@@ -42,6 +42,7 @@ export const webFetch = registerCapability({
     category: "search",
   },
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "allow",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

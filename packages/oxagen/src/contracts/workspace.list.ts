@@ -2,9 +2,9 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 /**
- * list_workspaces — list the workspaces inside one organization the caller can use.
+ * workspace.list — list the workspaces inside one organization the caller can use.
  *
- * Takes an `orgSlug` (the tenant the user picked from list_orgs) and returns the
+ * Takes an `orgSlug` (the tenant the user picked from org.list) and returns the
  * org's workspaces so the CLI linker can present the workspace picker. Unscoped +
  * user-level: at link time the user has chosen an org but not yet a workspace, so
  * this runs under the auth-only /v1 user group. The handler verifies the caller
@@ -23,9 +23,7 @@ export const workspaceListItemSchema = z.object({
   role: z
     .string()
     .nullable()
-    .describe(
-      "The caller's workspace role, or null when they are an org admin without a direct workspace membership",
-    ),
+    .describe("The caller's workspace role, or null when they are an org admin without a direct workspace membership"),
 });
 
 export const workspaceList = registerCapability({
@@ -39,28 +37,19 @@ export const workspaceList = registerCapability({
   scoped: false,
   agent: { requiresApproval: false, riskLevel: "low", category: "workspace" },
   sensitivity: "low",
-  // allow by default: same reasoning as list_orgs — listing workspaces within an
-  // org the caller already belongs to is a user-intrinsic right, and the handler
-  // enforces membership before listing (not-a-member → error). "deny" would 403
-  // any caller whose org predates this capability being seeded in role_grants,
-  // which is every org that has not been re-seeded.
+  mutates: false,
+  // allow by default: same reasoning as org.list — listing workspaces within an
+  // org the caller already belongs to is a user-intrinsic right. The handler
+  // enforces membership before listing (not-a-member → error). Keeping this as
+  // "deny" caused no_grant 403s for Enterprise callers whose org was created
+  // before workspace.list was seeded in role_grants. (OXA fix — CLI picker 403.)
   defaultEffect: "allow",
   defaultRoles: {
-    org: {
-      Owner: "allow",
-      Admin: "allow",
-      Member: "allow",
-      Billing: "allow",
-      Compliance: "allow",
-      Viewer: "allow",
-    },
+    org: { Owner: "allow", Admin: "allow", Member: "allow", Billing: "allow", Compliance: "allow", Viewer: "allow" },
     workspace: {},
   },
   input: z.object({
-    orgSlug: z
-      .string()
-      .min(1)
-      .describe("Slug of the organization whose workspaces to list"),
+    orgSlug: z.string().min(1).describe("Slug of the organization whose workspaces to list"),
   }),
   output: z.object({
     organization: z.object({

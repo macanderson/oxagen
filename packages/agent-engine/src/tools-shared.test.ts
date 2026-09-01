@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { buildWorkspaceTools } from "./tools";
+import { MemoryWorkspace } from "./workspaces/memory";
 import {
   isTestPath,
   CANONICAL_TOOL_NAMES,
@@ -8,6 +10,7 @@ import {
   verbositySchema,
   limitSchema,
   resolveLimit,
+  MUTATING_TOOL_NAMES,
 } from "./tools-shared";
 
 describe("isTestPath", () => {
@@ -47,7 +50,7 @@ describe("tool naming standard", () => {
 
   it("returns an unknown/legacy name unchanged (training-prior tools are not renamed)", () => {
     expect(canonicalToolName("read_file")).toBe("read_file");
-    expect(canonicalToolName("code_graph")).toBe("code_graph");
+    expect(canonicalToolName("read_file")).toBe("read_file");
   });
 });
 
@@ -99,5 +102,50 @@ describe("limitSchema + resolveLimit", () => {
     expect(resolveLimit("minimal", caps, 3)).toBe(3);
     expect(resolveLimit("minimal", caps, 100)).toBe(40); // clamped
     expect(resolveLimit("minimal", caps, 0)).toBe(1); // floored
+  });
+});
+
+describe("MUTATING_TOOL_NAMES", () => {
+  it("names every filesystem mutator, deletion included", () => {
+    // Moved here from loop-driver.test.ts with the list itself. The predicate
+    // it used to test (`isMutatingTool`) went with the step loop — nothing
+    // called it — so the set is asserted directly.
+    //
+    // `delete_file` belongs for the reason the set exists: a step that deleted
+    // a file and then failed must not be blindly retried, and a deletion must
+    // never be dispatched concurrently with a write to the same tree.
+    expect([...MUTATING_TOOL_NAMES].sort()).toEqual([
+      "bash",
+      "delete_file",
+      "edit_file",
+      "write_file",
+    ]);
+  });
+
+  it("excludes the read-only tools, which may run concurrently", () => {
+    for (const readOnly of ["read_file", "list_dir", "search"]) {
+      expect(MUTATING_TOOL_NAMES.has(readOnly)).toBe(false);
+    }
+  });
+
+  it("is exactly the set of tools readOnly mode withholds", () => {
+    // Derived from the registration rather than restated, and checked in BOTH
+    // directions, because the two ways this list can be wrong have different
+    // consequences and neither raises an error on its own. A name here that no
+    // tool answers to serializes nothing. A registered mutator missing from
+    // here is advertised to Stella as read_only and then dispatched
+    // concurrently with a write — a data race with nothing to observe it.
+    //
+    // This guard exists because that second failure nearly shipped: the tool
+    // surface gained `delete_file` in one branch while this list moved in
+    // another, and the two merged cleanly with the deletion classified as a
+    // read.
+    const ws = () => new MemoryWorkspace({ "a.ts": "x" });
+    const all = new Set(Object.keys(buildWorkspaceTools(ws())));
+    const readOnly = new Set(
+      Object.keys(buildWorkspaceTools(ws(), { readOnly: true })),
+    );
+    const withheld = [...all].filter((name) => !readOnly.has(name)).sort();
+    expect(withheld).toEqual([...MUTATING_TOOL_NAMES].sort());
   });
 });

@@ -24,6 +24,7 @@ export const agentSubagentResultGet = registerCapability({
     category: "introspection",
   },
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

@@ -2,95 +2,33 @@
  * Automatic prompt enhancement.
  *
  * Before a prompt is handed to the agent (or split into a plan), this enriches it
- * with the context the engine already has about the repository: the code graph (a
- * symbol + import index — where things are defined, what imports them) and
- * the recalled memory context. The user types "fix the login bug"; the agent
- * receives that plus the exact files and symbols involved and the gotchas it
- * learned last time. That is what makes the agent both faster (less blind
- * grepping) and cheaper (fewer exploratory tool calls before it acts).
+ * with the recalled memory context the engine already has: the gotchas it learned
+ * last time, and the repository prior when one is configured. The user types "fix
+ * the login bug"; the agent receives that plus what past sessions discovered.
  *
- * Unlike the CLI version, this module uses the engine's injected ports
- * ({@link CodeGraphProvider} and {@link MemoryProvider}) rather than calling
- * `queryCodeGraph` directly or using `FleetMemory`. This makes it suitable for
- * both the CLI (local symbol index) and the platform (remote Neo4j graph,
- * `agent.memory.*` context).
+ * The module uses the engine's injected {@link MemoryProvider} port rather than
+ * reaching for a concrete store, so the CLI and the platform share one
+ * implementation.
  */
-import type { CodeGraphProvider } from "../types";
 import type { MemoryProvider } from "../ports";
-import type { ContextRetrieval } from "../trace/types";
-import { localize } from "../localize";
 import { loadPrior, renderPrior } from "../priors";
 import {
   filterRecall,
   tagRecall,
   type RecallItem,
 } from "../memory/applicability";
-import { CODEY_EXT, extractCandidates } from "../internal/extract-candidates";
-
-// Re-exported for existing consumers (tests import it from this module).
-export { extractCandidates };
 
 export interface EnhanceOptions {
   prompt: string;
-  /**
-   * Code graph provider for symbol/path lookups. When omitted, code-graph
-   * enrichment is skipped — the prompt is still returned with any memory context.
-   */
-  codeGraph?: CodeGraphProvider | null;
   /**
    * Memory provider for recalled lessons. When omitted, memory enrichment is
    * skipped. Calls `recallContext()` to get a pre-formatted context string.
    */
   memory?: MemoryProvider | null;
-  /** Max distinct symbols/paths to look up (default 6). */
-  maxSymbols?: number;
-  /**
-   * Extra retrieval hints (e.g. the evaluator's `contextQueries`): symbol names,
-   * file paths, or topics. They are mined for candidates and looked up in the code
-   * graph, but never appended to the visible prompt text — only what they resolve
-   * to is injected.
-   */
-  extraQueries?: string[];
-  /**
-   * Wall-clock budget for the whole code-graph enrichment pass. On a cold
-   * store the FIRST query triggers a full tree-sitter build of the repo, which
-   * on a large repo can take minutes — far more than the context is worth.
-   * When the budget expires, whatever resolved so far is injected and the rest
-   * is skipped; the underlying build continues in the provider's cache, so the
-   * agent's own later `code_graph` tool calls still benefit. Undefined ⇒
-   * unbounded (the historical behavior).
-   */
-  timeoutMs?: number;
   /** Repository identifier for F8 repo-prior lookup (e.g., "django/django"). */
   repo?: string;
   /** Base directory for F8 repo-prior files (e.g., ~/.oxagen/repo-priors). */
   priorsDir?: string;
-}
-
-/**
- * Race a code-graph query against the remaining budget. A timeout resolves to
- * "" (a miss) rather than rejecting — enhancement is best-effort by design.
- * The abandoned query keeps running in the provider (warming its cache); only
- * this stage stops waiting for it.
- */
-async function queryWithin(
-  q: Promise<string>,
-  remainingMs: number,
-): Promise<string> {
-  if (remainingMs <= 0) return "";
-  // Unbounded (or absurdly large) budget: no timer — setTimeout overflows
-  // past 2^31-1 ms and would fire immediately.
-  if (remainingMs > 2_147_483_647) return q.catch(() => "");
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<string>((resolve) => {
-    timer = setTimeout(() => resolve(""), remainingMs);
-    timer.unref?.();
-  });
-  try {
-    return await Promise.race([q.catch(() => ""), timeout]);
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 export interface EnhanceResult {
@@ -98,20 +36,8 @@ export interface EnhanceResult {
   prompt: string;
   /** The retrieved context block alone (empty if nothing was found). */
   context: string;
-  /** Symbol/path tokens that resolved to something in the code graph. */
-  resolved: string[];
-  /**
-   * True when literal candidate lookups resolved little or nothing and a
-   * semantic (embedding) search over the raw prompt was used instead. Lets a
-   * conceptual prompt that names no exact symbol or path — e.g. "project level
-   * configurations for the cli app" — still retrieve real files instead of
-   * leaving the agent to blind grep.
-   */
-  usedSemanticFallback: boolean;
   /** Whether any memory context was injected. */
   hasMemory: boolean;
-  /** Whether F1 localization was run and produced candidates. */
-  hasLocalization: boolean;
   /** Whether F8 repo prior was injected. */
   hasRepoPrior: boolean;
   /** Whether F9 memory recall filtering was applied. */
@@ -122,87 +48,19 @@ export interface EnhanceResult {
   finishedAt: number;
   /** Wall-clock ms spent gathering + injecting context. */
   durationMs: number;
-  /** Which candidates were mined and which resolved (for verbose telemetry). */
-  retrieval: ContextRetrieval;
-}
-
-/**
- * Literal candidates resolved at or below this count → the prompt is probably
- * conceptual (names no exact symbol/path), so fall back to one embedding
- * search over the raw prompt. "Few", not only "zero": a prompt that names one
- * thing precisely can still be mostly about a subsystem it never names.
- */
-const SEMANTIC_FALLBACK_MAX_RESOLVED = 1;
-/** Bounded — a few files to orient the agent, not a second exploration budget. */
-const SEMANTIC_FALLBACK_LIMIT = 5;
-
-/** True when a code-graph result string represents a real hit (not a "No …" miss). */
-function isHit(result: string): boolean {
-  return (
-    result.length > 0 &&
-    !/^No (symbols?|file) /.test(result) &&
-    !/^Nothing imports/.test(result)
-  );
 }
 
 export async function enhancePrompt(
   opts: EnhanceOptions,
 ): Promise<EnhanceResult> {
-  const { prompt, codeGraph, memory } = opts;
-  const max = opts.maxSymbols ?? 6;
+  const { prompt, memory } = opts;
   const startedAt = Date.now();
 
   const sections: string[] = [];
-  const resolved: string[] = [];
-  const symbolsQueried: string[] = [];
-  const pathsQueried: string[] = [];
-  let usedSemanticFallback = false;
-  let hasLocalization = false;
   let hasRepoPrior = false;
   let filteredRecall = false;
 
-  // ── Deadline for every graph-backed pass in this stage (Infinity when
-  // unbounded). Computed BEFORE F1 so localization and the code-graph
-  // retrieval below share ONE budget — localization races the existing
-  // enhance budget, it never extends it.
-
-  const deadline =
-    opts.timeoutMs && opts.timeoutMs > 0
-      ? startedAt + opts.timeoutMs
-      : Infinity;
-  const remaining = (): number =>
-    deadline === Infinity ? Number.MAX_SAFE_INTEGER : deadline - Date.now();
-
-  // ── F1: Deterministic localization ─────────────────────────────────────────
-
-  // Flag semantics: localization runs UNLESS process.env.OXAGEN_LOCALIZE === "0".
-  // Default on, explicit opt-out.
-  const localizeFlagOff = process.env.OXAGEN_LOCALIZE === "0";
-
-  let localizedFiles: string[] = [];
-  if (!localizeFlagOff && codeGraph) {
-    try {
-      // Suppress the localizer's own semantic fallback: the code-graph
-      // retrieval below owns the "resolved enough / go semantic" decision with
-      // its own gate. Running a second, differently-thresholded semantic query
-      // here would surface files the enhancer deliberately withheld.
-      // timeoutMs: what is left of the stage budget (MAX_SAFE_INTEGER when
-      // unbounded — the localizer treats over-max-timer values as no deadline).
-      const locMap = await localize(prompt, codeGraph, {
-        semanticFallback: false,
-        timeoutMs: remaining(),
-      });
-      if (locMap.renderedBlock.length > 0) {
-        sections.push(locMap.renderedBlock);
-        hasLocalization = true;
-        localizedFiles = locMap.files.map((f) => f.path);
-      }
-    } catch {
-      // localize() never throws by contract, but guard defensively.
-    }
-  }
-
-  // ── F8: Repo prior injection (immediately after localization) ─────────────
+  // ── F8: Repo prior injection ──────────────────────────────────────────────
 
   if (opts.repo && opts.priorsDir && process.env.OXAGEN_REPO_PRIORS === "1") {
     try {
@@ -250,11 +108,12 @@ export async function enhancePrompt(
         }
       }
 
-      // Filter recall items: stage 1 (lexical), stage 2 (scorer=null for now).
-      // Candidate files come from the localization pass above — never re-localize.
+      // Stage 1 (lexical) only — stage 2's scorer stays null. Nothing supplies
+      // candidate files: the agent locates code itself with `grep`/`read_file`,
+      // so applicability is judged against the issue text alone.
       const filtered = await filterRecall(
         items,
-        { issue: prompt, candidateFiles: localizedFiles },
+        { issue: prompt, candidateFiles: [] },
         null,
       );
       const taggedRecall = tagRecall(filtered);
@@ -265,132 +124,9 @@ export async function enhancePrompt(
     }
   }
 
-  if (codeGraph) {
-    try {
-      const { symbols, paths } = extractCandidates(prompt);
-      // Evaluator-supplied hints are authoritative — the model explicitly named them
-      // — so classify each directly (like a backticked span) rather than mining it
-      // from prose. They sharpen retrieval without polluting the visible prompt text.
-      const symSet = new Set(symbols);
-      const pathSet = new Set(paths);
-      for (const q of opts.extraQueries ?? []) {
-        const t = q.trim();
-        if (!t) continue;
-        if (t.includes("/") || CODEY_EXT.test(t))
-          pathSet.add(t.replace(/^\.\//, ""));
-        else if (/^[\w.$]+$/.test(t)) symSet.add(t);
-        // Multi-word topics that aren't identifiers are skipped — they won't resolve.
-      }
-
-      // Symbol definitions — "where is X defined". Each lookup is independent
-      // of the others, so fire them concurrently instead of one `await` per
-      // symbol — a serial loop of up to `max` round-trips was the dominant
-      // cost before the worker's first token. The budget check happens once,
-      // up front, against the candidate count (rather than per-item inside a
-      // serial loop): either the whole wave fires within the remaining
-      // budget, or none of it does. `queryWithin` still races each query
-      // against that same remaining-budget snapshot.
-      const symCandidates = [...symSet].slice(0, max);
-      if (symCandidates.length > 0 && remaining() > 0) {
-        symbolsQueried.push(...symCandidates);
-        const budget = remaining();
-        const symPairs = await Promise.all(
-          symCandidates.map(async (sym) => ({
-            sym,
-            res: await queryWithin(codeGraph.query("search", sym, 4), budget),
-          })),
-        );
-        for (const { sym, res } of symPairs) {
-          if (isHit(res)) {
-            sections.push(`Definitions of \`${sym}\`:\n${res}`);
-            resolved.push(sym);
-          }
-        }
-      }
-
-      // File context — symbols a referenced file defines, plus its dependents
-      // (what a change to it could break). This is the impact-analysis the agent
-      // would otherwise have to discover by hand. The `file_symbols` lookups are
-      // independent of each other, so they fire as one concurrent wave; the
-      // `dependents` lookups depend on which files actually resolved, so they
-      // form a second concurrent wave over just the hits. Results are re-keyed
-      // by path and re-assembled in original candidate order below, preserving
-      // the exact "Symbols in P" immediately followed by its own dependents
-      // section ordering the serial loop produced.
-      const pathCandidates = [...pathSet].slice(0, max);
-      if (pathCandidates.length > 0 && remaining() > 0) {
-        pathsQueried.push(...pathCandidates);
-        const symsBudget = remaining();
-        const symsPairs = await Promise.all(
-          pathCandidates.map(async (p) => ({
-            p,
-            syms: await queryWithin(
-              codeGraph.query("file_symbols", p, 12),
-              symsBudget,
-            ),
-          })),
-        );
-
-        const hitPaths = symsPairs
-          .filter(({ syms }) => isHit(syms))
-          .map(({ p }) => p);
-        const depsBudget = remaining();
-        const depsPairs =
-          hitPaths.length > 0 && depsBudget > 0
-            ? await Promise.all(
-                hitPaths.map(async (p) => ({
-                  p,
-                  deps: await queryWithin(
-                    codeGraph.query("dependents", p, 8),
-                    depsBudget,
-                  ),
-                })),
-              )
-            : [];
-        const depsByPath = new Map(depsPairs.map(({ p, deps }) => [p, deps]));
-
-        for (const { p, syms } of symsPairs) {
-          if (isHit(syms)) {
-            sections.push(`Symbols in ${p}:\n${syms}`);
-            resolved.push(p);
-            const deps = depsByPath.get(p);
-            if (deps && isHit(deps)) sections.push(deps);
-          }
-        }
-      }
-
-      // Semantic fallback — literal candidates resolved little or nothing,
-      // which is the common case for a conceptual prompt ("project level
-      // configurations for the cli app") that names no symbol or path
-      // directly. Embed the raw prompt once and cosine-rank file nodes so the
-      // agent gets real context instead of falling through to blind grep.
-      if (
-        resolved.length <= SEMANTIC_FALLBACK_MAX_RESOLVED &&
-        remaining() > 0
-      ) {
-        const semanticHits = await queryWithin(
-          codeGraph.query("semantic_search", prompt, SEMANTIC_FALLBACK_LIMIT),
-          remaining(),
-        );
-        if (isHit(semanticHits)) {
-          sections.push(
-            `Semantically relevant files (auto-retrieved via embeddings):\n${semanticHits}`,
-          );
-          usedSemanticFallback = true;
-        }
-      }
-    } catch {
-      /* code graph unavailable — enhancement is optional */
-    }
-  }
-
   const parts: string[] = [];
   if (sections.length > 0) {
-    parts.push(
-      "## Relevant code context (auto-retrieved from the code graph)\n" +
-        "Use this to skip exploration and go straight to the right files.\n\n" +
-        sections.join("\n\n"),
-    );
+    parts.push(sections.join("\n\n"));
   }
   if (hasMemory && memoryContext) {
     parts.push(
@@ -404,28 +140,15 @@ export async function enhancePrompt(
   const enhanced = context ? `${prompt}\n\n${context}` : prompt;
 
   const finishedAt = Date.now();
-  const resolvedSet = new Set(resolved);
-  const retrieval: ContextRetrieval = {
-    symbolsQueried,
-    pathsQueried,
-    resolved,
-    unresolved: [...symbolsQueried, ...pathsQueried].filter(
-      (c) => !resolvedSet.has(c),
-    ),
-  };
 
   return {
     prompt: enhanced,
     context,
-    resolved,
-    usedSemanticFallback,
     hasMemory,
-    hasLocalization,
     hasRepoPrior,
     filteredRecall,
     startedAt,
     finishedAt,
     durationMs: finishedAt - startedAt,
-    retrieval,
   };
 }

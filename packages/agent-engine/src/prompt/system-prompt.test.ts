@@ -6,11 +6,13 @@
  *   reproduce → localize → fix → re-test verification protocol.
  *
  * Both must keep the profile-independent tool rules — chief among them the
- * graph-first context-gathering mandate, which must never reference a tool
- * that is not wired for the run (hasCodeGraph / hasCodeMap).
+ * locate-before-you-touch mandate, which must never name a tool the engine
+ * does not hand the model.
  */
 import { describe, it, expect } from "vitest";
 import { buildSystemPrompt, buildCodingCorePrompt } from "./system-prompt";
+import { buildWorkspaceTools } from "../tools";
+import { MemoryWorkspace } from "../workspaces/memory";
 
 const base = { cwd: "/repo" } as const;
 
@@ -121,22 +123,7 @@ describe("buildSystemPrompt — profiles", () => {
   });
 });
 
-describe("buildSystemPrompt — graph-first tool guidance", () => {
-  it("mandates code_graph FIRST as a hard rule and lists every operation", () => {
-    const prompt = buildSystemPrompt(base);
-    // A forceful, prominent mandate — not a soft preference the model shrugs off.
-    expect(prompt).toContain("CODE GRAPH FIRST");
-    expect(prompt).toContain("non-negotiable");
-    expect(prompt).toContain("you MUST query");
-    expect(prompt).toContain("STOP and call it first");
-    // Every operation, with the exact trigger, so the model knows what to call when.
-    expect(prompt).toContain("`search <symbol>`");
-    expect(prompt).toContain("`file_symbols <file>`");
-    expect(prompt).toContain("`dependents <file>`");
-    expect(prompt).toContain("`imports <file>`");
-    expect(prompt).toContain("Only fall back to `grep`");
-  });
-
+describe("buildSystemPrompt — locate-before-you-touch tool guidance", () => {
   it("instructs batching of independent tool calls into one message (wall-clock parallelism)", () => {
     // The engine runs one step per assistant message and the AI SDK executes
     // ALL of that message's tool calls concurrently — the model just has to be
@@ -145,68 +132,60 @@ describe("buildSystemPrompt — graph-first tool guidance", () => {
     expect(prompt).toContain("BATCH INDEPENDENT TOOL CALLS");
     expect(prompt).toContain("ONE message");
     expect(prompt).toContain("File EDITS stay sequential");
-    // The example list adapts to wiring: no code_graph mention when unwired.
-    const withoutGraph = buildSystemPrompt({ ...base, hasCodeGraph: false });
-    expect(withoutGraph).toContain("BATCH INDEPENDENT TOOL CALLS");
-    expect(withoutGraph).not.toContain("code_graph");
   });
 
-  it("drops graph guidance and keeps plain grep guidance when code_graph is not wired", () => {
-    const prompt = buildSystemPrompt({ ...base, hasCodeGraph: false });
-    expect(prompt).not.toContain("code_graph");
+  it("names only tools the engine registers — never a code graph", () => {
+    // The engine has no code-graph provider on any surface, so the prompt must
+    // never steer the model at a `code_graph` tool it will not be handed.
+    for (const profile of ["interactive", "headless"] as const) {
+      const prompt = buildSystemPrompt({ ...base, profile });
+      expect(prompt).not.toContain("code_graph");
+      expect(prompt).not.toContain("CODE GRAPH");
+    }
+  });
+
+  it("tells the model to locate code with the unified search tool", () => {
+    const prompt = buildSystemPrompt(base);
+    expect(prompt).toContain("LOCATE BEFORE YOU TOUCH");
+    expect(prompt).toContain("Use `search` to find the code");
+    // The one query covers both axes — say so, or the model reaches for a
+    // path-only tool it no longer has when it only remembers a symbol.
+    expect(prompt).toContain("matches both file names and file contents");
+  });
+
+  it("headless verification protocol names search as the locate tool", () => {
+    const prompt = buildSystemPrompt({ ...base, profile: "headless" });
     expect(prompt).toContain(
-      "Use `grep` and `glob` to locate code instead of guessing paths.",
+      "Localize before editing: use `search` to find the real source",
     );
   });
 
-  it("headless localization step lists only the wired locate tools, graph first", () => {
-    const withGraph = buildSystemPrompt({ ...base, profile: "headless" });
-    expect(withGraph).toContain("use `code_graph`/`grep` (in that order)");
-    const bare = buildSystemPrompt({
-      ...base,
-      profile: "headless",
-      hasCodeGraph: false,
-    });
-    expect(bare).toContain("use `grep` to find the real source");
-    expect(bare).not.toContain("code_graph");
+  it("names `search`, never the split `grep`/`glob` pair it replaced", () => {
+    // Stella's catalog carries ONE search over file names and contents, and
+    // reserves the names `grep` and `glob` so a merged surface cannot offer
+    // them. The prompt is written to that surface on every profile, with or
+    // without a persona, so no rule can quietly reintroduce the old pair.
+    for (const profile of ["interactive", "headless"] as const) {
+      for (const agent of [
+        undefined,
+        { name: "reviewer", systemPrompt: "You are a reviewer." },
+      ]) {
+        const prompt = buildSystemPrompt({ ...base, profile, agent });
+        expect(prompt).toContain("`search`");
+        expect(prompt).not.toContain("`grep`");
+        expect(prompt).not.toContain("`glob`");
+        expect(prompt).not.toMatch(/\bglob\/grep\b|\bgrep\/glob\b/);
+      }
+    }
   });
 
-  it("keeps graph-first guidance alongside a named agent persona", () => {
+  it("keeps locate guidance alongside a named agent persona", () => {
     const prompt = buildSystemPrompt({
       ...base,
       agent: { name: "reviewer", systemPrompt: "You are a reviewer." },
     });
     expect(prompt).toContain("You are a reviewer.");
-    expect(prompt).toContain("GRAPH FIRST");
-  });
-});
-
-describe("buildSystemPrompt — F1 localization trust-but-verify rule", () => {
-  it("adds the spec's one-line rule when a localization block was injected this turn", () => {
-    const prompt = buildSystemPrompt({ ...base, hasLocalization: true });
-    expect(prompt).toContain(
-      "Candidate locations were computed from the code graph.",
-    );
-    expect(prompt).toContain("Verify with one read before");
-    expect(prompt).toContain("do not re-derive them.");
-  });
-
-  it("omits the rule by default — no rule about a block the model never received", () => {
-    const prompt = buildSystemPrompt(base);
-    expect(prompt).not.toContain("Candidate locations were computed");
-    expect(prompt).not.toContain("re-derive");
-  });
-
-  it("keeps the rule on the headless profile alongside the verification protocol", () => {
-    const prompt = buildSystemPrompt({
-      ...base,
-      profile: "headless",
-      hasLocalization: true,
-    });
-    expect(prompt).toContain(
-      "Candidate locations were computed from the code graph.",
-    );
-    expect(prompt).toContain("Verification protocol");
+    expect(prompt).toContain("LOCATE BEFORE YOU TOUCH");
   });
 });
 
@@ -231,5 +210,102 @@ describe("buildSystemPrompt — ask_user clarification rule", () => {
     expect(buildSystemPrompt({ ...base, hasAskUser: false })).toBe(
       buildSystemPrompt(base),
     );
+  });
+});
+
+// ── The prompt may only name tools the engine can hand the model ──────────────
+
+/**
+ * Programs the prompt names inside its `bash` guidance. They are things the
+ * model runs THROUGH a tool, never tools themselves, so they are not expected
+ * in the registry.
+ */
+const SHELL_PROGRAMS = new Set(["cd", "gh"]);
+
+/**
+ * Tools the HOST merges in via `extraTools`, not ones `buildWorkspaceTools`
+ * registers. `get_execution_trace` is a platform capability declared in
+ * packages/oxagen (`agent.trace.get`) and materialized for platform agents;
+ * the engine cannot import it — that dependency direction is the one ADR-017
+ * forbids — so it cannot be derived here and is named instead.
+ */
+const HOST_CAPABILITIES = new Set(["get_execution_trace"]);
+
+describe("buildSystemPrompt — every tool it names is one the engine registers", () => {
+  /** The maximal tool set: every gated tool wired on. */
+  function registeredToolNames(): Set<string> {
+    return new Set(
+      Object.keys(
+        buildWorkspaceTools(new MemoryWorkspace({}), {
+          askUser: async () => ({ answer: "", wasFreeText: false }),
+        }),
+      ),
+    );
+  }
+
+  /** Every backticked identifier the prompt can emit, over all option combinations. */
+  function backtickedNames(): Set<string> {
+    const names = new Set<string>();
+    for (const profile of ["interactive", "headless"] as const) {
+      for (const readOnly of [false, true]) {
+        for (const hasAskUser of [false, true]) {
+          for (const agent of [
+            undefined,
+            { name: "reviewer", systemPrompt: "You are a reviewer." },
+          ]) {
+            const prompt = buildSystemPrompt({
+              ...base,
+              profile,
+              readOnly,
+              hasAskUser,
+              agent,
+            });
+            for (const m of prompt.matchAll(/`([A-Za-z][A-Za-z0-9_]*)`/g)) {
+              names.add(m[1]!);
+            }
+          }
+        }
+      }
+    }
+    return names;
+  }
+
+  it("names no tool the engine does not register", () => {
+    // Nothing asserted this until now, which is how the prompt could advertise
+    // `code_graph` for as long as it did: the tool was gone, the prompt still
+    // sold it, and no test could tell. Checked in ONE direction on purpose —
+    // every name the prompt uses must exist. The reverse (every tool must be
+    // mentioned) is a much stricter claim and deliberately not made here.
+    const registered = registeredToolNames();
+    const unregistered = [...backtickedNames()].filter(
+      (name) =>
+        !registered.has(name) &&
+        !SHELL_PROGRAMS.has(name) &&
+        !HOST_CAPABILITIES.has(name),
+    );
+    expect(unregistered).toEqual([]);
+  });
+
+  it("keeps the two exception lists from going stale", () => {
+    // A shell program or host capability that BECOMES an engine tool would sit
+    // in an exception list forever, silently exempt from the check above. Fail
+    // instead, so whoever registers it deletes the entry.
+    const registered = registeredToolNames();
+    for (const name of [...SHELL_PROGRAMS, ...HOST_CAPABILITIES]) {
+      expect(registered.has(name)).toBe(false);
+    }
+  });
+
+  it("matches the maximal tool set, since readOnly withholds tools the prompt still names", () => {
+    // The check above pairs every prompt variant against the FULL registry
+    // rather than the per-configuration one: a read-only run registers no
+    // write_file/edit_file/bash but the prompt still names them when telling
+    // the model what it may not do. Per-configuration matching would fail on
+    // that, which is why the question is "can the engine ever register this?".
+    const readOnly = Object.keys(
+      buildWorkspaceTools(new MemoryWorkspace({}), { readOnly: true }),
+    );
+    expect(readOnly).not.toContain("write_file");
+    expect(registeredToolNames().has("write_file")).toBe(true);
   });
 });

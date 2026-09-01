@@ -19,6 +19,12 @@ CREATE CONSTRAINT user_public_id IF NOT EXISTS FOR (n:User) REQUIRE n.publicId I
 CREATE CONSTRAINT agent_public_id IF NOT EXISTS FOR (n:Agent) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT agent_version_public_id IF NOT EXISTS FOR (n:AgentVersion) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT tool_public_id IF NOT EXISTS FOR (n:Tool) REQUIRE n.publicId IS UNIQUE;
+// :ToolVersion has no writer. agent.tool_versions exists (the workspace asset
+// registry restored it), but agent_tool_calls records no version, so nothing
+// says which version a given invocation ran — the tool projection
+// (packages/agent/src/dispatch/tool-projection.ts) writes :Tool instead, keyed
+// on the same slug the registry uses. The constraint is kept so a future
+// version-grained writer, and any legacy node, stay addressable.
 CREATE CONSTRAINT tool_version_public_id IF NOT EXISTS FOR (n:ToolVersion) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT playbook_public_id IF NOT EXISTS FOR (n:Playbook) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT playbook_version_public_id IF NOT EXISTS FOR (n:PlaybookVersion) REQUIRE n.publicId IS UNIQUE;
@@ -57,8 +63,8 @@ CREATE CONSTRAINT demotion_id IF NOT EXISTS FOR (n:Demotion) REQUIRE n.id IS UNI
 CREATE CONSTRAINT evidence_id IF NOT EXISTS FOR (n:Evidence) REQUIRE n.id IS UNIQUE;
 
 // New edge types (no Cypher DDL required; documented here for the registry):
-//   INVOKED              :Execution -> :ToolVersion (one per tool call)
-//   LOADED_SKILL         :AgentVersion -> :SkillVersion
+//   INVOKED              :Execution -> :Tool (one per distinct tool invoked)
+//   LOADED_SKILL         :AgentVersion -> :SkillVersion (declared; no writer)
 //   BRANCHED_TO_SUBAGENT :Message -> :Message (parent fanout to child)
 //   APPROVED_BY          :Execution -> :User (approval audit)
 //   PROMOTED             :Promotion -> :Memory (auditable class promotion)
@@ -79,6 +85,9 @@ CREATE INDEX agent_memory_org IF NOT EXISTS FOR (n:AgentMemory) ON (n.orgId);
 CREATE INDEX background_task_org IF NOT EXISTS FOR (n:BackgroundTask) ON (n.orgId);
 CREATE INDEX subagent_fanout_org IF NOT EXISTS FOR (n:SubagentFanout) ON (n.orgId);
 CREATE INDEX subagent_run_org IF NOT EXISTS FOR (n:SubagentRun) ON (n.orgId);
+// The tool projection MERGEs :Tool on {id, orgId, workspaceId} once per
+// distinct tool per execution — see packages/agent/src/dispatch/tool-projection.ts.
+CREATE INDEX tool_org IF NOT EXISTS FOR (n:Tool) ON (n.orgId);
 
 // --- Two-axis memory model — filter/sort indexes ---
 // Reads filter on status='ACTIVE' and the two axes; the promotion-candidate UI

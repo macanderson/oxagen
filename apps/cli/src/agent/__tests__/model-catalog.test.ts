@@ -21,7 +21,6 @@ import {
   LATEST_OPENAI_CODING,
   DEFAULT_CODING_MODEL,
 } from "../model-catalog.js";
-import { modelForTier } from "../model-router.js";
 import { DEFAULT_MODEL } from "../model.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -51,12 +50,6 @@ const REGISTRY_EXPECTATIONS: Record<string, string> = {
 };
 
 describe("model catalog is the single source of truth", () => {
-  it("every tier default resolves to the catalog", () => {
-    expect(modelForTier("fast")).toBe(LATEST_ANTHROPIC.haiku);
-    expect(modelForTier("balanced")).toBe(LATEST_ANTHROPIC.sonnet);
-    expect(modelForTier("precise")).toBe(LATEST_ANTHROPIC.fable);
-  });
-
   it("the agent-loop default is the catalog's balanced/Sonnet slug", () => {
     expect(DEFAULT_MODEL).toBe(DEFAULT_CODING_MODEL);
     expect(DEFAULT_MODEL).toBe(LATEST_ANTHROPIC.sonnet);

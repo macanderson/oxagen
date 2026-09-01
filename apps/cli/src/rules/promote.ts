@@ -16,7 +16,7 @@
  * writes a file exclusively when the caller passes `approve: true`.
  *
  * Recurrence is scored with the same kind of transparent lexical overlap the
- * fleet store's `recall` uses (see agent/fleet/memory.ts) rather than
+ * fleet store's `recall` uses (see rules/fleet-memory.ts) rather than
  * embeddings — no model call, works offline, good enough to cluster the
  * handful of lessons an agent keeps re-learning.
  */
@@ -24,7 +24,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import type { TurnTrace } from "../agent/trace.js";
-import type { MemoryRecord } from "../agent/fleet/memory.js";
+import type { MemoryRecord } from "./fleet-memory.js";
 import type { Rule, RuleGuard } from "./types.js";
 
 /** One recurrence of a candidate lesson, with enough context to audit the mining. */
@@ -223,36 +223,21 @@ function observationsFromMemory(records: MemoryRecord[]): RawObservation[] {
     }));
 }
 
-/**
- * The longest common leading directory across every path, or null if they share
- * none.
- *
- * Comparison is per path SEGMENT, not per character: `src/foo` and `src/foobar`
- * share `src`, not `src/foo`. A raw `startsWith` would answer `src/foo` (or
- * `src`, depending on which path happened to come first), producing a
- * `src/foo/**` guard that silently fails to cover `src/foobar` — and a different
- * guard for the same evidence in a different order.
- */
+/** The longest common leading directory across every path, or null if they share none. */
 function commonDirPrefix(paths: string[]): string | null {
   const dirs = paths.map((p) =>
     p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "",
   );
   if (dirs.length === 0 || dirs.some((d) => !d)) return null; // a bare filename can't anchor a safe glob
-  let prefix = dirs[0]!.split("/");
+  let prefix = dirs[0]!;
   for (const d of dirs.slice(1)) {
-    const segments = d.split("/");
-    let shared = 0;
-    while (
-      shared < prefix.length &&
-      shared < segments.length &&
-      prefix[shared] === segments[shared]
-    ) {
-      shared++;
+    while (!d.startsWith(prefix)) {
+      const cut = prefix.lastIndexOf("/");
+      if (cut === -1) return null;
+      prefix = prefix.slice(0, cut);
     }
-    if (shared === 0) return null;
-    prefix = prefix.slice(0, shared);
   }
-  return prefix.join("/") || null;
+  return prefix || null;
 }
 
 /**
@@ -320,22 +305,21 @@ export function mineCandidates(
   ];
 
   // Greedy single-pass clustering: each observation joins the first cluster its
-  // term set overlaps enough with, else starts a new one. Each cluster caches
-  // its head's term set, so tokenizing is O(n) rather than O(n × clusters).
-  const clusters: Array<{ members: RawObservation[]; headTerms: Set<string> }> =
-    [];
+  // term set overlaps enough with, else starts a new one. O(n × clusters), fine
+  // at CLI-local data volumes (hundreds of turns, tens of memories).
+  const clusters: RawObservation[][] = [];
   for (const obs of observations) {
     const obsTerms = new Set(terms(obs.text));
     const home = clusters.find(
-      (c) => jaccard(obsTerms, c.headTerms) >= cfg.minSimilarity,
+      (c) => jaccard(obsTerms, new Set(terms(c[0]!.text))) >= cfg.minSimilarity,
     );
-    if (home) home.members.push(obs);
-    else clusters.push({ members: [obs], headTerms: obsTerms });
+    if (home) home.push(obs);
+    else clusters.push([obs]);
   }
 
   const existingRules = input.existingRules ?? [];
   const candidates: RuleCandidate[] = [];
-  for (const { members: cluster } of clusters) {
+  for (const cluster of clusters) {
     const salient = cluster.some((o) => o.salient);
     if (cluster.length < cfg.minOccurrences && !salient) continue;
 

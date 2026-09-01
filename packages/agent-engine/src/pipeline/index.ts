@@ -6,19 +6,15 @@
  *
  *   1. EVALUATE — a cheap model scores completeness + complexity and proposes
  *      context to pull and a noise-removed rewrite.
- *   2. ENHANCE  — the code graph + recalled memory are injected, grounding the
- *      agent in the real files/symbols involved.
+ *   2. ENHANCE  — recalled memory and the repo prior are injected, grounding
+ *      the agent in what past sessions learned about this repository.
  *   3. ROUTE    — the evaluator's chosen tier selects the worker model
  *      (cheapest tier for the job; the default evaluator is the local
  *      heuristic — see evaluate/evaluator.ts); a one-way deterministic safety
  *      floor only prevents under-spending on high-stakes domains.
  *   4. EXECUTE  — the coding agent runs the local tool loop.
- *   5. JUDGE    — a DIFFERENT model checks whether the work is actually
- *      complete. The default is the balanced tier (see `pickAdvisorModel`),
- *      dropped to the fast tier for a low-complexity, small-diff turn (see
- *      {@link pickTieredAdvisor}); `OXAGEN_LLM_ADVISOR` or a `judgeModels`
- *      panel overrides both. The one invariant is that the judge is never the
- *      model that did the work.
+ *   5. JUDGE    — a DIFFERENT model (default: the flagship Anthropic model)
+ *      checks whether the work is actually complete.
  *   6. REVISE   — if it isn't, the agent is sent back with the judge's findings,
  *      then re-judged, up to a bounded number of rounds.
  *
@@ -32,8 +28,7 @@
  * It also does NOT check for a gateway key — that is the caller's responsibility.
  */
 import type { ModelMessage, ToolSet } from "ai";
-import { runCodingAgent } from "../engine";
-import { estimateMessageTokens } from "../loop-driver";
+import { estimateMessageTokens } from "../tokens";
 import { buildSystemPrompt } from "../prompt/system-prompt";
 import { evaluatePrompt } from "../evaluate/evaluator";
 import {
@@ -78,11 +73,11 @@ import type {
   ModelTier,
   UsageTotals,
   Workspace,
-  CodeGraphProvider,
   ProjectContext,
   CodingEvent,
   ImageAttachment,
   EngineNonFatalError,
+  RunCodingAgentOptions,
   RunCodingAgentResult,
   AskUserCallback,
 } from "../types";
@@ -127,27 +122,17 @@ function newTraceId(): string {
  * project rules. Both the pipeline and bare execution paths route through here so
  * the agent gets its full behavioral contract, not just the raw project text.
  * Stable within a session (cwd/projectContext/readOnly don't change), so it keeps
- * the provider prompt cache warm across turns. The one turn-dependent input is
- * `hasLocalization` — whether ENHANCE injected an F1 candidate-locations block
- * this turn — which adds the spec's trust-but-verify rule; it is stable within a
- * turn and false on the bare path (which never runs ENHANCE).
+ * the provider prompt cache warm across turns.
  */
-function composeAgentSystem(
-  opts: RunTurnOptions,
-  cwd: string,
-  hasLocalization = false,
-): string {
+function composeAgentSystem(opts: RunTurnOptions, cwd: string): string {
   return buildSystemPrompt({
     cwd,
     projectContext: opts.projectContext,
+    // Never reference a tool the model does not have: the ask_user rule appears
+    // only when a human-in-the-loop callback was supplied (an interactive
+    // surface).
     readOnly: opts.readOnly,
-    // Never reference a tool the model does not have: code_graph is only
-    // materialized when a provider is injected.
-    hasCodeGraph: Boolean(opts.codeGraph),
-    // Likewise ask_user: the rule appears only when a human-in-the-loop
-    // callback was supplied (an interactive surface).
     hasAskUser: Boolean(opts.askUser),
-    hasLocalization,
     profile: opts.profile,
     // A named-agent persona replaces the default identity (its systemPrompt
     // becomes the preamble). Lets `--agent` and the fleet run their persona
@@ -157,6 +142,22 @@ function composeAgentSystem(
 }
 
 export interface RunTurnOptions {
+  /**
+   * Runs one execution segment — the seam through which the pipeline reaches
+   * whatever engine executes a turn.
+   *
+   * REQUIRED, and it used to default to the in-process TypeScript loop. That
+   * loop is deleted, so the pipeline has no engine of its own: it wraps turns,
+   * it is not inside one, and with nothing to fall back to a missing engine is
+   * a programming error rather than a slower path. A platform caller passes
+   * `@oxagen/agent-runner`'s `executeTurn` closed over its surface; injected
+   * rather than imported because the dependency points the other way —
+   * agent-runner depends on this package, so the pipeline can never name it.
+   *
+   * One seam covers both the judged rounds and the bare path: they build the
+   * same options shape.
+   */
+  execute: (options: RunCodingAgentOptions) => Promise<RunCodingAgentResult>;
   /** The user's prompt for this turn, exactly as typed. */
   prompt: string;
   /**
@@ -208,12 +209,10 @@ export interface RunTurnOptions {
   profile?: "interactive" | "headless";
   /** Episodic session memory (recalled before, written after). */
   memory?: MemoryProvider | null;
-  /** Code graph provider for prompt enhancement. */
-  codeGraph?: CodeGraphProvider | null;
   /**
    * Interactive clarification callback. Supplied ONLY by a surface with a human
-   * to ask (the REPL). When present, every `runCodingAgent` round this turn runs
-   * gets the `ask_user` tool, and the system prompt gains the "ask when truly
+   * to ask (the REPL). When present, every execution round this turn runs gets
+   * the `ask_user` tool, and the system prompt gains the "ask when truly
    * ambiguous" rule (via `hasAskUser`). Omitted on headless / one-shot / chat
    * turns — the tool is then never advertised, since nobody could answer it.
    */
@@ -221,12 +220,11 @@ export interface RunTurnOptions {
   /** Trace sink for recording the turn record. */
   trace?: TraceStore | null;
   /**
-   * Transactional file lock (ADR-021 §5, "Lock authority and file-level state
-   * stay in Postgres") — the
-   * SINGLE wiring point is inside `tools.ts`'s write_file/edit_file, which
-   * `runCodingAgent` (via `engine.ts`) threads this straight through to.
+   * Transactional file lock (ADR-021) — the
+   * SINGLE wiring point is inside `tools.ts`'s write_file/edit_file, which the
+   * host builds the tool set for and threads this straight through to.
    * `runTurn` generates one stable lock identity per turn (`lockContext`,
-   * below) and passes BOTH down to every `runCodingAgent` call this turn
+   * below) and passes BOTH down to every execution segment this turn
    * makes (including revision rounds), then batch-releases everything the
    * turn holds in its `lockContext.executionId` once the turn ends — the
    * final backstop after per-call release.
@@ -234,7 +232,7 @@ export interface RunTurnOptions {
    * CLI: omit or pass null (single-process, no shared lease store — unlocked).
    * Platform: inject the adapter from `@oxagen/agent/adapters`, used by both
    * the chat surface and `agent.repo.edit` (fleet dispatch) since both funnel
-   * through this same shared engine (docs/adr/ADR-019-unified-agent-engine.md).
+   * through this same shared engine (docs/adr/ADR-017-unified-agent-engine.md).
    */
   fileLock?: FileLockProvider | null;
   /**
@@ -254,14 +252,6 @@ export interface RunTurnOptions {
    * `OXAGEN_MID_JUDGE_STEPS` env var or this option. Undefined / 0 disables.
    */
   midJudgeSteps?: number;
-  /**
-   * Wall-clock budget (ms) for the ENHANCE stage's code-graph pass. On a cold
-   * store the first graph query triggers a full tree-sitter build — minutes on
-   * a large repo — so headless callers bound it; whatever resolved in budget
-   * is injected and the build keeps warming in the background for the agent's
-   * own `code_graph` tool calls. Undefined ⇒ unbounded.
-   */
-  enhanceTimeoutMs?: number;
   /** Repository identifier for F8 repo-prior lookup (e.g., "django/django"). */
   repo?: string;
   /** Base directory for F8 repo-prior files (e.g., ~/.oxagen/repo-priors). */
@@ -302,7 +292,7 @@ export interface RunTurnOptions {
   /**
    * Fast path for conversational / lookup turns (e.g. "what's the command to
    * add an MCP server?"). Keeps the grounding stages that make an answer
-   * accurate (evaluate + enhance/code-graph + docs) but skips the frontier
+   * accurate (evaluate + enhance + docs) but skips the frontier
    * completeness judge and its revise loop when the turn produced NO file
    * changes — a pure Q&A answer has no executed evidence to verify, so the judge
    * call is waste. The zero-diff guard makes this safe even if the caller's
@@ -319,7 +309,7 @@ export interface RunTurnOptions {
   /** Abort the turn (e.g. user hit Ctrl-C / Esc). */
   signal?: AbortSignal;
   /**
-   * Per-turn dollar budget gate. Forwarded to every `runCodingAgent` round this
+   * Per-turn dollar budget gate. Forwarded to every execution round this
    * turn runs, but wrapped so it sees the turn's CUMULATIVE usage (prior rounds'
    * tokens carried as a baseline) — the engine guard alone only sees one round's
    * usage, so this is what makes the ceiling a true per-TURN cap across the
@@ -490,6 +480,9 @@ function captureToolEvent(
  * is invalid; otherwise always produces a trace.
  */
 export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
+  // The engine seam, resolved once so both the judged rounds and the bare
+  // path run segments through the same function. See RunTurnOptions.execute.
+  const execute = opts.execute;
   const cwd = opts.workspace.root;
   const startedAt = Date.now();
   const filesTouched = new Set<string>();
@@ -505,7 +498,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   // edits never conflict with themselves) and executionId (turn-end batch
   // release correlation) — distinct from `trace.id`, which is only assembled
   // at the END of the turn and so can't be known early enough to acquire
-  // under. A DIFFERENT concurrently-running `runTurn`/`runCodingAgent` call
+  // under. A DIFFERENT concurrently-running turn
   // (another chat turn, another fleet subagent child) gets its OWN id here,
   // so two live agents correctly see each other as conflicting holders.
   const turnLockId = newTraceId();
@@ -558,10 +551,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   const enhanceStart = Date.now();
   const enhanced = await enhancePrompt({
     prompt: evaluation.refinedPrompt,
-    codeGraph: opts.codeGraph,
     memory: opts.memory,
-    extraQueries: evaluation.contextQueries,
-    timeoutMs: opts.enhanceTimeoutMs,
     repo: opts.repo,
     priorsDir: opts.priorsDir,
   });
@@ -569,28 +559,17 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   const enhancement: EnhancementTrace = {
     prompt: enhanced.prompt,
     context: enhanced.context,
-    resolved: enhanced.resolved,
     lessonCount: enhanced.hasMemory ? 1 : 0,
-    source: enhancementSource(enhanced.resolved.length, enhanced.hasMemory),
+    source: enhanced.hasMemory ? "memory" : "none",
     startedAt: enhanced.startedAt,
     finishedAt: enhanced.finishedAt,
     durationMs: enhanced.durationMs,
-    retrieval: enhanced.retrieval,
   };
-  // usedSemanticFallback never adds to `resolved` (see enhancePrompt: the
-  // semantic hits are pushed to `sections`/the injected prompt, not to
-  // `resolved`), so it must be its own arm of this condition — otherwise a
-  // prompt that resolves nothing literally but DOES get real semantically-
-  // retrieved context wrongly narrates "no extra context found" even though
-  // the agent's prompt actually carries that context.
   opts.onStage?.({
     kind: "enhance",
-    label:
-      enhanced.resolved.length ||
-      enhanced.hasMemory ||
-      enhanced.usedSemanticFallback
-        ? `enhanced · ${enhanced.resolved.length} code refs${enhanced.usedSemanticFallback ? " (+semantic)" : ""} · ${enhanced.hasMemory ? "memory" : "no memory"}`
-        : "enhanced · no extra context found",
+    label: enhanced.hasMemory
+      ? "enhanced · memory"
+      : "enhanced · no extra context found",
   });
 
   // ── 3. ROUTE ──
@@ -642,9 +621,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     const estimatedInputTokens =
       Math.ceil(enhanced.prompt.length / 4) +
       estimateMessageTokens(history) +
-      Math.ceil(
-        composeAgentSystem(opts, cwd, enhanced.hasLocalization).length / 4,
-      );
+      Math.ceil(composeAgentSystem(opts, cwd).length / 4);
     const estimatedOutputTokens = Math.round(
       400 + (evaluation.complexity / 100) * 4000,
     );
@@ -736,7 +713,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   // `usage`/`cachedInputTokens` accumulators) and add it before delegating to
   // the caller's guard. One wrapped guard, defined once, reads the mutable
   // baseline — so a "prompt"-mode approval's raised ceiling (held inside the
-  // caller's guard) persists across rounds. Passed to every runCodingAgent call.
+  // caller's guard) persists across rounds. Passed to every execution segment.
   const budgetBaseline = {
     inputTokens: 0,
     outputTokens: 0,
@@ -751,9 +728,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   // completed escalated round's premium accumulates in `budgetEscalationPremium`
   // (the reset-from-`usage` baseline below is raw tokens and would otherwise lose
   // it). When nothing escalates (routed.model === initialWorkerModel) the factor
-  // is exactly 1, so a non-escalated turn passes raw tokens straight through.
-  // Exact when the guard's reference model equals the initial worker (the
-  // common/pinned case); a conservative premium approximation otherwise.
+  // is exactly 1, so a non-escalated turn is byte-identical to before this
+  // feature. Exact when the guard's reference model equals the initial worker
+  // (the common/pinned case); a conservative premium approximation otherwise.
   const budgetEscalationPremium = {
     inputTokens: 0,
     outputTokens: 0,
@@ -831,20 +808,19 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     segCommandOutputs: Array<{ command: string; output: string; ok: boolean }>,
   ) {
     let segReasoning = "";
-    const segResult = await runCodingAgent({
+    const segResult = await execute({
       workspace: opts.workspace,
       ai: opts.ai,
       instruction: segPrompt,
       images: segImages,
       model: routed.model,
       effort: opts.effort,
-      system: composeAgentSystem(opts, cwd, enhanced.hasLocalization),
+      system: composeAgentSystem(opts, cwd),
       history: segHistory,
       maxSteps: segMaxSteps,
       extraTools: opts.extraTools,
       wrapTools: opts.wrapTools,
       readOnly: opts.readOnly,
-      codeGraph: opts.codeGraph ?? undefined,
       askUser: opts.askUser ?? undefined,
       memory: opts.memory ?? undefined,
       onError: opts.onError,
@@ -927,7 +903,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       ok: boolean;
     }> = [];
 
-    let result: Awaited<ReturnType<typeof runCodingAgent>>;
+    let result: RunCodingAgentResult;
 
     // Round 0 with mid-session judge: run the first half, judge, then continue.
     // The combined result is returned with merged usage/steps so the standard
@@ -1354,18 +1330,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     // complete — revising it doubles turn cost for marginal expected gain.
     // Confident-incomplete verdicts still revise. Tune/disable via
     // OXAGEN_REVISE_MIN_CONFIDENCE (default 40; 0 restores always-revise).
-    // An unparsable value falls back to the default rather than becoming NaN —
-    // a NaN floor would fail every `confidence >= floor` comparison and silently
-    // switch auto-revision OFF, the opposite of the safe default.
-    const reviseMinConfidenceEnv = Number(
-      process.env["OXAGEN_REVISE_MIN_CONFIDENCE"],
+    const reviseMinConfidence = Number(
+      process.env["OXAGEN_REVISE_MIN_CONFIDENCE"] ?? 40,
     );
-    const reviseMinConfidence =
-      process.env["OXAGEN_REVISE_MIN_CONFIDENCE"] !== undefined &&
-      Number.isFinite(reviseMinConfidenceEnv) &&
-      reviseMinConfidenceEnv >= 0
-        ? reviseMinConfidenceEnv
-        : 40;
     const canRevise =
       !verdict.complete &&
       round < maxRounds &&
@@ -1501,16 +1468,6 @@ function phaseStat(
     model,
     usage,
   };
-}
-
-function enhancementSource(
-  resolved: number,
-  hasMemory: boolean,
-): EnhancementTrace["source"] {
-  if (resolved && hasMemory) return "code-graph+memory";
-  if (resolved) return "code-graph";
-  if (hasMemory) return "memory";
-  return "none";
 }
 
 /** How the router settled a turn — `static` (deterministic), `shadow`, or `enforce`. */
@@ -1780,6 +1737,7 @@ async function runBare(
   toolEvents: ToolEvent[],
   thinkingLog: Array<{ round: number; text: string }>,
 ): Promise<RunTurnResult> {
+  const execute = opts.execute;
   // Bare mode has no full router, but an unpinned bare turn should still not
   // hard-default to the frontier tier (DEFAULT_AGENT_MODEL) — a trivial "explain
   // this file" would pay Fable pricing for nothing. Perf #8: route the unpinned
@@ -1787,7 +1745,7 @@ async function runBare(
   // model-free classifier the full pipeline uses), so trivial bare turns run
   // cheap while auth/billing/architecture prompts still escalate to precise. A
   // pin (`opts.model`) always wins. This value BOTH labels the run (usage,
-  // trace.selectedModel) AND is passed to runCodingAgent below, so the label can
+  // trace.selectedModel) AND is passed to the engine below, so the label can
   // never diverge from what actually executes.
   const model =
     opts.model ?? modelForTier(classifyTier({ text: opts.prompt }).tier);
@@ -1801,14 +1759,14 @@ async function runBare(
   const lockContext = opts.fileLock
     ? { agentId: bareLockId, executionId: bareLockId }
     : undefined;
-  const result = await runCodingAgent({
+  const result = await execute({
     workspace: opts.workspace,
     ai: opts.ai,
     instruction: opts.prompt,
     images: opts.images,
     // Routed above (pin wins, else classifyTier floor) — pass it explicitly so
-    // execution matches the labeled model instead of falling to runCodingAgent's
-    // frontier DEFAULT_AGENT_MODEL.
+    // execution matches the labeled model instead of falling to the frontier
+    // DEFAULT_AGENT_MODEL.
     model,
     effort: opts.effort,
     system: composeAgentSystem(opts, cwd),
@@ -1817,7 +1775,6 @@ async function runBare(
     extraTools: opts.extraTools,
     wrapTools: opts.wrapTools,
     readOnly: opts.readOnly,
-    codeGraph: opts.codeGraph ?? undefined,
     askUser: opts.askUser ?? undefined,
     memory: opts.memory ?? undefined,
     onError: opts.onError,
@@ -1888,7 +1845,6 @@ async function runBare(
     enhancement: {
       prompt: opts.prompt,
       context: "",
-      resolved: [],
       lessonCount: 0,
       source: "none",
     },

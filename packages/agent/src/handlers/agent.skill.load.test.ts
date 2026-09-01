@@ -143,6 +143,35 @@ describe("agent.skill.load handler", () => {
     expect(typeof arg.load_latency_ms).toBe("number");
   });
 
+  it("records the run's execution step, so the read-side join can find it", async () => {
+    // #2597: this column was hardcoded to null on every load, which is why
+    // readSkillTokenCosts had never returned a row. That the join then matches
+    // is proven end to end in
+    // packages/telemetry/src/skill-execution-join.integration.test.ts.
+    enqueue([{ id: "skl_1", activeVersionId: null }]);
+    enqueue([{ id: "slv_1", versionNumber: 1, body: "body text" }]);
+    enqueue([{}]); // usage bump update
+    await agentSkillLoadHandler(
+      { skillSlug: "summarize" },
+      { ...CTX, executionStepId: "step-abc" },
+    );
+    const arg = mocks.recordSkillLoad.mock.calls[0]![0] as SkillLoadRow;
+    expect(arg.execution_step_id).toBe("step-abc");
+  });
+
+  it("records null outside a run rather than inventing a step", async () => {
+    // A capability invoked from the API, from MCP, or by a person belongs to
+    // no run. NULL is the truthful answer and the join correctly excludes it;
+    // a fabricated id would join to nothing and turn a missing answer into a
+    // confidently wrong one.
+    enqueue([{ id: "skl_1", activeVersionId: null }]);
+    enqueue([{ id: "slv_1", versionNumber: 1, body: "body text" }]);
+    enqueue([{}]); // usage bump update
+    await agentSkillLoadHandler({ skillSlug: "summarize" }, CTX);
+    const arg = mocks.recordSkillLoad.mock.calls[0]![0] as SkillLoadRow;
+    expect(arg.execution_step_id).toBeNull();
+  });
+
   it("does not record telemetry when the skill fails to load", async () => {
     enqueue([]); // skill not found
     const result = await agentSkillLoadHandler({ skillSlug: "missing" }, CTX);

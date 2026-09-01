@@ -16,7 +16,7 @@
  * The two coexist under one `oxagen config` Commander command because
  * Commander routes a first positional arg to a matching subcommand when one
  * exists (`get`/`set`/`add`/`remove`/`explain`/`build`/`lint`/`init`/`pull`,
- * registered in program.tsx) and falls back to this file's own `[key] [value]`
+ * registered in program.ts) and falls back to this file's own `[key] [value]`
  * action otherwise — verified empirically; there is no name collision between
  * the legacy keys (token/model/api-url/org/workspace) and the new subcommands.
  *
@@ -26,7 +26,7 @@
  * via `out.info`, and every failure is a uniform stderr error line that sets a
  * non-zero exit code (2 for usage/validation, 1 for runtime) — never `process.exit`.
  * `config build --json` emits one single-line JSON value; no other subcommand
- * registers a `--json` flag in program.tsx yet.
+ * registers a `--json` flag yet (see the report note).
  */
 import { existsSync } from "node:fs";
 import {
@@ -71,10 +71,13 @@ import {
   type BuildIndexOptions,
 } from "../config/index.js";
 
-// "effort" persists the field `CliConfig`/store #2 (~/.config/oxagen/config.json)
-// already carries and `resolveEffort` (agent/model.ts) already reads, so
-// `oxagen config effort <level>` — the redirect target that `config set effort`
-// points a user at — is a real, working command rather than a dead end.
+// "effort" was omitted here historically even though `CliConfig`/store #2
+// (~/.config/oxagen/config.json) has always had an `effort` field
+// (`resolveEffort` in agent/model.ts reads it) — there was simply no CLI
+// command to persist it, only the transient per-turn `--effort` flag. Added
+// alongside item 5's dead-key redirect so `oxagen config effort <level>` (the
+// redirect target for a mistaken `config set effort <level>`) is a real,
+// working command rather than another dead end.
 const VALID_KEYS = [
   "token",
   "model",
@@ -174,7 +177,7 @@ export async function handleConfig(
   const display = key === "token" ? maskToken(value) : value;
   writer.write(`✓ ${key} = ${display}`);
 
-  // A model set here (store #2) can be permanently masked at runtime
+  // Item 6: a model set here (store #2) can be permanently masked at runtime
   // by OXAGEN_MODEL — either exported directly in the shell, or projected
   // from settings.json by applySettingsToEnv (../settings/runtime.ts). Warn
   // the user right away (on stderr, so it never pollutes captured stdout), with
@@ -284,10 +287,10 @@ const RUNTIME_KEY_ENV_VAR: Record<(typeof RUNTIME_DEAD_KEYS)[number], string> =
   };
 
 /**
- * Split-brain get: `oxagen config get model` (this Workspace Config surface)
- * and `oxagen config model` (the legacy store #2 getter) read DIFFERENT
- * stores — and store #3 has no `model` at all (`configSet` below blocks it
- * from ever being written there). Rather than pick one store
+ * Item 8b (split-brain get): `oxagen config get model` (this Workspace Config
+ * surface) and `oxagen config model` (the legacy store #2 getter) read
+ * DIFFERENT stores — and store #3 never had `model` in the first place (item
+ * 5 now blocks it from ever being written there). Rather than pick one store
  * to read arbitrarily, print every store that could plausibly hold the value
  * — shell env, settings.json (model/apiUrl only), config.json (store #2) —
  * with the actual runtime-effective winner (via the same resolver the agent
@@ -381,7 +384,7 @@ export function configSet(
   writer: CommandWriter = stdoutWriter,
 ): void {
   const out = createOutput({}, writer);
-  // Dead-key writes: model/apiUrl/effort/token belong to store #2
+  // Item 5 (dead-key writes): model/apiUrl/effort/token belong to store #2
   // (~/.config/oxagen/config.json) or settings.json, never to this Workspace
   // Config surface — nothing reads them back from workspace/user/repo/managed
   // config. Redirect instead of printing a confident "✓" for a write that
@@ -409,10 +412,10 @@ export function configSet(
   try {
     const path = writeSetPath(scope, dottedPath, value, ctx);
     writer.write(`✓ ${dottedPath} = ${value}  (${scope}: ${path})`);
-    // Warn whenever a DIFFERENT scope currently wins this path and will keep
-    // winning after this write — either because it's governance-locked, OR
-    // because it's simply a more-specific, unlocked scope
-    // (e.g. writing to `user` while `workspace`/`repo` already
+    // Item 8a: warn whenever a DIFFERENT scope currently wins this path and
+    // will keep winning after this write — either because it's governance-
+    // locked (the original check) OR because it's simply a more-specific,
+    // unlocked scope (e.g. writing to `user` while `workspace`/`repo` already
     // set the same path — CONFIG_SCOPE_ORDER puts those later/"more specific",
     // so they'd silently keep shadowing this write otherwise). Advisory → stderr.
     if (before.scope && before.scope !== scope) {

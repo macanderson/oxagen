@@ -1,6 +1,6 @@
 /**
  * Additional coverage for buildWorkspaceTools — tools not exercised by tools.test.ts:
- * write_file, list_dir, glob, grep, code_graph execute, bash error/timeout paths.
+ * write_file, list_dir, search, delete_file, bash error/timeout paths.
  */
 import { describe, it, expect } from "vitest";
 import { MemoryWorkspace } from "./workspaces/memory";
@@ -122,63 +122,144 @@ describe("buildWorkspaceTools – list_dir", () => {
   });
 });
 
-describe("buildWorkspaceTools – glob", () => {
-  it("returns sorted matches for a glob pattern", async () => {
+describe("buildWorkspaceTools – search (by file name)", () => {
+  it("returns sorted name matches under the name header", async () => {
     const ws = new MemoryWorkspace({
-      "src/a.ts": "",
       "src/b.ts": "",
+      "src/a.ts": "",
       "lib/c.js": "",
     });
     const tools = buildWorkspaceTools(ws);
-    const result = await run(tools.glob, { pattern: "src/*.ts" });
-    expect(result).toContain("src/a.ts");
-    expect(result).toContain("src/b.ts");
+    const result = await run(tools.search, { query: ".ts" });
+    expect(result).toBe("Files matching by name:\nsrc/a.ts\nsrc/b.ts");
     expect(result).not.toContain("lib/c.js");
   });
 
-  it("returns (no matches) for a pattern with no results", async () => {
-    const ws = new MemoryWorkspace({});
+  it("matches names case-insensitively on substring", async () => {
+    const ws = new MemoryWorkspace({ "src/ConfigLoader.ts": "" });
     const tools = buildWorkspaceTools(ws);
-    const result = await run(tools.glob, { pattern: "**/*.py" });
-    expect(result).toBe("(no matches)");
+    const result = await run(tools.search, { query: "configloader" });
+    expect(result).toContain("src/ConfigLoader.ts");
   });
 
-  it("returns an error string when glob fails", async () => {
+  it("returns (no matches) for a query with no results", async () => {
     const ws = new MemoryWorkspace({});
-    ws.glob = async () => {
-      throw new Error("invalid pattern");
-    };
     const tools = buildWorkspaceTools(ws);
-    const result = await run(tools.glob, { pattern: "[bad" });
-    expect(result).toContain("Error globbing");
-    expect(result).toContain("invalid pattern");
+    const result = await run(tools.search, { query: "zzz" });
+    expect(result).toBe("(no matches)");
   });
 });
 
-describe("buildWorkspaceTools – grep", () => {
-  it("returns file:line:text hits", async () => {
+describe("buildWorkspaceTools – search (by content)", () => {
+  it("returns file:line:text hits under the content header", async () => {
     const ws = new MemoryWorkspace({ "a.ts": "const x = 1\nconst y = 2" });
     const tools = buildWorkspaceTools(ws);
-    const result = await run(tools.grep, { pattern: "const y" });
-    expect(result).toContain("a.ts:2:const y = 2");
+    const result = await run(tools.search, { query: "const y" });
+    expect(result).toBe("Content matches:\na.ts:2:const y = 2");
   });
 
-  it("returns (no matches) when pattern is not found", async () => {
+  it("returns both sections, names first, when a query matches on both axes", async () => {
+    const ws = new MemoryWorkspace({ "src/config.ts": "load config here" });
+    const tools = buildWorkspaceTools(ws);
+    const result = await run(tools.search, { query: "config" });
+    expect(result).toBe(
+      "Files matching by name:\nsrc/config.ts\n\n" +
+        "Content matches:\nsrc/config.ts:1:load config here",
+    );
+  });
+
+  it("treats a query that does not compile as a regex as a literal", async () => {
+    const ws = new MemoryWorkspace({ "a.ts": "call foo( now" });
+    const tools = buildWorkspaceTools(ws);
+    const result = await run(tools.search, { query: "foo(" });
+    expect(result).toContain("a.ts:1:call foo( now");
+  });
+
+  it("returns (no matches) when the query is not found", async () => {
     const ws = new MemoryWorkspace({ "a.ts": "hello" });
     const tools = buildWorkspaceTools(ws);
-    const result = await run(tools.grep, { pattern: "zzz" });
+    const result = await run(tools.search, { query: "zzz" });
     expect(result).toBe("(no matches)");
   });
 
-  it("returns an error string when grep fails", async () => {
-    const ws = new MemoryWorkspace({});
+  it("still reports name matches when the content axis fails", async () => {
+    const ws = new MemoryWorkspace({ "src/a.ts": "hello" });
     ws.grep = async () => {
-      throw new Error("regex error");
+      throw new Error("regex engine exploded");
     };
     const tools = buildWorkspaceTools(ws);
-    const result = await run(tools.grep, { pattern: "(?bad" });
-    expect(result).toContain("Error grepping");
-    expect(result).toContain("regex error");
+    const result = await run(tools.search, { query: "a.ts" });
+    expect(result).toBe("Files matching by name:\nsrc/a.ts");
+  });
+
+  it("degrades to (no matches) when both axes fail", async () => {
+    const ws = new MemoryWorkspace({});
+    ws.grep = async () => {
+      throw new Error("boom");
+    };
+    ws.glob = async () => {
+      throw new Error("boom");
+    };
+    const tools = buildWorkspaceTools(ws);
+    const result = await run(tools.search, { query: "anything" });
+    expect(result).toBe("(no matches)");
+  });
+});
+
+describe("buildWorkspaceTools – delete_file", () => {
+  it("deletes a file, after which read_file errors with ENOENT", async () => {
+    const ws = new MemoryWorkspace({ "a.ts": "doomed" });
+    const tools = buildWorkspaceTools(ws);
+    const result = await run(tools.delete_file, {
+      path: "a.ts",
+      reason: "obsolete",
+    });
+    expect(result).toBe("Deleted a.ts");
+    const read = await run(tools.read_file, { path: "a.ts" });
+    expect(read).toContain("Error reading a.ts");
+    expect(read).toContain("ENOENT");
+  });
+
+  it("emits a command event on delete", async () => {
+    const ws = new MemoryWorkspace({ "a.ts": "" });
+    const events: CodingEvent[] = [];
+    const tools = buildWorkspaceTools(ws, { onEvent: (e) => events.push(e) });
+    await run(tools.delete_file, { path: "a.ts" });
+    expect(
+      events.some(
+        (e) =>
+          e.type === "command" &&
+          e.command === "delete_file a.ts" &&
+          e.exitCode === 0,
+      ),
+    ).toBe(true);
+  });
+
+  it("returns an error string when the file does not exist", async () => {
+    const ws = new MemoryWorkspace({});
+    const tools = buildWorkspaceTools(ws);
+    const result = await run(tools.delete_file, { path: "missing.ts" });
+    expect(result).toContain("Error deleting missing.ts");
+    expect(result).toContain("ENOENT");
+  });
+
+  it("is absent when the workspace does not implement deleteFile", () => {
+    const ws = new MemoryWorkspace({});
+    // Shadow the prototype method: a workspace without the capability simply
+    // has no deleteFile, and presence — not a flag — gates the tool.
+    (ws as { deleteFile?: MemoryWorkspace["deleteFile"] }).deleteFile =
+      undefined;
+    const tools = buildWorkspaceTools(ws);
+    expect(tools.delete_file).toBeUndefined();
+    expect(tools.search).toBeDefined();
+  });
+
+  it("is withheld in readOnly mode like the other mutators", () => {
+    const ws = new MemoryWorkspace({ "a.ts": "" });
+    const tools = buildWorkspaceTools(ws, { readOnly: true });
+    expect(tools.delete_file).toBeUndefined();
+    expect(tools.write_file).toBeUndefined();
+    expect(tools.edit_file).toBeUndefined();
   });
 });
 
@@ -206,35 +287,6 @@ describe("buildWorkspaceTools – edit_file error path", () => {
   });
 });
 
-describe("buildWorkspaceTools – code_graph execute", () => {
-  it("delegates to the provider and returns clipped output", async () => {
-    const ws = new MemoryWorkspace({});
-    const codeGraph = { query: async () => "symbol found at src/x.ts:10" };
-    const tools = buildWorkspaceTools(ws, { codeGraph });
-    const result = await run(tools.code_graph, {
-      operation: "search",
-      query: "myFn",
-    });
-    expect(result).toBe("symbol found at src/x.ts:10");
-  });
-
-  it("returns a code_graph error string when provider throws", async () => {
-    const ws = new MemoryWorkspace({});
-    const codeGraph = {
-      query: async (): Promise<string> => {
-        throw new Error("index not ready");
-      },
-    };
-    const tools = buildWorkspaceTools(ws, { codeGraph });
-    const result = await run(tools.code_graph, {
-      operation: "file_symbols",
-      query: "src/x.ts",
-    });
-    expect(result).toContain("code_graph error");
-    expect(result).toContain("index not ready");
-  });
-});
-
 describe("buildWorkspaceTools – bash error paths", () => {
   it("returns a timed-out message when exec timedOut is true", async () => {
     const ws = new MemoryWorkspace({});
@@ -248,7 +300,7 @@ describe("buildWorkspaceTools – bash error paths", () => {
     const tools = buildWorkspaceTools(ws, { onEvent: (e) => events.push(e) });
     const result = await run(tools.bash, {
       command: "sleep 9999",
-      timeout_ms: 100,
+      timeout_secs: 1,
     });
     expect(result).toContain("timed out");
     // event is still emitted before the timedOut check
@@ -280,7 +332,7 @@ describe("buildWorkspaceTools – bash error paths", () => {
     expect(result).toContain("spawn failed");
   });
 
-  it("caps timeout_ms at 600000", async () => {
+  it("caps timeout_secs at 600 seconds (600000ms on the exec)", async () => {
     const ws = new MemoryWorkspace({});
     const observed: number[] = [];
     ws.exec = async (_cmd, opts) => {
@@ -288,19 +340,33 @@ describe("buildWorkspaceTools – bash error paths", () => {
       return { exitCode: 0, stdout: "ok", stderr: "", timedOut: false };
     };
     const tools = buildWorkspaceTools(ws);
-    await run(tools.bash, { command: "echo", timeout_ms: 9_999_999 });
+    await run(tools.bash, { command: "echo", timeout_secs: 9_999_999 });
     expect(observed[0]).toBe(600_000);
+  });
+
+  it("defaults the exec timeout to 120 seconds when timeout_secs is omitted", async () => {
+    const ws = new MemoryWorkspace({});
+    const observed: number[] = [];
+    ws.exec = async (_cmd, opts) => {
+      observed.push(opts?.timeoutMs ?? -1);
+      return { exitCode: 0, stdout: "ok", stderr: "", timedOut: false };
+    };
+    const tools = buildWorkspaceTools(ws);
+    await run(tools.bash, { command: "echo" });
+    expect(observed[0]).toBe(120_000);
   });
 });
 
 describe("per-tool timeout backstop", () => {
-  it("toolBackstopMs honors bash's declared timeout_ms plus grace, capped at max", async () => {
+  it("toolBackstopMs honors bash's declared timeout_secs plus grace, capped at max", async () => {
+    // The schema key: a bash {timeout_secs: 500} call must move the backstop,
+    // or a long build gets a false "timed out" at 150s while still running.
     const { toolBackstopMs } = await import("./tools");
-    expect(toolBackstopMs("bash", { timeout_ms: 500_000 })).toBe(530_000);
+    expect(toolBackstopMs("bash", { timeout_secs: 500 })).toBe(530_000);
     expect(toolBackstopMs("bash", {})).toBe(150_000); // default 120s + 30s grace
-    expect(toolBackstopMs("bash", { timeout_ms: 9_999_999 })).toBe(630_000); // capped at 600s
+    expect(toolBackstopMs("bash", { timeout_secs: 9_999 })).toBe(630_000); // capped at 600s
     expect(toolBackstopMs("read_file", {})).toBe(60_000);
-    expect(toolBackstopMs("grep", null)).toBe(60_000);
+    expect(toolBackstopMs("search", null)).toBe(60_000);
   });
 
   it("a wedged tool resolves to a backstop timeout string instead of hanging", async () => {
@@ -308,10 +374,11 @@ describe("per-tool timeout backstop", () => {
     vi.useFakeTimers();
     try {
       const ws = new MemoryWorkspace({});
-      // Wedge grep: never resolves — the backstop must fire at 60s.
+      // Wedge the content axis: search awaits it, so the backstop must fire
+      // at 60s.
       ws.grep = () => new Promise(() => {});
       const tools = buildWorkspaceTools(ws);
-      const pending = run(tools.grep, { pattern: "x" });
+      const pending = run(tools.search, { query: "x" });
       await vi.advanceTimersByTimeAsync(60_001);
       const out = await pending;
       expect(out).toContain("timed out after 60s (backstop)");

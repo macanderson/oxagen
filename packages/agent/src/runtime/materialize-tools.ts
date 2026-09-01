@@ -14,8 +14,8 @@ import {
 } from "@oxagen/oxagen/iam";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { pluginForContract } from "@oxagen/oxagen/plugins";
+import { capabilityMutates } from "@oxagen/oxagen/types";
 import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
-import { beforeTool, afterTool, onError } from "../hooks/runtime";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { checkConsent, recordConsent, DEFAULT_CONSENT_TTL_MS } from "./consent";
 import {
@@ -76,7 +76,12 @@ function buildInvocationPayload(
     capability_name: base.capabilityName,
     message_id: base.ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
     parent_message_id: null,
-    execution_step_id: null,
+    // The run this tool call belongs to (#2597). One of the seven producers
+    // that wrote NULL here unconditionally; this factory is the one covering
+    // every capability and external MCP call, so filling it in makes
+    // `tool_invocations` joinable for those five call sites at once. NULL
+    // stays the honest answer outside a run.
+    execution_step_id: base.ctx.executionStepId ?? null,
     status: overrides.status,
     input_size_bytes: base.inputBytes,
     output_size_bytes: overrides.outputBytes,
@@ -125,16 +130,11 @@ export interface ConsentRequiredEvent {
 
 export interface MaterializeOptions {
   /**
-   * Capability names to materialize, to the exclusion of all others.
-   *
-   * SCOPE — this and `riskCeiling` below bind REGISTERED CAPABILITIES ONLY.
-   * Neither is consulted in the plugin-type contributor loop, so external
-   * plugin/MCP tools are unaffected by an allowlist: a run that allowlists two
-   * capabilities still receives every tool the workspace's enabled MCP servers
-   * contribute. `serverAllowlist` is the only per-turn narrowing that reaches
-   * external tools, and it filters whole SERVERS, not individual tools.
+   * Read-only because callers compose it — `withOntologyReads` hands back the
+   * caller's own set unchanged when the run did not opt in, and a mutable
+   * parameter type would make that pass-through a lie about ownership.
    */
-  allowlist?: Set<string>;
+  allowlist?: ReadonlySet<string>;
   /**
    * Capability names to withhold from the model for THIS turn. Used by the
    * chat route in code mode to drop `execute_code`/`edit_repo_file` when the
@@ -146,7 +146,6 @@ export interface MaterializeOptions {
   excludeCapabilities?: Set<string>;
   // Workspace risk policy: when set to "low" or "medium", any capability
   // with a strictly-higher riskLevel is filtered out of the tool set.
-  // Registered capabilities only — see the scope note on `allowlist`.
   riskCeiling?: "low" | "medium" | "high";
   /** When provided, only MCP servers whose publicId is in this set are loaded for the turn. */
   serverAllowlist?: Set<string>;
@@ -177,11 +176,14 @@ export interface MaterializedTools {
   // "agent_code_execute" → "agent.code.execute"). The route translates
   // tool-call stream events back to the real name for the UI.
   nameMap: Record<string, string>;
-  // Model-safe aliases of capabilities the engine's dispatch guard must
-  // serialize behind the exclusive barrier (see isMutatingCapability). Pass
-  // through to RunCodingAgentOptions.mutatingToolNames. External plugin/MCP
-  // tools are NOT classified here yet (unknown semantics ⇒ they keep the
-  // shared lane, the pre-guard status quo).
+  // Model-safe aliases of every tool that must serialize rather than run
+  // beside other calls in the same step (see isMutatingCapability). Passed
+  // through to RunCodingAgentOptions.mutatingToolNames, which the Stella tool
+  // mapping negates into each advertised schema's `read_only` bit.
+  //
+  // Includes external plugin/MCP tools, whose semantics this process cannot
+  // know. They used to keep the shared concurrent lane on that same "unknown
+  // semantics" reasoning, which had it the wrong way round (#2600).
   mutatingToolNames: string[];
 }
 
@@ -239,13 +241,10 @@ const WORKBENCH_ONLY_SANDBOX_CAPS = new Set<string>([
 ]);
 
 // Model-facing output caps for the sandbox-exec capabilities (P0 token flood).
-// These capabilities return RAW stdout/stderr; a `cat bigfile`, verbose pytest,
-// or `npm install` would otherwise stream megabytes straight into the model's
-// context window. Mirrors the engine tools' 30k budget, with a tighter cap on
-// the (usually noisier, less load-bearing) stderr stream.
-// Today `execute_code` is the only family member a model can reach — every
-// other one is withheld by WORKBENCH_ONLY_SANDBOX_CAPS — but the clip gates on
-// the whole family so re-materializing one can never reopen the flood.
+// execute_code / run_sandbox_command return RAW stdout/stderr; a `cat bigfile`,
+// verbose pytest, or `npm install` would otherwise stream megabytes straight
+// into the model's context window. Mirrors the engine tools' 30k budget, with a
+// tighter cap on the (usually noisier, less load-bearing) stderr stream.
 const EXEC_STDOUT_MAX = 30_000; // chars
 const EXEC_STDERR_MAX = 10_000; // chars
 
@@ -294,21 +293,23 @@ function passesRisk(
 }
 
 /**
- * Concurrency class for the engine's dispatch guard (agent-engine v2
- * Phase 0): a capability classified MUTATING runs behind the exclusive
- * barrier instead of the shared (capped) read lane. Contracts have no
- * first-class "mutates" flag yet — that is the Phase-3 `read_only` schema
- * bit — so this is a conservative proxy over existing metadata: destructive
- * sensitivity, high agent risk, or an approval requirement. Misclassifying a
- * read as mutating only costs parallelism; the reverse costs correctness, so
- * the proxy errs toward mutating.
+ * Concurrency class for the engine's dispatch: a capability classified
+ * MUTATING serializes; everything else may run alongside other calls in the
+ * same step. The Stella tool mapping negates this into each advertised
+ * schema's `read_only` bit.
+ *
+ * Delegates to `@oxagen/oxagen`'s {@link capabilityMutates} rather than
+ * deciding anything itself, so the contract type, this classifier and the
+ * guard over the registry all read one definition.
+ *
+ * It used to answer the question from `sensitivity === "destructive"`, a high
+ * `agent.riskLevel`, or `requiresApproval` — three fields that grade how
+ * DANGEROUS a capability is, standing in for whether it writes. Those are
+ * different questions, and 219 of 271 agent-surface capabilities were reaching
+ * the engine marked concurrent-safe on the strength of it (#2600).
  */
-function isMutatingCapability(cap: AnyCapability): boolean {
-  return (
-    cap.sensitivity === "destructive" ||
-    cap.agent?.riskLevel === "high" ||
-    cap.agent?.requiresApproval === true
-  );
+export function isMutatingCapability(cap: AnyCapability): boolean {
+  return capabilityMutates(cap);
 }
 
 // Build the Vercel AI SDK tool map for a workspace turn. Filters by
@@ -338,15 +339,6 @@ function toExternalToolInputSchema(
 // Parse a synthetic external-MCP capability id `mcp.<serverId>.<tool>` into its
 // parts. serverId is a UUID (no dots); the tool name may itself contain dots,
 // so split on the first two dots only.
-//
-// Returns null for any other key shape — notably the file-based contributor's
-// `file-mcp.<serverName>.<tool>` (plugin-types/file-mcp.ts), whose servers have
-// no mcp_servers row and therefore no durable consent identity. The two gates
-// below treat that null differently ON PURPOSE: the agent-RBAC "ask" path fails
-// CLOSED (an ask it cannot record must not run), while the user first-use
-// consent gate is simply SKIPPED — a file-based server is declared in local
-// project/user config, which is already a trust decision by whoever runs the
-// process, not something a chat user can be meaningfully asked about.
 function parseMcpSyntheticId(
   cap: string,
 ): { serverId: string; toolName: string } | null {
@@ -506,7 +498,6 @@ export async function materializeTools(
         description: cap.description,
         inputSchema: cap.input as ZodTypeAny,
         execute: async (input: unknown) => {
-          await beforeTool({ capability: cap.name, ctx, input });
           const invocationId = crypto.randomUUID();
           const startedAt = Date.now();
           const inputBytes = byteSize(input);
@@ -561,7 +552,6 @@ export async function materializeTools(
             const result = await invoke(cap.name, input, ctx, {
               surface: "agent",
             });
-            await afterTool({ capability: cap.name, ctx, output: result });
             // every tool invocation lands one row in ClickHouse
             // `tool_invocations` with surface + provider. Failure-isolated.
             try {
@@ -590,11 +580,6 @@ export async function materializeTools(
             // blow the context window. No-op for every other capability.
             return clipExecOutput(cap.name, result);
           } catch (err) {
-            await onError({
-              capability: cap.name,
-              ctx,
-              error: err instanceof Error ? err : new Error(String(err)),
-            });
             try {
               await insertToolInvocation(
                 buildInvocationPayload(
@@ -708,7 +693,13 @@ export async function materializeTools(
         );
         continue;
       }
-      register(
+      // Fail safe, the same rule a contract that declares nothing gets: an
+      // external tool's semantics are unknown to this process, so it
+      // serializes rather than joining the concurrent lane. It used to keep
+      // the shared lane on exactly that "unknown semantics" reasoning, which
+      // had the argument the wrong way round — unknown is the case that must
+      // not run concurrently (#2600).
+      const externalAlias = register(
         capturedKey,
         tool({
           description: raw.description,
@@ -1085,10 +1076,6 @@ export async function materializeTools(
                 kind: SpanKind.CLIENT,
                 attributes: {
                   "tool.name": capturedKey,
-                  // External tools declare no risk level — nothing in the MCP
-                  // descriptor carries one. "low" here is the SCHEMA DEFAULT
-                  // (matching the tool_invocations row written below), not an
-                  // assessment of the tool. Do not read it as one.
                   "tool.risk_level": "low",
                 },
               });
@@ -1160,6 +1147,7 @@ export async function materializeTools(
           },
         }),
       );
+      mutatingToolNames.push(externalAlias);
     }
   }
   // ── End installable-plugin tools ────────────────────────────────────────────

@@ -8,14 +8,9 @@
  */
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
-import type {
-  Workspace,
-  CodeGraphProvider,
-  CodingEvent,
-  AskUserCallback,
-} from "./types";
+import type { Workspace, CodingEvent, AskUserCallback } from "./types";
 import type { FileLockProvider, DiagnosticsProvider } from "./ports";
-import { delay } from "./loop-driver";
+import { delay } from "./internal/delay";
 import { buildStructuredTools } from "./tools-structured";
 import {
   EditIntegrityLedger,
@@ -339,13 +334,13 @@ const TOOL_TIMEOUT_GRACE_MS = 30_000;
  */
 const ASK_USER_BACKSTOP_MS = 30 * 60_000;
 
-/** Backstop deadline for one call, honoring bash's declared `timeout_ms`. */
+/** Backstop deadline for one call, honoring bash's declared `timeout_secs`. */
 export function toolBackstopMs(name: string, input: unknown): number {
   if (name === "bash") {
-    const declared = (input as { timeout_ms?: unknown } | null)?.timeout_ms;
+    const declared = (input as { timeout_secs?: unknown } | null)?.timeout_secs;
     const own = Math.min(
       typeof declared === "number" && Number.isFinite(declared)
-        ? declared
+        ? declared * 1000
         : BASH_DEFAULT_TIMEOUT_MS,
       BASH_MAX_TIMEOUT_MS,
     );
@@ -371,7 +366,7 @@ function withBackstop(
     const timer = setTimeout(() => {
       resolve(
         `Tool ${name} timed out after ${Math.round(ms / 1000)}s (backstop) — ` +
-          `it did not return. Try a narrower call${name === "bash" ? " or a larger timeout_ms" : ""}.`,
+          `it did not return. Try a narrower call${name === "bash" ? " or a larger timeout_secs" : ""}.`,
       );
     }, ms);
     (timer as { unref?: () => void }).unref?.();
@@ -393,7 +388,7 @@ function withBackstop(
 // ── Agent file locking (docs/specs/agent-file-locking/plan.md) ─────────────
 // The SINGLE wiring point: write_file/edit_file acquire the transactional
 // Postgres lease immediately before the real filesystem write and release it
-// immediately after, for EVERY caller of runCodingAgent (chat, CLI,
+// immediately after, for EVERY surface that runs a turn (chat, CLI,
 // agent.repo.edit fleet dispatch) — there is exactly one enforcement point.
 
 /** Acquire retry budget: a real hold is expected to be release-then-reacquire
@@ -505,7 +500,6 @@ export function buildWorkspaceTools(
   workspace: Workspace,
   opts: {
     readOnly?: boolean;
-    codeGraph?: CodeGraphProvider;
     onEvent?: (e: CodingEvent) => void;
     /**
      * Turn abort signal, forwarded to `workspace.exec` so an aborted turn kills
@@ -531,8 +525,8 @@ export function buildWorkspaceTools(
     diagnostics?: DiagnosticsProvider;
     /**
      * Interactive clarification callback. When supplied, the `ask_user` tool is
-     * registered (mirrors `codeGraph` gating); when omitted — every headless /
-     * one-shot surface with nobody to ask — the tool is never advertised.
+     * registered; when omitted — every headless / one-shot surface with nobody
+     * to ask — the tool is never advertised.
      */
     askUser?: AskUserCallback;
   } = {},
@@ -859,99 +853,96 @@ export function buildWorkspaceTools(
       },
     }),
 
-    glob: tool({
+    search: tool({
       description:
-        "Find files matching a glob pattern (e.g. 'src/**/*.ts'). Skips node_modules/.git/dist.",
+        "Search the workspace with one query: file contents (as a regular " +
+        "expression when the query parses as one, literally otherwise) AND " +
+        "file names. Returns name matches, then file:line:text content " +
+        "matches. Skips node_modules/.git/dist.",
       inputSchema: z.object({
-        pattern: z.string(),
+        query: z.string().min(1).describe("What to find."),
       }),
-      execute: async ({ pattern }) => {
+      execute: async ({ query }) => {
+        // Stella's catalog retired `grep` and `glob` in favour of ONE search
+        // and reserves both names, so a merged tool surface cannot carry them
+        // (crates/stella-tools/src/custom.rs's name reservation). One query
+        // over both axes also matches how models actually search: they rarely
+        // know in advance whether the thing they remember is a path or a
+        // symbol.
+        const pattern = (() => {
+          try {
+            // Probe only: workspace.grep compiles the pattern itself.
+            new RegExp(query);
+            return query;
+          } catch {
+            return query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          }
+        })();
         try {
-          const matches = await workspace.glob(pattern);
-          return clip(matches.sort().join("\n") || "(no matches)");
+          const [contentHits, names] = await Promise.all([
+            workspace.grep(pattern).catch(() => [] as string[]),
+            workspace.glob("**/*").catch(() => [] as string[]),
+          ]);
+          const needle = query.toLowerCase();
+          const nameHits = names
+            .filter((name) => name.toLowerCase().includes(needle))
+            .sort();
+          const sections: string[] = [];
+          if (nameHits.length > 0) {
+            sections.push(`Files matching by name:\n${nameHits.join("\n")}`);
+          }
+          if (contentHits.length > 0) {
+            sections.push(`Content matches:\n${contentHits.join("\n")}`);
+          }
+          return clip(sections.join("\n\n") || "(no matches)");
         } catch (err) {
-          return `Error globbing ${pattern}: ${err instanceof Error ? err.message : String(err)}`;
-        }
-      },
-    }),
-
-    grep: tool({
-      description:
-        "Search file contents with a regular expression. Returns matching file:line:text. Skips node_modules/.git/dist.",
-      inputSchema: z.object({
-        pattern: z.string().describe("JavaScript regular expression."),
-        path: z
-          .string()
-          .optional()
-          .describe("Subdirectory to search (default: cwd)."),
-        glob: z
-          .string()
-          .optional()
-          .describe("Restrict to files matching this glob (e.g. '*.ts')."),
-      }),
-      execute: async ({ pattern, path, glob }) => {
-        try {
-          const hits = await workspace.grep(pattern, { path, glob });
-          return clip(hits.join("\n") || "(no matches)");
-        } catch (err) {
-          return `Error grepping for ${pattern}: ${err instanceof Error ? err.message : String(err)}`;
+          return `Error searching for ${query}: ${err instanceof Error ? err.message : String(err)}`;
         }
       },
     }),
   };
 
-  // code_graph is optional — only added when a provider is supplied.
-  if (opts.codeGraph) {
-    const codeGraph = opts.codeGraph;
-    tools.code_graph = tool({
+  // delete_file is gated on the workspace implementing deletion — the same
+  // presence-not-flag gating ask_user uses. A workspace without it leaves the
+  // model with `bash rm`, which records no file-touch event.
+  if (workspace.deleteFile) {
+    const deleteFile = workspace.deleteFile.bind(workspace);
+    tools.delete_file = tool({
       description:
-        "Query the repository's code graph — a precomputed index of symbols and " +
-        "import relationships — for STRUCTURAL answers, instead of guessing paths " +
-        'or grepping. Prefer this over `grep` for "where is X defined" and for ' +
-        "impact analysis before a change. Operations: 'search' finds where a " +
-        "symbol (function/class/type/interface) is defined by name; 'file_symbols' " +
-        "lists the top-level symbols a file defines; 'dependents' lists the files " +
-        "that import a given file (what a change could break); 'imports' lists the " +
-        "local files a given file imports; 'semantic_search' finds files " +
-        "conceptually related to a natural-language description (e.g. 'project " +
-        "level configuration for the cli app') via embedding similarity, returning " +
-        "a flat ranked FILE LIST — use it when 'search' returns nothing because the " +
-        "query names no exact symbol or path.",
+        "Delete a file. Use this, not `rm` in bash, so the deletion is " +
+        "recorded like any other file change.",
       inputSchema: z.object({
-        operation: z.enum([
-          "search",
-          "file_symbols",
-          "dependents",
-          "imports",
-          "semantic_search",
-        ]),
-        query: z
+        path: z.string(),
+        reason: z
           .string()
-          .describe(
-            "A symbol name for 'search'; a file path (relative to cwd, or a suffix " +
-              "like 'agent/loop.ts') for 'file_symbols' / 'dependents' / 'imports'; " +
-              "a natural-language concept for 'semantic_search'.",
-          ),
-        limit: z
-          .number()
-          .int()
           .optional()
-          .describe("Max results to return (default 25)."),
+          .describe("Why this file is being deleted (recorded, not shown)."),
       }),
-      execute: async ({ operation, query, limit }) => {
+      execute: async ({ path }) => {
+        // Same gate as write_file/edit_file: deleting the grading test is the
+        // same self-certification move as editing it, and a guard that stops
+        // one but not the other stops neither.
+        if (forbidTestEdits && isTestPath(path))
+          return TEST_EDIT_DENIED_MESSAGE;
         try {
-          return clip(await codeGraph.query(operation, query, limit));
+          await deleteFile(path);
+          onEvent({
+            type: "command",
+            command: `delete_file ${path}`,
+            exitCode: 0,
+          });
+          return `Deleted ${path}`;
         } catch (err) {
-          return `code_graph error: ${err instanceof Error ? err.message : String(err)}`;
+          return `Error deleting ${path}: ${err instanceof Error ? err.message : String(err)}`;
         }
       },
     });
   }
 
   // ask_user is optional — only added when an interactive surface supplies a
-  // human-in-the-loop callback (mirrors code_graph gating above). A headless /
-  // one-shot run has nobody to answer, so it never gets the tool and the model
-  // cannot call one that would block the loop forever.
+  // human-in-the-loop callback. A headless / one-shot run has nobody to answer,
+  // so it never gets the tool and the model cannot call one that would block the
+  // loop forever.
   if (opts.askUser) {
     const askUser = opts.askUser;
     tools.ask_user = tool({
@@ -1015,14 +1006,14 @@ export function buildWorkspaceTools(
       "Run a shell command in the working directory. Use for builds, tests, git, package managers. Has a timeout.",
     inputSchema: z.object({
       command: z.string(),
-      timeout_ms: z
+      timeout_secs: z
         .number()
         .int()
         .optional()
-        .describe("Timeout in milliseconds (default 120000, max 600000)."),
+        .describe("Timeout in seconds (default 120, max 600)."),
     }),
-    execute: async ({ command, timeout_ms }) => {
-      const timeoutMs = Math.min(timeout_ms ?? 120_000, 600_000);
+    execute: async ({ command, timeout_secs }) => {
+      const timeoutMs = Math.min(timeout_secs ?? 120, 600) * 1000;
       try {
         const result = await workspace.exec(command, { timeoutMs, signal });
         onEvent({ type: "command", command, exitCode: result.exitCode });
@@ -1054,6 +1045,7 @@ export function buildWorkspaceTools(
     delete tools["write_file"];
     delete tools["edit_file"];
     delete tools["bash"];
+    delete tools["delete_file"];
   }
 
   // Every tool gets the timeout backstop LAST so it bounds the whole execute

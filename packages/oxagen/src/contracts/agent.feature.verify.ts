@@ -26,6 +26,7 @@ export const agentFeatureVerify = registerCapability({
     category: "verification",
   },
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

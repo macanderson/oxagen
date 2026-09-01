@@ -17,6 +17,7 @@ export const sandboxTemplateGet = registerCapability({
   layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

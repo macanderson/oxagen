@@ -48,6 +48,7 @@ export const workflowStatus = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "workflow" },
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

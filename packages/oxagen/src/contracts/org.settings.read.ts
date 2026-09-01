@@ -40,6 +40,7 @@ export const orgSettingsRead = registerCapability({
     category: "organization",
   },
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow", Member: "allow" },

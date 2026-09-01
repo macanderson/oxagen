@@ -2,9 +2,9 @@
  * The Phase C branch at the seam.
  *
  * The seam was built in Phase 1 so the engine could be swapped here without
- * touching a surface. These tests assert exactly that: the same call, with the
- * same options, reaches a different engine purely on the flag — and reaches the
- * TS engine by default, which is what every deployment still runs.
+ * touching a surface. It has now been swapped for the last time: Stella is
+ * what every call reaches, by default and on request, and the seam's remaining
+ * job is to refuse anything else rather than quietly substituting the survivor.
  */
 import { describe, expect, test } from "vitest";
 import {
@@ -24,10 +24,10 @@ function answeringAi(): AgentAi {
     stream(_args: ModelRunArgs) {
       return {
         fullStream: (async function* () {
-          yield { type: "text-delta", text: "ts engine answered" };
+          yield { type: "text-delta", text: "the model answered" };
         })(),
         steps: Promise.resolve([{}]),
-        text: Promise.resolve("ts engine answered"),
+        text: Promise.resolve("the model answered"),
         toolCalls: Promise.resolve([]),
         usage: Promise.resolve({
           inputTokens: 1,
@@ -60,7 +60,8 @@ function fakePool(text: string): SidecarPool {
 }
 
 describe("executeTurn engine selection", () => {
-  test("runs the TS engine when nothing asks for another", async () => {
+  test("runs Stella when nothing asks for another", async () => {
+    configureStellaEngine({ pool: fakePool("stella by default") });
     const result = await executeTurn(
       "chat",
       {
@@ -70,7 +71,7 @@ describe("executeTurn engine selection", () => {
       },
       { env: {} },
     );
-    expect(result.text).toBe("ts engine answered");
+    expect(result.text).toBe("stella by default");
   });
 
   test("routes to Stella on the process flag, with no surface change", async () => {
@@ -88,30 +89,44 @@ describe("executeTurn engine selection", () => {
     expect(result.text).toBe("stella engine answered");
   });
 
-  test("a run's own requested_engine wins over the process flag", async () => {
+  test("a run's own requested_engine is honoured", async () => {
     configureStellaEngine({ pool: fakePool("stella by request") });
     const result = await executeTurn(
       "a2a",
       { ai: answeringAi(), instruction: "hello", system: "s" },
-      { requestedEngine: "stella", env: { OXAGEN_ENGINE: "ts" } },
+      { requestedEngine: "stella", env: {} },
     );
     expect(result.text).toBe("stella by request");
   });
 
-  test("a run may pin the TS engine while the fleet default is Stella", async () => {
-    const result = await executeTurn(
-      "chat",
-      {
-        workspace: new MemoryWorkspace({ "a.ts": "x" }),
-        ai: answeringAi(),
-        instruction: "hello",
-      },
-      { requestedEngine: "ts", env: { OXAGEN_ENGINE: "stella" } },
-    );
-    expect(result.text).toBe("ts engine answered");
+  test("a run pinning the deleted TS engine fails the turn", async () => {
+    // The ask cannot be honoured and must not be quietly upgraded to Stella:
+    // a run that named an engine and got a different one reports success for
+    // work nobody asked for.
+    await expect(
+      executeTurn(
+        "chat",
+        {
+          workspace: new MemoryWorkspace({ "a.ts": "x" }),
+          ai: answeringAi(),
+          instruction: "hello",
+        },
+        { requestedEngine: "ts", env: {} },
+      ),
+    ).rejects.toThrow(/"ts" engine, which was removed/);
   });
 
-  test("a misspelled flag fails the turn instead of quietly running the TS engine", async () => {
+  test("a fleet flag still set to the deleted TS engine fails the turn", async () => {
+    await expect(
+      executeTurn(
+        "chat",
+        { ai: answeringAi(), instruction: "hello" },
+        { env: { OXAGEN_ENGINE: "ts" } },
+      ),
+    ).rejects.toThrow(/"ts" engine, which was removed/);
+  });
+
+  test("a misspelled flag fails the turn instead of quietly running Stella", async () => {
     await expect(
       executeTurn(
         "chat",

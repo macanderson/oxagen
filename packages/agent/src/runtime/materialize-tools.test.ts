@@ -240,9 +240,6 @@ vi.mock("./mcp-snapshots", async (importOriginal) => {
 });
 
 const mocks = vi.hoisted(() => ({
-  beforeTool: vi.fn(async () => undefined),
-  afterTool: vi.fn(async () => undefined),
-  onError: vi.fn(async () => undefined),
   createApprovalRequest: vi.fn(async () => ({ approvalId: "appr_x" })),
   waitForApproval: vi.fn(
     async (): Promise<{
@@ -252,12 +249,6 @@ const mocks = vi.hoisted(() => ({
     }> => ({ approvalId: "appr_x", resolution: "approved", note: null }),
   ),
   insertToolInvocation: vi.fn(async () => undefined),
-}));
-
-vi.mock("../hooks/runtime", () => ({
-  beforeTool: mocks.beforeTool,
-  afterTool: mocks.afterTool,
-  onError: mocks.onError,
 }));
 
 vi.mock("./approval", () => ({
@@ -394,23 +385,16 @@ describe("materializeTools", () => {
     });
   });
 
-  it("fires before/after hooks around a successful invocation", async () => {
-    mocks.beforeTool.mockClear();
-    mocks.afterTool.mockClear();
-    mocks.onError.mockClear();
+  it("a successful invocation resolves cleanly through the kernel", async () => {
     const { tools } = await materializeTools(CTX);
-    await (
-      tools.capA as unknown as { execute: (i: unknown) => Promise<unknown> }
-    ).execute({ x: "hi" });
-    expect(mocks.beforeTool).toHaveBeenCalledTimes(1);
-    expect(mocks.afterTool).toHaveBeenCalledTimes(1);
-    expect(mocks.onError).not.toHaveBeenCalled();
+    await expect(
+      (
+        tools.capA as unknown as { execute: (i: unknown) => Promise<unknown> }
+      ).execute({ x: "hi" }),
+    ).resolves.toBeDefined();
   });
 
-  it("fires onError when the handler throws", async () => {
-    mocks.beforeTool.mockClear();
-    mocks.afterTool.mockClear();
-    mocks.onError.mockClear();
+  it("rethrows a handler failure to the caller (tool_invocations records it)", async () => {
     vi.mocked(invoke).mockRejectedValueOnce(new Error("boom"));
     const { tools } = await materializeTools(CTX);
     await expect(
@@ -418,9 +402,6 @@ describe("materializeTools", () => {
         tools.capA as unknown as { execute: (i: unknown) => Promise<unknown> }
       ).execute({ x: "hi" }),
     ).rejects.toThrow("boom");
-    expect(mocks.beforeTool).toHaveBeenCalledTimes(1);
-    expect(mocks.afterTool).not.toHaveBeenCalled();
-    expect(mocks.onError).toHaveBeenCalledTimes(1);
   });
 
   it("requests approval when requiresApproval+messageId, blocks until approved", async () => {

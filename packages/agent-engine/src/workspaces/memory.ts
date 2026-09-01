@@ -68,6 +68,11 @@ export class MemoryWorkspace implements Workspace {
     return 1;
   }
 
+  async deleteFile(p: string): Promise<void> {
+    if (!this.files.has(p)) throw new Error(`ENOENT: ${p}`);
+    this.files.delete(p);
+  }
+
   async list(dir = "."): Promise<string[]> {
     const prefix = dir === "." ? "" : dir.replace(/\/$/, "") + "/";
     const names = new Set<string>();

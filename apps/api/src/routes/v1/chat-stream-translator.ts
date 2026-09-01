@@ -4,8 +4,8 @@
 // execution metadata for the SOC 2 audit trail.
 //
 // It is the SINGLE source of truth for the part→SSE mapping. The route drives it
-// via `runCodingAgent`'s `onStreamPart` tap (one part at a time, across the
-// engine's per-step `streamText` calls) instead of a hand-rolled `for await`
+// via the engine's `onStreamPart` tap (one part at a time, across the
+// engine's per-step model calls) instead of a hand-rolled `for await`
 // over a single `streamAgentReply` — so the multi-step tool loop (`stopWhen`),
 // invoke()-gated tools, per-turn memory recall, and the USD budget guard all
 // apply, with the client wire protocol byte-identical to before the engine

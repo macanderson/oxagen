@@ -91,6 +91,7 @@ export const billingUsageBreakdown = registerCapability({
     category: "billing",
   },
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow", Billing: "allow" },

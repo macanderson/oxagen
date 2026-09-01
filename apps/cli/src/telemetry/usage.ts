@@ -141,7 +141,7 @@ export function ensureDisclosureShown(): void {
 // ── session-level accumulator ────────────────────────────────────────────
 //
 // Populated opportunistically by call sites deep in the agent loop that have
-// signal the generic index.tsx wrapper does not — e.g. which model tier
+// signal the generic index.ts wrapper does not — e.g. which model tier
 // actually ran, how many tool calls of each kind. Every setter is a no-op-safe
 // accumulator; nothing here can throw, and nothing here is required for a
 // valid event (all fields have a safe zero-value default).
@@ -175,7 +175,7 @@ export function resetUsageSessionStats(): void {
   stats = emptyStats();
 }
 
-/** Tally one or more invocations of a tool by name (e.g. "code_graph", "grep"). */
+/** Tally one or more invocations of a tool by name (e.g. "read_file", "grep"). */
 export function recordToolCall(toolName: string, count = 1): void {
   // Match the server's identifier shape so a name never fails validation —
   // never the tool's arguments or output, just the name and a count.
@@ -338,7 +338,7 @@ export async function sendUsageEvent(
 
 /**
  * The single entry point every command flow calls at the end of a run (see
- * index.tsx). No-ops completely — no disclosure, no id generation, no
+ * index.ts). No-ops completely — no disclosure, no id generation, no
  * network — when telemetry is disabled.
  *
  * This function is a hard guarantee, not just a convention: it can NEVER

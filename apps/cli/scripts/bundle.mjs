@@ -6,41 +6,23 @@
  * Why this exists
  * ---------------
  * The published `@oxagen/cli` npm package is not standalone-installable: its
- * `dependencies` still carry `@oxagen/engram: workspace:*` (the workspace
- * protocol leaked into the publish) and those internal packages are unpublished,
+ * `dependencies` carry `workspace:*` internal packages that are unpublished,
  * and the bin shebang is `#!/usr/bin/env tsx` (needs tsx at runtime). So
  * `npm i -g @oxagen/cli` fails in a clean container.
  *
- * Benchmark harnesses (Harbor / Terminal-Bench) drop the agent into an ephemeral
- * task container that has neither the monorepo nor a working npm publish. This
- * bundle is the portable artifact we upload into that container: one `.mjs` file
- * + Node 22, nothing else.
- *
- * WASM grammars:
- * The CLI now uses @oxagen/code-graph (tree-sitter) for code-graph construction.
- * tree-sitter WASM files are binary assets esbuild cannot inline; they are copied
- * next to the bundle so the loader's resolveWasm() finds them via import.meta.url
- * (ESM bundle: import.meta.url is the bundle's own URL, so moduleDir() = the
- * dist-standalone/ directory where the wasm files live).
+ * Container installs (bench harnesses, clean CI) use this bundle as the
+ * portable artifact: one `.mjs` file + Node 22, nothing else.
  *
  * Output: apps/cli/dist-standalone/oxagen.mjs  (runnable: `node oxagen.mjs "…"`)
  */
 import { build } from "esbuild";
-import {
-  chmodSync,
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
-import { createRequire } from "node:module";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const cliRoot = resolve(here, "..");
-const entry = resolve(cliRoot, "src/index.tsx");
+const entry = resolve(cliRoot, "src/index.ts");
 const outfile = resolve(cliRoot, "dist-standalone/oxagen.mjs");
 
 /**
@@ -62,33 +44,12 @@ const tsExtensionResolver = {
         `${base}.js`,
         `${base}.mjs`,
         resolve(base, "index.ts"),
-        resolve(base, "index.tsx"),
+        resolve(base, "index.ts"),
       ]) {
         if (existsSync(cand)) return { path: cand };
       }
       return null; // fall through to esbuild's default resolution
     });
-  },
-};
-
-/**
- * Neutralize dev-only modules that are *statically* imported (so externalizing
- * them would make Node eagerly resolve a missing package and crash at startup),
- * but are never exercised by the headless agent. ink statically imports
- * `react-devtools-core` for its dev-tools bridge; stub it to a no-op.
- */
-const STUBBED = /^react-devtools-core$/;
-const stubDevOnlyModules = {
-  name: "stub-dev-only-modules",
-  setup(b) {
-    b.onResolve({ filter: STUBBED }, (args) => ({
-      path: args.path,
-      namespace: "ox-stub",
-    }));
-    b.onLoad({ filter: /.*/, namespace: "ox-stub" }, () => ({
-      contents: "export default { connectToDevTools() {} };",
-      loader: "js",
-    }));
   },
 };
 
@@ -99,30 +60,10 @@ await build({
   platform: "node",
   format: "esm",
   target: "node20",
-  // Native deps of the context engine (@oxagen/engram). esbuild cannot inline a
-  // .node addon, and they are reached lazily via require() (see src/agent/memory.ts
-  // and the createRequire shim at the top of src/index.tsx) rather than eagerly
-  // imported — so leaving them external is safe: a benchmark container without them
-  // still runs the full agent loop, it just skips persistent memory. A real
-  // `npm i -g` install DOES get them; scripts/prepare-standalone-publish.mjs puts
-  // this same list into the published manifest's `dependencies`.
-  external: ["duckdb", "blake3"],
-  // A real `require`, `__filename`, and `__dirname` for bundled CJS code reached
-  // under ESM. Two distinct needs:
-  //  - `require`: externalized natives (e.g. duckdb) reached via require()/
-  //    createRequire, plus any bundled dep with a runtime (non-static) require()
-  //    esbuild can't hoist to a static import in ESM output.
-  //  - `__filename`/`__dirname`: web-tree-sitter's tree-sitter.js is Emscripten-
-  //    generated UMD glue with a Node-environment branch
-  //    (`ENVIRONMENT_IS_NODE`) that reads `__dirname` directly (to locate its own
-  //    tree-sitter.wasm runtime blob next to itself) — undeclared in real ESM,
-  //    so without this shim Parser.init() throws "__dirname is not defined" on
-  //    every call, and since the failure happens before loader.ts's `initialized`
-  //    flag is set, EVERY parseSourceFile() call re-throws it — the whole code
-  //    graph silently comes back empty (P0 2026-07-02: 2,644/2,644 files failed
-  //    on a Django repo smoke run). loader.ts's own moduleDir()/resolveWasm()
-  //    already prefer import.meta.url and are unaffected — this shim is for the
-  //    bundled *dependency* code, not our own.
+  // A real `require`, `__filename`, and `__dirname` for bundled CJS code
+  // reached under ESM: any bundled dep with a runtime (non-static) require()
+  // esbuild can't hoist to a static import in ESM output, and Node-flavored
+  // CJS glue that reads `__dirname`/`__filename` directly.
   // The node shebang is fixed up post-build.
   banner: {
     js: [
@@ -134,7 +75,7 @@ await build({
       "const __dirname = __ox_dirname(__filename);",
     ].join("\n"),
   },
-  plugins: [stubDevOnlyModules, tsExtensionResolver],
+  plugins: [tsExtensionResolver],
   loader: { ".node": "copy" },
   logLevel: "info",
   metafile: false,
@@ -148,29 +89,6 @@ const lines = readFileSync(outfile, "utf8").split("\n");
 while (lines.length && lines[0].startsWith("#!")) lines.shift();
 writeFileSync(outfile, ["#!/usr/bin/env node", ...lines].join("\n"));
 chmodSync(outfile, 0o755);
-
-// Copy tree-sitter WASM grammars next to the bundle.
-// @oxagen/code-graph/src/loader.ts's resolveWasm() checks moduleDir() first
-// (which is the bundle's directory in ESM bundles — import.meta.url points at
-// the oxagen.mjs file, so dirname(fileURLToPath(import.meta.url)) = dist-standalone/).
-// Resolve from @oxagen/code-graph since it owns the tree-sitter deps.
-const outDir = dirname(outfile);
-mkdirSync(outDir, { recursive: true });
-const codeGraphRequire = createRequire(
-  new URL("../../../packages/code-graph/package.json", import.meta.url),
-);
-const WASM_ASSETS = [
-  ["web-tree-sitter", "tree-sitter.wasm"],
-  ["tree-sitter-typescript", "tree-sitter-typescript.wasm"],
-  ["tree-sitter-python", "tree-sitter-python.wasm"],
-];
-for (const [pkg, file] of WASM_ASSETS) {
-  const pkgDir = dirname(codeGraphRequire.resolve(`${pkg}/package.json`));
-  const src = resolve(pkgDir, file);
-  const dest = resolve(outDir, file);
-  copyFileSync(src, dest);
-  console.log(`  copied ${file} → dist-standalone/`);
-}
 
 console.log(`\n✔ oxagen standalone bundle written to ${outfile}`);
 console.log("  Run it with:  node " + outfile + " --version");

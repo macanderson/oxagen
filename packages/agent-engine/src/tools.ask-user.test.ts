@@ -2,7 +2,7 @@
  * ask_user — the interactive clarification tool.
  *
  * Registered ONLY when an `askUser` callback is supplied (an interactive surface
- * with a human to answer), mirroring `code_graph` gating. It validates the
+ * with a human to answer). It validates the
  * question + option set, forwards the user's reply to the model as plain text
  * (prefixed to say whether they chose an option or wrote their own), and returns
  * a corrective error STRING (never throws — the loop stays alive) on bad input.

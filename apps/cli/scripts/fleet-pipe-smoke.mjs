@@ -41,7 +41,7 @@ import { setTimeout as delay } from "node:timers/promises";
 const SCRIPT = fileURLToPath(import.meta.url);
 const CLI_ROOT = dirname(dirname(SCRIPT)); // apps/cli
 const SRC = join(CLI_ROOT, "src", "sessions");
-const CLI_ENTRY = join(CLI_ROOT, "src", "index.tsx");
+const CLI_ENTRY = join(CLI_ROOT, "src", "index.ts");
 const STORE_TS = join(SRC, "store.ts");
 const PATHS_TS = join(SRC, "paths.ts");
 const IDS_TS = join(SRC, "ids.ts");
@@ -476,7 +476,7 @@ async function legLiveDispatch() {
   say("Leg C · live detached dispatch");
   if (process.env.OXAGEN_SMOKE_LIVE !== "1") {
     skip(
-      "live dispatch gated behind OXAGEN_SMOKE_LIVE=1 (makes real worker/model calls)",
+      "live dispatch gated behind OXAGEN_SMOKE_LIVE=1 (real worker/model calls; needs task #4/#6)",
     );
     return;
   }

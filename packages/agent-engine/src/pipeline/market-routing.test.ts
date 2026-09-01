@@ -16,6 +16,7 @@ import type {
 import { emptyUsage } from "../types";
 import type { PromptEvaluation } from "../trace/types";
 import type { AgentAi, ModelRunArgs } from "../ports";
+import { scriptedEngine } from "./scripted-engine";
 
 const HAIKU = "anthropic/claude-haiku-4.5";
 const SONNET = modelForTier("balanced");
@@ -167,6 +168,7 @@ describe("runTurn — onRouteOutcome", () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const outcomes: RouteOutcome[] = [];
     await runTurn({
+      execute: scriptedEngine,
       prompt: "refactor the widget rendering in src/a.ts",
       workspace: ws,
       ai: makeAi("src/a.ts"),
@@ -191,6 +193,7 @@ describe("runTurn — onRouteOutcome", () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const outcomes: RouteOutcome[] = [];
     await runTurn({
+      execute: scriptedEngine,
       prompt: "refactor the widget rendering in src/a.ts",
       workspace: ws,
       ai: makeAi("src/a.ts"),
@@ -211,6 +214,7 @@ describe("runTurn — onRouteOutcome", () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const outcomes: RouteOutcome[] = [];
     await runTurn({
+      execute: scriptedEngine,
       prompt: "refactor the widget rendering in src/a.ts",
       workspace: ws,
       // judgeComplete=false ⇒ every round is rejected, forcing a revise round.
@@ -234,6 +238,7 @@ describe("runTurn — onRouteOutcome", () => {
   it("a throwing onRouteOutcome never fails the turn", async () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "refactor the widget rendering in src/a.ts",
       workspace: ws,
       ai: makeAi("src/a.ts"),

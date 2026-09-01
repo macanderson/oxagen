@@ -15,10 +15,10 @@
  * whose confirmation goes to stderr via `out.info`; an unknown subcommand is a
  * uniform stderr usage error with exit code 2. There is NO `--json` flag today:
  * these handlers take only `(subcommand?, writer)` — the REPL-bridge shape, with
- * no options object to carry `json` — and program.tsx declares none. `status`
+ * no options object to carry `json` — and program.ts declares none. `status`
  * is nonetheless routed through `out.data` so it is single-line-JSON-ready the
- * moment a flag can be threaded (which needs both a program.tsx `--json` option
- * and a signature able to carry it without breaking the bridge).
+ * moment a flag can be threaded (which needs both a program.ts `--json` option
+ * and a signature able to carry it without breaking the bridge). See the report.
  */
 import { readConfig, writeConfig, getApiUrl } from "../lib/config.js";
 import { isTelemetryEnabled } from "../telemetry/usage.js";

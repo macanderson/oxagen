@@ -11,6 +11,7 @@ import { describe, it, expect, vi } from "vitest";
 import { MemoryWorkspace } from "../workspaces/memory";
 import { runTurn } from "./index";
 import type { AgentAi, ModelRunArgs } from "../ports";
+import { scriptedEngine } from "./scripted-engine";
 
 const DEFAULT_EVAL = {
   completeness: 70,
@@ -82,6 +83,7 @@ describe("runTurn — pasted image attachment threading", () => {
     const png = Buffer.from("fake-png");
 
     await runTurn({
+      execute: scriptedEngine,
       prompt: "what's in this image?",
       workspace: ws,
       ai,
@@ -105,6 +107,7 @@ describe("runTurn — pasted image attachment threading", () => {
     const png = Buffer.from("fake-png");
 
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "what's wrong here?",
       workspace: ws,
       ai,

@@ -3,6 +3,7 @@ import { chatMessageExecution } from "@oxagen/oxagen/contracts/chat.message.exec
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
+import { projectToolUsageBestEffort } from "./project-tool-usage";
 
 /**
  * chatMessageExecution handler: record execution within a chat message context.
@@ -159,6 +160,8 @@ export const chatMessageExecutionHandler: CapabilityHandler<
 
     return executionResult;
   });
+
+  await projectToolUsageBestEffort(result.executionId, ctx);
 
   return result;
 };

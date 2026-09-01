@@ -21,7 +21,7 @@
 import { z } from "zod";
 import { modelForTier, accumulateUsage } from "../router/model-router";
 import { emptyUsage } from "../types";
-import { isFatalAuthOrBillingError } from "../loop-driver";
+import { isFatalAuthOrBillingError } from "../model-errors";
 import type { AgentAi } from "../ports";
 import type { JudgeVerdict } from "../trace/types";
 

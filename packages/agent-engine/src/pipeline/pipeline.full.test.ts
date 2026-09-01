@@ -25,6 +25,7 @@ import { MemoryWorkspace } from "../workspaces/memory";
 import { runTurn } from "./index";
 import { modelForTier } from "../router/model-router";
 import type { AgentAi, ModelRunArgs } from "../ports";
+import { scriptedEngine } from "./scripted-engine";
 
 const tick = (): Promise<void> => new Promise((r) => setImmediate(r));
 
@@ -169,6 +170,7 @@ describe("runTurn — full pipeline path", () => {
     const { ai } = makeAi();
 
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "improve src/a.ts",
       workspace: ws,
       ai,
@@ -207,7 +209,12 @@ describe("runTurn — full pipeline path", () => {
       },
     });
 
-    const result = await runTurn({ prompt: "auth work", workspace: ws, ai });
+    const result = await runTurn({
+      prompt: "auth work",
+      workspace: ws,
+      ai,
+      execute: scriptedEngine,
+    });
     expect(result.trace.selectedTier).toBe("precise");
     expect(result.trace.selectionRationale).toContain("safety floor");
   });
@@ -227,6 +234,7 @@ describe("runTurn — full pipeline path", () => {
     });
 
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "add a feature to src/a.ts",
       workspace: ws,
       ai,
@@ -256,6 +264,7 @@ describe("runTurn — full pipeline path", () => {
     process.env["OXAGEN_MAX_REVISE_ROUNDS"] = "1";
     try {
       const result = await runTurn({
+        execute: scriptedEngine,
         prompt: "add a feature to src/a.ts",
         workspace: ws,
         ai,
@@ -281,6 +290,7 @@ describe("runTurn — full pipeline path", () => {
     process.env["OXAGEN_MAX_REVISE_ROUNDS"] = "5";
     try {
       const result = await runTurn({
+        execute: scriptedEngine,
         prompt: "add a feature to src/a.ts",
         workspace: ws,
         ai,
@@ -306,6 +316,7 @@ describe("runTurn — full pipeline path", () => {
     process.env["OXAGEN_LADDER"] = "0";
     try {
       const result = await runTurn({
+        execute: scriptedEngine,
         prompt: "explain src/a.ts",
         workspace: ws,
         ai,
@@ -328,6 +339,7 @@ describe("runTurn — full pipeline path", () => {
 
     // Default behavior (judge-skip ON): no OXAGEN_LADDER set.
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "explain src/a.ts",
       workspace: ws,
       ai,
@@ -355,6 +367,7 @@ describe("runTurn — full pipeline path", () => {
     // A lookup turn: NOT readOnly (so the ADR-021 read-only skip does not apply),
     // but fastPath opts into skipping the judge on a zero diff.
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "what's the command to add an MCP server?",
       workspace: ws,
       ai,
@@ -382,6 +395,7 @@ describe("runTurn — full pipeline path", () => {
     process.env["OXAGEN_LADDER"] = "0";
     try {
       const result = await runTurn({
+        execute: scriptedEngine,
         prompt: "add a filesystem MCP",
         workspace: ws,
         ai,
@@ -403,6 +417,7 @@ describe("runTurn — full pipeline path", () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const { ai } = makeAi();
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "do it",
       workspace: ws,
       ai,
@@ -417,6 +432,7 @@ describe("runTurn — full pipeline path", () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const { ai } = makeAi();
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "do it",
       workspace: ws,
       ai,
@@ -433,6 +449,7 @@ describe("runTurn — full pipeline path", () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const { ai } = makeAi();
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "do it",
       workspace: ws,
       ai,
@@ -445,7 +462,13 @@ describe("runTurn — full pipeline path", () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const record = vi.fn();
     const { ai } = makeAi();
-    await runTurn({ prompt: "do it", workspace: ws, ai, trace: { record } });
+    await runTurn({
+      prompt: "do it",
+      workspace: ws,
+      ai,
+      trace: { record },
+      execute: scriptedEngine,
+    });
     await tick();
     expect(record).toHaveBeenCalledOnce();
   });
@@ -457,6 +480,7 @@ describe("runTurn — full pipeline path", () => {
     const { ai } = makeAi();
 
     await runTurn({
+      execute: scriptedEngine,
       prompt: "do it",
       workspace: ws,
       ai,
@@ -484,6 +508,7 @@ describe("runTurn — full pipeline path", () => {
     const { ai } = makeAi();
 
     await runTurn({
+      execute: scriptedEngine,
       prompt: "do it",
       workspace: ws,
       ai,
@@ -512,6 +537,7 @@ describe("runTurn — full pipeline path", () => {
       }),
     });
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "run the tests",
       workspace: ws,
       ai,
@@ -521,11 +547,8 @@ describe("runTurn — full pipeline path", () => {
     expect(result.trace.judgeRounds).toHaveLength(1);
   });
 
-  it("marks the enhancement source when both code graph and memory contribute", async () => {
+  it("marks the enhancement source as memory when recall contributes", async () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
-    const codeGraph = {
-      query: vi.fn().mockResolvedValue("src/a.ts:1: something defined here"),
-    };
     const memory = {
       recallContext: vi.fn().mockResolvedValue("recalled lesson"),
       remember: vi.fn(),
@@ -533,57 +556,46 @@ describe("runTurn — full pipeline path", () => {
     const { ai } = makeAi({
       evalObject: {
         ...DEFAULT_EVAL,
-        contextQueries: ["something"],
         refinedPrompt: "fix `something`",
       },
     });
 
+    const stages: string[] = [];
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "fix `something`",
       workspace: ws,
       ai,
-      codeGraph,
       memory,
+      onStage: (e) => {
+        if (e.kind === "enhance") stages.push(e.label);
+      },
     });
-    expect(result.trace.enhancement.source).toBe("code-graph+memory");
+    expect(result.trace.enhancement.source).toBe("memory");
     expect(result.trace.enhancement.lessonCount).toBe(1);
-    expect(result.trace.enhancement.resolved).toContain("something");
+    expect(result.trace.enhancement.context).toContain("recalled lesson");
+    expect(stages[0]).toContain("memory");
   });
 
-  it("surfaces the semantic fallback in the enhance stage label instead of narrating 'no extra context found'", async () => {
-    // usedSemanticFallback never pushes onto `resolved` (see enhancePrompt —
-    // semantic hits land in `sections`/the injected prompt, not `resolved`),
-    // so a prompt that resolves nothing literally but DOES get real
-    // semantically-retrieved context must not be labeled as no context found.
+  it("marks the enhancement source as none when nothing was recalled", async () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
-    // "search"/"file_symbols" miss (no literal candidate in this prompt);
-    // "semantic_search" hits — this is the fallback path exactly.
-    const codeGraph = {
-      query: vi
-        .fn()
-        .mockImplementation((op: string) =>
-          op === "semantic_search"
-            ? Promise.resolve("src/related.ts (0.82)")
-            : Promise.resolve("No symbols matching."),
-        ),
-    };
     const { ai } = makeAi({
       evalObject: { ...DEFAULT_EVAL, refinedPrompt: "improve the login flow" },
     });
 
     const stages: string[] = [];
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "improve the login flow",
       workspace: ws,
       ai,
-      codeGraph,
       onStage: (e) => {
         if (e.kind === "enhance") stages.push(e.label);
       },
     });
 
-    expect(result.trace.enhancement.resolved).toHaveLength(0);
-    expect(stages[0]).toContain("semantic");
-    expect(stages[0]).not.toContain("no extra context found");
+    expect(result.trace.enhancement.source).toBe("none");
+    expect(result.trace.enhancement.context).toBe("");
+    expect(stages[0]).toContain("no extra context found");
   });
 });

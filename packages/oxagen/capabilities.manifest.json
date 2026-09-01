@@ -4490,6 +4490,19 @@
       }
     },
     {
+      "name": "create_stella_enrollment",
+      "file": "telemetry.stella.enroll.ts",
+      "domain": "telemetry",
+      "mode": "sync",
+      "surfaces": ["api"],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
       "name": "ingest_stella_operational_telemetry",
       "file": "telemetry.stella.ingest.ts",
       "domain": "telemetry",

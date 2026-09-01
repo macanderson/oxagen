@@ -11,6 +11,7 @@ export const pluginRegistryList = registerCapability({
   layers: ["api", "docs", "mcp", "unit", "app"],
   scoped: true,
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

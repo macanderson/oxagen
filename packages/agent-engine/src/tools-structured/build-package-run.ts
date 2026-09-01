@@ -10,8 +10,7 @@
 //
 // STATE, not STRUCTURE: this answers "does the code compile right now?" — a
 // runtime STATE question. It does NOT answer "what type does this symbol have?"
-// or "what depends on this module?" — those are STRUCTURE questions for
-// code_graph, which reads the graph without executing the compiler.
+// or "what depends on this module?" — those are answered by reading the source.
 
 import { tool, type Tool } from "ai";
 import { z } from "zod";
@@ -81,7 +80,7 @@ export function buildBuildPackageRunTool(
       "`typecheck` is the fast feedback loop; use mode `build` only when you specifically need " +
       "the full build. Anti-triggers: to RUN tests use `test_unit_run`; for arbitrary shell use " +
       "`bash`. This answers the STATE question 'does it compile?' — to ask what a symbol's type " +
-      "is or what depends on a module (structure), use `code_graph`.",
+      "is or what depends on a module, `search` for it and read the source.",
     inputSchema: z.object({
       scope: scopeSchema
         .optional()

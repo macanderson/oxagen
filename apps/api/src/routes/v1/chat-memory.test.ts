@@ -3,9 +3,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 import type { AgentMemoryRecallOutput } from "@oxagen/oxagen/contracts/agent.memory.recall";
 import {
   formatRecalledMemories,
-  stripRecalledMemoryHeading,
   recallWorkspaceMemoryMessage,
-  createRecalledMemoryProvider,
 } from "./chat-memory";
 
 type Mem = AgentMemoryRecallOutput["memories"][number];
@@ -56,21 +54,6 @@ describe("formatRecalledMemories", () => {
     ])!;
     expect(body).toContain("- [FACT·convention]");
     expect(body).not.toContain("enforcement");
-  });
-});
-
-describe("stripRecalledMemoryHeading", () => {
-  it("drops the leading ## heading + blank lines, keeps the preamble", () => {
-    const body = formatRecalledMemories([memory()])!;
-    const stripped = stripRecalledMemoryHeading(body);
-    expect(stripped.startsWith("## ")).toBe(false);
-    expect(stripped).toContain("NOT user input");
-  });
-
-  it("returns the body unchanged when it has no heading", () => {
-    expect(stripRecalledMemoryHeading("no heading here")).toBe(
-      "no heading here",
-    );
   });
 });
 
@@ -149,24 +132,5 @@ describe("recallWorkspaceMemoryMessage", () => {
       timeoutMs: 1,
     });
     expect(msg).toBeNull();
-  });
-});
-
-describe("createRecalledMemoryProvider", () => {
-  it("recallContext returns the heading-stripped body of the recalled message", async () => {
-    const body = formatRecalledMemories([memory()])!;
-    const provider = createRecalledMemoryProvider({
-      recalledPromise: Promise.resolve({ role: "user", content: body }),
-    });
-    const recalled = await provider.recallContext();
-    expect(recalled.startsWith("## ")).toBe(false);
-    expect(recalled).toContain("[RULE·convention]");
-  });
-
-  it("recallContext returns empty string when nothing was recalled", async () => {
-    const provider = createRecalledMemoryProvider({
-      recalledPromise: Promise.resolve(null),
-    });
-    expect(await provider.recallContext()).toBe("");
   });
 });

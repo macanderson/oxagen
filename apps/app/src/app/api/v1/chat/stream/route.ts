@@ -79,7 +79,6 @@ import {
   recallWorkspaceMemoryDetailed,
   resolveGroundingCitations,
 } from "./recall-context";
-import { createChatMemoryProvider } from "./engine-memory";
 import { buildPageContextMessage } from "./page-context";
 import { evaluateTurnCreditGate } from "./credit-gate";
 import {
@@ -373,7 +372,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   // ── Pre-turn credit admission gate ───────────────────────────────────────────
   // Run the SAME admission gate (assertCanStartTurn) that already fires on every
   // scoped contract.invoke() tool call, BEFORE the top-level model turn begins —
-  // the model stream (runCodingAgent → streamAgentReply) is a direct @oxagen/ai
+  // the model stream reaches `streamAgentReply` as a direct @oxagen/ai
   // call, not an invoke(), so without this a no-tool-call turn skipped the
   // balance check and a suspended / zero-balance org got a full model call for
   // free. Blocks ONLY on the affirmative InsufficientCredits / BillingSuspended
@@ -816,6 +815,10 @@ export async function POST(request: NextRequest): Promise<Response> {
           requestId,
           surface: "app" as const,
           messageId: parentMessageId ?? requestId,
+          // The same per-turn key handed to the metered AI port below
+          // (createPlatformAgentAi(capCtx, capCtx.messageId, "app")), so
+          // skill_loads and token_usage join for this turn (#2597).
+          executionStepId: parentMessageId ?? requestId,
           clientIp,
         };
 
@@ -1208,9 +1211,9 @@ export async function POST(request: NextRequest): Promise<Response> {
           ? { ...agentTools, ...pageFormFillTool }
           : agentTools;
 
-        // Run the SAME coding engine the CLI uses (runCodingAgent) — one
-        // explicit step-driver with retry/compaction/loop-nudges — instead of a
-        // hand-rolled streamText loop. No `workspace` ⇒ no filesystem tools; the
+        // Run the SAME engine the CLI uses — one engine owning retry,
+        // compaction and loop detection — instead of a hand-rolled streamText
+        // loop. No `workspace` ⇒ no filesystem tools; the
         // materialized capability ToolSet is injected via `extraTools`. The raw
         // AI-SDK parts are forwarded to the stateful SSE translator via
         // `onStreamPart` so the client wire protocol is byte-identical.
@@ -1558,21 +1561,22 @@ export async function POST(request: NextRequest): Promise<Response> {
           // path (otherwise videos arrive as keyframe images above). Passed as
           // AI-SDK file parts by the engine.
           ...(videoAttachments.length > 0 ? { videos: videoAttachments } : {}),
-          history:
-            codeContextMessage ||
-            pinnedContextMessage ||
-            referencesContextMessage ||
-            pageContextMessage
-              ? [
-                  ...historyForEngine,
-                  ...([
-                    codeContextMessage,
-                    pinnedContextMessage,
-                    referencesContextMessage,
-                    pageContextMessage,
-                  ].filter(Boolean) as ModelMessage[]),
-                ]
-              : historyForEngine,
+          // Context messages, then the recalled-memory message LAST — the
+          // exact position the engine's MemoryProvider used to inject it:
+          // after the cached system prefix and every synthetic context block,
+          // immediately before the instruction. The provider-shaped adapter is
+          // gone (#1236's app-surface twin): no engine makes a mid-turn
+          // recallContext() callback any more.
+          history: [
+            ...historyForEngine,
+            ...([
+              codeContextMessage,
+              pinnedContextMessage,
+              referencesContextMessage,
+              pageContextMessage,
+              recalledMemory.message,
+            ].filter(Boolean) as ModelMessage[]),
+          ],
           // Prompt layering: base (chat OR coding) → bound agent instructions.
           // The coding CONTRACT (codeModeSystemPrompt) must always sit ABOVE the
           // customer's agent instructions, so the bound instructions are
@@ -1630,13 +1634,6 @@ export async function POST(request: NextRequest): Promise<Response> {
           // dispatch barrier (agent-engine v2 Phase 0) instead of the AI SDK's
           // unbounded parallel execution.
           mutatingToolNames,
-          // Recall ran CONCURRENTLY in the setup Promise.all above; the provider
-          // just reads its already-resolved value (no serial latency — C3). The
-          // engine prepends its own "## Recalled context" heading before the
-          // provider's body.
-          memory: createChatMemoryProvider({
-            recalledPromise: Promise.resolve(recalledMemory.message),
-          }),
           // NO `trace`: createClickHouseTraceStore writes up to 200 chars of the
           // raw instruction into ClickHouse, violating the chat surface's
           // hash-only prompt policy (C5). Per-step usage/credits still flow

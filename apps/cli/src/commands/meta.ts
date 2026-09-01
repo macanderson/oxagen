@@ -2,9 +2,9 @@
  * commands/meta.ts — Commander-tree introspection shared by the REPL and the
  * slash-command catalog.
  *
- * Extracted from program.tsx so leaf modules (slash/catalog.ts,
+ * Extracted from program.ts so leaf modules (slash/catalog.ts,
  * repl/interactive.tsx) can type/inspect CLI commands WITHOUT importing the
- * whole composition root: program.tsx holds the full 2k-line command tree, so
+ * whole composition root: program.ts holds the full 2k-line command tree, so
  * importing it from the REPL/slash layer put every command edit in their
  * type-check and test closure. This module is a leaf — it depends only on
  * commander's types and knows nothing about the actual command set.

@@ -12,8 +12,7 @@
  *    trace/file-lock adapters.
  *  - Mock ../lib/github-token to inject a test token.
  *  - Assert the handler orchestrates these collaborators correctly and that it
- *    invokes the full pipeline (runTurn) rather than the bare loop
- *    (runCodingAgent).
+ *    invokes the full pipeline (runTurn) rather than a bare turn.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -299,10 +298,11 @@ describe("agentRepoEditHandler — pipeline (runTurn)", () => {
     ]);
   });
 
-  it("calls the full pipeline (runTurn) — not the bare loop (runCodingAgent)", async () => {
+  it("calls the full pipeline (runTurn), not a bare turn", async () => {
     await agentRepoEditHandler(BASE_INPUT, ctx);
 
-    // runTurn must be called; runCodingAgent must NOT appear in the mock set.
+    // repo-edit is judged work: it must go through the pipeline, not straight
+    // to the engine.
     expect(mocks.runTurnFn).toHaveBeenCalledOnce();
   });
 
@@ -337,16 +337,18 @@ describe("agentRepoEditHandler — pipeline (runTurn)", () => {
     );
   });
 
-  it("passes a workspace and trace without centralized code graph or memory", async () => {
+  it("passes a workspace without centralized trace, code graph or memory", async () => {
     await agentRepoEditHandler(BASE_INPUT, ctx);
 
     expect(mocks.runTurnFn).toHaveBeenCalledWith(
       expect.objectContaining({
         workspace: expect.any(Object),
-        trace: expect.any(Object),
       }),
     );
     const options = mocks.runTurnFn.mock.calls[0]?.[0];
+    // The hand-built ClickHouse TraceStore is gone (#1240): the durable record
+    // of a turn is the engine event stream, not a bespoke per-turn row.
+    expect(options).not.toHaveProperty("trace");
     expect(options).not.toHaveProperty("codeGraph");
     expect(options).not.toHaveProperty("memory");
   });

@@ -8,10 +8,10 @@ import type { A2ATaskRow } from "./task-store";
 // ── mocks (vi.hoisted so the factories can reference them) ────────────────────
 const h = vi.hoisted(() => {
   const state: { streamParts: unknown[] } = { streamParts: [] };
-  // runCodingAgent double: drives the caller's onStreamPart with the scripted
-  // parts (mirroring the engine's per-step fullStream tap) and returns the
-  // turn's summed usage read from the last `finish` part's totalUsage.
-  const runCodingAgent = vi.fn(
+  // Engine double: drives the caller's onStreamPart with the scripted parts
+  // (mirroring the engine's per-step fullStream tap) and returns the turn's
+  // summed usage read from the last `finish` part's totalUsage.
+  const engineTurn = vi.fn(
     async (opts: { onStreamPart?: (p: unknown) => void }) => {
       let usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
       for (const p of state.streamParts) {
@@ -118,7 +118,7 @@ const h = vi.hoisted(() => {
   };
   return {
     state,
-    runCodingAgent,
+    engineTurn,
     insertEvents,
     updateTask,
     loadTask,
@@ -135,7 +135,7 @@ vi.mock("@oxagen/iam", () => ({
   fetchAgentRunAuthz: h.fetchAgentRunAuthz,
 }));
 const {
-  runCodingAgent,
+  engineTurn,
   insertEvents,
   updateTask,
   loadTask,
@@ -162,15 +162,15 @@ vi.mock("@oxagen/agent/adapters", () => ({
 }));
 vi.mock("@oxagen/agent-runner", () => ({
   // The bridge enters the engine through the executeTurn seam (agent-engine
-  // v2 Phase 1); the double keeps runCodingAgent's one-argument contract by
+  // v2 Phase 1); the double keeps the engine's one-argument contract by
   // dropping the surface tag.
   executeTurn: vi.fn(
-    (_surface: string, opts: Parameters<typeof h.runCodingAgent>[0]) =>
-      h.runCodingAgent(opts),
+    (_surface: string, opts: Parameters<typeof h.engineTurn>[0]) =>
+      h.engineTurn(opts),
   ),
   // The bridge imports DEFAULT_MAX_AGENT_STEPS for the maxSteps backstop; a
   // factory mock must declare every named export the source touches or Vitest
-  // throws on access. The value is inert here (the runCodingAgent double ignores
+  // throws on access. The value is inert here (the engine double ignores
   // maxSteps) — it only needs to exist. Mirrors the engine default.
   DEFAULT_MAX_AGENT_STEPS: 256,
 }));
@@ -259,7 +259,7 @@ const USER_MESSAGE: A2AMessage = HISTORY[0]!;
 
 beforeEach(() => {
   setStreamParts([]);
-  runCodingAgent.mockClear();
+  engineTurn.mockClear();
   updateTask.mockClear();
   insertEvents.mockClear();
   loadTask.mockClear();
@@ -320,7 +320,7 @@ describe("runA2ATask", () => {
 
     // Token usage is metered via the engine's AI port; lifecycle events are
     // emitted to ClickHouse (started + completed at minimum).
-    expect(runCodingAgent).toHaveBeenCalledOnce();
+    expect(engineTurn).toHaveBeenCalledOnce();
     const eventTypes = (
       insertEvents.mock.calls as unknown as Array<
         [Array<{ event_type: string }>]
@@ -386,7 +386,7 @@ describe("runA2ATask", () => {
   });
 
   it("marks the task failed when the engine throws", async () => {
-    runCodingAgent.mockImplementationOnce(() => {
+    engineTurn.mockImplementationOnce(() => {
       throw new Error("model down");
     });
     const final = await runA2ATask({
@@ -408,7 +408,7 @@ describe("runA2ATask", () => {
       message: USER_MESSAGE,
       model: "gpt-x",
     });
-    expect(runCodingAgent).toHaveBeenCalledOnce();
+    expect(engineTurn).toHaveBeenCalledOnce();
   });
 });
 
@@ -602,7 +602,7 @@ describe("runA2ATask — agent_executions lineage (spec §3.2)", () => {
 });
 
 // A2A JSON-RPC wire snapshot (task D). The bridge was refactored to run through
-// runCodingAgent (multi-step tool loop, invoke()-gated tools, per-turn memory
+// the shared engine (multi-step tool loop, invoke()-gated tools, per-turn memory
 // recall, USD budget guard) instead of a single hand-rolled streamAgentReply.
 // The A2A protocol wire — the sequence of status-update / artifact-update events
 // pushed to onEvent — MUST be preserved: the same part→event mapping now runs in

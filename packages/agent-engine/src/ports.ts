@@ -142,7 +142,7 @@ export interface FileLockGrant {
  * same file. This is the SINGLE wiring point: `write_file`/`edit_file` in
  * `tools.ts` acquire immediately before the real filesystem write and release
  * immediately after, regardless of which surface (chat, CLI, `agent.repo.edit`
- * fleet dispatch) called `runCodingAgent` — there is exactly one enforcement
+ * fleet dispatch) started the turn — there is exactly one enforcement
  * point, not one per caller.
  *
  * CLI: no `fileLock` is injected (undefined) — the CLI runs single-process, so

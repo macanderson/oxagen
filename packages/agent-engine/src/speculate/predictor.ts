@@ -13,8 +13,8 @@
  *   marker ("call read_file with offset:N, limit:M") — tools.ts wrote that
  *   marker precisely so the model would issue that call; predicting it is
  *   near-certain.
- * - A `grep` hit list is followed by reads of the top distinct matching files.
- * - A `glob` listing is followed by reads of its first entries.
+ * - A `search` result is followed by reads of the top distinct matching
+ *   files — content hits first, then a couple of name-only matches.
  */
 
 /** One completed tool call: what ran, with what input, and the string result. */
@@ -49,15 +49,6 @@ const TRUNCATION_FOLLOW_UP_RE =
 /** Matches a `path:line:` grep hit prefix (path must look file-ish). */
 const GREP_HIT_RE = /^([^\s:][^:]*):(\d+):/;
 
-/** Most read_file predictions mined from one code_graph result — stay modest. */
-const MAX_CODE_GRAPH_READS = 2;
-
-/** Matches a CLI code-graph row: "kind name — path:line" (signature tail ok). */
-const CODE_GRAPH_EMDASH_RE = /—\s+([^\s:]+):\d+/;
-
-/** Matches a CLI semantic-search row: "path (0.87)". */
-const CODE_GRAPH_SCORED_RE = /^(\S+)\s+\(\d+(?:\.\d+)?\)$/;
-
 function isPathLike(line: string): boolean {
   return (
     line.length > 0 &&
@@ -67,12 +58,12 @@ function isPathLike(line: string): boolean {
   );
 }
 
-/** A bare relative path on its own line (dependents/imports listing body). */
+/** A bare relative path on its own line — `search`'s "matching by name" body. */
 function isBarePathLine(line: string): boolean {
   return (
     isPathLike(line) &&
-    !line.includes(" ") && // headers ("Files importing x (3):") have spaces
-    !line.endsWith(":") && // file_symbols header line ("src/a.ts:")
+    !line.includes(" ") && // headers ("Files matching by name:") have spaces
+    !line.endsWith(":") && // section header line
     (line.includes("/") || line.includes("."))
   );
 }
@@ -97,66 +88,43 @@ export const heuristicPredictor: SpeculationPredictor = ({
         },
       });
     }
-    // Impact prefetch: the file just read is the file the model most likely
-    // changes next, and the code_graph description steers it to `dependents`
-    // for impact analysis before a change. Deterministic operation ONLY —
-    // never `semantic_search`, whose prefetch would spend an embedding on a
-    // prediction that may never be consumed. Providers without an import
-    // graph answer `dependents` with a static pointer string at zero cost,
-    // and the layer drops the prediction entirely when no code_graph tool is
-    // in the ToolSet, so this is safe to predict unconditionally.
-    if (typeof path === "string") {
-      predictions.push({
-        tool: "code_graph",
-        input: { operation: "dependents", query: path },
-      });
-    }
     return predictions;
   }
 
-  if (tool === "code_graph") {
-    // A code-graph answer is a list of code locations; the near-certain
-    // follow-up is reading the top hits. Row shapes vary by provider:
-    //   platform:  "path:line: kind name"
-    //   CLI:       "kind name — path:line (sig)"    (search / file_symbols)
-    //              bare path lines under a header   (dependents / imports)
-    //              "path (0.87)"                    (semantic_search)
-    // Only READS are predicted from here — never further code_graph calls —
-    // so no operation (semantic_search included) can cascade speculatively.
+  if (tool === "search") {
+    // The unified search returns a "Files matching by name:" section of bare
+    // paths and a "Content matches:" section of `path:line:text`. TWO passes,
+    // not one line-order pass: names are printed first but content hits carry
+    // line-level evidence the model is likelier to open, so content must win
+    // the budget regardless of print order.
+    //
+    // Name lines use `isBarePathLine`, not `isPathLike` — the latter admits
+    // the section headers themselves ("Files matching by name:" has no
+    // leading paren and no NUL), which would spend read_file prefetches on
+    // strings that are not paths at all.
+    const lines = result.split("\n");
     const seen = new Set<string>();
-    for (const line of result.split("\n")) {
-      const path =
-        GREP_HIT_RE.exec(line)?.[1] ??
-        CODE_GRAPH_EMDASH_RE.exec(line)?.[1] ??
-        CODE_GRAPH_SCORED_RE.exec(line)?.[1] ??
-        (isBarePathLine(line) ? line : undefined);
-      if (path === undefined || seen.has(path)) continue;
-      seen.add(path);
-      predictions.push({ tool: "read_file", input: { path } });
-      if (predictions.length >= MAX_CODE_GRAPH_READS) break;
-    }
-    return predictions;
-  }
-
-  if (tool === "grep") {
-    const seen = new Set<string>();
-    for (const line of result.split("\n")) {
+    for (const line of lines) {
       const hit = GREP_HIT_RE.exec(line);
       if (!hit) continue;
       const path = hit[1]!;
       if (seen.has(path)) continue;
       seen.add(path);
       predictions.push({ tool: "read_file", input: { path } });
-      if (predictions.length >= MAX_PREDICTIONS_PER_OBSERVATION) break;
+      if (predictions.length >= MAX_PREDICTIONS_PER_OBSERVATION) {
+        return predictions;
+      }
     }
-    return predictions;
-  }
-
-  if (tool === "glob") {
-    for (const line of result.split("\n")) {
-      if (!isPathLike(line)) continue;
+    let nameReads = 0;
+    for (const line of lines) {
+      if (nameReads >= 2) break; // listings are broader — stay modest
+      if (!isBarePathLine(line) || seen.has(line)) continue;
+      seen.add(line);
+      nameReads += 1;
       predictions.push({ tool: "read_file", input: { path: line } });
-      if (predictions.length >= 2) break; // listings are broader — stay modest
+      if (predictions.length >= MAX_PREDICTIONS_PER_OBSERVATION) {
+        return predictions;
+      }
     }
     return predictions;
   }

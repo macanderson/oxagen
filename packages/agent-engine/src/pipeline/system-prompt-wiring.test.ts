@@ -18,6 +18,7 @@ import { describe, it, expect, vi } from "vitest";
 import { MemoryWorkspace } from "../workspaces/memory";
 import { runTurn } from "./index";
 import type { AgentAi, ModelRunArgs } from "../ports";
+import { scriptedEngine } from "./scripted-engine";
 
 /** An AgentAi that records the system prompt it is called with, then returns cleanly. */
 function makeCapturingAi(capture: (system: string) => void): AgentAi {
@@ -57,6 +58,7 @@ describe("runTurn — system prompt wiring", () => {
   it("delivers the agent operating rules (report tool results, don't end on a bare tool call)", async () => {
     let captured = "";
     await runTurn({
+      execute: scriptedEngine,
       prompt: "what's the CI status of the PR?",
       workspace: new MemoryWorkspace({ "a.ts": "x" }),
       ai: makeCapturingAi((s) => (captured = s)),
@@ -74,6 +76,7 @@ describe("runTurn — system prompt wiring", () => {
   it("threads profile:'headless' into the composed prompt (strips narration, adds protocol)", async () => {
     let captured = "";
     await runTurn({
+      execute: scriptedEngine,
       prompt: "fix the failing test",
       workspace: new MemoryWorkspace({ "a.ts": "x" }),
       ai: makeCapturingAi((s) => (captured = s)),
@@ -96,6 +99,7 @@ describe("runTurn — system prompt wiring", () => {
   it("defaults to the interactive (narrating) profile when none is given", async () => {
     let captured = "";
     await runTurn({
+      execute: scriptedEngine,
       prompt: "fix the failing test",
       workspace: new MemoryWorkspace({ "a.ts": "x" }),
       ai: makeCapturingAi((s) => (captured = s)),
@@ -112,6 +116,7 @@ describe("runTurn — system prompt wiring", () => {
   it("composes the operating rules WITH the repo's project rules (does not replace them)", async () => {
     let captured = "";
     await runTurn({
+      execute: scriptedEngine,
       prompt: "do the thing",
       workspace: new MemoryWorkspace({ "a.ts": "x" }),
       ai: makeCapturingAi((s) => (captured = s)),
@@ -129,38 +134,19 @@ describe("runTurn — system prompt wiring", () => {
     expect(captured).toContain("Project rules (from CLAUDE.md)");
   });
 
-  it("adds the F1 trust-but-verify rule ONLY when ENHANCE produced a localization map (full pipeline)", async () => {
-    // Positive: a code graph that resolves the backticked symbol → the F1
-    // localizer renders a candidate-locations block during ENHANCE → the
-    // executor's system prompt must carry the spec's one-line rule.
-    let withGraph = "";
-    const codeGraph = {
-      query: vi
-        .fn()
-        .mockResolvedValue(
-          "function parseThing — src/parse.ts:10  export function parseThing()",
-        ),
-    };
+  it("never advertises a code graph to the executor (full pipeline)", async () => {
+    // The engine registers no `code_graph` tool on any surface, so the prompt
+    // the executor actually receives must not steer the model at one.
+    let system = "";
     await runTurn({
+      execute: scriptedEngine,
       prompt: "fix `parseThing` returning null on empty input",
       workspace: new MemoryWorkspace({ "src/parse.ts": "x" }),
-      ai: makeCapturingAi((s) => (withGraph = s)),
-      codeGraph,
+      ai: makeCapturingAi((s) => (system = s)),
     });
-    expect(withGraph).toContain(
-      "Candidate locations were computed from the code graph.",
-    );
-    expect(withGraph).toContain("do not re-derive them.");
-
-    // Negative: the same pipeline without a graph cannot localize, so the
-    // rule must be absent — no rule about a block the model never received.
-    let withoutGraph = "";
-    await runTurn({
-      prompt: "fix `parseThing` returning null on empty input",
-      workspace: new MemoryWorkspace({ "src/parse.ts": "x" }),
-      ai: makeCapturingAi((s) => (withoutGraph = s)),
-    });
-    expect(withoutGraph).toContain("Operating rules:");
-    expect(withoutGraph).not.toContain("do not re-derive them.");
+    expect(system).toContain("Operating rules:");
+    expect(system).toContain("LOCATE BEFORE YOU TOUCH");
+    expect(system).not.toContain("code_graph");
+    expect(system).not.toContain("CODE GRAPH");
   });
 });

@@ -7,6 +7,9 @@ export {
   describeEditFailure,
   clipMiddle,
 } from "./tools";
+// Which built-in tools mutate — the engine serializes them, and so must any
+// host that advertises this tool set to a remote engine.
+export { MUTATING_TOOL_NAMES } from "./tools-shared";
 // Edit integrity — hash-anchored, syntax-gated, audited file edits.
 export {
   hashContent,
@@ -16,14 +19,8 @@ export {
 } from "./edit-integrity";
 export type { SyntaxCheckResult } from "./edit-integrity";
 // LocalWorkspace is a CLI adapter (Stage B), not engine code — see ADR-019.
-export {
-  runCodingAgent,
-  changedFilesFromDiff,
-  isErrorResult,
-  stringifyCapped,
-  DEFAULT_AGENT_MODEL,
-  DEFAULT_MAX_AGENT_STEPS,
-} from "./engine";
+// DEFAULT_AGENT_MODEL / DEFAULT_MAX_AGENT_STEPS come through ./types above.
+export { changedFilesFromDiff } from "./diff";
 
 // Stage A4 — model router + rate card.
 export * from "./router/index";

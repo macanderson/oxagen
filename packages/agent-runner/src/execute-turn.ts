@@ -4,23 +4,20 @@
  *
  * Every platform surface — app chat, REST chat, the A2A bridge, and the
  * `agent.repo.edit` fleet capability — enters the engine through this module
- * instead of importing `runCodingAgent`/`runTurn` directly. Behavior is a
- * byte-identical delegation; the value is the seam.
+ * instead of importing `runTurn` directly. The value is the seam:
  *
- * Scope, precisely: these two functions run a turn IN-REQUEST. Durable runs
- * took a different route — run rows, the append-only event log, checkpoints,
- * fenced attempts, and resume all live in run-store.ts, driven by
- * `packages/agent-worker`, and they never call through here. So the seam's
- * remaining job is engine selection: Phase C swaps the engine behind the
- * `OXAGEN_ENGINE` flag HERE, without touching any surface — see
- * {@link executeTurn}.
+ * - Phase 2 (durable runs) adds run rows, the append-only event log,
+ *   per-step checkpoints, and resume HERE, without touching any surface.
+ * - Phase C (the Stella engine) swaps the engine behind the `OXAGEN_ENGINE`
+ *   flag HERE, without touching any surface — see {@link executeTurn}.
  *
  * Two functions rather than one polymorphic spec, deliberately: the bare loop
  * and the judged pipeline take different option types and return different
- * results, and the call sites read best with the options object inline.
+ * results, and the call sites read best with the options object inline. The
+ * consolidation into a serializable RunSpec happens in Phase 2, when run rows
+ * force the options apart from the ports anyway.
  */
 import {
-  runCodingAgent,
   runTurn,
   type RunCodingAgentOptions,
   type RunCodingAgentResult,
@@ -30,11 +27,10 @@ import {
 import { resolveEngineChoice, type EngineChoice } from "./stella/engine-choice";
 
 /**
- * Which platform surface is running this turn. Inert on the in-request path —
- * nothing here routes on it. It exists so every caller declares its identity at
- * the seam, and it is the same union `agent_runs.surface` stores on the durable
- * path (`EnqueueRunInput.surface` in run-store.ts), so the two spellings of
- * "which surface" cannot drift apart.
+ * Which platform surface is running this turn. Inert today (nothing routes on
+ * it); it exists so every caller declares its identity at the seam, and so
+ * Phase 2 can stamp it onto the run row / event log without another
+ * all-call-sites sweep.
  */
 export type PlatformSurface = "chat" | "api-chat" | "a2a" | "repo-edit";
 
@@ -51,43 +47,54 @@ export interface ExecuteTurnOptions {
 }
 
 /**
- * Run one bare engine turn (the step loop, no judge/revise pipeline) for
- * `surface`, on whichever engine the flag resolves to.
+ * Run one bare engine turn (no judge/revise pipeline) for `surface`.
  *
- * Both engines satisfy the same contract — same options in, same result out,
- * same `onEvent`/`onStreamPart` streams — so no caller of this function can
- * tell which one ran, and none needed changing to gain the choice. That was the
- * whole point of building the seam in Phase 1.
+ * `resolveEngineChoice` is still consulted even though it can only answer
+ * `stella`: its job now is to REFUSE a run that asked for the deleted
+ * TypeScript loop, rather than run it on Stella and report success for an
+ * engine nobody selected.
  *
- * The Stella path is loaded lazily, only when it is actually chosen: a
- * deployment on the TS engine must not pay a module-load cost, and more
- * importantly must not construct a sidecar pool it will never use.
+ * The Stella path stays a lazy import. It costs nothing to keep and it means a
+ * process that never runs a turn — a CLI printing help, a test importing this
+ * module for its types — still does not construct a sidecar pool.
  */
 export async function executeTurn(
   surface: PlatformSurface,
   engine: RunCodingAgentOptions,
   options: ExecuteTurnOptions = {},
 ): Promise<RunCodingAgentResult> {
-  void surface; // declared at the seam; the in-request path records nothing
+  void surface; // recorded on the run row starting in Phase 2
   const choice: EngineChoice = resolveEngineChoice({
     requested: options.requestedEngine,
     env: options.env,
   });
-  if (choice === "stella") {
-    const { runTurnOnStella } = await import("./stella/index");
-    return runTurnOnStella(engine);
-  }
-  return runCodingAgent(engine);
+  void choice; // "stella" or it threw; kept so the refusal is not optimised away
+  const { runTurnOnStella } = await import("./stella/index");
+  return runTurnOnStella(engine);
 }
 
 /**
  * Run one judged pipeline turn (evaluate → enhance → route → execute → judge
- * → revise) for `surface`. Exactly `runTurn(pipeline)` today.
+ * → revise) for `surface`.
+ *
+ * The pipeline stays host-side — it wraps turns, it is not inside one — but
+ * each execution segment goes through {@link executeTurn}, so a judged turn
+ * reaches the engine exactly as a bare one does. Injected via
+ * `RunTurnOptions.execute`, which is REQUIRED now that the pipeline has no
+ * in-process loop to fall back on, and injected rather than imported because
+ * the dependency points this way: the engine package cannot import this one.
  */
 export function executePipelineTurn(
   surface: PlatformSurface,
-  pipeline: RunTurnOptions,
+  pipeline: Omit<RunTurnOptions, "execute">,
+  options: ExecuteTurnOptions = {},
 ): Promise<RunTurnResult> {
-  void surface; // declared at the seam; the in-request path records nothing
-  return runTurn(pipeline);
+  // `execute` is this function's whole contribution, so a caller cannot pass
+  // one: supplying the engine here is what makes a judged turn reach the same
+  // engine a bare one does. It is spread last so the type and the runtime
+  // agree about which value wins.
+  return runTurn({
+    ...pipeline,
+    execute: (segment) => executeTurn(surface, segment, options),
+  });
 }

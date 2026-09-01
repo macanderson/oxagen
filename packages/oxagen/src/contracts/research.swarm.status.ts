@@ -12,6 +12,7 @@ export const researchSwarmStatus = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "research" },
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

@@ -11,6 +11,7 @@ export const pluginOrgList = registerCapability({
   layers: ["api", "docs", "mcp", "unit"],
   scoped: true,
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

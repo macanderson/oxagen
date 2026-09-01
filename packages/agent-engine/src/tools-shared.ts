@@ -9,9 +9,9 @@
 //
 // Three concerns live here, each a leaf the tools compose:
 //   1. isTestPath — the test-file predicate (below).
-//   2. The tool-NAMING standard: canonical `domain.subject.action` names + the
-//      canonical↔model-facing mapping, so every new structured tool gets its
-//      model-facing name mechanically.
+//   2. The tool-NAMING standard (ADR-022 pending): canonical `domain.subject.
+//      action` names + the canonical↔model-facing mapping, so every new
+//      structured tool gets its model-facing name mechanically.
 //   3. The shared ARG fragments (scopeSchema / verbositySchema / limitSchema)
 //      every new structured tool composes, so their inputs stay uniform.
 
@@ -58,23 +58,18 @@ export function isTestPath(relPath: string): boolean {
   return TEST_BASENAME_PATTERNS.some((re) => re.test(basename));
 }
 
-// ── Tool naming standard ─────────────────────────────────────────────────────
+// ── Tool naming standard (ADR-022 pending) ───────────────────────────────────
 //
 // Canonical tool names are `domain.subject.action` — exactly three dot-separated
 // segments, singular nouns, snake_case for a compound word WITHIN one segment.
 // The model-facing name is the canonical name with every out-of-charset char
-// (the provider tool-name grammar is ^[A-Za-z0-9_-]) replaced by `_`.
+// (the provider tool-name grammar is ^[A-Za-z0-9_-]) replaced by `_`, so a
+// structured tool and any capability twin present the SAME name to the model.
 // This registry + the two mapping helpers are the single mechanism every future
 // structured tool reuses, so naming is decided once, not per tool.
 //
-// HEADS UP: this dotted form came from ADR-022, which ADR-025 superseded for
-// CAPABILITY names — every capability is now verb-first snake_case, so no
-// capability shares a dotted name with a structured tool any more. These five
-// engine-local structured tools have not been migrated; that is tracked work,
-// not a claim that the dotted form is still the house standard.
-//
-// The core seven (read_file, write_file, edit_file, list_dir, glob, grep,
-// bash) and code_graph deliberately KEEP their plain, short model-facing names
+// The core file/exec tools (read_file, write_file, edit_file, list_dir,
+// search, bash) deliberately KEEP their plain, short model-facing names
 // (training-prior protection) and are intentionally absent from this registry
 // — they are not `domain.subject.action` and must not be renamed.
 
@@ -91,12 +86,10 @@ export type CanonicalToolName = (typeof CANONICAL_TOOL_NAMES)[number];
 
 /**
  * Canonical dotted name → model-facing name: replace every character outside the
- * provider tool-name charset (`^[A-Za-z0-9_-]`) with `_`. Same substitution the
- * kernel's `toModelToolName` (packages/agent/src/runtime/materialize-tools.ts)
- * applies, so `x.y.z` resolves to `x_y_z` on both sides. The kernel additionally
- * truncates to 128 chars and de-duplicates collisions; every name in
- * {@link CANONICAL_TOOL_NAMES} is far shorter than that, so the two agree here.
- * Pure.
+ * provider tool-name charset (`^[A-Za-z0-9_-]`) with `_`. Kept byte-identical to
+ * the kernel's `toModelToolName` (packages/agent/src/runtime/materialize-tools.ts)
+ * so a structured tool named `x.y.z` and a materialized capability `x.y.z`
+ * resolve to the same `x_y_z`. Pure.
  */
 export function modelToolName(canonical: string): string {
   return canonical.replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -201,3 +194,30 @@ export function resolveLimit(
   if (limit !== undefined) return Math.max(1, Math.min(limit, caps.verbose));
   return caps[verbosity];
 }
+
+// ── Which built-in tools mutate the workspace ────────────────────────────────
+
+/**
+ * Tools that MUTATE the workspace when they execute — running one a second
+ * time re-applies its side effects. These are the built-in
+ * `buildWorkspaceTools` names (see tools.ts): `bash` (arbitrary shell),
+ * `write_file`, and `edit_file`.
+ *
+ * Two consumers, and they are the reason this is one list rather than two.
+ * `dispatch-guard.ts` refuses to run these concurrently with anything else.
+ * `@oxagen/agent-runner`'s tool mapping declares them to Stella as
+ * `read_only: false`, so the engine serializes them on its own side. A tool
+ * that mutates and is missing from one of those answers is a tool two callers
+ * can run at once.
+ *
+ * agent-runner used to keep a mirrored copy with a test scraping this file's
+ * source to pin them together, because this copy was scheduled to die with the
+ * TypeScript loop. It moved here instead, so there is one list and nothing to
+ * pin.
+ */
+export const MUTATING_TOOL_NAMES: ReadonlySet<string> = new Set<string>([
+  "bash",
+  "write_file",
+  "edit_file",
+  "delete_file",
+]);

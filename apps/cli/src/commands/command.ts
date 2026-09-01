@@ -13,8 +13,9 @@
  * emits one single-line JSON value (shape preserved: list → summary array, show →
  * the command, new → `{name,path,created}`), pretty mode renders the human view.
  * A bad name exits 2 (usage) and an unknown command exits 1, both as uniform
- * stderr error lines that never touch stdout. `command run` delegates the turn
- * itself to runOneShot, which owns its own streaming output.
+ * stderr error lines that never touch stdout. `command run` no longer runs a
+ * turn: the coding agent was retired in the Stella cutover, so it validates
+ * the invocation and prints the retirement notice.
  */
 import {
   loadCommands,
@@ -128,12 +129,13 @@ export async function commandRun(
     out.error(expanded.error, "usage");
     return;
   }
-  // ADR-019 §4: running a command expands to an agent turn — require an account.
-  // The turn's own streaming output belongs to runOneShot, not this writer.
-  const { requireSession } = await import("../lib/session.js");
-  const session = requireSession();
-  const { runOneShot } = await import("../repl/one-shot.js");
-  await runOneShot(expanded.prompt, { session, model: expanded.model });
+  // Running the expanded turn was the retired coding agent's job — the
+  // template still expands (so the command's definition can be validated),
+  // but the turn itself now belongs to the `stella` CLI.
+  const { printRetiredNotice } = await import("./retired.js");
+  printRetiredNotice(
+    "Running a slash command as an agent turn (`command run`)",
+  );
 }
 
 function prettyCommandList(commands: SlashCommand[]): string {

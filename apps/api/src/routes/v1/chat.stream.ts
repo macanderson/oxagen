@@ -46,10 +46,7 @@ import {
   createApiStreamTranslator,
   type ApiStreamEvent,
 } from "./chat-stream-translator";
-import {
-  recallWorkspaceMemoryMessage,
-  createRecalledMemoryProvider,
-} from "./chat-memory";
+import { recallWorkspaceMemoryMessage } from "./chat-memory";
 
 const BodySchema = z.object({
   // Bound the message body — the shared per-message ingress cap (see
@@ -84,10 +81,10 @@ export const chatStreamRoute = new Hono<AppEnv>();
 // Each SSE line: `data: <JSON ApiStreamEvent>\n\n`
 // Terminal: `event: done\ndata: [DONE]\n\n`
 //
-// Runs the SAME coding engine the CLI and in-app chat use (runCodingAgent),
-// workspace-optional conversational mode — one step-driver with the multi-step
-// tool loop (`stopWhen`), invoke()-gated tools, per-turn memory recall, and the
-// USD budget guard. Raw AI-SDK parts are forwarded to a stateful SSE translator
+// Runs the SAME engine the CLI and in-app chat use, workspace-optional
+// conversational mode — the multi-step tool loop (`stopWhen`), invoke()-gated
+// tools, per-turn memory recall and the USD budget guard. Raw AI-SDK parts are
+// forwarded to a stateful SSE translator
 // via `onStreamPart` so the client wire protocol is byte-identical to the
 // pre-engine single-`streamAgentReply` transport.
 chatStreamRoute.post("/", async (c) => {
@@ -119,7 +116,13 @@ chatStreamRoute.post("/", async (c) => {
   // A stable per-turn UUID: execution_step_id / reference_id in the metered AI
   // port, executionRef for memory recall, and messageId in telemetry.
   const messageId = ctx.requestId;
-  const capCtx: CapabilityContext = { ...ctx, messageId };
+  // Same value the metered AI port receives, so skill_loads and token_usage
+  // are keyed identically for this turn (#2597).
+  const capCtx: CapabilityContext = {
+    ...ctx,
+    messageId,
+    executionStepId: messageId,
+  };
 
   // Resolve language model: explicit > tier > workspace/user defaults > system default.
   let resolvedModel = model;
@@ -442,7 +445,14 @@ chatStreamRoute.post("/", async (c) => {
         const result = await executeTurn("api-chat", {
           ai,
           instruction: content,
-          history: historyForEngine,
+          // The recalled-memory message rides history directly, in the exact
+          // position the engine's MemoryProvider used to inject it — after the
+          // cached system prefix, immediately before the instruction. The
+          // provider-shaped adapter is gone (#1236): there is no mid-turn
+          // recallContext() callback on any engine any more.
+          history: recalledMemory
+            ? [...historyForEngine, recalledMemory]
+            : historyForEngine,
           system: resolvePrompt({
             key: "chat.system",
             baseline: chatSystemPrompt({
@@ -466,14 +476,10 @@ chatStreamRoute.post("/", async (c) => {
           // No `workspace` ⇒ conversational mode: no filesystem tools; the
           // materialized invoke()-gated capability ToolSet is injected here.
           extraTools: agentTools,
-          // Mutating capability aliases serialize behind the engine's
-          // dispatch barrier (agent-engine v2 Phase 0).
+          // Mutating capability aliases: the engine's read/write partitioning
+          // input (the TS dispatch barrier before the cutover, Stella's
+          // read_only bit after).
           mutatingToolNames,
-          // Recall ran CONCURRENTLY in the setup Promise.all above; the provider
-          // just reads its already-resolved value (no serial latency).
-          memory: createRecalledMemoryProvider({
-            recalledPromise: Promise.resolve(recalledMemory),
-          }),
           // Client-disconnect abort stops the loop.
           signal: c.req.raw.signal,
           onStreamPart: (part) => translator.onPart(part),

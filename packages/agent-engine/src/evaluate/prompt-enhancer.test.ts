@@ -1,28 +1,17 @@
 /**
- * Tests for prompt enhancement (F1 localization, F8 repo priors, F9 recall filter).
+ * Tests for prompt enhancement (F8 repo priors, F9 recall filter).
  *
- * Tests the wiring of deterministic localization, repo-prior injection, and
- * memory-recall applicability filtering into the ENHANCE stage.
+ * Tests the wiring of repo-prior injection and memory-recall applicability
+ * filtering into the ENHANCE stage.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { enhancePrompt, extractCandidates } from "./prompt-enhancer";
-import type { CodeGraphProvider, Workspace } from "../types";
+import { enhancePrompt } from "./prompt-enhancer";
 import type { MemoryProvider } from "../ports";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
 import type { RepoPrior } from "../priors";
 import { savePrior } from "../priors";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-
-function makeCodeGraphProvider(
-  overrides: Partial<CodeGraphProvider> = {},
-): CodeGraphProvider {
-  return {
-    query: vi.fn().mockResolvedValue(""),
-    ...overrides,
-  };
-}
 
 function makeMemoryProvider(context: string = ""): MemoryProvider {
   return {
@@ -45,7 +34,6 @@ function setEnv(key: string, value: string | undefined): void {
 
 beforeEach(() => {
   // Default state: flags unset or off.
-  delete process.env.OXAGEN_LOCALIZE;
   delete process.env.OXAGEN_REPO_PRIORS;
   delete process.env.OXAGEN_RECALL_FILTER;
 });
@@ -60,171 +48,6 @@ afterEach(() => {
     }
   }
   Object.keys(originalEnv).length = 0;
-});
-
-// ── extractCandidates ────────────────────────────────────────────────────────
-
-describe("extractCandidates", () => {
-  it("extracts backticked symbols and paths", () => {
-    const prompt = "fix `loginUser` in `src/auth.ts`";
-    const result = extractCandidates(prompt);
-    expect(result.symbols).toContain("loginUser");
-    expect(result.paths).toContain("src/auth.ts");
-  });
-
-  it("extracts CamelCase and snake_case identifiers", () => {
-    const prompt = "fix the LoginValidator and user_id field";
-    const result = extractCandidates(prompt);
-    expect(result.symbols).toContain("LoginValidator");
-    expect(result.symbols).toContain("user_id");
-  });
-
-  it("filters prose stopwords", () => {
-    const prompt = "fix the bug in the code";
-    const result = extractCandidates(prompt);
-    // "fix", "the", "bug", "code" are stopwords or too short.
-    expect(result.symbols.length).toBe(0);
-  });
-});
-
-// ── F1 Localization ──────────────────────────────────────────────────────────
-
-describe("F1: Localization", () => {
-  it("runs localization when flag is unset (default on)", async () => {
-    delete process.env.OXAGEN_LOCALIZE;
-    const graph = makeCodeGraphProvider({
-      query: vi.fn().mockResolvedValue("packages/auth/index.ts"),
-    });
-
-    // Mock localize to return a non-empty renderedBlock.
-    const mockLocalize = vi.spyOn(await import("../localize"), "localize");
-    mockLocalize.mockResolvedValue({
-      files: [
-        {
-          path: "packages/auth/index.ts",
-          symbols: ["loginUser"],
-          score: 5,
-          reason: "traceback hit",
-        },
-      ],
-      testHints: ["packages/auth/test"],
-      tracebackParsed: true,
-      renderedBlock:
-        "## Candidate locations (deterministic)\n- **packages/auth/index.ts**",
-    });
-
-    const result = await enhancePrompt({
-      prompt: "fix the login bug",
-      codeGraph: graph,
-    });
-
-    expect(result.hasLocalization).toBe(true);
-    mockLocalize.mockRestore();
-  });
-
-  it("skips localization when OXAGEN_LOCALIZE=0", async () => {
-    setEnv("OXAGEN_LOCALIZE", "0");
-    const graph = makeCodeGraphProvider();
-
-    const mockLocalize = vi.spyOn(await import("../localize"), "localize");
-    mockLocalize.mockResolvedValue({
-      files: [],
-      testHints: [],
-      tracebackParsed: false,
-      renderedBlock: "## Candidate locations (deterministic)",
-    });
-
-    const result = await enhancePrompt({
-      prompt: "fix the login bug",
-      codeGraph: graph,
-    });
-
-    // Localize should not be called when flag is "0".
-    expect(result.hasLocalization).toBe(false);
-    mockLocalize.mockRestore();
-  });
-
-  it("returns empty renderedBlock and sets hasLocalization=false when localize returns empty", async () => {
-    const graph = makeCodeGraphProvider();
-
-    const mockLocalize = vi.spyOn(await import("../localize"), "localize");
-    mockLocalize.mockResolvedValue({
-      files: [],
-      testHints: [],
-      tracebackParsed: false,
-      renderedBlock: "",
-    });
-
-    const result = await enhancePrompt({
-      prompt: "fix the login bug",
-      codeGraph: graph,
-    });
-
-    expect(result.hasLocalization).toBe(false);
-    mockLocalize.mockRestore();
-  });
-
-  it("gracefully handles localize errors (defensive try/catch)", async () => {
-    const graph = makeCodeGraphProvider();
-
-    const mockLocalize = vi.spyOn(await import("../localize"), "localize");
-    mockLocalize.mockRejectedValue(new Error("graph unavailable"));
-
-    // Should not throw; enhancement degrades gracefully.
-    const result = await enhancePrompt({
-      prompt: "fix the login bug",
-      codeGraph: graph,
-    });
-
-    expect(result.hasLocalization).toBe(false);
-    mockLocalize.mockRestore();
-  });
-
-  it("forwards the remaining stage budget to localize (races the budget, never extends it)", async () => {
-    const graph = makeCodeGraphProvider();
-
-    const mockLocalize = vi.spyOn(await import("../localize"), "localize");
-    mockLocalize.mockResolvedValue({
-      files: [],
-      testHints: [],
-      tracebackParsed: false,
-      renderedBlock: "",
-    });
-
-    await enhancePrompt({
-      prompt: "fix the login bug",
-      codeGraph: graph,
-      timeoutMs: 5_000,
-    });
-
-    expect(mockLocalize).toHaveBeenCalledTimes(1);
-    const [, , locOpts] = mockLocalize.mock.calls[0]!;
-    expect(locOpts?.semanticFallback).toBe(false);
-    // The forwarded budget is the REMAINING slice of the 5 s stage budget —
-    // positive, and never more than the stage budget itself.
-    expect(locOpts?.timeoutMs).toBeGreaterThan(0);
-    expect(locOpts?.timeoutMs).toBeLessThanOrEqual(5_000);
-    mockLocalize.mockRestore();
-  });
-
-  it("passes an effectively-unbounded budget to localize when ENHANCE has no timeout", async () => {
-    const graph = makeCodeGraphProvider();
-
-    const mockLocalize = vi.spyOn(await import("../localize"), "localize");
-    mockLocalize.mockResolvedValue({
-      files: [],
-      testHints: [],
-      tracebackParsed: false,
-      renderedBlock: "",
-    });
-
-    await enhancePrompt({ prompt: "fix the login bug", codeGraph: graph });
-
-    const [, , locOpts] = mockLocalize.mock.calls[0]!;
-    // MAX_SAFE_INTEGER — the localizer treats over-max-timer values as no deadline.
-    expect(locOpts?.timeoutMs).toBe(Number.MAX_SAFE_INTEGER);
-    mockLocalize.mockRestore();
-  });
 });
 
 // ── F8 Repo Prior Injection ──────────────────────────────────────────────────
@@ -375,32 +198,27 @@ describe("F9: Memory Recall Filtering", () => {
     expect(result.context).toContain("[recall — verify before trusting]");
   });
 
-  it("gracefully handles filtering errors (fall back to raw memory)", async () => {
+  it("keeps memory when the recall provider itself throws", async () => {
     setEnv("OXAGEN_RECALL_FILTER", "1");
 
-    const memory = makeMemoryProvider("- some lesson");
+    const memory: MemoryProvider = {
+      recallContext: vi.fn().mockRejectedValue(new Error("store offline")),
+      remember: vi.fn(),
+    };
 
-    // Simulate a mock that might fail during filtering.
-    const mockLocalize = vi.spyOn(await import("../localize"), "localize");
-    mockLocalize.mockRejectedValue(new Error("graph error"));
+    // Recall is best-effort: a failing provider degrades to no memory rather
+    // than failing the turn.
+    const result = await enhancePrompt({ prompt: "fix something", memory });
 
-    const result = await enhancePrompt({
-      prompt: "fix something",
-      memory,
-      codeGraph: makeCodeGraphProvider(),
-    });
-
-    // Should gracefully degrade, keeping memory (possibly unfiltered).
-    expect(result.hasMemory).toBe(true);
-
-    mockLocalize.mockRestore();
+    expect(result.hasMemory).toBe(false);
+    expect(result.context).toBe("");
   });
 });
 
-// ── Integration: all three features together ──────────────────────────────────
+// ── Integration: F8 + F9 together ─────────────────────────────────────────────
 
-describe("Integration: F1 + F8 + F9", () => {
-  it("injects localization, prior, and filtered recall in correct order", async () => {
+describe("Integration: F8 + F9", () => {
+  it("injects prior and filtered recall in that order", async () => {
     setEnv("OXAGEN_REPO_PRIORS", "1");
     setEnv("OXAGEN_RECALL_FILTER", "1");
 
@@ -417,64 +235,33 @@ describe("Integration: F1 + F8 + F9", () => {
     };
     savePrior(tmpDir, prior);
 
-    const graph = makeCodeGraphProvider();
     const memory = makeMemoryProvider("- use async/await\n- validate input");
-
-    const mockLocalize = vi.spyOn(await import("../localize"), "localize");
-    mockLocalize.mockResolvedValue({
-      files: [
-        {
-          path: "src/auth.ts",
-          symbols: ["login"],
-          score: 5,
-          reason: "symbol hit",
-        },
-      ],
-      testHints: [],
-      tracebackParsed: true,
-      renderedBlock:
-        "## Candidate locations (deterministic)\n- **src/auth.ts**",
-    });
 
     const result = await enhancePrompt({
       prompt: "fix async login validation",
-      codeGraph: graph,
       memory,
       repo: "django/django",
       priorsDir: tmpDir,
     });
 
-    expect(result.hasLocalization).toBe(true);
     expect(result.hasRepoPrior).toBe(true);
     expect(result.filteredRecall).toBe(true);
     expect(result.hasMemory).toBe(true);
 
-    // Verify order: localization first, then prior, then memory.
-    const locIdx = result.context.indexOf("## Candidate locations");
     const priorIdx = result.context.indexOf("## Repo prior:");
     const recallIdx = result.context.indexOf("## Lessons from prior sessions");
-
-    expect(locIdx).toBeLessThan(priorIdx);
+    expect(priorIdx).toBeGreaterThanOrEqual(0);
     expect(priorIdx).toBeLessThan(recallIdx);
 
-    mockLocalize.mockRestore();
     rmSync(tmpDir, { recursive: true });
   });
 
   it("returns correct EnhanceResult flags", async () => {
-    const graph = makeCodeGraphProvider({
-      query: vi.fn().mockResolvedValue(""),
-    });
     const memory = makeMemoryProvider("");
 
-    const result = await enhancePrompt({
-      prompt: "fix something",
-      codeGraph: graph,
-      memory,
-    });
+    const result = await enhancePrompt({ prompt: "fix something", memory });
 
     // All flags should be false when no features are enabled.
-    expect(result.hasLocalization).toBe(false);
     expect(result.hasRepoPrior).toBe(false);
     expect(result.filteredRecall).toBe(false);
     expect(result.hasMemory).toBe(false);
@@ -483,7 +270,7 @@ describe("Integration: F1 + F8 + F9", () => {
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
     expect(result.startedAt).toBeGreaterThan(0);
     expect(result.finishedAt).toBeGreaterThanOrEqual(result.startedAt);
-    expect(Array.isArray(result.resolved)).toBe(true);
-    expect(result.usedSemanticFallback).toBe(false);
+    expect(result.prompt).toBe("fix something");
+    expect(result.context).toBe("");
   });
 });

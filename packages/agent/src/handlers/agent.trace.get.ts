@@ -1,11 +1,5 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, asc, eq, inArray } from "drizzle-orm";
-import {
-  createSession,
-  appendEvent,
-  analyzeReplay,
-  extractTurnMetrics,
-} from "@oxagen/engram";
 import type { CapabilityContext } from "../types";
 import type {
   AgentTraceGetInput,
@@ -300,67 +294,48 @@ export async function agentTraceGetHandler(
   }
 
   const root = build(rootId);
-  const { turnMetrics, replayDeterministic } = deriveTurnMetrics(root, ctx);
+  const { turnMetrics, replayDeterministic } = deriveTurnMetrics(root);
   return { ...root, turnMetrics, replayDeterministic };
 }
 
 /**
- * Treat each of the root execution's steps as one "turn" of a synthetic
- * @oxagen/engram Session, then reuse session/replay.ts's extractTurnMetrics
- * (per-step compile time / tokens / tool-call count / outcome) and
- * analyzeReplay (a determinism sanity-check over the synthesized metrics) to
- * power the trace UI's per-step metrics panel. Postgres execution rows don't
- * carry engram's context-compile cache telemetry (candidatesRetrieved/
- * cacheHitRate), so those fields are always 0/omitted here — this reuses the
- * turn/tool-call/outcome shape, not the context-compile-specific one.
+ * Per-step turn metrics for the trace UI, computed directly from the stored
+ * execution/step rows.
+ *
+ * This used to synthesize a throwaway @oxagen/engram `Session` purely to feed
+ * the rows through `extractTurnMetrics`/`analyzeReplay` and read back exactly
+ * what it had written (#1255) — a round trip through an event log that existed
+ * only for the length of the call. The engram session recorder is retired with
+ * the Stella cutover (the engine's own event stream is the turn record), so
+ * the projection is computed in place. `cacheHitRate` stays 0: that field
+ * belongs to engram's context-compile telemetry, which this per-step shape
+ * never carried.
+ *
+ * `replayDeterministic` keeps the exact predicate `analyzeReplay` applied to
+ * the synthesized log: every step's token total is non-negative and the (fixed)
+ * cache-hit rate is in range — i.e. the stored rows are internally sane.
  */
-function deriveTurnMetrics(
-  root: TraceExecutionNode,
-  ctx: CapabilityContext,
-): {
+function deriveTurnMetrics(root: TraceExecutionNode): {
   turnMetrics: NonNullable<TraceExecutionNode["turnMetrics"]>;
   replayDeterministic: boolean;
 } {
-  const session = createSession(root.executionId, {
-    org: ctx.orgId,
-    workspace: ctx.workspaceId,
-  });
-  for (const step of root.steps) {
-    const totalTokens = (step.inputTokens ?? 0) + (step.outputTokens ?? 0);
-    appendEvent(session, "turn_start", step.stepId, {});
-    appendEvent(session, "context_compiled", step.stepId, {
-      candidatesRetrieved: 0,
-      candidatesPacked: 0,
-      candidatesEvicted: 0,
-      totalTokens,
-      cacheHitRate: 0,
+  let replayDeterministic = true;
+  const turnMetrics = root.steps.map((step) => {
+    const tokens = (step.inputTokens ?? 0) + (step.outputTokens ?? 0);
+    if (tokens < 0) replayDeterministic = false;
+    return {
+      turnId: step.stepId,
       compileMs: step.latencyMs ?? 0,
-    });
-    for (const tc of step.toolCalls) {
-      appendEvent(session, "tool_call", step.stepId, {
-        tool: tc.toolName,
-        input: null,
-      });
-    }
-    appendEvent(session, "turn_end", step.stepId, {
+      tokens,
+      cacheHitRate: 0,
+      toolCalls: step.toolCalls.length,
       outcome:
         step.status === "completed"
-          ? "success"
+          ? ("success" as const)
           : step.status === "failed"
-            ? "failure"
-            : "interrupted",
-      totalTokens,
-      durationMs: step.latencyMs ?? 0,
-    });
-  }
-  const turnMetrics = extractTurnMetrics(session).map((m) => ({
-    turnId: m.turnId,
-    compileMs: m.compileMs,
-    tokens: m.tokens,
-    cacheHitRate: m.cacheHitRate,
-    toolCalls: m.toolCalls,
-    outcome: m.outcome,
-  }));
-  const replay = analyzeReplay(session);
-  return { turnMetrics, replayDeterministic: replay.deterministic };
+            ? ("failure" as const)
+            : ("interrupted" as const),
+    };
+  });
+  return { turnMetrics, replayDeterministic };
 }

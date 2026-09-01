@@ -63,6 +63,7 @@ export const iamRoleList = registerCapability({
   // Role/grant configuration reveals the org's permission model — admin-level
   // but not credential material.
   sensitivity: "medium",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow", Compliance: "allow" },

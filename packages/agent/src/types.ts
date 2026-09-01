@@ -24,6 +24,16 @@ export interface CapabilityContext {
   surface: "api" | "mcp" | "app" | "runner";
   messageId: string | null;
   /**
+   * Which run this capability call belongs to — the correlation key the
+   * telemetry tables mean by `execution_step_id`, and the field whose absence
+   * left `skill_loads.execution_step_id` NULL on every row (#2597).
+   *
+   * Absent means absent: `undefined` outside a run (API, MCP, a person), and
+   * every recorder writes NULL rather than inventing an id. The canonical
+   * declaration in packages/oxagen/src/types.ts carries the full reasoning.
+   */
+  executionStepId?: string | null;
+  /**
    * The org's effective subscription tier. Optional — populated during
    * org-scope resolution. Handlers that gate features must read this or
    * call `resolveOrgTier(ctx.orgId)` directly.

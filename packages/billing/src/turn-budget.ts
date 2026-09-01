@@ -8,10 +8,9 @@ import { providerCostUsd, type RateCard } from "./pricing";
  *
  * A turn budget is OFF by default. When enabled it carries a dollar `limitUsd`
  * and one `mode` that decides what happens the moment the turn's cumulative
- * provider cost reaches that limit. Enforcement lives in the ONE shared turn
- * loop (`runCodingAgent` in @oxagen/agent-engine): after each step the loop
- * hands the cumulative usage to a caller-supplied guard that (a) converts tokens
- * to dollars via {@link providerCostUsd} and (b) applies the policy below.
+ * provider cost reaches that limit. The host builds the guard and hands it to
+ * the engine as `RunCodingAgentOptions.budgetGuard`; it converts tokens to
+ * dollars via {@link providerCostUsd} and applies the policy below.
  */
 
 /** What happens when a turn's cost reaches the budget limit. Strictness ladder: soft → gated → hard. */

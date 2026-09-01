@@ -8,7 +8,7 @@ import {
 
 // Byte-for-byte SSE wire snapshot for the REST chat stream (chat.stream.ts).
 //
-// The route was refactored to run through runCodingAgent (multi-step tool loop,
+// The route was refactored to run through the shared engine (multi-step tool loop,
 // invoke()-gated tools, per-turn memory recall, USD budget guard) instead of a
 // single hand-rolled streamAgentReply. The client wire protocol MUST be
 // byte-identical: the raw AI-SDK parts flow through THIS translator (the single

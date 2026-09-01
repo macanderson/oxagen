@@ -70,6 +70,7 @@ export const auditLogQuery = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },
   sensitivity: "high",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     // Audit data is admin-level: org Owner/Admin and workspace Owner only.

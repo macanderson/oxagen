@@ -21,9 +21,9 @@
  * a bad scope argument, exit 1 for a write failure). `--json` rides on the
  * existing `ctx` arg (`ctx.json`) rather than a new positional, so the REPL
  * cli-bridge's `(ctx, writer)` call sites and the trailing `writer` param are
- * untouched. NOTE: program.tsx does not yet declare a `--json` option on these
- * subcommands, nor pass `{ json: opts.json }` in the ctx arg, so json mode is
- * currently reachable only from a direct caller, never from the shell.
+ * untouched. NOTE: program.ts does not yet declare a `--json` option on these
+ * subcommands, so json mode is not reachable from the shell until it passes
+ * `{ json: opts.json }` in the ctx arg — see the report.
  */
 import { existsSync } from "node:fs";
 import {

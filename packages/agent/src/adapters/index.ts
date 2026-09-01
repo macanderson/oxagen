@@ -1,5 +1,3 @@
-export { createClickHouseTraceStore } from "./trace-store";
-export type { TraceStoreArgs } from "./trace-store";
 // Postgres lease-backed file lock (ADR-021 §5) — the current provider.
 export { createFileLeaseLockAdapter } from "./file-lock-lease";
 export type { FileLeaseLockAdapterArgs } from "./file-lock-lease";

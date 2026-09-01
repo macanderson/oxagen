@@ -75,9 +75,9 @@
  *
  * ## What this v1 driver deliberately does NOT do (explicit follow-ups)
  *
- * - **No mid-turn checkpoint.** `io.checkpoint` is never called. The
- *   in-process TS engine (`runCodingAgent`, reached via `executeTurn`) owns
- *   its whole turn loop and has no serializable mid-turn state to hand back —
+ * - **No mid-turn checkpoint.** `io.checkpoint` is never called. The engine
+ *   reached via `executeTurn` owns its whole turn and hands back no
+ *   serializable mid-turn state —
  *   that capability arrives with the Phase 3 embedded Stella core's
  *   step-scoped `run_step` API (spec.md §4.3/§6). Until then, crash-resume
  *   for a run this driver owns is a FULL RE-RUN from the top, bounded by the
@@ -184,6 +184,7 @@ import {
 } from "@oxagen/billing";
 import type { CapabilityContext } from "../types";
 import { materializeTools } from "./materialize-tools";
+import { withOntologyReads } from "./ontology-tools";
 import { createPlatformAgentAi } from "../adapters";
 
 // ---------------------------------------------------------------------------
@@ -535,6 +536,14 @@ export function createPlatformTurnDriver(): TurnDriver {
           requestId: run.runId,
           surface: "runner",
           messageId: null,
+          // The run IS this turn's execution step, and `run.runId` is already
+          // what this driver hands createPlatformAgentAi as its telemetry key
+          // below — so token_usage and skill_loads carry the same value and
+          // the read-side join matches (#2597). This is the path that had no
+          // identity to offer at all: `messageId` is legitimately null on a
+          // durable run (there is no chat message to attach to), so before
+          // this field every skill a durable run loaded recorded NULL.
+          executionStepId: run.runId,
         };
         const ctx: CapabilityContext =
           agentRun !== undefined ? { ...baseCtx, agentRun } : baseCtx;
@@ -542,9 +551,19 @@ export function createPlatformTurnDriver(): TurnDriver {
         const { tools: extraTools, mutatingToolNames } = await materializeTools(
           ctx,
           {
-            allowlist: spec.toolPolicy?.allowlist
-              ? new Set(spec.toolPolicy.allowlist)
-              : undefined,
+            // `toolPolicy.ontology` unions the ontology read set into the
+            // run's declared allowlist, so a narrowed run can still reason
+            // over the business graph. It is a widening of the ONE
+            // materialization, never a second one: the graph reads reach
+            // `invoke()` through the same tool closures as every other
+            // capability, so IAM, billing admission, the entitlement gate and
+            // the decision-rules gate all run on them unchanged.
+            allowlist: withOntologyReads(
+              spec.toolPolicy?.allowlist
+                ? new Set(spec.toolPolicy.allowlist)
+                : undefined,
+              spec.toolPolicy?.ontology === true,
+            ),
             riskCeiling: spec.toolPolicy?.riskCeiling,
           },
         );

@@ -1,9 +1,6 @@
 /**
- * Unit coverage for the reasoning-effort resolver and the permission-rule
- * describer added for CLI observability:
+ * Unit coverage for the reasoning-effort resolver:
  *   - resolveEffort / isReasoningEffort / EFFORT_LEVELS (agent/model.ts)
- *   - persistedRuleString (agent/permissions.ts) — the exact settings.json rule
- *     string the broker writes when the user chooses "allow + remember".
  *   - findModelMask (agent/model.ts) — item 6 of the config-truth audit
  *     (fix/cli-config-truth): detects whether OXAGEN_MODEL (shell, or
  *     projected from settings.json) would mask a value `oxagen config model`
@@ -19,8 +16,6 @@ import {
   EFFORT_LEVELS,
   findModelMask,
 } from "../model.js";
-import { persistedRuleString } from "../permissions.js";
-import type { PermissionRequest } from "../permissions.js";
 
 describe("reasoning effort", () => {
   afterEach(() => {
@@ -101,32 +96,5 @@ describe("findModelMask", () => {
     const mask = findModelMask("vendor/new", { cwd, userSettingsPath });
     expect(mask?.value).toBe("vendor/from-settings");
     expect(mask?.source).toContain("project settings.json");
-  });
-});
-
-describe("persistedRuleString", () => {
-  const cwd = "/repo";
-
-  it("formats a bash command rule verbatim", () => {
-    const req: PermissionRequest = { tool: "bash", command: "pnpm build", cwd };
-    expect(persistedRuleString(req, "allow", cwd)).toBe("Bash(pnpm build)");
-  });
-
-  it("formats a write rule with a workspace-relative path", () => {
-    const req: PermissionRequest = {
-      tool: "write_file",
-      path: "/repo/src/a.ts",
-      cwd,
-    };
-    expect(persistedRuleString(req, "allow", cwd)).toBe("Write(src/a.ts)");
-  });
-
-  it("formats an edit rule and carries the decision through", () => {
-    const req: PermissionRequest = {
-      tool: "edit_file",
-      path: "/repo/pkg/x.ts",
-      cwd,
-    };
-    expect(persistedRuleString(req, "deny", cwd)).toBe("Edit(pkg/x.ts)");
   });
 });

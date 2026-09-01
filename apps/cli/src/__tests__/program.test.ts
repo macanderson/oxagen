@@ -36,9 +36,22 @@ describe("describeCliCommands", () => {
   });
 
   it("derives an argument hint from the command's declared arguments", () => {
-    // `agents [goal...]` → optional argument.
-    expect(byName.get("agents")?.argumentHint).toBe("[goal]");
+    // `trace <executionId>` → required argument.
+    expect(byName.get("trace")?.argumentHint).toBe("<executionId>");
     // `cost` takes only options → no positional hint.
     expect(byName.get("cost")?.argumentHint).toBeUndefined();
+  });
+
+  it("keeps the retired agent commands registered as stubs", () => {
+    for (const name of [
+      "agents",
+      "solve",
+      "fleet",
+      "daemon",
+      "view",
+      "replay",
+    ]) {
+      expect(byName.get(name)?.description).toMatch(/retired/i);
+    }
   });
 });

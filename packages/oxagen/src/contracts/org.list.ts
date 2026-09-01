@@ -42,6 +42,7 @@ export const orgList = registerCapability({
     category: "organization",
   },
   sensitivity: "low",
+  mutates: false,
   // allow by default: "list my own orgs" is a user-intrinsic right. Any
   // authenticated principal who passes the enterprise resolver without an
   // explicit deny policy must be allowed — the handler enforces that the

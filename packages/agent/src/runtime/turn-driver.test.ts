@@ -133,6 +133,7 @@ import {
   type RunLeaseRef,
 } from "@oxagen/agent-runner";
 import { isRunSpecIdentityMismatchError } from "@oxagen/agent-runner/run-errors";
+import { ONTOLOGY_READ_CAPABILITIES } from "./ontology-tools";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -350,7 +351,7 @@ describe("createPlatformTurnDriver — happy path", () => {
     });
   });
 
-  it("builds the CapabilityContext with surface 'runner', requestId = runId, messageId null", async () => {
+  it("builds the CapabilityContext with surface 'runner', requestId = runId, messageId null, executionStepId = runId", async () => {
     const driver = createPlatformTurnDriver();
     const run = makeRun({
       runId: "run_abc",
@@ -370,6 +371,11 @@ describe("createPlatformTurnDriver — happy path", () => {
         requestId: "run_abc",
         surface: "runner",
         messageId: null,
+        // #2597: a durable run has no chat message to attach to, so messageId
+        // is legitimately null and the run itself is the execution step. This
+        // is the SAME value handed to createPlatformAgentAi below, which is
+        // what makes token_usage and skill_loads join for this turn.
+        executionStepId: "run_abc",
       },
       expect.anything(),
     );
@@ -396,6 +402,50 @@ describe("createPlatformTurnDriver — happy path", () => {
     expect(mocks.materializeToolsFn).toHaveBeenCalledWith(expect.anything(), {
       allowlist: new Set(["cap.a", "cap.b"]),
       riskCeiling: "low",
+    });
+  });
+
+  it("unions the ontology read set into the allowlist when toolPolicy.ontology is set", async () => {
+    const driver = createPlatformTurnDriver();
+    const run = makeRun({
+      spec: {
+        version: 1,
+        instruction: "which accounts are at renewal risk?",
+        toolPolicy: { allowlist: ["cap.a"], ontology: true },
+      },
+    });
+    const { io } = makeIo();
+
+    await driver(run, io);
+
+    const [, opts] = mocks.materializeToolsFn.mock.calls[0] as [
+      unknown,
+      { allowlist: ReadonlySet<string> },
+    ];
+    // The run's own tool survives; the graph reads join it.
+    expect(opts.allowlist.has("cap.a")).toBe(true);
+    for (const name of ONTOLOGY_READ_CAPABILITIES) {
+      expect(opts.allowlist.has(name), `${name} is missing`).toBe(true);
+    }
+  });
+
+  it("leaves the allowlist alone when toolPolicy.ontology is absent", async () => {
+    // Defaults off: an allowlist that silently grows is not an allowlist.
+    const driver = createPlatformTurnDriver();
+    const run = makeRun({
+      spec: {
+        version: 1,
+        instruction: "do it",
+        toolPolicy: { allowlist: ["cap.a"] },
+      },
+    });
+    const { io } = makeIo();
+
+    await driver(run, io);
+
+    expect(mocks.materializeToolsFn).toHaveBeenCalledWith(expect.anything(), {
+      allowlist: new Set(["cap.a"]),
+      riskCeiling: undefined,
     });
   });
 
@@ -718,7 +768,7 @@ function v2Spec(): Record<string, unknown> {
     run_kind: "general",
     goal: "Summarize the incident",
     engine_policy: {
-      requested_engine: "ts",
+      requested_engine: "stella",
       allowed_engine_versions: ["2.1.0"],
       model_policy_ref: "model-policy:default",
       max_steps: 64,
@@ -787,7 +837,11 @@ function v2Detail(
     retentionPolicyDigest: V2_DIGEST.retention,
     maxAttempts: 3,
     attemptNumber: 1,
-    engine: { name: "ts", version: "2.1.0", buildDigest: V2_DIGEST.checksum },
+    engine: {
+      name: "stella",
+      version: "2.1.0",
+      buildDigest: V2_DIGEST.checksum,
+    },
     restore: null,
     ...overrides,
   };

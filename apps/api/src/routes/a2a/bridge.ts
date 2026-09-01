@@ -26,10 +26,7 @@ import {
   type TurnBudgetPolicy,
 } from "@oxagen/billing";
 import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
-import {
-  recallWorkspaceMemoryMessage,
-  createRecalledMemoryProvider,
-} from "../v1/chat-memory";
+import { recallWorkspaceMemoryMessage } from "../v1/chat-memory";
 import {
   getSkillId,
   type A2AArtifact,
@@ -314,9 +311,9 @@ async function resolveParentExecutionId(
 
 /**
  * Run one A2A task by bridging to the same agent execution path the chat
- * surface uses — the shared coding engine (runCodingAgent) in workspace-optional
- * conversational mode, so the multi-step tool loop, invoke()-gated tools,
- * per-turn memory recall, and the USD budget guard all apply. Token usage is
+ * surface uses — the shared engine in workspace-optional conversational mode,
+ * so the multi-step tool loop, invoke()-gated tools and per-turn memory recall
+ * and the USD budget guard all apply. Token usage is
  * metered automatically by @oxagen/ai; task lifecycle is emitted to ClickHouse
  * and persisted to Postgres. Returns the final task row.
  *
@@ -523,6 +520,9 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
           requestId: ctx.requestId,
           surface: "api",
           messageId: ctx.requestId,
+          // The A2A task's own per-turn key, matching what its metered AI port
+          // reports as token_usage.execution_step_id (#2597).
+          executionStepId: ctx.requestId,
           clientIp: ctx.clientIp,
           // Agent RBAC Q2: the target agent's delegation context — the tools
           // this returns close over this ctx, so BOTH the model-facing filter
@@ -591,17 +591,19 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
       onPause: () => false,
     });
 
-    // Run the SAME coding engine the CLI + in-app chat use (runCodingAgent),
-    // workspace-optional conversational mode: the multi-step tool loop
-    // (`stopWhen`), invoke()-gated tools, per-turn memory recall, and the USD
-    // budget guard now all apply. Raw AI-SDK parts are mapped to A2A artifact/
+    // Run the SAME engine the CLI + in-app chat use, workspace-optional
+    // conversational mode: the multi-step tool loop (`stopWhen`),
+    // invoke()-gated tools, per-turn memory recall and the USD budget guard
+    // all apply. Raw AI-SDK parts are mapped to A2A artifact/
     // status events via `onStreamPart`, preserving the JSON-RPC wire format.
     const ai = createPlatformAgentAi(ctx, ctx.requestId, "api");
 
     const result = await executeTurn("a2a", {
       ai,
       instruction,
-      history: historyForEngine,
+      // Recalled memory rides history in the position the engine's
+      // MemoryProvider used to inject it (#1236) — no mid-turn callback.
+      history: recalled ? [...historyForEngine, recalled] : historyForEngine,
       system: resolvePrompt({
         key: "chat.system",
         baseline,
@@ -615,12 +617,10 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
       maxRetries: 0,
       maxOverflowRetries: 0,
       extraTools: agentTools,
-      // Mutating capability aliases serialize behind the engine's dispatch
-      // barrier (agent-engine v2 Phase 0).
+      // Mutating capability aliases: the engine's read/write partitioning
+      // input (the TS dispatch barrier before the cutover, Stella's read_only
+      // bit after).
       mutatingToolNames,
-      memory: createRecalledMemoryProvider({
-        recalledPromise: Promise.resolve(recalled),
-      }),
       budgetGuard,
       onStreamPart: (raw: unknown) => {
         const pType =

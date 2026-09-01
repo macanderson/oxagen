@@ -27,6 +27,7 @@ import { MemoryWorkspace } from "../workspaces/memory";
 import { runTurn } from "./index";
 import type { AgentAi, ModelRunArgs } from "../ports";
 import type { ScopeReviewInfo } from "../trace/types";
+import { scriptedEngine } from "./scripted-engine";
 
 const DEFAULT_EVAL = {
   completeness: 70,
@@ -91,6 +92,7 @@ describe("runTurn — scope review gate", () => {
     const seen: ScopeReviewInfo[] = [];
 
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "improve src/a.ts",
       workspace: ws,
       ai,
@@ -115,6 +117,7 @@ describe("runTurn — scope review gate", () => {
     const ai = makeAi(streamSpy);
 
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "improve src/a.ts",
       workspace: ws,
       ai,
@@ -135,6 +138,7 @@ describe("runTurn — scope review gate", () => {
     const ai = makeAi(streamSpy);
 
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "improve src/a.ts",
       workspace: ws,
       ai,
@@ -156,6 +160,7 @@ describe("runTurn — scope review gate", () => {
     const ai = makeAi(streamSpy);
 
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "improve src/a.ts",
       workspace: ws,
       ai,

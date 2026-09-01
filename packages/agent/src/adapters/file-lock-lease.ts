@@ -7,7 +7,7 @@
  * graph-backed lock is eventually consistent and therefore invisible during
  * projection lag.
  *
- * Injected wherever `runCodingAgent`/`runTurn` gets a real workspace (today:
+ * Injected wherever a turn gets a real workspace (today:
  * `agent.repo.edit`'s handler) so `write_file`/`edit_file` in
  * `packages/agent-engine/src/tools.ts` acquire before the real write and
  * release after — the SINGLE enforcement point protects every caller.

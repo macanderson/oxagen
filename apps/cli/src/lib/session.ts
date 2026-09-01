@@ -3,7 +3,7 @@
  *
  * The CLI requires an active Oxagen session (token + org + workspace) before
  * any agent-path command runs. Call `requireSession()` at the top of the
- * default action in index.tsx; it exits 1 with a clear error if the session
+ * default action in index.ts; it exits 1 with a clear error if the session
  * is missing so the user knows exactly what to do next.
  */
 import { getApiUrl, getOrgId, getToken, getWorkspaceId } from "./config.js";

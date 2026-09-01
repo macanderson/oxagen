@@ -42,6 +42,7 @@ export const pluginVersionList = registerCapability({
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: false,
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

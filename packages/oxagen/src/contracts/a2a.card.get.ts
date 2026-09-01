@@ -71,6 +71,7 @@ export const a2aCardGet = registerCapability({
     category: "introspection",
   },
   sensitivity: "low",
+  mutates: false,
   // Reading the card consumes no AI credits — skip the billing admission gate.
   noBillingGate: true,
   defaultEffect: "deny",
