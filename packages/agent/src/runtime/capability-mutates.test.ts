@@ -69,16 +69,27 @@ describe("one definition, two readers", () => {
 });
 
 describe("against the real registry", () => {
-  it("no capability reaches the engine as concurrent-safe without saying so", () => {
-    // The whole bug in one assertion. `read_only` on the wire is
-    // `!mutatingToolNames.has(name)`, so anything this returns false for is
-    // advertised to Stella as safe to run beside itself.
-    const concurrent = agentCapabilities().filter((c) => !capabilityMutates(c));
-    const undeclared = concurrent.filter((c) => c.mutates !== false);
+  it("carries `mutates` through registration, so marking a contract is not inert", () => {
+    // Not a tautology, unlike asserting that every concurrent capability
+    // declares itself — `capabilityMutates` returns false ONLY for
+    // `mutates === false`, so that set is empty by construction and the
+    // assertion could never fail.
+    //
+    // This is the question that can actually go wrong: `registerCapability`
+    // stores the declaration, and if it ever narrowed or rebuilt the object,
+    // `mutates` would be dropped, every contract would read as undeclared, and
+    // the whole surface would silently serialize. Safe, but the reclaim would
+    // do nothing and nothing would say so.
+    const declared = agentCapabilities().filter((c) => c.mutates === false);
     expect(
-      undeclared.map((c) => c.name),
-      "these would run concurrently on an inference rather than a declaration",
-    ).toEqual([]);
+      declared.length,
+      "no contract survives registration with mutates:false — the field is " +
+        "being stripped between the contract and the registry",
+    ).toBeGreaterThan(0);
+    for (const cap of declared) {
+      expect(capabilityMutates(cap), `${cap.name}`).toBe(false);
+      expect(isMutatingCapability(cap), `${cap.name}`).toBe(false);
+    }
   });
 
   it("recall_memory is not advertised as concurrent-safe", () => {
