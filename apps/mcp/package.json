@@ -21,6 +21,7 @@
     "@oxagen/iam": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/plugins": "workspace:*",
+    "@oxagen/rules": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@vercel/sandbox": "2.0.2",
     "ai": "7.0.14",

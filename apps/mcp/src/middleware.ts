@@ -8,6 +8,7 @@ import "@oxagen/agent/register";
 import { apiKeyAuthMiddleware, type Middleware } from "xmcp";
 import { bootstrapIAMRuntime } from "@oxagen/iam";
 import { bootstrapBillingRuntime } from "@oxagen/billing";
+import { bootstrapDecisionRulesRuntime } from "@oxagen/rules";
 import { bootstrapEntitlementRuntime } from "@oxagen/plugins";
 import { setSecurityEventEmitter } from "@oxagen/oxagen/kernel";
 import {
@@ -40,6 +41,9 @@ bootstrapBillingRuntime();
 // Wire the capability entitlement gate — blocks invocations of plugin-owned
 // capabilities when the plugin is not installed+enabled for the org.
 bootstrapEntitlementRuntime();
+// Wire the workspace decision-rules gate — the same governance an agent
+// answers to applies to a direct MCP invocation of the same capability.
+bootstrapDecisionRulesRuntime();
 
 // Wire the Postgres security event emitter (SOC2 CC6/CC7 audit trail).
 // Registered ONCE, immediately after bootstrapIAMRuntime(), so the db

@@ -110,6 +110,9 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../../packages/plugins
+      '@oxagen/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
@@ -246,6 +249,9 @@ importers:
       '@oxagen/prompt-templates':
         specifier: workspace:*
         version: link:../../packages/prompt-templates
+      '@oxagen/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
       '@oxagen/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -619,6 +625,9 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../../packages/plugins
+      '@oxagen/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
@@ -924,6 +933,9 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@oxagen/rules':
+        specifier: workspace:*
+        version: link:../rules
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry
@@ -1744,6 +1756,40 @@ importers:
       typescript:
         specifier: 6.0.3
         version: 6.0.3
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0)
+
+  packages/rules:
+    dependencies:
+      '@oxagen/database':
+        specifier: workspace:*
+        version: link:../database
+      '@oxagen/oxagen':
+        specifier: workspace:*
+        version: link:../oxagen
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9)
+      pino:
+        specifier: 9.14.0
+        version: 9.14.0
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: 25.9.1
+        version: 25.9.1
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0))
+      eslint:
+        specifier: 9.39.4
+        version: 9.39.4(jiti@2.7.0)
       vitest:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0)
