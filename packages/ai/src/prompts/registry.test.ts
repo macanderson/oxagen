@@ -311,13 +311,17 @@ describe("codeModeSystemPrompt", () => {
     expect(prompt.startsWith(chatSystemPrompt(CTX))).toBe(true);
     // ...plus the code-mode section and its tools-first discipline.
     expect(prompt).toContain("Code Mode");
+    // The tools Code mode ACTUALLY registers. `code_graph` was named here for
+    // a provider no platform caller ever wires, and `grep`/`glob` are retired
+    // in favour of one `search` — a prompt that advertises a tool the model
+    // cannot call teaches it to emit failing calls.
     for (const tool of [
       "read_file",
       "write_file",
       "edit_file",
-      "grep",
+      "delete_file",
+      "search",
       "bash",
-      "code_graph",
     ]) {
       expect(prompt).toContain(tool);
     }

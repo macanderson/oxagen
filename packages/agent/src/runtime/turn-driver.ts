@@ -184,6 +184,7 @@ import {
 } from "@oxagen/billing";
 import type { CapabilityContext } from "../types";
 import { materializeTools } from "./materialize-tools";
+import { withOntologyReads } from "./ontology-tools";
 import { createPlatformAgentAi } from "../adapters";
 
 // ---------------------------------------------------------------------------
@@ -542,9 +543,19 @@ export function createPlatformTurnDriver(): TurnDriver {
         const { tools: extraTools, mutatingToolNames } = await materializeTools(
           ctx,
           {
-            allowlist: spec.toolPolicy?.allowlist
-              ? new Set(spec.toolPolicy.allowlist)
-              : undefined,
+            // `toolPolicy.ontology` unions the ontology read set into the
+            // run's declared allowlist, so a narrowed run can still reason
+            // over the business graph. It is a widening of the ONE
+            // materialization, never a second one: the graph reads reach
+            // `invoke()` through the same tool closures as every other
+            // capability, so IAM, billing admission, the entitlement gate and
+            // the decision-rules gate all run on them unchanged.
+            allowlist: withOntologyReads(
+              spec.toolPolicy?.allowlist
+                ? new Set(spec.toolPolicy.allowlist)
+                : undefined,
+              spec.toolPolicy?.ontology === true,
+            ),
             riskCeiling: spec.toolPolicy?.riskCeiling,
           },
         );

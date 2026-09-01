@@ -13,8 +13,8 @@
  *   marker ("call read_file with offset:N, limit:M") — tools.ts wrote that
  *   marker precisely so the model would issue that call; predicting it is
  *   near-certain.
- * - A `grep` hit list is followed by reads of the top distinct matching files.
- * - A `glob` listing is followed by reads of its first entries.
+ * - A `search` result is followed by reads of the top distinct matching
+ *   files — content hits first, then a couple of name-only matches.
  */
 
 /** One completed tool call: what ran, with what input, and the string result. */
@@ -138,25 +138,40 @@ export const heuristicPredictor: SpeculationPredictor = ({
     return predictions;
   }
 
-  if (tool === "grep") {
+  if (tool === "search") {
+    // The unified search returns a "Files matching by name:" section of bare
+    // paths and a "Content matches:" section of `path:line:text`. TWO passes,
+    // not one line-order pass: names are printed first but content hits carry
+    // line-level evidence the model is likelier to open, so content must win
+    // the budget regardless of print order.
+    //
+    // Name lines use `isBarePathLine`, not `isPathLike` — the latter admits
+    // the section headers themselves ("Files matching by name:" has no
+    // leading paren and no NUL), which would spend read_file prefetches on
+    // strings that are not paths at all.
+    const lines = result.split("\n");
     const seen = new Set<string>();
-    for (const line of result.split("\n")) {
+    for (const line of lines) {
       const hit = GREP_HIT_RE.exec(line);
       if (!hit) continue;
       const path = hit[1]!;
       if (seen.has(path)) continue;
       seen.add(path);
       predictions.push({ tool: "read_file", input: { path } });
-      if (predictions.length >= MAX_PREDICTIONS_PER_OBSERVATION) break;
+      if (predictions.length >= MAX_PREDICTIONS_PER_OBSERVATION) {
+        return predictions;
+      }
     }
-    return predictions;
-  }
-
-  if (tool === "glob") {
-    for (const line of result.split("\n")) {
-      if (!isPathLike(line)) continue;
+    let nameReads = 0;
+    for (const line of lines) {
+      if (nameReads >= 2) break; // listings are broader — stay modest
+      if (!isBarePathLine(line) || seen.has(line)) continue;
+      seen.add(line);
+      nameReads += 1;
       predictions.push({ tool: "read_file", input: { path: line } });
-      if (predictions.length >= 2) break; // listings are broader — stay modest
+      if (predictions.length >= MAX_PREDICTIONS_PER_OBSERVATION) {
+        return predictions;
+      }
     }
     return predictions;
   }

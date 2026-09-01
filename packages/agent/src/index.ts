@@ -1,4 +1,9 @@
 export * from "./runtime/materialize-tools";
+// The ontology read set — the graph capabilities an agent reasons over, plus
+// the read-only guard and the per-run allowlist union that carries them into a
+// narrowed run. A surface that wants to grant the graph names this set rather
+// than spelling eight capability names of its own.
+export * from "./runtime/ontology-tools";
 export * from "./runtime/approval";
 export * from "./runtime/stream-events";
 // The platform TurnDriver — agent-engine v2 Phase 2 integration
@@ -24,7 +29,6 @@ export * from "./dispatch/lineage-outcome";
 export * from "./dispatch/lineage-projection";
 export * from "./dispatch/tool-projection";
 export * from "./memory/neo4j";
-export * as hooks from "./hooks/runtime";
 export { resolveHandler, invokeCapability } from "./handlers/index";
 export type { CapabilityHandlerFn } from "./handlers/index";
 // Sandbox session lifecycle & work-recovery (spec: sandbox-session-lifecycle).

@@ -15,7 +15,7 @@ import { loadRules } from "../loader.js";
 import { guardsToDeny } from "../enforce.js";
 import type { Rule } from "../types.js";
 import type { TurnTrace, JudgeVerdict } from "../../agent/trace.js";
-import type { MemoryRecord } from "../../agent/fleet/memory.js";
+import type { MemoryRecord } from "../fleet-memory.js";
 
 function judge(over: Partial<JudgeVerdict> = {}): JudgeVerdict {
   return {
@@ -32,7 +32,11 @@ function judge(over: Partial<JudgeVerdict> = {}): JudgeVerdict {
 }
 
 /** A minimal, valid TurnTrace carrying one judge round with the given findings. */
-function trace(id: string, findings: string[], over: Partial<TurnTrace> = {}): TurnTrace {
+function trace(
+  id: string,
+  findings: string[],
+  over: Partial<TurnTrace> = {},
+): TurnTrace {
   return {
     id,
     createdAt: 1000,
@@ -51,7 +55,13 @@ function trace(id: string, findings: string[], over: Partial<TurnTrace> = {}): T
       model: "m",
       usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
     },
-    enhancement: { prompt: "do work", context: "", resolved: [], lessonCount: 0, source: "none" },
+    enhancement: {
+      prompt: "do work",
+      context: "",
+      resolved: [],
+      lessonCount: 0,
+      source: "none",
+    },
     selectedModel: "m",
     selectedTier: "balanced",
     selectionRationale: "",
@@ -93,7 +103,9 @@ describe("mineCandidates", () => {
     expect(candidates[0]?.text).toBe("forgot to add a test for the new route");
     expect(candidates[0]?.occurrences).toBe(3);
     expect(candidates[0]?.evidence).toHaveLength(3);
-    expect(candidates[0]?.evidence.every((e) => e.ref.startsWith("trace:"))).toBe(true);
+    expect(
+      candidates[0]?.evidence.every((e) => e.ref.startsWith("trace:")),
+    ).toBe(true);
   });
 
   it("does not surface a one-off finding below the occurrence threshold", () => {
@@ -103,7 +115,11 @@ describe("mineCandidates", () => {
 
   it("promotes a single high-salience memory regardless of occurrence count", () => {
     const memories = [
-      memory({ memoryClass: "FACT", enforcementScore: null, lesson: "database credentials leaked in a log line" }),
+      memory({
+        memoryClass: "FACT",
+        enforcementScore: null,
+        lesson: "database credentials leaked in a log line",
+      }),
     ];
     const candidates = mineCandidates({ traces: [], memories });
     expect(candidates).toHaveLength(1);
@@ -119,7 +135,11 @@ describe("mineCandidates", () => {
       trace("t3", ["forgot to add a test for the new route"]),
     ];
     const memories = [
-      memory({ memoryClass: "FACT", enforcementScore: null, lesson: "database credentials leaked in a log line" }),
+      memory({
+        memoryClass: "FACT",
+        enforcementScore: null,
+        lesson: "database credentials leaked in a log line",
+      }),
     ];
     const candidates = mineCandidates({ traces, memories });
     expect(candidates).toHaveLength(2);
@@ -133,9 +153,16 @@ describe("mineCandidates", () => {
       trace("t3", ["never force-push to a shared branch"]),
     ];
     const existingRules: Rule[] = [
-      { id: "no-force-push", description: "", text: "Never force-push to a shared branch.", source: "x" },
+      {
+        id: "no-force-push",
+        description: "",
+        text: "Never force-push to a shared branch.",
+        source: "x",
+      },
     ];
-    expect(mineCandidates({ traces, memories: [], existingRules })).toHaveLength(0);
+    expect(
+      mineCandidates({ traces, memories: [], existingRules }),
+    ).toHaveLength(0);
   });
 
   it("infers a deny-path guard from a recurring gotcha's consistent file evidence", () => {
@@ -156,13 +183,27 @@ describe("mineCandidates", () => {
       }),
     ];
     const candidates = mineCandidates({ traces: [], memories });
-    expect(candidates[0]?.guard).toEqual({ denyPathGlob: "packages/database/migrations/**" });
+    expect(candidates[0]?.guard).toEqual({
+      denyPathGlob: "packages/database/migrations/**",
+    });
   });
 
   it("leaves a candidate prompt-only when file evidence shares no common directory", () => {
     const memories = [
-      memory({ id: "m1", memoryClass: "RULE", enforcementScore: 95, lesson: "shared lesson text here", files: ["a/one.ts"] }),
-      memory({ id: "m2", memoryClass: "RULE", enforcementScore: 95, lesson: "shared lesson text here", files: ["b/two.ts"] }),
+      memory({
+        id: "m1",
+        memoryClass: "RULE",
+        enforcementScore: 95,
+        lesson: "shared lesson text here",
+        files: ["a/one.ts"],
+      }),
+      memory({
+        id: "m2",
+        memoryClass: "RULE",
+        enforcementScore: 95,
+        lesson: "shared lesson text here",
+        files: ["b/two.ts"],
+      }),
     ];
     const candidates = mineCandidates({ traces: [], memories });
     expect(candidates[0]?.guard).toBeUndefined();
@@ -188,11 +229,17 @@ describe("promoteCandidate", () => {
     const [candidate] = mineCandidates({ traces, memories: [] });
     expect(candidate).toBeDefined();
 
-    const result = promoteCandidate(candidate!, { dir: rulesDir, approve: true });
+    const result = promoteCandidate(candidate!, {
+      dir: rulesDir,
+      approve: true,
+    });
     expect(result.status).toBe("written");
     expect(existsSync(result.path)).toBe(true);
 
-    const loaded = loadRules({ cwd: dir, userRulesDir: join(dir, "user-rules") });
+    const loaded = loadRules({
+      cwd: dir,
+      userRulesDir: join(dir, "user-rules"),
+    });
     expect(loaded).toHaveLength(1);
     expect(loaded[0]?.id).toBe(candidate!.id);
     expect(loaded[0]?.text).toBe("forgot to add a test for the new route");
@@ -208,11 +255,16 @@ describe("promoteCandidate", () => {
     ];
     const [candidate] = mineCandidates({ traces, memories: [] });
 
-    const result = promoteCandidate(candidate!, { dir: rulesDir, approve: false });
+    const result = promoteCandidate(candidate!, {
+      dir: rulesDir,
+      approve: false,
+    });
     expect(result.status).toBe("declined");
     expect(existsSync(result.path)).toBe(false);
     expect(existsSync(rulesDir)).toBe(false); // declining never even creates the directory
-    expect(loadRules({ cwd: dir, userRulesDir: join(dir, "user-rules") })).toHaveLength(0);
+    expect(
+      loadRules({ cwd: dir, userRulesDir: join(dir, "user-rules") }),
+    ).toHaveLength(0);
   });
 
   it("does not overwrite an already-promoted rule on re-promotion", () => {
@@ -223,9 +275,15 @@ describe("promoteCandidate", () => {
     ];
     const [candidate] = mineCandidates({ traces, memories: [] });
 
-    const first = promoteCandidate(candidate!, { dir: rulesDir, approve: true });
+    const first = promoteCandidate(candidate!, {
+      dir: rulesDir,
+      approve: true,
+    });
     expect(first.status).toBe("written");
-    const second = promoteCandidate(candidate!, { dir: rulesDir, approve: true });
+    const second = promoteCandidate(candidate!, {
+      dir: rulesDir,
+      approve: true,
+    });
     expect(second.status).toBe("already-exists");
   });
 
@@ -249,11 +307,19 @@ describe("promoteCandidate", () => {
     const [candidate] = mineCandidates({ traces: [], memories });
     expect(candidate?.guard).toBeDefined();
 
-    const result = promoteCandidate(candidate!, { dir: rulesDir, approve: true });
+    const result = promoteCandidate(candidate!, {
+      dir: rulesDir,
+      approve: true,
+    });
     expect(result.status).toBe("written");
 
-    const loaded = loadRules({ cwd: dir, userRulesDir: join(dir, "user-rules") });
-    expect(loaded[0]?.guard).toEqual({ denyPathGlob: "packages/database/migrations/**" });
+    const loaded = loadRules({
+      cwd: dir,
+      userRulesDir: join(dir, "user-rules"),
+    });
+    expect(loaded[0]?.guard).toEqual({
+      denyPathGlob: "packages/database/migrations/**",
+    });
 
     const { deny, reasons } = guardsToDeny(loaded);
     expect(deny).toContain("*(packages/database/migrations/**)");

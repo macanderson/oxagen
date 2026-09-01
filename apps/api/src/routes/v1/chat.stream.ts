@@ -46,10 +46,7 @@ import {
   createApiStreamTranslator,
   type ApiStreamEvent,
 } from "./chat-stream-translator";
-import {
-  recallWorkspaceMemoryMessage,
-  createRecalledMemoryProvider,
-} from "./chat-memory";
+import { recallWorkspaceMemoryMessage } from "./chat-memory";
 
 const BodySchema = z.object({
   // Bound the message body — the shared per-message ingress cap (see
@@ -442,7 +439,14 @@ chatStreamRoute.post("/", async (c) => {
         const result = await executeTurn("api-chat", {
           ai,
           instruction: content,
-          history: historyForEngine,
+          // The recalled-memory message rides history directly, in the exact
+          // position the engine's MemoryProvider used to inject it — after the
+          // cached system prefix, immediately before the instruction. The
+          // provider-shaped adapter is gone (#1236): there is no mid-turn
+          // recallContext() callback on any engine any more.
+          history: recalledMemory
+            ? [...historyForEngine, recalledMemory]
+            : historyForEngine,
           system: resolvePrompt({
             key: "chat.system",
             baseline: chatSystemPrompt({
@@ -466,14 +470,10 @@ chatStreamRoute.post("/", async (c) => {
           // No `workspace` ⇒ conversational mode: no filesystem tools; the
           // materialized invoke()-gated capability ToolSet is injected here.
           extraTools: agentTools,
-          // Mutating capability aliases serialize behind the engine's
-          // dispatch barrier (agent-engine v2 Phase 0).
+          // Mutating capability aliases: the engine's read/write partitioning
+          // input (the TS dispatch barrier before the cutover, Stella's
+          // read_only bit after).
           mutatingToolNames,
-          // Recall ran CONCURRENTLY in the setup Promise.all above; the provider
-          // just reads its already-resolved value (no serial latency).
-          memory: createRecalledMemoryProvider({
-            recalledPromise: Promise.resolve(recalledMemory),
-          }),
           // Client-disconnect abort stops the loop.
           signal: c.req.raw.signal,
           onStreamPart: (part) => translator.onPart(part),

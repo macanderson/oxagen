@@ -134,7 +134,7 @@ describe("buildSystemPrompt — graph-first tool guidance", () => {
     expect(prompt).toContain("`file_symbols <file>`");
     expect(prompt).toContain("`dependents <file>`");
     expect(prompt).toContain("`imports <file>`");
-    expect(prompt).toContain("Only fall back to `grep`");
+    expect(prompt).toContain("Only fall back to `search`");
   });
 
   it("instructs batching of independent tool calls into one message (wall-clock parallelism)", () => {
@@ -151,23 +151,23 @@ describe("buildSystemPrompt — graph-first tool guidance", () => {
     expect(withoutGraph).not.toContain("code_graph");
   });
 
-  it("drops graph guidance and keeps plain grep guidance when code_graph is not wired", () => {
+  it("drops graph guidance and keeps plain search guidance when code_graph is not wired", () => {
     const prompt = buildSystemPrompt({ ...base, hasCodeGraph: false });
     expect(prompt).not.toContain("code_graph");
     expect(prompt).toContain(
-      "Use `grep` and `glob` to locate code instead of guessing paths.",
+      "Use `search` to locate code instead of guessing paths.",
     );
   });
 
   it("headless localization step lists only the wired locate tools, graph first", () => {
     const withGraph = buildSystemPrompt({ ...base, profile: "headless" });
-    expect(withGraph).toContain("use `code_graph`/`grep` (in that order)");
+    expect(withGraph).toContain("use `code_graph`/`search` (in that order)");
     const bare = buildSystemPrompt({
       ...base,
       profile: "headless",
       hasCodeGraph: false,
     });
-    expect(bare).toContain("use `grep` to find the real source");
+    expect(bare).toContain("use `search` to find the real source");
     expect(bare).not.toContain("code_graph");
   });
 

@@ -29,9 +29,6 @@ onlyBuiltDependencies:
   - protobufjs
   - sharp
   - ssh2
-  - tree-sitter-javascript
-  - tree-sitter-python
-  - tree-sitter-typescript
   - unrs-resolver
 
 ignoredBuiltDependencies:
@@ -64,9 +61,9 @@ allowBuilds:
   protobufjs: true
   sharp: true
   ssh2: true
-  tree-sitter-javascript: true
-  tree-sitter-python: true
-  tree-sitter-typescript: true
+  tree-sitter-javascript: set this to true or false
+  tree-sitter-python: set this to true or false
+  tree-sitter-typescript: set this to true or false
   unrs-resolver: true
 
 minimumReleaseAgeExclude:

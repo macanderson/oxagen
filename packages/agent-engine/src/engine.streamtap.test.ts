@@ -13,7 +13,10 @@ import type { CodingEvent, RunCodingAgentOptions } from "./types";
  */
 
 /** Minimal streaming result matching the subset the engine consumes. */
-function streamResult(parts: unknown[], usage = { inputTokens: 1, outputTokens: 1, totalTokens: 2 }) {
+function streamResult(
+  parts: unknown[],
+  usage = { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+) {
   return {
     fullStream: (async function* () {
       for (const p of parts) yield p;
@@ -35,7 +38,10 @@ describe("runCodingAgent — workspace-optional (chat surface)", () => {
         capturedTools = args.tools as Record<string, unknown>;
         return streamResult([{ type: "text-delta", text: "hi" }]);
       },
-      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+      generateObject: async () => ({
+        object: {} as never,
+        usage: { totalTokens: 0 },
+      }),
     };
 
     const result = await runCodingAgent({
@@ -53,7 +59,15 @@ describe("runCodingAgent — workspace-optional (chat surface)", () => {
     });
 
     // The built-in filesystem tools must never appear on a workspace-less run.
-    for (const fsTool of ["read_file", "write_file", "edit_file", "list_dir", "glob", "grep", "bash"]) {
+    for (const fsTool of [
+      "read_file",
+      "write_file",
+      "edit_file",
+      "delete_file",
+      "list_dir",
+      "search",
+      "bash",
+    ]) {
       expect(capturedTools[fsTool]).toBeUndefined();
     }
     // Only the caller-supplied capability tool is present.
@@ -70,7 +84,10 @@ describe("runCodingAgent — workspace-optional (chat surface)", () => {
     const record = vi.fn();
     const ai: AgentAi = {
       stream: () => streamResult([{ type: "text-delta", text: "ok" }]),
-      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+      generateObject: async () => ({
+        object: {} as never,
+        usage: { totalTokens: 0 },
+      }),
     };
 
     await runCodingAgent({
@@ -84,8 +101,13 @@ describe("runCodingAgent — workspace-optional (chat surface)", () => {
     await Promise.resolve();
     await Promise.resolve();
     // remember still fires (with empty changedFiles) — it is a no-op sink for chat.
-    expect(remember).toHaveBeenCalledWith("coding_turn", { instruction: "q", changedFiles: [] });
-    expect(record).toHaveBeenCalledWith(expect.objectContaining({ changedFiles: [] }));
+    expect(remember).toHaveBeenCalledWith("coding_turn", {
+      instruction: "q",
+      changedFiles: [],
+    });
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({ changedFiles: [] }),
+    );
   });
 });
 
@@ -98,12 +120,18 @@ describe("runCodingAgent — onStreamPart raw tap", () => {
       { type: "reasoning-end", id: "r1" },
       { type: "text-delta", text: "answer" },
       { type: "finish-step" },
-      { type: "finish", totalUsage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
+      {
+        type: "finish",
+        totalUsage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      },
     ];
     const seen: unknown[] = [];
     const ai: AgentAi = {
       stream: () => streamResult(parts),
-      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+      generateObject: async () => ({
+        object: {} as never,
+        usage: { totalTokens: 0 },
+      }),
     };
 
     await runCodingAgent({
@@ -119,7 +147,9 @@ describe("runCodingAgent — onStreamPart raw tap", () => {
 });
 
 describe("runCodingAgent — maxOverflowRetries gate (C1)", () => {
-  const overflowErr = new Error("prompt is too long: maximum context length exceeded");
+  const overflowErr = new Error(
+    "prompt is too long: maximum context length exceeded",
+  );
 
   function overflowThenSucceedAi(): { ai: AgentAi; calls: () => number } {
     let calls = 0;
@@ -134,23 +164,33 @@ describe("runCodingAgent — maxOverflowRetries gate (C1)", () => {
               args.onError?.({ error: overflowErr });
             })(),
             steps: Promise.resolve([{}]),
-            usage: Promise.resolve({ inputTokens: 0, outputTokens: 0, totalTokens: 0 }),
+            usage: Promise.resolve({
+              inputTokens: 0,
+              outputTokens: 0,
+              totalTokens: 0,
+            }),
             response: Promise.resolve({ messages: [] }),
           } as unknown as ReturnType<AgentAi["stream"]>;
         }
         return streamResult([{ type: "text-delta", text: "recovered" }]);
       },
-      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+      generateObject: async () => ({
+        object: {} as never,
+        usage: { totalTokens: 0 },
+      }),
     };
     return { ai, calls: () => calls };
   }
 
   // A large, shrinkable history so the overflow retry's compaction actually
   // reduces the token estimate (older messages > contentCap get truncated).
-  const bigHistory: RunCodingAgentOptions["history"] = Array.from({ length: 8 }, (_, i) => ({
-    role: i % 2 === 0 ? "user" : "assistant",
-    content: "x".repeat(4000),
-  }));
+  const bigHistory: RunCodingAgentOptions["history"] = Array.from(
+    { length: 8 },
+    (_, i) => ({
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: "x".repeat(4000),
+    }),
+  );
 
   it("default budget retries the step after compacting (overflow recovered)", async () => {
     const { ai, calls } = overflowThenSucceedAi();

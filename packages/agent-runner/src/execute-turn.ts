@@ -80,12 +80,22 @@ export async function executeTurn(
 
 /**
  * Run one judged pipeline turn (evaluate → enhance → route → execute → judge
- * → revise) for `surface`. Exactly `runTurn(pipeline)` today.
+ * → revise) for `surface`.
+ *
+ * The pipeline stays host-side whichever engine runs — it wraps turns, it is
+ * not inside one — but each execution segment goes through {@link executeTurn},
+ * so a judged turn rides the same engine selection as a bare one. Injected via
+ * `RunTurnOptions.execute` because the dependency points this way: the engine
+ * package cannot import this one. A caller's own `execute` wins, which is what
+ * lets a test drive the pipeline against a scripted segment runner.
  */
 export function executePipelineTurn(
   surface: PlatformSurface,
   pipeline: RunTurnOptions,
+  options: ExecuteTurnOptions = {},
 ): Promise<RunTurnResult> {
-  void surface; // recorded on the run row starting in Phase 2
-  return runTurn(pipeline);
+  return runTurn({
+    execute: (segment) => executeTurn(surface, segment, options),
+    ...pipeline,
+  });
 }

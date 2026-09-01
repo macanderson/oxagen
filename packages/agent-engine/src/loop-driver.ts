@@ -91,6 +91,7 @@ export const MUTATING_TOOL_NAMES: ReadonlySet<string> = new Set<string>([
   "bash",
   "write_file",
   "edit_file",
+  "delete_file",
 ]);
 
 /** True when `name` is a workspace-mutating tool (see {@link MUTATING_TOOL_NAMES}). Exported for tests. */

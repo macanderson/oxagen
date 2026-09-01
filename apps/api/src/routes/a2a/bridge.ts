@@ -26,10 +26,7 @@ import {
   type TurnBudgetPolicy,
 } from "@oxagen/billing";
 import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
-import {
-  recallWorkspaceMemoryMessage,
-  createRecalledMemoryProvider,
-} from "../v1/chat-memory";
+import { recallWorkspaceMemoryMessage } from "../v1/chat-memory";
 import {
   getSkillId,
   type A2AArtifact,
@@ -577,7 +574,9 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
     const result = await executeTurn("a2a", {
       ai,
       instruction,
-      history: historyForEngine,
+      // Recalled memory rides history in the position the engine's
+      // MemoryProvider used to inject it (#1236) — no mid-turn callback.
+      history: recalled ? [...historyForEngine, recalled] : historyForEngine,
       system: resolvePrompt({
         key: "chat.system",
         baseline,
@@ -591,12 +590,10 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
       maxRetries: 0,
       maxOverflowRetries: 0,
       extraTools: agentTools,
-      // Mutating capability aliases serialize behind the engine's dispatch
-      // barrier (agent-engine v2 Phase 0).
+      // Mutating capability aliases: the engine's read/write partitioning
+      // input (the TS dispatch barrier before the cutover, Stella's read_only
+      // bit after).
       mutatingToolNames,
-      memory: createRecalledMemoryProvider({
-        recalledPromise: Promise.resolve(recalled),
-      }),
       budgetGuard,
       onStreamPart: (raw: unknown) => {
         const pType =

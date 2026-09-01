@@ -27,7 +27,6 @@ import {
   recallWorkspaceMemory,
   recallWorkspaceMemoryDetailed,
   resolveGroundingCitations,
-  stripRecalledMemoryHeading,
 } from "./recall-context";
 
 type RecalledMemory = Parameters<typeof formatRecalledMemories>[0][number];
@@ -93,28 +92,6 @@ describe("formatRecalledMemories", () => {
     ]);
     expect(body).toContain("line one line two");
     expect(body).not.toContain("line one\n");
-  });
-});
-
-describe("stripRecalledMemoryHeading", () => {
-  it("drops the leading ## heading and following blank lines, keeps the preamble", () => {
-    const body = formatRecalledMemories([
-      memory({ lesson: "use strict types" }),
-    ]);
-    expect(body).not.toBeNull();
-    const stripped = stripRecalledMemoryHeading(body as string);
-    // The engine adds its own heading, so ours must be gone…
-    expect(stripped.startsWith("## ")).toBe(false);
-    expect(stripped).not.toContain("Recalled workspace memory");
-    // …but the anti-injection preamble and bullets stay.
-    expect(stripped.startsWith("(System-injected context")).toBe(true);
-    expect(stripped).toContain("use strict types");
-  });
-
-  it("returns the body unchanged when there is no leading heading", () => {
-    expect(stripRecalledMemoryHeading("- just a bullet")).toBe(
-      "- just a bullet",
-    );
   });
 });
 

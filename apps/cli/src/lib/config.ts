@@ -26,10 +26,6 @@ export interface CliConfig {
   verbose?: boolean;
   /** Model-runtime settings */
   runtime?: RuntimeConfig;
-  /** Graph tool settings. Typed off the schema leaf — importing the accessor
-   * module (agent/context/config.ts) here would recreate the import cycle it
-   * closes by calling readConfig() from this file. */
-  graph?: import("../agent/context/config-schema.js").GraphConfigPatch;
   /** Anonymous usage-telemetry preferences (apps/cli/src/telemetry/usage.ts). */
   telemetry?: TelemetryConfig;
 }

@@ -337,16 +337,18 @@ describe("agentRepoEditHandler — pipeline (runTurn)", () => {
     );
   });
 
-  it("passes a workspace and trace without centralized code graph or memory", async () => {
+  it("passes a workspace without centralized trace, code graph or memory", async () => {
     await agentRepoEditHandler(BASE_INPUT, ctx);
 
     expect(mocks.runTurnFn).toHaveBeenCalledWith(
       expect.objectContaining({
         workspace: expect.any(Object),
-        trace: expect.any(Object),
       }),
     );
     const options = mocks.runTurnFn.mock.calls[0]?.[0];
+    // The hand-built ClickHouse TraceStore is gone (#1240): the durable record
+    // of a turn is the engine event stream, not a bespoke per-turn row.
+    expect(options).not.toHaveProperty("trace");
     expect(options).not.toHaveProperty("codeGraph");
     expect(options).not.toHaveProperty("memory");
   });
