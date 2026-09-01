@@ -9,7 +9,7 @@
 //
 // STATE, not STRUCTURE: the diff is the uncommitted STATE of the tree. The
 // per-file `symbols` are the enclosing declarations git names in its hunk
-// headers — names to grep for when the agent wants the STRUCTURE questions this
+// headers — names to search for when the agent wants the STRUCTURE questions this
 // tool never answers (callers of a changed function, its type, its neighbours).
 // This tool is deliberately AST-free and does no structural search.
 
@@ -61,10 +61,10 @@ export function buildGitDiffSummarizeTool(
       "the enclosing functions/classes touched — the cheap orientation before you dig in. " +
       "Prefer this over `bash git diff` to see the SHAPE of a change (which files, how big, " +
       "what symbols) without spending tokens on the actual patch text. The returned `symbols` " +
-      "are declaration names — `grep` for one to find who calls a changed function or what it " +
+      "are declaration names — `search` for one to find who calls a changed function or what it " +
       "depends on (this tool answers WHAT CHANGED, not how the code is " +
       "connected). Anti-triggers: do NOT use it to read the actual code changes — use " +
-      "`read_file` for the real lines; do NOT use it for structural queries — that is `grep`.",
+      "`read_file` for the real lines; do NOT use it for structural queries — that is `search`.",
     inputSchema: z.object({
       ref: z
         .string()

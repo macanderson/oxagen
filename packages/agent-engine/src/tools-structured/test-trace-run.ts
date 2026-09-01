@@ -4,7 +4,7 @@
 // V8 coverage tracer and return the EXECUTED PATH: which repo files (and which
 // functions in them) actually ran, ranked. Phase 2 "debugger in the loop" v1
 // (docs/ideas/agentic-cli-roadmap-2026-07-10.md): debugging grounded in runtime
-// truth instead of grep-and-guess — the model reads the files the failure
+// truth instead of search-and-guess — the model reads the files the failure
 // actually traversed, not the files whose names looked relevant.
 //
 // ADR-021: ZERO model calls. The trace summarization is a deterministic node
@@ -13,7 +13,7 @@
 // bounded, typed ranking does.
 //
 // STATE, not STRUCTURE: this answers "what code did this failing test actually
-// execute?" — a runtime STATE question. "What tests cover symbol X?" is a grep;
+// execute?" — a runtime STATE question. "What tests cover symbol X?" is a search;
 // "does it pass?" stays with test_unit_run.
 
 import { tool, type Tool } from "ai";
@@ -169,10 +169,10 @@ export function buildTestTraceRunTool(
       "Run ONE test file under a V8 execution tracer and return the EXECUTED PATH — which " +
       "repo files (and which functions in them) the test actually ran, ranked — alongside the " +
       "typed pass/fail summary. Use this FIRST when debugging a failing test instead of " +
-      "grepping for suspects: read the top executedPath files, they are the code the failure " +
+      "searching for suspects: read the top executedPath files, they are the code the failure " +
       "actually traversed. Optionally narrow to one test with `test_name`. Anti-triggers: " +
       "for plain pass/fail over several files use `test_unit_run`; for 'what tests cover " +
-      "symbol X' use `grep`; this tool runs exactly one test file, never " +
+      "symbol X' use `search`; this tool runs exactly one test file, never " +
       "a package or the repo.",
     inputSchema: z.object({
       test_file: z
@@ -286,7 +286,7 @@ export function buildTestTraceRunTool(
           traceDegraded: executedPath === null || undefined,
           hint:
             parsed.failed > 0 && executedPath && executedPath.files.length > 0
-              ? "Ground the debugging in executedPath: these files/functions actually ran during the failure — read the top entries before grepping elsewhere."
+              ? "Ground the debugging in executedPath: these files/functions actually ran during the failure — read the top entries before searching elsewhere."
               : undefined,
         };
       } finally {

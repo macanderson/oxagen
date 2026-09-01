@@ -68,10 +68,10 @@ export function isTestPath(relPath: string): boolean {
 // This registry + the two mapping helpers are the single mechanism every future
 // structured tool reuses, so naming is decided once, not per tool.
 //
-// The core seven (read_file, write_file, edit_file, list_dir, glob, grep,
-// bash) deliberately KEEP their plain, short model-facing names (training-prior
-// protection) and are intentionally absent from this registry — they are not
-// `domain.subject.action` and must not be renamed.
+// The core file/exec tools (read_file, write_file, edit_file, list_dir,
+// search, bash) deliberately KEEP their plain, short model-facing names
+// (training-prior protection) and are intentionally absent from this registry
+// — they are not `domain.subject.action` and must not be renamed.
 
 /** The deterministic structured tools this engine advertises, canonical form. */
 export const CANONICAL_TOOL_NAMES = [

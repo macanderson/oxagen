@@ -160,7 +160,7 @@ export function buildTestUnitRunTool(
       "empty selection both return a hint, not everything); for a non-test command (build, git, " +
       "install) use `bash`; to typecheck use `build_package_run`. This answers the STATE " +
       "question 'does it pass?' — to find WHICH tests cover a symbol or who imports a module, " +
-      "`grep` for it, then pass those files here as `changedFiles`.",
+      "`search` for it, then pass those files here as `changedFiles`.",
     inputSchema: z.object({
       scope: scopeSchema
         .optional()

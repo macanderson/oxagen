@@ -80,7 +80,7 @@ export function buildBuildPackageRunTool(
       "`typecheck` is the fast feedback loop; use mode `build` only when you specifically need " +
       "the full build. Anti-triggers: to RUN tests use `test_unit_run`; for arbitrary shell use " +
       "`bash`. This answers the STATE question 'does it compile?' — to ask what a symbol's type " +
-      "is or what depends on a module, `grep` for it and read the source.",
+      "is or what depends on a module, `search` for it and read the source.",
     inputSchema: z.object({
       scope: scopeSchema
         .optional()

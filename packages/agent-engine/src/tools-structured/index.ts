@@ -9,7 +9,7 @@
 // (ADR-021 §1: these duties sit on the pure-function / index rungs of the
 // determinism ladder, never the model rung).
 //
-// buildWorkspaceTools (../tools.ts) merges these alongside read_file/grep/bash
+// buildWorkspaceTools (../tools.ts) merges these alongside read_file/search/bash
 // so every surface (CLI, app, API, MCP sandbox) advertises them identically.
 
 import type { ToolSet } from "ai";
