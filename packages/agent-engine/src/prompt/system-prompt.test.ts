@@ -11,6 +11,8 @@
  */
 import { describe, it, expect } from "vitest";
 import { buildSystemPrompt, buildCodingCorePrompt } from "./system-prompt";
+import { buildWorkspaceTools } from "../tools";
+import { MemoryWorkspace } from "../workspaces/memory";
 
 const base = { cwd: "/repo" } as const;
 
@@ -208,5 +210,102 @@ describe("buildSystemPrompt — ask_user clarification rule", () => {
     expect(buildSystemPrompt({ ...base, hasAskUser: false })).toBe(
       buildSystemPrompt(base),
     );
+  });
+});
+
+// ── The prompt may only name tools the engine can hand the model ──────────────
+
+/**
+ * Programs the prompt names inside its `bash` guidance. They are things the
+ * model runs THROUGH a tool, never tools themselves, so they are not expected
+ * in the registry.
+ */
+const SHELL_PROGRAMS = new Set(["cd", "gh"]);
+
+/**
+ * Tools the HOST merges in via `extraTools`, not ones `buildWorkspaceTools`
+ * registers. `get_execution_trace` is a platform capability declared in
+ * packages/oxagen (`agent.trace.get`) and materialized for platform agents;
+ * the engine cannot import it — that dependency direction is the one ADR-017
+ * forbids — so it cannot be derived here and is named instead.
+ */
+const HOST_CAPABILITIES = new Set(["get_execution_trace"]);
+
+describe("buildSystemPrompt — every tool it names is one the engine registers", () => {
+  /** The maximal tool set: every gated tool wired on. */
+  function registeredToolNames(): Set<string> {
+    return new Set(
+      Object.keys(
+        buildWorkspaceTools(new MemoryWorkspace({}), {
+          askUser: async () => ({ answer: "", wasFreeText: false }),
+        }),
+      ),
+    );
+  }
+
+  /** Every backticked identifier the prompt can emit, over all option combinations. */
+  function backtickedNames(): Set<string> {
+    const names = new Set<string>();
+    for (const profile of ["interactive", "headless"] as const) {
+      for (const readOnly of [false, true]) {
+        for (const hasAskUser of [false, true]) {
+          for (const agent of [
+            undefined,
+            { name: "reviewer", systemPrompt: "You are a reviewer." },
+          ]) {
+            const prompt = buildSystemPrompt({
+              ...base,
+              profile,
+              readOnly,
+              hasAskUser,
+              agent,
+            });
+            for (const m of prompt.matchAll(/`([A-Za-z][A-Za-z0-9_]*)`/g)) {
+              names.add(m[1]!);
+            }
+          }
+        }
+      }
+    }
+    return names;
+  }
+
+  it("names no tool the engine does not register", () => {
+    // Nothing asserted this until now, which is how the prompt could advertise
+    // `code_graph` for as long as it did: the tool was gone, the prompt still
+    // sold it, and no test could tell. Checked in ONE direction on purpose —
+    // every name the prompt uses must exist. The reverse (every tool must be
+    // mentioned) is a much stricter claim and deliberately not made here.
+    const registered = registeredToolNames();
+    const unregistered = [...backtickedNames()].filter(
+      (name) =>
+        !registered.has(name) &&
+        !SHELL_PROGRAMS.has(name) &&
+        !HOST_CAPABILITIES.has(name),
+    );
+    expect(unregistered).toEqual([]);
+  });
+
+  it("keeps the two exception lists from going stale", () => {
+    // A shell program or host capability that BECOMES an engine tool would sit
+    // in an exception list forever, silently exempt from the check above. Fail
+    // instead, so whoever registers it deletes the entry.
+    const registered = registeredToolNames();
+    for (const name of [...SHELL_PROGRAMS, ...HOST_CAPABILITIES]) {
+      expect(registered.has(name)).toBe(false);
+    }
+  });
+
+  it("matches the maximal tool set, since readOnly withholds tools the prompt still names", () => {
+    // The check above pairs every prompt variant against the FULL registry
+    // rather than the per-configuration one: a read-only run registers no
+    // write_file/edit_file/bash but the prompt still names them when telling
+    // the model what it may not do. Per-configuration matching would fail on
+    // that, which is why the question is "can the engine ever register this?".
+    const readOnly = Object.keys(
+      buildWorkspaceTools(new MemoryWorkspace({}), { readOnly: true }),
+    );
+    expect(readOnly).not.toContain("write_file");
+    expect(registeredToolNames().has("write_file")).toBe(true);
   });
 });
