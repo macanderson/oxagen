@@ -489,7 +489,7 @@ export async function runCodingAgent(
                 failingCounts.delete(sig); // progress — reset the failing loop counter
                 // Successful-repeat detection: count identical successful calls.
                 // Only applies to bash (the expensive repeated-test-run pattern);
-                // read_file/code_graph repeats are cheap and sometimes intentional.
+                // read_file repeats are cheap and sometimes intentional.
                 if (toolName === "bash") {
                   const succCount = (successCounts.get(sig) ?? 0) + 1;
                   successCounts.set(sig, succCount);

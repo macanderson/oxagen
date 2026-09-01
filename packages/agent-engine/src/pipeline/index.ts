@@ -6,8 +6,8 @@
  *
  *   1. EVALUATE — a cheap model scores completeness + complexity and proposes
  *      context to pull and a noise-removed rewrite.
- *   2. ENHANCE  — the code graph + recalled memory are injected, grounding the
- *      agent in the real files/symbols involved.
+ *   2. ENHANCE  — recalled memory and the repo prior are injected, grounding
+ *      the agent in what past sessions learned about this repository.
  *   3. ROUTE    — the evaluator's chosen tier selects the worker model
  *      (cheapest tier for the job; the default evaluator is the local
  *      heuristic — see evaluate/evaluator.ts); a one-way deterministic safety
@@ -291,7 +291,7 @@ export interface RunTurnOptions {
   /**
    * Fast path for conversational / lookup turns (e.g. "what's the command to
    * add an MCP server?"). Keeps the grounding stages that make an answer
-   * accurate (evaluate + enhance/code-graph + docs) but skips the frontier
+   * accurate (evaluate + enhance + docs) but skips the frontier
    * completeness judge and its revise loop when the turn produced NO file
    * changes — a pure Q&A answer has no executed evidence to verify, so the judge
    * call is waste. The zero-diff guard makes this safe even if the caller's

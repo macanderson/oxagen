@@ -167,7 +167,7 @@ export function resetUsageSessionStats(): void {
   stats = emptyStats();
 }
 
-/** Tally one or more invocations of a tool by name (e.g. "code_graph", "grep"). */
+/** Tally one or more invocations of a tool by name (e.g. "read_file", "grep"). */
 export function recordToolCall(toolName: string, count = 1): void {
   // Match the server's identifier shape so a name never fails validation —
   // never the tool's arguments or output, just the name and a count.

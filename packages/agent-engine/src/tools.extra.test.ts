@@ -1,6 +1,6 @@
 /**
  * Additional coverage for buildWorkspaceTools — tools not exercised by tools.test.ts:
- * write_file, list_dir, search, delete_file, code_graph execute, bash error/timeout paths.
+ * write_file, list_dir, search, delete_file, bash error/timeout paths.
  */
 import { describe, it, expect } from "vitest";
 import { MemoryWorkspace } from "./workspaces/memory";

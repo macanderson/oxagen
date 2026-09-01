@@ -58,7 +58,6 @@ function trace(
     enhancement: {
       prompt: "do work",
       context: "",
-      resolved: [],
       lessonCount: 0,
       source: "none",
     },

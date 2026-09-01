@@ -22,7 +22,7 @@ export type { ModelTier, UsageTotals };
 export type StageKind =
   | "evaluate" // the cheap model scored the prompt
   | "plan" // the goal was decomposed into an executable task plan
-  | "enhance" // code-graph + memory context was injected
+  | "enhance" // recalled memory / repo-prior context was injected
   | "route" // the executor model was selected
   | "execute" // the coding agent ran
   | "judge" // the advisor checked the work for completeness
@@ -85,7 +85,7 @@ export interface PromptEvaluation {
   recommendedTier: ModelTier;
   /** Information the prompt is missing (empty when it is self-contained). */
   missing: string[];
-  /** Symbols / file paths / topics worth retrieving from the code graph. */
+  /** Symbols / file paths / topics the evaluator flagged as worth retrieving. */
   contextQueries: string[];
   /** The prompt rewritten: filler removed, intent sharpened, meaning preserved. */
   refinedPrompt: string;

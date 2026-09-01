@@ -47,7 +47,7 @@ describe("tool naming standard", () => {
 
   it("returns an unknown/legacy name unchanged (training-prior tools are not renamed)", () => {
     expect(canonicalToolName("read_file")).toBe("read_file");
-    expect(canonicalToolName("code_graph")).toBe("code_graph");
+    expect(canonicalToolName("read_file")).toBe("read_file");
   });
 });
 
@@ -59,8 +59,12 @@ describe("scopeSchema (exactly-one refinement)", () => {
   });
   it("rejects no scope and multiple scopes", () => {
     expect(scopeSchema.safeParse({}).success).toBe(false);
-    expect(scopeSchema.safeParse({ package: "x", files: ["a.ts"] }).success).toBe(false);
-    expect(scopeSchema.safeParse({ package: "x", all: true }).success).toBe(false);
+    expect(
+      scopeSchema.safeParse({ package: "x", files: ["a.ts"] }).success,
+    ).toBe(false);
+    expect(scopeSchema.safeParse({ package: "x", all: true }).success).toBe(
+      false,
+    );
   });
   it("treats all:false as not-a-scope (so it fails the exactly-one rule)", () => {
     expect(scopeSchema.safeParse({ all: false }).success).toBe(false);

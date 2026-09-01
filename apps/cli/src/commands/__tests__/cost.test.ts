@@ -3,7 +3,15 @@
  * rollup render correctly and that --json is machine-readable. The trace store is
  * mocked so the session rollup is deterministic and touches no filesystem.
  */
-import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  vi,
+  type Mock,
+} from "vitest";
 import type { TurnTrace } from "../../agent/trace.js";
 
 vi.mock("../../agent/trace-store.js", () => ({ openTraceStore: vi.fn() }));
@@ -38,11 +46,19 @@ function turn(over: Partial<TurnTrace> = {}): TurnTrace {
     cwd: "/proj",
     originalPrompt: "x",
     evaluation: {
-      completeness: 50, complexity: 50, recommendedTier: "balanced", missing: [], contextQueries: [],
-      refinedPrompt: "x", removed: [], reasoning: "", fallback: false,
-      model: "anthropic/claude-haiku-4.5", usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+      completeness: 50,
+      complexity: 50,
+      recommendedTier: "balanced",
+      missing: [],
+      contextQueries: [],
+      refinedPrompt: "x",
+      removed: [],
+      reasoning: "",
+      fallback: false,
+      model: "anthropic/claude-haiku-4.5",
+      usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
     },
-    enhancement: { prompt: "x", context: "", resolved: [], lessonCount: 0, source: "none" },
+    enhancement: { prompt: "x", context: "", lessonCount: 0, source: "none" },
     selectedModel: "anthropic/claude-sonnet-5",
     selectedTier: "balanced",
     selectionRationale: "r",
@@ -82,7 +98,12 @@ describe("cost projection", () => {
   });
 
   it("projects a single model with --model and --json", async () => {
-    await handleCost({ in: 1_000_000, out: 0, model: "anthropic/claude-opus-4.8", json: true });
+    await handleCost({
+      in: 1_000_000,
+      out: 0,
+      model: "anthropic/claude-opus-4.8",
+      json: true,
+    });
     const p = JSON.parse(out) as { totalUsd: number; vendor: string };
     expect(p.vendor).toBe("anthropic");
     expect(p.totalUsd).toBeCloseTo(15);
@@ -100,8 +121,24 @@ describe("cost --session", () => {
     const phased = turn({
       id: "t1",
       phases: [
-        { phase: "evaluate", round: 0, startedAt: 0, finishedAt: 10, durationMs: 10, model: "anthropic/claude-haiku-4.5", usage: { inputTokens: 20, outputTokens: 5, costUsd: 0.001 } },
-        { phase: "execute", round: 0, startedAt: 10, finishedAt: 1000, durationMs: 990, model: "anthropic/claude-sonnet-5", usage: { inputTokens: 80, outputTokens: 45, costUsd: 0.049 } },
+        {
+          phase: "evaluate",
+          round: 0,
+          startedAt: 0,
+          finishedAt: 10,
+          durationMs: 10,
+          model: "anthropic/claude-haiku-4.5",
+          usage: { inputTokens: 20, outputTokens: 5, costUsd: 0.001 },
+        },
+        {
+          phase: "execute",
+          round: 0,
+          startedAt: 10,
+          finishedAt: 1000,
+          durationMs: 990,
+          model: "anthropic/claude-sonnet-5",
+          usage: { inputTokens: 80, outputTokens: 45, costUsd: 0.049 },
+        },
       ],
       verbose: true,
     });
@@ -127,7 +164,12 @@ describe("cost --session", () => {
     const r = JSON.parse(out) as {
       turns: number;
       totalCostUsd: number;
-      byModel: Array<{ model: string; costUsd: number; inputTokens: number; turns: number }>;
+      byModel: Array<{
+        model: string;
+        costUsd: number;
+        inputTokens: number;
+        turns: number;
+      }>;
     };
     expect(r.turns).toBe(1);
     expect(r.totalCostUsd).toBeCloseTo(0.05);
@@ -142,13 +184,31 @@ describe("cost --session", () => {
     const phased = turn({
       id: "t1",
       phases: [
-        { phase: "evaluate", round: 0, startedAt: 0, finishedAt: 10, durationMs: 10, model: "anthropic/claude-haiku-4.5", usage: { inputTokens: 20, outputTokens: 5, costUsd: 0.001 } },
-        { phase: "execute", round: 0, startedAt: 10, finishedAt: 1000, durationMs: 990, model: "anthropic/claude-sonnet-5", usage: { inputTokens: 80, outputTokens: 45, costUsd: 0.049 } },
+        {
+          phase: "evaluate",
+          round: 0,
+          startedAt: 0,
+          finishedAt: 10,
+          durationMs: 10,
+          model: "anthropic/claude-haiku-4.5",
+          usage: { inputTokens: 20, outputTokens: 5, costUsd: 0.001 },
+        },
+        {
+          phase: "execute",
+          round: 0,
+          startedAt: 10,
+          finishedAt: 1000,
+          durationMs: 990,
+          model: "anthropic/claude-sonnet-5",
+          usage: { inputTokens: 80, outputTokens: 45, costUsd: 0.049 },
+        },
       ],
     });
     mockStore.mockReturnValue({ list: () => [phased] });
     await handleCost({ session: true, json: true });
-    const r = JSON.parse(out) as { byModel: Array<{ model: string; costUsd: number; turns: number }> };
+    const r = JSON.parse(out) as {
+      byModel: Array<{ model: string; costUsd: number; turns: number }>;
+    };
     const haiku = r.byModel.find((m) => m.model.includes("haiku"));
     const sonnet = r.byModel.find((m) => m.model.includes("sonnet"));
     expect(haiku?.costUsd).toBeCloseTo(0.001);
