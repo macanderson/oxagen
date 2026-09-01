@@ -55,9 +55,17 @@ integration test exercising the full path.
 - SSE = replayable subscription from last seq; reconnect works mid-run.
 - ClickHouse ingestion + ADR-028 replay re-pointed at the event log.
 
+**Deployment: done.** `packages/agent-worker` now ships to the shared node on
+the same contract as api/app/docs/mcp — a `start` script, a single esbuild
+bundle, an `oxagen-run.json` manifest, a loopback `/healthz` the node's
+post-start poll reads, and a `worker` leg in the `deploy-node` matrix. The
+tarball carries a `stella-serve` binary built at the pinned version, so
+selecting the Stella engine for the worker is one Parameter Store flag.
+
 Exit: kill -9 a worker mid-run → run completes on another worker; client
 reconnect mid-run loses zero events; chat.persist-stream retired or reduced to
-a projection.
+a projection. **Still open**: chat runs inline on the request path, so the
+reconnect and crash-survival halves are not yet exercised in production.
 
 ## Phase 3 — Embedded Stella core behind a flag (Track 2)
 
