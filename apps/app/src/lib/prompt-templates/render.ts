@@ -44,23 +44,29 @@ export interface RenderResult {
  * // rendered: "Summarize run run_4221 in workspace {{workspace}}."
  * // missing: ["workspace"]
  */
-export function renderTemplate(body: string, variables: RenderVariables): RenderResult {
+export function renderTemplate(
+  body: string,
+  variables: RenderVariables,
+): RenderResult {
   const missing: string[] = [];
 
-  const rendered = body.replace(TEMPLATE_TOKEN_RE, (_match, rawName: string) => {
-    const name = rawName.trim();
-    // Only substitute if the name is an allowed identifier.
-    if (!VAR_NAME_RE.test(name)) {
-      // Unknown syntax — leave as-is.
+  const rendered = body.replace(
+    TEMPLATE_TOKEN_RE,
+    (_match, rawName: string) => {
+      const name = rawName.trim();
+      // Only substitute if the name is an allowed identifier.
+      if (!VAR_NAME_RE.test(name)) {
+        // Unknown syntax — leave as-is.
+        return _match;
+      }
+      if (Object.prototype.hasOwnProperty.call(variables, name)) {
+        return variables[name] ?? "";
+      }
+      missing.push(name);
+      // Leave the placeholder in place so the user can see what's missing.
       return _match;
-    }
-    if (Object.prototype.hasOwnProperty.call(variables, name)) {
-      return variables[name] ?? "";
-    }
-    missing.push(name);
-    // Leave the placeholder in place so the user can see what's missing.
-    return _match;
-  });
+    },
+  );
 
   return { rendered, missing };
 }
@@ -112,9 +118,12 @@ export function resolveVariables(
     } else if (variable.resolver === "page") {
       // source = "page.entity.name" → look up pageEntity.label etc.
       if (variable.source === "page.entity.id") value = context.pageEntity?.id;
-      else if (variable.source === "page.entity.kind") value = context.pageEntity?.kind;
-      else if (variable.source === "page.entity.label") value = context.pageEntity?.label;
-      else if (variable.source === "page.entity.summary") value = context.pageEntity?.summary;
+      else if (variable.source === "page.entity.kind")
+        value = context.pageEntity?.kind;
+      else if (variable.source === "page.entity.label")
+        value = context.pageEntity?.label;
+      else if (variable.source === "page.entity.summary")
+        value = context.pageEntity?.summary;
     } else if (variable.resolver === "ask") {
       // "ask" resolver means prompt the user at invocation time — mark as
       // unresolved for now; the UI shows a follow-up dialog.

@@ -122,7 +122,7 @@ vi.mock("lucide-react", () => ({
   Loader2: () => <span data-icon="Loader2" />,
 }));
 
-vi.mock("@oxagen/prompt-templates", () => ({
+vi.mock("@/lib/prompt-templates", () => ({
   getApplicableTemplates: () => [],
   renderTemplate: (body: string) => ({ rendered: body, missing: [] }),
   resolveVariables: () => ({ resolved: {}, unresolved: [] }),

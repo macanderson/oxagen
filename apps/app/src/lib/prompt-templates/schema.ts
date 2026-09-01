@@ -58,7 +58,10 @@ export type ContextMatcher = z.infer<typeof contextMatcherSchema>;
 
 export const promptTemplateSchema = z.object({
   /** Stable kebab-case identifier, unique across the registry. */
-  id: z.string().min(1).regex(/^[a-z0-9-]+$/, "id must be kebab-case"),
+  id: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9-]+$/, "id must be kebab-case"),
   /** Short human label shown in the Command Menu. */
   title: z.string().min(1),
   /** One-sentence description shown as tooltip / secondary text. */
@@ -71,7 +74,13 @@ export const promptTemplateSchema = z.object({
    *  communicate  — send messages, notify, invite
    *  analyze      — report, summarize, trend
    */
-  category: z.enum(["create", "investigate", "configure", "communicate", "analyze"]),
+  category: z.enum([
+    "create",
+    "investigate",
+    "configure",
+    "communicate",
+    "analyze",
+  ]),
   /** Tags for future filtering / search. */
   tags: z.array(z.string()).default([]),
   /**

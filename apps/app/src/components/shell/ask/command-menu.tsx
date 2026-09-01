@@ -56,8 +56,8 @@ import {
   getApplicableTemplates,
   renderTemplate,
   resolveVariables,
-} from "@oxagen/prompt-templates";
-import type { PromptTemplate } from "@oxagen/prompt-templates";
+} from "@/lib/prompt-templates";
+import type { PromptTemplate } from "@/lib/prompt-templates";
 import {
   Dialog,
   DialogPopup,

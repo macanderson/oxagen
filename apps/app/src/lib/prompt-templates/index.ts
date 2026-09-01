@@ -125,9 +125,11 @@ export function getApplicableTemplates(
   } = {},
 ): PromptTemplate[] {
   const limit = options.limit ?? 6;
-  const { pathname, routeParams, queryParams, pageEntity, capabilities } = context;
+  const { pathname, routeParams, queryParams, pageEntity, capabilities } =
+    context;
 
-  const candidates: Array<{ template: PromptTemplate; specificity: number }> = [];
+  const candidates: Array<{ template: PromptTemplate; specificity: number }> =
+    [];
 
   for (const template of registry) {
     // 1. Route matching — at least one matcher must match.
@@ -137,7 +139,8 @@ export function getApplicableTemplates(
     if (!matchingRoute) continue;
 
     // 2. Capability gate — user must have the declared capability.
-    if (template.capability && !capabilities.includes(template.capability)) continue;
+    if (template.capability && !capabilities.includes(template.capability))
+      continue;
 
     // 3. Required variable resolution.
     const unresolvable = template.variables
@@ -155,8 +158,10 @@ export function getApplicableTemplates(
           if (!pageEntity) return true;
           if (v.source === "page.entity.id") return !pageEntity.id;
           if (v.source === "page.entity.kind") return !pageEntity.kind;
-          if (v.source === "page.entity.label") return pageEntity.label === undefined;
-          if (v.source === "page.entity.summary") return pageEntity.summary === undefined;
+          if (v.source === "page.entity.label")
+            return pageEntity.label === undefined;
+          if (v.source === "page.entity.summary")
+            return pageEntity.summary === undefined;
           return true;
         }
         return false;
@@ -175,7 +180,17 @@ export function getApplicableTemplates(
 }
 
 // Re-export types and schema for consumers.
-export type { PromptTemplate, PageContext, TemplateVariable, ContextMatcher } from "./schema";
-export { promptTemplateSchema, pageContextSchema, templateVariableSchema, contextMatcherSchema } from "./schema";
+export type {
+  PromptTemplate,
+  PageContext,
+  TemplateVariable,
+  ContextMatcher,
+} from "./schema";
+export {
+  promptTemplateSchema,
+  pageContextSchema,
+  templateVariableSchema,
+  contextMatcherSchema,
+} from "./schema";
 export { renderTemplate, resolveVariables } from "./render";
 export type { RenderResult, RenderVariables } from "./render";
