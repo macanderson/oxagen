@@ -742,7 +742,8 @@ describe("runA2ATask — agent RBAC delegation (Q2)", () => {
       .map((call) => call[2] as { state?: string })
       .find((patch) => patch.state === "rejected");
     expect(rejectedPatch).toBeDefined();
-    expect(runCodingAgent).not.toHaveBeenCalled();
+    const { executeTurn } = await import("@oxagen/agent-runner");
+    expect(vi.mocked(executeTurn)).not.toHaveBeenCalled();
   });
 
   it("emits a final status-update when it fails a skill-addressed task closed", async () => {
