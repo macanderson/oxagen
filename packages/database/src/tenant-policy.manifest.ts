@@ -46,6 +46,14 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.agents", policyClass: "standard" },
   { table: "agent.skills", policyClass: "standard_or_builtin" },
   { table: "agent.skill_versions", policyClass: "standard_or_builtin" },
+  // Workspace agent-asset registry (20260831120000_agent_asset_registry.sql):
+  // tool declarations + context records + the append-only promotions ledger.
+  // All tenant-authored (no builtin sentinel rows), so plain standard.
+  { table: "agent.tools", policyClass: "standard" },
+  { table: "agent.tool_versions", policyClass: "standard" },
+  { table: "agent.context_records", policyClass: "standard" },
+  { table: "agent.context_record_versions", policyClass: "standard" },
+  { table: "agent.context_promotions", policyClass: "standard" },
   { table: "agent.agent_plans", policyClass: "standard" },
   { table: "agent.agent_executions", policyClass: "standard" },
   { table: "agent.agent_execution_steps", policyClass: "standard" },

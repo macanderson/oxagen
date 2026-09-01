@@ -726,6 +726,36 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./skill.edit")).skillEditHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "publish_tool_declaration",
+    async () =>
+      (await import("./tool.declaration.publish"))
+        .toolDeclarationPublishHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_tool_declarations",
+    async () =>
+      (await import("./tool.declaration.list"))
+        .toolDeclarationListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "publish_context_record",
+    async () =>
+      (await import("./context.record.publish"))
+        .contextRecordPublishHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_context_records",
+    async () =>
+      (await import("./context.record.list"))
+        .contextRecordListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "promote_context_record",
+    async () =>
+      (await import("./context.record.promote"))
+        .contextRecordPromoteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "export_skill",
     async () =>
       (await import("./skill.export"))
