@@ -335,7 +335,7 @@ Each customer defines their own ontology via these prompts. **The platform is ag
 
 **Deliverables:**
 - Add `ConnectorPluginSchema` Zod object in `packages/ingestion/src/connectors/schema.ts`
-- Create `schema.yaml` files for all 15 built-in connectors (GitHub, Google Drive, Slack, Linear, Salesforce, etc.)
+- Create `schema.yaml` files for every built-in connector (GitHub, Google Drive, Slack, Linear, Salesforce, etc.)
 - Add `connector_schemas` table to Postgres schema
 - Implement `plugin.schema.get`, `plugin.schema.validate` contract handlers
 - Add `schemaUrl` fetch + cache logic to the install pathway
@@ -543,7 +543,7 @@ Agent now has rich context: code implementation + design intent + architecture, 
 
 ### Functional
 - [ ] 20 contracts fully implemented across API, MCP, CLI, Agent (no surface gaps)
-- [ ] All 15 built-in connectors ship co-located `schema.yaml` + pass alignment check
+- [ ] Every built-in connector ships a co-located `schema.yaml` + passes the alignment check
 - [ ] Dynamic form renderer works for all built-in connectors (no hand-coded per-connector wizards)
 - [ ] `repo.configure` and `integration.configure` allow custom `ontologyPrompt` and `semanticEdgePrompt` per-connector
 - [ ] Semantic edge inference reads custom prompts and infers edges with confidence scores
@@ -575,7 +575,7 @@ Agent now has rich context: code implementation + design intent + architecture, 
 **Connector layer:**
 - `packages/ingestion/src/connectors/types.ts` — add `schemaPath: string`, `deliveryConfigSchema: z.ZodTypeAny`, `ontologyPrompt?: string`
 - `packages/ingestion/src/connectors/github/index.ts` — add co-located `schema.yaml`
-- `packages/ingestion/src/connectors/{all}/index.ts` — add YAML schemas for all 15
+- `packages/ingestion/src/connectors/{all}/index.ts` — add YAML schemas for every connector
 
 **Database:**
 - `packages/database/src/schema/ingestion.ts` — add `connector_schemas` table + migration

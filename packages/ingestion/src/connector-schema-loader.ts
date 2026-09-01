@@ -169,6 +169,9 @@ export const BUILT_IN_PLUGIN_IDS = new Set([
   "microsoft",
   "salesforce",
   "zoom",
+  // Revenue / support
+  "stripe",
+  "zendesk",
   // Custom / generic
   "custom-sql",
   "custom-webhook",
