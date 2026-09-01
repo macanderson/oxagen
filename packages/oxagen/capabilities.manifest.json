@@ -2110,8 +2110,8 @@
       "layers": {
         "schema": true,
         "api": true,
-        "docs": false,
-        "mcp": false,
+        "docs": true,
+        "mcp": true,
         "unit": true
       }
     },
@@ -2124,7 +2124,7 @@
       "layers": {
         "schema": true,
         "api": true,
-        "docs": false,
+        "docs": true,
         "unit": true
       }
     },
@@ -2137,7 +2137,7 @@
       "layers": {
         "schema": true,
         "api": true,
-        "docs": false,
+        "docs": true,
         "unit": true
       }
     },
@@ -4511,8 +4511,8 @@
       "layers": {
         "schema": true,
         "api": true,
-        "docs": false,
-        "mcp": false,
+        "docs": true,
+        "mcp": true,
         "unit": true
       }
     },
@@ -4525,7 +4525,7 @@
       "layers": {
         "schema": true,
         "api": true,
-        "docs": false,
+        "docs": true,
         "unit": true
       }
     },
