@@ -39,13 +39,16 @@ pnpm add -g @oxagen/cli
 oxagen --version
 ```
 
-> This only works for releases published through
-> `pnpm --filter @oxagen/cli publish:standalone`, which ships the single-file
-> bundle plus a clean manifest. Publishing `apps/cli/package.json` as-is does
-> **not** work: its `bin` points at `dist/index.js`, whose shebang is
+> The published npm package expects `tsx` on `PATH`, so it does not run
+> standalone outside the monorepo. Use the monorepo or standalone bundle
+> methods instead.
+>
+> The standalone bundle is what
+> `pnpm --filter @oxagen/cli publish:standalone` ships — the single-file bundle
+> plus a clean manifest. Publishing `apps/cli/package.json` as-is does **not**
+> work: its `bin` points at `dist/index.js`, whose shebang is
 > `#!/usr/bin/env tsx`, and its `dependencies` still carry unpublished
-> `workspace:*` packages. Prefer the monorepo or standalone-bundle methods if
-> you are unsure which kind of release you have.
+> `workspace:*` packages.
 
 See https://docs.oxagen.sh/docs/cli/installation for the full walkthrough.
 

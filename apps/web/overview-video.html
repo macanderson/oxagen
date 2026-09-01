@@ -126,7 +126,6 @@ h3.big{font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1.2;max-
 .comps{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-top:30px}
 .comp{border:1px solid var(--border);border-radius:14px;padding:16px 18px;background:var(--surface)}
 .comp .ct{font-size:13px;font-weight:700}
-.comp .ci{color:var(--gt);font-weight:500;font-size:11px;margin-left:4px}
 .comp p{font-size:11.5px;color:var(--mut);line-height:1.65;margin-top:6px}
 .comp p b{color:var(--fg)}
 /* benchmark */
@@ -360,10 +359,10 @@ footer{border-top:1px solid var(--border);margin-top:70px;padding:26px 0 40px;
   didn't train on</b>, and promoted only on <b>measured lift</b>. context prs are the
   publication step; the witness gate is the floor.</p>
   <div class="rail"><div class="lstep gold">act</div><div class="larr">&#8594;</div><div class="lstep gold">receipts</div><div class="larr">&#8594;</div><div class="lstep gold">mine candidates</div><div class="larr">&#8594;</div><div class="lstep gold">eval on held-out</div><div class="larr">&#8594;</div><div class="lstep gold">promote on lift</div><div class="larr loopback">&#8617;</div></div>
-  <div class="comps"><div class="comp"><div class="ct">tool foundry <span class="ci">#830</span></div><p>hits a capability gap, writes itself a typed tool, proves it with a witness, registers it.</p></div><div class="comp"><div class="ct">self-tuning <span class="ci">#831</span></div><p>a bandit over prompts, policies, routing. first slice shipped: <b>stella tune</b>.</p></div><div class="comp"><div class="ct">stella-maintains-stella <span class="ci">#832</span></div><p>audits its own source and opens gated draft PRs against itself. human merge.</p></div><div class="comp"><div class="ct">distillation <span class="ci">#833</span></div><p>repeated wins become parameterized skills — promoted on measured lift, not frequency.</p></div><div class="comp"><div class="ct">causal self-model <span class="ci">#834</span></div><p>predicts its own likely failure and intervenes before it costs a turn.</p></div><div class="comp"><div class="ct">curriculum <span class="ci">#835</span></div><p>maps its capability frontier, drills the gaps in sandboxed worktrees under verify.</p></div><div class="comp"><div class="ct">weight-space adapters <span class="ci">#836</span></div><p>LoRA on its own redacted trajectories — gated by eval and human sign-off.</p></div></div>
+  <div class="comps"><div class="comp"><div class="ct">tool foundry</div><p>hits a capability gap, writes itself a typed tool, proves it with a witness, registers it.</p></div><div class="comp"><div class="ct">self-tuning</div><p>a bandit over prompts, policies, routing. first slice shipped: <b>stella tune</b>.</p></div><div class="comp"><div class="ct">stella-maintains-stella</div><p>audits its own source and opens gated draft PRs against itself. human merge.</p></div><div class="comp"><div class="ct">distillation</div><p>repeated wins become parameterized skills — promoted on measured lift, not frequency.</p></div><div class="comp"><div class="ct">causal self-model</div><p>predicts its own likely failure and intervenes before it costs a turn.</p></div><div class="comp"><div class="ct">curriculum</div><p>maps its capability frontier, drills the gaps in sandboxed worktrees under verify.</p></div><div class="comp"><div class="ct">weight-space adapters</div><p>LoRA on its own redacted trajectories — gated by eval and human sign-off.</p></div></div>
   <p class="slead" style="font-size:12.5px;margin-top:26px">shipped today:
   <b>stella tune</b> a/bs a policy knob over loop-bench and promotes the winner with
-  a reversible rollback record. on deck: the trajectory dataset (#872), the shared
+  a reversible rollback record. on deck: the trajectory dataset, the shared
   evaluator, and stella opening gated prs against its own source — every one of them
   clearing the same fail&#8594;pass machinery as your code.</p>
 </div></section>
@@ -374,7 +373,7 @@ footer{border-top:1px solid var(--border);margin-top:70px;padding:26px 0 40px;
   <div class="bench">
     <div style="font-size:12px;color:var(--mut);margin-bottom:14px">pass@1 &middot; 89 tasks &middot; higher is better</div>
     <div class="brow" title="stella 0.6 · witness-on — 71.9% pass@1"><div class="blabel"><span class="bstar">&#10022;</span> stella 0.6 · witness-on</div><div class="btrack"><div class="bar hero" style="--w:89.9%"></div></div><div class="bval">71.9%</div></div><div class="brow" title="claude fable 5 · max — 64.7% pass@1"><div class="blabel">claude fable 5 · max</div><div class="btrack"><div class="bar" style="--w:80.9%"></div></div><div class="bval">64.7%</div></div><div class="brow" title="kimi k3 · xhigh — 62.4% pass@1"><div class="blabel">kimi k3 · xhigh</div><div class="btrack"><div class="bar" style="--w:78.0%"></div></div><div class="bval">62.4%</div></div><div class="brow" title="gpt-5.5 · high — 60.1% pass@1"><div class="blabel">gpt-5.5 · high</div><div class="btrack"><div class="bar" style="--w:75.1%"></div></div><div class="bval">60.1%</div></div>
-    <div class="bfoot">preregistered before any paid call (#950) &middot; frozen SUT
+    <div class="bfoot">preregistered before any paid call &middot; frozen SUT
     = origin/main, unmodified &middot; witness-on arm: an independent model authors
     the failing test, tamper-excluded &middot; every trial reproducible from local
     receipts &middot; $0.84 per resolved task at 4m11s median</div>

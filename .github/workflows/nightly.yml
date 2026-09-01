@@ -311,6 +311,27 @@ jobs:
       - name: E2e suite
         run: pnpm test:e2e
 
+      # Playwright writes a trace and an `error-context.md` per failure into
+      # apps/app/test-results/. That file names the page the browser was
+      # actually on when a wait expired, which is what separates a click that
+      # never navigated from a destination that never rendered — the question
+      # the nightly flake (#2559) is stuck on. Without this the container is
+      # torn down and the only copy goes with it, so a red night can be seen
+      # and not diagnosed. pipeline.yml carries the same block for its sharded
+      # e2e job; this one is not sharded, hence the fixed name.
+      #
+      # Before the Linear step, not after: that step is `continue-on-error`
+      # and has its own way of failing, and evidence should not depend on
+      # ticketing having worked.
+      - name: Upload Playwright traces (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-nightly
+          path: apps/app/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: File Linear ticket on e2e failure
         if: failure()
         continue-on-error: true
