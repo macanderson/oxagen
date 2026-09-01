@@ -21,6 +21,7 @@ export const secretKeyList = registerCapability({
   layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

@@ -19,6 +19,7 @@ export const userWorkspacePreferencesRead = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "user" },
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow", Member: "allow", Viewer: "allow" },

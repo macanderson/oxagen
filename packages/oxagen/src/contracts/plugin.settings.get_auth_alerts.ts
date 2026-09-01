@@ -25,6 +25,7 @@ export const pluginSettingsGetAuthAlerts = registerCapability({
   // A notification-preference read; must not consume credits or be balance-gated.
   noBillingGate: true,
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

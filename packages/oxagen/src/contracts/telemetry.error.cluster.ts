@@ -36,6 +36,7 @@ export const telemetryErrorCluster = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

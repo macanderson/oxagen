@@ -16,6 +16,7 @@ export const notificationsList = registerCapability({
   layers: ["api", "docs", "mcp", "unit", "app"],
   scoped: true,
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow", Compliance: "allow", Billing: "allow" },

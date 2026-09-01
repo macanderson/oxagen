@@ -12,6 +12,7 @@ export const repoBranchList = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "vcs" },
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
