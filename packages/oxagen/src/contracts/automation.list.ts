@@ -11,6 +11,7 @@ export const automationList = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "automation" },
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

@@ -22,6 +22,7 @@ export const agentSandboxLogsList = registerCapability({
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "execution" },
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

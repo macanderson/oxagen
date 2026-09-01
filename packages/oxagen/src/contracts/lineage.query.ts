@@ -169,6 +169,7 @@ export const lineageQuery = registerCapability({
     category: "introspection",
   },
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

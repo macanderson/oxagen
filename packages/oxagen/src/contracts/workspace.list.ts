@@ -37,6 +37,7 @@ export const workspaceList = registerCapability({
   scoped: false,
   agent: { requiresApproval: false, riskLevel: "low", category: "workspace" },
   sensitivity: "low",
+  mutates: false,
   // allow by default: same reasoning as org.list — listing workspaces within an
   // org the caller already belongs to is a user-intrinsic right. The handler
   // enforces membership before listing (not-a-member → error). Keeping this as

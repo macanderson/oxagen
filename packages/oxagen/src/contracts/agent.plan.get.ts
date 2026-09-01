@@ -28,6 +28,7 @@ export const agentPlanGet = registerCapability({
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "planning" },
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

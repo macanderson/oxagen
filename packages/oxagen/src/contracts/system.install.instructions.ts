@@ -51,6 +51,7 @@ export const systemInstallInstructions = registerCapability({
     category: "system",
   },
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

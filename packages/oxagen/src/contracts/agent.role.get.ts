@@ -33,6 +33,7 @@ export const agentRoleGet = registerCapability({
     category: "introspection",
   },
   sensitivity: "medium",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow", Compliance: "allow" },

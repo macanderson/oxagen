@@ -11,6 +11,7 @@ export const agentUiRender = registerCapability({
   scoped: false,
   agent: { requiresApproval: false, riskLevel: "low", category: "ui" },
   sensitivity: "low",
+  mutates: false,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow" },
