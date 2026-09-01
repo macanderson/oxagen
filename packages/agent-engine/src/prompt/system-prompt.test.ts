@@ -6,8 +6,8 @@
  *   reproduce → localize → fix → re-test verification protocol.
  *
  * Both must keep the profile-independent tool rules — chief among them the
- * graph-first context-gathering mandate, which must never reference a tool
- * that is not wired for the run (hasCodeGraph / hasCodeMap).
+ * locate-before-you-touch mandate, which must never name a tool the engine
+ * does not hand the model.
  */
 import { describe, it, expect } from "vitest";
 import { buildSystemPrompt, buildCodingCorePrompt } from "./system-prompt";
@@ -142,17 +142,39 @@ describe("buildSystemPrompt — locate-before-you-touch tool guidance", () => {
     }
   });
 
-  it("tells the model to locate code with grep/glob before editing", () => {
+  it("tells the model to locate code with the unified search tool", () => {
     const prompt = buildSystemPrompt(base);
     expect(prompt).toContain("LOCATE BEFORE YOU TOUCH");
-    expect(prompt).toContain("Use `grep` and `glob` to find the code");
+    expect(prompt).toContain("Use `search` to find the code");
+    // The one query covers both axes — say so, or the model reaches for a
+    // path-only tool it no longer has when it only remembers a symbol.
+    expect(prompt).toContain("matches both file names and file contents");
   });
 
-  it("headless verification protocol names grep/glob as the locate tools", () => {
+  it("headless verification protocol names search as the locate tool", () => {
     const prompt = buildSystemPrompt({ ...base, profile: "headless" });
     expect(prompt).toContain(
-      "Localize before editing: use `grep`/`glob` to find the real source",
+      "Localize before editing: use `search` to find the real source",
     );
+  });
+
+  it("names `search`, never the split `grep`/`glob` pair it replaced", () => {
+    // Stella's catalog carries ONE search over file names and contents, and
+    // reserves the names `grep` and `glob` so a merged surface cannot offer
+    // them. The prompt is written to that surface on every profile, with or
+    // without a persona, so no rule can quietly reintroduce the old pair.
+    for (const profile of ["interactive", "headless"] as const) {
+      for (const agent of [
+        undefined,
+        { name: "reviewer", systemPrompt: "You are a reviewer." },
+      ]) {
+        const prompt = buildSystemPrompt({ ...base, profile, agent });
+        expect(prompt).toContain("`search`");
+        expect(prompt).not.toContain("`grep`");
+        expect(prompt).not.toContain("`glob`");
+        expect(prompt).not.toMatch(/\bglob\/grep\b|\bgrep\/glob\b/);
+      }
+    }
   });
 
   it("keeps locate guidance alongside a named agent persona", () => {
