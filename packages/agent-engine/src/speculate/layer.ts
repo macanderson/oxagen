@@ -34,8 +34,7 @@ import {
 /** Read-only tools the layer may speculate and serve from cache. */
 export const SPECULATABLE_TOOLS = new Set([
   "read_file",
-  "grep",
-  "glob",
+  "search",
   "list_dir",
   // code_graph reads the code-graph index, not the live filesystem, so it is
   // cache-safe under the same conservative rule as the reads above (any

@@ -137,6 +137,15 @@ export interface Workspace {
     pattern: string,
     opts?: { path?: string; glob?: string },
   ): Promise<string[]>;
+  /**
+   * Remove one file. OPTIONAL: a workspace that cannot delete simply does not
+   * advertise the `delete_file` tool — presence of the capability, not a
+   * flag, gates the tool, mirroring how `codeGraph` gates `code_graph`.
+   * Stella's catalog classifies deletion as its one Destructive tool and
+   * steers the model off `rm`; a workspace without this leaves the model with
+   * `bash rm`, which records no file-touch audit event.
+   */
+  deleteFile?(p: string): Promise<void>;
   exec(
     command: string,
     opts?: { timeoutMs?: number; signal?: AbortSignal },
