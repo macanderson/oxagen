@@ -611,24 +611,35 @@ export function createPlatformTurnDriver(): TurnDriver {
           },
         );
 
-        const result = await executeTurn(run.surface as PlatformSurface, {
-          ai,
-          instruction: spec.instruction,
-          history: spec.history as ModelMessage[] | undefined,
-          model: spec.model,
-          // Runaway backstop for the agentic tool loop, NOT a functional
-          // limit — RunSpec v1 has no per-run step override.
-          maxSteps: DEFAULT_MAX_AGENT_STEPS,
-          extraTools,
-          mutatingToolNames,
-          budgetGuard,
-          // Lease loss OR a cancel request both abort this same signal — see
-          // @oxagen/agent-worker's worker.ts; this driver doesn't need to
-          // know which.
-          signal: io.signal,
-          onStreamPart: (part) => io.onEvent("stream-part", part),
-          onEvent: (e) => io.onEvent("coding-event", e),
-        });
+        const result = await executeTurn(
+          run.surface as PlatformSurface,
+          {
+            ai,
+            instruction: spec.instruction,
+            history: spec.history as ModelMessage[] | undefined,
+            model: spec.model,
+            // Runaway backstop for the agentic tool loop, NOT a functional
+            // limit — RunSpec v1 has no per-run step override.
+            maxSteps: DEFAULT_MAX_AGENT_STEPS,
+            extraTools,
+            mutatingToolNames,
+            budgetGuard,
+            // Lease loss OR a cancel request both abort this same signal — see
+            // @oxagen/agent-worker's worker.ts; this driver doesn't need to
+            // know which.
+            signal: io.signal,
+            onStreamPart: (part) => io.onEvent("stream-part", part),
+            onEvent: (e) => io.onEvent("coding-event", e),
+          },
+          {
+            // The run's own engine ask wins over the worker's OXAGEN_ENGINE —
+            // per run rather than per deployment, which is what makes a shadow
+            // slice or a pinned-engine rerun expressible. Absent on every row
+            // written before the field existed; those take the process default,
+            // exactly as they always did.
+            requestedEngine: spec.engine ?? null,
+          },
+        );
 
         const outcome = {
           text: result.text,

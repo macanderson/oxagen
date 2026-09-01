@@ -33,7 +33,11 @@ import { createPostgresRunStore } from "@oxagen/agent-runner";
 // The subpath, not the barrel: this module supervises sidecar processes and so
 // reaches for node builtins, which the barrel must stay clear of for the app's
 // bundler. A worker is a long-lived Node process, so it can take them.
-import { shutdownStellaEngine } from "@oxagen/agent-runner/stella";
+import {
+  configureStellaEngine,
+  shutdownStellaEngine,
+} from "@oxagen/agent-runner/stella";
+import { providerCostUsd } from "@oxagen/billing";
 import { createPlatformTurnDriver } from "@oxagen/agent";
 import { createAgentWorker } from "./worker";
 import { bootstrap } from "./bootstrap";
@@ -65,6 +69,22 @@ async function main(): Promise<void> {
   // inert. Fail fast on boot errors — a worker that cannot enforce must not
   // claim runs.
   await bootstrap();
+
+  // Arm the Stella engine's own spend accounting with the billing rate card.
+  // The engine folds each `CompletionResult.cost_usd` into the turn's settled
+  // spend, and without a pricer every call reports zero — a ceiling that can
+  // never be reached (macanderson/oxagen#2543). Host-side metering is separate
+  // and unaffected: `streamAgentReply` still writes `token_usage` per call.
+  configureStellaEngine({
+    price: ({ usage, model }) =>
+      providerCostUsd({
+        model,
+        inputTokens: usage.input_tokens,
+        outputTokens: usage.output_tokens,
+        cachedTokens: usage.cached_input_tokens ?? 0,
+        cacheWriteTokens: usage.cache_write_tokens ?? 0,
+      }),
+  });
 
   // Widening the concrete store to BOTH structural ports is the drift check.
   // `./types.ts` hand-mirrors @oxagen/agent-runner's V2 surface so the harness

@@ -218,3 +218,31 @@ describe("runSpecV1Schema", () => {
     expect(runSpecV1Schema.safeParse({ version: 2 }).success).toBe(false);
   });
 });
+
+describe("runSpecV1.engine — the per-run engine ask", () => {
+  it("accepts both engines and round-trips through the builder", () => {
+    for (const engine of ["ts", "stella"] as const) {
+      const spec = buildLegacyRunSpecV1({ instruction: "x", engine });
+      expect(spec.engine).toBe(engine);
+      expect(parseRunSpecV1(spec)).toEqual(spec);
+    }
+  });
+
+  it("omits the key entirely when not asked for — pre-field rows stay byte-identical", () => {
+    const spec = buildLegacyRunSpecV1({ instruction: "x" });
+    expect("engine" in spec).toBe(false);
+  });
+
+  it("rejects an engine outside RUN_ENGINES rather than defaulting", () => {
+    expect(() =>
+      parseRunSpecV1({ version: 1, instruction: "x", engine: "gpt-loop" }),
+    ).toThrow(/engine/);
+  });
+
+  it("parses a row written before the field existed", () => {
+    expect(parseRunSpecV1({ version: 1, instruction: "x" })).toEqual({
+      version: 1,
+      instruction: "x",
+    });
+  });
+});

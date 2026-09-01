@@ -1,0 +1,20 @@
+# Keeps the build context for packages/agent-worker/Dockerfile (and any later
+# image built from the repo root) down to source. Everything here is either
+# regenerated inside the image (node_modules via pnpm install) or has no
+# business in one (VCS state, local env, build output, caches).
+.git
+.github/docker
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/coverage
+**/.env
+**/.env.*
+!.env.example
+.stella
+.agent
+.ds-sync
+ds-bundle
+docs/brand_old
+**/*.log
