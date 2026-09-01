@@ -896,6 +896,34 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "/usr/local/bin/stella-serve",
   },
+  STELLA_ENROLLMENT_SIGNING_SECRET: {
+    group: "Inngest",
+    description:
+      "HMAC secret this deployment signs Stella enterprise-telemetry enrollments with " +
+      "(create_stella_enrollment). A managed Stella install verifies the signature against its " +
+      "own copy of the same secret, named by the enrollment document's verification_secret_env " +
+      "— the two are distributed out of band. Unset means the capability refuses to mint " +
+      "rather than issuing an enrollment no install could verify.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "generate",
+  },
+  STELLA_TELEMETRY_INGEST_ENDPOINTS: {
+    group: "Inngest",
+    description:
+      "Comma-separated HTTPS ingest endpoints this deployment serves for Stella operational " +
+      "telemetry. create_stella_enrollment refuses to sign an enrollment pointing anywhere else, " +
+      "so an operator cannot mint a valid document aiming a fleet of installs at a third party. " +
+      "Defaults to the public endpoint; plaintext entries are dropped.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "https://api.oxagen.sh/v1/telemetry/stella/operational",
+  },
   OXAGEN_WORKER_CONCURRENCY: {
     group: "Inngest",
     description:
