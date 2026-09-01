@@ -815,6 +815,10 @@ export async function POST(request: NextRequest): Promise<Response> {
           requestId,
           surface: "app" as const,
           messageId: parentMessageId ?? requestId,
+          // The same per-turn key handed to the metered AI port below
+          // (createPlatformAgentAi(capCtx, capCtx.messageId, "app")), so
+          // skill_loads and token_usage join for this turn (#2597).
+          executionStepId: parentMessageId ?? requestId,
           clientIp,
         };
 

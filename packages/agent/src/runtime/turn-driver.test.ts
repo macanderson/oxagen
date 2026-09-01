@@ -351,7 +351,7 @@ describe("createPlatformTurnDriver — happy path", () => {
     });
   });
 
-  it("builds the CapabilityContext with surface 'runner', requestId = runId, messageId null", async () => {
+  it("builds the CapabilityContext with surface 'runner', requestId = runId, messageId null, executionStepId = runId", async () => {
     const driver = createPlatformTurnDriver();
     const run = makeRun({
       runId: "run_abc",
@@ -371,6 +371,11 @@ describe("createPlatformTurnDriver — happy path", () => {
         requestId: "run_abc",
         surface: "runner",
         messageId: null,
+        // #2597: a durable run has no chat message to attach to, so messageId
+        // is legitimately null and the run itself is the execution step. This
+        // is the SAME value handed to createPlatformAgentAi below, which is
+        // what makes token_usage and skill_loads join for this turn.
+        executionStepId: "run_abc",
       },
       expect.anything(),
     );

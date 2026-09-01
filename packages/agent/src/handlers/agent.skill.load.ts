@@ -237,7 +237,11 @@ export async function agentSkillLoadHandler(
       skill_id: resolved.skillId,
       skill_slug: input.skillSlug,
       skill_version: resolved.row.versionNumber,
-      execution_step_id: null,
+      // The run this load belongs to, when there is one. NULL outside a run
+      // (API, MCP, a person) is the truthful answer, and is exactly what the
+      // read-side join excludes — never a fabricated id to make the column
+      // look populated.
+      execution_step_id: ctx.executionStepId ?? null,
       surface: ctx.surface,
       load_latency_ms: loadLatencyMs,
       created_at: new Date().toISOString(),

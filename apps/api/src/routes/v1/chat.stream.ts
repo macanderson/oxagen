@@ -116,7 +116,13 @@ chatStreamRoute.post("/", async (c) => {
   // A stable per-turn UUID: execution_step_id / reference_id in the metered AI
   // port, executionRef for memory recall, and messageId in telemetry.
   const messageId = ctx.requestId;
-  const capCtx: CapabilityContext = { ...ctx, messageId };
+  // Same value the metered AI port receives, so skill_loads and token_usage
+  // are keyed identically for this turn (#2597).
+  const capCtx: CapabilityContext = {
+    ...ctx,
+    messageId,
+    executionStepId: messageId,
+  };
 
   // Resolve language model: explicit > tier > workspace/user defaults > system default.
   let resolvedModel = model;

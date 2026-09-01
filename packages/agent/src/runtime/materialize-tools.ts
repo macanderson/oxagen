@@ -75,7 +75,12 @@ function buildInvocationPayload(
     capability_name: base.capabilityName,
     message_id: base.ctx.messageId ?? "00000000-0000-0000-0000-000000000000",
     parent_message_id: null,
-    execution_step_id: null,
+    // The run this tool call belongs to (#2597). One of the seven producers
+    // that wrote NULL here unconditionally; this factory is the one covering
+    // every capability and external MCP call, so filling it in makes
+    // `tool_invocations` joinable for those five call sites at once. NULL
+    // stays the honest answer outside a run.
+    execution_step_id: base.ctx.executionStepId ?? null,
     status: overrides.status,
     input_size_bytes: base.inputBytes,
     output_size_bytes: overrides.outputBytes,

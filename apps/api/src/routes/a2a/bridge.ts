@@ -496,6 +496,9 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
           requestId: ctx.requestId,
           surface: "api",
           messageId: ctx.requestId,
+          // The A2A task's own per-turn key, matching what its metered AI port
+          // reports as token_usage.execution_step_id (#2597).
+          executionStepId: ctx.requestId,
           clientIp: ctx.clientIp,
           // Agent RBAC Q2: the target agent's delegation context — the tools
           // this returns close over this ctx, so BOTH the model-facing filter
