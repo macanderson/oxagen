@@ -1,0 +1,157 @@
+apiVersion: oxagen.ai/v1alpha1
+kind: ConnectorPlugin
+
+metadata:
+  id: stripe
+  displayName: Stripe
+  description: Sync customers, charges, refunds, subscriptions, invoices, and disputes from your Stripe account.
+  icon: stripe
+  category: billing
+  version: "1.0.0"
+  schemaVersion: "1"
+  publisher:
+    name: Oxagen
+    verified: true
+
+auth:
+  schemes:
+    - id: restricted_key
+      kind: api_key
+      displayName: Stripe API Key
+      fields:
+        - key: apiKey
+          label: Secret or Restricted Key
+          widget: secret
+          description: >
+            Create a restricted key at dashboard.stripe.com/apikeys with read
+            permission on Customers, Charges, Refunds, Subscriptions, Invoices,
+            and Disputes. A full secret key (sk_) also works. A publishable key
+            (pk_) will not — it cannot read these resources.
+          validation:
+            required: true
+            pattern: "^(sk|rk)_(live|test)_[A-Za-z0-9]{16,}$"
+
+config:
+  fields:
+    - key: syncDepthDays
+      label: Initial Sync Depth (days)
+      widget: number
+      description: How far back to pull history on the first sync. Later syncs only fetch what changed.
+      defaultValue: 90
+      validation:
+        min: 1
+        max: 730
+
+    - key: pageSize
+      label: Records Per Request
+      widget: number
+      description: How many records to request per API call. Stripe's maximum is 100.
+      defaultValue: 100
+      validation:
+        min: 1
+        max: 100
+
+    - key: stripeAccount
+      label: Connected Account ID (optional)
+      widget: text
+      description: >
+        Read from one connected account instead of the platform account. Leave
+        empty unless you use Stripe Connect.
+      validation:
+        pattern: "^acct_[A-Za-z0-9]+$"
+
+recordTypes:
+  selectionMode: multi
+  defaultAll: false
+  items:
+    - id: customer
+      displayName: Customers
+      description: Billing customers with name, email, currency, and account balance.
+      defaultEnabled: true
+
+    - id: charge
+      displayName: Charges
+      description: Payment attempts with amount, currency, status, and the customer charged.
+      defaultEnabled: true
+
+    - id: refund
+      displayName: Refunds
+      description: Money returned against a charge, with amount, reason, and status.
+      defaultEnabled: true
+
+    - id: subscription
+      displayName: Subscriptions
+      description: Recurring plans with status, billing period, prices, and cancellation state.
+      defaultEnabled: true
+
+    - id: invoice
+      displayName: Invoices
+      description: Issued invoices with totals, amount due, paid state, and billing period.
+      defaultEnabled: true
+
+    - id: dispute
+      displayName: Disputes
+      description: Chargebacks with amount, reason, status, and the evidence deadline.
+      defaultEnabled: false
+
+filters:
+  pathFilters:
+    enabled: false
+  labelFilters:
+    enabled: false
+
+sync:
+  delivery: polling
+  pollingSupported: true
+  polling:
+    defaultIntervalSeconds: 900
+    minIntervalSeconds: 300
+    maxIntervalSeconds: 86400
+
+# Every *Minor field is an integer in the currency's smallest unit, exactly as
+# Stripe reports it: 2000 means $20.00 in USD and ¥2000 in JPY. Read it against
+# the currency field — never as a decimal amount.
+defaultFieldMappings:
+  customer:
+    name: displayName
+    email: email
+    description: description
+    currency: currency
+    createdAt: createdAt
+  charge:
+    description: description
+    amountMinor: amount
+    currency: currency
+    status: status
+    customerId: parentId
+    createdAt: createdAt
+  refund:
+    amountMinor: amount
+    currency: currency
+    status: status
+    reason: reason
+    chargeId: parentId
+    createdAt: createdAt
+  subscription:
+    status: status
+    customerId: parentId
+    currency: currency
+    startDate: startDate
+    currentPeriodEnd: dueDate
+    createdAt: createdAt
+  invoice:
+    number: title
+    status: status
+    totalMinor: amount
+    currency: currency
+    customerId: parentId
+    dueDate: dueDate
+    createdAt: createdAt
+  dispute:
+    amountMinor: amount
+    currency: currency
+    status: status
+    reason: reason
+    chargeId: parentId
+    evidenceDueBy: dueDate
+    createdAt: createdAt

@@ -30,5 +30,7 @@ import "./connectors/linear/index";
 import "./connectors/slack/index";
 import "./connectors/salesforce/index";
 import "./connectors/microsoft/index";
+import "./connectors/stripe/index";
+import "./connectors/zendesk/index";
 import "./connectors/custom-sql/index";
 import "./connectors/custom-webhook/index";

@@ -20,9 +20,13 @@ export interface TokenResponse {
   expiresInSec?: number;
 }
 
-export type RefreshResult = TokenResponse | { error: string; description?: string };
+export type RefreshResult =
+  | TokenResponse
+  | { error: string; description?: string };
 
-export function isRefreshError(r: RefreshResult): r is { error: string; description?: string } {
+export function isRefreshError(
+  r: RefreshResult,
+): r is { error: string; description?: string } {
   return "error" in r;
 }
 
@@ -49,7 +53,9 @@ export interface ProviderRefreshStrategy {
    * Extra request headers beyond Content-Type + Accept JSON (e.g. Authorization
    * for Basic-auth providers like Zoom).
    */
-  extraHeaders?(env: Record<string, string | undefined>): Record<string, string>;
+  extraHeaders?(
+    env: Record<string, string | undefined>,
+  ): Record<string, string>;
   /**
    * Parse the JSON response into a normalized shape.
    * Returns { error } if the provider signals failure.
@@ -86,6 +92,7 @@ export const PERMANENT_ERRORS = new Set([
  *   Slack   — SLACK_DATA_CLIENT_ID / SLACK_DATA_CLIENT_SECRET
  *   Zoom    — ZOOM_DATA_CLIENT_ID / ZOOM_DATA_CLIENT_SECRET
  *   Linear  — no refresh endpoint (access tokens are long-lived PATs)
+ *   Zendesk — no refresh endpoint (OAuth access tokens do not expire)
  *   Salesforce — SALESFORCE_DATA_CLIENT_ID / SALESFORCE_DATA_CLIENT_SECRET
  *   Microsoft  — MICROSOFT_DATA_CLIENT_ID / MICROSOFT_DATA_CLIENT_SECRET
  */
@@ -113,7 +120,10 @@ export const REFRESH_PROVIDERS: Record<string, ProviderRefreshStrategy> = {
         error_description?: string;
       };
       if (j.error || !j.access_token) {
-        return { error: j.error ?? "missing_access_token", description: j.error_description };
+        return {
+          error: j.error ?? "missing_access_token",
+          description: j.error_description,
+        };
       }
       return {
         accessToken: j.access_token,
@@ -146,7 +156,10 @@ export const REFRESH_PROVIDERS: Record<string, ProviderRefreshStrategy> = {
         error_description?: string;
       };
       if (j.error || !j.access_token) {
-        return { error: j.error ?? "missing_access_token", description: j.error_description };
+        return {
+          error: j.error ?? "missing_access_token",
+          description: j.error_description,
+        };
       }
       return { accessToken: j.access_token, expiresInSec: j.expires_in };
     },
@@ -204,7 +217,9 @@ export const REFRESH_PROVIDERS: Record<string, ProviderRefreshStrategy> = {
       // Zoom requires HTTP Basic auth with client_id:client_secret (base64).
       const clientId = env["ZOOM_DATA_CLIENT_ID"] ?? "";
       const clientSecret = env["ZOOM_DATA_CLIENT_SECRET"] ?? "";
-      const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+      const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString(
+        "base64",
+      );
       return { Authorization: `Basic ${credentials}` };
     },
     parseResponse(json) {
@@ -240,6 +255,21 @@ export const REFRESH_PROVIDERS: Record<string, ProviderRefreshStrategy> = {
     supportsRefresh: false,
   },
 
+  /**
+   * Zendesk — no refresh endpoint. A Zendesk OAuth grant returns an access
+   * token that does not expire and no refresh token, so there is nothing to
+   * rotate. Declared rather than omitted: an absent entry answers
+   * "unsupported_provider", which reads as a misconfiguration, while this says
+   * the token is meant to be used as-is.
+   */
+  zendesk: {
+    tokenUrl: "",
+    requiredEnv: [],
+    buildBody: () => null,
+    parseResponse: () => ({ error: "no_refresh_endpoint" }),
+    supportsRefresh: false,
+  },
+
   salesforce: {
     tokenUrl: "https://login.salesforce.com/services/oauth2/token",
     requiredEnv: ["SALESFORCE_DATA_CLIENT_ID", "SALESFORCE_DATA_CLIENT_SECRET"],
@@ -263,7 +293,10 @@ export const REFRESH_PROVIDERS: Record<string, ProviderRefreshStrategy> = {
         error_description?: string;
       };
       if (j.error || !j.access_token) {
-        return { error: j.error ?? "missing_access_token", description: j.error_description };
+        return {
+          error: j.error ?? "missing_access_token",
+          description: j.error_description,
+        };
       }
       return { accessToken: j.access_token, expiresInSec: j.expires_in };
     },
@@ -296,7 +329,10 @@ export const REFRESH_PROVIDERS: Record<string, ProviderRefreshStrategy> = {
         error_description?: string;
       };
       if (j.error || !j.access_token) {
-        return { error: j.error ?? "missing_access_token", description: j.error_description };
+        return {
+          error: j.error ?? "missing_access_token",
+          description: j.error_description,
+        };
       }
       return {
         accessToken: j.access_token,
@@ -337,7 +373,8 @@ export async function refreshOAuthToken(
 ): Promise<RefreshResult> {
   const strategy = REFRESH_PROVIDERS[refreshProviderKeyFor(provider)];
   if (!strategy) return { error: "unsupported_provider" };
-  if (strategy.supportsRefresh === false) return { error: "no_refresh_endpoint" };
+  if (strategy.supportsRefresh === false)
+    return { error: "no_refresh_endpoint" };
 
   let env: Record<string, string | undefined> = {};
   if (strategy.requiredEnv.length > 0) {
@@ -355,7 +392,9 @@ export async function refreshOAuthToken(
 
   let responseJson: Record<string, unknown>;
   try {
-    const extraHeaders = strategy.extraHeaders ? strategy.extraHeaders(env) : {};
+    const extraHeaders = strategy.extraHeaders
+      ? strategy.extraHeaders(env)
+      : {};
     const response = await fetch(strategy.tokenUrl, {
       method: "POST",
       headers: {
@@ -367,7 +406,10 @@ export async function refreshOAuthToken(
     });
     responseJson = (await response.json()) as Record<string, unknown>;
   } catch (err) {
-    return { error: "http_error", description: err instanceof Error ? err.message : String(err) };
+    return {
+      error: "http_error",
+      description: err instanceof Error ? err.message : String(err),
+    };
   }
 
   return strategy.parseResponse(responseJson);
