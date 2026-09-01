@@ -9,6 +9,11 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
+      // Runtime source only, the same scoping apps/api uses for the same
+      // reason: `build-node.mjs` is the esbuild packaging script, it runs at
+      // package time rather than in the worker, and left unscoped it enters
+      // the denominator at 0% and drags the whole package under its floor.
+      include: ["src/**/*.ts"],
       exclude: [
         ...coverageConfigDefaults.exclude,
         // Bin-style process entrypoint (signal wiring + process.exit). Not
