@@ -79,7 +79,7 @@ function repoEditRaw(): Json {
     run_kind: "repo_edit",
     goal: "Add a retry to the webhook publisher",
     engine_policy: {
-      requested_engine: "ts",
+      requested_engine: "stella",
       allowed_engine_versions: ["2.1.0", "2.2.0-rc.1"],
       model_policy_ref: "model-policy:default",
       max_steps: 64,
@@ -1006,7 +1006,7 @@ describe("parseCallerRunInfluence", () => {
   it("accepts bounded advisory preferences", () => {
     const influence = parseCallerRunInfluence({
       goal: "ship it",
-      preferences: { requested_engine: "ts", max_steps: 8 },
+      preferences: { requested_engine: "stella", max_steps: 8 },
     });
     expect(influence.preferences?.max_steps).toBe(8);
   });
@@ -1122,11 +1122,13 @@ describe("buildTrustedRunSpecV2", () => {
   it("never lets a caller preference reach a trusted engine field", () => {
     const spec = buildTrustedRunSpecV2(trustedRepoEditInput(), {
       goal: "ship it",
-      // Both preferences are individually well-formed, and both disagree with
-      // what the trusted resolver decided. The resolver's values must win.
+      // max_steps carries the contrast now: both preferences are well-formed,
+      // and this one disagrees with what the trusted resolver decided. The
+      // engine field cannot disagree any more — Stella is the only admissible
+      // value — so it asserts only that the resolver's value is what lands.
       preferences: { requested_engine: "stella", max_steps: 4096 },
     });
-    expect(spec.engine_policy.requested_engine).toBe("ts");
+    expect(spec.engine_policy.requested_engine).toBe("stella");
     expect(spec.engine_policy.max_steps).toBe(64);
     expect(spec).not.toHaveProperty("preferences");
   });

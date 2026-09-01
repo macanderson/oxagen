@@ -763,7 +763,7 @@ function v2Spec(): Record<string, unknown> {
     run_kind: "general",
     goal: "Summarize the incident",
     engine_policy: {
-      requested_engine: "ts",
+      requested_engine: "stella",
       allowed_engine_versions: ["2.1.0"],
       model_policy_ref: "model-policy:default",
       max_steps: 64,
@@ -832,7 +832,11 @@ function v2Detail(
     retentionPolicyDigest: V2_DIGEST.retention,
     maxAttempts: 3,
     attemptNumber: 1,
-    engine: { name: "ts", version: "2.1.0", buildDigest: V2_DIGEST.checksum },
+    engine: {
+      name: "stella",
+      version: "2.1.0",
+      buildDigest: V2_DIGEST.checksum,
+    },
     restore: null,
     ...overrides,
   };

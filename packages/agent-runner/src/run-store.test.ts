@@ -790,7 +790,7 @@ const DECISION_REF = "azd_0123456789abcdef0123";
 const OBSERVED_AT = "2026-07-21T12:00:00.000Z";
 
 const ENGINE = {
-  name: "ts",
+  name: "stella",
   version: "2.1.1",
   buildDigest: SHA_1,
 } as const;
@@ -801,7 +801,7 @@ function makeSpec(overrides: Record<string, unknown> = {}): RunSpecV2 {
     run_kind: "repo_edit",
     goal: "add a health check route",
     engine_policy: {
-      requested_engine: "ts",
+      requested_engine: "stella",
       allowed_engine_versions: ["2.1.1"],
       model_policy_ref: "default",
       max_steps: 64,
@@ -1429,7 +1429,7 @@ describe("V2 SQL builders", () => {
       }),
     );
     expect(text).toContain("INSERT INTO agent.agent_run_attempts");
-    expect(params).toContain("ts");
+    expect(params).toContain("stella");
     expect(params).toContain("2.1.1");
     expect(params).toContain(SHA_1); // engine build digest
     expect(params).toContain("arat_prior0123456789abcd");

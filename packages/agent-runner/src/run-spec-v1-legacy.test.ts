@@ -250,12 +250,21 @@ describe("runSpecV1Schema", () => {
 });
 
 describe("runSpecV1.engine — the per-run engine ask", () => {
-  it("accepts both engines and round-trips through the builder", () => {
-    for (const engine of ["ts", "stella"] as const) {
-      const spec = buildLegacyRunSpecV1({ instruction: "x", engine });
-      expect(spec.engine).toBe(engine);
-      expect(parseRunSpecV1(spec)).toEqual(spec);
-    }
+  it("round-trips the one admissible engine through the builder", () => {
+    const spec = buildLegacyRunSpecV1({ instruction: "x", engine: "stella" });
+    expect(spec.engine).toBe("stella");
+    expect(parseRunSpecV1(spec)).toEqual(spec);
+  });
+
+  it("refuses a spec asking for the deleted TS engine", () => {
+    // Admission, not resolution: a stored v1 row written before the cutover
+    // still says "ts", and it must fail rather than be resolved to whatever
+    // engine happens to exist now.
+    const stale = {
+      ...buildLegacyRunSpecV1({ instruction: "x" }),
+      engine: "ts",
+    };
+    expect(runSpecV1Schema.safeParse(stale).success).toBe(false);
   });
 
   it("omits the key entirely when not asked for — pre-field rows stay byte-identical", () => {
