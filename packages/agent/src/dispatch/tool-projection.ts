@@ -22,11 +22,14 @@ const logger = pino({
 // WHY POSTGRES FOR BOTH IDENTITY AND USAGE. The four-store boundary puts
 // identity in Postgres and usage counters in ClickHouse, and for tools both
 // halves are Postgres today — not by preference but because ClickHouse's
-// tool-usage record cannot be joined to an execution. `tool_invocations`
-// declares an `execution_step_id` column, and every one of its seven
-// producers writes NULL into it (materialize-tools.ts's
-// buildInvocationPayload, graph.telemetry.ts, and the five inngest-functions
-// emitters). agent.agent_tool_calls.execution_step_id, by contrast, is a NOT
+// tool-usage record could not be joined to an execution. `tool_invocations`
+// declares an `execution_step_id` column, and all seven of its producers used
+// to write NULL into it. #2597 gave CapabilityContext an `executionStepId` and
+// filled it in materialize-tools.ts's buildInvocationPayload — the factory
+// behind five of the seven, covering every capability and external MCP call.
+// graph.telemetry.ts and the five inngest-functions emitters still write NULL,
+// so this projection keeps reading Postgres until they are threaded too.
+// agent.agent_tool_calls.execution_step_id, by contrast, is a NOT
 // NULL foreign key to agent.agent_execution_steps, whose execution_id is the
 // join this projection exists to make queryable. So agent_tool_calls is the
 // only execution-joinable tool record in the system, and it carries the tool
@@ -63,17 +66,22 @@ const logger = pino({
 // edge to today's pin. Until an invocation carries its version, the edge
 // lands at the grain the data can support.
 //
-// NO :Skill / :SkillVersion / LOADED_SKILL IS WRITTEN. The same audit found
-// no per-execution skill-load record anywhere: ClickHouse `skill_loads` has
-// the right shape, and its sole producer
-// (packages/agent/src/handlers/agent.skill.load.ts) hardcodes
-// `execution_step_id: null` because CapabilityContext carries no execution or
-// step id to hand it. Projecting the edge from the `load_skill` rows that do
-// land in agent_tool_calls would cover only model-initiated loads on the chat
-// path, and absence in the graph would read as "this run loaded no skills"
-// rather than "this load was not recorded" — a false negative aimed at
-// exactly the question the projection exists to answer. Those rows still
-// appear here honestly, as an INVOKED edge to the `load_skill` :Tool.
+// NO :Skill / :SkillVersion / LOADED_SKILL IS WRITTEN YET. When this was
+// written there was no per-execution skill-load record anywhere: ClickHouse
+// `skill_loads` had the right shape, and its sole producer
+// (packages/agent/src/handlers/agent.skill.load.ts) hardcoded
+// `execution_step_id: null` because CapabilityContext carried no execution or
+// step id to hand it. #2597 fixed that — a load inside a run now records its
+// step, and readSkillTokenCosts returns real rows — so the edge is buildable
+// on `skill_loads` whenever someone builds it.
+//
+// It is still not built FROM agent_tool_calls, and that reasoning is
+// unchanged: the `load_skill` rows landing there cover only model-initiated
+// loads on the chat path, so absence in the graph would read as "this run
+// loaded no skills" rather than "this load was not recorded" — a false
+// negative aimed at exactly the question the projection exists to answer.
+// Those rows still appear here honestly, as an INVOKED edge to the
+// `load_skill` :Tool.
 //
 // Callers: the two handlers that terminate an execution
 // (packages/handlers/src/agent.execution.record.ts and

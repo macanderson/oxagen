@@ -303,6 +303,32 @@ export interface CapabilityContext {
    */
   messageId: string | null;
   /**
+   * Which run this capability call belongs to — the correlation key every
+   * telemetry table means by `execution_step_id`.
+   *
+   * A capability could not previously tell which execution it was part of, so
+   * the sole producer of `skill_loads` wrote `execution_step_id: null` on every
+   * row and the read-side join in `skill-telemetry.ts` had never returned
+   * anything (#2597). The key itself was not missing: each surface already
+   * computed one and handed it to the metered AI port, which is what fills
+   * `token_usage.execution_step_id`. It simply had no name here, so three
+   * surfaces each decided independently that some other id would double as it.
+   *
+   * Naming it is the fix. A surface sets this to the SAME value it gives the
+   * AI port, so both sides of that join agree by construction rather than by
+   * coincidence:
+   *   - the two chat paths: the per-turn `messageId`
+   *   - the durable-run driver: the run's `runId`
+   *
+   * **Absent means absent.** Invoked from the API, from MCP, or by a person,
+   * this is `undefined` and every recorder writes NULL. Do not substitute the
+   * request id, the message id, or a fresh UUID to make a column look
+   * populated: a row carrying a fabricated key joins to nothing, and turns a
+   * missing answer into a confidently wrong one. A missing answer is
+   * recoverable; a wrong one is not.
+   */
+  executionStepId?: string | null;
+  /**
    * The org's effective subscription tier. Optional — populated during
    * org-scope resolution. Handlers that gate features must read this or
    * call `resolveOrgTier(ctx.orgId)` directly.

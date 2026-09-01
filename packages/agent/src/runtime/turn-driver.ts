@@ -536,6 +536,14 @@ export function createPlatformTurnDriver(): TurnDriver {
           requestId: run.runId,
           surface: "runner",
           messageId: null,
+          // The run IS this turn's execution step, and `run.runId` is already
+          // what this driver hands createPlatformAgentAi as its telemetry key
+          // below — so token_usage and skill_loads carry the same value and
+          // the read-side join matches (#2597). This is the path that had no
+          // identity to offer at all: `messageId` is legitimately null on a
+          // durable run (there is no chat message to attach to), so before
+          // this field every skill a durable run loaded recorded NULL.
+          executionStepId: run.runId,
         };
         const ctx: CapabilityContext =
           agentRun !== undefined ? { ...baseCtx, agentRun } : baseCtx;
