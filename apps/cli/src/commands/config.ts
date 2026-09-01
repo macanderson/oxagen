@@ -16,7 +16,7 @@
  * The two coexist under one `oxagen config` Commander command because
  * Commander routes a first positional arg to a matching subcommand when one
  * exists (`get`/`set`/`add`/`remove`/`explain`/`build`/`lint`/`init`/`pull`,
- * registered in program.tsx) and falls back to this file's own `[key] [value]`
+ * registered in program.ts) and falls back to this file's own `[key] [value]`
  * action otherwise — verified empirically; there is no name collision between
  * the legacy keys (token/model/api-url/org/workspace) and the new subcommands.
  *
@@ -29,11 +29,23 @@
  * registers a `--json` flag yet (see the report note).
  */
 import { existsSync } from "node:fs";
-import { readConfig, writeConfig, getApiUrl, getToken, type CliConfig } from "../lib/config.js";
+import {
+  readConfig,
+  writeConfig,
+  getApiUrl,
+  getToken,
+  type CliConfig,
+} from "../lib/config.js";
 import { userApiPostOrThrow } from "../lib/api.js";
 import { createOutput, errorMessage, type Output } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
-import { resolveModelId, resolveEffort, findModelMask, isReasoningEffort, EFFORT_LEVELS } from "../agent/model.js";
+import {
+  resolveModelId,
+  resolveEffort,
+  findModelMask,
+  isReasoningEffort,
+  EFFORT_LEVELS,
+} from "../agent/model.js";
 import { loadSettings } from "../settings/index.js";
 import {
   resolveWorkspaceConfig,
@@ -66,17 +78,30 @@ import {
 // alongside item 5's dead-key redirect so `oxagen config effort <level>` (the
 // redirect target for a mistaken `config set effort <level>`) is a real,
 // working command rather than another dead end.
-const VALID_KEYS = ["token", "model", "api-url", "org", "workspace", "effort"] as const;
+const VALID_KEYS = [
+  "token",
+  "model",
+  "api-url",
+  "org",
+  "workspace",
+  "effort",
+] as const;
 type ConfigKey = (typeof VALID_KEYS)[number];
 
 function keyToConfigField(key: ConfigKey): keyof CliConfig {
   switch (key) {
-    case "token": return "token";
-    case "api-url": return "apiUrl";
-    case "org": return "orgSlug";
-    case "workspace": return "workspaceSlug";
-    case "model": return "model" as keyof CliConfig;
-    case "effort": return "effort" as keyof CliConfig;
+    case "token":
+      return "token";
+    case "api-url":
+      return "apiUrl";
+    case "org":
+      return "orgSlug";
+    case "workspace":
+      return "workspaceSlug";
+    case "model":
+      return "model" as keyof CliConfig;
+    case "effort":
+      return "effort" as keyof CliConfig;
   }
 }
 
@@ -113,7 +138,10 @@ export async function handleConfig(
 
   if (!VALID_KEYS.includes(key as ConfigKey)) {
     process.exitCode = 2;
-    out.error(`Unknown config key: "${key}". Valid keys: ${VALID_KEYS.join(", ")}`, "usage");
+    out.error(
+      `Unknown config key: "${key}". Valid keys: ${VALID_KEYS.join(", ")}`,
+      "usage",
+    );
     return;
   }
 
@@ -136,7 +164,10 @@ export async function handleConfig(
   if (field === "effort") {
     if (!isReasoningEffort(value)) {
       process.exitCode = 2;
-      out.error(`Invalid effort "${value}". Valid: ${EFFORT_LEVELS.join(", ")}`, "usage");
+      out.error(
+        `Invalid effort "${value}". Valid: ${EFFORT_LEVELS.join(", ")}`,
+        "usage",
+      );
       return;
     }
     writeConfig({ effort: value });
@@ -178,7 +209,8 @@ export async function handleConfig(
  * call into `buildConsolidatedIndex` — can be pointed at a fixture "$HOME"
  * without touching the real one; other handlers simply ignore those fields.
  */
-export type WorkspaceConfigCtx = ConfigWriteCtx & Pick<BuildIndexOptions, "userHomeDir" | "userSettingsPath">;
+export type WorkspaceConfigCtx = ConfigWriteCtx &
+  Pick<BuildIndexOptions, "userHomeDir" | "userSettingsPath">;
 
 const DEFAULT_SCOPE: ConfigScope = "workspace";
 
@@ -189,7 +221,10 @@ function isConfigScope(value: string): value is ConfigScope {
 function reportScopeError(scope: string, out: Output): void {
   // A bad --scope is a usage error → exit 2 (set BEFORE out.error so it wins).
   process.exitCode = 2;
-  out.error(`Unknown scope "${scope}". Use one of: ${CONFIG_SCOPES.join(", ")}`, "usage");
+  out.error(
+    `Unknown scope "${scope}". Use one of: ${CONFIG_SCOPES.join(", ")}`,
+    "usage",
+  );
 }
 
 function reportError(err: unknown, out: Output): void {
@@ -229,21 +264,27 @@ export function configInit(
     return;
   }
   try {
-    writeConfigScopeDoc(path, { $schema: "https://schemas.oxagen.sh/workspace.json", version: 1 });
+    writeConfigScopeDoc(path, {
+      $schema: "https://schemas.oxagen.sh/workspace.json",
+      version: 1,
+    });
   } catch (err) {
     return reportError(err, out);
   }
   writer.write(`✓ Wrote starter ${scope} config to ${path}`);
-  out.info(`  Edit it with \`oxagen config set <path> <value> --scope ${scope}\` or \`oxagen config add <lang> <kind> "…"\`.`);
+  out.info(
+    `  Edit it with \`oxagen config set <path> <value> --scope ${scope}\` or \`oxagen config add <lang> <kind> "…"\`.`,
+  );
 }
 
 /** The env var each runtime dead key resolves through at runtime (see the resolvers in agent/model.ts + lib/config.ts). */
-const RUNTIME_KEY_ENV_VAR: Record<(typeof RUNTIME_DEAD_KEYS)[number], string> = {
-  model: "OXAGEN_MODEL",
-  apiUrl: "OXAGEN_API_URL",
-  effort: "OXAGEN_EFFORT",
-  token: "OXAGEN_API_TOKEN",
-};
+const RUNTIME_KEY_ENV_VAR: Record<(typeof RUNTIME_DEAD_KEYS)[number], string> =
+  {
+    model: "OXAGEN_MODEL",
+    apiUrl: "OXAGEN_API_URL",
+    effort: "OXAGEN_EFFORT",
+    token: "OXAGEN_API_TOKEN",
+  };
 
 /**
  * Item 8b (split-brain get): `oxagen config get model` (this Workspace Config
@@ -265,26 +306,45 @@ function printRuntimeKeyGet(
   const envValue = process.env[envVar];
   const config = readConfig();
   const configValue = config[key as keyof CliConfig] as string | undefined;
-  const mask = (v: string | undefined): string => (v === undefined ? "(not set)" : key === "token" ? maskToken(v) : v);
+  const mask = (v: string | undefined): string =>
+    v === undefined ? "(not set)" : key === "token" ? maskToken(v) : v;
 
-  writer.write(`${key} — resolved from EACH store (config get / config set never touch these — see \`oxagen config ${RUNTIME_DEAD_KEY_REDIRECT[key]}\`):`);
+  writer.write(
+    `${key} — resolved from EACH store (config get / config set never touch these — see \`oxagen config ${RUNTIME_DEAD_KEY_REDIRECT[key]}\`):`,
+  );
   writer.write(`  shell/session env ${envVar}:  ${mask(envValue)}`);
 
   if (key === "model" || key === "apiUrl") {
-    const { settings, scopes } = loadSettings({ cwd, userSettingsPath: ctx.userSettingsPath, noCache: true });
+    const { settings, scopes } = loadSettings({
+      cwd,
+      userSettingsPath: ctx.userSettingsPath,
+      noCache: true,
+    });
     const settingsValue = settings[key];
-    const winner = [...scopes].reverse().find((s) => s.settings?.[key] !== undefined);
-    writer.write(`  settings.json${winner ? ` (${winner.scope}: ${winner.path})` : ""}:  ${mask(settingsValue)}`);
+    const winner = [...scopes]
+      .reverse()
+      .find((s) => s.settings?.[key] !== undefined);
+    writer.write(
+      `  settings.json${winner ? ` (${winner.scope}: ${winner.path})` : ""}:  ${mask(settingsValue)}`,
+    );
   }
 
   writer.write(`  ~/.config/oxagen/config.json:  ${mask(configValue)}`);
 
   let effective: string | undefined;
   switch (key) {
-    case "model": effective = resolveModelId(); break;
-    case "apiUrl": effective = getApiUrl(); break;
-    case "effort": effective = resolveEffort(); break;
-    case "token": effective = getToken(); break;
+    case "model":
+      effective = resolveModelId();
+      break;
+    case "apiUrl":
+      effective = getApiUrl();
+      break;
+    case "effort":
+      effective = resolveEffort();
+      break;
+    case "token":
+      effective = getToken();
+      break;
   }
   writer.write(`  → effective at runtime:  ${mask(effective)}`);
 }
@@ -296,7 +356,11 @@ export function configGet(
   writer: CommandWriter = stdoutWriter,
 ): void {
   if ((RUNTIME_DEAD_KEYS as readonly string[]).includes(dottedPath)) {
-    printRuntimeKeyGet(dottedPath as (typeof RUNTIME_DEAD_KEYS)[number], ctx, writer);
+    printRuntimeKeyGet(
+      dottedPath as (typeof RUNTIME_DEAD_KEYS)[number],
+      ctx,
+      writer,
+    );
     return;
   }
   const cwd = ctx.cwd ?? process.cwd();
@@ -327,7 +391,10 @@ export function configSet(
   // would be a silent no-op (schema.ts's superRefine also rejects these
   // defense-in-depth, but that produces a less actionable zod error).
   if ((RUNTIME_DEAD_KEYS as readonly string[]).includes(dottedPath)) {
-    const redirect = RUNTIME_DEAD_KEY_REDIRECT[dottedPath as (typeof RUNTIME_DEAD_KEYS)[number]];
+    const redirect =
+      RUNTIME_DEAD_KEY_REDIRECT[
+        dottedPath as (typeof RUNTIME_DEAD_KEYS)[number]
+      ];
     process.exitCode = 2;
     out.error(
       `"${dottedPath}" is a CLI runtime setting, not a Workspace Config field — nothing reads it from ` +
@@ -353,7 +420,8 @@ export function configSet(
     // so they'd silently keep shadowing this write otherwise). Advisory → stderr.
     if (before.scope && before.scope !== scope) {
       const specificity = (s: ConfigScope) => CONFIG_SCOPE_ORDER.indexOf(s);
-      const stillWins = before.locked || specificity(before.scope) > specificity(scope);
+      const stillWins =
+        before.locked || specificity(before.scope) > specificity(scope);
       if (stillWins) {
         out.warn(
           `  Note: ${before.reason} — this write may be overridden at resolve time. ` +
@@ -399,7 +467,10 @@ export function configAdd(
   if (!isConfigScope(scope)) return reportScopeError(scope, out);
   if (!(LANGUAGE_ITEM_KINDS as readonly string[]).includes(kind)) {
     process.exitCode = 2;
-    out.error(`Unknown kind "${kind}". Use one of: ${LANGUAGE_ITEM_KINDS.join(", ")}`, "usage");
+    out.error(
+      `Unknown kind "${kind}". Use one of: ${LANGUAGE_ITEM_KINDS.join(", ")}`,
+      "usage",
+    );
     return;
   }
   const id = opts.id ?? slugify(text);
@@ -412,11 +483,14 @@ export function configAdd(
     locked: opts.locked,
     origin: "manual",
     source: opts.source,
-    confidence: opts.confidence !== undefined ? Number(opts.confidence) : undefined,
+    confidence:
+      opts.confidence !== undefined ? Number(opts.confidence) : undefined,
   };
   try {
     const path = addLanguageItem(scope, lang, item, ctx);
-    writer.write(`✓ Added ${kind} "${id}" to languages.${lang} (${scope}: ${path})`);
+    writer.write(
+      `✓ Added ${kind} "${id}" to languages.${lang} (${scope}: ${path})`,
+    );
   } catch (err) {
     reportError(err, out);
   }
@@ -436,7 +510,9 @@ export function configRemove(
     const result = removeItem(scope, id, ctx);
     if (result.removed) {
       const where = result.languages.map((l) => `languages.${l}`).join(", ");
-      writer.write(`✓ Removed "${id}" from ${where} (${scope}: ${result.path})`);
+      writer.write(
+        `✓ Removed "${id}" from ${where} (${scope}: ${result.path})`,
+      );
     } else {
       // Well-formed command, target absent → a runtime "not found" (exit 1),
       // reported as a uniform stderr error so stdout stays clean.
@@ -474,7 +550,10 @@ export async function configBuild(
   const cwd = ctx.cwd ?? process.cwd();
   let consolidated: Awaited<ReturnType<typeof buildConsolidatedIndex>>;
   try {
-    consolidated = await buildConsolidatedIndex(cwd, { ...ctx, liveMcpTools: opts.liveMcp });
+    consolidated = await buildConsolidatedIndex(cwd, {
+      ...ctx,
+      liveMcpTools: opts.liveMcp,
+    });
   } catch (err) {
     return reportError(err, out);
   }
@@ -504,7 +583,13 @@ function diffConsolidated(
   fresh: WorkspaceConfig["consolidated"],
 ): string[] {
   const drift: string[] = [];
-  const categories = ["skills", "agents", "mcpServers", "commands", "customTools"] as const;
+  const categories = [
+    "skills",
+    "agents",
+    "mcpServers",
+    "commands",
+    "customTools",
+  ] as const;
   for (const category of categories) {
     const beforeNames = new Set((stored?.[category] ?? []).map((i) => i.name));
     const afterNames = new Set((fresh?.[category] ?? []).map((i) => i.name));
@@ -523,7 +608,10 @@ export async function configLint(
 ): Promise<void> {
   const out = createOutput({}, writer);
   const cwd = ctx.cwd ?? process.cwd();
-  const { scopes, config } = resolveWorkspaceConfig(cwd, { ...ctx, noCache: true });
+  const { scopes, config } = resolveWorkspaceConfig(cwd, {
+    ...ctx,
+    noCache: true,
+  });
   let ok = true;
   let checked = 0;
   for (const s of scopes) {
@@ -537,7 +625,8 @@ export async function configLint(
       writer.write(`✓ ${s.scope} (${s.path})`);
     }
   }
-  if (checked === 0) writer.write("No config files found. Run `oxagen config init`.");
+  if (checked === 0)
+    writer.write("No config files found. Run `oxagen config init`.");
 
   if (config.consolidated) {
     let fresh: Awaited<ReturnType<typeof buildConsolidatedIndex>> | undefined;
@@ -545,7 +634,10 @@ export async function configLint(
       fresh = await buildConsolidatedIndex(cwd, ctx); // liveMcpTools left off — lint stays fast/offline
     } catch (err) {
       ok = false;
-      out.error(`consolidated: could not re-scan sources: ${errorMessage(err)}`, "invalid");
+      out.error(
+        `consolidated: could not re-scan sources: ${errorMessage(err)}`,
+        "invalid",
+      );
       fresh = undefined;
     }
     if (fresh) {
@@ -554,7 +646,9 @@ export async function configLint(
         writer.write("consolidated: up to date");
       } else {
         ok = false;
-        writer.write("consolidated: drift detected — run `oxagen config build` to refresh");
+        writer.write(
+          "consolidated: drift detected — run `oxagen config build` to refresh",
+        );
         for (const line of drift) writer.write(`  ${line}`);
       }
     }
@@ -574,7 +668,9 @@ export async function configDoctor(
   writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   const cwd = ctx.cwd ?? process.cwd();
-  const { runConfigDoctor, formatDoctorReport } = await import("../config/doctor.js");
+  const { runConfigDoctor, formatDoctorReport } = await import(
+    "../config/doctor.js"
+  );
   const report = runConfigDoctor(cwd, ctx);
   // The report string carries its own ✓/✗ findings — it is the answer → stdout;
   // a contained error finding still just sets a non-zero exit (never process.exit).
@@ -615,17 +711,26 @@ export async function configPull(
   let pulled = 0;
   try {
     if (result.userConfig) {
-      writeConfigScopeDoc(paths.user, result.userConfig as unknown as Record<string, unknown>);
+      writeConfigScopeDoc(
+        paths.user,
+        result.userConfig as unknown as Record<string, unknown>,
+      );
       writer.write(`✓ Pulled user config → ${paths.user}`);
       pulled++;
     }
     if (result.managedConfig) {
-      writeConfigScopeDoc(paths.org, result.managedConfig as unknown as Record<string, unknown>);
+      writeConfigScopeDoc(
+        paths.org,
+        result.managedConfig as unknown as Record<string, unknown>,
+      );
       writer.write(`✓ Pulled managed (org) config → ${paths.org}`);
       pulled++;
     }
   } catch (err) {
     return reportError(err, out);
   }
-  if (pulled === 0) writer.write("Nothing to pull — no user or managed config on the platform yet.");
+  if (pulled === 0)
+    writer.write(
+      "Nothing to pull — no user or managed config on the platform yet.",
+    );
 }

@@ -133,7 +133,7 @@ export function ensureDisclosureShown(): void {
 // ── session-level accumulator ────────────────────────────────────────────
 //
 // Populated opportunistically by call sites deep in the agent loop that have
-// signal the generic index.tsx wrapper does not — e.g. which model tier
+// signal the generic index.ts wrapper does not — e.g. which model tier
 // actually ran, how many tool calls of each kind. Every setter is a no-op-safe
 // accumulator; nothing here can throw, and nothing here is required for a
 // valid event (all fields have a safe zero-value default).
@@ -171,7 +171,11 @@ export function resetUsageSessionStats(): void {
 export function recordToolCall(toolName: string, count = 1): void {
   // Match the server's identifier shape so a name never fails validation —
   // never the tool's arguments or output, just the name and a count.
-  const key = toolName.toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 32) || "unknown";
+  const key =
+    toolName
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, "_")
+      .slice(0, 32) || "unknown";
   stats.toolCalls[key] = (stats.toolCalls[key] ?? 0) + count;
 }
 
@@ -218,7 +222,11 @@ function resolveModelTier(): ModelTier {
 export function classifyErrorType(err: unknown): string {
   if (!(err instanceof Error)) return "unknown";
   const msg = err.message.toLowerCase();
-  if (msg.includes("credit") || msg.includes("insufficient") || msg.includes("billing")) {
+  if (
+    msg.includes("credit") ||
+    msg.includes("insufficient") ||
+    msg.includes("billing")
+  ) {
     return "credit_balance";
   }
   if (msg.includes("abort")) return "aborted";
@@ -240,10 +248,14 @@ export function classifyErrorType(err: unknown): string {
  * no subcommand token, so it is classified purely by SHAPE (prompt / repl /
  * stdin), never by the words themselves.
  */
-export function classifyCommand(argv: string[], knownCommands: readonly string[]): string {
+export function classifyCommand(
+  argv: string[],
+  knownCommands: readonly string[],
+): string {
   const rest = argv.slice(2);
   const first = rest[0];
-  if (first && !first.startsWith("-") && knownCommands.includes(first)) return first;
+  if (first && !first.startsWith("-") && knownCommands.includes(first))
+    return first;
   const hasPositional = rest.some((a) => !a.startsWith("-"));
   if (hasPositional) return "prompt";
   return process.stdout.isTTY ? "repl" : "stdin";
@@ -262,7 +274,10 @@ export interface BuildEventInput {
 }
 
 /** Assemble the full, allowlist-shaped payload from the accumulator + per-call fields. */
-export function buildUsageEvent(input: BuildEventInput, installId: string): UsageEventPayload {
+export function buildUsageEvent(
+  input: BuildEventInput,
+  installId: string,
+): UsageEventPayload {
   return {
     install_id: installId,
     session_id: SESSION_ID,
@@ -292,7 +307,9 @@ export function buildUsageEvent(input: BuildEventInput, installId: string): Usag
  * re-checks the opt-out flags so a disabled install never opens a socket even
  * if a caller forgets to check first.
  */
-export async function sendUsageEvent(payload: UsageEventPayload): Promise<void> {
+export async function sendUsageEvent(
+  payload: UsageEventPayload,
+): Promise<void> {
   if (!isTelemetryEnabled()) return;
   const url = `${getApiUrl()}${USAGE_ENDPOINT_PATH}`;
   const controller = new AbortController();
@@ -313,7 +330,7 @@ export async function sendUsageEvent(payload: UsageEventPayload): Promise<void> 
 
 /**
  * The single entry point every command flow calls at the end of a run (see
- * index.tsx). No-ops completely — no disclosure, no id generation, no
+ * index.ts). No-ops completely — no disclosure, no id generation, no
  * network — when telemetry is disabled.
  *
  * This function is a hard guarantee, not just a convention: it can NEVER

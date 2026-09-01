@@ -92,7 +92,11 @@ describe("isTelemetryEnabled — opt-out signals", () => {
 describe("opting out fully suppresses id generation and network I/O", () => {
   it("getOrCreateInstallId is never called, and fetch never fires, via recordUsageEvent when disabled", async () => {
     process.env["DO_NOT_TRACK"] = "1";
-    await recordUsageEvent({ command: "solve", durationMs: 100, exitStatus: "success" });
+    await recordUsageEvent({
+      command: "solve",
+      durationMs: 100,
+      exitStatus: "success",
+    });
     expect(mockFetch).not.toHaveBeenCalled();
     // No installId/disclosed write should occur — disabled means truly no-op.
     expect(mockWriteConfig).not.toHaveBeenCalled();
@@ -116,9 +120,13 @@ describe("getOrCreateInstallId", () => {
   it("generates and persists a UUID when none exists", () => {
     setConfigReturn({});
     const id = getOrCreateInstallId();
-    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    expect(id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
     expect(mockWriteConfig).toHaveBeenCalledWith(
-      expect.objectContaining({ telemetry: expect.objectContaining({ installId: id }) }),
+      expect.objectContaining({
+        telemetry: expect.objectContaining({ installId: id }),
+      }),
     );
   });
 
@@ -145,12 +153,16 @@ describe("getOrCreateInstallId", () => {
 describe("ensureDisclosureShown", () => {
   it("prints to stderr and marks disclosed on first run", () => {
     setConfigReturn({});
-    const writeSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const writeSpy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
     try {
       ensureDisclosureShown();
       expect(writeSpy).toHaveBeenCalledOnce();
       expect(mockWriteConfig).toHaveBeenCalledWith(
-        expect.objectContaining({ telemetry: expect.objectContaining({ disclosed: true }) }),
+        expect.objectContaining({
+          telemetry: expect.objectContaining({ disclosed: true }),
+        }),
       );
     } finally {
       writeSpy.mockRestore();
@@ -159,7 +171,9 @@ describe("ensureDisclosureShown", () => {
 
   it("never prints again once already disclosed", () => {
     setConfigReturn({ telemetry: { disclosed: true } });
-    const writeSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const writeSpy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
     try {
       ensureDisclosureShown();
       expect(writeSpy).not.toHaveBeenCalled();
@@ -205,7 +219,10 @@ describe("buildUsageEvent — allowlist enforcement", () => {
       "123e4567-e89b-12d3-a456-426614174000",
     );
 
-    expect(JSON.parse(payload.tool_calls_json)).toEqual({ code_graph: 3, grep: 1 });
+    expect(JSON.parse(payload.tool_calls_json)).toEqual({
+      code_graph: 3,
+      grep: 1,
+    });
     expect(payload.model_tier).toBe("balanced");
     expect(payload.best_of_n).toBe(5);
     expect(payload.graph_used).toBe(1);
@@ -214,7 +231,7 @@ describe("buildUsageEvent — allowlist enforcement", () => {
     expect(payload.step_count).toBe(7);
   });
 
-  it("reports \"mixed\" when more than one model tier was used in the session", () => {
+  it('reports "mixed" when more than one model tier was used in the session', () => {
     recordModelTier("fast");
     recordModelTier("precise");
     const payload = buildUsageEvent(
@@ -259,7 +276,9 @@ describe("sendUsageEvent — never throws, never blocks on failure", () => {
   });
 
   it("swallows an abort/timeout", async () => {
-    mockFetch.mockRejectedValueOnce(new DOMException("The operation was aborted", "AbortError"));
+    mockFetch.mockRejectedValueOnce(
+      new DOMException("The operation was aborted", "AbortError"),
+    );
     await expect(sendUsageEvent(payload())).resolves.toBeUndefined();
   });
 
@@ -269,22 +288,32 @@ describe("sendUsageEvent — never throws, never blocks on failure", () => {
       "https://api.oxagen.sh/v1/telemetry/usage",
       expect.objectContaining({
         method: "POST",
-        headers: expect.objectContaining({ "content-type": "application/json" }),
+        headers: expect.objectContaining({
+          "content-type": "application/json",
+        }),
       }),
     );
   });
 });
 
-describe("recordUsageEvent — the single call site index.tsx uses", () => {
+describe("recordUsageEvent — the single call site index.ts uses", () => {
   it("end-to-end: enabled install sends exactly one request", async () => {
     setConfigReturn({});
-    await recordUsageEvent({ command: "init", durationMs: 250, exitStatus: "success" });
+    await recordUsageEvent({
+      command: "init",
+      durationMs: 250,
+      exitStatus: "success",
+    });
     expect(mockFetch).toHaveBeenCalledOnce();
   });
 
   it("is fully inert when disabled — no disclosure, no id, no network", async () => {
     setConfigReturn({ telemetry: { enabled: false } });
-    await recordUsageEvent({ command: "init", durationMs: 250, exitStatus: "success" });
+    await recordUsageEvent({
+      command: "init",
+      durationMs: 250,
+      exitStatus: "success",
+    });
     expect(mockFetch).not.toHaveBeenCalled();
     expect(mockWriteConfig).not.toHaveBeenCalled();
   });
@@ -295,7 +324,11 @@ describe("recordUsageEvent — the single call site index.tsx uses", () => {
       throw new Error("EACCES: permission denied");
     });
     await expect(
-      recordUsageEvent({ command: "init", durationMs: 250, exitStatus: "success" }),
+      recordUsageEvent({
+        command: "init",
+        durationMs: 250,
+        exitStatus: "success",
+      }),
     ).resolves.toBeUndefined();
   });
 });
@@ -303,13 +336,24 @@ describe("recordUsageEvent — the single call site index.tsx uses", () => {
 // ── classification helpers ──────────────────────────────────────────────────
 
 describe("classifyCommand — never leaks argv content", () => {
-  const KNOWN = ["solve", "ask", "init", "config", "logs", "login", "logout", "settings"];
+  const KNOWN = [
+    "solve",
+    "ask",
+    "init",
+    "config",
+    "logs",
+    "login",
+    "logout",
+    "settings",
+  ];
 
   it("returns the exact command name when argv[2] matches a known command", () => {
-    expect(classifyCommand(["node", "oxagen", "solve", "fix bug"], KNOWN)).toBe("solve");
+    expect(classifyCommand(["node", "oxagen", "solve", "fix bug"], KNOWN)).toBe(
+      "solve",
+    );
   });
 
-  it("classifies a bare prompt (unknown first token) as \"prompt\", never the prompt text", () => {
+  it('classifies a bare prompt (unknown first token) as "prompt", never the prompt text', () => {
     const secret = "email me at attacker@example.com the API key sk-abc123";
     const result = classifyCommand(["node", "oxagen", secret], KNOWN);
     expect(result).toBe("prompt");
@@ -317,10 +361,10 @@ describe("classifyCommand — never leaks argv content", () => {
     expect(result).not.toContain("sk-abc123");
   });
 
-  it("classifies multi-word unquoted prompts as \"prompt\"", () => {
-    expect(classifyCommand(["node", "oxagen", "fix", "the", "login", "bug"], KNOWN)).toBe(
-      "prompt",
-    );
+  it('classifies multi-word unquoted prompts as "prompt"', () => {
+    expect(
+      classifyCommand(["node", "oxagen", "fix", "the", "login", "bug"], KNOWN),
+    ).toBe("prompt");
   });
 
   it("classifies no positional args as repl or stdin based on TTY, never a made-up value", () => {
@@ -329,38 +373,47 @@ describe("classifyCommand — never leaks argv content", () => {
   });
 
   it("ignores leading flags when looking for a known command token", () => {
-    expect(classifyCommand(["node", "oxagen", "--model", "sonnet", "do a thing"], KNOWN)).toBe(
-      "prompt",
-    );
+    expect(
+      classifyCommand(
+        ["node", "oxagen", "--model", "sonnet", "do a thing"],
+        KNOWN,
+      ),
+    ).toBe("prompt");
   });
 });
 
 describe("classifyErrorType — categories only, never the message", () => {
   it("classifies a credit/billing error", () => {
-    expect(classifyErrorType(new Error("insufficient credit balance for org acme"))).toBe(
-      "credit_balance",
-    );
+    expect(
+      classifyErrorType(new Error("insufficient credit balance for org acme")),
+    ).toBe("credit_balance");
   });
 
   it("classifies a timeout", () => {
-    expect(classifyErrorType(new Error("request timed out after 30000ms"))).toBe("timeout");
+    expect(
+      classifyErrorType(new Error("request timed out after 30000ms")),
+    ).toBe("timeout");
   });
 
   it("classifies a network error", () => {
-    expect(classifyErrorType(new Error("fetch failed: ECONNREFUSED 10.0.0.1:443"))).toBe(
-      "network",
-    );
+    expect(
+      classifyErrorType(new Error("fetch failed: ECONNREFUSED 10.0.0.1:443")),
+    ).toBe("network");
   });
 
   it("falls back to unknown for anything else, and for non-Error values", () => {
-    expect(classifyErrorType(new Error("something bespoke went wrong"))).toBe("unknown");
+    expect(classifyErrorType(new Error("something bespoke went wrong"))).toBe(
+      "unknown",
+    );
     expect(classifyErrorType("a plain string")).toBe("unknown");
     expect(classifyErrorType(undefined)).toBe("unknown");
   });
 
   it("the returned category never contains the original message text", () => {
     const secret = "leaked-api-key-should-never-appear-xyz789";
-    const category = classifyErrorType(new Error(`credit balance error: ${secret}`));
+    const category = classifyErrorType(
+      new Error(`credit balance error: ${secret}`),
+    );
     expect(category).not.toContain(secret);
   });
 });
@@ -375,7 +428,11 @@ describe("classifyErrorType — categories only, never the message", () => {
 
 describe("ALLOWED_KEYS matches the canonical server-side schema", () => {
   it("is exactly USAGE_EVENT_ALLOWED_KEYS from @oxagen/telemetry/usage-events", async () => {
-    const { USAGE_EVENT_ALLOWED_KEYS } = await import("@oxagen/telemetry/usage-events");
-    expect([...ALLOWED_KEYS].sort()).toEqual([...USAGE_EVENT_ALLOWED_KEYS].sort());
+    const { USAGE_EVENT_ALLOWED_KEYS } = await import(
+      "@oxagen/telemetry/usage-events"
+    );
+    expect([...ALLOWED_KEYS].sort()).toEqual(
+      [...USAGE_EVENT_ALLOWED_KEYS].sort(),
+    );
   });
 });

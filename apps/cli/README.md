@@ -1,10 +1,14 @@
 # Oxagen CLI
 
-Agentic coding powered by Oxagen's knowledge-graph context engine. Run `oxagen`
-in a terminal for an interactive coding session (or `oxagen "<prompt>"` for a
-one-shot run) that grounds every turn in your workspace's knowledge graph,
-agent memory, and local code graph — plus platform commands for the graph,
-environments, secrets, sandboxes, and fleets of agents.
+The Oxagen platform CLI: knowledge graph, agent memory, environments,
+secrets, sandboxes, evals, budgets, and workspace configuration from the
+terminal.
+
+The interactive coding agent this CLI used to ship was retired in the Stella
+cutover — Stella owns all things agentic. For a terminal coding agent, use
+the `stella` CLI with the oxagen MCP server (see
+`docs/specs/agent-engine-v2/`); the retired commands remain as stubs that
+print exactly that.
 
 Full reference: **https://docs.oxagen.sh/docs/cli**
 
@@ -45,22 +49,7 @@ oxagen --version
 
 See https://docs.oxagen.sh/docs/cli/installation for the full walkthrough.
 
-## Two credentials, two jobs
-
-- **A gateway key** (BYOK, via the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway)
-  or a plain `ANTHROPIC_API_KEY`) — all the agentic coding loop needs to run.
-  Resolved from `AI_GATEWAY_API_KEY` (env → `~/.oxagen/settings.json` →
-  `~/.config/oxagen/config.json` → nearest `.env.local`).
-- **An Oxagen platform account + API key** — needed only for platform commands
-  (`graph`, `env`, `secret`, `sandbox`, …) that reach your org's knowledge
-  graph, environments, and credential vault.
-
-```bash
-export AI_GATEWAY_API_KEY="vck_…"
-oxagen "summarize what this repository does"       # coding loop only — no account needed
-```
-
-## Authentication (platform commands)
+## Authentication
 
 ```bash
 oxagen login                                        # opens a browser, OAuth + org/workspace picker
@@ -80,16 +69,11 @@ command for its flags. The full command tree lives in
 `apps/cli/src/program.tsx` and is documented at
 https://docs.oxagen.sh/docs/cli/commands.
 
-**Agentic coding loop**
+**Runs, cost, and observability**
 
 ```bash
-oxagen [prompt...]        # REPL with no prompt; one-shot with a prompt; reads stdin if piped
-oxagen init                # scaffold .oxagen/, build the local code graph, link a workspace
-oxagen agents [goal...]    # plan a goal into tasks, dispatch a fleet of agents in parallel
-oxagen solve <prompt...>   # best-of-N candidate solutions, judged and merged
-oxagen pr status|watch|fix # watch or actively fix CI on a pull request
-oxagen view                 # dashboard: agent runs, spend, code-graph stats, health
-oxagen replay [turn]       # inspect how a past turn was handled
+oxagen init                # scaffold .oxagen/ settings, link a workspace
+oxagen pr status|watch     # watch CI on a pull request, merge when green
 oxagen trace <executionId> # a run as a span tree (steps, tool calls, children)
 oxagen logs                 # tail the CLI's own debug log
 oxagen cost                 # price tokens or roll up this project's recorded spend
@@ -116,9 +100,9 @@ oxagen settings show|get|set|validate|init   # layered settings.json
 ```bash
 oxagen agent list|show|new              # named agent definitions
 oxagen agent env bind|unbind|list       # bind an agent to a platform environment
-oxagen command list|show|new|run        # custom slash commands
+oxagen command list|show|new            # custom slash commands (run them via stella)
 oxagen rules list|show|new|check        # workspace rules, hard-blocked at the tool layer
-oxagen mcp add|list|remove|enable|disable|check   # external MCP servers for the agent loop
+oxagen mcp add|list|remove|enable|disable|check   # external MCP servers
 ```
 
 **Platform resources** (require platform auth)
@@ -135,10 +119,9 @@ oxagen recover [hash]                                 # restore agent work from 
 oxagen file-lock list|acquire|release                # the same locks write_file/edit_file use
 ```
 
-**Daemon & telemetry**
+**Telemetry**
 
 ```bash
-oxagen daemon start|stop|status     # keep indexes and the code graph warm between runs
 oxagen telemetry [on|off|status]    # anonymous usage telemetry (on by default)
 ```
 
