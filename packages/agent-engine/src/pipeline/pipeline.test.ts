@@ -2,9 +2,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { MemoryWorkspace } from "../workspaces/memory";
 import { runTurn } from "./index";
-import { DEFAULT_AGENT_MODEL } from "../engine";
+import { DEFAULT_AGENT_MODEL } from "../types";
 import { classifyTier, modelForTier } from "../router/model-router";
 import type { AgentAi, ModelRunArgs } from "../ports";
+import { scriptedEngine } from "./scripted-engine";
 
 // ── Minimal AgentAi that optionally edits a file, then returns. ──────────────
 
@@ -46,6 +47,7 @@ describe("runTurn — bare-mode callbacks", () => {
     const changes: Array<{ diff: string; changedFiles: string[] }> = [];
 
     await runTurn({
+      execute: scriptedEngine,
       prompt: "rename before to after in src/e.ts",
       workspace: ws,
       ai: makeAi("src/e.ts"),
@@ -72,6 +74,7 @@ describe("runTurn — bare-mode callbacks", () => {
     }> = [];
 
     await runTurn({
+      execute: scriptedEngine,
       prompt: "rename before to after in src/e.ts",
       workspace: ws,
       ai: makeAi("src/e.ts"),
@@ -131,6 +134,7 @@ describe("runTurn — bare mode model accounting", () => {
     // classifyTier floors to the precise tier.
     const prompt = "fix the authentication bug in the login flow";
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt,
       workspace: ws,
       ai,
@@ -177,6 +181,7 @@ describe("runTurn — bare mode model accounting", () => {
     };
 
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "do something",
       workspace: ws,
       ai,
@@ -192,6 +197,7 @@ describe("runTurn — bare mode model accounting", () => {
   it("still labels/accounts a pinned bare run with the pinned model", async () => {
     const ws = new MemoryWorkspace({ "a.ts": "x" });
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "do something",
       workspace: ws,
       ai: makeAi(),
@@ -231,6 +237,7 @@ describe("runTurn — thinking-log persistence", () => {
   it("persists the model's reasoning onto the trace (bare path)", async () => {
     const ws = new MemoryWorkspace({ "a.ts": "x" });
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "think about it",
       workspace: ws,
       ai: aiWithReasoning("I should check the imports before editing."),
@@ -244,6 +251,7 @@ describe("runTurn — thinking-log persistence", () => {
   it("omits the thinking log when the model emits no reasoning", async () => {
     const ws = new MemoryWorkspace({ "a.ts": "x" });
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "no reasoning here",
       workspace: ws,
       ai: makeAi(),

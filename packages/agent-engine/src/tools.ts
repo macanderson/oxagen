@@ -10,7 +10,7 @@ import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 import type { Workspace, CodingEvent, AskUserCallback } from "./types";
 import type { FileLockProvider, DiagnosticsProvider } from "./ports";
-import { delay } from "./loop-driver";
+import { delay } from "./internal/delay";
 import { buildStructuredTools } from "./tools-structured";
 import {
   EditIntegrityLedger,

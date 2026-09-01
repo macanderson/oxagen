@@ -25,6 +25,7 @@ afterAll(() => {
 import { runTurn } from "./index";
 import type { AgentAi, ModelRunArgs } from "../ports";
 import type { CommandResult, Workspace } from "../types";
+import { scriptedEngine } from "./scripted-engine";
 
 const WITNESS = "pnpm vitest run src/calc.test.ts";
 const FIXED = "export const answer = () => 42;\n";
@@ -78,8 +79,7 @@ class GateWorkspace implements Workspace {
   }
   async exec(command: string): Promise<CommandResult> {
     const reverted = this.files.get("src/calc.ts") === ORIGINAL;
-    const exitCode =
-      command === WITNESS && reverted ? this.exitWithoutFix : 0;
+    const exitCode = command === WITNESS && reverted ? this.exitWithoutFix : 0;
     return { exitCode, stdout: "", stderr: "", timedOut: false };
   }
   async diff(): Promise<string> {
@@ -164,6 +164,7 @@ describe("runTurn — mutation gate wiring", () => {
     const ws = new GateWorkspace(0); // tests still pass without the fix
     const stages: string[] = [];
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "fix the answer",
       workspace: ws,
       ai: makeAi(),
@@ -187,6 +188,7 @@ describe("runTurn — mutation gate wiring", () => {
   it("keeps a witnessed turn complete", async () => {
     const ws = new GateWorkspace(1); // tests FAIL without the fix — real green
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "fix the answer",
       workspace: ws,
       ai: makeAi(),
@@ -204,6 +206,7 @@ describe("runTurn — mutation gate wiring", () => {
     const ws = new GateWorkspace(1);
     const stages: string[] = [];
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "fix the answer",
       workspace: ws,
       ai: makeAi({ bashCommand: null }),
@@ -222,6 +225,7 @@ describe("runTurn — mutation gate wiring", () => {
     try {
       const ws = new GateWorkspace(0);
       const result = await runTurn({
+        execute: scriptedEngine,
         prompt: "fix the answer",
         workspace: ws,
         ai: makeAi(),
@@ -236,6 +240,7 @@ describe("runTurn — mutation gate wiring", () => {
   it("never arms on a read-only turn (no revert, no gate verdicts)", async () => {
     const ws = new GateWorkspace(0); // would be vacuous IF the gate ran
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "fix the answer",
       workspace: ws,
       ai: makeAi(),
@@ -250,6 +255,7 @@ describe("runTurn — mutation gate wiring", () => {
   it("is disabled by the explicit mutationVerify:false option", async () => {
     const ws = new GateWorkspace(0);
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "fix the answer",
       workspace: ws,
       ai: makeAi(),

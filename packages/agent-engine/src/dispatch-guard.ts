@@ -26,7 +26,7 @@
  * AFTER a human-gated call must not land before the human decides.
  */
 import type { ToolSet } from "ai";
-import { MUTATING_TOOL_NAMES } from "./loop-driver";
+import { MUTATING_TOOL_NAMES } from "./tools-shared";
 
 /** Max non-mutating tool executions in flight at once (Stella's driver cap). */
 export const MAX_CONCURRENT_TOOL_CALLS = 8;

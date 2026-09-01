@@ -88,6 +88,59 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   };
 });
 
+vi.mock("@oxagen/agent-runner", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  // The route enters the engine through the executeTurn seam. Stella is the
+  // only engine now and a sidecar cannot be spawned in a route test, so the
+  // seam is doubled here — the same thing the A2A bridge's test does.
+  //
+  // The double is deliberately thin: it calls the injected AI port once and
+  // forwards every raw stream part to the caller's `onStreamPart`. That is the
+  // whole contract this route depends on, so the tests keep scripting
+  // `streamAgentReply` and asserting on the SSE the translator produces. It is
+  // not a step loop and must not become one.
+  executeTurn: vi.fn(
+    async (
+      _surface: string,
+      opts: {
+        ai: {
+          stream: (args: Record<string, unknown>) => {
+            fullStream: AsyncIterable<unknown>;
+            usage: Promise<Record<string, number>>;
+          };
+        };
+        model?: string;
+        system?: string;
+        history?: unknown[];
+        instruction: string;
+        extraTools?: Record<string, unknown>;
+        signal?: AbortSignal;
+        onStreamPart?: (p: unknown) => void;
+      },
+    ) => {
+      const stream = opts.ai.stream({
+        model: opts.model ?? "",
+        system: opts.system ?? "",
+        messages: [
+          ...(opts.history ?? []),
+          { role: "user", content: opts.instruction },
+        ],
+        tools: opts.extraTools ?? {},
+        abortSignal: opts.signal,
+      });
+      for await (const part of stream.fullStream) opts.onStreamPart?.(part);
+      return {
+        text: "",
+        steps: 1,
+        diff: "",
+        changedFiles: [],
+        usage: await stream.usage,
+        messages: [],
+      };
+    },
+  ),
+}));
+
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
   requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>

@@ -18,6 +18,7 @@ import { describe, it, expect, vi } from "vitest";
 import { MemoryWorkspace } from "../workspaces/memory";
 import { runTurn } from "./index";
 import type { AgentAi, ModelRunArgs } from "../ports";
+import { scriptedEngine } from "./scripted-engine";
 
 /** An AgentAi that records the system prompt it is called with, then returns cleanly. */
 function makeCapturingAi(capture: (system: string) => void): AgentAi {
@@ -57,6 +58,7 @@ describe("runTurn — system prompt wiring", () => {
   it("delivers the agent operating rules (report tool results, don't end on a bare tool call)", async () => {
     let captured = "";
     await runTurn({
+      execute: scriptedEngine,
       prompt: "what's the CI status of the PR?",
       workspace: new MemoryWorkspace({ "a.ts": "x" }),
       ai: makeCapturingAi((s) => (captured = s)),
@@ -74,6 +76,7 @@ describe("runTurn — system prompt wiring", () => {
   it("threads profile:'headless' into the composed prompt (strips narration, adds protocol)", async () => {
     let captured = "";
     await runTurn({
+      execute: scriptedEngine,
       prompt: "fix the failing test",
       workspace: new MemoryWorkspace({ "a.ts": "x" }),
       ai: makeCapturingAi((s) => (captured = s)),
@@ -96,6 +99,7 @@ describe("runTurn — system prompt wiring", () => {
   it("defaults to the interactive (narrating) profile when none is given", async () => {
     let captured = "";
     await runTurn({
+      execute: scriptedEngine,
       prompt: "fix the failing test",
       workspace: new MemoryWorkspace({ "a.ts": "x" }),
       ai: makeCapturingAi((s) => (captured = s)),
@@ -112,6 +116,7 @@ describe("runTurn — system prompt wiring", () => {
   it("composes the operating rules WITH the repo's project rules (does not replace them)", async () => {
     let captured = "";
     await runTurn({
+      execute: scriptedEngine,
       prompt: "do the thing",
       workspace: new MemoryWorkspace({ "a.ts": "x" }),
       ai: makeCapturingAi((s) => (captured = s)),
@@ -134,6 +139,7 @@ describe("runTurn — system prompt wiring", () => {
     // the executor actually receives must not steer the model at one.
     let system = "";
     await runTurn({
+      execute: scriptedEngine,
       prompt: "fix `parseThing` returning null on empty input",
       workspace: new MemoryWorkspace({ "src/parse.ts": "x" }),
       ai: makeCapturingAi((s) => (system = s)),

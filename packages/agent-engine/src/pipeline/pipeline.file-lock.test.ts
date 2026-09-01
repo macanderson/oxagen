@@ -26,6 +26,7 @@ import type {
   FileLockGrant,
   ModelRunArgs,
 } from "../ports";
+import { scriptedEngine } from "./scripted-engine";
 
 function makeAi(editFile?: string): AgentAi {
   return {
@@ -78,6 +79,7 @@ describe("runTurn — FileLockProvider", () => {
     const fileLock: FileLockProvider = { acquire, release, releaseAll };
 
     await runTurn({
+      execute: scriptedEngine,
       prompt: "rename before to after in src/a.ts",
       workspace: ws,
       ai: makeAi("src/a.ts"),
@@ -114,6 +116,7 @@ describe("runTurn — FileLockProvider", () => {
     };
 
     await runTurn({
+      execute: scriptedEngine,
       prompt: "describe the file",
       workspace: ws,
       ai: makeAi(), // no file edit
@@ -145,6 +148,7 @@ describe("runTurn — FileLockProvider", () => {
     };
 
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "rename before to after in src/b.ts",
       workspace: ws,
       ai: makeAi("src/b.ts"),
@@ -160,6 +164,7 @@ describe("runTurn — FileLockProvider", () => {
   it("proceeds unlocked (no acquire/release calls) when fileLock is omitted — byte-identical to before this feature", async () => {
     const ws = new MemoryWorkspace({ "src/c.ts": "before" });
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "rename before to after in src/c.ts",
       workspace: ws,
       ai: makeAi("src/c.ts"),
@@ -213,6 +218,7 @@ describe("runTurn — FileLockProvider protects independent callers (chat vs. fl
 
     const wsFleet = new MemoryWorkspace({ "shared.ts": "before" });
     const fleetResult = await runTurn({
+      execute: scriptedEngine,
       prompt: "rename before to after in shared.ts",
       workspace: wsFleet,
       ai: makeAi("shared.ts"),
@@ -232,6 +238,7 @@ describe("runTurn — FileLockProvider protects independent callers (chat vs. fl
     holders.delete("shared.ts");
     const wsSecond = new MemoryWorkspace({ "shared.ts": "before" });
     await runTurn({
+      execute: scriptedEngine,
       prompt: "rename before to after in shared.ts",
       workspace: wsSecond,
       ai: makeAi("shared.ts"),

@@ -450,3 +450,26 @@ export interface RunCodingAgentResult {
    */
   stopReason?: TurnStopReason;
 }
+
+// ── Turn defaults ────────────────────────────────────────────────────────────
+
+/**
+ * The model a turn runs on when a caller passes no `model` at all (as opposed
+ * to routing through a tier — see
+ * `router/model-router.ts`'s `modelForTier`, a separate concept). Exported so
+ * a caller that needs to know/label what this default resolves to (e.g. the
+ * pipeline's bare-mode accounting in `pipeline/index.ts`) uses this SAME
+ * constant instead of a second hardcoded literal that can drift out of sync.
+ */
+export const DEFAULT_AGENT_MODEL = "anthropic/claude-fable-5";
+
+/**
+ * Default cap on tool-using steps per turn — a runaway backstop, NOT a
+ * functional limit. A turn ends naturally the moment the model
+ * returns a step with no tool call (its final answer); this cap only fires if
+ * the model loops on tools without ever settling, bounding billed LLM calls
+ * (one per step) before a stuck loop burns unbounded credits. Exported as the
+ * single source of truth so every surface (REST chat, A2A bridge, app chat)
+ * shares one value instead of hardcoding a literal that can silently drift.
+ */
+export const DEFAULT_MAX_AGENT_STEPS = 256;
