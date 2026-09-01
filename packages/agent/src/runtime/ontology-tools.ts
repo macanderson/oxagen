@@ -84,9 +84,9 @@ const ONTOLOGY_READ_SET: ReadonlySet<string> = new Set(
  *
  * An allowlist rather than a denylist of mutating verbs: a verb nobody
  * anticipated must fail this check, and a denylist is the shape that lets one
- * through. {@link isMutatingCapability} reads the contract's own metadata and
- * this reads its name, because a mutating capability that declares itself
- * low-risk and approval-free passes the first check and fails this one.
+ * through. The other rules read the contract's own metadata and this reads its
+ * name, because a capability that writes while declaring `mutates: false` and
+ * a low risk grade passes both of those and fails this one.
  */
 const READ_VERBS: ReadonlySet<string> = new Set([
   "get",
@@ -105,12 +105,42 @@ export interface OntologyReadViolation {
 }
 
 /**
- * Judge one capability against the read-only rule.
+ * Is this capability DANGEROUS — a separate question from whether it writes.
  *
- * Returns `null` when it may be in the set. `capability` being `undefined`
- * means the registry has no such name, which is a violation rather than a
- * skip: an unregistered name in this list is a graph read an agent silently
- * lost, and silence is the failure this module exists to prevent.
+ * These three fields grade blast radius. Until #2600 they were also standing
+ * in for "does this mutate", and that conflation was the bug: a cheap,
+ * low-risk, approval-free write was invisible to them. `capabilityMutates`
+ * answers the mutation question now, from a field that means it.
+ *
+ * So this is not the old check surviving under a new name. It asks a
+ * different question, and this set wants both answers because it is
+ * **auto-granted**: `toolPolicy.ontology: true` unions these eight into a
+ * narrowed run's allowlist without the enqueuer naming a single one. A set
+ * handed out that way must exclude dangerous capabilities whatever their
+ * mutation bit claims — and one declaring destructive sensitivity *and*
+ * `mutates: false` is contradicting itself, which for an auto-granted set has
+ * to fail closed rather than be believed.
+ *
+ * Costs nothing in practice: no legitimate graph read is high-risk.
+ */
+function isRiskShaped(cap: RegistryCapability): boolean {
+  return (
+    cap.sensitivity === "destructive" ||
+    cap.agent?.riskLevel === "high" ||
+    cap.agent?.requiresApproval === true
+  );
+}
+
+/**
+ * Judge one capability against the admission rules for the auto-granted set.
+ *
+ * Four independent questions, each able to reject on its own: is it still
+ * registered, does it write, is it dangerous, and does its name read like a
+ * write. Returns `null` when it may be in the set.
+ *
+ * `capability` being `undefined` is a violation rather than a skip: an
+ * unregistered name in this list is a graph read an agent silently lost, and
+ * silence is the failure this module exists to prevent.
  */
 export function ontologyReadViolation(
   name: string,
@@ -128,8 +158,17 @@ export function ontologyReadViolation(
     return {
       capability: name,
       reason:
-        "declares itself mutating (destructive sensitivity, high agent risk, " +
-        "or requiresApproval) — the ontology set is read-only",
+        "does not declare `mutates: false` — the ontology set is read-only, " +
+        "and a capability that declares nothing is treated as writing",
+    };
+  }
+  if (isRiskShaped(capability)) {
+    return {
+      capability: name,
+      reason:
+        "is risk-shaped (destructive sensitivity, high agent risk, or " +
+        "requiresApproval) — this set is auto-granted, so a dangerous " +
+        "capability is refused whatever its mutates bit says",
     };
   }
   const verb = name.split("_")[0] ?? "";

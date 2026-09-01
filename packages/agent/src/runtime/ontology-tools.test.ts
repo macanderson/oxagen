@@ -1,8 +1,9 @@
 /**
- * The ontology read set, held to its two promises.
+ * The ontology read set, held to its promises.
  *
- * The first half drives the rule with fixtures — it is the guard that fails if
- * a write-shaped capability is ever added to the list. The second half runs it
+ * The first half drives the admission rules with fixtures — the guard that
+ * fails if a capability which writes, or is merely dangerous, is ever added to
+ * this auto-granted list. The second half runs it
  * against the REAL registry, which is the part every other test in this
  * directory cannot do: they `vi.mock("@oxagen/oxagen")` away the contracts, so
  * nothing in the tree noticed whether a graph read was still registered, still
@@ -20,9 +21,15 @@ import {
   withOntologyReads,
 } from "./ontology-tools";
 
+// An honest read under the post-#2600 model: it says so. Before that bit
+// existed, "low risk + no approval" WAS how a read declared itself, and this
+// fixture carried no `mutates` — which made it a write the moment the default
+// flipped, and every test using it meaningless in a way that still passed
+// locally.
 const READ: RegistryCapability = {
   name: "irrelevant",
   description: "a graph read",
+  mutates: false,
   agent: { riskLevel: "low", requiresApproval: false },
   sensitivity: "low",
 };
@@ -30,7 +37,7 @@ const READ: RegistryCapability = {
 /** Every declared name resolves to a plain low-risk read. */
 const allRead = (): RegistryCapability => READ;
 
-describe("ontologyReadViolation — the write-shaped guard", () => {
+describe("ontologyReadViolation — the admission rules", () => {
   it("admits a low-risk read verb", () => {
     expect(ontologyReadViolation("query_ontology", READ)).toBeNull();
   });
@@ -40,6 +47,10 @@ describe("ontologyReadViolation — the write-shaped guard", () => {
     expect(violation?.reason).toContain("not registered");
   });
 
+  // Each of these spreads READ, so it carries `mutates: false` and passes the
+  // mutation check. They are rejected by the RISK rule instead — which is the
+  // sharper test: it proves danger alone bars a capability from an
+  // auto-granted set even when its own mutation bit says it only reads.
   it.each([
     ["destructive sensitivity", { ...READ, sensitivity: "destructive" }],
     ["high agent risk", { ...READ, agent: { riskLevel: "high" } }],
@@ -49,12 +60,35 @@ describe("ontologyReadViolation — the write-shaped guard", () => {
       "query_ontology",
       cap as RegistryCapability,
     );
-    expect(violation?.reason).toContain("mutating");
+    expect(violation?.reason).toContain("risk-shaped");
+  });
+
+  it("rejects a capability that declares nothing about mutating", () => {
+    // The fail-safe default reaching this guard: absent means writing, so an
+    // undeclared capability cannot enter the set by omission.
+    const { mutates: _drop, ...undeclared } = READ;
+    const violation = ontologyReadViolation(
+      "query_ontology",
+      undeclared as RegistryCapability,
+    );
+    expect(violation?.reason).toContain("does not declare `mutates: false`");
+  });
+
+  it("refuses a destructive capability that claims mutates: false", () => {
+    // Contradictory metadata. For a set granted without anyone naming its
+    // members, the safe reading is to disbelieve the reassuring half.
+    const violation = ontologyReadViolation("query_ontology", {
+      ...READ,
+      mutates: false,
+      sensitivity: "destructive",
+    } as RegistryCapability);
+    expect(violation?.reason).toContain("risk-shaped");
   });
 
   it("rejects a mutating verb even when the metadata says low risk", () => {
-    // The hole the metadata check alone leaves: a delete that declares itself
-    // harmless. `isMutatingCapability` passes it; the verb does not.
+    // The hole the metadata checks alone leave: a delete that declares itself
+    // a harmless read. Both the mutation bit and the risk grade pass it; the
+    // verb does not.
     const violation = ontologyReadViolation("delete_node", READ);
     expect(violation?.reason).toContain("not a read verb");
   });

@@ -14,6 +14,7 @@ import {
 } from "@oxagen/oxagen/iam";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { pluginForContract } from "@oxagen/oxagen/plugins";
+import { capabilityMutates } from "@oxagen/oxagen/types";
 import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { checkConsent, recordConsent, DEFAULT_CONSENT_TTL_MS } from "./consent";
@@ -175,11 +176,14 @@ export interface MaterializedTools {
   // "agent_code_execute" → "agent.code.execute"). The route translates
   // tool-call stream events back to the real name for the UI.
   nameMap: Record<string, string>;
-  // Model-safe aliases of capabilities the engine's dispatch guard must
-  // serialize behind the exclusive barrier (see isMutatingCapability). Pass
-  // through to RunCodingAgentOptions.mutatingToolNames. External plugin/MCP
-  // tools are NOT classified here yet (unknown semantics ⇒ they keep the
-  // shared lane, the pre-guard status quo).
+  // Model-safe aliases of every tool that must serialize rather than run
+  // beside other calls in the same step (see isMutatingCapability). Passed
+  // through to RunCodingAgentOptions.mutatingToolNames, which the Stella tool
+  // mapping negates into each advertised schema's `read_only` bit.
+  //
+  // Includes external plugin/MCP tools, whose semantics this process cannot
+  // know. They used to keep the shared concurrent lane on that same "unknown
+  // semantics" reasoning, which had it the wrong way round (#2600).
   mutatingToolNames: string[];
 }
 
@@ -289,25 +293,23 @@ function passesRisk(
 }
 
 /**
- * Concurrency class for the engine's dispatch guard (agent-engine v2
- * Phase 0): a capability classified MUTATING runs behind the exclusive
- * barrier instead of the shared (capped) read lane. Contracts have no
- * first-class "mutates" flag yet — that is the Phase-3 `read_only` schema
- * bit — so this is a conservative proxy over existing metadata: destructive
- * sensitivity, high agent risk, or an approval requirement. Misclassifying a
- * read as mutating only costs parallelism; the reverse costs correctness, so
- * the proxy errs toward mutating.
+ * Concurrency class for the engine's dispatch: a capability classified
+ * MUTATING serializes; everything else may run alongside other calls in the
+ * same step. The Stella tool mapping negates this into each advertised
+ * schema's `read_only` bit.
  *
- * Exported because `ontology-tools.ts` holds the ontology read set to this
- * same rule. Two copies of "what counts as mutating" is how one of them ends
- * up admitting a write.
+ * Delegates to `@oxagen/oxagen`'s {@link capabilityMutates} rather than
+ * deciding anything itself, so the contract type, this classifier and the
+ * guard over the registry all read one definition.
+ *
+ * It used to answer the question from `sensitivity === "destructive"`, a high
+ * `agent.riskLevel`, or `requiresApproval` — three fields that grade how
+ * DANGEROUS a capability is, standing in for whether it writes. Those are
+ * different questions, and 219 of 271 agent-surface capabilities were reaching
+ * the engine marked concurrent-safe on the strength of it (#2600).
  */
 export function isMutatingCapability(cap: AnyCapability): boolean {
-  return (
-    cap.sensitivity === "destructive" ||
-    cap.agent?.riskLevel === "high" ||
-    cap.agent?.requiresApproval === true
-  );
+  return capabilityMutates(cap);
 }
 
 // Build the Vercel AI SDK tool map for a workspace turn. Filters by
@@ -691,7 +693,13 @@ export async function materializeTools(
         );
         continue;
       }
-      register(
+      // Fail safe, the same rule a contract that declares nothing gets: an
+      // external tool's semantics are unknown to this process, so it
+      // serializes rather than joining the concurrent lane. It used to keep
+      // the shared lane on exactly that "unknown semantics" reasoning, which
+      // had the argument the wrong way round — unknown is the case that must
+      // not run concurrently (#2600).
+      const externalAlias = register(
         capturedKey,
         tool({
           description: raw.description,
@@ -1139,6 +1147,7 @@ export async function materializeTools(
           },
         }),
       );
+      mutatingToolNames.push(externalAlias);
     }
   }
   // ── End installable-plugin tools ────────────────────────────────────────────

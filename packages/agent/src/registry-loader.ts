@@ -28,6 +28,13 @@ export interface RegistryCapability {
    */
   sensitivity?: "low" | "medium" | "high" | "destructive";
   /**
+   * Whether the capability writes. Mirrored from the contract so
+   * `capabilityMutates` can be applied to this structural view; absent means
+   * it mutates, which is what makes an unmirrored or undeclared capability
+   * serialize rather than silently run concurrently.
+   */
+  mutates?: boolean;
+  /**
    * The contract's IAM default effect. Optional here (decoupled structural
    * view); when absent, readers MUST fall back to "deny" — the SAME fallback
    * the kernel applies (packages/oxagen/src/kernel.ts's IAM seam), so the
