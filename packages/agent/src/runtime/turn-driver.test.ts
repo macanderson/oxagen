@@ -439,6 +439,31 @@ describe("createPlatformTurnDriver — happy path", () => {
         extraTools: fakeTools,
         mutatingToolNames: ["toolA"],
       }),
+      expect.anything(),
+    );
+  });
+
+  it("hands the spec's engine ask to executeTurn, and null when the row predates the field", async () => {
+    const driver = createPlatformTurnDriver();
+    const { io } = makeIo();
+
+    await driver(
+      makeRun({ spec: { version: 1, instruction: "x", engine: "stella" } }),
+      io,
+    );
+    expect(mocks.executeTurnFn).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.anything(),
+      { requestedEngine: "stella" },
+    );
+
+    await driver(makeRun({ spec: { version: 1, instruction: "x" } }), io);
+    // Null, not undefined or a default: absent means "the process decides",
+    // which is what every pre-field row always got.
+    expect(mocks.executeTurnFn).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.anything(),
+      { requestedEngine: null },
     );
   });
 
@@ -449,7 +474,11 @@ describe("createPlatformTurnDriver — happy path", () => {
 
     await driver(run, io);
 
-    expect(mocks.executeTurnFn).toHaveBeenCalledWith("a2a", expect.anything());
+    expect(mocks.executeTurnFn).toHaveBeenCalledWith(
+      "a2a",
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it("passes io.signal through to executeTurn unchanged", async () => {
@@ -463,6 +492,7 @@ describe("createPlatformTurnDriver — happy path", () => {
     expect(mocks.executeTurnFn).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ signal: controller.signal }),
+      expect.anything(),
     );
   });
 
@@ -526,6 +556,7 @@ describe("createPlatformTurnDriver — budget guard", () => {
     expect(mocks.executeTurnFn).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ budgetGuard: undefined }),
+      expect.anything(),
     );
   });
 
@@ -557,6 +588,7 @@ describe("createPlatformTurnDriver — budget guard", () => {
     expect(mocks.executeTurnFn).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ budgetGuard: fakeGuard }),
+      expect.anything(),
     );
   });
 

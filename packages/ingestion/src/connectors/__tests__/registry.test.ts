@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-// Import index.ts which auto-registers all 15 built-in connectors.
+// Import index.ts which auto-registers every built-in connector.
 // This must happen before calling getConnector/listConnectors.
 import "../../index";
 import { getConnector, listConnectors } from "../types";
@@ -19,17 +19,19 @@ const EXPECTED_CONNECTOR_IDS = [
   "slack",
   "salesforce",
   "microsoft",
+  "stripe",
+  "zendesk",
   "custom-sql",
   "custom-webhook",
 ];
 
 describe("connector registry", () => {
-  it("has all 15 built-in connectors registered", () => {
+  it("has every built-in connector registered", () => {
     const ids = listConnectors().map((c) => c.connectorId);
     for (const expected of EXPECTED_CONNECTOR_IDS) {
       expect(ids).toContain(expected);
     }
-    expect(ids.length).toBeGreaterThanOrEqual(15);
+    expect(ids.length).toBeGreaterThanOrEqual(EXPECTED_CONNECTOR_IDS.length);
   });
 
   it("getConnector returns the correct connector by id", () => {

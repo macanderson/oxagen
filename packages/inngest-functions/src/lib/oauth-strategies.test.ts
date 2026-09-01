@@ -53,6 +53,7 @@ describe("refreshProviderKeyFor", () => {
       "linear",
       "salesforce",
       "microsoft",
+      "zendesk",
       "nope",
     ]) {
       expect(refreshProviderKeyFor(p)).toBe(p);

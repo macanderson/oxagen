@@ -3,8 +3,9 @@
  *
  * Import this module once at application startup (Inngest worker, API route,
  * MCP tool) to register all connectors with the global registry. After this
- * import, getConnector(connectorId) resolves every built-in connector imported
- * below (the count drifts — read the import list, don't trust a number).
+ * import, getConnector(connectorId) resolves every built-in connector — the
+ * import list below is the set, and BUILT_IN_PLUGIN_IDS in
+ * connector-schema-loader.ts is what pairs each id with its schema.yaml.
  *
  * `example-saas` ships a schema.yaml for the plugin-schema docs but has no
  * connector implementation, so it is deliberately absent here and
@@ -19,6 +20,8 @@
  *     slack/           — messages, channels, users (webhook)
  *     salesforce/      — opportunities, contacts, accounts, leads, cases (REST poll)
  *     microsoft/       — Outlook, Teams, SharePoint, OneDrive, Calendar (webhook + admin consent)
+ *     stripe/          — customers, charges, refunds, subscriptions, invoices, disputes (REST poll)
+ *     zendesk/         — tickets, ticket comments, users, organizations (incremental export poll)
  *     custom-sql/      — any database via connection string + custom queries (SQL poll)
  *     custom-webhook/  — any HTTP webhook source (generic)
  */
@@ -49,6 +52,13 @@ import "./salesforce/index";
 
 // Microsoft 365
 import "./microsoft/index";
+
+// Stripe — a customer's own Stripe account as business entities, unrelated to
+// packages/billing (how Oxagen bills its own customers).
+import "./stripe/index";
+
+// Zendesk
+import "./zendesk/index";
 
 // Custom / generic connectors
 import "./custom-sql/index";

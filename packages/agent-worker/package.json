@@ -9,10 +9,12 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "start": "tsx src/main.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
     "test:unit": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "build:node": "node build-node.mjs"
   },
   "dependencies": {
     "@oxagen/agent": "workspace:*",
@@ -24,13 +26,16 @@
     "@oxagen/iam": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/plugins": "workspace:*",
+    "@oxagen/rules": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "typescript": "6.0.3"
   },
   "devDependencies": {
     "@types/node": "25.9.1",
     "@vitest/coverage-v8": "2.1.9",
+    "esbuild": "0.28.0",
     "eslint": "9.39.4",
+    "tsx": "4.22.3",
     "vitest": "2.1.9"
   }
 }

@@ -129,7 +129,7 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 | `pnpm check:manifest --json` | Machine-readable parity output (filter for genuine `api`/`mcp` gaps) |
 | `pnpm check:ui-parity` | Enforces app-layer capability → UI binding (`capability-ui-map.json`) |
 | `pnpm check:mobile-parity` | Enforces mobile feature parity (ADR-026) — no desktop-only features without registered reflow/hidden justification |
-| `pnpm check:connector-schemas` | Verifies all 16 built-in plugin connector schemas are registered |
+| `pnpm check:connector-schemas` | Verifies every built-in plugin connector schema is registered |
 | `pnpm check:contracts` | Ensures every contract file is in the barrel index + naming compliance |
 | `pnpm check:vision` | LLM-judges PR diff against `docs/VISION.md` |
 | `pnpm env:check` | Validates `.env.local` against the env registry |

@@ -52,6 +52,7 @@
  * VERIFY against the deployed database, not to assume from this comment.
  */
 import { z } from "zod";
+import { RUN_ENGINES } from "./run-spec-v2";
 
 /** Every v1 row carries exactly this literal in `agent_runs.spec.version`. */
 export const LEGACY_RUN_SPEC_VERSION = 1;
@@ -138,6 +139,14 @@ export const runSpecV1Schema = z.object({
   history: z.array(legacyHistoryMessageSchema).optional(),
   toolPolicy: legacyToolPolicySchema.optional(),
   delegation: legacyDelegationSchema.optional(),
+  /**
+   * Which engine this run asked for, in the same `RUN_ENGINES` vocabulary v2's
+   * `enginePolicy.requested_engine` speaks. Optional, and absent on every row
+   * written before the field existed — absent means "take the process
+   * default", which is exactly what those rows always got. The turn driver
+   * hands it to `executeTurn`, where it wins over `OXAGEN_ENGINE`.
+   */
+  engine: z.enum(RUN_ENGINES).optional(),
 });
 
 export type RunSpecV1 = z.infer<typeof runSpecV1Schema>;
@@ -185,6 +194,8 @@ export interface LegacyRunSpecV1Input {
   instruction: string;
   model?: string;
   toolPolicy?: LegacyToolPolicy;
+  /** See `runSpecV1Schema.engine`. Omitted ⇒ the process default decides. */
+  engine?: (typeof RUN_ENGINES)[number];
 }
 
 /**
@@ -202,5 +213,6 @@ export function buildLegacyRunSpecV1(input: LegacyRunSpecV1Input): RunSpecV1 {
     instruction: input.instruction,
     ...(input.model !== undefined ? { model: input.model } : {}),
     ...(input.toolPolicy !== undefined ? { toolPolicy: input.toolPolicy } : {}),
+    ...(input.engine !== undefined ? { engine: input.engine } : {}),
   };
 }

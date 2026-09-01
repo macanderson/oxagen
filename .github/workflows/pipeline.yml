@@ -710,6 +710,11 @@ jobs:
             hostname: api.oxagen.sh
           - service: mcp
             hostname: mcp.oxagen.sh
+          # The durable-run worker (agent-engine v2 Phase A). No hostname:
+          # Caddy has no route to it — its only HTTP surface is the loopback
+          # /healthz the node's own deploy poll reads.
+          - service: worker
+            hostname: ""
     steps:
       - uses: actions/checkout@v5
 
@@ -735,7 +740,19 @@ jobs:
       # A list of names in a workflow drifts the moment a route reads a new
       # variable, and its failure is a build crash naming a route instead of
       # the variable; the registry already knows which service needs what.
+      # The worker has no build-time environment: its bundle inlines nothing
+      # (no NEXT_PUBLIC_*), and every secret arrives at container start from
+      # Parameter Store via oxagen-run.json's config_prefix. The registry's
+      # ServiceName union deliberately doesn't include it, so the resolver
+      # would refuse the name — an empty file keeps the Package step's
+      # unconditional source honest.
       - name: Resolve the build environment for ${{ matrix.service }}
+        if: matrix.service == 'worker'
+        run: |
+          : > "$RUNNER_TEMP/build-env"
+
+      - name: Resolve the build environment for ${{ matrix.service }}
+        if: matrix.service != 'worker'
         env:
           PARAMETER_PREFIX: /oxagen/production
         run: |
@@ -756,6 +773,27 @@ jobs:
       # the values are the whole production configuration for this service, and
       # `pnpm install` above — which runs third-party lifecycle scripts — has no
       # business seeing them.
+      # The Stella engine, compiled from macanderson/stella at the exact
+      # version pinned in packages/stella-engine-client/sidecar.config.json —
+      # the same pin, resolved the same way, as stella-sidecar.yml. Built here
+      # because this runner is the same arch as the node (arm64/glibc) and
+      # stella publishes no stella-serve artifact to pin (#2547 carries the
+      # upstream ask). Worker-only for now: the api/app legs join when their
+      # surfaces flip OXAGEN_ENGINE.
+      - uses: dtolnay/rust-toolchain@stable
+        if: matrix.service == 'worker'
+
+      - name: Build stella-serve for the worker
+        if: matrix.service == 'worker'
+        run: |
+          set -euo pipefail
+          VERSION="$(jq -r '.stellaVersion' packages/stella-engine-client/sidecar.config.json)"
+          git clone --depth 1 --branch "v${VERSION}" \
+            https://github.com/macanderson/stella.git "$RUNNER_TEMP/stella-src"
+          cargo build --release -p stella-serve --bin stella-serve \
+            --manifest-path "$RUNNER_TEMP/stella-src/Cargo.toml"
+          echo "STELLA_SERVE_ARTIFACT=$RUNNER_TEMP/stella-src/target/release/stella-serve" >> "$GITHUB_ENV"
+
       - name: Package ${{ matrix.service }}
         run: |
           set -euo pipefail

@@ -92,6 +92,7 @@ export const PERMANENT_ERRORS = new Set([
  *   Slack   — SLACK_DATA_CLIENT_ID / SLACK_DATA_CLIENT_SECRET
  *   Zoom    — ZOOM_DATA_CLIENT_ID / ZOOM_DATA_CLIENT_SECRET
  *   Linear  — no refresh endpoint (access tokens are long-lived PATs)
+ *   Zendesk — no refresh endpoint (OAuth access tokens do not expire)
  *   Salesforce — SALESFORCE_DATA_CLIENT_ID / SALESFORCE_DATA_CLIENT_SECRET
  *   Microsoft  — MICROSOFT_DATA_CLIENT_ID / MICROSOFT_DATA_CLIENT_SECRET
  */
@@ -247,6 +248,21 @@ export const REFRESH_PROVIDERS: Record<string, ProviderRefreshStrategy> = {
    * invalid refresh.
    */
   linear: {
+    tokenUrl: "",
+    requiredEnv: [],
+    buildBody: () => null,
+    parseResponse: () => ({ error: "no_refresh_endpoint" }),
+    supportsRefresh: false,
+  },
+
+  /**
+   * Zendesk — no refresh endpoint. A Zendesk OAuth grant returns an access
+   * token that does not expire and no refresh token, so there is nothing to
+   * rotate. Declared rather than omitted: an absent entry answers
+   * "unsupported_provider", which reads as a misconfiguration, while this says
+   * the token is meant to be used as-is.
+   */
+  zendesk: {
     tokenUrl: "",
     requiredEnv: [],
     buildBody: () => null,

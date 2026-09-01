@@ -11,6 +11,7 @@ import "@oxagen/agent/register";
 import { loadEnv } from "@oxagen/config/env";
 import { bootstrapIAMRuntime } from "@oxagen/iam";
 import { bootstrapBillingRuntime } from "@oxagen/billing";
+import { bootstrapDecisionRulesRuntime } from "@oxagen/rules";
 import { bootstrapEntitlementRuntime } from "@oxagen/plugins";
 import { setSecurityEventEmitter } from "@oxagen/oxagen/kernel";
 import { initTracer, recordSecurityEvent } from "@oxagen/telemetry";
@@ -64,6 +65,9 @@ async function runBootstrap(): Promise<void> {
   // are injected process-globals — without them invoke() cannot enforce.
   bootstrapIAMRuntime();
   bootstrapBillingRuntime();
+  // Same decision-rules gate as the api: a durable run's tool calls answer
+  // to the same workspace governance as an inline one's.
+  bootstrapDecisionRulesRuntime();
   bootstrapEntitlementRuntime();
 
   // SOC2 audit trail: the kernel emits a security event after every

@@ -1,0 +1,31 @@
+{
+  "name": "@oxagen/rules",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --max-warnings 0",
+    "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@oxagen/database": "workspace:*",
+    "@oxagen/oxagen": "workspace:*",
+    "drizzle-orm": "0.45.2",
+    "pino": "9.14.0",
+    "typescript": "6.0.3",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "25.9.1",
+    "@vitest/coverage-v8": "2.1.9",
+    "eslint": "9.39.4",
+    "vitest": "2.1.9"
+  }
+}

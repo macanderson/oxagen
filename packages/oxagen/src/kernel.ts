@@ -134,6 +134,41 @@ export function setCapabilityEntitlementGate(
   _entitlementGate = gate;
 }
 
+// ── Decision-rules gate (injected at bootstrap) ──────────────────────────────
+//
+// Workspace-authored governance over which business actions an agent may take
+// on its own (issue a refund, message a customer). The kernel accepts a
+// pluggable gate so it carries no dependency on @oxagen/rules — same pattern
+// as the billing/budget/entitlement gates above. It fires AFTER those gates
+// and BEFORE the handler: a rule refines what an authorized, funded, entitled
+// caller may do; it never substitutes for any of them. The registered gate
+// throws @oxagen/rules' DecisionRuleDeniedError /
+// DecisionRuleApprovalRequiredError to refuse, and MUST fail open on its own
+// infrastructure (a broken rules store never takes every action down with it).
+
+export type DecisionRulesKernelGateFn = (args: {
+  capability: string;
+  input: unknown;
+  ctx: {
+    orgId: string;
+    workspaceId: string | null;
+    userId: string | null;
+    surface?: string;
+  };
+}) => Promise<void>;
+
+let _decisionRulesGate: DecisionRulesKernelGateFn | null = null;
+
+/** Register the decision-rules gate. Call once at service bootstrap. */
+export function setDecisionRulesGate(gate: DecisionRulesKernelGateFn): void {
+  _decisionRulesGate = gate;
+}
+
+/** Remove the decision-rules gate. Used in tests. */
+export function clearDecisionRulesGate(): void {
+  _decisionRulesGate = null;
+}
+
 /** Remove the capability entitlement gate. Used in tests. */
 export function clearCapabilityEntitlementGate(): void {
   _entitlementGate = null;
@@ -1182,6 +1217,27 @@ async function _invokeCore(
         await _entitlementGate(canonical, ctx.orgId, ctx.workspaceId);
       }
       // ── End capability entitlement gate ─────────────────────────────────────
+
+      // ── Decision-rules gate ─────────────────────────────────────────────────
+      // Same skip conditions as billing: unscoped and platform-internal
+      // (org-less) invocations pass. Fires for agent-facing surfaces and API
+      // alike — a rule about refunds binds the action, not the door it came
+      // through.
+      if (_decisionRulesGate !== null && ctx.orgId && isScoped) {
+        await _decisionRulesGate({
+          capability: canonical,
+          // The VALIDATED input — the same value the handler receives, so a
+          // rule and the action it governs read one shape.
+          input: inputResult.data,
+          ctx: {
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId ?? null,
+            userId: ctx.userId ?? null,
+            surface: opts?.surface,
+          },
+        });
+      }
+      // ── End decision-rules gate ─────────────────────────────────────────────
 
       const handler = await resolveHandler(canonical);
       // Principal spine: hand the handler the resolved principal

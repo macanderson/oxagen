@@ -76,6 +76,7 @@ export async function register(): Promise<void> {
     const { bootstrapIAMRuntime } = await import("@oxagen/iam");
     const { bootstrapBillingRuntime } = await import("@oxagen/billing");
     const { bootstrapEntitlementRuntime } = await import("@oxagen/plugins");
+    const { bootstrapDecisionRulesRuntime } = await import("@oxagen/rules");
     const { setSecurityEventEmitter } = await import("@oxagen/oxagen/kernel");
     const { recordSecurityEvent } = await import("@oxagen/telemetry");
     const { makeSecurityEventInserter } = await import(
@@ -96,6 +97,9 @@ export async function register(): Promise<void> {
     // Wire the capability entitlement gate — blocks invocations of plugin-owned
     // capabilities when the plugin is not installed+enabled for the org.
     bootstrapEntitlementRuntime();
+    // Wire the workspace decision-rules gate (refund ceilings, approval
+    // thresholds, …) — governs which business actions an agent may take.
+    bootstrapDecisionRulesRuntime();
 
     // Wire the Postgres security event emitter (SOC2 CC6/CC7 audit trail).
     // Registered once per server process, immediately after bootstrapIAMRuntime()

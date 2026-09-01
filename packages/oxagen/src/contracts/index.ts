@@ -212,6 +212,11 @@ import { skillExport } from "./skill.export";
 import { skillMetricsRead } from "./skill.metrics.read";
 import { skillCreate } from "./skill.create";
 import { skillEnable } from "./skill.enable";
+import { toolDeclarationPublish } from "./tool.declaration.publish";
+import { toolDeclarationList } from "./tool.declaration.list";
+import { contextRecordPublish } from "./context.record.publish";
+import { contextRecordList } from "./context.record.list";
+import { contextRecordPromote } from "./context.record.promote";
 import { agentSubagentAggregate } from "./agent.subagent.aggregate";
 import { agentSubagentDispatch } from "./agent.subagent.dispatch";
 import { connectionList } from "./connection.list";
@@ -719,6 +724,11 @@ export {
   skillMetricsRead,
   skillCreate,
   skillEnable,
+  toolDeclarationPublish,
+  toolDeclarationList,
+  contextRecordPublish,
+  contextRecordList,
+  contextRecordPromote,
   agentSubagentAggregate,
   agentSubagentDispatch,
   connectionList,
@@ -1062,6 +1072,11 @@ export const contracts = [
   skillMetricsRead,
   skillCreate,
   skillEnable,
+  toolDeclarationPublish,
+  toolDeclarationList,
+  contextRecordPublish,
+  contextRecordList,
+  contextRecordPromote,
   agentExecutionList,
   agentExecutionRecord,
   modelCapabilityList,

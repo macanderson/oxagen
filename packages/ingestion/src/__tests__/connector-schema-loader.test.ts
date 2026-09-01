@@ -223,12 +223,12 @@ describe("loadBuiltInSchema — built-in plugins", () => {
 
   // Regression: set size must match the number of schema.yaml files on disk,
   // so this test catches drift in either direction.
-  it("BUILT_IN_PLUGIN_IDS contains the expected 16 connector ids", () => {
+  it("BUILT_IN_PLUGIN_IDS contains the expected 18 connector ids", () => {
     // Update this count whenever a new connector is added to BUILT_IN_PLUGIN_IDS.
     // Current set: github, linear, slack, google-drive, google-calendar, google-gmail,
     // google-meet, google-tasks, google-contacts, google-bigquery, microsoft, salesforce,
-    // zoom, custom-sql, custom-webhook, example-saas = 16.
-    expect(BUILT_IN_PLUGIN_IDS.size).toBe(16);
+    // zoom, stripe, zendesk, custom-sql, custom-webhook, example-saas = 18.
+    expect(BUILT_IN_PLUGIN_IDS.size).toBe(18);
   });
 
   // Regression: every declared built-in MUST have a schema file that resolves

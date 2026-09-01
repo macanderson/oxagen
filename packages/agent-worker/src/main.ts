@@ -43,11 +43,26 @@ import { createPostgresRunStore } from "@oxagen/agent-runner";
 // The subpath, not the barrel: this module supervises sidecar processes and so
 // reaches for node builtins, which the barrel must stay clear of for the app's
 // bundler. A worker is a long-lived Node process, so it can take them.
-import { shutdownStellaEngine } from "@oxagen/agent-runner/stella";
+import {
+  configureStellaEngine,
+  shutdownStellaEngine,
+} from "@oxagen/agent-runner/stella";
+import { providerCostUsd } from "@oxagen/billing";
 import { createPlatformTurnDriver } from "@oxagen/agent";
 import { createAgentWorker } from "./worker";
 import { bootstrap } from "./bootstrap";
+import { startHealthServer, type HealthState } from "./health";
 import type { AttemptRunStore, RunStore } from "./types";
+
+/**
+ * Loopback liveness port. `PORT` is what the shared node's deploy contract
+ * passes (oxagen-run.json's `port`, polled as the post-start health check);
+ * the fallback is for a worker run by hand from a checkout.
+ */
+function readHealthPort(): number {
+  const raw = Number(process.env.PORT);
+  return Number.isInteger(raw) && raw > 0 ? raw : 4200;
+}
 
 function readConcurrency(): number | undefined {
   const raw = process.env.OXAGEN_WORKER_CONCURRENCY;
@@ -64,6 +79,22 @@ async function main(): Promise<void> {
   // inert. Fail fast on boot errors — a worker that cannot enforce must not
   // claim runs.
   await bootstrap();
+
+  // Arm the Stella engine's own spend accounting with the billing rate card.
+  // The engine folds each `CompletionResult.cost_usd` into the turn's settled
+  // spend, and without a pricer every call reports zero — a ceiling that can
+  // never be reached (macanderson/oxagen#2543). Host-side metering is separate
+  // and unaffected: `streamAgentReply` still writes `token_usage` per call.
+  configureStellaEngine({
+    price: ({ usage, model }) =>
+      providerCostUsd({
+        model,
+        inputTokens: usage.input_tokens,
+        outputTokens: usage.output_tokens,
+        cachedTokens: usage.cached_input_tokens ?? 0,
+        cacheWriteTokens: usage.cache_write_tokens ?? 0,
+      }),
+  });
 
   // Widening the concrete store to BOTH structural ports is the drift check.
   // `./types.ts` hand-mirrors @oxagen/agent-runner's V2 surface so the harness
@@ -90,10 +121,16 @@ async function main(): Promise<void> {
     },
   });
 
+  const healthState: HealthState = { draining: false };
+  const health = startHealthServer(readHealthPort(), healthState);
+
   let shuttingDown = false;
   function shutdown(signal: NodeJS.Signals): void {
     if (shuttingDown) return;
     shuttingDown = true;
+    // Report draining rather than closing the listener: a 503 tells the next
+    // deploy's health poll the truth, while a vanished socket reads as a crash.
+    healthState.draining = true;
     console.log(
       `@oxagen/agent-worker: ${signal} received, draining in-flight runs...`,
     );
@@ -105,6 +142,7 @@ async function main(): Promise<void> {
       // A no-op on a worker that never ran a Stella turn.
       .then(() => shutdownStellaEngine())
       .then(() => {
+        health.close();
         console.log("@oxagen/agent-worker: drained, exiting.");
         process.exit(0);
       })

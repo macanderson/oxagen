@@ -66,6 +66,7 @@ vi.mock("@oxagen/plugins", () => ({
 vi.mock("@oxagen/oxagen/kernel", () => ({
   setSecurityEventEmitter: mocks.setSecurityEventEmitter,
   setCapabilityEntitlementGate: vi.fn(),
+  setDecisionRulesGate: vi.fn(),
   invoke: vi.fn(),
   clearHandlersForTests: vi.fn(),
 }));

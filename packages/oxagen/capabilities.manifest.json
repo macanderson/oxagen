@@ -1227,7 +1227,7 @@
       "file": "api.key.revoke.ts",
       "domain": "api_key",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": ["api", "mcp", "agent"],
       "layers": {
         "api": true,
         "docs": true,
@@ -1241,7 +1241,7 @@
       "file": "api.key.rotate.ts",
       "domain": "api_key",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": ["api", "mcp", "agent"],
       "layers": {
         "api": true,
         "docs": true,
@@ -2099,6 +2099,46 @@
         "mcp": true,
         "unit": true,
         "docs": true
+      }
+    },
+    {
+      "name": "list_context_records",
+      "file": "context.record.list.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": ["api", "agent", "mcp"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "promote_context_record",
+      "file": "context.record.promote.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": ["api"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "publish_context_record",
+      "file": "context.record.publish.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": ["api"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "unit": true
       }
     },
     {
@@ -4460,6 +4500,33 @@
         "api": true,
         "unit": true,
         "docs": true
+      }
+    },
+    {
+      "name": "list_tool_declarations",
+      "file": "tool.declaration.list.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": ["api", "agent", "mcp"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "publish_tool_declaration",
+      "file": "tool.declaration.publish.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": ["api"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "unit": true
       }
     },
     {

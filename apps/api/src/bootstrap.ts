@@ -8,6 +8,7 @@ import "@oxagen/agent/register";
 import { loadEnv } from "@oxagen/config/env";
 import { bootstrapIAMRuntime } from "@oxagen/iam";
 import { bootstrapBillingRuntime } from "@oxagen/billing";
+import { bootstrapDecisionRulesRuntime } from "@oxagen/rules";
 import { bootstrapEntitlementRuntime } from "@oxagen/plugins";
 import { setSecurityEventEmitter } from "@oxagen/oxagen/kernel";
 import { initTracer, recordSecurityEvent } from "@oxagen/telemetry";
@@ -90,6 +91,9 @@ async function runBootstrap(): Promise<void> {
   // Wire the billing admission gate (suspended / zero-balance refusal +
   // auto-reload) into contract.invoke(), alongside the IAM gate.
   bootstrapBillingRuntime();
+  // Workspace decision rules (refund ceilings, approval thresholds, …)
+  // gate every scoped invoke after billing/entitlement. Dormant without this.
+  bootstrapDecisionRulesRuntime();
   // Wire the capability entitlement gate — blocks invocations of plugin-owned
   // capabilities when the plugin is not installed+enabled for the org.
   bootstrapEntitlementRuntime();
