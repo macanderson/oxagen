@@ -115,6 +115,36 @@ describe("parseRunSpecV1 — rejections", () => {
     ).toThrow(/toolPolicy.riskCeiling/);
   });
 
+  it("accepts toolPolicy.ontology, the per-run graph grant", () => {
+    const parsed = parseRunSpecV1({
+      version: 1,
+      instruction: "which accounts are at renewal risk?",
+      toolPolicy: { allowlist: ["read_file"], ontology: true },
+    });
+    expect(parsed.toolPolicy?.ontology).toBe(true);
+  });
+
+  it("leaves toolPolicy.ontology undefined when a run does not ask", () => {
+    // Absent, not false — the driver reads `=== true`, so an omitted flag and
+    // an explicit false mean the same thing and neither grants the graph.
+    const parsed = parseRunSpecV1({
+      version: 1,
+      instruction: "x",
+      toolPolicy: { allowlist: ["read_file"] },
+    });
+    expect(parsed.toolPolicy?.ontology).toBeUndefined();
+  });
+
+  it("rejects a non-boolean toolPolicy.ontology", () => {
+    expect(() =>
+      parseRunSpecV1({
+        version: 1,
+        instruction: "x",
+        toolPolicy: { ontology: "yes" },
+      }),
+    ).toThrow(/toolPolicy.ontology/);
+  });
+
   it("rejects an unrecognized history role", () => {
     expect(() =>
       parseRunSpecV1({

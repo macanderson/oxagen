@@ -124,7 +124,12 @@ export interface ConsentRequiredEvent {
 }
 
 export interface MaterializeOptions {
-  allowlist?: Set<string>;
+  /**
+   * Read-only because callers compose it — `withOntologyReads` hands back the
+   * caller's own set unchanged when the run did not opt in, and a mutable
+   * parameter type would make that pass-through a lie about ownership.
+   */
+  allowlist?: ReadonlySet<string>;
   /**
    * Capability names to withhold from the model for THIS turn. Used by the
    * chat route in code mode to drop `execute_code`/`edit_repo_file` when the
@@ -288,8 +293,12 @@ function passesRisk(
  * sensitivity, high agent risk, or an approval requirement. Misclassifying a
  * read as mutating only costs parallelism; the reverse costs correctness, so
  * the proxy errs toward mutating.
+ *
+ * Exported because `ontology-tools.ts` holds the ontology read set to this
+ * same rule. Two copies of "what counts as mutating" is how one of them ends
+ * up admitting a write.
  */
-function isMutatingCapability(cap: AnyCapability): boolean {
+export function isMutatingCapability(cap: AnyCapability): boolean {
   return (
     cap.sensitivity === "destructive" ||
     cap.agent?.riskLevel === "high" ||

@@ -88,6 +88,19 @@ export function isLegacyCodeModeSurface(surface: string): boolean {
 const legacyToolPolicySchema = z.object({
   allowlist: z.array(z.string().min(1)).optional(),
   riskCeiling: z.enum(["low", "medium", "high"]).optional(),
+  /**
+   * Grant this run the ontology read set on top of whatever `allowlist`
+   * declares (`@oxagen/agent`'s `ONTOLOGY_READ_CAPABILITIES`).
+   *
+   * Only an allowlisted run needs it. A run that declares no allowlist already
+   * materializes every agent-surface capability, the graph reads included, so
+   * the flag is inert there rather than meaning something different.
+   *
+   * Defaults off, and the default is the honest one: an allowlist that
+   * silently grows eight tools is not an allowlist. The enqueuer that wants an
+   * agent to reason over the business graph says so.
+   */
+  ontology: z.boolean().optional(),
 });
 
 /**

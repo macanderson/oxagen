@@ -1,4 +1,9 @@
 export * from "./runtime/materialize-tools";
+// The ontology read set — the graph capabilities an agent reasons over, plus
+// the read-only guard and the per-run allowlist union that carries them into a
+// narrowed run. A surface that wants to grant the graph names this set rather
+// than spelling eight capability names of its own.
+export * from "./runtime/ontology-tools";
 export * from "./runtime/approval";
 export * from "./runtime/stream-events";
 // The platform TurnDriver — agent-engine v2 Phase 2 integration
