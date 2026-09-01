@@ -15,6 +15,7 @@ import type { AgentAi, RunCodingAgentOptions } from "@oxagen/agent-engine";
 import { createFakeSidecar, type FakeStep } from "./fake-sidecar";
 import {
   buildBudgetSpec,
+  REVERSE_REQUEST_TIMEOUT_MS,
   runStellaTurn,
   StellaTurnAbortedError,
   stopReasonFor,
@@ -176,6 +177,20 @@ describe("runStellaTurn", () => {
         ok: true,
       }),
     );
+  });
+
+  test("gives the engine a deadline longer than the host's approval TTL", async () => {
+    // Stella's default is five minutes, which is EXACTLY the host's approval
+    // TTL — so with the default, an approval granted near its own limit can
+    // find the engine already gave up on the request it was answering. The
+    // engine's deadline is a backstop against a host that stopped answering
+    // at all, not a competitor to the host's own bounds.
+    const { fake, lease } = leaseFor([{ kind: "complete", text: "" }]);
+    await runStellaTurn(baseOptions(), { lease });
+    const declared = fake.turnRequest!.reverse_request_timeout_ms as number;
+    const APPROVAL_TTL_MS = 5 * 60 * 1000; // materialize-tools.ts
+    expect(declared).toBeGreaterThan(APPROVAL_TTL_MS);
+    expect(declared).toBe(REVERSE_REQUEST_TIMEOUT_MS);
   });
 
   test("advertises tools with read_only derived from the mutating list", async () => {

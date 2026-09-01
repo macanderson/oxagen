@@ -97,6 +97,26 @@ export interface StellaTurnDeps {
 export const MISSING_SYSTEM_PROMPT =
   "the Stella engine path requires an explicit `system` prompt";
 
+/**
+ * How long the engine waits for the host to answer one reverse request.
+ *
+ * Stella's own default is five minutes — which is exactly the host's approval
+ * TTL (`materialize-tools.ts`'s `APPROVAL_TTL_MS`). A capability that requires
+ * approval parks its `tool_request` inside `waitForApproval` for as long as the
+ * person takes, so with the default the two deadlines expire together: an
+ * approval granted near its own limit can find the engine has already given up
+ * on the request it was answering.
+ *
+ * This is set to Stella's server-side maximum on purpose. The engine's deadline
+ * should be a backstop against a host that has stopped answering *at all*, not
+ * a second timeout competing with the host's own bounds — and the host already
+ * has several that fire first and with better messages: the per-tool backstop,
+ * the approval TTL, the turn budget, and the caller's abort signal. That is the
+ * same layering the tool backstop uses when it sits a grace period above
+ * `bash`'s declared timeout, so the real timeout always reports first.
+ */
+export const REVERSE_REQUEST_TIMEOUT_MS = 60 * 60 * 1000;
+
 export async function runStellaTurn(
   opts: RunCodingAgentOptions,
   deps: StellaTurnDeps,
@@ -141,6 +161,7 @@ export async function runStellaTurn(
     }),
     budget: buildBudgetSpec(deps.price !== undefined),
     max_steps: opts.maxSteps ?? DEFAULT_MAX_AGENT_STEPS,
+    reverse_request_timeout_ms: REVERSE_REQUEST_TIMEOUT_MS,
   };
 
   const provider = createProviderHandler({
