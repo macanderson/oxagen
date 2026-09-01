@@ -35,10 +35,10 @@
 /* Scan the components folder located one directory up */
 @source "../components";
 
-/* ── Page headings — Oxagen wordmark face (Space Grotesk) ───────────────────
+/* ── Page headings — Oxagen wordmark face (Aeonik) ──────────────────────────
  * The app sets its display headings in the SAME face as the oxagen wordmark /
- * logo (Space Grotesk → --font-wordmark), overriding the shared Aeonik Fono
- * default (--font-display) for h1–h3. Unlayered so it wins over the @layer base
+ * logo (Aeonik → --font-wordmark), overriding the shared Aeonik Fono default
+ * (--font-display) for h1–h3. Unlayered so it wins over the @layer base
  * heading rule in @oxagen/ui without an !important. Scoped to this app only —
  * docs/website keep Aeonik Fono. Case is left untouched; the lowercase
  * transform is reserved for the .ox-wordmark lockup itself. */
