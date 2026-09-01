@@ -24,7 +24,6 @@ export * from "./dispatch/lineage-outcome";
 export * from "./dispatch/lineage-projection";
 export * from "./dispatch/tool-projection";
 export * from "./memory/neo4j";
-export * as hooks from "./hooks/runtime";
 export { resolveHandler, invokeCapability } from "./handlers/index";
 export type { CapabilityHandlerFn } from "./handlers/index";
 // Sandbox session lifecycle & work-recovery (spec: sandbox-session-lifecycle).

@@ -79,7 +79,6 @@ import {
   recallWorkspaceMemoryDetailed,
   resolveGroundingCitations,
 } from "./recall-context";
-import { createChatMemoryProvider } from "./engine-memory";
 import { buildPageContextMessage } from "./page-context";
 import { evaluateTurnCreditGate } from "./credit-gate";
 import {
@@ -1558,21 +1557,22 @@ export async function POST(request: NextRequest): Promise<Response> {
           // path (otherwise videos arrive as keyframe images above). Passed as
           // AI-SDK file parts by the engine.
           ...(videoAttachments.length > 0 ? { videos: videoAttachments } : {}),
-          history:
-            codeContextMessage ||
-            pinnedContextMessage ||
-            referencesContextMessage ||
-            pageContextMessage
-              ? [
-                  ...historyForEngine,
-                  ...([
-                    codeContextMessage,
-                    pinnedContextMessage,
-                    referencesContextMessage,
-                    pageContextMessage,
-                  ].filter(Boolean) as ModelMessage[]),
-                ]
-              : historyForEngine,
+          // Context messages, then the recalled-memory message LAST — the
+          // exact position the engine's MemoryProvider used to inject it:
+          // after the cached system prefix and every synthetic context block,
+          // immediately before the instruction. The provider-shaped adapter is
+          // gone (#1236's app-surface twin): no engine makes a mid-turn
+          // recallContext() callback any more.
+          history: [
+            ...historyForEngine,
+            ...([
+              codeContextMessage,
+              pinnedContextMessage,
+              referencesContextMessage,
+              pageContextMessage,
+              recalledMemory.message,
+            ].filter(Boolean) as ModelMessage[]),
+          ],
           // Prompt layering: base (chat OR coding) → bound agent instructions.
           // The coding CONTRACT (codeModeSystemPrompt) must always sit ABOVE the
           // customer's agent instructions, so the bound instructions are
@@ -1630,13 +1630,6 @@ export async function POST(request: NextRequest): Promise<Response> {
           // dispatch barrier (agent-engine v2 Phase 0) instead of the AI SDK's
           // unbounded parallel execution.
           mutatingToolNames,
-          // Recall ran CONCURRENTLY in the setup Promise.all above; the provider
-          // just reads its already-resolved value (no serial latency — C3). The
-          // engine prepends its own "## Recalled context" heading before the
-          // provider's body.
-          memory: createChatMemoryProvider({
-            recalledPromise: Promise.resolve(recalledMemory.message),
-          }),
           // NO `trace`: createClickHouseTraceStore writes up to 200 chars of the
           // raw instruction into ClickHouse, violating the chat surface's
           // hash-only prompt policy (C5). Per-step usage/credits still flow

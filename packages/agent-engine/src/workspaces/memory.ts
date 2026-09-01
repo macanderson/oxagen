@@ -23,7 +23,10 @@ export class MemoryWorkspace implements Workspace {
     this.execHandler = fn;
   }
 
-  async readFile(p: string, opts?: { offset?: number; limit?: number }): Promise<string> {
+  async readFile(
+    p: string,
+    opts?: { offset?: number; limit?: number },
+  ): Promise<string> {
     const text = this.files.get(p);
     if (text === undefined) throw new Error(`ENOENT: ${p}`);
     if (opts?.offset == null && opts?.limit == null) return text;
@@ -48,16 +51,26 @@ export class MemoryWorkspace implements Workspace {
     const count = oldString === "" ? 0 : text.split(oldString).length - 1;
     if (opts?.replaceAll) {
       if (count === 0) {
-        throw new Error(describeEditFailure(text, oldString) ?? `old_string not found in ${p}`);
+        throw new Error(
+          describeEditFailure(text, oldString) ??
+            `old_string not found in ${p}`,
+        );
       }
       this.files.set(p, text.split(oldString).join(newString));
       return count;
     }
     if (count !== 1) {
-      throw new Error(describeEditFailure(text, oldString) ?? `old_string not found in ${p}`);
+      throw new Error(
+        describeEditFailure(text, oldString) ?? `old_string not found in ${p}`,
+      );
     }
     this.files.set(p, text.replace(oldString, newString));
     return 1;
+  }
+
+  async deleteFile(p: string): Promise<void> {
+    if (!this.files.has(p)) throw new Error(`ENOENT: ${p}`);
+    this.files.delete(p);
   }
 
   async list(dir = "."): Promise<string[]> {
@@ -76,7 +89,10 @@ export class MemoryWorkspace implements Workspace {
     return [...this.files.keys()].filter((p) => re.test(p)).sort();
   }
 
-  async grep(pattern: string, opts?: { path?: string; glob?: string }): Promise<string[]> {
+  async grep(
+    pattern: string,
+    opts?: { path?: string; glob?: string },
+  ): Promise<string[]> {
     const re = new RegExp(pattern);
     const fileRe = opts?.glob
       ? globToRegExp(opts.glob.includes("/") ? opts.glob : `**/${opts.glob}`)
@@ -92,7 +108,10 @@ export class MemoryWorkspace implements Workspace {
     return hits;
   }
 
-  async exec(command: string, _opts?: { timeoutMs?: number }): Promise<CommandResult> {
+  async exec(
+    command: string,
+    _opts?: { timeoutMs?: number },
+  ): Promise<CommandResult> {
     return this.execHandler(command);
   }
 
