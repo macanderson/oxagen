@@ -2,6 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { agentExecutionRecord } from "@oxagen/oxagen/contracts/agent.execution.record";
 import { schema, withTenantDb } from "@oxagen/database";
 import { logger } from "./logger";
+import { projectToolUsageBestEffort } from "./project-tool-usage";
 
 /**
  * recordExecution() handler: persist complete agent execution with steps and tool calls.
@@ -121,6 +122,8 @@ export const agentExecutionRecordHandler: CapabilityHandler<
       createdAt: execution.createdAt,
     };
   });
+
+  await projectToolUsageBestEffort(result.executionId, ctx);
 
   return result;
 };
