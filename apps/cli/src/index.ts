@@ -9,7 +9,7 @@
  *
  * The coding agent itself was retired in the Stella cutover — agentic work
  * lives in the `stella` CLI, which talks to Oxagen over MCP/API. The Commander
- * command tree lives in ./program.tsx. This entry stays thin: settings
+ * command tree lives in ./program.ts. This entry stays thin: settings
  * projection, then hand off to the tree.
  */
 import { buildProgram } from "./program.js";

@@ -3,7 +3,7 @@
  *
  * The CLI requires an active Oxagen session (token + org + workspace) before
  * any agent-path command runs. Call `requireSession()` at the top of the
- * default action in index.tsx; it exits 1 with a clear error if the session
+ * default action in index.ts; it exits 1 with a clear error if the session
  * is missing so the user knows exactly what to do next.
  */
 import { getApiUrl, getOrgId, getToken, getWorkspaceId } from "./config.js";
@@ -95,7 +95,8 @@ export function requireSession(): Session {
   // Explicit local BYOK (OXAGEN_LOCAL=1 / `--local`): use the user's own key
   // (gateway or Anthropic) even when logged in — the user wants their own
   // key/models, not the platform.
-  if (forceLocalByok() && resolveAiCredential() !== null) return localByokSession();
+  if (forceLocalByok() && resolveAiCredential() !== null)
+    return localByokSession();
 
   if (!token || !orgSlug || !workspaceSlug) {
     // Benchmark bypass (OXAGEN_ALLOW_NO_SESSION=1): headless bench containers

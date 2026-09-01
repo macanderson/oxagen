@@ -1,7 +1,7 @@
 /**
  * program.ts — The Commander command tree for the `oxagen` CLI.
  *
- * Extracted from index.tsx so the exact same command set that drives
+ * Extracted from index.ts so the exact same command set that drives
  * `oxagen --help` is the single source of truth for command introspection
  * (commands/meta.ts describeCliCommands). Building the program has no side
  * effects — every handler is a dynamic `import()` inside its action — so a
@@ -33,7 +33,7 @@ function collectPair(value: string, previous: string[]): string[] {
 
 /**
  * Construct the full `oxagen` command tree. Pure: no parsing, no I/O, no
- * side effects — `index.tsx` parses it, the REPL only introspects it.
+ * side effects — `index.ts` parses it, the REPL only introspects it.
  */
 export function buildProgram(): Command {
   const program = new Command();

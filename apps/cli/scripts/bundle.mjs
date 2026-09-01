@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const cliRoot = resolve(here, "..");
-const entry = resolve(cliRoot, "src/index.tsx");
+const entry = resolve(cliRoot, "src/index.ts");
 const outfile = resolve(cliRoot, "dist-standalone/oxagen.mjs");
 
 /**
@@ -44,7 +44,7 @@ const tsExtensionResolver = {
         `${base}.js`,
         `${base}.mjs`,
         resolve(base, "index.ts"),
-        resolve(base, "index.tsx"),
+        resolve(base, "index.ts"),
       ]) {
         if (existsSync(cand)) return { path: cand };
       }

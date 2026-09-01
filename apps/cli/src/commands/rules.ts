@@ -23,7 +23,7 @@
  * and goes to stdout; validation errors exit 2 (`usage`) and not-found errors
  * exit 1 — both as uniform `✗ …` stderr lines, never touching stdout. Every
  * handler takes a trailing {@link CommandWriter} so it is REPL-bridge safe.
- * (`list`/`show`/`check`/`new` have no `--json` flag registered in program.tsx.)
+ * (`list`/`show`/`check`/`new` have no `--json` flag registered in program.ts.)
  */
 import { join } from "node:path";
 import {

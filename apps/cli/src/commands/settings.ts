@@ -21,7 +21,7 @@
  * a bad scope argument, exit 1 for a write failure). `--json` rides on the
  * existing `ctx` arg (`ctx.json`) rather than a new positional, so the REPL
  * cli-bridge's `(ctx, writer)` call sites and the trailing `writer` param are
- * untouched. NOTE: program.tsx does not yet declare a `--json` option on these
+ * untouched. NOTE: program.ts does not yet declare a `--json` option on these
  * subcommands, so json mode is not reachable from the shell until it passes
  * `{ json: opts.json }` in the ctx arg — see the report.
  */
@@ -85,7 +85,12 @@ export function settingsShow(
   const { settings, scopes } = loadSettings({ ...ctx, noCache: true });
   const summaries: ScopeSummary[] = scopes
     .filter((s) => s.settings || s.error)
-    .map((s) => ({ scope: s.scope, path: s.path, ok: !s.error, error: s.error ?? null }));
+    .map((s) => ({
+      scope: s.scope,
+      path: s.path,
+      ok: !s.error,
+      error: s.error ?? null,
+    }));
   out.data({ settings, scopes: summaries }, () => {
     const lines = [
       "Effective settings (merged user → project → local):",
@@ -126,7 +131,10 @@ export function settingsPath(
     [
       "Settings scope files (lowest → highest precedence):",
       "",
-      ...infos.map((i) => `  ${i.scope.padEnd(8)} ${i.path}  ${i.exists ? "(exists)" : "(absent)"}`),
+      ...infos.map(
+        (i) =>
+          `  ${i.scope.padEnd(8)} ${i.path}  ${i.exists ? "(exists)" : "(absent)"}`,
+      ),
     ].join("\n"),
   );
 }
@@ -158,7 +166,10 @@ export function settingsSet(
   const scope = scopeArg ?? "project";
   if (!isScope(scope)) {
     process.exitCode = 2;
-    out.error(`Unknown scope "${scope}". Use one of: ${SCOPES.join(", ")}`, "usage");
+    out.error(
+      `Unknown scope "${scope}". Use one of: ${SCOPES.join(", ")}`,
+      "usage",
+    );
     return;
   }
   let path: string;
@@ -168,7 +179,10 @@ export function settingsSet(
     out.error(err, "error");
     return;
   }
-  out.data({ key, value, scope, path }, () => `✓ ${key} = ${value}  (${scope}: ${path})`);
+  out.data(
+    { key, value, scope, path },
+    () => `✓ ${key} = ${value}  (${scope}: ${path})`,
+  );
   if (shellShadowsSettingsKey(key)) {
     const envVar = envVarForSettingsKey(key);
     out.warn(
@@ -193,13 +207,22 @@ export function settingsValidate(
   const { scopes } = loadSettings({ ...ctx, noCache: true });
   const results: ScopeValidation[] = scopes
     .filter((s) => s.settings || s.error) // absent file — nothing to validate
-    .map((s) => ({ scope: s.scope, path: s.path, ok: !s.error, error: s.error ?? null }));
+    .map((s) => ({
+      scope: s.scope,
+      path: s.path,
+      ok: !s.error,
+      error: s.error ?? null,
+    }));
   const ok = results.every((r) => r.ok);
   if (!ok) process.exitCode = 1;
   out.data({ ok, checked: results.length, results }, () => {
     if (results.length === 0) return "No settings files found.";
     return results
-      .map((r) => (r.ok ? `✓ ${r.scope} (${r.path})` : `✗ ${r.scope} (${r.path}): ${r.error}`))
+      .map((r) =>
+        r.ok
+          ? `✓ ${r.scope} (${r.path})`
+          : `✗ ${r.scope} (${r.path}): ${r.error}`,
+      )
       .join("\n");
   });
 }
@@ -213,7 +236,10 @@ export function settingsInit(
   const scope = scopeArg ?? "project";
   if (!isScope(scope)) {
     process.exitCode = 2;
-    out.error(`Unknown scope "${scope}". Use one of: ${SCOPES.join(", ")}`, "usage");
+    out.error(
+      `Unknown scope "${scope}". Use one of: ${SCOPES.join(", ")}`,
+      "usage",
+    );
     return;
   }
   const { path, created } = writeStarterSettings({ ...ctx, scope });

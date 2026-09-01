@@ -27,8 +27,8 @@
     "directory": "apps/cli"
   },
   "scripts": {
-    "dev": "tsx src/index.tsx",
-    "start": "tsx src/index.tsx",
+    "dev": "tsx src/index.ts",
+    "start": "tsx src/index.ts",
     "build": "tsc && node scripts/copy-runtime-assets.mjs",
     "bundle": "node scripts/bundle.mjs",
     "prepublish:standalone": "node scripts/prepare-standalone-publish.mjs",
