@@ -4,7 +4,7 @@
 // V8 coverage tracer and return the EXECUTED PATH: which repo files (and which
 // functions in them) actually ran, ranked. Phase 2 "debugger in the loop" v1
 // (docs/ideas/agentic-cli-roadmap-2026-07-10.md): debugging grounded in runtime
-// truth instead of grep-and-guess — the model reads the files the failure
+// truth instead of search-and-guess — the model reads the files the failure
 // actually traversed, not the files whose names looked relevant.
 //
 // ADR-021: ZERO model calls. The trace summarization is a deterministic node
@@ -13,8 +13,8 @@
 // bounded, typed ranking does.
 //
 // STATE, not STRUCTURE: this answers "what code did this failing test actually
-// execute?" — a runtime STATE question. "What tests cover symbol X?" stays with
-// code_graph; "does it pass?" stays with test_unit_run.
+// execute?" — a runtime STATE question. "What tests cover symbol X?" is a search;
+// "does it pass?" stays with test_unit_run.
 
 import { tool, type Tool } from "ai";
 import { z } from "zod";
@@ -24,7 +24,11 @@ import { parseVitestJson, shQuote, clipStr, MAX_STDERR_TAIL } from "./parse";
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_TIMEOUT_MS = 600_000;
 /** Ceiling on ranked files reported back to the model. */
-export const TRACE_FILE_CAPS = { minimal: 12, standard: 20, verbose: 32 } as const;
+export const TRACE_FILE_CAPS = {
+  minimal: 12,
+  standard: 20,
+  verbose: 32,
+} as const;
 /** Top executed function names reported per file. */
 const TOP_FUNCTIONS_PER_FILE = 8;
 /** Failing assertions carried alongside the trace. */
@@ -92,13 +96,13 @@ export function buildTraceSummarizeCommand(opts: {
     "let scanned=0;const rows=[];",
     "for(const[abs,cov]of Object.entries(doc)){",
     "scanned++;",
-    "if(!abs.startsWith(root)||abs.includes(\"node_modules\"))continue;",
+    'if(!abs.startsWith(root)||abs.includes("node_modules"))continue;',
     "const f=cov.f||{},fnMap=cov.fnMap||{};",
     "const names=[];let n=0;",
     "for(const[id,count]of Object.entries(f)){",
     "if(!(count>0))continue;",
     "const meta=fnMap[id];",
-    'const name=meta&&meta.name;',
+    "const name=meta&&meta.name;",
     'if(name==="(empty-report)")continue;',
     "n++;",
     'if(name&&!name.startsWith("(anonymous"))names.push(name);',
@@ -142,7 +146,10 @@ export function parseTraceSummary(
           : [],
       });
     }
-    return { files, scanned: typeof doc.scanned === "number" ? doc.scanned : 0 };
+    return {
+      files,
+      scanned: typeof doc.scanned === "number" ? doc.scanned : 0,
+    };
   } catch {
     return null;
   }
@@ -162,13 +169,15 @@ export function buildTestTraceRunTool(
       "Run ONE test file under a V8 execution tracer and return the EXECUTED PATH — which " +
       "repo files (and which functions in them) the test actually ran, ranked — alongside the " +
       "typed pass/fail summary. Use this FIRST when debugging a failing test instead of " +
-      "grepping for suspects: read the top executedPath files, they are the code the failure " +
+      "searching for suspects: read the top executedPath files, they are the code the failure " +
       "actually traversed. Optionally narrow to one test with `test_name`. Anti-triggers: " +
       "for plain pass/fail over several files use `test_unit_run`; for 'what tests cover " +
-      "symbol X' (structure) use `code_graph`; this tool runs exactly one test file, never " +
+      "symbol X' use `search`; this tool runs exactly one test file, never " +
       "a package or the repo.",
     inputSchema: z.object({
-      test_file: z.string().describe("The single test file to trace (repo-relative or absolute)."),
+      test_file: z
+        .string()
+        .describe("The single test file to trace (repo-relative or absolute)."),
       test_name: z
         .string()
         .optional()
@@ -191,7 +200,10 @@ export function buildTestTraceRunTool(
         max_files ?? TRACE_FILE_CAPS.standard,
         TRACE_FILE_CAPS.verbose,
       );
-      const timeout = Math.min(timeout_ms ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
+      const timeout = Math.min(
+        timeout_ms ?? DEFAULT_TIMEOUT_MS,
+        MAX_TIMEOUT_MS,
+      );
       // Unique per-invocation dir keeps parallel turns from cross-reading.
       const coverageDir = `.oxagen-trace-${Date.now().toString(36)}-${process.pid}`;
       const runCommand = buildTraceCommand({
@@ -212,7 +224,11 @@ export function buildTestTraceRunTool(
           error: `Failed to run traced vitest: ${err instanceof Error ? err.message : String(err)}`,
         };
       }
-      deps.onEvent?.({ type: "command", command: runCommand, exitCode: run.exitCode });
+      deps.onEvent?.({
+        type: "command",
+        command: runCommand,
+        exitCode: run.exitCode,
+      });
 
       try {
         if (run.timedOut) {
@@ -231,7 +247,8 @@ export function buildTestTraceRunTool(
           root: workspace.root,
           maxFiles,
         });
-        let executedPath: { files: ExecutedFile[]; scanned: number } | null = null;
+        let executedPath: { files: ExecutedFile[]; scanned: number } | null =
+          null;
         try {
           const summary = await workspace.exec(summarizeCommand, {
             timeoutMs: 30_000,
@@ -243,7 +260,10 @@ export function buildTestTraceRunTool(
         }
 
         if (parsed.parseError) {
-          const tail = clipStr(run.stderr.slice(-MAX_STDERR_TAIL), MAX_STDERR_TAIL);
+          const tail = clipStr(
+            run.stderr.slice(-MAX_STDERR_TAIL),
+            MAX_STDERR_TAIL,
+          );
           return {
             testFile: test_file,
             parseError: true,
@@ -266,7 +286,7 @@ export function buildTestTraceRunTool(
           traceDegraded: executedPath === null || undefined,
           hint:
             parsed.failed > 0 && executedPath && executedPath.files.length > 0
-              ? "Ground the debugging in executedPath: these files/functions actually ran during the failure — read the top entries before grepping elsewhere."
+              ? "Ground the debugging in executedPath: these files/functions actually ran during the failure — read the top entries before searching elsewhere."
               : undefined,
         };
       } finally {

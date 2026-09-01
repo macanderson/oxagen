@@ -63,11 +63,9 @@ export class UnsupportedTurnContentError extends Error {
 /**
  * Build the turn's opening transcript.
  *
- * The ordering — system, then history, then the new instruction — is the same
- * one `runCodingAgent` assembles, so a turn's prompt prefix is unchanged by
- * which engine runs it. That matters beyond tidiness: an identical prefix is
- * what lets Phase D compare the two engines on cost without the comparison
- * being confounded by a different cache-hit rate.
+ * The ordering — system, then history, then the new instruction — is fixed,
+ * because the prefix a turn opens with is what the provider's prompt cache is
+ * keyed on. Reordering it silently costs every turn its cache hit.
  */
 export function toCompletionMessages(args: {
   system: string;

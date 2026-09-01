@@ -201,19 +201,6 @@ export type CodingEvent =
   | { type: "command"; command: string; exitCode: number }
   | { type: "final-diff"; diff: string; changedFiles: string[] };
 
-export interface CodeGraphProvider {
-  query(
-    operation:
-      | "search"
-      | "file_symbols"
-      | "dependents"
-      | "imports"
-      | "semantic_search",
-    query: string,
-    limit?: number,
-  ): Promise<string>;
-}
-
 /** The user's reply to an {@link AskUserCallback} clarification question. */
 export interface AskUserResponse {
   /**
@@ -231,8 +218,8 @@ export interface AskUserResponse {
  * the `ask_user` tool so the agent can pause and pose a single structured
  * multiple-choice question; when absent — every headless/one-shot/chat surface
  * — the tool is never advertised, so the model cannot call a tool that would
- * block forever with nobody to answer it. Mirrors {@link CodeGraphProvider}:
- * the presence of the capability, not a surface flag, gates the tool.
+ * block forever with nobody to answer it. The presence of the capability, not a
+ * surface flag, gates the tool.
  *
  * The callback resolves with the user's {@link AskUserResponse}. It MAY block
  * for as long as the human takes to decide — the caller (the REPL overlay) is
@@ -299,7 +286,6 @@ export interface RunCodingAgentOptions {
   /** Compact the transcript once its estimated tokens exceed this fraction of the window (default 0.8). */
   compactionThreshold?: number;
   readOnly?: boolean;
-  codeGraph?: CodeGraphProvider;
   /**
    * Speculative tool execution (ADR-030): prefetch the model's likely next
    * reads (read_file/grep/glob follow-ups) into a per-turn promise cache while
@@ -357,7 +343,7 @@ export interface RunCodingAgentOptions {
   fileLock?: FileLockProvider | null;
   /**
    * Identity the file-lock port acquires/releases under. `agentId` MUST be
-   * stable across every `runCodingAgent` call within the SAME turn (so a
+   * stable across every execution segment within the SAME turn (so a
    * revision round renews its own lock instead of conflicting with itself)
    * but DIFFERENT across concurrently-running turns/subagent children (so two
    * live agents correctly see each other as conflicting holders).
@@ -433,7 +419,7 @@ export interface RunCodingAgentOptions {
 }
 
 /**
- * Why {@link runCodingAgent} ended the turn. Absent ⇒ the model finished
+ * Why the engine ended the turn. Absent ⇒ the model finished
  * naturally (a non-`tool-calls` finish reason).
  *
  * - `budget` — a per-turn dollar ceiling stopped it (the `budgetGuard` returned
@@ -464,3 +450,26 @@ export interface RunCodingAgentResult {
    */
   stopReason?: TurnStopReason;
 }
+
+// ── Turn defaults ────────────────────────────────────────────────────────────
+
+/**
+ * The model a turn runs on when a caller passes no `model` at all (as opposed
+ * to routing through a tier — see
+ * `router/model-router.ts`'s `modelForTier`, a separate concept). Exported so
+ * a caller that needs to know/label what this default resolves to (e.g. the
+ * pipeline's bare-mode accounting in `pipeline/index.ts`) uses this SAME
+ * constant instead of a second hardcoded literal that can drift out of sync.
+ */
+export const DEFAULT_AGENT_MODEL = "anthropic/claude-fable-5";
+
+/**
+ * Default cap on tool-using steps per turn — a runaway backstop, NOT a
+ * functional limit. A turn ends naturally the moment the model
+ * returns a step with no tool call (its final answer); this cap only fires if
+ * the model loops on tools without ever settling, bounding billed LLM calls
+ * (one per step) before a stuck loop burns unbounded credits. Exported as the
+ * single source of truth so every surface (REST chat, A2A bridge, app chat)
+ * shares one value instead of hardcoding a literal that can silently drift.
+ */
+export const DEFAULT_MAX_AGENT_STEPS = 256;

@@ -867,28 +867,27 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_ENGINE: {
     group: "Inngest",
     description:
-      "Which engine runs an agent turn (agent-engine v2 Phase C — " +
-      "docs/specs/agent-engine-v2/plan.md): `ts` for the TypeScript step loop, " +
-      "`stella` to hand the turn to a `stella-serve` sidecar over loopback. Defaults to `ts`. " +
-      "A run's own RunSpec v2 enginePolicy.requested_engine wins over this, which is what makes " +
-      "a shadow slice a property of the run rather than of the deployment. An unrecognised " +
-      "value fails the process at boot rather than silently running `ts`.",
+      "Which engine runs an agent turn: `stella`, which hands the turn to a `stella-serve` " +
+      "sidecar over loopback, and which is now the only value. Defaults to `stella`, so this " +
+      "normally goes unset. The TypeScript step loop `ts` once selected has been deleted; " +
+      "setting it fails the process at boot with a message saying the engine was removed, " +
+      "rather than silently running the other one. A run's own RunSpec v2 " +
+      "enginePolicy.requested_engine still wins over this and is refused the same way.",
     secret: false,
     clientExposed: false,
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
-    placeholder: "ts",
+    placeholder: "stella",
   },
   STELLA_SERVE_BIN: {
     group: "Inngest",
     description:
       "Absolute path to the `stella-serve` binary the Stella engine path boots (agent-engine v2 " +
-      "Phase C). Falls back to `stella-serve` on PATH. Needed on a worker running " +
-      "OXAGEN_ENGINE=stella — there is deliberately no fallback to the TS engine when the " +
-      "binary is missing, so a turn that asked for Stella fails rather than quietly running the " +
-      "other one. One sidecar is spawned per worker slot, bound to loopback with a per-process " +
-      "token.",
+      "Phase C). Falls back to `stella-serve` on PATH. Needed on every worker, since Stella is " +
+      "the only engine: a missing binary fails the turn, and there is no longer another engine " +
+      "to quietly run instead. One sidecar is spawned per worker slot, bound to loopback with a " +
+      "per-process token.",
     secret: false,
     clientExposed: false,
     services: [],

@@ -2,7 +2,7 @@
  * Tests for the engine's evaluate sub-package.
  *
  * Tests evaluatePrompt, judgeCompleteness, buildRevisionPrompt, and
- * extractCandidates via mocked AgentAi ports — never hits the gateway.
+ * enhancePrompt via mocked AgentAi ports — never hits the gateway.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { evaluatePrompt, LOCAL_EVALUATOR } from "./evaluator";
@@ -14,7 +14,7 @@ import {
   pickAdvisorModel,
   DEFAULT_ADVISOR_MODEL,
 } from "./judge";
-import { extractCandidates, enhancePrompt } from "./prompt-enhancer";
+import { enhancePrompt } from "./prompt-enhancer";
 import type { AgentAi } from "../ports";
 import { emptyUsage } from "../types";
 
@@ -44,7 +44,9 @@ const LLM_EVALUATOR = "anthropic/claude-haiku-4.5";
 describe("evaluatePrompt", () => {
   it("defaults to the local heuristic coordinator — no model call", async () => {
     const generateObject = vi.fn();
-    const ai = makeAi({ generateObject: generateObject as AgentAi["generateObject"] });
+    const ai = makeAi({
+      generateObject: generateObject as AgentAi["generateObject"],
+    });
 
     const result = await evaluatePrompt({ prompt: "fix the auth bug" }, ai);
 
@@ -75,7 +77,10 @@ describe("evaluatePrompt", () => {
     });
 
     const result = await evaluatePrompt(
-      { prompt: "please fix the login timeout bug in src/auth/session.ts", model: LLM_EVALUATOR },
+      {
+        prompt: "please fix the login timeout bug in src/auth/session.ts",
+        model: LLM_EVALUATOR,
+      },
       ai,
     );
 
@@ -90,10 +95,15 @@ describe("evaluatePrompt", () => {
 
   it("falls back to heuristic when ai.generateObject throws", async () => {
     const ai = makeAi({
-      generateObject: vi.fn().mockRejectedValue(new Error("gateway unavailable")),
+      generateObject: vi
+        .fn()
+        .mockRejectedValue(new Error("gateway unavailable")),
     });
 
-    const result = await evaluatePrompt({ prompt: "fix the auth bug", model: LLM_EVALUATOR }, ai);
+    const result = await evaluatePrompt(
+      { prompt: "fix the auth bug", model: LLM_EVALUATOR },
+      ai,
+    );
 
     expect(result.fallback).toBe(true);
     // Auth-related prompt → precise tier heuristically
@@ -132,7 +142,10 @@ describe("evaluatePrompt", () => {
       }),
     });
 
-    const result = await evaluatePrompt({ prompt: "rename the thing", model: LLM_EVALUATOR }, ai);
+    const result = await evaluatePrompt(
+      { prompt: "rename the thing", model: LLM_EVALUATOR },
+      ai,
+    );
     expect(result.refinedPrompt).toBe("rename the thing");
   });
 
@@ -153,7 +166,10 @@ describe("evaluatePrompt", () => {
       }),
     });
 
-    const result = await evaluatePrompt({ prompt: "do it", model: LLM_EVALUATOR }, ai);
+    const result = await evaluatePrompt(
+      { prompt: "do it", model: LLM_EVALUATOR },
+      ai,
+    );
     expect(result.completeness).toBe(100);
     expect(result.complexity).toBe(0);
   });
@@ -319,7 +335,13 @@ describe("judgeCompleteness", () => {
 
   it("puts the git diff and command outputs (evidence) into the judge prompt", async () => {
     const gen = vi.fn().mockResolvedValue({
-      object: { complete: true, confidence: 90, findings: [], remainingWork: [], reasoning: "ok" },
+      object: {
+        complete: true,
+        confidence: 90,
+        findings: [],
+        remainingWork: [],
+        reasoning: "ok",
+      },
       usage: emptyUsage(),
     });
     const ai = makeAi({ generateObject: gen });
@@ -331,7 +353,9 @@ describe("judgeCompleteness", () => {
         filesTouched: ["math_utils.py"],
         commandsRun: ["pytest -q"],
         diff: "--- a/math_utils.py\n+++ b/math_utils.py\n-    return a - b\n+    return a + b",
-        commandOutputs: [{ command: "pytest -q", output: "2 passed in 0.01s", ok: true }],
+        commandOutputs: [
+          { command: "pytest -q", output: "2 passed in 0.01s", ok: true },
+        ],
         steps: 4,
         executorModel: "anthropic/claude-sonnet-5",
       },
@@ -348,11 +372,19 @@ describe("judgeCompleteness", () => {
 
   it("marks a command FAILED and preserves the failing tail of its output", async () => {
     const gen = vi.fn().mockResolvedValue({
-      object: { complete: false, confidence: 85, findings: ["tests fail"], remainingWork: ["fix"], reasoning: "failing tests" },
+      object: {
+        complete: false,
+        confidence: 85,
+        findings: ["tests fail"],
+        remainingWork: ["fix"],
+        reasoning: "failing tests",
+      },
       usage: emptyUsage(),
     });
     const ai = makeAi({ generateObject: gen });
-    const longOutput = "collecting…\n".repeat(500) + "E   assert add(2,3)==5\nFAILED test_math.py::test_add";
+    const longOutput =
+      "collecting…\n".repeat(500) +
+      "E   assert add(2,3)==5\nFAILED test_math.py::test_add";
 
     await judgeCompleteness(
       {
@@ -375,7 +407,10 @@ describe("judgeCompleteness", () => {
 
 describe("pickJudgePanel", () => {
   it("returns distinct cross-vendor models, excluding the executor", () => {
-    const panel = pickJudgePanel("anthropic/claude-opus-4-8", "openai/gpt-5,google/gemini-2.5-pro,anthropic/claude-opus-4-8,openai/gpt-5");
+    const panel = pickJudgePanel(
+      "anthropic/claude-opus-4-8",
+      "openai/gpt-5,google/gemini-2.5-pro,anthropic/claude-opus-4-8,openai/gpt-5",
+    );
     expect(panel).toContain("openai/gpt-5");
     expect(panel).toContain("google/gemini-2.5-pro");
     expect(panel).not.toContain("anthropic/claude-opus-4-8"); // executor excluded
@@ -418,16 +453,32 @@ describe("judgePanel", () => {
 
   it("is complete only on a strict majority; unions dissenting findings otherwise", async () => {
     // 2 of 3 say incomplete → panel INCOMPLETE, findings unioned.
-    const ai = judgeAi({ "openai/gpt-5": false, "google/gemini-2.5-pro": false, "x/y": true });
-    const verdict = await judgePanel(base, ai, ["openai/gpt-5", "google/gemini-2.5-pro", "x/y"]);
+    const ai = judgeAi({
+      "openai/gpt-5": false,
+      "google/gemini-2.5-pro": false,
+      "x/y": true,
+    });
+    const verdict = await judgePanel(base, ai, [
+      "openai/gpt-5",
+      "google/gemini-2.5-pro",
+      "x/y",
+    ]);
     expect(verdict.complete).toBe(false);
     expect(verdict.findings.length).toBeGreaterThanOrEqual(2);
     expect(verdict.model).toContain("panel(");
   });
 
   it("is complete when a majority agree it's complete", async () => {
-    const ai = judgeAi({ "openai/gpt-5": true, "google/gemini-2.5-pro": true, "x/y": false });
-    const verdict = await judgePanel(base, ai, ["openai/gpt-5", "google/gemini-2.5-pro", "x/y"]);
+    const ai = judgeAi({
+      "openai/gpt-5": true,
+      "google/gemini-2.5-pro": true,
+      "x/y": false,
+    });
+    const verdict = await judgePanel(base, ai, [
+      "openai/gpt-5",
+      "google/gemini-2.5-pro",
+      "x/y",
+    ]);
     expect(verdict.complete).toBe(true);
     expect(verdict.findings).toEqual([]);
   });
@@ -439,7 +490,8 @@ describe("judgePanel", () => {
     // would hide an out-of-credits account behind a falsely reassuring verdict.
     const ai = makeAi({
       generateObject: vi.fn().mockImplementation((args: { model: string }) => {
-        if (args.model === "google/gemini-2.5-pro") return Promise.reject(FATAL_ERROR);
+        if (args.model === "google/gemini-2.5-pro")
+          return Promise.reject(FATAL_ERROR);
         return Promise.resolve({
           object: {
             complete: true,
@@ -498,154 +550,21 @@ describe("buildRevisionPrompt", () => {
   });
 });
 
-// ── extractCandidates ─────────────────────────────────────────────────────────
-
-describe("extractCandidates", () => {
-  it("extracts backtick symbols", () => {
-    const { symbols } = extractCandidates("Fix the `loginUser` function");
-    expect(symbols).toContain("loginUser");
-  });
-
-  it("extracts backtick paths", () => {
-    const { paths } = extractCandidates("The bug is in `src/auth/session.ts`");
-    expect(paths).toContain("src/auth/session.ts");
-  });
-
-  it("extracts CamelCase identifiers from prose", () => {
-    const { symbols } = extractCandidates("The GraphNode component is broken");
-    expect(symbols).toContain("GraphNode");
-  });
-
-  it("extracts snake_case identifiers from prose", () => {
-    const { symbols } = extractCandidates("fix the build_tools script");
-    expect(symbols).toContain("build_tools");
-  });
-
-  it("deduplicates candidates", () => {
-    const { symbols } = extractCandidates("`loginUser` and `loginUser` again");
-    expect(symbols.filter((s) => s === "loginUser").length).toBe(1);
-  });
-
-  it("returns empty arrays for plain text", () => {
-    const { symbols, paths } = extractCandidates("fix the bug please");
-    expect(symbols).toHaveLength(0);
-    expect(paths).toHaveLength(0);
-  });
-
-  it("drops capitalized prose stopwords but keeps real symbols", () => {
-    const { symbols } = extractCandidates(
-      "Fix the ASCIIUsernameValidator. Replace the regex and Confirm the change. However the FixDecimalInputMixin stays.",
-    );
-    expect(symbols).toContain("ASCIIUsernameValidator");
-    expect(symbols).toContain("FixDecimalInputMixin");
-    expect(symbols).not.toContain("Fix");
-    expect(symbols).not.toContain("Replace");
-    expect(symbols).not.toContain("Confirm");
-    expect(symbols).not.toContain("However");
-  });
-
-  it("still extracts stopword-shaped tokens when backticked (explicit code quote)", () => {
-    const { symbols } = extractCandidates("call `fix` here");
-    expect(symbols).toContain("fix");
-  });
-});
-
 // ── enhancePrompt ─────────────────────────────────────────────────────────────
 
 describe("enhancePrompt", () => {
-  // Disable localization (F1) for these tests — they predate the feature
-  // and expect specific semantic fallback behavior.
-  let originalLocalize: string | undefined;
-
-  beforeEach(() => {
-    originalLocalize = process.env.OXAGEN_LOCALIZE;
-    process.env.OXAGEN_LOCALIZE = "0";
-  });
-
-  afterEach(() => {
-    if (originalLocalize === undefined) {
-      delete process.env.OXAGEN_LOCALIZE;
-    } else {
-      process.env.OXAGEN_LOCALIZE = originalLocalize;
-    }
-  });
-
-  it("bounds the code-graph pass with timeoutMs and degrades to no context", async () => {
-    // A provider stuck on a cold build: the query never resolves.
-    const codeGraph = { query: vi.fn(() => new Promise<string>(() => {})) };
-    const started = Date.now();
-    const result = await enhancePrompt({
-      prompt: "fix the `loginUser` function in `src/auth/session.ts`",
-      codeGraph,
-      timeoutMs: 50,
-    });
-    expect(Date.now() - started).toBeLessThan(2_000);
-    expect(result.context).toBe("");
-    expect(result.resolved).toHaveLength(0);
-    // The stuck query was abandoned, not rejected — enhancement is best-effort.
-    expect(result.prompt).toContain("loginUser");
-  });
-
-  it("keeps whatever resolved before the deadline expired", async () => {
-    let calls = 0;
-    const codeGraph = {
-      query: vi.fn((): Promise<string> => {
-        calls += 1;
-        // First query resolves instantly; later ones hang (budget exhausts).
-        return calls === 1
-          ? Promise.resolve("src/auth/session.ts:5: loginUser function")
-          : new Promise<string>(() => {});
-      }),
-    };
-    const result = await enhancePrompt({
-      prompt: "fix `loginUser` and `parseToken` and `refreshSession`",
-      codeGraph,
-      timeoutMs: 100,
-    });
-    expect(result.resolved).toContain("loginUser");
-    expect(result.context).toContain("loginUser");
-  });
-
-  it("returns original prompt when no codeGraph or memory", async () => {
+  it("returns the original prompt when no memory is wired", async () => {
     const result = await enhancePrompt({ prompt: "fix the bug" });
     expect(result.prompt).toBe("fix the bug");
     expect(result.context).toBe("");
-    expect(result.resolved).toHaveLength(0);
     expect(result.hasMemory).toBe(false);
-  });
-
-  it("injects code graph results for matching symbols", async () => {
-    const codeGraph = {
-      query: vi.fn().mockResolvedValue("src/auth/session.ts:5: loginUser function"),
-    };
-
-    const result = await enhancePrompt({
-      prompt: "fix the `loginUser` function",
-      codeGraph,
-    });
-
-    expect(result.context).toContain("loginUser");
-    expect(result.resolved).toContain("loginUser");
-    expect(result.prompt).toContain("code graph");
-  });
-
-  it("skips code graph results that are misses", async () => {
-    const codeGraph = {
-      query: vi.fn().mockResolvedValue("No symbols matching foo"),
-    };
-
-    const result = await enhancePrompt({
-      prompt: "fix the `foo` function",
-      codeGraph,
-    });
-
-    expect(result.resolved).toHaveLength(0);
-    expect(result.context).toBe("");
   });
 
   it("injects memory context when provider returns non-empty string", async () => {
     const memory = {
-      recallContext: vi.fn().mockResolvedValue("Remember: always run tests after changes"),
+      recallContext: vi
+        .fn()
+        .mockResolvedValue("Remember: always run tests after changes"),
       remember: vi.fn(),
     };
 
@@ -659,6 +578,17 @@ describe("enhancePrompt", () => {
     expect(result.context).toContain("always run tests");
   });
 
+  it("treats whitespace-only recall as no memory", async () => {
+    const memory = {
+      recallContext: vi.fn().mockResolvedValue("   \n  "),
+      remember: vi.fn(),
+    };
+
+    const result = await enhancePrompt({ prompt: "make a change", memory });
+    expect(result.hasMemory).toBe(false);
+    expect(result.prompt).toBe("make a change");
+  });
+
   it("handles memory provider throwing gracefully", async () => {
     const memory = {
       recallContext: vi.fn().mockRejectedValue(new Error("memory error")),
@@ -668,112 +598,5 @@ describe("enhancePrompt", () => {
     const result = await enhancePrompt({ prompt: "test", memory });
     expect(result.hasMemory).toBe(false);
     expect(result.prompt).toBe("test");
-  });
-
-  it("handles code graph throwing gracefully", async () => {
-    const codeGraph = {
-      query: vi.fn().mockRejectedValue(new Error("graph error")),
-    };
-
-    const result = await enhancePrompt({
-      prompt: "fix `loginUser`",
-      codeGraph,
-    });
-
-    expect(result.resolved).toHaveLength(0);
-    expect(result.prompt).toBe("fix `loginUser`");
-  });
-
-  it("uses extraQueries for additional symbol lookups", async () => {
-    const codeGraph = {
-      query: vi.fn().mockResolvedValue("found: sessionStore definition"),
-    };
-
-    const result = await enhancePrompt({
-      prompt: "fix the session timeout",
-      codeGraph,
-      extraQueries: ["sessionStore"],
-    });
-
-    expect(result.resolved).toContain("sessionStore");
-  });
-
-  it("records retrieval stats", async () => {
-    const codeGraph = {
-      query: vi.fn().mockResolvedValue("No symbols matching xyz"),
-    };
-
-    const result = await enhancePrompt({
-      prompt: "fix `xyz`",
-      codeGraph,
-    });
-
-    expect(result.retrieval.symbolsQueried).toContain("xyz");
-    expect(result.retrieval.unresolved).toContain("xyz");
-    expect(result.retrieval.resolved).toHaveLength(0);
-  });
-
-  it("falls back to semantic_search for a conceptual prompt with zero literal tokens", async () => {
-    // "project level configurations for the cli app" names no symbol or path —
-    // extractCandidates yields nothing, so without the fallback no context
-    // would be injected at all (the exact gap this feature closes).
-    const codeGraph = {
-      query: vi.fn(async (operation: string) => {
-        if (operation === "semantic_search") {
-          return "apps/cli/oxagen.config.ts (0.81)\napps/cli/src/lib/config.ts (0.63)";
-        }
-        return "No symbols matching.";
-      }),
-    };
-
-    const result = await enhancePrompt({
-      prompt: "project level configurations for the cli app",
-      codeGraph,
-    });
-
-    expect(codeGraph.query).toHaveBeenCalledWith(
-      "semantic_search",
-      "project level configurations for the cli app",
-      expect.any(Number),
-    );
-    expect(result.usedSemanticFallback).toBe(true);
-    expect(result.context).toContain("Semantically relevant files");
-    expect(result.context).toContain("oxagen.config.ts");
-  });
-
-  it("skips the semantic fallback once literal candidates already resolved enough", async () => {
-    const codeGraph = {
-      query: vi.fn(async (operation: string, q: string) => {
-        if (operation === "search" && q === "loginUser") {
-          return "src/auth/session.ts:5: loginUser function";
-        }
-        if (operation === "file_symbols" && q === "session.ts") {
-          return "session.ts:\nfunction loginUser — session.ts:5";
-        }
-        if (operation === "semantic_search") return "should-not-be-used.ts (0.99)";
-        return "No symbols matching.";
-      }),
-    };
-
-    const result = await enhancePrompt({
-      prompt: "where is `loginUser` defined and what does `session.ts` contain?",
-      codeGraph,
-    });
-
-    expect(result.usedSemanticFallback).toBe(false);
-    expect(result.context).not.toContain("should-not-be-used.ts");
-  });
-
-  it("degrades gracefully when the code graph throws on the semantic query", async () => {
-    const codeGraph = {
-      query: vi.fn(async (operation: string) => {
-        if (operation === "semantic_search") throw new Error("gateway unavailable");
-        return "No symbols matching.";
-      }),
-    };
-
-    const result = await enhancePrompt({ prompt: "do something conceptual", codeGraph });
-    expect(result.usedSemanticFallback).toBe(false);
-    expect(result.prompt).toBe("do something conceptual");
   });
 });

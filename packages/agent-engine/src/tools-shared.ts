@@ -68,8 +68,8 @@ export function isTestPath(relPath: string): boolean {
 // This registry + the two mapping helpers are the single mechanism every future
 // structured tool reuses, so naming is decided once, not per tool.
 //
-// The core seven (read_file, write_file, edit_file, list_dir, glob, grep,
-// bash) and code_graph deliberately KEEP their plain, short model-facing names
+// The core file/exec tools (read_file, write_file, edit_file, list_dir,
+// search, bash) deliberately KEEP their plain, short model-facing names
 // (training-prior protection) and are intentionally absent from this registry
 // — they are not `domain.subject.action` and must not be renamed.
 
@@ -194,3 +194,30 @@ export function resolveLimit(
   if (limit !== undefined) return Math.max(1, Math.min(limit, caps.verbose));
   return caps[verbosity];
 }
+
+// ── Which built-in tools mutate the workspace ────────────────────────────────
+
+/**
+ * Tools that MUTATE the workspace when they execute — running one a second
+ * time re-applies its side effects. These are the built-in
+ * `buildWorkspaceTools` names (see tools.ts): `bash` (arbitrary shell),
+ * `write_file`, and `edit_file`.
+ *
+ * Two consumers, and they are the reason this is one list rather than two.
+ * `dispatch-guard.ts` refuses to run these concurrently with anything else.
+ * `@oxagen/agent-runner`'s tool mapping declares them to Stella as
+ * `read_only: false`, so the engine serializes them on its own side. A tool
+ * that mutates and is missing from one of those answers is a tool two callers
+ * can run at once.
+ *
+ * agent-runner used to keep a mirrored copy with a test scraping this file's
+ * source to pin them together, because this copy was scheduled to die with the
+ * TypeScript loop. It moved here instead, so there is one list and nothing to
+ * pin.
+ */
+export const MUTATING_TOOL_NAMES: ReadonlySet<string> = new Set<string>([
+  "bash",
+  "write_file",
+  "edit_file",
+  "delete_file",
+]);

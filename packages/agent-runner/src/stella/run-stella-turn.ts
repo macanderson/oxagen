@@ -1,6 +1,6 @@
 /**
- * Run one turn on the Stella engine, satisfying the exact contract
- * `runCodingAgent` satisfies.
+ * Run one turn on the Stella engine — the only engine — against the contract
+ * `RunCodingAgentOptions`/`RunCodingAgentResult` still name.
  *
  * Same options in (`RunCodingAgentOptions`), same result out
  * (`RunCodingAgentResult`), same `onEvent` / `onStreamPart` streams — which is
@@ -43,6 +43,7 @@ import {
 } from "@oxagen/agent-engine";
 import type { ModelMessage, ToolSet } from "ai";
 import type {
+  CompletionResult,
   CompletionUsage,
   TurnRequest,
 } from "@oxagen/stella-engine-client";
@@ -89,10 +90,10 @@ export interface StellaTurnDeps {
 /**
  * The default system prompt, resolved by the caller.
  *
- * `runCodingAgent` falls back to `buildCodingCorePrompt()` when `system` is
- * omitted. That default is not exported, and re-deriving it here would create a
- * second copy of a prompt whose byte-stability is a caching contract — so this
- * path requires the caller to have resolved one. `executeTurn` does.
+ * Nothing defaults it. `buildCodingCorePrompt()` is not exported, and
+ * re-deriving it here would create a second copy of a prompt whose
+ * byte-stability is a caching contract — so this path requires the caller to
+ * have resolved one. `executeTurn` does.
  */
 export const MISSING_SYSTEM_PROMPT =
   "the Stella engine path requires an explicit `system` prompt";
@@ -150,6 +151,7 @@ export async function runStellaTurn(
   // parallel copy that could disagree with what the model actually saw.
   let lastSeenTranscript: ModelMessage[] | undefined;
   let steps = 0;
+  let budgetStopped = false;
 
   const request: TurnRequest = {
     provider_id: "oxagen-host",
@@ -182,8 +184,15 @@ export async function runStellaTurn(
     // failed tool is something the model is meant to read and react to.
     onFailure: "report",
     onProviderRequest: async (completion) => {
-      steps += 1;
       lastSeenTranscript = toModelMessages(completion.messages);
+      // The dollar ceiling is checked HERE — before the call is bought, on what
+      // the turn has already spent. A guard consulted after the fact reports an
+      // overspend it could have prevented.
+      if (!(await budgetPermitsAnotherCall(opts, usageTotals))) {
+        budgetStopped = true;
+        return declinedCompletion(opts.model ?? "");
+      }
+      steps += 1;
       return provider(completion);
     },
     onToolRequest: (name, input) =>
@@ -222,18 +231,40 @@ export async function runStellaTurn(
   }
 
   return assembleResult({
-    text: run.outcome.text,
+    // A budget stop declines the last completion, so the engine's outcome text
+    // is the empty string we handed it. The answer the model had already given
+    // lives in the transcript it sent with that request, and is what the user
+    // should still see.
+    text: budgetStopped
+      ? lastAssistantText(lastSeenTranscript)
+      : run.outcome.text,
     steps,
     opts,
     onEvent,
     usageTotals,
     transcript: lastSeenTranscript,
+    ...(budgetStopped ? { stopReason: "budget" as const } : {}),
   });
 }
 
+/** The most recent assistant turn in a transcript, as plain text. */
+function lastAssistantText(transcript: ModelMessage[] | undefined): string {
+  for (let i = (transcript?.length ?? 0) - 1; i >= 0; i -= 1) {
+    const message = transcript![i]!;
+    if (message.role !== "assistant") continue;
+    if (typeof message.content === "string") return message.content;
+    return message.content
+      .filter(
+        (part): part is { type: "text"; text: string } => part.type === "text",
+      )
+      .map((part) => part.text)
+      .join("");
+  }
+  return "";
+}
+
 /**
- * Assemble tools exactly as `runCodingAgent` does — with one deliberate
- * omission.
+ * Assemble the turn's tool set — with one deliberate omission.
  *
  * `wrapToolsWithDispatchGuard` is **not** applied. Stella partitions a step's
  * calls itself on the `read_only` bit each schema carries, so running the TS
@@ -252,7 +283,6 @@ function buildToolSet(opts: RunCodingAgentOptions): ToolSet {
   let tools: ToolSet = opts.workspace
     ? buildWorkspaceTools(opts.workspace, {
         readOnly: opts.readOnly,
-        codeGraph: opts.codeGraph,
         onEvent: opts.onEvent ?? ((): void => undefined),
         signal: opts.signal,
         fileLock: opts.fileLock,
@@ -287,10 +317,100 @@ function buildToolSet(opts: RunCodingAgentOptions): ToolSet {
  * not. `observed` records the same zeroes without pretending to enforce.
  *
  * This is separate from `RunCodingAgentOptions.budgetGuard`, which the host
- * still owns and which is unaffected by the engine choice.
+ * owns and enforces itself in {@link budgetPermitsAnotherCall}. That sentence
+ * used to read "unaffected by the engine choice" — true while two engines
+ * existed and one of them called the guard, and exactly backwards afterwards
+ * (#2608). The host enforcing it here is what makes it true again.
  */
 export function buildBudgetSpec(hasPricer: boolean): TurnRequest["budget"] {
   return { mode: hasPricer ? "observed" : "off" };
+}
+
+/** How long a pending budget approval waits before it is reported as slow. */
+const BUDGET_WAIT_BREADCRUMB_MS = 60_000;
+
+/**
+ * Await `fn()`, and if it has not settled within `thresholdMs`, fire `onSlow`
+ * once — WITHOUT cancelling or auto-resolving the wait.
+ *
+ * The budget guard blocks indefinitely in "prompt" mode while a human decides.
+ * We never auto-deny, because the human's decision is the only thing entitled
+ * to end that wait; we do make a long one observable, so a stuck approval is
+ * not silent.
+ */
+async function withSlowWaitBreadcrumb<T>(
+  fn: () => Promise<T>,
+  thresholdMs: number,
+  onSlow: () => void,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined = setTimeout(() => {
+    timer = undefined;
+    onSlow();
+  }, thresholdMs);
+  (timer as unknown as { unref?: () => void }).unref?.();
+  try {
+    return await fn();
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/**
+ * Ask the host's per-turn dollar guard whether this turn may buy another
+ * completion.
+ *
+ * Enforcement is host-side on purpose, and this is the seam where it belongs:
+ * the engine holds no authority in this architecture, and every effect it asks
+ * for re-enters the host to be checked. A budget is an effect like any other.
+ *
+ * Consulted BEFORE each `provider_request` is answered, on the usage every
+ * prior completion in this turn already spent — so the ceiling stops the next
+ * billable call rather than reporting it afterwards.
+ */
+async function budgetPermitsAnotherCall(
+  opts: RunCodingAgentOptions,
+  spent: readonly CompletionUsage[],
+): Promise<boolean> {
+  const guard = opts.budgetGuard;
+  if (!guard) return true;
+  const usage = sumUsage(spent);
+  const verdict = await withSlowWaitBreadcrumb(
+    () =>
+      guard({
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        totalTokens: usage.totalTokens,
+        cachedInputTokens: usage.cachedInputTokens,
+      }),
+    BUDGET_WAIT_BREADCRUMB_MS,
+    () =>
+      opts.onError?.({
+        phase: "budget-wait-slow",
+        error: new Error(
+          `Budget approval has been pending for over ${Math.round(
+            BUDGET_WAIT_BREADCRUMB_MS / 1000,
+          )}s.`,
+        ),
+      }),
+  );
+  return verdict !== "stop";
+}
+
+/**
+ * The completion returned when the budget refuses to buy another one.
+ *
+ * Zero usage and zero cost because nothing was bought — reporting anything else
+ * would inflate the turn's settled spend with a call that never happened. No
+ * tool calls and `stop` so the engine ends the turn rather than asking again.
+ */
+function declinedCompletion(model: string): CompletionResult {
+  return {
+    text: "",
+    usage: { input_tokens: 0, output_tokens: 0 },
+    model,
+    cost_usd: 0,
+    finish_reason: "stop",
+  };
 }
 
 /**

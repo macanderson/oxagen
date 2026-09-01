@@ -311,9 +311,9 @@ async function resolveParentExecutionId(
 
 /**
  * Run one A2A task by bridging to the same agent execution path the chat
- * surface uses — the shared coding engine (runCodingAgent) in workspace-optional
- * conversational mode, so the multi-step tool loop, invoke()-gated tools,
- * per-turn memory recall, and the USD budget guard all apply. Token usage is
+ * surface uses — the shared engine in workspace-optional conversational mode,
+ * so the multi-step tool loop, invoke()-gated tools and per-turn memory recall
+ * and the USD budget guard all apply. Token usage is
  * metered automatically by @oxagen/ai; task lifecycle is emitted to ClickHouse
  * and persisted to Postgres. Returns the final task row.
  *
@@ -564,10 +564,10 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
       onPause: () => false,
     });
 
-    // Run the SAME coding engine the CLI + in-app chat use (runCodingAgent),
-    // workspace-optional conversational mode: the multi-step tool loop
-    // (`stopWhen`), invoke()-gated tools, per-turn memory recall, and the USD
-    // budget guard now all apply. Raw AI-SDK parts are mapped to A2A artifact/
+    // Run the SAME engine the CLI + in-app chat use, workspace-optional
+    // conversational mode: the multi-step tool loop (`stopWhen`),
+    // invoke()-gated tools, per-turn memory recall and the USD budget guard
+    // all apply. Raw AI-SDK parts are mapped to A2A artifact/
     // status events via `onStreamPart`, preserving the JSON-RPC wire format.
     const ai = createPlatformAgentAi(ctx, ctx.requestId, "api");
 

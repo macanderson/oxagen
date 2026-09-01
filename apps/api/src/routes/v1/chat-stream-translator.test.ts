@@ -8,7 +8,7 @@ import {
 
 // Byte-for-byte SSE wire snapshot for the REST chat stream (chat.stream.ts).
 //
-// The route was refactored to run through runCodingAgent (multi-step tool loop,
+// The route was refactored to run through the shared engine (multi-step tool loop,
 // invoke()-gated tools, per-turn memory recall, USD budget guard) instead of a
 // single hand-rolled streamAgentReply. The client wire protocol MUST be
 // byte-identical: the raw AI-SDK parts flow through THIS translator (the single
@@ -36,10 +36,18 @@ const SCRIPTED_PARTS: unknown[] = [
   { type: "text-delta", text: "Hello " },
   { type: "tool-input-start", id: "c1", toolName: "graph_query" },
   { type: "tool-input-delta", id: "c1", delta: '{"q":' },
-  { type: "tool-call", toolCallId: "c1", toolName: "graph_query", input: { q: "x" } },
+  {
+    type: "tool-call",
+    toolCallId: "c1",
+    toolName: "graph_query",
+    input: { q: "x" },
+  },
   { type: "tool-result", toolCallId: "c1", output: { rows: 2 } },
   { type: "text-delta", text: "world" },
-  { type: "finish", totalUsage: { inputTokens: 11, outputTokens: 7, totalTokens: 18 } },
+  {
+    type: "finish",
+    totalUsage: { inputTokens: 11, outputTokens: 7, totalTokens: 18 },
+  },
   { type: "finish-step" },
 ];
 
@@ -77,7 +85,11 @@ describe("createApiStreamTranslator — SSE wire parity", () => {
       { type: "reasoning-delta", reasoningId: "r1", text: "thinking" },
       { type: "reasoning-end", reasoningId: "r1", durationMs: 0 },
       { type: "text", text: "Hello " },
-      { type: "tool-input-start", toolCallId: "c1", capability: "query_ontology" },
+      {
+        type: "tool-input-start",
+        toolCallId: "c1",
+        capability: "query_ontology",
+      },
       { type: "tool-input-delta", toolCallId: "c1", delta: '{"q":' },
       {
         type: "tool-call-start",
@@ -125,8 +137,17 @@ describe("createApiStreamTranslator — SSE wire parity", () => {
       emit: (e) => events.push(e),
     });
     t.onPart({ type: "start-step" });
-    t.onPart({ type: "tool-call", toolCallId: "c9", toolName: "graph_query", input: {} });
-    t.onPart({ type: "tool-error", toolCallId: "c9", error: new Error("boom") });
+    t.onPart({
+      type: "tool-call",
+      toolCallId: "c9",
+      toolName: "graph_query",
+      input: {},
+    });
+    t.onPart({
+      type: "tool-error",
+      toolCallId: "c9",
+      error: new Error("boom"),
+    });
     const end = events.find((e) => e.type === "tool-call-end");
     expect(end).toMatchObject({
       type: "tool-call-end",
@@ -163,7 +184,11 @@ describe("createApiStreamTranslator — SSE wire parity", () => {
         .join("") + "event: done\ndata: [DONE]\n\n";
 
     mkdirSync(SNAPSHOT_DIR, { recursive: true });
-    writeFileSync(join(SNAPSHOT_DIR, "api-chat-sse-snapshot.txt"), wire, "utf8");
+    writeFileSync(
+      join(SNAPSHOT_DIR, "api-chat-sse-snapshot.txt"),
+      wire,
+      "utf8",
+    );
 
     // Lock the frame shape: every event line is `data: {...}` and the stream
     // terminates with the `[DONE]` sentinel.

@@ -38,7 +38,6 @@ const CANONICAL: Record<string, string> = {
   list_dir: "Read",
   glob: "Read",
   grep: "Read",
-  code_graph: "Read",
   write_file: "Write",
   edit_file: "Edit",
   bash: "Bash",
@@ -50,7 +49,6 @@ const SUBJECT_FIELD: Record<string, string> = {
   list_dir: "path",
   glob: "pattern",
   grep: "pattern",
-  code_graph: "query",
   write_file: "path",
   edit_file: "path",
   bash: "command",
@@ -78,10 +76,17 @@ export function parseRule(rule: string): ParsedRule {
   const trimmed = rule.trim();
   const open = trimmed.indexOf("(");
   if (open === -1 || !trimmed.endsWith(")")) return { tool: trimmed };
-  return { tool: trimmed.slice(0, open).trim(), pattern: trimmed.slice(open + 1, -1).trim() };
+  return {
+    tool: trimmed.slice(0, open).trim(),
+    pattern: trimmed.slice(open + 1, -1).trim(),
+  };
 }
 
-function ruleMatches(rule: string, canonical: string, subject: string): boolean {
+function ruleMatches(
+  rule: string,
+  canonical: string,
+  subject: string,
+): boolean {
   const parsed = parseRule(rule);
   // The tool token is glob-matched against the canonical name. For local tools
   // this is an exact compare ("Bash" === "Bash"); for MCP tools it lets a rule
@@ -97,7 +102,8 @@ export function evaluateLocalPermission(
   input: unknown,
   permissions: Permissions | undefined,
 ): LocalPermissionResult {
-  if (!permissions) return { decision: "allow", reason: "no permissions configured" };
+  if (!permissions)
+    return { decision: "allow", reason: "no permissions configured" };
 
   const canonical = CANONICAL[toolName] ?? toolName;
   const subject = subjectOf(toolName, input);
@@ -118,7 +124,10 @@ export function evaluateLocalPermission(
     return { decision: "allow", reason: "defaultMode: bypassPermissions" };
   }
   if (mode === "deny") {
-    return { decision: "deny", reason: "defaultMode: deny (no allow rule matched)" };
+    return {
+      decision: "deny",
+      reason: "defaultMode: deny (no allow rule matched)",
+    };
   }
   return { decision: "allow", reason: `defaultMode: ${mode}` };
 }

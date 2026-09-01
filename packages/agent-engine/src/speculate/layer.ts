@@ -36,15 +36,6 @@ export const SPECULATABLE_TOOLS = new Set([
   "read_file",
   "search",
   "list_dir",
-  // code_graph reads the code-graph index, not the live filesystem, so it is
-  // cache-safe under the same conservative rule as the reads above (any
-  // mutation drops the whole cache; the index itself only re-syncs between
-  // turns). Prefetch discipline lives in the predictor: only deterministic
-  // operations are ever PREDICTED — `semantic_search` is never speculated
-  // (each prefetch would spend an embedding on a prediction that may never be
-  // consumed) — though a repeated identical model-issued call of any
-  // operation may still be served from cache.
-  "code_graph",
 ]);
 
 /** Known-pure tools that neither mutate the filesystem nor get speculated. */

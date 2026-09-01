@@ -159,7 +159,7 @@ export const oxagenSettingsSchema = z
     model: z.string().optional(),
     /**
      * Model for the WORKER role — the executor that runs the tool loop and edits
-     * code (`runCodingAgent`). Falls back to `model`. Set via `/worker-model`.
+     * code. Falls back to `model`. Set via `/worker-model`.
      */
     workerModel: z.string().optional(),
     /**

@@ -500,7 +500,7 @@ export const stripeEventProcessing = billingSchema.table(
 
 // Hard PERIOD-TO-DATE spend ceiling. Distinct axis from the per-TURN
 // dollar budget in workspace.workspace_budget_policy / budget.policy.* (which
-// caps a single agent turn's cost inside the runCodingAgent loop): THIS ceiling
+// caps a single agent turn's cost): THIS ceiling
 // caps cumulative period spend for a whole org or workspace and is enforced in
 // the kernel's invoke() admission path (the budget gate, next to IAM/billing) so
 // a runaway fleet is DENIED before the provider call, not discovered on the

@@ -9,7 +9,7 @@
  * already wired into EVERY `contract.invoke()` (via bootstrapBillingRuntime →
  * setBillingAdmissionGate in the kernel), so every scoped, metered TOOL call an
  * agent makes is refused for a suspended or zero-balance org. But the chat
- * route's top-level model turn (`runCodingAgent` → `streamAgentReply`) is a
+ * route's top-level model turn reaches `streamAgentReply` as a
  * direct `@oxagen/ai` streaming call, NOT a `contract.invoke()` — so a turn that
  * makes no tool call (a pure Q&A response) skipped the balance check entirely
  * and a zero-balance org got a full model call for free. This gate closes that

@@ -204,7 +204,7 @@ describe("buildUsageEvent — allowlist enforcement", () => {
   });
 
   it("reflects accumulator state: tool calls, tiers, best-of-n, graph/pipeline/byok flags", () => {
-    recordToolCall("code_graph", 3);
+    recordToolCall("read_file", 3);
     recordToolCall("grep");
     recordModelTier("balanced");
     setBestOfN(5);
@@ -220,7 +220,7 @@ describe("buildUsageEvent — allowlist enforcement", () => {
     );
 
     expect(JSON.parse(payload.tool_calls_json)).toEqual({
-      code_graph: 3,
+      read_file: 3,
       grep: 1,
     });
     expect(payload.model_tier).toBe("balanced");

@@ -372,7 +372,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   // ── Pre-turn credit admission gate ───────────────────────────────────────────
   // Run the SAME admission gate (assertCanStartTurn) that already fires on every
   // scoped contract.invoke() tool call, BEFORE the top-level model turn begins —
-  // the model stream (runCodingAgent → streamAgentReply) is a direct @oxagen/ai
+  // the model stream reaches `streamAgentReply` as a direct @oxagen/ai
   // call, not an invoke(), so without this a no-tool-call turn skipped the
   // balance check and a suspended / zero-balance org got a full model call for
   // free. Blocks ONLY on the affirmative InsufficientCredits / BillingSuspended
@@ -1207,9 +1207,9 @@ export async function POST(request: NextRequest): Promise<Response> {
           ? { ...agentTools, ...pageFormFillTool }
           : agentTools;
 
-        // Run the SAME coding engine the CLI uses (runCodingAgent) — one
-        // explicit step-driver with retry/compaction/loop-nudges — instead of a
-        // hand-rolled streamText loop. No `workspace` ⇒ no filesystem tools; the
+        // Run the SAME engine the CLI uses — one engine owning retry,
+        // compaction and loop detection — instead of a hand-rolled streamText
+        // loop. No `workspace` ⇒ no filesystem tools; the
         // materialized capability ToolSet is injected via `extraTools`. The raw
         // AI-SDK parts are forwarded to the stateful SSE translator via
         // `onStreamPart` so the client wire protocol is byte-identical.

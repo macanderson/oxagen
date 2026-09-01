@@ -1,6 +1,6 @@
 /**
  * Additional coverage for buildWorkspaceTools — tools not exercised by tools.test.ts:
- * write_file, list_dir, search, delete_file, code_graph execute, bash error/timeout paths.
+ * write_file, list_dir, search, delete_file, bash error/timeout paths.
  */
 import { describe, it, expect } from "vitest";
 import { MemoryWorkspace } from "./workspaces/memory";
@@ -284,35 +284,6 @@ describe("buildWorkspaceTools – edit_file error path", () => {
     });
     expect(result).toContain("Error editing a.ts");
     expect(result).toContain("not found");
-  });
-});
-
-describe("buildWorkspaceTools – code_graph execute", () => {
-  it("delegates to the provider and returns clipped output", async () => {
-    const ws = new MemoryWorkspace({});
-    const codeGraph = { query: async () => "symbol found at src/x.ts:10" };
-    const tools = buildWorkspaceTools(ws, { codeGraph });
-    const result = await run(tools.code_graph, {
-      operation: "search",
-      query: "myFn",
-    });
-    expect(result).toBe("symbol found at src/x.ts:10");
-  });
-
-  it("returns a code_graph error string when provider throws", async () => {
-    const ws = new MemoryWorkspace({});
-    const codeGraph = {
-      query: async (): Promise<string> => {
-        throw new Error("index not ready");
-      },
-    };
-    const tools = buildWorkspaceTools(ws, { codeGraph });
-    const result = await run(tools.code_graph, {
-      operation: "file_symbols",
-      query: "src/x.ts",
-    });
-    expect(result).toContain("code_graph error");
-    expect(result).toContain("index not ready");
   });
 });
 

@@ -3,10 +3,10 @@
  * Importing from ./index executes the re-export module and gives it v8 coverage.
  */
 import { describe, it, expect } from "vitest";
+import * as barrel from "./index";
 import {
   MemoryWorkspace,
   buildWorkspaceTools,
-  runCodingAgent,
   changedFilesFromDiff,
 } from "./index";
 
@@ -25,8 +25,12 @@ describe("index barrel exports", () => {
     expect(tools.search).toBeDefined();
   });
 
-  it("exports runCodingAgent as a function", () => {
-    expect(typeof runCodingAgent).toBe("function");
+  it("no longer exports a turn loop — Stella is the only engine", () => {
+    // The barrel used to export `runCodingAgent`. Deleting it is the point of
+    // this cutover, so a re-export sneaking back in should fail here rather
+    // than quietly giving callers a second engine.
+    expect("runCodingAgent" in barrel).toBe(false);
+    expect("runTurn" in barrel).toBe(true);
   });
 
   it("exports changedFilesFromDiff and it works correctly", () => {

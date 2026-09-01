@@ -25,7 +25,6 @@ export type {
   StageKind,
   StageEvent,
   PromptEvaluation,
-  ContextRetrieval,
   EnhancementTrace,
   PhaseStat,
   ToolEvent,

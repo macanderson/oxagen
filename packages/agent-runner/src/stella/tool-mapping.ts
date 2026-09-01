@@ -30,21 +30,19 @@
  */
 import { asSchema, type ToolSet } from "ai";
 import type { ToolOutput, ToolSchema } from "@oxagen/stella-engine-client";
+import { MUTATING_TOOL_NAMES } from "@oxagen/agent-engine";
 
 /**
- * Workspace tools that mutate, mirroring `loop-driver.ts`'s `isMutatingTool`.
+ * Workspace tools that mutate, imported rather than mirrored.
  *
- * Mirrored rather than imported because the engine's copy is scheduled for
- * deletion with the rest of the TS loop (macanderson/oxagen#1241) while this
- * one outlives it. The drift risk is real and is covered by a test that pins
- * the two lists together.
+ * This used to be a copy of the engine's list, because the engine's lived in
+ * `loop-driver.ts` and was scheduled to die with the TypeScript loop. It moved
+ * to `tools-shared.ts` instead and is exported, so there is one list and no
+ * drift to pin.
  */
-export const BUILTIN_MUTATING_TOOLS = [
-  "bash",
-  "write_file",
-  "edit_file",
-  "delete_file",
-] as const;
+export const BUILTIN_MUTATING_TOOLS: readonly string[] = [
+  ...MUTATING_TOOL_NAMES,
+];
 
 /** Raised when the engine asks for a tool the host does not have. */
 export class UnknownToolError extends Error {

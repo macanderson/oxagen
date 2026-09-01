@@ -8,10 +8,9 @@ import { providerCostUsd, type RateCard } from "./pricing";
  *
  * A turn budget is OFF by default. When enabled it carries a dollar `limitUsd`
  * and one `mode` that decides what happens the moment the turn's cumulative
- * provider cost reaches that limit. Enforcement lives in the ONE shared turn
- * loop (`runCodingAgent` in @oxagen/agent-engine): after each step the loop
- * hands the cumulative usage to a caller-supplied guard that (a) converts tokens
- * to dollars via {@link providerCostUsd} and (b) applies the policy below.
+ * provider cost reaches that limit. The host builds the guard and hands it to
+ * the engine as `RunCodingAgentOptions.budgetGuard`; it converts tokens to
+ * dollars via {@link providerCostUsd} and applies the policy below.
  */
 
 /** What happens when a turn's cost reaches the budget limit. Strictness ladder: soft → gated → hard. */
@@ -188,10 +187,31 @@ export function evaluateTurnBudget(
     case "grace": {
       const ceilingUsd = limitUsd * (1 + Math.max(0, policy.graceOveragePct));
       if (costUsd < limitUsd)
-        return { state: "ok", action: "continue", costUsd, limitUsd, ceilingUsd, mode: "grace" };
+        return {
+          state: "ok",
+          action: "continue",
+          costUsd,
+          limitUsd,
+          ceilingUsd,
+          mode: "grace",
+        };
       if (costUsd < ceilingUsd)
-        return { state: "within_grace", action: "continue", costUsd, limitUsd, ceilingUsd, mode: "grace" };
-      return { state: "exceeded", action: "stop", costUsd, limitUsd, ceilingUsd, mode: "grace" };
+        return {
+          state: "within_grace",
+          action: "continue",
+          costUsd,
+          limitUsd,
+          ceilingUsd,
+          mode: "grace",
+        };
+      return {
+        state: "exceeded",
+        action: "stop",
+        costUsd,
+        limitUsd,
+        ceilingUsd,
+        mode: "grace",
+      };
     }
   }
 }
@@ -331,22 +351,36 @@ const MODE_STRICTNESS: Record<TurnBudgetMode, number> = {
 };
 
 /** The stricter of two modes (enforce > prompt > grace). */
-export function strictestMode(a: TurnBudgetMode, b: TurnBudgetMode): TurnBudgetMode {
+export function strictestMode(
+  a: TurnBudgetMode,
+  b: TurnBudgetMode,
+): TurnBudgetMode {
   return MODE_STRICTNESS[a] >= MODE_STRICTNESS[b] ? a : b;
 }
 
 /** Apply one enabled ceiling to a base policy: clamp limit down, tighten mode, force on. */
-function applyCeiling(base: TurnBudgetPolicy, ceiling: TurnBudgetPolicy): TurnBudgetPolicy {
+function applyCeiling(
+  base: TurnBudgetPolicy,
+  ceiling: TurnBudgetPolicy,
+): TurnBudgetPolicy {
   // A ceiling with no positive limit can't constrain a dollar amount — treat it
   // as "no ceiling" rather than forcing a $0 (turn-killing) budget.
   if (!ceiling.enabled || ceiling.limitUsd <= 0) return base;
-  const baseLimit = base.enabled && base.limitUsd > 0 ? base.limitUsd : Number.POSITIVE_INFINITY;
+  const baseLimit =
+    base.enabled && base.limitUsd > 0
+      ? base.limitUsd
+      : Number.POSITIVE_INFINITY;
   const limitUsd = Math.min(baseLimit, ceiling.limitUsd);
-  const mode = strictestMode(base.enabled ? base.mode : ceiling.mode, ceiling.mode);
+  const mode = strictestMode(
+    base.enabled ? base.mode : ceiling.mode,
+    ceiling.mode,
+  );
   // Only the grace cushion is meaningful when the resulting mode is grace; take
   // the tighter (smaller) cushion so a ceiling never loosens the overage window.
   const graceOveragePct =
-    mode === "grace" ? Math.min(base.graceOveragePct, ceiling.graceOveragePct) : base.graceOveragePct;
+    mode === "grace"
+      ? Math.min(base.graceOveragePct, ceiling.graceOveragePct)
+      : base.graceOveragePct;
   return { enabled: true, limitUsd, mode, graceOveragePct };
 }
 
@@ -370,14 +404,17 @@ export function resolveEffectiveTurnBudget(
 
   // 2. Defaults — only seed a member who hasn't set their own budget.
   if (!effective.enabled) {
-    if (org?.enforcement === "default" && org.policy.enabled) effective = { ...org.policy };
+    if (org?.enforcement === "default" && org.policy.enabled)
+      effective = { ...org.policy };
     if (workspace?.enforcement === "default" && workspace.policy.enabled)
       effective = { ...workspace.policy };
   }
 
   // 3. Ceilings — always clamp, strictest wins. Org then workspace.
-  if (org?.enforcement === "ceiling") effective = applyCeiling(effective, org.policy);
-  if (workspace?.enforcement === "ceiling") effective = applyCeiling(effective, workspace.policy);
+  if (org?.enforcement === "ceiling")
+    effective = applyCeiling(effective, org.policy);
+  if (workspace?.enforcement === "ceiling")
+    effective = applyCeiling(effective, workspace.policy);
 
   return effective;
 }

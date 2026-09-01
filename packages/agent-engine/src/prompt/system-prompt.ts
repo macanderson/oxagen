@@ -69,20 +69,6 @@ export interface SystemPromptOptions {
   /** A named agent persona whose prompt replaces the default identity. */
   agent?: { name: string; systemPrompt: string };
   /**
-   * Whether the `code_graph` tool is wired for this run (a CodeGraphProvider
-   * was supplied). Defaults to true — it is the common case; pass false when
-   * running without a provider so the prompt never references a missing tool.
-   */
-  hasCodeGraph?: boolean;
-  /**
-   * Whether this turn's ENHANCE stage injected an F1 deterministic-localization
-   * block (`## Candidate locations (deterministic)`) into the prompt. Adds the
-   * spec's one-line rule telling the model to verify the candidates with one
-   * read instead of re-deriving them. Off by default so the system prompt stays
-   * byte-stable (cache-warm) for every run without a localization map.
-   */
-  hasLocalization?: boolean;
-  /**
    * Whether the interactive `ask_user` clarification tool is wired for this run
    * (an `askUser` callback was supplied — an interactive surface with a human).
    * Adds ONE rule telling the model to ask a structured question only when
@@ -96,17 +82,7 @@ export interface SystemPromptOptions {
 
 export function buildSystemPrompt(opts: SystemPromptOptions): string {
   const { cwd, projectContext, readOnly, agent } = opts;
-  const hasCodeGraph = opts.hasCodeGraph ?? true;
   const profile = opts.profile ?? "interactive";
-  // Tools the model may use to locate code, best-first — the headless
-  // localization step must list only the tools actually wired for this run.
-  const locateToolList = [
-    ...(hasCodeGraph ? ["`code_graph`"] : []),
-    "`search`",
-  ];
-  const locateTools =
-    locateToolList.join("/") +
-    (locateToolList.length > 1 ? " (in that order)" : "");
   const preamble = agent
     ? [
         agent.systemPrompt.trim(),
@@ -120,49 +96,17 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
       ];
 
   // Profile-independent tool rules — BOTH profiles get these verbatim.
-  // The code-graph mandate goes FIRST and hardest: agents default to search/read/
-  // list to explore, which is slow, imprecise, and burns the context window. The
-  // graph is a precomputed symbol/import index built for THIS repo — it must be
-  // the first move for any structural question.
   const lines = [
     ...preamble,
     "",
     "Operating rules:",
-    ...(hasCodeGraph
-      ? [
-          "- CODE GRAPH FIRST — non-negotiable. `code_graph` is a precomputed symbol + import",
-          "  index for THIS repository. It is faster, more precise, and far cheaper than listing",
-          "  directories, searching, or reading files to hunt for code. BEFORE you `search`,",
-          "  `list_dir`, `read_file`, or `bash`-find to locate or understand code, you MUST query",
-          "  `code_graph`. The operations and exactly when to use each:",
-          "    • `search <symbol>`   — where a function/class/type/interface is defined. Use this",
-          "      INSTEAD of searching for a name.",
-          "    • `file_symbols <file>` — what a file defines/exports. Call it BEFORE you `read_file`",
-          "      a file you don't know, to see what's there without reading the whole thing.",
-          "    • `dependents <file>`  — who imports a file (the blast radius). Call it BEFORE you",
-          "      change any shared/exported file, to know what a change could break.",
-          "    • `imports <file>`     — what a file depends on.",
-          "  If you catch yourself about to `search`/`list_dir`/`read_file` to FIND or MAP code",
-          "  and have not called `code_graph` yet, STOP and call it first. State the graph result",
-          "  before you act on it.",
-          "- Only fall back to `search` when the graph genuinely returns nothing for your",
-          "  query, or the target is plain text (a string literal, comment, config key, or prose)",
-          "  rather than a code symbol — never as your first move for a symbol.",
-        ]
-      : ["- Use `search` to locate code instead of guessing paths."]),
-    // F1 deterministic localization (docs/specs/swe-rank1-scalpel.md §F1): the
-    // one-line trust-but-verify rule, present ONLY when a candidate-locations
-    // block was actually injected this turn — a rule about a block the model
-    // never received would be pure noise.
-    ...(opts.hasLocalization
-      ? [
-          "- Candidate locations were computed from the code graph. Verify with one read before",
-          "  trusting; do not re-derive them.",
-        ]
-      : []),
+    "- LOCATE BEFORE YOU TOUCH. Use `search` to find the code you are about to change — one",
+    "  query matches both file names and file contents, so it finds the file whether you",
+    "  remember the path or the symbol. Never guess a path, and never edit a file you have",
+    "  not located and read.",
     "- Act, don't narrate intentions at length. Read before you edit, and edit precisely.",
     "- BATCH INDEPENDENT TOOL CALLS. When your next actions do not depend on each other's",
-    `  results — several \`read_file\`s, \`search\`es${hasCodeGraph ? ", `code_graph` queries" : ""}, independent checks —`,
+    "  results — several `read_file`s, `search`es, independent checks —",
     "  issue them together in ONE message so they execute concurrently instead of paying a",
     "  full model round-trip per call. Serialize only when a call genuinely needs an earlier",
     "  call's output. File EDITS stay sequential.",
@@ -206,7 +150,7 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
       "let the tools carry the work and speak only in the final answer):",
       "- Reproduce the failure FIRST: run the failing test, or write a minimal repro, and",
       "  confirm it actually fails before you change anything.",
-      `- Localize before editing: use ${locateTools} to find the real source`,
+      "- Localize before editing: use `search` to find the real source",
       "  of the failure, and `read_file` a file before you edit it.",
       "- Make the SMALLEST root-cause fix that matches the surrounding style — no drive-by",
       "  rewrites, no unrelated cleanups.",

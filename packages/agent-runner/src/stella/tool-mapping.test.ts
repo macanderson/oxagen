@@ -21,6 +21,7 @@ import {
   toToolSchemas,
   UnknownToolError,
 } from "./tool-mapping";
+import { MUTATING_TOOL_NAMES } from "@oxagen/agent-engine";
 
 /** Explicitly two-arg so `mock.calls` is typed as the SDK actually calls it. */
 type ToolExec = (input: unknown, options: unknown) => Promise<string>;
@@ -46,33 +47,25 @@ function fixtureTools(execute: ToolExec = async () => "ok"): ToolSet {
 }
 
 describe("BUILTIN_MUTATING_TOOLS", () => {
-  test("still matches the engine's MUTATING_TOOL_NAMES exactly", () => {
-    // The list is mirrored, not imported, for two reasons: the engine's copy is
-    // scheduled for deletion with the rest of the TS loop
-    // (macanderson/oxagen#1241) while this one outlives it, and `loop-driver`
-    // is not re-exported from `@oxagen/agent-engine`'s barrel at all.
+  test("is the engine's list itself, not a copy of it", () => {
+    // This used to be a mirrored literal pinned to the engine's by a test that
+    // read `loop-driver.ts` off disk and regex-scraped it. The engine's copy
+    // moved to `tools-shared.ts` and is exported, so the two cannot diverge and
+    // there is nothing to scrape.
     //
-    // Mirroring is only safe while something notices the two diverging. A tool
-    // the engine fences and this list does not gets advertised to Stella as
-    // `read_only`, and the engine then dispatches it concurrently with another
-    // write — a data race with no error anywhere. So this reads the engine's
-    // source, the same way this package's sidecar witness test reads its
-    // sibling's.
-    const source = readFileSync(
-      resolve(import.meta.dirname, "../../../agent-engine/src/loop-driver.ts"),
-      "utf8",
+    // The hazard that test guarded still explains why this matters: a tool the
+    // engine fences and this list does not is advertised to Stella as
+    // `read_only`, and Stella then dispatches it concurrently with another
+    // write — a data race with no error anywhere.
+    expect([...BUILTIN_MUTATING_TOOLS].sort()).toEqual(
+      [...MUTATING_TOOL_NAMES].sort(),
     );
-    const declaration =
-      /MUTATING_TOOL_NAMES[^=]*=\s*new Set<string>\(\[([^\]]*)\]/.exec(source);
-    expect(
-      declaration,
-      "could not find MUTATING_TOOL_NAMES in loop-driver.ts — it moved or was renamed",
-    ).not.toBeNull();
-
-    const engineNames = [...declaration![1]!.matchAll(/"([^"]+)"/g)]
-      .map((match) => match[1]!)
-      .sort();
-    expect(engineNames).toEqual([...BUILTIN_MUTATING_TOOLS].sort());
+    expect([...BUILTIN_MUTATING_TOOLS].sort()).toEqual([
+      "bash",
+      "delete_file",
+      "edit_file",
+      "write_file",
+    ]);
   });
 });
 

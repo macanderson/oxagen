@@ -7,7 +7,7 @@
  * decision runs everywhere and the whole module is unit-testable without a DB.
  *
  * This is a DIFFERENT axis from the per-turn dollar budget in ./turn-budget:
- * that caps ONE agent turn's cumulative cost inside the runCodingAgent loop;
+ * that caps ONE agent turn's cumulative cost;
  * THIS caps cumulative PERIOD spend for a whole org or workspace and is enforced
  * in the kernel invoke() admission path before any provider call.
  */

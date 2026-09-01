@@ -296,11 +296,13 @@ export type RetentionPolicyPublicId = z.output<
 // ── Admission ceilings and enumerations ─────────────────────────────────────
 
 /**
- * Engines admissible today. The TS engine is the launch producer; Stella lands
- * behind the same evidence seam (spec.md, "Ownership boundary"). An unknown
- * engine fails admission rather than being resolved at claim time.
+ * Engines admissible today. Stella is the only one: the TypeScript step loop
+ * it replaced has been deleted, so a spec naming `ts` fails admission rather
+ * than being resolved at claim time. `RETIRED_ENGINES` in
+ * `stella/engine-choice.ts` is what turns that failure into a sentence saying
+ * the engine was removed, instead of "unknown engine".
  */
-export const RUN_ENGINES = ["ts", "stella"] as const;
+export const RUN_ENGINES = ["stella"] as const;
 
 /** Repository providers admissible today. The first slice is GitHub-only. */
 export const REPOSITORY_PROVIDERS = ["github"] as const;

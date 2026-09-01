@@ -27,6 +27,7 @@ import { MemoryWorkspace } from "../workspaces/memory";
 import { runTurn } from "./index";
 import type { AgentAi, ModelRunArgs } from "../ports";
 import type { ScopeReviewInfo } from "../trace/types";
+import { scriptedEngine } from "./scripted-engine";
 
 const DEFAULT_EVAL = {
   completeness: 70,
@@ -42,21 +43,26 @@ const DEFAULT_EVAL = {
 /** Faked AgentAi: serves the evaluator object, then a "complete" judge verdict,
  * and a streaming tool loop that records the instruction it was invoked with. */
 function makeAi(streamSpy: (instruction: string) => void): AgentAi {
-  const generateObject = vi.fn().mockImplementation((args: { system?: string }) => {
-    if (args.system?.includes("evaluation stage")) {
-      return Promise.resolve({ object: DEFAULT_EVAL, usage: { inputTokens: 2, outputTokens: 1 } });
-    }
-    return Promise.resolve({
-      object: {
-        complete: true,
-        confidence: 90,
-        findings: [],
-        remainingWork: [],
-        reasoning: "looks done",
-      },
-      usage: { inputTokens: 3, outputTokens: 2 },
+  const generateObject = vi
+    .fn()
+    .mockImplementation((args: { system?: string }) => {
+      if (args.system?.includes("evaluation stage")) {
+        return Promise.resolve({
+          object: DEFAULT_EVAL,
+          usage: { inputTokens: 2, outputTokens: 1 },
+        });
+      }
+      return Promise.resolve({
+        object: {
+          complete: true,
+          confidence: 90,
+          findings: [],
+          remainingWork: [],
+          reasoning: "looks done",
+        },
+        usage: { inputTokens: 3, outputTokens: 2 },
+      });
     });
-  });
   return {
     stream(args: ModelRunArgs) {
       streamSpy(args.messages?.[args.messages.length - 1]?.content as string);
@@ -65,7 +71,11 @@ function makeAi(streamSpy: (instruction: string) => void): AgentAi {
           yield { type: "text-delta", text: "done" };
         })(),
         steps: Promise.resolve([{}]),
-        usage: Promise.resolve({ inputTokens: 5, outputTokens: 3, totalTokens: 8 }),
+        usage: Promise.resolve({
+          inputTokens: 5,
+          outputTokens: 3,
+          totalTokens: 8,
+        }),
         response: Promise.resolve({ messages: [] }),
         finishReason: Promise.resolve("stop"),
       } as unknown as ReturnType<AgentAi["stream"]>;
@@ -82,6 +92,7 @@ describe("runTurn — scope review gate", () => {
     const seen: ScopeReviewInfo[] = [];
 
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "improve src/a.ts",
       workspace: ws,
       ai,
@@ -106,6 +117,7 @@ describe("runTurn — scope review gate", () => {
     const ai = makeAi(streamSpy);
 
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "improve src/a.ts",
       workspace: ws,
       ai,
@@ -126,10 +138,14 @@ describe("runTurn — scope review gate", () => {
     const ai = makeAi(streamSpy);
 
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "improve src/a.ts",
       workspace: ws,
       ai,
-      confirmScope: async () => ({ proceed: true, prompt: "EDITED INSTRUCTION" }),
+      confirmScope: async () => ({
+        proceed: true,
+        prompt: "EDITED INSTRUCTION",
+      }),
     });
 
     expect(streamSpy).toHaveBeenCalled();
@@ -144,6 +160,7 @@ describe("runTurn — scope review gate", () => {
     const ai = makeAi(streamSpy);
 
     const result = await runTurn({
+      execute: scriptedEngine,
       prompt: "improve src/a.ts",
       workspace: ws,
       ai,

@@ -18,7 +18,7 @@ import { z } from "zod";
 import { enhancePrompt } from "../evaluate/prompt-enhancer";
 import { classifyTier, modelForTier } from "../router/model-router";
 import { emptyUsage } from "../types";
-import type { ModelTier, UsageTotals, CodeGraphProvider } from "../types";
+import type { ModelTier, UsageTotals } from "../types";
 import type { AgentAi, MemoryProvider } from "../ports";
 import type { AgentDefinition, Plan, Task } from "../fleet/types";
 
@@ -98,8 +98,6 @@ export interface PlanOptions {
   model?: string;
   /** Memory for recalled context in prompt enhancement. Optional. */
   memory?: MemoryProvider | null;
-  /** Code graph for prompt enhancement. Optional. */
-  codeGraph?: CodeGraphProvider | null;
   /** Roster of named agents the planner may assign tasks to. */
   agents?: AgentDefinition[];
   signal?: AbortSignal;
@@ -196,10 +194,9 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
     };
   }
 
-  // Enhance the goal so the planner sees the real code involved.
+  // Enhance the goal with what past sessions learned about this repository.
   const enhanced = await enhancePrompt({
     prompt: opts.goal,
-    codeGraph: opts.codeGraph,
     memory: opts.memory,
   });
 
