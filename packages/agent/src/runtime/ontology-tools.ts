@@ -6,15 +6,34 @@
  *
  * `materializeTools` materializes every capability whose `surfaces` include
  * `"agent"`, and the graph reads are among them, so a chat or durable turn
- * already carries them. What it does not carry is a guarantee: the set is not
- * named anywhere, so dropping `"agent"` from one contract removes an agent's
- * ability to traverse the graph with nothing failing, and a run that narrows
- * itself with `toolPolicy.allowlist` loses the set entirely unless its
- * enqueuer happened to spell all eight names.
+ * already carries them. Censused against the shipped registry on 2026-08-31:
+ * 271 of 340 registered capabilities carry the agent surface, and all eight
+ * below are among them. The count is dated because it drifts; the guarantee
+ * lives in `ontology-tools.test.ts`, not in this sentence.
+ *
+ * What that does not buy is the guarantee. The set is named nowhere, so
+ * dropping `"agent"` from one contract removes an agent's ability to traverse
+ * the graph with nothing failing, and a run that narrows itself with
+ * `toolPolicy.allowlist` loses the set entirely unless its enqueuer happened
+ * to spell all eight names.
  *
  * So the set is declared here, held read-only by
  * {@link assertOntologyReadOnly}, and unioned into a narrowed run's allowlist
  * by {@link withOntologyReads}.
+ *
+ * ## The mechanism is the existing one, not a second one
+ *
+ * These reach the model exactly the way `get_execution_trace` does — a plain
+ * `registerCapability` carrying `"agent"` in `surfaces`, picked up by
+ * `materializeTools`. Nothing here adds a delivery path: {@link
+ * withOntologyReads} widens the allowlist of the one materialization a caller
+ * already performs.
+ *
+ * That has a consequence for anything reasoning about an agent's tool set.
+ * These are not workspace tools, so a check shaped like "every tool the prompt
+ * names is in `buildWorkspaceTools`" false-positives on them, exactly as it
+ * does on `get_execution_trace`. The correct set is workspace tools UNION
+ * materialized capabilities.
  *
  * ## What this deliberately does not do
  *

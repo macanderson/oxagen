@@ -141,9 +141,19 @@ describe("against the real capability registry", () => {
       mod.getCapability(name) as unknown as RegistryCapability | undefined;
   }
 
-  it("every declared capability is registered, read-only, and on the agent surface", async () => {
+  it("every declared capability still carries the agent surface", async () => {
+    // The guard that makes the declaration load-bearing rather than
+    // documentary. `surfaces` is what decides whether materializeTools builds
+    // a tool at all, so an edit dropping "agent" from one of these contracts
+    // takes a graph read away from every agent on the platform — silently,
+    // without this. Confirmed to fail for exactly that reason: dropping
+    // "agent" from ontology.query.ts reports `query_ontology no longer reaches
+    // an agent: expected [ 'api', 'mcp', 'cli' ] to include 'agent'`.
+    //
+    // The per-contract equivalent is agent.trace.get.test.ts's surfaces
+    // assertion. This is the same idea keyed to the declared SET, so adding a
+    // ninth read to ONTOLOGY_READ_CAPABILITIES inherits the guard.
     const mod = await import("@oxagen/oxagen");
-    assertOntologyReadOnly(await realLookup());
     for (const name of ONTOLOGY_READ_CAPABILITIES) {
       const cap = mod.getCapability(name);
       expect(cap, `${name} is not registered`).toBeDefined();
@@ -152,6 +162,10 @@ describe("against the real capability registry", () => {
         `${name} no longer reaches an agent`,
       ).toContain("agent");
     }
+  });
+
+  it("every declared capability is registered and read-only", async () => {
+    assertOntologyReadOnly(await realLookup());
   });
 
   it("no declared capability is classified mutating, so Stella may dispatch them concurrently", async () => {
