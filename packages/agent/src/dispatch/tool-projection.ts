@@ -38,17 +38,30 @@ const logger = pino({
 // input_tokens/output_tokens beside the columns read here. Those are
 // ClickHouse's and are joined at read time.
 //
+// TOOL IDENTITY IS THE SLUG, so this projection and the asset registry
+// converge on one node instead of two. agent.tools is keyed
+// UNIQUE (workspace_id, slug), and tool.declaration.publish defines that slug
+// as `input.name.trim().toLowerCase()` — so `lower(tool_name)` from an
+// invocation addresses the declaration exactly. :Tool is MERGEd on that slug
+// and takes the declaration's public_id when one exists, so a later registry
+// projection MERGEs the same node and enriches it rather than colliding with
+// it on the graph-global publicId constraint. A tool invoked but never
+// declared still gets a node, with a derived publicId and `declared = false`:
+// the registry is populated by publishing, not by running, so keying on the
+// declaration alone would drop every undeclared tool from the graph — and
+// absence would then read as "this run used no such tool".
+//
 // NO :ToolVersion NODE IS WRITTEN, and INVOKED therefore points at :Tool.
 // packages/ontology/src/schema.cypher records the edge as
-// :Execution -> :ToolVersion, which was written against agent.tool_versions —
-// a table dropped as dead in
-// packages/database/drizzle/migration_archive/0004_drop_dead_tables.sql
-// ("no domain reads/writes; e2e fixture only"). Nothing in the tree records a
-// tool version any more, so a :ToolVersion node here would carry a fabricated
-// version. A tool's identity as this repository actually records it is
-// (org, workspace, tool_type, tool_name), which is what :Tool is keyed on.
-// Restoring the version grain is tracked separately; until it exists, the
-// edge lands where the data can support it.
+// :Execution -> :ToolVersion. agent.tool_versions does exist (the asset
+// registry restored it — it had been dropped as dead in
+// packages/database/drizzle/migration_archive/0004_drop_dead_tables.sql), but
+// the missing link is not the table: agent_tool_calls records tool_name and
+// tool_type and no version at all, so nothing says which version a given
+// invocation ran. agent.tools.active_version_id names the version pinned
+// NOW, and attributing a past invocation to it would date every historical
+// edge to today's pin. Until an invocation carries its version, the edge
+// lands at the grain the data can support.
 //
 // NO :Skill / :SkillVersion / LOADED_SKILL IS WRITTEN. The same audit found
 // no per-execution skill-load record anywhere: ClickHouse `skill_loads` has
@@ -79,10 +92,13 @@ export interface ProjectExecutionToolUsageArgs {
   workspaceId: string;
 }
 
-/** One (tool_type, tool_name) this execution invoked, with its call tallies. */
+/** One tool this execution invoked, keyed by slug, with its call tallies. */
 interface ToolUsageRow extends Record<string, unknown> {
-  tool_type: string;
+  slug: string;
   tool_name: string;
+  tool_type: string;
+  /** agent.tools.public_id when the tool is declared, else null. */
+  declared_public_id: string | null;
   call_count: number;
   failed_call_count: number;
   first_invoked_at: Date;
@@ -123,9 +139,16 @@ async function loadExecutionId(args: {
  * The join to agent_execution_steps is what supplies execution_id —
  * agent_tool_calls carries only execution_step_id. Both sides are filtered on
  * org + workspace rather than relying on the step join alone, so a mis-scoped
- * step row can never widen the result. ORDER BY makes the projected parameter
- * list deterministic, which is what lets a re-run issue byte-identical
- * statements.
+ * step row can never widen the result. The LEFT JOIN to agent.tools attaches
+ * the declaration's public_id where the tool is declared and leaves it null
+ * where it is not; it cannot multiply rows, because (workspace_id, slug) is
+ * unique there.
+ *
+ * Grouping is by slug alone — the identity — so two spellings of one tool name
+ * tally into the single node they address rather than racing each other's
+ * counts through it. `name` and `type` are display facts chosen with min() for
+ * determinism. ORDER BY makes the projected parameter list deterministic,
+ * which is what lets a re-run issue byte-identical statements.
  */
 async function loadToolUsage(args: {
   executionId: string;
@@ -136,8 +159,10 @@ async function loadToolUsage(args: {
   const result = await withTenantDb((tx) =>
     tx.execute<ToolUsageRow>(sql`
       SELECT
-        tc.tool_type,
-        tc.tool_name,
+        lower(tc.tool_name) AS slug,
+        min(tc.tool_name) AS tool_name,
+        min(tc.tool_type) AS tool_type,
+        max(t.public_id::text) AS declared_public_id,
         count(*)::int AS call_count,
         count(*) FILTER (WHERE tc.status = 'failed')::int AS failed_call_count,
         min(tc.created_at) AS first_invoked_at,
@@ -147,11 +172,16 @@ async function loadToolUsage(args: {
         ON s.id = tc.execution_step_id
        AND s.org_id = ${orgId}::uuid
        AND s.workspace_id = ${workspaceId}::uuid
+      LEFT JOIN agent.tools t
+        ON t.slug = lower(tc.tool_name)
+       AND t.org_id = ${orgId}::uuid
+       AND t.workspace_id = ${workspaceId}::uuid
+       AND t.deleted_at IS NULL
       WHERE s.execution_id = ${executionId}::uuid
         AND tc.org_id = ${orgId}::uuid
         AND tc.workspace_id = ${workspaceId}::uuid
-      GROUP BY tc.tool_type, tc.tool_name
-      ORDER BY tc.tool_type, tc.tool_name
+      GROUP BY lower(tc.tool_name)
+      ORDER BY lower(tc.tool_name)
     `),
   );
   return Array.from(result as unknown as ToolUsageRow[]);
@@ -192,8 +222,11 @@ const MERGE_TOOLS_CYPHER = /* cypher */ `
     t.publicId = tl.publicId,
     t.createdAt = datetime()
   SET
+    t.publicId = CASE WHEN tl.declared THEN tl.publicId ELSE t.publicId END,
+    t.slug = tl.id,
     t.name = tl.name,
     t.toolType = tl.toolType,
+    t.declared = tl.declared,
     t.displayName = tl.displayName,
     t.updatedAt = datetime()
 `;
@@ -217,17 +250,22 @@ function toIso(d: Date): string {
 }
 
 /**
- * A tool's graph identity. There is no agent.tools row to carry one, so the
- * key is derived from the columns that do identify the tool —
- * (tool_type, tool_name) — and is stable across runs by construction. The
- * publicId additionally carries the tenant scope because the :Tool and
- * :GraphNode publicId constraints are graph-global, so two workspaces using a
- * tool of the same name must not collide on it.
+ * A tool's graph identity: the slug it is addressed by, plus the declaration's
+ * public_id when the tool is declared in the asset registry.
+ *
+ * The derived fallback carries the tenant scope because the :Tool and
+ * :GraphNode publicId constraints are graph-global, so two workspaces that
+ * invoke an undeclared tool of the same name must not collide on it. It is
+ * prefixed `undeclared:` so a reader can tell a derived address from a
+ * registry one without joining anything.
  */
 function toolIdentity(row: ToolUsageRow, orgId: string, workspaceId: string) {
   return {
-    id: `${row.tool_type}:${row.tool_name}`,
-    publicId: `${orgId}:${workspaceId}:${row.tool_type}:${row.tool_name}`,
+    id: row.slug,
+    publicId:
+      row.declared_public_id ??
+      `undeclared:${orgId}:${workspaceId}:${row.slug}`,
+    declared: row.declared_public_id !== null,
   };
 }
 

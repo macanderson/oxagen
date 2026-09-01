@@ -39,26 +39,34 @@ const WORKSPACE_ID = "22222222-2222-2222-2222-222222222222";
 const EXECUTION_ID = "33333333-3333-3333-3333-333333333333";
 
 interface ToolUsageFixture {
-  tool_type: string;
+  slug: string;
   tool_name: string;
+  tool_type: string;
+  declared_public_id: string | null;
   call_count: number;
   failed_call_count: number;
   first_invoked_at: Date;
   last_invoked_at: Date;
 }
 
+// Declared in the asset registry — carries agent.tools.public_id.
 const SEARCH_TOOL: ToolUsageFixture = {
-  tool_type: "builtin",
+  slug: "search",
   tool_name: "search",
+  tool_type: "builtin",
+  declared_public_id: "tol_search",
   call_count: 3,
   failed_call_count: 0,
   first_invoked_at: new Date("2026-01-01T00:00:01.000Z"),
   last_invoked_at: new Date("2026-01-01T00:00:09.000Z"),
 };
 
+// Invoked but never published to the registry — no declaration to key on.
 const LOAD_SKILL_TOOL: ToolUsageFixture = {
-  tool_type: "mcp",
+  slug: "load_skill",
   tool_name: "load_skill",
+  tool_type: "mcp",
+  declared_public_id: null,
   call_count: 1,
   failed_call_count: 1,
   first_invoked_at: new Date("2026-01-01T00:00:04.000Z"),
@@ -130,10 +138,7 @@ describe("projectExecutionToolUsage — tools an execution invoked", () => {
 
     expect(toolCall![0]).toMatch(/MERGE \(t:Tool/);
     const toolParams = toolCall![1]!.tools as Array<Record<string, unknown>>;
-    expect(toolParams.map((t) => t.id)).toEqual([
-      "builtin:search",
-      "mcp:load_skill",
-    ]);
+    expect(toolParams.map((t) => t.id)).toEqual(["search", "load_skill"]);
     expect(toolParams.map((t) => t.name)).toEqual(["search", "load_skill"]);
 
     expect(invokedCall![0]).toMatch(/MERGE \(e\)-\[i:INVOKED\]->\(t\)/);
@@ -146,19 +151,32 @@ describe("projectExecutionToolUsage — tools an execution invoked", () => {
     expect(mocks.sessionClose).toHaveBeenCalledTimes(1);
   });
 
-  it("scopes the tool publicId by tenant so two workspaces using the same tool name cannot collide on the graph-global constraint", async () => {
+  it("keys a declared tool on the asset registry's public_id, so a registry projection MERGEs the same node instead of a rival one", async () => {
     mockPostgres([{ id: EXECUTION_ID }], [SEARCH_TOOL]);
     await projectExecutionToolUsage(baseArgs());
 
     const toolParams = capturedRunCalls()[1]![1]!.tools as Array<
       Record<string, unknown>
     >;
+    expect(toolParams[0]!.id).toBe("search");
+    expect(toolParams[0]!.publicId).toBe("tol_search");
+    expect(toolParams[0]!.declared).toBe(true);
+  });
+
+  it("gives an undeclared tool a tenant-scoped derived publicId, so two workspaces cannot collide on the graph-global constraint", async () => {
+    mockPostgres([{ id: EXECUTION_ID }], [LOAD_SKILL_TOOL]);
+    await projectExecutionToolUsage(baseArgs());
+
+    const toolParams = capturedRunCalls()[1]![1]!.tools as Array<
+      Record<string, unknown>
+    >;
     expect(toolParams[0]!.publicId).toBe(
-      `${ORG_ID}:${WORKSPACE_ID}:builtin:search`,
+      `undeclared:${ORG_ID}:${WORKSPACE_ID}:load_skill`,
     );
+    expect(toolParams[0]!.declared).toBe(false);
 
     mocks.sessionRun.mockClear();
-    mockPostgres([{ id: EXECUTION_ID }], [SEARCH_TOOL]);
+    mockPostgres([{ id: EXECUTION_ID }], [LOAD_SKILL_TOOL]);
     await projectExecutionToolUsage(
       baseArgs({ workspaceId: "99999999-9999-9999-9999-999999999999" }),
     );
@@ -166,6 +184,15 @@ describe("projectExecutionToolUsage — tools an execution invoked", () => {
       Record<string, unknown>
     >;
     expect(otherParams[0]!.publicId).not.toBe(toolParams[0]!.publicId);
+  });
+
+  it("adopts the registry publicId once a tool is declared, and never downgrades a declared one to the derived form", async () => {
+    mockPostgres([{ id: EXECUTION_ID }], [SEARCH_TOOL]);
+    await projectExecutionToolUsage(baseArgs());
+    const cypher = capturedRunCalls()[1]![0];
+    expect(cypher).toContain(
+      "t.publicId = CASE WHEN tl.declared THEN tl.publicId ELSE t.publicId END",
+    );
   });
 
   it("records a load_skill call as an ordinary INVOKED edge and never as a LOADED_SKILL edge or a :Skill node", async () => {
@@ -180,7 +207,7 @@ describe("projectExecutionToolUsage — tools an execution invoked", () => {
     const toolParams = capturedRunCalls()[1]![1]!.tools as Array<
       Record<string, unknown>
     >;
-    expect(toolParams[0]!.id).toBe("mcp:load_skill");
+    expect(toolParams[0]!.id).toBe("load_skill");
   });
 });
 
@@ -300,6 +327,7 @@ describe("projectExecutionToolUsage — four-store boundary", () => {
     >;
     expect(Object.keys(toolParams[0]!).sort()).toEqual([
       "callCount",
+      "declared",
       "displayName",
       "failedCallCount",
       "firstInvokedAt",

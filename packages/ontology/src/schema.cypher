@@ -19,11 +19,12 @@ CREATE CONSTRAINT user_public_id IF NOT EXISTS FOR (n:User) REQUIRE n.publicId I
 CREATE CONSTRAINT agent_public_id IF NOT EXISTS FOR (n:Agent) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT agent_version_public_id IF NOT EXISTS FOR (n:AgentVersion) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT tool_public_id IF NOT EXISTS FOR (n:Tool) REQUIRE n.publicId IS UNIQUE;
-// :ToolVersion has no writer. agent.tool_versions was dropped as a dead table
-// (packages/database/drizzle/migration_archive/0004_drop_dead_tables.sql), so
-// nothing records a tool version to key one on; the tool projection
-// (packages/agent/src/dispatch/tool-projection.ts) writes :Tool instead. The
-// constraint is kept so legacy nodes stay addressable.
+// :ToolVersion has no writer. agent.tool_versions exists (the workspace asset
+// registry restored it), but agent_tool_calls records no version, so nothing
+// says which version a given invocation ran — the tool projection
+// (packages/agent/src/dispatch/tool-projection.ts) writes :Tool instead, keyed
+// on the same slug the registry uses. The constraint is kept so a future
+// version-grained writer, and any legacy node, stay addressable.
 CREATE CONSTRAINT tool_version_public_id IF NOT EXISTS FOR (n:ToolVersion) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT playbook_public_id IF NOT EXISTS FOR (n:Playbook) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT playbook_version_public_id IF NOT EXISTS FOR (n:PlaybookVersion) REQUIRE n.publicId IS UNIQUE;
