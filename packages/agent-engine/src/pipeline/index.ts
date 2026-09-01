@@ -211,8 +211,8 @@ export interface RunTurnOptions {
   memory?: MemoryProvider | null;
   /**
    * Interactive clarification callback. Supplied ONLY by a surface with a human
-   * to ask (the REPL). When present, every `runCodingAgent` round this turn runs
-   * gets the `ask_user` tool, and the system prompt gains the "ask when truly
+   * to ask (the REPL). When present, every execution round this turn runs gets
+   * the `ask_user` tool, and the system prompt gains the "ask when truly
    * ambiguous" rule (via `hasAskUser`). Omitted on headless / one-shot / chat
    * turns — the tool is then never advertised, since nobody could answer it.
    */
@@ -221,10 +221,10 @@ export interface RunTurnOptions {
   trace?: TraceStore | null;
   /**
    * Transactional file lock (ADR-021) — the
-   * SINGLE wiring point is inside `tools.ts`'s write_file/edit_file, which
-   * `runCodingAgent` (via `engine.ts`) threads this straight through to.
+   * SINGLE wiring point is inside `tools.ts`'s write_file/edit_file, which the
+   * host builds the tool set for and threads this straight through to.
    * `runTurn` generates one stable lock identity per turn (`lockContext`,
-   * below) and passes BOTH down to every `runCodingAgent` call this turn
+   * below) and passes BOTH down to every execution segment this turn
    * makes (including revision rounds), then batch-releases everything the
    * turn holds in its `lockContext.executionId` once the turn ends — the
    * final backstop after per-call release.
@@ -309,7 +309,7 @@ export interface RunTurnOptions {
   /** Abort the turn (e.g. user hit Ctrl-C / Esc). */
   signal?: AbortSignal;
   /**
-   * Per-turn dollar budget gate. Forwarded to every `runCodingAgent` round this
+   * Per-turn dollar budget gate. Forwarded to every execution round this
    * turn runs, but wrapped so it sees the turn's CUMULATIVE usage (prior rounds'
    * tokens carried as a baseline) — the engine guard alone only sees one round's
    * usage, so this is what makes the ceiling a true per-TURN cap across the
@@ -498,7 +498,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   // edits never conflict with themselves) and executionId (turn-end batch
   // release correlation) — distinct from `trace.id`, which is only assembled
   // at the END of the turn and so can't be known early enough to acquire
-  // under. A DIFFERENT concurrently-running `runTurn`/`runCodingAgent` call
+  // under. A DIFFERENT concurrently-running turn
   // (another chat turn, another fleet subagent child) gets its OWN id here,
   // so two live agents correctly see each other as conflicting holders.
   const turnLockId = newTraceId();
@@ -713,7 +713,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   // `usage`/`cachedInputTokens` accumulators) and add it before delegating to
   // the caller's guard. One wrapped guard, defined once, reads the mutable
   // baseline — so a "prompt"-mode approval's raised ceiling (held inside the
-  // caller's guard) persists across rounds. Passed to every runCodingAgent call.
+  // caller's guard) persists across rounds. Passed to every execution segment.
   const budgetBaseline = {
     inputTokens: 0,
     outputTokens: 0,
@@ -1745,7 +1745,7 @@ async function runBare(
   // model-free classifier the full pipeline uses), so trivial bare turns run
   // cheap while auth/billing/architecture prompts still escalate to precise. A
   // pin (`opts.model`) always wins. This value BOTH labels the run (usage,
-  // trace.selectedModel) AND is passed to runCodingAgent below, so the label can
+  // trace.selectedModel) AND is passed to the engine below, so the label can
   // never diverge from what actually executes.
   const model =
     opts.model ?? modelForTier(classifyTier({ text: opts.prompt }).tier);
@@ -1765,8 +1765,8 @@ async function runBare(
     instruction: opts.prompt,
     images: opts.images,
     // Routed above (pin wins, else classifyTier floor) — pass it explicitly so
-    // execution matches the labeled model instead of falling to runCodingAgent's
-    // frontier DEFAULT_AGENT_MODEL.
+    // execution matches the labeled model instead of falling to the frontier
+    // DEFAULT_AGENT_MODEL.
     model,
     effort: opts.effort,
     system: composeAgentSystem(opts, cwd),

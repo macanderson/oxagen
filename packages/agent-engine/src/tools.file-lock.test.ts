@@ -2,7 +2,7 @@
  * Coverage for the agent-file-locking wiring (OXA-2070,
  * docs/specs/agent-file-locking/plan.md) — the SINGLE enforcement point:
  * write_file/edit_file acquire before the real filesystem write and release
- * after, for every caller of runCodingAgent (chat, CLI, agent.repo.edit fleet
+ * after, for every surface that runs a turn (chat, CLI, agent.repo.edit fleet
  * dispatch) alike. `FileLockProvider` is faked here; the real Neo4j-backed
  * acquire/release Cypher is covered by
  * packages/ontology/src/mutations/acquire-file-lock.test.ts,
@@ -232,7 +232,7 @@ describe("buildWorkspaceTools — agent file locking (edit_file)", () => {
   });
 
   it("two concurrent turns racing on the SAME path: the second sees a denial while the first still holds it", async () => {
-    // Simulates two runCodingAgent calls (e.g. the chat surface and a fleet
+    // Simulates two concurrent turns (e.g. the chat surface and a fleet
     // subagent, both funneling through the same shared engine per
     // docs/adr/ADR-017-unified-agent-engine.md) targeting the same file. A
     // single shared, stateful fake stands in for the real transactional

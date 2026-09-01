@@ -190,7 +190,7 @@ export const workspaceMemoryPolicy = workspaceSchema.table(
 // members who haven't set their own) or a hard `ceiling` (clamps members — they
 // can't exceed it and the enforcement mode can only get stricter). Resolved
 // against the member's own budget by resolveEffectiveTurnBudget in @oxagen/billing;
-// the shared runCodingAgent guard enforces the single merged policy. Rows created
+// the per-turn budget guard applies the single merged policy. Rows created
 // on first write; absent ⇒ no governance (members keep their personal budget).
 // (Org-WIDE default across all workspaces is a planned follow-up — the merge
 // function already accepts an org level, so it needs no billing change.)

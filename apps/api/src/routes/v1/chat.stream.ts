@@ -81,10 +81,10 @@ export const chatStreamRoute = new Hono<AppEnv>();
 // Each SSE line: `data: <JSON ApiStreamEvent>\n\n`
 // Terminal: `event: done\ndata: [DONE]\n\n`
 //
-// Runs the SAME coding engine the CLI and in-app chat use (runCodingAgent),
-// workspace-optional conversational mode — one step-driver with the multi-step
-// tool loop (`stopWhen`), invoke()-gated tools, per-turn memory recall, and the
-// USD budget guard. Raw AI-SDK parts are forwarded to a stateful SSE translator
+// Runs the SAME engine the CLI and in-app chat use, workspace-optional
+// conversational mode — the multi-step tool loop (`stopWhen`), invoke()-gated
+// tools and per-turn memory recall; the USD budget guard is passed but not
+// consulted (#2609). Raw AI-SDK parts are forwarded to a stateful SSE translator
 // via `onStreamPart` so the client wire protocol is byte-identical to the
 // pre-engine single-`streamAgentReply` transport.
 chatStreamRoute.post("/", async (c) => {

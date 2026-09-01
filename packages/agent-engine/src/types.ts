@@ -343,7 +343,7 @@ export interface RunCodingAgentOptions {
   fileLock?: FileLockProvider | null;
   /**
    * Identity the file-lock port acquires/releases under. `agentId` MUST be
-   * stable across every `runCodingAgent` call within the SAME turn (so a
+   * stable across every execution segment within the SAME turn (so a
    * revision round renews its own lock instead of conflicting with itself)
    * but DIFFERENT across concurrently-running turns/subagent children (so two
    * live agents correctly see each other as conflicting holders).
@@ -419,7 +419,7 @@ export interface RunCodingAgentOptions {
 }
 
 /**
- * Why {@link runCodingAgent} ended the turn. Absent ⇒ the model finished
+ * Why the engine ended the turn. Absent ⇒ the model finished
  * naturally (a non-`tool-calls` finish reason).
  *
  * - `budget` — a per-turn dollar ceiling stopped it (the `budgetGuard` returned

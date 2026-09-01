@@ -360,7 +360,7 @@ function withBackstop(
 // ── Agent file locking (docs/specs/agent-file-locking/plan.md) ─────────────
 // The SINGLE wiring point: write_file/edit_file acquire the transactional
 // Postgres lease immediately before the real filesystem write and release it
-// immediately after, for EVERY caller of runCodingAgent (chat, CLI,
+// immediately after, for EVERY surface that runs a turn (chat, CLI,
 // agent.repo.edit fleet dispatch) — there is exactly one enforcement point.
 
 /** Acquire retry budget: a real hold is expected to be release-then-reacquire

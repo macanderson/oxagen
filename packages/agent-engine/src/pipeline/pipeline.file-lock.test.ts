@@ -178,7 +178,7 @@ describe("runTurn — FileLockProvider protects independent callers (chat vs. fl
   it("two independent runTurn calls sharing ONE FileLockProvider get different lock identities and correctly serialize on the same target path", async () => {
     // Chat surface (apps/app/src/app/api/v1/chat/stream/route.ts) and a fleet
     // subagent child (agent.repo.edit dispatched via agent.execute-subagent)
-    // both funnel through runCodingAgent → the SAME tools.ts wiring — neither
+    // both funnel through the SAME tools.ts wiring — neither
     // knows about the other. A single stateful fake stands in for the shared
     // transactional Postgres lease.
     const holders = new Map<string, string>();

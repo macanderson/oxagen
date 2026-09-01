@@ -4,8 +4,7 @@
  *
  * Every platform surface — app chat, REST chat, the A2A bridge, and the
  * `agent.repo.edit` fleet capability — enters the engine through this module
- * instead of importing `runCodingAgent`/`runTurn` directly. Behavior today is
- * a byte-identical delegation; the value is the seam:
+ * instead of importing `runTurn` directly. The value is the seam:
  *
  * - Phase 2 (durable runs) adds run rows, the append-only event log,
  *   per-step checkpoints, and resume HERE, without touching any surface.

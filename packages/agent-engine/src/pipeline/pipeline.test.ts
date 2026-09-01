@@ -101,7 +101,7 @@ describe("runTurn — bare mode model accounting", () => {
   it("labels/accounts an unpinned, high-stakes bare run with DEFAULT_AGENT_MODEL, matching what actually executes", async () => {
     // Assert BOTH sides agree: the model the stream() call actually received,
     // and the label recorded on the trace. An unpinned run falls through to
-    // runCodingAgent's own default (DEFAULT_AGENT_MODEL, Fable 5), so the
+    // the engine's own default (DEFAULT_AGENT_MODEL, Fable 5), so the
     // label must track that, not a hardcoded tier. A prompt that matches
     // PRECISE_DOMAINS (auth) still floors to the frontier tier — same slug as
     // DEFAULT_AGENT_MODEL — so this also covers the classifyTier escalation

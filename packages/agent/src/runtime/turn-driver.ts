@@ -75,9 +75,9 @@
  *
  * ## What this v1 driver deliberately does NOT do (explicit follow-ups)
  *
- * - **No mid-turn checkpoint.** `io.checkpoint` is never called. The
- *   in-process TS engine (`runCodingAgent`, reached via `executeTurn`) owns
- *   its whole turn loop and has no serializable mid-turn state to hand back —
+ * - **No mid-turn checkpoint.** `io.checkpoint` is never called. The engine
+ *   reached via `executeTurn` owns its whole turn and hands back no
+ *   serializable mid-turn state —
  *   that capability arrives with the Phase 3 embedded Stella core's
  *   step-scoped `run_step` API (spec.md §4.3/§6). Until then, crash-resume
  *   for a run this driver owns is a FULL RE-RUN from the top, bounded by the

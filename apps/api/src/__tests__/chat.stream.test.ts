@@ -179,7 +179,7 @@ async function* textStream(text: string) {
 
 /**
  * Wrap a `fullStream` generator in the full StreamTextResult shape the unified
- * agent engine (runCodingAgent) awaits. The engine reads `usage`,
+ * agent engine awaits. The engine reads `usage`,
  * `finishReason`, `response`, and `steps` as top-level promises on the stream
  * result. A mock returning only `{ fullStream }` makes the
  * engine throw when it awaits the missing `usage`, aborting the turn before the
@@ -718,7 +718,7 @@ describe("chat stream: error handling", () => {
     // SSE response still completes (the failure must not corrupt the stream).
     expect(res.status).toBe(200);
     // Drain so the stream's start() callback completes: under the unified engine
-    // (runCodingAgent) persistence runs asynchronously inside the stream body,
+    // persistence runs asynchronously inside the stream body,
     // AFTER the engine's usage/finishReason promises resolve — so the log is only
     // guaranteed to have fired once the SSE body is fully read.
     await res.text();

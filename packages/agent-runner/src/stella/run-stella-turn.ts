@@ -1,6 +1,6 @@
 /**
- * Run one turn on the Stella engine, satisfying the exact contract
- * `runCodingAgent` satisfies.
+ * Run one turn on the Stella engine — the only engine — against the contract
+ * `RunCodingAgentOptions`/`RunCodingAgentResult` still name.
  *
  * Same options in (`RunCodingAgentOptions`), same result out
  * (`RunCodingAgentResult`), same `onEvent` / `onStreamPart` streams — which is
@@ -89,10 +89,10 @@ export interface StellaTurnDeps {
 /**
  * The default system prompt, resolved by the caller.
  *
- * `runCodingAgent` falls back to `buildCodingCorePrompt()` when `system` is
- * omitted. That default is not exported, and re-deriving it here would create a
- * second copy of a prompt whose byte-stability is a caching contract — so this
- * path requires the caller to have resolved one. `executeTurn` does.
+ * Nothing defaults it. `buildCodingCorePrompt()` is not exported, and
+ * re-deriving it here would create a second copy of a prompt whose
+ * byte-stability is a caching contract — so this path requires the caller to
+ * have resolved one. `executeTurn` does.
  */
 export const MISSING_SYSTEM_PROMPT =
   "the Stella engine path requires an explicit `system` prompt";
@@ -232,8 +232,7 @@ export async function runStellaTurn(
 }
 
 /**
- * Assemble tools exactly as `runCodingAgent` does — with one deliberate
- * omission.
+ * Assemble the turn's tool set — with one deliberate omission.
  *
  * `wrapToolsWithDispatchGuard` is **not** applied. Stella partitions a step's
  * calls itself on the `read_only` bit each schema carries, so running the TS
