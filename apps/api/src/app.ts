@@ -298,6 +298,7 @@ import { auditLogQueryRoute } from "./routes/v1/audit.log.query";
 import { agentLlmRoute } from "./routes/v1/agent.llm";
 import { authCliTokenRoute } from "./routes/v1/auth.cli.token";
 import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
+import { telemetryStellaEnrollRoute } from "./routes/v1/telemetry.stella.enroll";
 import { telemetryStellaIngestRoute } from "./routes/v1/telemetry.stella.ingest";
 import { cmsRoute } from "./routes/v1/cms";
 import { a2aWellKnownRoute } from "./routes/a2a/well-known";
@@ -458,6 +459,10 @@ orgScoped.use("/agent/compose", agentExecRateLimiter);
 orgScoped.use("/agent/sandbox/*", agentExecRateLimiter);
 orgScoped.use("/agent/tasks", agentExecRateLimiter);
 orgScoped.route("/workspaces", workspaceCreateRoute);
+// Minting an enrollment is an operator action, so it sits behind the session
+// auth this router applies — not beside the ingest route, whose API-key gate
+// an already-enrolled machine could otherwise use to mint more enrollments.
+orgScoped.route("/telemetry/stella/enrollments", telemetryStellaEnrollRoute);
 orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
 orgScoped.route(
   "/billing/subscription/upgrade/start",
