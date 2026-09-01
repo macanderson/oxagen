@@ -1,0 +1,145 @@
+apiVersion: oxagen.ai/v1alpha1
+kind: ConnectorPlugin
+
+metadata:
+  id: zendesk
+  displayName: Zendesk
+  description: Sync tickets, ticket comments, users, and organizations from Zendesk Support.
+  icon: zendesk
+  category: support
+  version: "1.0.0"
+  schemaVersion: "1"
+  publisher:
+    name: Oxagen
+    verified: true
+
+auth:
+  schemes:
+    - id: oauth2
+      kind: oauth2_authorization_code
+      displayName: Connect with Zendesk (OAuth)
+      scopes:
+        - read
+
+    - id: api_token
+      kind: api_key
+      displayName: API Token
+      fields:
+        - key: apiKey
+          label: Zendesk API Token
+          widget: secret
+          description: >
+            Create one under Admin Center → Apps and integrations → Zendesk API →
+            API tokens. Enter the agent's email address in the Agent Email field
+            below — Zendesk authenticates an API token against that email.
+          validation:
+            required: true
+            pattern: "^[A-Za-z0-9]{20,}$"
+
+config:
+  fields:
+    - key: subdomain
+      label: Zendesk Subdomain
+      widget: text
+      description: The subdomain alone, not the full URL. For https://acme.zendesk.com, enter "acme".
+      validation:
+        required: true
+        pattern: "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+
+    - key: email
+      label: Agent Email
+      widget: text
+      description: >
+        The email of the agent the API token belongs to. Required for API token
+        auth; leave empty when connecting with OAuth.
+      validation:
+        pattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+
+    - key: syncDepthDays
+      label: Initial Sync Depth (days)
+      widget: number
+      description: How far back to pull ticket history on the first sync. Later syncs only fetch what changed.
+      defaultValue: 90
+      validation:
+        min: 1
+        max: 730
+
+    - key: pageSize
+      label: Records Per Request
+      widget: number
+      description: How many records to request per API call. Zendesk's incremental export maximum is 1000.
+      defaultValue: 1000
+      validation:
+        min: 1
+        max: 1000
+
+recordTypes:
+  selectionMode: multi
+  defaultAll: false
+  items:
+    - id: ticket
+      displayName: Tickets
+      description: Support tickets with subject, status, priority, channel, tags, and assignment.
+      defaultEnabled: true
+
+    - id: ticket_comment
+      displayName: Ticket Comments
+      description: The public and internal replies on a ticket, carrying the conversation itself.
+      defaultEnabled: true
+
+    - id: user
+      displayName: Users
+      description: End users and agents with name, email, role, and organization.
+      defaultEnabled: true
+
+    - id: organization
+      displayName: Organizations
+      description: Customer organizations with domain names, tags, and notes.
+      defaultEnabled: false
+
+filters:
+  pathFilters:
+    enabled: false
+  labelFilters:
+    enabled: true
+    appliesTo:
+      - ticket
+
+sync:
+  delivery: polling
+  pollingSupported: true
+  polling:
+    defaultIntervalSeconds: 900
+    minIntervalSeconds: 300
+    maxIntervalSeconds: 86400
+
+defaultFieldMappings:
+  ticket:
+    subject: title
+    description: description
+    status: status
+    priority: priority
+    tags: tags
+    assigneeId: assignee
+    organizationId: parentId
+    dueAt: dueDate
+    createdAt: createdAt
+    updatedAt: updatedAt
+  ticket_comment:
+    body: description
+    authorId: author
+    ticketId: parentId
+    createdAt: createdAt
+  user:
+    name: displayName
+    email: email
+    role: jobTitle
+    organizationId: parentId
+    createdAt: createdAt
+    updatedAt: updatedAt
+  organization:
+    name: title
+    details: description
+    tags: tags
+    createdAt: createdAt
+    updatedAt: updatedAt
