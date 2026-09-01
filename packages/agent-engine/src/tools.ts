@@ -8,12 +8,7 @@
  */
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
-import type {
-  Workspace,
-  CodeGraphProvider,
-  CodingEvent,
-  AskUserCallback,
-} from "./types";
+import type { Workspace, CodingEvent, AskUserCallback } from "./types";
 import type { FileLockProvider, DiagnosticsProvider } from "./ports";
 import { delay } from "./loop-driver";
 import { buildStructuredTools } from "./tools-structured";
@@ -477,7 +472,6 @@ export function buildWorkspaceTools(
   workspace: Workspace,
   opts: {
     readOnly?: boolean;
-    codeGraph?: CodeGraphProvider;
     onEvent?: (e: CodingEvent) => void;
     /**
      * Turn abort signal, forwarded to `workspace.exec` so an aborted turn kills
@@ -503,8 +497,8 @@ export function buildWorkspaceTools(
     diagnostics?: DiagnosticsProvider;
     /**
      * Interactive clarification callback. When supplied, the `ask_user` tool is
-     * registered (mirrors `codeGraph` gating); when omitted — every headless /
-     * one-shot surface with nobody to ask — the tool is never advertised.
+     * registered; when omitted — every headless / one-shot surface with nobody
+     * to ask — the tool is never advertised.
      */
     askUser?: AskUserCallback;
   } = {},
@@ -881,8 +875,8 @@ export function buildWorkspaceTools(
   };
 
   // delete_file is gated on the workspace implementing deletion — the same
-  // presence-not-flag gating code_graph and ask_user use. A workspace without
-  // it leaves the model with `bash rm`, which records no file-touch event.
+  // presence-not-flag gating ask_user uses. A workspace without it leaves the
+  // model with `bash rm`, which records no file-touch event.
   if (workspace.deleteFile) {
     const deleteFile = workspace.deleteFile.bind(workspace);
     tools.delete_file = tool({
@@ -917,58 +911,10 @@ export function buildWorkspaceTools(
     });
   }
 
-  // code_graph is optional — only added when a provider is supplied.
-  if (opts.codeGraph) {
-    const codeGraph = opts.codeGraph;
-    tools.code_graph = tool({
-      description:
-        "Query the repository's code graph — a precomputed index of symbols and " +
-        "import relationships — for STRUCTURAL answers, instead of guessing paths " +
-        'or grepping. Prefer this over `grep` for "where is X defined" and for ' +
-        "impact analysis before a change. Operations: 'search' finds where a " +
-        "symbol (function/class/type/interface) is defined by name; 'file_symbols' " +
-        "lists the top-level symbols a file defines; 'dependents' lists the files " +
-        "that import a given file (what a change could break); 'imports' lists the " +
-        "local files a given file imports; 'semantic_search' finds files " +
-        "conceptually related to a natural-language description (e.g. 'project " +
-        "level configuration for the cli app') via embedding similarity, returning " +
-        "a flat ranked FILE LIST — use it when 'search' returns nothing because the " +
-        "query names no exact symbol or path.",
-      inputSchema: z.object({
-        operation: z.enum([
-          "search",
-          "file_symbols",
-          "dependents",
-          "imports",
-          "semantic_search",
-        ]),
-        query: z
-          .string()
-          .describe(
-            "A symbol name for 'search'; a file path (relative to cwd, or a suffix " +
-              "like 'agent/loop.ts') for 'file_symbols' / 'dependents' / 'imports'; " +
-              "a natural-language concept for 'semantic_search'.",
-          ),
-        limit: z
-          .number()
-          .int()
-          .optional()
-          .describe("Max results to return (default 25)."),
-      }),
-      execute: async ({ operation, query, limit }) => {
-        try {
-          return clip(await codeGraph.query(operation, query, limit));
-        } catch (err) {
-          return `code_graph error: ${err instanceof Error ? err.message : String(err)}`;
-        }
-      },
-    });
-  }
-
   // ask_user is optional — only added when an interactive surface supplies a
-  // human-in-the-loop callback (mirrors code_graph gating above). A headless /
-  // one-shot run has nobody to answer, so it never gets the tool and the model
-  // cannot call one that would block the loop forever.
+  // human-in-the-loop callback. A headless / one-shot run has nobody to answer,
+  // so it never gets the tool and the model cannot call one that would block the
+  // loop forever.
   if (opts.askUser) {
     const askUser = opts.askUser;
     tools.ask_user = tool({

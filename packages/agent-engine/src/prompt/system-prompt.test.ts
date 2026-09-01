@@ -121,22 +121,7 @@ describe("buildSystemPrompt — profiles", () => {
   });
 });
 
-describe("buildSystemPrompt — graph-first tool guidance", () => {
-  it("mandates code_graph FIRST as a hard rule and lists every operation", () => {
-    const prompt = buildSystemPrompt(base);
-    // A forceful, prominent mandate — not a soft preference the model shrugs off.
-    expect(prompt).toContain("CODE GRAPH FIRST");
-    expect(prompt).toContain("non-negotiable");
-    expect(prompt).toContain("you MUST query");
-    expect(prompt).toContain("STOP and call it first");
-    // Every operation, with the exact trigger, so the model knows what to call when.
-    expect(prompt).toContain("`search <symbol>`");
-    expect(prompt).toContain("`file_symbols <file>`");
-    expect(prompt).toContain("`dependents <file>`");
-    expect(prompt).toContain("`imports <file>`");
-    expect(prompt).toContain("Only fall back to `search`");
-  });
-
+describe("buildSystemPrompt — locate-before-you-touch tool guidance", () => {
   it("instructs batching of independent tool calls into one message (wall-clock parallelism)", () => {
     // The engine runs one step per assistant message and the AI SDK executes
     // ALL of that message's tool calls concurrently — the model just has to be
@@ -145,68 +130,38 @@ describe("buildSystemPrompt — graph-first tool guidance", () => {
     expect(prompt).toContain("BATCH INDEPENDENT TOOL CALLS");
     expect(prompt).toContain("ONE message");
     expect(prompt).toContain("File EDITS stay sequential");
-    // The example list adapts to wiring: no code_graph mention when unwired.
-    const withoutGraph = buildSystemPrompt({ ...base, hasCodeGraph: false });
-    expect(withoutGraph).toContain("BATCH INDEPENDENT TOOL CALLS");
-    expect(withoutGraph).not.toContain("code_graph");
   });
 
-  it("drops graph guidance and keeps plain search guidance when code_graph is not wired", () => {
-    const prompt = buildSystemPrompt({ ...base, hasCodeGraph: false });
-    expect(prompt).not.toContain("code_graph");
+  it("names only tools the engine registers — never a code graph", () => {
+    // The engine has no code-graph provider on any surface, so the prompt must
+    // never steer the model at a `code_graph` tool it will not be handed.
+    for (const profile of ["interactive", "headless"] as const) {
+      const prompt = buildSystemPrompt({ ...base, profile });
+      expect(prompt).not.toContain("code_graph");
+      expect(prompt).not.toContain("CODE GRAPH");
+    }
+  });
+
+  it("tells the model to locate code with grep/glob before editing", () => {
+    const prompt = buildSystemPrompt(base);
+    expect(prompt).toContain("LOCATE BEFORE YOU TOUCH");
+    expect(prompt).toContain("Use `grep` and `glob` to find the code");
+  });
+
+  it("headless verification protocol names grep/glob as the locate tools", () => {
+    const prompt = buildSystemPrompt({ ...base, profile: "headless" });
     expect(prompt).toContain(
-      "Use `search` to locate code instead of guessing paths.",
+      "Localize before editing: use `grep`/`glob` to find the real source",
     );
   });
 
-  it("headless localization step lists only the wired locate tools, graph first", () => {
-    const withGraph = buildSystemPrompt({ ...base, profile: "headless" });
-    expect(withGraph).toContain("use `code_graph`/`search` (in that order)");
-    const bare = buildSystemPrompt({
-      ...base,
-      profile: "headless",
-      hasCodeGraph: false,
-    });
-    expect(bare).toContain("use `search` to find the real source");
-    expect(bare).not.toContain("code_graph");
-  });
-
-  it("keeps graph-first guidance alongside a named agent persona", () => {
+  it("keeps locate guidance alongside a named agent persona", () => {
     const prompt = buildSystemPrompt({
       ...base,
       agent: { name: "reviewer", systemPrompt: "You are a reviewer." },
     });
     expect(prompt).toContain("You are a reviewer.");
-    expect(prompt).toContain("GRAPH FIRST");
-  });
-});
-
-describe("buildSystemPrompt — F1 localization trust-but-verify rule", () => {
-  it("adds the spec's one-line rule when a localization block was injected this turn", () => {
-    const prompt = buildSystemPrompt({ ...base, hasLocalization: true });
-    expect(prompt).toContain(
-      "Candidate locations were computed from the code graph.",
-    );
-    expect(prompt).toContain("Verify with one read before");
-    expect(prompt).toContain("do not re-derive them.");
-  });
-
-  it("omits the rule by default — no rule about a block the model never received", () => {
-    const prompt = buildSystemPrompt(base);
-    expect(prompt).not.toContain("Candidate locations were computed");
-    expect(prompt).not.toContain("re-derive");
-  });
-
-  it("keeps the rule on the headless profile alongside the verification protocol", () => {
-    const prompt = buildSystemPrompt({
-      ...base,
-      profile: "headless",
-      hasLocalization: true,
-    });
-    expect(prompt).toContain(
-      "Candidate locations were computed from the code graph.",
-    );
-    expect(prompt).toContain("Verification protocol");
+    expect(prompt).toContain("LOCATE BEFORE YOU TOUCH");
   });
 });
 

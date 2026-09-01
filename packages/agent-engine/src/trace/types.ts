@@ -100,38 +100,22 @@ export interface PromptEvaluation {
   usage: UsageTotals;
 }
 
-/** Which candidates the enhancer mined and which actually resolved. */
-export interface ContextRetrieval {
-  /** Symbol-like candidates queried against the code graph. */
-  symbolsQueried: string[];
-  /** File-path candidates queried against the code graph. */
-  pathsQueried: string[];
-  /** Candidates that resolved to something real. */
-  resolved: string[];
-  /** Candidates that resolved to nothing (no code-graph hit). */
-  unresolved: string[];
-}
-
 /** What the enhancer added to the prompt before handing it to the executor. */
 export interface EnhancementTrace {
   /** The final prompt handed to the executor (refined + injected context). */
   prompt: string;
   /** The injected context block alone (empty when nothing was found). */
   context: string;
-  /** Symbol/path tokens that resolved to something in the code graph. */
-  resolved: string[];
   /** How many past-work lessons were recalled and injected. */
   lessonCount: number;
   /** Where the injected context came from. */
-  source: "none" | "code-graph" | "memory" | "code-graph+memory";
+  source: "none" | "memory";
   /** Epoch ms the context-gathering started (verbose turns). */
   startedAt?: number;
   /** Epoch ms the context-gathering finished (verbose turns). */
   finishedAt?: number;
   /** Wall-clock ms spent gathering + injecting context. */
   durationMs?: number;
-  /** Per-candidate retrieval breakdown (verbose turns). */
-  retrieval?: ContextRetrieval;
 }
 
 /**

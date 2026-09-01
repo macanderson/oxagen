@@ -49,15 +49,6 @@ const TRUNCATION_FOLLOW_UP_RE =
 /** Matches a `path:line:` grep hit prefix (path must look file-ish). */
 const GREP_HIT_RE = /^([^\s:][^:]*):(\d+):/;
 
-/** Most read_file predictions mined from one code_graph result — stay modest. */
-const MAX_CODE_GRAPH_READS = 2;
-
-/** Matches a CLI code-graph row: "kind name — path:line" (signature tail ok). */
-const CODE_GRAPH_EMDASH_RE = /—\s+([^\s:]+):\d+/;
-
-/** Matches a CLI semantic-search row: "path (0.87)". */
-const CODE_GRAPH_SCORED_RE = /^(\S+)\s+\(\d+(?:\.\d+)?\)$/;
-
 function isPathLike(line: string): boolean {
   return (
     line.length > 0 &&
@@ -67,12 +58,12 @@ function isPathLike(line: string): boolean {
   );
 }
 
-/** A bare relative path on its own line (dependents/imports listing body). */
+/** A bare relative path on its own line — `search`'s "matching by name" body. */
 function isBarePathLine(line: string): boolean {
   return (
     isPathLike(line) &&
-    !line.includes(" ") && // headers ("Files importing x (3):") have spaces
-    !line.endsWith(":") && // file_symbols header line ("src/a.ts:")
+    !line.includes(" ") && // headers ("Files matching by name:") have spaces
+    !line.endsWith(":") && // section header line
     (line.includes("/") || line.includes("."))
   );
 }
@@ -96,44 +87,6 @@ export const heuristicPredictor: SpeculationPredictor = ({
           limit: Number(followUp[2]),
         },
       });
-    }
-    // Impact prefetch: the file just read is the file the model most likely
-    // changes next, and the code_graph description steers it to `dependents`
-    // for impact analysis before a change. Deterministic operation ONLY —
-    // never `semantic_search`, whose prefetch would spend an embedding on a
-    // prediction that may never be consumed. Providers without an import
-    // graph answer `dependents` with a static pointer string at zero cost,
-    // and the layer drops the prediction entirely when no code_graph tool is
-    // in the ToolSet, so this is safe to predict unconditionally.
-    if (typeof path === "string") {
-      predictions.push({
-        tool: "code_graph",
-        input: { operation: "dependents", query: path },
-      });
-    }
-    return predictions;
-  }
-
-  if (tool === "code_graph") {
-    // A code-graph answer is a list of code locations; the near-certain
-    // follow-up is reading the top hits. Row shapes vary by provider:
-    //   platform:  "path:line: kind name"
-    //   CLI:       "kind name — path:line (sig)"    (search / file_symbols)
-    //              bare path lines under a header   (dependents / imports)
-    //              "path (0.87)"                    (semantic_search)
-    // Only READS are predicted from here — never further code_graph calls —
-    // so no operation (semantic_search included) can cascade speculatively.
-    const seen = new Set<string>();
-    for (const line of result.split("\n")) {
-      const path =
-        GREP_HIT_RE.exec(line)?.[1] ??
-        CODE_GRAPH_EMDASH_RE.exec(line)?.[1] ??
-        CODE_GRAPH_SCORED_RE.exec(line)?.[1] ??
-        (isBarePathLine(line) ? line : undefined);
-      if (path === undefined || seen.has(path)) continue;
-      seen.add(path);
-      predictions.push({ tool: "read_file", input: { path } });
-      if (predictions.length >= MAX_CODE_GRAPH_READS) break;
     }
     return predictions;
   }

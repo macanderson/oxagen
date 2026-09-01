@@ -61,15 +61,6 @@ describe("buildWorkspaceTools", () => {
     expect(tools.read_file).toBeDefined();
   });
 
-  it("code_graph is present only with a provider", () => {
-    const ws = new MemoryWorkspace({});
-    expect(buildWorkspaceTools(ws).code_graph).toBeUndefined();
-    const withGraph = buildWorkspaceTools(ws, {
-      codeGraph: { query: async () => "result" },
-    });
-    expect(withGraph.code_graph).toBeDefined();
-  });
-
   it("bash delegates to workspace.exec and emits a command event", async () => {
     const ws = new MemoryWorkspace({});
     ws.onExec(() => ({

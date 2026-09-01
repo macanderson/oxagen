@@ -181,7 +181,6 @@ export async function runCodingAgent(
   let tools: ToolSet = opts.workspace
     ? buildWorkspaceTools(opts.workspace, {
         readOnly: opts.readOnly,
-        codeGraph: opts.codeGraph,
         onEvent,
         // Forward the turn signal so an aborted turn kills any in-flight bash subtree.
         signal: opts.signal,
@@ -197,7 +196,7 @@ export async function runCodingAgent(
         // built-in check only (the CLI's default).
         diagnostics: opts.diagnostics,
         // Interactive clarification: register `ask_user` only when a surface
-        // with a human supplied the callback (mirrors codeGraph gating).
+        // with a human supplied the callback.
         askUser: opts.askUser,
       })
     : ({} as ToolSet);

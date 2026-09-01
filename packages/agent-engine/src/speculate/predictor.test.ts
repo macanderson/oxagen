@@ -9,7 +9,7 @@ import {
 } from "./predictor";
 
 describe("heuristicPredictor — read_file follow-ups", () => {
-  it("predicts the ranged re-read first (near-certain), then the dependents impact query", () => {
+  it("predicts the ranged re-read of the elided middle", () => {
     const result =
       "1\tfoo\n… [truncated: file has 900 lines total, showing ~first 420 " +
       "and last 220 lines — call read_file with offset:420, limit:260 to fetch " +
@@ -24,23 +24,17 @@ describe("heuristicPredictor — read_file follow-ups", () => {
         tool: "read_file",
         input: { path: "src/big.ts", offset: 420, limit: 260 },
       },
-      {
-        tool: "code_graph",
-        input: { operation: "dependents", query: "src/big.ts" },
-      },
     ]);
   });
 
-  it("predicts only the dependents impact query for an untruncated read", () => {
+  it("predicts nothing for an untruncated read", () => {
     expect(
       heuristicPredictor({
         tool: "read_file",
         input: { path: "a.ts" },
         result: "1\tconst x = 1;",
       }),
-    ).toEqual([
-      { tool: "code_graph", input: { operation: "dependents", query: "a.ts" } },
-    ]);
+    ).toEqual([]);
   });
 
   it("predicts nothing when the input has no string path", () => {
@@ -136,111 +130,6 @@ describe("heuristicPredictor — search name-only matches", () => {
         result: clipped,
       }),
     ).toEqual([]);
-  });
-});
-
-describe("heuristicPredictor — code_graph result mining", () => {
-  it("predicts reads of platform-format rows (path:line:), deduped and capped at two", () => {
-    const result = [
-      "src/dep1.ts:5: function useA",
-      "src/dep1.ts:9: function useAA", // duplicate path — deduped
-      "src/dep2.ts:3: class B",
-      "src/dep3.ts:7: type C", // beyond the modest cap
-    ].join("\n");
-    expect(
-      heuristicPredictor({
-        tool: "code_graph",
-        input: { operation: "search", query: "use" },
-        result,
-      }),
-    ).toEqual([
-      { tool: "read_file", input: { path: "src/dep1.ts" } },
-      { tool: "read_file", input: { path: "src/dep2.ts" } },
-    ]);
-  });
-
-  it("predicts reads from CLI em-dash rows, signature tail included", () => {
-    const result = "function runTurn — src/agent/loop.ts:141 (opts: TurnOpts)";
-    expect(
-      heuristicPredictor({
-        tool: "code_graph",
-        input: { operation: "search", query: "runTurn" },
-        result,
-      }),
-    ).toEqual([{ tool: "read_file", input: { path: "src/agent/loop.ts" } }]);
-  });
-
-  it("predicts reads of bare-path listing bodies and skips header lines", () => {
-    const result = [
-      "Files importing src/a.ts (3):", // header — has spaces, not a path
-      "src/user1.ts",
-      "src/user2.ts",
-    ].join("\n");
-    expect(
-      heuristicPredictor({
-        tool: "code_graph",
-        input: { operation: "dependents", query: "src/a.ts" },
-        result,
-      }),
-    ).toEqual([
-      { tool: "read_file", input: { path: "src/user1.ts" } },
-      { tool: "read_file", input: { path: "src/user2.ts" } },
-    ]);
-  });
-
-  it("predicts reads from semantic-search scored rows — but never a semantic_search call", () => {
-    const result = "src/config.ts (0.91)\nsrc/env.ts (0.87)";
-    const predictions = heuristicPredictor({
-      tool: "code_graph",
-      input: { operation: "semantic_search", query: "project configuration" },
-      result,
-    });
-    expect(predictions).toEqual([
-      { tool: "read_file", input: { path: "src/config.ts" } },
-      { tool: "read_file", input: { path: "src/env.ts" } },
-    ]);
-  });
-
-  it("predicts nothing from unavailable/error parentheticals", () => {
-    for (const result of [
-      "(import graph not available for this connection — use grep to find references)",
-      "(code graph query error: connection refused)",
-      "",
-    ]) {
-      expect(
-        heuristicPredictor({
-          tool: "code_graph",
-          input: { operation: "dependents", query: "src/a.ts" },
-          result,
-        }),
-      ).toEqual([]);
-    }
-  });
-});
-
-describe("heuristicPredictor — semantic_search prefetch exclusion (regression)", () => {
-  it("never predicts a code_graph operation other than dependents, for any observation", () => {
-    const observations = [
-      { tool: "read_file", input: { path: "src/a.ts" }, result: "1\tx" },
-      { tool: "search", input: { query: "x" }, result: "src/a.ts:1:x" },
-      { tool: "search", input: { query: "a" }, result: "src/a.ts" },
-      {
-        tool: "code_graph",
-        input: { operation: "semantic_search", query: "config" },
-        result: "src/config.ts (0.91)",
-      },
-      {
-        tool: "code_graph",
-        input: { operation: "search", query: "foo" },
-        result: "src/a.ts:1: function foo",
-      },
-    ];
-    for (const obs of observations) {
-      for (const p of heuristicPredictor(obs)) {
-        if (p.tool !== "code_graph") continue;
-        expect(p.input["operation"]).toBe("dependents");
-      }
-    }
   });
 });
 

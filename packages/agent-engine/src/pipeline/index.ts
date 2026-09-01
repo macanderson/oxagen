@@ -74,7 +74,6 @@ import type {
   ModelTier,
   UsageTotals,
   Workspace,
-  CodeGraphProvider,
   ProjectContext,
   CodingEvent,
   ImageAttachment,
@@ -124,27 +123,17 @@ function newTraceId(): string {
  * project rules. Both the pipeline and bare execution paths route through here so
  * the agent gets its full behavioral contract, not just the raw project text.
  * Stable within a session (cwd/projectContext/readOnly don't change), so it keeps
- * the provider prompt cache warm across turns. The one turn-dependent input is
- * `hasLocalization` — whether ENHANCE injected an F1 candidate-locations block
- * this turn — which adds the spec's trust-but-verify rule; it is stable within a
- * turn and false on the bare path (which never runs ENHANCE).
+ * the provider prompt cache warm across turns.
  */
-function composeAgentSystem(
-  opts: RunTurnOptions,
-  cwd: string,
-  hasLocalization = false,
-): string {
+function composeAgentSystem(opts: RunTurnOptions, cwd: string): string {
   return buildSystemPrompt({
     cwd,
     projectContext: opts.projectContext,
+    // Never reference a tool the model does not have: the ask_user rule appears
+    // only when a human-in-the-loop callback was supplied (an interactive
+    // surface).
     readOnly: opts.readOnly,
-    // Never reference a tool the model does not have: code_graph is only
-    // materialized when a provider is injected.
-    hasCodeGraph: Boolean(opts.codeGraph),
-    // Likewise ask_user: the rule appears only when a human-in-the-loop
-    // callback was supplied (an interactive surface).
     hasAskUser: Boolean(opts.askUser),
-    hasLocalization,
     profile: opts.profile,
     // A named-agent persona replaces the default identity (its systemPrompt
     // becomes the preamble). Lets `--agent` and the fleet run their persona
@@ -219,8 +208,6 @@ export interface RunTurnOptions {
   profile?: "interactive" | "headless";
   /** Episodic session memory (recalled before, written after). */
   memory?: MemoryProvider | null;
-  /** Code graph provider for prompt enhancement. */
-  codeGraph?: CodeGraphProvider | null;
   /**
    * Interactive clarification callback. Supplied ONLY by a surface with a human
    * to ask (the REPL). When present, every `runCodingAgent` round this turn runs
@@ -264,14 +251,6 @@ export interface RunTurnOptions {
    * `OXAGEN_MID_JUDGE_STEPS` env var or this option. Undefined / 0 disables.
    */
   midJudgeSteps?: number;
-  /**
-   * Wall-clock budget (ms) for the ENHANCE stage's code-graph pass. On a cold
-   * store the first graph query triggers a full tree-sitter build — minutes on
-   * a large repo — so headless callers bound it; whatever resolved in budget
-   * is injected and the build keeps warming in the background for the agent's
-   * own `code_graph` tool calls. Undefined ⇒ unbounded.
-   */
-  enhanceTimeoutMs?: number;
   /** Repository identifier for F8 repo-prior lookup (e.g., "django/django"). */
   repo?: string;
   /** Base directory for F8 repo-prior files (e.g., ~/.oxagen/repo-priors). */
@@ -571,10 +550,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   const enhanceStart = Date.now();
   const enhanced = await enhancePrompt({
     prompt: evaluation.refinedPrompt,
-    codeGraph: opts.codeGraph,
     memory: opts.memory,
-    extraQueries: evaluation.contextQueries,
-    timeoutMs: opts.enhanceTimeoutMs,
     repo: opts.repo,
     priorsDir: opts.priorsDir,
   });
@@ -582,28 +558,17 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   const enhancement: EnhancementTrace = {
     prompt: enhanced.prompt,
     context: enhanced.context,
-    resolved: enhanced.resolved,
     lessonCount: enhanced.hasMemory ? 1 : 0,
-    source: enhancementSource(enhanced.resolved.length, enhanced.hasMemory),
+    source: enhanced.hasMemory ? "memory" : "none",
     startedAt: enhanced.startedAt,
     finishedAt: enhanced.finishedAt,
     durationMs: enhanced.durationMs,
-    retrieval: enhanced.retrieval,
   };
-  // usedSemanticFallback never adds to `resolved` (see enhancePrompt: the
-  // semantic hits are pushed to `sections`/the injected prompt, not to
-  // `resolved`), so it must be its own arm of this condition — otherwise a
-  // prompt that resolves nothing literally but DOES get real semantically-
-  // retrieved context wrongly narrates "no extra context found" even though
-  // the agent's prompt actually carries that context.
   opts.onStage?.({
     kind: "enhance",
-    label:
-      enhanced.resolved.length ||
-      enhanced.hasMemory ||
-      enhanced.usedSemanticFallback
-        ? `enhanced · ${enhanced.resolved.length} code refs${enhanced.usedSemanticFallback ? " (+semantic)" : ""} · ${enhanced.hasMemory ? "memory" : "no memory"}`
-        : "enhanced · no extra context found",
+    label: enhanced.hasMemory
+      ? "enhanced · memory"
+      : "enhanced · no extra context found",
   });
 
   // ── 3. ROUTE ──
@@ -655,9 +620,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     const estimatedInputTokens =
       Math.ceil(enhanced.prompt.length / 4) +
       estimateMessageTokens(history) +
-      Math.ceil(
-        composeAgentSystem(opts, cwd, enhanced.hasLocalization).length / 4,
-      );
+      Math.ceil(composeAgentSystem(opts, cwd).length / 4);
     const estimatedOutputTokens = Math.round(
       400 + (evaluation.complexity / 100) * 4000,
     );
@@ -851,13 +814,12 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       images: segImages,
       model: routed.model,
       effort: opts.effort,
-      system: composeAgentSystem(opts, cwd, enhanced.hasLocalization),
+      system: composeAgentSystem(opts, cwd),
       history: segHistory,
       maxSteps: segMaxSteps,
       extraTools: opts.extraTools,
       wrapTools: opts.wrapTools,
       readOnly: opts.readOnly,
-      codeGraph: opts.codeGraph ?? undefined,
       askUser: opts.askUser ?? undefined,
       memory: opts.memory ?? undefined,
       onError: opts.onError,
@@ -1507,16 +1469,6 @@ function phaseStat(
   };
 }
 
-function enhancementSource(
-  resolved: number,
-  hasMemory: boolean,
-): EnhancementTrace["source"] {
-  if (resolved && hasMemory) return "code-graph+memory";
-  if (resolved) return "code-graph";
-  if (hasMemory) return "memory";
-  return "none";
-}
-
 /** How the router settled a turn — `static` (deterministic), `shadow`, or `enforce`. */
 type RoutingMode = "static" | "shadow" | "enforce";
 
@@ -1822,7 +1774,6 @@ async function runBare(
     extraTools: opts.extraTools,
     wrapTools: opts.wrapTools,
     readOnly: opts.readOnly,
-    codeGraph: opts.codeGraph ?? undefined,
     askUser: opts.askUser ?? undefined,
     memory: opts.memory ?? undefined,
     onError: opts.onError,
@@ -1893,7 +1844,6 @@ async function runBare(
     enhancement: {
       prompt: opts.prompt,
       context: "",
-      resolved: [],
       lessonCount: 0,
       source: "none",
     },

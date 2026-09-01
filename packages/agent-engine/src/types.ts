@@ -201,19 +201,6 @@ export type CodingEvent =
   | { type: "command"; command: string; exitCode: number }
   | { type: "final-diff"; diff: string; changedFiles: string[] };
 
-export interface CodeGraphProvider {
-  query(
-    operation:
-      | "search"
-      | "file_symbols"
-      | "dependents"
-      | "imports"
-      | "semantic_search",
-    query: string,
-    limit?: number,
-  ): Promise<string>;
-}
-
 /** The user's reply to an {@link AskUserCallback} clarification question. */
 export interface AskUserResponse {
   /**
@@ -231,8 +218,8 @@ export interface AskUserResponse {
  * the `ask_user` tool so the agent can pause and pose a single structured
  * multiple-choice question; when absent — every headless/one-shot/chat surface
  * — the tool is never advertised, so the model cannot call a tool that would
- * block forever with nobody to answer it. Mirrors {@link CodeGraphProvider}:
- * the presence of the capability, not a surface flag, gates the tool.
+ * block forever with nobody to answer it. The presence of the capability, not a
+ * surface flag, gates the tool.
  *
  * The callback resolves with the user's {@link AskUserResponse}. It MAY block
  * for as long as the human takes to decide — the caller (the REPL overlay) is
@@ -299,7 +286,6 @@ export interface RunCodingAgentOptions {
   /** Compact the transcript once its estimated tokens exceed this fraction of the window (default 0.8). */
   compactionThreshold?: number;
   readOnly?: boolean;
-  codeGraph?: CodeGraphProvider;
   /**
    * Speculative tool execution (ADR-030): prefetch the model's likely next
    * reads (read_file/grep/glob follow-ups) into a per-turn promise cache while

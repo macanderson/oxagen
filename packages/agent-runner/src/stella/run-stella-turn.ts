@@ -252,7 +252,6 @@ function buildToolSet(opts: RunCodingAgentOptions): ToolSet {
   let tools: ToolSet = opts.workspace
     ? buildWorkspaceTools(opts.workspace, {
         readOnly: opts.readOnly,
-        codeGraph: opts.codeGraph,
         onEvent: opts.onEvent ?? ((): void => undefined),
         signal: opts.signal,
         fileLock: opts.fileLock,
