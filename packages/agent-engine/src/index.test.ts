@@ -22,7 +22,7 @@ describe("index barrel exports", () => {
     const ws = new MemoryWorkspace({});
     const tools = buildWorkspaceTools(ws);
     expect(tools.read_file).toBeDefined();
-    expect(tools.glob).toBeDefined();
+    expect(tools.search).toBeDefined();
   });
 
   it("exports runCodingAgent as a function", () => {

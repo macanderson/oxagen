@@ -7,10 +7,16 @@
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { MemoryWorkspace } from "./workspaces/memory";
-import { buildWorkspaceTools, isTestPath, TEST_EDIT_DENIED_MESSAGE } from "./tools";
+import {
+  buildWorkspaceTools,
+  isTestPath,
+  TEST_EDIT_DENIED_MESSAGE,
+} from "./tools";
 
 async function run(tool: unknown, input: unknown): Promise<string> {
-  return (tool as { execute: (i: unknown, o: unknown) => Promise<string> }).execute(input, {});
+  return (
+    tool as { execute: (i: unknown, o: unknown) => Promise<string> }
+  ).execute(input, {});
 }
 
 describe("isTestPath", () => {
@@ -69,7 +75,9 @@ describe("buildWorkspaceTools – OXAGEN_FORBID_TEST_EDITS", () => {
 
   it("denies edit_file on a test path when the flag is set", async () => {
     process.env["OXAGEN_FORBID_TEST_EDITS"] = "1";
-    const ws = new MemoryWorkspace({ "tests/foo.test.ts": "export const x = 1;" });
+    const ws = new MemoryWorkspace({
+      "tests/foo.test.ts": "export const x = 1;",
+    });
     const tools = buildWorkspaceTools(ws);
     const result = await run(tools.edit_file, {
       path: "tests/foo.test.ts",
@@ -98,7 +106,9 @@ describe("buildWorkspaceTools – OXAGEN_FORBID_TEST_EDITS", () => {
   });
 
   it("allows edit_file on a test path when the flag is unset", async () => {
-    const ws = new MemoryWorkspace({ "tests/foo.test.ts": "export const x = 1;" });
+    const ws = new MemoryWorkspace({
+      "tests/foo.test.ts": "export const x = 1;",
+    });
     const tools = buildWorkspaceTools(ws);
     const result = await run(tools.edit_file, {
       path: "tests/foo.test.ts",
@@ -145,14 +155,14 @@ describe("buildWorkspaceTools – OXAGEN_FORBID_TEST_EDITS", () => {
     expect(await ws.readFile("src/new.ts")).toBe("export const y = 1;");
   });
 
-  it("does not restrict read_file or grep on test paths when the flag is set", async () => {
+  it("does not restrict read_file or search on test paths when the flag is set", async () => {
     process.env["OXAGEN_FORBID_TEST_EDITS"] = "1";
     const ws = new MemoryWorkspace({ "tests/foo.test.ts": "hello" });
     const tools = buildWorkspaceTools(ws);
     const read = await run(tools.read_file, { path: "tests/foo.test.ts" });
     expect(read).toContain("hello");
-    const grep = await run(tools.grep, { pattern: "hello" });
-    expect(grep).toContain("tests/foo.test.ts");
+    const search = await run(tools.search, { query: "hello" });
+    expect(search).toContain("tests/foo.test.ts:1:hello");
   });
 
   it("readOnly mode still withholds write_file/edit_file regardless of the flag", () => {
@@ -161,5 +171,34 @@ describe("buildWorkspaceTools – OXAGEN_FORBID_TEST_EDITS", () => {
     const tools = buildWorkspaceTools(ws, { readOnly: true });
     expect(tools.write_file).toBeUndefined();
     expect(tools.edit_file).toBeUndefined();
+  });
+});
+
+describe("OXAGEN_FORBID_TEST_EDITS — delete_file", () => {
+  it("denies deleting a test file under the flag", async () => {
+    // Deleting the grading test is the same self-certification move as
+    // editing it; a guard that stops one but not the other stops neither.
+    process.env["OXAGEN_FORBID_TEST_EDITS"] = "1";
+    try {
+      const ws = new MemoryWorkspace({
+        "src/a.test.ts": "test('x', () => {})",
+        "src/a.ts": "export const a = 1;",
+      });
+      const tools = buildWorkspaceTools(ws, {}) as Record<
+        string,
+        { execute: (i: unknown, o?: unknown) => Promise<unknown> }
+      >;
+      const denied = await tools.delete_file!.execute({
+        path: "src/a.test.ts",
+      });
+      expect(String(denied)).toContain("read-only in this mode");
+      // Still there.
+      await expect(ws.readFile("src/a.test.ts")).resolves.toContain("test(");
+      // A source file deletes normally.
+      await tools.delete_file!.execute({ path: "src/a.ts" });
+      await expect(ws.readFile("src/a.ts")).rejects.toThrow();
+    } finally {
+      delete process.env["OXAGEN_FORBID_TEST_EDITS"];
+    }
   });
 });

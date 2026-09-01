@@ -43,6 +43,7 @@ export const BUILTIN_MUTATING_TOOLS = [
   "bash",
   "write_file",
   "edit_file",
+  "delete_file",
 ] as const;
 
 /** Raised when the engine asks for a tool the host does not have. */
