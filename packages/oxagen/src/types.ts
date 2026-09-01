@@ -203,6 +203,27 @@ export interface CapabilityDeclaration<
    */
   sensitivity: CapabilitySensitivity;
   /**
+   * Whether invoking this capability CHANGES anything — a Postgres write, a
+   * Neo4j write, a blob write, an external side effect. Not how dangerous it
+   * is, not whether it touches PII, not whether it needs approval: only
+   * whether running it twice at once could interleave.
+   *
+   * This is the one input to concurrency. `false` lets the engine dispatch
+   * this capability alongside others in the same step; anything else makes it
+   * serialize. **Absent means it mutates** — see {@link capabilityMutates} for
+   * why the default is that way round.
+   *
+   * Declare `false` only after reading the handler. The name does not settle
+   * it: `recall_memory` reads in its name and its `sensitivity: "low"`, and
+   * writes three Neo4j statements including
+   * `m.citation_count = coalesce(m.citation_count, 0) + 1` — a read-modify-write
+   * that silently loses updates when two calls interleave.
+   *
+   * Answers the same question as {@link CapabilityLifecycleMetadata.effect},
+   * for capabilities generally rather than for lifecycle hooks.
+   */
+  mutates?: boolean;
+  /**
    * The IAM resolver's rule-8 fallback: what happens when no explicit
    * grant/role/policy matches. Required.
    *
@@ -266,6 +287,34 @@ export function getSurfaces(
   cap: Pick<CapabilityDeclaration, "surfaces">,
 ): readonly CapabilitySurface[] {
   return cap.surfaces ?? DEFAULT_SURFACES;
+}
+
+/**
+ * Does this capability change anything?
+ *
+ * The ONE definition of that question. The engine's concurrency split reads
+ * it (via `materializeTools`' `mutatingToolNames`, which the Stella tool
+ * mapping negates into each schema's `read_only` bit), and so does the guard
+ * that keeps the two honest. A second copy is how one of them starts
+ * admitting a write.
+ *
+ * **An undeclared capability mutates.** The cost of that default is a little
+ * concurrency; the cost of the other default is a lost or interleaved write
+ * that surfaces later as wrong data with no error anywhere. It is also the
+ * only default that stays correct as contracts are added by people who have
+ * never read this file.
+ *
+ * Deliberately does NOT consult `sensitivity`, `agent.riskLevel` or
+ * `agent.requiresApproval`. Those grade how DANGEROUS a capability is and
+ * drive approval prompts and default grants; they were never a claim about
+ * whether it writes, and reading them as one is the defect this replaces
+ * (#2600). `recall_memory` is the proof in both directions: it declares the
+ * lowest value of all three and performs three Neo4j writes.
+ */
+export function capabilityMutates(
+  cap: Pick<CapabilityDeclaration, "mutates">,
+): boolean {
+  return cap.mutates !== false;
 }
 
 /**
