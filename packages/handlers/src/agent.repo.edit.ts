@@ -7,7 +7,6 @@ import type { MarketRoutingPolicy, RoutingStatRow } from "@oxagen/agent-engine";
 import { readRoutingStats, recordRouterOutcome } from "@oxagen/telemetry";
 import { runInTenantScope } from "@oxagen/tenancy";
 import {
-  createClickHouseTraceStore,
   createFileLeaseLockAdapter,
   createPlatformAgentAi,
   ModalSandboxWorkspace,
@@ -103,11 +102,6 @@ export const agentRepoEditHandler: CapabilityHandler<
     model: input.model,
     maxSteps: input.maxSteps,
     readOnly: false,
-    trace: createClickHouseTraceStore({
-      orgId: ctx.orgId,
-      workspaceId: ctx.workspaceId,
-      surface: "agent",
-    }),
     // Agent file locking (ADR-021 §5): this is the real fleet path —
     // agent.repo.edit is dispatched both directly and as a subagent-fanout
     // child (agent.execute-subagent invoking a capability by name), so two

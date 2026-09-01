@@ -15,7 +15,6 @@ import {
 import { runInTenantScope } from "@oxagen/tenancy";
 import { pluginForContract } from "@oxagen/oxagen/plugins";
 import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
-import { beforeTool, afterTool, onError } from "../hooks/runtime";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { checkConsent, recordConsent, DEFAULT_CONSENT_TTL_MS } from "./consent";
 import {
@@ -483,7 +482,6 @@ export async function materializeTools(
         description: cap.description,
         inputSchema: cap.input as ZodTypeAny,
         execute: async (input: unknown) => {
-          await beforeTool({ capability: cap.name, ctx, input });
           const invocationId = crypto.randomUUID();
           const startedAt = Date.now();
           const inputBytes = byteSize(input);
@@ -538,7 +536,6 @@ export async function materializeTools(
             const result = await invoke(cap.name, input, ctx, {
               surface: "agent",
             });
-            await afterTool({ capability: cap.name, ctx, output: result });
             // every tool invocation lands one row in ClickHouse
             // `tool_invocations` with surface + provider. Failure-isolated.
             try {
@@ -567,11 +564,6 @@ export async function materializeTools(
             // blow the context window. No-op for every other capability.
             return clipExecOutput(cap.name, result);
           } catch (err) {
-            await onError({
-              capability: cap.name,
-              ctx,
-              error: err instanceof Error ? err : new Error(String(err)),
-            });
             try {
               await insertToolInvocation(
                 buildInvocationPayload(
