@@ -311,13 +311,13 @@ const TOOL_TIMEOUT_GRACE_MS = 30_000;
  */
 const ASK_USER_BACKSTOP_MS = 30 * 60_000;
 
-/** Backstop deadline for one call, honoring bash's declared `timeout_ms`. */
+/** Backstop deadline for one call, honoring bash's declared `timeout_secs`. */
 export function toolBackstopMs(name: string, input: unknown): number {
   if (name === "bash") {
-    const declared = (input as { timeout_ms?: unknown } | null)?.timeout_ms;
+    const declared = (input as { timeout_secs?: unknown } | null)?.timeout_secs;
     const own = Math.min(
       typeof declared === "number" && Number.isFinite(declared)
-        ? declared
+        ? declared * 1000
         : BASH_DEFAULT_TIMEOUT_MS,
       BASH_MAX_TIMEOUT_MS,
     );
@@ -343,7 +343,7 @@ function withBackstop(
     const timer = setTimeout(() => {
       resolve(
         `Tool ${name} timed out after ${Math.round(ms / 1000)}s (backstop) — ` +
-          `it did not return. Try a narrower call${name === "bash" ? " or a larger timeout_ms" : ""}.`,
+          `it did not return. Try a narrower call${name === "bash" ? " or a larger timeout_secs" : ""}.`,
       );
     }, ms);
     (timer as { unref?: () => void }).unref?.();
@@ -831,46 +831,91 @@ export function buildWorkspaceTools(
       },
     }),
 
-    glob: tool({
+    search: tool({
       description:
-        "Find files matching a glob pattern (e.g. 'src/**/*.ts'). Skips node_modules/.git/dist.",
+        "Search the workspace with one query: file contents (as a regular " +
+        "expression when the query parses as one, literally otherwise) AND " +
+        "file names. Returns name matches, then file:line:text content " +
+        "matches. Skips node_modules/.git/dist.",
       inputSchema: z.object({
-        pattern: z.string(),
+        query: z.string().min(1).describe("What to find."),
       }),
-      execute: async ({ pattern }) => {
+      execute: async ({ query }) => {
+        // Stella's catalog retired `grep` and `glob` in favour of ONE search
+        // and reserves both names, so a merged tool surface cannot carry them
+        // (crates/stella-tools/src/custom.rs's name reservation). One query
+        // over both axes also matches how models actually search: they rarely
+        // know in advance whether the thing they remember is a path or a
+        // symbol.
+        const pattern = (() => {
+          try {
+            // Probe only: workspace.grep compiles the pattern itself.
+            new RegExp(query);
+            return query;
+          } catch {
+            return query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          }
+        })();
         try {
-          const matches = await workspace.glob(pattern);
-          return clip(matches.sort().join("\n") || "(no matches)");
+          const [contentHits, names] = await Promise.all([
+            workspace.grep(pattern).catch(() => [] as string[]),
+            workspace.glob("**/*").catch(() => [] as string[]),
+          ]);
+          const needle = query.toLowerCase();
+          const nameHits = names
+            .filter((name) => name.toLowerCase().includes(needle))
+            .sort();
+          const sections: string[] = [];
+          if (nameHits.length > 0) {
+            sections.push(`Files matching by name:\n${nameHits.join("\n")}`);
+          }
+          if (contentHits.length > 0) {
+            sections.push(`Content matches:\n${contentHits.join("\n")}`);
+          }
+          return clip(sections.join("\n\n") || "(no matches)");
         } catch (err) {
-          return `Error globbing ${pattern}: ${err instanceof Error ? err.message : String(err)}`;
-        }
-      },
-    }),
-
-    grep: tool({
-      description:
-        "Search file contents with a regular expression. Returns matching file:line:text. Skips node_modules/.git/dist.",
-      inputSchema: z.object({
-        pattern: z.string().describe("JavaScript regular expression."),
-        path: z
-          .string()
-          .optional()
-          .describe("Subdirectory to search (default: cwd)."),
-        glob: z
-          .string()
-          .optional()
-          .describe("Restrict to files matching this glob (e.g. '*.ts')."),
-      }),
-      execute: async ({ pattern, path, glob }) => {
-        try {
-          const hits = await workspace.grep(pattern, { path, glob });
-          return clip(hits.join("\n") || "(no matches)");
-        } catch (err) {
-          return `Error grepping for ${pattern}: ${err instanceof Error ? err.message : String(err)}`;
+          return `Error searching for ${query}: ${err instanceof Error ? err.message : String(err)}`;
         }
       },
     }),
   };
+
+  // delete_file is gated on the workspace implementing deletion — the same
+  // presence-not-flag gating code_graph and ask_user use. A workspace without
+  // it leaves the model with `bash rm`, which records no file-touch event.
+  if (workspace.deleteFile) {
+    const deleteFile = workspace.deleteFile.bind(workspace);
+    tools.delete_file = tool({
+      description:
+        "Delete a file. Use this, not `rm` in bash, so the deletion is " +
+        "recorded like any other file change.",
+      inputSchema: z.object({
+        path: z.string(),
+        reason: z
+          .string()
+          .optional()
+          .describe("Why this file is being deleted (recorded, not shown)."),
+      }),
+      execute: async ({ path }) => {
+        // Same gate as write_file/edit_file: deleting the grading test is the
+        // same self-certification move as editing it, and a guard that stops
+        // one but not the other stops neither.
+        if (forbidTestEdits && isTestPath(path))
+          return TEST_EDIT_DENIED_MESSAGE;
+        try {
+          await deleteFile(path);
+          onEvent({
+            type: "command",
+            command: `delete_file ${path}`,
+            exitCode: 0,
+          });
+          return `Deleted ${path}`;
+        } catch (err) {
+          return `Error deleting ${path}: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    });
+  }
 
   // code_graph is optional — only added when a provider is supplied.
   if (opts.codeGraph) {
@@ -987,14 +1032,14 @@ export function buildWorkspaceTools(
       "Run a shell command in the working directory. Use for builds, tests, git, package managers. Has a timeout.",
     inputSchema: z.object({
       command: z.string(),
-      timeout_ms: z
+      timeout_secs: z
         .number()
         .int()
         .optional()
-        .describe("Timeout in milliseconds (default 120000, max 600000)."),
+        .describe("Timeout in seconds (default 120, max 600)."),
     }),
-    execute: async ({ command, timeout_ms }) => {
-      const timeoutMs = Math.min(timeout_ms ?? 120_000, 600_000);
+    execute: async ({ command, timeout_secs }) => {
+      const timeoutMs = Math.min(timeout_secs ?? 120, 600) * 1000;
       try {
         const result = await workspace.exec(command, { timeoutMs, signal });
         onEvent({ type: "command", command, exitCode: result.exitCode });
@@ -1026,6 +1071,7 @@ export function buildWorkspaceTools(
     delete tools["write_file"];
     delete tools["edit_file"];
     delete tools["bash"];
+    delete tools["delete_file"];
   }
 
   // Every tool gets the timeout backstop LAST so it bounds the whole execute

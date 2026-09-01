@@ -100,7 +100,10 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
   const profile = opts.profile ?? "interactive";
   // Tools the model may use to locate code, best-first — the headless
   // localization step must list only the tools actually wired for this run.
-  const locateToolList = [...(hasCodeGraph ? ["`code_graph`"] : []), "`grep`"];
+  const locateToolList = [
+    ...(hasCodeGraph ? ["`code_graph`"] : []),
+    "`search`",
+  ];
   const locateTools =
     locateToolList.join("/") +
     (locateToolList.length > 1 ? " (in that order)" : "");
@@ -117,7 +120,7 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
       ];
 
   // Profile-independent tool rules — BOTH profiles get these verbatim.
-  // The code-graph mandate goes FIRST and hardest: agents default to grep/read/
+  // The code-graph mandate goes FIRST and hardest: agents default to search/read/
   // list to explore, which is slow, imprecise, and burns the context window. The
   // graph is a precomputed symbol/import index built for THIS repo — it must be
   // the first move for any structural question.
@@ -129,24 +132,24 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
       ? [
           "- CODE GRAPH FIRST — non-negotiable. `code_graph` is a precomputed symbol + import",
           "  index for THIS repository. It is faster, more precise, and far cheaper than listing",
-          "  directories, grepping, or reading files to hunt for code. BEFORE you `grep`, `glob`,",
+          "  directories, searching, or reading files to hunt for code. BEFORE you `search`,",
           "  `list_dir`, `read_file`, or `bash`-find to locate or understand code, you MUST query",
           "  `code_graph`. The operations and exactly when to use each:",
           "    • `search <symbol>`   — where a function/class/type/interface is defined. Use this",
-          "      INSTEAD of grepping for a name.",
+          "      INSTEAD of searching for a name.",
           "    • `file_symbols <file>` — what a file defines/exports. Call it BEFORE you `read_file`",
           "      a file you don't know, to see what's there without reading the whole thing.",
           "    • `dependents <file>`  — who imports a file (the blast radius). Call it BEFORE you",
           "      change any shared/exported file, to know what a change could break.",
           "    • `imports <file>`     — what a file depends on.",
-          "  If you catch yourself about to `grep`/`glob`/`list_dir`/`read_file` to FIND or MAP code",
+          "  If you catch yourself about to `search`/`list_dir`/`read_file` to FIND or MAP code",
           "  and have not called `code_graph` yet, STOP and call it first. State the graph result",
           "  before you act on it.",
-          "- Only fall back to `grep`/`glob` when the graph genuinely returns nothing for your",
+          "- Only fall back to `search` when the graph genuinely returns nothing for your",
           "  query, or the target is plain text (a string literal, comment, config key, or prose)",
           "  rather than a code symbol — never as your first move for a symbol.",
         ]
-      : ["- Use `grep` and `glob` to locate code instead of guessing paths."]),
+      : ["- Use `search` to locate code instead of guessing paths."]),
     // F1 deterministic localization (docs/specs/swe-rank1-scalpel.md §F1): the
     // one-line trust-but-verify rule, present ONLY when a candidate-locations
     // block was actually injected this turn — a rule about a block the model
@@ -159,14 +162,14 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
       : []),
     "- Act, don't narrate intentions at length. Read before you edit, and edit precisely.",
     "- BATCH INDEPENDENT TOOL CALLS. When your next actions do not depend on each other's",
-    `  results — several \`read_file\`s, \`grep\`s${hasCodeGraph ? ", `code_graph` queries" : ""}, independent checks —`,
+    `  results — several \`read_file\`s, \`search\`es${hasCodeGraph ? ", `code_graph` queries" : ""}, independent checks —`,
     "  issue them together in ONE message so they execute concurrently instead of paying a",
     "  full model round-trip per call. Serialize only when a call genuinely needs an earlier",
     "  call's output. File EDITS stay sequential.",
     "- Prefer `edit_file` for surgical changes; only `write_file` for new files or full rewrites.",
     "- Before editing a file you have not read this session, `read_file` it first.",
     "- Use `bash` for builds, tests, git, and anything the dedicated tools don't cover.",
-    "- FILE-TOOL ROOT IS PINNED: read_file/write_file/edit_file/list_dir/glob/grep resolve",
+    "- FILE-TOOL ROOT IS PINNED: read_file/write_file/edit_file/delete_file/list_dir/search resolve",
     "  relative paths against the cwd shown in Environment below — always. Every `bash` call",
     "  starts fresh in that same cwd; a `cd` inside one command NEVER persists and NEVER moves",
     "  the file tools. If you work in another directory (a git worktree or second checkout you",

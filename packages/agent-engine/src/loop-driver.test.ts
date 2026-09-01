@@ -31,7 +31,7 @@ describe("toolCallSignature", () => {
       toolCallSignature("edit_file", { path: "b" }),
     );
     expect(toolCallSignature("bash", { command: "ls" })).not.toBe(
-      toolCallSignature("grep", { command: "ls" }),
+      toolCallSignature("search", { command: "ls" }),
     );
   });
 });
@@ -612,16 +612,21 @@ describe("estimateMessageTokens caching", () => {
 });
 
 describe("MUTATING_TOOL_NAMES / isMutatingTool", () => {
-  it("classifies bash/write_file/edit_file as mutating and reads as not", () => {
+  it("classifies every filesystem mutator as mutating, and reads as not", () => {
     expect(isMutatingTool("bash")).toBe(true);
     expect(isMutatingTool("write_file")).toBe(true);
     expect(isMutatingTool("edit_file")).toBe(true);
+    // delete_file belongs here for the reason the set exists: a step that
+    // deleted a file and THEN failed mid-stream must not be blindly retried,
+    // because the retry re-runs the delete.
+    expect(isMutatingTool("delete_file")).toBe(true);
     expect(isMutatingTool("read_file")).toBe(false);
-    expect(isMutatingTool("grep")).toBe(false);
+    expect(isMutatingTool("search")).toBe(false);
     expect(isMutatingTool("code_graph")).toBe(false);
     expect(isMutatingTool("ask_user")).toBe(false);
     expect([...MUTATING_TOOL_NAMES].sort()).toEqual([
       "bash",
+      "delete_file",
       "edit_file",
       "write_file",
     ]);

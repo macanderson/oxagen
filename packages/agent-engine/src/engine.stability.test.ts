@@ -189,7 +189,8 @@ describe("runCodingAgent – stream-stall watchdog", () => {
     expect(result.text).toBe("tests pass");
     expect(
       events.some(
-        (e) => e.type === "tool-result" && (e as { name: string }).name === "bash",
+        (e) =>
+          e.type === "tool-result" && (e as { name: string }).name === "bash",
       ),
     ).toBe(true);
   });
@@ -258,7 +259,7 @@ describe("runCodingAgent – max-steps stop reason", () => {
     const { ai } = scriptedAi([
       {
         parts: [
-          { type: "tool-call", toolCallId: "c", toolName: "grep", input: {} },
+          { type: "tool-call", toolCallId: "c", toolName: "search", input: {} },
         ],
         finishReason: "tool-calls",
       },
@@ -274,7 +275,9 @@ describe("runCodingAgent – max-steps stop reason", () => {
   });
 
   it("leaves stopReason unset on a natural finish", async () => {
-    const { ai } = scriptedAi([{ parts: [{ type: "text-delta", text: "done" }] }]);
+    const { ai } = scriptedAi([
+      { parts: [{ type: "text-delta", text: "done" }] },
+    ]);
     const result = await runCodingAgent({
       ai,
       instruction: "finish cleanly",
@@ -374,7 +377,9 @@ describe("runCodingAgent – mid-flight mutation guard", () => {
     // a non-negative duration — proving per-attempt timing didn't break.
     const toolResults = events.filter((e) => e.type === "tool-result");
     for (const tr of toolResults) {
-      expect((tr as { durationMs: number }).durationMs).toBeGreaterThanOrEqual(0);
+      expect((tr as { durationMs: number }).durationMs).toBeGreaterThanOrEqual(
+        0,
+      );
     }
   });
 });
@@ -387,7 +392,9 @@ describe("runCodingAgent – fire-and-forget error surfacing", () => {
       remember,
     };
     const onError = vi.fn();
-    const { ai } = scriptedAi([{ parts: [{ type: "text-delta", text: "ok" }] }]);
+    const { ai } = scriptedAi([
+      { parts: [{ type: "text-delta", text: "ok" }] },
+    ]);
     await runCodingAgent({
       ai,
       instruction: "remember this",
@@ -411,7 +418,9 @@ describe("runCodingAgent – fire-and-forget error surfacing", () => {
     const record = vi.fn().mockRejectedValue(new Error("clickhouse timeout"));
     const trace: TraceStore = { record };
     const onError = vi.fn();
-    const { ai } = scriptedAi([{ parts: [{ type: "text-delta", text: "ok" }] }]);
+    const { ai } = scriptedAi([
+      { parts: [{ type: "text-delta", text: "ok" }] },
+    ]);
     await runCodingAgent({
       ai,
       instruction: "trace this",
