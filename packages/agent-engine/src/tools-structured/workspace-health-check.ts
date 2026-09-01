@@ -9,8 +9,7 @@
 //
 // STATE, not STRUCTURE: "where am I and is the tree clean/green?" is runtime
 // STATE. This tool never describes how the code is organised or connected —
-// module graphs, symbol locations and dependencies are STRUCTURE, owned by
-// code_graph.
+// symbol locations and dependencies are found by reading and grepping.
 
 import { tool, type Tool } from "ai";
 import { z } from "zod";
@@ -116,7 +115,7 @@ export function buildWorkspaceHealthCheckTool(
       "the typecheck/lint to one package. Anti-triggers: keep the default (git-only) unless you " +
       "specifically need typecheck/lint — those cost real time; for full compiler errors use " +
       "`build_package_run`; to run tests use `test_unit_run`; for how the code is structured " +
-      "(modules, symbols, dependencies) use `code_graph` — this reports STATE, not structure.",
+      "(modules, symbols, dependencies) use `grep` — this reports STATE, not structure.",
     inputSchema: z.object({
       checks: z
         .array(z.enum(["git", "typecheck", "lint"]))

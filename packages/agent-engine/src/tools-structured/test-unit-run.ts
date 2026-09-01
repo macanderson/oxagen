@@ -10,7 +10,7 @@
 //
 // STATE, not STRUCTURE: this tool answers "does the change pass?" — a runtime
 // STATE question. It never answers "what tests exercise this symbol?" or "who
-// imports this?" — those are STRUCTURE questions owned by code_graph.
+// imports this?" — for those the agent greps.
 // It only uses import edges to SELECT which existing tests to execute.
 
 import { tool, type Tool } from "ai";
@@ -159,8 +159,8 @@ export function buildTestUnitRunTool(
       "for exact paths. Anti-triggers: it NEVER runs a whole-repo suite (`scope.all` and an " +
       "empty selection both return a hint, not everything); for a non-test command (build, git, " +
       "install) use `bash`; to typecheck use `build_package_run`. This answers the STATE " +
-      "question 'does it pass?' — to find WHICH tests cover a symbol or who imports a module " +
-      "(structure), use `code_graph`, then pass those files here as `changedFiles`.",
+      "question 'does it pass?' — to find WHICH tests cover a symbol or who imports a module, " +
+      "`grep` for it, then pass those files here as `changedFiles`.",
     inputSchema: z.object({
       scope: scopeSchema
         .optional()

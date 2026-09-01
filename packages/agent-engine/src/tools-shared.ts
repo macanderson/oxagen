@@ -69,9 +69,9 @@ export function isTestPath(relPath: string): boolean {
 // structured tool reuses, so naming is decided once, not per tool.
 //
 // The core seven (read_file, write_file, edit_file, list_dir, glob, grep,
-// bash) and code_graph deliberately KEEP their plain, short model-facing names
-// (training-prior protection) and are intentionally absent from this registry
-// — they are not `domain.subject.action` and must not be renamed.
+// bash) deliberately KEEP their plain, short model-facing names (training-prior
+// protection) and are intentionally absent from this registry — they are not
+// `domain.subject.action` and must not be renamed.
 
 /** The deterministic structured tools this engine advertises, canonical form. */
 export const CANONICAL_TOOL_NAMES = [

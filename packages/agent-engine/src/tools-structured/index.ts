@@ -9,9 +9,8 @@
 // (ADR-021 §1: these duties sit on the pure-function / index rungs of the
 // determinism ladder, never the model rung).
 //
-// buildWorkspaceTools (../tools.ts) merges these alongside read_file/bash/
-// code_graph so every surface (CLI, app, API, MCP sandbox) advertises them
-// identically.
+// buildWorkspaceTools (../tools.ts) merges these alongside read_file/grep/bash
+// so every surface (CLI, app, API, MCP sandbox) advertises them identically.
 
 import type { ToolSet } from "ai";
 import type { Workspace, CodingEvent } from "../types";
@@ -52,7 +51,11 @@ export function buildStructuredTools(
 
 // Re-export the pure parsers/selectors so the unit tests exercise them directly.
 export * from "./parse";
-export { selectTestsForChanges, buildVitestCommand, TEST_FAILURE_CAPS } from "./test-unit-run";
+export {
+  selectTestsForChanges,
+  buildVitestCommand,
+  TEST_FAILURE_CAPS,
+} from "./test-unit-run";
 export {
   buildTraceCommand,
   buildTraceSummarizeCommand,
