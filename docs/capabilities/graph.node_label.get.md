@@ -37,3 +37,6 @@ None (read-only). Reads the node's labels from Neo4j.
 |---|---|
 | `not_found` | No node matches `nodeId` in this workspace. |
 | `unauthorized` | Caller lacks the required org/workspace role. |
+
+## Related
+- [The ontology read set](_ontology-read-set.md) — the graph reads an agent is granted together, and the `toolPolicy.ontology` opt-in

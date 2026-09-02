@@ -65,3 +65,4 @@ POST /v1/ontology/query
 - `ontology.neighbors` — one-hop neighborhood of a node
 - `graph.node.search` — text search over nodes
 - `graph.search` — semantic search over eligible shared context
+- [The ontology read set](_ontology-read-set.md) — the graph reads an agent is granted together, and the `toolPolicy.ontology` opt-in

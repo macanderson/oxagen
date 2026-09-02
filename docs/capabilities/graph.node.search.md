@@ -61,3 +61,4 @@ GET /v1/graph/nodes/search?query=oauth&labels=Issue&limit=5
 - `graph.node.list` — paginated browse with filters
 - `graph.node.get` — retrieve a single node by `publicId`
 - `graph.stats` — aggregate node and edge counts
+- [The ontology read set](_ontology-read-set.md) — the graph reads an agent is granted together, and the `toolPolicy.ontology` opt-in

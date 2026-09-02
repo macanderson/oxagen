@@ -4,6 +4,10 @@ Reference for all declared capabilities across the Oxagen platform.
 Each capability is implemented across API, MCP, and agent surfaces with
 contract-first design, IAM enforcement, and instrumentation.
 
+Capabilities granted to an agent as a set have a page of their own:
+[the ontology read set](_ontology-read-set.md) covers the graph reads and the
+`toolPolicy.ontology` opt-in.
+
 ## Agent (74, count drifts)
 
 - [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step

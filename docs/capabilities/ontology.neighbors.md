@@ -63,3 +63,4 @@ POST /v1/ontology/neighbors
 ## Related
 - `ontology.query` — typed multi-hop traversal
 - `graph.node.get` — retrieve a single node by `publicId`
+- [The ontology read set](_ontology-read-set.md) — the graph reads an agent is granted together, and the `toolPolicy.ontology` opt-in
