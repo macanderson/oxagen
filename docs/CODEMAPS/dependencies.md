@@ -101,7 +101,6 @@ xmcp                    MCP server framework (streamable HTTP)
 | `@oxagen/code-graph` | cli, api | Code graph indexing |
 | `@oxagen/functions` | api, app | Shared function utilities |
 | `@oxagen/mcp-config` | cli, mcp | MCP server config schema |
-| `@oxagen/prompt-templates` | app, handlers | Prompt template library |
 | `@oxagen/bench` | bench/web | Deterministic eval/replay benchmark engine (`runBenchmark()`) |
 
 ## Tooling Packages

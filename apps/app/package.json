@@ -8,6 +8,7 @@
     "kill": "lsof -ti tcp:3000,6007 | xargs kill -9 2>/dev/null; true",
     "build": "NODE_ENV=production NODE_OPTIONS=--max-old-space-size=5120 next build",
     "start": "next start --port 3000",
+    "generate:templates": "node src/lib/prompt-templates/scripts/generate-built-in-templates.mjs",
     "lint": "eslint .",
     "typecheck": "NODE_OPTIONS=--max-old-space-size=8192 tsc --noEmit",
     "test:unit": "vitest run --passWithNoTests",
@@ -48,7 +49,6 @@
     "@oxagen/ontology": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/plugins": "workspace:*",
-    "@oxagen/prompt-templates": "workspace:*",
     "@oxagen/rules": "workspace:*",
     "@oxagen/storage": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
@@ -108,6 +108,7 @@
     "typescript": "6.0.3",
     "typescript-eslint": "8.60.0",
     "vite": "^6.4.3",
-    "vitest": "2.1.9"
+    "vitest": "2.1.9",
+    "yaml": "2.9.0"
   }
 }

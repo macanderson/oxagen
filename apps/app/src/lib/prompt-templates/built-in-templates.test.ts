@@ -1,7 +1,7 @@
 /**
  * built-in-templates.test.ts — drift guard.
  *
- * built-in-templates.ts is generated from src/templates/*.yaml by
+ * built-in-templates.ts is generated from templates/*.yaml by
  * scripts/generate-built-in-templates.mjs and statically bundled so the
  * registry stays browser-safe (no runtime node:fs). This test re-reads the YAML
  * sources (Node test env — fs is available here) and asserts the generated
@@ -30,7 +30,7 @@ function readYamlTemplatesFromDisk(): unknown[] {
 }
 
 describe("built-in-templates (generated)", () => {
-  it("matches the authored YAML sources (regenerate if this fails: pnpm --filter @oxagen/prompt-templates generate:templates)", () => {
+  it("matches the authored YAML sources (regenerate if this fails: pnpm --filter app generate:templates)", () => {
     expect(BUILT_IN_TEMPLATES).toEqual(readYamlTemplatesFromDisk());
   });
 

@@ -246,9 +246,6 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../../packages/plugins
-      '@oxagen/prompt-templates':
-        specifier: workspace:*
-        version: link:../../packages/prompt-templates
       '@oxagen/rules':
         specifier: workspace:*
         version: link:../../packages/rules
@@ -424,6 +421,9 @@ importers:
       vitest:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0)
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
 
   apps/cli:
     dependencies:
@@ -1663,28 +1663,6 @@ importers:
       vitest:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0)
-
-  packages/prompt-templates:
-    dependencies:
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
-    devDependencies:
-      '@types/node':
-        specifier: 25.9.1
-        version: 25.9.1
-      '@vitest/coverage-v8':
-        specifier: 2.1.9
-        version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0))
-      typescript:
-        specifier: 6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: 2.1.9
-        version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0)
-      yaml:
-        specifier: 2.9.0
-        version: 2.9.0
 
   packages/rules:
     dependencies:

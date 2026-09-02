@@ -103,7 +103,7 @@ const mockResolveVariables = vi.fn((_vars: unknown, _ctx: unknown) => ({
   unresolved: [] as string[],
 }));
 
-vi.mock("@oxagen/prompt-templates", () => ({
+vi.mock("@/lib/prompt-templates", () => ({
   getApplicableTemplates: (ctx: unknown) => mockGetApplicableTemplates(ctx),
   renderTemplate: (body: string, vars: Record<string, string>) =>
     mockRenderTemplate(body, vars),

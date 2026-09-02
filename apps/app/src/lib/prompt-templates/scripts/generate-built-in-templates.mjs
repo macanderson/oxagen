@@ -11,7 +11,7 @@
  * and this script bakes it into a plain-data `.ts` module that bundles cleanly
  * into both server and browser chunks (no node builtins, no loaders).
  *
- * Run:  pnpm --filter @oxagen/prompt-templates generate:templates
+ * Run:  pnpm --filter app generate:templates
  *
  * The drift between YAML and the generated module is guarded by a unit test
  * (built-in-templates.test.ts), so a forgotten regen fails CI rather than
@@ -24,8 +24,8 @@ import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const TEMPLATES_DIR = resolve(__dirname, "../src/templates");
-const OUT_FILE = resolve(__dirname, "../src/built-in-templates.ts");
+const TEMPLATES_DIR = resolve(__dirname, "../templates");
+const OUT_FILE = resolve(__dirname, "../built-in-templates.ts");
 
 /**
  * Deterministic file order: alphabetical by filename. Ranking is primarily by
@@ -56,8 +56,8 @@ function emit(templates) {
   const banner = `/**
  * built-in-templates.ts — GENERATED FILE, DO NOT EDIT BY HAND.
  *
- * Source of truth: src/templates/*.yaml
- * Regenerate:      pnpm --filter @oxagen/prompt-templates generate:templates
+ * Source of truth: templates/*.yaml
+ * Regenerate:      pnpm --filter app generate:templates
  *
  * Statically bundled so the prompt-template registry is browser-safe (no
  * runtime fs reads). Validated against promptTemplateSchema at registry load.

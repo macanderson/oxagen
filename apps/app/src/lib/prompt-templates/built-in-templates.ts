@@ -1,8 +1,8 @@
 /**
  * built-in-templates.ts — GENERATED FILE, DO NOT EDIT BY HAND.
  *
- * Source of truth: src/templates/*.yaml
- * Regenerate:      pnpm --filter @oxagen/prompt-templates generate:templates
+ * Source of truth: templates/*.yaml
+ * Regenerate:      pnpm --filter app generate:templates
  *
  * Statically bundled so the prompt-template registry is browser-safe (no
  * runtime fs reads). Validated against promptTemplateSchema at registry load.
