@@ -4,12 +4,14 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const conversationPurgeHandler: CapabilityHandler<typeof conversationPurge> = async (
-  _input,
-  ctx,
-) => {
+export const conversationPurgeHandler: CapabilityHandler<
+  typeof conversationPurge
+> = async (_input, ctx) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "conversation.purge: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "conversation.purge: rejected — no authenticated user",
+    );
     throw new Error("conversation.purge requires an authenticated user");
   }
 

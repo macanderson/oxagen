@@ -9,6 +9,7 @@
  */
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { logger } from "@oxagen/handlers/logger";
 import { resolveAutomationsScope } from "@/lib/automations/scope";
 import { getAutomation } from "@/lib/automations/automations";
 import type { AutomationGetOutput } from "@oxagen/oxagen/contracts/automation.get";
@@ -18,21 +19,35 @@ import { PlaybookSteps } from "./_components/playbook-steps";
 import { RunHistory } from "./_components/run-history";
 
 interface PageProps {
-  params: Promise<{ orgSlug: string; workspaceSlug: string; automationId: string }>;
+  params: Promise<{
+    orgSlug: string;
+    workspaceSlug: string;
+    automationId: string;
+  }>;
 }
 
 export const metadata: Metadata = { title: "Automation" };
 
 export default async function AutomationDetailPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug, automationId } = await params;
-  const { ctx, canManage } = await resolveAutomationsScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveAutomationsScope(
+    orgSlug,
+    workspaceSlug,
+  );
 
   let automation: AutomationGetOutput;
   try {
     automation = await getAutomation(ctx, automationId);
   } catch (err) {
-    // A missing / cross-tenant automation resolves to 404, not a thrown error page.
-    console.error("automation.get failed:", err);
+    // Every failure here resolves to 404 rather than a thrown error page: the
+    // common case is a missing or cross-tenant id, and a 404 leaks nothing
+    // about which is which. An infrastructure failure also lands here, so the
+    // log line is the only place that distinction survives — read it before
+    // concluding an id is genuinely gone.
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, automationId },
+      "automations: automation.get failed",
+    );
     notFound();
   }
 

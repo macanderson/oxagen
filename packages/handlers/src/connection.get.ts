@@ -5,7 +5,9 @@ import { eq, and, isNull } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { logger } from "./logger";
 
-export const connectionGetHandler: CapabilityHandler<typeof connectionGet> = async (input, ctx) => {
+export const connectionGetHandler: CapabilityHandler<
+  typeof connectionGet
+> = async (input, ctx) => {
   const [row] = await withTenantDb((tx) =>
     tx
       .select({
@@ -21,7 +23,8 @@ export const connectionGetHandler: CapabilityHandler<typeof connectionGet> = asy
         lastSyncAt: schema.sourceConnections.lastSyncAt,
         errorMessage: schema.sourceConnections.errorMessage,
         healthStatus: schema.sourceConnections.healthStatus,
-        consecutiveFailureCount: schema.sourceConnections.consecutiveFailureCount,
+        consecutiveFailureCount:
+          schema.sourceConnections.consecutiveFailureCount,
         lastPollAt: schema.sourceConnections.lastPollAt,
         nextPollAt: schema.sourceConnections.nextPollAt,
         lastErrorAt: schema.sourceConnections.lastErrorAt,
@@ -42,15 +45,20 @@ export const connectionGetHandler: CapabilityHandler<typeof connectionGet> = asy
   );
 
   if (!row) {
-    logger.warn({ connectionId: input.connectionId, orgId: ctx.orgId }, "connection.get: not found");
+    logger.warn(
+      { connectionId: input.connectionId, orgId: ctx.orgId },
+      "connection.get: not found",
+    );
     throw new HTTPException(404, { message: "Connection not found" });
   }
 
   return {
     ...row,
-    deliveryConfig: (row.deliveryConfig as Record<string, unknown> | null) ?? null,
+    deliveryConfig:
+      (row.deliveryConfig as Record<string, unknown> | null) ?? null,
     lastSyncAt: row.lastSyncAt?.toISOString() ?? null,
-    healthStatus: (row.healthStatus as "healthy" | "degraded" | "errored") ?? "healthy",
+    healthStatus:
+      (row.healthStatus as "healthy" | "degraded" | "errored") ?? "healthy",
     lastPollAt: row.lastPollAt?.toISOString() ?? null,
     nextPollAt: row.nextPollAt?.toISOString() ?? null,
     lastErrorAt: row.lastErrorAt?.toISOString() ?? null,

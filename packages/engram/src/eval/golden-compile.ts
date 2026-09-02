@@ -17,10 +17,43 @@ import { countTokens } from "../compiler/tokenizer";
 
 /** Articles, prepositions, and generic question words that carry no retrieval signal. */
 const STOPWORDS = new Set([
-  "the", "and", "for", "from", "with", "that", "this", "what", "which", "does",
-  "where", "who", "whom", "into", "onto", "are", "was", "were", "has", "have",
-  "its", "value", "constant", "module", "file", "mention", "answer", "just",
-  "name", "give", "list", "used", "use", "uses", "set", "their", "you",
+  "the",
+  "and",
+  "for",
+  "from",
+  "with",
+  "that",
+  "this",
+  "what",
+  "which",
+  "does",
+  "where",
+  "who",
+  "whom",
+  "into",
+  "onto",
+  "are",
+  "was",
+  "were",
+  "has",
+  "have",
+  "its",
+  "value",
+  "constant",
+  "module",
+  "file",
+  "mention",
+  "answer",
+  "just",
+  "name",
+  "give",
+  "list",
+  "used",
+  "use",
+  "uses",
+  "set",
+  "their",
+  "you",
 ]);
 
 /** Lowercase, split on non-alphanumerics, drop stopwords and 1–2 char tokens. */
@@ -52,13 +85,20 @@ export function rankCorpus(
   corpus: MemoryRecord[],
   taskFrame: TaskFrame,
 ): CompiledRecord[] {
-  const query = terms(`${taskFrame.taskDescription} ${taskFrame.workingSet.join(" ")}`);
+  const query = terms(
+    `${taskFrame.taskDescription} ${taskFrame.workingSet.join(" ")}`,
+  );
   return corpus
     .map((record): CompiledRecord => {
       const text = factText(record);
       let score = 0;
       for (const term of terms(text)) if (query.has(term)) score++;
-      return { id: record.id, score, text, tokens: countTokens(text, taskFrame.modelId) };
+      return {
+        id: record.id,
+        score,
+        text,
+        tokens: countTokens(text, taskFrame.modelId),
+      };
     })
     .filter((c) => c.score > 0)
     .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));

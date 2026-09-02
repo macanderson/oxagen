@@ -24,10 +24,10 @@ import { createBuiltinSkillRegistry } from "@oxagen/skills";
 import { logger } from "./logger";
 import { skillBodyChecksum } from "./skill-checksum";
 
-// Builtin skills are resolved from EMBEDDED module data (createBuiltinSkillRegistry),
-// never a runtime filesystem read. Serverless bundlers drop the sibling
-// packages/skills/skills data, so a `readdir` there returns ENOENT in prod and
-// silently seeded ZERO skills — the root cause of the "no builtin on disk" error.
+// Builtin skills are resolved from EMBEDDED module data
+// (createBuiltinSkillRegistry), never a runtime filesystem read: serverless
+// bundlers drop the sibling packages/skills/skills data, so a `readdir` there
+// returns ENOENT in production and seeds nothing.
 
 interface SeedArgs {
   orgId: string;
@@ -54,6 +54,7 @@ async function runSeed(
   let inserted = 0;
 
   for (const template of templates) {
+    const metadata = canonicalSkillMetadata(template.metadata);
     const content = serializeArtifactToml({
       schema_version: 1,
       kind: "skill",
@@ -61,9 +62,7 @@ async function runSeed(
       description: template.description,
       instructions: template.body,
       references: template.references.map((reference) => reference.path),
-      ...(canonicalSkillMetadata(template.metadata)
-        ? { metadata: canonicalSkillMetadata(template.metadata) }
-        : {}),
+      ...(metadata ? { metadata } : {}),
     });
     // ── Idempotency check ─────────────────────────────────────────────────
     // Skip if a skill with this slug already exists (not soft-deleted) for
@@ -112,10 +111,19 @@ async function runSeed(
 
     const skillRow = skillRows[0];
     if (!skillRow) {
-      // Conflict on insert — row was concurrently inserted; skip gracefully.
+      // ON CONFLICT DO NOTHING swallowed the insert. Two distinct causes reach
+      // here, and skills_workspace_slug_idx cannot tell them apart because it
+      // is a FULL unique index on (workspace_id, slug) — it does not exclude
+      // soft-deleted rows:
+      //   1. a concurrent seeder inserted the same slug first, or
+      //   2. a soft-deleted row already holds the slug, so the existence check
+      //      above (which requires deleted_at IS NULL) missed it.
+      // Case 2 means the template can never be re-seeded into this workspace.
+      // No capability sets skills.deleted_at today, so it is unreachable — but
+      // it becomes live the moment a delete-skill capability lands.
       logger.debug(
         { slug: template.slug, orgId, workspaceId },
-        "skill-workspace-seed: concurrent insert detected, skipping",
+        "skill-workspace-seed: slug already claimed (concurrent insert or soft-deleted row), skipping",
       );
       continue;
     }

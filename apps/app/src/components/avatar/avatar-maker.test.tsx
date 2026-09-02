@@ -28,7 +28,15 @@ afterEach(cleanup);
 // EntityAvatar renders next/image for photo avatars; jsdom has no Next.js
 // image runtime, so stub it the same way avatar-upload.test.tsx does.
 vi.mock("next/image", () => ({
-  default: ({ src, alt, ...rest }: { src: string; alt: string; [key: string]: unknown }) => (
+  default: ({
+    src,
+    alt,
+    ...rest
+  }: {
+    src: string;
+    alt: string;
+    [key: string]: unknown;
+  }) => (
     // eslint-disable-next-line @next/next/no-img-element -- jsdom test shim; real next/image requires Next.js runtime
     <img src={src} alt={alt} {...rest} />
   ),
@@ -51,12 +59,18 @@ async function openDialog() {
 describe("AvatarMaker — trigger", () => {
   it("renders the EntityAvatar preview and the Edit avatar button", () => {
     render(<AvatarMaker value={null} onChange={vi.fn()} name="Acme Team" />);
-    expect(screen.getByRole("img", { name: "Acme Team avatar" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit avatar" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "Acme Team avatar" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Edit avatar" }),
+    ).toBeInTheDocument();
   });
 
   it("disables the trigger when disabled=true", () => {
-    render(<AvatarMaker value={null} onChange={vi.fn()} name="Acme Team" disabled />);
+    render(
+      <AvatarMaker value={null} onChange={vi.fn()} name="Acme Team" disabled />,
+    );
     expect(screen.getByRole("button", { name: "Edit avatar" })).toBeDisabled();
   });
 });
@@ -75,38 +89,67 @@ describe("AvatarMaker — dialog + tabs", () => {
     render(<AvatarMaker value={null} onChange={vi.fn()} name="Acme Team" />);
     await openDialog();
 
-    expect(screen.getByRole("tab", { name: "Photo" })).toHaveAttribute("data-active");
-    expect(screen.getByRole("button", { name: "Choose a photo" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Photo" })).toHaveAttribute(
+      "data-active",
+    );
+    expect(
+      screen.getByRole("button", { name: "Choose a photo" }),
+    ).toBeInTheDocument();
   });
 
   it("defaults to the Photo tab when the current value is a photo URL", async () => {
-    render(<AvatarMaker value="https://cdn.example.com/a.webp" onChange={vi.fn()} name="Acme Team" />);
+    render(
+      <AvatarMaker
+        value="https://cdn.example.com/a.webp"
+        onChange={vi.fn()}
+        name="Acme Team"
+      />,
+    );
     await openDialog();
 
-    expect(screen.getByRole("tab", { name: "Photo" })).toHaveAttribute("data-active");
+    expect(screen.getByRole("tab", { name: "Photo" })).toHaveAttribute(
+      "data-active",
+    );
   });
 
   it("defaults to the Design tab when the current value is a designed avatar", async () => {
-    const value = serializeDesignedAvatar({ emoji: "🦊", bg: "#f59e0b", mode: "full" });
+    const value = serializeDesignedAvatar({
+      emoji: "🦊",
+      bg: "#f59e0b",
+      mode: "full",
+    });
     render(<AvatarMaker value={value} onChange={vi.fn()} name="Acme Team" />);
     await openDialog();
 
-    expect(screen.getByRole("tab", { name: "Design" })).toHaveAttribute("data-active");
+    expect(screen.getByRole("tab", { name: "Design" })).toHaveAttribute(
+      "data-active",
+    );
   });
 });
 
 describe("AvatarMaker — Design tab pre-population", () => {
   it("pre-populates emoji, color, and mode from the current designed value", async () => {
-    const value = serializeDesignedAvatar({ emoji: "🦊", bg: "#3b82f6", mode: "mono-light" });
+    const value = serializeDesignedAvatar({
+      emoji: "🦊",
+      bg: "#3b82f6",
+      mode: "mono-light",
+    });
     render(<AvatarMaker value={value} onChange={vi.fn()} name="Acme Team" />);
     await openDialog();
 
     // Emoji button for the fox is pressed.
-    expect(screen.getByRole("button", { name: "fox" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "fox" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     // Custom hex field reflects the current background.
-    expect(screen.getByLabelText("Custom background color hex value")).toHaveValue("#3b82f6");
+    expect(
+      screen.getByLabelText("Custom background color hex value"),
+    ).toHaveValue("#3b82f6");
     // Color mode segmented control reflects the current mode.
-    expect(screen.getByRole("button", { name: "Mono light" })).toHaveAttribute("data-pressed");
+    expect(screen.getByRole("button", { name: "Mono light" })).toHaveAttribute(
+      "data-pressed",
+    );
   });
 });
 
@@ -118,13 +161,17 @@ describe("AvatarMaker — Design tab save flow", () => {
 
     await user.click(screen.getByRole("tab", { name: "Design" }));
     await user.click(screen.getByRole("button", { name: "fox" }));
-    await user.click(screen.getByRole("button", { name: "Background color #f59e0b" }));
+    await user.click(
+      screen.getByRole("button", { name: "Background color #f59e0b" }),
+    );
     await user.click(screen.getByRole("button", { name: "Mono dark" }));
 
     const dialog = screen.getByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
-    expect(onChange).toHaveBeenCalledWith('avatar:v1:{"emoji":"🦊","bg":"#f59e0b","mode":"mono-dark"}');
+    expect(onChange).toHaveBeenCalledWith(
+      'avatar:v1:{"emoji":"🦊","bg":"#f59e0b","mode":"mono-dark"}',
+    );
   });
 
   it("narrows the emoji grid via the search filter", async () => {
@@ -137,7 +184,9 @@ describe("AvatarMaker — Design tab save flow", () => {
     await user.type(screen.getByLabelText("Icon"), "cat");
 
     expect(screen.getByRole("button", { name: "cat" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "fox" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "fox" }),
+    ).not.toBeInTheDocument();
   });
 
   it("filters the emoji grid to a single category when a category chip is clicked", async () => {
@@ -148,7 +197,9 @@ describe("AvatarMaker — Design tab save flow", () => {
     await user.click(screen.getByRole("button", { name: "Food" }));
 
     expect(screen.getByRole("button", { name: "pizza" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "fox" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "fox" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows an error and disables Save for an invalid custom hex value", async () => {
@@ -178,7 +229,9 @@ describe("AvatarMaker — Design tab save flow", () => {
     const dialog = screen.getByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
-    expect(onChange).toHaveBeenCalledWith(expect.stringContaining('"bg":"#abcdef"'));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.stringContaining('"bg":"#abcdef"'),
+    );
   });
 });
 
@@ -199,7 +252,14 @@ describe("AvatarMaker — cancel", () => {
 
 describe("AvatarMaker — entityLabel copy", () => {
   it("mentions the entityLabel noun in the dialog description", async () => {
-    render(<AvatarMaker value={null} onChange={vi.fn()} name="Acme Team" entityLabel="workspace" />);
+    render(
+      <AvatarMaker
+        value={null}
+        onChange={vi.fn()}
+        name="Acme Team"
+        entityLabel="workspace"
+      />,
+    );
     await openDialog();
 
     expect(screen.getByText(/for this workspace/i)).toBeInTheDocument();

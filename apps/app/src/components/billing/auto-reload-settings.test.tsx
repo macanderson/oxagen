@@ -16,7 +16,10 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, act } from "@testing-library/react";
-import { AutoReloadSettings, type AutoReloadSettingsProps } from "./auto-reload-settings";
+import {
+  AutoReloadSettings,
+  type AutoReloadSettingsProps,
+} from "./auto-reload-settings";
 import type { OrgBillingSettings, PaymentMethodView } from "@oxagen/billing";
 
 afterEach(cleanup);
@@ -49,7 +52,7 @@ const settings: OrgBillingSettings = {
   orgId: "org-test",
   autoReloadEnabled: false,
   autoReloadThresholdCents: 500, // $5.00
-  autoReloadAmountCents: 2000,   // $20.00
+  autoReloadAmountCents: 2000, // $20.00
   autoReloadPaymentMethodId: null,
   lastAutoReloadAt: null,
   lowBalanceThresholdCents: 500,
@@ -111,14 +114,18 @@ describe("AutoReloadSettings — rendering", () => {
   it("pre-fills threshold input from settings when enabled", () => {
     render(<AutoReloadSettings {...defaultProps} settings={enabledSettings} />);
     // When enabled, threshold input shows $5.00
-    const threshold = screen.getByLabelText(/reload when balance falls below/i) as HTMLInputElement;
+    const threshold = screen.getByLabelText(
+      /reload when balance falls below/i,
+    ) as HTMLInputElement;
     expect(threshold.value).toBe("5.00");
   });
 
   it("pre-fills amount input from settings when enabled", () => {
     render(<AutoReloadSettings {...defaultProps} settings={enabledSettings} />);
     // When enabled, amount input shows $20.00
-    const amount = screen.getByLabelText(/buy this many credits/i) as HTMLInputElement;
+    const amount = screen.getByLabelText(
+      /buy this many credits/i,
+    ) as HTMLInputElement;
     expect(amount.value).toBe("20.00");
   });
 
@@ -132,7 +139,9 @@ describe("AutoReloadSettings — canManage=false", () => {
   it("hides the Save button when canManage=false", () => {
     render(<AutoReloadSettings {...defaultProps} canManage={false} />);
     // Save button is conditionally rendered only when canManage=true
-    expect(screen.queryByRole("button", { name: /save/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /save/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("still renders the toggle when canManage=false", () => {
@@ -165,18 +174,22 @@ describe("AutoReloadSettings — fill registration", () => {
   it("calls useRegisterFillableForm with a formId containing 'billing-auto-reload'", () => {
     render(<AutoReloadSettings {...defaultProps} />);
     expect(mockUseRegisterFillableForm).toHaveBeenCalled();
-    const callArg = (mockUseRegisterFillableForm.mock.calls[0] as unknown as [
-      { formId: string; fields: { name: string }[] },
-    ])[0];
+    const callArg = (
+      mockUseRegisterFillableForm.mock.calls[0] as unknown as [
+        { formId: string; fields: { name: string }[] },
+      ]
+    )[0];
     expect(callArg.formId).toContain("billing-auto-reload");
     expect(callArg.formId).toContain("acme");
   });
 
   it("registers 3 fields: enabled, threshold, amount", () => {
     render(<AutoReloadSettings {...defaultProps} />);
-    const callArg = (mockUseRegisterFillableForm.mock.calls[0] as unknown as [
-      { formId: string; fields: { name: string }[] },
-    ])[0];
+    const callArg = (
+      mockUseRegisterFillableForm.mock.calls[0] as unknown as [
+        { formId: string; fields: { name: string }[] },
+      ]
+    )[0];
     const names = callArg.fields.map((f) => f.name);
     expect(names).toContain("enabled");
     expect(names).toContain("threshold");
@@ -206,10 +219,14 @@ describe("AutoReloadSettings — fill registration", () => {
       capturedApply!({ threshold: "10.00", amount: "25.00" });
     });
 
-    const thresholdInput = screen.getByLabelText(/reload when balance falls below/i) as HTMLInputElement;
+    const thresholdInput = screen.getByLabelText(
+      /reload when balance falls below/i,
+    ) as HTMLInputElement;
     expect(thresholdInput.value).toBe("10.00");
 
-    const amountInput = screen.getByLabelText(/buy this many credits/i) as HTMLInputElement;
+    const amountInput = screen.getByLabelText(
+      /buy this many credits/i,
+    ) as HTMLInputElement;
     expect(amountInput.value).toBe("25.00");
   });
 
@@ -221,10 +238,14 @@ describe("AutoReloadSettings — fill registration", () => {
       capturedApply!({ threshold: 15, amount: 50 });
     });
 
-    const thresholdInput = screen.getByLabelText(/reload when balance falls below/i) as HTMLInputElement;
+    const thresholdInput = screen.getByLabelText(
+      /reload when balance falls below/i,
+    ) as HTMLInputElement;
     expect(thresholdInput.value).toBe("15");
 
-    const amountInput = screen.getByLabelText(/buy this many credits/i) as HTMLInputElement;
+    const amountInput = screen.getByLabelText(
+      /buy this many credits/i,
+    ) as HTMLInputElement;
     expect(amountInput.value).toBe("50");
   });
 });

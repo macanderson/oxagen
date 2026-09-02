@@ -21,9 +21,13 @@ vi.mock("@/lib/utils", () => ({
 }));
 
 vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children, variant: _variant }: { children: React.ReactNode; variant?: string }) => (
-    <span data-testid="badge">{children}</span>
-  ),
+  Badge: ({
+    children,
+    variant: _variant,
+  }: {
+    children: React.ReactNode;
+    variant?: string;
+  }) => <span data-testid="badge">{children}</span>,
 }));
 
 // Mock all the card components
@@ -105,7 +109,15 @@ vi.mock("./registry-components/image-preview", () => ({
 }));
 
 vi.mock("./registry-components/file-attachment", () => ({
-  default: ({ url, name, kind }: { url: string; name: string; kind: string }) => (
+  default: ({
+    url,
+    name,
+    kind,
+  }: {
+    url: string;
+    name: string;
+    kind: string;
+  }) => (
     <div data-testid="file-attachment" data-url={url} data-kind={kind}>
       {name}
     </div>
@@ -136,7 +148,9 @@ describe("MessageBubble", () => {
   it("renders plain text content via MarkdownMessage", async () => {
     const { MessageBubble } = await import("./message-bubble");
     render(<MessageBubble message={baseMessage} />);
-    expect(screen.getByTestId("markdown-message")).toHaveTextContent("Hello world");
+    expect(screen.getByTestId("markdown-message")).toHaveTextContent(
+      "Hello world",
+    );
   });
 
   it("renders branchReason badge when present", async () => {
@@ -166,7 +180,9 @@ describe("MessageBubble", () => {
     );
     // Single text block → no timeline
     expect(screen.queryByTestId("activity-timeline")).not.toBeInTheDocument();
-    expect(screen.getByTestId("markdown-message")).toHaveTextContent("Solo text");
+    expect(screen.getByTestId("markdown-message")).toHaveTextContent(
+      "Solo text",
+    );
   });
 
   it("renders ActivityTimeline when multiple content blocks present", async () => {
@@ -220,7 +236,12 @@ describe("MessageBubble", () => {
           role: "assistant",
           contentBlocks: [
             { type: "text", text: "intro" },
-            { type: "reasoning", reasoningId: "r1", text: "thinking…", durationMs: 1200 },
+            {
+              type: "reasoning",
+              reasoningId: "r1",
+              text: "thinking…",
+              durationMs: 1200,
+            },
             {
               type: "tool-call",
               toolCallId: "tc1",
@@ -245,7 +266,13 @@ describe("MessageBubble", () => {
               expiresAt: "2026-06-12T00:00:00Z",
               resolution: "approved",
             },
-            { type: "plan", planId: "pl1", title: "Plan", steps: [], status: "pending" },
+            {
+              type: "plan",
+              planId: "pl1",
+              title: "Plan",
+              steps: [],
+              status: "pending",
+            },
             {
               type: "subagent-fanout",
               fanoutId: "f1",
@@ -274,7 +301,9 @@ describe("MessageBubble", () => {
     expect(screen.getByTestId("subagent-fanout")).toBeInTheDocument();
     expect(screen.getByTestId("memory-card")).toBeInTheDocument();
     // Registered componentId renders the real registry component (lazy path).
-    expect(await screen.findByTestId("known-component")).toHaveTextContent("hello");
+    expect(await screen.findByTestId("known-component")).toHaveTextContent(
+      "hello",
+    );
   });
 
   it("renders terminal-state variants of status-bearing blocks", async () => {
@@ -308,7 +337,13 @@ describe("MessageBubble", () => {
               riskLevel: "low",
               expiresAt: "2026-06-12T00:00:00Z",
             },
-            { type: "plan", planId: "pl1", title: "Plan", steps: [], status: "approved" },
+            {
+              type: "plan",
+              planId: "pl1",
+              title: "Plan",
+              steps: [],
+              status: "approved",
+            },
             {
               type: "subagent-fanout",
               fanoutId: "f1",
@@ -345,9 +380,30 @@ describe("MessageBubble", () => {
           role: "assistant",
           contentBlocks: [
             { type: "text", text: "working" },
-            { type: "tool-call", toolCallId: "t1", capability: "web.search", inputPreview: {}, riskLevel: "low", status: "completed" },
-            { type: "tool-call", toolCallId: "t2", capability: "web.fetch", inputPreview: {}, riskLevel: "low", status: "completed" },
-            { type: "tool-call", toolCallId: "t3", capability: "graph.search", inputPreview: {}, riskLevel: "low", status: "completed" },
+            {
+              type: "tool-call",
+              toolCallId: "t1",
+              capability: "web.search",
+              inputPreview: {},
+              riskLevel: "low",
+              status: "completed",
+            },
+            {
+              type: "tool-call",
+              toolCallId: "t2",
+              capability: "web.fetch",
+              inputPreview: {},
+              riskLevel: "low",
+              status: "completed",
+            },
+            {
+              type: "tool-call",
+              toolCallId: "t3",
+              capability: "graph.search",
+              inputPreview: {},
+              riskLevel: "low",
+              status: "completed",
+            },
           ],
         }}
       />,
@@ -366,9 +422,23 @@ describe("MessageBubble", () => {
           ...baseMessage,
           role: "assistant",
           contentBlocks: [
-            { type: "tool-call", toolCallId: "t1", capability: "web.search", inputPreview: {}, riskLevel: "low", status: "completed" },
+            {
+              type: "tool-call",
+              toolCallId: "t1",
+              capability: "web.search",
+              inputPreview: {},
+              riskLevel: "low",
+              status: "completed",
+            },
             { type: "text", text: "an aside" },
-            { type: "tool-call", toolCallId: "t2", capability: "web.fetch", inputPreview: {}, riskLevel: "low", status: "completed" },
+            {
+              type: "tool-call",
+              toolCallId: "t2",
+              capability: "web.fetch",
+              inputPreview: {},
+              riskLevel: "low",
+              status: "completed",
+            },
           ],
         }}
       />,
@@ -451,8 +521,20 @@ describe("MessageBubble", () => {
         message={{
           ...baseMessage,
           attachments: [
-            { publicId: "gen_1", kind: "image", name: "a.png", mimeType: "image/png", url: "/api/v1/assets/gen_1" },
-            { publicId: "gen_2", kind: "image", name: "b.png", mimeType: "image/png", url: "/api/v1/assets/gen_2" },
+            {
+              publicId: "gen_1",
+              kind: "image",
+              name: "a.png",
+              mimeType: "image/png",
+              url: "/api/v1/assets/gen_1",
+            },
+            {
+              publicId: "gen_2",
+              kind: "image",
+              name: "b.png",
+              mimeType: "image/png",
+              url: "/api/v1/assets/gen_2",
+            },
           ],
         }}
       />,

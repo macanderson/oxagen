@@ -25,7 +25,9 @@ vi.mock("drizzle-orm", () => ({
   eq: (a: unknown, b: unknown) => ({ eq: [a, b] }),
 }));
 
-vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("./logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 import { commandMenuSuggestHandler } from "./command.menu.suggest";
 
@@ -48,7 +50,8 @@ const MINIMAL_INPUT = {
     id: "aex_abc123",
     publicId: "run_4221",
     label: "Run #4221",
-    summary: "Run of playbook churn-investigate v3. Status: failed at step 'normalize'.",
+    summary:
+      "Run of playbook churn-investigate v3. Status: failed at step 'normalize'.",
   },
   recentEntities: [] as Array<{ kind: string; id: string; label?: string }>,
   capabilities: ["run_capability_chain"] as string[],
@@ -56,9 +59,21 @@ const MINIMAL_INPUT = {
 };
 
 const SAMPLE_SUGGESTIONS = [
-  { text: "Summarize this run's failure root cause", category: "investigate" as const, confidence: 0.92 },
-  { text: "Show similar failed runs today", category: "investigate" as const, confidence: 0.8 },
-  { text: "Identify the failing step pattern", category: "analyze" as const, confidence: 0.75 },
+  {
+    text: "Summarize this run's failure root cause",
+    category: "investigate" as const,
+    confidence: 0.92,
+  },
+  {
+    text: "Show similar failed runs today",
+    category: "investigate" as const,
+    confidence: 0.8,
+  },
+  {
+    text: "Identify the failing step pattern",
+    category: "analyze" as const,
+    confidence: 0.75,
+  },
 ];
 
 // Default: org has suggestions enabled (settings = {})
@@ -70,35 +85,45 @@ afterEach(() => {
 
 describe("commandMenuSuggestHandler", () => {
   it("returns LLM suggestions when the org opt-out is not set", async () => {
-    mockWithTenantDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-      const tx = {
-        query: {
-          organizations: {
-            findFirst: async () => enabledOrgRow,
+    mockWithTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          query: {
+            organizations: {
+              findFirst: async () => enabledOrgRow,
+            },
           },
-        },
-      };
-      return fn(tx);
+        };
+        return fn(tx);
+      },
+    );
+    mockGenerateObjectFor.mockResolvedValue({
+      object: { suggestions: SAMPLE_SUGGESTIONS },
     });
-    mockGenerateObjectFor.mockResolvedValue({ object: { suggestions: SAMPLE_SUGGESTIONS } });
 
     const result = await commandMenuSuggestHandler(MINIMAL_INPUT, ctx);
     expect(result.suggestions).toHaveLength(3);
-    expect(result.suggestions[0]?.text).toBe("Summarize this run's failure root cause");
+    expect(result.suggestions[0]?.text).toBe(
+      "Summarize this run's failure root cause",
+    );
     expect(result.suggestions[0]?.category).toBe("investigate");
   });
 
   it("returns [] when the org has opted out (suggest_llm_enabled = false)", async () => {
-    mockWithTenantDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-      const tx = {
-        query: {
-          organizations: {
-            findFirst: async () => ({ settings: { suggest_llm_enabled: false } }),
+    mockWithTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          query: {
+            organizations: {
+              findFirst: async () => ({
+                settings: { suggest_llm_enabled: false },
+              }),
+            },
           },
-        },
-      };
-      return fn(tx);
-    });
+        };
+        return fn(tx);
+      },
+    );
 
     const result = await commandMenuSuggestHandler(MINIMAL_INPUT, ctx);
     expect(result.suggestions).toHaveLength(0);
@@ -107,17 +132,21 @@ describe("commandMenuSuggestHandler", () => {
   });
 
   it("defaults to enabled when suggest_llm_enabled is missing from settings", async () => {
-    mockWithTenantDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-      const tx = {
-        query: {
-          organizations: {
-            findFirst: async () => ({ settings: { some_other_flag: true } }),
+    mockWithTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          query: {
+            organizations: {
+              findFirst: async () => ({ settings: { some_other_flag: true } }),
+            },
           },
-        },
-      };
-      return fn(tx);
+        };
+        return fn(tx);
+      },
+    );
+    mockGenerateObjectFor.mockResolvedValue({
+      object: { suggestions: SAMPLE_SUGGESTIONS },
     });
-    mockGenerateObjectFor.mockResolvedValue({ object: { suggestions: SAMPLE_SUGGESTIONS } });
 
     const result = await commandMenuSuggestHandler(MINIMAL_INPUT, ctx);
     expect(result.suggestions.length).toBeGreaterThan(0);
@@ -125,10 +154,14 @@ describe("commandMenuSuggestHandler", () => {
   });
 
   it("returns [] silently when the LLM call throws (spec §7 graceful degradation)", async () => {
-    mockWithTenantDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-      const tx = { query: { organizations: { findFirst: async () => enabledOrgRow } } };
-      return fn(tx);
-    });
+    mockWithTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          query: { organizations: { findFirst: async () => enabledOrgRow } },
+        };
+        return fn(tx);
+      },
+    );
     mockGenerateObjectFor.mockRejectedValue(new Error("LLM timeout"));
 
     const result = await commandMenuSuggestHandler(MINIMAL_INPUT, ctx);
@@ -136,11 +169,17 @@ describe("commandMenuSuggestHandler", () => {
   });
 
   it("only sends pageEntity.summary to the LLM, not the full entity", async () => {
-    mockWithTenantDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-      const tx = { query: { organizations: { findFirst: async () => enabledOrgRow } } };
-      return fn(tx);
+    mockWithTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          query: { organizations: { findFirst: async () => enabledOrgRow } },
+        };
+        return fn(tx);
+      },
+    );
+    mockGenerateObjectFor.mockResolvedValue({
+      object: { suggestions: SAMPLE_SUGGESTIONS },
     });
-    mockGenerateObjectFor.mockResolvedValue({ object: { suggestions: SAMPLE_SUGGESTIONS } });
 
     await commandMenuSuggestHandler(MINIMAL_INPUT, ctx);
 
@@ -156,31 +195,45 @@ describe("commandMenuSuggestHandler", () => {
   });
 
   it("uses the fast model tier (Haiku-class)", async () => {
-    mockWithTenantDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-      const tx = { query: { organizations: { findFirst: async () => enabledOrgRow } } };
-      return fn(tx);
+    mockWithTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          query: { organizations: { findFirst: async () => enabledOrgRow } },
+        };
+        return fn(tx);
+      },
+    );
+    mockGenerateObjectFor.mockResolvedValue({
+      object: { suggestions: SAMPLE_SUGGESTIONS },
     });
-    mockGenerateObjectFor.mockResolvedValue({ object: { suggestions: SAMPLE_SUGGESTIONS } });
 
     await commandMenuSuggestHandler(MINIMAL_INPUT, ctx);
 
-    const callArgs = mockGenerateObjectFor.mock.calls[0]?.[0] as { model: unknown };
+    const callArgs = mockGenerateObjectFor.mock.calls[0]?.[0] as {
+      model: unknown;
+    };
     // Our mock selectModel returns "mock-model" for the fast tier
     expect(callArgs.model).toBe("mock-model");
   });
 
   it("truncates LLM output to max 5 suggestions", async () => {
-    mockWithTenantDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-      const tx = { query: { organizations: { findFirst: async () => enabledOrgRow } } };
-      return fn(tx);
-    });
+    mockWithTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          query: { organizations: { findFirst: async () => enabledOrgRow } },
+        };
+        return fn(tx);
+      },
+    );
     // LLM returns 6 suggestions (shouldn't happen but guard against it)
     const sixSuggestions = Array.from({ length: 6 }, (_, i) => ({
       text: `Suggestion ${i} about something here`,
       category: "investigate" as const,
       confidence: 0.8,
     }));
-    mockGenerateObjectFor.mockResolvedValue({ object: { suggestions: sixSuggestions } });
+    mockGenerateObjectFor.mockResolvedValue({
+      object: { suggestions: sixSuggestions },
+    });
 
     const result = await commandMenuSuggestHandler(MINIMAL_INPUT, ctx);
     expect(result.suggestions.length).toBeLessThanOrEqual(5);
@@ -188,7 +241,9 @@ describe("commandMenuSuggestHandler", () => {
 
   it("returns [] gracefully when org settings read fails", async () => {
     mockWithTenantDb.mockRejectedValue(new Error("DB unavailable"));
-    mockGenerateObjectFor.mockResolvedValue({ object: { suggestions: SAMPLE_SUGGESTIONS } });
+    mockGenerateObjectFor.mockResolvedValue({
+      object: { suggestions: SAMPLE_SUGGESTIONS },
+    });
 
     // isSuggestEnabled catches the error and returns true (enabled), so the LLM
     // is still called — this tests the happy path when settings are unavailable.

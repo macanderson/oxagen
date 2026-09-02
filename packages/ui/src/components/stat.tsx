@@ -52,18 +52,40 @@ const toneClass = {
 
 const Stat = React.forwardRef<HTMLDivElement, StatProps>(
   (
-    { className, label, value, delta, trend, intent, hint, icon, loading, tone = "neutral", ...props },
+    {
+      className,
+      label,
+      value,
+      delta,
+      trend,
+      intent,
+      hint,
+      icon,
+      loading,
+      tone = "neutral",
+      ...props
+    },
     ref,
   ) => {
     const resolvedIntent =
-      intent ?? (trend === "up" ? "positive" : trend === "down" ? "negative" : "neutral");
+      intent ??
+      (trend === "up" ? "positive" : trend === "down" ? "negative" : "neutral");
     const TrendIcon = trend ? trendIcon[trend] : null;
     return (
-      <div ref={ref} className={cn("relative flex min-w-0 flex-col gap-1 p-4", className)} {...props}>
+      <div
+        ref={ref}
+        className={cn("relative flex min-w-0 flex-col gap-1 p-4", className)}
+        {...props}
+      >
         <div className="flex items-center justify-between gap-2">
-          <div className="truncate text-xs font-medium text-muted-foreground">{label}</div>
+          <div className="truncate text-xs font-medium text-muted-foreground">
+            {label}
+          </div>
           {icon && (
-            <div aria-hidden="true" className="shrink-0 text-muted-foreground [&_svg]:size-4">
+            <div
+              aria-hidden="true"
+              className="shrink-0 text-muted-foreground [&_svg]:size-4"
+            >
               {icon}
             </div>
           )}
@@ -87,7 +109,9 @@ const Stat = React.forwardRef<HTMLDivElement, StatProps>(
                   intentClass[resolvedIntent],
                 )}
               >
-                {TrendIcon && <TrendIcon aria-hidden="true" className="size-3" />}
+                {TrendIcon && (
+                  <TrendIcon aria-hidden="true" className="size-3" />
+                )}
                 {delta}
               </span>
             )}

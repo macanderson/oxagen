@@ -6,7 +6,11 @@ import { HeroBackdrop } from "@/components/brand/hero-backdrop";
  * hero backdrop as the (auth) group so signup → create-org reads as one branded
  * flow. The child page supplies its own centering wrapper above the backdrop.
  */
-export default function OnboardingLayout({ children }: { children: ReactNode }) {
+export default function OnboardingLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
   return (
     <div className="relative isolate min-h-dvh overflow-hidden">
       <HeroBackdrop intensity="hero" />

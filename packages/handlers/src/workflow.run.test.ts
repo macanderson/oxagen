@@ -17,13 +17,12 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
-    const tx = {
-      insert: (_table: unknown) => ({ values: mocks.insertValues }),
-    };
-    return fn(tx);
-  },
-
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
+      const tx = {
+        insert: (_table: unknown) => ({ values: mocks.insertValues }),
+      };
+      return fn(tx);
+    },
   };
 });
 
@@ -47,7 +46,11 @@ describe("workflow.run handler", () => {
     mocks.inngestSend.mockResolvedValue(undefined);
   });
 
-  const BASE_INPUT = { goal: "Profile Fortune 500 CEOs", outputFormat: "json" as const, maxParallelism: 50 };
+  const BASE_INPUT = {
+    goal: "Profile Fortune 500 CEOs",
+    outputFormat: "json" as const,
+    maxParallelism: 50,
+  };
 
   it("rejects when no userId in context", async () => {
     await expect(
@@ -81,7 +84,10 @@ describe("workflow.run handler", () => {
     // workflow run failed at INSERT. The DB mock can't catch the violation, so
     // assert the literal value explicitly.
     await workflowRunHandler(BASE_INPUT, CTX);
-    const insertCall = mocks.insertValues.mock.calls[0]![0] as Record<string, unknown>;
+    const insertCall = mocks.insertValues.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
     expect(insertCall.originType).toBe("workflow_run");
   });
 
@@ -93,28 +99,39 @@ describe("workflow.run handler", () => {
 
   it("uses input title when provided", async () => {
     await workflowRunHandler({ ...BASE_INPUT, title: "My Workflow" }, CTX);
-    const insertCall = mocks.insertValues.mock.calls[0]![0] as Record<string, unknown>;
-    expect((insertCall.inputPayload as Record<string, unknown>).title).toBe("My Workflow");
+    const insertCall = mocks.insertValues.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect((insertCall.inputPayload as Record<string, unknown>).title).toBe(
+      "My Workflow",
+    );
   });
 
   it("truncates goal to 200 chars as title when title omitted", async () => {
     const longGoal = "A".repeat(300);
     await workflowRunHandler({ ...BASE_INPUT, goal: longGoal }, CTX);
-    const insertCall = mocks.insertValues.mock.calls[0]![0] as Record<string, unknown>;
+    const insertCall = mocks.insertValues.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
     const payload = insertCall.inputPayload as Record<string, unknown>;
     expect((payload.title as string).length).toBe(200);
   });
 
   it("forwards maxParallelism to inngest payload", async () => {
     await workflowRunHandler({ ...BASE_INPUT, maxParallelism: 10 }, CTX);
-    const sendCall = mocks.inngestSend.mock.calls[0]![0] as Record<string, unknown>;
+    const sendCall = mocks.inngestSend.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
     expect((sendCall.data as Record<string, unknown>).maxParallelism).toBe(10);
   });
 
   it("throws when insert returns no row", async () => {
     mocks.insertReturning.mockResolvedValueOnce([]);
-    await expect(
-      workflowRunHandler(BASE_INPUT, CTX),
-    ).rejects.toThrow("workflow.run: insert returned no row");
+    await expect(workflowRunHandler(BASE_INPUT, CTX)).rejects.toThrow(
+      "workflow.run: insert returned no row",
+    );
   });
 });

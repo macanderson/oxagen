@@ -106,9 +106,19 @@ return "ok"
 }
 
 /** `sips -s format png` — bundled on every Mac; a no-op re-encode if `src` is already PNG. */
-async function convertToPng(srcPath: string, destPath: string): Promise<boolean> {
+async function convertToPng(
+  srcPath: string,
+  destPath: string,
+): Promise<boolean> {
   try {
-    await execFileAsync("sips", ["-s", "format", "png", srcPath, "--out", destPath]);
+    await execFileAsync("sips", [
+      "-s",
+      "format",
+      "png",
+      srcPath,
+      "--out",
+      destPath,
+    ]);
   } catch {
     return false;
   }
@@ -132,7 +142,9 @@ export async function readClipboardImage(): Promise<PastedImageAttachment | null
   const pngPath = join(dir, `image-${randomUUID()}.png`);
 
   if (await hasCommand("pngpaste")) {
-    return (await tryPngpaste(pngPath)) ? { path: pngPath, mediaType: "image/png" } : null;
+    return (await tryPngpaste(pngPath))
+      ? { path: pngPath, mediaType: "image/png" }
+      : null;
   }
 
   // No pngpaste — fall back to AppleScript + sips. Dump to a scratch file first

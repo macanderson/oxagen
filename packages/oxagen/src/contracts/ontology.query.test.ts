@@ -18,8 +18,12 @@ describe("ontology.query contract", () => {
   });
 
   it("bounds maxDepth to 1–5", () => {
-    expect(() => ontologyQuery.input.parse({ startNodeId: "n_1", maxDepth: 6 })).toThrow();
-    expect(() => ontologyQuery.input.parse({ startNodeId: "n_1", maxDepth: 0 })).toThrow();
+    expect(() =>
+      ontologyQuery.input.parse({ startNodeId: "n_1", maxDepth: 6 }),
+    ).toThrow();
+    expect(() =>
+      ontologyQuery.input.parse({ startNodeId: "n_1", maxDepth: 0 }),
+    ).toThrow();
   });
 
   it("allows a null startNode in the output (node not found)", () => {

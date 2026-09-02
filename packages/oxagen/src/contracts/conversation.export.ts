@@ -16,7 +16,11 @@ export const conversationExport = registerCapability({
   // Exporting is a cheap read/serialize — it does not consume AI tokens, so the
   // billing gate must not block it (mirrors conversation.files.list).
   noBillingGate: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "conversation" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "conversation",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {
@@ -45,6 +49,10 @@ export const conversationExport = registerCapability({
   }),
 });
 
-export type ConversationExportFormat = z.output<typeof conversationExportFormat>;
+export type ConversationExportFormat = z.output<
+  typeof conversationExportFormat
+>;
 export type ConversationExportInput = z.output<typeof conversationExport.input>;
-export type ConversationExportOutput = z.output<typeof conversationExport.output>;
+export type ConversationExportOutput = z.output<
+  typeof conversationExport.output
+>;

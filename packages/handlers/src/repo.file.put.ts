@@ -35,9 +35,13 @@ export const repoFilePutHandler: CapabilityHandler<typeof repoFilePut> = async (
       ref: input.branch,
     })
     .catch((err: unknown) => {
-      logger.error(
+      // Expected when the path is new on this branch. It also fires on a
+      // transient read failure, in which case the diff below overstates the
+      // change as a whole-file add — the commit itself is unaffected, so warn
+      // rather than fail the write.
+      logger.warn(
         { err, orgId: ctx.orgId, path: input.path },
-        "repo.file.put: failed to read prior file content for diff computation",
+        "repo.file.put: no prior file content — diff computed as a new file",
       );
       return null;
     });

@@ -59,29 +59,51 @@ describe("oxagenPluginManifestSchema", () => {
 
   it("accepts all valid tier values", () => {
     for (const tier of ["free", "premium"] as const) {
-      const result = oxagenPluginManifestSchema.safeParse({ ...validManifest, tier });
+      const result = oxagenPluginManifestSchema.safeParse({
+        ...validManifest,
+        tier,
+      });
       expect(result.success, `tier "${tier}" should be valid`).toBe(true);
     }
   });
 
   it("accepts all valid visibility values", () => {
     for (const visibility of ["hidden", "preview", "beta", "ga"] as const) {
-      const result = oxagenPluginManifestSchema.safeParse({ ...validManifest, visibility });
-      expect(result.success, `visibility "${visibility}" should be valid`).toBe(true);
+      const result = oxagenPluginManifestSchema.safeParse({
+        ...validManifest,
+        visibility,
+      });
+      expect(result.success, `visibility "${visibility}" should be valid`).toBe(
+        true,
+      );
     }
   });
 
   it("accepts all valid minPlanTier values", () => {
-    for (const minPlanTier of ["free", "build", "scale", "enterprise"] as const) {
-      const result = oxagenPluginManifestSchema.safeParse({ ...validManifest, minPlanTier });
-      expect(result.success, `minPlanTier "${minPlanTier}" should be valid`).toBe(true);
+    for (const minPlanTier of [
+      "free",
+      "build",
+      "scale",
+      "enterprise",
+    ] as const) {
+      const result = oxagenPluginManifestSchema.safeParse({
+        ...validManifest,
+        minPlanTier,
+      });
+      expect(
+        result.success,
+        `minPlanTier "${minPlanTier}" should be valid`,
+      ).toBe(true);
     }
   });
 
   // ── id format ───────────────────────────────────────────────────────────────
 
   it("rejects an id without a slash (missing namespace)", () => {
-    const result = oxagenPluginManifestSchema.safeParse({ ...validManifest, id: "my-plugin" });
+    const result = oxagenPluginManifestSchema.safeParse({
+      ...validManifest,
+      id: "my-plugin",
+    });
     expect(result.success).toBe(false);
   });
 
@@ -102,14 +124,20 @@ describe("oxagenPluginManifestSchema", () => {
   });
 
   it("rejects an id that is empty", () => {
-    const result = oxagenPluginManifestSchema.safeParse({ ...validManifest, id: "" });
+    const result = oxagenPluginManifestSchema.safeParse({
+      ...validManifest,
+      id: "",
+    });
     expect(result.success).toBe(false);
   });
 
   // ── contracts ───────────────────────────────────────────────────────────────
 
   it("rejects an empty contracts array", () => {
-    const result = oxagenPluginManifestSchema.safeParse({ ...validManifest, contracts: [] });
+    const result = oxagenPluginManifestSchema.safeParse({
+      ...validManifest,
+      contracts: [],
+    });
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues[0]?.message).toMatch(/at least one contract/i);
@@ -144,7 +172,10 @@ describe("oxagenPluginManifestSchema", () => {
         },
       ],
     });
-    expect(result.success, result.success ? "" : JSON.stringify(result.error.issues)).toBe(true);
+    expect(
+      result.success,
+      result.success ? "" : JSON.stringify(result.error.issues),
+    ).toBe(true);
   });
 
   // ── version ─────────────────────────────────────────────────────────────────

@@ -1,22 +1,28 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { discoverImportCandidates } from "./discover";
-import { normalizeArtifactSlug, normalizeImportCandidate } from "./normalize";
-import { TOOL_MAPPING_VERSION } from "./tool-mappings";
+import { discoverImportCandidates } from "./discover.js";
+import {
+  normalizeArtifactSlug,
+  normalizeImportCandidate,
+} from "./normalize.js";
+import { TOOL_MAPPING_VERSION } from "./tool-mappings.js";
 import type {
   ConflictDecision,
   ConflictResolver,
   ImportPlatform,
   ImportReceipt,
   ImportScope,
-} from "./types";
-import { activateImportedArtifact } from "./write";
+} from "./types.js";
+import { activateImportedArtifact } from "./write.js";
 
-export { discoverImportCandidates } from "./discover";
-export { normalizeImportCandidate, normalizeArtifactSlug } from "./normalize";
-export { activateImportedArtifact } from "./write";
-export * from "./types";
+export { discoverImportCandidates } from "./discover.js";
+export {
+  normalizeImportCandidate,
+  normalizeArtifactSlug,
+} from "./normalize.js";
+export { activateImportedArtifact } from "./write.js";
+export * from "./types.js";
 
 export async function importArtifacts(options: {
   cwd?: string;

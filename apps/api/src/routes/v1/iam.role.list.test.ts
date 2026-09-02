@@ -9,7 +9,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mocks.invoke }));
-vi.mock("../../lib/context", () => ({ capabilityContext: mocks.capabilityContext }));
+vi.mock("../../lib/context", () => ({
+  capabilityContext: mocks.capabilityContext,
+}));
 
 import { iamRoleListRoute } from "./iam.role.list";
 

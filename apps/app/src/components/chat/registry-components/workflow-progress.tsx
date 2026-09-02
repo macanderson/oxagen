@@ -12,7 +12,11 @@ import {
   Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { WorkflowRunSnapshot, WorkflowTaskSnapshot } from "@oxagen/oxagen/contracts/workflow.status";
+import { safeHref } from "@/lib/safe-url";
+import type {
+  WorkflowRunSnapshot,
+  WorkflowTaskSnapshot,
+} from "@oxagen/oxagen/contracts/workflow.status";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -65,7 +69,12 @@ const STATUS_CONFIG: Record<
 
 const TASK_STATUS_CONFIG: Record<
   TaskStatus,
-  { icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; iconClass: string; cellClass: string; label: string }
+  {
+    icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+    iconClass: string;
+    cellClass: string;
+    label: string;
+  }
 > = {
   pending: {
     icon: CircleDot,
@@ -187,9 +196,7 @@ export default function WorkflowProgress({
   const [cancelling, setCancelling] = React.useState(false);
   const [cancelError, setCancelError] = React.useState<string | null>(null);
 
-  const isDone = data
-    ? STATUS_CONFIG[data.workflow.status].isDone
-    : false;
+  const isDone = data ? STATUS_CONFIG[data.workflow.status].isDone : false;
 
   // Poll the scoped workflow status route every 3s until terminal status.
   React.useEffect(() => {
@@ -218,7 +225,11 @@ export default function WorkflowProgress({
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load workflow status");
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load workflow status",
+          );
           timer = setTimeout(poll, 5000);
         }
       }
@@ -243,7 +254,9 @@ export default function WorkflowProgress({
       const result = (await res.json()) as { cancelled: boolean };
       if (result.cancelled) {
         setData((prev) =>
-          prev ? { ...prev, workflow: { ...prev.workflow, status: "cancelled" } } : prev,
+          prev
+            ? { ...prev, workflow: { ...prev.workflow, status: "cancelled" } }
+            : prev,
         );
       }
     } catch (err) {
@@ -311,7 +324,10 @@ export default function WorkflowProgress({
   // pointed at a route that doesn't exist (the workflow router only serves
   // GET/DELETE `/:id`), so it always 404'd — drop it and gate the button on a
   // real resultUrl instead of shipping a download that fails.
-  const downloadUrl = workflow.resultUrl;
+  // `resultUrl` comes back with the workflow snapshot, so the scheme is
+  // allow-listed before it becomes a download href — an unsafe value simply
+  // hides the button rather than arming a `javascript:` navigation.
+  const downloadUrl = safeHref(workflow.resultUrl);
 
   return (
     <div
@@ -324,10 +340,17 @@ export default function WorkflowProgress({
     >
       {/* Header */}
       <div className="flex items-start gap-3">
-        <BarChart3 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <BarChart3
+          className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-foreground truncate">{workflow.title}</p>
-          <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{workflow.goal}</p>
+          <p className="text-sm font-semibold text-foreground truncate">
+            {workflow.title}
+          </p>
+          <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+            {workflow.goal}
+          </p>
         </div>
         <span
           className={cn(
@@ -378,8 +401,7 @@ export default function WorkflowProgress({
           { label: "Done", value: String(workflow.completedTasks) },
           { label: "Failed", value: String(workflow.failedTasks) },
           {
-            label:
-              workflow.status === "running" ? "Elapsed" : "Duration",
+            label: workflow.status === "running" ? "Elapsed" : "Duration",
             value:
               workflow.status === "running"
                 ? formatElapsed(workflow.startedAt)
@@ -407,7 +429,11 @@ export default function WorkflowProgress({
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <Clock className="h-3 w-3" aria-hidden="true" />
           ETA:{" "}
-          {formatEta(workflow.completedTasks, workflow.totalTasks, workflow.startedAt)}
+          {formatEta(
+            workflow.completedTasks,
+            workflow.totalTasks,
+            workflow.startedAt,
+          )}
         </div>
       )}
 
@@ -437,8 +463,13 @@ export default function WorkflowProgress({
               const Icon = tCfg.icon;
               return (
                 <li key={task.id} className="flex items-center gap-2 text-xs">
-                  <Icon className={cn("h-3 w-3 shrink-0", tCfg.iconClass)} aria-hidden="true" />
-                  <span className="text-muted-foreground">#{task.taskIndex + 1}</span>
+                  <Icon
+                    className={cn("h-3 w-3 shrink-0", tCfg.iconClass)}
+                    aria-hidden="true"
+                  />
+                  <span className="text-muted-foreground">
+                    #{task.taskIndex + 1}
+                  </span>
                   <span className="truncate text-foreground">{task.title}</span>
                 </li>
               );
@@ -448,7 +479,9 @@ export default function WorkflowProgress({
       )}
 
       {/* Actions */}
-      {(workflow.status === "running" || workflow.status === "planning" || workflow.resultUrl) && (
+      {(workflow.status === "running" ||
+        workflow.status === "planning" ||
+        workflow.resultUrl) && (
         <div className="flex flex-col gap-1.5 pt-1 border-t border-border/50">
           {cancelError && (
             <p
@@ -460,37 +493,38 @@ export default function WorkflowProgress({
             </p>
           )}
           <div className="flex items-center gap-2">
-          {(workflow.status === "running" || workflow.status === "planning") && (
-            <button
-              type="button"
-              onClick={() => void handleCancel()}
-              disabled={cancelling}
-              className={cn(
-                "flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5",
-                "text-xs font-medium text-muted-foreground transition-colors",
-                "hover:border-destructive/40 hover:text-destructive",
-                "disabled:pointer-events-none disabled:opacity-50",
-              )}
-              aria-busy={cancelling}
-            >
-              <X className="h-3.5 w-3.5" aria-hidden="true" />
-              {cancelling ? "Cancelling…" : "Cancel"}
-            </button>
-          )}
-          {workflow.status === "completed" && downloadUrl && (
-            <a
-              href={downloadUrl}
-              download
-              className={cn(
-                "flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5",
-                "text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90",
-              )}
-              aria-label={`Download results as ${workflow.outputFormat.toUpperCase()}`}
-            >
-              <Download className="h-3.5 w-3.5" aria-hidden="true" />
-              Download {workflow.outputFormat.toUpperCase()}
-            </a>
-          )}
+            {(workflow.status === "running" ||
+              workflow.status === "planning") && (
+              <button
+                type="button"
+                onClick={() => void handleCancel()}
+                disabled={cancelling}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5",
+                  "text-xs font-medium text-muted-foreground transition-colors",
+                  "hover:border-destructive/40 hover:text-destructive",
+                  "disabled:pointer-events-none disabled:opacity-50",
+                )}
+                aria-busy={cancelling}
+              >
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+                {cancelling ? "Cancelling…" : "Cancel"}
+              </button>
+            )}
+            {workflow.status === "completed" && downloadUrl && (
+              <a
+                href={downloadUrl}
+                download
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5",
+                  "text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90",
+                )}
+                aria-label={`Download results as ${workflow.outputFormat.toUpperCase()}`}
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                Download {workflow.outputFormat.toUpperCase()}
+              </a>
+            )}
           </div>
         </div>
       )}

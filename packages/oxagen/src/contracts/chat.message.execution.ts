@@ -68,5 +68,9 @@ export const chatMessageExecution = registerCapability({
   }),
 });
 
-export type ChatMessageExecutionInput = z.output<typeof chatMessageExecution.input>;
-export type ChatMessageExecutionOutput = z.output<typeof chatMessageExecution.output>;
+export type ChatMessageExecutionInput = z.output<
+  typeof chatMessageExecution.input
+>;
+export type ChatMessageExecutionOutput = z.output<
+  typeof chatMessageExecution.output
+>;

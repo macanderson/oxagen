@@ -192,7 +192,6 @@ function AddMemberDialog({
             size="sm"
             className="max-md:h-11"
             startIcon={<UserPlus className="h-3.5 w-3.5" />}
-            disabled={false}
           />
         }
       >
@@ -469,10 +468,7 @@ function MemberRow({
   const member = { ...initialMember, role };
 
   return (
-    <li
-      key={member.publicId}
-      className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
-    >
+    <li className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-col">
         <span className="font-medium">
           {member.displayName ?? member.email}

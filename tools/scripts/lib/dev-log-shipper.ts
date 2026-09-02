@@ -86,7 +86,10 @@ export function createDevLogShipper(devSession: string): DevLogShipper {
         service,
         stream,
         level: detectLevel(message),
-        message: message.length > MAX_MESSAGE_LEN ? message.slice(0, MAX_MESSAGE_LEN) : message,
+        message:
+          message.length > MAX_MESSAGE_LEN
+            ? message.slice(0, MAX_MESSAGE_LEN)
+            : message,
         ts: new Date().toISOString(),
         host,
       });

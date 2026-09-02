@@ -73,9 +73,17 @@ export function deduplicateSemanticRecords(
         domainSurvivors[idx] = record;
         const uidx = unique.indexOf(matched);
         if (uidx >= 0) unique[uidx] = record;
-        duplicates.push({ keep: record.id, remove: matched.id, similarity: matchedSim });
+        duplicates.push({
+          keep: record.id,
+          remove: matched.id,
+          similarity: matchedSim,
+        });
       } else {
-        duplicates.push({ keep: matched.id, remove: record.id, similarity: matchedSim });
+        duplicates.push({
+          keep: matched.id,
+          remove: record.id,
+          similarity: matchedSim,
+        });
       }
     } else {
       unique.push(record);

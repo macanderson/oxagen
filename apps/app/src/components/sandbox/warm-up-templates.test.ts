@@ -13,7 +13,9 @@ describe("warm-up-templates", () => {
   });
 
   it("has a resolvable default template", () => {
-    expect(WARM_UP_TEMPLATES.some((t) => t.id === DEFAULT_TEMPLATE_ID)).toBe(true);
+    expect(WARM_UP_TEMPLATES.some((t) => t.id === DEFAULT_TEMPLATE_ID)).toBe(
+      true,
+    );
     expect(templateById(DEFAULT_TEMPLATE_ID).id).toBe(DEFAULT_TEMPLATE_ID);
   });
 

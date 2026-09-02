@@ -95,16 +95,15 @@ function DimensionCard({
       data-testid={testId}
     >
       <div className="mb-1.5 text-xs font-medium text-foreground">{title}</div>
-      <div className="space-y-1.5 text-xs text-muted-foreground">{children}</div>
+      <div className="space-y-1.5 text-xs text-muted-foreground">
+        {children}
+      </div>
     </div>
   );
 }
 
 export function EffectiveScopePanel(props: EffectiveScopeInput) {
-  const view = React.useMemo(
-    () => computeEffectiveScopeView(props),
-    [props],
-  );
+  const view = React.useMemo(() => computeEffectiveScopeView(props), [props]);
 
   const graph = view.graph.effective;
   const budget = graph?.budget;
@@ -117,11 +116,13 @@ export function EffectiveScopePanel(props: EffectiveScopeInput) {
     >
       <div className="flex flex-wrap items-center gap-2">
         <ShieldCheck className="h-4 w-4 text-primary" aria-hidden="true" />
-        <h3 className="text-sm font-medium text-foreground">
-          Effective scope
-        </h3>
+        <h3 className="text-sm font-medium text-foreground">Effective scope</h3>
         {view.roleName ? (
-          <Badge variant="secondary" size="sm" data-testid="effective-scope-role">
+          <Badge
+            variant="secondary"
+            size="sm"
+            data-testid="effective-scope-role"
+          >
             {view.roleName}
           </Badge>
         ) : null}
@@ -182,8 +183,8 @@ export function EffectiveScopePanel(props: EffectiveScopeInput) {
             </>
           ) : (
             <p data-testid="scope-capabilities-unknown">
-              Grant details unavailable — the role&rsquo;s capability list
-              could not be loaded. The runtime still enforces it.
+              Grant details unavailable — the role&rsquo;s capability list could
+              not be loaded. The runtime still enforces it.
             </p>
           )}
           {view.capabilities.equipped.length > 0 ? (
@@ -246,7 +247,10 @@ export function EffectiveScopePanel(props: EffectiveScopeInput) {
           ) : (
             <ul className="space-y-0.5" data-testid="scope-mcp-rules">
               {view.mcp.rules.map((rule, i) => (
-                <li key={`${rule.pattern}-${i}`} className="flex items-center justify-between gap-2">
+                <li
+                  key={`${rule.pattern}-${i}`}
+                  className="flex items-center justify-between gap-2"
+                >
                   <span className="truncate font-mono text-[11px]">
                     {rule.pattern}
                   </span>
@@ -277,7 +281,8 @@ export function EffectiveScopePanel(props: EffectiveScopeInput) {
           <p data-testid="scope-subagents-list">
             {view.subagents.equipped.length > 0
               ? `Subagents: ${view.subagents.effective.join(", ")}` +
-                (view.subagents.effective.length < view.subagents.equipped.length
+                (view.subagents.effective.length <
+                view.subagents.equipped.length
                   ? ` (${view.subagents.equipped.length - view.subagents.effective.length} outside the role ceiling)`
                   : "")
               : "No subagents equipped."}

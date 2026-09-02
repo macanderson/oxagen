@@ -37,8 +37,12 @@ const {
   const mockFrom = vi.fn(() => ({ where: mockWhere }));
   const mockSelect = vi.fn(() => ({ from: mockFrom }));
   const mockTx = { select: mockSelect };
-  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) => fn(mockTx));
-  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) => fn());
+  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) =>
+    fn(mockTx),
+  );
+  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) =>
+    fn(),
+  );
 
   return {
     mockGetSession: vi.fn(),
@@ -69,13 +73,22 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
 vi.mock("@oxagen/handlers/register", () => ({}));
-vi.mock("@/lib/workbench/scope", () => ({ buildWorkbenchCtx: mockBuildWorkbenchCtx }));
-vi.mock("@/lib/workbench/equip-sources", () => ({ loadEquipSources: mockLoadEquipSources }));
+vi.mock("@/lib/workbench/scope", () => ({
+  buildWorkbenchCtx: mockBuildWorkbenchCtx,
+}));
+vi.mock("@/lib/workbench/equip-sources", () => ({
+  loadEquipSources: mockLoadEquipSources,
+}));
 vi.mock("@/lib/routes", () => ({
   workspace: {
     workbench: {
-      sandboxes: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-        `/${orgSlug}/${workspaceSlug}/workbench/sandboxes`,
+      sandboxes: ({
+        orgSlug,
+        workspaceSlug,
+      }: {
+        orgSlug: string;
+        workspaceSlug: string;
+      }) => `/${orgSlug}/${workspaceSlug}/workbench/sandboxes`,
     },
   },
 }));
@@ -146,11 +159,17 @@ describe("createTemplateAction", () => {
     expect(res).toEqual({ ok: true, template: TEMPLATE });
     expect(mockInvoke).toHaveBeenCalledWith(
       "create_sandbox_template",
-      expect.objectContaining({ environmentId: "env_1", name: "Base", slug: "base" }),
+      expect.objectContaining({
+        environmentId: "env_1",
+        name: "Base",
+        slug: "base",
+      }),
       expect.any(Object),
       { surface: "agent" },
     );
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/default/workbench/sandboxes");
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/acme/default/workbench/sandboxes",
+    );
   });
 
   it("member: role gate rejects, invoke NOT called", async () => {
@@ -180,7 +199,11 @@ describe("createTemplateAction", () => {
 describe("updateTemplateAction", () => {
   it("owner: invokes update_sandbox_template", async () => {
     mockInvoke.mockResolvedValue({ template: TEMPLATE });
-    const res = await updateTemplateAction({ ...SCOPE, templateId: "tpl_1", name: "New" });
+    const res = await updateTemplateAction({
+      ...SCOPE,
+      templateId: "tpl_1",
+      name: "New",
+    });
     expect(res).toEqual({ ok: true, template: TEMPLATE });
     expect(mockInvoke).toHaveBeenCalledWith(
       "update_sandbox_template",
@@ -202,7 +225,10 @@ describe("setTemplateToolsAction", () => {
     expect(res.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
       "set_sandbox_template_tools",
-      { templateId: "tpl_1", tools: [{ kind: "capability", ref: "list_environments" }] },
+      {
+        templateId: "tpl_1",
+        tools: [{ kind: "capability", ref: "list_environments" }],
+      },
       expect.any(Object),
       { surface: "agent" },
     );
@@ -211,8 +237,13 @@ describe("setTemplateToolsAction", () => {
 
 describe("setDefaultTemplateAction", () => {
   it("owner: invokes set_default_sandbox_template", async () => {
-    mockInvoke.mockResolvedValue({ template: { ...TEMPLATE, isDefault: true } });
-    const res = await setDefaultTemplateAction({ ...SCOPE, templateId: "tpl_1" });
+    mockInvoke.mockResolvedValue({
+      template: { ...TEMPLATE, isDefault: true },
+    });
+    const res = await setDefaultTemplateAction({
+      ...SCOPE,
+      templateId: "tpl_1",
+    });
     expect(res.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
       "set_default_sandbox_template",
@@ -224,7 +255,10 @@ describe("setDefaultTemplateAction", () => {
 
   it("member: role gate rejects", async () => {
     dbState.wsRoleRows = [{ role: "member" }];
-    const res = await setDefaultTemplateAction({ ...SCOPE, templateId: "tpl_1" });
+    const res = await setDefaultTemplateAction({
+      ...SCOPE,
+      templateId: "tpl_1",
+    });
     expect(res.ok).toBe(false);
     expect(mockInvoke).not.toHaveBeenCalled();
   });
@@ -247,7 +281,12 @@ describe("deleteTemplateAction", () => {
 describe("exportTemplateAction", () => {
   it("member-allowed read (no manager gate): returns manifest", async () => {
     dbState.wsRoleRows = [{ role: "member" }];
-    const manifest = { kind: "oxagen.sandbox-template", version: 1, name: "Base", slug: "base" };
+    const manifest = {
+      kind: "oxagen.sandbox-template",
+      version: 1,
+      name: "Base",
+      slug: "base",
+    };
     mockInvoke.mockResolvedValue({ manifest });
     const res = await exportTemplateAction({ ...SCOPE, templateId: "tpl_1" });
     expect(res).toEqual({ ok: true, manifest });
@@ -262,8 +301,16 @@ describe("exportTemplateAction", () => {
 
 describe("importTemplateAction", () => {
   it("owner: invokes import_sandbox_template and passes through warnings", async () => {
-    const manifest = { kind: "oxagen.sandbox-template", version: 1, name: "Base", slug: "base" };
-    mockInvoke.mockResolvedValue({ template: TEMPLATE, warnings: ["tool xyz not installed"] });
+    const manifest = {
+      kind: "oxagen.sandbox-template",
+      version: 1,
+      name: "Base",
+      slug: "base",
+    };
+    mockInvoke.mockResolvedValue({
+      template: TEMPLATE,
+      warnings: ["tool xyz not installed"],
+    });
     const res = await importTemplateAction({
       ...SCOPE,
       environmentId: "env_1",
@@ -271,7 +318,11 @@ describe("importTemplateAction", () => {
       slug: "base-copy",
       setAsDefault: false,
     });
-    expect(res).toEqual({ ok: true, template: TEMPLATE, warnings: ["tool xyz not installed"] });
+    expect(res).toEqual({
+      ok: true,
+      template: TEMPLATE,
+      warnings: ["tool xyz not installed"],
+    });
     expect(mockInvoke).toHaveBeenCalledWith(
       "import_sandbox_template",
       expect.objectContaining({ environmentId: "env_1", slug: "base-copy" }),
@@ -284,15 +335,39 @@ describe("importTemplateAction", () => {
 describe("readToolSourcesAction", () => {
   it("flattens skills, capabilities, and mcp servers into kind+ref options", async () => {
     mockLoadEquipSources.mockResolvedValue({
-      skills: [{ ref: "sk_1", name: "Summarize", description: "", enabled: true }],
-      tools: [{ name: "list_environments", description: "", domain: "environment", category: null, riskLevel: "low", requiresApproval: false, external: false }],
+      skills: [
+        { ref: "sk_1", name: "Summarize", description: "", enabled: true },
+      ],
+      tools: [
+        {
+          name: "list_environments",
+          description: "",
+          domain: "environment",
+          category: null,
+          riskLevel: "low",
+          requiresApproval: false,
+          external: false,
+        },
+      ],
       subagents: [{ ref: "ag_1", name: "Helper", slug: "helper" }],
-      mcp: [{ ref: "mcp_1", name: "gh", title: "GitHub", description: null, enabled: true }],
+      mcp: [
+        {
+          ref: "mcp_1",
+          name: "gh",
+          title: "GitHub",
+          description: null,
+          enabled: true,
+        },
+      ],
     });
     const out = await readToolSourcesAction(SCOPE);
     expect(out).toEqual([
       { kind: "agent_skill", ref: "sk_1", label: "Summarize" },
-      { kind: "capability", ref: "list_environments", label: "list_environments" },
+      {
+        kind: "capability",
+        ref: "list_environments",
+        label: "list_environments",
+      },
       { kind: "mcp_server", ref: "mcp_1", label: "GitHub" },
     ]);
   });

@@ -303,7 +303,8 @@ describe("ThemeProvider — BroadcastChannel cross-tab sync", () => {
   it("receives incoming BroadcastChannel message and updates theme", () => {
     let capturedListener: ((e: MessageEvent) => void) | null = null;
     const addEventListenerSpy = vi.fn().mockImplementation((event, fn) => {
-      if (event === "message") capturedListener = fn as (e: MessageEvent) => void;
+      if (event === "message")
+        capturedListener = fn as (e: MessageEvent) => void;
     });
 
     vi.stubGlobal(
@@ -362,7 +363,9 @@ describe("ThemeProvider — BroadcastChannel unavailable", () => {
 
   it("mounts without error when BroadcastChannel is undefined", () => {
     // Temporarily remove BroadcastChannel to simulate unsupported environments.
-    const original = (globalThis as Record<string, unknown>)["BroadcastChannel"];
+    const original = (globalThis as Record<string, unknown>)[
+      "BroadcastChannel"
+    ];
     (globalThis as Record<string, unknown>)["BroadcastChannel"] = undefined;
     const { getByText } = render(
       <ThemeProvider initialTheme="light">
@@ -391,7 +394,8 @@ describe("ThemeProvider — BroadcastChannel non-string message", () => {
         postMessage: vi.fn(),
         close: vi.fn(),
         addEventListener: vi.fn().mockImplementation((event, fn) => {
-          if (event === "message") capturedListener = fn as (e: MessageEvent) => void;
+          if (event === "message")
+            capturedListener = fn as (e: MessageEvent) => void;
         }),
         removeEventListener: vi.fn(),
       })),
@@ -422,7 +426,8 @@ describe("useTheme — outside provider", () => {
   });
 
   it("returns an inert default theme instead of throwing", () => {
-    const seen: { theme?: string; resolvedTheme?: string; themesLen?: number } = {};
+    const seen: { theme?: string; resolvedTheme?: string; themesLen?: number } =
+      {};
     function BareConsumer() {
       const { theme, resolvedTheme, themes } = useTheme();
       seen.theme = theme;

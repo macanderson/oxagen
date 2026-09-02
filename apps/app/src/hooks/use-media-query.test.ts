@@ -34,12 +34,14 @@ function stubMatchMedia(initialMatches: boolean) {
   const matchMedia = vi.fn((query: string) => {
     queries.push(query);
     const listeners =
-      listenersByQuery.get(query) ?? listenersByQuery.set(query, new Set()).get(query)!;
+      listenersByQuery.get(query) ??
+      listenersByQuery.set(query, new Set()).get(query)!;
     return {
       matches,
       media: query,
       addEventListener: (_: "change", cb: ChangeListener) => listeners.add(cb),
-      removeEventListener: (_: "change", cb: ChangeListener) => listeners.delete(cb),
+      removeEventListener: (_: "change", cb: ChangeListener) =>
+        listeners.delete(cb),
     } as unknown as MediaQueryList;
   });
 
@@ -51,7 +53,8 @@ function stubMatchMedia(initialMatches: boolean) {
     setMatches(next: boolean) {
       matches = next;
       for (const listeners of listenersByQuery.values()) {
-        for (const cb of listeners) cb({ matches: next } as MediaQueryListEvent);
+        for (const cb of listeners)
+          cb({ matches: next } as MediaQueryListEvent);
       }
     },
     listenerCount(query: string) {

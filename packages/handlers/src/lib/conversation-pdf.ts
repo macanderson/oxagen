@@ -8,8 +8,16 @@
 // with page numbers — long conversations paginate cleanly without text ever
 // running through the footer.
 
-import type { PDFFont, PDFPage, PDFDocument as PDFDocumentType, RGB } from "pdf-lib";
-import type { ConversationExportModel, ExportBlock } from "./conversation-markdown";
+import type {
+  PDFFont,
+  PDFPage,
+  PDFDocument as PDFDocumentType,
+  RGB,
+} from "pdf-lib";
+import type {
+  ConversationExportModel,
+  ExportBlock,
+} from "./conversation-markdown";
 import { formatDuration, roleLabel } from "./conversation-markdown";
 
 // ── Page geometry (A4) ────────────────────────────────────────────────────────
@@ -130,8 +138,15 @@ export function wrapLine(
 }
 
 /** Wrap multi-line text: split on newlines, wrap each logical line. */
-function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
-  return text.split("\n").flatMap((line) => wrapLine(line, font, size, maxWidth));
+function wrapText(
+  text: string,
+  font: PDFFont,
+  size: number,
+  maxWidth: number,
+): string[] {
+  return text
+    .split("\n")
+    .flatMap((line) => wrapLine(line, font, size, maxWidth));
 }
 
 // ── Rounded rect (SVG path — pdf-lib rectangles have square corners) ──────────
@@ -169,7 +184,10 @@ export async function buildConversationPdf(
 
   const color = (c: Rgb): RGB => rgb(c[0], c[1], c[2]);
 
-  const cur: Cursor = { page: doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]), y: PAGE_HEIGHT - MARGIN };
+  const cur: Cursor = {
+    page: doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]),
+    y: PAGE_HEIGHT - MARGIN,
+  };
 
   const newPage = () => {
     cur.page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
@@ -198,8 +216,23 @@ export async function buildConversationPdf(
     }
   };
 
-  const drawParagraph = (text: string, font: PDFFont, size: number, leading: number, c: Rgb, x = MARGIN, width = CONTENT_WIDTH) => {
-    drawLines(wrapText(sanitizePdfText(text), font, size, width), font, size, leading, c, x);
+  const drawParagraph = (
+    text: string,
+    font: PDFFont,
+    size: number,
+    leading: number,
+    c: Rgb,
+    x = MARGIN,
+    width = CONTENT_WIDTH,
+  ) => {
+    drawLines(
+      wrapText(sanitizePdfText(text), font, size, width),
+      font,
+      size,
+      leading,
+      c,
+      x,
+    );
   };
 
   /** Monospace panel (code / tool summaries): light-gray rounded rect behind
@@ -211,7 +244,10 @@ export async function buildConversationPdf(
       // If not even one line + padding fits, start a fresh page.
       ensure(CODE_LEADING + CODE_PADDING * 2);
       const available = cur.y - CONTENT_BOTTOM - CODE_PADDING * 2;
-      const fit = Math.max(1, Math.min(lines.length, Math.floor(available / CODE_LEADING)));
+      const fit = Math.max(
+        1,
+        Math.min(lines.length, Math.floor(available / CODE_LEADING)),
+      );
       const chunk = lines.slice(0, fit);
       lines = lines.slice(fit);
       const panelH = chunk.length * CODE_LEADING + CODE_PADDING * 2;
@@ -240,7 +276,9 @@ export async function buildConversationPdf(
   drawParagraph(model.title, bold, TITLE_SIZE, TITLE_LEADING, INK);
   cur.y -= 6;
 
-  const scope = [model.orgName, model.workspaceName].filter(Boolean).join(" / ");
+  const scope = [model.orgName, model.workspaceName]
+    .filter(Boolean)
+    .join(" / ");
   const metaLines = [
     `Exported ${model.exportedAt.toISOString().slice(0, 10)}  ·  Created ${model.createdAt.toISOString().slice(0, 10)}`,
     ...(scope ? [scope] : []),
@@ -250,7 +288,8 @@ export async function buildConversationPdf(
         : ""
     }`,
   ];
-  for (const line of metaLines) drawParagraph(line, body, META_SIZE, META_LEADING, MUTED);
+  for (const line of metaLines)
+    drawParagraph(line, body, META_SIZE, META_LEADING, MUTED);
 
   cur.y -= 10;
   ensure(2);
@@ -275,7 +314,15 @@ export async function buildConversationPdf(
           META_LEADING,
           MUTED,
         );
-        drawParagraph(block.text, italic, META_SIZE, META_LEADING, MUTED, MARGIN + 12, CONTENT_WIDTH - 12);
+        drawParagraph(
+          block.text,
+          italic,
+          META_SIZE,
+          META_LEADING,
+          MUTED,
+          MARGIN + 12,
+          CONTENT_WIDTH - 12,
+        );
         break;
       }
       case "tool": {
@@ -285,15 +332,25 @@ export async function buildConversationPdf(
           `status: ${block.status}`,
           ...(duration ? [`duration: ${duration}`] : []),
         ].join("  ·  ");
-        const text = block.resultPreview ? `${summary}\nresult: ${block.resultPreview}` : summary;
+        const text = block.resultPreview
+          ? `${summary}\nresult: ${block.resultPreview}`
+          : summary;
         drawMonoPanel(text, MUTED);
         break;
       }
       case "code":
-        drawMonoPanel(block.language ? `[${block.language}]\n${block.code}` : block.code);
+        drawMonoPanel(
+          block.language ? `[${block.language}]\n${block.code}` : block.code,
+        );
         break;
       case "attachment":
-        drawParagraph(`Attachment: ${block.name} — ${block.url}`, body, META_SIZE, META_LEADING, USER_ACCENT);
+        drawParagraph(
+          `Attachment: ${block.name} — ${block.url}`,
+          body,
+          META_SIZE,
+          META_LEADING,
+          USER_ACCENT,
+        );
         break;
     }
   };
@@ -337,7 +394,11 @@ export async function buildConversationPdf(
   return doc.save();
 }
 
-function drawFooters(doc: PDFDocumentType, font: PDFFont, footerColor: RGB): void {
+function drawFooters(
+  doc: PDFDocumentType,
+  font: PDFFont,
+  footerColor: RGB,
+): void {
   const pages = doc.getPages();
   const total = pages.length;
   pages.forEach((page, i) => {

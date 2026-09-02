@@ -6,12 +6,17 @@ import { registerCapability } from "../registry";
 export const orgMemberInviteAccept = registerCapability({
   name: "accept_member_invite",
   domain: "org",
-  description: "Accept a pending org invitation. Creates the membership row and provisions least-privilege IAM.",
+  description:
+    "Accept a pending org invitation. Creates the membership row and provisions least-privilege IAM.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "organization" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "organization",
+  },
   sensitivity: "medium",
   // The invitee (authenticated as themselves) can accept their own invite.
   // defaultEffect allow on Member covers the case after they're provisioned;
@@ -33,5 +38,9 @@ export const orgMemberInviteAccept = registerCapability({
   }),
 });
 
-export type OrgMemberInviteAcceptInput = z.output<typeof orgMemberInviteAccept.input>;
-export type OrgMemberInviteAcceptOutput = z.output<typeof orgMemberInviteAccept.output>;
+export type OrgMemberInviteAcceptInput = z.output<
+  typeof orgMemberInviteAccept.input
+>;
+export type OrgMemberInviteAcceptOutput = z.output<
+  typeof orgMemberInviteAccept.output
+>;

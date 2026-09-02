@@ -27,5 +27,9 @@ export const schemaPropertyDelete = registerCapability({
   }),
 });
 
-export type SchemaPropertyDeleteInput = z.output<typeof schemaPropertyDelete.input>;
-export type SchemaPropertyDeleteOutput = z.output<typeof schemaPropertyDelete.output>;
+export type SchemaPropertyDeleteInput = z.output<
+  typeof schemaPropertyDelete.input
+>;
+export type SchemaPropertyDeleteOutput = z.output<
+  typeof schemaPropertyDelete.output
+>;

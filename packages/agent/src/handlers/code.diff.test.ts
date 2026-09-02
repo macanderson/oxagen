@@ -39,7 +39,8 @@ describe("code.diff handler", () => {
   });
 
   it("honours contextLines=0 (tighter hunks)", async () => {
-    const before = Array.from({ length: 10 }, (_, i) => `l${i}`).join("\n") + "\n";
+    const before =
+      Array.from({ length: 10 }, (_, i) => `l${i}`).join("\n") + "\n";
     const after = before.replace("l5", "L5");
     const r = await codeDiffHandler(
       { before, after, path: "f", contextLines: 0 },

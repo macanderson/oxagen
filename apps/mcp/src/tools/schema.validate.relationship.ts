@@ -11,11 +11,19 @@ export const schema = {
 export const metadata: ToolMetadata = {
   name: schemaValidateRelationship.name,
   description: schemaValidateRelationship.description,
-  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+  },
 };
 
-export default async function schemaValidateRelationshipTool(args: InferSchema<typeof schema>) {
+export default async function schemaValidateRelationshipTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(schemaValidateRelationship.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(schemaValidateRelationship.name, args, ctx, {
+    surface: "mcp",
+  });
   return schemaValidateRelationship.output.parse(output);
 }

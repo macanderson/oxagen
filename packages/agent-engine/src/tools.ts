@@ -187,26 +187,54 @@ function levenshtein(a: string, b: string): number {
   return prev[n] as number;
 }
 
+/** Chars of each string the similarity score looks at (bounds the DP grid). */
+const SIMILARITY_WINDOW = 200;
+
+/** Trim + cap a line to the window the similarity score is computed over. */
+function similarityKey(s: string): string {
+  return s.trim().slice(0, SIMILARITY_WINDOW);
+}
+
 /** Similarity in [0,1] (1 = identical) over trimmed, length-capped strings. */
 function similarity(a: string, b: string): number {
-  const x = a.trim().slice(0, 200);
-  const y = b.trim().slice(0, 200);
+  const x = similarityKey(a);
+  const y = similarityKey(b);
   const max = Math.max(x.length, y.length);
   if (max === 0) return 1; // both empty
   return 1 - levenshtein(x, y) / max;
 }
 
-/** The file line (1-based) most similar to `target`, or null for empty input. */
+/**
+ * The file line (1-based) most similar to `target`, or null for empty input.
+ *
+ * Every line runs a Levenshtein DP against `target`, which is O(200²) per line
+ * once both are capped — so a naive sweep of a 10k-line file is ~4×10⁸ inner
+ * steps of SYNCHRONOUS work on the caller's thread, and this runs on the
+ * `edit_file` MISS path, driven by model-chosen input, inside a shared API
+ * process. The per-tool backstop cannot interrupt a synchronous loop, so the
+ * cost is contained here instead: `levenshtein(x, y) >= | |x| - |y| |`, hence
+ * `similarity(x, y) <= 1 - ||x|-|y||/max`. When that ceiling cannot beat the
+ * best score so far, the DP is skipped. The prune is exact — it only ever drops
+ * candidates that could not have won under the strict `>` comparison — so the
+ * chosen line is identical to the unpruned sweep.
+ */
 function closestLine(
   content: string,
   target: string,
 ): { line: number; text: string } | null {
   const lines = content.split("\n");
+  const y = similarityKey(target);
   let best: { line: number; text: string; score: number } | null = null;
   for (let i = 0; i < lines.length; i++) {
-    const score = similarity(lines[i] as string, target);
-    if (!best || score > best.score)
-      best = { line: i + 1, text: lines[i] as string, score };
+    const text = lines[i] as string;
+    if (best) {
+      const x = similarityKey(text);
+      const max = Math.max(x.length, y.length);
+      const ceiling = max === 0 ? 1 : 1 - Math.abs(x.length - y.length) / max;
+      if (ceiling <= best.score) continue;
+    }
+    const score = similarity(text, target);
+    if (!best || score > best.score) best = { line: i + 1, text, score };
   }
   return best ? { line: best.line, text: best.text } : null;
 }

@@ -12,7 +12,9 @@ describe("agent.sandbox.files.list capability", () => {
   });
 
   it("parses minimal valid input (sessionId only) and defaults depth to 2", () => {
-    const parsed = agentSandboxFilesList.input.parse({ sessionId: "sbx_abc123" });
+    const parsed = agentSandboxFilesList.input.parse({
+      sessionId: "sbx_abc123",
+    });
     expect(parsed.depth).toBe(2);
     expect(parsed.path).toBeUndefined();
   });

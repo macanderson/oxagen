@@ -30,17 +30,25 @@ import { signUpFreshUser } from "./helpers/signup";
 import { seedSubscription } from "./helpers/seed-subscription";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SCREENSHOT_DIR = resolve(__dirname, "screenshots");
+// Per-spec subdirectory, NOT the shared `e2e/screenshots` root: the beforeAll
+// below wipes this directory, and pointing several specs at the same root made
+// each one delete the artifacts the previously-run specs had just captured.
+const SCREENSHOT_DIR = resolve(
+  __dirname,
+  "screenshots",
+  "security-audit-filter-export",
+);
 
 function deQuote(raw: string | undefined, fallback: string): string {
   if (!raw) return fallback;
-  if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')) return raw.slice(1, -1);
+  if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"'))
+    return raw.slice(1, -1);
   return raw;
 }
 
 const DATABASE_URL = deQuote(
   process.env.DATABASE_URL,
-  "postgres://oxagen:oxagen@localhost:5432/oxagen",
+  "postgres://oxagen:oxagen@localhost:5433/oxagen",
 );
 
 async function getOrgId(orgSlug: string): Promise<string> {
@@ -49,7 +57,8 @@ async function getOrgId(orgSlug: string): Promise<string> {
     const [row] = await sql<{ id: string }[]>`
       SELECT id FROM org.organizations WHERE slug = ${orgSlug}
     `;
-    if (!row) throw new Error(`security-audit e2e: org not found for slug ${orgSlug}`);
+    if (!row)
+      throw new Error(`security-audit e2e: org not found for slug ${orgSlug}`);
     return row.id;
   } finally {
     await sql.end({ timeout: 5 });
@@ -69,7 +78,11 @@ test("audit log: filter bar round-trips through the URL and Enterprise export su
   const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "audit-log" });
   const orgId = await getOrgId(orgSlug);
   // Audit export additionally requires Enterprise (org creator is Owner by default).
-  await seedSubscription({ orgId, planSlug: "enterprise-v2", planName: "Enterprise" });
+  await seedSubscription({
+    orgId,
+    planSlug: "enterprise-v2",
+    planName: "Enterprise",
+  });
 
   await page.goto(`/${orgSlug}/security/audit`);
   await expect(page).not.toHaveURL(/\/login/);
@@ -82,22 +95,32 @@ test("audit log: filter bar round-trips through the URL and Enterprise export su
   await expect(page.getByLabel("From date")).toBeVisible();
   await expect(page.getByLabel("To date")).toBeVisible();
 
-  await page.screenshot({ path: `${SCREENSHOT_DIR}/audit-log-default.png`, fullPage: true });
+  await page.screenshot({
+    path: `${SCREENSHOT_DIR}/audit-log-default.png`,
+    fullPage: true,
+  });
 
   // Submitting a free-text filter round-trips to the URL and re-renders.
   await search.fill("organization");
   await search.press("Enter");
   await expect(page).toHaveURL(/[?&]q=organization/);
   await page.waitForLoadState("domcontentloaded");
-  await expect(page.getByLabel("Free-text audit filter")).toHaveValue("organization");
+  await expect(page.getByLabel("Free-text audit filter")).toHaveValue(
+    "organization",
+  );
 
-  await page.screenshot({ path: `${SCREENSHOT_DIR}/audit-log-filtered.png`, fullPage: true });
+  await page.screenshot({
+    path: `${SCREENSHOT_DIR}/audit-log-filtered.png`,
+    fullPage: true,
+  });
 
   // Enterprise + owner unlocks export — the buttons are real links, not the
   // disabled/Lock upsell state.
   const exportNdjson = page.getByRole("link", { name: /Export NDJSON/i });
   await expect(exportNdjson).toBeVisible();
-  await expect(page.getByRole("button", { name: /Export NDJSON/i })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /Export NDJSON/i }),
+  ).toHaveCount(0);
 
   const href = await exportNdjson.getAttribute("href");
   expect(href).toBeTruthy();
@@ -118,7 +141,9 @@ test("audit log: non-Enterprise org shows the upsell and export stays locked", a
 }) => {
   test.setTimeout(60_000);
 
-  const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "audit-log-free" });
+  const { orgSlug } = await signUpFreshUser(page, {
+    orgPrefix: "audit-log-free",
+  });
 
   await page.goto(`/${orgSlug}/security/audit`);
   await expect(page).not.toHaveURL(/\/login/);

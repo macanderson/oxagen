@@ -37,13 +37,18 @@ describe("loadWorkspacePromptConfigSafe", () => {
   });
 
   it("logs once and returns {} when the inner read rejects", async () => {
-    mocks.withTenantDb.mockRejectedValueOnce(new Error("RLS: permission denied"));
+    mocks.withTenantDb.mockRejectedValueOnce(
+      new Error("RLS: permission denied"),
+    );
 
     const result = await loadWorkspacePromptConfigSafe("ws-uuid-1");
 
     expect(result).toEqual({});
     expect(mocks.warn).toHaveBeenCalledTimes(1);
-    const [meta, msg] = mocks.warn.mock.calls[0] as [Record<string, unknown>, string];
+    const [meta, msg] = mocks.warn.mock.calls[0] as [
+      Record<string, unknown>,
+      string,
+    ];
     expect(meta).toMatchObject({ workspaceId: "ws-uuid-1" });
     expect(meta.err).toBeInstanceOf(Error);
     expect(msg).toMatch(/prompt-config read failed/i);

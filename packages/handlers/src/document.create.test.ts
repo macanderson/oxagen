@@ -25,15 +25,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      insert: () => ({
-        values: () => ({
-          returning: mocks.insertReturning,
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        insert: () => ({
+          values: () => ({
+            returning: mocks.insertReturning,
+          }),
         }),
       }),
-    }),
-
   };
 });
 
@@ -49,7 +48,10 @@ beforeEach(() => {
 
 describe("documentCreateHandler — auth guards", () => {
   it("throws when workspaceId is null", async () => {
-    const ctx: CapabilityContext = { ...CTX, workspaceId: null as unknown as string };
+    const ctx: CapabilityContext = {
+      ...CTX,
+      workspaceId: null as unknown as string,
+    };
     await expect(documentCreateHandler({ title: "T" }, ctx)).rejects.toThrow(
       "document.create requires a workspace scope",
     );
@@ -65,7 +67,10 @@ describe("documentCreateHandler — auth guards", () => {
 
 describe("documentCreateHandler — happy path", () => {
   it("calls insert and returns contract-shaped output", async () => {
-    const result = await documentCreateHandler({ title: "My Doc", content: "Hello" }, CTX);
+    const result = await documentCreateHandler(
+      { title: "My Doc", content: "Hello" },
+      CTX,
+    );
 
     expect(mocks.insertReturning).toHaveBeenCalledTimes(1);
     expect(result.document_id).toBe(FAKE_ROW.publicId);
@@ -96,7 +101,9 @@ describe("documentCreateHandler — insert failure", () => {
   });
 
   it("propagates DB errors", async () => {
-    mocks.insertReturning.mockRejectedValueOnce(new Error("connection refused"));
+    mocks.insertReturning.mockRejectedValueOnce(
+      new Error("connection refused"),
+    );
     await expect(documentCreateHandler({ title: "T" }, CTX)).rejects.toThrow(
       "connection refused",
     );

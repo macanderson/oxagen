@@ -70,11 +70,13 @@ describe("Sheet — trigger open", () => {
   it("opens sheet when trigger is clicked", async () => {
     const { queryByRole, getByRole } = render(
       <Sheet>
-        <SheetTrigger render={<button type="button" />}>Open Sheet</SheetTrigger>
+        <SheetTrigger render={<button type="button" />}>
+          Open Sheet
+        </SheetTrigger>
         <SheetPopup>
           <SheetTitle>Triggered Sheet</SheetTitle>
         </SheetPopup>
-      </Sheet>
+      </Sheet>,
     );
     expect(queryByRole("dialog")).not.toBeInTheDocument();
     await userEvent.click(getByRole("button", { name: "Open Sheet" }));

@@ -8,7 +8,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  cleanup,
+} from "@testing-library/react";
 import { NodeDetailPanel } from "./node-detail-panel";
 import { fetchNodeDetail } from "./api-client";
 
@@ -90,7 +96,9 @@ describe("NodeDetailPanel — after load", () => {
         onClose={vi.fn()}
       />,
     );
-    await waitFor(() => expect(screen.getByText("Bug #42")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Bug #42")).toBeInTheDocument(),
+    );
   });
 
   it("renders node properties after load", async () => {
@@ -117,7 +125,9 @@ describe("NodeDetailPanel — after load", () => {
         onClose={vi.fn()}
       />,
     );
-    await waitFor(() => expect(screen.getByText("AI Safety")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("AI Safety")).toBeInTheDocument(),
+    );
   });
 
   it("renders the neighbor edge type label", async () => {
@@ -130,7 +140,9 @@ describe("NodeDetailPanel — after load", () => {
         onClose={vi.fn()}
       />,
     );
-    await waitFor(() => expect(screen.getByText("RELATED_TO")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("RELATED_TO")).toBeInTheDocument(),
+    );
   });
 });
 
@@ -146,7 +158,9 @@ describe("NodeDetailPanel — interactions", () => {
         onClose={vi.fn()}
       />,
     );
-    await waitFor(() => expect(screen.getByText("AI Safety")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("AI Safety")).toBeInTheDocument(),
+    );
     fireEvent.click(screen.getByText("AI Safety"));
     expect(onSelectNode).toHaveBeenCalledWith("n2");
   });
@@ -163,7 +177,9 @@ describe("NodeDetailPanel — interactions", () => {
       />,
     );
     // The button is rendered immediately, no need to wait
-    const expandBtn = screen.getByRole("button", { name: /expand neighbours/i });
+    const expandBtn = screen.getByRole("button", {
+      name: /expand neighbours/i,
+    });
     fireEvent.click(expandBtn);
     expect(onExpand).toHaveBeenCalledWith("n1");
   });
@@ -215,7 +231,9 @@ describe("NodeDetailPanel — error state", () => {
       />,
     );
     await waitFor(() =>
-      expect(screen.getByText("Failed to load node detail.")).toBeInTheDocument(),
+      expect(
+        screen.getByText("Failed to load node detail."),
+      ).toBeInTheDocument(),
     );
   });
 });

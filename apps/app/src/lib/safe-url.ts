@@ -6,8 +6,9 @@
  *
  * Safe = an http(s) absolute URL, or a same-document relative reference
  * (path-absolute `/…`, fragment `#…`, or query `?…`). Everything else —
- * `javascript:`, `data:`, `vbscript:`, `blob:`, `file:`, protocol-relative
- * `//host`, and anything unparseable — is rejected.
+ * `javascript:`, `data:`, `vbscript:`, `blob:`, `file:`, every scheme-relative
+ * spelling (`//host`, `/\host`, `\\host`, `\/host`), and anything unparseable
+ * — is rejected.
  */
 
 /**
@@ -33,7 +34,19 @@ export function safeHref(url: string | null | undefined): string | undefined {
   if (normalized.length === 0) return undefined;
 
   // Same-document relative references stay on the current origin.
-  if (normalized.startsWith("//")) return undefined; // protocol-relative → external
+  //
+  // A leading `/` is only same-origin when the NEXT character is not another
+  // slash. WHATWG URL parsing treats a backslash exactly like a forward slash
+  // when deciding whether a reference is scheme-relative, so `//evil.com`,
+  // `/\evil.com`, `\\evil.com` and `\/evil.com` all resolve to the authority
+  // `evil.com`. Checking only for the literal `//` would let the backslash
+  // spellings through as "relative" and turn agent-supplied output into an
+  // off-origin navigation.
+  if (normalized.startsWith("\\")) return undefined;
+  const second = normalized.charAt(1);
+  if (normalized.startsWith("/") && (second === "/" || second === "\\")) {
+    return undefined; // scheme-relative → external origin
+  }
   if (
     normalized.startsWith("/") ||
     normalized.startsWith("#") ||
@@ -45,7 +58,9 @@ export function safeHref(url: string | null | undefined): string | undefined {
   // Absolute reference: permit only http/https.
   try {
     const { protocol } = new URL(normalized);
-    return protocol === "http:" || protocol === "https:" ? normalized : undefined;
+    return protocol === "http:" || protocol === "https:"
+      ? normalized
+      : undefined;
   } catch {
     return undefined;
   }

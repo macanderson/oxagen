@@ -43,12 +43,16 @@ vi.mock("lucide-react", async (importOriginal) => {
 describe("ImagePreview", () => {
   it("renders the placeholder state when placeholder=true", () => {
     render(<ImagePreview alt="Test" placeholder />);
-    expect(screen.getByText("Image generation unavailable")).toBeInTheDocument();
+    expect(
+      screen.getByText("Image generation unavailable"),
+    ).toBeInTheDocument();
   });
 
   it("renders placeholder when neither url nor dataUri is provided", () => {
     render(<ImagePreview alt="Test" />);
-    expect(screen.getByText("Image generation unavailable")).toBeInTheDocument();
+    expect(
+      screen.getByText("Image generation unavailable"),
+    ).toBeInTheDocument();
   });
 
   it("renders the image when url is provided", () => {
@@ -79,14 +83,22 @@ describe("ImagePreview", () => {
 
   it("shows errorReason in placeholder state", () => {
     render(
-      <ImagePreview alt="Test" placeholder errorReason="API key not configured" />,
+      <ImagePreview
+        alt="Test"
+        placeholder
+        errorReason="API key not configured"
+      />,
     );
-    expect(screen.getByText("Generation failed: API key not configured")).toBeInTheDocument();
+    expect(
+      screen.getByText("Generation failed: API key not configured"),
+    ).toBeInTheDocument();
   });
 
   it("shows default unavailable text when no errorReason", () => {
     render(<ImagePreview alt="Test" placeholder />);
-    expect(screen.getByText("Image generation is not enabled.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Image generation is not enabled."),
+    ).toBeInTheDocument();
   });
 
   it("shows prompt in placeholder state", () => {
@@ -96,7 +108,10 @@ describe("ImagePreview", () => {
 
   it("figure role has aria-label matching alt when image renders", () => {
     render(<ImagePreview url="/api/v1/assets/gen_abc" alt="My alt text" />);
-    expect(screen.getByRole("figure")).toHaveAttribute("aria-label", "My alt text");
+    expect(screen.getByRole("figure")).toHaveAttribute(
+      "aria-label",
+      "My alt text",
+    );
   });
 
   it("figure role has aria-label 'Image generation unavailable' in placeholder", () => {

@@ -114,14 +114,26 @@ export async function setPasswordAction(
     const message =
       err instanceof Error ? err.message : "Failed to set password";
     // Better Auth throws a structured APIError; surface a user-friendly message.
-    if (message.includes("PASSWORD_ALREADY_SET") || message.includes("already set")) {
+    if (
+      message.includes("PASSWORD_ALREADY_SET") ||
+      message.includes("already set")
+    ) {
       return { ok: false, error: "A password is already set on this account" };
     }
-    if (message.includes("PASSWORD_TOO_SHORT") || message.includes("too short")) {
-      return { ok: false, error: "Password is too short (minimum 8 characters)" };
+    if (
+      message.includes("PASSWORD_TOO_SHORT") ||
+      message.includes("too short")
+    ) {
+      return {
+        ok: false,
+        error: "Password is too short (minimum 8 characters)",
+      };
     }
     if (message.includes("PASSWORD_TOO_LONG") || message.includes("too long")) {
-      return { ok: false, error: "Password is too long (maximum 128 characters)" };
+      return {
+        ok: false,
+        error: "Password is too long (maximum 128 characters)",
+      };
     }
     return { ok: false, error: "Failed to set password. Please try again." };
   }
@@ -178,15 +190,25 @@ export async function unlinkAccountAction(
   } catch (err: unknown) {
     const message =
       err instanceof Error ? err.message : "Failed to unlink account";
-    if (message.includes("FAILED_TO_UNLINK_LAST_ACCOUNT") || message.includes("last account")) {
+    if (
+      message.includes("FAILED_TO_UNLINK_LAST_ACCOUNT") ||
+      message.includes("last account")
+    ) {
       return {
         ok: false,
-        error: "Set a password or connect another account before disconnecting this one.",
+        error:
+          "Set a password or connect another account before disconnecting this one.",
       };
     }
-    if (message.includes("ACCOUNT_NOT_FOUND") || message.includes("not found")) {
+    if (
+      message.includes("ACCOUNT_NOT_FOUND") ||
+      message.includes("not found")
+    ) {
       return { ok: false, error: "Account not found" };
     }
-    return { ok: false, error: "Failed to disconnect account. Please try again." };
+    return {
+      ok: false,
+      error: "Failed to disconnect account. Please try again.",
+    };
   }
 }

@@ -7,7 +7,7 @@ import { buildContext } from "../context";
 export const schema = {
   ...agentSandboxExec.input.shape,
   sessionId: agentSandboxExec.input.shape.sessionId.describe(
-    "Durable-session id (sbx_…) returned by agent.sandbox.start",
+    "Durable-session id (sbx_…) returned by start_sandbox",
   ),
   command: agentSandboxExec.input.shape.command.describe(
     "Shell command line executed via `sh -c` in the session workspace; filesystem/process state persists across calls",
@@ -28,6 +28,8 @@ export default async function agentSandboxExecTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentSandboxExec.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentSandboxExec.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentSandboxExec.output.parse(output);
 }

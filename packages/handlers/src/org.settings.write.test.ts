@@ -42,8 +42,15 @@ describe("org.settings.write handler", () => {
   });
 
   it("applies only the provided fields and returns the mapped row", async () => {
-    mocks.findFirst.mockResolvedValue({ ...ROW, name: "Acme Inc", industry: "Tech" });
-    const out = await orgSettingsWriteHandler({ name: "Acme Inc", industry: "Tech" }, CTX);
+    mocks.findFirst.mockResolvedValue({
+      ...ROW,
+      name: "Acme Inc",
+      industry: "Tech",
+    });
+    const out = await orgSettingsWriteHandler(
+      { name: "Acme Inc", industry: "Tech" },
+      CTX,
+    );
     expect(mocks.update).toHaveBeenCalledTimes(1);
     expect(mocks.set).toHaveBeenCalledWith(
       expect.objectContaining({ name: "Acme Inc", industry: "Tech" }),
@@ -61,9 +68,9 @@ describe("org.settings.write handler", () => {
 
   it("maps a unique-violation on slug to a friendly error", async () => {
     mocks.where.mockRejectedValueOnce({ code: "23505" });
-    await expect(orgSettingsWriteHandler({ slug: "taken" }, CTX)).rejects.toThrow(
-      /already in use/,
-    );
+    await expect(
+      orgSettingsWriteHandler({ slug: "taken" }, CTX),
+    ).rejects.toThrow(/already in use/);
   });
 
   it("maps a Drizzle-wrapped unique-violation (code on .cause) to a friendly error", async () => {
@@ -75,9 +82,9 @@ describe("org.settings.write handler", () => {
       message: "Failed query: update org.organizations ...",
       cause: { code: "23505", constraint_name: "organizations_slug_idx" },
     });
-    await expect(orgSettingsWriteHandler({ slug: "taken" }, CTX)).rejects.toThrow(
-      /already in use/,
-    );
+    await expect(
+      orgSettingsWriteHandler({ slug: "taken" }, CTX),
+    ).rejects.toThrow(/already in use/);
   });
 
   it("throws when the organization is not found after update", async () => {

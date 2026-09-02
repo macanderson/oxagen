@@ -110,7 +110,9 @@ describe("linear connector – verifyWebhook", () => {
 
   it("rejects wrong secret", () => {
     const sig = createHmac("sha256", "wrong").update(payload).digest("hex");
-    expect(linear.verifyWebhook!(payload, { "linear-signature": sig }, secret)).toBe(false);
+    expect(
+      linear.verifyWebhook!(payload, { "linear-signature": sig }, secret),
+    ).toBe(false);
   });
 
   it("rejects missing header", () => {
@@ -119,6 +121,8 @@ describe("linear connector – verifyWebhook", () => {
 
   it("rejects null secret", () => {
     const sig = createHmac("sha256", secret).update(payload).digest("hex");
-    expect(linear.verifyWebhook!(payload, { "linear-signature": sig }, null)).toBe(false);
+    expect(
+      linear.verifyWebhook!(payload, { "linear-signature": sig }, null),
+    ).toBe(false);
   });
 });

@@ -71,7 +71,10 @@ export interface SwarmSessionStore {
 }
 
 /** React hook over the sessionStorage-backed swarm list for one workspace. */
-export function useSwarmSessionStore(orgSlug: string, workspaceSlug: string): SwarmSessionStore {
+export function useSwarmSessionStore(
+  orgSlug: string,
+  workspaceSlug: string,
+): SwarmSessionStore {
   const key = storageKey(orgSlug, workspaceSlug);
   const [swarms, setSwarms] = useState<SwarmSessionRecord[]>([]);
 
@@ -88,7 +91,10 @@ export function useSwarmSessionStore(orgSlug: string, workspaceSlug: string): Sw
   const addSwarm = useCallback(
     (record: SwarmSessionRecord) => {
       setSwarms((prev) => {
-        const next = [record, ...prev.filter((s) => s.swarmId !== record.swarmId)];
+        const next = [
+          record,
+          ...prev.filter((s) => s.swarmId !== record.swarmId),
+        ];
         writeStore(key, next);
         return next;
       });
@@ -99,7 +105,9 @@ export function useSwarmSessionStore(orgSlug: string, workspaceSlug: string): Sw
   const updateSwarm = useCallback(
     (swarmId: string, patch: Partial<SwarmSessionRecord>) => {
       setSwarms((prev) => {
-        const next = prev.map((s) => (s.swarmId === swarmId ? { ...s, ...patch } : s));
+        const next = prev.map((s) =>
+          s.swarmId === swarmId ? { ...s, ...patch } : s,
+        );
         writeStore(key, next);
         return next;
       });

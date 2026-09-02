@@ -7,21 +7,19 @@
  *
  * "Files" renders `ConversationFilesList` (`./conversation-files.tsx`) — the
  * client-side fetch (`GET /api/v1/conversations/:id/assets`) and row rendering
- * for this conversation's generated assets. This tab is now the sole surface
- * for conversation files; the old Sheet-based drawer trigger was removed as
- * duplicate UI, leaving one implementation of "list this conversation's
- * generated assets", not two.
+ * for this conversation's generated assets. This tab is the single surface for
+ * conversation files, so there is exactly one implementation of "list this
+ * conversation's generated assets".
  *
- * "Workspace" delegates entirely to the existing model-dispatched
+ * "Workspace" delegates entirely to the model-dispatched
  * `registry-components/workspace-context-panel.tsx` (componentId
- * "workspace-context-panel") — it already implements the full
- * `agent.sandbox_file.list`/`.read` fetch, lazy directory expansion, and file
- * viewer against `FileTreeCard`. Reusing it here (instead of a second
- * hand-rolled sandbox-file fetch) means the two surfaces can never drift out
- * of sync on the sandbox file contract. The tab only appears once the turn
- * has actually started a durable sandbox session (an `agent.sandbox.start`
- * tool call completed with a `sessionId`) — before that there is nothing to
- * browse.
+ * "workspace-context-panel"), which already implements the
+ * `list_sandbox_files` / `read_sandbox_file` fetch, lazy directory expansion,
+ * and the file viewer built on `FileTreeCard`. Delegating (instead of a second
+ * hand-rolled sandbox-file fetch) keeps the two surfaces from drifting apart on
+ * the sandbox file contract. The tab appears only once the turn has started a
+ * durable sandbox session — a completed `start_sandbox` tool call carrying a
+ * `sessionId`. Before that there is nothing to browse.
  */
 
 import * as React from "react";
@@ -37,9 +35,9 @@ import SandboxWorkspaceTree from "./registry-components/workspace-context-panel"
 import type { LiveToolCall } from "./use-tool-stream";
 
 /**
- * Finds the `sessionId` of the most recently completed `agent.sandbox.start`
- * tool call in the live turn's tool-call state, or null if the turn hasn't
- * started a durable sandbox session. Exported (pure) for unit testing.
+ * Finds the `sessionId` of the most recently completed `start_sandbox` tool
+ * call in the live turn's tool-call state, or null if the turn hasn't started a
+ * durable sandbox session. Exported (pure) for unit testing.
  */
 export function findActiveSandboxSessionId(
   toolCalls: Record<string, LiveToolCall>,
@@ -47,9 +45,11 @@ export function findActiveSandboxSessionId(
   let found: string | null = null;
   let latestStart = -Infinity;
   for (const tc of Object.values(toolCalls)) {
-    if (tc.capability !== "start_sandbox" || tc.status !== "completed") continue;
+    if (tc.capability !== "start_sandbox" || tc.status !== "completed")
+      continue;
     const output = tc.output as Record<string, unknown> | null;
-    const sessionId = output && typeof output.sessionId === "string" ? output.sessionId : null;
+    const sessionId =
+      output && typeof output.sessionId === "string" ? output.sessionId : null;
     if (!sessionId) continue;
     if (tc.startedAt >= latestStart) {
       latestStart = tc.startedAt;
@@ -74,10 +74,9 @@ type PanelTab = "files" | "workspace";
 /**
  * The chrome-less tabs body: the Files / Workspace `Tabs` with all the
  * sandbox-detection + default-tab logic, but WITHOUT the bordered card wrapper.
- * Split out of `WorkspaceContextPanel` so the calm Agent-activity rail can drop
- * these tabs into its own "Outputs" card without doubling up the border /
- * shadow. `WorkspaceContextPanel` renders this inside its wrapper, so its
- * existing tests are unaffected.
+ * The Agent-activity rail drops these tabs straight into its own "Outputs" card,
+ * which already draws a border and shadow; `WorkspaceContextPanel` wraps them in
+ * that chrome itself.
  */
 export function WorkspaceContextTabs({
   conversationPublicId,
@@ -127,7 +126,10 @@ export function WorkspaceContextTabs({
       </TabsList>
 
       <TabsPanel value="files" className="min-h-0 flex-1 overflow-y-auto">
-        <ConversationFilesList conversationPublicId={conversationPublicId} active={tab === "files"} />
+        <ConversationFilesList
+          conversationPublicId={conversationPublicId}
+          active={tab === "files"}
+        />
       </TabsPanel>
 
       {sandboxSessionId ? (
@@ -152,8 +154,8 @@ export function WorkspaceContextPanel({
   className,
 }: WorkspaceContextPanelProps) {
   return (
-    // The marker now rides on the inner WorkspaceContextTabs, so this wrapper no
-    // longer carries it — avoids a duplicate when the registry panel renders.
+    // The `data-component` marker rides on the inner WorkspaceContextTabs, not
+    // on this wrapper, so the registry panel can't render a duplicate marker.
     <div
       className={cn(
         "flex min-h-0 flex-col rounded-xl border border-border bg-card text-card-foreground shadow-sm",

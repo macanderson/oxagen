@@ -66,11 +66,15 @@ export const agentSandboxList = registerCapability({
       z.object({
         sessionId: z
           .string()
-          .describe("Opaque durable-session id (sbx_…) — the public id column."),
+          .describe(
+            "Opaque durable-session id (sbx_…) — the public id column.",
+          ),
         sessionKey: z
           .string()
           .nullable()
-          .describe("Caller-supplied reuse key, or null for ephemeral sessions."),
+          .describe(
+            "Caller-supplied reuse key, or null for ephemeral sessions.",
+          ),
         label: z
           .string()
           .nullable()
@@ -103,8 +107,12 @@ export const agentSandboxList = registerCapability({
         expiresAt: z
           .string()
           .nullable()
-          .describe("ISO soft-expiry timestamp, or null when the session has no expiry."),
-        createdAt: z.string().describe("ISO timestamp the session was created."),
+          .describe(
+            "ISO soft-expiry timestamp, or null when the session has no expiry.",
+          ),
+        createdAt: z
+          .string()
+          .describe("ISO timestamp the session was created."),
         // ── Session lifecycle & work-recovery (spec: sandbox-session-lifecycle) ──
         // All optional so existing callers/parsers are unaffected; the handler
         // always populates them from the registry row.

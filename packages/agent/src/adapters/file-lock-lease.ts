@@ -3,10 +3,9 @@
  * `@oxagen/agent-engine` file-lock port, backed by the transactional lease in
  * `@oxagen/agent`'s `file-lock/lease.ts` (ADR-021 §5).
  *
- * This SUPERSEDES the old Neo4j-backed file-lock adapter (since removed from
- * this directory): locks are mutual-exclusion state and must live in
- * Postgres. A graph-backed lock is eventually consistent and therefore
- * invisible during projection lag.
+ * Locks are mutual-exclusion state, so they must live in Postgres. A
+ * graph-backed lock is eventually consistent and therefore invisible during
+ * projection lag.
  *
  * Injected wherever a turn gets a real workspace (today:
  * `agent.repo.edit`'s handler) so `write_file`/`edit_file` in

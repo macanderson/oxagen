@@ -70,20 +70,26 @@ describe("selectModel (@oxagen/ai) — gateway only", () => {
     envValues = { ...TIER_ENV };
     const model = selectModel();
     expect(mocks.languageModel).toHaveBeenCalledTimes(1);
-    expect(mocks.languageModel).toHaveBeenCalledWith("anthropic/claude-sonnet-5");
+    expect(mocks.languageModel).toHaveBeenCalledWith(
+      "anthropic/claude-sonnet-5",
+    );
     expect(model).toBe(mocks.languageInstance);
   });
 
   it("resolves the fast tier to its OXAGEN_LLM_FAST gateway id", () => {
     envValues = { ...TIER_ENV };
     selectModel({ tier: "fast" });
-    expect(mocks.languageModel).toHaveBeenCalledWith("anthropic/claude-haiku-4.5");
+    expect(mocks.languageModel).toHaveBeenCalledWith(
+      "anthropic/claude-haiku-4.5",
+    );
   });
 
   it("resolves the precise tier to its OXAGEN_LLM_PRECISE gateway id", () => {
     envValues = { ...TIER_ENV };
     selectModel({ tier: "precise" });
-    expect(mocks.languageModel).toHaveBeenCalledWith("anthropic/claude-opus-4.8");
+    expect(mocks.languageModel).toHaveBeenCalledWith(
+      "anthropic/claude-opus-4.8",
+    );
   });
 
   it("an explicit gateway model id wins over a tier", () => {
@@ -141,7 +147,10 @@ describe("media tier resolution (@oxagen/ai)", () => {
         precise: "anthropic/claude-opus-4.8",
       },
       image: { basic: "openai/gpt-image-1", advanced: "bfl/flux-2-max" },
-      video: { basic: "google/veo-3.0-fast-generate-001", advanced: "google/veo-3.0-generate-001" },
+      video: {
+        basic: "google/veo-3.0-fast-generate-001",
+        advanced: "google/veo-3.0-generate-001",
+      },
     });
   });
 });
@@ -153,7 +162,9 @@ describe("selectVideoModel (@oxagen/ai) — gateway only", () => {
     envValues = { ...MEDIA_ENV };
     const model = selectVideoModel();
     expect(mocks.video).toHaveBeenCalledTimes(1);
-    expect(mocks.video).toHaveBeenCalledWith("google/veo-3.0-fast-generate-001");
+    expect(mocks.video).toHaveBeenCalledWith(
+      "google/veo-3.0-fast-generate-001",
+    );
     expect(model).toBe(mocks.videoInstance);
   });
 

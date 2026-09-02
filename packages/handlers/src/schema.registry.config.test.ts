@@ -57,7 +57,11 @@ describe("schemaRegistryConfigHandler", () => {
 
   it("updates enforcementMode and returns updated config", async () => {
     mocks.updateReturning.mockResolvedValue([
-      { publicId: "scr_abc", enforcementMode: "strict", conformanceFloor: "0.50" },
+      {
+        publicId: "scr_abc",
+        enforcementMode: "strict",
+        conformanceFloor: "0.50",
+      },
     ]);
 
     const result = await schemaRegistryConfigHandler(
@@ -72,7 +76,11 @@ describe("schemaRegistryConfigHandler", () => {
 
   it("updates conformanceFloor and parses it as float", async () => {
     mocks.updateReturning.mockResolvedValue([
-      { publicId: "scr_abc", enforcementMode: "lenient", conformanceFloor: "0.75" },
+      {
+        publicId: "scr_abc",
+        enforcementMode: "lenient",
+        conformanceFloor: "0.75",
+      },
     ]);
 
     const result = await schemaRegistryConfigHandler(
@@ -100,7 +108,11 @@ describe("schemaRegistryConfigHandler", () => {
 
   it("calls getOrCreateRegistry with ctx.orgId, workspaceId, userId", async () => {
     mocks.updateReturning.mockResolvedValue([
-      { publicId: "scr_abc", enforcementMode: "lenient", conformanceFloor: "0.50" },
+      {
+        publicId: "scr_abc",
+        enforcementMode: "lenient",
+        conformanceFloor: "0.50",
+      },
     ]);
 
     await schemaRegistryConfigHandler({ enforcementMode: "lenient" }, CTX);
@@ -134,7 +146,11 @@ describe("schemaRegistryConfigHandler", () => {
 
   it("accepts empty input object without throwing", async () => {
     mocks.updateReturning.mockResolvedValue([
-      { publicId: "scr_abc", enforcementMode: "lenient", conformanceFloor: "0.50" },
+      {
+        publicId: "scr_abc",
+        enforcementMode: "lenient",
+        conformanceFloor: "0.50",
+      },
     ]);
 
     // No fields changed — just updatedByUserId touches the row.

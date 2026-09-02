@@ -25,5 +25,8 @@ export type {
 } from "./org";
 export { resolveOrgScope } from "./org";
 
-export type { WorkspaceScopeResult, WorkspaceScopeResolution } from "./workspace";
+export type {
+  WorkspaceScopeResult,
+  WorkspaceScopeResolution,
+} from "./workspace";
 export { resolveWorkspaceScope } from "./workspace";

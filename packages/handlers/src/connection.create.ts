@@ -7,10 +7,9 @@ import { getConnector } from "@oxagen/ingestion/connectors";
 import { logger } from "./logger";
 import { assertGithubInstallationAccessible } from "./lib/github-installation-access";
 
-export const connectionCreateHandler: CapabilityHandler<typeof connectionCreate> = async (
-  input,
-  ctx,
-) => {
+export const connectionCreateHandler: CapabilityHandler<
+  typeof connectionCreate
+> = async (input, ctx) => {
   if (!ctx.userId) {
     throw new Error("connection.create requires an authenticated user");
   }
@@ -24,9 +23,9 @@ export const connectionCreateHandler: CapabilityHandler<typeof connectionCreate>
   // token for that org, so verify the acting user can actually reach it on GitHub
   // before trusting it. See connection.mappings.set for the full rationale.
   if (input.connectorId === "github") {
-    const iid = (input.connectionConfig as Record<string, unknown> | null | undefined)?.[
-      "installationId"
-    ];
+    const iid = (
+      input.connectionConfig as Record<string, unknown> | null | undefined
+    )?.["installationId"];
     if (typeof iid === "string" || typeof iid === "number") {
       await assertGithubInstallationAccessible(ctx, iid);
     }

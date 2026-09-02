@@ -6,7 +6,7 @@ import { buildContext } from "../context";
 
 export const schema = {
   runId: agentSubagentResultGet.input.shape.runId.describe(
-    "Public ID of the child run to fetch (from agent.subagent.aggregate children[].runId / timeline[].runId)",
+    "Public ID of the child run to fetch (from aggregate_subagents children[].runId / timeline[].runId)",
   ),
 };
 
@@ -24,6 +24,8 @@ export default async function agentSubagentResultGetTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentSubagentResultGet.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentSubagentResultGet.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentSubagentResultGet.output.parse(output);
 }

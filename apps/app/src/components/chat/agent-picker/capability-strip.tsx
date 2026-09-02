@@ -105,7 +105,8 @@ function orderedRefs(toolRefs: readonly AgentToolRef[]): AgentToolRef[] {
   );
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ULID_RE = /^[0-9A-Z]{26}$/;
 
 /**
@@ -139,7 +140,11 @@ export interface CapabilityStripProps {
   className?: string;
 }
 
-export function CapabilityStrip({ toolRefs, v2 = false, className }: CapabilityStripProps) {
+export function CapabilityStrip({
+  toolRefs,
+  v2 = false,
+  className,
+}: CapabilityStripProps) {
   if (toolRefs.length === 0) return null;
 
   const summary = summarizeToolRefs(toolRefs);
@@ -147,7 +152,9 @@ export function CapabilityStrip({ toolRefs, v2 = false, className }: CapabilityS
   const maxNamed = v2 ? MAX_NAMED_CHIPS_V2 : MAX_NAMED_CHIPS;
   // v2 never lets an opaque-id-looking ref become a named chip — it's
   // excluded from the eligible pool up front and simply counted in overflow.
-  const eligible = v2 ? ordered.filter((t) => !looksLikeOpaqueId(t.ref)) : ordered;
+  const eligible = v2
+    ? ordered.filter((t) => !looksLikeOpaqueId(t.ref))
+    : ordered;
   const named = eligible.slice(0, maxNamed);
   const overflow = ordered.length - named.length;
 

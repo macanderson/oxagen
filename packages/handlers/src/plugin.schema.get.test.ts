@@ -12,14 +12,21 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 vi.mock("@oxagen/ingestion/connector-schema-loader", () => ({
   loadBuiltInSchema: mocks.loadBuiltInSchema,
 }));
-vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("./logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 import { pluginSchemaGetHandler } from "./plugin.schema.get";
 
 const CTX = makeCTX({ orgId: "org-1", workspaceId: "ws-1" });
 
 const BUILT_IN = {
-  metadata: { id: "github", displayName: "GitHub", version: "1.0.0", schemaVersion: "1" },
+  metadata: {
+    id: "github",
+    displayName: "GitHub",
+    version: "1.0.0",
+    schemaVersion: "1",
+  },
   config: { fields: [{ key: "organizations", label: "Organizations" }] },
 } as unknown as NonNullable<ReturnType<typeof mocks.loadBuiltInSchema>>;
 
@@ -37,7 +44,9 @@ function makeTx(opts: { selectRows?: unknown[]; onWrite?: () => void } = {}) {
     select: () => ({
       from: () => ({
         where: () => ({
-          orderBy: () => ({ limit: () => Promise.resolve(opts.selectRows ?? []) }),
+          orderBy: () => ({
+            limit: () => Promise.resolve(opts.selectRows ?? []),
+          }),
         }),
       }),
     }),
@@ -50,8 +59,8 @@ describe("plugin.schema.get handler", () => {
   it("returns the bundled schema for a built-in connector (and warms the cache)", async () => {
     mocks.loadBuiltInSchema.mockReturnValue(BUILT_IN);
     const onWrite = vi.fn();
-    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
-      fn(makeTx({ onWrite })),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx({ onWrite })),
     );
 
     const out = await pluginSchemaGetHandler({ pluginId: "github" }, CTX);
@@ -65,7 +74,9 @@ describe("plugin.schema.get handler", () => {
     // system catalog (oxagen_app lacks grants in some envs) must NOT fail the
     // Configure form — built-ins resolve from the bundled YAML regardless.
     mocks.loadBuiltInSchema.mockReturnValue(BUILT_IN);
-    mocks.withTenantDb.mockRejectedValue(new Error("permission denied for table connector_schemas"));
+    mocks.withTenantDb.mockRejectedValue(
+      new Error("permission denied for table connector_schemas"),
+    );
 
     const out = await pluginSchemaGetHandler({ pluginId: "github" }, CTX);
 
@@ -75,8 +86,9 @@ describe("plugin.schema.get handler", () => {
   it("returns a partner plugin's schema from the DB cache when present", async () => {
     mocks.loadBuiltInSchema.mockReturnValue(null);
     const cached = { metadata: { id: "acme" } };
-    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
-      fn(makeTx({ selectRows: [{ schema: cached }] })),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) =>
+        fn(makeTx({ selectRows: [{ schema: cached }] })),
     );
 
     const out = await pluginSchemaGetHandler({ pluginId: "acme" }, CTX);
@@ -86,21 +98,23 @@ describe("plugin.schema.get handler", () => {
 
   it("404s (not 500) for a partner plugin when the cache read THROWS", async () => {
     mocks.loadBuiltInSchema.mockReturnValue(null);
-    mocks.withTenantDb.mockRejectedValue(new Error("permission denied for table connector_schemas"));
-
-    await expect(pluginSchemaGetHandler({ pluginId: "acme" }, CTX)).rejects.toThrow(
-      "Schema not found for plugin: acme",
+    mocks.withTenantDb.mockRejectedValue(
+      new Error("permission denied for table connector_schemas"),
     );
+
+    await expect(
+      pluginSchemaGetHandler({ pluginId: "acme" }, CTX),
+    ).rejects.toThrow("Schema not found for plugin: acme");
   });
 
   it("404s for an unknown plugin with an empty cache", async () => {
     mocks.loadBuiltInSchema.mockReturnValue(null);
-    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
-      fn(makeTx({ selectRows: [] })),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx({ selectRows: [] })),
     );
 
-    await expect(pluginSchemaGetHandler({ pluginId: "nope" }, CTX)).rejects.toThrow(
-      "Schema not found for plugin: nope",
-    );
+    await expect(
+      pluginSchemaGetHandler({ pluginId: "nope" }, CTX),
+    ).rejects.toThrow("Schema not found for plugin: nope");
   });
 });

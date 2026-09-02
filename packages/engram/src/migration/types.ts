@@ -4,7 +4,13 @@
  * Maps the existing MemoryRow shape (from packages/agent/src/memory/neo4j.ts)
  * to the new Engram record format.
  */
-import type { RecordKind, EpisodicBody, SemanticBody, Namespace, Provenance } from "../types";
+import type {
+  RecordKind,
+  EpisodicBody,
+  SemanticBody,
+  Namespace,
+  Provenance,
+} from "../types";
 
 /**
  * The Neo4j MemoryRow shape — mirrors packages/agent/src/memory/neo4j.ts.
@@ -62,7 +68,10 @@ export function mapKind(legacyKind: string): RecordKind {
  * If the mapped kind is "semantic", wraps in SemanticBody.
  * Otherwise wraps in EpisodicBody.
  */
-export function mapBody(row: LegacyMemoryRow, kind: RecordKind): EpisodicBody | SemanticBody {
+export function mapBody(
+  row: LegacyMemoryRow,
+  kind: RecordKind,
+): EpisodicBody | SemanticBody {
   if (kind === "semantic") {
     return {
       fact: row.lesson,
@@ -110,7 +119,8 @@ function inferDomain(row: LegacyMemoryRow): string {
   // Simple heuristic based on source field
   if (row.source.includes("code") || row.source.includes("file")) return "code";
   if (row.source.includes("api") || row.source.includes("http")) return "api";
-  if (row.source.includes("db") || row.source.includes("database")) return "database";
+  if (row.source.includes("db") || row.source.includes("database"))
+    return "database";
   if (row.source.includes("auth")) return "auth";
   return "general";
 }

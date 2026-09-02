@@ -253,7 +253,10 @@ export async function distill(
     const fact = await extractFactFromCluster(cluster, options);
     if (!fact) continue;
 
-    // Check if this fact already exists
+    // Check if this fact already exists. NOTE: only pre-existing facts are
+    // consulted — two clusters in THIS batch that distill to the same fact both
+    // land in `newFacts`. Their bodies are identical, so content addressing
+    // collapses them to one record on write, but the caller sees two entries.
     const existing = findExistingFact(fact, existingFacts);
     if (existing) {
       // Boost confidence: seeing the same pattern again reinforces it

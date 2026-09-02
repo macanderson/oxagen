@@ -279,9 +279,14 @@ export function createDockerSandbox(
     let outputTruncated = false;
     stream.on("data", (c: Buffer) => {
       if (accumulatedBytes + c.length > MAX_OUTPUT_BYTES) {
-        outputTruncated = true;
-        // Kill the container so it stops producing more output.
-        container.kill({ signal: "SIGKILL" }).catch(() => undefined);
+        // Kill the container once, on the chunk that trips the cap. A fast
+        // printer keeps emitting frames until the SIGKILL lands, so guard on
+        // outputTruncated — without it every subsequent frame fires another
+        // HTTP kill request at the Docker daemon.
+        if (!outputTruncated) {
+          outputTruncated = true;
+          container.kill({ signal: "SIGKILL" }).catch(() => undefined);
+        }
         return;
       }
       chunks.push(c);
@@ -390,36 +395,31 @@ export function createDockerSandbox(
     const queue: SandboxStreamChunk[] = [];
     let done = false;
     let resolveNext: (() => void) | null = null;
+    // Kill the container once when the backlog cap is hit. The container keeps
+    // emitting frames until the SIGKILL lands, so without this guard every
+    // frame past the cap fires another HTTP kill request at the Docker daemon.
+    let killedForOverflow = false;
+    const killOnce = () => {
+      if (killedForOverflow) return;
+      killedForOverflow = true;
+      container.kill({ signal: "SIGKILL" }).catch(() => undefined);
+    };
     const notify = () => {
       if (resolveNext) {
         resolveNext();
         resolveNext = null;
       }
     };
-    stdoutPipe.on("data", (c: Buffer) => {
+    const push = (channel: "stdout" | "stderr", c: Buffer) => {
       if (queue.length >= MAX_QUEUE_ITEMS) {
-        container.kill({ signal: "SIGKILL" }).catch(() => undefined);
+        killOnce();
         return;
       }
-      queue.push({
-        channel: "stdout",
-        data: c.toString("utf8"),
-        at: Date.now(),
-      });
+      queue.push({ channel, data: c.toString("utf8"), at: Date.now() });
       notify();
-    });
-    stderrPipe.on("data", (c: Buffer) => {
-      if (queue.length >= MAX_QUEUE_ITEMS) {
-        container.kill({ signal: "SIGKILL" }).catch(() => undefined);
-        return;
-      }
-      queue.push({
-        channel: "stderr",
-        data: c.toString("utf8"),
-        at: Date.now(),
-      });
-      notify();
-    });
+    };
+    stdoutPipe.on("data", (c: Buffer) => push("stdout", c));
+    stderrPipe.on("data", (c: Buffer) => push("stderr", c));
 
     const timer = setTimeout(() => {
       container.kill({ signal: "SIGKILL" }).catch(() => undefined);
@@ -434,13 +434,24 @@ export function createDockerSandbox(
         notify();
       });
 
-    while (true) {
-      if (queue.length > 0) {
-        yield queue.shift()!;
-        continue;
+    try {
+      while (true) {
+        if (queue.length > 0) {
+          yield queue.shift()!;
+          continue;
+        }
+        if (done) return;
+        await new Promise<void>((r) => (resolveNext = r));
       }
-      if (done) return;
-      await new Promise<void>((r) => (resolveNext = r));
+    } finally {
+      // A consumer that `break`s (or throws) out of `for await` closes the
+      // generator here while the container is still running. Without this the
+      // container survives until the timeout fires — burning the caller's CPU,
+      // memory, and (with network=allow) egress for no reader. Both calls are
+      // idempotent: on the normal path the container has already exited and the
+      // timer is already cleared.
+      clearTimeout(timer);
+      container.kill({ signal: "SIGKILL" }).catch(() => undefined);
     }
   }
 

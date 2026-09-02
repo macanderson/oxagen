@@ -492,9 +492,11 @@ export interface CheckedContext extends CapabilityContext {
    * Only ever present on a CHECKED context, and only for an `allow`: a
    * deny / approval-pending / evaluation-error decision returns its reference
    * on the typed kernel result or on the thrown `CapabilityError`, because the
-   * handler never runs. The kernel STRIPS any inbound value off the incoming
-   * `CapabilityContext` before the check — a caller-supplied decision reference
-   * is a forgery attempt, never an input.
+   * handler never runs. A caller-supplied decision reference is a forgery
+   * attempt, never an input: the kernel REJECTS the whole invocation (an
+   * `authz_denied` CapabilityError plus a security event) when the incoming
+   * `CapabilityContext` carries this field, rather than stripping it — a silent
+   * strip would let the probe succeed and leave no trace.
    */
   authorizationDecision?: AuthorizationDecisionRef;
 }

@@ -34,7 +34,9 @@ describe("listOxagenPlugins", () => {
     const { oxagenPluginManifestSchema } = await import("./manifest");
     for (const plugin of listOxagenPlugins()) {
       const result = oxagenPluginManifestSchema.safeParse(plugin);
-      expect(result.success, `manifest "${plugin.id}" should pass schema`).toBe(true);
+      expect(result.success, `manifest "${plugin.id}" should pass schema`).toBe(
+        true,
+      );
     }
   });
 });
@@ -96,7 +98,10 @@ describe("pluginForContract", () => {
     ];
     for (const [contract, expectedId] of contractCases) {
       const plugin = pluginForContract(contract);
-      expect(plugin, `contract "${contract}" should map to plugin "${expectedId}"`).toBeDefined();
+      expect(
+        plugin,
+        `contract "${contract}" should map to plugin "${expectedId}"`,
+      ).toBeDefined();
       expect(plugin?.id).toBe(expectedId);
     }
   });
@@ -176,7 +181,10 @@ describe("plugin registry invariants — Phase 1 pack assignments", () => {
     for (const plugin of listOxagenPlugins()) {
       for (const contract of plugin.contracts) {
         const prev = seen.get(contract);
-        expect(prev, `contract "${contract}" claimed by both "${prev}" and "${plugin.id}"`).toBeUndefined();
+        expect(
+          prev,
+          `contract "${contract}" claimed by both "${prev}" and "${plugin.id}"`,
+        ).toBeUndefined();
         seen.set(contract, plugin.id);
       }
     }

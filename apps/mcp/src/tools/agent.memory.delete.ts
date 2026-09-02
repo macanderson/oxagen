@@ -25,6 +25,8 @@ export default async function agentMemoryDeleteTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentMemoryDelete.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentMemoryDelete.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentMemoryDelete.output.parse(output);
 }

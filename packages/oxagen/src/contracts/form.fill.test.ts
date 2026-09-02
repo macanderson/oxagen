@@ -20,7 +20,13 @@ describe("form.fill capability", () => {
       entitySummary: "Workspace: Acme, status: active",
       instruction: "Set the name to Acme Corp and mark it active",
       fields: [
-        { name: "name", label: "Name", type: "text", current: "Old name", required: true },
+        {
+          name: "name",
+          label: "Name",
+          type: "text",
+          current: "Old name",
+          required: true,
+        },
         {
           name: "status",
           label: "Status",
@@ -64,7 +70,9 @@ describe("form.fill capability", () => {
       formFill.input.parse({
         route: "/org/ws/settings",
         instruction: "Update the name",
-        fields: [{ name: "name", label: "Name", type: "invalid_type", current: "x" }],
+        fields: [
+          { name: "name", label: "Name", type: "invalid_type", current: "x" },
+        ],
       }),
     ).toThrow();
   });
@@ -72,7 +80,13 @@ describe("form.fill capability", () => {
   it("parses a valid output with changed and unchanged fields", () => {
     const parsed = formFill.output.parse({
       fields: [
-        { name: "name", current: "Old", proposed: "New", changed: true, reason: "User asked to rename" },
+        {
+          name: "name",
+          current: "Old",
+          proposed: "New",
+          changed: true,
+          reason: "User asked to rename",
+        },
         { name: "status", current: "draft", proposed: "draft", changed: false },
       ],
     });

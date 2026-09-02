@@ -9,7 +9,11 @@ export const agentEnvironmentList = registerCapability({
     "List an agent's environment bindings, with each binding's resolved template name.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   sensitivity: "low",
@@ -23,4 +27,6 @@ export const agentEnvironmentList = registerCapability({
   output: z.object({ bindings: z.array(agentEnvironmentBindingSchema) }),
 });
 
-export type AgentEnvironmentListOutput = z.output<typeof agentEnvironmentList.output>;
+export type AgentEnvironmentListOutput = z.output<
+  typeof agentEnvironmentList.output
+>;

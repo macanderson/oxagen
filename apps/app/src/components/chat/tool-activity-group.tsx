@@ -44,14 +44,22 @@ function isInFlight(status: ToolCallStatus): boolean {
 
 /** The muted human detail for a call: its label, plus a one-line input summary
  *  when there is something salient to show. */
-function callDetail(item: ToolActivityItem): { label: string; summary: string | null } {
+function callDetail(item: ToolActivityItem): {
+  label: string;
+  summary: string | null;
+} {
   const { label } = toolCallMeta(item.capability);
-  return { label, summary: toolCallSummary(item.capability, item.inputPreview) };
+  return {
+    label,
+    summary: toolCallSummary(item.capability, item.inputPreview),
+  };
 }
 
 export function ToolActivityGroup({ items, live }: ToolActivityGroupProps) {
   const [expanded, setExpanded] = React.useState(false);
-  const [openRows, setOpenRows] = React.useState<ReadonlySet<string>>(() => new Set());
+  const [openRows, setOpenRows] = React.useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
 
   if (items.length === 0) return null;
 
@@ -72,29 +80,51 @@ export function ToolActivityGroup({ items, live }: ToolActivityGroupProps) {
   const latestDetail = callDetail(latest);
 
   return (
-    <div className="my-1 text-sm" data-component="tool-activity-group" data-testid="tool-activity-group">
+    <div
+      className="my-1 text-sm"
+      data-component="tool-activity-group"
+      data-testid="tool-activity-group"
+    >
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        aria-label={expanded ? "Collapse tool activity" : "Expand tool activity"}
+        aria-label={
+          expanded ? "Collapse tool activity" : "Expand tool activity"
+        }
         className="flex min-h-7 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs transition-colors hover:bg-muted/50"
       >
         {expanded ? (
-          <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <ChevronDown
+            className="h-3 w-3 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
         ) : (
-          <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <ChevronRight
+            className="h-3 w-3 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
         )}
         {showLive ? (
-          <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" aria-label="Working" />
+          <Loader2
+            className="h-3 w-3 shrink-0 animate-spin text-muted-foreground"
+            aria-label="Working"
+          />
         ) : (
-          <Check className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Done" />
+          <Check
+            className="h-3 w-3 shrink-0 text-muted-foreground"
+            aria-label="Done"
+          />
         )}
         {showLive ? (
           <span className="flex min-w-0 flex-1 items-center gap-1.5">
-            <span className="truncate text-foreground">{latestDetail.label}</span>
+            <span className="truncate text-foreground">
+              {latestDetail.label}
+            </span>
             {latestDetail.summary ? (
-              <span className="truncate text-muted-foreground">· {latestDetail.summary}</span>
+              <span className="truncate text-muted-foreground">
+                · {latestDetail.summary}
+              </span>
             ) : null}
           </span>
         ) : (
@@ -115,7 +145,9 @@ export function ToolActivityGroup({ items, live }: ToolActivityGroupProps) {
           </span>
         )}
         {showLive && items.length > 1 ? (
-          <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">step {items.length}</span>
+          <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">
+            step {items.length}
+          </span>
         ) : null}
       </button>
 
@@ -126,17 +158,27 @@ export function ToolActivityGroup({ items, live }: ToolActivityGroupProps) {
             const { Icon } = toolCallMeta(item.capability);
             const rowOpen = openRows.has(item.toolCallId);
             return (
-              <div key={item.toolCallId} data-testid={`tool-activity-row-${item.toolCallId}`}>
+              <div
+                key={item.toolCallId}
+                data-testid={`tool-activity-row-${item.toolCallId}`}
+              >
                 <button
                   type="button"
                   onClick={() => toggleRow(item.toolCallId)}
                   aria-expanded={rowOpen}
                   className="flex min-h-6 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs transition-colors hover:bg-muted/50"
                 >
-                  <Icon className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-                  <span className="shrink-0 truncate text-foreground">{label}</span>
+                  <Icon
+                    className="h-3 w-3 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <span className="shrink-0 truncate text-foreground">
+                    {label}
+                  </span>
                   {summary ? (
-                    <span className="min-w-0 flex-1 truncate text-muted-foreground">· {summary}</span>
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                      · {summary}
+                    </span>
                   ) : (
                     <span className="min-w-0 flex-1" />
                   )}
@@ -150,7 +192,10 @@ export function ToolActivityGroup({ items, live }: ToolActivityGroupProps) {
                     </span>
                   ) : null}
                   {isInFlight(item.status) ? (
-                    <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" aria-label="Running" />
+                    <Loader2
+                      className="h-3 w-3 shrink-0 animate-spin text-muted-foreground"
+                      aria-label="Running"
+                    />
                   ) : item.durationMs != null ? (
                     <span className="shrink-0 text-muted-foreground tabular-nums">
                       {formatDuration(item.durationMs)}

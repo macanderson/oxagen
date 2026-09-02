@@ -9,7 +9,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mocks.invoke }));
-vi.mock("../../lib/context", () => ({ capabilityContext: mocks.capabilityContext }));
+vi.mock("../../lib/context", () => ({
+  capabilityContext: mocks.capabilityContext,
+}));
 
 import { capabilityRegistryGetRoute } from "./capability.registry.get";
 
@@ -30,7 +32,9 @@ beforeEach(() => {
 });
 
 async function get(qs = ""): Promise<Response> {
-  return capabilityRegistryGetRoute.fetch(new Request(`http://localhost/?${qs}`));
+  return capabilityRegistryGetRoute.fetch(
+    new Request(`http://localhost/?${qs}`),
+  );
 }
 
 describe("GET capability/registry/get", () => {

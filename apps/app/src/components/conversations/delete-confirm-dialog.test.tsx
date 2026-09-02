@@ -28,7 +28,9 @@ const defaultProps = {
 
 describe("DeleteConfirmDialog — closed", () => {
   it("renders nothing when open=false", () => {
-    const { container } = render(<DeleteConfirmDialog {...defaultProps} open={false} />);
+    const { container } = render(
+      <DeleteConfirmDialog {...defaultProps} open={false} />,
+    );
     expect(screen.queryByText("Delete conversation?")).not.toBeInTheDocument();
     expect(container.firstChild).toBeDefined(); // wrapper may exist but dialog body absent
   });
@@ -42,7 +44,9 @@ describe("DeleteConfirmDialog — open", () => {
 
   it("renders the description", () => {
     render(<DeleteConfirmDialog {...defaultProps} />);
-    expect(screen.getByText("This action cannot be undone.")).toBeInTheDocument();
+    expect(
+      screen.getByText("This action cannot be undone."),
+    ).toBeInTheDocument();
   });
 
   it("renders Cancel and Delete buttons", () => {
@@ -53,12 +57,16 @@ describe("DeleteConfirmDialog — open", () => {
 
   it("uses custom confirmLabel", () => {
     render(<DeleteConfirmDialog {...defaultProps} confirmLabel="Delete all" />);
-    expect(screen.getByRole("button", { name: /delete all/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /delete all/i }),
+    ).toBeInTheDocument();
   });
 
   it("Cancel calls onOpenChange(false)", async () => {
     const onOpenChange = vi.fn();
-    render(<DeleteConfirmDialog {...defaultProps} onOpenChange={onOpenChange} />);
+    render(
+      <DeleteConfirmDialog {...defaultProps} onOpenChange={onOpenChange} />,
+    );
     await userEvent.click(screen.getByRole("button", { name: /cancel/i }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });

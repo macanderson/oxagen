@@ -9,6 +9,8 @@ export const pluginOrgUninstallRoute = new Hono<AppEnv>();
 pluginOrgUninstallRoute.post("/", async (c) => {
   const body = pluginOrgUninstall.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(pluginOrgUninstall.name, body, ctx, { surface: "api" });
+  const out = await invoke(pluginOrgUninstall.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

@@ -9,13 +9,13 @@ import { resolveConnectionAuth } from "./resolve-connection-auth";
 //
 // A webhook-declared connector (deliveryMethod: "webhook" + subscribeWebhooks)
 // only receives deliveries once it has an active provider subscription AND a
-// stored HMAC/channel secret. Nothing wrote ingestion.webhook_subscriptions
-// before this, so the delivery route's JOIN (apps/api webhook.ts) always found a
-// null secret and every real delivery 401'd. This module closes that gap: it
-// resolves the connection's OAuth token, asks the connector to register (or
-// re-register) the provider subscription, encrypts the returned secret to the
-// {keyId, ciphertext} envelope the route decrypts, and upserts the row keyed by
-// webhook_path (unique). Both first-time provisioning and cron renewal call
+// stored HMAC/channel secret. The delivery route (apps/api webhook.ts) joins
+// ingestion.webhook_subscriptions and rejects a delivery with no secret, so
+// this module is what makes the row exist: it resolves the connection's OAuth
+// token, asks the connector to register (or re-register) the provider
+// subscription, encrypts the returned secret to the {keyId, ciphertext}
+// envelope the route decrypts, and upserts the row keyed by webhook_path
+// (unique). Both first-time provisioning and cron renewal call
 // provisionWebhookSubscription — re-subscription is idempotent per connection.
 
 type Envelope = { keyId: string; ciphertext: string };

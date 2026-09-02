@@ -35,7 +35,10 @@ describe("mermaid.generate capability", () => {
 
   it("rejects an empty title", () => {
     expect(() =>
-      mermaidGenerate.input.parse({ title: "", diagram: "flowchart TD\n  A --> B" }),
+      mermaidGenerate.input.parse({
+        title: "",
+        diagram: "flowchart TD\n  A --> B",
+      }),
     ).toThrow();
   });
 
@@ -47,13 +50,20 @@ describe("mermaid.generate capability", () => {
 
   it("rejects a diagram exceeding 50,000 characters", () => {
     expect(() =>
-      mermaidGenerate.input.parse({ title: "Big", diagram: "A".repeat(50_001) }),
+      mermaidGenerate.input.parse({
+        title: "Big",
+        diagram: "A".repeat(50_001),
+      }),
     ).toThrow();
   });
 
   it("rejects an invalid theme value", () => {
     expect(() =>
-      mermaidGenerate.input.parse({ title: "T", diagram: "graph TD", theme: "light" }),
+      mermaidGenerate.input.parse({
+        title: "T",
+        diagram: "graph TD",
+        theme: "light",
+      }),
     ).toThrow();
   });
 

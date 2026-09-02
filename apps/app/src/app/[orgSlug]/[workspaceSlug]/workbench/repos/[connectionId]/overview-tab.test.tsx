@@ -54,7 +54,7 @@ describe("OverviewTab", () => {
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent("Couldn't load repo metrics");
     expect(alert).toHaveTextContent(
-      "Failed to load get_repo_metrics for this connection.",
+      "We couldn't read sync metrics for this repo connection. Try again.",
     );
     expect(
       screen.getByRole("button", { name: "Try again" }),

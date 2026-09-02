@@ -51,7 +51,8 @@ export function OverviewTab({
       <ErrorState
         title="Couldn't load repo metrics"
         description={
-          error ?? "Failed to load get_repo_metrics for this connection."
+          error ??
+          "We couldn't read sync metrics for this repo connection. Try again."
         }
         retry={() => void retry()}
       />

@@ -189,43 +189,66 @@ describe("DuckDBEpisodicStore", () => {
       });
       await store.append(record);
 
-      const results = await store.searchLexical(namespace, "nullpointerexception auth.ts:42", 10);
+      const results = await store.searchLexical(
+        namespace,
+        "nullpointerexception auth.ts:42",
+        10,
+      );
       expect(results).toHaveLength(1);
       expect(results[0]!.recordId).toBe(record.id);
       expect(results[0]!.score).toBeGreaterThan(0);
     });
 
     it("scores by fraction of matched tokens", async () => {
-      const record = makeRecord("error_observed", { message: "auth.ts:42 failure" });
+      const record = makeRecord("error_observed", {
+        message: "auth.ts:42 failure",
+      });
       await store.append(record);
 
       // Only 1 of the 2 tokens matches ("nonexistentterm" never appears).
-      const results = await store.searchLexical(namespace, "auth.ts:42 nonexistentterm", 10);
+      const results = await store.searchLexical(
+        namespace,
+        "auth.ts:42 nonexistentterm",
+        10,
+      );
       expect(results).toHaveLength(1);
       expect(results[0]!.score).toBeCloseTo(0.5, 5);
     });
 
     it("returns no results when nothing matches", async () => {
       await store.append(makeRecord("unrelated", { message: "all good here" }));
-      const results = await store.searchLexical(namespace, "totally different query", 10);
+      const results = await store.searchLexical(
+        namespace,
+        "totally different query",
+        10,
+      );
       expect(results).toHaveLength(0);
     });
 
     it("scopes results to the given namespace", async () => {
-      const record = makeRecord("error_observed", { message: "shared error text" });
+      const record = makeRecord("error_observed", {
+        message: "shared error text",
+      });
       await store.append(record);
       await store.append(
         createRecord({
           kind: "episodic",
           namespace: { org: "other-org", workspace: "other-ws" },
-          body: { event: "error_observed", payload: { message: "shared error text" } },
+          body: {
+            event: "error_observed",
+            payload: { message: "shared error text" },
+          },
           salience: 0.5,
           confidence: 1.0,
           provenance,
         }),
       );
 
-      const results = await store.searchLexical(namespace, "shared error text", 10);
+      const results = await store.searchLexical(
+        namespace,
+        "shared error text",
+        10,
+      );
       expect(results).toHaveLength(1);
       expect(results[0]!.recordId).toBe(record.id);
     });

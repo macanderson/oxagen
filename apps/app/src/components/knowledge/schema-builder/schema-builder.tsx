@@ -1,5 +1,22 @@
 "use client";
 
+/**
+ * schema-builder.tsx — the Knowledge → Schema registry shell.
+ *
+ * Owns one loaded registry snapshot and renders it through four tabs (Schemas,
+ * Labels, Relationships, Version History) plus the label/relationship editor
+ * dialogs, the pin → reconcile dialog, and the AI assistant drawer. Every read
+ * and write goes through schema-service.ts, which POSTs to the in-app
+ * /api/schema/* proxy route — that route is where auth and the capability
+ * allow-list live.
+ *
+ * KNOWN GAP: none of the async handlers below catch. A failed load or save
+ * rejects into the void, leaving the surface blank or silently unchanged with
+ * no message to the user. Fixing that means adding an error slot to this
+ * component and to SchemaList/LabelEditor/RelationshipEditor/VersionHistory —
+ * a cross-component change, not a local one.
+ */
+
 import * as React from "react";
 import { Bot, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -130,7 +147,10 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
     return result;
   };
 
-  const handleReconcile = (schemaName: string) => {
+  // Reconciliation is version-scoped, not schema-scoped: it always re-labels
+  // against the whole pinned registry version. `schemaName` only identifies
+  // which row raised the prompt, so it is deliberately unused here.
+  const handleReconcile = (_schemaName: string) => {
     if (!registry?.pinnedVersionId) return;
     void schemaReconcileDispatchAction({
       orgSlug: slugs.orgSlug,
@@ -138,7 +158,6 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
       versionId: registry.pinnedVersionId,
       prune: false,
     });
-    void schemaName;
   };
 
   const handleSaveLabel = async (input: SchemaLabelUpsertInput) => {
@@ -156,8 +175,13 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
   };
 
   const handlePin = async (vid: string) => {
-    // The schema.version.pin contract is not yet wired — optimistically update UI
-    // and show the reconcile dialog. Version number looked up from loaded versions.
+    // Opening the reconcile dialog is all this does today: pin_schema_version
+    // is never called, so pinning is not actually persisted.
+    //
+    // KNOWN DEFECT: the dialog is hard-coded to version 1 because VersionHistory
+    // owns the version list and onPin only hands back an id. Fixing it means
+    // widening onPin to carry the version number, which is a prop-signature
+    // change — do that together with wiring pin_schema_version.
     setPinDialog({ versionId: vid, versionNumber: 1 });
   };
 

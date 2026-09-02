@@ -12,7 +12,10 @@ import { toolCallSummary } from "./tool-call-summary";
 describe("toolCallSummary", () => {
   it("prefers `query` over other fields", () => {
     expect(
-      toolCallSummary("web.search", { query: "nuclear submarines", name: "ignored" }),
+      toolCallSummary("web.search", {
+        query: "nuclear submarines",
+        name: "ignored",
+      }),
     ).toBe("nuclear submarines");
   });
 
@@ -22,13 +25,19 @@ describe("toolCallSummary", () => {
 
   it("falls through the priority list to the first present field", () => {
     expect(toolCallSummary("x", { path: "src/index.ts" })).toBe("src/index.ts");
-    expect(toolCallSummary("x", { title: "Release notes" })).toBe("Release notes");
-    expect(toolCallSummary("x", { url: "https://example.com" })).toBe("https://example.com");
+    expect(toolCallSummary("x", { title: "Release notes" })).toBe(
+      "Release notes",
+    );
+    expect(toolCallSummary("x", { url: "https://example.com" })).toBe(
+      "https://example.com",
+    );
   });
 
   it("matches priority keys case-insensitively", () => {
     expect(toolCallSummary("x", { Query: "hello" })).toBe("hello");
-    expect(toolCallSummary("x", { PROMPT: "write a poem" })).toBe("write a poem");
+    expect(toolCallSummary("x", { PROMPT: "write a poem" })).toBe(
+      "write a poem",
+    );
   });
 
   it("uses an id-ish field only as a last resort", () => {
@@ -36,7 +45,9 @@ describe("toolCallSummary", () => {
     expect(toolCallSummary("x", { node_id: "n_42" })).toBe("n_42");
     expect(toolCallSummary("x", { id: "obj_1" })).toBe("obj_1");
     // A salient field wins over an id when both are present.
-    expect(toolCallSummary("x", { id: "obj_1", name: "Widget" })).toBe("Widget");
+    expect(toolCallSummary("x", { id: "obj_1", name: "Widget" })).toBe(
+      "Widget",
+    );
   });
 
   it("does not treat plain words ending in 'id' as id fields", () => {
@@ -44,9 +55,9 @@ describe("toolCallSummary", () => {
   });
 
   it("collapses whitespace onto a single line", () => {
-    expect(toolCallSummary("x", { prompt: "line one\n  line two\t\tmore" })).toBe(
-      "line one line two more",
-    );
+    expect(
+      toolCallSummary("x", { prompt: "line one\n  line two\t\tmore" }),
+    ).toBe("line one line two more");
   });
 
   it("truncates long values to a single clipped line with an ellipsis", () => {
@@ -76,6 +87,8 @@ describe("toolCallSummary", () => {
 
   it("ignores non-string salient values", () => {
     // `query` present but not a string → skip to the next candidate.
-    expect(toolCallSummary("x", { query: 42, name: "fallback" })).toBe("fallback");
+    expect(toolCallSummary("x", { query: 42, name: "fallback" })).toBe(
+      "fallback",
+    );
   });
 });

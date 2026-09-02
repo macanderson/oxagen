@@ -13,24 +13,20 @@ import { idMixin, auditMixin } from "./_mixins";
 
 // ── Enums ────────────────────────────────────────────────────────────────────
 
-export const privacyRequestScopeEnum = privacySchema.enum("privacy_request_scope", [
-  "user",
-  "org",
-]);
+export const privacyRequestScopeEnum = privacySchema.enum(
+  "privacy_request_scope",
+  ["user", "org"],
+);
 
-export const privacyExportStatusEnum = privacySchema.enum("privacy_export_status", [
-  "queued",
-  "processing",
-  "ready",
-  "failed",
-]);
+export const privacyExportStatusEnum = privacySchema.enum(
+  "privacy_export_status",
+  ["queued", "processing", "ready", "failed"],
+);
 
-export const privacyErasureStatusEnum = privacySchema.enum("privacy_erasure_status", [
-  "queued",
-  "processing",
-  "completed",
-  "failed",
-]);
+export const privacyErasureStatusEnum = privacySchema.enum(
+  "privacy_erasure_status",
+  ["queued", "processing", "completed", "failed"],
+);
 
 // ── privacy_export_requests ──────────────────────────────────────────────────
 
@@ -47,7 +43,10 @@ export const privacyExportRequests = privacySchema.table(
     status: privacyExportStatusEnum("status").notNull().default("queued"),
     /** Signed Vercel Blob URL — set when status transitions to "ready". */
     exportUrl: text("export_url"),
-    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     /** Error message if status = "failed". */
     errorMessage: text("error_message"),
   },
@@ -77,8 +76,14 @@ export const privacyErasureRequests = privacySchema.table(
      * Configurable via PRIVACY_ERASURE_GRACE_DAYS (default 30).
      * Set to createdAt for immediate erasure (grace period = 0).
      */
-    scheduledAt: timestamp("scheduled_at", { withTimezone: true, mode: "date" }).notNull(),
-    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    scheduledAt: timestamp("scheduled_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    completedAt: timestamp("completed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     errorMessage: text("error_message"),
   },
   (t) => ({

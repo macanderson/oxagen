@@ -6,10 +6,16 @@ import {
   providerFromModelId,
   type Surface,
 } from "@oxagen/telemetry";
-import { chargeVideoCredits, videoProviderCostUsdMicros } from "@oxagen/billing";
+import {
+  chargeVideoCredits,
+  videoProviderCostUsdMicros,
+} from "@oxagen/billing";
 import { getScope, runInTenantScope, type TenantScope } from "@oxagen/tenancy";
 
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "ai.video" } });
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "ai.video" },
+});
 
 /**
  * VideoModel mirrors the `VideoModel` type from the `ai` package (which is not
@@ -51,7 +57,9 @@ const VIDEO_MODEL_DURATIONS: Record<string, readonly number[]> = {
  * supports, resolved by longest-prefix match, or `undefined` when the model has
  * no known constraint (unknown models pass the caller's duration through).
  */
-export function supportedVideoDurations(modelId: string): readonly number[] | undefined {
+export function supportedVideoDurations(
+  modelId: string,
+): readonly number[] | undefined {
   let best: { key: string; durations: readonly number[] } | null = null;
   for (const [key, durations] of Object.entries(VIDEO_MODEL_DURATIONS)) {
     if (modelId.startsWith(key) && (!best || key.length > best.key.length)) {
@@ -84,7 +92,11 @@ export function resolveVideoDurationSeconds(
 ): ResolvedVideoDuration {
   const supported = supportedVideoDurations(modelId);
   if (!supported || supported.length === 0) {
-    return { effectiveSeconds: requestedSeconds, requestedSeconds, adjusted: false };
+    return {
+      effectiveSeconds: requestedSeconds,
+      requestedSeconds,
+      adjusted: false,
+    };
   }
   if (requestedSeconds === undefined) {
     return {
@@ -139,12 +151,17 @@ export function videoDurationAlternatives(
       supportedSeconds,
       closestSeconds: supportedSeconds.reduce((best, d) =>
         Math.abs(d - requestedSeconds) < Math.abs(best - requestedSeconds) ||
-        (Math.abs(d - requestedSeconds) === Math.abs(best - requestedSeconds) && d > best)
+        (Math.abs(d - requestedSeconds) === Math.abs(best - requestedSeconds) &&
+          d > best)
           ? d
           : best,
       ),
     }))
-    .sort((a, b) => Math.abs(a.closestSeconds - requestedSeconds) - Math.abs(b.closestSeconds - requestedSeconds));
+    .sort(
+      (a, b) =>
+        Math.abs(a.closestSeconds - requestedSeconds) -
+        Math.abs(b.closestSeconds - requestedSeconds),
+    );
 }
 
 export interface GenerateVideoForArgs {
@@ -259,7 +276,10 @@ export async function generateVideoFor(
   // Snap the duration to the model's supported set — an unsupported value fails
   // the whole render at the gateway. Billing below uses the same effective
   // value so we never charge for seconds the provider didn't produce.
-  const duration = resolveVideoDurationSeconds(resolvedModelId, args.durationSeconds);
+  const duration = resolveVideoDurationSeconds(
+    resolvedModelId,
+    args.durationSeconds,
+  );
   if (duration.adjusted) {
     logger.warn(
       {
@@ -298,7 +318,10 @@ export async function generateVideoFor(
   // GeneratedFile exposes `mediaType` (not `mimeType`) in AI SDK v6.
   const mimeType: string = video.mediaType ?? "video/mp4";
 
-  const costUsdMicros = videoProviderCostUsdMicros(resolvedModelId, duration.effectiveSeconds);
+  const costUsdMicros = videoProviderCostUsdMicros(
+    resolvedModelId,
+    duration.effectiveSeconds,
+  );
 
   // `input_tokens` is repurposed to carry the asset count so the token_usage
   // schema doesn't need a new column. A value of 1 means "1 video generated".
@@ -356,5 +379,10 @@ export async function generateVideoFor(
     logger.error({ err }, "generateVideo credit charge failed");
   }
 
-  return { bytes, mimeType, durationMs, effectiveDurationSeconds: duration.effectiveSeconds };
+  return {
+    bytes,
+    mimeType,
+    durationMs,
+    effectiveDurationSeconds: duration.effectiveSeconds,
+  };
 }

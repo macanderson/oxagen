@@ -38,13 +38,19 @@ describe("skill.version.activate capability", () => {
 
   it("rejects versionNumber of 0 (below minimum)", () => {
     expect(() =>
-      skillVersionActivate.input.parse({ skillId: "skl_abc", versionNumber: 0 }),
+      skillVersionActivate.input.parse({
+        skillId: "skl_abc",
+        versionNumber: 0,
+      }),
     ).toThrow();
   });
 
   it("rejects non-integer versionNumber", () => {
     expect(() =>
-      skillVersionActivate.input.parse({ skillId: "skl_abc", versionNumber: 1.5 }),
+      skillVersionActivate.input.parse({
+        skillId: "skl_abc",
+        versionNumber: 1.5,
+      }),
     ).toThrow();
   });
 

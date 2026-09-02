@@ -22,6 +22,8 @@ export default async function pluginCatalogBrowseTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(pluginCatalogBrowse.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(pluginCatalogBrowse.name, args, ctx, {
+    surface: "mcp",
+  });
   return pluginCatalogBrowse.output.parse(output);
 }

@@ -5,7 +5,9 @@ import { getCapability } from "../registry";
 describe("agent.mcp.consent.list capability", () => {
   it("parses empty input and a mineOnly flag", () => {
     expect(agentMcpConsentList.input.parse({}).mineOnly).toBeUndefined();
-    expect(agentMcpConsentList.input.parse({ mineOnly: true }).mineOnly).toBe(true);
+    expect(agentMcpConsentList.input.parse({ mineOnly: true }).mineOnly).toBe(
+      true,
+    );
   });
 
   it("parses a valid output row", () => {

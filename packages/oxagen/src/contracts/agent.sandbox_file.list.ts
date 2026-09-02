@@ -50,7 +50,8 @@ export const agentSandboxFilesList = registerCapability({
       .string()
       .max(1024)
       .refine((p) => isSafeWorkspacePath(p), {
-        message: "path must be a safe, workspace-relative path (no absolute paths or `..` segments)",
+        message:
+          "path must be a safe, workspace-relative path (no absolute paths or `..` segments)",
       })
       .optional()
       .describe(

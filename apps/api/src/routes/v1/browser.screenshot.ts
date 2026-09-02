@@ -9,6 +9,8 @@ export const browserScreenshotRoute = new Hono<AppEnv>();
 browserScreenshotRoute.post("/", async (c) => {
   const body = browserScreenshot.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(browserScreenshot.name, body, ctx, { surface: "api" });
+  const out = await invoke(browserScreenshot.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

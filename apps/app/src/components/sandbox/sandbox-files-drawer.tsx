@@ -4,15 +4,14 @@
  * sandbox-files-drawer.tsx — the right-side file browser for one durable
  * sandbox, opened from the detail-page header.
  *
- * WHY this exists (and replaces chat's WorkspaceContextPanel on this surface):
- * the old panel fetched a scoped `/api/v1/:org/:ws/agent/sandbox/{files,file}`
- * path that fell through a next.config `fallback` rewrite to the Hono API. That
- * cross-service hop is fragile (rewrite/auth/path drift) and rendered the tree
- * empty. Here the data comes from INJECTED loaders (`listFiles`/`readFile`) that
- * the detail page binds to `list_sandbox_files`/`read_sandbox_file` server
- * actions — a direct capability invoke inside the app's own tenant scope, no
- * HTTP hop. The loaders are injected (like the terminal's `runCommand`) so this
- * stays pure UI and is unit-testable with mocks.
+ * Data comes from INJECTED loaders (`listFiles`/`readFile`) that the detail page
+ * binds to the `list_sandbox_files`/`read_sandbox_file` server actions — a
+ * direct capability invoke inside the app's own tenant scope. Do NOT route this
+ * through a scoped `/api/v1/:org/:ws/agent/sandbox/…` fetch: that path only
+ * reaches the Hono API via a next.config `fallback` rewrite, and the extra
+ * cross-service hop is fragile under rewrite/auth/path drift. The loaders are
+ * injected (like the terminal's `runCommand`) so this stays pure UI and is
+ * unit-testable with mocks.
  *
  * The tree renderer (`FileTreeCard`) is the shared presentational component from
  * the chat registry, reused read-only. The lazy-expansion bookkeeping is a small

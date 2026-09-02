@@ -16,7 +16,11 @@ export const conversationPurge = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "docs", "mcp", "unit", "app"],
   scoped: true,
-  agent: { requiresApproval: true, riskLevel: "high", category: "conversation" },
+  agent: {
+    requiresApproval: true,
+    riskLevel: "high",
+    category: "conversation",
+  },
   sensitivity: "destructive",
   defaultEffect: "deny",
   defaultRoles: {

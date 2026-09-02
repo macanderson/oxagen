@@ -19,7 +19,8 @@ export const OFFICIAL_MCP_REGISTRY_NAME = "Official MCP Registry";
  * Root URL of the official MCP registry — no trailing path.
  * registry-client appends /v0.1/servers at fetch time.
  */
-export const OFFICIAL_MCP_REGISTRY_BASE_URL = "https://registry.modelcontextprotocol.io";
+export const OFFICIAL_MCP_REGISTRY_BASE_URL =
+  "https://registry.modelcontextprotocol.io";
 
 interface SeedArgs {
   orgId: string;

@@ -371,13 +371,20 @@ export interface RunCodingAgentOptions {
    */
   onError?: (err: EngineNonFatalError) => void;
   /**
-   * Raw AI-SDK `fullStream` part tap. Invoked for EVERY part of every step,
-   * synchronously, as the first thing the loop does per part — BEFORE the
-   * engine's own `CodingEvent` translation (which only consumes a subset:
-   * text/reasoning/tool-call/-result/-error). A consumer that needs higher
-   * fidelity than `CodingEvent` — the in-app SSE translator, which forwards
-   * `tool-input-start/-delta`, `reasoning-start/-end`, `start-step`,
-   * `finish-step`, `finish`, `error` verbatim to the browser — uses this.
+   * Raw AI-SDK `fullStream` part tap. Receives EVERY part of every step, in
+   * stream order and BEFORE that part's `CodingEvent` translation (which only
+   * consumes a subset: text/reasoning/tool-call/-result/-error). A consumer
+   * that needs higher fidelity than `CodingEvent` — the in-app SSE translator,
+   * which forwards `tool-input-start/-delta`, `reasoning-start/-end`,
+   * `start-step`, `finish-step`, `finish`, `error` verbatim to the browser —
+   * uses this.
+   *
+   * NOT invoked as each part arrives: the loop buffers a step's taps and
+   * flushes them once the step COMMITS, so an attempt that fails mid-stream and
+   * is retried emits nothing (there is no retraction event in the wire
+   * protocol). The practical consequence for a streaming consumer is that a
+   * step's parts land in one burst at the step boundary rather than token by
+   * token.
    *
    * MUST NOT throw: it runs inside the engine's per-step try/catch, so a throw
    * (e.g. enqueue on a closed SSE controller) would be misclassified as a
@@ -444,9 +451,10 @@ export interface RunCodingAgentResult {
   };
   messages: ModelMessage[];
   /**
-   * Set when the turn ended for a reason other than the model finishing —
-   * currently only `"budget"` (a per-turn dollar ceiling stopped it). Lets a
-   * surface tell the user WHY the turn cut off. Absent on a natural finish.
+   * Set when the turn ended for a reason other than the model finishing:
+   * `"budget"` (a per-turn dollar ceiling stopped it) or `"max-steps"` (the
+   * step cap was reached while the model still wanted to act). Lets a surface
+   * tell the user WHY the turn cut off. Absent on a natural finish.
    */
   stopReason?: TurnStopReason;
 }

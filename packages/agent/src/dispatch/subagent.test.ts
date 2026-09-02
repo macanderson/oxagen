@@ -53,13 +53,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => ({
-    transaction: async (fn: (tx: typeof fakeTx) => Promise<unknown>) => fn(fakeTx),
-    select: () => fakeSelectDb,
-  }),
-  withTenantDb: async (fn: (tx: typeof fakeUnifiedTx) => Promise<unknown>) =>
-    fn(fakeUnifiedTx),
-
+    db: () => ({
+      transaction: async (fn: (tx: typeof fakeTx) => Promise<unknown>) =>
+        fn(fakeTx),
+      select: () => fakeSelectDb,
+    }),
+    withTenantDb: async (fn: (tx: typeof fakeUnifiedTx) => Promise<unknown>) =>
+      fn(fakeUnifiedTx),
   };
 });
 
@@ -104,7 +104,11 @@ describe("subagent dispatch", () => {
     expect((mocks.txInsertCalls[1]!.values as unknown[]).length).toBe(3);
 
     expect(mocks.inngestSend).toHaveBeenCalledTimes(1);
-    const evt = (mocks.inngestSend.mock.calls[0] as unknown as [{ name: string; data: Record<string, unknown> }])[0]!
+    const evt = (
+      mocks.inngestSend.mock.calls[0] as unknown as [
+        { name: string; data: Record<string, unknown> },
+      ]
+    )[0]!;
     expect(evt.name).toBe("agent/subagent.dispatch");
     expect(evt.data.fanoutId).toBe("fan_123");
     expect(evt.data.orgId).toBe("ten_1");

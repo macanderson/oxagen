@@ -133,11 +133,7 @@ describe("EdgeDetailPanel — inferred edge", () => {
   it("does not render ConfidenceMeter when confidence is undefined", () => {
     const edge: ExplorerEdge = { ...inferredEdge, confidence: undefined };
     render(
-      <EdgeDetailPanel
-        edge={edge}
-        onSelectNode={vi.fn()}
-        onClose={vi.fn()}
-      />,
+      <EdgeDetailPanel edge={edge} onSelectNode={vi.fn()} onClose={vi.fn()} />,
     );
     expect(screen.queryByRole("meter")).not.toBeInTheDocument();
   });

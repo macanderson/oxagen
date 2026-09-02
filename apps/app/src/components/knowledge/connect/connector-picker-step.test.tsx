@@ -41,7 +41,9 @@ describe("ConnectorPickerStep", () => {
       />,
     );
     expect(screen.getByTestId("connector-card-custom-sql")).toBeInTheDocument();
-    expect(screen.getByTestId("connector-card-google-drive")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("connector-card-google-drive"),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("connector-card-github")).toBeInTheDocument();
   });
 
@@ -90,12 +92,20 @@ describe("ConnectorPickerStep", () => {
     );
     fireEvent.click(screen.getByTestId("connector-select-github"));
     const link = screen.getByTestId("oauth-redirect-link");
-    expect(link).toHaveAttribute("href", "/acme/main/knowledge/sources?setup=github");
+    expect(link).toHaveAttribute(
+      "href",
+      "/acme/main/knowledge/sources?setup=github",
+    );
   });
 
   it("renders an empty state when there are no connectors", () => {
     render(
-      <ConnectorPickerStep orgSlug="acme" workspaceSlug="main" connectors={[]} onSelect={vi.fn()} />,
+      <ConnectorPickerStep
+        orgSlug="acme"
+        workspaceSlug="main"
+        connectors={[]}
+        onSelect={vi.fn()}
+      />,
     );
     expect(screen.getByText("No connectors available")).toBeInTheDocument();
   });

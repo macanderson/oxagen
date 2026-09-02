@@ -15,9 +15,7 @@ describe("workspace.invite.send capability", () => {
   });
 
   it("rejects missing email", () => {
-    expect(() =>
-      workspaceInviteSend.input.parse({ role: "member" }),
-    ).toThrow();
+    expect(() => workspaceInviteSend.input.parse({ role: "member" })).toThrow();
   });
 
   it("rejects an invalid email format", () => {
@@ -86,9 +84,7 @@ describe("workspace.invite.send capability", () => {
   // ── input: type validation ────────────────────────────────────────────────
 
   it("rejects non-string email", () => {
-    expect(() =>
-      workspaceInviteSend.input.parse({ email: 12345 }),
-    ).toThrow();
+    expect(() => workspaceInviteSend.input.parse({ email: 12345 })).toThrow();
   });
 
   // ── output shape ──────────────────────────────────────────────────────────

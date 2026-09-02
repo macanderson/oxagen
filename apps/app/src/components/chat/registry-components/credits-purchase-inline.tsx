@@ -30,7 +30,10 @@ export default function CreditsPurchaseInline({
     suggestedAmountUsd ? String(suggestedAmountUsd) : "",
   );
   const [useCustom, setUseCustom] = React.useState(
-    suggestedAmountUsd !== undefined && !PRESET_AMOUNTS.includes(suggestedAmountUsd as (typeof PRESET_AMOUNTS)[number]),
+    suggestedAmountUsd !== undefined &&
+      !PRESET_AMOUNTS.includes(
+        suggestedAmountUsd as (typeof PRESET_AMOUNTS)[number],
+      ),
   );
   const [formState, setFormState] = React.useState<FormState>("idle");
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
@@ -38,7 +41,7 @@ export default function CreditsPurchaseInline({
 
   const isSubmitting = formState === "submitting";
 
-  const effectiveAmount = useCustom ? (parseFloat(customAmount) || 0) : amountUsd;
+  const effectiveAmount = useCustom ? parseFloat(customAmount) || 0 : amountUsd;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -51,7 +54,10 @@ export default function CreditsPurchaseInline({
       return;
     }
 
-    const result = await buyCreditsAction({ orgSlug, amountUsd: effectiveAmount });
+    const result = await buyCreditsAction({
+      orgSlug,
+      amountUsd: effectiveAmount,
+    });
 
     if (result.ok) {
       setFormState("success");
@@ -70,8 +76,13 @@ export default function CreditsPurchaseInline({
         aria-live="polite"
       >
         <div className="flex items-center gap-3">
-          <CheckCircle2 className="h-5 w-5 shrink-0 text-success" aria-hidden="true" />
-          <p className="text-sm font-medium text-foreground">Redirecting to checkout…</p>
+          <CheckCircle2
+            className="h-5 w-5 shrink-0 text-success"
+            aria-hidden="true"
+          />
+          <p className="text-sm font-medium text-foreground">
+            Redirecting to checkout…
+          </p>
         </div>
       </div>
     );
@@ -81,12 +92,21 @@ export default function CreditsPurchaseInline({
     <form
       onSubmit={handleSubmit}
       aria-label="Purchase credits"
-      className={cn("rounded-2xl border border-border bg-card p-5 space-y-5 w-full max-w-sm")}
+      className={cn(
+        "rounded-2xl border border-border bg-card p-5 space-y-5 w-full max-w-sm",
+      )}
     >
       <div className="flex items-center gap-2.5">
-        <Coins className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="text-sm font-semibold text-foreground">Purchase credits</span>
-        <span className="ml-auto text-xs text-muted-foreground">1 credit = $0.01</span>
+        <Coins
+          className="h-4 w-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <span className="text-sm font-semibold text-foreground">
+          Purchase credits
+        </span>
+        <span className="ml-auto text-xs text-muted-foreground">
+          1 credit = $0.01
+        </span>
       </div>
 
       <div className="grid grid-cols-4 gap-2">
@@ -94,7 +114,10 @@ export default function CreditsPurchaseInline({
           <button
             key={amt}
             type="button"
-            onClick={() => { setAmountUsd(amt); setUseCustom(false); }}
+            onClick={() => {
+              setAmountUsd(amt);
+              setUseCustom(false);
+            }}
             disabled={isSubmitting}
             className={cn(
               "rounded-xl border py-2 text-sm font-medium transition-colors",
@@ -144,7 +167,9 @@ export default function CreditsPurchaseInline({
         className="w-full"
         aria-busy={isSubmitting}
       >
-        {isSubmitting ? "Starting checkout…" : (
+        {isSubmitting ? (
+          "Starting checkout…"
+        ) : (
           <span className="flex items-center gap-1.5">
             Buy ${effectiveAmount} in credits
             <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />

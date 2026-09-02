@@ -22,6 +22,8 @@ export default async function notificationsListTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(notificationsList.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(notificationsList.name, args, ctx, {
+    surface: "mcp",
+  });
   return notificationsList.output.parse(output);
 }

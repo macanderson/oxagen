@@ -38,7 +38,15 @@ export interface PermissionResult {
  *   - "prefix_*_suffix" matches tools with that prefix and suffix
  *
  * This is intentionally simple — not a full glob library — to keep the
- * permission rules predictable and debuggable.
+ * permission rules predictable and debuggable. Two consequences worth knowing
+ * before reusing it outside tool names:
+ *
+ *   - `*` compiles to `.*`, which crosses every separator. It is safe on flat
+ *     tool names but NOT on structured values: `https://*.corp.com/*` also
+ *     matches `https://evil.com/x.corp.com/y`. See checkServerUrl in managed.ts.
+ *   - Matching is byte-exact and case-sensitive, with no normalization of the
+ *     value, so a denylist entry is only as good as the exact spelling it was
+ *     written against.
  */
 export function matchGlob(pattern: string, value: string): boolean {
   // Exact match (no wildcards)
@@ -131,6 +139,10 @@ export function evaluatePermission(
 
 // ── Tool Visibility ───────────────────────────────────────────────────────────
 
+/**
+ * Structurally identical to `ToolVisibility` in schema.ts. It exists so this
+ * module stays independent of Zod; keep the two in step when either changes.
+ */
 export interface ToolVisibilityConfig {
   include?: string[];
   exclude?: string[];

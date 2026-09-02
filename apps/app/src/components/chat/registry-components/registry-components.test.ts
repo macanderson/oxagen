@@ -1,6 +1,21 @@
 import { describe, it, expect } from "vitest";
 
-// ── Pure helper: slug derivation (mirrors all inline components) ──────────────
+/**
+ * ⚠ READ THIS BEFORE TRUSTING THIS FILE.
+ *
+ * Every helper below is a COPY of logic that lives in an inline registry
+ * component — nothing here is imported from the components themselves. These
+ * tests pin the intended behaviour of the copies, so they can NOT catch a
+ * regression in create-workspace-inline, credits-purchase-inline,
+ * confirm-destructive-inline, model-settings-inline, invite-member-inline, or
+ * billing-upgrade-inline: change any of those and every assertion here stays
+ * green.
+ *
+ * Real coverage means exporting the helper from its component and importing it
+ * here, or rendering the component under jsdom. Do not add new copied helpers.
+ */
+
+// ── Pure helper: slug derivation (COPY of the inline components' logic) ───────
 
 function deriveSlug(name: string): string {
   return name

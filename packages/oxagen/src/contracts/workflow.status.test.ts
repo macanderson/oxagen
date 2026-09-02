@@ -51,15 +51,11 @@ describe("workflow.status capability", () => {
   });
 
   it("rejects input missing workflowId", () => {
-    expect(() =>
-      workflowStatus.input.parse({}),
-    ).toThrow();
+    expect(() => workflowStatus.input.parse({})).toThrow();
   });
 
   it("rejects input with empty workflowId", () => {
-    expect(() =>
-      workflowStatus.input.parse({ workflowId: "" }),
-    ).toThrow();
+    expect(() => workflowStatus.input.parse({ workflowId: "" })).toThrow();
   });
 
   it("parses a valid output with workflow and tasks", () => {
@@ -81,9 +77,7 @@ describe("workflow.status capability", () => {
   });
 
   it("rejects output missing workflow field", () => {
-    expect(() =>
-      workflowStatus.output.parse({ tasks: [] }),
-    ).toThrow();
+    expect(() => workflowStatus.output.parse({ tasks: [] })).toThrow();
   });
 
   it("rejects output with invalid workflow status", () => {

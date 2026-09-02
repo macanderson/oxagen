@@ -23,7 +23,9 @@ describe("useRecent — initial state", () => {
   it("reads existing entries from localStorage on mount", () => {
     localStorage.setItem(
       "oxagen:ask:recent",
-      JSON.stringify([{ query: "prior query", at: "2026-01-01T00:00:00.000Z" }]),
+      JSON.stringify([
+        { query: "prior query", at: "2026-01-01T00:00:00.000Z" },
+      ]),
     );
     const { result } = renderHook(() => useRecent());
     expect(result.current.recent).toHaveLength(1);
@@ -99,7 +101,9 @@ describe("useRecent — push", () => {
     act(() => {
       result.current.push("persisted");
     });
-    const stored = JSON.parse(localStorage.getItem("oxagen:ask:recent") ?? "[]") as { query: string }[];
+    const stored = JSON.parse(
+      localStorage.getItem("oxagen:ask:recent") ?? "[]",
+    ) as { query: string }[];
     expect(stored[0]!.query).toBe("persisted");
   });
 
@@ -129,7 +133,10 @@ describe("useRecent — clear", () => {
   });
 
   it("removes the localStorage key", () => {
-    localStorage.setItem("oxagen:ask:recent", JSON.stringify([{ query: "x", at: "" }]));
+    localStorage.setItem(
+      "oxagen:ask:recent",
+      JSON.stringify([{ query: "x", at: "" }]),
+    );
     const { result } = renderHook(() => useRecent());
     act(() => {
       result.current.clear();

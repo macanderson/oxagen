@@ -54,7 +54,14 @@ export const OpenWithChecks: Story = {
     ],
     ci: {
       overall: "failing",
-      counts: { total: 3, passed: 2, failed: 1, pending: 0, skipped: 0, neutral: 0 },
+      counts: {
+        total: 3,
+        passed: 2,
+        failed: 1,
+        pending: 0,
+        skipped: 0,
+        neutral: 0,
+      },
       runs: [
         {
           name: "lint",
@@ -116,7 +123,14 @@ export const Merged: Story = {
     comments: [],
     ci: {
       overall: "passing",
-      counts: { total: 1, passed: 1, failed: 0, pending: 0, skipped: 0, neutral: 0 },
+      counts: {
+        total: 1,
+        passed: 1,
+        failed: 0,
+        pending: 0,
+        skipped: 0,
+        neutral: 0,
+      },
       runs: [
         {
           name: "gate",
@@ -124,7 +138,9 @@ export const Merged: Story = {
           conclusion: "success",
           url: null,
           startedAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
-          completedAt: new Date(Date.now() - 2 * 86_400_000 + 200_000).toISOString(),
+          completedAt: new Date(
+            Date.now() - 2 * 86_400_000 + 200_000,
+          ).toISOString(),
           durationMs: 200_000,
           app: null,
         },

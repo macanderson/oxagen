@@ -80,7 +80,9 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -102,7 +104,8 @@ vi.mock("@oxagen/ingestion/connectors", () => ({
 
 vi.mock("@oxagen/crypto", () => ({
   decrypt: mocks.decrypt,
-  resolveIngestionCryptoAdapterForKeyId: mocks.resolveIngestionCryptoAdapterForKeyId,
+  resolveIngestionCryptoAdapterForKeyId:
+    mocks.resolveIngestionCryptoAdapterForKeyId,
 }));
 
 import { app } from "../app";
@@ -150,8 +153,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.getConnector.mockReturnValue({ verifyWebhook: mocks.verifyWebhook });
   mocks.verifyWebhook.mockReturnValue(true);
-  mocks.withSystemDb.mockImplementation(
-    (fn: Parameters<WithDbFn>[0]) => fn(makeMockTx([DB_CONNECTION_ROW]) as TxLike),
+  mocks.withSystemDb.mockImplementation((fn: Parameters<WithDbFn>[0]) =>
+    fn(makeMockTx([DB_CONNECTION_ROW]) as TxLike),
   );
   mocks.inngestSend.mockResolvedValue({});
 });
@@ -163,14 +166,20 @@ describe("IngestionEntityReceived event shape", () => {
     const res = await app.fetch(
       makeRequest(WEBHOOK_PATH, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-github-event": "push" },
+        headers: {
+          "content-type": "application/json",
+          "x-github-event": "push",
+        },
         body: GITHUB_PUSH_PAYLOAD,
       }),
     );
     expect(res.status).toBe(200);
     expect(mocks.inngestSend).toHaveBeenCalledOnce();
 
-    const event = mocks.inngestSend.mock.calls[0]?.[0] as { name: string; data: unknown };
+    const event = mocks.inngestSend.mock.calls[0]?.[0] as {
+      name: string;
+      data: unknown;
+    };
     expect(event.name).toBe("ingestion/entity.received");
   });
 
@@ -178,7 +187,10 @@ describe("IngestionEntityReceived event shape", () => {
     await app.fetch(
       makeRequest(WEBHOOK_PATH, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-github-event": "push" },
+        headers: {
+          "content-type": "application/json",
+          "x-github-event": "push",
+        },
         body: GITHUB_PUSH_PAYLOAD,
       }),
     );
@@ -205,7 +217,10 @@ describe("IngestionEntityReceived event shape", () => {
     await app.fetch(
       makeRequest(WEBHOOK_PATH, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-github-event": "push" },
+        headers: {
+          "content-type": "application/json",
+          "x-github-event": "push",
+        },
         body: GITHUB_PUSH_PAYLOAD,
       }),
     );
@@ -227,7 +242,10 @@ describe("IngestionEntityReceived event shape", () => {
     await app.fetch(
       makeRequest(WEBHOOK_PATH, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-github-event": "pull_request" },
+        headers: {
+          "content-type": "application/json",
+          "x-github-event": "pull_request",
+        },
         body: GITHUB_PUSH_PAYLOAD,
       }),
     );
@@ -242,7 +260,10 @@ describe("IngestionEntityReceived event shape", () => {
     await app.fetch(
       makeRequest(WEBHOOK_PATH, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-github-event": "push" },
+        headers: {
+          "content-type": "application/json",
+          "x-github-event": "push",
+        },
         body: GITHUB_PUSH_PAYLOAD,
       }),
     );
@@ -260,7 +281,10 @@ describe("IngestionEntityReceived event shape", () => {
     await app.fetch(
       makeRequest(WEBHOOK_PATH, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-github-event": "push" },
+        headers: {
+          "content-type": "application/json",
+          "x-github-event": "push",
+        },
         body: GITHUB_PUSH_PAYLOAD,
       }),
     );
@@ -278,7 +302,10 @@ describe("IngestionEntityReceived event shape", () => {
     await app.fetch(
       makeRequest(WEBHOOK_PATH, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-github-event": "push" },
+        headers: {
+          "content-type": "application/json",
+          "x-github-event": "push",
+        },
         body: GITHUB_PUSH_PAYLOAD,
       }),
     );
@@ -286,7 +313,10 @@ describe("IngestionEntityReceived event shape", () => {
     const event = mocks.inngestSend.mock.calls[0]?.[0] as {
       data: IngestionEntityReceived;
     };
-    const payload = event.data.payload as { ref: string; pusher: { name: string } };
+    const payload = event.data.payload as {
+      ref: string;
+      pusher: { name: string };
+    };
     expect(payload.ref).toBe("refs/heads/main");
     expect(payload.pusher.name).toBe("mac");
   });
@@ -307,8 +337,8 @@ describe("connection DB lookup", () => {
   });
 
   it("returns 404 when connection row is not found", async () => {
-    mocks.withSystemDb.mockImplementation(
-      (fn: Parameters<WithDbFn>[0]) => fn(makeMockTx([]) as TxLike),
+    mocks.withSystemDb.mockImplementation((fn: Parameters<WithDbFn>[0]) =>
+      fn(makeMockTx([]) as TxLike),
     );
     const res = await app.fetch(
       makeRequest(WEBHOOK_PATH, {
@@ -346,12 +376,17 @@ describe("HMAC signature enforcement", () => {
   it("decrypts secretEnc and passes secret to verifyWebhook", async () => {
     const ENC_ROW = {
       ...DB_CONNECTION_ROW,
-      secretEnc: { keyId: "key-1", ciphertext: Buffer.from("secret").toString("base64") },
+      secretEnc: {
+        keyId: "key-1",
+        ciphertext: Buffer.from("secret").toString("base64"),
+      },
     };
-    mocks.withSystemDb.mockImplementation(
-      (fn: Parameters<WithDbFn>[0]) => fn(makeMockTx([ENC_ROW]) as TxLike),
+    mocks.withSystemDb.mockImplementation((fn: Parameters<WithDbFn>[0]) =>
+      fn(makeMockTx([ENC_ROW]) as TxLike),
     );
-    mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValue({ adapter: {} });
+    mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValue({
+      adapter: {},
+    });
     mocks.decrypt.mockResolvedValue(Buffer.from("my-webhook-secret"));
 
     const res = await app.fetch(

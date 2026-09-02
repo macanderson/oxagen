@@ -71,7 +71,11 @@ vi.mock("@/components/ui/button", () => ({
       return React.cloneElement(renderProp, {}, children);
     }
     return (
-      <button type={(type as "button" | "submit" | "reset") ?? "button"} onClick={onClick} disabled={disabled}>
+      <button
+        type={(type as "button" | "submit" | "reset") ?? "button"}
+        onClick={onClick}
+        disabled={disabled}
+      >
         {children}
       </button>
     );
@@ -79,7 +83,9 @@ vi.mock("@/components/ui/button", () => ({
 }));
 
 vi.mock("@/components/ui/input", () => ({
-  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <input {...props} />
+  ),
 }));
 
 vi.mock("@/components/ui/label", () => ({
@@ -116,7 +122,9 @@ describe("ResetPasswordForm", () => {
 
     expect(screen.getByLabelText(/^new password$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^confirm password$/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /set new password/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /set new password/i }),
+    ).toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------
@@ -128,7 +136,9 @@ describe("ResetPasswordForm", () => {
 
     expect(screen.getByRole("alert")).toBeInTheDocument();
     // The form fields should NOT be present in the invalid-token state
-    expect(screen.queryByRole("button", { name: /set new password/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /set new password/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows a link back to /forgot-password in the invalid-token state", () => {
@@ -149,7 +159,10 @@ describe("ResetPasswordForm", () => {
     render(<ResetPasswordForm token="valid-token" />);
 
     await user.type(screen.getByLabelText(/^new password$/i), "newpassword1");
-    await user.type(screen.getByLabelText(/^confirm password$/i), "newpassword1");
+    await user.type(
+      screen.getByLabelText(/^confirm password$/i),
+      "newpassword1",
+    );
     await user.click(screen.getByRole("button", { name: /set new password/i }));
 
     await waitFor(() => {
@@ -173,7 +186,10 @@ describe("ResetPasswordForm", () => {
     render(<ResetPasswordForm token="valid-token" />);
 
     await user.type(screen.getByLabelText(/^new password$/i), "newpassword1");
-    await user.type(screen.getByLabelText(/^confirm password$/i), "newpassword1");
+    await user.type(
+      screen.getByLabelText(/^confirm password$/i),
+      "newpassword1",
+    );
     await user.click(screen.getByRole("button", { name: /set new password/i }));
 
     await waitFor(() => {
@@ -200,7 +216,10 @@ describe("ResetPasswordForm", () => {
     render(<ResetPasswordForm token="bad-token" />);
 
     await user.type(screen.getByLabelText(/^new password$/i), "newpassword1");
-    await user.type(screen.getByLabelText(/^confirm password$/i), "newpassword1");
+    await user.type(
+      screen.getByLabelText(/^confirm password$/i),
+      "newpassword1",
+    );
     await user.click(screen.getByRole("button", { name: /set new password/i }));
 
     await waitFor(() => {
@@ -225,7 +244,10 @@ describe("ResetPasswordForm", () => {
     render(<ResetPasswordForm token="valid-token" />);
 
     await user.type(screen.getByLabelText(/^new password$/i), "newpassword1");
-    await user.type(screen.getByLabelText(/^confirm password$/i), "newpassword1");
+    await user.type(
+      screen.getByLabelText(/^confirm password$/i),
+      "newpassword1",
+    );
     await user.click(screen.getByRole("button", { name: /set new password/i }));
 
     await waitFor(() => {
@@ -255,7 +277,10 @@ describe("ResetPasswordForm", () => {
     render(<ResetPasswordForm token="valid-token" />);
 
     await user.type(screen.getByLabelText(/^new password$/i), "newpassword1");
-    await user.type(screen.getByLabelText(/^confirm password$/i), "newpassword1");
+    await user.type(
+      screen.getByLabelText(/^confirm password$/i),
+      "newpassword1",
+    );
     await user.click(screen.getByRole("button", { name: /set new password/i }));
 
     await waitFor(() => {

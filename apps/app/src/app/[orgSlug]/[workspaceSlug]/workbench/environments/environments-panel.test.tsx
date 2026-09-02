@@ -347,7 +347,9 @@ describe("EnvironmentsPanel", () => {
   // with an environment whose slug is literally "default".
   it("labels the workspace-root value column 'Fallback', distinct from a default-slugged env", () => {
     const props = makeDefaultProps({
-      environments: [makeEnv({ id: "env-d", name: "Default", slug: "default" })],
+      environments: [
+        makeEnv({ id: "env-d", name: "Default", slug: "default" }),
+      ],
     });
     render(<EnvironmentsPanel {...props} />);
     expect(

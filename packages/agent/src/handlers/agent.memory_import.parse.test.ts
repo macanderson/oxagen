@@ -25,15 +25,32 @@ describe("agent.memory.import.parse handler", () => {
   });
 
   it("flattens extracted memories from all documents into drafts", async () => {
-    mocks.extractMock.mockImplementation(async ({ filename }: { filename: string }) => {
-      if (filename === "a.md") {
-        return [{ lesson: "Lesson A1", memoryClass: "OBSERVATION", memoryKind: "constraint" }];
-      }
-      return [
-        { lesson: "Lesson B1", memoryClass: "OBSERVATION", memoryKind: "gotcha" },
-        { lesson: "Lesson B2", memoryClass: "RULE", memoryKind: "routine-change", enforcementScore: 60 },
-      ];
-    });
+    mocks.extractMock.mockImplementation(
+      async ({ filename }: { filename: string }) => {
+        if (filename === "a.md") {
+          return [
+            {
+              lesson: "Lesson A1",
+              memoryClass: "OBSERVATION",
+              memoryKind: "constraint",
+            },
+          ];
+        }
+        return [
+          {
+            lesson: "Lesson B1",
+            memoryClass: "OBSERVATION",
+            memoryKind: "gotcha",
+          },
+          {
+            lesson: "Lesson B2",
+            memoryClass: "RULE",
+            memoryKind: "routine-change",
+            enforcementScore: 60,
+          },
+        ];
+      },
+    );
 
     const out = await agentMemoryImportParseHandler(
       { documents: [doc("a.md"), doc("b.md")] },
@@ -46,9 +63,15 @@ describe("agent.memory.import.parse handler", () => {
     // Every draft carries source "user", classified true, and its source document.
     expect(out.drafts.every((d) => d.source === "user")).toBe(true);
     expect(out.drafts.every((d) => d.classified === true)).toBe(true);
-    expect(out.drafts.find((d) => d.lesson === "Lesson A1")?.sourceDocument).toBe("a.md");
-    expect(out.drafts.find((d) => d.lesson === "Lesson B2")?.memoryClass).toBe("RULE");
-    expect(out.drafts.find((d) => d.lesson === "Lesson B2")?.enforcementScore).toBe(60);
+    expect(
+      out.drafts.find((d) => d.lesson === "Lesson A1")?.sourceDocument,
+    ).toBe("a.md");
+    expect(out.drafts.find((d) => d.lesson === "Lesson B2")?.memoryClass).toBe(
+      "RULE",
+    );
+    expect(
+      out.drafts.find((d) => d.lesson === "Lesson B2")?.enforcementScore,
+    ).toBe(60);
   });
 
   it("anchors drafts to the default nodeRef when supplied", async () => {
@@ -85,10 +108,17 @@ describe("agent.memory.import.parse handler", () => {
   });
 
   it("records a document that yields no memories as skipped (not a draft)", async () => {
-    mocks.extractMock.mockImplementation(async ({ filename }: { filename: string }) =>
-      filename === "empty.md"
-        ? []
-        : [{ lesson: "Real", memoryClass: "OBSERVATION", memoryKind: "gotcha" }],
+    mocks.extractMock.mockImplementation(
+      async ({ filename }: { filename: string }) =>
+        filename === "empty.md"
+          ? []
+          : [
+              {
+                lesson: "Real",
+                memoryClass: "OBSERVATION",
+                memoryKind: "gotcha",
+              },
+            ],
     );
     const out = await agentMemoryImportParseHandler(
       { documents: [doc("empty.md"), doc("good.md")] },
@@ -101,10 +131,18 @@ describe("agent.memory.import.parse handler", () => {
   });
 
   it("records a document whose extraction throws as skipped, without failing the batch", async () => {
-    mocks.extractMock.mockImplementation(async ({ filename }: { filename: string }) => {
-      if (filename === "bad.md") throw new Error("model exploded");
-      return [{ lesson: "Survivor", memoryClass: "OBSERVATION", memoryKind: "constraint" }];
-    });
+    mocks.extractMock.mockImplementation(
+      async ({ filename }: { filename: string }) => {
+        if (filename === "bad.md") throw new Error("model exploded");
+        return [
+          {
+            lesson: "Survivor",
+            memoryClass: "OBSERVATION",
+            memoryKind: "constraint",
+          },
+        ];
+      },
+    );
     const out = await agentMemoryImportParseHandler(
       { documents: [doc("bad.md"), doc("ok.md")] },
       CTX,

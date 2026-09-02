@@ -15,19 +15,22 @@ export const Results: Story = {
         {
           title: "USS Nautilus (SSN-571) — Wikipedia",
           url: "https://en.wikipedia.org/wiki/USS_Nautilus_(SSN-571)",
-          content: "USS Nautilus (SSN-571) was the world's first operational nuclear-powered submarine and the first to complete a submerged transit of the North Pole on 3 August 1958.",
+          content:
+            "USS Nautilus (SSN-571) was the world's first operational nuclear-powered submarine and the first to complete a submerged transit of the North Pole on 3 August 1958.",
           score: 0.98,
         },
         {
           title: "Operation Sunshine: Nautilus and the North Pole",
           url: "https://www.navalhistory.org/operation-sunshine",
-          content: "In 1958 the Nautilus undertook a top-secret mission to cross the Arctic ice cap submerged.",
+          content:
+            "In 1958 the Nautilus undertook a top-secret mission to cross the Arctic ice cap submerged.",
           score: 0.91,
         },
         {
           title: "Hyman G. Rickover and the Nuclear Navy",
           url: "https://www.energy.gov/articles/rickover",
-          content: "Admiral Rickover directed the development of the naval nuclear propulsion program.",
+          content:
+            "Admiral Rickover directed the development of the naval nuclear propulsion program.",
           score: 0.84,
         },
       ],

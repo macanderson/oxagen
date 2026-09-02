@@ -16,7 +16,14 @@
  */
 
 import * as React from "react";
-import { render, screen, waitFor, cleanup, fireEvent, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  cleanup,
+  fireEvent,
+  act,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -71,7 +78,9 @@ vi.mock("@/components/ui/button", () => ({
 }));
 
 vi.mock("@/components/ui/input", () => ({
-  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <input {...props} />
+  ),
 }));
 
 vi.mock("@/components/ui/textarea", () => ({
@@ -80,10 +89,17 @@ vi.mock("@/components/ui/textarea", () => ({
   ),
 }));
 
-vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
-  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
-  has: (_t, prop) => prop !== "then",
-}));
+vi.mock(
+  "lucide-react",
+  () =>
+    new Proxy({} as Record<string | symbol, unknown>, {
+      get: (_t, prop) =>
+        prop === "then"
+          ? undefined
+          : () => <svg aria-hidden="true" data-icon={String(prop)} />,
+      has: (_t, prop) => prop !== "then",
+    }),
+);
 
 // ---------------------------------------------------------------------------
 // Import under test (after mocks)
@@ -95,9 +111,13 @@ import { WorkspaceGeneralForm } from "./workspace-general-form";
 // Fixtures
 // ---------------------------------------------------------------------------
 
-let capturedApply: (
-  (proposed: Record<string, unknown>, mode: "field" | "all", fieldName?: string) => void
-) | null = null;
+let capturedApply:
+  | ((
+      proposed: Record<string, unknown>,
+      mode: "field" | "all",
+      fieldName?: string,
+    ) => void)
+  | null = null;
 
 const defaultProps = {
   orgSlug: "acme",
@@ -148,18 +168,16 @@ describe("WorkspaceGeneralForm", () => {
   // (b) Auto-derive slug from name when slug is empty
   it("derives slug from name when slug field is cleared and name changes", () => {
     render(
-      <WorkspaceGeneralForm
-        {...defaultProps}
-        initialSlug=""
-        initialName=""
-      />,
+      <WorkspaceGeneralForm {...defaultProps} initialSlug="" initialName="" />,
     );
 
     fireEvent.change(screen.getByLabelText(/workspace name/i), {
       target: { value: "Analytics Team" },
     });
 
-    const slugInput = screen.getByLabelText(/workspace slug/i) as HTMLInputElement;
+    const slugInput = screen.getByLabelText(
+      /workspace slug/i,
+    ) as HTMLInputElement;
     expect(slugInput.value).toBe("analytics-team");
   });
 
@@ -171,7 +189,9 @@ describe("WorkspaceGeneralForm", () => {
       target: { value: "New Name" },
     });
 
-    const slugInput = screen.getByLabelText(/workspace slug/i) as HTMLInputElement;
+    const slugInput = screen.getByLabelText(
+      /workspace slug/i,
+    ) as HTMLInputElement;
     // initialSlug="research" is non-empty — must not be overwritten
     expect(slugInput.value).toBe("research");
   });
@@ -184,7 +204,9 @@ describe("WorkspaceGeneralForm", () => {
       target: { value: "My Team 2026!" },
     });
 
-    const slugInput = screen.getByLabelText(/workspace slug/i) as HTMLInputElement;
+    const slugInput = screen.getByLabelText(
+      /workspace slug/i,
+    ) as HTMLInputElement;
     // slugify("My Team 2026!") should produce "my-team-2026"
     expect(slugInput.value).toMatch(/^[a-z0-9-]+$/);
     expect(slugInput.value).not.toContain("!");
@@ -206,7 +228,10 @@ describe("WorkspaceGeneralForm", () => {
     expect(capturedApply).not.toBeNull();
 
     act(() => {
-      capturedApply!({ name: "Proposed", slug: "new-slug", description: "New desc" }, "all");
+      capturedApply!(
+        { name: "Proposed", slug: "new-slug", description: "New desc" },
+        "all",
+      );
     });
 
     fireEvent.submit(
@@ -256,7 +281,9 @@ describe("WorkspaceGeneralForm", () => {
       expect(mockReplace).toHaveBeenCalledOnce();
     });
 
-    expect(mockReplace).toHaveBeenCalledWith("/acme/research-v2/settings/general");
+    expect(mockReplace).toHaveBeenCalledWith(
+      "/acme/research-v2/settings/general",
+    );
   });
 
   // (i) Save button disabled when name or slug is empty
@@ -265,20 +292,24 @@ describe("WorkspaceGeneralForm", () => {
       <WorkspaceGeneralForm {...defaultProps} initialName="" initialSlug="" />,
     );
 
-    expect(screen.getByRole("button", { name: /save changes/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /save changes/i }),
+    ).toBeDisabled();
   });
 
   it("disables the save button when slug is empty", () => {
-    render(
-      <WorkspaceGeneralForm {...defaultProps} initialSlug="" />,
-    );
+    render(<WorkspaceGeneralForm {...defaultProps} initialSlug="" />);
 
     // Name is non-empty ("Research") but slug is empty
-    const slugInput = screen.getByLabelText(/workspace slug/i) as HTMLInputElement;
+    const slugInput = screen.getByLabelText(
+      /workspace slug/i,
+    ) as HTMLInputElement;
     // It might have auto-seeded the slug from name focus; clear it explicitly
     fireEvent.change(slugInput, { target: { value: "" } });
 
-    expect(screen.getByRole("button", { name: /save changes/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /save changes/i }),
+    ).toBeDisabled();
   });
 
   // (j) Action throws — form does not crash
@@ -313,7 +344,9 @@ describe("WorkspaceGeneralForm", () => {
       expect(mockAction).toHaveBeenCalledOnce();
     });
 
-    const [arg] = mockAction.mock.calls[0] as [{ orgSlug: string; workspaceSlug: string }];
+    const [arg] = mockAction.mock.calls[0] as [
+      { orgSlug: string; workspaceSlug: string },
+    ];
     expect(arg.orgSlug).toBe("acme");
     expect(arg.workspaceSlug).toBe("research");
   });

@@ -86,7 +86,10 @@ export async function agentSandboxFilesListHandler(
       await markSessionStatus(ctx, row.id, "gone");
       throw new SandboxSessionGoneError(input.sessionId);
     }
-    const handle = await driver.restoreSession(row.snapshotId, specFromRow(row, ctx));
+    const handle = await driver.restoreSession(
+      row.snapshotId,
+      specFromRow(row, ctx),
+    );
     await rebindSession(ctx, row.id, handle.sandboxId);
     result = await driver.execInSession({
       sandboxId: handle.sandboxId,

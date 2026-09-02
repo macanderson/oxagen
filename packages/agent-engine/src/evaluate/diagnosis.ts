@@ -75,7 +75,8 @@ export const DIAGNOSIS_MARKER = "DIAGNOSIS_COMPLETE";
  * - If more than 3 hypotheses, keeps the first 3.
  *
  * Tolerances:
- * - Trailing commas are NOT valid JSON; returns null rather than throwing.
+ * - Trailing commas before `}` / `]` are stripped before parsing, so a model
+ *   that emits them still yields a diagnosis.
  * - Markdown text around the fence is ignored.
  * - A marker with no following fence → null.
  * - Unparseable JSON → null.
@@ -94,7 +95,9 @@ export function extractDiagnosis(transcript: string): Diagnosis | null {
   }
 
   // Search for the first fenced code block after the marker.
-  const afterMarker = transcript.slice(lastMarkerIndex + DIAGNOSIS_MARKER.length);
+  const afterMarker = transcript.slice(
+    lastMarkerIndex + DIAGNOSIS_MARKER.length,
+  );
 
   // Match ```json ... ``` or bare ``` ... ```.
   // Regex: ``` (optionally followed by "json" or other language tag) ... ```.
@@ -130,7 +133,10 @@ export function extractDiagnosis(transcript: string): Diagnosis | null {
   const problem = obj.problem.trim();
 
   // Validate expectedBehavior.
-  if (typeof obj.expectedBehavior !== "string" || obj.expectedBehavior.trim() === "") {
+  if (
+    typeof obj.expectedBehavior !== "string" ||
+    obj.expectedBehavior.trim() === ""
+  ) {
     return null;
   }
   const expectedBehavior = obj.expectedBehavior.trim();
@@ -140,11 +146,10 @@ export function extractDiagnosis(transcript: string): Diagnosis | null {
     return null;
   }
   const rawHypotheses = obj.rootCauseHypotheses;
-  if (rawHypotheses.length < 1 || rawHypotheses.length > 3) {
-    // If more than 3, keep the first 3. If less than 1, invalid.
-    if (rawHypotheses.length < 1) {
-      return null;
-    }
+  // Zero hypotheses is invalid; more than 3 is fine — the slice below keeps
+  // the first 3.
+  if (rawHypotheses.length < 1) {
+    return null;
   }
 
   const hypotheses: Hypothesis[] = [];
@@ -174,7 +179,8 @@ export function extractDiagnosis(transcript: string): Diagnosis | null {
     }
     seenIds.add(id);
 
-    const evidence = typeof hyp.evidence === "string" ? hyp.evidence.trim() : "";
+    const evidence =
+      typeof hyp.evidence === "string" ? hyp.evidence.trim() : "";
 
     hypotheses.push({
       id,
@@ -195,7 +201,11 @@ export function extractDiagnosis(transcript: string): Diagnosis | null {
 
   // Validate diffBudget (default to 120).
   let diffBudget = 120;
-  if (typeof obj.diffBudget === "number" && Number.isFinite(obj.diffBudget) && obj.diffBudget > 0) {
+  if (
+    typeof obj.diffBudget === "number" &&
+    Number.isFinite(obj.diffBudget) &&
+    obj.diffBudget > 0
+  ) {
     diffBudget = obj.diffBudget;
   }
 

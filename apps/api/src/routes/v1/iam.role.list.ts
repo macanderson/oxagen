@@ -10,7 +10,9 @@ iamRoleListRoute.get("/", async (c) => {
   const q = c.req.query();
   const input = iamRoleList.input.parse({
     ...(q["scopeKind"] ? { scopeKind: q["scopeKind"] } : {}),
-    ...(q["includeGrants"] ? { includeGrants: q["includeGrants"] === "true" } : {}),
+    ...(q["includeGrants"]
+      ? { includeGrants: q["includeGrants"] === "true" }
+      : {}),
     ...(q["limit"] ? { limit: Number(q["limit"]) } : {}),
     ...(q["offset"] ? { offset: Number(q["offset"]) } : {}),
   });

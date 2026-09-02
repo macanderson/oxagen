@@ -121,6 +121,12 @@ export async function fetchAgentRunLiveAuthority(
  * The flattened form is lossy on purpose — it is what the resolver consumes,
  * not what a ceiling is pinned from. Anything that needs expiries or assignment
  * identity must use `fetchAgentRunLiveAuthority` instead.
+ *
+ * READ COMMITTED, unlike `fetchAgentRunLiveAuthority` above: this is the LEGACY
+ * V1 delegated read (the A2A bridge and the turn driver), whose result feeds the
+ * never-refreshed per-run memo rather than the generation-keyed live check, so
+ * it carries no generation vector whose consistency a single snapshot would
+ * protect. New callers want `fetchAgentRunLiveAuthority`.
  */
 export async function fetchAgentRunAuthz(
   args: FetchAgentRunAuthzArgs,

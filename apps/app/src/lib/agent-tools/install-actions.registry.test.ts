@@ -21,8 +21,13 @@ vi.mock("@/lib/routes", () => ({
   workspace: {
     workbench: {
       tools: {
-        capabilities: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-          `/${orgSlug}/${workspaceSlug}/workbench/tools/capabilities`,
+        capabilities: ({
+          orgSlug,
+          workspaceSlug,
+        }: {
+          orgSlug: string;
+          workspaceSlug: string;
+        }) => `/${orgSlug}/${workspaceSlug}/workbench/tools/capabilities`,
       },
     },
   },
@@ -50,7 +55,12 @@ beforeEach(() => {
 
 describe("addRegistry", () => {
   it("returns ok:false on invalid input", async () => {
-    const result = await addRegistry({ orgSlug: "acme", workspaceSlug: "main", name: "", baseUrl: "" });
+    const result = await addRegistry({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+      name: "",
+      baseUrl: "",
+    });
     expect(result).toEqual({ ok: false, error: "Invalid input" });
     expect(mockResolveManager).not.toHaveBeenCalled();
   });
@@ -86,7 +96,9 @@ describe("addRegistry", () => {
       AUTHORIZED_SCOPE.ctx,
       { surface: "agent" },
     );
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/workbench/tools/capabilities");
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/acme/main/workbench/tools/capabilities",
+    );
     expect(result).toEqual({ ok: true, registryId: "reg_1", isDefault: false });
   });
 
@@ -107,14 +119,22 @@ describe("addRegistry", () => {
 
 describe("removeRegistry", () => {
   it("returns ok:false on invalid input", async () => {
-    const result = await removeRegistry({ orgSlug: "acme", workspaceSlug: "main", registryId: "" });
+    const result = await removeRegistry({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+      registryId: "",
+    });
     expect(result).toEqual({ ok: false, error: "Invalid input" });
   });
 
   it("passes through the auth-denial error", async () => {
     mockResolveManager.mockResolvedValue({ ok: false, error: "denied" });
 
-    const result = await removeRegistry({ orgSlug: "acme", workspaceSlug: "main", registryId: "reg_1" });
+    const result = await removeRegistry({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+      registryId: "reg_1",
+    });
 
     expect(result).toEqual({ ok: false, error: "denied" });
     expect(mockInvoke).not.toHaveBeenCalled();
@@ -124,7 +144,11 @@ describe("removeRegistry", () => {
     mockResolveManager.mockResolvedValue({ ok: true, scope: AUTHORIZED_SCOPE });
     mockInvoke.mockResolvedValue({ ok: true, promotedId: "reg_2" });
 
-    const result = await removeRegistry({ orgSlug: "acme", workspaceSlug: "main", registryId: "reg_1" });
+    const result = await removeRegistry({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+      registryId: "reg_1",
+    });
 
     expect(mockInvoke).toHaveBeenCalledWith(
       "remove_plugin_registry",
@@ -132,7 +156,9 @@ describe("removeRegistry", () => {
       AUTHORIZED_SCOPE.ctx,
       { surface: "agent" },
     );
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/workbench/tools/capabilities");
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/acme/main/workbench/tools/capabilities",
+    );
     expect(result).toEqual({ ok: true, promotedId: "reg_2" });
   });
 
@@ -140,7 +166,11 @@ describe("removeRegistry", () => {
     mockResolveManager.mockResolvedValue({ ok: true, scope: AUTHORIZED_SCOPE });
     mockInvoke.mockRejectedValue(new Error("still in use"));
 
-    const result = await removeRegistry({ orgSlug: "acme", workspaceSlug: "main", registryId: "reg_1" });
+    const result = await removeRegistry({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+      registryId: "reg_1",
+    });
 
     expect(result).toEqual({ ok: false, error: "still in use" });
   });

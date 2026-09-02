@@ -318,11 +318,9 @@ async function main(): Promise<void> {
       ),
     );
 
-    // The two guards below used to `return` out of main() entirely. They now
-    // fall through to the Agent RBAC phase (below) instead, because that
-    // phase has its own independent data dependency (org.organizations, not
-    // iam.roles) and shouldn't be skipped just because the human-role phase
-    // found nothing to do.
+    // Both guards below skip only the human-role phase and fall through to the
+    // Agent RBAC phase: that phase depends on org.organizations, not iam.roles,
+    // so it must still run when the human-role phase finds nothing to do.
     if (specs.length === 0) {
       console.log(
         kleur.yellow(

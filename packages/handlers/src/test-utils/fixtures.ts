@@ -10,6 +10,8 @@ export const TEST_CTX: CapabilityContext = {
   messageId: null,
 };
 
-export function makeCTX(overrides: Partial<CapabilityContext> = {}): CapabilityContext {
+export function makeCTX(
+  overrides: Partial<CapabilityContext> = {},
+): CapabilityContext {
   return { ...TEST_CTX, ...overrides };
 }

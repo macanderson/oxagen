@@ -21,7 +21,9 @@ import type { CapabilityContext } from "../types";
  * egress, which would be a security regression for a template that asked for a
  * locked-down network.
  */
-export function driverNetworkForMode(mode: SandboxNetworkMode): "allow" | "deny" {
+export function driverNetworkForMode(
+  mode: SandboxNetworkMode,
+): "allow" | "deny" {
   switch (mode) {
     case "public":
     case "static_egress":

@@ -8,7 +8,8 @@ import { registerCapability } from "../registry";
 export const notificationsMark = registerCapability({
   name: "mark_notification",
   domain: "notification",
-  description: "Mark a notification as read and/or archived for the calling user.",
+  description:
+    "Mark a notification as read and/or archived for the calling user.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["api", "docs", "mcp", "unit", "app"],
@@ -16,7 +17,12 @@ export const notificationsMark = registerCapability({
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {
-    org: { Owner: "allow", Admin: "allow", Compliance: "allow", Billing: "allow" },
+    org: {
+      Owner: "allow",
+      Admin: "allow",
+      Compliance: "allow",
+      Billing: "allow",
+    },
     workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
   },
   input: z.object({

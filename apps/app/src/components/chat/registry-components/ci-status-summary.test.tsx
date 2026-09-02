@@ -72,12 +72,17 @@ describe("CiStatusSummary overall status", () => {
     ["unknown", "Unknown", "text-muted-foreground"],
   ];
 
-  it.each(cases)("renders %s -> %s label in the right tone", (overall, label, tone) => {
-    render(<CiStatusSummary overall={overall} counts={ZERO_COUNTS} runs={[]} />);
-    const status = screen.getByText(label);
-    expect(status).toBeInTheDocument();
-    expect(status.className).toContain(tone);
-  });
+  it.each(cases)(
+    "renders %s -> %s label in the right tone",
+    (overall, label, tone) => {
+      render(
+        <CiStatusSummary overall={overall} counts={ZERO_COUNTS} runs={[]} />,
+      );
+      const status = screen.getByText(label);
+      expect(status).toBeInTheDocument();
+      expect(status.className).toContain(tone);
+    },
+  );
 });
 
 describe("CiStatusSummary counts line", () => {
@@ -85,15 +90,26 @@ describe("CiStatusSummary counts line", () => {
     render(
       <CiStatusSummary
         overall="failing"
-        counts={{ total: 8, passed: 5, failed: 1, pending: 2, skipped: 0, neutral: 0 }}
+        counts={{
+          total: 8,
+          passed: 5,
+          failed: 1,
+          pending: 2,
+          skipped: 0,
+          neutral: 0,
+        }}
         runs={[]}
       />,
     );
-    expect(screen.getByText("5 passed · 1 failed · 2 pending")).toBeInTheDocument();
+    expect(
+      screen.getByText("5 passed · 1 failed · 2 pending"),
+    ).toBeInTheDocument();
   });
 
   it("renders nothing when every category is zero", () => {
-    render(<CiStatusSummary overall="unknown" counts={ZERO_COUNTS} runs={[]} />);
+    render(
+      <CiStatusSummary overall="unknown" counts={ZERO_COUNTS} runs={[]} />,
+    );
     expect(screen.queryByText(/passed/)).not.toBeInTheDocument();
   });
 });
@@ -103,7 +119,14 @@ describe("CiStatusSummary runs list", () => {
     render(
       <CiStatusSummary
         overall="failing"
-        counts={{ total: 4, passed: 1, failed: 1, pending: 1, skipped: 1, neutral: 0 }}
+        counts={{
+          total: 4,
+          passed: 1,
+          failed: 1,
+          pending: 1,
+          skipped: 1,
+          neutral: 0,
+        }}
         runs={[
           run({ name: "unit", conclusion: "success" }),
           run({ name: "lint", conclusion: "failure" }),
@@ -123,8 +146,17 @@ describe("CiStatusSummary runs list", () => {
     render(
       <CiStatusSummary
         overall="passing"
-        counts={{ total: 1, passed: 1, failed: 0, pending: 0, skipped: 0, neutral: 0 }}
-        runs={[run({ name: "build", app: "GitHub Actions", durationMs: 90_000 })]}
+        counts={{
+          total: 1,
+          passed: 1,
+          failed: 0,
+          pending: 0,
+          skipped: 0,
+          neutral: 0,
+        }}
+        runs={[
+          run({ name: "build", app: "GitHub Actions", durationMs: 90_000 }),
+        ]}
       />,
     );
     expect(screen.getByText("GitHub Actions")).toBeInTheDocument();
@@ -135,7 +167,14 @@ describe("CiStatusSummary runs list", () => {
     render(
       <CiStatusSummary
         overall="passing"
-        counts={{ total: 1, passed: 1, failed: 0, pending: 0, skipped: 0, neutral: 0 }}
+        counts={{
+          total: 1,
+          passed: 1,
+          failed: 0,
+          pending: 0,
+          skipped: 0,
+          neutral: 0,
+        }}
         runs={[run({ name: "build", url: "https://ci.example.com/1" })]}
       />,
     );
@@ -146,7 +185,9 @@ describe("CiStatusSummary runs list", () => {
   });
 
   it("renders no runs disclosure when the list is empty", () => {
-    render(<CiStatusSummary overall="unknown" counts={ZERO_COUNTS} runs={[]} />);
+    render(
+      <CiStatusSummary overall="unknown" counts={ZERO_COUNTS} runs={[]} />,
+    );
     expect(screen.queryByText(/check$/)).not.toBeInTheDocument();
   });
 
@@ -154,7 +195,14 @@ describe("CiStatusSummary runs list", () => {
     render(
       <CiStatusSummary
         overall="pending"
-        counts={{ total: 1, passed: 0, failed: 0, pending: 1, skipped: 0, neutral: 0 }}
+        counts={{
+          total: 1,
+          passed: 0,
+          failed: 0,
+          pending: 1,
+          skipped: 0,
+          neutral: 0,
+        }}
         runs={[run({ name: "deploy", status: "queued", conclusion: null })]}
       />,
     );
@@ -165,7 +213,14 @@ describe("CiStatusSummary runs list", () => {
     render(
       <CiStatusSummary
         overall="failing"
-        counts={{ total: 2, passed: 0, failed: 2, pending: 0, skipped: 0, neutral: 0 }}
+        counts={{
+          total: 2,
+          passed: 0,
+          failed: 2,
+          pending: 0,
+          skipped: 0,
+          neutral: 0,
+        }}
         runs={[
           run({ name: "slow", conclusion: "timed_out" }),
           run({ name: "aborted", conclusion: "cancelled" }),
@@ -179,7 +234,14 @@ describe("CiStatusSummary runs list", () => {
     const { container } = render(
       <CiStatusSummary
         overall="pending"
-        counts={{ total: 1, passed: 0, failed: 0, pending: 1, skipped: 0, neutral: 0 }}
+        counts={{
+          total: 1,
+          passed: 0,
+          failed: 0,
+          pending: 1,
+          skipped: 0,
+          neutral: 0,
+        }}
         runs={[]}
       />,
     );

@@ -6,7 +6,15 @@
  * stdout; and every failure path is a uniform stderr error line (pretty: `✗ …`,
  * json: `{"type":"error",…}`) with exit code 1 and nothing on stdout.
  */
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from "vitest";
 import type { CommandWriter } from "../../lib/capture-writer.js";
 
 vi.mock("../../lib/config.js", () => ({
@@ -67,7 +75,10 @@ afterEach(() => {
 
 describe("handleA2ACard", () => {
   it("emits one single-line JSON value on stdout in --json mode", async () => {
-    fetchMock.mockResolvedValue({ ok: true, json: async () => CARD } as unknown as Response);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => CARD,
+    } as unknown as Response);
     const { writer, out, err } = makeWriter();
     await handleA2ACard({ json: true }, writer);
     expect(out).toHaveLength(1);
@@ -79,7 +90,10 @@ describe("handleA2ACard", () => {
   });
 
   it("renders the human card on stdout without --json", async () => {
-    fetchMock.mockResolvedValue({ ok: true, json: async () => CARD } as unknown as Response);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => CARD,
+    } as unknown as Response);
     const { writer, out, err } = makeWriter();
     await handleA2ACard({}, writer);
     expect(out).toHaveLength(1);

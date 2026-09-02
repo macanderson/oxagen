@@ -42,12 +42,14 @@ vi.mock("../logger", () => ({
 }));
 
 // ── Capture the Inngest handler ───────────────────────────────────────────────
-let capturedHandler: ((ctx: {
-  event: { data: Record<string, unknown> };
-  step: {
-    run: (name: string, fn: () => Promise<unknown>) => Promise<unknown>;
-  };
-}) => Promise<unknown>) | null = null;
+let capturedHandler:
+  | ((ctx: {
+      event: { data: Record<string, unknown> };
+      step: {
+        run: (name: string, fn: () => Promise<unknown>) => Promise<unknown>;
+      };
+    }) => Promise<unknown>)
+  | null = null;
 
 mocks.inngestCreateFunction.mockImplementation(
   (_opts: unknown, _trigger: unknown, handler: typeof capturedHandler) => {
@@ -102,11 +104,13 @@ function makeConnection(overrides: Partial<Record<string, unknown>> = {}) {
 //    then succeed (empty result) for subsequent calls (e.g. last_sync_at update)
 function setupDb(row: Record<string, unknown> | null) {
   let callCount = 0;
-  mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-    callCount++;
-    const rows = callCount === 1 && row !== null ? [row] : [];
-    return fn({ execute: vi.fn().mockResolvedValue(rows) });
-  });
+  mocks.withSystemDb.mockImplementation(
+    async (fn: (tx: unknown) => Promise<unknown>) => {
+      callCount++;
+      const rows = callCount === 1 && row !== null ? [row] : [];
+      return fn({ execute: vi.fn().mockResolvedValue(rows) });
+    },
+  );
 }
 
 beforeEach(() => {
@@ -120,7 +124,10 @@ describe("ingestionSyncRequested — skip cases", () => {
   it("returns skipped=true when connection is not found", async () => {
     setupDb(null);
 
-    const result = await capturedHandler!({ event: makeEvent(), step: makeStep() });
+    const result = await capturedHandler!({
+      event: makeEvent(),
+      step: makeStep(),
+    });
 
     expect(result).toEqual({ skipped: true, reason: "connection_not_found" });
     expect(mocks.inngestSend).not.toHaveBeenCalled();
@@ -133,7 +140,10 @@ describe("ingestionSyncRequested — skip cases", () => {
   it("returns skipped=true when connection status is 'deleting'", async () => {
     setupDb(makeConnection({ status: "deleting" }));
 
-    const result = await capturedHandler!({ event: makeEvent(), step: makeStep() });
+    const result = await capturedHandler!({
+      event: makeEvent(),
+      step: makeStep(),
+    });
 
     expect(result).toEqual({ skipped: true, reason: "connection_deleted" });
     expect(mocks.inngestSend).not.toHaveBeenCalled();
@@ -142,7 +152,10 @@ describe("ingestionSyncRequested — skip cases", () => {
   it("returns skipped=true when connection status is 'deleted'", async () => {
     setupDb(makeConnection({ status: "deleted" }));
 
-    const result = await capturedHandler!({ event: makeEvent(), step: makeStep() });
+    const result = await capturedHandler!({
+      event: makeEvent(),
+      step: makeStep(),
+    });
 
     expect(result).toEqual({ skipped: true, reason: "connection_deleted" });
     expect(mocks.inngestSend).not.toHaveBeenCalled();
@@ -171,7 +184,9 @@ describe("ingestionSyncRequested — GitHub connector", () => {
   });
 
   it("uses 'main' as defaultBranch when deliveryConfig omits it", async () => {
-    setupDb(makeConnection({ delivery_config: { owner: "acme", repo: "api" } }));
+    setupDb(
+      makeConnection({ delivery_config: { owner: "acme", repo: "api" } }),
+    );
 
     await capturedHandler!({ event: makeEvent(), step: makeStep() });
 
@@ -185,7 +200,10 @@ describe("ingestionSyncRequested — GitHub connector", () => {
   it("stamps last_sync_at and returns connection info", async () => {
     setupDb(makeConnection());
 
-    const result = await capturedHandler!({ event: makeEvent(), step: makeStep() });
+    const result = await capturedHandler!({
+      event: makeEvent(),
+      step: makeStep(),
+    });
 
     expect(result).toMatchObject({
       connectionId: "conn-uuid-1",
@@ -201,10 +219,16 @@ describe("ingestionSyncRequested — GitHub connector", () => {
   it("skips connector dispatch but still stamps last_sync_at when owner is missing", async () => {
     setupDb(makeConnection({ delivery_config: { repo: "platform" } }));
 
-    const result = await capturedHandler!({ event: makeEvent(), step: makeStep() });
+    const result = await capturedHandler!({
+      event: makeEvent(),
+      step: makeStep(),
+    });
 
     // Not skipped overall; just skips the send
-    expect(result).toMatchObject({ connectionId: "conn-uuid-1", connectorId: "github" });
+    expect(result).toMatchObject({
+      connectionId: "conn-uuid-1",
+      connectorId: "github",
+    });
     expect(mocks.inngestSend).not.toHaveBeenCalled();
     expect(mocks.loggerWarn).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: "conn-uuid-1" }),
@@ -218,7 +242,10 @@ describe("ingestionSyncRequested — non-GitHub connector", () => {
   it("logs 'does not support sync dispatch yet' without throwing", async () => {
     setupDb(makeConnection({ connector_id: "linear" }));
 
-    const result = await capturedHandler!({ event: makeEvent(), step: makeStep() });
+    const result = await capturedHandler!({
+      event: makeEvent(),
+      step: makeStep(),
+    });
 
     expect(mocks.inngestSend).not.toHaveBeenCalled();
     expect(mocks.loggerInfo).toHaveBeenCalledWith(

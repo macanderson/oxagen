@@ -30,17 +30,35 @@ vi.mock("../../lib/cms/access", () => ({
 vi.mock("@oxagen/notifications", () => ({
   sendEmail: mocks.sendEmail,
   isEmailTransportConfigured: mocks.isEmailTransportConfigured,
-  bookAccessEmailTemplate: () => ({ subject: "s", text: "t", html: "<p>h</p>" }),
+  bookAccessEmailTemplate: () => ({
+    subject: "s",
+    text: "t",
+    html: "<p>h</p>",
+  }),
 }));
 
 // Constants only — avoids importing the DB client barrel in a unit test.
 vi.mock("@oxagen/database", () => ({
   COMPANY_SIZES: [
-    "1-10", "11-50", "51-200", "201-500", "501-1000", "1001-5000", "5001-10000", "10001+",
+    "1-10",
+    "11-50",
+    "51-200",
+    "201-500",
+    "501-1000",
+    "1001-5000",
+    "5001-10000",
+    "10001+",
   ],
   REFERRAL_SOURCES: [
-    "search_engine", "social_media", "referral", "email", "blog_or_content",
-    "event_or_conference", "advertisement", "word_of_mouth", "other",
+    "search_engine",
+    "social_media",
+    "referral",
+    "email",
+    "blog_or_content",
+    "event_or_conference",
+    "advertisement",
+    "word_of_mouth",
+    "other",
   ],
   EDITION_SLUGS: ["field-manual", "page-flip-reader"],
   DEFAULT_EDITION_SLUG: "page-flip-reader",
@@ -50,7 +68,8 @@ import { cmsRoute } from "./cms";
 
 const SENT = "The link to the book has been sent to your email.";
 const DEMO_SENT = "Thanks — we got it. We'll be in touch shortly.";
-const NOT_FOUND = "We couldn’t find that email. Please fill out the form to get the book.";
+const NOT_FOUND =
+  "We couldn’t find that email. Please fill out the form to get the book.";
 
 let ipCounter = 0;
 function freshIp(): string {
@@ -116,7 +135,10 @@ describe("POST /v1/cms/leads", () => {
   });
 
   it("honeypot: a filled website field is silently dropped (no capture, still 200)", async () => {
-    const res = await post("/leads", { ...VALID_LEAD, website: "http://spam.example" });
+    const res = await post("/leads", {
+      ...VALID_LEAD,
+      website: "http://spam.example",
+    });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, message: SENT });
     expect(mocks.captureLeadAndIssueCode).not.toHaveBeenCalled();
@@ -125,7 +147,9 @@ describe("POST /v1/cms/leads", () => {
 
   it("honours a chosen edition", async () => {
     await post("/leads", { ...VALID_LEAD, edition: "field-manual" });
-    expect(mocks.captureLeadAndIssueCode.mock.calls[0]![1]).toBe("field-manual");
+    expect(mocks.captureLeadAndIssueCode.mock.calls[0]![1]).toBe(
+      "field-manual",
+    );
   });
 
   it("returns 400 on invalid JSON", async () => {
@@ -147,7 +171,10 @@ describe("POST /v1/cms/leads", () => {
   });
 
   it("intent:demo captures the lead only — no book code, no book email", async () => {
-    mocks.captureLead.mockResolvedValue({ id: "lead_2", email: "ada@example.com" });
+    mocks.captureLead.mockResolvedValue({
+      id: "lead_2",
+      email: "ada@example.com",
+    });
     const res = await post("/leads", {
       ...VALID_LEAD,
       intent: "demo",
@@ -195,10 +222,15 @@ describe("POST /v1/cms/book/redeem", () => {
       ok: true,
       html: "<html>book</html>",
       newCode: "rotated",
-      editions: [{ slug: "page-flip-reader", title: "Reader", format: "page-flip" }],
+      editions: [
+        { slug: "page-flip-reader", title: "Reader", format: "page-flip" },
+      ],
       leadEmail: "ada@example.com",
     });
-    const res = await post("/book/redeem", { edition: "page-flip-reader", code: "abc" });
+    const res = await post("/book/redeem", {
+      edition: "page-flip-reader",
+      code: "abc",
+    });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
@@ -208,7 +240,10 @@ describe("POST /v1/cms/book/redeem", () => {
 
   it("passes a consumed/invalid reason straight through", async () => {
     mocks.redeemAndRotate.mockResolvedValue({ ok: false, reason: "consumed" });
-    const res = await post("/book/redeem", { edition: "page-flip-reader", code: "used" });
+    const res = await post("/book/redeem", {
+      edition: "page-flip-reader",
+      code: "used",
+    });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: false, reason: "consumed" });
   });
@@ -226,8 +261,13 @@ describe("POST /v1/cms/book/redeem", () => {
   });
 
   it("maps an access-layer failure to a 500 without leaking the error", async () => {
-    mocks.redeemAndRotate.mockRejectedValue(new Error("neo4j down at 10.0.0.1"));
-    const res = await post("/book/redeem", { edition: "page-flip-reader", code: "abc" });
+    mocks.redeemAndRotate.mockRejectedValue(
+      new Error("neo4j down at 10.0.0.1"),
+    );
+    const res = await post("/book/redeem", {
+      edition: "page-flip-reader",
+      code: "abc",
+    });
     expect(res.status).toBe(500);
     const body = (await res.json()) as { message: string };
     expect(body.message).not.toContain("10.0.0.1");
@@ -236,8 +276,13 @@ describe("POST /v1/cms/book/redeem", () => {
 
 describe("POST /v1/cms/book/resend", () => {
   it("emails a fresh code to a known lead", async () => {
-    mocks.findLeadByEmail.mockResolvedValue({ id: "lead_1", email: "ada@example.com" });
-    mocks.issueCodeForLead.mockResolvedValue("http://localhost:8080/read?e=page-flip-reader&c=xyz");
+    mocks.findLeadByEmail.mockResolvedValue({
+      id: "lead_1",
+      email: "ada@example.com",
+    });
+    mocks.issueCodeForLead.mockResolvedValue(
+      "http://localhost:8080/read?e=page-flip-reader&c=xyz",
+    );
     const res = await post("/book/resend", { email: "ada@example.com" });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, sent: true, message: SENT });
@@ -248,7 +293,11 @@ describe("POST /v1/cms/book/resend", () => {
     mocks.findLeadByEmail.mockResolvedValue(null);
     const res = await post("/book/resend", { email: "ghost@example.com" });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, sent: false, message: NOT_FOUND });
+    expect(await res.json()).toEqual({
+      ok: true,
+      sent: false,
+      message: NOT_FOUND,
+    });
     expect(mocks.issueCodeForLead).not.toHaveBeenCalled();
     expect(mocks.sendEmail).not.toHaveBeenCalled();
   });
@@ -265,7 +314,9 @@ describe("POST /v1/cms/book/resend", () => {
   });
 
   it("maps a lookup failure to a 500 without leaking the error", async () => {
-    mocks.findLeadByEmail.mockRejectedValue(new Error("postgres down at 10.0.0.2"));
+    mocks.findLeadByEmail.mockRejectedValue(
+      new Error("postgres down at 10.0.0.2"),
+    );
     const res = await post("/book/resend", { email: "ada@example.com" });
     expect(res.status).toBe(500);
     const body = (await res.json()) as { message: string };

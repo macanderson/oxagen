@@ -5,7 +5,8 @@ import { FieldErrorSchema } from "./schema.shared";
 export const schemaValidateRelationship = registerCapability({
   name: "validate_schema_relationship",
   domain: "schema",
-  description: "Validate a relationship's type and properties against the workspace schema. Returns conformance score and field-level errors.",
+  description:
+    "Validate a relationship's type and properties against the workspace schema. Returns conformance score and field-level errors.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -34,5 +35,9 @@ export const schemaValidateRelationship = registerCapability({
   }),
 });
 
-export type SchemaValidateRelationshipInput = z.output<typeof schemaValidateRelationship.input>;
-export type SchemaValidateRelationshipOutput = z.output<typeof schemaValidateRelationship.output>;
+export type SchemaValidateRelationshipInput = z.output<
+  typeof schemaValidateRelationship.input
+>;
+export type SchemaValidateRelationshipOutput = z.output<
+  typeof schemaValidateRelationship.output
+>;

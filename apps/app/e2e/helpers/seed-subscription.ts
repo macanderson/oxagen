@@ -20,7 +20,7 @@ function deQuote(raw: string | undefined, fallback: string): string {
 
 const DATABASE_URL = deQuote(
   process.env.DATABASE_URL,
-  "postgres://oxagen:oxagen@localhost:5432/oxagen",
+  "postgres://oxagen:oxagen@localhost:5433/oxagen",
 );
 
 export interface SeedSubscriptionOpts {
@@ -92,7 +92,8 @@ export async function seedSubscription(
       RETURNING id
     `;
 
-    if (!planRow) throw new Error("seed-subscription: plan upsert returned no row");
+    if (!planRow)
+      throw new Error("seed-subscription: plan upsert returned no row");
     const planId = planRow.id;
 
     // Deactivate any existing subscription to avoid duplicate-active confusion.
@@ -129,7 +130,8 @@ export async function seedSubscription(
       RETURNING id
     `;
 
-    if (!subRow) throw new Error("seed-subscription: subscription insert returned no row");
+    if (!subRow)
+      throw new Error("seed-subscription: subscription insert returned no row");
     const subscriptionId = subRow.id;
 
     const cleanup = async () => {

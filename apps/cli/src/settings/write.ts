@@ -169,6 +169,11 @@ export function shellShadowsSettingsKey(
 const STARTER: OxagenSettings = {
   $schema: "https://schemas.oxagen.sh/oxagen-cli-settings-schema.json",
   env: {},
+  // Starter deny rules are prefix-anchored text globs, not a sandbox — see the
+  // matching notes in permissions-gate.ts. They catch the model's habitual
+  // phrasing (`rm -rf …` at the head of a command, a bare `.env` path); they do
+  // not catch `cd x && rm -rf .` or `./.env`. Treat them as a starting point to
+  // tighten, not as a guarantee.
   permissions: {
     defaultMode: "default",
     deny: ["Bash(rm -rf*)", "Write(.env*)", "Read(.env*)"],

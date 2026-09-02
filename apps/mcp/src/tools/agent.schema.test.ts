@@ -27,7 +27,9 @@ describe("agent.memory.write schema", () => {
 
   it("accepts all valid memoryClass values", () => {
     for (const memoryClass of ["OBSERVATION", "RULE", "FACT"] as const) {
-      expect(() => Schema.parse({ ...validPayload, memoryClass })).not.toThrow();
+      expect(() =>
+        Schema.parse({ ...validPayload, memoryClass }),
+      ).not.toThrow();
     }
   });
 
@@ -56,7 +58,11 @@ describe("agent.memory.write schema", () => {
 
   it("accepts an optional enforcementScore within 1-100", () => {
     expect(() =>
-      Schema.parse({ ...validPayload, memoryClass: "RULE", enforcementScore: 80 }),
+      Schema.parse({
+        ...validPayload,
+        memoryClass: "RULE",
+        enforcementScore: 80,
+      }),
     ).not.toThrow();
   });
 
@@ -268,9 +274,7 @@ describe("agent.mcp.register schema", () => {
   });
 
   it("rejects an endpointUrl that is an empty string", () => {
-    expect(() =>
-      Schema.parse({ ...validPayload, endpointUrl: "" }),
-    ).toThrow();
+    expect(() => Schema.parse({ ...validPayload, endpointUrl: "" })).toThrow();
   });
 
   it("accepts all valid transportType values", () => {
@@ -314,9 +318,7 @@ describe("agent.mcp.register schema", () => {
   });
 
   it("rejects an empty name (min 1)", () => {
-    expect(() =>
-      Schema.parse({ ...validPayload, name: "" }),
-    ).toThrow();
+    expect(() => Schema.parse({ ...validPayload, name: "" })).toThrow();
   });
 
   it("accepts a name of exactly 120 characters (upper boundary)", () => {

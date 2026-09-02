@@ -16,7 +16,9 @@ export function SetPasswordForm() {
   const router = useRouter();
   const [newPassword, setNewPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
-  const [status, setStatus] = React.useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [status, setStatus] = React.useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -52,8 +54,8 @@ export function SetPasswordForm() {
       <div>
         <h3 className="text-sm font-medium">Set a password</h3>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Add a password so you can sign in with your email address in addition to
-          your connected accounts.
+          Add a password so you can sign in with your email address in addition
+          to your connected accounts.
         </p>
       </div>
 

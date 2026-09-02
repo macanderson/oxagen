@@ -1,6 +1,6 @@
 /**
- * `oxagen lineage show <dispatchId>` — CLI parity surface for `query_lineage`
- * (Linear #1078, the fleet-lineage explorer's data spine). Fetches the
+ * `oxagen lineage show <dispatchId>` — CLI parity surface for `query_lineage`,
+ * the fleet-lineage explorer's data spine. Fetches the
  * dispatch tree rooted at one `agent.subagent_fanouts` row over the org-scoped
  * API (GET /lineage/query/:dispatchId) and renders it as an indented tree:
  * every subagent run reachable from the root, each carrying its principal,
@@ -132,12 +132,25 @@ function groupByParent(
   return map;
 }
 
+/**
+ * Render one node and its subtree. `seen` carries the runIds already rendered
+ * on the current path: the adjacency list is server-supplied, so a malformed
+ * tree (a self-parent, or a parent/child cycle) must terminate with a marker
+ * rather than recurse until the stack overflows.
+ */
 function renderNode(
   node: LineageNode,
   indent: string,
   byParent: Map<string | null, LineageNode[]>,
   out: string[],
+  seen: ReadonlySet<string> = new Set(),
 ): void {
+  if (seen.has(node.runId)) {
+    out.push(
+      `${indent}↺ ${node.capabilityName} (${node.runId}) — cycle, not expanded`,
+    );
+    return;
+  }
   const violation = node.delegationViolation
     ? ` ⚠ DELEGATION VIOLATION (${node.delegationViolation.ruleId})`
     : "";
@@ -146,8 +159,9 @@ function renderNode(
       `[depth ${node.depth}] ${node.outcome} ${formatUsd(node.spend.costUsd)} ` +
       `${modelCell(node)} — ${principalCell(node)}${violation}`,
   );
+  const path = new Set(seen).add(node.runId);
   for (const child of byParent.get(node.runId) ?? []) {
-    renderNode(child, `${indent}  `, byParent, out);
+    renderNode(child, `${indent}  `, byParent, out, path);
   }
 }
 

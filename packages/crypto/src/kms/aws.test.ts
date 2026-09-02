@@ -7,14 +7,18 @@ const mockSend = vi.hoisted(() => vi.fn());
 
 vi.mock("@aws-sdk/client-kms", () => ({
   KMSClient: vi.fn(() => ({ send: mockSend })),
-  GenerateDataKeyCommand: vi.fn((params: unknown) => ({ _type: "GenerateDataKey", params })),
+  GenerateDataKeyCommand: vi.fn((params: unknown) => ({
+    _type: "GenerateDataKey",
+    params,
+  })),
   DecryptCommand: vi.fn((params: unknown) => ({ _type: "Decrypt", params })),
 }));
 
 import { GenerateDataKeyCommand, DecryptCommand } from "@aws-sdk/client-kms";
 import { createAwsKmsAdapter } from "./aws";
 
-const TEST_ARN = "arn:aws:kms:us-east-2:578673726240:key/00000000-0000-0000-0000-000000000000";
+const TEST_ARN =
+  "arn:aws:kms:us-east-2:578673726240:key/00000000-0000-0000-0000-000000000000";
 const KEY_ID = "ingestion:kms:v1";
 
 beforeEach(() => {
@@ -41,7 +45,10 @@ describe("generateDataKey", () => {
   it("sends GenerateDataKeyCommand with the bound key ARN and AES_256 spec", async () => {
     const dek = randomBytes(32);
     const encryptedDek = randomBytes(200);
-    mockSend.mockResolvedValueOnce({ Plaintext: dek, CiphertextBlob: encryptedDek });
+    mockSend.mockResolvedValueOnce({
+      Plaintext: dek,
+      CiphertextBlob: encryptedDek,
+    });
 
     const adapter = createAwsKmsAdapter(TEST_ARN);
     await adapter.generateDataKey(KEY_ID);
@@ -55,7 +62,10 @@ describe("generateDataKey", () => {
   it("returns Plaintext as plaintext and CiphertextBlob as encrypted", async () => {
     const dek = randomBytes(32);
     const encryptedDek = randomBytes(200);
-    mockSend.mockResolvedValueOnce({ Plaintext: dek, CiphertextBlob: encryptedDek });
+    mockSend.mockResolvedValueOnce({
+      Plaintext: dek,
+      CiphertextBlob: encryptedDek,
+    });
 
     const adapter = createAwsKmsAdapter(TEST_ARN);
     const result = await adapter.generateDataKey(KEY_ID);
@@ -65,7 +75,10 @@ describe("generateDataKey", () => {
   });
 
   it("throws when KMS returns no Plaintext", async () => {
-    mockSend.mockResolvedValueOnce({ Plaintext: undefined, CiphertextBlob: randomBytes(200) });
+    mockSend.mockResolvedValueOnce({
+      Plaintext: undefined,
+      CiphertextBlob: randomBytes(200),
+    });
 
     const adapter = createAwsKmsAdapter(TEST_ARN);
     await expect(adapter.generateDataKey(KEY_ID)).rejects.toThrow(
@@ -74,7 +87,10 @@ describe("generateDataKey", () => {
   });
 
   it("throws when KMS returns no CiphertextBlob", async () => {
-    mockSend.mockResolvedValueOnce({ Plaintext: randomBytes(32), CiphertextBlob: undefined });
+    mockSend.mockResolvedValueOnce({
+      Plaintext: randomBytes(32),
+      CiphertextBlob: undefined,
+    });
 
     const adapter = createAwsKmsAdapter(TEST_ARN);
     await expect(adapter.generateDataKey(KEY_ID)).rejects.toThrow(
@@ -112,9 +128,9 @@ describe("decryptDataKey", () => {
     mockSend.mockResolvedValueOnce({ Plaintext: undefined });
 
     const adapter = createAwsKmsAdapter(TEST_ARN);
-    await expect(adapter.decryptDataKey(randomBytes(200), KEY_ID)).rejects.toThrow(
-      /Decrypt returned empty Plaintext/,
-    );
+    await expect(
+      adapter.decryptDataKey(randomBytes(200), KEY_ID),
+    ).rejects.toThrow(/Decrypt returned empty Plaintext/);
   });
 });
 
@@ -135,7 +151,9 @@ describe("round-trip through envelope encryption", () => {
     const recovered = await decrypt(ciphertext, KEY_ID, { adapter });
 
     expect(recovered.toString("utf8")).toBe("oauth-token-value");
-    expect(ciphertext.includes(Buffer.from("oauth-token-value", "utf8"))).toBe(false);
+    expect(ciphertext.includes(Buffer.from("oauth-token-value", "utf8"))).toBe(
+      false,
+    );
   });
 
   it("produces distinct ciphertexts for the same plaintext (fresh IV per call)", async () => {
@@ -144,8 +162,14 @@ describe("round-trip through envelope encryption", () => {
     const dek2 = randomBytes(32);
 
     mockSend
-      .mockResolvedValueOnce({ Plaintext: dek1, CiphertextBlob: randomBytes(200) })
-      .mockResolvedValueOnce({ Plaintext: dek2, CiphertextBlob: randomBytes(200) });
+      .mockResolvedValueOnce({
+        Plaintext: dek1,
+        CiphertextBlob: randomBytes(200),
+      })
+      .mockResolvedValueOnce({
+        Plaintext: dek2,
+        CiphertextBlob: randomBytes(200),
+      });
 
     const adapter = createAwsKmsAdapter(TEST_ARN);
     const a = await encrypt("same-input", KEY_ID, { adapter });

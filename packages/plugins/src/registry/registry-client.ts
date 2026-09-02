@@ -51,7 +51,10 @@ export async function listServers(
       `registry list response failed validation: ${parsed.error.message}`,
     );
   }
-  return { servers: parsed.data.servers, nextCursor: parsed.data.metadata?.nextCursor };
+  return {
+    servers: parsed.data.servers,
+    nextCursor: parsed.data.metadata?.nextCursor,
+  };
 }
 
 export async function getServerVersion(

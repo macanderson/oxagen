@@ -25,8 +25,8 @@ export interface ModelRate {
    * this rate, not the fresh-input rate. Mirrors
    * `packages/billing/src/pricing.ts`'s `cachedInputPer1M`; kept in sync by
    * hand since this card is intentionally vendored, not imported.
-   * (apps/cli/src/agent/rate-card.ts is a pure re-export of this module —
-   * the old hand-synced CLI copy was deduped in 29c8d53c.)
+   * (apps/cli/src/agent/rate-card.ts is a pure re-export of this module, so
+   * the CLI never carries a second copy of these numbers.)
    */
   cachedInputPer1M: number;
 }
@@ -85,11 +85,10 @@ export const RATE_CARD: RateCardEntry[] = [
   },
   // gpt-5.5-pro/gpt-5.5 rows are from the AI Gateway's /v1/models pricing
   // (2026-07-07, base tier ≤272k context). They MUST sort before the generic
-  // "gpt-5" prefix row: without them every gpt-5.5-pro token was priced at
-  // the generic $1.25/$10 — an 18–24× under-report that made pro-judge
-  // configs look affordable on the cost dashboards while draining the real
-  // gateway balance. gpt-5.5-pro publishes no cache-read rate; 50% of fresh
-  // input follows the same OpenAI ratio as the other rows.
+  // "gpt-5" prefix row: "gpt-5.5-pro" starts with "gpt-5", so a generic row
+  // placed first would win the prefix match and price these ~18–24× too
+  // cheaply. gpt-5.5-pro publishes no cache-read rate; 50% of fresh input
+  // follows the same OpenAI ratio as the other rows.
   {
     family: "gpt-5.5-pro",
     label: "GPT-5.5 Pro",
@@ -290,7 +289,7 @@ export interface TokenUsage {
    * Prompt tokens served from the provider's cache — a SUBSET of
    * `inputTokens`, not additional to it. Billed at `cachedInputPer1M`
    * instead of the fresh `inputPer1M` rate; omitted/0 prices every input
-   * token as fresh (the old, pre-cache-aware behavior).
+   * token as fresh.
    */
   cachedTokens?: number;
 }
@@ -353,8 +352,8 @@ export interface CostProjection {
  * `inputTokens` into billable-fresh and cached-read exactly as
  * {@link estimateCostUsd} does, so a cache-heavy turn is not overstated — the
  * two functions are guaranteed to agree on `totalUsd`. `cachedTokens` defaults
- * to 0 (every input token priced fresh — the old, pre-cache-aware behavior), so
- * existing callers that omit it are unaffected.
+ * to 0 (every input token priced fresh), so a caller that omits it still gets a
+ * correct — if conservative — projection.
  */
 export function projectCost(model: string, usage: TokenUsage): CostProjection {
   const entry = entryFor(model);

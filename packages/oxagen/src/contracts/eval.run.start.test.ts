@@ -92,8 +92,8 @@ describe("eval.run.start capability", () => {
   it("is billing-gated (does not set noBillingGate)", () => {
     // eval.run.start consumes AI tokens (target + judge), so it must NOT opt out
     // of the billing admission gate. The field is intentionally absent.
-    expect((evalRunStart as { noBillingGate?: boolean }).noBillingGate).not.toBe(
-      true,
-    );
+    expect(
+      (evalRunStart as { noBillingGate?: boolean }).noBillingGate,
+    ).not.toBe(true);
   });
 });

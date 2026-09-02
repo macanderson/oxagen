@@ -10,10 +10,9 @@ import { logger } from "./logger";
 // completed | failed | cancelled).
 const TERMINAL_STATUSES = ["completed", "failed", "cancelled"] as const;
 
-export const workflowCancelHandler: CapabilityHandler<typeof workflowCancel> = async (
-  input,
-  ctx,
-) => {
+export const workflowCancelHandler: CapabilityHandler<
+  typeof workflowCancel
+> = async (input, ctx) => {
   // Read the existence/status and flip to "cancelled" inside ONE transaction so
   // the status check and the write cannot interleave with the Inngest worker
   // transitioning the run to a terminal state (TOCTOU). The UPDATE itself carries
@@ -50,13 +49,17 @@ export const workflowCancelHandler: CapabilityHandler<typeof workflowCancel> = a
     // Zero rows flipped => the run reached a terminal status (already
     // completed/failed/cancelled, or transitioned there mid-cancel). Do not
     // corrupt the terminal state.
-    if (!updated) return { kind: "already_terminal" as const, id: execution.id };
+    if (!updated)
+      return { kind: "already_terminal" as const, id: execution.id };
 
     return { kind: "cancelled" as const, id: updated.id };
   });
 
   if (outcome.kind === "not_found") {
-    logger.warn({ workflowId: input.workflowId, orgId: ctx.orgId }, "workflow.cancel: not found");
+    logger.warn(
+      { workflowId: input.workflowId, orgId: ctx.orgId },
+      "workflow.cancel: not found",
+    );
     throw new Error(`workflow not found: ${input.workflowId}`);
   }
 

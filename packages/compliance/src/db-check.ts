@@ -1,10 +1,11 @@
 // db-check.ts — programmatic generation of the security_events CHECK-constraint
 // SQL from the single-source TS unions in security-event-types.ts.
 //
-// This eliminates the third hand-maintained copy of the taxonomy (the migration
-// DDL). The Drizzle schema builds its `check()` constraint from these helpers,
-// and migration authors generate the exact constraint body with
-// `generateEventTypeCheckClause()` rather than retyping the list.
+// The migration DDL is not a hand-maintained copy of the taxonomy. The Drizzle
+// schema builds its `check()` constraint from these helpers, and migration
+// authors paste the output of `generateEventTypeCheckClause()` rather than
+// retyping the list. The drift test in security-event-types.test.ts asserts the
+// latest event_type migration contains that exact generated body.
 //
 // Pure string builders — no DB dependency, no SQL execution. Quoting is a
 // single-quote SQL string literal; the inputs are compile-time constants from

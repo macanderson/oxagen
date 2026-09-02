@@ -35,4 +35,6 @@ export const integrationMetrics = registerCapability({
 });
 
 export type IntegrationMetricsInput = z.output<typeof integrationMetrics.input>;
-export type IntegrationMetricsOutput = z.output<typeof integrationMetrics.output>;
+export type IntegrationMetricsOutput = z.output<
+  typeof integrationMetrics.output
+>;

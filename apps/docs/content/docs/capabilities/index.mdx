@@ -9,7 +9,7 @@ A **capability** is the unit of action in Oxagen. Each one is a typed contract d
 
 | Field | Meaning |
 |---|---|
-| Name | ADR-025 snake_case identifier, e.g. `query_audit_log` |
+| Name | Verb-first snake_case identifier, e.g. `query_audit_log` — see [Capability naming](/docs/api/capabilities#capability-naming) |
 | Domain | Functional grouping (billing, graph, agent, …) |
 | Surfaces | Where it is mounted: `api`, `mcp`, `agent`, `cli` |
 | Sensitivity | `low`, `medium`, `high`, or `destructive` — destructive capabilities require explicit approval before running |
@@ -26,6 +26,6 @@ Org admins can browse the full registry in **Organization → Governance → Cap
 
 Selected capabilities have dedicated reference pages documenting their surfaces, inputs, and outputs:
 
-- [skill.author](/docs/capabilities/skill.author) — author a workspace skill from a natural-language prompt.
+- [author_skill](/docs/capabilities/skill.author) — author a workspace skill from a natural-language prompt.
 
 For everything else, the governance catalog is the authoritative, always-current reference — it is generated from the live registry, not maintained by hand.

@@ -28,7 +28,10 @@ describe("SvgPreview", () => {
   it("renders an img element with the SVG data URI as src", () => {
     render(<SvgPreview svg={SVG} title={TITLE} />);
     const img = screen.getByRole("img");
-    expect(img).toHaveAttribute("src", expect.stringContaining("data:image/svg+xml"));
+    expect(img).toHaveAttribute(
+      "src",
+      expect.stringContaining("data:image/svg+xml"),
+    );
   });
 
   it("img alt text matches the title", () => {
@@ -84,11 +87,14 @@ describe("SvgPreview", () => {
 
   it("hides the Download link when no serveUrl is provided (persistence skipped/failed)", () => {
     render(<SvgPreview svg={SVG} title={TITLE} />);
-    expect(screen.queryByLabelText(`Download ${TITLE} as SVG file`)).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(`Download ${TITLE} as SVG file`),
+    ).not.toBeInTheDocument();
   });
 
   it("never renders the SVG markup into the DOM (no dangerouslySetInnerHTML)", () => {
-    const malicious = '<svg xmlns="http://www.w3.org/2000/svg"><circle r="9"/></svg>';
+    const malicious =
+      '<svg xmlns="http://www.w3.org/2000/svg"><circle r="9"/></svg>';
     const { container } = render(<SvgPreview svg={malicious} title={TITLE} />);
     // The raw markup must only ever appear encoded inside the img src —
     // querying the DOM for an actual <circle> element must find nothing.

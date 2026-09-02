@@ -22,7 +22,6 @@ export function scaffoldPrompt(opts: {
   path: string;
   created: boolean;
 } {
-  const dir =
-    opts.dir ?? join(opts.cwd ?? process.cwd(), ".oxagen", "prompts");
+  const dir = opts.dir ?? join(opts.cwd ?? process.cwd(), ".oxagen", "prompts");
   return scaffoldMarkdownFile({ dir, name: opts.name, template: TEMPLATE });
 }

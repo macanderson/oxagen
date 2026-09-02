@@ -21,7 +21,9 @@ const withCursorOf = {
 
 describe("readCursor", () => {
   it("returns the string cursor for a record type", () => {
-    expect(readCursor({ issue: "2026-01-01T00:00:00Z" }, "issue")).toBe("2026-01-01T00:00:00Z");
+    expect(readCursor({ issue: "2026-01-01T00:00:00Z" }, "issue")).toBe(
+      "2026-01-01T00:00:00Z",
+    );
   });
 
   it("returns null for missing / non-string / null map", () => {
@@ -38,20 +40,27 @@ describe("advanceCursor", () => {
       rec("2", "2026-03-15T12:00:00.000Z"),
       rec("3", "2026-02-01T00:00:00.000Z"),
     ];
-    expect(advanceCursor(withCursorOf, "issue", batch, null)).toBe("2026-03-15T12:00:00.000Z");
+    expect(advanceCursor(withCursorOf, "issue", batch, null)).toBe(
+      "2026-03-15T12:00:00.000Z",
+    );
   });
 
   it("never regresses below the prior cursor", () => {
     const batch = [rec("1", "2026-01-01T00:00:00.000Z")];
-    expect(advanceCursor(withCursorOf, "issue", batch, "2026-06-01T00:00:00.000Z")).toBe(
-      "2026-06-01T00:00:00.000Z",
-    );
+    expect(
+      advanceCursor(withCursorOf, "issue", batch, "2026-06-01T00:00:00.000Z"),
+    ).toBe("2026-06-01T00:00:00.000Z");
   });
 
   it("keeps the prior cursor when the connector has no cursorOf", () => {
-    expect(advanceCursor({}, "issue", [rec("1", "2026-01-01T00:00:00.000Z")], "prior")).toBe(
-      "prior",
-    );
+    expect(
+      advanceCursor(
+        {},
+        "issue",
+        [rec("1", "2026-01-01T00:00:00.000Z")],
+        "prior",
+      ),
+    ).toBe("prior");
   });
 
   it("ignores records whose cursorOf is null", () => {
@@ -76,7 +85,9 @@ describe("mergeCursor", () => {
   });
 
   it("clears the cursor when next is null", () => {
-    expect(mergeCursor({ issue: "a", pull_request: "b" }, "issue", null)).toEqual({
+    expect(
+      mergeCursor({ issue: "a", pull_request: "b" }, "issue", null),
+    ).toEqual({
       pull_request: "b",
     });
   });

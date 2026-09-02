@@ -86,8 +86,22 @@ describe("runEvalSuite", () => {
   it("runs compileFn for each turn", async () => {
     const trace = makeTrace({
       turns: [
-        { taskFrame, budget, requiredInContext: ["r1"], forbiddenInContext: [], expectedToolCalls: [], expectedOutcome: "success" },
-        { taskFrame, budget, requiredInContext: ["r2"], forbiddenInContext: [], expectedToolCalls: [], expectedOutcome: "success" },
+        {
+          taskFrame,
+          budget,
+          requiredInContext: ["r1"],
+          forbiddenInContext: [],
+          expectedToolCalls: [],
+          expectedOutcome: "success",
+        },
+        {
+          taskFrame,
+          budget,
+          requiredInContext: ["r2"],
+          forbiddenInContext: [],
+          expectedToolCalls: [],
+          expectedOutcome: "success",
+        },
       ],
     });
     const compileFn = vi.fn(async () => ["r1", "r2"]);
@@ -169,7 +183,9 @@ describe("runEvalSuite", () => {
 
   it("passes the correct taskFrame and budget to compileFn", async () => {
     const trace = makeTrace();
-    const compileFn = vi.fn(async (_frame: TaskFrame, _bud: TokenBudget) => ["rec-1"]);
+    const compileFn = vi.fn(async (_frame: TaskFrame, _bud: TokenBudget) => [
+      "rec-1",
+    ]);
 
     await runEvalSuite([trace], compileFn);
 

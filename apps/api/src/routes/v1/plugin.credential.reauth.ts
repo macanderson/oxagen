@@ -9,6 +9,8 @@ export const pluginCredentialReauthRoute = new Hono<AppEnv>();
 pluginCredentialReauthRoute.post("/", async (c) => {
   const body = pluginCredentialReauth.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(pluginCredentialReauth.name, body, ctx, { surface: "api" });
+  const out = await invoke(pluginCredentialReauth.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

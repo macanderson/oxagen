@@ -18,6 +18,7 @@ import {
   SECURITY_MANAGER_ROLES,
 } from "@/lib/resolve-org";
 import { getSession } from "@/lib/session";
+import { authDenialStatus } from "@/lib/auth-denial";
 import { assertEnterprise } from "@/lib/enterprise";
 import { isTierDenied } from "@oxagen/billing";
 import { requireEnv } from "@oxagen/config/env";
@@ -36,11 +37,17 @@ import {
 // Default Node.js runtime: node:crypto HMAC + DB access — never move to edge. No
 // `export const runtime` (incompatible with cacheComponents; Node is default).
 
+/** Minimum accepted length for a dedicated signing key, in characters. */
+const MIN_SIGNING_SECRET_LENGTH = 16;
+
 function signingSecret(): string {
-  // A dedicated key is preferred; fall back to the always-present auth secret so
-  // the feature works out-of-the-box. Both are >= 32 bytes.
+  // A dedicated key is preferred; a shorter-than-minimum one is ignored rather
+  // than trusted, falling back to the always-present auth secret so the feature
+  // works out of the box.
   const dedicated = process.env["AUDIT_EXPORT_SIGNING_SECRET"];
-  if (dedicated && dedicated.length >= 16) return dedicated;
+  if (dedicated && dedicated.length >= MIN_SIGNING_SECRET_LENGTH) {
+    return dedicated;
+  }
   return requireEnv(["BETTER_AUTH_SECRET"] as const).BETTER_AUTH_SECRET;
 }
 
@@ -55,8 +62,18 @@ export async function GET(
   const session = await getSession();
   if (!session?.user) return new Response("Unauthorized", { status: 401 });
 
-  // Resolve org (404s unknown slug via notFound()).
-  const tenant = await resolveOrg(orgSlug);
+  // Resolve org. `resolveOrg` signals an unknown/invalid slug by throwing
+  // notFound(), and a Route Handler has NO not-found render boundary — letting
+  // that sentinel escape crashes the function (502) instead of answering 404.
+  // Convert it to a real Response here (see @/lib/auth-denial).
+  let tenant: Awaited<ReturnType<typeof resolveOrg>>;
+  try {
+    tenant = await resolveOrg(orgSlug);
+  } catch (err) {
+    const status = authDenialStatus(err);
+    if (status === null) throw err;
+    return new Response("Not found", { status });
+  }
 
   // 2. Membership (null role = not a member → 404, no existence leak).
   const role = await getOrgRole(tenant.id, session.user.id);

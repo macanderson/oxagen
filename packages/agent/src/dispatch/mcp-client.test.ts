@@ -11,11 +11,21 @@ const mocks = vi.hoisted(() => ({
 
 mocks.fakeListTools.mockImplementation(async () => ({
   tools: [
-    { name: "search", inputSchema: { type: "object" }, description: "search remote" },
-    { name: "fetch", inputSchema: { type: "object" }, description: "fetch remote" },
+    {
+      name: "search",
+      inputSchema: { type: "object" },
+      description: "search remote",
+    },
+    {
+      name: "fetch",
+      inputSchema: { type: "object" },
+      description: "fetch remote",
+    },
   ],
 }));
-mocks.fakeCallTool.mockImplementation(async () => ({ content: [{ type: "text", text: "ok" }] }));
+mocks.fakeCallTool.mockImplementation(async () => ({
+  content: [{ type: "text", text: "ok" }],
+}));
 mocks.fakeConnect.mockImplementation(async () => undefined);
 mocks.fakeClose.mockImplementation(async () => undefined);
 mocks.ClientMock.mockImplementation(() => ({
@@ -51,7 +61,10 @@ const stdioMocks = vi.hoisted(() => {
     instances.push(inst);
     return inst;
   });
-  const getDefaultEnvironment = vi.fn(() => ({ PATH: "/usr/bin", HOME: "/home/x" }));
+  const getDefaultEnvironment = vi.fn(() => ({
+    PATH: "/usr/bin",
+    HOME: "/home/x",
+  }));
   return { instances, StdioTransportMock, getDefaultEnvironment };
 });
 
@@ -90,7 +103,9 @@ describe("mcp-client", () => {
     const args = mocks.TransportMock.mock.calls[0]!;
     expect(args[0]).toBeInstanceOf(URL);
     expect((args[0] as URL).toString()).toBe("https://example.test/mcp");
-    const opts = args[1] as { requestInit: { headers: Record<string, string> } };
+    const opts = args[1] as {
+      requestInit: { headers: Record<string, string> };
+    };
     expect(opts.requestInit.headers.authorization).toBe("Bearer abc");
     expect(mocks.fakeConnect).toHaveBeenCalledTimes(1);
   });
@@ -111,10 +126,16 @@ describe("mcp-client", () => {
     });
     const tools = await materializeMcpTools(client, "ext");
     expect(Object.keys(tools).sort()).toEqual(["ext.fetch", "ext.search"]);
-    const t = tools["ext.search"] as { description?: string; execute?: (i: unknown) => Promise<unknown> };
+    const t = tools["ext.search"] as {
+      description?: string;
+      execute?: (i: unknown) => Promise<unknown>;
+    };
     expect(t.description).toBe("search remote");
     const res = await t.execute!({ q: "hello" });
-    expect(mocks.fakeCallTool).toHaveBeenCalledWith({ name: "search", arguments: { q: "hello" } });
+    expect(mocks.fakeCallTool).toHaveBeenCalledWith({
+      name: "search",
+      arguments: { q: "hello" },
+    });
     expect(res).toEqual([{ type: "text", text: "ok" }]);
   });
 
@@ -184,7 +205,9 @@ describe("mcp-client stdio transport", () => {
 
   it("defaults args to [] when omitted", async () => {
     await connectMcpStdio({ command: "python" });
-    const params = stdioMocks.StdioTransportMock.mock.calls[0]![0] as { args: string[] };
+    const params = stdioMocks.StdioTransportMock.mock.calls[0]![0] as {
+      args: string[];
+    };
     expect(params.args).toEqual([]);
   });
 

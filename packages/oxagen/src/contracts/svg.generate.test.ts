@@ -23,9 +23,7 @@ describe("svg.generate capability", () => {
   });
 
   it("rejects an empty prompt", () => {
-    expect(() =>
-      svgGenerate.input.parse({ prompt: "" }),
-    ).toThrow();
+    expect(() => svgGenerate.input.parse({ prompt: "" })).toThrow();
   });
 
   it("rejects a non-positive width", () => {

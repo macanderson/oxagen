@@ -1,5 +1,5 @@
 ---
-title: skill.author
+title: author_skill
 description: Author a new skill from a natural-language prompt — model-synthesised skill.toml, validated, installed.
 ---
 
@@ -7,7 +7,7 @@ description: Author a new skill from a natural-language prompt — model-synthes
 
 ## Overview
 
-`skill.author` lets an agent (or a developer via API/MCP) create a new workspace skill from a
+`author_skill` lets an agent (or a developer via API/MCP) create a new workspace skill from a
 plain-English description. The handler:
 
 1. Passes the prompt to the model (via `@oxagen/ai` `generateObjectFor`) to synthesise a structured
@@ -16,7 +16,7 @@ plain-English description. The handler:
    `@oxagen/agent-artifacts`.
 3. Validates the assembled document with `canonicalizeSkillArtifact` — an invalid slug, a wrong
    `kind`, or any unknown field throws before anything is written.
-4. Calls `skill.workspace.install` (custom path) to persist the skill transactionally.
+4. Calls `install_skill` (custom path) to persist the skill transactionally.
 
 The operation is idempotent on slug: if a skill with the generated name already exists, the
 installer returns `installed: false` and no duplicate is created.
@@ -26,8 +26,8 @@ installer returns `installed: false` and no duplicate is created.
 | Surface | Mount |
 |---|---|
 | API | `POST /v1/:org_slug/:workspace_slug/skill/author` |
-| MCP | Tool `skill.author` |
-| Agent | `invoke('skill.author', { prompt, … }, ctx)` |
+| MCP | Tool `author_skill` |
+| Agent | `invoke('author_skill', { prompt, … }, ctx)` |
 
 ## Input
 
@@ -73,7 +73,7 @@ POST /v1/acme/default/skill/author
 {
   "publicId": "skl_AbC123",
   "slug": "pr-review",
-  "body": "---\nname: pr-review\ndescription: ...\nmetadata:\n  weight: high\n  category: engineering\n---\n\n# PR Review\n...",
+  "content": "[skill]\nname = \"pr-review\"\ndescription = \"...\"\nweight = \"high\"\ncategory = \"engineering\"\n\nbody = \"\"\"\n# PR Review\n...\n\"\"\"\n",
   "activeVersion": 1,
   "installed": true
 }
@@ -81,7 +81,7 @@ POST /v1/acme/default/skill/author
 
 ## Notes
 
-- `skill.author` is a **builtin agent capability** — it does not appear in the plugin marketplace.
+- `author_skill` is a **builtin agent capability** — it does not appear in the plugin marketplace.
   It is always available to agents on workspaces where the caller has the appropriate role.
 - The generated skill follows the canonical `skill.toml` anatomy described in the
   `skill-builder` builtin skill.

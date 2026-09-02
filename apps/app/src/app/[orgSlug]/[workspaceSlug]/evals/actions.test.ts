@@ -40,8 +40,12 @@ const {
   const mockFrom = vi.fn(() => ({ where: mockWhere }));
   const mockSelect = vi.fn(() => ({ from: mockFrom }));
   const mockTx = { select: mockSelect };
-  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) => fn(mockTx));
-  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) => fn());
+  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) =>
+    fn(mockTx),
+  );
+  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) =>
+    fn(),
+  );
   return {
     mockGetSession: vi.fn(),
     mockResolveOrg: vi.fn(),
@@ -89,7 +93,9 @@ const SESSION = { user: { id: "user-1" } };
 const ORG = { id: "org-1", slug: "acme" };
 const WS = { id: "ws-1", slug: "research" };
 
-function base<T extends object>(overrides: T): { orgSlug: string; workspaceSlug: string } & T {
+function base<T extends object>(
+  overrides: T,
+): { orgSlug: string; workspaceSlug: string } & T {
   return { orgSlug: "acme", workspaceSlug: "research", ...overrides };
 }
 
@@ -109,17 +115,30 @@ describe("evals actions", () => {
 
   describe("createDatasetAction", () => {
     it("invokes create_dataset with a 3-arg call (no surface option) and returns ok:true", async () => {
-      mockInvoke.mockResolvedValue({ datasetId: "id-1", publicId: "evd_abc", slug: "smoke" });
+      mockInvoke.mockResolvedValue({
+        datasetId: "id-1",
+        publicId: "evd_abc",
+        slug: "smoke",
+      });
 
       const result = await createDatasetAction(
         base({ name: "Smoke dataset", description: "d" }),
       );
 
-      expect(result).toEqual({ ok: true, datasetId: "id-1", publicId: "evd_abc", slug: "smoke" });
+      expect(result).toEqual({
+        ok: true,
+        datasetId: "id-1",
+        publicId: "evd_abc",
+        slug: "smoke",
+      });
       expect(mockInvoke).toHaveBeenCalledWith(
         "create_dataset",
         { name: "Smoke dataset", description: "d" },
-        expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }),
+        expect.objectContaining({
+          orgId: "org-1",
+          workspaceId: "ws-1",
+          userId: "user-1",
+        }),
       );
       // Exactly 3 args — a surface opt would make this a 4-arg call.
       expect(mockInvoke.mock.calls[0]).toHaveLength(3);
@@ -134,7 +153,9 @@ describe("evals actions", () => {
     });
 
     it("rejects an invalid (non-kebab-case) slug before invoking", async () => {
-      const result = await createDatasetAction(base({ name: "x", slug: "Not Kebab!" }));
+      const result = await createDatasetAction(
+        base({ name: "x", slug: "Not Kebab!" }),
+      );
 
       expect(result.ok).toBe(false);
       expect(mockInvoke).not.toHaveBeenCalled();
@@ -217,13 +238,26 @@ describe("evals actions", () => {
 
   describe("addDatasetItemAction", () => {
     it("invokes add_dataset_item with a single-item batch", async () => {
-      mockInvoke.mockResolvedValue({ datasetId: "id-1", added: 1, itemCount: 4 });
+      mockInvoke.mockResolvedValue({
+        datasetId: "id-1",
+        added: 1,
+        itemCount: 4,
+      });
 
       const result = await addDatasetItemAction(
-        base({ datasetPublicId: "evd_abc", input: "What is 2+2?", expectedOutput: "4" }),
+        base({
+          datasetPublicId: "evd_abc",
+          input: "What is 2+2?",
+          expectedOutput: "4",
+        }),
       );
 
-      expect(result).toEqual({ ok: true, datasetId: "id-1", added: 1, itemCount: 4 });
+      expect(result).toEqual({
+        ok: true,
+        datasetId: "id-1",
+        added: 1,
+        itemCount: 4,
+      });
       expect(mockInvoke).toHaveBeenCalledWith(
         "add_dataset_item",
         {
@@ -236,9 +270,15 @@ describe("evals actions", () => {
     });
 
     it("omits expectedOutput from the item when not provided", async () => {
-      mockInvoke.mockResolvedValue({ datasetId: "id-1", added: 1, itemCount: 1 });
+      mockInvoke.mockResolvedValue({
+        datasetId: "id-1",
+        added: 1,
+        itemCount: 1,
+      });
 
-      await addDatasetItemAction(base({ datasetPublicId: "evd_abc", input: "Just a question" }));
+      await addDatasetItemAction(
+        base({ datasetPublicId: "evd_abc", input: "Just a question" }),
+      );
 
       expect(mockInvoke).toHaveBeenCalledWith(
         "add_dataset_item",
@@ -248,7 +288,9 @@ describe("evals actions", () => {
     });
 
     it("rejects an empty input before invoking", async () => {
-      const result = await addDatasetItemAction(base({ datasetPublicId: "evd_abc", input: "" }));
+      const result = await addDatasetItemAction(
+        base({ datasetPublicId: "evd_abc", input: "" }),
+      );
 
       expect(result.ok).toBe(false);
       expect(mockInvoke).not.toHaveBeenCalled();
@@ -273,12 +315,22 @@ describe("evals actions", () => {
   describe("getDatasetAction", () => {
     it("invokes get_dataset with a limit and returns ok:true", async () => {
       mockInvoke.mockResolvedValue({
-        dataset: { datasetId: "id-1", name: "n", slug: "s", description: null, source: "manual", itemCount: 0, createdAt: "now" },
+        dataset: {
+          datasetId: "id-1",
+          name: "n",
+          slug: "s",
+          description: null,
+          source: "manual",
+          itemCount: 0,
+          createdAt: "now",
+        },
         items: [],
         nextCursor: null,
       });
 
-      const result = await getDatasetAction(base({ datasetPublicId: "evd_abc" }));
+      const result = await getDatasetAction(
+        base({ datasetPublicId: "evd_abc" }),
+      );
 
       expect(result.ok).toBe(true);
       expect(mockInvoke).toHaveBeenCalledWith(
@@ -291,12 +343,22 @@ describe("evals actions", () => {
 
     it("passes cursor through when provided", async () => {
       mockInvoke.mockResolvedValue({
-        dataset: { datasetId: "id-1", name: "n", slug: "s", description: null, source: "manual", itemCount: 0, createdAt: "now" },
+        dataset: {
+          datasetId: "id-1",
+          name: "n",
+          slug: "s",
+          description: null,
+          source: "manual",
+          itemCount: 0,
+          createdAt: "now",
+        },
         items: [],
         nextCursor: null,
       });
 
-      await getDatasetAction(base({ datasetPublicId: "evd_abc", cursor: "evi_page2" }));
+      await getDatasetAction(
+        base({ datasetPublicId: "evd_abc", cursor: "evi_page2" }),
+      );
 
       expect(mockInvoke).toHaveBeenCalledWith(
         "get_dataset",
@@ -308,12 +370,22 @@ describe("evals actions", () => {
     it("ALLOWS a viewer to read (unlike the writer gate)", async () => {
       dbState.wsRoleRows = [{ role: "viewer" }];
       mockInvoke.mockResolvedValue({
-        dataset: { datasetId: "id-1", name: "n", slug: "s", description: null, source: "manual", itemCount: 0, createdAt: "now" },
+        dataset: {
+          datasetId: "id-1",
+          name: "n",
+          slug: "s",
+          description: null,
+          source: "manual",
+          itemCount: 0,
+          createdAt: "now",
+        },
         items: [],
         nextCursor: null,
       });
 
-      const result = await getDatasetAction(base({ datasetPublicId: "evd_abc" }));
+      const result = await getDatasetAction(
+        base({ datasetPublicId: "evd_abc" }),
+      );
 
       expect(result.ok).toBe(true);
       expect(mockInvoke).toHaveBeenCalled();
@@ -322,7 +394,9 @@ describe("evals actions", () => {
     it("denies a non-member (no workspace role row) without invoking", async () => {
       dbState.wsRoleRows = [];
 
-      const result = await getDatasetAction(base({ datasetPublicId: "evd_abc" }));
+      const result = await getDatasetAction(
+        base({ datasetPublicId: "evd_abc" }),
+      );
 
       expect(result.ok).toBe(false);
       expect(mockInvoke).not.toHaveBeenCalled();
@@ -331,7 +405,9 @@ describe("evals actions", () => {
     it("maps an invoke() rejection to ok:false", async () => {
       mockInvoke.mockRejectedValue(new Error("dataset not found"));
 
-      const result = await getDatasetAction(base({ datasetPublicId: "evd_missing" }));
+      const result = await getDatasetAction(
+        base({ datasetPublicId: "evd_missing" }),
+      );
 
       expect(result).toEqual({ ok: false, error: "dataset not found" });
     });
@@ -343,7 +419,11 @@ describe("evals actions", () => {
 
   describe("startEvalRunAction", () => {
     it("invokes start_eval_run with a model target and returns ok:true", async () => {
-      mockInvoke.mockResolvedValue({ runId: "evr_1", status: "pending", itemCount: 5 });
+      mockInvoke.mockResolvedValue({
+        runId: "evr_1",
+        status: "pending",
+        itemCount: 5,
+      });
 
       const result = await startEvalRunAction(
         base({
@@ -367,7 +447,11 @@ describe("evals actions", () => {
     });
 
     it("invokes start_eval_run with an agent target", async () => {
-      mockInvoke.mockResolvedValue({ runId: "evr_2", status: "pending", itemCount: 3 });
+      mockInvoke.mockResolvedValue({
+        runId: "evr_2",
+        status: "pending",
+        itemCount: 3,
+      });
 
       await startEvalRunAction(
         base({
@@ -422,7 +506,11 @@ describe("evals actions", () => {
       dbState.wsRoleRows = [{ role: "viewer" }];
 
       const result = await startEvalRunAction(
-        base({ datasetPublicId: "evd_abc", target: { kind: "model" }, passThreshold: 0.7 }),
+        base({
+          datasetPublicId: "evd_abc",
+          target: { kind: "model" },
+          passThreshold: 0.7,
+        }),
       );
 
       expect(result.ok).toBe(false);
@@ -433,7 +521,11 @@ describe("evals actions", () => {
       mockInvoke.mockRejectedValue(new Error("insufficient balance"));
 
       const result = await startEvalRunAction(
-        base({ datasetPublicId: "evd_abc", target: { kind: "model" }, passThreshold: 0.7 }),
+        base({
+          datasetPublicId: "evd_abc",
+          target: { kind: "model" },
+          passThreshold: 0.7,
+        }),
       );
 
       expect(result).toEqual({ ok: false, error: "insufficient balance" });
@@ -457,7 +549,9 @@ describe("evals actions", () => {
       };
       mockInvoke.mockResolvedValue(status);
 
-      const result = await getEvalRunStatusAction(base({ runPublicId: "evr_1" }));
+      const result = await getEvalRunStatusAction(
+        base({ runPublicId: "evr_1" }),
+      );
 
       expect(result).toEqual({ ok: true, status });
       expect(mockInvoke).toHaveBeenCalledWith(
@@ -480,7 +574,9 @@ describe("evals actions", () => {
         failureReason: null,
       });
 
-      const result = await getEvalRunStatusAction(base({ runPublicId: "evr_1" }));
+      const result = await getEvalRunStatusAction(
+        base({ runPublicId: "evr_1" }),
+      );
 
       expect(result.ok).toBe(true);
     });

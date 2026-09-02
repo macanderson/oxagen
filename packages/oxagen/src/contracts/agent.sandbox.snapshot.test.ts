@@ -11,7 +11,9 @@ describe("agent.sandbox.snapshot capability", () => {
 
   it("requires a sessionId", () => {
     expect(() => agentSandboxSnapshot.input.parse({})).toThrow();
-    expect(agentSandboxSnapshot.input.parse({ sessionId: "sbx_1" }).sessionId).toBe("sbx_1");
+    expect(
+      agentSandboxSnapshot.input.parse({ sessionId: "sbx_1" }).sessionId,
+    ).toBe("sbx_1");
   });
 
   it("validates the output shape", () => {

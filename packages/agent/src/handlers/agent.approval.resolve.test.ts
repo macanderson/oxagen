@@ -18,10 +18,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => fakeApprovalResolveDb,
-  withTenantDb: async (fn: (tx: typeof fakeApprovalResolveDb) => Promise<unknown>) =>
-    fn(fakeApprovalResolveDb),
-
+    db: () => fakeApprovalResolveDb,
+    withTenantDb: async (
+      fn: (tx: typeof fakeApprovalResolveDb) => Promise<unknown>,
+    ) => fn(fakeApprovalResolveDb),
   };
 });
 

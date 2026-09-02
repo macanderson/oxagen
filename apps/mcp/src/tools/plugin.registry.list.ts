@@ -20,6 +20,8 @@ export default async function pluginRegistryListTool(
   _args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(pluginRegistryList.name, {}, ctx, { surface: "mcp" });
+  const output = await invoke(pluginRegistryList.name, {}, ctx, {
+    surface: "mcp",
+  });
   return pluginRegistryList.output.parse(output);
 }

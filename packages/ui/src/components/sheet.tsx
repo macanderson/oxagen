@@ -56,7 +56,11 @@ const SheetPopup = React.forwardRef<
 >(({ side = "right", className, children, portalProps, ...props }, ref) => (
   <SheetPortal {...portalProps}>
     <SheetOverlay />
-    <DialogPrimitive.Popup ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
+    <DialogPrimitive.Popup
+      ref={ref}
+      className={cn(sheetVariants({ side }), className)}
+      {...props}
+    >
       {children}
       <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
         <X className="h-4 w-4" />
@@ -67,20 +71,41 @@ const SheetPopup = React.forwardRef<
 ));
 SheetPopup.displayName = "SheetPopup";
 
-const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col space-y-2 text-center sm:text-left", className)} {...props} />
+const SheetHeader = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn(
+      "flex flex-col space-y-2 text-center sm:text-left",
+      className,
+    )}
+    {...props}
+  />
 );
 SheetHeader.displayName = "SheetHeader";
 
 /** coss ui body wrapper — sits between `SheetHeader` and `SheetFooter`. */
-const SheetPanel = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-1 flex-col gap-2 overflow-y-auto", className)} {...props} />
+const SheetPanel = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn("flex flex-1 flex-col gap-2 overflow-y-auto", className)}
+    {...props}
+  />
 );
 SheetPanel.displayName = "SheetPanel";
 
-const SheetFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+const SheetFooter = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)}
+    className={cn(
+      "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+      className,
+    )}
     {...props}
   />
 );

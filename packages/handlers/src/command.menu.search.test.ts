@@ -67,7 +67,9 @@ vi.mock("drizzle-orm", () => ({
   or: (...args: unknown[]) => ({ or: args }),
 }));
 
-vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("./logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 import { commandMenuSearchHandler } from "./command.menu.search";
 
@@ -90,30 +92,46 @@ afterEach(() => {
 describe("commandMenuSearchHandler", () => {
   it("returns empty rows when all sources return nothing", async () => {
     const result = await commandMenuSearchHandler(
-      { kind: "run", query: "aex_nothing", orgSlug: "acme", workspaceSlug: "prod" },
+      {
+        kind: "run",
+        query: "aex_nothing",
+        orgSlug: "acme",
+        workspaceSlug: "prod",
+      },
       ctx,
     );
     expect(result.rows).toHaveLength(0);
   });
 
   it("maps playbook Postgres rows into SearchResultRow with correct href", async () => {
-    mockWithTenantDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-      // Simulate tx chain: .select().from().where().limit() → []
-      const tx = {
-        select: () => tx,
-        from: () => tx,
-        where: () => tx,
-        orderBy: () => tx,
-        limit: () =>
-          Promise.resolve([
-            { publicId: "plb_abc", name: "Churn Investigate", status: "active" },
-          ]),
-      };
-      return fn(tx);
-    });
+    mockWithTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        // Simulate tx chain: .select().from().where().limit() → []
+        const tx = {
+          select: () => tx,
+          from: () => tx,
+          where: () => tx,
+          orderBy: () => tx,
+          limit: () =>
+            Promise.resolve([
+              {
+                publicId: "plb_abc",
+                name: "Churn Investigate",
+                status: "active",
+              },
+            ]),
+        };
+        return fn(tx);
+      },
+    );
 
     const result = await commandMenuSearchHandler(
-      { kind: "playbook", query: "churn", orgSlug: "acme", workspaceSlug: "prod" },
+      {
+        kind: "playbook",
+        query: "churn",
+        orgSlug: "acme",
+        workspaceSlug: "prod",
+      },
       ctx,
     );
     expect(result.rows).toHaveLength(1);
@@ -138,22 +156,33 @@ describe("commandMenuSearchHandler", () => {
       ],
     });
     // Postgres also returns the same record
-    mockWithTenantDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-      const tx = {
-        select: () => tx,
-        from: () => tx,
-        where: () => tx,
-        orderBy: () => tx,
-        limit: () =>
-          Promise.resolve([
-            { publicId: "plb_abc", name: "Churn Investigate", status: "active" },
-          ]),
-      };
-      return fn(tx);
-    });
+    mockWithTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          select: () => tx,
+          from: () => tx,
+          where: () => tx,
+          orderBy: () => tx,
+          limit: () =>
+            Promise.resolve([
+              {
+                publicId: "plb_abc",
+                name: "Churn Investigate",
+                status: "active",
+              },
+            ]),
+        };
+        return fn(tx);
+      },
+    );
 
     const result = await commandMenuSearchHandler(
-      { kind: "playbook", query: "churn", orgSlug: "acme", workspaceSlug: "prod" },
+      {
+        kind: "playbook",
+        query: "churn",
+        orgSlug: "acme",
+        workspaceSlug: "prod",
+      },
       ctx,
     );
 
@@ -163,28 +192,32 @@ describe("commandMenuSearchHandler", () => {
     // But we only tested "same href" dedup — here they differ.
     // Just verify total ≤ 8 and Postgres row is first.
     expect(result.rows.length).toBeLessThanOrEqual(8);
-    expect(result.rows[0]?.href).toBe("/acme/prod/automation/playbooks/plb_abc");
+    expect(result.rows[0]?.href).toBe(
+      "/acme/prod/automation/playbooks/plb_abc",
+    );
   });
 
   it("slices merged results to max 8 rows", async () => {
     // Return 6 Postgres rows + 5 graph nodes → 11 total, should be sliced to 8
-    mockWithTenantDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-      const tx = {
-        select: () => tx,
-        from: () => tx,
-        where: () => tx,
-        orderBy: () => tx,
-        limit: () =>
-          Promise.resolve(
-            Array.from({ length: 6 }, (_, i) => ({
-              publicId: `aex_${i}`,
-              status: "completed",
-              createdAt: new Date(),
-            })),
-          ),
-      };
-      return fn(tx);
-    });
+    mockWithTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          select: () => tx,
+          from: () => tx,
+          where: () => tx,
+          orderBy: () => tx,
+          limit: () =>
+            Promise.resolve(
+              Array.from({ length: 6 }, (_, i) => ({
+                publicId: `aex_${i}`,
+                status: "completed",
+                createdAt: new Date(),
+              })),
+            ),
+        };
+        return fn(tx);
+      },
+    );
     mockInvoke.mockResolvedValue({
       nodes: Array.from({ length: 5 }, (_, i) => ({
         nodeId: `node_${i}`,
@@ -203,20 +236,29 @@ describe("commandMenuSearchHandler", () => {
 
   it("gracefully handles graph.node.search failure (ontology best-effort)", async () => {
     mockInvoke.mockRejectedValue(new Error("Neo4j unavailable"));
-    mockWithTenantDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-      const tx = {
-        select: () => tx,
-        from: () => tx,
-        where: () => tx,
-        orderBy: () => tx,
-        limit: () =>
-          Promise.resolve([{ publicId: "agt_abc", name: "Cleanup Agent", status: "active" }]),
-      };
-      return fn(tx);
-    });
+    mockWithTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          select: () => tx,
+          from: () => tx,
+          where: () => tx,
+          orderBy: () => tx,
+          limit: () =>
+            Promise.resolve([
+              { publicId: "agt_abc", name: "Cleanup Agent", status: "active" },
+            ]),
+        };
+        return fn(tx);
+      },
+    );
 
     const result = await commandMenuSearchHandler(
-      { kind: "agent", query: "cleanup", orgSlug: "acme", workspaceSlug: "prod" },
+      {
+        kind: "agent",
+        query: "cleanup",
+        orgSlug: "acme",
+        workspaceSlug: "prod",
+      },
       ctx,
     );
     // Should still return Postgres rows despite graph failure.
@@ -227,25 +269,35 @@ describe("commandMenuSearchHandler", () => {
   it("searches across all kinds when no kind filter is provided", async () => {
     // Each withTenantDb call returns 1 row of the appropriate type
     let callCount = 0;
-    mockWithTenantDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-      callCount++;
-      const entityConfigs = [
-        [{ publicId: "aex_1", status: "failed", createdAt: new Date() }],
-        [{ publicId: "plb_1", name: "Playbook A", status: "active" }],
-        [{ publicId: "plt_1", triggerType: "webhook", isEnabled: true }],
-        [{ publicId: "agt_1", name: "Agent A", status: "active" }],
-        [{ publicId: "prn_1", displayName: "Alice", kind: "human", status: "active" }],
-      ];
-      const data = entityConfigs[(callCount - 1) % entityConfigs.length] ?? [];
-      const tx = {
-        select: () => tx,
-        from: () => tx,
-        where: () => tx,
-        orderBy: () => tx,
-        limit: () => Promise.resolve(data),
-      };
-      return fn(tx);
-    });
+    mockWithTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        callCount++;
+        const entityConfigs = [
+          [{ publicId: "aex_1", status: "failed", createdAt: new Date() }],
+          [{ publicId: "plb_1", name: "Playbook A", status: "active" }],
+          [{ publicId: "plt_1", triggerType: "webhook", isEnabled: true }],
+          [{ publicId: "agt_1", name: "Agent A", status: "active" }],
+          [
+            {
+              publicId: "prn_1",
+              displayName: "Alice",
+              kind: "human",
+              status: "active",
+            },
+          ],
+        ];
+        const data =
+          entityConfigs[(callCount - 1) % entityConfigs.length] ?? [];
+        const tx = {
+          select: () => tx,
+          from: () => tx,
+          where: () => tx,
+          orderBy: () => tx,
+          limit: () => Promise.resolve(data),
+        };
+        return fn(tx);
+      },
+    );
 
     const result = await commandMenuSearchHandler(
       { query: "a", orgSlug: "acme", workspaceSlug: "prod" },

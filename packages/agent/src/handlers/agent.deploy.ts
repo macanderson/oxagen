@@ -58,7 +58,10 @@ export async function agentDeployHandler(
 
     await tx
       .update(schema.agents)
-      .set({ deploymentStatus: input.deploymentStatus, updatedByUserId: userId })
+      .set({
+        deploymentStatus: input.deploymentStatus,
+        updatedByUserId: userId,
+      })
       .where(
         and(
           eq(schema.agents.id, agent.id),

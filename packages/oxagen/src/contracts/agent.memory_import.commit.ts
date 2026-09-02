@@ -43,13 +43,20 @@ export const agentMemoryImportCommit = registerCapability({
     results: z
       .array(
         z.object({
-          lesson: z.string().describe("Echo of the draft lesson, for client reconciliation"),
+          lesson: z
+            .string()
+            .describe("Echo of the draft lesson, for client reconciliation"),
           ok: z.boolean(),
           memoryId: z
             .string()
             .nullable()
-            .describe("Neo4j node id of the written memory, or null on failure"),
-          error: z.string().nullable().describe("Failure reason, or null on success"),
+            .describe(
+              "Neo4j node id of the written memory, or null on failure",
+            ),
+          error: z
+            .string()
+            .nullable()
+            .describe("Failure reason, or null on success"),
         }),
       )
       .describe("Positional results — results[i] corresponds to drafts[i]"),
@@ -58,5 +65,9 @@ export const agentMemoryImportCommit = registerCapability({
   }),
 });
 
-export type AgentMemoryImportCommitInput = z.input<typeof agentMemoryImportCommit.input>;
-export type AgentMemoryImportCommitOutput = z.output<typeof agentMemoryImportCommit.output>;
+export type AgentMemoryImportCommitInput = z.input<
+  typeof agentMemoryImportCommit.input
+>;
+export type AgentMemoryImportCommitOutput = z.output<
+  typeof agentMemoryImportCommit.output
+>;

@@ -9,7 +9,11 @@ import { createRecord } from "../record";
 import type { Namespace, Provenance, MemoryRecord } from "../types";
 
 const NS: Namespace = { org: "test-org", workspace: "test-ws" };
-const PROV: Provenance = { author: "test", derivedFrom: [], timestamp: Date.now() };
+const PROV: Provenance = {
+  author: "test",
+  derivedFrom: [],
+  timestamp: Date.now(),
+};
 
 function makeRecord(event: string, salience = 0.5): MemoryRecord {
   return createRecord({
@@ -32,13 +36,18 @@ function treeOf(records: MemoryRecord[]): MerkleTree {
  */
 function makePeer(records: MemoryRecord[]) {
   const store = new Map(records.map((r) => [r.id, r]));
-  const rebuild = () => buildMerkleTree([...store.values()].map(toRecordVersion));
+  const rebuild = () =>
+    buildMerkleTree([...store.values()].map(toRecordVersion));
   let tree = rebuild();
-  const getSubtree = vi.fn(async (_ns: Namespace, prefix: string) => tree.node(prefix));
+  const getSubtree = vi.fn(async (_ns: Namespace, prefix: string) =>
+    tree.node(prefix),
+  );
   const peer: SyncPeer = {
     getRootHash: vi.fn(async () => tree.rootHash),
     getSubtree,
-    pullRecords: vi.fn(async (ids: string[]) => ids.map((id) => store.get(id)).filter((r): r is MemoryRecord => !!r)),
+    pullRecords: vi.fn(async (ids: string[]) =>
+      ids.map((id) => store.get(id)).filter((r): r is MemoryRecord => !!r),
+    ),
     pushRecords: vi.fn(async (recs: MemoryRecord[]) => {
       for (const r of recs) store.set(r.id, r);
       tree = rebuild();
@@ -65,7 +74,13 @@ describe("syncWithPeer", () => {
     const { peer, getSubtree } = makePeer(shared);
     const { loadLocal, storeRecords } = makeLocal(shared);
 
-    const result = await syncWithPeer(treeOf(shared), peer, NS, loadLocal, storeRecords);
+    const result = await syncWithPeer(
+      treeOf(shared),
+      peer,
+      NS,
+      loadLocal,
+      storeRecords,
+    );
 
     expect(result.recordsPulled).toBe(0);
     expect(result.recordsPushed).toBe(0);
@@ -79,7 +94,13 @@ describe("syncWithPeer", () => {
     const { peer } = makePeer([shared, remoteOnly]);
     const { store, loadLocal, storeRecords } = makeLocal([shared]);
 
-    const result = await syncWithPeer(treeOf([shared]), peer, NS, loadLocal, storeRecords);
+    const result = await syncWithPeer(
+      treeOf([shared]),
+      peer,
+      NS,
+      loadLocal,
+      storeRecords,
+    );
 
     expect(result.recordsPulled).toBe(1);
     expect(storeRecords).toHaveBeenCalled();
@@ -93,7 +114,13 @@ describe("syncWithPeer", () => {
     const { peer, store: remoteStore } = makePeer([shared]);
     const { loadLocal, storeRecords } = makeLocal([shared, localOnly]);
 
-    const result = await syncWithPeer(treeOf([shared, localOnly]), peer, NS, loadLocal, storeRecords);
+    const result = await syncWithPeer(
+      treeOf([shared, localOnly]),
+      peer,
+      NS,
+      loadLocal,
+      storeRecords,
+    );
 
     expect(result.recordsPushed).toBe(1);
     expect(peer.pushRecords).toHaveBeenCalled();
@@ -107,7 +134,13 @@ describe("syncWithPeer", () => {
     const { peer } = makePeer([shared, remoteOnly]);
     const { loadLocal, storeRecords } = makeLocal([shared, localOnly]);
 
-    const result = await syncWithPeer(treeOf([shared, localOnly]), peer, NS, loadLocal, storeRecords);
+    const result = await syncWithPeer(
+      treeOf([shared, localOnly]),
+      peer,
+      NS,
+      loadLocal,
+      storeRecords,
+    );
 
     expect(result.recordsPulled).toBe(1);
     expect(result.recordsPushed).toBe(1);
@@ -122,9 +155,19 @@ describe("syncWithPeer", () => {
     const localVersion = { ...base, salience: 0.3 };
 
     const { peer, store: remoteStore } = makePeer([remoteVersion]);
-    const { store: localStore, loadLocal, storeRecords } = makeLocal([localVersion]);
+    const {
+      store: localStore,
+      loadLocal,
+      storeRecords,
+    } = makeLocal([localVersion]);
 
-    const result = await syncWithPeer(treeOf([localVersion]), peer, NS, loadLocal, storeRecords);
+    const result = await syncWithPeer(
+      treeOf([localVersion]),
+      peer,
+      NS,
+      loadLocal,
+      storeRecords,
+    );
 
     // Local converged to the max salience.
     expect(localStore.get(base.id)!.salience).toBe(0.9);
@@ -136,15 +179,27 @@ describe("syncWithPeer", () => {
 
   it("fetches only the divergent record's subtree path, not the whole tree", async () => {
     // Enough records to force the trie to split past a single leaf.
-    const shared = Array.from({ length: 40 }, (_, i) => makeRecord(`rec-${i}`, 0.5));
+    const shared = Array.from({ length: 40 }, (_, i) =>
+      makeRecord(`rec-${i}`, 0.5),
+    );
     const divergentId = shared[7]!.id;
-    const localVersions = shared.map((r) => (r.id === divergentId ? { ...r, salience: 0.2 } : r));
-    const remoteVersions = shared.map((r) => (r.id === divergentId ? { ...r, salience: 0.8 } : r));
+    const localVersions = shared.map((r) =>
+      r.id === divergentId ? { ...r, salience: 0.2 } : r,
+    );
+    const remoteVersions = shared.map((r) =>
+      r.id === divergentId ? { ...r, salience: 0.8 } : r,
+    );
 
     const { peer, getSubtree } = makePeer(remoteVersions);
     const { loadLocal, storeRecords } = makeLocal(localVersions);
 
-    const result = await syncWithPeer(treeOf(localVersions), peer, NS, loadLocal, storeRecords);
+    const result = await syncWithPeer(
+      treeOf(localVersions),
+      peer,
+      NS,
+      loadLocal,
+      storeRecords,
+    );
 
     // Only the one divergent record is pulled...
     expect(peer.pullRecords).toHaveBeenCalledWith([divergentId]);
@@ -158,7 +213,13 @@ describe("syncWithPeer", () => {
     const shared = [makeRecord("x")];
     const { peer } = makePeer(shared);
     const { loadLocal, storeRecords } = makeLocal(shared);
-    const result = await syncWithPeer(treeOf(shared), peer, NS, loadLocal, storeRecords);
+    const result = await syncWithPeer(
+      treeOf(shared),
+      peer,
+      NS,
+      loadLocal,
+      storeRecords,
+    );
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
   });
 
@@ -167,12 +228,26 @@ describe("syncWithPeer", () => {
     const localOnly = makeRecord("local-only");
     const remoteOnly = makeRecord("remote-only");
     const { peer, store: remoteStore } = makePeer([shared, remoteOnly]);
-    const { store: localStore, loadLocal, storeRecords } = makeLocal([shared, localOnly]);
+    const {
+      store: localStore,
+      loadLocal,
+      storeRecords,
+    } = makeLocal([shared, localOnly]);
 
-    await syncWithPeer(treeOf([shared, localOnly]), peer, NS, loadLocal, storeRecords);
+    await syncWithPeer(
+      treeOf([shared, localOnly]),
+      peer,
+      NS,
+      loadLocal,
+      storeRecords,
+    );
 
-    const localRoot = buildMerkleTree([...localStore.values()].map(toRecordVersion)).rootHash;
-    const remoteRoot = buildMerkleTree([...remoteStore.values()].map(toRecordVersion)).rootHash;
+    const localRoot = buildMerkleTree(
+      [...localStore.values()].map(toRecordVersion),
+    ).rootHash;
+    const remoteRoot = buildMerkleTree(
+      [...remoteStore.values()].map(toRecordVersion),
+    ).rootHash;
     expect(localRoot).toBe(remoteRoot);
   });
 });

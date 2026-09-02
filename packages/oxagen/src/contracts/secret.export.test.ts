@@ -12,15 +12,23 @@ describe("secret.export contract", () => {
   it("accepts a valid input (all fields optional)", () => {
     expect(() => secretExport.input.parse({})).not.toThrow();
     expect(() =>
-      secretExport.input.parse({ environmentId: "env_1", keyIds: ["sk_1", "sk_2"] }),
+      secretExport.input.parse({
+        environmentId: "env_1",
+        keyIds: ["sk_1", "sk_2"],
+      }),
     ).not.toThrow();
   });
   it("rejects a non-array keyIds", () => {
-    expect(() => secretExport.input.parse({ keyIds: "not-an-array" })).toThrow();
+    expect(() =>
+      secretExport.input.parse({ keyIds: "not-an-array" }),
+    ).toThrow();
   });
   it("accepts a valid output", () => {
     expect(() =>
-      secretExport.output.parse({ env: [{ key: "FOO", value: "bar" }], dotenv: "FOO=bar\n" }),
+      secretExport.output.parse({
+        env: [{ key: "FOO", value: "bar" }],
+        dotenv: "FOO=bar\n",
+      }),
     ).not.toThrow();
   });
 });

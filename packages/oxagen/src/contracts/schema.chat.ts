@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const schemaChat = registerCapability({
   name: "run_schema_chat",
   domain: "schema",
-  description: "AI iterative builder turn: takes conversation + current draft; returns assistant message + proposed mutation tool calls.",
+  description:
+    "AI iterative builder turn: takes conversation + current draft; returns assistant message + proposed mutation tool calls.",
   mode: "sync",
   surfaces: ["api", "agent"] as const,
   layers: ["schema", "api", "unit", "docs"],
@@ -23,10 +24,16 @@ export const schemaChat = registerCapability({
   }),
   output: z.object({
     assistantMessage: z.string(),
-    proposedMutations: z.array(z.object({
-      capability: z.string().describe("Contract name, e.g. schema.label.upsert"),
-      input: z.record(z.string(), z.unknown()),
-    })).optional(),
+    proposedMutations: z
+      .array(
+        z.object({
+          capability: z
+            .string()
+            .describe("Capability name, e.g. upsert_schema_label"),
+          input: z.record(z.string(), z.unknown()),
+        }),
+      )
+      .optional(),
     conversationId: z.string(),
   }),
 });

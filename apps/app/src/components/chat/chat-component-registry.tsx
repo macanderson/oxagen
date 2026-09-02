@@ -21,26 +21,6 @@ type AnyLazy = LazyExoticComponent<
 >;
 
 /**
- * Registry keyed by componentId string. All entries are React.lazy so the
- * component bundle is only loaded the first time a matching event arrives.
- *
- * Contract ids (REGISTRY_CONTRACT):
- *   "svg-preview"              — renders an inline SVG string or data-URL (M agent)
- *   "image-preview"            — renders a generated / fetched image (M agent)
- *   "install-instructions"     — renders a copy-able installation step block (M agent)
- *   "make-video-form"          — renders the make-a-video request form (V agent)
- *   "file-attachment"          — renders a generated document/spreadsheet/pdf/archive asset card
- *   "html-artifact"            — renders model-generated HTML in a sandboxed iframe
- *   "connection-create-inline" — renders an inline GitHub (or fallback) connection wizard card
- *   "code-diff"                — renders a unified-diff patch set (agent.repo.edit, repo.file.put)
- *   "terminal-trace"           — long-form shell scrollback for large agent.sandbox.exec output
- *   "file-tree"                — collapsible workspace/repo file tree, changed files link to their diff
- *   "coding-trace-panel"       — collapsible run-overview timeline composing terminal-trace/code-diff steps
- *   "workspace-context-panel"  — active sandbox session's file tree (client-fetched agent.sandbox.files.list)
- *   "pr-stats"                 — PR summary + stats + expandable comments + CI status (repo.pr.get)
- *   "ci-status"                — generic GitHub CI / check-run status for a ref (repo.ci.status)
- */
-/**
  * Emit a structured warning when a componentId arrives with no registered
  * renderer. Called from both message-bubble and chat-shell-client so the
  * signal appears at exactly one definition site.
@@ -56,8 +36,7 @@ export function logUnknownComponent(componentId: string): void {
 
 /**
  * Visible fallback rendered when a componentId arrives that has no registered
- * renderer. Replaces the previous `return null` behaviour so the user gets a
- * clear signal instead of a silent empty gap.
+ * renderer, so the user gets a clear signal instead of a silent empty gap.
  */
 export function UnknownComponentCard({
   componentId,
@@ -77,6 +56,14 @@ export function UnknownComponentCard({
   );
 }
 
+/**
+ * Registry keyed by componentId string. All entries are React.lazy so the
+ * component bundle is only loaded the first time a matching event arrives.
+ *
+ * These ids ARE the contract: `content_blocks` rows persist them as strings,
+ * so a rename needs a data migration. Each entry documents itself below rather
+ * than in a second list that drifts out of sync with the map.
+ */
 // The registry is heterogeneous — each component declares its own prop shape —
 // but the renderer always supplies props as `Record<string, unknown>` (spread
 // from `block.props`). The precise prop types are erased into the uniform

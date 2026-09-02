@@ -39,8 +39,12 @@ const {
   const mockFrom = vi.fn(() => ({ where: mockWhere }));
   const mockSelect = vi.fn(() => ({ from: mockFrom }));
   const mockTx = { select: mockSelect };
-  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) => fn(mockTx));
-  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) => fn());
+  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) =>
+    fn(mockTx),
+  );
+  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) =>
+    fn(),
+  );
 
   return {
     mockGetSession: vi.fn(),
@@ -77,13 +81,21 @@ vi.mock("@oxagen/agent/register", () => ({}));
 vi.mock("@/lib/routes", () => ({
   workspace: {
     settings: {
-      agentDefaults: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-        `/${orgSlug}/${workspaceSlug}/settings/agent-defaults`,
+      agentDefaults: ({
+        orgSlug,
+        workspaceSlug,
+      }: {
+        orgSlug: string;
+        workspaceSlug: string;
+      }) => `/${orgSlug}/${workspaceSlug}/settings/agent-defaults`,
     },
   },
 }));
 
-import { saveMemoryPolicyAction, readMemoryPolicyAction } from "./memory-policy-actions";
+import {
+  saveMemoryPolicyAction,
+  readMemoryPolicyAction,
+} from "./memory-policy-actions";
 
 const SESSION = { user: { id: "user-1" } };
 const ORG = { id: "org-1", slug: "acme" };
@@ -139,14 +151,20 @@ describe("saveMemoryPolicyAction", () => {
         complianceThreshold: 70,
         defaultDecayFloor: 5,
       },
-      expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }),
+      expect.objectContaining({
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        userId: "user-1",
+      }),
       { surface: "agent" },
     );
   });
 
   it("revalidates the consolidated agent-defaults path on success", async () => {
     await saveMemoryPolicyAction(base());
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/settings/agent-defaults");
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/acme/main/settings/agent-defaults",
+    );
   });
 
   it("returns ok:false with error message when invoke throws", async () => {
@@ -174,12 +192,19 @@ describe("readMemoryPolicyAction", () => {
   });
 
   it("asserts org membership then invokes get_memory_policy and returns the result", async () => {
-    const result = await readMemoryPolicyAction({ orgSlug: "acme", workspaceSlug: "main" });
+    const result = await readMemoryPolicyAction({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+    });
     expect(mockAssertOrgMember).toHaveBeenCalledWith("org-1", "user-1");
     expect(mockInvoke).toHaveBeenCalledWith(
       "get_memory_policy",
       {},
-      expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }),
+      expect.objectContaining({
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        userId: "user-1",
+      }),
       { surface: "agent" },
     );
     expect(result).toEqual({

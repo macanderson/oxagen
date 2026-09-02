@@ -49,7 +49,12 @@ async function loadAssets(assetIds: string[]): Promise<Map<string, AssetRow>> {
  * Priority: assetId > contentBase64 > text. An entry must provide at least one.
  */
 async function resolveEntry(
-  entry: { name: string; assetId?: string; contentBase64?: string; text?: string },
+  entry: {
+    name: string;
+    assetId?: string;
+    contentBase64?: string;
+    text?: string;
+  },
   orgId: string,
   assetsById: Map<string, AssetRow>,
 ): Promise<Uint8Array> {
@@ -111,12 +116,13 @@ async function resolveEntry(
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-export const archiveCreateHandler: CapabilityHandler<typeof archiveCreate> = async (
-  input,
-  ctx,
-) => {
+export const archiveCreateHandler: CapabilityHandler<
+  typeof archiveCreate
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    throw new Error("archive.create: userId is required — no user identity in context");
+    throw new Error(
+      "archive.create: userId is required — no user identity in context",
+    );
   }
 
   const { archiveName, entries } = input;
@@ -134,7 +140,9 @@ export const archiveCreateHandler: CapabilityHandler<typeof archiveCreate> = asy
   // Batch-load every referenced asset in ONE query (was one SELECT per entry).
   // Blob fetches still run per-entry in parallel below.
   const assetIds = [
-    ...new Set(entries.map((e) => e.assetId).filter((id): id is string => Boolean(id))),
+    ...new Set(
+      entries.map((e) => e.assetId).filter((id): id is string => Boolean(id)),
+    ),
   ];
   const assetsById = await loadAssets(assetIds);
 

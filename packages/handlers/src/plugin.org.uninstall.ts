@@ -6,7 +6,9 @@ import { logger } from "./logger";
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
   if (!ctx.workspaceId) {
-    throw new Error("[plugin.org.uninstall] workspaceId is required (scoped capability)");
+    throw new Error(
+      "[plugin.org.uninstall] workspaceId is required (scoped capability)",
+    );
   }
   const { orgListingId } = input as { orgListingId: string };
 
@@ -45,7 +47,10 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         );
     });
   } catch (err) {
-    logger.error({ err, orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId }, "plugin.org.uninstall: failed");
+    logger.error(
+      { err, orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "plugin.org.uninstall: failed",
+    );
     throw err;
   }
 
@@ -62,6 +67,9 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     requestId: ctx.requestId ?? null,
   });
 
-  logger.info({ orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId }, "plugin.org.uninstall: ok");
+  logger.info(
+    { orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+    "plugin.org.uninstall: ok",
+  );
   return { ok: true };
 };

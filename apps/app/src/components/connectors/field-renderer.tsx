@@ -45,7 +45,11 @@ import { KeyValueEditor } from "./key-value-editor";
 import { SecretFileUpload } from "./secret-file-upload";
 import { useConnectorSchema } from "./connector-schema-provider";
 import { FieldWrapper } from "./field-wrapper";
-import { TagInput, MultiSelectWidget, JsonCodeField } from "./field-renderer-widgets";
+import {
+  TagInput,
+  MultiSelectWidget,
+  JsonCodeField,
+} from "./field-renderer-widgets";
 import { validateField } from "./field-renderer-helpers";
 import type { FieldRendererProps } from "./field-renderer-types";
 
@@ -54,8 +58,13 @@ export { validateField };
 
 // ── Main FieldRenderer ─────────────────────────────────────────────────────────
 
-export function FieldRenderer({ field, namespace = "config", disabled = false }: FieldRendererProps) {
-  const { formState, setFieldValue, touchField, isFieldVisible } = useConnectorSchema();
+export function FieldRenderer({
+  field,
+  namespace = "config",
+  disabled = false,
+}: FieldRendererProps) {
+  const { formState, setFieldValue, touchField, isFieldVisible } =
+    useConnectorSchema();
 
   const fieldId = `${namespace}.${field.key}`;
   const rawValue = formState.values[field.key];
@@ -70,15 +79,12 @@ export function FieldRenderer({ field, namespace = "config", disabled = false }:
     fieldError &&
     (formState.touched.has(field.key) || fieldError.code !== undefined);
 
+  // Blur only marks the field touched. Validation errors are produced by the
+  // parent form's submit pass (ConnectorConfigForm.runClientValidation) and by
+  // the server; touching is what makes an existing error visible.
   const handleBlur = React.useCallback(() => {
     touchField(field.key);
-    // Client-side validation on blur
-    const err = validateField(field, rawValue);
-    if (err) {
-      // We don't set errors here — parent form submit does full validation.
-      // Touch is enough to show server errors.
-    }
-  }, [field, rawValue, touchField]);
+  }, [field.key, touchField]);
 
   if (!isVisible) return null;
 
@@ -159,7 +165,11 @@ export function FieldRenderer({ field, namespace = "config", disabled = false }:
         <Input
           id={fieldId}
           type="number"
-          value={typeof rawValue === "number" ? String(rawValue) : (rawValue as string | undefined) ?? ""}
+          value={
+            typeof rawValue === "number"
+              ? String(rawValue)
+              : ((rawValue as string | undefined) ?? "")
+          }
           onChange={(e) => {
             const n = Number(e.currentTarget.value);
             setFieldValue(field.key, isNaN(n) ? undefined : n);
@@ -326,7 +336,8 @@ export function FieldRenderer({ field, namespace = "config", disabled = false }:
 
   // ── checkbox (Switch) ─────────────────────────────────────────────────────────
   if (widget === "checkbox") {
-    const checked = typeof rawValue === "boolean" ? rawValue : Boolean(field.defaultValue);
+    const checked =
+      typeof rawValue === "boolean" ? rawValue : Boolean(field.defaultValue);
     return (
       <FieldWrapper
         id={fieldId}
@@ -353,7 +364,12 @@ export function FieldRenderer({ field, namespace = "config", disabled = false }:
 
   // ── slider ─────────────────────────────────────────────────────────────────────
   if (widget === "slider") {
-    const numVal = typeof rawValue === "number" ? rawValue : (field.defaultValue as number | undefined) ?? (field.validation?.min ?? 0);
+    const numVal =
+      typeof rawValue === "number"
+        ? rawValue
+        : ((field.defaultValue as number | undefined) ??
+          field.validation?.min ??
+          0);
     const min = field.validation?.min ?? 0;
     const max = field.validation?.max ?? 100;
     return (
@@ -372,9 +388,12 @@ export function FieldRenderer({ field, namespace = "config", disabled = false }:
             onValueCommitted={() => touchField(field.key)}
             min={min}
             max={max}
-            step={field.validation?.min !== undefined && field.validation.max !== undefined
-              ? Math.round((max - min) / 100 * 10) / 10 || 0.01
-              : 1}
+            step={
+              field.validation?.min !== undefined &&
+              field.validation.max !== undefined
+                ? Math.round(((max - min) / 100) * 10) / 10 || 0.01
+                : 1
+            }
             disabled={disabled}
             className="flex-1"
             aria-describedby={ariaDescribedBy}
@@ -389,9 +408,10 @@ export function FieldRenderer({ field, namespace = "config", disabled = false }:
 
   // ── key-value ──────────────────────────────────────────────────────────────────
   if (widget === "key-value") {
-    const current = (rawValue && typeof rawValue === "object" && !Array.isArray(rawValue))
-      ? (rawValue as Record<string, string>)
-      : {};
+    const current =
+      rawValue && typeof rawValue === "object" && !Array.isArray(rawValue)
+        ? (rawValue as Record<string, string>)
+        : {};
     return (
       <FieldWrapper
         id={fieldId}

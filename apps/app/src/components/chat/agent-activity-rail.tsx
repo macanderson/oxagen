@@ -1,12 +1,9 @@
 "use client";
 
 /**
- * AgentActivityRail — the calm, always-present right rail for a chat surface,
- * inspired by Claude's Progress / Outputs / Context cards. It replaces the old
- * dense stack (a bare `CodingTracePanel` trace-index + a tabbed
- * `WorkspaceContextPanel`) with three titled cards, each with a one-line
- * descriptor, a collapse control, and a graceful ambient state so the rail is
- * reassuring even before the first turn:
+ * AgentActivityRail — the calm, always-present right rail for a chat surface.
+ * Three titled cards, each with a collapse control and a graceful ambient
+ * state, so the rail is reassuring even before the first turn:
  *
  *   • Progress — the live turn as ordered stages (reuses `CodingTraceStages`),
  *     with a compact "Working · N tools" / "Turn complete" status line above.
@@ -64,7 +61,6 @@ interface RailCardProps {
    * changes text in v2's idle states ("Progress · idle", "Files · 0"). */
   cardId: string;
   title: string;
-  /** One-line descriptor rendered muted at the foot of the card body. */
   /** Small count/state pill shown right-aligned in the header. */
   badge?: React.ReactNode;
   /** Pulsing dot in the header while the turn is streaming. */
@@ -82,8 +78,7 @@ interface RailCardProps {
 /**
  * One titled, collapsible rail card: header (icon · title · live dot · badge ·
  * chevron) over a bordered body. No trailing helper caption — every card body
- * renders either real content or a self-explanatory empty state, so a repeated
- * one-line descriptor under it was pure duplication (ux pass 2026-07-16).
+ * renders either real content or a self-explanatory empty state.
  */
 function RailCard({
   icon: Icon,
@@ -284,7 +279,10 @@ function ContextRow({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <Icon
+        className="size-3.5 shrink-0 text-muted-foreground"
+        aria-hidden="true"
+      />
       <span className="w-16 shrink-0 text-muted-foreground">{label}</span>
       <span className="flex min-w-0 flex-1 items-center gap-1 text-foreground">
         {children}
@@ -318,7 +316,11 @@ export function resolveContextRepo({
   availableRepos: RepoOption[];
 }): { owner: string; name: string; branch: string | null } | null {
   if (binding) {
-    return { owner: binding.owner, name: binding.name, branch: binding.defaultBranch };
+    return {
+      owner: binding.owner,
+      name: binding.name,
+      branch: binding.defaultBranch,
+    };
   }
   if (!selectedRepoKey) return null;
   const repo = availableRepos.find((r) => r.key === selectedRepoKey);
@@ -374,13 +376,12 @@ function ContextCard({
   );
 
   return (
-    <RailCard
-      icon={FolderGit2}
-      cardId="context"
-      title="Context"
-    >
+    <RailCard icon={FolderGit2} cardId="context" title="Context">
       {repo ? (
-        <div className="flex flex-col gap-2 text-xs" data-testid="context-grounded">
+        <div
+          className="flex flex-col gap-2 text-xs"
+          data-testid="context-grounded"
+        >
           <ContextRow icon={FolderGit2} label="Repo">
             <span className="truncate font-medium">
               {repo.owner}/{repo.name}
@@ -413,9 +414,7 @@ function ContextCard({
           ) : null}
           {toolCount > 0 ? (
             <ContextRow icon={Wrench} label="Tools">
-              <span className="tabular-nums">
-                {toolCount} used this turn
-              </span>
+              <span className="tabular-nums">{toolCount} used this turn</span>
             </ContextRow>
           ) : null}
         </div>
@@ -424,7 +423,10 @@ function ContextCard({
           className="flex flex-col items-center gap-1.5 py-3 text-center"
           data-testid="context-empty"
         >
-          <FolderGit2 className="size-5 text-muted-foreground/70" aria-hidden="true" />
+          <FolderGit2
+            className="size-5 text-muted-foreground/70"
+            aria-hidden="true"
+          />
           <p className="text-xs font-medium text-foreground">
             Not connected to a repository
           </p>
@@ -491,7 +493,10 @@ function OutputsCard({
   toolCalls,
   v2 = false,
 }: OutputsCardProps) {
-  const hasFiles = React.useMemo(() => hasFileToolActivity(toolCalls), [toolCalls]);
+  const hasFiles = React.useMemo(
+    () => hasFileToolActivity(toolCalls),
+    [toolCalls],
+  );
   const { open, onOpenChange } = useV2CardOpenState(hasFiles, hasFiles);
   const idle = v2 && !hasFiles;
 

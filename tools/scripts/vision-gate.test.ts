@@ -31,7 +31,8 @@ describe("parseVerdict", () => {
   });
 
   it("parses JSON wrapped in code fences and prose", () => {
-    const raw = 'Here you go:\n```json\n{"verdict":"drifts","confidence":0.8,"summary":"x","reasons":[],"drift_flags":["vendor lock-in"],"recommendation":"y"}\n```\nDone.';
+    const raw =
+      'Here you go:\n```json\n{"verdict":"drifts","confidence":0.8,"summary":"x","reasons":[],"drift_flags":["vendor lock-in"],"recommendation":"y"}\n```\nDone.';
     const v = parseVerdict(raw);
     expect(v.verdict).toBe("drifts");
     expect(v.drift_flags).toEqual(["vendor lock-in"]);
@@ -45,7 +46,9 @@ describe("parseVerdict", () => {
   });
 
   it("sanitizes malformed field types instead of crashing", () => {
-    const v = parseVerdict('{"verdict":"neutral","confidence":"high","reasons":"not-an-array"}');
+    const v = parseVerdict(
+      '{"verdict":"neutral","confidence":"high","reasons":"not-an-array"}',
+    );
     expect(v.verdict).toBe("neutral");
     expect(v.confidence).toBe(0);
     expect(v.reasons).toEqual([]);
@@ -66,7 +69,12 @@ describe("truncateDiff", () => {
 
 describe("buildPrompt", () => {
   it("embeds the vision doc as the sole rubric and the PR context", () => {
-    const p = buildPrompt("THE VISION TEXT", { title: "t", body: "b" }, "1 file changed", "diff --git");
+    const p = buildPrompt(
+      "THE VISION TEXT",
+      { title: "t", body: "b" },
+      "1 file changed",
+      "diff --git",
+    );
     expect(p.system).toContain("THE VISION TEXT");
     expect(p.system).toContain("ONLY rubric");
     for (const v of VERDICTS) expect(p.system).toContain(`"${v}"`);

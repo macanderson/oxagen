@@ -38,7 +38,9 @@ describe("agent.memory.import.commit handler", () => {
     mocks.embedTextMock.mockReset();
     mocks.isKnowledgeGraphEnabledMock.mockReset();
     mocks.isKnowledgeGraphEnabledMock.mockReturnValue(true);
-    mocks.embedTextMock.mockImplementation(async () => new Array(1536).fill(0.05));
+    mocks.embedTextMock.mockImplementation(async () =>
+      new Array(1536).fill(0.05),
+    );
     let n = 0;
     mocks.writeMemoryMock.mockImplementation(async () => ({
       memoryId: `m_${++n}`,
@@ -54,7 +56,11 @@ describe("agent.memory.import.commit handler", () => {
     expect(out.imported).toBe(2);
     expect(out.failed).toBe(0);
     expect(out.results).toHaveLength(2);
-    expect(out.results[0]).toMatchObject({ lesson: "A", ok: true, error: null });
+    expect(out.results[0]).toMatchObject({
+      lesson: "A",
+      ok: true,
+      error: null,
+    });
     expect(out.results[0]?.memoryId).toMatch(/^m_/);
     expect(mocks.writeMemoryMock).toHaveBeenCalledTimes(2);
     expect(mocks.embedTextMock).toHaveBeenCalledTimes(2);
@@ -76,7 +82,10 @@ describe("agent.memory.import.commit handler", () => {
       },
       CTX,
     );
-    const arg = mocks.writeMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.writeMemoryMock.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(arg).toMatchObject({
       lesson: "Anchored lesson",
       memoryClass: "OBSERVATION",
@@ -97,7 +106,10 @@ describe("agent.memory.import.commit handler", () => {
       { drafts: [{ lesson: "L", memoryKind: "constraint" } as never] },
       CTX,
     );
-    const arg = mocks.writeMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.writeMemoryMock.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(arg.nodeRef).toBe("user-memory");
     expect(arg.source).toBe("user");
     expect(arg.memoryClass).toBe("OBSERVATION");
@@ -106,14 +118,26 @@ describe("agent.memory.import.commit handler", () => {
 
   it("captures per-item failures without aborting the batch", async () => {
     mocks.writeMemoryMock
-      .mockImplementationOnce(async () => ({ memoryId: "m_ok", edgesCreated: 0 }))
+      .mockImplementationOnce(async () => ({
+        memoryId: "m_ok",
+        edgesCreated: 0,
+      }))
       .mockImplementationOnce(async () => {
         throw new Error("neo4j write timeout");
       })
-      .mockImplementationOnce(async () => ({ memoryId: "m_ok3", edgesCreated: 0 }));
+      .mockImplementationOnce(async () => ({
+        memoryId: "m_ok3",
+        edgesCreated: 0,
+      }));
 
     const out = await agentMemoryImportCommitHandler(
-      { drafts: [draft({ lesson: "A" }), draft({ lesson: "B" }), draft({ lesson: "C" })] },
+      {
+        drafts: [
+          draft({ lesson: "A" }),
+          draft({ lesson: "B" }),
+          draft({ lesson: "C" }),
+        ],
+      },
       CTX,
     );
     expect(out.imported).toBe(2);
@@ -131,7 +155,15 @@ describe("agent.memory.import.commit handler", () => {
 
   it("captures a class-invariant violation as a per-item failure (RULE draft with no enforcementScore)", async () => {
     const out = await agentMemoryImportCommitHandler(
-      { drafts: [draft({ lesson: "A", memoryClass: "RULE", enforcementScore: undefined })] },
+      {
+        drafts: [
+          draft({
+            lesson: "A",
+            memoryClass: "RULE",
+            enforcementScore: undefined,
+          }),
+        ],
+      },
       CTX,
     );
     expect(out.failed).toBe(1);
@@ -151,7 +183,10 @@ describe("agent.memory.import.commit handler", () => {
       { drafts: [draft({ lesson: "A" }), draft({ lesson: "B" })] },
       CTX,
     );
-    expect(out.results[0]).toMatchObject({ ok: false, error: "embedding gateway down" });
+    expect(out.results[0]).toMatchObject({
+      ok: false,
+      error: "embedding gateway down",
+    });
     expect(out.failed).toBe(1);
     expect(out.imported).toBe(1);
   });

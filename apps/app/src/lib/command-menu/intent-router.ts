@@ -65,7 +65,11 @@ export type Intent =
 
 /** Normalise text for matching — lowercase, collapse whitespace, strip punctuation. */
 function normalise(text: string): string {
-  return text.toLowerCase().replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /** Fuzzy match: does `needle` appear in `haystack` after normalisation? */
@@ -79,25 +83,65 @@ function fuzzyMatch(needle: string, haystack: string): boolean {
 }
 
 // Prefixes that signal the user wants to navigate somewhere.
-const NAV_PREFIXES = ["go to", "open", "navigate to", "take me to", "show me", "go"];
+const NAV_PREFIXES = [
+  "go to",
+  "open",
+  "navigate to",
+  "take me to",
+  "show me",
+  "go",
+];
 
 // Prefixes that signal a question / search.
 const SEARCH_PREFIXES = [
-  "who", "what", "where", "when", "why", "how",
-  "list", "find", "search", "show", "display", "get",
-  "which", "is there", "are there",
+  "who",
+  "what",
+  "where",
+  "when",
+  "why",
+  "how",
+  "list",
+  "find",
+  "search",
+  "show",
+  "display",
+  "get",
+  "which",
+  "is there",
+  "are there",
 ];
 
 // Prefixes that signal an imperative fill/edit instruction.
 const FILL_VERBS = [
-  "fill", "update", "set", "change", "edit", "populate", "autofill",
-  "suggest", "complete", "fill in", "fill out", "fix",
+  "fill",
+  "update",
+  "set",
+  "change",
+  "edit",
+  "populate",
+  "autofill",
+  "suggest",
+  "complete",
+  "fill in",
+  "fill out",
+  "fix",
 ];
 
 // General action verbs (lower priority than fill when form is registered).
 const ACTION_VERBS = [
-  "create", "new", "add", "delete", "remove", "archive", "invite",
-  "connect", "disconnect", "deploy", "publish", "save", "run",
+  "create",
+  "new",
+  "add",
+  "delete",
+  "remove",
+  "archive",
+  "invite",
+  "connect",
+  "disconnect",
+  "deploy",
+  "publish",
+  "save",
+  "run",
 ];
 
 /** True when the query text reads as a fill/edit instruction. */
@@ -163,7 +207,9 @@ export function classifyIntent(options: ClassifyOptions): Intent {
       : trimmed;
 
     const targets = enumerateNavTargets(ctx);
-    const match = targets.find((t) => fuzzyMatch(stripped, t.label) || fuzzyMatch(trimmed, t.label));
+    const match = targets.find(
+      (t) => fuzzyMatch(stripped, t.label) || fuzzyMatch(trimmed, t.label),
+    );
     if (match) {
       return { type: "navigate", href: match.href, label: match.label };
     }

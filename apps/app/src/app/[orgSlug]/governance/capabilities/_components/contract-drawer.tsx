@@ -12,8 +12,14 @@
 
 import type { AuditEvent } from "@oxagen/oxagen/contracts/audit.log.query";
 import type { CapabilityRegistrySummary } from "@oxagen/oxagen/contracts/capability.registry.list";
-import type { CapabilityRegistryDetail, CapabilityFieldSpec } from "@oxagen/oxagen/contracts/capability.registry.get";
-import { Drawer, LoadingState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
+import type {
+  CapabilityRegistryDetail,
+  CapabilityFieldSpec,
+} from "@oxagen/oxagen/contracts/capability.registry.get";
+import {
+  Drawer,
+  LoadingState,
+} from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import type { CapabilityInsights, CapabilityUsageSlice } from "../actions";
@@ -52,7 +58,9 @@ function ChainSection({
 function RoleGrantChips({ roles }: { roles: Record<string, string> }) {
   const entries = Object.entries(roles);
   if (entries.length === 0) {
-    return <span className="text-xs text-muted-foreground">No default grants</span>;
+    return (
+      <span className="text-xs text-muted-foreground">No default grants</span>
+    );
   }
   return (
     <div className="flex flex-wrap gap-1.5">
@@ -75,7 +83,13 @@ function RoleGrantChips({ roles }: { roles: Record<string, string> }) {
   );
 }
 
-function FieldTable({ title, fields }: { title: string; fields: CapabilityFieldSpec[] }) {
+function FieldTable({
+  title,
+  fields,
+}: {
+  title: string;
+  fields: CapabilityFieldSpec[];
+}) {
   if (fields.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
@@ -97,7 +111,10 @@ function FieldTable({ title, fields }: { title: string; fields: CapabilityFieldS
           </thead>
           <tbody>
             {fields.map((f) => (
-              <tr key={f.name} className="border-b border-border last:border-b-0">
+              <tr
+                key={f.name}
+                className="border-b border-border last:border-b-0"
+              >
                 <td className="px-2 py-1.5 font-mono">{f.name}</td>
                 <td className="px-2 py-1.5 text-muted-foreground">{f.type}</td>
                 <td className="px-2 py-1.5">{f.required ? "yes" : "no"}</td>
@@ -112,7 +129,9 @@ function FieldTable({ title, fields }: { title: string; fields: CapabilityFieldS
 
 function UsageLine({ usage }: { usage: CapabilityUsageSlice | null }) {
   if (usage === null) {
-    return <p className="text-xs text-muted-foreground">Usage data unavailable.</p>;
+    return (
+      <p className="text-xs text-muted-foreground">Usage data unavailable.</p>
+    );
   }
   return (
     <p className="text-xs text-muted-foreground">
@@ -124,14 +143,17 @@ function UsageLine({ usage }: { usage: CapabilityUsageSlice | null }) {
       <span className="font-medium text-foreground">
         {usage.executions.toLocaleString()}
       </span>{" "}
-      metered calls ({(usage.inputTokens + usage.outputTokens).toLocaleString()} tokens).
+      metered calls ({(usage.inputTokens + usage.outputTokens).toLocaleString()}{" "}
+      tokens).
     </p>
   );
 }
 
 function AuditList({ events }: { events: AuditEvent[] | null }) {
   if (events === null) {
-    return <p className="text-xs text-muted-foreground">Audit feed unavailable.</p>;
+    return (
+      <p className="text-xs text-muted-foreground">Audit feed unavailable.</p>
+    );
   }
   if (events.length === 0) {
     return (
@@ -149,12 +171,18 @@ function AuditList({ events }: { events: AuditEvent[] | null }) {
         >
           <Badge
             size="sm"
-            variant={e.outcome === "deny" || e.outcome === "error" ? "error-soft" : "success-soft"}
+            variant={
+              e.outcome === "deny" || e.outcome === "error"
+                ? "error-soft"
+                : "success-soft"
+            }
           >
             {e.outcome ?? "event"}
           </Badge>
           <span className="font-mono">{e.eventType}</span>
-          <span className="ml-auto text-muted-foreground">{formatWhen(e.occurredAt)}</span>
+          <span className="ml-auto text-muted-foreground">
+            {formatWhen(e.occurredAt)}
+          </span>
         </li>
       ))}
     </ul>
@@ -170,7 +198,12 @@ export interface ContractDrawerProps {
   insights: CapabilityInsights | null;
 }
 
-export function ContractDrawer({ open, onOpenChange, summary, insights }: ContractDrawerProps) {
+export function ContractDrawer({
+  open,
+  onOpenChange,
+  summary,
+  insights,
+}: ContractDrawerProps) {
   if (!summary) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange} title="Contract">
@@ -198,7 +231,14 @@ export function ContractDrawer({ open, onOpenChange, summary, insights }: Contra
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span>Fallback effect:</span>
-              <Badge size="sm" variant={summary.defaultEffect === "allow" ? "success-soft" : "warning-soft"}>
+              <Badge
+                size="sm"
+                variant={
+                  summary.defaultEffect === "allow"
+                    ? "success-soft"
+                    : "warning-soft"
+                }
+              >
                 {summary.defaultEffect}
               </Badge>
               {summary.agent?.requiresApproval ? (
@@ -209,7 +249,9 @@ export function ContractDrawer({ open, onOpenChange, summary, insights }: Contra
             </div>
             <p className="text-xs text-muted-foreground">Org role grants</p>
             <RoleGrantChips roles={summary.orgRoles} />
-            <p className="text-xs text-muted-foreground">Workspace role grants</p>
+            <p className="text-xs text-muted-foreground">
+              Workspace role grants
+            </p>
             <RoleGrantChips roles={summary.workspaceRoles} />
           </div>
         </ChainSection>
@@ -217,7 +259,10 @@ export function ContractDrawer({ open, onOpenChange, summary, insights }: Contra
 
         <ChainSection step={2} title="Knowledge scope — what it may touch">
           <div className="flex flex-wrap items-center gap-1.5">
-            <Badge size="sm" variant={summary.scoped ? "success-soft" : "warning-soft"}>
+            <Badge
+              size="sm"
+              variant={summary.scoped ? "success-soft" : "warning-soft"}
+            >
               {summary.scoped ? "tenant-scoped" : "global"}
             </Badge>
             <Badge size="sm" variant="muted">
@@ -262,9 +307,13 @@ export function ContractDrawer({ open, onOpenChange, summary, insights }: Contra
                 <FieldTable title="Output" fields={detail.outputFields} />
               </>
             ) : insights ? (
-              <p className="text-xs text-muted-foreground">Field specs unavailable.</p>
+              <p className="text-xs text-muted-foreground">
+                Field specs unavailable.
+              </p>
             ) : (
-              <p className="text-xs text-muted-foreground">Loading field specs…</p>
+              <p className="text-xs text-muted-foreground">
+                Loading field specs…
+              </p>
             )}
           </div>
         </ChainSection>
@@ -273,13 +322,21 @@ export function ContractDrawer({ open, onOpenChange, summary, insights }: Contra
         <ChainSection step={4} title="Commercial terms — what it costs">
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-1.5">
-              <Badge size="sm" variant={summary.noBillingGate ? "muted" : "info-soft"}>
-                {summary.noBillingGate ? "billing-gate exempt" : "billing-gated"}
+              <Badge
+                size="sm"
+                variant={summary.noBillingGate ? "muted" : "info-soft"}
+              >
+                {summary.noBillingGate
+                  ? "billing-gate exempt"
+                  : "billing-gated"}
               </Badge>
               {summary.plugin ? (
                 <Badge size="sm" variant="warning-soft">
                   pack: {summary.plugin.id} ({summary.plugin.tier}
-                  {summary.plugin.minPlanTier ? ` · min ${summary.plugin.minPlanTier}` : ""})
+                  {summary.plugin.minPlanTier
+                    ? ` · min ${summary.plugin.minPlanTier}`
+                    : ""}
+                  )
                 </Badge>
               ) : (
                 <Badge size="sm" variant="muted">
@@ -300,13 +357,17 @@ export function ContractDrawer({ open, onOpenChange, summary, insights }: Contra
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge
               size="sm"
-              variant={summary.layers.includes("unit") ? "success-soft" : "error-soft"}
+              variant={
+                summary.layers.includes("unit") ? "success-soft" : "error-soft"
+              }
             >
               unit {summary.layers.includes("unit") ? "✓" : "—"}
             </Badge>
             <Badge
               size="sm"
-              variant={summary.layers.includes("e2e") ? "success-soft" : "muted"}
+              variant={
+                summary.layers.includes("e2e") ? "success-soft" : "muted"
+              }
             >
               e2e {summary.layers.includes("e2e") ? "✓" : "—"}
             </Badge>
@@ -331,15 +392,23 @@ export function ContractDrawer({ open, onOpenChange, summary, insights }: Contra
             {insights ? (
               <AuditList events={insights.audit} />
             ) : (
-              <p className="text-xs text-muted-foreground">Loading audit feed…</p>
+              <p className="text-xs text-muted-foreground">
+                Loading audit feed…
+              </p>
             )}
           </div>
         </ChainSection>
 
-        {detail && (detail.produces.length > 0 || detail.consumes.length > 0 || detail.chainHints.length > 0) ? (
+        {detail &&
+        (detail.produces.length > 0 ||
+          detail.consumes.length > 0 ||
+          detail.chainHints.length > 0) ? (
           <>
             <Separator />
-            <section className="flex flex-col gap-1.5 py-3" aria-label="Chaining">
+            <section
+              className="flex flex-col gap-1.5 py-3"
+              aria-label="Chaining"
+            >
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Chaining
               </h3>

@@ -9,7 +9,9 @@ describe("environment.delete contract", () => {
     expect(environmentDelete.surfaces).toEqual(["api", "mcp", "agent"]);
   });
   it("accepts a valid input", () => {
-    expect(() => environmentDelete.input.parse({ environmentId: "env_1" })).not.toThrow();
+    expect(() =>
+      environmentDelete.input.parse({ environmentId: "env_1" }),
+    ).not.toThrow();
   });
   it("rejects input missing the required environmentId", () => {
     expect(() => environmentDelete.input.parse({})).toThrow();

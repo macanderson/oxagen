@@ -41,9 +41,7 @@ test("developer MCP: no-key fallback, then live key injection after creating a t
 
   // Install tabs still render (graceful fallback) using the placeholder key.
   await expect(page.getByRole("tab", { name: "Claude Code" })).toBeVisible();
-  await expect(
-    page.getByRole("tab", { name: "Claude Desktop" }),
-  ).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Claude Desktop" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Cursor" })).toBeVisible();
   await expect(page.locator("[data-mcp-code]").first()).toContainText(
     "$OXAGEN_API_KEY",

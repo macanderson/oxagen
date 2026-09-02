@@ -14,7 +14,9 @@ export interface RevokeOwnSessionButtonProps {
   sessionId: string;
 }
 
-export function RevokeOwnSessionButton({ sessionId }: RevokeOwnSessionButtonProps) {
+export function RevokeOwnSessionButton({
+  sessionId,
+}: RevokeOwnSessionButtonProps) {
   const [status, setStatus] = React.useState<
     "idle" | "confirming" | "revoking" | "error"
   >("idle");
@@ -31,7 +33,9 @@ export function RevokeOwnSessionButton({ sessionId }: RevokeOwnSessionButtonProp
     const result = await revokeOwnSessionAction({ sessionId });
     if (!result.ok) {
       setStatus("error");
-      setErrorMsg("error" in result ? result.error : "Failed to revoke session.");
+      setErrorMsg(
+        "error" in result ? result.error : "Failed to revoke session.",
+      );
     }
     // On success the page re-renders via revalidatePath; the row disappears.
   }

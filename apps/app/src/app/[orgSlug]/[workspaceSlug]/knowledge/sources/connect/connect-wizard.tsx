@@ -372,12 +372,15 @@ export function ConnectSourceWizard({
     // never ran to fetch it) and never blocks activation success on failure;
     // the connection is already active regardless of this call's outcome.
     if (schema?.sync) {
+      // Explicitly swallowed: the action already logs server-side, and an
+      // uncaught rejection here (a dropped request, say) would surface as an
+      // unhandled promise rejection on a flow that has otherwise succeeded.
       void configureSourceIntegrationAction({
         orgSlug,
         workspaceSlug,
         integrationId: connectionId,
         syncCadence: schema.sync.delivery,
-      });
+      }).catch(() => {});
     }
 
     setDone(true);

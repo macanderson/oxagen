@@ -26,7 +26,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { argv, exit, stdout } from "node:process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -51,7 +51,10 @@ export function externalsFrom(configSource: string): string[] {
     configSource,
   );
   if (!block) return [];
-  return [...new Set(block[1].match(/"([^"]+)"/g)?.map((q) => q.slice(1, -1)) ?? [])];
+  const inner = block[1] ?? "";
+  return [
+    ...new Set(inner.match(/"([^"]+)"/g)?.map((q) => q.slice(1, -1)) ?? []),
+  ];
 }
 
 /** Externalised packages that apps/mcp does not declare. */
@@ -71,6 +74,22 @@ function main(): void {
   ) as { dependencies?: Record<string, string> };
 
   const externals = externalsFrom(config);
+
+  // An empty result is ambiguous: either the config genuinely externalises
+  // nothing, or the array moved and the parser silently missed it. Only the
+  // second is possible while the config still talks about externals, and in
+  // that case a clean pass here is a lie — the guard would wave through the
+  // exact #1191 shape it exists to catch. Fail loudly instead.
+  if (externals.length === 0 && /external/i.test(config)) {
+    stdout.write(
+      "check:mcp-externals — apps/mcp/xmcp.config.ts mentions externals but no " +
+        "externals array could be parsed out of it. The parser looks for a " +
+        'top-level `const <name> = [ "pkg", … ];`; restore that shape or update ' +
+        "externalsFrom(). Refusing to report a pass it cannot actually prove.\n",
+    );
+    exit(1);
+  }
+
   const missing = undeclared(externals, pkg.dependencies ?? {});
 
   if (missing.length > 0) {
@@ -91,4 +110,7 @@ function main(): void {
   );
 }
 
-if (import.meta.url === `file://${argv[1]}`) main();
+// pathToFileURL, not string concatenation: a repo path containing a space or a
+// non-ASCII character percent-encodes in `import.meta.url` but not in argv[1],
+// and the mismatch would make this guard a silent no-op that exits 0.
+if (argv[1] && import.meta.url === pathToFileURL(argv[1]).href) main();

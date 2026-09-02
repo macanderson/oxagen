@@ -9,6 +9,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { safeHref } from "@/lib/safe-url";
 
 /**
  * ci-status-summary — SHARED presentational summary of a CI run set.
@@ -37,7 +38,12 @@ export type CiRunConclusion =
 export type CiRunStatus = "queued" | "in_progress" | "completed";
 
 /** Roll-up verdict across all runs for a ref. */
-export type CiOverall = "passing" | "failing" | "pending" | "neutral" | "unknown";
+export type CiOverall =
+  | "passing"
+  | "failing"
+  | "pending"
+  | "neutral"
+  | "unknown";
 
 export interface CiRun {
   name: string;
@@ -91,8 +97,16 @@ const OVERALL_META: Record<
   passing: { textClass: "text-success", label: "Passing", spin: false },
   failing: { textClass: "text-destructive", label: "Failing", spin: false },
   pending: { textClass: "text-warning", label: "Pending", spin: true },
-  neutral: { textClass: "text-muted-foreground", label: "Neutral", spin: false },
-  unknown: { textClass: "text-muted-foreground", label: "Unknown", spin: false },
+  neutral: {
+    textClass: "text-muted-foreground",
+    label: "Neutral",
+    spin: false,
+  },
+  unknown: {
+    textClass: "text-muted-foreground",
+    label: "Unknown",
+    spin: false,
+  },
 };
 
 /** Icon + colour for a single run row, keyed on lifecycle + conclusion. */
@@ -108,12 +122,22 @@ function RunGlyph({ run }: { run: CiRun }): ReactElement {
   }
   switch (run.conclusion) {
     case "success":
-      return <CheckCircle2 className="size-3.5 shrink-0 text-success" aria-label="Success" />;
+      return (
+        <CheckCircle2
+          className="size-3.5 shrink-0 text-success"
+          aria-label="Success"
+        />
+      );
     case "failure":
     case "timed_out":
     case "cancelled":
     case "action_required":
-      return <XCircle className="size-3.5 shrink-0 text-error" aria-label="Failure" />;
+      return (
+        <XCircle
+          className="size-3.5 shrink-0 text-error"
+          aria-label="Failure"
+        />
+      );
     default:
       // skipped / neutral / stale / null
       return (
@@ -136,21 +160,32 @@ function countsLine(counts: CiCounts): string {
   return parts.join(" · ");
 }
 
-export function CiStatusSummary({ overall, counts, runs }: CiStatusSummaryProps): ReactElement {
+export function CiStatusSummary({
+  overall,
+  counts,
+  runs,
+}: CiStatusSummaryProps): ReactElement {
   const meta = OVERALL_META[overall];
   const line = countsLine(counts);
 
   return (
     <div className="flex flex-col gap-2" data-component="ci-status-summary">
       <div className="flex flex-wrap items-center gap-2">
-        <span className={cn("inline-flex items-center gap-1 text-xs font-medium", meta.textClass)}>
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 text-xs font-medium",
+            meta.textClass,
+          )}
+        >
           {meta.spin ? (
             <Loader2 className="size-3 animate-spin" aria-hidden="true" />
           ) : null}
           {meta.label}
         </span>
         {line ? (
-          <span className="text-xs tabular-nums text-muted-foreground">{line}</span>
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {line}
+          </span>
         ) : null}
       </div>
 
@@ -162,36 +197,50 @@ export function CiStatusSummary({ overall, counts, runs }: CiStatusSummaryProps)
             </span>
           </summary>
           <ul className="mt-2 flex flex-col gap-1.5 border-t border-border/60 pt-2">
-            {runs.map((run, i) => (
-              <li key={`${run.name}-${i}`} className="flex items-center gap-2 text-xs">
-                <RunGlyph run={run} />
-                <span className="min-w-0 flex-1 truncate text-foreground" title={run.name}>
-                  {run.name}
-                </span>
-                {run.app ? (
-                  <span className="shrink-0 text-muted-foreground">{run.app}</span>
-                ) : null}
-                {run.durationMs !== null ? (
-                  <span className="shrink-0 tabular-nums text-muted-foreground">
-                    {formatDuration(run.durationMs)}
-                  </span>
-                ) : null}
-                {run.url ? (
-                  <a
-                    href={run.url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    aria-label={`View ${run.name} check`}
-                    className={cn(
-                      "shrink-0 rounded p-0.5 text-muted-foreground transition-colors",
-                      "hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    )}
+            {runs.map((run, i) => {
+              // `run.url` reaches us through capability output, so the scheme is
+              // allow-listed before it becomes an href — an unsafe value drops
+              // the link rather than arming a `javascript:` navigation.
+              const runHref = safeHref(run.url);
+              return (
+                <li
+                  key={`${run.name}-${i}`}
+                  className="flex items-center gap-2 text-xs"
+                >
+                  <RunGlyph run={run} />
+                  <span
+                    className="min-w-0 flex-1 truncate text-foreground"
+                    title={run.name}
                   >
-                    <ExternalLink className="size-3" aria-hidden="true" />
-                  </a>
-                ) : null}
-              </li>
-            ))}
+                    {run.name}
+                  </span>
+                  {run.app ? (
+                    <span className="shrink-0 text-muted-foreground">
+                      {run.app}
+                    </span>
+                  ) : null}
+                  {run.durationMs !== null ? (
+                    <span className="shrink-0 tabular-nums text-muted-foreground">
+                      {formatDuration(run.durationMs)}
+                    </span>
+                  ) : null}
+                  {runHref ? (
+                    <a
+                      href={runHref}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      aria-label={`View ${run.name} check`}
+                      className={cn(
+                        "shrink-0 rounded p-0.5 text-muted-foreground transition-colors",
+                        "hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      )}
+                    >
+                      <ExternalLink className="size-3" aria-hidden="true" />
+                    </a>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         </details>
       ) : null}

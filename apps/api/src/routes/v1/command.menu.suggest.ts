@@ -14,6 +14,8 @@ export const commandMenuSuggestRoute = new Hono<AppEnv>();
 commandMenuSuggestRoute.post("/", async (c) => {
   const body = commandMenuSuggest.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(commandMenuSuggest.name, body, ctx, { surface: "api" });
+  const out = await invoke(commandMenuSuggest.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out, 200);
 });

@@ -10,7 +10,9 @@ import {
 
 const connectionConfigSchema = z.object({
   instanceUrl: z.string().url(),
-  objectTypes: z.array(z.string()).default(["Opportunity", "Contact", "Account", "Lead", "Case"]),
+  objectTypes: z
+    .array(z.string())
+    .default(["Opportunity", "Contact", "Account", "Lead", "Case"]),
   syncDepthDays: z.number().int().positive().default(180),
 });
 
@@ -32,7 +34,9 @@ function soqlDateLiteral(cursor: string): string | null {
 }
 
 function asRecord(raw: unknown): Record<string, unknown> {
-  return raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return raw !== null && typeof raw === "object"
+    ? (raw as Record<string, unknown>)
+    : {};
 }
 
 function asString(v: unknown): string | undefined {
@@ -42,9 +46,13 @@ function asString(v: unknown): string | undefined {
 const salesforce: ConnectorDefinition<Config> = {
   connectorId: "salesforce",
   displayName: "Salesforce",
-  description: "Sync opportunities, contacts, accounts, leads, and cases from Salesforce.",
+  description:
+    "Sync opportunities, contacts, accounts, leads, and cases from Salesforce.",
   icon: "salesforce",
-  supportedAuthSchemes: ["oauth2_authorization_code", "oauth2_client_credentials"],
+  supportedAuthSchemes: [
+    "oauth2_authorization_code",
+    "oauth2_client_credentials",
+  ],
   deliveryMethod: "rest_polling",
   defaultPollIntervalSeconds: 900,
   connectionConfigSchema,
@@ -55,7 +63,8 @@ const salesforce: ConnectorDefinition<Config> = {
 
   normalizeRecord(sourceRecordType: string, raw: unknown): NormalizedRecord {
     const r = asRecord(raw);
-    const sfType = asString(asRecord(r["attributes"])["type"]) ?? sourceRecordType;
+    const sfType =
+      asString(asRecord(r["attributes"])["type"]) ?? sourceRecordType;
 
     switch (sfType.toLowerCase()) {
       case "opportunity": {
@@ -80,7 +89,9 @@ const salesforce: ConnectorDefinition<Config> = {
       case "contact": {
         return {
           externalId: asString(r["Id"]) ?? "",
-          displayName: `${r["FirstName"] ?? ""} ${r["LastName"] ?? ""}`.trim() || asString(r["Name"]),
+          displayName:
+            `${r["FirstName"] ?? ""} ${r["LastName"] ?? ""}`.trim() ||
+            asString(r["Name"]),
           properties: {
             firstName: asString(r["FirstName"]),
             lastName: asString(r["LastName"]),
@@ -118,7 +129,9 @@ const salesforce: ConnectorDefinition<Config> = {
       case "lead": {
         return {
           externalId: asString(r["Id"]) ?? "",
-          displayName: `${r["FirstName"] ?? ""} ${r["LastName"] ?? ""}`.trim() || asString(r["Name"]),
+          displayName:
+            `${r["FirstName"] ?? ""} ${r["LastName"] ?? ""}`.trim() ||
+            asString(r["Name"]),
           properties: {
             firstName: asString(r["FirstName"]),
             lastName: asString(r["LastName"]),
@@ -184,21 +197,32 @@ const salesforce: ConnectorDefinition<Config> = {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
     });
     if (!resp.ok) {
-      throw new Error(`salesforce.poll: query API ${resp.status} for ${object}`);
+      throw new Error(
+        `salesforce.poll: query API ${resp.status} for ${object}`,
+      );
     }
-    const json = (await resp.json()) as { records?: Array<Record<string, unknown>> };
+    const json = (await resp.json()) as {
+      records?: Array<Record<string, unknown>>;
+    };
     const now = new Date().toISOString();
     for (const raw of json.records ?? []) {
       const id = asString(raw["Id"]) ?? "";
       if (!id) continue;
-      yield { sourceRecordType: recordType, externalId: id, raw, receivedAt: now };
+      yield {
+        sourceRecordType: recordType,
+        externalId: id,
+        raw,
+        receivedAt: now,
+      };
     }
   },
 
   // Cursor watermark: Salesforce SystemModstamp (falls back to LastModifiedDate).
   cursorOf(_recordType, raw): string | null {
     const r = asRecord(raw);
-    return asString(r["SystemModstamp"]) ?? asString(r["LastModifiedDate"]) ?? null;
+    return (
+      asString(r["SystemModstamp"]) ?? asString(r["LastModifiedDate"]) ?? null
+    );
   },
 };
 

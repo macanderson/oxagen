@@ -1,12 +1,8 @@
 /**
- * Org workspaces home — lists every workspace in the org as a card.
+ * Org workspaces home — the destination of the org-mode "Workspaces" nav item.
  *
- * Fixes the broken org-mode "Workspaces" nav item, which used to point at the
- * org root (`/{orgSlug}`). That page immediately redirects into the first
- * workspace's Ask surface, so opening it from the governance surface flashed an
- * error and dumped the user on the Ask page. This gives that nav item a real
- * destination: a picker where each card shows the workspace avatar + name and
- * links into the workspace.
+ * A picker listing every workspace in the org as a card: each card shows the
+ * workspace avatar + name and links into that workspace's Sessions surface.
  */
 
 import { eq } from "drizzle-orm";

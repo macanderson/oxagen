@@ -100,7 +100,8 @@ function tokenizeWords(text: string): Set<string> {
 function extractPathTokens(text: string): string[] {
   const paths: string[] = [];
   // Match sequences that look like file paths or extensions
-  const pathRegex = /[\w./\-]+\.(ts|tsx|js|jsx|py|java|go|rs|rb|php|cs|cpp|c|h|hpp|json|yaml|yml|xml|html|css|sql|md)/gi;
+  const pathRegex =
+    /[\w./\-]+\.(ts|tsx|js|jsx|py|java|go|rs|rb|php|cs|cpp|c|h|hpp|json|yaml|yml|xml|html|css|sql|md)/gi;
   const matches = text.matchAll(pathRegex);
   for (const match of matches) {
     paths.push(match[0]);
@@ -212,7 +213,9 @@ async function stageTwo(
       survivors.map((e) => e.item),
       context,
     );
-    scores = new Map(result.map((r) => [r.id, { score: r.score, reason: r.reason }]));
+    scores = new Map(
+      result.map((r) => [r.id, { score: r.score, reason: r.reason }]),
+    );
   } catch {
     // Scorer threw; fail open with stage-1 survivors.
     return survivors.map((entry) => ({

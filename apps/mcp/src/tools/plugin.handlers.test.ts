@@ -50,7 +50,16 @@ describe("plugin.catalog.browse handler", () => {
     const fakeOutput = { servers: [], nextOffset: null, total: 0 };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { limit: 30, offset: 0, search: undefined, categories: undefined, transportTypes: undefined, authKind: undefined, installed: undefined, pluginType: undefined };
+    const args = {
+      limit: 30,
+      offset: 0,
+      search: undefined,
+      categories: undefined,
+      transportTypes: undefined,
+      authKind: undefined,
+      installed: undefined,
+      pluginType: undefined,
+    };
     const result = await handler_pluginCatalogBrowse(args);
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
@@ -66,7 +75,16 @@ describe("plugin.catalog.browse handler", () => {
   it("propagates invoke errors", async () => {
     mocks.invoke.mockRejectedValue(new Error("catalog unavailable"));
     await expect(
-      handler_pluginCatalogBrowse({ limit: 10, offset: 0, search: undefined, categories: undefined, transportTypes: undefined, authKind: undefined, installed: undefined, pluginType: undefined }),
+      handler_pluginCatalogBrowse({
+        limit: 10,
+        offset: 0,
+        search: undefined,
+        categories: undefined,
+        transportTypes: undefined,
+        authKind: undefined,
+        installed: undefined,
+        pluginType: undefined,
+      }),
     ).rejects.toThrow("catalog unavailable");
   });
 });
@@ -123,7 +141,9 @@ import handler_pluginCredentialReauth, {
 describe("plugin.credential.reauth handler", () => {
   it("exports schema and metadata", () => {
     expect(pluginCredentialReauthSchema).toBeDefined();
-    expect(pluginCredentialReauthMetadata.name).toBe("reauth_plugin_credential");
+    expect(pluginCredentialReauthMetadata.name).toBe(
+      "reauth_plugin_credential",
+    );
   });
 
   it("calls invoke with reauth args", async () => {
@@ -152,7 +172,9 @@ import handler_pluginCredentialRevoke, {
 describe("plugin.credential.revoke handler", () => {
   it("exports schema and metadata", () => {
     expect(pluginCredentialRevokeSchema).toBeDefined();
-    expect(pluginCredentialRevokeMetadata.name).toBe("revoke_plugin_credential");
+    expect(pluginCredentialRevokeMetadata.name).toBe(
+      "revoke_plugin_credential",
+    );
   });
 
   it("is annotated as a destructive, idempotent, non-read-only tool", () => {
@@ -241,12 +263,9 @@ describe("plugin.org.install handler", () => {
     };
     await handler_pluginOrgInstall(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "install_plugin",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("install_plugin", args, fakeCtx, {
+      surface: "mcp",
+    });
   });
 });
 
@@ -268,7 +287,13 @@ describe("plugin.org.install_bulk handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = {
-      items: [{ pluginType: "mcp_server" as const, pluginId: undefined, catalogServerId: "cat_1" }],
+      items: [
+        {
+          pluginType: "mcp_server" as const,
+          pluginId: undefined,
+          catalogServerId: "cat_1",
+        },
+      ],
     };
     await handler_pluginOrgInstallBulk(args);
 
@@ -301,12 +326,9 @@ describe("plugin.org.list handler", () => {
     const args = { pluginType: "mcp_server" as const };
     await handler_pluginOrgList(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "list_plugins",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("list_plugins", args, fakeCtx, {
+      surface: "mcp",
+    });
   });
 
   it("works with empty args", async () => {
@@ -333,7 +355,11 @@ describe("plugin.set_enabled handler", () => {
     const fakeOutput = { ok: true, workspaceServerId: null };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { scope: "org" as const, orgListingId: "orl_1", enabled: true };
+    const args = {
+      scope: "org" as const,
+      orgListingId: "orl_1",
+      enabled: true,
+    };
     await handler_pluginSetEnabled(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -348,7 +374,11 @@ describe("plugin.set_enabled handler", () => {
     const fakeOutput = { ok: true, workspaceServerId: "wss_1" };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { scope: "workspace" as const, orgListingId: "orl_1", enabled: true };
+    const args = {
+      scope: "workspace" as const,
+      orgListingId: "orl_1",
+      enabled: true,
+    };
     await handler_pluginSetEnabled(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -406,7 +436,10 @@ describe("plugin.registry.add handler", () => {
     const fakeOutput = { registryId: "reg_1", isDefault: false };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { name: "My Registry", baseUrl: "https://registry.example.com" };
+    const args = {
+      name: "My Registry",
+      baseUrl: "https://registry.example.com",
+    };
     await handler_pluginRegistryAdd(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -492,7 +525,10 @@ describe("plugin.settings.set_auth_alerts handler", () => {
     const fakeOutput = { ok: true };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { sendEmail: true, roles: ["Owner" as const, "Admin" as const] };
+    const args = {
+      sendEmail: true,
+      roles: ["Owner" as const, "Admin" as const],
+    };
     await handler_pluginSettingsSetAuthAlerts(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(

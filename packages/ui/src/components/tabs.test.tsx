@@ -74,15 +74,23 @@ describe("Tabs — render", () => {
           <TabsTab value="a">Tab A</TabsTab>
           <TabsTab value="b">Tab B</TabsTab>
         </TabsList>
-        <TabsPanel value="a" keepMounted>Panel A content</TabsPanel>
-        <TabsPanel value="b" keepMounted>Panel B content</TabsPanel>
-      </Tabs>
+        <TabsPanel value="a" keepMounted>
+          Panel A content
+        </TabsPanel>
+        <TabsPanel value="b" keepMounted>
+          Panel B content
+        </TabsPanel>
+      </Tabs>,
     );
     await userEvent.click(getByRole("tab", { name: "Tab B" }));
     // Base UI sets data-hidden on the inactive panel element.
     const panels = container.querySelectorAll('[role="tabpanel"]');
-    const panelA = Array.from(panels).find((p) => p.textContent?.includes("Panel A content"));
-    const panelB = Array.from(panels).find((p) => p.textContent?.includes("Panel B content"));
+    const panelA = Array.from(panels).find((p) =>
+      p.textContent?.includes("Panel A content"),
+    );
+    const panelB = Array.from(panels).find((p) =>
+      p.textContent?.includes("Panel B content"),
+    );
     expect(panelA).toHaveAttribute("data-hidden");
     expect(panelB).not.toHaveAttribute("data-hidden");
   });
@@ -110,7 +118,7 @@ describe("Tabs — render", () => {
           <TabsTab value="x">X</TabsTab>
         </TabsList>
         <TabsPanel value="x">Content</TabsPanel>
-      </Tabs>
+      </Tabs>,
     );
     expect(getByRole("tablist").className).toContain("custom-list");
   });

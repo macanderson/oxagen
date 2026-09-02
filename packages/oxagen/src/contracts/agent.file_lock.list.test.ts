@@ -31,7 +31,9 @@ describe("agent.file.lock.list capability", () => {
   });
 
   it("parses an empty locks array", () => {
-    expect(agentFileLockList.output.parse({ locks: [] })).toEqual({ locks: [] });
+    expect(agentFileLockList.output.parse({ locks: [] })).toEqual({
+      locks: [],
+    });
   });
 
   it("is registered in the capability registry", () => {

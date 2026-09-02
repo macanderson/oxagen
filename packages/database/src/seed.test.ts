@@ -35,7 +35,9 @@ const mocks = vi.hoisted(() => {
 
   // ── insert chain ─────────────────────────────────────────────────────────
   const onConflictDoNothingMock = vi.fn().mockResolvedValue(undefined);
-  const valuesMock = vi.fn().mockReturnValue({ onConflictDoNothing: onConflictDoNothingMock });
+  const valuesMock = vi
+    .fn()
+    .mockReturnValue({ onConflictDoNothing: onConflictDoNothingMock });
   const insertMock = vi.fn().mockReturnValue({ values: valuesMock });
 
   // ── update chain ─────────────────────────────────────────────────────────
@@ -50,9 +52,11 @@ const mocks = vi.hoisted(() => {
   };
 
   // withSystemDb calls its callback with the mock tx.
-  const withSystemDbMock = vi.fn(async (cb: (tx: typeof mockTx) => Promise<unknown>) => {
-    return cb(mockTx);
-  });
+  const withSystemDbMock = vi.fn(
+    async (cb: (tx: typeof mockTx) => Promise<unknown>) => {
+      return cb(mockTx);
+    },
+  );
 
   const closeDatabaseMock = vi.fn().mockResolvedValue(undefined);
 
@@ -89,14 +93,21 @@ function resetAllMocks() {
   mocks.fromMock.mockReset().mockReturnValue({ where: mocks.whereMock });
   mocks.selectMock.mockReset().mockReturnValue({ from: mocks.fromMock });
   mocks.onConflictDoNothingMock.mockReset().mockResolvedValue(undefined);
-  mocks.valuesMock.mockReset().mockReturnValue({ onConflictDoNothing: mocks.onConflictDoNothingMock });
+  mocks.valuesMock
+    .mockReset()
+    .mockReturnValue({ onConflictDoNothing: mocks.onConflictDoNothingMock });
   mocks.insertMock.mockReset().mockReturnValue({ values: mocks.valuesMock });
   mocks.updateWhereMock.mockReset().mockResolvedValue(undefined);
-  mocks.updateSetMock.mockReset().mockReturnValue({ where: mocks.updateWhereMock });
+  mocks.updateSetMock
+    .mockReset()
+    .mockReturnValue({ where: mocks.updateWhereMock });
   mocks.updateMock.mockReset().mockReturnValue({ set: mocks.updateSetMock });
-  mocks.withSystemDbMock.mockReset().mockImplementation(
-    async (cb: (tx: typeof mocks.mockTx) => Promise<unknown>) => cb(mocks.mockTx),
-  );
+  mocks.withSystemDbMock
+    .mockReset()
+    .mockImplementation(
+      async (cb: (tx: typeof mocks.mockTx) => Promise<unknown>) =>
+        cb(mocks.mockTx),
+    );
   mocks.closeDatabaseMock.mockReset().mockResolvedValue(undefined);
 }
 
@@ -195,7 +206,9 @@ describe("seedDev()", () => {
       .mockResolvedValueOnce([{ id: "org-id" }])
       .mockResolvedValueOnce([{ id: "user-id" }])
       .mockResolvedValueOnce([{ id: "ws-id" }])
-      .mockResolvedValueOnce([{ id: "agent-id", activeVersionId: "existing-version-id" }]);
+      .mockResolvedValueOnce([
+        { id: "agent-id", activeVersionId: "existing-version-id" },
+      ]);
 
     await seedDev();
 
@@ -211,7 +224,7 @@ describe("seedDev()", () => {
   it("throws if the user upsert returns no row", async () => {
     mocks.limitMock
       .mockResolvedValueOnce([{ id: "org-id" }]) // org ok
-      .mockResolvedValueOnce([]);                 // user missing
+      .mockResolvedValueOnce([]); // user missing
     await expect(seedDev()).rejects.toThrow(/dev user/);
   });
 
@@ -219,7 +232,7 @@ describe("seedDev()", () => {
     mocks.limitMock
       .mockResolvedValueOnce([{ id: "org-id" }])
       .mockResolvedValueOnce([{ id: "user-id" }])
-      .mockResolvedValueOnce([]);                 // workspace missing
+      .mockResolvedValueOnce([]); // workspace missing
     await expect(seedDev()).rejects.toThrow(/dev workspace/);
   });
 
@@ -228,7 +241,7 @@ describe("seedDev()", () => {
       .mockResolvedValueOnce([{ id: "org-id" }])
       .mockResolvedValueOnce([{ id: "user-id" }])
       .mockResolvedValueOnce([{ id: "ws-id" }])
-      .mockResolvedValueOnce([]);                 // agent missing
+      .mockResolvedValueOnce([]); // agent missing
     await expect(seedDev()).rejects.toThrow(/qa-chat agent/);
   });
 
@@ -238,7 +251,7 @@ describe("seedDev()", () => {
       .mockResolvedValueOnce([{ id: "user-id" }])
       .mockResolvedValueOnce([{ id: "ws-id" }])
       .mockResolvedValueOnce([{ id: "agent-id", activeVersionId: null }])
-      .mockResolvedValueOnce([]);                 // version missing
+      .mockResolvedValueOnce([]); // version missing
     await expect(seedDev()).rejects.toThrow(/qa-chat agent version/);
   });
 });

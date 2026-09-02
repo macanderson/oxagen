@@ -54,9 +54,7 @@ export const agentSandboxFileRead = registerCapability({
         message:
           "path must be a safe, workspace-relative path (no absolute paths or `..` segments)",
       })
-      .describe(
-        "Workspace-relative file to read (e.g. `src/index.ts`).",
-      ),
+      .describe("Workspace-relative file to read (e.g. `src/index.ts`)."),
     maxBytes: z
       .number()
       .int()

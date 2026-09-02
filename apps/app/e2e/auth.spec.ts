@@ -13,16 +13,24 @@ import { gotoStable } from "./helpers/nav";
 test.describe("auth — unauthenticated guard", () => {
   test("login page renders email + OAuth options", async ({ page }) => {
     await page.goto("/login");
-    await expect(page.getByRole("heading", { name: /welcome back/i })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /welcome back/i }),
+    ).toBeVisible();
     await expect(page.getByLabel("Email")).toBeVisible();
     await expect(page.getByLabel("Password")).toBeVisible();
-    await expect(page.getByRole("button", { name: /continue with google/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /continue with github/i })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /continue with google/i }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /continue with github/i }),
+    ).toBeVisible();
   });
 
   test("signup page links back to login", async ({ page }) => {
     await page.goto("/signup");
-    await expect(page.getByRole("heading", { name: /create an account/i })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /create an account/i }),
+    ).toBeVisible();
     await page.getByRole("link", { name: /sign in/i }).click();
     await expect(page).toHaveURL(/\/login$/);
   });
@@ -35,8 +43,8 @@ test.describe("auth — unauthenticated guard", () => {
 
 // ─── Real sign-in journey ────────────────────────────────────────────────────
 //
-// Seeds a user + session via the fixture (same pattern as agent-runtime-flow),
-// injects the signed session cookie via `loginWithSession`, and asserts that:
+// Seeds a user + session via `setupAgentRuntimeFixture`, injects the signed
+// session cookie via `loginWithSession`, and asserts that:
 //   1. The authed user lands on an org/workspace page (not /login).
 //   2. The session persists across a same-tab navigation.
 //   3. The user's name / org appears somewhere in the authenticated shell.
@@ -98,7 +106,9 @@ test.describe("auth — successful sign-in journey", () => {
     await expect(page).not.toHaveURL(/\/login/);
 
     // The URL must still contain both slugs.
-    await expect(page).toHaveURL(new RegExp(`${AUTH_ORG_SLUG}/${AUTH_WS_SLUG}`));
+    await expect(page).toHaveURL(
+      new RegExp(`${AUTH_ORG_SLUG}/${AUTH_WS_SLUG}`),
+    );
   });
 
   test("org slug appears in the authed page body or nav", async ({
@@ -163,10 +173,9 @@ test.describe("auth — email+password login form", () => {
     // Better Auth sets the session cookie and redirects to the app.
     // After a successful login, the user should land on an authenticated page
     // (not /login). Allow up to 15 s for the session round-trip.
-    await page.waitForURL(
-      (url) => !url.pathname.startsWith("/login"),
-      { timeout: 15_000 },
-    );
+    await page.waitForURL((url) => !url.pathname.startsWith("/login"), {
+      timeout: 15_000,
+    });
 
     // ── 4. Assert authenticated landing ──────────────────────────────────
     await expect(page).not.toHaveURL(/\/login/);

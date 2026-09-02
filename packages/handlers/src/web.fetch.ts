@@ -3,12 +3,15 @@ import { webFetch as webFetchContract } from "@oxagen/oxagen/contracts/web.fetch
 import { webFetch } from "@oxagen/web";
 import { logger } from "./logger";
 
-export const webFetchHandler: CapabilityHandler<typeof webFetchContract> = async (
-  input,
-  ctx,
-) => {
+export const webFetchHandler: CapabilityHandler<
+  typeof webFetchContract
+> = async (input, ctx) => {
   logger.info(
-    { orgId: ctx.orgId, url: input.url, extractMarkdown: input.extractMarkdown },
+    {
+      orgId: ctx.orgId,
+      url: input.url,
+      extractMarkdown: input.extractMarkdown,
+    },
     "web.fetch: starting",
   );
 

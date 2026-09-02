@@ -8,7 +8,9 @@ const mocks = vi.hoisted(() => ({
   exec: vi.fn(),
 }));
 
-vi.mock("./agent.sandbox.exec", () => ({ agentSandboxExecHandler: mocks.exec }));
+vi.mock("./agent.sandbox.exec", () => ({
+  agentSandboxExecHandler: mocks.exec,
+}));
 vi.mock("./_sandbox-session", () => {
   class SandboxSessionGoneError extends Error {
     readonly code = "sandbox_session_gone";
@@ -16,7 +18,10 @@ vi.mock("./_sandbox-session", () => {
   return { SandboxSessionGoneError };
 });
 
-import { recoverSandboxSession, recoveryLabel } from "./recover-sandbox-session";
+import {
+  recoverSandboxSession,
+  recoveryLabel,
+} from "./recover-sandbox-session";
 import { SandboxSessionGoneError } from "./_sandbox-session";
 
 const ctx = {
@@ -67,7 +72,9 @@ describe("recoverSandboxSession", () => {
   });
 
   it("dirty tree pushed → kind 'recovered' with branch + commit", async () => {
-    execReturns("OXA_DIRTY\nOXA_BRANCH=recovery/sbx-1/20260717T000000Z\nOXA_COMMIT=deadbeef\nOXA_PUSHED\n");
+    execReturns(
+      "OXA_DIRTY\nOXA_BRANCH=recovery/sbx-1/20260717T000000Z\nOXA_COMMIT=deadbeef\nOXA_PUSHED\n",
+    );
     const out = await recoverSandboxSession(ctx, { sessionId: "sbx_1" });
     expect(out.kind).toBe("recovered");
     expect(out.dirty).toBe(true);

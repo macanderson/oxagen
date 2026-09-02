@@ -38,8 +38,12 @@ const {
   const mockFrom = vi.fn(() => ({ where: mockWhere }));
   const mockSelect = vi.fn(() => ({ from: mockFrom }));
   const mockTx = { select: mockSelect };
-  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) => fn(mockTx));
-  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) => fn());
+  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) =>
+    fn(mockTx),
+  );
+  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) =>
+    fn(),
+  );
   return {
     mockGetSession: vi.fn(),
     mockResolveOrg: vi.fn(),
@@ -119,8 +123,17 @@ describe("updateWorkspaceGeneralAction", () => {
     expect(mockInvoke).toHaveBeenCalledTimes(1);
     expect(mockInvoke).toHaveBeenCalledWith(
       "update_workspace_settings",
-      { name: "Research Renamed", slug: "research", description: "team space", avatarUrl: null },
-      expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }),
+      {
+        name: "Research Renamed",
+        slug: "research",
+        description: "team space",
+        avatarUrl: null,
+      },
+      expect.objectContaining({
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        userId: "user-1",
+      }),
       { surface: "agent" },
     );
     // Unchanged slug → only the base settings paths are revalidated.
@@ -138,19 +151,25 @@ describe("updateWorkspaceGeneralAction", () => {
       description: null,
     });
 
-    const result = await updateWorkspaceGeneralAction(base({ slug: "research-2" }));
+    const result = await updateWorkspaceGeneralAction(
+      base({ slug: "research-2" }),
+    );
 
     expect(result).toEqual({ ok: true, slug: "research-2" });
     expect(mockRevalidatePath).toHaveBeenCalledWith(
       "/acme/research-2/settings/general",
     );
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/research-2/settings");
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/acme/research-2/settings",
+    );
     expect(mockRevalidatePath).toHaveBeenCalledTimes(4);
   });
 
   it("maps the handler's slug-in-use error to the stable UX copy", async () => {
     mockInvoke.mockRejectedValue(
-      new Error('Slug "taken" is already in use by another workspace in this org'),
+      new Error(
+        'Slug "taken" is already in use by another workspace in this org',
+      ),
     );
 
     const result = await updateWorkspaceGeneralAction(base({ slug: "taken" }));
@@ -162,7 +181,9 @@ describe("updateWorkspaceGeneralAction", () => {
   });
 
   it("rejects an invalid slug before invoking", async () => {
-    const result = await updateWorkspaceGeneralAction(base({ slug: "Bad Slug!" }));
+    const result = await updateWorkspaceGeneralAction(
+      base({ slug: "Bad Slug!" }),
+    );
 
     expect(result.ok).toBe(false);
     expect(mockInvoke).not.toHaveBeenCalled();
@@ -189,7 +210,12 @@ describe("updateWorkspaceGeneralAction", () => {
 
     expect(mockInvoke).toHaveBeenCalledWith(
       "update_workspace_settings",
-      { name: "Research", slug: "research", description: null, avatarUrl: null },
+      {
+        name: "Research",
+        slug: "research",
+        description: null,
+        avatarUrl: null,
+      },
       expect.anything(),
       { surface: "agent" },
     );
@@ -200,7 +226,12 @@ describe("updateWorkspaceGeneralAction", () => {
 
     expect(mockInvoke).toHaveBeenCalledWith(
       "update_workspace_settings",
-      { name: "Research", slug: "research", description: null, avatarUrl: null },
+      {
+        name: "Research",
+        slug: "research",
+        description: null,
+        avatarUrl: null,
+      },
       expect.anything(),
       { surface: "agent" },
     );

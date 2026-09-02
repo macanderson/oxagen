@@ -6,7 +6,12 @@
  */
 import { render, cleanup } from "@testing-library/react";
 import { describe, expect, it, afterEach } from "vitest";
-import { Tooltip, TooltipTrigger, TooltipPopup, TooltipProvider } from "./tooltip";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipPopup,
+  TooltipProvider,
+} from "./tooltip";
 
 afterEach(cleanup);
 

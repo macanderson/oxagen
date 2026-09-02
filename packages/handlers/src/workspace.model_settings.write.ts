@@ -8,8 +8,13 @@ export const workspaceModelSettingsWriteHandler: CapabilityHandler<
   typeof workspaceModelSettingsWrite
 > = async (input, ctx) => {
   if (!ctx.workspaceId || ctx.workspaceId === "") {
-    logger.warn({ orgId: ctx.orgId }, "workspace.model.settings.write: rejected — no workspaceId");
-    throw new Error("workspace.model.settings.write requires a workspace context");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "workspace.model.settings.write: rejected — no workspaceId",
+    );
+    throw new Error(
+      "workspace.model.settings.write requires a workspace context",
+    );
   }
 
   if (!ctx.userId) {
@@ -17,7 +22,9 @@ export const workspaceModelSettingsWriteHandler: CapabilityHandler<
       { workspaceId: ctx.workspaceId },
       "workspace.model.settings.write: rejected — no authenticated user",
     );
-    throw new Error("workspace.model.settings.write requires an authenticated user");
+    throw new Error(
+      "workspace.model.settings.write requires an authenticated user",
+    );
   }
 
   // Only include explicitly provided fields in the update. "not provided" means

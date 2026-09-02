@@ -4,8 +4,13 @@
  * Full disclosure lives in TELEMETRY.md at the repo root; read that first.
  *
  * Design invariants (this file IS the trust boundary on the client):
- *   - `ALLOWED_KEYS` below is the ONLY set of fields this module will ever put
- *     on the wire. It is a plain, dependency-free literal — NOT imported from
+ *   - `ALLOWED_KEYS` below is the set of fields this module puts on the wire.
+ *     Enforcement is at build + test time, not runtime: `buildUsageEvent` is
+ *     the sole payload constructor and `UsageEventPayload` types it exactly,
+ *     and the test below cross-checks the list. Nothing strips a stray key
+ *     from a payload handed straight to `sendUsageEvent`, so that constructor
+ *     is the boundary to keep honest.
+ *     It is a plain, dependency-free literal — NOT imported from
  *     `@oxagen/telemetry` — so the published, potentially-open-sourced CLI has
  *     zero production coupling to that internal workspace package (no
  *     ClickHouse client, no OpenTelemetry SDK ever reaches the CLI bundle). A
@@ -18,10 +23,13 @@
  *     could carry a prompt, file path, model slug, API key, or any other
  *     piece of content or identity.
  *   - Sending is opt-out-respecting, best-effort, and bounded: if telemetry is
- *     disabled this module never generates an id and never opens a socket; if
- *     it is enabled, the network call is wrapped in a short AbortController
- *     timeout and every error (network, timeout, non-2xx) is swallowed. A
- *     telemetry failure can never surface as a CLI failure.
+ *     disabled this module never PERSISTS an id (no install id is minted or
+ *     written to disk) and never opens a socket; if it is enabled, the network
+ *     call is wrapped in a short AbortController timeout and every error
+ *     (network, timeout, non-2xx) is swallowed. A telemetry failure can never
+ *     surface as a CLI failure. The ephemeral in-process `SESSION_ID` below is
+ *     minted at import time either way — it is never written down and never
+ *     leaves the process while opted out.
  */
 import { randomUUID } from "node:crypto";
 import { readConfig, writeConfig, getApiUrl } from "../lib/config.js";

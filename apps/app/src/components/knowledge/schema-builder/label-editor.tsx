@@ -16,10 +16,19 @@ interface LabelEditorProps {
   onCancel: () => void;
 }
 
-export function LabelEditor({ schemaName, initial, onSave, onCancel }: LabelEditorProps) {
+export function LabelEditor({
+  schemaName,
+  initial,
+  onSave,
+  onCancel,
+}: LabelEditorProps) {
   const [name, setName] = React.useState(initial?.name ?? "");
-  const [displayName, setDisplayName] = React.useState(initial?.displayName ?? "");
-  const [description, setDescription] = React.useState(initial?.description ?? "");
+  const [displayName, setDisplayName] = React.useState(
+    initial?.displayName ?? "",
+  );
+  const [description, setDescription] = React.useState(
+    initial?.description ?? "",
+  );
   const [naturalKeyProps, setNaturalKeyProps] = React.useState(
     initial?.naturalKeyProps?.join(", ") ?? "",
   );
@@ -37,7 +46,10 @@ export function LabelEditor({ schemaName, initial, onSave, onCancel }: LabelEdit
         displayName,
         description: description || undefined,
         naturalKeyProps: naturalKeyProps
-          ? naturalKeyProps.split(",").map((s) => s.trim()).filter(Boolean)
+          ? naturalKeyProps
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
           : undefined,
         properties,
       });
@@ -81,7 +93,9 @@ export function LabelEditor({ schemaName, initial, onSave, onCancel }: LabelEdit
       <div className="space-y-1.5">
         <Label htmlFor="label-natural-key">
           Natural Key Properties{" "}
-          <span className="text-muted-foreground font-normal">(comma-separated)</span>
+          <span className="text-muted-foreground font-normal">
+            (comma-separated)
+          </span>
         </Label>
         <Input
           id="label-natural-key"
@@ -98,7 +112,9 @@ export function LabelEditor({ schemaName, initial, onSave, onCancel }: LabelEdit
           onUpdate={(i, p) =>
             setProperties((prev) => prev.map((x, idx) => (idx === i ? p : x)))
           }
-          onRemove={(i) => setProperties((prev) => prev.filter((_, idx) => idx !== i))}
+          onRemove={(i) =>
+            setProperties((prev) => prev.filter((_, idx) => idx !== i))
+          }
         />
       </div>
       <div className="flex justify-end gap-2 pt-2">

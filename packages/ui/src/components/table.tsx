@@ -4,11 +4,12 @@ import { cn } from "../lib/utils";
 /*
  * coss ui Table — the shared data-table primitive set.
  *
- * Replaces the hand-rolled `<table>` markup that had drifted across surfaces
- * (billing usage, registries, evals, skills, environments…). Token-driven:
- * the header bar uses the card-header tokens (THEME.md — "table headers are
- * dark bars in both modes"), rows use the border/muted tokens, and density is
- * a single CSS-var knob so every cell follows.
+ * The shared `<table>` markup for every data surface (billing usage,
+ * registries, evals, skills, environments…). Token-driven: the header is FLAT —
+ * it takes the card-header tokens, which match the card surface exactly, so the
+ * header reads as a hairline-separated band rather than a shaded bar (THEME.md
+ * — "card and table headers are flat"). Rows use the border/muted tokens, and
+ * density is a single CSS-var knob so every cell follows.
  *
  *   <Table density="compact">
  *     <TableHeader>
@@ -47,7 +48,11 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
     <div className={cn("relative w-full overflow-x-auto", containerClassName)}>
       <table
         ref={ref}
-        className={cn("w-full caption-bottom text-sm", densityVars[density], className)}
+        className={cn(
+          "w-full caption-bottom text-sm",
+          densityVars[density],
+          className,
+        )}
         {...props}
       />
     </div>
@@ -55,7 +60,8 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
 );
 Table.displayName = "Table";
 
-export interface TableHeaderProps extends React.HTMLAttributes<HTMLTableSectionElement> {
+export interface TableHeaderProps
+  extends React.HTMLAttributes<HTMLTableSectionElement> {
   /** Keep the header visible while the table body scrolls under it. */
   sticky?: boolean;
 }
@@ -79,7 +85,11 @@ const TableBody = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <tbody ref={ref} className={cn("[&_tr:last-child]:border-0", className)} {...props} />
+  <tbody
+    ref={ref}
+    className={cn("[&_tr:last-child]:border-0", className)}
+    {...props}
+  />
 ));
 TableBody.displayName = "TableBody";
 
@@ -89,13 +99,17 @@ const TableFooter = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <tfoot
     ref={ref}
-    className={cn("border-t border-border bg-muted/40 font-medium [&>tr]:last:border-b-0", className)}
+    className={cn(
+      "border-t border-border bg-muted/40 font-medium [&>tr]:last:border-b-0",
+      className,
+    )}
     {...props}
   />
 ));
 TableFooter.displayName = "TableFooter";
 
-export interface TableRowProps extends React.HTMLAttributes<HTMLTableRowElement> {
+export interface TableRowProps
+  extends React.HTMLAttributes<HTMLTableRowElement> {
   /** Pointer affordance for clickable rows (row-level navigation/selection). */
   interactive?: boolean;
 }
@@ -136,7 +150,10 @@ const TableCell = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <td
     ref={ref}
-    className={cn("px-[var(--table-pad-x)] py-[var(--table-pad-y)] align-middle", className)}
+    className={cn(
+      "px-[var(--table-pad-x)] py-[var(--table-pad-y)] align-middle",
+      className,
+    )}
     {...props}
   />
 ));
@@ -146,11 +163,16 @@ const TableCaption = React.forwardRef<
   HTMLTableCaptionElement,
   React.HTMLAttributes<HTMLTableCaptionElement>
 >(({ className, ...props }, ref) => (
-  <caption ref={ref} className={cn("mt-3 text-xs text-muted-foreground", className)} {...props} />
+  <caption
+    ref={ref}
+    className={cn("mt-3 text-xs text-muted-foreground", className)}
+    {...props}
+  />
 ));
 TableCaption.displayName = "TableCaption";
 
-export interface TableEmptyProps extends React.HTMLAttributes<HTMLTableRowElement> {
+export interface TableEmptyProps
+  extends React.HTMLAttributes<HTMLTableRowElement> {
   /** Number of columns the empty message spans (match your header). */
   colSpan: number;
 }

@@ -107,9 +107,11 @@ function serializeSnapshot(value: JsonWireValue): string {
 }
 
 export function jcsBytes(value: unknown): Uint8Array {
-  // This function has no size limit of its own — callers enforce the 1 MiB
-  // envelope cap. Keys are sorted with the array sort, so large objects don't
-  // hash in quadratic time.
+  // This function has no size or depth limit of its own. `limits.ts` publishes
+  // `MAX_ENVELOPE_JCS_BYTES` as the envelope cap a caller is expected to apply;
+  // nothing in this package enforces it. Keys are sorted with the captured
+  // array sort, so large objects don't hash in quadratic time, but nesting
+  // depth is bounded only by the JS call stack.
   const encoder = new intrinsicTextEncoderConstructor();
   return Reflect.apply(intrinsicTextEncoderEncode, encoder, [
     serializeSnapshot(snapshotJsonWire(value)),

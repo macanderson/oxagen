@@ -52,8 +52,16 @@ function makeFanout(overrides: Partial<LiveFanout> = {}): LiveFanout {
     fanoutId: "fanout_1",
     parentMessageId: "m_1",
     children: [
-      { childMessageId: "c1", capability: "dispatch_subagent", status: "running" },
-      { childMessageId: "c2", capability: "dispatch_subagent", status: "running" },
+      {
+        childMessageId: "c1",
+        capability: "dispatch_subagent",
+        status: "running",
+      },
+      {
+        childMessageId: "c2",
+        capability: "dispatch_subagent",
+        status: "running",
+      },
     ],
     status: "running",
     ...overrides,
@@ -101,8 +109,14 @@ describe("groupCodingTraceStages", () => {
 
   it("splits tool calls into generic 'tool' vs 'code' buckets by capability", async () => {
     const { groupCodingTraceStages } = await import("./coding-trace-panel");
-    const generic = makeToolCall({ toolCallId: "tc_generic", capability: "graph.query" });
-    const codeRun = makeToolCall({ toolCallId: "tc_code", capability: "execute_code" });
+    const generic = makeToolCall({
+      toolCallId: "tc_generic",
+      capability: "graph.query",
+    });
+    const codeRun = makeToolCall({
+      toolCallId: "tc_code",
+      capability: "execute_code",
+    });
     const groups = groupCodingTraceStages({
       order: ["tool:tc_generic", "tool:tc_code"],
       plans: {},
@@ -120,7 +134,10 @@ describe("groupCodingTraceStages", () => {
   it("maps tool-call status to tone (failed/running/done)", async () => {
     const { groupCodingTraceStages } = await import("./coding-trace-panel");
     const failed = makeToolCall({ toolCallId: "tc_failed", status: "failed" });
-    const running = makeToolCall({ toolCallId: "tc_running", status: "running" });
+    const running = makeToolCall({
+      toolCallId: "tc_running",
+      status: "running",
+    });
     const groups = groupCodingTraceStages({
       order: ["tool:tc_failed", "tool:tc_running"],
       plans: {},
@@ -153,8 +170,14 @@ describe("groupCodingTraceStages", () => {
 
   it("maps a completed fanout to tone 'done' and a non-running/completed fanout to 'failed'", async () => {
     const { groupCodingTraceStages } = await import("./coding-trace-panel");
-    const completed = makeFanout({ fanoutId: "fanout_done", status: "completed" });
-    const timedOut = makeFanout({ fanoutId: "fanout_timeout", status: "timed_out" });
+    const completed = makeFanout({
+      fanoutId: "fanout_done",
+      status: "completed",
+    });
+    const timedOut = makeFanout({
+      fanoutId: "fanout_timeout",
+      status: "timed_out",
+    });
     const groups = groupCodingTraceStages({
       order: ["fanout:fanout_done", "fanout:fanout_timeout"],
       plans: {},
@@ -164,7 +187,9 @@ describe("groupCodingTraceStages", () => {
       isStreaming: false,
     });
     const doneRow = groups.subagent.find((r) => r.key === "fanout:fanout_done");
-    const timeoutRow = groups.subagent.find((r) => r.key === "fanout:fanout_timeout");
+    const timeoutRow = groups.subagent.find(
+      (r) => r.key === "fanout:fanout_timeout",
+    );
     expect(doneRow?.tone).toBe("done");
     expect(doneRow?.active).toBe(false);
     expect(timeoutRow?.tone).toBe("failed");
@@ -193,11 +218,19 @@ describe("groupCodingTraceStages", () => {
       plans: {},
       toolCalls: {},
       activeFanouts: {},
-      turnUsage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, costUsd: 0 } as never,
+      turnUsage: {
+        inputTokens: 1,
+        outputTokens: 1,
+        totalTokens: 2,
+        costUsd: 0,
+      } as never,
       isStreaming: false,
     });
     expect(groups.result).toHaveLength(1);
-    expect(groups.result[0]).toMatchObject({ label: "Turn complete", anchorId: "turn-result" });
+    expect(groups.result[0]).toMatchObject({
+      label: "Turn complete",
+      anchorId: "turn-result",
+    });
   });
 
   it("shows an 'In progress…' result row while still streaming with no usage yet", async () => {
@@ -251,7 +284,10 @@ describe("CodingTracePanel", () => {
 
   it("renders stage sections with row counts and deep-link hrefs", async () => {
     const { CodingTracePanel } = await import("./coding-trace-panel");
-    const codeRun = makeToolCall({ toolCallId: "tc_code", capability: "execute_code" });
+    const codeRun = makeToolCall({
+      toolCallId: "tc_code",
+      capability: "execute_code",
+    });
     render(
       <CodingTracePanel
         order={["plan:plan_1", "tool:tc_code"]}
@@ -303,6 +339,8 @@ describe("CodingTracePanel", () => {
     );
     expect(screen.getByTestId("trace-row-plan:plan_1")).toBeInTheDocument();
     await userEvent.click(screen.getByText("Plan"));
-    expect(screen.queryByTestId("trace-row-plan:plan_1")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("trace-row-plan:plan_1"),
+    ).not.toBeInTheDocument();
   });
 });

@@ -73,13 +73,19 @@ describe("UsageEventPayloadSchema — accepts the real shape", () => {
 
   it("accepts every documented model_tier value, including mixed and empty", () => {
     for (const tier of ["fast", "balanced", "precise", "mixed", ""]) {
-      const result = UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, model_tier: tier });
+      const result = UsageEventPayloadSchema.safeParse({
+        ...VALID_PAYLOAD,
+        model_tier: tier,
+      });
       expect(result.success).toBe(true);
     }
   });
 
   it("accepts an empty tool_calls_json object (no tools invoked)", () => {
-    const result = UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, tool_calls_json: "{}" });
+    const result = UsageEventPayloadSchema.safeParse({
+      ...VALID_PAYLOAD,
+      tool_calls_json: "{}",
+    });
     expect(result.success).toBe(true);
   });
 });
@@ -107,7 +113,10 @@ describe("UsageEventPayloadSchema — the allowlist is enforced, not advisory", 
       "cwd",
     ];
     for (const key of contentKeys) {
-      const result = UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, [key]: "anything" });
+      const result = UsageEventPayloadSchema.safeParse({
+        ...VALID_PAYLOAD,
+        [key]: "anything",
+      });
       expect(result.success).toBe(false);
     }
   });
@@ -120,10 +129,16 @@ describe("UsageEventPayloadSchema — the allowlist is enforced, not advisory", 
 
   it("rejects malformed UUIDs for install_id / session_id", () => {
     expect(
-      UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, install_id: "not-a-uuid" }).success,
+      UsageEventPayloadSchema.safeParse({
+        ...VALID_PAYLOAD,
+        install_id: "not-a-uuid",
+      }).success,
     ).toBe(false);
     expect(
-      UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, session_id: "not-a-uuid" }).success,
+      UsageEventPayloadSchema.safeParse({
+        ...VALID_PAYLOAD,
+        session_id: "not-a-uuid",
+      }).success,
     ).toBe(false);
   });
 
@@ -136,27 +151,41 @@ describe("UsageEventPayloadSchema — the allowlist is enforced, not advisory", 
   });
 
   it("rejects best_of_n / step_count / duration_ms outside their integer column bounds", () => {
-    expect(UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, best_of_n: 256 }).success).toBe(
-      false,
-    ); // > UInt8
-    expect(UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, best_of_n: -1 }).success).toBe(
-      false,
-    );
     expect(
-      UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, step_count: 65_536 }).success,
+      UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, best_of_n: 256 })
+        .success,
+    ).toBe(false); // > UInt8
+    expect(
+      UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, best_of_n: -1 })
+        .success,
+    ).toBe(false);
+    expect(
+      UsageEventPayloadSchema.safeParse({
+        ...VALID_PAYLOAD,
+        step_count: 65_536,
+      }).success,
     ).toBe(false); // > UInt16
     expect(
-      UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, duration_ms: 1.5 }).success,
+      UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, duration_ms: 1.5 })
+        .success,
     ).toBe(false); // non-integer
   });
 
   it("rejects a boolean-flag field carrying anything but exactly 0 or 1", () => {
-    for (const field of ["graph_used", "pipeline_used", "tui", "headless", "byok"] as const) {
-      expect(UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, [field]: 2 }).success).toBe(
-        false,
-      );
+    for (const field of [
+      "graph_used",
+      "pipeline_used",
+      "tui",
+      "headless",
+      "byok",
+    ] as const) {
       expect(
-        UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, [field]: true }).success,
+        UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, [field]: 2 })
+          .success,
+      ).toBe(false);
+      expect(
+        UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, [field]: true })
+          .success,
       ).toBe(false);
     }
   });
@@ -164,14 +193,22 @@ describe("UsageEventPayloadSchema — the allowlist is enforced, not advisory", 
   it("rejects command / os / arch / exit_status values that aren't short lowercase identifiers", () => {
     for (const field of ["command", "os", "arch", "exit_status"] as const) {
       expect(
-        UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, [field]: "has spaces" }).success,
+        UsageEventPayloadSchema.safeParse({
+          ...VALID_PAYLOAD,
+          [field]: "has spaces",
+        }).success,
       ).toBe(false);
       expect(
-        UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, [field]: "/etc/passwd" }).success,
+        UsageEventPayloadSchema.safeParse({
+          ...VALID_PAYLOAD,
+          [field]: "/etc/passwd",
+        }).success,
       ).toBe(false);
       expect(
-        UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, [field]: "Sentence case." })
-          .success,
+        UsageEventPayloadSchema.safeParse({
+          ...VALID_PAYLOAD,
+          [field]: "Sentence case.",
+        }).success,
       ).toBe(false);
     }
   });
@@ -184,7 +221,10 @@ describe("UsageEventPayloadSchema — the allowlist is enforced, not advisory", 
     ];
     for (const value of messageLike) {
       expect(
-        UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, error_type: value }).success,
+        UsageEventPayloadSchema.safeParse({
+          ...VALID_PAYLOAD,
+          error_type: value,
+        }).success,
       ).toBe(false);
     }
   });
@@ -201,7 +241,10 @@ describe("UsageEventPayloadSchema — the allowlist is enforced, not advisory", 
     ];
     for (const value of badShapes) {
       expect(
-        UsageEventPayloadSchema.safeParse({ ...VALID_PAYLOAD, tool_calls_json: value }).success,
+        UsageEventPayloadSchema.safeParse({
+          ...VALID_PAYLOAD,
+          tool_calls_json: value,
+        }).success,
       ).toBe(false);
     }
   });
@@ -216,7 +259,10 @@ describe("parseUsageEventPayload", () => {
 
   it("returns ok:false with a short, static error — never the offending value", () => {
     const secretLikeValue = "sk-super-secret-value-should-never-be-echoed";
-    const result = parseUsageEventPayload({ ...VALID_PAYLOAD, command: secretLikeValue });
+    const result = parseUsageEventPayload({
+      ...VALID_PAYLOAD,
+      command: secretLikeValue,
+    });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error).not.toContain(secretLikeValue);
@@ -227,7 +273,9 @@ describe("parseUsageEventPayload", () => {
   it("never throws on garbage input", () => {
     expect(() => parseUsageEventPayload(null)).not.toThrow();
     expect(() => parseUsageEventPayload(undefined)).not.toThrow();
-    expect(() => parseUsageEventPayload("a string, not an object")).not.toThrow();
+    expect(() =>
+      parseUsageEventPayload("a string, not an object"),
+    ).not.toThrow();
     expect(() => parseUsageEventPayload(42)).not.toThrow();
     expect(() => parseUsageEventPayload([1, 2, 3])).not.toThrow();
     expect(parseUsageEventPayload(null).ok).toBe(false);

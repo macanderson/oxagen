@@ -3,7 +3,9 @@ import { imageGenerate } from "./image.generate";
 
 describe("image.generate capability", () => {
   it("parses a minimal valid input", () => {
-    const parsed = imageGenerate.input.parse({ prompt: "A sunset over the ocean" });
+    const parsed = imageGenerate.input.parse({
+      prompt: "A sunset over the ocean",
+    });
     expect(parsed.prompt).toBe("A sunset over the ocean");
     expect(parsed.size).toBeUndefined();
     expect(parsed.alt).toBeUndefined();
@@ -20,9 +22,7 @@ describe("image.generate capability", () => {
   });
 
   it("rejects an empty prompt", () => {
-    expect(() =>
-      imageGenerate.input.parse({ prompt: "" }),
-    ).toThrow();
+    expect(() => imageGenerate.input.parse({ prompt: "" })).toThrow();
   });
 
   it("rejects an invalid size value", () => {
@@ -52,7 +52,11 @@ describe("image.generate capability", () => {
       placeholder: false,
       render: {
         componentId: "image-preview",
-        props: { dataUri: "data:image/png;base64,AAABBB", alt: "A test image", placeholder: false },
+        props: {
+          dataUri: "data:image/png;base64,AAABBB",
+          alt: "A test image",
+          placeholder: false,
+        },
       },
     });
     expect(out.dataUri).toBe("data:image/png;base64,AAABBB");

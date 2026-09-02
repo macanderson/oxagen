@@ -43,7 +43,9 @@ export const agentMemoryUpdate = registerCapability({
       .min(1)
       .max(2000)
       .optional()
-      .describe("Replacement lesson text; triggers a re-embed for semantic recall"),
+      .describe(
+        "Replacement lesson text; triggers a re-embed for semantic recall",
+      ),
     memoryKind: memoryKindSchema.optional().describe("New content-domain kind"),
     source: z
       .string()

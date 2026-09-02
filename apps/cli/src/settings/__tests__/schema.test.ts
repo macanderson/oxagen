@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { oxagenSettingsSchema, permissionsSchema, hooksSchema } from "../schema.js";
+import {
+  oxagenSettingsSchema,
+  permissionsSchema,
+  hooksSchema,
+} from "../schema.js";
 
 describe("oxagenSettingsSchema", () => {
   it("parses a full settings document", () => {
@@ -7,10 +11,22 @@ describe("oxagenSettingsSchema", () => {
       model: "anthropic/claude-sonnet-5",
       apiUrl: "https://api.oxagen.sh",
       env: { FOO: "bar" },
-      permissions: { defaultMode: "default", deny: ["Bash(rm -rf*)"], allow: ["Bash(git*)"] },
-      hooks: { PreToolUse: [{ matcher: "bash", hooks: [{ type: "command", command: "echo hi" }] }] },
+      permissions: {
+        defaultMode: "default",
+        deny: ["Bash(rm -rf*)"],
+        allow: ["Bash(git*)"],
+      },
+      hooks: {
+        PreToolUse: [
+          { matcher: "bash", hooks: [{ type: "command", command: "echo hi" }] },
+        ],
+      },
       mcpServers: {
-        github: { transport: "stdio", command: "npx", args: ["-y", "server-github"] },
+        github: {
+          transport: "stdio",
+          command: "npx",
+          args: ["-y", "server-github"],
+        },
       },
       toolVisibility: { github: { include: ["create_*"] } },
     });
@@ -35,7 +51,9 @@ describe("oxagenSettingsSchema", () => {
   });
 
   it("rejects a hook matcher with no actions", () => {
-    expect(() => hooksSchema.parse({ PreToolUse: [{ matcher: "*", hooks: [] }] })).toThrow();
+    expect(() =>
+      hooksSchema.parse({ PreToolUse: [{ matcher: "*", hooks: [] }] }),
+    ).toThrow();
   });
 
   it("passes through forward-compat sections (commands/skills)", () => {
@@ -50,16 +68,29 @@ describe("oxagenSettingsSchema", () => {
 
   it("validates inline agent definitions (prompt required)", () => {
     const parsed = oxagenSettingsSchema.parse({
-      agents: { reviewer: { description: "d", prompt: "You review.", tools: ["Read"], model: "z" } },
+      agents: {
+        reviewer: {
+          description: "d",
+          prompt: "You review.",
+          tools: ["Read"],
+          model: "z",
+        },
+      },
     });
     expect(parsed.agents?.reviewer?.prompt).toBe("You review.");
-    expect(() => oxagenSettingsSchema.parse({ agents: { bad: { model: "z" } } })).toThrow();
+    expect(() =>
+      oxagenSettingsSchema.parse({ agents: { bad: { model: "z" } } }),
+    ).toThrow();
   });
 
   it("accepts per-agent skills and mcpServers on an inline agent", () => {
     const parsed = oxagenSettingsSchema.parse({
       agents: {
-        reviewer: { prompt: "You review.", skills: ["reviewer"], mcpServers: ["github"] },
+        reviewer: {
+          prompt: "You review.",
+          skills: ["reviewer"],
+          mcpServers: ["github"],
+        },
       },
     });
     expect(parsed.agents?.reviewer?.skills).toEqual(["reviewer"]);
@@ -94,6 +125,8 @@ describe("oxagenSettingsSchema", () => {
   });
 
   it("rejects a non-boolean confirmScope", () => {
-    expect(oxagenSettingsSchema.safeParse({ confirmScope: "true" }).success).toBe(false);
+    expect(
+      oxagenSettingsSchema.safeParse({ confirmScope: "true" }).success,
+    ).toBe(false);
   });
 });

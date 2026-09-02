@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { workspaceConfigSchema, RUNTIME_DEAD_KEYS, RUNTIME_DEAD_KEY_REDIRECT } from "../schema.js";
+import {
+  workspaceConfigSchema,
+  RUNTIME_DEAD_KEYS,
+  RUNTIME_DEAD_KEY_REDIRECT,
+} from "../schema.js";
 
 describe("workspaceConfigSchema — minimal identity-only file", () => {
   it("accepts today's real workspace.json shape (WorkspaceLink, no config sections)", () => {
@@ -56,7 +60,13 @@ describe("workspaceConfigSchema — full example (design.md §4)", () => {
     },
 
     commands: {
-      dev: [{ run: "pnpm dev --filter @oxagen/app", description: "web app on :3000", background: true }],
+      dev: [
+        {
+          run: "pnpm dev --filter @oxagen/app",
+          description: "web app on :3000",
+          background: true,
+        },
+      ],
       build: [{ run: "pnpm build" }],
       test: [{ run: "pnpm test:unit" }],
       lint: [{ run: "pnpm lint" }],
@@ -71,10 +81,20 @@ describe("workspaceConfigSchema — full example (design.md §4)", () => {
       namePattern: "oxagen-{slug}",
       seed: {
         include: [".env", ".env.local", "creds.json", ".oxagen/settings.json"],
-        exclude: ["**/node_modules/**", "**/dist/**", "**/.next/**", "**/.turbo/**"],
+        exclude: [
+          "**/node_modules/**",
+          "**/dist/**",
+          "**/.next/**",
+          "**/.turbo/**",
+        ],
       },
       link: ["node_modules", ".pnpm-store"],
-      setup: [{ run: "pnpm i --no-frozen-lockfile", description: "sync deps in the new worktree" }],
+      setup: [
+        {
+          run: "pnpm i --no-frozen-lockfile",
+          description: "sync deps in the new worktree",
+        },
+      ],
       cleanup: "auto",
     },
 
@@ -83,8 +103,20 @@ describe("workspaceConfigSchema — full example (design.md §4)", () => {
     languages: {
       typescript: {
         items: [
-          { id: "no-any", kind: "rule", text: "No `any`.", enforced: true, origin: "manual" },
-          { id: "ui-import", kind: "convention", doc: "docs/ui-imports.md", origin: "scan", source: "CLAUDE.md" },
+          {
+            id: "no-any",
+            kind: "rule",
+            text: "No `any`.",
+            enforced: true,
+            origin: "manual",
+          },
+          {
+            id: "ui-import",
+            kind: "convention",
+            doc: "docs/ui-imports.md",
+            origin: "scan",
+            source: "CLAUDE.md",
+          },
         ],
       },
       english: {
@@ -97,7 +129,12 @@ describe("workspaceConfigSchema — full example (design.md §4)", () => {
           glossary: { "knowledge graph": "two words, lowercase" },
         },
         items: [
-          { id: "oxford", kind: "convention", text: "Oxford comma.", origin: "manual" },
+          {
+            id: "oxford",
+            kind: "convention",
+            text: "Oxford comma.",
+            origin: "manual",
+          },
           {
             id: "rust-errors",
             kind: "convention",
@@ -123,7 +160,10 @@ describe("workspaceConfigSchema — full example (design.md §4)", () => {
       pullRequest: {
         template: ".github/pull_request_template.md",
         base: "main",
-        attribution: { footer: "Generated with Oxagen", assignees: ["mac@oxagen.ai"] },
+        attribution: {
+          footer: "Generated with Oxagen",
+          assignees: ["mac@oxagen.ai"],
+        },
       },
       branch: {
         convention: "{type}/{slug}",
@@ -147,7 +187,12 @@ describe("workspaceConfigSchema — full example (design.md §4)", () => {
     sources: {
       scan: ["workspace", "user"],
       workspace: {
-        conventions: ["CLAUDE.md", "AGENTS.md", ".cursorrules", ".cursor/rules/**"],
+        conventions: [
+          "CLAUDE.md",
+          "AGENTS.md",
+          ".cursorrules",
+          ".cursor/rules/**",
+        ],
         skills: [".agents/skills", ".claude/skills", ".oxagen/skills"],
         agents: [".claude/agents", ".oxagen/agents", ".cursor/agents"],
         mcp: [".mcp.json", ".cursor/mcp.json", ".oxagen/settings.json"],
@@ -166,13 +211,42 @@ describe("workspaceConfigSchema — full example (design.md §4)", () => {
 
     consolidated: {
       generatedAt: "2026-01-01T00:00:00.000Z",
-      skills: [{ name: "coss-ui", scope: "workspace", path: ".agents/skills/coss-ui", description: "…" }],
-      agents: [{ name: "break-fix", scope: "user", path: "~/.claude/agents/break-fix.md", tools: ["Read", "Edit", "Bash"] }],
-      mcpServers: [{ name: "linear", scope: "workspace", transport: "stdio", tools: ["create_issue"] }],
-      commands: [{ name: "ci-green", scope: "workspace", path: ".oxagen/commands/ci-green.md" }],
+      skills: [
+        {
+          name: "coss-ui",
+          scope: "workspace",
+          path: ".agents/skills/coss-ui",
+          description: "…",
+        },
+      ],
+      agents: [
+        {
+          name: "break-fix",
+          scope: "user",
+          path: "~/.claude/agents/break-fix.md",
+          tools: ["Read", "Edit", "Bash"],
+        },
+      ],
+      mcpServers: [
+        {
+          name: "linear",
+          scope: "workspace",
+          transport: "stdio",
+          tools: ["create_issue"],
+        },
+      ],
+      commands: [
+        {
+          name: "ci-green",
+          scope: "workspace",
+          path: ".oxagen/commands/ci-green.md",
+        },
+      ],
       customTools: [{ name: "…", scope: "user" }],
       conventionsByLanguage: { typescript: [] },
-      sourceFiles: [{ path: "CLAUDE.md", scope: "workspace", kind: "conventions" }],
+      sourceFiles: [
+        { path: "CLAUDE.md", scope: "workspace", kind: "conventions" },
+      ],
     },
 
     locked: ["packageManagers.primary"],
@@ -181,7 +255,11 @@ describe("workspaceConfigSchema — full example (design.md §4)", () => {
   it("parses the full example with no errors", () => {
     const result = workspaceConfigSchema.safeParse(FULL);
     if (!result.success) {
-      throw new Error(result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
+      throw new Error(
+        result.error.issues
+          .map((i) => `${i.path.join(".")}: ${i.message}`)
+          .join("; "),
+      );
     }
     expect(result.success).toBe(true);
   });
@@ -199,14 +277,18 @@ describe("workspaceConfigSchema — full example (design.md §4)", () => {
 describe("workspaceConfigSchema — validation", () => {
   it("rejects an unknown language item kind", () => {
     const result = workspaceConfigSchema.safeParse({
-      languages: { typescript: { items: [{ id: "x", kind: "bogus", origin: "manual" }] } },
+      languages: {
+        typescript: { items: [{ id: "x", kind: "bogus", origin: "manual" }] },
+      },
     });
     expect(result.success).toBe(false);
   });
 
   it("rejects an unknown language item origin", () => {
     const result = workspaceConfigSchema.safeParse({
-      languages: { typescript: { items: [{ id: "x", kind: "rule", origin: "bogus" }] } },
+      languages: {
+        typescript: { items: [{ id: "x", kind: "rule", origin: "bogus" }] },
+      },
     });
     expect(result.success).toBe(false);
   });
@@ -221,7 +303,11 @@ describe("workspaceConfigSchema — validation", () => {
   it("rejects an out-of-range confidence", () => {
     const result = workspaceConfigSchema.safeParse({
       languages: {
-        typescript: { items: [{ id: "x", kind: "rule", origin: "research", confidence: 1.5 }] },
+        typescript: {
+          items: [
+            { id: "x", kind: "rule", origin: "research", confidence: 1.5 },
+          ],
+        },
       },
     });
     expect(result.success).toBe(false);
@@ -235,8 +321,12 @@ describe("workspaceConfigSchema — validation", () => {
   });
 
   it("passes through unknown top-level keys (forward-compat)", () => {
-    const parsed = workspaceConfigSchema.parse({ someFutureSection: { ok: true } });
-    expect((parsed as Record<string, unknown>).someFutureSection).toEqual({ ok: true });
+    const parsed = workspaceConfigSchema.parse({
+      someFutureSection: { ok: true },
+    });
+    expect((parsed as Record<string, unknown>).someFutureSection).toEqual({
+      ok: true,
+    });
   });
 });
 
@@ -248,20 +338,26 @@ describe("workspaceConfigSchema — RUNTIME_DEAD_KEYS guard (item 5, fix/cli-con
       if (!result.success) {
         const issue = result.error.issues.find((i) => i.path.join(".") === key);
         expect(issue).toBeDefined();
-        expect(issue?.message).toContain(`oxagen config ${RUNTIME_DEAD_KEY_REDIRECT[key]}`);
+        expect(issue?.message).toContain(
+          `oxagen config ${RUNTIME_DEAD_KEY_REDIRECT[key]}`,
+        );
       }
     }
   });
 
   it("still accepts a document with a dead key stripped out and every other section intact", () => {
-    const result = workspaceConfigSchema.safeParse({ vision: { statement: "ok" } });
+    const result = workspaceConfigSchema.safeParse({
+      vision: { statement: "ok" },
+    });
     expect(result.success).toBe(true);
   });
 
   it("does not reject unrelated unknown top-level keys just because RUNTIME_DEAD_KEYS exists", () => {
     // Regression guard: the fix must deny-list exactly the 4 dead keys, not
     // flip the schema to `.strict()` (which would break forward-compat).
-    const result = workspaceConfigSchema.safeParse({ someFutureSection: { ok: true } });
+    const result = workspaceConfigSchema.safeParse({
+      someFutureSection: { ok: true },
+    });
     expect(result.success).toBe(true);
   });
 });

@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { Copy, Check, Download } from "lucide-react";
 import { useCopyToClipboard } from "@/components/ui/copy-button";
+import { safeHref } from "@/lib/safe-url";
 
 export interface SvgPreviewProps {
   /** Sanitized inline SVG markup string. */
@@ -43,6 +44,10 @@ export default function SvgPreview({ svg, title, serveUrl }: SvgPreviewProps) {
 
   const handleCopy = useCallback(() => void copy(svg), [copy, svg]);
 
+  // The serving URL rides in with the handler's props, so the scheme is
+  // allow-listed before it becomes a download href.
+  const downloadHref = safeHref(serveUrl);
+
   return (
     <div
       className="group relative rounded-2xl border border-border bg-card text-card-foreground shadow-sm overflow-hidden transition-shadow hover:shadow-md"
@@ -55,9 +60,9 @@ export default function SvgPreview({ svg, title, serveUrl }: SvgPreviewProps) {
           {title}
         </span>
         <div className="flex shrink-0 items-center gap-0.5">
-          {serveUrl ? (
+          {downloadHref ? (
             <a
-              href={serveUrl}
+              href={downloadHref}
               download={`${title}.svg`}
               aria-label={`Download ${title} as SVG file`}
               // min-h/w-11 keeps a ≥44px touch target on mobile.

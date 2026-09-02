@@ -1,6 +1,9 @@
 import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
-import { notifyOrgManagers, lowBalanceAlertTemplate } from "@oxagen/notifications";
+import {
+  notifyOrgManagers,
+  lowBalanceAlertTemplate,
+} from "@oxagen/notifications";
 import { billingProvider } from "./client";
 import { effectiveBalance, createCreditLot } from "./credits";
 import { CREDIT_REASONS } from "./constants";
@@ -67,7 +70,9 @@ export interface AutoReloadResult {
  *
  * On charge failure: logs the error and returns { reloaded: false, reason }.
  */
-export async function maybeAutoReload(orgId: string): Promise<AutoReloadResult> {
+export async function maybeAutoReload(
+  orgId: string,
+): Promise<AutoReloadResult> {
   const start = Date.now();
   const settings = await getOrgBillingSettings(orgId);
 
@@ -99,7 +104,10 @@ export async function maybeAutoReload(orgId: string): Promise<AutoReloadResult> 
     return { reloaded: false, reason: "invalid_reload_amount" };
   }
 
-  // Resolve the Stripe customer id from the active subscription.
+  // Resolve the Stripe customer id from one of the org's subscription rows.
+  // There is no status filter and no ORDER BY here, so an org with several
+  // subscription rows may resolve any of them — safe only while every row for
+  // an org shares the same stripe_customer_id (see ensureStripeCustomer).
   const subRow = await withTenantDb((tx) =>
     tx.query.subscriptions.findFirst({
       where: eq(schema.subscriptions.orgId, orgId),
@@ -108,16 +116,21 @@ export async function maybeAutoReload(orgId: string): Promise<AutoReloadResult> 
   );
 
   if (!subRow?.stripeCustomerId) {
-    logger.warn({ orgId }, "billing: auto-reload — no stripe customer found, cannot charge");
+    logger.warn(
+      { orgId },
+      "billing: auto-reload — no stripe customer found, cannot charge",
+    );
     return { reloaded: false, reason: "no_stripe_customer" };
   }
 
   const customerId = subRow.stripeCustomerId;
 
   // Determine payment method: settings override or customer default.
-  let paymentMethodId: string | undefined = settings.autoReloadPaymentMethodId ?? undefined;
+  let paymentMethodId: string | undefined =
+    settings.autoReloadPaymentMethodId ?? undefined;
   if (!paymentMethodId) {
-    const defaultPm = await billingProvider().getDefaultPaymentMethodId(customerId);
+    const defaultPm =
+      await billingProvider().getDefaultPaymentMethodId(customerId);
     paymentMethodId = defaultPm ?? undefined;
   }
 
@@ -126,7 +139,9 @@ export async function maybeAutoReload(orgId: string): Promise<AutoReloadResult> 
   const hourBucket = `${now.getUTCFullYear()}-${now.getUTCMonth()}-${now.getUTCDate()}-${now.getUTCHours()}`;
   const idempotencyKey = `auto_reload:${orgId}:${hourBucket}`;
 
-  let chargeResult: Awaited<ReturnType<ReturnType<typeof billingProvider>["chargeOffSession"]>>;
+  let chargeResult: Awaited<
+    ReturnType<ReturnType<typeof billingProvider>["chargeOffSession"]>
+  >;
   try {
     chargeResult = await billingProvider().chargeOffSession({
       customerId,
@@ -142,7 +157,13 @@ export async function maybeAutoReload(orgId: string): Promise<AutoReloadResult> 
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error(
-      { orgId, customerId, amountCents, err: message, durationMs: Date.now() - start },
+      {
+        orgId,
+        customerId,
+        amountCents,
+        err: message,
+        durationMs: Date.now() - start,
+      },
       "billing: auto-reload — charge off-session failed",
     );
     return { reloaded: false, reason: message };
@@ -150,7 +171,13 @@ export async function maybeAutoReload(orgId: string): Promise<AutoReloadResult> 
 
   if (!chargeResult.succeeded) {
     logger.warn(
-      { orgId, customerId, amountCents, status: chargeResult.status, durationMs: Date.now() - start },
+      {
+        orgId,
+        customerId,
+        amountCents,
+        status: chargeResult.status,
+        durationMs: Date.now() - start,
+      },
       "billing: auto-reload — charge did not succeed",
     );
     return { reloaded: false, reason: `charge_status:${chargeResult.status}` };
@@ -164,6 +191,14 @@ export async function maybeAutoReload(orgId: string): Promise<AutoReloadResult> 
   // lastAutoReloadAt — so the next turn (within the same hour idempotency
   // window) retries the grant against the same, de-duplicated charge and
   // self-heals, while ops has the paymentIntentId to compensate if it doesn't.
+  //
+  // One failure below is BENIGN, and the alert cannot tell it apart: two
+  // concurrent turns can both pass the lastAutoReloadAt check, both send the
+  // same idempotencyKey (so Stripe charges once), and both then try to grant
+  // against the same paymentIntentId. The credit_ledger idempotency index
+  // rejects the second insert, which lands here as "grant_failed_after_charge"
+  // even though the racer already granted the credits correctly. Check the
+  // ledger for the paymentIntentId before compensating on this alert.
   const grantDate = now;
   const expiresAt = new Date(grantDate);
   expiresAt.setFullYear(expiresAt.getFullYear() + 1);
@@ -228,7 +263,10 @@ export async function maybeAutoReload(orgId: string): Promise<AutoReloadResult> 
  * but never propagated (billing operations must not fail due to notification
  * issues).
  */
-export async function notifyLowBalance(orgId: string, result: LowBalanceResult): Promise<void> {
+export async function notifyLowBalance(
+  orgId: string,
+  result: LowBalanceResult,
+): Promise<void> {
   if (!result.low) return;
   try {
     // Resolve the human-readable org name from the database.
@@ -257,6 +295,9 @@ export async function notifyLowBalance(orgId: string, result: LowBalanceResult):
       deepLink: "/settings/billing/credits",
     });
   } catch (err) {
-    logger.warn({ orgId, err }, "billing: low-balance notification failed (non-fatal)");
+    logger.warn(
+      { orgId, err },
+      "billing: low-balance notification failed (non-fatal)",
+    );
   }
 }

@@ -6,12 +6,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ---------------------------------------------------------------------------
 // Hoisted stubs
 // ---------------------------------------------------------------------------
-const { mockResolveOrgTier, mockMeetsMinimumTier, mockRequireTier } = vi.hoisted(() => {
-  const mockResolveOrgTier = vi.fn();
-  const mockMeetsMinimumTier = vi.fn();
-  const mockRequireTier = vi.fn();
-  return { mockResolveOrgTier, mockMeetsMinimumTier, mockRequireTier };
-});
+const { mockResolveOrgTier, mockMeetsMinimumTier, mockRequireTier } =
+  vi.hoisted(() => {
+    const mockResolveOrgTier = vi.fn();
+    const mockMeetsMinimumTier = vi.fn();
+    const mockRequireTier = vi.fn();
+    return { mockResolveOrgTier, mockMeetsMinimumTier, mockRequireTier };
+  });
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -26,7 +27,11 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
   };
 });
 
-import { getEnterpriseAccess, assertEnterprise, SOC2_MIN_TIER } from "./enterprise";
+import {
+  getEnterpriseAccess,
+  assertEnterprise,
+  SOC2_MIN_TIER,
+} from "./enterprise";
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -79,7 +84,11 @@ describe("assertEnterprise", () => {
     mockResolveOrgTier.mockResolvedValue("enterprise");
     mockRequireTier.mockReturnValue(undefined); // no-op for allowed tiers
     await assertEnterprise("org-1", "audit-export");
-    expect(mockRequireTier).toHaveBeenCalledWith("enterprise", SOC2_MIN_TIER, "audit-export");
+    expect(mockRequireTier).toHaveBeenCalledWith(
+      "enterprise",
+      SOC2_MIN_TIER,
+      "audit-export",
+    );
   });
 
   it("propagates when requireTier throws (insufficient tier)", async () => {
@@ -88,6 +97,8 @@ describe("assertEnterprise", () => {
     mockRequireTier.mockImplementation(() => {
       throw err;
     });
-    await expect(assertEnterprise("org-1", "soc2-export")).rejects.toThrow("TierDenied");
+    await expect(assertEnterprise("org-1", "soc2-export")).rejects.toThrow(
+      "TierDenied",
+    );
   });
 });

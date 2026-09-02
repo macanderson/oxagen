@@ -18,18 +18,17 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => ({
-    query: {
-      workspaces: { findFirst: mocks.workspaceFindFirst },
-    },
-  }),
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
+    db: () => ({
       query: {
         workspaces: { findFirst: mocks.workspaceFindFirst },
       },
     }),
-
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        query: {
+          workspaces: { findFirst: mocks.workspaceFindFirst },
+        },
+      }),
   };
 });
 
@@ -50,7 +49,9 @@ describe("workspaceModelSettingsReadHandler (@oxagen/handlers)", () => {
 
   it("throws when workspaceId is empty string (no workspace context)", async () => {
     const noWsCtx: CapabilityContext = { ...CTX, workspaceId: "" };
-    await expect(workspaceModelSettingsReadHandler({}, noWsCtx)).rejects.toThrow(
+    await expect(
+      workspaceModelSettingsReadHandler({}, noWsCtx),
+    ).rejects.toThrow(
       "workspace.model.settings.read requires a workspace context",
     );
   });

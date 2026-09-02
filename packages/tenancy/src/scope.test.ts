@@ -51,6 +51,30 @@ describe("tenant scope", () => {
     ).toThrowError(/workspaceId/);
   });
 
+  it("truncates a long rejected id instead of echoing it whole into the log", () => {
+    const huge = "x".repeat(5000);
+    let message = "";
+    try {
+      runInTenantScope({ orgId: huge, workspaceId: WS }, () => 1);
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toMatch(/orgId/);
+    expect(message).toContain("(5000 chars)");
+    expect(message.length).toBeLessThan(200);
+  });
+
+  it("rejects a non-string id as a TenantScopeError, not a TypeError", () => {
+    // The `string` type is a compile-time promise; untyped callers (Inngest
+    // step payloads, JS interop) can still hand this undefined.
+    expect(() =>
+      runInTenantScope(
+        { orgId: undefined as unknown as string, workspaceId: WS },
+        () => 1,
+      ),
+    ).toThrowError(TenantScopeError);
+  });
+
   it("isolates nested scopes and restores the outer one", () => {
     const other = "00000000-0000-0000-0000-0000000000c3";
     runInTenantScope({ orgId: ORG, workspaceId: WS }, () => {
@@ -59,6 +83,25 @@ describe("tenant scope", () => {
       });
       expect(requireScope().orgId).toBe(ORG);
     });
+  });
+
+  // ── The stored snapshot is frozen (readonly is erased at runtime) ────────
+
+  it("the active scope cannot be mutated through the handle it hands out", () => {
+    runInTenantScope({ orgId: ORG, workspaceId: WS }, () => {
+      const handle = requireScope() as unknown as Record<string, unknown>;
+      expect(Object.isFrozen(handle)).toBe(true);
+      // Non-strict assignment would silently no-op; this file is a module, so
+      // strict mode applies and the write throws. Either way the scope holds.
+      expect(() => {
+        handle.orgId = ORG_B;
+      }).toThrow();
+      expect(requireScope().orgId).toBe(ORG);
+    });
+  });
+
+  it("getPrincipalAttribution's out-of-scope result is frozen", () => {
+    expect(Object.isFrozen(getPrincipalAttribution())).toBe(true);
   });
 
   // ── Nested scope restores outer scope on exit ────────────────────────────
@@ -238,6 +281,51 @@ describe("tenant scope", () => {
           expect(requireScope().principalId).toBeNull();
         },
       );
+    });
+
+    it("runWithPrincipal ignores undefined keys instead of erasing attribution", () => {
+      // `{ principalId: maybeResolved?.id }` yields `undefined` when the
+      // optional chain misses. A plain spread would overwrite the scope's
+      // existing userId/capabilityName with undefined → null.
+      runInTenantScope(
+        { orgId: ORG, workspaceId: WS, userId: USER, capabilityName: "x.y" },
+        () => {
+          runWithPrincipal(
+            { principalId: undefined, userId: undefined },
+            () => {
+              const seen = getPrincipalAttribution();
+              expect(seen.userId).toBe(USER);
+              expect(seen.capabilityName).toBe("x.y");
+            },
+          );
+        },
+      );
+    });
+
+    it("runWithPrincipal cannot switch tenant through a smuggled orgId", () => {
+      // Excess-property checking only fires on fresh literals, so a wider
+      // variable can carry an orgId. Enriching who-acted must never move
+      // which-tenant.
+      const smuggled = {
+        principalId: PRINCIPAL,
+        orgId: ORG_B,
+        workspaceId: WS_B,
+      } as Partial<{ principalId: string }>;
+      runInTenantScope({ orgId: ORG, workspaceId: WS }, () => {
+        runWithPrincipal(smuggled, () => {
+          expect(requireScope().orgId).toBe(ORG);
+          expect(requireScope().workspaceId).toBe(WS);
+          expect(requireScope().principalId).toBe(PRINCIPAL);
+        });
+      });
+    });
+
+    it("runWithPrincipal still clears a field on an explicit null", () => {
+      runInTenantScope({ orgId: ORG, workspaceId: WS, userId: USER }, () => {
+        runWithPrincipal({ userId: null }, () => {
+          expect(getPrincipalAttribution().userId).toBeNull();
+        });
+      });
     });
 
     it("runWithPrincipal is a passthrough when no scope is active", () => {

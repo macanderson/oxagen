@@ -33,9 +33,9 @@ export function SubagentFanout({
       data-fanout-status={status}
     >
       <div className="flex items-center gap-2">
-        <Users className="h-4 w-4 text-muted-foreground" />
+        <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <span className="text-xs font-medium text-muted-foreground">
-          {subagents.length} subagents
+          {subagents.length} subagent{subagents.length === 1 ? "" : "s"}
         </span>
         <FanoutStatus status={status} />
       </div>
@@ -70,7 +70,8 @@ function ChildCard({
   output: unknown;
   onSelect?: (childMessageId: string) => void;
 }) {
-  const status: SubagentStatus = child.status ?? (output !== undefined ? "completed" : "running");
+  const status: SubagentStatus =
+    child.status ?? (output !== undefined ? "completed" : "running");
   return (
     <button
       type="button"
@@ -83,9 +84,13 @@ function ChildCard({
     >
       <div className="flex items-center gap-2">
         <ChildStatusIcon status={status} />
-        <span className="truncate font-medium">{child.label ?? child.capability}</span>
+        <span className="truncate font-medium">
+          {child.label ?? child.capability}
+        </span>
       </div>
-      <div className="mt-1 font-mono text-[10px] text-muted-foreground">{child.capability}</div>
+      <div className="mt-1 font-mono text-[10px] text-muted-foreground">
+        {child.capability}
+      </div>
     </button>
   );
 }
@@ -120,7 +125,8 @@ function FanoutStatus({ status }: { status: SubagentStatus }) {
 }
 
 function ChildStatusIcon({ status }: { status: SubagentStatus }) {
-  if (status === "running") return <Loader2 className="h-3 w-3 animate-spin text-foreground" />;
+  if (status === "running")
+    return <Loader2 className="h-3 w-3 animate-spin text-foreground" />;
   if (status === "completed") return <Check className="h-3 w-3 text-success" />;
   return <X className="h-3 w-3 text-destructive" />;
 }

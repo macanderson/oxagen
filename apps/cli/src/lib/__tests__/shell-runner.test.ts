@@ -40,13 +40,21 @@ describe("runShellCommand", () => {
   });
 
   it("reports a non-zero exit code", async () => {
-    const handle = runShellCommand({ command: "exit 3", cwd, onData: () => {} });
+    const handle = runShellCommand({
+      command: "exit 3",
+      cwd,
+      onData: () => {},
+    });
     const res = await handle.done;
     expect(res.exitCode).toBe(3);
   });
 
   it("kill() terminates a long-running command and reports killed", async () => {
-    const handle = runShellCommand({ command: "sleep 30", cwd, onData: () => {} });
+    const handle = runShellCommand({
+      command: "sleep 30",
+      cwd,
+      onData: () => {},
+    });
     // Let it actually start before killing.
     await new Promise((r) => setTimeout(r, 100));
     handle.kill();
@@ -59,7 +67,10 @@ describe("runShellCommand", () => {
 
 describe("runShellCommandBuffered", () => {
   it("captures stdout and resolves with exit 0", async () => {
-    const res = await runShellCommandBuffered({ command: "echo hi-buffered", cwd });
+    const res = await runShellCommandBuffered({
+      command: "echo hi-buffered",
+      cwd,
+    });
     expect(res.exitCode).toBe(0);
     expect(res.timedOut).toBe(false);
     expect(res.stdout).toContain("hi-buffered");

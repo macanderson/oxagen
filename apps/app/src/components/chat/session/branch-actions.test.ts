@@ -33,8 +33,8 @@ vi.mock("@oxagen/handlers/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 vi.mock("@oxagen/tenancy", () => ({
-  runInTenantScope: vi.fn(
-    async (_scope: unknown, fn: () => Promise<unknown>) => fn(),
+  runInTenantScope: vi.fn(async (_scope: unknown, fn: () => Promise<unknown>) =>
+    fn(),
   ),
 }));
 

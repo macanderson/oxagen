@@ -22,6 +22,8 @@ export default async function sandboxTemplateDeleteTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(sandboxTemplateDelete.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(sandboxTemplateDelete.name, args, ctx, {
+    surface: "mcp",
+  });
   return sandboxTemplateDelete.output.parse(output);
 }

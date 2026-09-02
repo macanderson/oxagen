@@ -18,7 +18,10 @@ describe("audit.log.query capability", () => {
     expect(auditLogQuery.sensitivity).toBe("high");
     expect(auditLogQuery.agent.category).toBe("read");
     expect(auditLogQuery.agent.requiresApproval).toBe(false);
-    expect(auditLogQuery.defaultRoles.org).toMatchObject({ Owner: "allow", Admin: "allow" });
+    expect(auditLogQuery.defaultRoles.org).toMatchObject({
+      Owner: "allow",
+      Admin: "allow",
+    });
   });
 
   it("exposes api, mcp, agent and cli surfaces", () => {
@@ -63,9 +66,9 @@ describe("audit.log.query capability", () => {
 
   it("rejects a non-ISO 'from' timestamp", () => {
     expect(() => auditLogQuery.input.parse({ from: "last tuesday" })).toThrow();
-    expect(auditLogQuery.input.parse({ from: "2024-01-01T00:00:00Z" }).from).toBe(
-      "2024-01-01T00:00:00Z",
-    );
+    expect(
+      auditLogQuery.input.parse({ from: "2024-01-01T00:00:00Z" }).from,
+    ).toBe("2024-01-01T00:00:00Z");
   });
 
   // ── output shape ──────────────────────────────────────────────────────────
@@ -112,7 +115,13 @@ describe("audit.log.query capability", () => {
   it("rejects an event with an unknown source", () => {
     expect(() =>
       auditLogQuery.output.parse({
-        events: [{ source: "weird", eventType: "x", occurredAt: "2024-01-01T00:00:00.000Z" }],
+        events: [
+          {
+            source: "weird",
+            eventType: "x",
+            occurredAt: "2024-01-01T00:00:00.000Z",
+          },
+        ],
         total: 1,
         hasMore: false,
         limit: 50,

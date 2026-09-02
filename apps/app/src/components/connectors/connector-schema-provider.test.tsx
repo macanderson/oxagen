@@ -80,7 +80,11 @@ interface CapturedCtx {
   touched: Set<string>;
 }
 
-function ContextCapture({ onCapture }: { onCapture: (ctx: CapturedCtx) => void }) {
+function ContextCapture({
+  onCapture,
+}: {
+  onCapture: (ctx: CapturedCtx) => void;
+}) {
   const ctx = useConnectorSchema();
   React.useEffect(() => {
     onCapture({
@@ -177,7 +181,9 @@ describe("ConnectorSchemaProvider — setFieldValue", () => {
   it("clears errors for the changed field", () => {
     const { getCtx, getCaptured } = renderWithProvider(SCHEMA);
     act(() => {
-      getCtx().setErrors([{ field: "organizations", message: "Required", code: "required" }]);
+      getCtx().setErrors([
+        { field: "organizations", message: "Required", code: "required" },
+      ]);
     });
     expect(getCaptured().errors).toHaveLength(1);
 
@@ -236,7 +242,12 @@ describe("ConnectorSchemaProvider — selectAuthScheme", () => {
             id: "pat",
             kind: "api_key",
             fields: [
-              { key: "apiKey", label: "API Key", widget: "secret", defaultValue: "" },
+              {
+                key: "apiKey",
+                label: "API Key",
+                widget: "secret",
+                defaultValue: "",
+              },
             ],
           },
         ],
@@ -347,7 +358,9 @@ describe("ConnectorSchemaProvider — throws without provider", () => {
       useConnectorSchema();
       return null;
     }
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
     expect(() => render(<Bare />)).toThrow(
       "useConnectorSchema must be used within ConnectorSchemaProvider",
     );
@@ -361,12 +374,15 @@ describe("ConnectorSchemaProvider — fetch (no initialSchema)", () => {
   });
 
   it("sets fetchError when server returns non-ok HTTP status", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: false,
-      status: 404,
-      text: async () => "Not found",
-      json: async () => ({ error: "not found" }),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        text: async () => "Not found",
+        json: async () => ({ error: "not found" }),
+      }),
+    );
 
     let capturedError: string | null = null;
     function ErrorCapture() {
@@ -378,7 +394,11 @@ describe("ConnectorSchemaProvider — fetch (no initialSchema)", () => {
     }
 
     render(
-      <ConnectorSchemaProvider pluginId="missing" orgSlug="acme" workspaceSlug="main">
+      <ConnectorSchemaProvider
+        pluginId="missing"
+        orgSlug="acme"
+        workspaceSlug="main"
+      >
         <ErrorCapture />
       </ConnectorSchemaProvider>,
     );
@@ -404,12 +424,15 @@ describe("ConnectorSchemaProvider — fetch (no initialSchema)", () => {
       },
     };
 
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => mockSchema,
-      text: async () => JSON.stringify(mockSchema),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockSchema,
+        text: async () => JSON.stringify(mockSchema),
+      }),
+    );
 
     let capturedId: string | undefined;
     function SchemaCapture() {
@@ -421,7 +444,11 @@ describe("ConnectorSchemaProvider — fetch (no initialSchema)", () => {
     }
 
     render(
-      <ConnectorSchemaProvider pluginId="fetched" orgSlug="acme" workspaceSlug="main">
+      <ConnectorSchemaProvider
+        pluginId="fetched"
+        orgSlug="acme"
+        workspaceSlug="main"
+      >
         <SchemaCapture />
       </ConnectorSchemaProvider>,
     );
@@ -434,7 +461,10 @@ describe("ConnectorSchemaProvider — fetch (no initialSchema)", () => {
   });
 
   it("sets fetchError when fetch network throws", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new Error("Network error")),
+    );
 
     let capturedError: string | null = null;
     function ErrorCapture() {
@@ -446,7 +476,11 @@ describe("ConnectorSchemaProvider — fetch (no initialSchema)", () => {
     }
 
     render(
-      <ConnectorSchemaProvider pluginId="gone" orgSlug="acme" workspaceSlug="main">
+      <ConnectorSchemaProvider
+        pluginId="gone"
+        orgSlug="acme"
+        workspaceSlug="main"
+      >
         <ErrorCapture />
       </ConnectorSchemaProvider>,
     );
@@ -486,13 +520,20 @@ describe("ConnectorSchemaProvider — initialValues", () => {
   }
 
   it("seeds provided values over schema defaults", () => {
-    const get = renderWithInitialValues({ organizations: ["acme-eng"], syncDepth: 30 });
+    const get = renderWithInitialValues({
+      organizations: ["acme-eng"],
+      syncDepth: 30,
+    });
     expect(get().organizations).toEqual(["acme-eng"]);
     expect(get().syncDepth).toBe(30);
   });
 
   it("keeps non-schema operational keys present in initialValues", () => {
-    const get = renderWithInitialValues({ organizations: ["acme-eng"], owner: "acme", repo: "core" });
+    const get = renderWithInitialValues({
+      organizations: ["acme-eng"],
+      owner: "acme",
+      repo: "core",
+    });
     // Operational keys not described by the manifest survive in form state so a
     // later merge-submit can preserve them.
     expect(get().owner).toBe("acme");

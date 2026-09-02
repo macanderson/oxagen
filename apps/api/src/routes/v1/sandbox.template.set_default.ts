@@ -9,6 +9,8 @@ export const sandboxTemplateSetDefaultRoute = new Hono<AppEnv>();
 sandboxTemplateSetDefaultRoute.post("/", async (c) => {
   const body = sandboxTemplateSetDefault.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(sandboxTemplateSetDefault.name, body, ctx, { surface: "api" });
+  const out = await invoke(sandboxTemplateSetDefault.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

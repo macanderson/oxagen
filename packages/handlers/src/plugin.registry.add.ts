@@ -10,7 +10,9 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
 
   let result: { id: string; isDefault: boolean };
   try {
-    result = await withTenantDb((tx) => addRegistry(tx, { orgId, workspaceId, name, baseUrl }));
+    result = await withTenantDb((tx) =>
+      addRegistry(tx, { orgId, workspaceId, name, baseUrl }),
+    );
   } catch (err) {
     logger.error(
       { err, orgId, workspaceId, name, baseUrl },
@@ -20,7 +22,13 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   }
 
   logger.info(
-    { registryId: result.id, orgId, workspaceId, name, isDefault: result.isDefault },
+    {
+      registryId: result.id,
+      orgId,
+      workspaceId,
+      name,
+      isDefault: result.isDefault,
+    },
     "plugin.registry.add: ok",
   );
   return { registryId: result.id, isDefault: result.isDefault };

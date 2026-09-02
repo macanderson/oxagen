@@ -5,11 +5,14 @@ import { eq, and, isNull } from "drizzle-orm";
 import { getOrCreateRegistry } from "./schema.versioning";
 import { logger } from "./logger";
 
-export const schemaPropertyDeleteHandler: CapabilityHandler<typeof schemaPropertyDelete> = async (
-  input,
-  ctx,
-) => {
-  const registry = await getOrCreateRegistry(ctx.orgId, ctx.workspaceId, ctx.userId);
+export const schemaPropertyDeleteHandler: CapabilityHandler<
+  typeof schemaPropertyDelete
+> = async (input, ctx) => {
+  const registry = await getOrCreateRegistry(
+    ctx.orgId,
+    ctx.workspaceId,
+    ctx.userId,
+  );
 
   if (!registry.draftVersionId) {
     return { deleted: false, propertyKey: input.key };
@@ -81,7 +84,13 @@ export const schemaPropertyDeleteHandler: CapabilityHandler<typeof schemaPropert
   });
 
   logger.info(
-    { orgId: ctx.orgId, workspaceId: ctx.workspaceId, ownerName: input.ownerName, key: input.key, deleted },
+    {
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      ownerName: input.ownerName,
+      key: input.key,
+      deleted,
+    },
     "schema.property.delete: soft-deleted property",
   );
 

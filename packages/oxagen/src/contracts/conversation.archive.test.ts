@@ -34,7 +34,10 @@ describe("conversation.archive capability", () => {
 
   it("accepts conversationIds with 100 items (max)", () => {
     const ids = Array.from({ length: 100 }, (_, i) => `cnv_${i}`);
-    const parsed = conversationArchive.input.parse({ conversationIds: ids, archived: true });
+    const parsed = conversationArchive.input.parse({
+      conversationIds: ids,
+      archived: true,
+    });
     expect(parsed.conversationIds).toHaveLength(100);
   });
 
@@ -53,7 +56,10 @@ describe("conversation.archive capability", () => {
 
   it("rejects a conversationId that is an empty string", () => {
     expect(() =>
-      conversationArchive.input.parse({ conversationIds: [""], archived: true }),
+      conversationArchive.input.parse({
+        conversationIds: [""],
+        archived: true,
+      }),
     ).toThrow();
   });
 

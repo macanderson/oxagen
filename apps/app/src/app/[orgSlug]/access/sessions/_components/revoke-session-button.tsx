@@ -25,9 +25,9 @@ export function RevokeSessionButton({
   targetUserId,
   userName,
 }: RevokeSessionButtonProps) {
-  const [status, setStatus] = React.useState<"idle" | "confirming" | "revoking" | "error">(
-    "idle",
-  );
+  const [status, setStatus] = React.useState<
+    "idle" | "confirming" | "revoking" | "error"
+  >("idle");
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
   async function handleRevoke() {

@@ -65,9 +65,14 @@ export default function ModelSettingsInline({
         aria-live="polite"
       >
         <div className="flex items-center gap-3">
-          <CheckCircle2 className="h-5 w-5 shrink-0 text-success" aria-hidden="true" />
+          <CheckCircle2
+            className="h-5 w-5 shrink-0 text-success"
+            aria-hidden="true"
+          />
           <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground">Model settings updated</p>
+            <p className="text-sm font-medium text-foreground">
+              Model settings updated
+            </p>
             <p className="truncate text-xs text-muted-foreground">
               Default tier: {tier}
             </p>
@@ -81,18 +86,27 @@ export default function ModelSettingsInline({
     <form
       onSubmit={handleSubmit}
       aria-label="Model settings"
-      className={cn("rounded-2xl border border-border bg-card p-5 space-y-5 w-full max-w-sm")}
+      className={cn(
+        "rounded-2xl border border-border bg-card p-5 space-y-5 w-full max-w-sm",
+      )}
     >
       <div className="flex items-center gap-2.5">
-        <Cpu className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="text-sm font-semibold text-foreground">Model settings</span>
+        <Cpu
+          className="h-4 w-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <span className="text-sm font-semibold text-foreground">
+          Model settings
+        </span>
       </div>
 
       <div className="space-y-1.5">
         <Label htmlFor={tierId}>Default model tier</Label>
         <Select
           value={tier}
-          onValueChange={(v) => { if (v !== null) setTier(v as TextTier); }}
+          onValueChange={(v) => {
+            if (v !== null) setTier(v as TextTier);
+          }}
           disabled={isSubmitting}
           name="tier"
         >
@@ -100,7 +114,9 @@ export default function ModelSettingsInline({
             <SelectValue placeholder="Select tier" />
           </SelectTrigger>
           <SelectPopup>
-            <SelectItem value="fast">Fast — lower cost, quick responses</SelectItem>
+            <SelectItem value="fast">
+              Fast — lower cost, quick responses
+            </SelectItem>
             <SelectItem value="balanced">Balanced — best value</SelectItem>
             <SelectItem value="precise">Precise — most capable</SelectItem>
           </SelectPopup>

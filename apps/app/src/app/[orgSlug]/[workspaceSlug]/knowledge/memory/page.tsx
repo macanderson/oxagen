@@ -22,7 +22,6 @@
  */
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { getSessionOrRedirect } from "@/lib/session";
 import {
   resolveOrg,
@@ -48,12 +47,10 @@ export default async function KnowledgeMemoriesPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
   const session = await getSessionOrRedirect();
 
+  // resolveOrg/resolveWorkspace call notFound() themselves on a miss — they
+  // return a non-nullable row or never return at all.
   const org = await resolveOrg(orgSlug);
-  if (!org) notFound();
-
   const ws = await resolveWorkspace(org.id, workspaceSlug);
-  if (!ws) notFound();
-
   await assertOrgMember(org.id, session.user.id);
 
   const sectionProps = {
@@ -79,7 +76,10 @@ export default async function KnowledgeMemoriesPage({ params }: PageProps) {
       </Section>
 
       <Section fallback={<LoadingState variant="detail" />}>
-        <EvidenceAttachSection orgSlug={orgSlug} workspaceSlug={workspaceSlug} />
+        <EvidenceAttachSection
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+        />
       </Section>
 
       <p className="text-xs text-muted-foreground">

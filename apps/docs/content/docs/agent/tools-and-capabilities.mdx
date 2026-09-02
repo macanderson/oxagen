@@ -20,8 +20,8 @@ The result is a Vercel AI SDK `tools` map passed to `streamText`. The agent sele
 
 | Tool | Description |
 |---|---|
-| `agent.memory.recall` | Query the workspace knowledge graph for relevant memories. Returns scored matches by semantic similarity. |
-| `agent.memory.write` | Persist a new memory (kind: `routine-change`, `constraint`, `bug-root-cause`, `convention-deviation`, or `gotcha`) to the workspace knowledge graph, attached to a graph node with a weight bucket (`low`, `high`, or `critical`). |
+| `recall_memory` | Query the workspace knowledge graph for relevant memories. Returns scored matches by semantic similarity. |
+| `write_memory` | Persist a new memory (kind: `routine-change`, `constraint`, `bug-root-cause`, `convention-deviation`, or `gotcha`) to the workspace knowledge graph, attached to a graph node with a weight bucket (`low`, `high`, or `critical`). |
 
 Memories persist across sessions and are visible in **Workspace → Knowledge → Memories**.
 
@@ -29,46 +29,50 @@ Memories persist across sessions and are visible in **Workspace → Knowledge �
 
 | Tool | Description |
 |---|---|
-| `agent.subagent.dispatch` | Dispatch one or more subagents in parallel. Each subagent runs a scoped capability and returns its result to the parent. Long-running subagents run as durable Inngest jobs. `riskLevel: medium` — requires user approval before the fanout is created. Maximum 100 tasks per dispatch call. |
-| `agent.subagent.aggregate` | Aggregate results from previously dispatched subagents. |
+| `dispatch_subagent` | Dispatch one or more subagents in parallel. Each subagent runs a scoped capability and returns its result to the parent. Long-running subagents run as durable Inngest jobs. `riskLevel: medium` — requires user approval before the fanout is created. Maximum 100 tasks per dispatch call. |
+| `aggregate_subagents` | Collect the results of an earlier `dispatch_subagent` fanout into one payload. |
 
 ### Code execution
 
 | Tool | Description |
 |---|---|
-| `agent.code.execute` | Execute Node 20, Python 3.12, or shell code in a hardened sandbox. Streams stdout/stderr back to the chat. `riskLevel: high` — requires user approval by default. |
+| `execute_code` | Execute Node 20, Python 3.12, or shell code in a hardened sandbox. Streams stdout/stderr back to the chat. `riskLevel: high` — requires user approval by default. |
 
 See [Code execution](/docs/agent/code-execution) for full details on the sandbox environment.
 
 ### Deterministic coding tools
 
-Every coding-agent turn — the CLI, the in-app [Code mode](/docs/agent/chat-interface#code-mode) sandbox, an API-triggered agent run, or the MCP sandbox agent — also advertises a fixed set of **structured, deterministic tools** (ADR-021 §3). These replace the model's usual approach of shelling out and parsing raw scrollback for the most common mechanical duties — running tests, typechecking, reading a diff, checking repo health — with a tool that runs **zero model calls**: a pure function resolves scope, a shell command executes, and a deterministic parser compresses the result into a small typed object before the model ever sees it. The point is token economy and accuracy: the agent spends its context on the handful of failures or errors that matter, not on a 500-line reporter dump it would otherwise have to re-derive structure from.
+Every coding-agent turn — the CLI, the in-app [Code mode](/docs/agent/chat-interface#code-mode) sandbox, an API-triggered agent run, or the MCP sandbox agent — also gets a fixed set of **structured, deterministic tools**.
 
-Four of these are **engine-internal** — unlike the capability-backed tools elsewhere on this page, they have no REST route or standalone MCP tool. They live only inside the coding-agent's tool map (`buildWorkspaceTools` in `packages/agent-engine/src/tools.ts`), the same registration point as the primitive `read_file`/`bash`/`code_graph` tools, so they are identical across every surface that runs the turn loop. The fifth, `debug_with_trace`, IS a full capability (`agent.debug.trace`) with its own API route and MCP tool, so it can also be called directly outside a turn — see `docs/capabilities/agent.debug.trace.md` in the capability reference set for the full input/output shape.
+Without them, an agent doing a mechanical chore — run the tests, typecheck, read a diff, check repo health — shells out and reads the raw scrollback. These tools do the same work with **zero model calls**: a plain function works out the scope, a shell command runs, and a parser squeezes the result into a small typed object before the model sees anything. The agent then spends its context on the handful of failures that matter instead of a 500-line reporter dump it would have to re-read for structure.
 
-| Tool (model-facing) | Canonical name | Surface | Purpose |
-|---|---|---|---|
-| `test_unit_run` | `test.unit.run` | Agent turn only | Runs vitest over only the sibling/importing tests implicated by a set of changed files (or an explicit `scope.package`/`scope.files`) and returns a typed pass/fail summary — counts, duration, and the first failing assertions with file:line — instead of the reporter's raw output. It never runs the whole repo: an empty selection or `scope.all` returns a hint rather than sweeping every test. |
-| `build_package_run` | `build.package.run` | Agent turn only | Typechecks (default `mode: "typecheck"`) or builds a package/file scope and returns deduped, file-grouped compiler errors as a typed list instead of raw `tsc`/build output. |
-| `git_diff_summarize` | `git.diff.summarize` | Agent turn only | Summarizes the working diff as a typed per-file overview — change type, added/removed line counts, and the enclosing symbols touched (read from git's own hunk headers, no AST) — the cheap orientation before reading the actual patch. |
-| `workspace_health_check` | `workspace.health.check` | Agent turn only | One compact snapshot of repo state: git branch, dirty-file count, and ahead/behind vs. upstream (always cheap), plus opt-in typecheck and lint summaries capped to a small bounded sample. |
-| `debug_with_trace` | `agent.debug.trace` | Full capability (API, MCP, agent) | Diagnoses why an agent execution failed as a structured failure frame — the failing step, error class, parsed top stack frames, related trace spans, and deterministically-ranked suspect files. Set `summarize: true` to add exactly one LLM call for a root-cause diagnosis; every other field is produced without a model. |
+Four of them are **engine-internal**: unlike the capability-backed tools elsewhere on this page, they have no REST route and no standalone MCP tool. They live only in the coding agent's tool map (`buildWorkspaceTools` in `packages/agent-engine/src/tools.ts`), alongside the primitive `read_file` / `bash` / `code_graph` tools, so they behave identically on every surface that runs the turn loop.
 
-Every tool shares a small set of argument conventions so the model learns them once: `verbosity` (`minimal` default, `standard`, or `verbose`) caps how much detail comes back, an optional numeric `limit` bounds list length directly, and repo-scoped tools take a `scope` that is exactly one of `{ package }`, `{ files }`, or `{ all }`. Canonical tool names follow the `domain.subject.action` naming standard (see [ADR-022](/docs/api/capabilities#capability-naming-and-aliases)); the model-facing name is the same string with dots replaced by underscores.
+The fifth, `debug_execution`, is a full capability with its own API route and MCP tool, so you can also call it directly, outside a turn.
+
+| Tool | Surface | Purpose |
+|---|---|---|
+| `test_unit_run` | Agent turn only | Runs vitest over only the sibling and importing tests implicated by a set of changed files (or an explicit `scope.package` / `scope.files`), and returns a typed pass/fail summary — counts, duration, and the first failing assertions with file:line — instead of the reporter's raw output. It never runs the whole repo: an empty selection, or `scope.all`, returns a hint rather than sweeping every test. |
+| `build_package_run` | Agent turn only | Typechecks (default `mode: "typecheck"`) or builds a package or file scope, and returns deduplicated, file-grouped compiler errors as a typed list instead of raw `tsc` output. |
+| `git_diff_summarize` | Agent turn only | Summarizes the working diff per file — change type, added and removed line counts, and which enclosing symbols were touched (read straight from git's hunk headers, no AST). Cheap orientation before reading the actual patch. |
+| `workspace_health_check` | Agent turn only | One compact snapshot of repo state: git branch, dirty-file count, and ahead/behind against upstream (always cheap), plus optional typecheck and lint summaries capped to a small sample. |
+| `debug_execution` | Full capability (API, MCP, agent) | Explains why an agent execution failed, as a structured failure frame: the failing step, the error class, the top parsed stack frames, related trace spans, and suspect files ranked deterministically. Set `summarize: true` to add exactly one LLM call for a root-cause diagnosis; every other field is produced without a model. |
+
+The tools share a few argument conventions, so the model learns them once. `verbosity` (`minimal` by default, or `standard` or `verbose`) caps how much detail comes back. An optional numeric `limit` bounds list length directly. Repo-scoped tools take a `scope` that is exactly one of `{ package }`, `{ files }`, or `{ all }`. Tool names follow the same verb-first snake_case standard as every other capability — see [Capability naming](/docs/api/capabilities#capability-naming).
 
 ### Planning
 
 | Tool | Description |
 |---|---|
-| `agent.plan.create` | Enter plan mode. The agent proposes a structured plan before executing any side-effectful tools. |
-| `agent.plan.approve` | Approve the proposed plan. The agent proceeds to execute. |
+| `create_plan` | Enter plan mode. The agent proposes a structured plan before executing any side-effectful tools. |
+| `approve_plan` | Approve the proposed plan. The agent proceeds to execute. |
 
 ### Skills
 
 | Tool | Description |
 |---|---|
-| `agent.skill.list` | List available skills (built-in filesystem skills + workspace prompt templates). |
-| `agent.skill.load` | Load a specific skill into the agent's context for the current turn. |
+| `list_agent_skills` | List available skills (built-in filesystem skills + workspace prompt templates). |
+| `load_skill` | Load a specific skill into the agent's context for the current turn. |
 
 Skills are file-based knowledge artifacts (canonical `skill.toml` bundles) that give the agent specialized domain knowledge or instructions. Workspace administrators can define custom skills via **Workspace → Knowledge** prompt templates.
 
@@ -76,9 +80,9 @@ Skills are file-based knowledge artifacts (canonical `skill.toml` bundles) that 
 
 | Tool | Description |
 |---|---|
-| `agent.task.background.start` | Start a long-running Inngest job. Returns a task ID immediately. The task runs asynchronously. |
-| `agent.task.background.read` | Poll the status of a background task. |
-| `agent.task.background.cancel` | Cancel a running background task. |
+| `start_background_task` | Start a long-running Inngest job. Returns a task ID immediately. The task runs asynchronously. |
+| `get_background_task` | Poll the status of a background task. |
+| `cancel_background_task` | Cancel a running background task. |
 
 Background tasks appear in **Workspace → Activity → Runs** with live status updates.
 
@@ -86,14 +90,14 @@ Background tasks appear in **Workspace → Activity → Runs** with live status 
 
 | Tool | Description |
 |---|---|
-| `agent.approval.resolve` | Approve or deny a pending approval request (used programmatically; in the app UI, approval cards render inline in chat). |
+| `resolve_approval` | Approve or deny a pending approval request (used programmatically; in the app UI, approval cards render inline in chat). |
 
 ### MCP server management
 
 | Tool | Description |
 |---|---|
-| `agent.mcp.list` | List external MCP servers registered for the workspace. |
-| `agent.tool.list` | List all tools available in the current session (built-in + plugin tools). |
+| `list_mcp_servers` | List external MCP servers registered for the workspace. |
+| `list_agent_tools` | List all tools available in the current session (built-in + plugin tools). |
 
 ## Plugin tools
 
@@ -109,6 +113,6 @@ Every tool has a `riskLevel` field: `low`, `medium`, or `high`.
 - **Medium:** May require approval depending on workspace policy.
 - **High:** Requires explicit user approval before execution (stream pauses; approval card rendered).
 
-`agent.code.execute` is the primary high-risk tool. The workspace tool policy can customize risk thresholds — see **Workspace → Settings → General → Tool policy**.
+`execute_code` is the primary high-risk tool. The workspace tool policy can customize risk thresholds — see **Workspace → Settings → General → Tool policy**.
 
 Default-deny applies to high-risk tools. A workspace that has never configured a tool policy has code execution disabled by default.

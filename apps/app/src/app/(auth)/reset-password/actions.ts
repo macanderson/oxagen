@@ -23,9 +23,7 @@ import { logger } from "@oxagen/handlers/logger";
 // Result type
 // ---------------------------------------------------------------------------
 
-export type ResetPasswordResult =
-  | { ok: true }
-  | { ok: false; error: string };
+export type ResetPasswordResult = { ok: true } | { ok: false; error: string };
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -79,12 +77,24 @@ export async function resetPasswordAction(
     // Never log the password. Capture the error message only.
     const message = err instanceof Error ? err.message : "";
 
-    if (
+    const isKnownTokenError =
       message.includes("INVALID_TOKEN") ||
       message.includes("invalid token") ||
-      message.includes("Token not found") ||
-      message.includes("token") // catch-all for token-related errors
-    ) {
+      message.includes("Token not found");
+    // The bare-substring arm is deliberately loose, and that looseness cuts
+    // both ways: it also swallows any infra failure whose message merely
+    // mentions a token (a CSRF check, a DB column named `token`, an upstream
+    // 401). The user-facing copy stays the same either way — telling a real
+    // person to request a new link is the right advice regardless — but a
+    // fallthrough match is logged so an outage hiding behind "expired link"
+    // is still visible in the logs.
+    if (isKnownTokenError || message.includes("token")) {
+      if (!isKnownTokenError) {
+        logger.warn(
+          { err: message },
+          "[reset-password] token-shaped failure did not match a known Better Auth token error",
+        );
+      }
       return {
         ok: false,
         error:
@@ -92,12 +102,21 @@ export async function resetPasswordAction(
       };
     }
 
-    if (message.includes("PASSWORD_TOO_SHORT") || message.includes("too short")) {
-      return { ok: false, error: "Password is too short (minimum 8 characters)" };
+    if (
+      message.includes("PASSWORD_TOO_SHORT") ||
+      message.includes("too short")
+    ) {
+      return {
+        ok: false,
+        error: "Password is too short (minimum 8 characters)",
+      };
     }
 
     if (message.includes("PASSWORD_TOO_LONG") || message.includes("too long")) {
-      return { ok: false, error: "Password is too long (maximum 128 characters)" };
+      return {
+        ok: false,
+        error: "Password is too long (maximum 128 characters)",
+      };
     }
 
     // Catch-all: none of the expected user-input errors above matched, so this

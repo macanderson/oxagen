@@ -130,6 +130,21 @@ describe("workspace.settings.write handler", () => {
     ).rejects.toThrow(/already in use/);
   });
 
+  it("maps a Drizzle-wrapped unique-violation (code on .cause) to a friendly error", async () => {
+    // Production path: drizzle wraps the postgres.js error and the SQLSTATE
+    // lives on `.cause`, not the top level. The shared isUniqueViolation walks
+    // the cause chain; a top-level-only check would miss this and leak raw SQL.
+    mocks.findFirst.mockResolvedValueOnce(EXISTING);
+    mocks.where.mockRejectedValueOnce({
+      name: "DrizzleQueryError",
+      message: "Failed query: update workspace.workspaces ...",
+      cause: { code: "23505", constraint_name: "workspaces_org_slug_idx" },
+    });
+    await expect(
+      workspaceSettingsWriteHandler({ slug: "taken" }, CTX),
+    ).rejects.toThrow(/already in use/);
+  });
+
   it("throws when the workspace is not found", async () => {
     mocks.findFirst.mockResolvedValueOnce(undefined);
     await expect(

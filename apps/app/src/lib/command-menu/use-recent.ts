@@ -37,10 +37,10 @@ function pushRecent(query: string): RecentEntry[] {
   const trimmed = query.trim();
   if (!trimmed) return readRecent();
   const existing = readRecent().filter((e) => e.query !== trimmed);
-  const updated: RecentEntry[] = [{ query: trimmed, at: new Date().toISOString() }, ...existing].slice(
-    0,
-    MAX_RECENT,
-  );
+  const updated: RecentEntry[] = [
+    { query: trimmed, at: new Date().toISOString() },
+    ...existing,
+  ].slice(0, MAX_RECENT);
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   } catch {
@@ -62,10 +62,11 @@ export interface UseRecentReturn {
 }
 
 export function useRecent(): UseRecentReturn {
-  // Lazy initializer: runs once on mount, SSR-safe because readRecent() guards
-  // typeof window. No useEffect needed — the initializer is already deferred
-  // to the first render on the client, so localStorage is never read on the
-  // server.
+  // Lazy initializer: readRecent() guards `typeof window`, so a server render
+  // never touches localStorage and yields []. NOTE: the initializer also runs
+  // during client hydration, where it CAN return stored entries — so any
+  // consumer that renders `recent` during the hydrating pass must be inside a
+  // client-only boundary (the command menu renders its list only once opened).
   const [recent, setRecent] = React.useState<RecentEntry[]>(readRecent);
 
   const push = React.useCallback((query: string) => {

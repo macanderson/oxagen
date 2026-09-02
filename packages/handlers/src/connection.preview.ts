@@ -8,10 +8,9 @@ import type { AuthCredential } from "@oxagen/ingestion/connectors";
 import { HTTPException } from "hono/http-exception";
 import { logger } from "./logger";
 
-export const connectionPreviewHandler: CapabilityHandler<typeof connectionPreview> = async (
-  input,
-  ctx,
-) => {
+export const connectionPreviewHandler: CapabilityHandler<
+  typeof connectionPreview
+> = async (input, ctx) => {
   // Fetch source connection + auth credentials in one query
   const rows = await withTenantDb((tx) =>
     tx
@@ -50,11 +49,16 @@ export const connectionPreviewHandler: CapabilityHandler<typeof connectionPrevie
   // Decrypt auth credentials. Route the adapter by the envelope's stored keyId
   // (not the current provider env var) so credentials written under a previous
   // provider still decrypt after the deployment flips INGESTION_CRYPTO_PROVIDER.
-  const envelope = row.encryptedPayload as { keyId: string; ciphertext: string };
+  const envelope = row.encryptedPayload as {
+    keyId: string;
+    ciphertext: string;
+  };
   const { adapter } = resolveIngestionCryptoAdapterForKeyId(envelope.keyId);
   const cipherBuf = Buffer.from(envelope.ciphertext, "base64");
   const plaintextBuf = await decrypt(cipherBuf, envelope.keyId, { adapter });
-  const authCredential = JSON.parse(plaintextBuf.toString("utf8")) as AuthCredential;
+  const authCredential = JSON.parse(
+    plaintextBuf.toString("utf8"),
+  ) as AuthCredential;
 
   // Load connector and fetch preview data
   const connector = getConnector(row.connectorId);
@@ -67,13 +71,19 @@ export const connectionPreviewHandler: CapabilityHandler<typeof connectionPrevie
   // TypeError where a validation message belongs. Validating on read as well
   // as on write matters because a row outlives the schema that admitted it.
   const deliveryConfig = (row.deliveryConfig ?? {}) as Record<string, unknown>;
-  const parsedConfig = connector.connectionConfigSchema.safeParse(deliveryConfig);
+  const parsedConfig =
+    connector.connectionConfigSchema.safeParse(deliveryConfig);
   if (!parsedConfig.success) {
     const issues = parsedConfig.error.issues
       .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
       .join("; ");
     logger.warn(
-      { connectionId: row.id, connectorId: row.connectorId, orgId: ctx.orgId, issues },
+      {
+        connectionId: row.id,
+        connectorId: row.connectorId,
+        orgId: ctx.orgId,
+        issues,
+      },
       "connection.preview: stored config does not satisfy the connector schema",
     );
     throw new HTTPException(422, {
@@ -89,7 +99,10 @@ export const connectionPreviewHandler: CapabilityHandler<typeof connectionPrevie
     "connection.preview: fetching record type samples",
   );
 
-  const samples = await connector.previewRecordTypes(authCredential, deliveryConfig);
+  const samples = await connector.previewRecordTypes(
+    authCredential,
+    deliveryConfig,
+  );
 
   return {
     recordTypes: samples.map((sample) => ({
@@ -97,7 +110,9 @@ export const connectionPreviewHandler: CapabilityHandler<typeof connectionPrevie
       displayName: sample.displayName,
       sampleCount: sample.sampleRecords.length,
       sampleFields: Object.keys(sample.fieldSchema),
-      sampleRecords: sample.sampleRecords.slice(0, 3) as Array<Record<string, unknown>>,
+      sampleRecords: sample.sampleRecords.slice(0, 3) as Array<
+        Record<string, unknown>
+      >,
     })),
   };
 };

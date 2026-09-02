@@ -32,7 +32,9 @@ vi.mock("@/components/ui/tooltip", () => ({
     render: React.ReactElement;
     children: React.ReactNode;
   }) => (isValidElement(trigger) ? cloneElement(trigger, {}, children) : null),
-  TooltipPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  TooltipPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 import { PromptCacheBar } from "./prompt-cache-bar";
@@ -48,7 +50,11 @@ describe("PromptCacheBar", () => {
   it("(b) computes the cache-hit rate over the prompt only", () => {
     // 800 of 1000 prompt tokens cached = 80% — output (500) does not dilute it.
     render(
-      <PromptCacheBar promptTokens={1000} completionTokens={500} cachedTokens={800} />,
+      <PromptCacheBar
+        promptTokens={1000}
+        completionTokens={500}
+        cachedTokens={800}
+      />,
     );
     const bar = screen.getByTestId("prompt-cache-bar");
     expect(bar.getAttribute("data-hit-rate")).toBe("80.0");
@@ -58,7 +64,11 @@ describe("PromptCacheBar", () => {
 
   it("(c) renders one segment per non-zero layer", () => {
     render(
-      <PromptCacheBar promptTokens={1000} completionTokens={500} cachedTokens={800} />,
+      <PromptCacheBar
+        promptTokens={1000}
+        completionTokens={500}
+        cachedTokens={800}
+      />,
     );
     const bar = screen.getByTestId("prompt-cache-bar");
     const layers = bar.querySelectorAll("[data-layer]");
@@ -72,7 +82,11 @@ describe("PromptCacheBar", () => {
   it("(c') omits zero-width layers", () => {
     // No cache hits and no output → only the "fresh" layer renders.
     render(
-      <PromptCacheBar promptTokens={1000} completionTokens={0} cachedTokens={0} />,
+      <PromptCacheBar
+        promptTokens={1000}
+        completionTokens={0}
+        cachedTokens={0}
+      />,
     );
     const bar = screen.getByTestId("prompt-cache-bar");
     expect(bar.querySelectorAll("[data-layer]").length).toBe(1);
@@ -83,7 +97,11 @@ describe("PromptCacheBar", () => {
   it("(d) clamps cached tokens to the prompt size", () => {
     // Provider reported 1500 cached against a 1000-token prompt → clamp to 100%.
     render(
-      <PromptCacheBar promptTokens={1000} completionTokens={0} cachedTokens={1500} />,
+      <PromptCacheBar
+        promptTokens={1000}
+        completionTokens={0}
+        cachedTokens={1500}
+      />,
     );
     const bar = screen.getByTestId("prompt-cache-bar");
     expect(bar.getAttribute("data-hit-rate")).toBe("100.0");
@@ -92,7 +110,11 @@ describe("PromptCacheBar", () => {
 
   it("(e) exposes an accessible, full-sentence aria-label", () => {
     render(
-      <PromptCacheBar promptTokens={1000} completionTokens={500} cachedTokens={800} />,
+      <PromptCacheBar
+        promptTokens={1000}
+        completionTokens={500}
+        cachedTokens={800}
+      />,
     );
     const img = screen.getByRole("img");
     const label = img.getAttribute("aria-label") ?? "";
@@ -104,7 +126,9 @@ describe("PromptCacheBar", () => {
 
   it("(f) formats a fractional hit rate to one decimal", () => {
     // 1 of 3 cached = 33.333…% → "33.3%".
-    render(<PromptCacheBar promptTokens={3} completionTokens={0} cachedTokens={1} />);
+    render(
+      <PromptCacheBar promptTokens={3} completionTokens={0} cachedTokens={1} />,
+    );
     expect(screen.getAllByText(/33\.3% cached/).length).toBeGreaterThan(0);
   });
 });

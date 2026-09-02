@@ -117,9 +117,19 @@ export function managersForImage(image: string): PackageManager[] {
 /**
  * Package-token validity. A package name may include letters, digits, and the
  * limited punctuation real ecosystem names use (`. _ - + @ /` for scoped npm
- * packages, and pip version pins like `fastapi==0.110`). Anything else —
- * whitespace-splitting aside — is rejected so no shell-active character can be
- * smuggled into the composed install command.
+ * packages, and pip version pins like `fastapi==0.110`).
+ *
+ * What this charset actually guarantees is that no command SEPARATOR reaches
+ * the composed string: no whitespace, `;`, `|`, `&`, `$`, backtick, or `'`, so
+ * a token can never start a second command. It is not a full shell-safety
+ * guarantee — it deliberately admits the comparison operators version pins need
+ * (`< > = ~ !`), and `< > ~ *` still carry shell meaning. Consequence today:
+ * `install()` interpolates tokens unquoted, so `pip install requests>=2` is read
+ * by the shell as a redirect into a file named `=2` and installs bare
+ * `requests` — the pin is silently dropped. Fixing that means single-quoting
+ * each token inside every `install()` (tokens can never contain `'`), and
+ * updating the two call-site expectations in
+ * apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/sandboxes/actions.test.ts.
  */
 const PACKAGE_TOKEN = /^[A-Za-z0-9._+@/=<>~!*-]+$/;
 

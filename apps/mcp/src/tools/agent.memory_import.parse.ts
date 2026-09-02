@@ -28,6 +28,8 @@ export default async function agentMemoryImportParseTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentMemoryImportParse.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentMemoryImportParse.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentMemoryImportParse.output.parse(output);
 }

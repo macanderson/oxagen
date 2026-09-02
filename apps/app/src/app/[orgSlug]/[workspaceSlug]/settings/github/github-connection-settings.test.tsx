@@ -15,7 +15,13 @@
 
 import * as React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  waitFor,
+} from "@testing-library/react";
 import { GithubConnectionSettings } from "./github-connection-settings";
 import type { GithubStatusResponse } from "@/lib/github";
 
@@ -34,7 +40,8 @@ const CONNECTED: GithubStatusResponse = {
       accountType: "Organization",
       repositorySelection: "selected",
       avatarUrl: null,
-      htmlUrl: "https://github.com/organizations/acme-inc/settings/installations/101",
+      htmlUrl:
+        "https://github.com/organizations/acme-inc/settings/installations/101",
     },
     {
       id: 202,
@@ -67,7 +74,11 @@ function mockFetchOnceOk(status: GithubStatusResponse): void {
 
 function renderPanel(canManage: boolean) {
   return render(
-    <GithubConnectionSettings orgSlug="acme" workspaceSlug="main" canManage={canManage} />,
+    <GithubConnectionSettings
+      orgSlug="acme"
+      workspaceSlug="main"
+      canManage={canManage}
+    />,
   );
 }
 
@@ -75,7 +86,9 @@ beforeEach(() => {
   global.fetch = vi.fn();
   // jsdom: replace location so href assignment + search/pathname reads are safe.
   delete (window as { location?: unknown }).location;
-  (window as { location: { href: string; search: string; pathname: string } }).location = {
+  (
+    window as { location: { href: string; search: string; pathname: string } }
+  ).location = {
     href: "",
     search: "",
     pathname: "/acme/main/settings/github",
@@ -92,7 +105,9 @@ describe("GithubConnectionSettings", () => {
     mockFetchOnceOk(DISCONNECTED);
     renderPanel(true);
 
-    await waitFor(() => expect(screen.getByTestId("github-disconnected")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByTestId("github-disconnected")).toBeTruthy(),
+    );
     expect(screen.getByTestId("github-connect-btn")).toBeTruthy();
     // The status endpoint was hit once.
     expect(global.fetch).toHaveBeenCalledWith(
@@ -105,7 +120,9 @@ describe("GithubConnectionSettings", () => {
     mockFetchOnceOk(DISCONNECTED);
     renderPanel(true);
 
-    await waitFor(() => expect(screen.getByTestId("github-connect-btn")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByTestId("github-connect-btn")).toBeTruthy(),
+    );
     fireEvent.click(screen.getByTestId("github-connect-btn"));
     // The identity leg is the primary connect destination (lets a second tenant
     // establish its own token), NOT the install URL.
@@ -117,7 +134,9 @@ describe("GithubConnectionSettings", () => {
     mockFetchOnceOk(DISCONNECTED);
     renderPanel(false);
 
-    await waitFor(() => expect(screen.getByTestId("github-disconnected")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByTestId("github-disconnected")).toBeTruthy(),
+    );
     expect(screen.queryByTestId("github-connect-btn")).toBeNull();
     expect(screen.getByText(/ask a workspace owner or admin/i)).toBeTruthy();
   });
@@ -126,7 +145,9 @@ describe("GithubConnectionSettings", () => {
     mockFetchOnceOk(CONNECTED);
     renderPanel(true);
 
-    await waitFor(() => expect(screen.getByTestId("github-connected")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByTestId("github-connected")).toBeTruthy(),
+    );
     expect(screen.getByText("acme-inc")).toBeTruthy();
     expect(screen.getByText("octocat")).toBeTruthy();
     expect(screen.getByTestId("github-add-org-link")).toBeTruthy();
@@ -141,7 +162,9 @@ describe("GithubConnectionSettings", () => {
     mockFetchOnceOk(CONNECTED);
     renderPanel(false);
 
-    await waitFor(() => expect(screen.getByTestId("github-connected")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByTestId("github-connected")).toBeTruthy(),
+    );
     expect(screen.queryByTestId("github-add-org-link")).toBeNull();
     expect(screen.queryByTestId("github-reconnect-btn")).toBeNull();
     expect(screen.queryByTestId("github-configure-101")).toBeNull();
@@ -152,25 +175,34 @@ describe("GithubConnectionSettings", () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: false,
       status: 502,
-      json: async () => ({ error: "GitHub API returned 502 when listing installations" }),
+      json: async () => ({
+        error: "GitHub API returned 502 when listing installations",
+      }),
     });
     renderPanel(true);
 
-    await waitFor(() => expect(screen.getByTestId("github-settings-error")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByTestId("github-settings-error")).toBeTruthy(),
+    );
     expect(screen.getByText(/502/)).toBeTruthy();
 
     // Retry → second fetch succeeds and the connected view renders.
     mockFetchOnceOk(CONNECTED);
     fireEvent.click(screen.getByText("Retry"));
-    await waitFor(() => expect(screen.getByTestId("github-connected")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByTestId("github-connected")).toBeTruthy(),
+    );
   });
 
   it("shows the success banner and strips the query param after returning from install", async () => {
-    (window as { location: { search: string } }).location.search = "?github_connected=1";
+    (window as { location: { search: string } }).location.search =
+      "?github_connected=1";
     mockFetchOnceOk(CONNECTED);
     renderPanel(true);
 
-    await waitFor(() => expect(screen.getByTestId("github-connected-banner")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByTestId("github-connected-banner")).toBeTruthy(),
+    );
     expect(window.history.replaceState).toHaveBeenCalled();
   });
 });

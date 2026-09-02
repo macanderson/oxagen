@@ -1,5 +1,10 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { decideSweepAction, startLeaseRenewal, MAX_ATTEMPTS, LEASE_RENEW_INTERVAL_MS } from "./lease";
+import {
+  decideSweepAction,
+  startLeaseRenewal,
+  MAX_ATTEMPTS,
+  LEASE_RENEW_INTERVAL_MS,
+} from "./lease";
 
 describe("decideSweepAction", () => {
   it("requeues below the attempt cap", () => {

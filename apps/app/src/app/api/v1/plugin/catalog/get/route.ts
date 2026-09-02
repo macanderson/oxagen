@@ -47,12 +47,9 @@ export async function GET(request: NextRequest) {
   };
 
   try {
-    const result = await invoke(
-      "get_catalog_plugin",
-      { name, version },
-      ctx,
-      { surface: "agent" },
-    );
+    const result = await invoke("get_catalog_plugin", { name, version }, ctx, {
+      surface: "agent",
+    });
     return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Get failed";

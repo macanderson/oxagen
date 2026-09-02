@@ -338,7 +338,9 @@ describe("hardenTrustedProviderLink", () => {
   });
 
   it("uses the default structured logger when none is injected", async () => {
-    const warnSpy = vi.spyOn(authLogger, "warn").mockImplementation(() => undefined);
+    const warnSpy = vi
+      .spyOn(authLogger, "warn")
+      .mockImplementation(() => undefined);
     const { store } = fakeStore({
       loadLinkTargetFacts: async () => ({
         userEmailVerified: false,
@@ -459,7 +461,9 @@ describe("withTrustedLinkHardening", () => {
   });
 
   it("logs hardening failures via the default structured logger when none injected", async () => {
-    const errorSpy = vi.spyOn(authLogger, "error").mockImplementation(() => undefined);
+    const errorSpy = vi
+      .spyOn(authLogger, "error")
+      .mockImplementation(() => undefined);
     const base = fakeBaseHooks();
     const store: AccountLinkingStore = {
       loadLinkTargetFacts: async () => {

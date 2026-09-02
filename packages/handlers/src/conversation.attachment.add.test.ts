@@ -96,7 +96,9 @@ describe("conversationAttachmentAddHandler (@oxagen/handlers)", () => {
   });
 
   it("throws when the asset is not ready", async () => {
-    mocks.assetSelect.mockResolvedValueOnce([makeAssetRow({ status: "pending" })]);
+    mocks.assetSelect.mockResolvedValueOnce([
+      makeAssetRow({ status: "pending" }),
+    ]);
     await expect(
       conversationAttachmentAddHandler(INPUT, makeCTX()),
     ).rejects.toThrow(/not ready/);
@@ -143,7 +145,9 @@ describe("conversationAttachmentAddHandler (@oxagen/handlers)", () => {
   });
 
   it("maps a null sizeBytes through to null", async () => {
-    mocks.assetSelect.mockResolvedValueOnce([makeAssetRow({ sizeBytes: null })]);
+    mocks.assetSelect.mockResolvedValueOnce([
+      makeAssetRow({ sizeBytes: null }),
+    ]);
     const result = await conversationAttachmentAddHandler(INPUT, makeCTX());
     expect(result.sizeBytes).toBeNull();
   });

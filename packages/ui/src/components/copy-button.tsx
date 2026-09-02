@@ -20,12 +20,19 @@ import { Tooltip, TooltipTrigger, TooltipPopup } from "./tooltip";
  * useCopyToClipboard — shared clipboard write + transient "copied" flag.
  * Use directly when the trigger chrome is bespoke; otherwise use <CopyButton>.
  */
-export function useCopyToClipboard({ timeout = 1500 }: { timeout?: number } = {}) {
+export function useCopyToClipboard({
+  timeout = 1500,
+}: {
+  timeout?: number;
+} = {}) {
   const [copied, setCopied] = React.useState(false);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  React.useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+  React.useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   const copy = React.useCallback(
     async (text: string) => {

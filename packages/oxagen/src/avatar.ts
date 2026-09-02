@@ -23,7 +23,10 @@ export const AVATAR_SPEC_PREFIX = "avatar:v1:";
 
 export const avatarUrlSchema = z
   .string()
-  .max(AVATAR_MAX_LEN, `avatar value must be at most ${AVATAR_MAX_LEN} characters`)
+  .max(
+    AVATAR_MAX_LEN,
+    `avatar value must be at most ${AVATAR_MAX_LEN} characters`,
+  )
   .refine(
     (value) =>
       value.startsWith("https://") || value.startsWith(AVATAR_SPEC_PREFIX),

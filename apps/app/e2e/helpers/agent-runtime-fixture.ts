@@ -83,7 +83,7 @@ function deQuote(raw: string | undefined, fallback: string): string {
 
 const DATABASE_URL = deQuote(
   process.env.DATABASE_URL,
-  "postgres://oxagen:oxagen@localhost:5432/oxagen",
+  "postgres://oxagen:oxagen@localhost:5433/oxagen",
 );
 const NEO4J_URL = deQuote(
   process.env.NEO4J_URI ?? process.env.NEO4J_URL,
@@ -504,14 +504,18 @@ export async function teardownFixture(opts: {
     )`;
     await sql`DELETE FROM agent.subagent_fanouts WHERE org_id = ${orgId}`;
     await sql`DELETE FROM agent.approval_requests WHERE org_id = ${orgId}`;
-    // IAM rows seeded by bootstrapOrgIAM (opt-in via FixtureOptions.bootstrapIam)
-    // live in the `org` schema and reference the org + its users — delete them in
-    // FK-safe order BEFORE the org/user rows, or org deletion hits a FK violation.
+    // IAM rows seeded when FixtureOptions.bootstrapIam was set. They reference
+    // the org and its users, so delete them in FK-safe order BEFORE the
+    // org/user rows or org deletion hits a FK violation:
+    // assignments → role_grants → principals → roles
+    //   principal_role_assignments.principal_id → iam.principals
+    //   principal_role_assignments.role_id      → iam.roles
+    //   role_grants.role_id                     → iam.roles
     // Safe no-op when bootstrapIam was not used (deletes 0 rows).
     await sql`DELETE FROM iam.principal_role_assignments WHERE org_id = ${orgId}`;
     await sql`DELETE FROM iam.role_grants WHERE role_id IN (SELECT id FROM iam.roles WHERE org_id = ${orgId})`;
-    await sql`DELETE FROM iam.roles WHERE org_id = ${orgId}`;
     await sql`DELETE FROM iam.principals WHERE org_id = ${orgId}`;
+    await sql`DELETE FROM iam.roles WHERE org_id = ${orgId}`;
     // Collect user IDs BEFORE deleting org_users (needed for session + auth.user cleanup).
     const orgUserRows = await sql<{ userId: string }[]>`
       SELECT user_id::text AS "userId" FROM org.org_users WHERE org_id = ${orgId}
@@ -527,17 +531,6 @@ export async function teardownFixture(opts: {
     )`;
     await sql`DELETE FROM workspace.workspaces WHERE org_id = ${orgId}`;
     await sql`DELETE FROM org.org_users WHERE org_id = ${orgId}`;
-    // IAM rows (bootstrapped by bootstrapOrgIAM when bootstrapIam:true).
-    // Delete in FK-safe order: assignments → role_grants → principals → roles.
-    // principal_role_assignments.principal_id → iam.principals
-    // principal_role_assignments.role_id → iam.roles
-    // role_grants.role_id → iam.roles
-    await sql`DELETE FROM iam.principal_role_assignments WHERE org_id = ${orgId}`;
-    await sql`DELETE FROM iam.role_grants WHERE role_id IN (
-      SELECT id FROM iam.roles WHERE org_id = ${orgId}
-    )`;
-    await sql`DELETE FROM iam.principals WHERE org_id = ${orgId}`;
-    await sql`DELETE FROM iam.roles WHERE org_id = ${orgId}`;
     // Delete auth.users — sessions already deleted above, org_users already deleted.
     if (orgUserIds.length > 0) {
       await sql`DELETE FROM auth.users WHERE id = ANY(${orgUserIds}::uuid[])`;

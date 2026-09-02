@@ -60,7 +60,10 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       const countRow = countRows[0];
       const unreadCount = countRow?.n ?? 0;
 
-      logger.info({ orgId, userId, count: rows.length, unreadCount }, "notifications.list: ok");
+      logger.info(
+        { orgId, userId, count: rows.length, unreadCount },
+        "notifications.list: ok",
+      );
       return {
         notifications: rows.map((r) => ({
           id: r.id,

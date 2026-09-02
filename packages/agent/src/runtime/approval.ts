@@ -4,7 +4,10 @@ import { requireEnv } from "@oxagen/config/env";
 import postgres from "postgres";
 import pino from "pino";
 
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { pkg: "agent.approval" } });
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { pkg: "agent.approval" },
+});
 
 // Default expiry window for an approval request. Approvals that age out
 // resolve to `expired` server-side rather than dangling forever.
@@ -72,7 +75,10 @@ async function ensureListener(): Promise<void> {
             // will resolve as "expired" after its TTL — the correct fallback for
             // a single corrupted notification. We deliberately do NOT resolve
             // any waiter here.
-            logger.warn({ err, payload }, "malformed NOTIFY payload on channel agent_approval_resolved");
+            logger.warn(
+              { err, payload },
+              "malformed NOTIFY payload on channel agent_approval_resolved",
+            );
           }
         });
       } catch (err) {
@@ -121,12 +127,21 @@ export async function waitForApproval(
 ): Promise<ApprovalResolution> {
   await ensureListener();
   return new Promise<ApprovalResolution>((resolve) => {
-    waiters.set(approvalId, resolve);
-    setTimeout(() => {
+    // The TTL timer is cleared the moment NOTIFY resolves the waiter. An
+    // uncleared timer keeps a ref on the event loop for the full TTL, so a
+    // worker that has drained its queue cannot exit until the last approval's
+    // window elapses — even though the approval was answered seconds in.
+    // Both callbacks below only ever run asynchronously, so arming the timer
+    // first (keeping it `const`) cannot fire before the waiter is registered.
+    const timer = setTimeout(() => {
       if (waiters.delete(approvalId)) {
         resolve({ approvalId, resolution: "expired", note: null });
       }
     }, ttlMs);
+    waiters.set(approvalId, (r) => {
+      clearTimeout(timer);
+      resolve(r);
+    });
   });
 }
 
@@ -168,7 +183,10 @@ export async function readApproval(approvalId: string, orgId: string) {
       })
       .from(schema.approvalRequests)
       .where(
-        and(eq(schema.approvalRequests.id, approvalId), eq(schema.approvalRequests.orgId, orgId)),
+        and(
+          eq(schema.approvalRequests.id, approvalId),
+          eq(schema.approvalRequests.orgId, orgId),
+        ),
       )
       .limit(1),
   );

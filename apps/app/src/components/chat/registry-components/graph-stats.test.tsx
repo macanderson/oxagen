@@ -20,7 +20,10 @@ describe("graph-stats chat renderer", () => {
   });
 
   it("defensively coerces non-numeric / missing props to 0", () => {
-    const props: Record<string, unknown> = { nodeCount: "oops", edgeCount: null };
+    const props: Record<string, unknown> = {
+      nodeCount: "oops",
+      edgeCount: null,
+    };
     const { getAllByText, getByText } = render(<GraphStatsBlock {...props} />);
     // All four counts fall back to 0.
     expect(getAllByText("0").length).toBe(4);

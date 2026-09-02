@@ -1,12 +1,8 @@
 /**
- * page.tsx — Workspace → Settings → Agent Defaults (web-app-2.0 Phase 2
- * consolidation).
+ * page.tsx — Workspace → Settings → Agent Defaults.
  *
- * Merges the four former standalone routes — settings/models,
- * settings/budget, settings/prompts, settings/memory — into one page with
- * four in-page sub-tabs (Models · Budget · Prompts · Memory Policy),
- * controlled by `?tab=`. See docs/web-app-2.0/workspace/settings/
- * agent-defaults/spec.md and ./agent-defaults-tabs.tsx.
+ * One page with four in-page sub-tabs (Models · Budget · Prompts · Memory
+ * Policy), controlled by `?tab=`. See ./agent-defaults-tabs.tsx.
  *
  * All sub-tab reads run in parallel (one Promise.all): the shared
  * owner/admin role lookup + get_model_settings + get_budget_policy +
@@ -14,11 +10,11 @@
  * runInTenantScope; the self-contained readers (readMemoryPolicyAction,
  * loadCodeModeOptions, loadAgentOptions — each already wraps its own
  * scope/never throws) run alongside. Each sub-tab keeps its own independent
- * save + feedback — no cross-tab save (per spec).
+ * save + feedback — there is no cross-tab save.
  *
  * The Models sub-tab additionally surfaces the "Your coding-agent
- * preferences" section (CodingAgentPreferencesForm) — the previously-unwired
- * `user.workspace_preferences.read/write` gap flagged in the spec.
+ * preferences" section (CodingAgentPreferencesForm), which writes the calling
+ * user's own `user.workspace_preferences`.
  */
 import type { Metadata } from "next";
 import { Cpu, Wallet } from "lucide-react";
@@ -33,7 +29,11 @@ import type { WorkspaceModelSettingsReadOutput } from "@oxagen/oxagen/contracts/
 import type { WorkspaceBudgetPolicyReadOutput } from "@oxagen/oxagen/contracts/workspace.budget_policy.read";
 import type { UserWorkspacePreferencesReadOutput } from "@oxagen/oxagen/contracts/user.workspace_preferences.read";
 import type { ModelDefaultsValue } from "@/components/settings/model-defaults-fields";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
 import { getEnterpriseAccess } from "@/lib/enterprise";
 import { loadCodeModeOptions } from "@/app/[orgSlug]/[workspaceSlug]/_shared/code-mode-data";
@@ -50,7 +50,10 @@ import { AgentDefaultsTabs } from "./agent-defaults-tabs";
 // Guard + type come from the boundary-agnostic sibling — importing them from
 // the "use client" tabs module would make isAgentDefaultsTab() a client
 // reference that throws when this Server Component calls it during render.
-import { isAgentDefaultsTab, type AgentDefaultsTab } from "./agent-defaults-tabs-shared";
+import {
+  isAgentDefaultsTab,
+  type AgentDefaultsTab,
+} from "./agent-defaults-tabs-shared";
 
 export const metadata: Metadata = {
   title: "Agent Defaults — Workspace Settings",
@@ -67,7 +70,9 @@ export default async function AgentDefaultsPage({
 }) {
   const { orgSlug, workspaceSlug } = await params;
   const sp = await searchParams;
-  const initialTab: AgentDefaultsTab = isAgentDefaultsTab(sp.tab) ? sp.tab : "models";
+  const initialTab: AgentDefaultsTab = isAgentDefaultsTab(sp.tab)
+    ? sp.tab
+    : "models";
 
   const session = await getSessionOrRedirect();
   const org = await resolveOrg(orgSlug);
@@ -92,46 +97,45 @@ export default async function AgentDefaultsPage({
     agentOptions,
   ] = await Promise.all([
     runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-      const [roleRows, modelSettings, budgetPolicy, promptSettings, codingPrefs] =
-        await Promise.all([
-          withTenantDb((tx) =>
-            tx
-              .select({ role: schema.workspaceUsers.role })
-              .from(schema.workspaceUsers)
-              .where(
-                and(
-                  eq(schema.workspaceUsers.workspaceId, ws.id),
-                  eq(schema.workspaceUsers.userId, session.user.id),
-                ),
-              )
-              .limit(1),
-          ),
-          invoke(
-            "get_model_settings",
-            {},
-            ctx,
-            { surface: "agent" },
-          ) as Promise<WorkspaceModelSettingsReadOutput>,
-          invoke(
-            "get_budget_policy",
-            {},
-            ctx,
-            { surface: "agent" },
-          ) as Promise<WorkspaceBudgetPolicyReadOutput>,
-          invoke(
-            "get_prompt_settings",
-            {},
-            ctx,
-            { surface: "agent" },
-          ) as Promise<PromptSettingsReadOutput>,
-          invoke(
-            "get_workspace_user_preferences",
-            {},
-            ctx,
-            { surface: "agent" },
-          ) as Promise<UserWorkspacePreferencesReadOutput>,
-        ]);
-      return { roleRows, modelSettings, budgetPolicy, promptSettings, codingPrefs };
+      const [
+        roleRows,
+        modelSettings,
+        budgetPolicy,
+        promptSettings,
+        codingPrefs,
+      ] = await Promise.all([
+        withTenantDb((tx) =>
+          tx
+            .select({ role: schema.workspaceUsers.role })
+            .from(schema.workspaceUsers)
+            .where(
+              and(
+                eq(schema.workspaceUsers.workspaceId, ws.id),
+                eq(schema.workspaceUsers.userId, session.user.id),
+              ),
+            )
+            .limit(1),
+        ),
+        invoke("get_model_settings", {}, ctx, {
+          surface: "agent",
+        }) as Promise<WorkspaceModelSettingsReadOutput>,
+        invoke("get_budget_policy", {}, ctx, {
+          surface: "agent",
+        }) as Promise<WorkspaceBudgetPolicyReadOutput>,
+        invoke("get_prompt_settings", {}, ctx, {
+          surface: "agent",
+        }) as Promise<PromptSettingsReadOutput>,
+        invoke("get_workspace_user_preferences", {}, ctx, {
+          surface: "agent",
+        }) as Promise<UserWorkspacePreferencesReadOutput>,
+      ]);
+      return {
+        roleRows,
+        modelSettings,
+        budgetPolicy,
+        promptSettings,
+        codingPrefs,
+      };
     }),
     getEnterpriseAccess(org.id),
     readMemoryPolicyAction({ orgSlug, workspaceSlug }),
@@ -174,11 +178,14 @@ export default async function AgentDefaultsPage({
                 aria-hidden="true"
               />
               <div>
-                <p className="text-sm font-semibold text-foreground">AI model defaults</p>
+                <p className="text-sm font-semibold text-foreground">
+                  AI model defaults
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  The default text tier and image/video models applied to every agent run and
-                  Workbench generation in this workspace. Workspace defaults take precedence over
-                  personal preferences for all members.
+                  The default text tier and image/video models applied to every
+                  agent run and Workbench generation in this workspace.
+                  Workspace defaults take precedence over personal preferences
+                  for all members.
                 </p>
               </div>
             </div>
@@ -212,13 +219,16 @@ export default async function AgentDefaultsPage({
               aria-hidden="true"
             />
             <div>
-              <p className="text-sm font-semibold text-foreground">Workspace turn budget</p>
+              <p className="text-sm font-semibold text-foreground">
+                Workspace turn budget
+              </p>
               <p className="text-xs text-muted-foreground">
-                Govern the per-turn dollar budget every member in this workspace runs under. A{" "}
-                <strong>hard ceiling</strong> clamps every member&apos;s effective budget — they
-                cannot exceed it and the enforcement mode can only get stricter. A{" "}
-                <strong>default</strong> only seeds a member who hasn&apos;t set their own budget;
-                they can still raise or lower it.
+                Govern the per-turn dollar budget every member in this workspace
+                runs under. A <strong>hard ceiling</strong> clamps every
+                member&apos;s effective budget — they cannot exceed it and the
+                enforcement mode can only get stricter. A{" "}
+                <strong>default</strong> only seeds a member who hasn&apos;t set
+                their own budget; they can still raise or lower it.
               </p>
             </div>
           </div>

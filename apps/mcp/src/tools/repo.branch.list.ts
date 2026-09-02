@@ -6,7 +6,9 @@ import { buildContext } from "../context";
 
 export const schema = {
   ...repoBranchList.input.shape,
-  owner: repoBranchList.input.shape.owner.describe("Repository owner (user or organisation)"),
+  owner: repoBranchList.input.shape.owner.describe(
+    "Repository owner (user or organisation)",
+  ),
   repo: repoBranchList.input.shape.repo.describe("Repository name"),
 };
 
@@ -21,8 +23,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function repoBranchListTool(args: InferSchema<typeof schema>) {
+export default async function repoBranchListTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(repoBranchList.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(repoBranchList.name, args, ctx, {
+    surface: "mcp",
+  });
   return repoBranchList.output.parse(output);
 }

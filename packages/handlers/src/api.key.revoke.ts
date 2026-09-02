@@ -20,15 +20,28 @@ import {
 } from "./lib/api-key-authz";
 import { logger } from "./logger";
 
-export const apiKeyRevokeHandler: CapabilityHandler<typeof apiKeyRevoke> = async (input, ctx) => {
+export const apiKeyRevokeHandler: CapabilityHandler<
+  typeof apiKeyRevoke
+> = async (input, ctx) => {
   // ── Auth + scope guard ─────────────────────────────────────────────────────
   if (!ctx.userId && !ctx.apiKeyId) {
-    logger.warn({ orgId: ctx.orgId }, "api.key.revoke: rejected — no authenticated principal");
-    throw new CapabilityError("revoke_api_key", "authz_denied", "Unauthorized: no authenticated principal");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "api.key.revoke: rejected — no authenticated principal",
+    );
+    throw new CapabilityError(
+      "revoke_api_key",
+      "authz_denied",
+      "Unauthorized: no authenticated principal",
+    );
   }
   if (!ctx.orgId) {
     logger.warn({}, "api.key.revoke: rejected — missing orgId");
-    throw new CapabilityError("revoke_api_key", "authz_denied", "Forbidden: orgId is required");
+    throw new CapabilityError(
+      "revoke_api_key",
+      "authz_denied",
+      "Forbidden: orgId is required",
+    );
   }
 
   const actorId = ctx.userId ?? ctx.apiKeyId ?? "system";
@@ -40,16 +53,24 @@ export const apiKeyRevokeHandler: CapabilityHandler<typeof apiKeyRevoke> = async
       { orgId: ctx.orgId, actorId, actorRole },
       "api.key.revoke: rejected — insufficient org role",
     );
-    throw new CapabilityError("revoke_api_key", "authz_denied", "Forbidden: only org Owners and Admins can revoke API keys");
+    throw new CapabilityError(
+      "revoke_api_key",
+      "authz_denied",
+      "Forbidden: only org Owners and Admins can revoke API keys",
+    );
   }
 
   const revokedAt = new Date();
 
   // ── Soft-delete (IDOR-safe: must match orgId) ─────────────────────────────
-  await withTenantDb(async (tx) => {
+  const revokedWorkspaceId = await withTenantDb(async (tx) => {
     // Verify the key belongs to this org and is not already revoked.
     const [existing] = await tx
-      .select({ id: schema.apiKeys.id, publicId: schema.apiKeys.publicId })
+      .select({
+        id: schema.apiKeys.id,
+        publicId: schema.apiKeys.publicId,
+        workspaceId: schema.apiKeys.workspaceId,
+      })
       .from(schema.apiKeys)
       .where(
         and(
@@ -65,7 +86,9 @@ export const apiKeyRevokeHandler: CapabilityHandler<typeof apiKeyRevoke> = async
         { orgId: ctx.orgId, keyPublicId: input.keyPublicId },
         "api.key.revoke: key not found or already revoked",
       );
-      throw new Error("Not found: API key does not exist, is not in this org, or is already revoked");
+      throw new Error(
+        "Not found: API key does not exist, is not in this org, or is already revoked",
+      );
     }
 
     await tx
@@ -77,6 +100,8 @@ export const apiKeyRevokeHandler: CapabilityHandler<typeof apiKeyRevoke> = async
         updatedByUserId: ctx.userId ?? undefined,
       })
       .where(eq(schema.apiKeys.id, existing.id));
+
+    return existing.workspaceId;
   });
 
   // ── Emit audit event (fire-and-forget) ────────────────────────────────────
@@ -84,7 +109,10 @@ export const apiKeyRevokeHandler: CapabilityHandler<typeof apiKeyRevoke> = async
     eventType: "api_key.revoked",
     actorUserId: ctx.userId ?? null,
     orgId: ctx.orgId,
-    workspaceId: null,
+    // Carry the revoked key's own workspace, not null — audit.log.query
+    // narrows security_events by workspaceId, so a null here would hide the
+    // revocation from the workspace's compliance feed.
+    workspaceId: revokedWorkspaceId,
     capability: "revoke_api_key",
     outcome: "success",
     ip: null,

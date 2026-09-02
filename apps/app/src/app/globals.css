@@ -83,16 +83,16 @@ html[data-font-size="large"] {
  * var(--density-py) for their internal gap/padding rather than fixed values.
  */
 html[data-density="compact"] {
-  --density-gap: 0.25rem;   /* 4px */
-  --density-py: 0.375rem;   /* 6px */
+  --density-gap: 0.25rem; /* 4px */
+  --density-py: 0.375rem; /* 6px */
 }
 html[data-density="comfortable"] {
-  --density-gap: 0.5rem;    /* 8px */
-  --density-py: 0.625rem;   /* 10px */
+  --density-gap: 0.5rem; /* 8px */
+  --density-py: 0.625rem; /* 10px */
 }
 html[data-density="spacious"] {
-  --density-gap: 0.875rem;  /* 14px */
-  --density-py: 1rem;       /* 16px */
+  --density-gap: 0.875rem; /* 14px */
+  --density-py: 1rem; /* 16px */
 }
 
 /* ── Mobile bottom navigation bar ───────────────────────────────────────── */
@@ -106,7 +106,7 @@ html[data-density="spacious"] {
  * env(safe-area-inset-bottom) below this height for notched devices.
  */
 :root {
-  --bottom-bar-h: 3.5rem;    /* 56px — bar content height (icon + label, ≥44px tap target) */
+  --bottom-bar-h: 3.5rem; /* 56px — bar content height (icon + label, ≥44px tap target) */
   --bottom-bar-gap: 0.75rem; /* 12px — breathing room reserved above the bar   */
 }
 
@@ -119,13 +119,20 @@ html[data-density="spacious"] {
  */
 @media (max-width: 767px) {
   body:has([data-mobile-bottom-bar]) {
-    --pwa-toast-bottom: calc(var(--bottom-bar-h) + env(safe-area-inset-bottom, 0px));
+    --pwa-toast-bottom: calc(
+      var(--bottom-bar-h) +
+      env(safe-area-inset-bottom, 0px)
+    );
   }
   /* Section pages add a fixed sub-nav switcher on top of the bar (3.8125rem =
      py-2 ×2 + h-11 trigger + border, mirroring MobileSettingsNav's spacer);
      overlays must clear that too. */
   body:has([data-mobile-bottom-bar]):has([data-mobile-section-nav]) {
-    --pwa-toast-bottom: calc(var(--bottom-bar-h) + 3.8125rem + env(safe-area-inset-bottom, 0px));
+    --pwa-toast-bottom: calc(
+      var(--bottom-bar-h) +
+      3.8125rem +
+      env(safe-area-inset-bottom, 0px)
+    );
   }
 }
 
@@ -136,7 +143,8 @@ html[data-density="spacious"] {
  * motion-reduce: Tailwind variant on the element itself.
  */
 @keyframes wand-ring-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.5;
     transform: scale(1);
   }

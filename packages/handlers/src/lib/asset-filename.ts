@@ -27,9 +27,11 @@ const EXT_BY_MIME: Record<string, string> = {
   "video/mp4": ".mp4",
   "video/webm": ".webm",
   "audio/mpeg": ".mp3",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+    ".docx",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+    ".pptx",
   "application/pdf": ".pdf",
   "application/zip": ".zip",
   "text/markdown": ".md",
@@ -103,7 +105,10 @@ export function assetDisplayName(src: AssetNameSource): string {
   const ext = extensionForAsset(src.mimeType, src.kind);
 
   const explicit = (src.displayName ?? "").trim();
-  const source = explicit.length > 0 ? explicit : stripInstruction((src.prompt ?? "").trim());
+  const source =
+    explicit.length > 0
+      ? explicit
+      : stripInstruction((src.prompt ?? "").trim());
 
   let base = slugify(source);
 
@@ -122,16 +127,28 @@ export function assetDisplayName(src: AssetNameSource): string {
 
 export type AssetDisposition = "inline" | "attachment";
 
+// Types the browser executes as markup on whatever origin serves them. They are
+// never served inline, however "renderable" they look: nosniff protects against
+// a *guessed* content type, not against an honest `Content-Type: text/html`, so
+// an inline one is stored XSS on the app's own origin. SVG is markup too — it
+// carries <script> — which is why it is listed here rather than with images.
+const EXECUTABLE_MARKUP_TYPES = new Set([
+  "image/svg+xml",
+  "text/html",
+  "text/xml",
+  "application/xhtml+xml",
+  "application/xml",
+]);
+
 /**
  * Whether an asset should be served `inline` (displayed by the browser / handed
  * to the OS default app) or `attachment` (downloaded). Browser-renderable types
- * display inline so clicking a filename SHOWS the document; everything else
- * downloads. SVG is forced to attachment — inline SVG served from our own origin
- * is a stored-XSS vector.
+ * display inline so clicking a filename SHOWS the document; everything else —
+ * and anything the browser would execute as markup — downloads.
  */
 export function assetDispositionType(mimeType: string): AssetDisposition {
   const type = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
-  if (type === "image/svg+xml") return "attachment";
+  if (EXECUTABLE_MARKUP_TYPES.has(type)) return "attachment";
   if (type.startsWith("image/")) return "inline";
   if (type.startsWith("video/") || type.startsWith("audio/")) return "inline";
   if (type === "application/pdf") return "inline";
@@ -149,7 +166,9 @@ export function contentDispositionHeader(
   disposition: AssetDisposition,
   filename: string,
 ): string {
-  const asciiFallback = filename.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
+  const asciiFallback = filename
+    .replace(/[^\x20-\x7e]/g, "_")
+    .replace(/["\\]/g, "_");
   const encoded = encodeURIComponent(filename);
   return `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`;
 }

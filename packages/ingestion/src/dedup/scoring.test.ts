@@ -67,21 +67,30 @@ describe("scoreCandidate", () => {
   });
 
   it("adds 0.4 for exact email match", () => {
-    const mutation = makeMutation({ properties: { email: "alice@example.com" }, displayName: undefined });
+    const mutation = makeMutation({
+      properties: { email: "alice@example.com" },
+      displayName: undefined,
+    });
     const candidate = { email: "alice@example.com", displayName: undefined };
     const score = scoreCandidate(mutation, candidate, 0.0);
     expect(score).toBeCloseTo(0.4, 3);
   });
 
   it("email match is case-insensitive", () => {
-    const mutation = makeMutation({ properties: { email: "ALICE@EXAMPLE.COM" }, displayName: undefined });
+    const mutation = makeMutation({
+      properties: { email: "ALICE@EXAMPLE.COM" },
+      displayName: undefined,
+    });
     const candidate = { email: "alice@example.com" };
     const score = scoreCandidate(mutation, candidate, 0.0);
     expect(score).toBeCloseTo(0.4, 3);
   });
 
   it("adds 0.4 for exact URL match when no email matches", () => {
-    const mutation = makeMutation({ properties: { url: "https://example.com/alice" }, displayName: undefined });
+    const mutation = makeMutation({
+      properties: { url: "https://example.com/alice" },
+      displayName: undefined,
+    });
     const candidate = { url: "https://example.com/alice" };
     const score = scoreCandidate(mutation, candidate, 0.0);
     expect(score).toBeCloseTo(0.4, 3);
@@ -99,7 +108,10 @@ describe("scoreCandidate", () => {
   });
 
   it("adds fuzzy name similarity at 0.2 weight", () => {
-    const mutation = makeMutation({ displayName: "Alice Smith", properties: {} });
+    const mutation = makeMutation({
+      displayName: "Alice Smith",
+      properties: {},
+    });
     const candidate = { displayName: "Alice Smith" };
     // score = 0 (embed) + 0 (no email/url) + 1.0 * 0.2 = 0.2
     const score = scoreCandidate(mutation, candidate, 0.0);
@@ -111,7 +123,10 @@ describe("scoreCandidate", () => {
       displayName: "Alice Smith",
       properties: { email: "alice@example.com" },
     });
-    const candidate = { displayName: "Alice Smith", email: "alice@example.com" };
+    const candidate = {
+      displayName: "Alice Smith",
+      email: "alice@example.com",
+    };
     // 0.8 * 0.4 = 0.32 (embed) + 0.4 (email) + 1.0 * 0.2 = 0.92
     const score = scoreCandidate(mutation, candidate, 0.8);
     expect(score).toBeCloseTo(0.92, 3);

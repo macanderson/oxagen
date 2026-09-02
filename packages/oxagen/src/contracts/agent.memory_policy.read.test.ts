@@ -23,6 +23,8 @@ describe("agent.memory.policy.read contract", () => {
   });
 
   it("rejects a recallThreshold above 1", () => {
-    expect(() => agentMemoryPolicyRead.output.parse({ recallThreshold: 1.5 })).toThrow();
+    expect(() =>
+      agentMemoryPolicyRead.output.parse({ recallThreshold: 1.5 }),
+    ).toThrow();
   });
 });

@@ -15,7 +15,8 @@ export const schema = {
     "Set the new version active immediately (default: true). Pass false to stage it without going live.",
   ),
   workspace_id: skillRevise.input.shape.workspace_id.describe(
-    "Workspace ID (defaults to the current workspace).",
+    "Ignored on this surface. The handler resolves the workspace from the " +
+      "calling API key's request context, never from this field.",
   ),
 };
 
@@ -29,7 +30,9 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function skillReviseTool(args: InferSchema<typeof schema>) {
+export default async function skillReviseTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   const output = await invoke(skillRevise.name, args, ctx, { surface: "mcp" });
   return skillRevise.output.parse(output);

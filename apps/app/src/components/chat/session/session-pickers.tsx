@@ -61,7 +61,8 @@ export interface SessionPickerListProps {
 
 function matchesQuery(row: SessionPickerRow, query: string): boolean {
   if (!query) return true;
-  const haystack = `${row.label} ${row.sublabel ?? ""} ${row.meta ?? ""}`.toLowerCase();
+  const haystack =
+    `${row.label} ${row.sublabel ?? ""} ${row.meta ?? ""}`.toLowerCase();
   return haystack.includes(query.toLowerCase());
 }
 
@@ -87,7 +88,10 @@ export function SessionPickerList({
   React.useEffect(() => {
     // jsdom (unit tests) has no scrollIntoView implementation — guard rather
     // than assume every DOM environment provides it.
-    if (autoScrollToSelected && typeof selectedRowRef.current?.scrollIntoView === "function") {
+    if (
+      autoScrollToSelected &&
+      typeof selectedRowRef.current?.scrollIntoView === "function"
+    ) {
       selectedRowRef.current.scrollIntoView({ block: "nearest" });
     }
     // Mount-only: this content is remounted fresh every time the picker opens
@@ -111,7 +115,9 @@ export function SessionPickerList({
       />
       <div className="flex flex-col gap-1 overflow-y-auto">
         {filteredGroups.length === 0 ? (
-          <p className="py-6 text-center text-xs text-muted-foreground">{emptyMessage}</p>
+          <p className="py-6 text-center text-xs text-muted-foreground">
+            {emptyMessage}
+          </p>
         ) : (
           filteredGroups.map((g) => (
             <div key={g.id} role="group" aria-label={g.label ?? undefined}>
@@ -139,17 +145,26 @@ export function SessionPickerList({
                     )}
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium text-foreground">{row.label}</span>
+                      <span className="block truncate font-medium text-foreground">
+                        {row.label}
+                      </span>
                       {row.sublabel ? (
-                        <span className="block truncate text-xs text-muted-foreground">{row.sublabel}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {row.sublabel}
+                        </span>
                       ) : null}
                       {row.meta ? (
-                        <span className="block truncate text-[11px] text-muted-foreground/80">{row.meta}</span>
+                        <span className="block truncate text-[11px] text-muted-foreground/80">
+                          {row.meta}
+                        </span>
                       ) : null}
                     </span>
                     {row.badge}
                     {selected ? (
-                      <Check className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                      <Check
+                        className="size-4 shrink-0 text-primary"
+                        aria-hidden="true"
+                      />
                     ) : null}
                   </button>
                 );
@@ -269,7 +284,8 @@ export function ModelPickerRows({
     ...(expanded ? remainingVendors.map(vendorGroup) : []),
   ];
 
-  const isTierId = (id: string): id is TextTier => TEXT_TIERS.some((t) => t.id === id);
+  const isTierId = (id: string): id is TextTier =>
+    TEXT_TIERS.some((t) => t.id === id);
 
   return (
     <SessionPickerList

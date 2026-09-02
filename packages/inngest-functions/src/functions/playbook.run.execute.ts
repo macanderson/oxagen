@@ -118,7 +118,9 @@ function assertPublicWebhookUrl(raw: string): URL {
 
   const blockedHostnames = new Set(["localhost", "metadata.google.internal"]);
   if (blockedHostnames.has(host)) {
-    throw new Error(`webhook step: refusing to fetch internal hostname "${host}"`);
+    throw new Error(
+      `webhook step: refusing to fetch internal hostname "${host}"`,
+    );
   }
 
   // IPv6 literal (wrapped in brackets in the URL hostname field)
@@ -195,30 +197,27 @@ export const [playbookRunExecute] = createFunction(
     };
 
     // ── Step 1: Load run row ──────────────────────────────────────────────────
-    const run = await step.run(
-      "load-run",
-      async () => {
-        return withSystemDb((tx) =>
-          tx.query.playbookRuns.findFirst({
-            where: and(
-              eq(schema.playbookRuns.id, runId),
-              eq(schema.playbookRuns.orgId, orgId),
-            ),
-            columns: {
-              id: true,
-              orgId: true,
-              workspaceId: true,
-              playbookId: true,
-              playbookVersionId: true,
-              status: true,
-              input: true,
-              inngestRunId: true,
-              startedByUserId: true,
-            },
-          }),
-        );
-      },
-    );
+    const run = await step.run("load-run", async () => {
+      return withSystemDb((tx) =>
+        tx.query.playbookRuns.findFirst({
+          where: and(
+            eq(schema.playbookRuns.id, runId),
+            eq(schema.playbookRuns.orgId, orgId),
+          ),
+          columns: {
+            id: true,
+            orgId: true,
+            workspaceId: true,
+            playbookId: true,
+            playbookVersionId: true,
+            status: true,
+            input: true,
+            inngestRunId: true,
+            startedByUserId: true,
+          },
+        }),
+      );
+    });
 
     if (!run) {
       logger.error({ runId, orgId }, "playbook-run-execute: run not found");
@@ -232,8 +231,14 @@ export const [playbookRunExecute] = createFunction(
     }
 
     if (run.status !== "pending") {
-      logger.warn({ runId, status: run.status }, "playbook-run-execute: run is not pending — skipping");
-      return { status: "skipped", reason: `run already in status: ${run.status}` };
+      logger.warn(
+        { runId, status: run.status },
+        "playbook-run-execute: run is not pending — skipping",
+      );
+      return {
+        status: "skipped",
+        reason: `run already in status: ${run.status}`,
+      };
     }
 
     const runPayload = (run.input ?? {}) as Record<string, unknown>;
@@ -315,7 +320,7 @@ export const [playbookRunExecute] = createFunction(
     const { steps, edges } = await step.run(
       "load-steps-edges",
       async (): Promise<{ steps: StepRow[]; edges: EdgeRow[] }> => {
-        const loadedSteps = await withSystemDb((tx) =>
+        const loadedSteps = (await withSystemDb((tx) =>
           tx
             .select({
               id: schema.playbookSteps.id,
@@ -327,11 +332,13 @@ export const [playbookRunExecute] = createFunction(
               config: schema.playbookSteps.config,
             })
             .from(schema.playbookSteps)
-            .where(eq(schema.playbookSteps.playbookVersionId, run.playbookVersionId))
+            .where(
+              eq(schema.playbookSteps.playbookVersionId, run.playbookVersionId),
+            )
             .orderBy(schema.playbookSteps.createdAt),
-        ) as StepRow[];
+        )) as StepRow[];
 
-        const loadedEdges = await withSystemDb((tx) =>
+        const loadedEdges = (await withSystemDb((tx) =>
           tx
             .select({
               id: schema.playbookEdges.id,
@@ -342,9 +349,11 @@ export const [playbookRunExecute] = createFunction(
               priority: schema.playbookEdges.priority,
             })
             .from(schema.playbookEdges)
-            .where(eq(schema.playbookEdges.playbookVersionId, run.playbookVersionId))
+            .where(
+              eq(schema.playbookEdges.playbookVersionId, run.playbookVersionId),
+            )
             .orderBy(schema.playbookEdges.priority),
-        ) as EdgeRow[];
+        )) as EdgeRow[];
 
         return { steps: loadedSteps, edges: loadedEdges };
       },
@@ -388,7 +397,10 @@ export const [playbookRunExecute] = createFunction(
     let currentStep = entrySteps[0] ?? steps[0]; // fallback: first insertion-order step
 
     if (!currentStep) {
-      logger.error({ runId, orgId }, "playbook-run-execute: could not determine entry step");
+      logger.error(
+        { runId, orgId },
+        "playbook-run-execute: could not determine entry step",
+      );
       await step.run("finalize-no-entry", () =>
         runInTenantScope({ orgId, workspaceId }, () =>
           withTenantDb((tx) =>
@@ -422,33 +434,38 @@ export const [playbookRunExecute] = createFunction(
       let shouldContinue = true;
 
       // Insert step_run row (started)
-      const stepRunId = await step.run(`step-run-insert-${stepDef.id}`, async () => {
-        const [stepRunRow] = await runInTenantScope({ orgId, workspaceId }, () =>
-          withTenantDb((tx) =>
-            tx
-              .insert(schema.playbookStepRuns)
-              .values({
-                orgId,
-                workspaceId,
-                playbookRunId: runId,
-                playbookStepId: stepDef.id,
-                attempt: 1,
-                status: "running",
-                input: runPayload,
-                startedAt: new Date(),
-              })
-              .returning({ id: schema.playbookStepRuns.id }),
-          ),
-        );
-        if (!stepRunRow?.id) {
-          // The DB returned no rows — treat this as a fatal step error so
-          // Inngest retries the step rather than silently completing the run.
-          throw new Error(
-            `playbook-run-execute: step_run insert returned no row for step ${stepDef.id} (playbookRunId=${runId})`,
+      const stepRunId = await step.run(
+        `step-run-insert-${stepDef.id}`,
+        async () => {
+          const [stepRunRow] = await runInTenantScope(
+            { orgId, workspaceId },
+            () =>
+              withTenantDb((tx) =>
+                tx
+                  .insert(schema.playbookStepRuns)
+                  .values({
+                    orgId,
+                    workspaceId,
+                    playbookRunId: runId,
+                    playbookStepId: stepDef.id,
+                    attempt: 1,
+                    status: "running",
+                    input: runPayload,
+                    startedAt: new Date(),
+                  })
+                  .returning({ id: schema.playbookStepRuns.id }),
+              ),
           );
-        }
-        return stepRunRow.id;
-      });
+          if (!stepRunRow?.id) {
+            // The DB returned no rows — treat this as a fatal step error so
+            // Inngest retries the step rather than silently completing the run.
+            throw new Error(
+              `playbook-run-execute: step_run insert returned no row for step ${stepDef.id} (playbookRunId=${runId})`,
+            );
+          }
+          return stepRunRow.id;
+        },
+      );
 
       // Emit step_started event
       const stepStartedEventType = "step_started" as const;
@@ -499,7 +516,9 @@ export const [playbookRunExecute] = createFunction(
           case "tool": {
             const cfg = stepDef.config as unknown as ToolStepConfig;
             if (!cfg.capability) {
-              throw new Error(`tool step "${stepDef.stepKey}": missing config.capability`);
+              throw new Error(
+                `tool step "${stepDef.stepKey}": missing config.capability`,
+              );
             }
 
             // Check if the capability contract declares requiresApproval.
@@ -707,18 +726,20 @@ export const [playbookRunExecute] = createFunction(
             currentSequence++;
 
             // Single-shot LLM completion — no hand-rolled agent loop
-            const { object: agentResult } = await step.run(`agent-run-${stepDef.id}`, () =>
-              generateObjectFor({
-                schema: z.object({ output: z.string() }),
-                system: `You are an autonomous agent step executor. Execute the given instruction and return your output as a concise text string.`,
-                prompt: `Instruction: ${prompt}\n\nContext payload: ${JSON.stringify(runPayload)}`,
-                telemetry: {
-                  orgId,
-                  workspaceId,
-                  surface: "runner" as const,
-                  messageId: stepRunId,
-                },
-              }),
+            const { object: agentResult } = await step.run(
+              `agent-run-${stepDef.id}`,
+              () =>
+                generateObjectFor({
+                  schema: z.object({ output: z.string() }),
+                  system: `You are an autonomous agent step executor. Execute the given instruction and return your output as a concise text string.`,
+                  prompt: `Instruction: ${prompt}\n\nContext payload: ${JSON.stringify(runPayload)}`,
+                  telemetry: {
+                    orgId,
+                    workspaceId,
+                    surface: "runner" as const,
+                    messageId: stepRunId,
+                  },
+                }),
             );
 
             stepOutput = agentResult.output;
@@ -728,27 +749,35 @@ export const [playbookRunExecute] = createFunction(
           case "prompt": {
             const cfg = stepDef.config as unknown as PromptStepConfig;
             if (!cfg.prompt) {
-              throw new Error(`prompt step "${stepDef.stepKey}": missing config.prompt`);
+              throw new Error(
+                `prompt step "${stepDef.stepKey}": missing config.prompt`,
+              );
             }
 
             // Interpolate {{key}} placeholders from the run payload
-            const interpolatedPrompt = cfg.prompt.replace(/\{\{(\w+)\}\}/g, (_match: string, key: string) => {
-              const val = runPayload[key];
-              return val !== undefined ? String(val) : `{{${key}}}`;
-            });
+            const interpolatedPrompt = cfg.prompt.replace(
+              /\{\{(\w+)\}\}/g,
+              (_match: string, key: string) => {
+                const val = runPayload[key];
+                return val !== undefined ? String(val) : `{{${key}}}`;
+              },
+            );
 
-            const { object: promptResult } = await step.run(`prompt-run-${stepDef.id}`, () =>
-              generateObjectFor({
-                schema: z.object({ output: z.string() }),
-                system: "You are an assistant. Respond to the following prompt.",
-                prompt: interpolatedPrompt,
-                telemetry: {
-                  orgId,
-                  workspaceId,
-                  surface: "runner" as const,
-                  messageId: stepRunId,
-                },
-              }),
+            const { object: promptResult } = await step.run(
+              `prompt-run-${stepDef.id}`,
+              () =>
+                generateObjectFor({
+                  schema: z.object({ output: z.string() }),
+                  system:
+                    "You are an assistant. Respond to the following prompt.",
+                  prompt: interpolatedPrompt,
+                  telemetry: {
+                    orgId,
+                    workspaceId,
+                    surface: "runner" as const,
+                    messageId: stepRunId,
+                  },
+                }),
             );
 
             stepOutput = promptResult.output;
@@ -771,10 +800,7 @@ export const [playbookRunExecute] = createFunction(
                   ]
                 : [];
 
-            const passed = evaluatePropertyConditions(
-              conditions,
-              runPayload,
-            );
+            const passed = evaluatePropertyConditions(conditions, runPayload);
 
             const conditionEventType = "condition_evaluated" as const;
             const conditionEventData = {
@@ -837,7 +863,8 @@ export const [playbookRunExecute] = createFunction(
                 );
                 stepsExecuted++;
                 stepOutputs[stepDef.stepKey] = stepOutput;
-                currentStep = falseTarget ?? null as unknown as typeof currentStep;
+                currentStep =
+                  falseTarget ?? (null as unknown as typeof currentStep);
                 continue;
               } else {
                 // No false-branch: run completes here
@@ -873,23 +900,25 @@ export const [playbookRunExecute] = createFunction(
                   condStopOccurredAt,
                 );
 
-                await step.run(`emit-run-completed-condition-${stepDef.id}`, () =>
-                  runInTenantScope({ orgId, workspaceId }, () =>
-                    withTenantDb((tx) =>
-                      tx.insert(schema.playbookEvents).values({
-                        orgId,
-                        workspaceId,
-                        playbookRunId: runId,
-                        stepRunId,
-                        sequence: currentSequence,
-                        eventType: condStopEventType,
-                        eventData: condStopEventData,
-                        prevEventHash: prevHash,
-                        eventHash: condStopHash,
-                        occurredAt: condStopOccurredAt,
-                      }),
+                await step.run(
+                  `emit-run-completed-condition-${stepDef.id}`,
+                  () =>
+                    runInTenantScope({ orgId, workspaceId }, () =>
+                      withTenantDb((tx) =>
+                        tx.insert(schema.playbookEvents).values({
+                          orgId,
+                          workspaceId,
+                          playbookRunId: runId,
+                          stepRunId,
+                          sequence: currentSequence,
+                          eventType: condStopEventType,
+                          eventData: condStopEventData,
+                          prevEventHash: prevHash,
+                          eventHash: condStopHash,
+                          occurredAt: condStopOccurredAt,
+                        }),
+                      ),
                     ),
-                  ),
                 );
 
                 await step.run("finalize-condition-stop", () =>
@@ -903,7 +932,12 @@ export const [playbookRunExecute] = createFunction(
                   ),
                 );
 
-                return { runId, status: "completed", stepsExecuted, reason: "condition_not_met" };
+                return {
+                  runId,
+                  status: "completed",
+                  stepsExecuted,
+                  reason: "condition_not_met",
+                };
               }
             }
             break;
@@ -912,7 +946,9 @@ export const [playbookRunExecute] = createFunction(
           case "webhook": {
             const cfg = stepDef.config as unknown as WebhookStepConfig;
             if (!cfg.url) {
-              throw new Error(`webhook step "${stepDef.stepKey}": missing config.url`);
+              throw new Error(
+                `webhook step "${stepDef.stepKey}": missing config.url`,
+              );
             }
 
             // SSRF guard: https-only AND reject internal/private/link-local
@@ -926,25 +962,28 @@ export const [playbookRunExecute] = createFunction(
               stepOutputs,
             });
 
-            const webhookResult = await step.run(`webhook-${stepDef.id}`, async () => {
-              const controller = new AbortController();
-              const timeout = setTimeout(() => controller.abort(), 10_000);
-              try {
-                const resp = await fetch(cfg.url, {
-                  method: cfg.method ?? "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    ...(cfg.headers ?? {}),
-                  },
-                  body: webhookBody,
-                  redirect: "manual", // never follow redirects automatically
-                  signal: controller.signal,
-                });
-                return { statusCode: resp.status, ok: resp.ok };
-              } finally {
-                clearTimeout(timeout);
-              }
-            });
+            const webhookResult = await step.run(
+              `webhook-${stepDef.id}`,
+              async () => {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 10_000);
+                try {
+                  const resp = await fetch(cfg.url, {
+                    method: cfg.method ?? "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      ...(cfg.headers ?? {}),
+                    },
+                    body: webhookBody,
+                    redirect: "manual", // never follow redirects automatically
+                    signal: controller.signal,
+                  });
+                  return { statusCode: resp.status, ok: resp.ok };
+                } finally {
+                  clearTimeout(timeout);
+                }
+              },
+            );
 
             stepOutput = webhookResult;
             break;
@@ -1034,7 +1073,9 @@ export const [playbookRunExecute] = createFunction(
               .set({
                 status: stepStatus,
                 output:
-                  stepOutput !== null ? (stepOutput as Record<string, unknown>) : undefined,
+                  stepOutput !== null
+                    ? (stepOutput as Record<string, unknown>)
+                    : undefined,
                 error: stepError !== null ? { message: stepError } : undefined,
                 completedAt:
                   stepStatus !== "waiting_approval" ? new Date() : undefined,
@@ -1104,7 +1145,11 @@ export const [playbookRunExecute] = createFunction(
       // reproducible rather than re-randomized per replay.
       await step.run(`emit-step-telemetry-${stepDef.id}`, async () => {
         const telRow: EventRow = {
-          event_id: deterministicEventId(runId, stepDef.id, "playbook_step.executed"),
+          event_id: deterministicEventId(
+            runId,
+            stepDef.id,
+            "playbook_step.executed",
+          ),
           org_id: orgId,
           workspace_id: workspaceId,
           event_type: "playbook_step.executed",
@@ -1125,12 +1170,19 @@ export const [playbookRunExecute] = createFunction(
         try {
           await insertEvents([telRow]);
         } catch (telErr) {
-          logger.warn({ telErr, stepId: stepDef.id }, "playbook-run-execute: insertEvents failed");
+          logger.warn(
+            { telErr, stepId: stepDef.id },
+            "playbook-run-execute: insertEvents failed",
+          );
         }
 
         try {
           await insertToolInvocation({
-            invocation_id: deterministicEventId(runId, stepDef.id, "tool_invocation"),
+            invocation_id: deterministicEventId(
+              runId,
+              stepDef.id,
+              "tool_invocation",
+            ),
             org_id: orgId,
             workspace_id: workspaceId,
             capability_name: `playbook.step.${stepDef.stepType}`,
@@ -1151,7 +1203,10 @@ export const [playbookRunExecute] = createFunction(
             created_at: new Date().toISOString(),
           });
         } catch (telErr) {
-          logger.warn({ telErr }, "playbook-run-execute: insertToolInvocation failed");
+          logger.warn(
+            { telErr },
+            "playbook-run-execute: insertToolInvocation failed",
+          );
         }
       });
 
@@ -1229,7 +1284,12 @@ export const [playbookRunExecute] = createFunction(
             ),
           );
 
-          return { runId, status: "failed", stepsExecuted, failedStep: stepDef.stepKey };
+          return {
+            runId,
+            status: "failed",
+            stepsExecuted,
+            failedStep: stepDef.stepKey,
+          };
         }
         // exitOnError=false: record failure, continue to next step
         // (fall through to next-step resolution below)
@@ -1243,7 +1303,7 @@ export const [playbookRunExecute] = createFunction(
       const nextId = nextStepByEdge.get(stepDef.id);
       if (nextId) {
         const nextStepDef = stepMap.get(nextId);
-        currentStep = nextStepDef ?? null as unknown as typeof currentStep;
+        currentStep = nextStepDef ?? (null as unknown as typeof currentStep);
       } else if (edges.length === 0) {
         // No edges defined at all — fall back to insertion order traversal
         const currentIdx = steps.findIndex((s) => s.id === stepDef.id);
@@ -1332,11 +1392,17 @@ export const [playbookRunExecute] = createFunction(
           },
         ]);
       } catch (telErr) {
-        logger.warn({ telErr }, "playbook-run-execute: final insertEvents failed");
+        logger.warn(
+          { telErr },
+          "playbook-run-execute: final insertEvents failed",
+        );
       }
     });
 
-    logger.info({ runId, orgId, workspaceId, stepsExecuted }, "playbook-run-execute: completed");
+    logger.info(
+      { runId, orgId, workspaceId, stepsExecuted },
+      "playbook-run-execute: completed",
+    );
 
     return { runId, status: finalStatus, stepsExecuted };
   },

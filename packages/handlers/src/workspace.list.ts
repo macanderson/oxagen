@@ -20,10 +20,9 @@ import { logger } from "./logger";
  * is resolved from the key's created_by_user_id, matching the IAM layer's
  * "API key authorizes as its creator" invariant.
  */
-export const workspaceListHandler: CapabilityHandler<typeof workspaceList> = async (
-  input,
-  ctx,
-) => {
+export const workspaceListHandler: CapabilityHandler<
+  typeof workspaceList
+> = async (input, ctx) => {
   // ── Resolve acting user (same pattern as org.list) ───────────────────────
   let userId = ctx.userId;
   if (!userId && ctx.apiKeyId) {
@@ -57,7 +56,13 @@ export const workspaceListHandler: CapabilityHandler<typeof workspaceList> = asy
         eq(schema.organizations.slug, input.orgSlug),
         ne(schema.organizations.status, "deleted"),
       ),
-      columns: { id: true, publicId: true, slug: true, namespace: true, name: true },
+      columns: {
+        id: true,
+        publicId: true,
+        slug: true,
+        namespace: true,
+        name: true,
+      },
     });
     if (!org) {
       throw new Error(`Organization "${input.orgSlug}" not found`);
@@ -71,7 +76,9 @@ export const workspaceListHandler: CapabilityHandler<typeof workspaceList> = asy
       columns: { role: true },
     });
     if (!membership) {
-      throw new Error(`You are not a member of organization "${input.orgSlug}"`);
+      throw new Error(
+        `You are not a member of organization "${input.orgSlug}"`,
+      );
     }
     const rows = await tx
       .select({

@@ -10,8 +10,12 @@ describe("workspace.budget.policy.read capability", () => {
   it("is workspace-scoped, low-risk, readable by all workspace roles", () => {
     expect(workspaceBudgetPolicyRead.domain).toBe("workspace");
     expect(workspaceBudgetPolicyRead.scoped).toBe(true);
-    expect(workspaceBudgetPolicyRead.defaultRoles.workspace.Viewer).toBe("allow");
-    expect(workspaceBudgetPolicyRead.defaultRoles.workspace.Member).toBe("allow");
+    expect(workspaceBudgetPolicyRead.defaultRoles.workspace.Viewer).toBe(
+      "allow",
+    );
+    expect(workspaceBudgetPolicyRead.defaultRoles.workspace.Member).toBe(
+      "allow",
+    );
   });
 
   it("parses an empty input", () => {

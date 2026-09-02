@@ -20,7 +20,15 @@ const DRAFTS: MappingDraft[] = [
 describe("MappingsStep", () => {
   it("renders a loading indicator while suggestions are fetching", () => {
     render(
-      <MappingsStep loading error={null} drafts={[]} onChangeDraft={vi.fn()} onRetry={vi.fn()} onNext={vi.fn()} onBack={vi.fn()} />,
+      <MappingsStep
+        loading
+        error={null}
+        drafts={[]}
+        onChangeDraft={vi.fn()}
+        onRetry={vi.fn()}
+        onNext={vi.fn()}
+        onBack={vi.fn()}
+      />,
     );
     expect(screen.getByTestId("mappings-loading")).toBeInTheDocument();
   });
@@ -38,21 +46,39 @@ describe("MappingsStep", () => {
         onBack={vi.fn()}
       />,
     );
-    expect(screen.getByText("LLM suggestion service unavailable")).toBeInTheDocument();
+    expect(
+      screen.getByText("LLM suggestion service unavailable"),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /try again/i }));
     expect(onRetry).toHaveBeenCalled();
   });
 
   it("renders an empty state when there are no drafts", () => {
     render(
-      <MappingsStep loading={false} error={null} drafts={[]} onChangeDraft={vi.fn()} onRetry={vi.fn()} onNext={vi.fn()} onBack={vi.fn()} />,
+      <MappingsStep
+        loading={false}
+        error={null}
+        drafts={[]}
+        onChangeDraft={vi.fn()}
+        onRetry={vi.fn()}
+        onNext={vi.fn()}
+        onBack={vi.fn()}
+      />,
     );
     expect(screen.getByText("No mappings to review")).toBeInTheDocument();
   });
 
   it("renders editable mapping rows with confidence and reasoning", () => {
     render(
-      <MappingsStep loading={false} error={null} drafts={DRAFTS} onChangeDraft={vi.fn()} onRetry={vi.fn()} onNext={vi.fn()} onBack={vi.fn()} />,
+      <MappingsStep
+        loading={false}
+        error={null}
+        drafts={DRAFTS}
+        onChangeDraft={vi.fn()}
+        onRetry={vi.fn()}
+        onNext={vi.fn()}
+        onBack={vi.fn()}
+      />,
     );
     expect(screen.getByTestId("mapping-row-custom")).toBeInTheDocument();
     expect(screen.getByDisplayValue("task")).toBeInTheDocument();
@@ -63,7 +89,15 @@ describe("MappingsStep", () => {
   it("calls onChangeDraft when the entity type is edited", async () => {
     const onChangeDraft = vi.fn();
     render(
-      <MappingsStep loading={false} error={null} drafts={DRAFTS} onChangeDraft={onChangeDraft} onRetry={vi.fn()} onNext={vi.fn()} onBack={vi.fn()} />,
+      <MappingsStep
+        loading={false}
+        error={null}
+        drafts={DRAFTS}
+        onChangeDraft={onChangeDraft}
+        onRetry={vi.fn()}
+        onNext={vi.fn()}
+        onBack={vi.fn()}
+      />,
     );
     const input = screen.getByLabelText("Entity type");
     await userEvent.clear(input);
@@ -91,7 +125,15 @@ describe("MappingsStep", () => {
     const onNext = vi.fn();
     const onBack = vi.fn();
     render(
-      <MappingsStep loading={false} error={null} drafts={DRAFTS} onChangeDraft={vi.fn()} onRetry={vi.fn()} onNext={onNext} onBack={onBack} />,
+      <MappingsStep
+        loading={false}
+        error={null}
+        drafts={DRAFTS}
+        onChangeDraft={vi.fn()}
+        onRetry={vi.fn()}
+        onNext={onNext}
+        onBack={onBack}
+      />,
     );
     fireEvent.click(screen.getByTestId("mappings-next-btn"));
     expect(onNext).toHaveBeenCalled();

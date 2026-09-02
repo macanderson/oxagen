@@ -22,7 +22,9 @@ export interface SlashError {
 }
 
 /** Parse "/review src/x here" → { name: "review", args: "src/x here" }. */
-export function parseInvocation(input: string): { name: string; args: string } | null {
+export function parseInvocation(
+  input: string,
+): { name: string; args: string } | null {
   const trimmed = input.trim();
   if (!trimmed.startsWith("/")) return null;
   const rest = trimmed.slice(1);
@@ -50,8 +52,10 @@ export function parseInvocation(input: string): { name: string; args: string } |
  */
 export function applyArgs(template: string, args: string): string {
   const positionals = args.length > 0 ? args.split(/\s+/) : [];
-  return template.replace(/\$ARGUMENTS\b|\$([1-9])\b/g, (_match, digit?: string) =>
-    digit === undefined ? args : positionals[Number(digit) - 1] ?? "",
+  return template.replace(
+    /\$ARGUMENTS\b|\$([1-9])\b/g,
+    (_match, digit?: string) =>
+      digit === undefined ? args : (positionals[Number(digit) - 1] ?? ""),
   );
 }
 

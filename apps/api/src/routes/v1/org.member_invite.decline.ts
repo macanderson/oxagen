@@ -9,6 +9,8 @@ export const orgMemberInviteDeclineRoute = new Hono<AppEnv>();
 orgMemberInviteDeclineRoute.post("/", async (c) => {
   const body = orgMemberInviteDecline.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const result = await invoke(orgMemberInviteDecline.name, body, ctx, { surface: "api" });
+  const result = await invoke(orgMemberInviteDecline.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(result);
 });

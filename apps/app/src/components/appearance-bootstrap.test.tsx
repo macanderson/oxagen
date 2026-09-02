@@ -21,7 +21,8 @@ function runScript(cookie: string) {
         add: (cls: string) => classes.add(cls),
         remove: (cls: string) => classes.delete(cls),
       },
-      setAttribute: (name: string, value: string) => attributes.set(name, value),
+      setAttribute: (name: string, value: string) =>
+        attributes.set(name, value),
       style,
     },
   };
@@ -56,28 +57,28 @@ describe("APPEARANCE_BOOTSTRAP_SCRIPT", () => {
   });
 
   it("sets data-font-size only for non-default valid values", () => {
-    expect(runScript("pref-font-size=small").attributes.get("data-font-size")).toBe(
-      "small",
-    );
-    expect(runScript("pref-font-size=large").attributes.get("data-font-size")).toBe(
-      "large",
-    );
+    expect(
+      runScript("pref-font-size=small").attributes.get("data-font-size"),
+    ).toBe("small");
+    expect(
+      runScript("pref-font-size=large").attributes.get("data-font-size"),
+    ).toBe("large");
     // medium is the prerendered default; script must not touch it.
     expect(
       runScript("pref-font-size=medium").attributes.has("data-font-size"),
     ).toBe(false);
-    expect(runScript("pref-font-size=huge").attributes.has("data-font-size")).toBe(
-      false,
-    );
+    expect(
+      runScript("pref-font-size=huge").attributes.has("data-font-size"),
+    ).toBe(false);
   });
 
   it("sets data-density only for non-default valid values", () => {
-    expect(runScript("pref-density=compact").attributes.get("data-density")).toBe(
-      "compact",
-    );
-    expect(runScript("pref-density=spacious").attributes.get("data-density")).toBe(
-      "spacious",
-    );
+    expect(
+      runScript("pref-density=compact").attributes.get("data-density"),
+    ).toBe("compact");
+    expect(
+      runScript("pref-density=spacious").attributes.get("data-density"),
+    ).toBe("spacious");
     expect(
       runScript("pref-density=comfortable").attributes.has("data-density"),
     ).toBe(false);

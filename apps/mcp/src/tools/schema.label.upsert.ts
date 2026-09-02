@@ -11,11 +11,19 @@ export const schema = {
 export const metadata: ToolMetadata = {
   name: schemaLabelUpsert.name,
   description: schemaLabelUpsert.description,
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+  },
 };
 
-export default async function schemaLabelUpsertTool(args: InferSchema<typeof schema>) {
+export default async function schemaLabelUpsertTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(schemaLabelUpsert.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(schemaLabelUpsert.name, args, ctx, {
+    surface: "mcp",
+  });
   return schemaLabelUpsert.output.parse(output);
 }

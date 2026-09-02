@@ -115,7 +115,11 @@ describe("schemaRelationshipDeleteHandler", () => {
       mocks.selectSchema.mockResolvedValue([SCHEMA_ROW]);
       mocks.selectRel.mockResolvedValue([REL_ROW]);
       await schemaRelationshipDeleteHandler(BASE_INPUT, CTX);
-      expect(mocks.getOrCreateRegistry).toHaveBeenCalledWith(CTX.orgId, CTX.workspaceId, CTX.userId);
+      expect(mocks.getOrCreateRegistry).toHaveBeenCalledWith(
+        CTX.orgId,
+        CTX.workspaceId,
+        CTX.userId,
+      );
     });
   });
 });

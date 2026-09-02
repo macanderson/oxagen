@@ -20,6 +20,8 @@ export default async function budgetPolicyReadTool(
   _args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(budgetPolicyRead.name, {}, ctx, { surface: "mcp" });
+  const output = await invoke(budgetPolicyRead.name, {}, ctx, {
+    surface: "mcp",
+  });
   return budgetPolicyRead.output.parse(output);
 }

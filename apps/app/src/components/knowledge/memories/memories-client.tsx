@@ -70,20 +70,9 @@ import { MarkdownContent } from "@/components/ui/markdown-content";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { MemoriesBulkImport, type DraftMemory } from "./memories-bulk-import";
 import { RationalePicker, type SuggestRationalesFn } from "./rationale-picker";
-// Shared kind/weight/class taxonomy lives in its own lightweight module (see
+// The shared class taxonomy lives in its own lightweight module (see
 // memory-kinds.ts) so the bulk-import grid can reuse it without importing this
-// CodeMirror-laden component. Re-exported here for existing consumers.
-export {
-  ALL_KINDS,
-  KIND_CONFIG,
-  WEIGHT_CONFIG,
-  ALL_CLASSES,
-  CLASS_CONFIG,
-  RECOMMENDED_MEMORY_KINDS,
-  type MemoryKind,
-  type MemoryWeight,
-  type MemoryClass,
-} from "./memory-kinds";
+// CodeMirror-laden component.
 import {
   ALL_CLASSES,
   CLASS_CONFIG,
@@ -320,6 +309,15 @@ interface MemoriesClientProps {
 
 // ---------------------------------------------------------------------------
 // Kind configuration helper
+//
+// NOTE: this is a SUPERSET of memory-kinds.ts's KIND_CONFIG — it also styles
+// the six content-domain kinds (FEEDBACK…PROSE) that the closed `MemoryKind`
+// union in memory-kinds.ts does not cover. The two therefore disagree on what
+// a kind looks like: the bulk-import grid falls back to a generic chip for
+// those six, and `convention-deviation` even resolves to a different icon in
+// each. memoryKind is an open string, so the closed union is the thing that is
+// wrong; collapsing both onto one open-string map is the fix, but it widens an
+// exported type and is left as a follow-up rather than done here.
 // ---------------------------------------------------------------------------
 
 const KIND_CONFIG: Record<
@@ -481,10 +479,18 @@ function CopyableId({ id }: { id: string }) {
   const [copied, setCopied] = React.useState(false);
 
   function handleCopy() {
-    void navigator.clipboard.writeText(id).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
+    // clipboard.writeText rejects on an insecure origin or a denied permission.
+    // Swallow it rather than leaving an unhandled rejection: the copy simply
+    // does not confirm, and the full id is still readable in the title tooltip.
+    void navigator.clipboard.writeText(id).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      },
+      () => {
+        /* copy unavailable — leave the label unchanged */
+      },
+    );
   }
 
   return (

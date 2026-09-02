@@ -16,7 +16,14 @@
  */
 
 import * as React from "react";
-import { render, screen, waitFor, cleanup, fireEvent, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  cleanup,
+  fireEvent,
+  act,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -69,7 +76,9 @@ vi.mock("@/components/ui/button", () => ({
 }));
 
 vi.mock("@/components/ui/input", () => ({
-  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <input {...props} />
+  ),
 }));
 
 vi.mock("@/components/ui/label", () => ({
@@ -107,10 +116,17 @@ vi.mock("@/components/avatar/avatar-maker", () => ({
   ),
 }));
 
-vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
-  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
-  has: (_t, prop) => prop !== "then",
-}));
+vi.mock(
+  "lucide-react",
+  () =>
+    new Proxy({} as Record<string | symbol, unknown>, {
+      get: (_t, prop) =>
+        prop === "then"
+          ? undefined
+          : () => <svg aria-hidden="true" data-icon={String(prop)} />,
+      has: (_t, prop) => prop !== "then",
+    }),
+);
 
 // ---------------------------------------------------------------------------
 // Import under test (after mocks)
@@ -174,14 +190,14 @@ describe("OrgGeneralForm", () => {
   it("disables the save button when canEdit is false", () => {
     render(<OrgGeneralForm {...defaultProps} canEdit={false} />);
 
-    expect(screen.getByRole("button", { name: /save changes/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /save changes/i }),
+    ).toBeDisabled();
   });
 
   // (c) Auto-derive slug from name when slug is empty
   it("derives slug from name when slug is empty", () => {
-    render(
-      <OrgGeneralForm {...defaultProps} initialName="" initialSlug="" />,
-    );
+    render(<OrgGeneralForm {...defaultProps} initialName="" initialSlug="" />);
 
     fireEvent.change(screen.getByLabelText("Organization name"), {
       target: { value: "My New Org" },
@@ -326,6 +342,8 @@ describe("OrgGeneralForm", () => {
     });
 
     const [formData] = mockAction.mock.calls[0] as [FormData];
-    expect(formData.get("avatarUrl")).toBe("https://cdn.example.com/avatar.png");
+    expect(formData.get("avatarUrl")).toBe(
+      "https://cdn.example.com/avatar.png",
+    );
   });
 });

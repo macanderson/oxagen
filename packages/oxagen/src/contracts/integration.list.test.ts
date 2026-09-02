@@ -92,9 +92,7 @@ describe("integration.list capability", () => {
   });
 
   it("rejects an unknown status value", () => {
-    expect(() =>
-      integrationList.input.parse({ status: "disabled" }),
-    ).toThrow();
+    expect(() => integrationList.input.parse({ status: "disabled" })).toThrow();
   });
 
   // ── input: optional pluginId ──────────────────────────────────────────────

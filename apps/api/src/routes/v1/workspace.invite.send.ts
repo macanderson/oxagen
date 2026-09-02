@@ -9,6 +9,8 @@ export const workspaceInviteSendRoute = new Hono<AppEnv>();
 workspaceInviteSendRoute.post("/", async (c) => {
   const body = workspaceInviteSend.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(workspaceInviteSend.name, body, ctx, { surface: "api" });
+  const out = await invoke(workspaceInviteSend.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

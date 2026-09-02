@@ -132,13 +132,21 @@ export function BudgetControl({
 
   async function saveAsDefault() {
     setSaveState("saving");
-    const res = await saveBudgetDefaultAction({
-      enabled: budgetEnabled,
-      limitUsd: budgetEnabled ? budgetUsd : null,
-      mode: budgetMode,
-      graceOveragePct: budgetGracePct,
-    });
-    setSaveState(res.ok ? "saved" : "error");
+    // A thrown server action would otherwise leave saveState at "saving"
+    // forever, permanently disabling the button with no explanation.
+    let ok: boolean;
+    try {
+      const res = await saveBudgetDefaultAction({
+        enabled: budgetEnabled,
+        limitUsd: budgetEnabled ? budgetUsd : null,
+        mode: budgetMode,
+        graceOveragePct: budgetGracePct,
+      });
+      ok = res.ok;
+    } catch {
+      ok = false;
+    }
+    setSaveState(ok ? "saved" : "error");
     clearTimeout(saveResetTimer.current);
     saveResetTimer.current = setTimeout(() => setSaveState("idle"), 2500);
   }

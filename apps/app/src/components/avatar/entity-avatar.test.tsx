@@ -15,7 +15,15 @@ afterEach(cleanup);
 // Mock next/image the same way avatar-upload.test.tsx does — jsdom has no
 // Next.js image optimization runtime.
 vi.mock("next/image", () => ({
-  default: ({ src, alt, ...rest }: { src: string; alt: string; [key: string]: unknown }) => (
+  default: ({
+    src,
+    alt,
+    ...rest
+  }: {
+    src: string;
+    alt: string;
+    [key: string]: unknown;
+  }) => (
     // eslint-disable-next-line @next/next/no-img-element -- jsdom test shim; real next/image requires Next.js runtime
     <img src={src} alt={alt} {...rest} />
   ),
@@ -23,21 +31,31 @@ vi.mock("next/image", () => ({
 
 describe("EntityAvatar — image kind", () => {
   it("renders an img with the entity name as alt text", () => {
-    render(<EntityAvatar value="https://cdn.example.com/a.png" name="Acme Corp" />);
+    render(
+      <EntityAvatar value="https://cdn.example.com/a.png" name="Acme Corp" />,
+    );
     const img = screen.getByAltText("Acme Corp avatar");
     expect(img).toHaveAttribute("src", "https://cdn.example.com/a.png");
   });
 
   it("rejects a non-https URL and falls back to initials", () => {
-    render(<EntityAvatar value="http://cdn.example.com/a.png" name="Acme Corp" />);
-    expect(screen.queryByRole("img", { name: "Acme Corp avatar" })).not.toHaveAttribute("src");
+    render(
+      <EntityAvatar value="http://cdn.example.com/a.png" name="Acme Corp" />,
+    );
+    expect(
+      screen.queryByRole("img", { name: "Acme Corp avatar" }),
+    ).not.toHaveAttribute("src");
     expect(screen.getByText("AC")).toBeInTheDocument();
   });
 });
 
 describe("EntityAvatar — designed kind", () => {
   it("renders the emoji tile with the background color and accessible label", () => {
-    const value = serializeDesignedAvatar({ emoji: "🦊", bg: "#f59e0b", mode: "full" });
+    const value = serializeDesignedAvatar({
+      emoji: "🦊",
+      bg: "#f59e0b",
+      mode: "full",
+    });
     render(<EntityAvatar value={value} name="Fox Workspace" />);
 
     const tile = screen.getByRole("img", { name: "Fox Workspace avatar" });
@@ -46,28 +64,44 @@ describe("EntityAvatar — designed kind", () => {
   });
 
   it("applies no filter for mode='full'", () => {
-    const value = serializeDesignedAvatar({ emoji: "🦊", bg: "#f59e0b", mode: "full" });
+    const value = serializeDesignedAvatar({
+      emoji: "🦊",
+      bg: "#f59e0b",
+      mode: "full",
+    });
     render(<EntityAvatar value={value} name="Fox" />);
     const glyph = screen.getByText("🦊");
     expect(glyph.style.filter).toBe("");
   });
 
   it("applies a white-silhouette filter for mode='mono-light'", () => {
-    const value = serializeDesignedAvatar({ emoji: "🦊", bg: "#f59e0b", mode: "mono-light" });
+    const value = serializeDesignedAvatar({
+      emoji: "🦊",
+      bg: "#f59e0b",
+      mode: "mono-light",
+    });
     render(<EntityAvatar value={value} name="Fox" />);
     const glyph = screen.getByText("🦊");
     expect(glyph.style.filter).toBe("brightness(0) invert(1)");
   });
 
   it("applies a black-silhouette filter for mode='mono-dark'", () => {
-    const value = serializeDesignedAvatar({ emoji: "🦊", bg: "#f59e0b", mode: "mono-dark" });
+    const value = serializeDesignedAvatar({
+      emoji: "🦊",
+      bg: "#f59e0b",
+      mode: "mono-dark",
+    });
     render(<EntityAvatar value={value} name="Fox" />);
     const glyph = screen.getByText("🦊");
     expect(glyph.style.filter).toBe("brightness(0)");
   });
 
   it("hides the emoji glyph from the accessibility tree", () => {
-    const value = serializeDesignedAvatar({ emoji: "🦊", bg: "#f59e0b", mode: "full" });
+    const value = serializeDesignedAvatar({
+      emoji: "🦊",
+      bg: "#f59e0b",
+      mode: "full",
+    });
     render(<EntityAvatar value={value} name="Fox" />);
     expect(screen.getByText("🦊")).toHaveAttribute("aria-hidden", "true");
   });
@@ -112,12 +146,16 @@ describe("EntityAvatar — shape + size", () => {
   });
 
   it("applies rounded-md for shape='square'", () => {
-    const { container } = render(<EntityAvatar value={null} name="Acme" shape="square" />);
+    const { container } = render(
+      <EntityAvatar value={null} name="Acme" shape="square" />,
+    );
     expect(container.querySelector(".rounded-md")).toBeTruthy();
   });
 
   it("applies the size-16 class for size='xl'", () => {
-    const { container } = render(<EntityAvatar value={null} name="Acme" size="xl" />);
+    const { container } = render(
+      <EntityAvatar value={null} name="Acme" size="xl" />,
+    );
     expect(container.querySelector(".size-16")).toBeTruthy();
   });
 

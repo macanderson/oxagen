@@ -46,10 +46,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => dbMocks,
-  withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-  withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-
+    db: () => dbMocks,
+    withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
+    withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
   };
 });
 
@@ -118,7 +117,9 @@ describe("ensureStripeCustomer", () => {
   it("tenant not found in DB — throws with tenant id in message", async () => {
     dbMocks.query.organizations.findFirst.mockResolvedValue(undefined);
 
-    await expect(ensureStripeCustomer("org-missing")).rejects.toThrow("org-missing");
+    await expect(ensureStripeCustomer("org-missing")).rejects.toThrow(
+      "org-missing",
+    );
     expect(findCustomerByOrgIdMock).not.toHaveBeenCalled();
     expect(createCustomerMock).not.toHaveBeenCalled();
   });

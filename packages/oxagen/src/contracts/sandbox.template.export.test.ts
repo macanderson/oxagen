@@ -6,7 +6,9 @@ describe("sandbox.template.export contract", () => {
     expect(sandboxTemplateExport.name).toBe("export_sandbox_template");
   });
   it("requires a templateId", () => {
-    expect(() => sandboxTemplateExport.input.parse({ templateId: "sbx_1" })).not.toThrow();
+    expect(() =>
+      sandboxTemplateExport.input.parse({ templateId: "sbx_1" }),
+    ).not.toThrow();
     expect(() => sandboxTemplateExport.input.parse({})).toThrow();
   });
   it("outputs a v1 manifest with secret NAMES only (no value field)", () => {
@@ -22,7 +24,9 @@ describe("sandbox.template.export contract", () => {
         secretSelection: "all",
         literalEnv: {},
         tools: [{ kind: "capability", ref: "agent.code.execute" }],
-        secretKeys: [{ key: "AI_GATEWAY_API_KEY", sensitive: true, required: true }],
+        secretKeys: [
+          { key: "AI_GATEWAY_API_KEY", sensitive: true, required: true },
+        ],
       },
     });
     expect(out.manifest.secretKeys[0]).not.toHaveProperty("value");

@@ -68,7 +68,11 @@ export function RenameDialog({
           }}
         />
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
+          <Button
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+            disabled={pending}
+          >
             Cancel
           </Button>
           <Button onClick={submit} disabled={!canSubmit}>

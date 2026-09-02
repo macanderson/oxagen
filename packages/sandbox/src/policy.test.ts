@@ -75,7 +75,9 @@ describe("applyPolicy — network", () => {
 
   it("error message names the network violation", () => {
     const req = makeReq({ network: "allow" });
-    expect(() => applyPolicy(req, FULL_POLICY)).toThrow(/network access not allowed by policy/);
+    expect(() => applyPolicy(req, FULL_POLICY)).toThrow(
+      /network access not allowed by policy/,
+    );
   });
 
   it("allows network=allow when policy permits network", () => {
@@ -98,7 +100,9 @@ describe("applyPolicy — network", () => {
 describe("applyPolicy — language denylist", () => {
   it("throws SandboxPolicyError when language is not in allowedLanguages", () => {
     const req = makeReq({ language: "python" });
-    expect(() => applyPolicy(req, NODE_ONLY_POLICY)).toThrow(SandboxPolicyError);
+    expect(() => applyPolicy(req, NODE_ONLY_POLICY)).toThrow(
+      SandboxPolicyError,
+    );
   });
 
   it("error message names the disallowed language", () => {

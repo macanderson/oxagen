@@ -35,6 +35,8 @@ export default async function chatMessageSendTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(chatMessageSend.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(chatMessageSend.name, args, ctx, {
+    surface: "mcp",
+  });
   return chatMessageSend.output.parse(output);
 }

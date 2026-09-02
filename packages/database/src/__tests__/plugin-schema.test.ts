@@ -19,10 +19,7 @@
 
 import { describe, it, expect } from "vitest";
 import { getTableConfig } from "drizzle-orm/pg-core";
-import {
-  PLUGIN_TYPES,
-  pluginInstalledPlugins,
-} from "../schema/plugin";
+import { PLUGIN_TYPES, pluginInstalledPlugins } from "../schema/plugin";
 import { flattenCheckSql, type DrizzleCheck } from "./_test-helpers";
 
 // ---------------------------------------------------------------------------
@@ -74,7 +71,9 @@ describe("PLUGIN_TYPES constant", () => {
 describe("pluginInstalledPlugins — installed_plugins_type_check CHECK constraint", () => {
   const cfg = getTableConfig(pluginInstalledPlugins);
   const checks = cfg.checks as DrizzleCheck[];
-  const typeCheck = checks.find((c) => c.name === "installed_plugins_type_check");
+  const typeCheck = checks.find(
+    (c) => c.name === "installed_plugins_type_check",
+  );
 
   it("has an 'installed_plugins_type_check' constraint", () => {
     expect(
@@ -116,7 +115,9 @@ describe("pluginInstalledPlugins — installed_plugins_type_check CHECK constrai
 describe("pluginInstalledPlugins — installed_plugins_source_check CHECK constraint", () => {
   const cfg = getTableConfig(pluginInstalledPlugins);
   const checks = cfg.checks as DrizzleCheck[];
-  const sourceCheck = checks.find((c) => c.name === "installed_plugins_source_check");
+  const sourceCheck = checks.find(
+    (c) => c.name === "installed_plugins_source_check",
+  );
 
   it("has an 'installed_plugins_source_check' constraint", () => {
     expect(
@@ -178,6 +179,8 @@ describe("pluginInstalledPlugins — catalog_server_id column removed", () => {
 describe("pluginOrgDenylist — table removed", () => {
   it("is NOT exported from the plugin schema module", async () => {
     const mod = await import("../schema/plugin");
-    expect((mod as Record<string, unknown>)["pluginOrgDenylist"]).toBeUndefined();
+    expect(
+      (mod as Record<string, unknown>)["pluginOrgDenylist"],
+    ).toBeUndefined();
   });
 });

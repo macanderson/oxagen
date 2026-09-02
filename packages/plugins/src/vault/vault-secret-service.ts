@@ -89,7 +89,15 @@ export interface ResolvedSecret {
   source: ResolvedSource;
 }
 
-/** Resolve value(key, env) = override ?? default ?? unset, decrypting as needed. */
+/**
+ * Resolve value(key, env) = override ?? default ?? unset, decrypting as needed.
+ *
+ * `secret_values` has no DB check tying its storage column to the owning key's
+ * `sensitive` flag (see packages/database/src/schema/environments.ts §5.5) — the
+ * pairing is a service-layer invariant only. If a row ever violates it, fail
+ * with a message that names the key and the mismatch instead of handing a null
+ * Buffer to the crypto layer, where it surfaces as an opaque decrypt error.
+ */
 async function resolveOne(
   key: KeyRow,
   value: ValueRow | undefined,
@@ -98,12 +106,22 @@ async function resolveOne(
   if (value && (value.valueEnc !== null || value.valueText !== null)) {
     if (key.sensitive) {
       if (!kms) throw new VaultLockedError();
+      if (value.valueEnc === null) {
+        throw new Error(
+          `[vault] key "${key.key}" is sensitive but its override is stored as plaintext — re-set the value for this environment`,
+        );
+      }
       const plain = await decOne(
-        value.valueEnc as Buffer,
+        value.valueEnc,
         value.valueKmsKeyId ?? kms.keyId,
         kms,
       );
       return { value: plain, source: "override" };
+    }
+    if (value.valueText === null) {
+      throw new Error(
+        `[vault] key "${key.key}" is not sensitive but its override is stored as ciphertext — re-set the value for this environment`,
+      );
     }
     return { value: value.valueText, source: "override" };
   }
@@ -583,7 +601,20 @@ export async function exportSecrets(
   });
 }
 
-/** Quote a value for `.env` output so it round-trips through parseEnvText. */
+/**
+ * Quote a value for `.env` output.
+ *
+ * KNOWN LIMITATION — this does NOT round-trip through parseEnvText for every
+ * value. parseEnvText closes a quoted value at the first matching quote and
+ * understands no backslash escapes, and it splits input on newlines before
+ * parsing. So two shapes are corrupted on export → re-import:
+ *   - a value containing BOTH `'` and `"` (emitted with `\"` escapes that the
+ *     parser reads as a literal backslash + terminator), and
+ *   - any multi-line value (a PEM key, for instance), which is truncated at its
+ *     first newline.
+ * Fixing this means teaching parseEnvText escapes and multi-line values; until
+ * then treat `dotenv` as display/copy output, not a lossless transport.
+ */
 function renderEnvValue(value: string): string {
   if (value !== "" && !/[\s#"'=]/.test(value)) return value;
   // Single quotes are literal in our parser; prefer them when safe.

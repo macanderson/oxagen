@@ -2,9 +2,9 @@ import { HexField } from "@/components/ui/hex-field";
 import { cn } from "@/lib/utils";
 
 /**
- * HeroBackdrop — the shared ember hero backdrop, ported from the docs landing
- * page so the app reads as the same brand surface. Three stacked,
- * pointer-events-none layers:
+ * HeroBackdrop — the shared ember hero backdrop. The docs landing page and the
+ * app render the same three layers, so both read as one brand surface. All
+ * three ignore pointer events and stack in this order:
  *
  *   1. `.ox-hero-grid`  — an ambient 46px lattice masked to a soft radial fade.
  *   2. `.ox-hero-orb`   — a blurred, slowly-pulsing ember light source.
@@ -31,7 +31,10 @@ export function HeroBackdrop({
   return (
     <div
       aria-hidden="true"
-      className={cn("pointer-events-none absolute inset-0 -z-10 overflow-hidden", className)}
+      className={cn(
+        "pointer-events-none absolute inset-0 -z-10 overflow-hidden",
+        className,
+      )}
     >
       <div className="ox-hero-grid absolute inset-0" />
       <div

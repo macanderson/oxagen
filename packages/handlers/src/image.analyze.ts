@@ -22,6 +22,10 @@ import { logger } from "./logger";
 // Asset lookup uses withSystemDb because the caller's workspace scope is carried
 // by orgId/workspaceId from the capability context and enforced explicitly in the
 // WHERE clause — there is no runInTenantScope active for this standalone lookup.
+//
+// NOTE: the lookup checks org + workspace only. It does NOT re-apply the asset's
+// per-asset `access_policy` the way generated-asset.serve does, so an asset with
+// policy `user` can be analysed by any workspace member, not just its creator.
 
 const analysisSchema = z.object({
   analysis: z.string(),
@@ -29,10 +33,9 @@ const analysisSchema = z.object({
   description: z.string(),
 });
 
-export const imageAnalyzeHandler: CapabilityHandler<typeof imageAnalyze> = async (
-  input,
-  ctx,
-) => {
+export const imageAnalyzeHandler: CapabilityHandler<
+  typeof imageAnalyze
+> = async (input, ctx) => {
   // ── 1. Resolve the asset row ─────────────────────────────────────────────────
   const [asset] = await withSystemDb((tx) =>
     tx
@@ -44,6 +47,7 @@ export const imageAnalyzeHandler: CapabilityHandler<typeof imageAnalyze> = async
       .where(
         and(
           eq(schema.generatedAssets.publicId, input.image_id),
+          eq(schema.generatedAssets.orgId, ctx.orgId),
           eq(schema.generatedAssets.workspaceId, ctx.workspaceId),
           eq(schema.generatedAssets.status, "ready"),
           isNull(schema.generatedAssets.deletedAt),
@@ -54,7 +58,11 @@ export const imageAnalyzeHandler: CapabilityHandler<typeof imageAnalyze> = async
 
   if (!asset?.storageUrl) {
     logger.warn(
-      { orgId: ctx.orgId, workspaceId: ctx.workspaceId, imageId: input.image_id },
+      {
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        imageId: input.image_id,
+      },
       "image.analyze: asset not found or not ready",
     );
     throw new Error(`Asset ${input.image_id} not found or not ready`);
@@ -77,7 +85,11 @@ export const imageAnalyzeHandler: CapabilityHandler<typeof imageAnalyze> = async
         {
           type: "image",
           image: asset.storageUrl,
-          mediaType: asset.mimeType as "image/png" | "image/jpeg" | "image/webp" | "image/gif",
+          mediaType: asset.mimeType as
+            | "image/png"
+            | "image/jpeg"
+            | "image/webp"
+            | "image/gif",
         },
         { type: "text", text: instruction },
       ],

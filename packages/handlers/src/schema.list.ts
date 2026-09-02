@@ -5,8 +5,15 @@ import { eq, and, isNull, inArray } from "drizzle-orm";
 import { getOrCreateRegistry } from "./schema.versioning";
 import { logger } from "./logger";
 
-export const schemaListHandler: CapabilityHandler<typeof schemaList> = async (_input, ctx) => {
-  const registry = await getOrCreateRegistry(ctx.orgId, ctx.workspaceId, ctx.userId);
+export const schemaListHandler: CapabilityHandler<typeof schemaList> = async (
+  _input,
+  ctx,
+) => {
+  const registry = await getOrCreateRegistry(
+    ctx.orgId,
+    ctx.workspaceId,
+    ctx.userId,
+  );
 
   // List the DRAFT (the working copy) first — it is a superset of the pinned
   // version, so newly created/scaffolded schemas list immediately; the `enabled`
@@ -43,7 +50,9 @@ export const schemaListHandler: CapabilityHandler<typeof schemaList> = async (_i
         ),
       );
 
-    const enabledMap = new Map(activations.map((a) => [a.schemaName, a.enabled]));
+    const enabledMap = new Map(
+      activations.map((a) => [a.schemaName, a.enabled]),
+    );
 
     return schemaRows.map((s) => ({
       schemaName: s.name,

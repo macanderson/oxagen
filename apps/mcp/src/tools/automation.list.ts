@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
 import { automationList } from "@oxagen/oxagen/contracts/automation.list";
@@ -6,10 +5,12 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
 export const schema = {
-  workspace_id: z
-    .string()
-    .optional()
-    .describe("Workspace ID (defaults to current workspace)"),
+  ...automationList.input.shape,
+  workspace_id: automationList.input.shape.workspace_id.describe(
+    "Ignored on this surface. Automations are always listed for the workspace " +
+      "the calling API key is scoped to; the handler reads scope from the " +
+      "request context, never from this field.",
+  ),
 };
 
 export const metadata: ToolMetadata = {
@@ -22,8 +23,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function automationListTool(args: InferSchema<typeof schema>) {
+export default async function automationListTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(automationList.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(automationList.name, args, ctx, {
+    surface: "mcp",
+  });
   return automationList.output.parse(output);
 }

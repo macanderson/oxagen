@@ -4,28 +4,21 @@
  * coding-agent preferences" section on Workspace → Settings → Agent Defaults
  * → Models sub-tab.
  *
- * Closes the contract gap flagged in
- * docs/web-app-2.0/workspace/settings/agent-defaults/spec.md:
- * `user.workspace_preferences.read/write` (`get_workspace_user_preferences` /
- * `update_workspace_user_preferences`) both declare `app` in their
- * `layers[]`, but before this file the ONLY apps/app caller was the agent
- * picker's "default assistant" star
- * (`_shared/agent-prefs-actions.ts::setDefaultAgentAction`, which writes just
- * `defaultAgentId`). This surfaces the FULL per-user default (repo +
- * environment + agent) as a real, savable settings form — see
- * coding-agent-preferences-form.tsx.
+ * Writes the calling user's FULL per-user default (repo + environment +
+ * agent) through `update_workspace_user_preferences` — see
+ * coding-agent-preferences-form.tsx. The agent picker's "default assistant"
+ * star (`_shared/agent-prefs-actions.ts::setDefaultAgentAction`) writes just
+ * `defaultAgentId` through the same capability.
  *
  * The READ side is NOT duplicated here: `get_workspace_user_preferences` is
  * invoked directly from page.tsx alongside the other three sub-tabs' reads
  * (get_model_settings / get_budget_policy / get_prompt_settings), reusing the
- * page's single resolved org/workspace/session context — mirroring the
- * existing models/budget/prompts pattern rather than memory's self-contained
- * readMemoryPolicyAction.
+ * page's single resolved org/workspace/session context.
  *
  * Write surfaces are ["api"] ONLY (app-only capability — the web app is the
  * sole writer of a user's coding-agent defaults) → invoke() WITHOUT a
- * `surface` override, mirroring the established precedent in
- * ../../_shared/agent-prefs-actions.ts::setDefaultAgentAction exactly.
+ * `surface` override, same as
+ * ../../_shared/agent-prefs-actions.ts::setDefaultAgentAction.
  *
  * No workspace-role gate: the contract's `defaultRoles` allow every workspace
  * role (Owner/Admin/Member/Viewer) — these are the CALLING USER's own
@@ -38,7 +31,11 @@ import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import { userWorkspacePreferencesWrite } from "@oxagen/oxagen/contracts/user.workspace_preferences.write";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 
 // ── Input schema ─────────────────────────────────────────────────────────────
 
@@ -67,7 +64,10 @@ export async function updateCodingAgentPreferencesAction(
 ): Promise<UpdateCodingAgentPreferencesResult> {
   const parsed = UpdateCodingAgentPreferencesSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
 
   const {
@@ -103,14 +103,22 @@ export async function updateCodingAgentPreferencesAction(
     // kernel's surface gate (surface_denied).
     await invoke(
       userWorkspacePreferencesWrite.name,
-      { defaultRepoConnectionId, defaultRepoSlug, defaultEnvironmentId, defaultAgentId },
+      {
+        defaultRepoConnectionId,
+        defaultRepoSlug,
+        defaultEnvironmentId,
+        defaultAgentId,
+      },
       capabilityCtx,
     );
     return { ok: true };
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to save coding-agent preferences.",
+      error:
+        err instanceof Error
+          ? err.message
+          : "Failed to save coding-agent preferences.",
     };
   }
 }

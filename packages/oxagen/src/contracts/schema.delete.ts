@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const schemaDelete = registerCapability({
   name: "delete_schema",
   domain: "schema",
-  description: "Drop an entire named schema from the draft — its labels, relationship types, and properties.",
+  description:
+    "Drop an entire named schema from the draft — its labels, relationship types, and properties.",
   mode: "sync",
   // Agent-surface only: schema.delete is invoked by the schema chat agent
   // (draft-state grounding), not yet exposed as an API route / MCP tool / CLI

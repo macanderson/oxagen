@@ -10,7 +10,9 @@ export const [stripeSyncSubscription] = createFunction(
   { id: "stripe.sync-subscription", retries: 5 },
   { event: "stripe/subscription.updated" },
   async ({ event, step }) => {
-    const { stripeSubscriptionId } = event.data as { stripeSubscriptionId: string };
+    const { stripeSubscriptionId } = event.data as {
+      stripeSubscriptionId: string;
+    };
     await step.run("sync", async () => {
       await syncSubscriptionFromStripe(stripeSubscriptionId);
     });

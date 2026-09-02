@@ -1,7 +1,15 @@
 import { createSign } from "node:crypto";
 
+const DEFAULT_BASE_URL = "https://api.github.com";
+
 // ---------------------------------------------------------------------------
-// Module-level cache — keyed by installationId, stores token + expiry.
+// Module-level cache of minted installation tokens.
+//
+// The key is (host, app, installation), not the installation alone: installation
+// IDs are only unique within one GitHub host, so a bare ID would let a GHES
+// installation serve a github.com caller — or one App serve another's — a token
+// that grants access it never authorised.
+//
 // Exported for test inspection only; callers should use getInstallationToken.
 // ---------------------------------------------------------------------------
 
@@ -10,7 +18,12 @@ interface CacheEntry {
   expiresAt: number;
 }
 
-const _cache = new Map<string | number, CacheEntry>();
+const _cache = new Map<string, CacheEntry>();
+
+function cacheKey(args: AppInstallationTokenArgs): string {
+  const host = args.baseUrl ?? DEFAULT_BASE_URL;
+  return `${host}|${args.appId}|${args.installationId}`;
+}
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -85,7 +98,7 @@ export async function createAppInstallationToken(
   args: AppInstallationTokenArgs,
 ): Promise<InstallationTokenResult> {
   const now = args.now ?? (() => Date.now());
-  const baseUrl = (args.baseUrl ?? "https://api.github.com").replace(/\/$/, "");
+  const baseUrl = (args.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
   const jwt = buildJwt(args.appId, args.privateKey, now());
 
   const res = await fetch(
@@ -130,7 +143,7 @@ export async function getInstallationToken(
   args: AppInstallationTokenArgs,
 ): Promise<InstallationTokenResult> {
   const now = args.now ?? (() => Date.now());
-  const key = args.installationId;
+  const key = cacheKey(args);
   const cached = _cache.get(key);
 
   if (cached !== undefined && now() < cached.expiresAt - 60_000) {
@@ -138,7 +151,9 @@ export async function getInstallationToken(
   }
 
   const result = await createAppInstallationToken(args);
-  _cache.set(key, result);
+  // A token whose expiry did not parse would never satisfy the freshness check
+  // above, so caching it only pins a dead entry in memory — skip it.
+  if (!Number.isNaN(result.expiresAt)) _cache.set(key, result);
   return result;
 }
 

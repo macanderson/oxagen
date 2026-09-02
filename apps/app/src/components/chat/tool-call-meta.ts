@@ -19,16 +19,17 @@ import {
 } from "lucide-react";
 
 /**
- * tool-call-meta — maps raw dotted capability names (e.g. `agent.code.execute`)
- * to a human-readable label and a domain icon for the chat tool-call UI.
+ * tool-call-meta — maps a raw capability name (e.g. `execute_code`) to a
+ * human-readable label and a domain icon for the chat tool-call UI.
  *
  * Two layers:
  *   1. A curated map for the frequent capabilities, hand-written for clarity.
- *   2. A derivation fallback that turns `domain.noun.verb` into "Verb noun"
- *      title case (e.g. `ontology.query` → "Query ontology").
+ *   2. A derivation fallback that reads the ADR-025 verb-first snake_case name
+ *      as `verb_noun` and title-cases it (e.g. `query_ontology` → "Query
+ *      ontology"). It also splits on `.` so a legacy dotted name still renders.
  *
- * The raw dotted string must never be the primary on-screen label — it belongs
- * in the expanded detail body and `title` attributes only.
+ * The raw capability string must never be the primary on-screen label — it
+ * belongs in the expanded detail body and `title` attributes only.
  */
 
 export interface ToolCallMeta {
@@ -147,8 +148,7 @@ const DOMAIN_ICONS: Record<string, LucideIcon> = {
   key: KeyRound,
 };
 
-// Leading segments that add no meaning to a derived label ("agent" prefixes
-// most runtime capabilities without describing what the call does).
+/** Upper-case the first character; leaves an empty string alone. */
 function capitalize(text: string): string {
   return text.length === 0
     ? text

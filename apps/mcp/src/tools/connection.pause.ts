@@ -18,8 +18,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function connectionPauseTool(args: InferSchema<typeof schema>) {
+export default async function connectionPauseTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(connectionPause.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(connectionPause.name, args, ctx, {
+    surface: "mcp",
+  });
   return connectionPause.output.parse(output);
 }

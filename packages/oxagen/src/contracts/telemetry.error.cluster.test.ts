@@ -28,10 +28,18 @@ describe("telemetry.error.cluster capability", () => {
   });
 
   it("clamps sinceHours to [1, 720]", () => {
-    expect(() => telemetryErrorCluster.input.parse({ sinceHours: 0 })).toThrow();
-    expect(() => telemetryErrorCluster.input.parse({ sinceHours: 721 })).toThrow();
-    expect(telemetryErrorCluster.input.parse({ sinceHours: 720 }).sinceHours).toBe(720);
-    expect(telemetryErrorCluster.input.parse({ sinceHours: 1 }).sinceHours).toBe(1);
+    expect(() =>
+      telemetryErrorCluster.input.parse({ sinceHours: 0 }),
+    ).toThrow();
+    expect(() =>
+      telemetryErrorCluster.input.parse({ sinceHours: 721 }),
+    ).toThrow();
+    expect(
+      telemetryErrorCluster.input.parse({ sinceHours: 720 }).sinceHours,
+    ).toBe(720);
+    expect(
+      telemetryErrorCluster.input.parse({ sinceHours: 1 }).sinceHours,
+    ).toBe(1);
   });
 
   it("clamps limit to [1, 100]", () => {
@@ -41,8 +49,12 @@ describe("telemetry.error.cluster capability", () => {
   });
 
   it("rejects an out-of-enum severity", () => {
-    expect(() => telemetryErrorCluster.input.parse({ severity: "info" })).toThrow();
-    expect(telemetryErrorCluster.input.parse({ severity: "fatal" }).severity).toBe("fatal");
+    expect(() =>
+      telemetryErrorCluster.input.parse({ severity: "info" }),
+    ).toThrow();
+    expect(
+      telemetryErrorCluster.input.parse({ severity: "fatal" }).severity,
+    ).toBe("fatal");
   });
 
   it("parses a full output shape", () => {

@@ -19,7 +19,9 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function repoMetricsTool(args: InferSchema<typeof schema>) {
+export default async function repoMetricsTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   const output = await invoke(repoMetrics.name, args, ctx, { surface: "mcp" });
   return repoMetrics.output.parse(output);

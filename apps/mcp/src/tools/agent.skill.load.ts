@@ -6,7 +6,9 @@ import { buildContext } from "../context";
 
 export const schema = {
   ...agentSkillLoad.input.shape,
-  skillSlug: agentSkillLoad.input.shape.skillSlug.describe("Slug of the skill to load"),
+  skillSlug: agentSkillLoad.input.shape.skillSlug.describe(
+    "Slug of the skill to load",
+  ),
   version: agentSkillLoad.input.shape.version.describe(
     "Version constraint: exact integer, '^N' (>=N), '~N' (=N). Omit for latest.",
   ),
@@ -22,8 +24,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function agentSkillLoadTool(args: InferSchema<typeof schema>) {
+export default async function agentSkillLoadTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentSkillLoad.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentSkillLoad.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentSkillLoad.output.parse(output);
 }

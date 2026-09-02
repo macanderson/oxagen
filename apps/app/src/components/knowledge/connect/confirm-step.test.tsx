@@ -7,7 +7,11 @@ import type { MappingDraft } from "./wizard-types";
 afterEach(cleanup);
 
 const MAPPINGS: MappingDraft[] = [
-  { sourceRecordType: "custom", oxagenEntityType: "task", propertyMappings: {} },
+  {
+    sourceRecordType: "custom",
+    oxagenEntityType: "task",
+    propertyMappings: {},
+  },
 ];
 
 describe("ConfirmStep", () => {
@@ -25,8 +29,12 @@ describe("ConfirmStep", () => {
     );
     expect(screen.getByText("My Database")).toBeInTheDocument();
     expect(screen.getByText("Custom SQL")).toBeInTheDocument();
-    expect(screen.getByTestId("confirm-mapping-summary")).toHaveTextContent("custom");
-    expect(screen.getByTestId("confirm-mapping-summary")).toHaveTextContent("task");
+    expect(screen.getByTestId("confirm-mapping-summary")).toHaveTextContent(
+      "custom",
+    );
+    expect(screen.getByTestId("confirm-mapping-summary")).toHaveTextContent(
+      "task",
+    );
   });
 
   it("calls onConfirm when the activate button is clicked", () => {
@@ -58,7 +66,9 @@ describe("ConfirmStep", () => {
         onBack={vi.fn()}
       />,
     );
-    expect(screen.getByText("Failed to save and activate this connection.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Failed to save and activate this connection."),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("confirm-activate-btn")).toBeDisabled();
     expect(screen.getByRole("button", { name: /back/i })).toBeDisabled();
   });

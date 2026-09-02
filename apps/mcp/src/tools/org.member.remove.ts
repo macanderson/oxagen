@@ -22,8 +22,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function orgMemberRemoveTool(args: InferSchema<typeof schema>) {
+export default async function orgMemberRemoveTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(orgMemberRemove.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(orgMemberRemove.name, args, ctx, {
+    surface: "mcp",
+  });
   return orgMemberRemove.output.parse(output);
 }

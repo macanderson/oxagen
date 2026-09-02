@@ -211,6 +211,20 @@ describe("assertAllowedAssetType", () => {
       assertAllowedAssetType("document", "application/octet-stream"),
     ).toThrow(/Unsupported/);
   });
+
+  // Regression: a bare `allowed[mime]` index resolves inherited
+  // Object.prototype keys to truthy values, so a client-supplied part
+  // Content-Type of "constructor" / "__proto__" / "toString" would pass the
+  // allowlist and let arbitrary bytes be stored under an arbitrary type.
+  it.each([
+    "constructor",
+    "__proto__",
+    "toString",
+    "valueOf",
+    "hasOwnProperty",
+  ])("rejects the Object.prototype key %s instead of resolving it", (mime) => {
+    expect(() => assertAllowedAssetType("avatar", mime)).toThrow(/Unsupported/);
+  });
 });
 
 // ── deriveAssetKey ────────────────────────────────────────────────────────────

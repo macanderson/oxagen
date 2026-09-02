@@ -1,7 +1,7 @@
 /**
- * Shared Phase-0 UI primitives.
- * Import from '@/app/[orgSlug]/[workspaceSlug]/_shared/components'.
- * Built in Phase 0 (web-app-2.0); reuse — do not fork.
+ * Shared route-level UI primitives (empty / error / loading blocks, section
+ * and tile containers, and a drawer). Import the barrel, not the files:
+ * `@/app/[orgSlug]/[workspaceSlug]/_shared/components`. Reuse — do not fork.
  */
 
 export { EmptyState } from "./empty-state";
@@ -18,9 +18,6 @@ export type { SectionProps } from "./section";
 
 export { Tile } from "./tile";
 export type { TileProps } from "./tile";
-
-export { TabStrip } from "./tab-strip";
-export type { TabStripProps, TabStripTab } from "./tab-strip";
 
 export { Drawer } from "./drawer";
 export type { DrawerProps } from "./drawer";

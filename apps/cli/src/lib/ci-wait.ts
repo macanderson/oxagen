@@ -49,7 +49,13 @@ const defaultRunner: CommandRunner = (cmd, args, opts) =>
         // A user shell exporting GH_FORCE_TTY / color config makes gh emit
         // ANSI-colored "JSON" even when piped, which breaks JSON.parse and
         // silently downgrades every probe to "not pending". Neutralize it.
-        env: { ...process.env, GH_FORCE_TTY: "", NO_COLOR: "1", CLICOLOR: "0", CLICOLOR_FORCE: "0" },
+        env: {
+          ...process.env,
+          GH_FORCE_TTY: "",
+          NO_COLOR: "1",
+          CLICOLOR: "0",
+          CLICOLOR_FORCE: "0",
+        },
       },
       (err, stdout) => {
         if (err) reject(err);
@@ -113,7 +119,9 @@ export function createCiWaitProbe(
       } catch (err) {
         // No PR for the branch, gh missing/unauthenticated, network down — all
         // mean we cannot CONFIRM a live CI wait, so the guard keeps its bite.
-        void debugLog("timeout", "[timeout] scope=ci_probe outcome=error", { error: err });
+        void debugLog("timeout", "[timeout] scope=ci_probe outcome=error", {
+          error: err,
+        });
         return false;
       }
     },

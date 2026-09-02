@@ -3,7 +3,10 @@
  *
  * Real per-request identity is resolved from the inbound Authorization header.
  * Only API keys are accepted:
- *   - API key   `<prefix>_<secret>`  -> resolveApiKey  -> org / workspace scope
+ *   - API key `ox_<base64url(32 bytes)>` -> resolveApiKey -> org / workspace
+ *     scope. (`resolveApiKey` indexes on the leading 12 characters, which is
+ *     a fixed-width window, not "the characters before the first underscore"
+ *     — see API_KEY_PREFIX_LENGTH in @oxagen/auth.)
  *
  * Session tokens (Better Auth opaque tokens -- no underscore) are rejected at
  * the edge with `invalid_token`. Session tokens carry no org/workspace scope;
@@ -15,8 +18,12 @@
  * so a bad scope is caught here instead of failing later, deeper in the
  * kernel.
  *
- * Token classification: an API key always contains an underscore in the format
- * `<prefix>_<secret>`. A session token (Better Auth opaque token) never does.
+ * Token classification is a cheap pre-filter, not the authority: an API key
+ * always contains an underscore (its `ox_` prefix), while a Better Auth
+ * session token is a UUID (see `generateId` in packages/auth/src/auth.ts) and
+ * so contains only hex digits and hyphens. A token that passes the underscore
+ * check is still verified by `resolveApiKey`, which re-checks the full `ox_`
+ * prefix and the hashed secret before returning any scope.
  *
  * SECURITY: tenant identity (orgId / workspaceId / userId / apiKeyId) is NEVER
  * read from client-controlled identity headers (`x-oxagen-org-id` & friends).
@@ -111,8 +118,10 @@ export async function resolveMcpContext(
   const token = extractBearerToken(authHeader);
   if (!token) return { ok: false, reason: "unauthenticated" };
 
-  // API keys contain an underscore separator: `<prefix>_<secret>`.
-  // Session tokens (Better Auth opaque tokens) never do.
+  // Cheap pre-filter: API keys carry an `ox_` prefix, so they always contain
+  // an underscore. Better Auth session tokens are UUIDs (hex + hyphens only),
+  // so they never do — they are rejected below without a DB round-trip.
+  // resolveApiKey re-validates the prefix authoritatively.
   const isApiKey = token.includes("_");
 
   if (isApiKey) {

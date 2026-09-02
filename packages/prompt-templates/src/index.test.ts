@@ -37,7 +37,12 @@ function makeTemplate(overrides: Partial<PromptTemplate> = {}): PromptTemplate {
     autoSubmit: false,
     body: "Investigate run {{run_id}}.",
     variables: [
-      { name: "run_id", resolver: "param", source: "params.runId", required: true },
+      {
+        name: "run_id",
+        resolver: "param",
+        source: "params.runId",
+        required: true,
+      },
     ],
     ...overrides,
   };
@@ -85,7 +90,12 @@ describe("promptTemplateSchema", () => {
       autoSubmit: true,
       body: "Investigate {{run_id}}.",
       variables: [
-        { name: "run_id", resolver: "param", source: "params.runId", required: true },
+        {
+          name: "run_id",
+          resolver: "param",
+          source: "params.runId",
+          required: true,
+        },
       ],
     };
     const result = promptTemplateSchema.parse(raw);
@@ -165,11 +175,15 @@ describe("pageContextSchema", () => {
 
 describe("matchesRoute", () => {
   it("matches {org}/{ws} style placeholders", () => {
-    expect(matchesRoute("/{org}/{ws}/runs/:runId", "/acme/prod/runs/run_123")).toBe(true);
+    expect(
+      matchesRoute("/{org}/{ws}/runs/:runId", "/acme/prod/runs/run_123"),
+    ).toBe(true);
   });
 
   it("does not match a different route shape", () => {
-    expect(matchesRoute("/{org}/{ws}/runs/:runId", "/acme/prod/triggers/t_1")).toBe(false);
+    expect(
+      matchesRoute("/{org}/{ws}/runs/:runId", "/acme/prod/triggers/t_1"),
+    ).toBe(false);
   });
 
   it("matches a route with no params", () => {
@@ -181,7 +195,9 @@ describe("matchesRoute", () => {
   });
 
   it("handles wildcard **", () => {
-    expect(matchesRoute("/{org}/**", "/acme/prod/runs/run_1/detail")).toBe(true);
+    expect(matchesRoute("/{org}/**", "/acme/prod/runs/run_1/detail")).toBe(
+      true,
+    );
   });
 
   it("handles single wildcard *", () => {
@@ -208,7 +224,14 @@ describe("getApplicableTemplates", () => {
       makeTemplate({
         id: "run-specific",
         applicableTo: [{ routePattern: "/{org}/{ws}/runs/:runId" }],
-        variables: [{ name: "run_id", resolver: "param", source: "params.runId", required: true }],
+        variables: [
+          {
+            name: "run_id",
+            resolver: "param",
+            source: "params.runId",
+            required: true,
+          },
+        ],
         capability: undefined,
       }),
     );
@@ -225,7 +248,14 @@ describe("getApplicableTemplates", () => {
       makeTemplate({
         id: "capability-gated",
         applicableTo: [{ routePattern: "/{org}/{ws}/runs/:runId" }],
-        variables: [{ name: "run_id", resolver: "param", source: "params.runId", required: true }],
+        variables: [
+          {
+            name: "run_id",
+            resolver: "param",
+            source: "params.runId",
+            required: true,
+          },
+        ],
         capability: "activity.run.read",
         body: "Gated action for {{run_id}}.",
       }),
@@ -360,9 +390,12 @@ describe("getAllTemplates", () => {
 
 describe("renderTemplate", () => {
   it("substitutes a single variable", () => {
-    const { rendered, missing } = renderTemplate("Investigate run {{run_id}}.", {
-      run_id: "run_123",
-    });
+    const { rendered, missing } = renderTemplate(
+      "Investigate run {{run_id}}.",
+      {
+        run_id: "run_123",
+      },
+    );
     expect(rendered).toBe("Investigate run run_123.");
     expect(missing).toHaveLength(0);
   });
@@ -377,7 +410,10 @@ describe("renderTemplate", () => {
   });
 
   it("tracks missing variables and leaves placeholder", () => {
-    const { rendered, missing } = renderTemplate("Investigate run {{run_id}}.", {});
+    const { rendered, missing } = renderTemplate(
+      "Investigate run {{run_id}}.",
+      {},
+    );
     expect(rendered).toContain("{{run_id}}");
     expect(missing).toContain("run_id");
   });
@@ -395,16 +431,15 @@ describe("renderTemplate", () => {
   });
 
   it("handles empty variable value (falsy but defined)", () => {
-    const { rendered, missing } = renderTemplate("Hello {{name}}.", { name: "" });
+    const { rendered, missing } = renderTemplate("Hello {{name}}.", {
+      name: "",
+    });
     expect(rendered).toBe("Hello .");
     expect(missing).toHaveLength(0);
   });
 
   it("substitutes multiple occurrences of the same variable", () => {
-    const { rendered } = renderTemplate(
-      "{{a}} and {{a}} again.",
-      { a: "X" },
-    );
+    const { rendered } = renderTemplate("{{a}} and {{a}} again.", { a: "X" });
     expect(rendered).toBe("X and X again.");
   });
 });
@@ -416,7 +451,14 @@ describe("renderTemplate", () => {
 describe("resolveVariables", () => {
   it("resolves param resolver from routeParams", () => {
     const { resolved, unresolved } = resolveVariables(
-      [{ name: "run_id", resolver: "param", source: "params.runId", required: true }],
+      [
+        {
+          name: "run_id",
+          resolver: "param",
+          source: "params.runId",
+          required: true,
+        },
+      ],
       { routeParams: { runId: "run_abc" } },
     );
     expect(resolved.run_id).toBe("run_abc");
@@ -425,7 +467,14 @@ describe("resolveVariables", () => {
 
   it("marks required param as unresolved when missing from routeParams", () => {
     const { unresolved } = resolveVariables(
-      [{ name: "run_id", resolver: "param", source: "params.runId", required: true }],
+      [
+        {
+          name: "run_id",
+          resolver: "param",
+          source: "params.runId",
+          required: true,
+        },
+      ],
       { routeParams: {} },
     );
     expect(unresolved).toContain("run_id");
@@ -433,7 +482,14 @@ describe("resolveVariables", () => {
 
   it("does not mark optional param as unresolved when missing", () => {
     const { unresolved } = resolveVariables(
-      [{ name: "tab", resolver: "param", source: "params.tab", required: false }],
+      [
+        {
+          name: "tab",
+          resolver: "param",
+          source: "params.tab",
+          required: false,
+        },
+      ],
       { routeParams: {} },
     );
     expect(unresolved).not.toContain("tab");
@@ -441,7 +497,14 @@ describe("resolveVariables", () => {
 
   it("resolves query resolver from queryParams", () => {
     const { resolved } = resolveVariables(
-      [{ name: "tab", resolver: "query", source: "query.tab", required: false }],
+      [
+        {
+          name: "tab",
+          resolver: "query",
+          source: "query.tab",
+          required: false,
+        },
+      ],
       { queryParams: { tab: "trace" } },
     );
     expect(resolved.tab).toBe("trace");
@@ -449,7 +512,14 @@ describe("resolveVariables", () => {
 
   it("resolves page.entity.label from pageEntity", () => {
     const { resolved } = resolveVariables(
-      [{ name: "name", resolver: "page", source: "page.entity.label", required: false }],
+      [
+        {
+          name: "name",
+          resolver: "page",
+          source: "page.entity.label",
+          required: false,
+        },
+      ],
       { pageEntity: { kind: "run", id: "r_1", label: "My Run" } },
     );
     expect(resolved.name).toBe("My Run");
@@ -457,7 +527,14 @@ describe("resolveVariables", () => {
 
   it("marks required page variable as unresolved when pageEntity absent", () => {
     const { unresolved } = resolveVariables(
-      [{ name: "label", resolver: "page", source: "page.entity.label", required: true }],
+      [
+        {
+          name: "label",
+          resolver: "page",
+          source: "page.entity.label",
+          required: true,
+        },
+      ],
       {},
     );
     expect(unresolved).toContain("label");
@@ -465,7 +542,14 @@ describe("resolveVariables", () => {
 
   it("always marks ask resolver variables as unresolved (user must be prompted)", () => {
     const { resolved, unresolved } = resolveVariables(
-      [{ name: "query", resolver: "ask", source: "ask.prompt", required: true }],
+      [
+        {
+          name: "query",
+          resolver: "ask",
+          source: "ask.prompt",
+          required: true,
+        },
+      ],
       { routeParams: { prompt: "something" } },
     );
     expect(unresolved).toContain("query");
@@ -474,7 +558,14 @@ describe("resolveVariables", () => {
 
   it("resolves session resolver from session context", () => {
     const { resolved } = resolveVariables(
-      [{ name: "user_id", resolver: "session", source: "session.user.id", required: false }],
+      [
+        {
+          name: "user_id",
+          resolver: "session",
+          source: "session.user.id",
+          required: false,
+        },
+      ],
       { session: { "user.id": "u_abc" } },
     );
     expect(resolved.user_id).toBe("u_abc");
@@ -483,9 +574,24 @@ describe("resolveVariables", () => {
   it("resolves multiple variables simultaneously", () => {
     const { resolved, unresolved } = resolveVariables(
       [
-        { name: "run_id", resolver: "param", source: "params.runId", required: true },
-        { name: "tab", resolver: "query", source: "query.tab", required: false },
-        { name: "label", resolver: "page", source: "page.entity.label", required: false },
+        {
+          name: "run_id",
+          resolver: "param",
+          source: "params.runId",
+          required: true,
+        },
+        {
+          name: "tab",
+          resolver: "query",
+          source: "query.tab",
+          required: false,
+        },
+        {
+          name: "label",
+          resolver: "page",
+          source: "page.entity.label",
+          required: false,
+        },
       ],
       {
         routeParams: { runId: "run_1" },

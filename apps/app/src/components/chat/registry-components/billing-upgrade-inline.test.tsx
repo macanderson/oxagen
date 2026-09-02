@@ -35,7 +35,12 @@ vi.mock("@/components/ui/button", () => ({
     type?: string;
     "aria-busy"?: boolean;
   }) => (
-    <button type={(type as "button" | "submit" | "reset") ?? "button"} onClick={onClick} disabled={disabled} aria-busy={ariaBusy}>
+    <button
+      type={(type as "button" | "submit" | "reset") ?? "button"}
+      onClick={onClick}
+      disabled={disabled}
+      aria-busy={ariaBusy}
+    >
       {children}
     </button>
   ),
@@ -57,10 +62,14 @@ vi.mock("@/lib/utils", () => ({
 
 describe("BillingUpgradeInline", () => {
   it("renders plan options", async () => {
-    const { changePlanAction } = await import("@/app/[orgSlug]/billing/actions");
+    const { changePlanAction } = await import(
+      "@/app/[orgSlug]/billing/actions"
+    );
     vi.mocked(changePlanAction).mockResolvedValue({ ok: true, url: null });
 
-    const { default: BillingUpgradeInline } = await import("./billing-upgrade-inline");
+    const { default: BillingUpgradeInline } = await import(
+      "./billing-upgrade-inline"
+    );
     render(<BillingUpgradeInline />);
     expect(screen.getByText("Build")).toBeInTheDocument();
     expect(screen.getByText("Scale")).toBeInTheDocument();
@@ -68,47 +77,72 @@ describe("BillingUpgradeInline", () => {
   });
 
   it("renders the upgrade form with aria-label", async () => {
-    const { changePlanAction } = await import("@/app/[orgSlug]/billing/actions");
+    const { changePlanAction } = await import(
+      "@/app/[orgSlug]/billing/actions"
+    );
     vi.mocked(changePlanAction).mockResolvedValue({ ok: true, url: null });
 
-    const { default: BillingUpgradeInline } = await import("./billing-upgrade-inline");
+    const { default: BillingUpgradeInline } = await import(
+      "./billing-upgrade-inline"
+    );
     render(<BillingUpgradeInline />);
-    expect(screen.getByRole("form", { name: "Upgrade plan" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("form", { name: "Upgrade plan" }),
+    ).toBeInTheDocument();
   });
 
   it("defaults to 'build' plan when no suggestedPlan", async () => {
-    const { changePlanAction } = await import("@/app/[orgSlug]/billing/actions");
+    const { changePlanAction } = await import(
+      "@/app/[orgSlug]/billing/actions"
+    );
     vi.mocked(changePlanAction).mockResolvedValue({ ok: true, url: null });
 
-    const { default: BillingUpgradeInline } = await import("./billing-upgrade-inline");
+    const { default: BillingUpgradeInline } = await import(
+      "./billing-upgrade-inline"
+    );
     render(<BillingUpgradeInline />);
     // Build button should be aria-pressed=true — there are multiple /Build/ buttons so find by aria-pressed
     const allButtons = screen.getAllByRole("button");
     const buildBtn = allButtons.find(
-      (b) => b.getAttribute("aria-pressed") === "true" && b.textContent?.includes("Build"),
+      (b) =>
+        b.getAttribute("aria-pressed") === "true" &&
+        b.textContent?.includes("Build"),
     );
     expect(buildBtn).toBeTruthy();
   });
 
   it("uses suggestedPlan to pre-select a plan", async () => {
-    const { changePlanAction } = await import("@/app/[orgSlug]/billing/actions");
+    const { changePlanAction } = await import(
+      "@/app/[orgSlug]/billing/actions"
+    );
     vi.mocked(changePlanAction).mockResolvedValue({ ok: true, url: null });
 
-    const { default: BillingUpgradeInline } = await import("./billing-upgrade-inline");
+    const { default: BillingUpgradeInline } = await import(
+      "./billing-upgrade-inline"
+    );
     render(<BillingUpgradeInline suggestedPlan="scale" />);
     // Scale plan button should be aria-pressed=true
     const allButtons = screen.getAllByRole("button");
     const scaleBtn = allButtons.find(
-      (b) => b.getAttribute("aria-pressed") === "true" && b.textContent?.includes("Scale"),
+      (b) =>
+        b.getAttribute("aria-pressed") === "true" &&
+        b.textContent?.includes("Scale"),
     );
     expect(scaleBtn).toBeTruthy();
   });
 
   it("shows error message when changePlanAction fails", async () => {
-    const { changePlanAction } = await import("@/app/[orgSlug]/billing/actions");
-    vi.mocked(changePlanAction).mockResolvedValue({ ok: false, error: "Payment required" });
+    const { changePlanAction } = await import(
+      "@/app/[orgSlug]/billing/actions"
+    );
+    vi.mocked(changePlanAction).mockResolvedValue({
+      ok: false,
+      error: "Payment required",
+    });
 
-    const { default: BillingUpgradeInline } = await import("./billing-upgrade-inline");
+    const { default: BillingUpgradeInline } = await import(
+      "./billing-upgrade-inline"
+    );
     render(<BillingUpgradeInline orgSlug="my-org" />);
     const submitBtn = screen.getByRole("button", { name: /Upgrade to/ });
     await userEvent.click(submitBtn);
@@ -118,7 +152,9 @@ describe("BillingUpgradeInline", () => {
   });
 
   it("shows success/redirecting state on successful submit", async () => {
-    const { changePlanAction } = await import("@/app/[orgSlug]/billing/actions");
+    const { changePlanAction } = await import(
+      "@/app/[orgSlug]/billing/actions"
+    );
     vi.mocked(changePlanAction).mockResolvedValue({ ok: true, url: null });
     // Stub window.location.assign
     const assign = vi.fn();
@@ -127,7 +163,9 @@ describe("BillingUpgradeInline", () => {
       writable: true,
     });
 
-    const { default: BillingUpgradeInline } = await import("./billing-upgrade-inline");
+    const { default: BillingUpgradeInline } = await import(
+      "./billing-upgrade-inline"
+    );
     render(<BillingUpgradeInline orgSlug="my-org" />);
     const submitBtn = screen.getByRole("button", { name: /Upgrade to/ });
     await userEvent.click(submitBtn);

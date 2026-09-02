@@ -61,7 +61,10 @@ export function SchemaAssistantDrawer({
       const result = await schemaChat(slugs, text);
 
       // Append the assistant's explanation
-      setMessages((prev) => [...prev, { role: "assistant", content: result.assistantMessage }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: result.assistantMessage },
+      ]);
 
       // Apply proposed mutations sequentially
       const mutations = result.proposedMutations ?? [];
@@ -82,13 +85,20 @@ export function SchemaAssistantDrawer({
         // Build a summary message
         const lines: string[] = [];
         if (successes.length > 0) {
-          lines.push(`Applied ${successes.length} mutation(s): ${successes.join(", ")}.`);
+          lines.push(
+            `Applied ${successes.length} mutation(s): ${successes.join(", ")}.`,
+          );
         }
         if (failures.length > 0) {
-          lines.push(`Failed ${failures.length} mutation(s): ${failures.join("; ")}.`);
+          lines.push(
+            `Failed ${failures.length} mutation(s): ${failures.join("; ")}.`,
+          );
         }
         if (lines.length > 0) {
-          setMessages((prev) => [...prev, { role: "assistant", content: lines.join("\n") }]);
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: lines.join("\n") },
+          ]);
         }
 
         // Notify the builder to re-fetch if at least one mutation succeeded
@@ -98,7 +108,10 @@ export function SchemaAssistantDrawer({
       }
     } catch (e) {
       const errText = e instanceof Error ? e.message : "Unknown error";
-      setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${errText}` }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: `Error: ${errText}` },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -113,16 +126,22 @@ export function SchemaAssistantDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex flex-col w-[500px] max-w-full p-0">
+      <SheetContent
+        side="right"
+        className="flex flex-col w-[500px] max-w-full p-0"
+      >
         <SheetHeader className="px-4 py-4 border-b border-border">
           <SheetTitle>Schema Assistant</SheetTitle>
         </SheetHeader>
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
+        >
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full py-16 text-center">
               <p className="text-sm text-muted-foreground">
-                Ask the AI to help design your schema — add labels, suggest properties, or explain
-                relationship types.
+                Ask the AI to help design your schema — add labels, suggest
+                properties, or explain relationship types.
               </p>
             </div>
           )}

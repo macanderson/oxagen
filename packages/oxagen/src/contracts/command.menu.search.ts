@@ -32,7 +32,10 @@ const searchResultRow = z.object({
   /** Scope line, e.g. 'Workspace: Production' */
   scope: z.string().describe("Scope hint shown beneath the label"),
   /** One-line context: status, last activity, etc. */
-  contextLine: z.string().nullable().describe("Brief additional context (status, last-run, etc.)"),
+  contextLine: z
+    .string()
+    .nullable()
+    .describe("Brief additional context (status, last-run, etc.)"),
   /** Client-side navigation target — the entity's detail page. */
   href: z.string().describe("Route the menu pushes when this item is selected"),
 });
@@ -58,10 +61,19 @@ export const commandMenuSearch = registerCapability({
     workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
   },
   input: z.object({
-    kind: z.enum(SEARCHABLE_KINDS).optional().describe("Restrict results to a single entity kind"),
+    kind: z
+      .enum(SEARCHABLE_KINDS)
+      .optional()
+      .describe("Restrict results to a single entity kind"),
     query: z.string().min(0).max(500).describe("Free-text search string"),
-    orgSlug: z.string().min(1).describe("Organization slug for href construction"),
-    workspaceSlug: z.string().min(1).describe("Workspace slug for href construction"),
+    orgSlug: z
+      .string()
+      .min(1)
+      .describe("Organization slug for href construction"),
+    workspaceSlug: z
+      .string()
+      .min(1)
+      .describe("Workspace slug for href construction"),
   }),
   output: z.object({
     rows: z.array(searchResultRow).max(8),

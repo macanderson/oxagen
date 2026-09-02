@@ -9,7 +9,7 @@ export const schema = {
     "The public ID of the conversation to attach the asset to.",
   ),
   assetPublicId: conversationAttachmentAdd.input.shape.assetPublicId.describe(
-    "The public ID (gen_…) of an already-uploaded/generated asset — e.g. the publicId returned by asset.upload with source=\"user_upload\". Must be ready and belong to the caller.",
+    'The public ID (gen_…) of an already-uploaded/generated asset — e.g. the publicId returned by upload_asset with source="user_upload". Must be ready and belong to the caller.',
   ),
 };
 

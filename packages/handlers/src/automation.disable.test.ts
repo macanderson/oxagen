@@ -107,9 +107,9 @@ describe("automationDisableHandler (@oxagen/handlers)", () => {
 
   it("passes different automation_id through to the error message", async () => {
     mocks.triggerFindFirst.mockResolvedValueOnce(undefined);
-    await expect(automationDisableHandler({ automation_id: "plt_xyz" }, CTX)).rejects.toThrow(
-      "automation.disable: trigger not found: plt_xyz",
-    );
+    await expect(
+      automationDisableHandler({ automation_id: "plt_xyz" }, CTX),
+    ).rejects.toThrow("automation.disable: trigger not found: plt_xyz");
   });
 
   it("works with mcp surface (AI agents may call disable without approval)", async () => {

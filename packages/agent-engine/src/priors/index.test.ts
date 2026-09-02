@@ -7,7 +7,13 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  readFileSync,
+  existsSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -348,14 +354,20 @@ describe("accruePitfalls", () => {
   it("deduplicates lessons case-insensitively", () => {
     const prior = createPrior({ pitfalls: ["Lesson A"] });
     savePrior(baseDir, prior);
-    const result = accruePitfalls(baseDir, "django/django", ["lesson a", "Lesson A", "LESSON A"]);
+    const result = accruePitfalls(baseDir, "django/django", [
+      "lesson a",
+      "Lesson A",
+      "LESSON A",
+    ]);
     expect(result?.pitfalls).toEqual(["Lesson A"]);
   });
 
   it("deduplicates after whitespace collapse", () => {
     const prior = createPrior({ pitfalls: ["lesson one"] });
     savePrior(baseDir, prior);
-    const result = accruePitfalls(baseDir, "django/django", ["  lesson   one  "]);
+    const result = accruePitfalls(baseDir, "django/django", [
+      "  lesson   one  ",
+    ]);
     expect(result?.pitfalls).toEqual(["lesson one"]);
   });
 
@@ -494,7 +506,11 @@ describe("lintPriorLegality", () => {
     const prior = createPrior({
       testInvocation: "./runtests.py --label=<label>",
       testDiscovery: "tests/test_<module>.py",
-      layout: ["src/ — main source", "tests/ — test suite", "docs/ — documentation"],
+      layout: [
+        "src/ — main source",
+        "tests/ — test suite",
+        "docs/ — documentation",
+      ],
       conventions: [
         "Use pytest markers for test selection",
         "Models defined in models.py",

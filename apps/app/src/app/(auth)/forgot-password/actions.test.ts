@@ -39,6 +39,15 @@ vi.mock("@oxagen/config/env", () => ({
   loadEnv: mockLoadEnv,
 }));
 
+// The action reports both failure paths through the structured logger (never
+// console), so the (d) case asserts against this mock rather than a
+// console.error spy — a bare console.error never reaches the log sink.
+const { mockLogger } = vi.hoisted(() => ({
+  mockLogger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+}));
+
+vi.mock("@oxagen/handlers/logger", () => ({ logger: mockLogger }));
+
 // next/headers and next/cache are not needed here (no session or revalidatePath)
 // but must be mocked if transitively imported.
 
@@ -84,7 +93,9 @@ describe("requestResetAction", () => {
       const result = await requestResetAction({ email: "" });
 
       expect(result.ok).toBe(false);
-      expect((result as { ok: false; error: string }).error).toMatch(/valid email/i);
+      expect((result as { ok: false; error: string }).error).toMatch(
+        /valid email/i,
+      );
       expect(mockRequestPasswordReset).not.toHaveBeenCalled();
     });
 
@@ -92,7 +103,9 @@ describe("requestResetAction", () => {
       const result = await requestResetAction({ email: "not-an-email" });
 
       expect(result.ok).toBe(false);
-      expect((result as { ok: false; error: string }).error).toMatch(/valid email/i);
+      expect((result as { ok: false; error: string }).error).toMatch(
+        /valid email/i,
+      );
       expect(mockRequestPasswordReset).not.toHaveBeenCalled();
     });
   });
@@ -101,7 +114,9 @@ describe("requestResetAction", () => {
     it("returns ok:true even when the API throws (account not found scenario)", async () => {
       mockRequestPasswordReset.mockRejectedValue(new Error("User not found"));
 
-      const result = await requestResetAction({ email: "noaccount@example.com" });
+      const result = await requestResetAction({
+        email: "noaccount@example.com",
+      });
 
       // Anti-enumeration: must always succeed to the caller.
       expect(result.ok).toBe(true);
@@ -121,20 +136,16 @@ describe("requestResetAction", () => {
       mockLoadEnv.mockImplementationOnce(() => {
         throw new Error("Invalid environment");
       });
-      const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const result = await requestResetAction({ email: "user@example.com" });
 
-      try {
-        const result = await requestResetAction({ email: "user@example.com" });
-
-        // A misconfigured server is the same failure for every email — no
-        // enumeration risk — and must NOT report ok while no email was sent.
-        expect(result.ok).toBe(false);
-        expect((result as { ok: false; error: string }).error).toMatch(/unavailable/i);
-        expect(mockRequestPasswordReset).not.toHaveBeenCalled();
-        expect(consoleError).toHaveBeenCalled();
-      } finally {
-        consoleError.mockRestore();
-      }
+      // A misconfigured server is the same failure for every email — no
+      // enumeration risk — and must NOT report ok while no email was sent.
+      expect(result.ok).toBe(false);
+      expect((result as { ok: false; error: string }).error).toMatch(
+        /unavailable/i,
+      );
+      expect(mockRequestPasswordReset).not.toHaveBeenCalled();
+      expect(mockLogger.error).toHaveBeenCalled();
     });
   });
 });

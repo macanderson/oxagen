@@ -6,7 +6,9 @@ describe("agent.environment.list contract", () => {
     expect(agentEnvironmentList.name).toBe("list_agent_environments");
   });
   it("requires an agentId", () => {
-    expect(() => agentEnvironmentList.input.parse({ agentId: "a_1" })).not.toThrow();
+    expect(() =>
+      agentEnvironmentList.input.parse({ agentId: "a_1" }),
+    ).not.toThrow();
     expect(() => agentEnvironmentList.input.parse({})).toThrow();
   });
   it("outputs a bindings array (a null template means 'use env default')", () => {

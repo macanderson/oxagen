@@ -116,12 +116,12 @@ const tools = await client.listTools();
 
 // Call a tool
 const result = await client.callTool({
-  name: "agent__memory__recall",
+  name: "recall_memory",
   arguments: { query: "quarterly review meeting notes" }
 });
 ```
 
-Tool names in the MCP protocol use double-underscore as the namespace separator: `agent.memory.recall` → `agent__memory__recall`.
+A tool is named after the capability behind it, with no translation step — verb-first snake_case, such as `recall_memory` or `list_agent_tools`. See [MCP tools](/docs/mcp/tools) for the list.
 
 ## Scope and isolation
 
@@ -129,11 +129,11 @@ Every MCP session is scoped to the org and workspace associated with the API key
 
 ## Verifying the connection
 
-After connecting, call the `system__install__instructions` tool to retrieve client-specific installation instructions for your workspace. The `client` field is required:
+After connecting, call the `get_install_instructions` tool to retrieve client-specific installation instructions for your workspace. The `client` field is required:
 
 ```json
 {
-  "name": "system__install__instructions",
+  "name": "get_install_instructions",
   "arguments": { "client": "claude-code" }
 }
 ```

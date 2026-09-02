@@ -95,9 +95,7 @@ describe("archive.create capability", () => {
   });
 
   it("rejects output missing required fields", () => {
-    expect(() =>
-      archiveCreate.output.parse({ assetId: "x" }),
-    ).toThrow();
+    expect(() => archiveCreate.output.parse({ assetId: "x" })).toThrow();
   });
 
   it("rejects output with wrong kind", () => {
@@ -131,7 +129,9 @@ describe("archive.create entries capacity guard", () => {
       name: `f${i}.txt`,
       text: "x",
     }));
-    expect(() => archiveCreate.input.parse({ entries })).toThrow(/at most 100/i);
+    expect(() => archiveCreate.input.parse({ entries })).toThrow(
+      /at most 100/i,
+    );
   });
 
   it("accepts exactly 100 entries", () => {

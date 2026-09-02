@@ -6,9 +6,33 @@ const PREF: Quantization[] = ["q8", "q6", "q5", "q4"];
 
 const TABLE: CapabilityRow[] = [
   // Deliberately out of order to prove the resolver sorts by codeScore.
-  { modelId: "small-7b", codeScore: 0.78, contextWindow: 131072, params: "7B", minRamGB: 6, quantizations: ["q4", "q5", "q6", "q8"], license: "Apache-2.0" },
-  { modelId: "big-32b", codeScore: 0.92, contextWindow: 131072, params: "32B", minRamGB: 22, quantizations: ["q4", "q5", "q6", "q8"], license: "Apache-2.0" },
-  { modelId: "mid-14b", codeScore: 0.85, contextWindow: 131072, params: "14B", minRamGB: 10, quantizations: ["q4", "q5", "q6", "q8"], license: "Apache-2.0" },
+  {
+    modelId: "small-7b",
+    codeScore: 0.78,
+    contextWindow: 131072,
+    params: "7B",
+    minRamGB: 6,
+    quantizations: ["q4", "q5", "q6", "q8"],
+    license: "Apache-2.0",
+  },
+  {
+    modelId: "big-32b",
+    codeScore: 0.92,
+    contextWindow: 131072,
+    params: "32B",
+    minRamGB: 22,
+    quantizations: ["q4", "q5", "q6", "q8"],
+    license: "Apache-2.0",
+  },
+  {
+    modelId: "mid-14b",
+    codeScore: 0.85,
+    contextWindow: 131072,
+    params: "14B",
+    minRamGB: 10,
+    quantizations: ["q4", "q5", "q6", "q8"],
+    license: "Apache-2.0",
+  },
 ];
 
 function device(ramGB: number): DeviceProfile {
@@ -59,7 +83,12 @@ describe("resolveBestOnDeviceModel (pinned)", () => {
   });
 
   it("errors clearly when the pinned model is unknown", () => {
-    const res = resolveBestOnDeviceModel(device(128), PREF, "does-not-exist", TABLE);
+    const res = resolveBestOnDeviceModel(
+      device(128),
+      PREF,
+      "does-not-exist",
+      TABLE,
+    );
     expect(res.row).toBeNull();
     expect(res.rationale).toMatch(/not in the capability table/i);
   });

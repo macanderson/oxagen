@@ -44,7 +44,13 @@ interface LabelAccumulator {
   constraints: string[];
   indexes: string[];
   vectorIndexes: string[];
-  /** True when any index/constraint references orgId — the tenant scope key. */
+  /**
+   * True when any index/constraint references orgId — the tenant scope key.
+   * Under-reports: a label scoped by workspaceId alone (:EntityNode, indexed on
+   * (workspaceId, entityType)) leaves this false even though its rows are
+   * tenant-owned. Widening the check to workspaceId would change the manifest's
+   * bytes and hash, so it is a deliberate follow-up, not a drive-by edit.
+   */
   orgScoped: boolean;
 }
 

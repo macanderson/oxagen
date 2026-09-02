@@ -25,13 +25,19 @@ describe("markdown.generate capability", () => {
     const parsed = markdownGenerate.input.parse({
       title: "Structured Doc",
       sections: [
-        { heading: "Introduction", paragraphs: ["First paragraph.", "Second paragraph."] },
+        {
+          heading: "Introduction",
+          paragraphs: ["First paragraph.", "Second paragraph."],
+        },
         { paragraphs: ["No heading section."] },
       ],
     });
     expect(parsed.sections).toHaveLength(2);
     expect(parsed.sections?.[0]?.heading).toBe("Introduction");
-    expect(parsed.sections?.[0]?.paragraphs).toEqual(["First paragraph.", "Second paragraph."]);
+    expect(parsed.sections?.[0]?.paragraphs).toEqual([
+      "First paragraph.",
+      "Second paragraph.",
+    ]);
     expect(parsed.sections?.[1]?.heading).toBeUndefined();
   });
 
@@ -105,16 +111,20 @@ describe("markdown.generate capability", () => {
         serveUrl: "/api/v1/assets/gen_X",
         render: {
           componentId: "file-attachment",
-          props: { url: "/x", name: "x.md", kind: "markdown", mimeType: "text/markdown", sizeBytes: 100 },
+          props: {
+            url: "/x",
+            name: "x.md",
+            kind: "markdown",
+            mimeType: "text/markdown",
+            sizeBytes: 100,
+          },
         },
       }),
     ).toThrow();
   });
 
   it("rejects an output missing required fields", () => {
-    expect(() =>
-      markdownGenerate.output.parse({ assetId: "x" }),
-    ).toThrow();
+    expect(() => markdownGenerate.output.parse({ assetId: "x" })).toThrow();
   });
 
   it("rejects a render directive with a wrong componentId", () => {
@@ -129,7 +139,13 @@ describe("markdown.generate capability", () => {
         serveUrl: "/api/v1/assets/gen_X",
         render: {
           componentId: "video-preview", // wrong
-          props: { url: "/x", name: "x.md", kind: "markdown", mimeType: "text/markdown", sizeBytes: 100 },
+          props: {
+            url: "/x",
+            name: "x.md",
+            kind: "markdown",
+            mimeType: "text/markdown",
+            sizeBytes: 100,
+          },
         },
       }),
     ).toThrow();

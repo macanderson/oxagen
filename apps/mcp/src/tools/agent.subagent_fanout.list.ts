@@ -28,6 +28,8 @@ export default async function agentSubagentFanoutListTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentSubagentFanoutList.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentSubagentFanoutList.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentSubagentFanoutList.output.parse(output);
 }

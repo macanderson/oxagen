@@ -103,7 +103,8 @@ export const Empty: Story = {
   args: {
     sessionId: "sbx_9f2c1a4b8d6e",
     runCommand: mockRunner(),
-    welcome: "Warm workspace ready. Connected to sbx_9f2c1a4b8d6e (agent image).",
+    welcome:
+      "Warm workspace ready. Connected to sbx_9f2c1a4b8d6e (agent image).",
   },
 };
 
@@ -116,7 +117,8 @@ export const WithHistory: Story = {
       {
         command: "ls -la",
         status: "done",
-        stdout: "total 8\ndrwxr-xr-x  README.md\ndrwxr-xr-x  src\n-rw-r--r--  package.json",
+        stdout:
+          "total 8\ndrwxr-xr-x  README.md\ndrwxr-xr-x  src\n-rw-r--r--  package.json",
         stderr: "",
         exitCode: 0,
         executionMs: 41,

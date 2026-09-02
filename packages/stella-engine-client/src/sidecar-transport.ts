@@ -48,6 +48,10 @@ export interface SidecarClientOptions {
    * beyond `/healthz`.
    */
   token: string;
+  /**
+   * Override the `fetch` used for every request. Only the tests set this; in
+   * production leave it unset so the runtime's own `fetch` is used.
+   */
   fetchImpl?: typeof fetch;
 }
 
@@ -124,9 +128,13 @@ function isAbortLike(error: unknown): boolean {
 
 export interface TurnRunResult {
   readonly turnId: string;
+  /** The terminal frame's outcome: `completed` or `aborted`. */
   readonly outcome: TurnOutcome;
+  /** Every `AgentEvent` seen on the stream, in arrival order. */
   readonly events: readonly AgentEventEnvelope[];
+  /** How many `provider_request` frames arrived — requests, not completions. */
   readonly providerCalls: number;
+  /** How many `tool_request` frames arrived — requests, not completions. */
   readonly toolCalls: number;
 }
 
@@ -312,6 +320,10 @@ export class StellaSidecarClient {
    * handler bug surfaces as itself rather than as a wedged turn; under
    * `onFailure: "report"` it is POSTed back to the engine instead, which is
    * what a production host wants.
+   *
+   * One limit of the default arm: only the first collected failure is
+   * rethrown. With several tool calls outstanding, the later errors are
+   * dropped.
    */
   async runTurn(
     request: TurnRequest,
@@ -466,5 +478,15 @@ function recordToFrame(record: string): ServerFrame | undefined {
     .map((line) => line.slice("data:".length).trimStart())
     .join("\n");
   if (data.length === 0) return undefined;
-  return JSON.parse(data) as ServerFrame;
+  try {
+    return JSON.parse(data) as ServerFrame;
+  } catch (cause) {
+    // A bare SyntaxError here reaches the caller with no hint that it came off
+    // the frame stream, which is the hardest kind of failure to diagnose.
+    const preview = data.length > 200 ? `${data.slice(0, 200)}…` : data;
+    throw new Error(
+      `frame stream carried a record that is not valid JSON: ${preview}`,
+      { cause },
+    );
+  }
 }

@@ -21,13 +21,23 @@ export const connectionUpdate = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    connectionId: z.string().min(1).describe("Public ID or internal UUID of the connection"),
-    displayName: z.string().min(1).max(200).optional().describe("New display name"),
+    connectionId: z
+      .string()
+      .min(1)
+      .describe("Public ID or internal UUID of the connection"),
+    displayName: z
+      .string()
+      .min(1)
+      .max(200)
+      .optional()
+      .describe("New display name"),
     deliveryConfig: z
       .record(z.unknown())
       .nullable()
       .optional()
-      .describe("Replacement delivery configuration (sync schedule/scope); null clears it"),
+      .describe(
+        "Replacement delivery configuration (sync schedule/scope); null clears it",
+      ),
   }),
   output: z.object({
     connectionId: z.string(),

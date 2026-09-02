@@ -27,18 +27,22 @@ const originalFetch = globalThis.fetch;
 
 /** Install a fetch mock returning `body` as JSON with `status`. Returns the spy. */
 function mockFetch(body: unknown, status = 200): ReturnType<typeof vi.fn> {
-  const spy = vi.fn(async () =>
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { "content-type": "application/json" },
-    }),
+  const spy = vi.fn(
+    async () =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { "content-type": "application/json" },
+      }),
   );
   globalThis.fetch = spy as unknown as typeof fetch;
   return spy;
 }
 
 /** Parse the JSON body of the Nth fetch call. */
-function requestBody(spy: ReturnType<typeof vi.fn>, call = 0): Record<string, unknown> {
+function requestBody(
+  spy: ReturnType<typeof vi.fn>,
+  call = 0,
+): Record<string, unknown> {
   const init = spy.mock.calls[call]?.[1] as RequestInit | undefined;
   return JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
 }
@@ -72,12 +76,20 @@ describe("MarketplaceClient.browseCatalog", () => {
       total: 41,
     });
     const client = createMarketplaceClient();
-    const res = await client.browseCatalog({ search: "acme", pluginType: "mcp_server" });
+    const res = await client.browseCatalog({
+      search: "acme",
+      pluginType: "mcp_server",
+    });
 
     expect(spy).toHaveBeenCalledTimes(1);
     const url = spy.mock.calls[0]?.[0] as string;
-    expect(url).toBe("https://api.oxagen.sh/v1/org-slug/ws-slug/plugin/catalog/browse");
-    expect(requestBody(spy)).toMatchObject({ search: "acme", pluginType: "mcp_server" });
+    expect(url).toBe(
+      "https://api.oxagen.sh/v1/org-slug/ws-slug/plugin/catalog/browse",
+    );
+    expect(requestBody(spy)).toMatchObject({
+      search: "acme",
+      pluginType: "mcp_server",
+    });
 
     expect(res.ok).toBe(true);
     if (!res.ok) return;
@@ -98,7 +110,12 @@ describe("MarketplaceClient.browseCatalog", () => {
   });
 
   it("passes through registry warnings", async () => {
-    mockFetch({ servers: [], nextOffset: null, total: 0, warnings: ["registry x timed out"] });
+    mockFetch({
+      servers: [],
+      nextOffset: null,
+      total: 0,
+      warnings: ["registry x timed out"],
+    });
     const res = await createMarketplaceClient().browseCatalog();
     expect(res.ok).toBe(true);
     if (!res.ok) return;
@@ -110,7 +127,11 @@ describe("MarketplaceClient.browseCatalog", () => {
     const spy = mockFetch({});
     const res = await createMarketplaceClient().browseCatalog();
     expect(spy).not.toHaveBeenCalled();
-    expect(res).toEqual({ ok: false, error: expect.stringContaining("Not logged in"), code: "auth" });
+    expect(res).toEqual({
+      ok: false,
+      error: expect.stringContaining("Not logged in"),
+      code: "auth",
+    });
   });
 
   it("maps an HTTP error to { ok:false, code:'http', status }", async () => {
@@ -150,8 +171,14 @@ describe("MarketplaceClient.getPlugin", () => {
       packages: [{ x: 1 }],
       remotes: [],
     });
-    const res = await createMarketplaceClient().getPlugin({ name: "@acme/search", version: "1.2.0" });
-    expect(requestBody(spy)).toEqual({ name: "@acme/search", version: "1.2.0" });
+    const res = await createMarketplaceClient().getPlugin({
+      name: "@acme/search",
+      version: "1.2.0",
+    });
+    expect(requestBody(spy)).toEqual({
+      name: "@acme/search",
+      version: "1.2.0",
+    });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.data).toEqual({
@@ -191,8 +218,13 @@ describe("MarketplaceClient.installPlugin", () => {
       id: "srv_1",
     });
     const url = spy.mock.calls[0]?.[0] as string;
-    expect(url).toBe("https://api.oxagen.sh/v1/org-slug/ws-slug/plugin/org/install");
-    expect(requestBody(spy)).toEqual({ pluginType: "mcp_server", pluginId: "srv_1" });
+    expect(url).toBe(
+      "https://api.oxagen.sh/v1/org-slug/ws-slug/plugin/org/install",
+    );
+    expect(requestBody(spy)).toEqual({
+      pluginType: "mcp_server",
+      pluginId: "srv_1",
+    });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.data).toEqual({ orgListingId: "lst_9", authKind: "oauth" });
@@ -201,7 +233,10 @@ describe("MarketplaceClient.installPlugin", () => {
   it("returns a typed auth failure when not logged in", async () => {
     authState.token = "";
     const spy = mockFetch({});
-    const res = await createMarketplaceClient().installPlugin({ pluginType: "mcp_server", id: "x" });
+    const res = await createMarketplaceClient().installPlugin({
+      pluginType: "mcp_server",
+      id: "x",
+    });
     expect(spy).not.toHaveBeenCalled();
     expect(res.ok).toBe(false);
     if (res.ok) return;

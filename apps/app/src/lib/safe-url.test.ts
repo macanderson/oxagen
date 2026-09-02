@@ -34,7 +34,9 @@ describe("safeHref", () => {
   });
 
   it("rejects data:, vbscript:, blob:, file: schemes", () => {
-    expect(safeHref("data:text/html,<script>alert(1)</script>")).toBeUndefined();
+    expect(
+      safeHref("data:text/html,<script>alert(1)</script>"),
+    ).toBeUndefined();
     expect(safeHref("vbscript:msgbox(1)")).toBeUndefined();
     expect(safeHref("blob:https://example.com/uuid")).toBeUndefined();
     expect(safeHref("file:///etc/passwd")).toBeUndefined();
@@ -42,6 +44,14 @@ describe("safeHref", () => {
 
   it("rejects protocol-relative URLs (external origin)", () => {
     expect(safeHref("//evil.com/path")).toBeUndefined();
+  });
+
+  it("rejects backslash spellings of a protocol-relative URL", () => {
+    // Browsers treat `\` exactly like `/` when deciding whether a reference is
+    // scheme-relative, so each of these navigates to evil.com.
+    expect(safeHref("/\\evil.com/path")).toBeUndefined();
+    expect(safeHref("\\\\evil.com/path")).toBeUndefined();
+    expect(safeHref("\\/evil.com/path")).toBeUndefined();
   });
 
   it("rejects null, undefined, empty, and whitespace-only", () => {

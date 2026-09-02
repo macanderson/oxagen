@@ -2,9 +2,16 @@
 import "@oxagen/handlers/register";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, assertOrgMember, assertSecurityManager } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  assertOrgMember,
+  assertSecurityManager,
+} from "@/lib/resolve-org";
 import { withSystemDb, schema } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
+
+/** Sentinel workspaceId for org-only capabilities (no workspace context). */
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 interface ExportResult {
   exportId: string;
@@ -17,23 +24,40 @@ interface EraseResult {
   effectiveAt: string;
 }
 
-export async function requestOrgDataExportAction(orgSlug: string): Promise<ExportResult> {
+export async function requestOrgDataExportAction(
+  orgSlug: string,
+): Promise<ExportResult> {
   const [session, org] = await Promise.all([
     getSessionOrRedirect(),
     resolveOrg(orgSlug),
   ]);
-  await assertOrgMember(org.id, session.user.id);
+  // An org export bundles EVERY member's profile, every workspace config, and
+  // every conversation into one downloadable archive — it is a whole-tenant
+  // data pull, not a self-service download. Membership alone would let any
+  // member exfiltrate their colleagues' data, so this needs the same owner/admin
+  // gate as the erase below (and as the UI already advertises).
+  await assertSecurityManager(org.id, session.user.id);
 
   const result = await invoke(
     "export_data",
     { scope: "org", orgId: org.id },
-    { userId: session.user.id, orgId: org.id, workspaceId: "00000000-0000-0000-0000-000000000000", apiKeyId: null, surface: "app", requestId: crypto.randomUUID(), messageId: null },
+    {
+      userId: session.user.id,
+      orgId: org.id,
+      workspaceId: ORG_ONLY_WS,
+      apiKeyId: null,
+      surface: "app",
+      requestId: crypto.randomUUID(),
+      messageId: null,
+    },
     { surface: "api" },
   );
   return result as ExportResult;
 }
 
-export async function requestOrgDataEraseAction(orgSlug: string): Promise<EraseResult> {
+export async function requestOrgDataEraseAction(
+  orgSlug: string,
+): Promise<EraseResult> {
   const [session, org] = await Promise.all([
     getSessionOrRedirect(),
     resolveOrg(orgSlug),
@@ -49,16 +73,31 @@ export async function requestOrgDataEraseAction(orgSlug: string): Promise<EraseR
   const result = await invoke(
     "erase_data",
     { scope: "org", orgId: org.id, confirm: true },
-    { userId: session.user.id, orgId: org.id, workspaceId: "00000000-0000-0000-0000-000000000000", apiKeyId: null, surface: "app", requestId: crypto.randomUUID(), messageId: null },
+    {
+      userId: session.user.id,
+      orgId: org.id,
+      workspaceId: ORG_ONLY_WS,
+      apiKeyId: null,
+      surface: "app",
+      requestId: crypto.randomUUID(),
+      messageId: null,
+    },
     { surface: "api" },
   );
   return result as EraseResult;
 }
 
-export async function getOrgExportStatusAction(orgSlug: string, exportId: string) {
-  // withSystemDb bypasses RLS, so the query MUST be constrained to the caller's
-  // org. Without resolveOrg + assertOrgMember + the orgId filter, any authed
-  // user could poll any export id and read another org's signed download URL.
+export async function getOrgExportStatusAction(
+  orgSlug: string,
+  exportId: string,
+): Promise<{ status: string; exportUrl: string | null } | null> {
+  // withSystemDb bypasses RLS, so authorization is enforced on two axes here:
+  //   1. assertOrgMember() — the caller must belong to the org named in the URL
+  //      (notFound()/404 otherwise, so a foreign org is indistinguishable from
+  //      an unknown one).
+  //   2. the org_id predicate below — the row must belong to THAT org, so a
+  //      foreign exportId returns null rather than another org's signed
+  //      download URL.
   const [session, org] = await Promise.all([
     getSessionOrRedirect(),
     resolveOrg(orgSlug),
@@ -70,7 +109,6 @@ export async function getOrgExportStatusAction(orgSlug: string, exportId: string
       .select({
         status: schema.privacyExportRequests.status,
         exportUrl: schema.privacyExportRequests.exportUrl,
-        orgId: schema.privacyExportRequests.orgId,
       })
       .from(schema.privacyExportRequests)
       .where(
@@ -84,12 +122,5 @@ export async function getOrgExportStatusAction(orgSlug: string, exportId: string
 
   const row = rows[0];
   if (!row) return null;
-
-  // Authorize: the caller must be a member of the org that owns this export.
-  // assertOrgMember() calls notFound() (treated as 404) for non-members, so a
-  // foreign exportId is indistinguishable from a missing one — no cross-org
-  // leak of the signed export URL.
-  await assertOrgMember(row.orgId, session.user.id);
-
   return { status: row.status, exportUrl: row.exportUrl };
 }

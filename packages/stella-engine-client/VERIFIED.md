@@ -88,28 +88,25 @@ live binary, each mutation applied alone:
 
 ## Wire surface, as verified
 
-A contract based on a planned session-oriented surface from stella's
-`docs/design/serve-surface.md` would be wrong about **every route**, because
-the shipped surface differs from that plan. A capability probe that looks for
-a `stella serve` subcommand never finds one, since it does not exist — so any
-smoke test built on that probe would skip in every environment, including CI,
-and never catch the mismatch.
+There is no session resource: `POST /sessions` is a 404, and the *turn* is the
+top-level thing you create. There is also no `stella serve` subcommand —
+`stella-serve` is its own binary, so a probe that looks for a subcommand finds
+nothing and skips everywhere, including CI.
 
-| Wrong assumption | Reality |
+| Route | Notes |
 |---|---|
-| `POST /sessions` | **404.** No session resource exists at all |
-| `POST /sessions/{id}/turns` | `POST /v1/turns` — the *turn* is the top-level resource |
-| SSE `/sessions/{id}/events` | `GET /v1/turns/{id}/events` |
-| `DELETE /sessions/{id}` | no such route → `POST /v1/turns/{id}/cancel` |
-| `GET /health` | `GET /healthz` |
-| no auth | `Authorization: Bearer` on every route except `/healthz` |
-| `seq` on every event | no frame carries a sequence number |
-| — *absent* — | `POST /v1/turns/{id}/provider-result` ← **required to drive any turn** |
-| — *absent* — | `POST /v1/turns/{id}/tool-result` ← **required for any tool** |
+| `GET /healthz` | The only route that takes no token |
+| `POST /v1/turns` | Creates and starts a turn |
+| `GET /v1/turns/{id}/events` | SSE frame stream. No frame carries a sequence number |
+| `POST /v1/turns/{id}/provider-result` | **Required to drive any turn** |
+| `POST /v1/turns/{id}/tool-result` | **Required for any tool** |
+| `POST /v1/turns/{id}/cancel` | The only teardown route; there is no `DELETE` |
 
-The last two rows matter most: with no way to answer a reverse request, a
-client cannot complete a single turn even with every other route correct —
-the engine parks on its first model call and aborts at the deadline.
+Every route except `/healthz` needs `Authorization: Bearer`.
+
+The two result routes matter most. Without a way to answer a reverse request, a
+client cannot finish a single turn even with every other route correct — the
+engine parks on its first model call and aborts at the deadline.
 
 ## Known gaps (verified absent, not oversights)
 
@@ -118,8 +115,8 @@ documented as unbuilt in stella's `docs/design/serve-surface.md`:
 
 - **No resumption.** No `seq`, no `?after=`, no retained history: a dropped SSE
   connection loses whatever streamed while it was down.
-- **One turn per session object.** No multi-turn conversation state server-side;
-  the host owns history and replays it on each `POST /v1/turns`.
+- **One turn at a time.** The server keeps no conversation state between turns;
+  the host owns the history and sends all of it on each `POST /v1/turns`.
 - **No steering, pause, or approval routes.** `scope_review` / `ask_user`
   `AgentEvent`s have no reverse endpoint yet.
 - **No token-level model streaming.** `RemoteProvider` implements `complete`,
@@ -132,9 +129,11 @@ documented as unbuilt in stella's `docs/design/serve-surface.md`:
 
 ## CI status
 
-Both workflows were rewritten to build `stella-serve` from source at the pinned
-tag, because stella's release tarball contains `stella-cli` only and never had a
-serve binary in it. They remain **unverified in practice**: GitHub Actions has
-been failing at `startup_failure` org-wide since 2026-07-10, so no workflow in
-this repository has run. The real gate is `pnpm gate` / lefthook, which runs
-`test:unit` — where the smoke test skips cleanly when no binary is present.
+Both sidecar workflows build `stella-serve` from source at the pinned tag.
+They have to: stella's release tarball ships `stella-cli` only, with no serve
+binary in it.
+
+The gate that runs on every machine is `pnpm gate` / lefthook, which runs
+`test:unit`. There the smoke test skips cleanly when no binary is present, so
+the wire contract is proven by the in-memory fake and by the smoke test
+whenever a binary is available.

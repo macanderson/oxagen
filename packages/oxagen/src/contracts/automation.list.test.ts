@@ -16,9 +16,7 @@ describe("automation.list capability", () => {
   });
 
   it("rejects non-string workspace_id", () => {
-    expect(() =>
-      automationList.input.parse({ workspace_id: 42 }),
-    ).toThrow();
+    expect(() => automationList.input.parse({ workspace_id: 42 })).toThrow();
   });
 
   // ── output shape ──────────────────────────────────────────────────────────

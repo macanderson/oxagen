@@ -144,13 +144,13 @@ function suggestionSystemPrompt(opts: { codeMode: boolean }): string {
     "constraint that matters, and what done looks like (a check, a test, an",
     "observable result). First person, written exactly as the user would send",
     "it. The agent receiving it sees this same conversation, so refer to prior",
-    "context naturally (\"the failing test above\") instead of restating it.",
+    'context naturally ("the failing test above") instead of restating it.',
     "",
-    "Labels are 2–4 words, Title Case, verb-first (e.g. \"Fix Failing Test\",",
-    "\"Wire The Route\", \"Meter This Agent\"), unique within the trio.",
+    'Labels are 2–4 words, Title Case, verb-first (e.g. "Fix Failing Test",',
+    '"Wire The Route", "Meter This Agent"), unique within the trio.',
     "",
-    "Never produce: \"summarize this conversation\", \"tell me more\", \"explain",
-    "that again\", \"what can I do here\", or a restatement of work already",
+    'Never produce: "summarize this conversation", "tell me more", "explain',
+    'that again", "what can I do here", or a restatement of work already',
     "completed this turn.",
   ];
   if (opts.codeMode) {
@@ -379,11 +379,17 @@ export async function generateTurnSuggestions(
       // NEVER cache: suggestions must vary with the exact conversation.
     });
 
-    const timeout = new Promise<null>((resolve) =>
-      setTimeout(() => resolve(null), SUGGESTION_TIMEOUT_MS + 250),
-    );
+    // Belt-and-suspenders deadline in case `abortSignal` is honored late. The
+    // timer is cleared once the race settles — an uncleared 6.25s handle keeps
+    // the serverless invocation alive well past a fast, successful generation.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), SUGGESTION_TIMEOUT_MS + 250);
+    });
 
-    const result = await Promise.race([generation, timeout]);
+    const result = await Promise.race([generation, timeout]).finally(() => {
+      if (timer !== undefined) clearTimeout(timer);
+    });
     if (!result) return null;
 
     const suggestions = result.object.suggestions

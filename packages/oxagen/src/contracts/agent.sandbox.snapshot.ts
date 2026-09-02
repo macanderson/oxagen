@@ -16,7 +16,11 @@ export const agentSandboxSnapshot = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "medium", category: "execution" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "medium",
+    category: "execution",
+  },
   sensitivity: "medium",
   defaultEffect: "deny",
   defaultRoles: {
@@ -32,9 +36,15 @@ export const agentSandboxSnapshot = registerCapability({
   output: z.object({
     snapshotId: z
       .string()
-      .describe("Filesystem snapshot id, recorded on the session for transparent restore."),
+      .describe(
+        "Filesystem snapshot id, recorded on the session for transparent restore.",
+      ),
   }),
 });
 
-export type AgentSandboxSnapshotInput = z.output<typeof agentSandboxSnapshot.input>;
-export type AgentSandboxSnapshotOutput = z.output<typeof agentSandboxSnapshot.output>;
+export type AgentSandboxSnapshotInput = z.output<
+  typeof agentSandboxSnapshot.input
+>;
+export type AgentSandboxSnapshotOutput = z.output<
+  typeof agentSandboxSnapshot.output
+>;

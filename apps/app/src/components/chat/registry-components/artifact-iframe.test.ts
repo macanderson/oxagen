@@ -1,13 +1,15 @@
 /**
  * artifact-iframe.test.ts
  *
- * Unit tests for the HtmlArtifact component:
- *   1. looksLikeHtml heuristic — asserts various inputs correctly classified
- *   2. Iframe sandbox prop contract — asserts allow-same-origin is ABSENT
+ * Covers `looksLikeHtml` (imported from code-execute-card, where it is
+ * co-located so CodeExecuteCard can detect HTML output too).
  *
- * We test the pure exported helpers rather than the React component (which
- * requires DOM / jsdom). The security-critical assertion is that the sandbox
- * attribute DOES NOT contain "allow-same-origin".
+ * ⚠ WHAT THIS FILE DOES NOT COVER: the sandbox and tab blocks below assert
+ * against constants declared IN THIS FILE, not against anything HtmlArtifact
+ * renders. They document the intended sandbox string; they CANNOT catch a
+ * regression in artifact-iframe.tsx — adding `allow-same-origin` to the real
+ * component would leave every assertion here green. Real coverage needs a jsdom
+ * render of <HtmlArtifact /> reading the iframe's `sandbox` attribute.
  */
 
 import { describe, it, expect } from "vitest";
@@ -19,7 +21,9 @@ import { looksLikeHtml } from "../code-execute-card";
 
 describe("looksLikeHtml", () => {
   it("detects <!DOCTYPE html> (uppercase)", () => {
-    expect(looksLikeHtml("<!DOCTYPE html><html><body></body></html>")).toBe(true);
+    expect(looksLikeHtml("<!DOCTYPE html><html><body></body></html>")).toBe(
+      true,
+    );
   });
 
   it("detects <!doctype html> (lowercase)", () => {
@@ -55,7 +59,9 @@ describe("looksLikeHtml", () => {
   });
 
   it("does not classify SVG fragment as HTML", () => {
-    expect(looksLikeHtml("<svg xmlns='http://www.w3.org/2000/svg'></svg>")).toBe(false);
+    expect(
+      looksLikeHtml("<svg xmlns='http://www.w3.org/2000/svg'></svg>"),
+    ).toBe(false);
   });
 });
 

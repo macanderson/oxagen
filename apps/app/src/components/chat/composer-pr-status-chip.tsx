@@ -9,11 +9,7 @@ import {
   MinusCircle,
   XCircle,
 } from "lucide-react";
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverPopup,
-} from "@/components/ui/popover";
+import { Popover, PopoverTrigger, PopoverPopup } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import {
   CiStatusSummary,
@@ -105,7 +101,13 @@ export function deriveComposerPr(
       const url = str(tc.output.htmlUrl);
       if (number !== null && url !== null) {
         // `open_pr` doesn't return the head ref — read it from the input.
-        found = { owner, name, number, url, headRef: str(tc.inputPreview?.head) };
+        found = {
+          owner,
+          name,
+          number,
+          url,
+          headRef: str(tc.inputPreview?.head),
+        };
       }
     }
   }
@@ -131,13 +133,43 @@ type CiFetchResult = CiStatusSummaryProps;
 /** Circle colour + a11y label for each aggregated verdict. */
 const OVERALL_DOT: Record<
   CiOverall,
-  { className: string; label: string; spin: boolean; Glyph: typeof CheckCircle2 }
+  {
+    className: string;
+    label: string;
+    spin: boolean;
+    Glyph: typeof CheckCircle2;
+  }
 > = {
-  passing: { className: "text-success", label: "CI passing", spin: false, Glyph: CheckCircle2 },
-  failing: { className: "text-error", label: "CI failing", spin: false, Glyph: XCircle },
-  pending: { className: "text-warning", label: "CI running", spin: true, Glyph: Loader2 },
-  neutral: { className: "text-muted-foreground", label: "CI neutral", spin: false, Glyph: MinusCircle },
-  unknown: { className: "text-muted-foreground", label: "CI status unknown", spin: false, Glyph: MinusCircle },
+  passing: {
+    className: "text-success",
+    label: "CI passing",
+    spin: false,
+    Glyph: CheckCircle2,
+  },
+  failing: {
+    className: "text-error",
+    label: "CI failing",
+    spin: false,
+    Glyph: XCircle,
+  },
+  pending: {
+    className: "text-warning",
+    label: "CI running",
+    spin: true,
+    Glyph: Loader2,
+  },
+  neutral: {
+    className: "text-muted-foreground",
+    label: "CI neutral",
+    spin: false,
+    Glyph: MinusCircle,
+  },
+  unknown: {
+    className: "text-muted-foreground",
+    label: "CI status unknown",
+    spin: false,
+    Glyph: MinusCircle,
+  },
 };
 
 function isPending(ci: CiFetchResult | null): boolean {
@@ -159,6 +191,14 @@ export function ComposerPrStatusChip({
 
   // Fetch CI for the PR head, then keep polling while the verdict is pending so
   // a running build advances toward passing/failing without a manual refresh.
+  //
+  // KNOWN GAP: the catch below records the error but schedules NO successor
+  // tick, and the effect deps don't change afterwards — so one failed request
+  // (a network blip, a 502) freezes the chip at "Couldn't load CI status" for
+  // the life of the mount. A fix needs a bounded retry on the same backoff.
+  // Note also that this chip mounts up to three times per conversation (the
+  // desktop rail's Context card, the mobile Activity sheet, and the composer),
+  // each polling this URL independently.
   React.useEffect(() => {
     if (!canFetch || !pr.headRef) return;
     let cancelled = false;
@@ -173,7 +213,9 @@ export function ComposerPrStatusChip({
       if (cancelled) return;
       setLoading((prev) => (ci === null ? true : prev));
       try {
-        const res = await fetch(url, { headers: { "Content-Type": "application/json" } });
+        const res = await fetch(url, {
+          headers: { "Content-Type": "application/json" },
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as CiFetchResult;
         if (cancelled) return;
@@ -220,7 +262,10 @@ export function ComposerPrStatusChip({
       >
         <GitPullRequest className="size-3.5 shrink-0" aria-hidden="true" />
         PR #{pr.number}
-        <ExternalLink className="size-2.5 shrink-0 opacity-60" aria-hidden="true" />
+        <ExternalLink
+          className="size-2.5 shrink-0 opacity-60"
+          aria-hidden="true"
+        />
       </a>
 
       <Popover>
@@ -241,10 +286,17 @@ export function ComposerPrStatusChip({
           }
         >
           {loading && ci === null ? (
-            <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-hidden="true" />
+            <Loader2
+              className="size-3.5 animate-spin text-muted-foreground"
+              aria-hidden="true"
+            />
           ) : (
             <DotGlyph
-              className={cn("size-3.5", dot.className, dot.spin && "animate-spin")}
+              className={cn(
+                "size-3.5",
+                dot.className,
+                dot.spin && "animate-spin",
+              )}
               aria-hidden="true"
             />
           )}
@@ -273,9 +325,15 @@ export function ComposerPrStatusChip({
               Loading CI status…
             </p>
           ) : ci.runs.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No checks reported yet.</p>
+            <p className="text-xs text-muted-foreground">
+              No checks reported yet.
+            </p>
           ) : (
-            <CiStatusSummary overall={ci.overall} counts={ci.counts} runs={ci.runs} />
+            <CiStatusSummary
+              overall={ci.overall}
+              counts={ci.counts}
+              runs={ci.runs}
+            />
           )}
         </PopoverPopup>
       </Popover>

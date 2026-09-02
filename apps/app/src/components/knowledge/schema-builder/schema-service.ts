@@ -18,7 +18,10 @@ import type {
  * that import this service.
  */
 function fixturesEnabled(): boolean {
-  return (globalThis as { __OXAGEN_STORYBOOK__?: boolean }).__OXAGEN_STORYBOOK__ === true;
+  return (
+    (globalThis as { __OXAGEN_STORYBOOK__?: boolean }).__OXAGEN_STORYBOOK__ ===
+    true
+  );
 }
 
 // ---- Input / Output type aliases ----
@@ -26,7 +29,12 @@ function fixturesEnabled(): boolean {
 export type SchemaRegistryGetOutput = SchemaRegistryData;
 
 export interface SchemaListOutput {
-  schemas: Array<Pick<SchemaItem, "schemaName" | "displayName" | "source" | "connectorId" | "enabled">>;
+  schemas: Array<
+    Pick<
+      SchemaItem,
+      "schemaName" | "displayName" | "source" | "connectorId" | "enabled"
+    >
+  >;
 }
 
 export interface SchemaToggleOutput {
@@ -123,7 +131,12 @@ export interface SchemaRecommendOutput {
       labels: Array<{
         name: string;
         description?: string;
-        properties?: Array<{ key: string; dataType: PropertyItem["dataType"]; required: boolean; description?: string }>;
+        properties?: Array<{
+          key: string;
+          dataType: PropertyItem["dataType"];
+          required: boolean;
+          description?: string;
+        }>;
       }>;
       relationshipTypes: Array<{
         name: string;
@@ -172,7 +185,12 @@ const FIXTURE_REGISTRY: SchemaRegistryData = {
           displayName: "Person",
           description: "A human individual",
           properties: [
-            { key: "name", dataType: "string", required: true, description: "Full name" },
+            {
+              key: "name",
+              dataType: "string",
+              required: true,
+              description: "Full name",
+            },
             { key: "email", dataType: "email", required: false },
           ],
         },
@@ -255,7 +273,13 @@ const FIXTURE_DIFF: VersionDiff = {
   schemasRemoved: [],
   labelsAdded: [{ schemaName: "core", labelName: "Contract" }],
   labelsRemoved: [],
-  labelsChanged: [{ schemaName: "core", labelName: "Person", changes: ["Added property: email"] }],
+  labelsChanged: [
+    {
+      schemaName: "core",
+      labelName: "Person",
+      changes: ["Added property: email"],
+    },
+  ],
   relationshipTypesAdded: [],
   relationshipTypesRemoved: [],
   relationshipTypesChanged: [],
@@ -309,7 +333,10 @@ async function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function post<T>(path: string, body: Record<string, unknown>): Promise<T> {
+async function post<T>(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<T> {
   const res = await fetch(`/api/schema/${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -341,17 +368,21 @@ export async function fetchRegistry(
   return post<SchemaRegistryGetOutput>("registry/get", { ...slugs, ...opts });
 }
 
-export async function fetchSchemas(slugs: TenantSlugs): Promise<SchemaListOutput> {
+export async function fetchSchemas(
+  slugs: TenantSlugs,
+): Promise<SchemaListOutput> {
   if (fixturesEnabled()) {
     await delay(300);
     return {
-      schemas: FIXTURE_REGISTRY.schemas.map(({ schemaName, displayName, source, connectorId, enabled }) => ({
-        schemaName,
-        displayName,
-        source,
-        connectorId,
-        enabled,
-      })),
+      schemas: FIXTURE_REGISTRY.schemas.map(
+        ({ schemaName, displayName, source, connectorId, enabled }) => ({
+          schemaName,
+          displayName,
+          source,
+          connectorId,
+          enabled,
+        }),
+      ),
     };
   }
   return post<SchemaListOutput>("list", { ...slugs });
@@ -395,7 +426,10 @@ export async function upsertRelationship(
     await delay(300);
     return { relationshipTypeId: `rel_${input.name}`, created: true };
   }
-  return post<SchemaRelationshipUpsertOutput>("relationship/upsert", { ...slugs, ...input });
+  return post<SchemaRelationshipUpsertOutput>("relationship/upsert", {
+    ...slugs,
+    ...input,
+  });
 }
 
 export async function upsertProperty(
@@ -406,7 +440,10 @@ export async function upsertProperty(
     await delay(300);
     return { propertyId: `prop_${input.key}`, created: true };
   }
-  return post<SchemaPropertyUpsertOutput>("property/upsert", { ...slugs, ...input });
+  return post<SchemaPropertyUpsertOutput>("property/upsert", {
+    ...slugs,
+    ...input,
+  });
 }
 
 export async function deleteLabel(
@@ -418,7 +455,11 @@ export async function deleteLabel(
     await delay(300);
     return { deleted: true, labelName };
   }
-  return post<SchemaLabelDeleteOutput>("label/delete", { ...slugs, schemaName, name: labelName });
+  return post<SchemaLabelDeleteOutput>("label/delete", {
+    ...slugs,
+    schemaName,
+    name: labelName,
+  });
 }
 
 export async function deleteRelationship(
@@ -430,7 +471,11 @@ export async function deleteRelationship(
     await delay(300);
     return { deleted: true, relationshipTypeName: name };
   }
-  return post<SchemaRelationshipDeleteOutput>("relationship/delete", { ...slugs, schemaName, name });
+  return post<SchemaRelationshipDeleteOutput>("relationship/delete", {
+    ...slugs,
+    schemaName,
+    name,
+  });
 }
 
 export async function deleteProperty(
@@ -442,7 +487,11 @@ export async function deleteProperty(
     await delay(300);
     return { deleted: true, propertyKey: key };
   }
-  return post<SchemaPropertyDeleteOutput>("property/delete", { ...slugs, ownerName, key });
+  return post<SchemaPropertyDeleteOutput>("property/delete", {
+    ...slugs,
+    ownerName,
+    key,
+  });
 }
 
 export async function fetchVersions(
@@ -465,7 +514,11 @@ export async function diffVersions(
     await delay(300);
     return FIXTURE_DIFF;
   }
-  return post<SchemaVersionDiffOutput>("version/diff", { ...slugs, fromVersionId, toVersionId });
+  return post<SchemaVersionDiffOutput>("version/diff", {
+    ...slugs,
+    fromVersionId,
+    toVersionId,
+  });
 }
 
 export async function exportSchema(
@@ -504,7 +557,11 @@ export async function reconcileDispatch(
     await delay(300);
     return { executionId: "aex_fixture_01" };
   }
-  return post<SchemaReconcileDispatchOutput>("reconcile/dispatch", { ...slugs, versionId, prune });
+  return post<SchemaReconcileDispatchOutput>("reconcile/dispatch", {
+    ...slugs,
+    versionId,
+    prune,
+  });
 }
 
 export async function configRegistry(
@@ -519,12 +576,18 @@ export async function configRegistry(
       conformanceFloor: input.conformanceFloor ?? 0.8,
     };
   }
-  return post<SchemaRegistryConfigOutput>("registry/config", { ...slugs, ...input });
+  return post<SchemaRegistryConfigOutput>("registry/config", {
+    ...slugs,
+    ...input,
+  });
 }
 
 export interface SchemaChatOutput {
   assistantMessage: string;
-  proposedMutations?: Array<{ capability: string; input: Record<string, unknown> }>;
+  proposedMutations?: Array<{
+    capability: string;
+    input: Record<string, unknown>;
+  }>;
   conversationId: string;
 }
 
@@ -535,12 +598,27 @@ export async function schemaChat(
   return post<SchemaChatOutput>("chat", { ...slugs, message });
 }
 
+/**
+ * Apply one chat-proposed mutation by POSTing it to the schema proxy route.
+ *
+ * `capability` is written by the model behind `schemaChat`, so it is untrusted
+ * input that ends up in a URL. Today the handler emits ADR-025 verb-first
+ * snake_case names ("upsert_schema_label"); the dot→slash step is kept only so
+ * a legacy dotted name ("schema.label.upsert" → "label/upsert") still resolves
+ * against the route's path map. Anything that could escape /api/schema/ — a
+ * traversal segment or a leading slash — is rejected before the fetch; the
+ * route allow-lists capability names again on its own side.
+ */
 export async function applyMutation(
   slugs: TenantSlugs,
   capability: string,
   input: unknown,
 ): Promise<unknown> {
-  // maps "schema.label.upsert" → path "label/upsert"
   const path = capability.replace(/^schema\./, "").replace(/\./g, "/");
+  if (!/^[a-z0-9_]+(\/[a-z0-9_]+)*$/i.test(path)) {
+    throw new Error(
+      `Refusing to apply an unrecognized mutation: ${capability}`,
+    );
+  }
   return post(path, { ...slugs, ...(input as Record<string, unknown>) });
 }

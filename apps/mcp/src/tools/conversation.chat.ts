@@ -28,6 +28,8 @@ export default async function conversationChatTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(conversationChat.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(conversationChat.name, args, ctx, {
+    surface: "mcp",
+  });
   return conversationChat.output.parse(output);
 }

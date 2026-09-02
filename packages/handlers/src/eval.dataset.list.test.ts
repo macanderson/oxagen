@@ -35,8 +35,8 @@ describe("eval.dataset.list handler", () => {
       itemCount: 3,
       createdAt: NOW,
     };
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx([ROW])),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) => fn(makeTx([ROW])),
     );
     const out = await evalDatasetListHandler({}, CTX);
     expect(out.datasets).toHaveLength(1);
@@ -52,8 +52,8 @@ describe("eval.dataset.list handler", () => {
   });
 
   it("returns an empty list when there are no datasets", async () => {
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx([])),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) => fn(makeTx([])),
     );
     const out = await evalDatasetListHandler({}, CTX);
     expect(out.datasets).toEqual([]);

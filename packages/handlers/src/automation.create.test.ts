@@ -22,7 +22,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
             mocks.insertedValues.push(vals as Record<string, unknown>);
             const returningFn = mocks.insertReturning;
             const thenable = {
-              then: (resolve: (v: unknown) => unknown) => Promise.resolve(returningFn()).then(resolve),
+              then: (resolve: (v: unknown) => unknown) =>
+                Promise.resolve(returningFn()).then(resolve),
               returning: returningFn,
             };
             return thenable;
@@ -51,7 +52,13 @@ const BASE_INPUT = {
   triggerConfig: {},
   steps: [] as Array<{
     name: string;
-    stepType: "agent" | "tool" | "condition" | "webhook" | "prompt" | "human_input";
+    stepType:
+      | "agent"
+      | "tool"
+      | "condition"
+      | "webhook"
+      | "prompt"
+      | "human_input";
     config: Record<string, unknown>;
   }>,
   enabled: false,
@@ -69,13 +76,15 @@ function setupHappyPath(triggerType = "api") {
 
   const responses: unknown[][] = [
     [{ id: "plb-uuid-1", publicId: "plb_abc" }], // call 1: playbook
-    [{ id: "ver-uuid-1" }],                       // call 2: version
-    [],                                             // call 3: step
+    [{ id: "ver-uuid-1" }], // call 2: version
+    [], // call 3: step
     [{ publicId: "plt_abc123", triggerType, isEnabled: true }], // call 4: trigger
   ];
   let callCount = 0;
   mocks.insertReturning.mockImplementation(() => {
-    const row = responses[callCount] ?? [{ publicId: "plt_abc123", triggerType, isEnabled: true }];
+    const row = responses[callCount] ?? [
+      { publicId: "plt_abc123", triggerType, isEnabled: true },
+    ];
     callCount++;
     return Promise.resolve(row);
   });
@@ -166,7 +175,12 @@ describe("automationCreateHandler (@oxagen/handlers)", () => {
           entityType: "Contact",
           eventType: "node.updated",
           propertyConditions: [
-            { property: "status", fromValue: "lead", toValue: "customer", operator: "eq" as const },
+            {
+              property: "status",
+              fromValue: "lead",
+              toValue: "customer",
+              operator: "eq" as const,
+            },
           ],
         },
         steps: [],
@@ -184,7 +198,10 @@ describe("automationCreateHandler (@oxagen/handlers)", () => {
       {
         name: "Monday Morning Report",
         triggerType: "schedule",
-        triggerConfig: { cronExpression: "0 9 * * 1", timezone: "America/New_York" },
+        triggerConfig: {
+          cronExpression: "0 9 * * 1",
+          timezone: "America/New_York",
+        },
         steps: [],
         enabled: false,
       },
@@ -199,7 +216,11 @@ describe("automationCreateHandler (@oxagen/handlers)", () => {
       {
         ...BASE_INPUT,
         steps: [
-          { name: "Send Webhook", stepType: "webhook", config: { url: "https://example.com" } },
+          {
+            name: "Send Webhook",
+            stepType: "webhook",
+            config: { url: "https://example.com" },
+          },
         ],
       },
       CTX,
@@ -237,8 +258,9 @@ describe("automationCreateHandler (@oxagen/handlers)", () => {
     ];
     let callCount = 0;
     mocks.insertReturning.mockImplementation(() => {
-      const row =
-        responses[callCount] ?? [{ publicId: "plt_abc123", triggerType: "api", isEnabled: false }];
+      const row = responses[callCount] ?? [
+        { publicId: "plt_abc123", triggerType: "api", isEnabled: false },
+      ];
       callCount++;
       return Promise.resolve(row);
     });
@@ -246,7 +268,10 @@ describe("automationCreateHandler (@oxagen/handlers)", () => {
 
   it("enables when surface=api, messageId=null, enabled=true (human-origin)", async () => {
     // CTX has surface='api' and messageId=null — human-origin
-    const result = await automationCreateHandler({ ...BASE_INPUT, enabled: true }, CTX);
+    const result = await automationCreateHandler(
+      { ...BASE_INPUT, enabled: true },
+      CTX,
+    );
     expect(triggerInsert().isEnabled).toBe(true);
     expect(playbookInsert().status).toBe("active");
     expect(result.enabled).toBe(true);
@@ -256,7 +281,10 @@ describe("automationCreateHandler (@oxagen/handlers)", () => {
   it("forces disabled when surface=api but messageId set (in-chat agent call)", async () => {
     setupHappyPathDisabled();
     const agentCtx = makeCTX({ surface: "api", messageId: "msg_123" });
-    const result = await automationCreateHandler({ ...BASE_INPUT, enabled: true }, agentCtx);
+    const result = await automationCreateHandler(
+      { ...BASE_INPUT, enabled: true },
+      agentCtx,
+    );
     expect(triggerInsert().isEnabled).toBe(false);
     expect(playbookInsert().status).toBe("draft");
     expect(result.enabled).toBe(false);
@@ -266,7 +294,10 @@ describe("automationCreateHandler (@oxagen/handlers)", () => {
   it("forces disabled when surface=mcp (AI-origin)", async () => {
     setupHappyPathDisabled();
     const mcpCtx = makeCTX({ surface: "mcp" });
-    const result = await automationCreateHandler({ ...BASE_INPUT, enabled: true }, mcpCtx);
+    const result = await automationCreateHandler(
+      { ...BASE_INPUT, enabled: true },
+      mcpCtx,
+    );
     expect(triggerInsert().isEnabled).toBe(false);
     expect(result.enabled).toBe(false);
   });
@@ -274,14 +305,20 @@ describe("automationCreateHandler (@oxagen/handlers)", () => {
   it("forces disabled when surface=runner (AI-origin)", async () => {
     setupHappyPathDisabled();
     const runnerCtx = makeCTX({ surface: "runner" });
-    const result = await automationCreateHandler({ ...BASE_INPUT, enabled: true }, runnerCtx);
+    const result = await automationCreateHandler(
+      { ...BASE_INPUT, enabled: true },
+      runnerCtx,
+    );
     expect(triggerInsert().isEnabled).toBe(false);
     expect(result.enabled).toBe(false);
   });
 
   it("enables when surface=app, messageId=null, enabled=true (human-origin)", async () => {
     const appCtx = makeCTX({ surface: "app", messageId: null });
-    const result = await automationCreateHandler({ ...BASE_INPUT, enabled: true }, appCtx);
+    const result = await automationCreateHandler(
+      { ...BASE_INPUT, enabled: true },
+      appCtx,
+    );
     expect(triggerInsert().isEnabled).toBe(true);
     expect(result.enabled).toBe(true);
   });
@@ -289,7 +326,10 @@ describe("automationCreateHandler (@oxagen/handlers)", () => {
   it("forces disabled when surface=app but messageId set (in-chat agent via app surface)", async () => {
     setupHappyPathDisabled();
     const appAgentCtx = makeCTX({ surface: "app", messageId: "msg_456" });
-    const result = await automationCreateHandler({ ...BASE_INPUT, enabled: true }, appAgentCtx);
+    const result = await automationCreateHandler(
+      { ...BASE_INPUT, enabled: true },
+      appAgentCtx,
+    );
     expect(triggerInsert().isEnabled).toBe(false);
     expect(playbookInsert().status).toBe("draft");
     expect(result.enabled).toBe(false);
@@ -298,7 +338,10 @@ describe("automationCreateHandler (@oxagen/handlers)", () => {
 
   it("stays disabled when enabled input is false even for human-origin call", async () => {
     setupHappyPathDisabled();
-    const result = await automationCreateHandler({ ...BASE_INPUT, enabled: false }, CTX);
+    const result = await automationCreateHandler(
+      { ...BASE_INPUT, enabled: false },
+      CTX,
+    );
     expect(triggerInsert().isEnabled).toBe(false);
     expect(playbookInsert().status).toBe("draft");
     expect(result.enabled).toBe(false);

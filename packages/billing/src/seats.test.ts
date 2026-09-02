@@ -29,10 +29,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => dbMocks,
-  withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-  withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-
+    db: () => dbMocks,
+    withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
+    withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
   };
 });
 
@@ -41,9 +40,12 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 // We don't need to replicate their logic — the DB mock controls results.
 
 // Import AFTER mocks.
-const { getOrgSeatUsage, assertSeatAvailable, SeatLimitError, isSeatLimitError } = await import(
-  "./seats"
-);
+const {
+  getOrgSeatUsage,
+  assertSeatAvailable,
+  SeatLimitError,
+  isSeatLimitError,
+} = await import("./seats");
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -152,7 +154,9 @@ describe("assertSeatAvailable", () => {
 
   it("throws SeatLimitError when used === licenses", async () => {
     mockSeatCounts({ seatCount: 1, activeUsers: 1, pendingInvites: 0 });
-    await expect(assertSeatAvailable("org-full")).rejects.toThrow(SeatLimitError);
+    await expect(assertSeatAvailable("org-full")).rejects.toThrow(
+      SeatLimitError,
+    );
   });
 
   it("SeatLimitError has correct code, licenses, and used fields", async () => {
@@ -172,7 +176,9 @@ describe("assertSeatAvailable", () => {
 
   it("throws SeatLimitError when used exceeds licenses (over-inviting)", async () => {
     mockSeatCounts({ seatCount: 1, activeUsers: 0, pendingInvites: 2 });
-    await expect(assertSeatAvailable("org-over-limit")).rejects.toThrow(SeatLimitError);
+    await expect(assertSeatAvailable("org-over-limit")).rejects.toThrow(
+      SeatLimitError,
+    );
   });
 });
 

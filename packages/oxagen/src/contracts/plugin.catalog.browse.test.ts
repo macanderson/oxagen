@@ -14,6 +14,8 @@ describe("plugin.catalog.browse contract", () => {
     expect(parsed.offset).toBe(0);
   });
   it("rejects an invalid authKind", () => {
-    expect(() => pluginCatalogBrowse.input.parse({ authKind: "bogus" })).toThrow();
+    expect(() =>
+      pluginCatalogBrowse.input.parse({ authKind: "bogus" }),
+    ).toThrow();
   });
 });

@@ -9,18 +9,27 @@ describe("connection.delete capability", () => {
   });
 
   it("parses connection_only mode", () => {
-    const parsed = connectionDelete.input.parse({ connectionId: "con_ABC", mode: "connection_only" });
+    const parsed = connectionDelete.input.parse({
+      connectionId: "con_ABC",
+      mode: "connection_only",
+    });
     expect(parsed.mode).toBe("connection_only");
   });
 
   it("parses data_only mode", () => {
-    const parsed = connectionDelete.input.parse({ connectionId: "con_ABC", mode: "data_only" });
+    const parsed = connectionDelete.input.parse({
+      connectionId: "con_ABC",
+      mode: "data_only",
+    });
     expect(parsed.mode).toBe("data_only");
   });
 
   it("rejects unknown mode", () => {
     expect(() =>
-      connectionDelete.input.parse({ connectionId: "con_ABC", mode: "nuclear" }),
+      connectionDelete.input.parse({
+        connectionId: "con_ABC",
+        mode: "nuclear",
+      }),
     ).toThrow();
   });
 
@@ -41,7 +50,11 @@ describe("connection.delete capability", () => {
 
   it("rejects wrong output status", () => {
     expect(() =>
-      connectionDelete.output.parse({ deletionJobId: "djob_xyz", mode: "full", status: "done" }),
+      connectionDelete.output.parse({
+        deletionJobId: "djob_xyz",
+        mode: "full",
+        status: "done",
+      }),
     ).toThrow();
   });
 

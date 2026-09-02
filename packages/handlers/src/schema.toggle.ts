@@ -11,11 +11,17 @@ import {
 import { invalidatePinnedSchemaCache } from "./schema.pinned";
 import { logger } from "./logger";
 
-export const schemaToggleHandler: CapabilityHandler<typeof schemaToggle> = async (input, ctx) => {
+export const schemaToggleHandler: CapabilityHandler<
+  typeof schemaToggle
+> = async (input, ctx) => {
   const { schemaName, enabled } = input;
 
   // 1. Load/create registry
-  const registry = await getOrCreateRegistry(ctx.orgId, ctx.workspaceId, ctx.userId);
+  const registry = await getOrCreateRegistry(
+    ctx.orgId,
+    ctx.workspaceId,
+    ctx.userId,
+  );
 
   // 2. Upsert the schema_activations row
   await withTenantDb(async (tx) => {
@@ -96,7 +102,12 @@ export const schemaToggleHandler: CapabilityHandler<typeof schemaToggle> = async
       const reconcileRecommended = isDowngrade || !enabled;
 
       logger.info(
-        { workspaceId: ctx.workspaceId, schemaName, publishedVersionId, pinnedVersionId },
+        {
+          workspaceId: ctx.workspaceId,
+          schemaName,
+          publishedVersionId,
+          pinnedVersionId,
+        },
         "schema.toggle: auto-published and pinned",
       );
 

@@ -38,7 +38,9 @@ import { DatasetsSection } from "./datasets-section";
 afterEach(cleanup);
 beforeEach(() => {
   mockInvoke.mockReset();
-  mockRunInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn());
+  mockRunInTenantScope.mockImplementation(
+    (_scope: unknown, fn: () => unknown) => fn(),
+  );
 });
 
 const BASE = {
@@ -55,14 +57,20 @@ describe("DatasetsSection", () => {
       datasets: [{ datasetId: "d1" }, { datasetId: "d2" }],
     });
     render(await DatasetsSection(BASE));
-    expect(screen.getByTestId("datasets-client")).toHaveAttribute("data-count", "2");
+    expect(screen.getByTestId("datasets-client")).toHaveAttribute(
+      "data-count",
+      "2",
+    );
     expect(screen.queryByTestId("error-state")).toBeNull();
   });
 
   it("renders the empty client — not an error — when there are genuinely no datasets", async () => {
     mockInvoke.mockResolvedValue({ datasets: [] });
     render(await DatasetsSection(BASE));
-    expect(screen.getByTestId("datasets-client")).toHaveAttribute("data-count", "0");
+    expect(screen.getByTestId("datasets-client")).toHaveAttribute(
+      "data-count",
+      "0",
+    );
     expect(screen.queryByTestId("error-state")).toBeNull();
   });
 

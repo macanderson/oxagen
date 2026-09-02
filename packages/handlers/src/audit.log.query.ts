@@ -1,5 +1,8 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
-import { auditLogQuery, type AuditEvent } from "@oxagen/oxagen/contracts/audit.log.query";
+import {
+  auditLogQuery,
+  type AuditEvent,
+} from "@oxagen/oxagen/contracts/audit.log.query";
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, desc, eq, gte, lt, type SQL } from "drizzle-orm";
 import { logger } from "./logger";
@@ -10,15 +13,22 @@ import { logger } from "./logger";
  * Reads the two append-only audit spines and returns a unified, newest-first
  * feed. Both tables are read through withSystemDb (security_events is partitioned
  * and lives in a bypass-only schema), so tenant isolation is enforced HERE,
- * explicitly: EVERY query filters by ctx.orgId, and by ctx-or-input workspaceId
- * when requested. Never relax this — a missing org filter would leak another
- * tenant's audit trail (SOC 2 §0).
+ * explicitly: EVERY query filters by ctx.orgId. Never relax this — a missing org
+ * filter would leak another tenant's audit trail (SOC 2 §0).
+ *
+ * Workspace narrowing comes ONLY from `input.workspaceId`; ctx.workspaceId is
+ * deliberately not applied, so the default result is the whole org's feed. That
+ * is what the org Governance hub wants, but it also means a caller allowed at
+ * workspace scope reads events from sibling workspaces — see the contract's
+ * defaultRoles before widening who may invoke this.
  *
  * Pagination across two heterogeneous tables is done by over-fetching
  * (offset+limit+1) from each requested source, merging by occurredAt desc, then
  * slicing the window. Correct and bounded for the realistic admin use case.
  */
-export const auditLogQueryHandler: CapabilityHandler<typeof auditLogQuery> = async (input, ctx) => {
+export const auditLogQueryHandler: CapabilityHandler<
+  typeof auditLogQuery
+> = async (input, ctx) => {
   const { orgId } = ctx;
   const window = input.offset + input.limit + 1; // +1 to detect hasMore
   const fromDate = input.from ? new Date(input.from) : null;
@@ -32,11 +42,16 @@ export const auditLogQueryHandler: CapabilityHandler<typeof auditLogQuery> = asy
   await withSystemDb(async (tx) => {
     if (wantSecurity) {
       const conds: SQL[] = [eq(schema.securityEvents.orgId, orgId)];
-      if (input.workspaceId) conds.push(eq(schema.securityEvents.workspaceId, input.workspaceId));
-      if (input.eventType) conds.push(eq(schema.securityEvents.eventType, input.eventType));
-      if (input.actorUserId) conds.push(eq(schema.securityEvents.actorUserId, input.actorUserId));
-      if (input.capability) conds.push(eq(schema.securityEvents.capability, input.capability));
-      if (input.outcome) conds.push(eq(schema.securityEvents.outcome, input.outcome));
+      if (input.workspaceId)
+        conds.push(eq(schema.securityEvents.workspaceId, input.workspaceId));
+      if (input.eventType)
+        conds.push(eq(schema.securityEvents.eventType, input.eventType));
+      if (input.actorUserId)
+        conds.push(eq(schema.securityEvents.actorUserId, input.actorUserId));
+      if (input.capability)
+        conds.push(eq(schema.securityEvents.capability, input.capability));
+      if (input.outcome)
+        conds.push(eq(schema.securityEvents.outcome, input.outcome));
       if (fromDate) conds.push(gte(schema.securityEvents.occurredAt, fromDate));
       if (toDate) conds.push(lt(schema.securityEvents.occurredAt, toDate));
 
@@ -74,9 +89,14 @@ export const auditLogQueryHandler: CapabilityHandler<typeof auditLogQuery> = asy
 
     if (wantPlaybook) {
       const conds: SQL[] = [eq(schema.playbookEvents.orgId, orgId)];
-      if (input.workspaceId) conds.push(eq(schema.playbookEvents.workspaceId, input.workspaceId));
-      if (input.eventType) conds.push(eq(schema.playbookEvents.eventType, input.eventType));
-      if (input.playbookRunId) conds.push(eq(schema.playbookEvents.playbookRunId, input.playbookRunId));
+      if (input.workspaceId)
+        conds.push(eq(schema.playbookEvents.workspaceId, input.workspaceId));
+      if (input.eventType)
+        conds.push(eq(schema.playbookEvents.eventType, input.eventType));
+      if (input.playbookRunId)
+        conds.push(
+          eq(schema.playbookEvents.playbookRunId, input.playbookRunId),
+        );
       if (fromDate) conds.push(gte(schema.playbookEvents.occurredAt, fromDate));
       if (toDate) conds.push(lt(schema.playbookEvents.occurredAt, toDate));
 

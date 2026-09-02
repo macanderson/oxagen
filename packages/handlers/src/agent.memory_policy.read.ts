@@ -13,39 +13,42 @@ const DEFAULT_POLICY = {
   defaultDecayFloor: 5,
 } as const;
 
-export const agentMemoryPolicyReadHandler: CapabilityHandler<typeof agentMemoryPolicyRead> =
-  async (_input, ctx) => {
-    if (!ctx.workspaceId) {
-      logger.warn(
-        { orgId: ctx.orgId },
-        "agent.memory.policy.read: rejected — no workspace context",
-      );
-      throw new Error("agent.memory.policy.read requires a workspace context");
-    }
-
-    const row = await withTenantDb((tx) =>
-      tx.query.workspaceMemoryPolicy.findFirst({
-        where: eq(schema.workspaceMemoryPolicy.workspaceId, ctx.workspaceId),
-      }),
+export const agentMemoryPolicyReadHandler: CapabilityHandler<
+  typeof agentMemoryPolicyRead
+> = async (_input, ctx) => {
+  if (!ctx.workspaceId) {
+    logger.warn(
+      { orgId: ctx.orgId },
+      "agent.memory.policy.read: rejected — no workspace context",
     );
-    if (!row) {
-      // No policy set — return defaults.
-      logger.debug(
-        { workspaceId: ctx.workspaceId },
-        "agent.memory.policy.read: returning defaults",
-      );
-      return DEFAULT_POLICY;
-    }
+    throw new Error("agent.memory.policy.read requires a workspace context");
+  }
 
+  const row = await withTenantDb((tx) =>
+    tx.query.workspaceMemoryPolicy.findFirst({
+      where: eq(schema.workspaceMemoryPolicy.workspaceId, ctx.workspaceId),
+    }),
+  );
+  if (!row) {
+    // No policy set — return defaults.
     logger.debug(
       { workspaceId: ctx.workspaceId },
-      "agent.memory.policy.read: returning stored policy",
+      "agent.memory.policy.read: returning defaults",
     );
-    return {
-      halfLifeLowDays: row.halfLifeLowDays,
-      halfLifeHighDays: row.halfLifeHighDays,
-      recallThreshold: row.recallThreshold ?? 0.1,
-      complianceThreshold: row.complianceThreshold ?? DEFAULT_POLICY.complianceThreshold,
-      defaultDecayFloor: row.defaultDecayFloor ?? DEFAULT_POLICY.defaultDecayFloor,
-    };
+    return DEFAULT_POLICY;
+  }
+
+  logger.debug(
+    { workspaceId: ctx.workspaceId },
+    "agent.memory.policy.read: returning stored policy",
+  );
+  return {
+    halfLifeLowDays: row.halfLifeLowDays,
+    halfLifeHighDays: row.halfLifeHighDays,
+    recallThreshold: row.recallThreshold ?? 0.1,
+    complianceThreshold:
+      row.complianceThreshold ?? DEFAULT_POLICY.complianceThreshold,
+    defaultDecayFloor:
+      row.defaultDecayFloor ?? DEFAULT_POLICY.defaultDecayFloor,
   };
+};

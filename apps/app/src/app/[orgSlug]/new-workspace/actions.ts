@@ -22,10 +22,23 @@ import { seedWorkspaceDefaultEnvironmentSystem } from "@oxagen/handlers/workspac
 // Re-checked server-side here so the gate can't be bypassed from the client.
 const WORKSPACE_CREATE_ROLES = new Set(["owner", "admin"]);
 
-// Slugs that collide with static [orgSlug] child routes — a workspace with one
-// of these slugs would be shadowed by the route and unreachable. "new-workspace"
-// is this very page; "settings" is the org settings subtree.
-const RESERVED_WORKSPACE_SLUGS = new Set(["new-workspace", "settings"]);
+// Slugs that collide with a static [orgSlug] child route. Next.js resolves a
+// static segment before the dynamic [workspaceSlug] one, so a workspace with any
+// of these slugs would be permanently shadowed by the org-level route and
+// unreachable. Keep this in sync with the directory listing of
+// apps/app/src/app/[orgSlug]/ — every folder there except [workspaceSlug].
+const RESERVED_WORKSPACE_SLUGS = new Set([
+  "access",
+  "billing",
+  "dashboard",
+  "developer",
+  "governance",
+  "members",
+  "new-workspace",
+  "security",
+  "settings",
+  "workspaces",
+]);
 
 // Sentinel workspaceId for org-only scope (workspace does not exist yet at
 // pre-check time; withTenantDb sets both GUCs but org_only-classed tables
@@ -114,12 +127,12 @@ export async function createWorkspaceAction(
 
       try {
         // tenancy: unscoped seam for workspace + membership creation. The
-        // workspace_only RLS policy on workspace_users checks WITH CHECK
-        // (workspace_id = current_setting('app.workspace_id')::uuid). When the
-        // scope is set to the sentinel (ORG_ONLY_WS) and the INSERT carries the
-        // real new workspace id, Postgres rejects the write. Using withSystemDb
-        // (RLS bypass) for this bootstrap creation is the correct fix — the
-        // workspace and its creator's membership row ARE the objects being
+        // tenant_isolation policy on workspace.workspace_users has WITH CHECK
+        // (workspace_id = current_setting('app.current_workspace_id')::uuid).
+        // With the scope set to the sentinel (ORG_ONLY_WS) and the INSERT
+        // carrying the real new workspace id, Postgres rejects the write.
+        // withSystemDb (RLS bypass) is the correct seam for this bootstrap —
+        // the workspace and its creator's membership row ARE the objects being
         // created, so there is no prior scope to derive from.
         const { workspaceId, workspaceSlug } = await withSystemDb(
           async (tx) => {

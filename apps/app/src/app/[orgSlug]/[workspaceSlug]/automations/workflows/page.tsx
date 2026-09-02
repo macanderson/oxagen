@@ -1,15 +1,12 @@
 /**
- * page.tsx — Workspace → Automations → Workflows (replaces the web-app-2.0
- * Phase 0 shell).
+ * page.tsx — Workspace → Automations → Workflows.
  *
- * The launch and monitoring surface for the workflow.* (goal → N parallel
- * sub-tasks via Inngest) and research.swarm.* (topic → N parallel web
- * searches) capability families. Neither family had any UI before this page —
- * both were agent/api/mcp-only, reachable only via the chat-rendered
- * `workflow-progress` component. Server component: resolves auth +
- * org/workspace scope + workspace role, renders the shared Automations header
- * + tab strip immediately, then streams the live workflow list into
- * <WorkflowsSection> inside a Suspense boundary.
+ * The launch and monitoring surface for two capability families: workflow.*
+ * (one goal → N parallel sub-tasks via Inngest) and research.swarm.* (one
+ * topic → N parallel web searches). Server component: it resolves auth, the
+ * org/workspace scope and the caller's workspace role, paints the shared
+ * Automations header + tab strip right away, then streams the live workflow
+ * list into <WorkflowsSection> inside a Suspense boundary.
  */
 import { Suspense } from "react";
 import { resolveAutomationsScope } from "@/lib/automations/scope";
@@ -24,7 +21,10 @@ interface PageProps {
 
 export default async function WorkflowsPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
-  const { ctx, canManage } = await resolveAutomationsScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveAutomationsScope(
+    orgSlug,
+    workspaceSlug,
+  );
   const routeCtx = { orgSlug, workspaceSlug };
 
   return (
@@ -35,7 +35,10 @@ export default async function WorkflowsPage({ params }: PageProps) {
         description="Parallel workflow and research-swarm runs — launch a goal or topic, watch live sub-task progress, and cancel a run that's misbehaving."
         actions={
           canManage ? (
-            <LaunchWorkflowButton orgSlug={orgSlug} workspaceSlug={workspaceSlug} />
+            <LaunchWorkflowButton
+              orgSlug={orgSlug}
+              workspaceSlug={workspaceSlug}
+            />
           ) : undefined
         }
       />

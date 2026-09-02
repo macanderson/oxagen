@@ -1,12 +1,25 @@
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
-import https from 'https';
-import readline from 'readline';
-import { ANALYTICS_URL, ANALYTICS_USER, ANALYTICS_PASSWORD, ANALYTICS_DATABASE } from './clickhouse-analytics-config';
+import fs from "fs";
+import path from "path";
+import os from "os";
+import https from "https";
+import readline from "readline";
+import {
+  ANALYTICS_URL,
+  ANALYTICS_USER,
+  ANALYTICS_PASSWORD,
+  ANALYTICS_DATABASE,
+} from "./clickhouse-analytics-config";
 
-const TELEMETRY_LOG = path.join(os.homedir(), '.claude', 'claude-code-telemetry.jsonl');
-const SYNCED_LOG = path.join(os.homedir(), '.claude', 'claude-code-telemetry.synced');
+const TELEMETRY_LOG = path.join(
+  os.homedir(),
+  ".claude",
+  "claude-code-telemetry.jsonl",
+);
+const SYNCED_LOG = path.join(
+  os.homedir(),
+  ".claude",
+  "claude-code-telemetry.synced",
+);
 
 interface TelemetryEntry {
   timestamp: string;
@@ -19,23 +32,23 @@ interface TelemetryEntry {
 async function executeClickHouseSql(sql: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const url = new URL(ANALYTICS_URL);
-    url.pathname = '/';
-    url.searchParams.set('query', sql);
+    url.pathname = "/";
+    url.searchParams.set("query", sql);
 
     const options = {
       hostname: url.hostname,
       port: url.port || 443,
       path: url.pathname + url.search,
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Basic ${Buffer.from(`${ANALYTICS_USER}:${ANALYTICS_PASSWORD}`).toString('base64')}`,
+        Authorization: `Basic ${Buffer.from(`${ANALYTICS_USER}:${ANALYTICS_PASSWORD}`).toString("base64")}`,
       },
     };
 
     const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => {
         if (res.statusCode === 200 || res.statusCode === 201) {
           resolve(data);
         } else {
@@ -44,7 +57,7 @@ async function executeClickHouseSql(sql: string): Promise<string> {
       });
     });
 
-    req.on('error', reject);
+    req.on("error", reject);
     req.end();
   });
 }
@@ -57,12 +70,14 @@ async function syncTelemetry() {
   // Skip sync if credentials are not configured — say so instead of failing
   // silently, since a silent skip here is indistinguishable from success.
   if (!ANALYTICS_URL || !ANALYTICS_USER || !ANALYTICS_PASSWORD) {
-    console.error('Telemetry sync skipped: analytics URL/credentials not configured or unparseable.');
+    console.error(
+      "Telemetry sync skipped: analytics URL/credentials not configured or unparseable.",
+    );
     return;
   }
 
   const lastSyncedLine = fs.existsSync(SYNCED_LOG)
-    ? parseInt(fs.readFileSync(SYNCED_LOG, 'utf-8').trim(), 10)
+    ? parseInt(fs.readFileSync(SYNCED_LOG, "utf-8").trim(), 10)
     : 0;
 
   const fileStream = fs.createReadStream(TELEMETRY_LOG);
@@ -90,10 +105,16 @@ async function syncTelemetry() {
 
   // Insert into ClickHouse
   for (const entry of entries) {
-    // Format array for ClickHouse: escape single quotes in file paths
-    const filesArray = entry.files_modified
-      .map(f => `'${f.replace(/'/g, "''")}'`)
-      .join(',');
+    // Format array for ClickHouse: escape single quotes in file paths.
+    // A hook can write a line with no `files_modified` at all, so treat a
+    // missing/non-array value as empty rather than throwing out of the loop and
+    // aborting the whole sync on one malformed entry.
+    const files = Array.isArray(entry.files_modified)
+      ? entry.files_modified
+      : [];
+    const filesArray = files
+      .map((f) => `'${String(f).replace(/'/g, "''")}'`)
+      .join(",");
     const insertSql = `
       INSERT INTO ${ANALYTICS_DATABASE}.agent_executions (
         type,
@@ -104,7 +125,7 @@ async function syncTelemetry() {
         status
       ) VALUES (
         'claude_code',
-        '${os.userInfo().username || 'unknown'}@${os.hostname()}',
+        '${os.userInfo().username || "unknown"}@${os.hostname()}',
         'unknown',
         [${filesArray}],
         0,
@@ -115,7 +136,10 @@ async function syncTelemetry() {
     try {
       await executeClickHouseSql(insertSql);
     } catch (error) {
-      console.error('Failed to sync telemetry to ClickHouse:', error instanceof Error ? error.message : error);
+      console.error(
+        "Failed to sync telemetry to ClickHouse:",
+        error instanceof Error ? error.message : error,
+      );
       return; // Stop syncing on error
     }
   }
@@ -126,7 +150,10 @@ async function syncTelemetry() {
 
 syncTelemetry()
   .then(() => process.exit(0))
-  .catch(err => {
-    console.error('Telemetry sync error:', err instanceof Error ? err.message : err);
+  .catch((err) => {
+    console.error(
+      "Telemetry sync error:",
+      err instanceof Error ? err.message : err,
+    );
     process.exit(1);
   });

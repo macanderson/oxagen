@@ -14,8 +14,8 @@ export const evalRunStartHandler: CapabilityHandler<
   // for reproducibility; the executor records the per-item resolved id too.
   const judgeModel = input.judgeModel ?? tierModelId("precise");
 
-  const { runPublicId, runId, datasetInternalId, itemCount } = await withTenantDb(
-    async (tx) => {
+  const { runPublicId, runId, datasetInternalId, itemCount } =
+    await withTenantDb(async (tx) => {
       const dataset = await resolveDataset(tx, input.datasetPublicId);
       if (dataset.itemCount === 0) {
         throw new HTTPException(422, {
@@ -52,8 +52,7 @@ export const evalRunStartHandler: CapabilityHandler<
         datasetInternalId: dataset.id,
         itemCount: effectiveCount,
       };
-    },
-  );
+    });
 
   // Enqueue the durable run. The executor (packages/inngest-functions) reads the
   // dataset items, runs each through the target + judge, and writes results.

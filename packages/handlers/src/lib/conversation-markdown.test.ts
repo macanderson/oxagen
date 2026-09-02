@@ -13,7 +13,9 @@ import {
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
-function row(overrides: Partial<ExportMessageRow> & { id: string }): ExportMessageRow {
+function row(
+  overrides: Partial<ExportMessageRow> & { id: string },
+): ExportMessageRow {
   return {
     parentMessageId: null,
     role: "user",
@@ -25,7 +27,9 @@ function row(overrides: Partial<ExportMessageRow> & { id: string }): ExportMessa
   };
 }
 
-function model(overrides: Partial<ConversationExportModel> = {}): ConversationExportModel {
+function model(
+  overrides: Partial<ConversationExportModel> = {},
+): ConversationExportModel {
   return {
     title: "Quarterly Planning",
     createdAt: new Date("2026-06-30T09:00:00.000Z"),
@@ -51,7 +55,11 @@ describe("walkActiveBranch", () => {
       row({ id: "b", parentMessageId: "a", role: "assistant" }),
       row({ id: "c", parentMessageId: "b" }),
     ];
-    expect(walkActiveBranch(rows, "c").map((r) => r.id)).toEqual(["a", "b", "c"]);
+    expect(walkActiveBranch(rows, "c").map((r) => r.id)).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
   });
 
   it("follows the active branch, excluding the abandoned sibling", () => {
@@ -80,7 +88,25 @@ describe("walkActiveBranch", () => {
 
   it("falls back when the recorded leaf id is missing from the rows", () => {
     const rows = [row({ id: "a" }), row({ id: "b", parentMessageId: "a" })];
-    expect(walkActiveBranch(rows, "ghost").map((r) => r.id)).toEqual(["a", "b"]);
+    expect(walkActiveBranch(rows, "ghost").map((r) => r.id)).toEqual([
+      "a",
+      "b",
+    ]);
+  });
+
+  it("terminates on a parent cycle instead of looping forever", () => {
+    // Corrupt data: a → b → a. Nothing in the schema forbids it, and an
+    // unguarded walk would spin while the path array grew without bound.
+    const rows = [
+      row({ id: "a", parentMessageId: "b" }),
+      row({ id: "b", parentMessageId: "a" }),
+    ];
+    expect(walkActiveBranch(rows, "b").map((r) => r.id)).toEqual(["a", "b"]);
+  });
+
+  it("terminates on a self-parenting row", () => {
+    const rows = [row({ id: "solo", parentMessageId: "solo" })];
+    expect(walkActiveBranch(rows, "solo").map((r) => r.id)).toEqual(["solo"]);
   });
 });
 
@@ -98,7 +124,12 @@ describe("messageToBlocks", () => {
         id: "a",
         role: "assistant",
         contentBlocks: [
-          { type: "reasoning", reasoningId: "r1", text: "thinking…", durationMs: 2100 },
+          {
+            type: "reasoning",
+            reasoningId: "r1",
+            text: "thinking…",
+            durationMs: 2100,
+          },
           { type: "text", text: "Here you go." },
           {
             type: "tool-call",
@@ -108,7 +139,13 @@ describe("messageToBlocks", () => {
             durationMs: 420,
             resultPreview: { hits: 3 },
           },
-          { type: "code-execute", toolCallId: "t2", language: "python", code: "print(1)", status: "success" },
+          {
+            type: "code-execute",
+            toolCallId: "t2",
+            language: "python",
+            code: "print(1)",
+            status: "success",
+          },
         ],
       }),
     );
@@ -141,7 +178,9 @@ describe("messageToBlocks", () => {
       }),
     );
     expect(blocks[0]).toMatchObject({ kind: "tool", capability: "x" });
-    expect((blocks[0] as { resultPreview?: string }).resultPreview).toBeUndefined();
+    expect(
+      (blocks[0] as { resultPreview?: string }).resultPreview,
+    ).toBeUndefined();
   });
 
   it("skips unknown block types and malformed entries", () => {
@@ -250,7 +289,12 @@ describe("conversationToMarkdown", () => {
             id: "a",
             role: "assistant",
             contentBlocks: [
-              { type: "tool-call", capability: "query_ontology", status: "success", durationMs: 90 },
+              {
+                type: "tool-call",
+                capability: "query_ontology",
+                status: "success",
+                durationMs: 90,
+              },
               { type: "code-execute", language: "ts", code: "const x = 1;" },
             ],
           }),
@@ -258,7 +302,9 @@ describe("conversationToMarkdown", () => {
         totalMessageCount: 1,
       }),
     );
-    expect(md).toContain("```\ntool: query_ontology · status: success · duration: 90ms\n```");
+    expect(md).toContain(
+      "```\ntool: query_ontology · status: success · duration: 90ms\n```",
+    );
     expect(md).toContain("```ts\nconst x = 1;\n```");
   });
 
@@ -269,7 +315,9 @@ describe("conversationToMarkdown", () => {
           row({
             id: "a",
             content: "see file",
-            metadata: { attachments: [{ name: "spec.md", url: "/api/v1/assets/gen_9" }] },
+            metadata: {
+              attachments: [{ name: "spec.md", url: "/api/v1/assets/gen_9" }],
+            },
           }),
         ]),
         totalMessageCount: 1,
@@ -310,7 +358,9 @@ describe("roleLabel / formatDuration / exportFilename", () => {
     expect(exportFilename("Quarterly Planning!", when, "md")).toBe(
       "quarterly-planning-2026-07-07.md",
     );
-    expect(exportFilename("  ", when, "pdf")).toBe("conversation-2026-07-07.pdf");
+    expect(exportFilename("  ", when, "pdf")).toBe(
+      "conversation-2026-07-07.pdf",
+    );
     const long = exportFilename("word ".repeat(40), when, "md");
     expect(long.length).toBeLessThanOrEqual(60 + "-2026-07-07.md".length);
   });

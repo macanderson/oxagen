@@ -38,7 +38,10 @@ export function CreatedState({
       data-testid="automation-created-state"
     >
       <div className="flex items-start gap-3">
-        <CheckCircle2 className="h-5 w-5 shrink-0 text-success mt-0.5" aria-hidden="true" />
+        <CheckCircle2
+          className="h-5 w-5 shrink-0 text-success mt-0.5"
+          aria-hidden="true"
+        />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-foreground">
             Created — disabled
@@ -56,7 +59,8 @@ export function CreatedState({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        The automation was created but is not live yet. Enable it when you are ready.
+        The automation was created but is not live yet. Enable it when you are
+        ready.
       </p>
 
       {enableError !== null && (
@@ -118,7 +122,9 @@ export function EnabledState({
           aria-hidden="true"
         />
         <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">Automation enabled</p>
+          <p className="text-sm font-medium text-foreground">
+            Automation enabled
+          </p>
           <p className="truncate text-xs text-muted-foreground">
             {createdAutomation?.name ?? fallbackName} is now live
           </p>

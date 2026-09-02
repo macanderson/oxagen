@@ -29,15 +29,17 @@ describe("capability.registry.get capability", () => {
   });
 
   it("declares the app layer (UI parity promise)", () => {
-    expect(capabilityRegistryGet.layers).toEqual(expect.arrayContaining(["app"]));
+    expect(capabilityRegistryGet.layers).toEqual(
+      expect.arrayContaining(["app"]),
+    );
   });
 
   it("requires a non-empty name", () => {
     expect(() => capabilityRegistryGet.input.parse({})).toThrow();
     expect(() => capabilityRegistryGet.input.parse({ name: "" })).toThrow();
-    expect(capabilityRegistryGet.input.parse({ name: "query_audit_log" }).name).toBe(
-      "query_audit_log",
-    );
+    expect(
+      capabilityRegistryGet.input.parse({ name: "query_audit_log" }).name,
+    ).toBe("query_audit_log");
   });
 
   it("accepts a null capability output (clean not-found)", () => {
@@ -60,13 +62,29 @@ describe("capability.registry.get capability", () => {
         noBillingGate: false,
         agent: null,
         auditTargetKind: null,
-        plugin: { id: "oxagen/media-svg", tier: "premium", minPlanTier: "build" },
+        plugin: {
+          id: "oxagen/media-svg",
+          tier: "premium",
+          minPlanTier: "build",
+        },
         orgRoles: { Owner: "allow" },
         workspaceRoles: {},
         inputFields: [
-          { name: "source", type: "enum(all | security | playbook)", required: false, description: "spine" },
+          {
+            name: "source",
+            type: "enum(all | security | playbook)",
+            required: false,
+            description: "spine",
+          },
         ],
-        outputFields: [{ name: "events", type: "array<object>", required: true, description: null }],
+        outputFields: [
+          {
+            name: "events",
+            type: "array<object>",
+            required: true,
+            description: null,
+          },
+        ],
         auditTargetIdField: null,
         produces: [],
         consumes: [],

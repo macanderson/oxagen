@@ -8,7 +8,7 @@ import { parseCypherSchema } from "./sources/neo4j";
 import { GENERATED_ASSET_KINDS, collectBlobAssets } from "./sources/blob";
 import { PG_DOMAINS } from "./domains";
 
-// The 21 Postgres schema domains declared in schema/_schemas.ts. The manifest
+// The 22 Postgres schema domains declared in schema/_schemas.ts. The manifest
 // must surface every one of these as a domain — this is the coverage contract.
 const EXPECTED_PG_SCHEMAS = [
   "agent",

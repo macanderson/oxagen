@@ -41,7 +41,10 @@ export type GithubSetupQueries = {
 };
 
 /** Build the GitHub connections (Knowledge → Sources) URL for a workspace. */
-export function buildSourcesPath(orgSlug: string, workspaceSlug: string): string {
+export function buildSourcesPath(
+  orgSlug: string,
+  workspaceSlug: string,
+): string {
   return `/${orgSlug}/${workspaceSlug}/knowledge/sources?setup=github`;
 }
 
@@ -54,7 +57,10 @@ export function buildSourcesPath(orgSlug: string, workspaceSlug: string): string
  * they can actually CONNECT/attach — not on the repo picker, which assumes an
  * existing token and dead-ends when there isn't one.
  */
-export function buildSettingsGithubPath(orgSlug: string, workspaceSlug: string): string {
+export function buildSettingsGithubPath(
+  orgSlug: string,
+  workspaceSlug: string,
+): string {
   return `/${orgSlug}/${workspaceSlug}/settings/github?github_installed=1`;
 }
 

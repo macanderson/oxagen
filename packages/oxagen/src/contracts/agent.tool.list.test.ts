@@ -14,7 +14,9 @@ describe("agent.tool.list capability", () => {
   });
 
   it("rejects a non-boolean includeExternal", () => {
-    expect(() => agentToolList.input.parse({ includeExternal: "yes" })).toThrow();
+    expect(() =>
+      agentToolList.input.parse({ includeExternal: "yes" }),
+    ).toThrow();
   });
 
   it("parses a valid output", () => {

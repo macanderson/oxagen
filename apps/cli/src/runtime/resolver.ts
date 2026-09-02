@@ -13,11 +13,7 @@
  */
 import { estimateModelRamGB, fitsDevice } from "./device.js";
 import { capabilityTable, capabilityRow } from "./registry.js";
-import type {
-  CapabilityRow,
-  DeviceProfile,
-  Quantization,
-} from "./types.js";
+import type { CapabilityRow, DeviceProfile, Quantization } from "./types.js";
 
 /** A resolved on-device pick: which model, at which quantization, and why. */
 export interface ResolvedOnDevice {
@@ -77,9 +73,12 @@ export function resolveBestOnDeviceModel(
   const rows = [...table].sort((a, b) => b.codeScore - a.codeScore);
 
   if (modelId !== "auto") {
-    const pinned = capabilityRow(modelId) ?? rows.find((r) => r.modelId === modelId);
+    const pinned =
+      capabilityRow(modelId) ?? rows.find((r) => r.modelId === modelId);
     if (!pinned) {
-      return unresolved(`pinned model "${modelId}" is not in the capability table`);
+      return unresolved(
+        `pinned model "${modelId}" is not in the capability table`,
+      );
     }
     const quant = bestFittingQuant(device, pinned, quantPref);
     if (!quant) {
@@ -113,7 +112,12 @@ function resolved(
   quant: Quantization,
   rationale: string,
 ): ResolvedOnDevice {
-  return { row, quant, estRamGB: estimateModelRamGB(row.params, quant), rationale };
+  return {
+    row,
+    quant,
+    estRamGB: estimateModelRamGB(row.params, quant),
+    rationale,
+  };
 }
 
 function unresolved(rationale: string): UnresolvedOnDevice {

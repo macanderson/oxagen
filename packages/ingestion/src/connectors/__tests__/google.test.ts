@@ -81,7 +81,10 @@ describe("google-calendar – normalizeRecord", () => {
     expect(result.externalId).toBe("event-abc");
     expect(result.displayName).toBe("Team sync");
     expect(result.properties["start"]).toBe("2024-02-01T10:00:00Z");
-    expect(result.properties["attendees"]).toEqual(["alice@example.com", "bob@example.com"]);
+    expect(result.properties["attendees"]).toEqual([
+      "alice@example.com",
+      "bob@example.com",
+    ]);
     expect(result.properties["organizer"]).toBe("alice@example.com");
   });
 
@@ -164,8 +167,13 @@ describe("google-contacts – normalizeRecord", () => {
     const raw = {
       resourceName: "people/c123456",
       etag: "etag-abc",
-      names: [{ displayName: "Alice Smith", givenName: "Alice", familyName: "Smith" }],
-      emailAddresses: [{ value: "alice@example.com" }, { value: "alice.work@example.com" }],
+      names: [
+        { displayName: "Alice Smith", givenName: "Alice", familyName: "Smith" },
+      ],
+      emailAddresses: [
+        { value: "alice@example.com" },
+        { value: "alice.work@example.com" },
+      ],
       phoneNumbers: [{ value: "+1-555-1234" }],
       organizations: [{ name: "ACME Corp", title: "Engineer" }],
     };
@@ -290,7 +298,9 @@ describe("google-bigquery – normalizeRecord", () => {
     expect(result.externalId).toBe("bq-row-1");
     expect(result.properties["user_id"]).toBe("u123");
     expect(result.properties["event_type"]).toBe("page_view");
-    expect(result.properties["page_url"]).toBe("https://app.example.com/dashboard");
+    expect(result.properties["page_url"]).toBe(
+      "https://app.example.com/dashboard",
+    );
   });
 
   it("uses _id as fallback externalId", () => {
@@ -336,13 +346,21 @@ describe.each([
   it("accepts a matching channel token", () => {
     const secret = "channel-token-abc123";
     expect(
-      connector.verifyWebhook!(PAYLOAD, { "x-goog-channel-token": secret }, secret),
+      connector.verifyWebhook!(
+        PAYLOAD,
+        { "x-goog-channel-token": secret },
+        secret,
+      ),
     ).toBe(true);
   });
 
   it("rejects a mismatched channel token (forged delivery)", () => {
     expect(
-      connector.verifyWebhook!(PAYLOAD, { "x-goog-channel-token": "wrong-token" }, "correct-token"),
+      connector.verifyWebhook!(
+        PAYLOAD,
+        { "x-goog-channel-token": "wrong-token" },
+        "correct-token",
+      ),
     ).toBe(false);
   });
 
@@ -352,13 +370,21 @@ describe.each([
 
   it("rejects when no secret is configured (fail closed)", () => {
     expect(
-      connector.verifyWebhook!(PAYLOAD, { "x-goog-channel-token": "anything" }, null),
+      connector.verifyWebhook!(
+        PAYLOAD,
+        { "x-goog-channel-token": "anything" },
+        null,
+      ),
     ).toBe(false);
   });
 
   it("rejects when the token length differs from the secret (no length leak)", () => {
     expect(
-      connector.verifyWebhook!(PAYLOAD, { "x-goog-channel-token": "short" }, "a-much-longer-secret"),
+      connector.verifyWebhook!(
+        PAYLOAD,
+        { "x-goog-channel-token": "short" },
+        "a-much-longer-secret",
+      ),
     ).toBe(false);
   });
 });

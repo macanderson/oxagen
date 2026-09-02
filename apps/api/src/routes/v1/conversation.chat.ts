@@ -9,6 +9,8 @@ export const conversationChatRoute = new Hono<AppEnv>();
 conversationChatRoute.post("/", async (c) => {
   const body = conversationChat.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(conversationChat.name, body, ctx, { surface: "api" });
+  const out = await invoke(conversationChat.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

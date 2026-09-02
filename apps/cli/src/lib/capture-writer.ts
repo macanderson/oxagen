@@ -32,7 +32,10 @@ export const stdoutWriter: CommandWriter = {
  * stdout and stderr are interleaved in call order — good enough for a single
  * assistant-message rendering of a command's output.
  */
-export function captureWriter(): { writer: CommandWriter; output: () => string } {
+export function captureWriter(): {
+  writer: CommandWriter;
+  output: () => string;
+} {
   const lines: string[] = [];
   return {
     writer: {

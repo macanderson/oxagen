@@ -10,8 +10,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseArtifactToml } from "@oxagen/agent-artifacts";
-import { discoverImportCandidates, importArtifacts } from "./index";
-import { mapForeignTools } from "./tool-mappings";
+import { discoverImportCandidates, importArtifacts } from "./index.js";
+import { mapForeignTools } from "./tool-mappings.js";
 
 describe("foreign artifact import", () => {
   it("discovers Claude, Codex, Cursor, and legacy Oxagen without mutating sources", async () => {

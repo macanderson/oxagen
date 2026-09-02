@@ -141,6 +141,12 @@ function toTotals(r: RawAgg): UsageTotals {
 // a single turn can drive several token_usage rows (tool loops, retries), so
 // this is strictly <= executions and answers "how many turns" not "how many
 // LLM calls".
+//
+// Caveat: the nil-UUID sentinel counts as one distinct value. Every stepless
+// row in the window (ingestion embeddings, image/video generation — see
+// NIL_UUID in clickhouse.ts) therefore collapses into a single phantom "turn",
+// adding at most 1 per group. Immaterial at dashboard grain, and not a billed
+// figure, but it is why a group with only stepless rows reports messages = 1.
 const AGG_SELECT = `
   sum(input_tokens)                        AS input_tokens,
   sum(output_tokens)                       AS output_tokens,

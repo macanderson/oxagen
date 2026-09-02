@@ -2,7 +2,12 @@
 
 import { ErrorState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 
-export default function AccessError({ reset }: { error: Error; reset: () => void }) {
+export default function AccessError({
+  reset,
+}: {
+  error: Error;
+  reset: () => void;
+}) {
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
       <ErrorState

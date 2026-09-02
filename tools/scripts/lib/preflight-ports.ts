@@ -19,7 +19,11 @@ export const APP_PORTS: readonly AppPort[] = [
 // True if something is already listening on `port` on the loopback interface.
 // A successful TCP connect means a server holds the port; a refused connection
 // or timeout means it's free. Read-only — never binds or sends data.
-export function isPortInUse(port: number, host = "127.0.0.1", timeoutMs = 1000): Promise<boolean> {
+export function isPortInUse(
+  port: number,
+  host = "127.0.0.1",
+  timeoutMs = 1000,
+): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = new net.Socket();
     const finish = (inUse: boolean): void => {
@@ -51,7 +55,11 @@ export function classifyStack(
   if (bound.length === 0) return { status: "clean" };
   if (bound.length >= ports.length) return { status: "running", bound };
   const boundPorts = new Set(bound.map((b) => b.port));
-  return { status: "partial", bound, free: ports.filter((p) => !boundPorts.has(p.port)) };
+  return {
+    status: "partial",
+    bound,
+    free: ports.filter((p) => !boundPorts.has(p.port)),
+  };
 }
 
 // Probe every app port and classify the result. Separated from the logging/exit

@@ -282,11 +282,35 @@ describe("decideMarketRoute", () => {
 describe("summarizeRoutingStats", () => {
   it("reports the cheapest eligible model per class and null when none clears", () => {
     const stats = [
-      row({ model: HAIKU, taskClass: "auth/single", avgCostUsdMicros: 500, verifiedRate: 0.6, samples: 100 }),
-      row({ model: SONNET, taskClass: "auth/single", avgCostUsdMicros: 3000, verifiedRate: 0.97, samples: 100 }),
-      row({ model: FABLE, taskClass: "auth/single", avgCostUsdMicros: 9000, verifiedRate: 0.99, samples: 100 }),
+      row({
+        model: HAIKU,
+        taskClass: "auth/single",
+        avgCostUsdMicros: 500,
+        verifiedRate: 0.6,
+        samples: 100,
+      }),
+      row({
+        model: SONNET,
+        taskClass: "auth/single",
+        avgCostUsdMicros: 3000,
+        verifiedRate: 0.97,
+        samples: 100,
+      }),
+      row({
+        model: FABLE,
+        taskClass: "auth/single",
+        avgCostUsdMicros: 9000,
+        verifiedRate: 0.99,
+        samples: 100,
+      }),
       // A class where nothing clears the bar.
-      row({ model: HAIKU, taskClass: "trivial/single", avgCostUsdMicros: 300, verifiedRate: 0.5, samples: 100 }),
+      row({
+        model: HAIKU,
+        taskClass: "trivial/single",
+        avgCostUsdMicros: 300,
+        verifiedRate: 0.5,
+        samples: 100,
+      }),
     ];
     const summary = summarizeRoutingStats(stats, ENFORCE);
     expect(summary).toHaveLength(2);

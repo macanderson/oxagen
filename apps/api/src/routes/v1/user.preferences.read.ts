@@ -9,6 +9,8 @@ export const userPreferencesReadRoute = new Hono<AppEnv>();
 userPreferencesReadRoute.get("/", async (c) => {
   const input = userPreferencesRead.input.parse({});
   const ctx = capabilityContext(c);
-  const out = await invoke(userPreferencesRead.name, input, ctx, { surface: "api" });
+  const out = await invoke(userPreferencesRead.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

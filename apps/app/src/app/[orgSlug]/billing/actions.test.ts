@@ -27,22 +27,26 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Hoisted fixtures — vi.hoisted() ensures they're available in vi.mock factories
 // ---------------------------------------------------------------------------
 
-const { mockDbRows, mockWithTenantDb, mockRunInTenantScope } = vi.hoisted(() => {
-  const mockDbRows: Array<{ role: string | null }> = [];
+const { mockDbRows, mockWithTenantDb, mockRunInTenantScope } = vi.hoisted(
+  () => {
+    const mockDbRows: Array<{ role: string | null }> = [];
 
-  const mockLimit = vi.fn(() => Promise.resolve(mockDbRows));
-  const mockWhere = vi.fn(() => ({ limit: mockLimit }));
-  const mockFrom = vi.fn(() => ({ where: mockWhere }));
-  const mockSelect = vi.fn(() => ({ from: mockFrom }));
-  const mockTx = { select: mockSelect };
-  const mockWithTenantDb = vi.fn((fn: (tx: unknown) => Promise<unknown>) => fn(mockTx));
+    const mockLimit = vi.fn(() => Promise.resolve(mockDbRows));
+    const mockWhere = vi.fn(() => ({ limit: mockLimit }));
+    const mockFrom = vi.fn(() => ({ where: mockWhere }));
+    const mockSelect = vi.fn(() => ({ from: mockFrom }));
+    const mockTx = { select: mockSelect };
+    const mockWithTenantDb = vi.fn((fn: (tx: unknown) => Promise<unknown>) =>
+      fn(mockTx),
+    );
 
-  const mockRunInTenantScope = vi.fn(
-    (_scope: unknown, fn: () => Promise<unknown>) => fn(),
-  );
+    const mockRunInTenantScope = vi.fn(
+      (_scope: unknown, fn: () => Promise<unknown>) => fn(),
+    );
 
-  return { mockDbRows, mockWithTenantDb, mockRunInTenantScope };
-});
+    return { mockDbRows, mockWithTenantDb, mockRunInTenantScope };
+  },
+);
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -65,8 +69,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: mockWithTenantDb,
-
+    withTenantDb: mockWithTenantDb,
   };
 });
 
@@ -380,20 +383,29 @@ describe("security event emission — billing.access_denied on gate failure", ()
     await cancelSubscriptionAction({ orgSlug: "acme" });
 
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<
+      string,
+      unknown
+    >;
     expect(event.eventType).toBe("billing.access_denied");
     expect(event.outcome).toBe("deny");
   });
 
   it("emits actorUserId from session on denial", async () => {
     await cancelSubscriptionAction({ orgSlug: "acme" });
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<
+      string,
+      unknown
+    >;
     expect(event.actorUserId).toBe("user-1");
   });
 
   it("emits orgId from resolved org on denial", async () => {
     await cancelSubscriptionAction({ orgSlug: "acme" });
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<
+      string,
+      unknown
+    >;
     expect(event.orgId).toBe("org-1");
   });
 });
@@ -408,7 +420,10 @@ describe("security event emission — billing.subscription_canceled on success",
     await cancelSubscriptionAction({ orgSlug: "acme" });
 
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<
+      string,
+      unknown
+    >;
     expect(event.eventType).toBe("billing.subscription_canceled");
     expect(event.outcome).toBe("success");
     expect(event.actorUserId).toBe("user-1");
@@ -417,7 +432,9 @@ describe("security event emission — billing.subscription_canceled on success",
   });
 
   it("does NOT emit a security event when cancel throws", async () => {
-    vi.mocked(cancelOrgSubscription).mockRejectedValue(new Error("stripe down"));
+    vi.mocked(cancelOrgSubscription).mockRejectedValue(
+      new Error("stripe down"),
+    );
     await cancelSubscriptionAction({ orgSlug: "acme" });
     expect(mockEmitSecurityEvent).not.toHaveBeenCalled();
   });
@@ -432,7 +449,10 @@ describe("security event emission — billing.subscription_reactivated on succes
     await reactivateSubscriptionAction({ orgSlug: "acme" });
 
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<
+      string,
+      unknown
+    >;
     expect(event.eventType).toBe("billing.subscription_reactivated");
     expect(event.outcome).toBe("success");
   });
@@ -446,7 +466,10 @@ describe("security event emission — billing.seats_changed on success", () => {
     await setSeatsAction({ orgSlug: "acme", seats: 3 });
 
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<
+      string,
+      unknown
+    >;
     expect(event.eventType).toBe("billing.seats_changed");
     expect(event.outcome).toBe("success");
   });
@@ -466,7 +489,10 @@ describe("security event emission — billing.auto_reload_updated on success", (
     await updateAutoReloadAction({ orgSlug: "acme", enabled: true });
 
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<
+      string,
+      unknown
+    >;
     expect(event.eventType).toBe("billing.auto_reload_updated");
     expect(event.outcome).toBe("success");
   });
@@ -478,10 +504,16 @@ describe("security event emission — billing.payment_method_default_changed on 
     const { setOrgDefaultPaymentMethod } = await import("@oxagen/billing");
     vi.mocked(setOrgDefaultPaymentMethod).mockResolvedValue(undefined);
 
-    await setDefaultPaymentMethodAction({ orgSlug: "acme", paymentMethodId: "pm_abc" });
+    await setDefaultPaymentMethodAction({
+      orgSlug: "acme",
+      paymentMethodId: "pm_abc",
+    });
 
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<
+      string,
+      unknown
+    >;
     expect(event.eventType).toBe("billing.payment_method_default_changed");
     expect(event.outcome).toBe("success");
   });
@@ -493,10 +525,16 @@ describe("security event emission — billing.payment_method_removed on success"
     const { removeOrgPaymentMethod } = await import("@oxagen/billing");
     vi.mocked(removeOrgPaymentMethod).mockResolvedValue(undefined);
 
-    await removePaymentMethodAction({ orgSlug: "acme", paymentMethodId: "pm_xyz" });
+    await removePaymentMethodAction({
+      orgSlug: "acme",
+      paymentMethodId: "pm_xyz",
+    });
 
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<
+      string,
+      unknown
+    >;
     expect(event.eventType).toBe("billing.payment_method_removed");
     expect(event.outcome).toBe("success");
   });
@@ -506,12 +544,17 @@ describe("security event emission — billing.payment_method_added on setup-inte
   it("emits billing.payment_method_added when setup intent created", async () => {
     setRole("owner");
     const { createPaymentMethodSetupIntent } = await import("@oxagen/billing");
-    vi.mocked(createPaymentMethodSetupIntent).mockResolvedValue({ clientSecret: "cs_test_abc" } as never);
+    vi.mocked(createPaymentMethodSetupIntent).mockResolvedValue({
+      clientSecret: "cs_test_abc",
+    } as never);
 
     await createSetupIntentAction({ orgSlug: "acme" });
 
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
-    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+    const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<
+      string,
+      unknown
+    >;
     expect(event.eventType).toBe("billing.payment_method_added");
     expect(event.outcome).toBe("success");
   });
@@ -548,7 +591,11 @@ describe("env validation scope + resilience (regression: page-wipe 812344190)", 
   it("changePlanAction validates ONLY NEXT_PUBLIC_APP_URL (never full loadEnv)", async () => {
     vi.mocked(changeOrgPlan).mockResolvedValue(null as never);
 
-    await changePlanAction({ orgSlug: "acme", targetPlanSlug: "scale-v2", interval: "month" });
+    await changePlanAction({
+      orgSlug: "acme",
+      targetPlanSlug: "scale-v2",
+      interval: "month",
+    });
 
     expect(requireEnv).toHaveBeenCalledWith(["NEXT_PUBLIC_APP_URL"]);
     expect(loadEnv).not.toHaveBeenCalled();
@@ -570,7 +617,11 @@ describe("env validation scope + resilience (regression: page-wipe 812344190)", 
       throw new Error("Invalid environment");
     });
 
-    const result = await changePlanAction({ orgSlug: "acme", targetPlanSlug: "scale-v2", interval: "month" });
+    const result = await changePlanAction({
+      orgSlug: "acme",
+      targetPlanSlug: "scale-v2",
+      interval: "month",
+    });
     expect(result.ok).toBe(false);
   });
 });

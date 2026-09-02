@@ -79,9 +79,21 @@ export const vendorLabels: Record<Vendor, string> = {
  * names stay decoupled from the underlying vendor model.
  */
 export const TEXT_TIERS: { id: TextTier; name: string; blurb: string }[] = [
-  { id: "fast", name: "Oxagen Fast", blurb: "Fastest — great for everyday tasks" },
-  { id: "balanced", name: "Oxagen Balanced", blurb: "Balanced quality and speed" },
-  { id: "precise", name: "Oxagen Precise", blurb: "Most capable, deep reasoning" },
+  {
+    id: "fast",
+    name: "Oxagen Fast",
+    blurb: "Fastest — great for everyday tasks",
+  },
+  {
+    id: "balanced",
+    name: "Oxagen Balanced",
+    blurb: "Balanced quality and speed",
+  },
+  {
+    id: "precise",
+    name: "Oxagen Precise",
+    blurb: "Most capable, deep reasoning",
+  },
 ];
 
 /** Display metadata for the two white-labeled media tiers (image + video). */
@@ -255,7 +267,9 @@ export function getModel(id: string): GatewayModel | undefined {
 }
 
 /** Resolve a (possibly id-string) argument to a GatewayModel. */
-function resolve(model: string | GatewayModel | undefined): GatewayModel | undefined {
+function resolve(
+  model: string | GatewayModel | undefined,
+): GatewayModel | undefined {
   if (model === undefined) return undefined;
   return typeof model === "string" ? getModel(model) : model;
 }
@@ -265,7 +279,9 @@ function resolve(model: string | GatewayModel | undefined): GatewayModel | undef
  * capability. An unknown id (not in the catalog) returns false — the caller
  * should not assume effort support for a model it can't describe.
  */
-export function supportsReasoning(model: string | GatewayModel | undefined): boolean {
+export function supportsReasoning(
+  model: string | GatewayModel | undefined,
+): boolean {
   return !!resolve(model)?.capabilities.includes("reasoning");
 }
 
@@ -275,7 +291,9 @@ export function supportsReasoning(model: string | GatewayModel | undefined): boo
  * unknown id returns false — never assume a model the catalog can't describe
  * can take image parts.
  */
-export function supportsVision(model: string | GatewayModel | undefined): boolean {
+export function supportsVision(
+  model: string | GatewayModel | undefined,
+): boolean {
   return !!resolve(model)?.capabilities.includes("vision");
 }
 
@@ -284,15 +302,21 @@ export function supportsVision(model: string | GatewayModel | undefined): boolea
  * the `video-input` capability. Distinct from `supportsVideo` (video
  * *generation*, e.g. Veo). Models without it fall back to sampled keyframes.
  */
-export function supportsVideoInput(model: string | GatewayModel | undefined): boolean {
+export function supportsVideoInput(
+  model: string | GatewayModel | undefined,
+): boolean {
   return !!resolve(model)?.capabilities.includes("video-input");
 }
 
-export function supportsImage(model: string | GatewayModel | undefined): boolean {
+export function supportsImage(
+  model: string | GatewayModel | undefined,
+): boolean {
   return !!resolve(model)?.capabilities.includes("image");
 }
 
-export function supportsVideo(model: string | GatewayModel | undefined): boolean {
+export function supportsVideo(
+  model: string | GatewayModel | undefined,
+): boolean {
   return !!resolve(model)?.capabilities.includes("video");
 }
 
@@ -301,7 +325,9 @@ export function supportsVideo(model: string | GatewayModel | undefined): boolean
  * at least one non-media capability. Pure image/video models (GPT Image, Veo,
  * FLUX) are not selectable in the text composer.
  */
-export function supportsText(model: string | GatewayModel | undefined): boolean {
+export function supportsText(
+  model: string | GatewayModel | undefined,
+): boolean {
   const caps = resolve(model)?.capabilities ?? [];
   return caps.some((c) => c !== "image" && c !== "video");
 }
@@ -360,9 +386,7 @@ export interface ResolvedTierCatalog {
 // Re-export the pure client-safe model-default resolver so it is available
 // from the "@oxagen/ai/catalog" subpath (client components) without any
 // provider-SDK or DB imports entering the bundle.
-export {
-  resolveModelDefaults,
-} from "./resolve-model-defaults";
+export { resolveModelDefaults } from "./resolve-model-defaults";
 export type {
   ModelTier,
   ModelDefaultsInput,

@@ -29,20 +29,26 @@ import { logger } from "./logger";
  * pluginId therefore 404s regardless of schemaUrl rather than silently
  * pretending to install.
  */
-export const integrationInstallHandler: CapabilityHandler<typeof integrationInstall> = async (
-  input,
-  ctx,
-) => {
+export const integrationInstallHandler: CapabilityHandler<
+  typeof integrationInstall
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    throw new HTTPException(401, { message: "integration.install requires an authenticated user" });
+    throw new HTTPException(401, {
+      message: "integration.install requires an authenticated user",
+    });
   }
 
   let connector: ConnectorDefinition;
   try {
     connector = getConnector(input.pluginId);
   } catch {
-    logger.warn({ pluginId: input.pluginId, orgId: ctx.orgId }, "integration.install: unknown plugin");
-    throw new HTTPException(404, { message: `Unknown plugin: ${input.pluginId}` });
+    logger.warn(
+      { pluginId: input.pluginId, orgId: ctx.orgId },
+      "integration.install: unknown plugin",
+    );
+    throw new HTTPException(404, {
+      message: `Unknown plugin: ${input.pluginId}`,
+    });
   }
 
   // Validate the supplied config against the connector's declared schema.
@@ -51,7 +57,9 @@ export const integrationInstallHandler: CapabilityHandler<typeof integrationInst
     const issues = parsed.error.issues
       .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
       .join("; ");
-    throw new HTTPException(422, { message: `Invalid plugin config: ${issues}` });
+    throw new HTTPException(422, {
+      message: `Invalid plugin config: ${issues}`,
+    });
   }
 
   const authScheme = connector.supportedAuthSchemes[0] ?? "public";

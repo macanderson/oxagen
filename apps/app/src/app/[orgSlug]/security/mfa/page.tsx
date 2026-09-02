@@ -8,7 +8,11 @@
 
 import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
-import { resolveOrg, getOrgRole, SECURITY_MANAGER_ROLES } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  getOrgRole,
+  SECURITY_MANAGER_ROLES,
+} from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
 import { loadMfaPolicy } from "./actions";
 import { MfaPolicyForm } from "./_components/mfa-policy-form";
@@ -47,8 +51,9 @@ export default async function SecurityMfaPage({
         }
       >
         <p className="mb-4 text-sm text-muted-foreground">
-          Require multi-factor authentication for every member in this organization. Satisfies SOC
-          2 CC6.1 logical access controls and CC6.2 authentication requirements.
+          Require multi-factor authentication for every member in this
+          organization. Satisfies SOC 2 CC6.1 logical access controls and CC6.2
+          authentication requirements.
         </p>
         <MfaPolicyForm
           orgSlug={orgSlug}
@@ -64,8 +69,8 @@ export default async function SecurityMfaPage({
         <code className="text-xs font-mono bg-muted px-1 rounded">
           security.mfa_policy_updated
         </code>{" "}
-        event in the append-only audit log with actor, timestamp, and outcome — satisfying CC6.1
-        and CC6.2 change evidence requirements.
+        event in the append-only audit log with actor, timestamp, and outcome —
+        satisfying CC6.1 and CC6.2 change evidence requirements.
       </Panel>
     </div>
   );

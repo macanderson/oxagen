@@ -19,7 +19,11 @@ import { repoBranchListHandler } from "@oxagen/handlers/repo.branch.list";
 import { logger } from "@oxagen/handlers/logger";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 
 export interface BranchActionCtx {
   orgSlug: string;
@@ -55,13 +59,19 @@ export async function listRepoBranchesAction(
   };
 
   try {
-    return await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-      const out = await repoBranchListHandler(input, capabilityCtx);
-      return {
-        branches: out.branches.map((b) => ({ name: b.name, isDefault: b.isDefault })),
-        defaultBranch: out.defaultBranch,
-      };
-    });
+    return await runInTenantScope(
+      { orgId: org.id, workspaceId: ws.id },
+      async () => {
+        const out = await repoBranchListHandler(input, capabilityCtx);
+        return {
+          branches: out.branches.map((b) => ({
+            name: b.name,
+            isDefault: b.isDefault,
+          })),
+          defaultBranch: out.defaultBranch,
+        };
+      },
+    );
   } catch (err) {
     logger.warn(
       {

@@ -77,6 +77,14 @@ const SURFACES = [
 
 const APP_URL = "https://app.oxagen.sh";
 
+/**
+ * The one command the docs actually recommend. Kept identical to the /install
+ * page and the floating InstallCliButton: a global npm install of @oxagen/cli
+ * is not reliably standalone yet (see /docs/cli/installation), so the landing
+ * CTAs must not advertise one.
+ */
+const INSTALL_CMD = "curl -fsSL https://cli.oxagen.sh/install.sh | sh";
+
 export default function HomePage(): ReactNode {
   return (
     <div className="flex flex-col">
@@ -134,7 +142,7 @@ export default function HomePage(): ReactNode {
             </div>
 
             <div className="mt-6">
-              <CopyCommand command="pnpm add -g @oxagen/cli" />
+              <CopyCommand command={INSTALL_CMD} />
             </div>
           </div>
 
@@ -287,7 +295,7 @@ export default function HomePage(): ReactNode {
             getting-started guide to stand up an organization and workspace.
           </p>
           <div className="mt-8">
-            <CopyCommand command="pnpm add -g @oxagen/cli" />
+            <CopyCommand command={INSTALL_CMD} />
           </div>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <Link

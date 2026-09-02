@@ -76,7 +76,9 @@ describe("resetPasswordAction", () => {
       });
 
       expect(result.ok).toBe(false);
-      expect((result as { ok: false; error: string }).error).toMatch(/token is missing/i);
+      expect((result as { ok: false; error: string }).error).toMatch(
+        /token is missing/i,
+      );
       expect(mockResetPassword).not.toHaveBeenCalled();
     });
 
@@ -88,7 +90,9 @@ describe("resetPasswordAction", () => {
       });
 
       expect(result.ok).toBe(false);
-      expect((result as { ok: false; error: string }).error).toMatch(/at least 8/i);
+      expect((result as { ok: false; error: string }).error).toMatch(
+        /at least 8/i,
+      );
       expect(mockResetPassword).not.toHaveBeenCalled();
     });
 
@@ -101,7 +105,9 @@ describe("resetPasswordAction", () => {
       });
 
       expect(result.ok).toBe(false);
-      expect((result as { ok: false; error: string }).error).toMatch(/at most 128/i);
+      expect((result as { ok: false; error: string }).error).toMatch(
+        /at most 128/i,
+      );
       expect(mockResetPassword).not.toHaveBeenCalled();
     });
   });
@@ -115,7 +121,9 @@ describe("resetPasswordAction", () => {
       });
 
       expect(result.ok).toBe(false);
-      expect((result as { ok: false; error: string }).error).toBe("Passwords do not match");
+      expect((result as { ok: false; error: string }).error).toBe(
+        "Passwords do not match",
+      );
       expect(mockResetPassword).not.toHaveBeenCalled();
     });
   });
@@ -131,7 +139,9 @@ describe("resetPasswordAction", () => {
       });
 
       expect(result.ok).toBe(false);
-      expect((result as { ok: false; error: string }).error).toMatch(/invalid or has expired/i);
+      expect((result as { ok: false; error: string }).error).toMatch(
+        /invalid or has expired/i,
+      );
     });
 
     it("returns ok:false with friendly message when API says Token not found", async () => {
@@ -144,7 +154,9 @@ describe("resetPasswordAction", () => {
       });
 
       expect(result.ok).toBe(false);
-      expect((result as { ok: false; error: string }).error).toMatch(/invalid or has expired/i);
+      expect((result as { ok: false; error: string }).error).toMatch(
+        /invalid or has expired/i,
+      );
     });
   });
 
@@ -159,7 +171,9 @@ describe("resetPasswordAction", () => {
       });
 
       expect(result.ok).toBe(false);
-      expect((result as { ok: false; error: string }).error).toMatch(/failed to reset password/i);
+      expect((result as { ok: false; error: string }).error).toMatch(
+        /failed to reset password/i,
+      );
     });
   });
 });

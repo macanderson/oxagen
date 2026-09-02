@@ -84,11 +84,14 @@ function formatScore(value: number | null): string {
   return value == null ? "—" : value.toFixed(2);
 }
 
-function formatPassRate(row: RunRow): string {
-  if (row.completedCount === 0 || row.avgScore == null) return "—";
-  // Pass rate isn't a column on the row — approximate from avgScore vs the
-  // threshold at the run level is not meaningful per-item, so surface the
-  // completed/total ratio as throughput instead of a fake per-item pass rate.
+/**
+ * The "Items" cell: completed-of-total throughput. A per-item pass rate is NOT
+ * available on a list row (only the run-level avgScore + threshold are), so we
+ * never fake one here. Independent of avgScore on purpose — an in-flight run
+ * has real progress to show long before it has a score.
+ */
+function formatItemsProgress(row: RunRow): string {
+  if (row.completedCount === 0) return "—";
   return `${row.completedCount}/${row.itemCount}`;
 }
 
@@ -336,7 +339,7 @@ export function RunsTable({
                     {formatScore(run.avgScore)}
                   </td>
                   <td className="whitespace-nowrap px-4 py-2 tabular-nums text-muted-foreground">
-                    {formatPassRate(run)}
+                    {formatItemsProgress(run)}
                   </td>
                   <td className="whitespace-nowrap px-4 py-2 tabular-nums text-muted-foreground">
                     {formatCost(run.costUsdMicros)}

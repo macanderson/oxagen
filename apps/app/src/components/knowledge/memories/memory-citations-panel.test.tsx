@@ -14,7 +14,14 @@
 
 import * as React from "react";
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor, within } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  waitFor,
+  within,
+} from "@testing-library/react";
 
 vi.mock("@/components/ui/popover", () => ({
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -29,10 +36,14 @@ vi.mock("@/components/ui/popover", () => ({
       {children}
     </button>
   ),
-  PopoverPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  PopoverPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
-const SelectContext = React.createContext<{ onValueChange?: (v: string) => void }>({});
+const SelectContext = React.createContext<{
+  onValueChange?: (v: string) => void;
+}>({});
 
 vi.mock("@/components/ui/select", () => ({
   Select: ({
@@ -62,8 +73,16 @@ vi.mock("@/components/ui/select", () => ({
     </div>
   ),
   SelectValue: () => null,
-  SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => {
+  SelectPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectItem: ({
+    value,
+    children,
+  }: {
+    value: string;
+    children: React.ReactNode;
+  }) => {
     const { onValueChange } = React.useContext(SelectContext);
     return (
       <button type="button" onClick={() => onValueChange?.(value)}>
@@ -73,7 +92,10 @@ vi.mock("@/components/ui/select", () => ({
   },
 }));
 
-import { MemoryCitationsPanel, type MemoryCitation } from "./memory-citations-panel";
+import {
+  MemoryCitationsPanel,
+  type MemoryCitation,
+} from "./memory-citations-panel";
 
 afterEach(cleanup);
 
@@ -113,10 +135,14 @@ describe("MemoryCitationsPanel", () => {
   });
 
   it("looks up citations for the entered execution id with no filters by default", async () => {
-    const listCitations = vi.fn().mockResolvedValue({ ok: true, citations: [citation()] });
+    const listCitations = vi
+      .fn()
+      .mockResolvedValue({ ok: true, citations: [citation()] });
     render(<MemoryCitationsPanel {...BASE} listCitations={listCitations} />);
 
-    fireEvent.change(screen.getByLabelText("Execution ID"), { target: { value: "exec-1" } });
+    fireEvent.change(screen.getByLabelText("Execution ID"), {
+      target: { value: "exec-1" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /load citations/i }));
 
     await waitFor(() => expect(listCitations).toHaveBeenCalledTimes(1));
@@ -134,7 +160,9 @@ describe("MemoryCitationsPanel", () => {
     });
     render(<MemoryCitationsPanel {...BASE} listCitations={listCitations} />);
 
-    fireEvent.change(screen.getByLabelText("Execution ID"), { target: { value: "exec-1" } });
+    fireEvent.change(screen.getByLabelText("Execution ID"), {
+      target: { value: "exec-1" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /load citations/i }));
 
     // NodeRef renders the lesson in both its trigger and its (mock-open)
@@ -145,7 +173,9 @@ describe("MemoryCitationsPanel", () => {
         screen.getAllByText("Always open a PR before merging.").length,
       ).toBeGreaterThan(0),
     );
-    expect(screen.queryByText("913d6df1-5dca-4bc7-aff6-193939228260")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("913d6df1-5dca-4bc7-aff6-193939228260"),
+    ).not.toBeInTheDocument();
 
     // Scope to the results table — the influence toggle buttons above the
     // table also render the raw "DECISIVE" label, so an unscoped query would
@@ -163,19 +193,27 @@ describe("MemoryCitationsPanel", () => {
     });
     render(<MemoryCitationsPanel {...BASE} listCitations={listCitations} />);
 
-    fireEvent.change(screen.getByLabelText("Execution ID"), { target: { value: "exec-1" } });
+    fireEvent.change(screen.getByLabelText("Execution ID"), {
+      target: { value: "exec-1" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /load citations/i }));
 
     await waitFor(() =>
-      expect(screen.getByText(/1 rule violation recorded in this execution/i)).toBeInTheDocument(),
+      expect(
+        screen.getByText(/1 rule violation recorded in this execution/i),
+      ).toBeInTheDocument(),
     );
   });
 
   it("passes the selected compliance filter and toggled influence filters to listCitations", async () => {
-    const listCitations = vi.fn().mockResolvedValue({ ok: true, citations: [] });
+    const listCitations = vi
+      .fn()
+      .mockResolvedValue({ ok: true, citations: [] });
     render(<MemoryCitationsPanel {...BASE} listCitations={listCitations} />);
 
-    fireEvent.change(screen.getByLabelText("Execution ID"), { target: { value: "exec-2" } });
+    fireEvent.change(screen.getByLabelText("Execution ID"), {
+      target: { value: "exec-2" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Violation" }));
     fireEvent.click(screen.getByRole("button", { name: "DECISIVE" }));
     fireEvent.click(screen.getByRole("button", { name: "CONTRIBUTING" }));
@@ -192,13 +230,19 @@ describe("MemoryCitationsPanel", () => {
   });
 
   it("shows an empty-results state when the execution cited nothing matching the filter", async () => {
-    const listCitations = vi.fn().mockResolvedValue({ ok: true, citations: [] });
+    const listCitations = vi
+      .fn()
+      .mockResolvedValue({ ok: true, citations: [] });
     render(<MemoryCitationsPanel {...BASE} listCitations={listCitations} />);
 
-    fireEvent.change(screen.getByLabelText("Execution ID"), { target: { value: "exec-3" } });
+    fireEvent.change(screen.getByLabelText("Execution ID"), {
+      target: { value: "exec-3" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /load citations/i }));
 
-    await waitFor(() => expect(screen.getByText("No citations recorded")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("No citations recorded")).toBeInTheDocument(),
+    );
   });
 
   it("shows an error state on failure and retries the same lookup", async () => {
@@ -208,10 +252,14 @@ describe("MemoryCitationsPanel", () => {
       .mockResolvedValueOnce({ ok: true, citations: [citation()] });
     render(<MemoryCitationsPanel {...BASE} listCitations={listCitations} />);
 
-    fireEvent.change(screen.getByLabelText("Execution ID"), { target: { value: "exec-4" } });
+    fireEvent.change(screen.getByLabelText("Execution ID"), {
+      target: { value: "exec-4" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /load citations/i }));
 
-    await waitFor(() => expect(screen.getByText("execution not found")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("execution not found")).toBeInTheDocument(),
+    );
 
     const retryButton = within(screen.getByRole("alert")).getByRole("button", {
       name: /try again/i,
@@ -221,7 +269,9 @@ describe("MemoryCitationsPanel", () => {
     await waitFor(() => expect(listCitations).toHaveBeenCalledTimes(2));
     // NodeRef renders the lesson in trigger + (mock-open) popover header.
     await waitFor(() =>
-      expect(screen.getAllByText("Never push directly to main.").length).toBeGreaterThan(0),
+      expect(
+        screen.getAllByText("Never push directly to main.").length,
+      ).toBeGreaterThan(0),
     );
   });
 });

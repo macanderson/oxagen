@@ -10,7 +10,10 @@ describe("api.key.rotate capability", () => {
   });
 
   it("accepts an optional name override", () => {
-    const parsed = apiKeyRotate.input.parse({ keyPublicId: "aky_abc", name: "rotated" });
+    const parsed = apiKeyRotate.input.parse({
+      keyPublicId: "aky_abc",
+      name: "rotated",
+    });
     expect(parsed.name).toBe("rotated");
   });
 

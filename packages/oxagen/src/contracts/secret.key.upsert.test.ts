@@ -16,7 +16,10 @@ describe("secret.key.upsert contract", () => {
     expect(parsed.sensitive).toBe(true);
   });
   it("honours an explicit sensitive=false", () => {
-    expect(secretKeyUpsert.input.parse({ key: "LOG_LEVEL", sensitive: false }).sensitive).toBe(false);
+    expect(
+      secretKeyUpsert.input.parse({ key: "LOG_LEVEL", sensitive: false })
+        .sensitive,
+    ).toBe(false);
   });
   it("rejects input missing the required key", () => {
     expect(() => secretKeyUpsert.input.parse({})).toThrow();

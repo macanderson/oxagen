@@ -16,6 +16,8 @@ agentFileLockListRoute.get("/", async (c) => {
     ...(repo ? { repo } : {}),
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(agentFileLockList.name, input, ctx, { surface: "api" });
+  const out = await invoke(agentFileLockList.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

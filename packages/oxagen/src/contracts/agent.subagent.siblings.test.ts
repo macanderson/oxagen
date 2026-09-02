@@ -59,7 +59,10 @@ describe("agent.subagent.siblings capability", () => {
   });
 
   it("parses an empty siblings list", () => {
-    const parsed = agentSubagentSiblings.output.parse({ ...BASE_OUTPUT, siblings: [] });
+    const parsed = agentSubagentSiblings.output.parse({
+      ...BASE_OUTPUT,
+      siblings: [],
+    });
     expect(parsed.siblings).toEqual([]);
   });
 

@@ -12,7 +12,9 @@ const tabs = [
 
 describe("resolveActiveTab", () => {
   it("returns the exact match", () => {
-    expect(resolveActiveTab(tabs, "/org/ws/settings/general")).toBe("/org/ws/settings/general");
+    expect(resolveActiveTab(tabs, "/org/ws/settings/general")).toBe(
+      "/org/ws/settings/general",
+    );
   });
 
   it("returns the longest prefix match", () => {
@@ -21,9 +23,9 @@ describe("resolveActiveTab", () => {
       { href: "/org/ws/settings" },
       { href: "/org/ws/settings/general" },
     ];
-    expect(resolveActiveTab(deepTabs, "/org/ws/settings/general/advanced")).toBe(
-      "/org/ws/settings/general",
-    );
+    expect(
+      resolveActiveTab(deepTabs, "/org/ws/settings/general/advanced"),
+    ).toBe("/org/ws/settings/general");
   });
 
   it("does not match partial segments (no false-positive prefix)", () => {
@@ -37,7 +39,9 @@ describe("resolveActiveTab", () => {
   });
 
   it("falls back to first tab href when no match", () => {
-    expect(resolveActiveTab(tabs, "/org/ws/unknown-page")).toBe("/org/ws/settings");
+    expect(resolveActiveTab(tabs, "/org/ws/unknown-page")).toBe(
+      "/org/ws/settings",
+    );
   });
 
   it("returns empty string when tabs array is empty", () => {
@@ -49,11 +53,7 @@ describe("resolveActiveTab", () => {
   });
 
   it("selects the deepest match among overlapping hrefs", () => {
-    const overlapping = [
-      { href: "/a" },
-      { href: "/a/b" },
-      { href: "/a/b/c" },
-    ];
+    const overlapping = [{ href: "/a" }, { href: "/a/b" }, { href: "/a/b/c" }];
     expect(resolveActiveTab(overlapping, "/a/b/c/d")).toBe("/a/b/c");
   });
 

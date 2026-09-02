@@ -15,17 +15,23 @@ afterEach(cleanup);
 
 describe("Slider — render", () => {
   it("renders a slider role", () => {
-    const { getByRole } = render(<Slider defaultValue={50} min={0} max={100} />);
+    const { getByRole } = render(
+      <Slider defaultValue={50} min={0} max={100} />,
+    );
     expect(getByRole("slider")).toBeInTheDocument();
   });
 
   it("renders with aria-valuenow reflecting defaultValue", () => {
-    const { getByRole } = render(<Slider defaultValue={30} min={0} max={100} />);
+    const { getByRole } = render(
+      <Slider defaultValue={30} min={0} max={100} />,
+    );
     expect(getByRole("slider")).toHaveAttribute("aria-valuenow", "30");
   });
 
   it("slider has aria-valuenow attribute", () => {
-    const { getByRole } = render(<Slider defaultValue={50} min={0} max={100} />);
+    const { getByRole } = render(
+      <Slider defaultValue={50} min={0} max={100} />,
+    );
     expect(getByRole("slider")).toHaveAttribute("aria-valuenow");
   });
 
@@ -37,7 +43,11 @@ describe("Slider — render", () => {
   });
 
   it("merges custom className on root", () => {
-    const { container } = render(<Slider defaultValue={0} className="custom-slider" />);
-    expect((container.firstChild as HTMLElement).className).toContain("custom-slider");
+    const { container } = render(
+      <Slider defaultValue={0} className="custom-slider" />,
+    );
+    expect((container.firstChild as HTMLElement).className).toContain(
+      "custom-slider",
+    );
   });
 });

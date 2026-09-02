@@ -4,12 +4,14 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const automationDisableHandler: CapabilityHandler<typeof automationDisable> = async (
-  input,
-  ctx,
-) => {
+export const automationDisableHandler: CapabilityHandler<
+  typeof automationDisable
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "automation.disable: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "automation.disable: rejected — no authenticated user",
+    );
     throw new Error("automation.disable requires an authenticated user");
   }
 
@@ -28,7 +30,9 @@ export const automationDisableHandler: CapabilityHandler<typeof automationDisabl
   );
 
   if (!trigger) {
-    throw new Error(`automation.disable: trigger not found: ${input.automation_id}`);
+    throw new Error(
+      `automation.disable: trigger not found: ${input.automation_id}`,
+    );
   }
 
   // Disable the trigger and set the playbook status to "draft" (nearest

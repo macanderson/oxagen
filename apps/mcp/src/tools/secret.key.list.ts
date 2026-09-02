@@ -22,6 +22,8 @@ export default async function secretKeyListTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(secretKeyList.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(secretKeyList.name, args, ctx, {
+    surface: "mcp",
+  });
   return secretKeyList.output.parse(output);
 }

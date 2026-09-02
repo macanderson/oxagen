@@ -97,7 +97,10 @@ describe("billingSubscriptionUpgradeStartHandler — happy path", () => {
       url: "https://checkout.stripe.com/session_abc",
     });
 
-    const result = await billingSubscriptionUpgradeStartHandler(validInput, validCtx);
+    const result = await billingSubscriptionUpgradeStartHandler(
+      validInput,
+      validCtx,
+    );
 
     expect(mockCreateCheckoutSession).toHaveBeenCalledWith({
       orgId: "org-1",
@@ -124,7 +127,10 @@ describe("billingSubscriptionUpgradeStartHandler — happy path", () => {
       apiKeyId: "aky_abc",
     };
 
-    const result = await billingSubscriptionUpgradeStartHandler(validInput, apiKeyCtx);
+    const result = await billingSubscriptionUpgradeStartHandler(
+      validInput,
+      apiKeyCtx,
+    );
 
     expect(mockCreateCheckoutSession).toHaveBeenCalledOnce();
     expect(result.checkoutUrl).toBe("https://checkout.stripe.com/session_xyz");

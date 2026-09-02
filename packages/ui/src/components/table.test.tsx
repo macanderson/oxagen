@@ -57,12 +57,16 @@ describe("Table", () => {
 
   it("applies the default density padding vars", () => {
     renderTable();
-    expect(screen.getByRole("table").className).toContain("[--table-pad-y:0.625rem]");
+    expect(screen.getByRole("table").className).toContain(
+      "[--table-pad-y:0.625rem]",
+    );
   });
 
   it("compact density tightens the vertical padding var", () => {
     renderTable({ density: "compact" });
-    expect(screen.getByRole("table").className).toContain("[--table-pad-y:0.375rem]");
+    expect(screen.getByRole("table").className).toContain(
+      "[--table-pad-y:0.375rem]",
+    );
   });
 
   it("merges containerClassName onto the scroll wrapper", () => {
@@ -73,7 +77,9 @@ describe("Table", () => {
 
   it("header uses the card-header token bar", () => {
     renderTable();
-    expect(screen.getByTestId("thead").className).toContain("bg-card-header-bg");
+    expect(screen.getByTestId("thead").className).toContain(
+      "bg-card-header-bg",
+    );
   });
 
   it("head cells are uppercase header ink", () => {

@@ -5,10 +5,12 @@ import { getCapability } from "../registry";
 describe("agent.mcp.set_enabled capability", () => {
   it("parses a valid enable and disable input", () => {
     expect(
-      agentMcpSetEnabled.input.parse({ mcpServerId: "mcs_1", enabled: true }).enabled,
+      agentMcpSetEnabled.input.parse({ mcpServerId: "mcs_1", enabled: true })
+        .enabled,
     ).toBe(true);
     expect(
-      agentMcpSetEnabled.input.parse({ mcpServerId: "mcs_1", enabled: false }).enabled,
+      agentMcpSetEnabled.input.parse({ mcpServerId: "mcs_1", enabled: false })
+        .enabled,
     ).toBe(false);
   });
 
@@ -29,7 +31,11 @@ describe("agent.mcp.set_enabled capability", () => {
 
   it("rejects a negative snapshot count", () => {
     expect(() =>
-      agentMcpSetEnabled.output.parse({ mcpServerId: "mcs_1", enabled: true, snapshotCount: -1 }),
+      agentMcpSetEnabled.output.parse({
+        mcpServerId: "mcs_1",
+        enabled: true,
+        snapshotCount: -1,
+      }),
     ).toThrow();
   });
 

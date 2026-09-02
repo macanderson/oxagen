@@ -55,7 +55,8 @@ function setupMocks(row: JoinedRow | null) {
         from: () => ({
           innerJoin: () => ({
             where: () => ({
-              limit: (n: number) => Promise.resolve(row ? [row].slice(0, n) : []),
+              limit: (n: number) =>
+                Promise.resolve(row ? [row].slice(0, n) : []),
             }),
           }),
         }),
@@ -116,14 +117,19 @@ describe("agent.subagent.result.get handler", () => {
     // from a nonexistent id, surfaced as a 404, never another org's data.
     setupMocks(null);
 
-    const err = await agentSubagentResultGetHandler({ runId: "sar_other_org" }, CTX).then(
+    const err = await agentSubagentResultGetHandler(
+      { runId: "sar_other_org" },
+      CTX,
+    ).then(
       () => {
         throw new Error("expected handler to reject");
       },
       (e: unknown) => e,
     );
     expect(err).toBeInstanceOf(SubagentRunNotFoundError);
-    expect((err as SubagentRunNotFoundError).code).toBe("subagent_run_not_found");
+    expect((err as SubagentRunNotFoundError).code).toBe(
+      "subagent_run_not_found",
+    );
     expect((err as Error).message).toBe("Subagent run sar_other_org not found");
   });
 });

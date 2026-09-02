@@ -14,7 +14,10 @@ describe("plugin.credential.set_secret contract", () => {
   });
   it("rejects invalid authKind", () => {
     expect(() =>
-      pluginCredentialSetSecret.input.parse({ orgListingId: "x", authKind: "none" }),
+      pluginCredentialSetSecret.input.parse({
+        orgListingId: "x",
+        authKind: "none",
+      }),
     ).toThrow();
   });
 });

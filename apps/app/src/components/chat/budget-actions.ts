@@ -25,9 +25,7 @@ export interface BudgetDefaultInput {
   graceOveragePct: number;
 }
 
-export type BudgetActionResult =
-  | { ok: true }
-  | { ok: false; error: string };
+export type BudgetActionResult = { ok: true } | { ok: false; error: string };
 
 /** Persist the composer's current per-turn budget as the user's saved default. */
 export async function saveBudgetDefaultAction(
@@ -61,7 +59,8 @@ export async function saveBudgetDefaultAction(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to save budget default",
+      error:
+        err instanceof Error ? err.message : "Failed to save budget default",
     };
   }
 }

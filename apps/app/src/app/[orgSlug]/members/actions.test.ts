@@ -8,6 +8,7 @@
  *     - duplicate pending invitation (unique constraint) → {ok:false, code:"already_invited"}
  *     - happy path → {ok:true}
  *   declineInvitationAction:
+ *     - non-owner/admin caller → {ok:false, error}, no revalidation
  *     - no matching row (not found or already resolved) → {ok:false, error}
  *     - happy path → {ok:true}
  *
@@ -64,13 +65,23 @@ const {
     }),
   };
 
-  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) => fn(mockTx));
-  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) => fn());
+  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) =>
+    fn(mockTx),
+  );
+  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) =>
+    fn(),
+  );
 
   // Passthrough template: build subject/text/html that embed the inviteUrl so
   // tests can assert the URL (and thus the publicId) is wired through.
   const mockInvitationEmailTemplate = vi.fn(
-    (i: { inviteUrl: string; inviterName: string; orgName: string; role: string; email: string }) => ({
+    (i: {
+      inviteUrl: string;
+      inviterName: string;
+      orgName: string;
+      role: string;
+      email: string;
+    }) => ({
       subject: `You've been invited to join ${i.orgName} on Oxagen`,
       text: `${i.inviterName} invited ${i.email} — accept: ${i.inviteUrl}`,
       html: `<a href="${i.inviteUrl}">Accept invitation</a>`,
@@ -87,7 +98,9 @@ const {
     mockRevalidatePath: vi.fn(),
     mockSendEmail: vi.fn(),
     mockInvitationEmailTemplate,
-    mockLoadEnv: vi.fn(() => ({ NEXT_PUBLIC_APP_URL: "https://app.example.com" })),
+    mockLoadEnv: vi.fn(() => ({
+      NEXT_PUBLIC_APP_URL: "https://app.example.com",
+    })),
     dbState,
   };
 });
@@ -107,8 +120,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: mockWithTenantDb,
-
+    withTenantDb: mockWithTenantDb,
   };
 });
 vi.mock("@oxagen/billing", async (importOriginal) => {
@@ -117,7 +129,9 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
     ...real,
     assertSeatAvailable: mockAssertSeatAvailable,
     isSeatLimitError: (err: unknown) =>
-      typeof err === "object" && err !== null && (err as { code?: string }).code === "seat_limit_reached",
+      typeof err === "object" &&
+      err !== null &&
+      (err as { code?: string }).code === "seat_limit_reached",
     SeatLimitError: class SeatLimitError extends Error {
       readonly code = "seat_limit_reached" as const;
       constructor() {
@@ -147,7 +161,9 @@ vi.mock("@oxagen/config/env", () => ({
 import { inviteMemberAction, declineInvitationAction } from "./actions";
 
 const ORG = { id: "org-1", name: "Acme Inc", slug: "acme" };
-const SESSION = { user: { id: "user-1", name: "Alice Inviter", email: "alice@example.com" } };
+const SESSION = {
+  user: { id: "user-1", name: "Alice Inviter", email: "alice@example.com" },
+};
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -165,7 +181,10 @@ describe("inviteMemberAction", () => {
     // role) clear the authorization gate.
     mockGetOrgRole.mockResolvedValue("owner");
     mockAssertSeatAvailable.mockResolvedValue(undefined);
-    mockSendEmail.mockResolvedValue({ id: "msg-1", accepted: ["newmember@example.com"] });
+    mockSendEmail.mockResolvedValue({
+      id: "msg-1",
+      accepted: ["newmember@example.com"],
+    });
   });
 
   it("returns forbidden when the caller is not a member of the org", async () => {
@@ -254,7 +273,10 @@ describe("inviteMemberAction", () => {
   });
 
   it("returns already_invited when DB throws a unique constraint violation", async () => {
-    dbState.insertError = new Error("duplicate key value violates unique constraint invitations_org_email_pending_idx");
+    // Verbatim Postgres text for the partial unique index, which is named "n".
+    dbState.insertError = new Error(
+      'duplicate key value violates unique constraint "n"',
+    );
 
     const res = await inviteMemberAction({
       orgSlug: "acme",
@@ -298,7 +320,9 @@ describe("inviteMemberAction", () => {
     expect(payload.subject).toContain("Acme Inc");
     expect(payload.text).toContain("invi_test123");
     expect(payload.html).toContain("invi_test123");
-    expect(payload.text).toContain("https://app.example.com/acme/members/accept?invitation=invi_test123");
+    expect(payload.text).toContain(
+      "https://app.example.com/acme/members/accept?invitation=invi_test123",
+    );
 
     // The template receives the org name, role, and invitee email.
     expect(mockInvitationEmailTemplate).toHaveBeenCalledTimes(1);
@@ -351,6 +375,19 @@ describe("declineInvitationAction", () => {
     dbState.updateReturning = [{ id: "inv-1" }];
     mockGetSession.mockResolvedValue(SESSION);
     mockResolveOrg.mockResolvedValue(ORG);
+    // Revoking is owner/admin-only, same gate as inviting.
+    mockGetOrgRole.mockResolvedValue("owner");
+  });
+
+  it("returns {ok:false} when the caller is not an owner or admin", async () => {
+    mockGetOrgRole.mockResolvedValue("member");
+
+    const res = await declineInvitationAction({
+      orgSlug: "acme",
+      invitationPublicId: "inv_01",
+    });
+    expect(res).toMatchObject({ ok: false, error: expect.any(String) });
+    expect(mockRevalidatePath).not.toHaveBeenCalled();
   });
 
   it("returns {ok:true} when the invitation exists and is updated", async () => {

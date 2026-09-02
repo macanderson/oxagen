@@ -9,7 +9,9 @@ const mocks = vi.hoisted(() => ({
   selectMock: vi.fn(),
 }));
 
-mocks.whereMock.mockImplementation(async (): Promise<unknown> => mocks.selectResult() as unknown);
+mocks.whereMock.mockImplementation(
+  async (): Promise<unknown> => mocks.selectResult() as unknown,
+);
 mocks.fromMock.mockReturnValue({ where: mocks.whereMock });
 mocks.selectMock.mockReturnValue({ from: mocks.fromMock });
 
@@ -18,10 +20,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => fakeToolListDb,
-  withTenantDb: async (fn: (tx: typeof fakeToolListDb) => Promise<unknown>) =>
-    fn(fakeToolListDb),
-
+    db: () => fakeToolListDb,
+    withTenantDb: async (fn: (tx: typeof fakeToolListDb) => Promise<unknown>) =>
+      fn(fakeToolListDb),
   };
 });
 
@@ -42,7 +43,9 @@ vi.mock("@oxagen/oxagen/plugins", () => ({
 }));
 
 vi.mock("@oxagen/plugins", () => ({
-  listEntitledCapabilityPluginIds: vi.fn(async (_orgId: string, _workspaceId: string) => new Set<string>()),
+  listEntitledCapabilityPluginIds: vi.fn(
+    async (_orgId: string, _workspaceId: string) => new Set<string>(),
+  ),
 }));
 
 import { agentToolListHandler } from "./agent.tool.list";
@@ -55,7 +58,11 @@ const BUILTIN_CAP = {
   name: "generate_document",
   description: "Generates a document",
   domain: "documents",
-  agent: { riskLevel: "low" as const, category: "documents", requiresApproval: false },
+  agent: {
+    riskLevel: "low" as const,
+    category: "documents",
+    requiresApproval: false,
+  },
   surfaces: ["api", "mcp", "agent"] as const,
 };
 
@@ -64,7 +71,9 @@ describe("agent.tool.list handler", () => {
     mocks.listCapabilities.mockClear();
     mocks.selectMock.mockClear();
     mocks.selectResult.mockClear();
-    mocks.getSurfaces.mockImplementation((c: { surfaces?: readonly string[] }) => c.surfaces ?? []);
+    mocks.getSurfaces.mockImplementation(
+      (c: { surfaces?: readonly string[] }) => c.surfaces ?? [],
+    );
   });
 
   it("returns only builtin agent-surface tools when includeExternal is false", async () => {
@@ -79,7 +88,11 @@ describe("agent.tool.list handler", () => {
   });
 
   it("filters out capabilities not on the agent surface", async () => {
-    const apiOnly = { ...BUILTIN_CAP, name: "billing.query", surfaces: ["api"] as const };
+    const apiOnly = {
+      ...BUILTIN_CAP,
+      name: "billing.query",
+      surfaces: ["api"] as const,
+    };
     mocks.listCapabilities.mockReturnValueOnce([BUILTIN_CAP, apiOnly]);
 
     const result = await agentToolListHandler({ includeExternal: false }, CTX);
@@ -150,13 +163,17 @@ describe("agent.tool.list handler — entitlement filter (WP4)", () => {
     mocks.listCapabilities.mockClear();
     mocks.selectMock.mockClear();
     mocks.selectResult.mockClear();
-    mocks.getSurfaces.mockImplementation((c: { surfaces?: readonly string[] }) => c.surfaces ?? []);
+    mocks.getSurfaces.mockImplementation(
+      (c: { surfaces?: readonly string[] }) => c.surfaces ?? [],
+    );
     vi.mocked(pluginForContract).mockClear();
     vi.mocked(listEntitledCapabilityPluginIds).mockClear();
     // Default: pluginForContract returns undefined (all builtins).
     vi.mocked(pluginForContract).mockReturnValue(undefined);
     // Default: empty entitled set.
-    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(new Set<string>());
+    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(
+      new Set<string>(),
+    );
   });
 
   it("includes plugin-claimed capability when org is entitled to the pack", async () => {
@@ -180,7 +197,9 @@ describe("agent.tool.list handler — entitlement filter (WP4)", () => {
     vi.mocked(pluginForContract).mockImplementation((name: string) =>
       name === "media.svg.generate" ? PLUGIN_MANIFEST : undefined,
     );
-    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(new Set<string>());
+    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(
+      new Set<string>(),
+    );
     mocks.listCapabilities.mockReturnValueOnce([BUILTIN_CAP, CLAIMED_CAP]);
 
     const result = await agentToolListHandler({ includeExternal: false }, CTX);
@@ -215,7 +234,11 @@ describe("agent.tool.list handler — entitlement filter (WP4)", () => {
   });
 
   it("fetches the entitled set at most once per handler invocation", async () => {
-    const PLUGIN_B = { ...PLUGIN_MANIFEST, id: "oxagen/other", contracts: ["generate_document"] };
+    const PLUGIN_B = {
+      ...PLUGIN_MANIFEST,
+      id: "oxagen/other",
+      contracts: ["generate_document"],
+    };
     vi.mocked(pluginForContract).mockImplementation((name: string) => {
       if (name === "media.svg.generate") return PLUGIN_MANIFEST;
       if (name === "generate_document") return PLUGIN_B;
@@ -232,6 +255,9 @@ describe("agent.tool.list handler — entitlement filter (WP4)", () => {
     // service is called exactly once per handler invocation.
     expect(result.tools).toHaveLength(2);
     expect(listEntitledCapabilityPluginIds).toHaveBeenCalledTimes(1);
-    expect(listEntitledCapabilityPluginIds).toHaveBeenCalledWith(CTX.orgId, CTX.workspaceId);
+    expect(listEntitledCapabilityPluginIds).toHaveBeenCalledWith(
+      CTX.orgId,
+      CTX.workspaceId,
+    );
   });
 });

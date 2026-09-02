@@ -32,10 +32,27 @@ const TRANSPORTS: Array<{ value: TransportValue; label: string }> = [
   { value: "stdio", label: "stdio" },
 ];
 
-const AUTH_KINDS: Array<{ value: AuthKindValue; label: string; description: string }> = [
-  { value: "none", label: "No authentication", description: "Public endpoint, no credentials required." },
-  { value: "secret", label: "Secret / API key", description: "A static bearer token or API key you'll enter after connecting." },
-  { value: "oauth", label: "OAuth", description: "The server authenticates via an OAuth flow." },
+const AUTH_KINDS: Array<{
+  value: AuthKindValue;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "none",
+    label: "No authentication",
+    description: "Public endpoint, no credentials required.",
+  },
+  {
+    value: "secret",
+    label: "Secret / API key",
+    description:
+      "A static bearer token or API key you'll enter after connecting.",
+  },
+  {
+    value: "oauth",
+    label: "OAuth",
+    description: "The server authenticates via an OAuth flow.",
+  },
 ];
 
 interface ConnectMcpFormProps {
@@ -73,7 +90,8 @@ export function ConnectMcpForm({
   const router = useRouter();
   const [name, setName] = React.useState("");
   const [endpointUrl, setEndpointUrl] = React.useState("");
-  const [transport, setTransport] = React.useState<TransportValue>("streamable-http");
+  const [transport, setTransport] =
+    React.useState<TransportValue>("streamable-http");
   const [authKind, setAuthKind] = React.useState<AuthKindValue>("none");
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -139,7 +157,11 @@ export function ConnectMcpForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4" data-testid="connect-mcp-form">
+    <form
+      onSubmit={handleSubmit}
+      className="flex flex-col gap-4"
+      data-testid="connect-mcp-form"
+    >
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1">
           <Label htmlFor="mcp-server-name" className="text-xs">
@@ -175,8 +197,16 @@ export function ConnectMcpForm({
         <Label htmlFor="mcp-server-transport" className="text-xs">
           Transport
         </Label>
-        <Select value={transport} onValueChange={(v) => setTransport(v as TransportValue)}>
-          <SelectTrigger id="mcp-server-transport" size="sm" className="w-full sm:w-64" disabled={pending}>
+        <Select
+          value={transport}
+          onValueChange={(v) => setTransport(v as TransportValue)}
+        >
+          <SelectTrigger
+            id="mcp-server-transport"
+            size="sm"
+            className="w-full sm:w-64"
+            disabled={pending}
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectPopup>
@@ -210,7 +240,9 @@ export function ConnectMcpForm({
               <Radio value={k.value} disabled={pending} className="mt-0.5" />
               <span>
                 <span className="font-medium text-foreground">{k.label}</span>
-                <span className="block text-xs text-muted-foreground">{k.description}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {k.description}
+                </span>
               </span>
             </label>
           ))}
@@ -220,7 +252,11 @@ export function ConnectMcpForm({
       {error && <p className="text-xs text-destructive">{error}</p>}
 
       <div>
-        <Button type="submit" disabled={pending} data-testid="connect-mcp-submit-btn">
+        <Button
+          type="submit"
+          disabled={pending}
+          data-testid="connect-mcp-submit-btn"
+        >
           <Plug className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
           {pending ? "Connecting…" : "Connect server"}
         </Button>

@@ -37,19 +37,27 @@ describe("OnboardingRecommendation story render (under Storybook)", () => {
 
   it("renders the fixture recommendation cards, not the 404 error box", async () => {
     render(
-      <OnboardingRecommendation slugs={SLUGS} onApply={noopApply} onDiscard={noopDiscard} />,
+      <OnboardingRecommendation
+        slugs={SLUGS}
+        onApply={noopApply}
+        onDiscard={noopDiscard}
+      />,
     );
 
     // Success state appears once the fixture data resolves.
     expect(await screen.findByText("Recommended")).toBeInTheDocument();
     expect(screen.getByText(/Contact/)).toBeInTheDocument();
     expect(screen.getByText(/Deal/)).toBeInTheDocument();
-    expect(screen.getByText(/Based on 180 sampled nodes\./)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Based on 180 sampled nodes\./),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Accept" })).toBeInTheDocument();
 
     // The reported symptom — a "Request failed (404)" / failure error box —
     // must NOT be present.
     expect(screen.queryByText(/Request failed/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Failed to get recommendations/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Failed to get recommendations/),
+    ).not.toBeInTheDocument();
   });
 });

@@ -56,12 +56,19 @@ export function CopyableId({
         className,
       )}
     >
-      {label && <span className="shrink-0 font-sans font-medium text-muted-foreground/80">{label}</span>}
+      {label && (
+        <span className="shrink-0 font-sans font-medium text-muted-foreground/80">
+          {label}
+        </span>
+      )}
       <span className="truncate">{shown}</span>
       {copied ? (
         <Check className="size-3 shrink-0 text-success" aria-hidden="true" />
       ) : (
-        <Copy className="size-3 shrink-0 opacity-60 group-hover:opacity-100" aria-hidden="true" />
+        <Copy
+          className="size-3 shrink-0 opacity-60 group-hover:opacity-100"
+          aria-hidden="true"
+        />
       )}
     </button>
   );

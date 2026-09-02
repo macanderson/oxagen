@@ -17,7 +17,11 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     throw new Error("[notifications.mark] orgId is required (org-scoped)");
   }
 
-  const updates: Partial<{ unread: boolean; archived: boolean; updatedAt: Date }> = {
+  const updates: Partial<{
+    unread: boolean;
+    archived: boolean;
+    updatedAt: Date;
+  }> = {
     updatedAt: new Date(),
   };
   if (typeof read === "boolean") updates.unread = !read;
@@ -42,10 +46,16 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         );
     });
   } catch (err) {
-    logger.error({ err, id, orgId: ctx.orgId, userId: ctx.userId }, "notifications.mark: failed");
+    logger.error(
+      { err, id, orgId: ctx.orgId, userId: ctx.userId },
+      "notifications.mark: failed",
+    );
     throw err;
   }
 
-  logger.info({ id, orgId: ctx.orgId, userId: ctx.userId }, "notifications.mark: ok");
+  logger.info(
+    { id, orgId: ctx.orgId, userId: ctx.userId },
+    "notifications.mark: ok",
+  );
   return { ok: true };
 };

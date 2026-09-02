@@ -14,16 +14,27 @@
  * writes them directly on some OAuth account create/link paths that bypass
  * this application-layer hook, so the columns can't be dropped without
  * breaking sign-in. The strip hooks here cover the write paths this module
- * sees — the Postgres BEFORE INSERT/UPDATE trigger (migration archive
- * 0003_soc2_auth_hardening.sql) is the backstop that nulls each plaintext
- * column whenever its *_enc counterpart is non-null on ANY write path.
+ * sees.
  *
  * ENCRYPTION COVERAGE: All three token fields — access_token, refresh_token,
  * AND id_token — are encrypted into their *_enc counterparts and their
- * plaintext columns are stripped before any write. Double protection:
- *   1. Application hook (this file) strips plaintext on covered write paths.
- *   2. DB trigger (migration archive 0003_soc2_auth_hardening.sql) strips on ANY
- *      write path, including Better Auth internal paths that bypass this hook.
+ * plaintext columns are stripped before any write that goes through these
+ * hooks.
+ *
+ * THIS HOOK IS CURRENTLY THE ONLY LINE OF DEFENSE. A Postgres
+ * BEFORE INSERT/UPDATE trigger (`auth.strip_plaintext_tokens` /
+ * `auth_accounts_strip_plaintext_tokens`) was written to null each plaintext
+ * column whenever its *_enc counterpart is non-null on ANY write path,
+ * including the Better Auth internal paths that bypass this file. It exists
+ * only in the retired Drizzle migration set
+ * (packages/database/drizzle/0000_baseline.sql and
+ * drizzle/migration_archive/0003_soc2_auth_hardening.sql). Drizzle migration
+ * is disabled (`packages/database` "migrate" script exits 1) and Atlas
+ * (packages/database/atlas/migrations/) is the canonical applier — and no
+ * Atlas migration creates that function or trigger. So any database
+ * provisioned from Atlas has the *_enc columns but NOT the backstop. Do not
+ * describe this module as "double protection" until the trigger is ported to
+ * an Atlas migration.
  *
  * NEVER log plaintext token values anywhere in this module.
  */
@@ -41,10 +52,10 @@ import type { KmsAdapter } from "@oxagen/crypto";
  *
  * NOTE: the plaintext `accessToken` / `refreshToken` / `idToken` columns still
  * exist in the DB but this module strips them before write so plaintext is not
- * durably stored once the *_enc counterpart is populated. They may be present on
- * the incoming account object from Better Auth's in-memory representation during
- * the OAuth callback — we read them for encryption purposes only and strip them
- * from the write set.
+ * durably stored on any write path that reaches these hooks. They may be present
+ * on the incoming account object from Better Auth's in-memory representation
+ * during the OAuth callback — we read them for encryption purposes only and
+ * strip them from the write set.
  */
 interface TokenFields {
   accessToken?: string | null;
@@ -181,9 +192,10 @@ export async function decryptAccountTokens(
  * - access_token / refresh_token / id_token: all still columns in the schema
  *   (Better Auth writes/reads them on some paths) but we strip them here so the
  *   plaintext is never durably stored once the encrypted *_enc counterpart
- *   exists. The DB trigger (migration archive 0003_soc2_auth_hardening.sql) is
- *   the final backstop for any write path that bypasses this hook.
- * MUST run on every account write.
+ *   exists.
+ * MUST run on every account write — with the DB trigger absent from the Atlas
+ * migration set (see the module header), a write path that skips this function
+ * persists the plaintext token with nothing behind it to clean up.
  */
 function stripPlaintextTokens(
   account: Record<string, unknown>,

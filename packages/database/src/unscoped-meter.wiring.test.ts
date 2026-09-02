@@ -1,5 +1,9 @@
-// unscoped-meter.integration.test.ts — end-to-end wiring check for
-// recordIfUnscoped.
+// unscoped-meter.wiring.test.ts — wiring check for recordIfUnscoped.
+//
+// Despite exercising two real modules together, this is a UNIT test: the
+// database client and the RLS flag are mocked and no Postgres is involved. The
+// suite that needs a live database lives under `integration/` and runs from
+// vitest.integration.config.ts — do not move this there.
 //
 // tenant.test.ts already asserts withSystemDb calls a MOCKED recordIfUnscoped
 // with the right args. That proves the call site exists but not that the

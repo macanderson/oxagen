@@ -38,7 +38,10 @@ export default function ConfirmDestructiveInline({
         aria-live="polite"
       >
         <div className="flex items-center gap-3">
-          <CheckCircle2 className="h-5 w-5 shrink-0 text-success" aria-hidden="true" />
+          <CheckCircle2
+            className="h-5 w-5 shrink-0 text-success"
+            aria-hidden="true"
+          />
           <p className="text-sm font-medium text-foreground">Confirmed</p>
         </div>
       </div>
@@ -53,7 +56,10 @@ export default function ConfirmDestructiveInline({
         aria-live="polite"
       >
         <div className="flex items-center gap-3">
-          <XCircle className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <XCircle
+            className="h-5 w-5 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
           <p className="text-sm font-medium text-foreground">Cancelled</p>
         </div>
       </div>
@@ -62,7 +68,9 @@ export default function ConfirmDestructiveInline({
 
   return (
     <div
-      className={cn("rounded-2xl border border-destructive/30 bg-destructive/5 p-5 space-y-4 w-full max-w-sm")}
+      className={cn(
+        "rounded-2xl border border-destructive/30 bg-destructive/5 p-5 space-y-4 w-full max-w-sm",
+      )}
       role="alertdialog"
       aria-label={title}
     >

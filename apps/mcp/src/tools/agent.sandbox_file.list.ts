@@ -6,7 +6,7 @@ import { buildContext } from "../context";
 
 export const schema = {
   sessionId: agentSandboxFilesList.input.shape.sessionId.describe(
-    "Durable-session id (sbx_…) returned by agent.sandbox.start.",
+    "Durable-session id (sbx_…) returned by start_sandbox.",
   ),
   path: agentSandboxFilesList.input.shape.path.describe(
     "Workspace-relative directory to list (e.g. `src`). Omit to list the workspace root. Must not be absolute or contain `..` segments.",

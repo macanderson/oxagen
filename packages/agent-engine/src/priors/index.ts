@@ -100,13 +100,22 @@ export function loadPrior(baseDir: string, repo: string): RepoPrior | null {
   if (typeof obj.testDiscovery !== "string") {
     return null;
   }
-  if (!Array.isArray(obj.layout) || !obj.layout.every((x) => typeof x === "string")) {
+  if (
+    !Array.isArray(obj.layout) ||
+    !obj.layout.every((x) => typeof x === "string")
+  ) {
     return null;
   }
-  if (!Array.isArray(obj.conventions) || !obj.conventions.every((x) => typeof x === "string")) {
+  if (
+    !Array.isArray(obj.conventions) ||
+    !obj.conventions.every((x) => typeof x === "string")
+  ) {
     return null;
   }
-  if (!Array.isArray(obj.pitfalls) || !obj.pitfalls.every((x) => typeof x === "string")) {
+  if (
+    !Array.isArray(obj.pitfalls) ||
+    !obj.pitfalls.every((x) => typeof x === "string")
+  ) {
     return null;
   }
   if (typeof obj.updatedAt !== "string") {
@@ -169,8 +178,10 @@ export function savePrior(baseDir: string, prior: RepoPrior): void {
  * Format: "## Repo prior: <repo>" header, followed by sections for test
  * invocation, test discovery, layout, conventions, and pitfalls.
  *
- * Hard cap: 2000 characters. Truncates pitfalls first, then conventions,
- * then layout to fit. testInvocation is never truncated (always included).
+ * Hard cap: 2000 characters. Over the cap the whole pitfalls section is
+ * dropped first; if that is still not enough the tail is clipped, which eats
+ * conventions and then layout. The header, testInvocation, and testDiscovery
+ * sit at the head and always survive.
  *
  * Returns the rendered block, possibly truncated.
  */
@@ -211,52 +222,21 @@ export function renderPrior(prior: RepoPrior): string {
     lines.push(`- ${item}`);
   }
 
-  let rendered = lines.join("\n");
+  const rendered = lines.join("\n");
+  if (rendered.length <= 2000) return rendered;
 
-  // Enforce 2000-char cap by truncating in order: pitfalls, conventions, layout.
-  if (rendered.length > 2000) {
-    // Try removing pitfalls one by one.
-    const pitfallStart = rendered.indexOf("**Pitfalls:**");
-    if (pitfallStart !== -1) {
-      const beforePitfalls = rendered.slice(0, pitfallStart);
-      if (beforePitfalls.length > 2000) {
-        return beforePitfalls.slice(0, 2000);
-      }
-      // Remove pitfalls and try again.
-      rendered = beforePitfalls;
-      if (rendered.length > 2000) {
-        return rendered.slice(0, 2000);
-      }
-    }
-
-    // Try removing conventions.
-    const conventionsStart = rendered.indexOf("**Conventions:**");
-    if (conventionsStart !== -1) {
-      const beforeConventions = rendered.slice(0, conventionsStart);
-      if (beforeConventions.length > 2000) {
-        return beforeConventions.slice(0, 2000);
-      }
-      rendered = beforeConventions;
-      if (rendered.length > 2000) {
-        return rendered.slice(0, 2000);
-      }
-    }
-
-    // Try removing layout.
-    const layoutStart = rendered.indexOf("**Layout:**");
-    if (layoutStart !== -1) {
-      const beforeLayout = rendered.slice(0, layoutStart);
-      if (beforeLayout.length > 2000) {
-        return beforeLayout.slice(0, 2000);
-      }
-      rendered = beforeLayout;
-      if (rendered.length > 2000) {
-        return rendered.slice(0, 2000);
-      }
-    }
-  }
-
-  return rendered.length > 2000 ? rendered.slice(0, 2000) : rendered;
+  // Over the cap. Pitfalls are the first thing to go — they are the longest
+  // and the least load-bearing section, and they are always rendered last, so
+  // cutting at their heading keeps layout and conventions whole.
+  const pitfallStart = rendered.indexOf("**Pitfalls:**");
+  const withoutPitfalls =
+    pitfallStart === -1 ? rendered : rendered.slice(0, pitfallStart);
+  // Dropping pitfalls was enough: keep everything above them intact.
+  if (withoutPitfalls.length <= 2000) return withoutPitfalls;
+  // Still over: clip the tail, which eats conventions and then layout in that
+  // order because they are rendered in that order. The header and the test
+  // invocation sit at the head, so they always survive.
+  return withoutPitfalls.slice(0, 2000);
 }
 
 // ── Accrue pitfalls ───────────────────────────────────────────────────────
@@ -274,14 +254,20 @@ export function renderPrior(prior: RepoPrior): string {
  *
  * Never throws.
  */
-export function accruePitfalls(baseDir: string, repo: string, lessons: string[]): RepoPrior | null {
+export function accruePitfalls(
+  baseDir: string,
+  repo: string,
+  lessons: string[],
+): RepoPrior | null {
   const prior = loadPrior(baseDir, repo);
   if (prior === null) {
     return null;
   }
 
   // Deduplicate: keep existing pitfalls (normalized), add new unique ones.
-  const existing = new Set(prior.pitfalls.map((s) => s.trim().replace(/\s+/g, " ").toLowerCase()));
+  const existing = new Set(
+    prior.pitfalls.map((s) => s.trim().replace(/\s+/g, " ").toLowerCase()),
+  );
   const newPitfalls: string[] = [...prior.pitfalls];
 
   for (const lesson of lessons) {
@@ -337,7 +323,10 @@ export function lintPriorLegality(prior: RepoPrior): string[] {
     { name: "testDiscovery", value: prior.testDiscovery },
     { name: "updatedAt", value: prior.updatedAt },
     ...prior.layout.map((v, i) => ({ name: `layout[${i}]`, value: v })),
-    ...prior.conventions.map((v, i) => ({ name: `conventions[${i}]`, value: v })),
+    ...prior.conventions.map((v, i) => ({
+      name: `conventions[${i}]`,
+      value: v,
+    })),
     ...prior.pitfalls.map((v, i) => ({ name: `pitfalls[${i}]`, value: v })),
   ];
 

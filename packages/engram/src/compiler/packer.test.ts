@@ -10,7 +10,11 @@ import type { RetrievalCandidate } from "../retrieval/types";
 import type { MemoryRecord, Namespace, Provenance } from "../types";
 
 const NS: Namespace = { org: "o", workspace: "w" };
-const PROV: Provenance = { author: "t", derivedFrom: [], timestamp: 1700000000000 };
+const PROV: Provenance = {
+  author: "t",
+  derivedFrom: [],
+  timestamp: 1700000000000,
+};
 
 // A dense code-ish body: chars/4 badly under-counts its real token cost.
 const CODE = "const x=[1,2,3].map((n)=>n*2).filter(Boolean);".repeat(20);
@@ -50,12 +54,22 @@ function budget(total: number): TokenBudget {
   const system = Math.floor(total * 0.02);
   const working = Math.floor(total * 0.08);
   const procedural = Math.floor(total * 0.04);
-  return { total, reserved: { system, procedural, working, volatile: total - system - working - procedural } };
+  return {
+    total,
+    reserved: {
+      system,
+      procedural,
+      working,
+      volatile: total - system - working - procedural,
+    },
+  };
 }
 
 describe("pack() budget invariant", () => {
   it("never exceeds budget.total even with token-dense bodies", () => {
-    const candidates = Array.from({ length: 40 }, (_, i) => cand(semantic(`${CODE}#${i}`, 0.9), 0.9));
+    const candidates = Array.from({ length: 40 }, (_, i) =>
+      cand(semantic(`${CODE}#${i}`, 0.9), 0.9),
+    );
     const result = pack({
       candidates,
       budget: budget(2000),

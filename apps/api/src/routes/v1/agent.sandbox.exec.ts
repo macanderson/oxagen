@@ -9,6 +9,8 @@ export const agentSandboxExecRoute = new Hono<AppEnv>();
 agentSandboxExecRoute.post("/", async (c) => {
   const body = agentSandboxExec.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(agentSandboxExec.name, body, ctx, { surface: "api" });
+  const out = await invoke(agentSandboxExec.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

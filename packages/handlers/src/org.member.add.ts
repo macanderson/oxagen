@@ -20,10 +20,15 @@ import { logger, maskEmail } from "./logger";
 // 30-day invitation TTL.
 const INVITATION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-export const orgMemberAddHandler: CapabilityHandler<typeof orgMemberAdd> = async (input, ctx) => {
+export const orgMemberAddHandler: CapabilityHandler<
+  typeof orgMemberAdd
+> = async (input, ctx) => {
   // ── Auth guard ───────────────────────────────────────────────────────────────
   if (!ctx.userId && !ctx.apiKeyId) {
-    logger.warn({ orgId: ctx.orgId }, "org.member.add: rejected — no authenticated principal");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "org.member.add: rejected — no authenticated principal",
+    );
     throw new Error("Unauthorized: no authenticated principal");
   }
   if (!ctx.orgId) {
@@ -91,12 +96,21 @@ export const orgMemberAddHandler: CapabilityHandler<typeof orgMemberAdd> = async
         `A pending invitation for ${input.email} already exists in this org. Revoke or wait for it to expire before resending.`,
       );
     }
-    logger.error({ err, orgId: ctx.orgId, email: maskEmail(input.email) }, "org.member.add: invitation insert failed");
+    logger.error(
+      { err, orgId: ctx.orgId, email: maskEmail(input.email) },
+      "org.member.add: invitation insert failed",
+    );
     throw err;
   }
 
   logger.info(
-    { orgId: ctx.orgId, email: maskEmail(input.email), role: input.role, invitationId: invitation.publicId, surface: ctx.surface },
+    {
+      orgId: ctx.orgId,
+      email: maskEmail(input.email),
+      role: input.role,
+      invitationId: invitation.publicId,
+      surface: ctx.surface,
+    },
     "org.member.add: invitation created",
   );
 

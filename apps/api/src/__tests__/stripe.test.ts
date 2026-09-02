@@ -48,16 +48,24 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
 vi.mock("@oxagen/handlers", () => ({
   serveFile: vi.fn(),
   FileNotFoundError: class FileNotFoundError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileNotFoundError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileNotFoundError";
+    }
   },
   FileForbiddenError: class FileForbiddenError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileForbiddenError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileForbiddenError";
+    }
   },
 }));
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -66,7 +74,9 @@ import { makeRequest } from "./_helpers";
 const STRIPE_PATH = "/webhooks/stripe";
 
 function makeStripePost(body: string, signature?: string): Request {
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
   if (signature !== undefined) {
     headers["stripe-signature"] = signature;
   }
@@ -144,14 +154,18 @@ describe("stripe webhook — success", () => {
   });
 
   it("returns 200 {received:true} on success", async () => {
-    const res = await app.fetch(makeStripePost(JSON.stringify({}), "t=999,v1=sig"));
+    const res = await app.fetch(
+      makeStripePost(JSON.stringify({}), "t=999,v1=sig"),
+    );
     expect(res.status).toBe(200);
     const body = (await res.json()) as { received: boolean };
     expect(body.received).toBe(true);
   });
 
   it("includes the status from processStripeEvent", async () => {
-    const res = await app.fetch(makeStripePost(JSON.stringify({}), "t=999,v1=sig"));
+    const res = await app.fetch(
+      makeStripePost(JSON.stringify({}), "t=999,v1=sig"),
+    );
     const body = (await res.json()) as { received: boolean; status: string };
     expect(body.status).toBe("processed");
   });
@@ -160,6 +174,9 @@ describe("stripe webhook — success", () => {
     // The raw body must be passed as a string to verifyStripeSignature
     const rawBody = '{"id":"evt_raw","object":"event"}';
     await app.fetch(makeStripePost(rawBody, "t=999,v1=sig"));
-    expect(mocks.verifyStripeSignature).toHaveBeenCalledWith(rawBody, "t=999,v1=sig");
+    expect(mocks.verifyStripeSignature).toHaveBeenCalledWith(
+      rawBody,
+      "t=999,v1=sig",
+    );
   });
 });

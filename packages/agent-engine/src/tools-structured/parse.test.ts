@@ -52,7 +52,14 @@ describe("parseVitestJson", () => {
     numPassedTests: 3,
     numFailedTests: 0,
     numPendingTests: 1,
-    testResults: [{ name: "/repo/a.test.ts", startTime: 1000, endTime: 1200, assertionResults: [] }],
+    testResults: [
+      {
+        name: "/repo/a.test.ts",
+        startTime: 1000,
+        endTime: 1200,
+        assertionResults: [],
+      },
+    ],
   });
   const failing = JSON.stringify({
     numPassedTests: 1,
@@ -64,7 +71,9 @@ describe("parseVitestJson", () => {
           {
             fullName: "adds numbers",
             status: "failed",
-            failureMessages: ["AssertionError: expected 1 to be 2\n at /repo/a.test.ts:12:5"],
+            failureMessages: [
+              "AssertionError: expected 1 to be 2\n at /repo/a.test.ts:12:5",
+            ],
             location: { line: 12, column: 5 },
           },
         ],
@@ -85,7 +94,11 @@ describe("parseVitestJson", () => {
     const r = parseVitestJson(failing);
     expect(r.failed).toBe(1);
     expect(r.failures).toHaveLength(1);
-    expect(r.failures[0]).toMatchObject({ test: "adds numbers", file: "/repo/a.test.ts", line: 12 });
+    expect(r.failures[0]).toMatchObject({
+      test: "adds numbers",
+      file: "/repo/a.test.ts",
+      line: 12,
+    });
     expect(r.failures[0]?.reason).toContain("expected 1 to be 2");
   });
   it("flags a parse error on unparseable input", () => {
@@ -141,7 +154,10 @@ describe("test-file selection helpers", () => {
       "src/a.ts:1: import",
       "src/b.spec.ts:2: import",
     ];
-    expect(testFilesFromGrepHits(hits, 10)).toEqual(["src/a.test.ts", "src/b.spec.ts"]);
+    expect(testFilesFromGrepHits(hits, 10)).toEqual([
+      "src/a.test.ts",
+      "src/b.spec.ts",
+    ]);
     expect(testFilesFromGrepHits(hits, 1)).toEqual(["src/a.test.ts"]);
   });
 });
@@ -157,7 +173,11 @@ describe("parseTscErrors", () => {
     const r = parseTscErrors(out);
     expect(r.errorCount).toBe(2); // dup collapsed
     expect(r.errors).toHaveLength(2);
-    expect(r.errors[0]).toMatchObject({ file: "src/a.ts", line: 10, code: "TS2322" });
+    expect(r.errors[0]).toMatchObject({
+      file: "src/a.ts",
+      line: 10,
+      code: "TS2322",
+    });
     expect(r.truncated).toBe(false);
   });
   it("honors a lowered maxErrors cap and flags truncation", () => {
@@ -170,13 +190,17 @@ describe("parseTscErrors", () => {
 
 describe("git diff parsing", () => {
   it("parseNumstat reads additions/deletions and normalizes rename braces", () => {
-    const m = parseNumstat("5\t2\tsrc/a.ts\n-\t-\tbin.png\n3\t0\tsrc/{old => new}/c.ts");
+    const m = parseNumstat(
+      "5\t2\tsrc/a.ts\n-\t-\tbin.png\n3\t0\tsrc/{old => new}/c.ts",
+    );
     expect(m.get("src/a.ts")).toEqual({ additions: 5, deletions: 2 });
     expect(m.get("bin.png")).toEqual({ additions: 0, deletions: 0 });
     expect(m.get("src/new/c.ts")).toEqual({ additions: 3, deletions: 0 });
   });
   it("symbolFromHunkContext pulls a declaration name and skips control keywords", () => {
-    expect(symbolFromHunkContext("export function doThing(a: number) {")).toBe("doThing");
+    expect(symbolFromHunkContext("export function doThing(a: number) {")).toBe(
+      "doThing",
+    );
     expect(symbolFromHunkContext("class Widget {")).toBe("Widget");
     expect(symbolFromHunkContext("  if (x) {")).toBeNull();
   });
@@ -195,8 +219,14 @@ describe("git diff parsing", () => {
       "+content",
     ].join("\n");
     const m = parseDiffU0(u0);
-    expect(m.get("src/a.ts")).toEqual({ changeType: "modified", symbols: ["doThing"] });
-    expect(m.get("src/new.ts")).toEqual({ changeType: "added", symbols: ["Fresh"] });
+    expect(m.get("src/a.ts")).toEqual({
+      changeType: "modified",
+      symbols: ["doThing"],
+    });
+    expect(m.get("src/new.ts")).toEqual({
+      changeType: "added",
+      symbols: ["Fresh"],
+    });
   });
   it("combineDiff merges stats + meta, sorts most-changed first, honors maxFiles", () => {
     const numstat = "5\t2\tsrc/a.ts\n1\t0\tsrc/b.ts";

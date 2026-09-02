@@ -99,26 +99,42 @@ export async function handleLogs(
   if (!opts.follow || writer !== stdoutWriter) return;
 
   // Follow mode: re-read on every change to the file and print anything new.
-  // Cheap and correct for an append-only JSONL log at CLI cadence.
+  // `watch` fires several times per append on some platforms, and each drain is
+  // async, so the drains must be serialized — two overlapping re-reads would
+  // both advance `seen` from the same starting point and duplicate (or drop)
+  // lines. `draining` collapses concurrent events into one trailing re-read.
   process.stderr.write(`\nFollowing ${file} (Ctrl-C to stop)…\n`);
   let seen = (await readDebugLog(Number.MAX_SAFE_INTEGER)).length;
+  let draining = false;
+  let pending = false;
+  const drain = async (): Promise<void> => {
+    if (draining) {
+      pending = true;
+      return;
+    }
+    draining = true;
+    try {
+      do {
+        pending = false;
+        const all = await readDebugLog(Number.MAX_SAFE_INTEGER);
+        const fresh = all
+          .slice(seen)
+          .filter((e) => matchesCategory(e, opts.category));
+        seen = all.length;
+        for (const e of fresh) {
+          process.stdout.write(
+            `${opts.json ? JSON.stringify(e) : formatEntry(e)}\n`,
+          );
+        }
+      } while (pending);
+    } finally {
+      draining = false;
+    }
+  };
   await new Promise<void>((resolve) => {
     let watcher: ReturnType<typeof watch> | null = null;
     try {
-      watcher = watch(file, { persistent: true }, () => {
-        void (async () => {
-          const all = await readDebugLog(Number.MAX_SAFE_INTEGER);
-          const fresh = all
-            .slice(seen)
-            .filter((e) => matchesCategory(e, opts.category));
-          seen = all.length;
-          for (const e of fresh) {
-            process.stdout.write(
-              `${opts.json ? JSON.stringify(e) : formatEntry(e)}\n`,
-            );
-          }
-        })();
-      });
+      watcher = watch(file, { persistent: true }, () => void drain());
     } catch (err) {
       process.stderr.write(
         `Cannot follow ${file}: ${err instanceof Error ? err.message : String(err)}\n`,

@@ -112,7 +112,10 @@ function truncate(s: string, max: number): string {
 export function errorFingerprint(errorClass: string, message: string): string {
   const normalized = message
     .replace(/0x[0-9a-fA-F]+/g, "0x…")
-    .replace(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g, "<uuid>")
+    .replace(
+      /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g,
+      "<uuid>",
+    )
     .replace(/\d{3,}/g, "<n>");
   return createHash("sha256")
     .update(`${errorClass}\n${normalized}`)

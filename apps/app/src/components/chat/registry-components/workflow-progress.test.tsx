@@ -82,7 +82,13 @@ describe("WorkflowProgress", () => {
   it("renders loading skeleton when fetch is pending", async () => {
     global.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
     const { default: WorkflowProgress } = await import("./workflow-progress");
-    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkflowProgress
+        workflowId="wf_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     // Loading skeleton has animate-pulse class
     expect(document.querySelector(".animate-pulse")).toBeInTheDocument();
   });
@@ -90,7 +96,13 @@ describe("WorkflowProgress", () => {
   it("renders error state when fetch fails", async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error("Network error"));
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkflowProgress
+        workflowId="wf_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     await waitFor(() => {
       expect(screen.getByText(/Failed to load workflow/)).toBeInTheDocument();
     });
@@ -102,7 +114,13 @@ describe("WorkflowProgress", () => {
       json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
     });
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkflowProgress
+        workflowId="wf_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     await waitFor(() => {
       expect(screen.getByText("Data Analysis Pipeline")).toBeInTheDocument();
     });
@@ -114,7 +132,13 @@ describe("WorkflowProgress", () => {
       json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
     });
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkflowProgress
+        workflowId="wf_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     await waitFor(() => {
       expect(screen.getByText("Analyze customer data")).toBeInTheDocument();
     });
@@ -126,7 +150,13 @@ describe("WorkflowProgress", () => {
       json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
     });
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkflowProgress
+        workflowId="wf_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     await waitFor(() => {
       expect(screen.getByText("Running")).toBeInTheDocument();
     });
@@ -138,7 +168,13 @@ describe("WorkflowProgress", () => {
       json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
     });
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkflowProgress
+        workflowId="wf_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     await waitFor(() => {
       const progressbar = screen.getByRole("progressbar");
       expect(progressbar).toBeInTheDocument();
@@ -153,22 +189,39 @@ describe("WorkflowProgress", () => {
       json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
     });
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkflowProgress
+        workflowId="wf_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Cancel/ })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /Cancel/ }),
+      ).toBeInTheDocument();
     });
   });
 
   it("shows Download link for completed workflow", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ workflow: COMPLETED_WORKFLOW, tasks: TASKS }),
+      json: () =>
+        Promise.resolve({ workflow: COMPLETED_WORKFLOW, tasks: TASKS }),
     });
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkflowProgress
+        workflowId="wf_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     await waitFor(() => {
       // The link uses aria-label "Download results as JSON"
-      expect(screen.getByRole("link", { name: /Download results as JSON/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("link", { name: /Download results as JSON/i }),
+      ).toBeInTheDocument();
     });
   });
 
@@ -179,13 +232,21 @@ describe("WorkflowProgress", () => {
     });
     global.fetch = fetchMock;
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkflowProgress
+        workflowId="wf_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     await waitFor(() => {
       expect(screen.getByText("Data Analysis Pipeline")).toBeInTheDocument();
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/acme/main/workflows/wf_123",
-      expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
+      expect.objectContaining({
+        headers: { "Content-Type": "application/json" },
+      }),
     );
   });
 
@@ -206,7 +267,13 @@ describe("WorkflowProgress", () => {
       json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
     });
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkflowProgress
+        workflowId="wf_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     await waitFor(() => {
       expect(screen.getByText("Tasks")).toBeInTheDocument();
     });
@@ -221,26 +288,37 @@ import { fireEvent } from "@testing-library/react";
 
 describe("WorkflowProgress — cancel error surfacing", () => {
   it("shows cancel-error alert when DELETE returns non-2xx", async () => {
-    global.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
-      if (!init?.method || init.method === "GET") {
+    global.fetch = vi
+      .fn()
+      .mockImplementation((_url: string, init?: RequestInit) => {
+        if (!init?.method || init.method === "GET") {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
+          });
+        }
+        // DELETE
         return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({ error: "Internal server error" }),
         });
-      }
-      // DELETE
-      return Promise.resolve({
-        ok: false,
-        status: 500,
-        json: () => Promise.resolve({ error: "Internal server error" }),
       });
-    });
 
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkflowProgress
+        workflowId="wf_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Cancel/ })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /Cancel/ }),
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Cancel/ }));
@@ -248,26 +326,41 @@ describe("WorkflowProgress — cancel error surfacing", () => {
     await waitFor(() => {
       expect(screen.getByTestId("cancel-error")).toBeInTheDocument();
     });
-    expect(screen.getByTestId("cancel-error")).toHaveTextContent(/cancel failed/i);
-    expect(screen.getByTestId("cancel-error")).toHaveTextContent(/still running/i);
+    expect(screen.getByTestId("cancel-error")).toHaveTextContent(
+      /cancel failed/i,
+    );
+    expect(screen.getByTestId("cancel-error")).toHaveTextContent(
+      /still running/i,
+    );
   });
 
   it("shows cancel-error alert when DELETE throws a network error", async () => {
-    global.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
-      if (!init?.method || init.method === "GET") {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
-        });
-      }
-      return Promise.reject(new Error("ERR_NETWORK"));
-    });
+    global.fetch = vi
+      .fn()
+      .mockImplementation((_url: string, init?: RequestInit) => {
+        if (!init?.method || init.method === "GET") {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
+          });
+        }
+        return Promise.reject(new Error("ERR_NETWORK"));
+      });
 
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkflowProgress
+        workflowId="wf_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Cancel/ })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /Cancel/ }),
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Cancel/ }));
@@ -279,24 +372,35 @@ describe("WorkflowProgress — cancel error surfacing", () => {
   });
 
   it("does NOT show cancel-error when DELETE succeeds", async () => {
-    global.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
-      if (!init?.method || init.method === "GET") {
+    global.fetch = vi
+      .fn()
+      .mockImplementation((_url: string, init?: RequestInit) => {
+        if (!init?.method || init.method === "GET") {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
+          });
+        }
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ workflow: RUNNING_WORKFLOW, tasks: TASKS }),
+          json: () => Promise.resolve({ cancelled: true }),
         });
-      }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ cancelled: true }),
       });
-    });
 
     const WorkflowProgress = (await import("./workflow-progress")).default;
-    render(<WorkflowProgress workflowId="wf_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkflowProgress
+        workflowId="wf_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Cancel/ })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /Cancel/ }),
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Cancel/ }));

@@ -124,7 +124,9 @@ describe("schemaReconcileDispatchHandler (@oxagen/handlers)", () => {
 
   it("throws if version not found", async () => {
     mocks.versionFindFirst.mockResolvedValueOnce(undefined);
-    await expect(schemaReconcileDispatchHandler(BASE_INPUT, CTX)).rejects.toThrow(
+    await expect(
+      schemaReconcileDispatchHandler(BASE_INPUT, CTX),
+    ).rejects.toThrow(
       "schema.reconcile.dispatch: schema version not found: scv_abc",
     );
     // Inngest event must NOT be sent
@@ -133,7 +135,9 @@ describe("schemaReconcileDispatchHandler (@oxagen/handlers)", () => {
 
   it("throws if agent_executions insert returns no row", async () => {
     mocks.execInsertReturning.mockResolvedValueOnce([]);
-    await expect(schemaReconcileDispatchHandler(BASE_INPUT, CTX)).rejects.toThrow(
+    await expect(
+      schemaReconcileDispatchHandler(BASE_INPUT, CTX),
+    ).rejects.toThrow(
       "schema.reconcile.dispatch: agent_executions insert returned no row",
     );
     expect(mocks.inngestSend).not.toHaveBeenCalled();

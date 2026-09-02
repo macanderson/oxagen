@@ -27,7 +27,9 @@ const ROLE = "oxagen_app";
 function requireEnv(name: string): string {
   const v = process.env[name]?.trim();
   if (!v) {
-    console.error(kleur.red(`[provision-rls-role] missing required env ${name}`));
+    console.error(
+      kleur.red(`[provision-rls-role] missing required env ${name}`),
+    );
     process.exit(1);
   }
   return v;
@@ -36,12 +38,20 @@ function requireEnv(name: string): string {
 async function main(): Promise<void> {
   // Admin connection: prefer an explicit ADMIN_DATABASE_URL so this is never
   // accidentally run through the (about-to-be) least-privilege app connection.
-  const adminUrl = process.env.ADMIN_DATABASE_URL?.trim() ?? process.env.DATABASE_URL?.trim();
+  const adminUrl =
+    process.env.ADMIN_DATABASE_URL?.trim() ?? process.env.DATABASE_URL?.trim();
   if (!adminUrl) {
-    console.error(kleur.red("[provision-rls-role] set ADMIN_DATABASE_URL (or DATABASE_URL) to a superuser connection"));
+    console.error(
+      kleur.red(
+        "[provision-rls-role] set ADMIN_DATABASE_URL (or DATABASE_URL) to a superuser connection",
+      ),
+    );
     process.exit(1);
   }
-  if (!process.env.ADMIN_DATABASE_URL?.trim() && process.env.DATABASE_URL?.trim()) {
+  if (
+    !process.env.ADMIN_DATABASE_URL?.trim() &&
+    process.env.DATABASE_URL?.trim()
+  ) {
     console.warn(
       kleur.yellow(
         "[provision-rls-role] ADMIN_DATABASE_URL not set — falling back to DATABASE_URL. " +
@@ -70,16 +80,24 @@ async function main(): Promise<void> {
 
     // Set LOGIN + password. Parameterized values can't be used for DDL, so the
     // password is quoted via the server's own literal-quoting to avoid injection.
-    const quoted = await sql<{ lit: string }[]>`SELECT quote_literal(${password}) AS lit`;
+    const quoted = await sql<
+      { lit: string }[]
+    >`SELECT quote_literal(${password}) AS lit`;
     const passwordLiteral = quoted[0]!.lit;
-    await sql.unsafe(`ALTER ROLE ${ROLE} WITH LOGIN PASSWORD ${passwordLiteral}`);
+    await sql.unsafe(
+      `ALTER ROLE ${ROLE} WITH LOGIN PASSWORD ${passwordLiteral}`,
+    );
 
     // Verify the role can never bypass RLS — the whole point of this exercise.
-    const [attrs] = await sql<{ rolsuper: boolean; rolbypassrls: boolean; rolcanlogin: boolean }[]>`
+    const [attrs] = await sql<
+      { rolsuper: boolean; rolbypassrls: boolean; rolcanlogin: boolean }[]
+    >`
       SELECT rolsuper, rolbypassrls, rolcanlogin FROM pg_roles WHERE rolname = ${ROLE}
     `;
     if (!attrs) {
-      console.error(kleur.red(`[provision-rls-role] could not read attributes for ${ROLE}`));
+      console.error(
+        kleur.red(`[provision-rls-role] could not read attributes for ${ROLE}`),
+      );
       process.exit(1);
     }
     if (attrs.rolsuper || attrs.rolbypassrls) {
@@ -92,14 +110,22 @@ async function main(): Promise<void> {
       process.exit(1);
     }
 
-    console.log(kleur.green(`[provision-rls-role] ${ROLE} ready: LOGIN=${attrs.rolcanlogin}, SUPERUSER=false, BYPASSRLS=false`));
+    console.log(
+      kleur.green(
+        `[provision-rls-role] ${ROLE} ready: LOGIN=${attrs.rolcanlogin}, SUPERUSER=false, BYPASSRLS=false`,
+      ),
+    );
 
     // Show the DATABASE_URL shape for oxagen_app. Reconstruct it from the parsed
     // host/path only — never string-replace the raw adminUrl, which can leak the
     // superuser password for DSN shapes the old regex didn't match (unix socket,
     // ?password= query param, IAM-token URLs). u.username/u.password are dropped;
     // any credential-bearing query params are stripped defensively.
-    console.log(kleur.cyan("[provision-rls-role] set this environment's DATABASE_URL to:"));
+    console.log(
+      kleur.cyan(
+        "[provision-rls-role] set this environment's DATABASE_URL to:",
+      ),
+    );
     try {
       const u = new URL(adminUrl);
       const params = new URLSearchParams(u.search);
@@ -107,11 +133,19 @@ async function main(): Promise<void> {
         if (/pass|pwd|token|secret|credential/i.test(k)) params.delete(k);
       }
       const q = params.toString();
-      console.log(`  ${u.protocol}//${ROLE}:<OXAGEN_APP_DB_PASSWORD>@${u.host}${u.pathname}${q ? `?${q}` : ""}`);
+      console.log(
+        `  ${u.protocol}//${ROLE}:<OXAGEN_APP_DB_PASSWORD>@${u.host}${u.pathname}${q ? `?${q}` : ""}`,
+      );
     } catch {
-      console.log(`  <scheme>://${ROLE}:<OXAGEN_APP_DB_PASSWORD>@<host>:<port>/<database>`);
+      console.log(
+        `  <scheme>://${ROLE}:<OXAGEN_APP_DB_PASSWORD>@<host>:<port>/<database>`,
+      );
     }
-    console.log(kleur.cyan("[provision-rls-role] then set TENANT_RLS_ENFORCEMENT_ENABLED=true and redeploy."));
+    console.log(
+      kleur.cyan(
+        "[provision-rls-role] then set TENANT_RLS_ENFORCEMENT_ENABLED=true and redeploy.",
+      ),
+    );
   } finally {
     await sql.end({ timeout: 5 });
   }

@@ -121,7 +121,12 @@ describe("startRssWatchdog", () => {
 
   it("a non-positive ceiling disables the watchdog", () => {
     const onLimit = vi.fn();
-    startRssWatchdog({ maxRssBytes: 0, intervalMs: 100, onLimit, readRss: () => 1 });
+    startRssWatchdog({
+      maxRssBytes: 0,
+      intervalMs: 100,
+      onLimit,
+      readRss: () => 1,
+    });
     vi.advanceTimersByTime(1000);
     expect(onLimit).not.toHaveBeenCalled();
   });

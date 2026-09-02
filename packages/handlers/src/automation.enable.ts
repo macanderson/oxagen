@@ -4,12 +4,14 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const automationEnableHandler: CapabilityHandler<typeof automationEnable> = async (
-  input,
-  ctx,
-) => {
+export const automationEnableHandler: CapabilityHandler<
+  typeof automationEnable
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "automation.enable: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "automation.enable: rejected — no authenticated user",
+    );
     throw new Error("automation.enable requires an authenticated user");
   }
 
@@ -28,7 +30,9 @@ export const automationEnableHandler: CapabilityHandler<typeof automationEnable>
   );
 
   if (!trigger) {
-    throw new Error(`automation.enable: trigger not found: ${input.automation_id}`);
+    throw new Error(
+      `automation.enable: trigger not found: ${input.automation_id}`,
+    );
   }
 
   // Enable the trigger and set the playbook status to active in one transaction.

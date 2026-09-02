@@ -8,7 +8,9 @@ describe("browser.screenshot capability", () => {
     expect(cap).toBeDefined();
     expect(cap?.domain).toBe("browser");
     expect(cap?.scoped).toBe(true);
-    expect(cap?.surfaces).toEqual(expect.arrayContaining(["api", "mcp", "agent"]));
+    expect(cap?.surfaces).toEqual(
+      expect.arrayContaining(["api", "mcp", "agent"]),
+    );
   });
 
   it("applies defaults: fullPage false, timeoutMs 60000", () => {
@@ -32,7 +34,9 @@ describe("browser.screenshot capability", () => {
     });
     expect(withSelector.selector).toBe(".hero");
 
-    const withoutSelector = browserScreenshot.input.parse({ sessionId: "sbx_abc" });
+    const withoutSelector = browserScreenshot.input.parse({
+      sessionId: "sbx_abc",
+    });
     expect(withoutSelector.selector).toBeUndefined();
   });
 

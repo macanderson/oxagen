@@ -39,8 +39,8 @@ describe("eval.dataset.create handler", () => {
 
   it("creates a dataset and returns the mapped output shape", async () => {
     const ROW = { id: "uuid-1", publicId: "eds_ABC", slug: "acme-eval" };
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx([ROW])),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) => fn(makeTx([ROW])),
     );
     const out = await evalDatasetCreateHandler({ name: "Acme Eval" }, CTX);
     expect(out).toEqual({
@@ -53,25 +53,28 @@ describe("eval.dataset.create handler", () => {
   it("derives a slug from the name when none is provided", async () => {
     const ROW = { id: "uuid-1", publicId: "eds_ABC", slug: "my-cool-dataset" };
     let capturedValues: Record<string, unknown> | undefined;
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) => {
-      const tx: TxLike = {
-        insert: vi.fn().mockReturnValue({
-          values: vi.fn().mockImplementation((v: Record<string, unknown>) => {
-            capturedValues = v;
-            return { returning: vi.fn().mockResolvedValue([ROW]) };
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) => {
+        const tx: TxLike = {
+          insert: vi.fn().mockReturnValue({
+            values: vi.fn().mockImplementation((v: Record<string, unknown>) => {
+              capturedValues = v;
+              return { returning: vi.fn().mockResolvedValue([ROW]) };
+            }),
           }),
-        }),
-      };
-      return fn(tx);
-    });
+        };
+        return fn(tx);
+      },
+    );
     await evalDatasetCreateHandler({ name: "My Cool Dataset!!" }, CTX);
     expect(capturedValues?.slug).toBe("my-cool-dataset");
   });
 
   it("throws a 409 when the slug collides with an existing dataset", async () => {
     mocks.isUniqueViolation.mockReturnValue(true);
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx(new Error("duplicate key"))),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) =>
+        fn(makeTx(new Error("duplicate key"))),
     );
     await expect(
       evalDatasetCreateHandler({ name: "Acme Eval", slug: "acme-eval" }, CTX),
@@ -82,11 +85,11 @@ describe("eval.dataset.create handler", () => {
   });
 
   it("throws when the insert returns no row", async () => {
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx([])),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) => fn(makeTx([])),
     );
-    await expect(evalDatasetCreateHandler({ name: "Acme Eval" }, CTX)).rejects.toThrow(
-      "eval_datasets insert failed",
-    );
+    await expect(
+      evalDatasetCreateHandler({ name: "Acme Eval" }, CTX),
+    ).rejects.toThrow("eval_datasets insert failed");
   });
 });

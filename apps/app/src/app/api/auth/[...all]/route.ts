@@ -37,7 +37,10 @@ async function POST(request: NextRequest): Promise<Response> {
   const status = response.status;
 
   // Emit audit event for failed sign-in (401/403) and rate-limit (429) hits.
-  if (isSignInPath(pathname) && (status === 401 || status === 403 || status === 429)) {
+  if (
+    isSignInPath(pathname) &&
+    (status === 401 || status === 403 || status === 429)
+  ) {
     const ip =
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
       request.headers.get("x-real-ip") ??

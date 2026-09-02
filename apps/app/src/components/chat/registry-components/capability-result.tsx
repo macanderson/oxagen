@@ -97,7 +97,9 @@ function SmartLink({
 
 function ScalarValue({ value }: { value: unknown }): React.ReactElement {
   if (value === null || value === undefined) {
-    return <Minus className="size-3.5 text-muted-foreground" aria-label="empty" />;
+    return (
+      <Minus className="size-3.5 text-muted-foreground" aria-label="empty" />
+    );
   }
   if (typeof value === "boolean") {
     return value ? (
@@ -121,7 +123,10 @@ function ScalarValue({ value }: { value: unknown }): React.ReactElement {
         className="inline-flex items-center gap-0.5 break-all text-primary hover:underline"
       >
         {truncate(str, 80)}
-        <ExternalLink className="size-3 shrink-0 opacity-70" aria-hidden="true" />
+        <ExternalLink
+          className="size-3 shrink-0 opacity-70"
+          aria-hidden="true"
+        />
       </a>
     );
   }
@@ -152,7 +157,9 @@ function ValueView({
       return <span className="text-xs text-muted-foreground">(none)</span>;
     }
     const shown = value.slice(0, MAX_ARRAY_ITEMS);
-    const allScalar = shown.every((v) => !isPlainRecord(v) && !Array.isArray(v));
+    const allScalar = shown.every(
+      (v) => !isPlainRecord(v) && !Array.isArray(v),
+    );
     if (allScalar) {
       return (
         <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
@@ -279,7 +286,8 @@ export default function CapabilityResult(
     return href ? [{ ...l, href }] : [];
   });
 
-  const heading = title ?? (capability ? humanizeCapability(capability) : "Result");
+  const heading =
+    title ?? (capability ? humanizeCapability(capability) : "Result");
 
   return (
     <div
@@ -288,11 +296,16 @@ export default function CapabilityResult(
       data-capability={capability}
     >
       <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2.5">
-        <span className="truncate text-sm font-semibold text-foreground" title={heading}>
+        <span
+          className="truncate text-sm font-semibold text-foreground"
+          title={heading}
+        >
           {heading}
         </span>
         {capability ? (
-          <span className="ml-auto shrink-0 text-xs text-muted-foreground">{capability}</span>
+          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+            {capability}
+          </span>
         ) : null}
       </div>
 

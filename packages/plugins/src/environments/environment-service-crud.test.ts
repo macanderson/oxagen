@@ -75,8 +75,10 @@ function makeTx() {
         return {
           where: (_cond: unknown) => ({
             returning: async () => state.updateReturning.shift() ?? [],
-            then: (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
-              Promise.resolve(undefined).then(res, rej),
+            then: (
+              res: (v: unknown) => unknown,
+              rej: (e: unknown) => unknown,
+            ) => Promise.resolve(undefined).then(res, rej),
           }),
         };
       },
@@ -98,7 +100,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 const actor = { orgId: "org-1", workspaceId: "ws-1", userId: "u1" };
 
-function makeEnvRow(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
+function makeEnvRow(
+  overrides: Partial<Record<string, unknown>> = {},
+): Record<string, unknown> {
   return {
     id: "env_int_1",
     publicId: "env_pub_1",
@@ -119,10 +123,17 @@ describe("createEnvironment", () => {
   it("creates an environment with valid slug and returns its summary", async () => {
     const { createEnvironment } = await import("./environment-service");
 
-    const created = makeEnvRow({ publicId: "env_new", name: "Staging", slug: "staging" });
+    const created = makeEnvRow({
+      publicId: "env_new",
+      name: "Staging",
+      slug: "staging",
+    });
     state.insertReturning.push([created]);
 
-    const result = await createEnvironment(actor, { name: "Staging", slug: "staging" });
+    const result = await createEnvironment(actor, {
+      name: "Staging",
+      slug: "staging",
+    });
 
     expect(result.id).toBe("env_new");
     expect(result.name).toBe("Staging");
@@ -138,7 +149,10 @@ describe("createEnvironment", () => {
     state.insertReturning.push([created]);
 
     // Pass uppercase slug — service should lowercase it
-    const result = await createEnvironment(actor, { name: "Preview", slug: "PREVIEW" });
+    const result = await createEnvironment(actor, {
+      name: "Preview",
+      slug: "PREVIEW",
+    });
 
     // The result slug comes from the returned row (which we set to "preview")
     expect(result.slug).toBe("preview");
@@ -214,7 +228,12 @@ describe("listEnvironments", () => {
 
     state.selectQueue.push([
       makeEnvRow({ publicId: "env_a", name: "Dev", slug: "dev" }),
-      makeEnvRow({ publicId: "env_b", name: "Prod", slug: "production", isDefault: true }),
+      makeEnvRow({
+        publicId: "env_b",
+        name: "Prod",
+        slug: "production",
+        isDefault: true,
+      }),
     ]);
 
     const result = await listEnvironments(actor);
@@ -261,7 +280,9 @@ describe("getEnvironment", () => {
   it("returns the environment summary for a valid publicId", async () => {
     const { getEnvironment } = await import("./environment-service");
 
-    state.selectQueue.push([makeEnvRow({ publicId: "env_pub_1", name: "Production" })]);
+    state.selectQueue.push([
+      makeEnvRow({ publicId: "env_pub_1", name: "Production" }),
+    ]);
 
     const result = await getEnvironment(actor, { environmentId: "env_pub_1" });
 
@@ -322,7 +343,10 @@ describe("updateEnvironment", () => {
     state.selectQueue.push([makeEnvRow({ isDefault: false })]);
 
     await expect(
-      updateEnvironment(actor, { environmentId: "env_pub_1", slug: "Bad_Slug" }),
+      updateEnvironment(actor, {
+        environmentId: "env_pub_1",
+        slug: "Bad_Slug",
+      }),
     ).rejects.toThrow(/invalid slug/);
 
     expect(state.updates).toHaveLength(0);
@@ -343,7 +367,9 @@ describe("updateEnvironment", () => {
   it("updates description to null (clear)", async () => {
     const { updateEnvironment } = await import("./environment-service");
 
-    state.selectQueue.push([makeEnvRow({ isDefault: false, description: "old" })]);
+    state.selectQueue.push([
+      makeEnvRow({ isDefault: false, description: "old" }),
+    ]);
     state.updateReturning.push([makeEnvRow({ description: null })]);
 
     const result = await updateEnvironment(actor, {
@@ -388,7 +414,10 @@ describe("updateEnvironment", () => {
     state.updateReturning.push([makeEnvRow({ name: "New Name" })]);
 
     // Only passing name — slug/description/isActive not passed
-    await updateEnvironment(actor, { environmentId: "env_pub_1", name: "New Name" });
+    await updateEnvironment(actor, {
+      environmentId: "env_pub_1",
+      name: "New Name",
+    });
 
     const setClause = state.updates[0]!.set;
     // slug/description/isActive should NOT be in the set clause
@@ -408,7 +437,9 @@ describe("deleteEnvironment", () => {
 
     state.selectQueue.push([makeEnvRow({ isDefault: false })]);
 
-    const result = await deleteEnvironment(actor, { environmentId: "env_pub_1" });
+    const result = await deleteEnvironment(actor, {
+      environmentId: "env_pub_1",
+    });
 
     expect(result).toEqual({ ok: true });
     expect(state.updates).toHaveLength(1);
@@ -461,7 +492,10 @@ describe("actor.userId ?? null branches", () => {
     const actorNoUser = { orgId: "org-1", workspaceId: "ws-1" };
     state.insertReturning.push([makeEnvRow({ publicId: "env_no_user" })]);
 
-    const result = await createEnvironment(actorNoUser, { name: "Env", slug: "env" });
+    const result = await createEnvironment(actorNoUser, {
+      name: "Env",
+      slug: "env",
+    });
 
     expect(result.id).toBe("env_no_user");
   });
@@ -473,7 +507,10 @@ describe("actor.userId ?? null branches", () => {
     state.selectQueue.push([makeEnvRow({ isDefault: false })]);
     state.updateReturning.push([makeEnvRow({ name: "Updated" })]);
 
-    await updateEnvironment(actorNoUser, { environmentId: "env_pub_1", name: "Updated" });
+    await updateEnvironment(actorNoUser, {
+      environmentId: "env_pub_1",
+      name: "Updated",
+    });
 
     expect(state.updates[0]!.set.updatedByUserId).toBeNull();
   });

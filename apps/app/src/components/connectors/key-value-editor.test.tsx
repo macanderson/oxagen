@@ -28,7 +28,12 @@ describe("KeyValueEditor — render", () => {
   });
 
   it("shows key and value in inputs", () => {
-    render(<KeyValueEditor value={{ apiUrl: "https://example.com" }} onChange={vi.fn()} />);
+    render(
+      <KeyValueEditor
+        value={{ apiUrl: "https://example.com" }}
+        onChange={vi.fn()}
+      />,
+    );
     const inputs = screen.getAllByRole("textbox");
     expect(inputs[0]).toHaveValue("apiUrl");
     expect(inputs[1]).toHaveValue("https://example.com");

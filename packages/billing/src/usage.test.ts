@@ -9,10 +9,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 interface SubState {
-  row: {
-    currentPeriodStart: Date;
-    currentPeriodEnd: Date;
-  } | undefined;
+  row:
+    | {
+        currentPeriodStart: Date;
+        currentPeriodEnd: Date;
+      }
+    | undefined;
 }
 
 const subState: SubState = { row: undefined };
@@ -21,17 +23,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: async (fn: (tx: unknown) => unknown) => {
-    const tx = {
-      query: {
-        subscriptions: {
-          findFirst: vi.fn(async () => subState.row),
+    withTenantDb: async (fn: (tx: unknown) => unknown) => {
+      const tx = {
+        query: {
+          subscriptions: {
+            findFirst: vi.fn(async () => subState.row),
+          },
         },
-      },
-    };
-    return fn(tx);
-  },
-
+      };
+      return fn(tx);
+    },
   };
 });
 
@@ -64,7 +65,10 @@ describe("getCurrentPeriodUsage", () => {
   });
 
   it("calls sumTokenUsage with period bounds from active subscription", async () => {
-    subState.row = { currentPeriodStart: periodStart, currentPeriodEnd: periodEnd };
+    subState.row = {
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd,
+    };
     sumTokenUsageMock.mockResolvedValue([]);
     await getCurrentPeriodUsage("org-1");
     expect(sumTokenUsageMock).toHaveBeenCalledWith({
@@ -75,7 +79,10 @@ describe("getCurrentPeriodUsage", () => {
   });
 
   it("returns the rollup rows from sumTokenUsage", async () => {
-    subState.row = { currentPeriodStart: periodStart, currentPeriodEnd: periodEnd };
+    subState.row = {
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd,
+    };
     const mockRows = [
       { metric: "input_tokens", quantity: 10000, costMicros: 30000n },
       { metric: "output_tokens", quantity: 2000, costMicros: 60000n },
@@ -86,7 +93,10 @@ describe("getCurrentPeriodUsage", () => {
   });
 
   it("passes the correct orgId to sumTokenUsage", async () => {
-    subState.row = { currentPeriodStart: periodStart, currentPeriodEnd: periodEnd };
+    subState.row = {
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd,
+    };
     sumTokenUsageMock.mockResolvedValue([]);
     await getCurrentPeriodUsage("org-xyz-999");
     expect(sumTokenUsageMock).toHaveBeenCalledWith(

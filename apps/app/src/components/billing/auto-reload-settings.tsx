@@ -58,7 +58,9 @@ export function AutoReloadSettings({
   const [amount, setAmount] = React.useState(
     centsToDisplayDollars(settings.autoReloadAmountCents),
   );
-  const [paymentMethodId, setPaymentMethodId] = React.useState<string | undefined>(
+  const [paymentMethodId, setPaymentMethodId] = React.useState<
+    string | undefined
+  >(
     settings.autoReloadPaymentMethodId ??
       methods.find((m) => m.isDefault)?.stripePaymentMethodId ??
       methods[0]?.stripePaymentMethodId ??
@@ -98,10 +100,16 @@ export function AutoReloadSettings({
   const applyAutoReload = React.useCallback(
     (proposed: Record<string, unknown>) => {
       if (typeof proposed.enabled === "boolean") setEnabled(proposed.enabled);
-      if (typeof proposed.threshold === "string" || typeof proposed.threshold === "number") {
+      if (
+        typeof proposed.threshold === "string" ||
+        typeof proposed.threshold === "number"
+      ) {
         setThreshold(String(proposed.threshold));
       }
-      if (typeof proposed.amount === "string" || typeof proposed.amount === "number") {
+      if (
+        typeof proposed.amount === "string" ||
+        typeof proposed.amount === "number"
+      ) {
         setAmount(String(proposed.amount));
       }
     },
@@ -124,7 +132,8 @@ export function AutoReloadSettings({
     if (enabled && !hasActiveSubscription) {
       toast.add({
         title: "Subscription required",
-        description: "You must have an active subscription to enable automatic reload.",
+        description:
+          "You must have an active subscription to enable automatic reload.",
         type: "error",
       });
       setEnabled(false);
@@ -135,7 +144,11 @@ export function AutoReloadSettings({
     const amountCents = parseDollarsToCents(amount);
 
     if (thresholdCents === null) {
-      toast.add({ title: "Invalid threshold", description: "Enter a valid dollar amount.", type: "error" });
+      toast.add({
+        title: "Invalid threshold",
+        description: "Enter a valid dollar amount.",
+        type: "error",
+      });
       return;
     }
     if (amountCents === null || amountCents < 100) {
@@ -157,7 +170,11 @@ export function AutoReloadSettings({
         paymentMethodId: paymentMethodId ?? undefined,
       });
       if ("error" in result && result.error) {
-        toast.add({ title: "Save failed", description: result.error, type: "error" });
+        toast.add({
+          title: "Save failed",
+          description: result.error,
+          type: "error",
+        });
       } else {
         toast.add({ title: "Auto-reload settings saved", type: "success" });
       }
@@ -197,7 +214,9 @@ export function AutoReloadSettings({
           <div className="grid gap-4 sm:grid-cols-2">
             {/* Threshold */}
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="autoreload-threshold">Reload when balance falls below ($)</Label>
+              <Label htmlFor="autoreload-threshold">
+                Reload when balance falls below ($)
+              </Label>
               <Input
                 id="autoreload-threshold"
                 type="number"
@@ -212,7 +231,9 @@ export function AutoReloadSettings({
 
             {/* Amount */}
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="autoreload-amount">Buy this many credits ($)</Label>
+              <Label htmlFor="autoreload-amount">
+                Buy this many credits ($)
+              </Label>
               <Input
                 id="autoreload-amount"
                 type="number"
@@ -238,10 +259,14 @@ export function AutoReloadSettings({
                     <SelectValue>
                       {paymentMethodId
                         ? (() => {
-                            const selected = methods.find((m) => m.stripePaymentMethodId === paymentMethodId);
+                            const selected = methods.find(
+                              (m) =>
+                                m.stripePaymentMethodId === paymentMethodId,
+                            );
                             if (!selected) return "Select a card";
                             const brand = selected.brand
-                              ? selected.brand.charAt(0).toUpperCase() + selected.brand.slice(1).toLowerCase()
+                              ? selected.brand.charAt(0).toUpperCase() +
+                                selected.brand.slice(1).toLowerCase()
                               : "Card";
                             return `${brand} •• ${selected.last4 ?? ""}${selected.isDefault ? " (default)" : ""}`;
                           })()
@@ -255,7 +280,8 @@ export function AutoReloadSettings({
                         value={m.stripePaymentMethodId}
                       >
                         {m.brand
-                          ? m.brand.charAt(0).toUpperCase() + m.brand.slice(1).toLowerCase()
+                          ? m.brand.charAt(0).toUpperCase() +
+                            m.brand.slice(1).toLowerCase()
                           : "Card"}{" "}
                         {m.last4 ? `•• ${m.last4}` : ""}
                         {m.isDefault ? " (default)" : ""}
@@ -271,16 +297,22 @@ export function AutoReloadSettings({
         {/* Helper copy */}
         {enabled && (
           <p className="text-xs text-muted-foreground">
-            When your balance falls below ${parseFloat(threshold || "0").toFixed(2)},
-            we&apos;ll automatically buy ${parseFloat(amount || "0").toFixed(2)} in
-            credits.
+            When your balance falls below $
+            {parseFloat(threshold || "0").toFixed(2)}, we&apos;ll automatically
+            buy ${parseFloat(amount || "0").toFixed(2)} in credits.
           </p>
         )}
 
         {/* Save */}
         {canManage && (
           <div className="flex justify-end">
-            <Button size="sm" variant="gradient" startIcon={<Save className="h-3.5 w-3.5" />} onClick={handleSave} disabled={saving}>
+            <Button
+              size="sm"
+              variant="gradient"
+              startIcon={<Save className="h-3.5 w-3.5" />}
+              onClick={handleSave}
+              disabled={saving}
+            >
               {saving ? "Saving…" : "Save"}
             </Button>
           </div>

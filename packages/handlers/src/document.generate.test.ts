@@ -23,7 +23,8 @@ const FAKE_ASSET = {
   id: "asset-uuid-123",
   publicId: "gen_DOCTEST",
   kind: "document" as const,
-  mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  mimeType:
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   sizeBytes: 1024,
   url: "https://blob.example.com/doc.docx",
   serveUrl: "/api/v1/assets/gen_DOCTEST",
@@ -120,10 +121,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 
   // Packer.toBuffer returns a Node.js Buffer; use a Uint8Array with PK magic.
-  const fakeDocxBytes = new Uint8Array([
-    ...PK_MAGIC,
-    ...new Uint8Array(60),
-  ]);
+  const fakeDocxBytes = new Uint8Array([...PK_MAGIC, ...new Uint8Array(60)]);
   mocks.docxPackerToBuffer.mockResolvedValue(Buffer.from(fakeDocxBytes));
 
   // Excel buffer — PK magic (xlsx is also a ZIP)
@@ -147,9 +145,7 @@ describe("documentsGenerateHandler — document (DOCX)", () => {
         kind: "document",
         title: "My Report",
         content: {
-          sections: [
-            { heading: "Introduction", paragraphs: ["Hello world."] },
-          ],
+          sections: [{ heading: "Introduction", paragraphs: ["Hello world."] }],
         },
       },
       CTX,
@@ -158,7 +154,10 @@ describe("documentsGenerateHandler — document (DOCX)", () => {
     expect(mocks.docxPackerToBuffer).toHaveBeenCalledTimes(1);
     expect(mocks.persistGeneratedAsset).toHaveBeenCalledTimes(1);
 
-    const persistArg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    const persistArg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(persistArg.kind).toBe("document");
     expect(persistArg.mimeType).toBe(
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -208,7 +207,9 @@ describe("documentsGenerateHandler — document (DOCX)", () => {
   });
 
   it("throws when persistGeneratedAsset rejects", async () => {
-    mocks.persistGeneratedAsset.mockRejectedValueOnce(new Error("Upload failed"));
+    mocks.persistGeneratedAsset.mockRejectedValueOnce(
+      new Error("Upload failed"),
+    );
     await expect(
       documentsGenerateHandler({ kind: "document", title: "Fail" }, CTX),
     ).rejects.toThrow("Upload failed");
@@ -223,14 +224,20 @@ describe("documentsGenerateHandler — spreadsheet (XLSX)", () => {
         title: "Sales Data",
         content: {
           headers: ["Month", "Revenue"],
-          rows: [["Jan", 1000], ["Feb", 2000]],
+          rows: [
+            ["Jan", 1000],
+            ["Feb", 2000],
+          ],
         },
       },
       CTX,
     );
 
     expect(mocks.excelWriteBuffer).toHaveBeenCalledTimes(1);
-    const persistArg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    const persistArg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(persistArg.kind).toBe("spreadsheet");
     expect(persistArg.mimeType).toBe(
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -267,7 +274,10 @@ describe("documentsGenerateHandler — presentation (PPTX)", () => {
     );
 
     expect(mocks.pptxWrite).toHaveBeenCalledTimes(1);
-    const persistArg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    const persistArg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(persistArg.kind).toBe("presentation");
     expect(persistArg.mimeType).toBe(
       "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -291,7 +301,10 @@ describe("documentsGenerateHandler — presentation (PPTX)", () => {
 describe("documentsGenerateHandler — org access policy", () => {
   it("persists with accessPolicy=org so teammates can view the file", async () => {
     await documentsGenerateHandler({ kind: "document", title: "Shared" }, CTX);
-    const persistArg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    const persistArg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(persistArg.accessPolicy).toBe("org");
   });
 });

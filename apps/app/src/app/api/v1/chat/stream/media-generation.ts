@@ -5,7 +5,10 @@ import {
   videoTierModelId,
   generateImageFor,
 } from "@oxagen/ai";
-import { persistGeneratedAsset, createPendingGeneratedAsset } from "@oxagen/handlers";
+import {
+  persistGeneratedAsset,
+  createPendingGeneratedAsset,
+} from "@oxagen/handlers";
 import { eventClient } from "@/event-client";
 import type { StreamEvent } from "@/components/chat/stream-event-types";
 import { formatStreamError } from "./stream-parts";
@@ -36,8 +39,20 @@ export function streamMediaGeneration(args: {
   const encoder = new TextEncoder();
   const responseStream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      // Enqueue-safe emit, mirroring the text route: once the client
+      // disconnects the controller is closed and enqueue THROWS. An unguarded
+      // throw here escapes into the catch below, which emits again, throws
+      // again, and leaves start() rejecting. Latch `closed` instead.
+      let closed = false;
       function emit(event: StreamEvent): void {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        if (closed) return;
+        try {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
+          );
+        } catch {
+          closed = true;
+        }
       }
       const toolCallId = randomUUID();
       try {
@@ -63,7 +78,11 @@ export function streamMediaGeneration(args: {
                 type: "component",
                 toolCallId,
                 componentId: "image-preview",
-                props: { placeholder: true, prompt: args.prompt, alt: args.prompt },
+                props: {
+                  placeholder: true,
+                  prompt: args.prompt,
+                  alt: args.prompt,
+                },
               });
             } else {
               // Persist to blob storage + a generated_assets row, then render via
@@ -92,7 +111,8 @@ export function streamMediaGeneration(args: {
             // Generation failed (no key / unsupported model / provider error):
             // render the image-preview empty-state with the reason instead of
             // failing the turn.
-            const reason = genErr instanceof Error ? genErr.message : "Generation failed";
+            const reason =
+              genErr instanceof Error ? genErr.message : "Generation failed";
             emit({
               type: "component",
               toolCallId,
@@ -152,12 +172,23 @@ export function streamMediaGeneration(args: {
           ...(code !== undefined ? { code } : {}),
         });
       } finally {
-        try {
-          controller.enqueue(encoder.encode("event: done\ndata: [DONE]\n\n"));
-        } catch {
-          // Controller may already be errored.
+        if (!closed) {
+          try {
+            controller.enqueue(encoder.encode("event: done\ndata: [DONE]\n\n"));
+          } catch {
+            // Controller may already be errored.
+            closed = true;
+          }
         }
-        controller.close();
+        // close() THROWS on an already-closed/errored controller, and a throw
+        // out of start() surfaces as an unhandled rejection.
+        if (!closed) {
+          try {
+            controller.close();
+          } catch {
+            // Already closed by a client disconnect — nothing left to do.
+          }
+        }
       }
     },
   });

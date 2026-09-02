@@ -14,7 +14,13 @@
  */
 
 import * as React from "react";
-import { render, screen, waitFor, cleanup, fireEvent } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  cleanup,
+  fireEvent,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { PreferencesInput } from "./preferences-action";
@@ -52,7 +58,12 @@ vi.mock("@/components/settings/model-defaults-fields", () => ({
     disabled: _d,
     scope: _s,
   }: {
-    value: { textTier: string | null; textModel: string | null; imageModel: string | null; videoModel: string | null };
+    value: {
+      textTier: string | null;
+      textModel: string | null;
+      imageModel: string | null;
+      videoModel: string | null;
+    };
     onChange: (v: typeof value) => void;
     disabled?: boolean;
     scope?: string;
@@ -87,7 +98,10 @@ vi.mock("@/components/ui/segmented-control", () => ({
     <div role="group" data-value={value}>
       {React.Children.map(children, (child) => {
         if (!React.isValidElement(child)) return child;
-        const { value: itemValue, children: itemChildren } = child.props as { value: string; children: React.ReactNode };
+        const { value: itemValue, children: itemChildren } = child.props as {
+          value: string;
+          children: React.ReactNode;
+        };
         return (
           <button
             type="button"
@@ -122,7 +136,10 @@ vi.mock("@/components/ui/button", () => ({
     type?: "button" | "submit" | "reset";
     className?: string;
   }) => (
-    <button type={(type as "button" | "submit" | "reset") ?? "button"} disabled={disabled}>
+    <button
+      type={(type as "button" | "submit" | "reset") ?? "button"}
+      disabled={disabled}
+    >
       {children}
     </button>
   ),
@@ -137,7 +154,11 @@ vi.mock("@/components/ui/label", () => ({
     children: React.ReactNode;
     id?: string;
     htmlFor?: string;
-  }) => <label id={id} htmlFor={htmlFor}>{children}</label>,
+  }) => (
+    <label id={id} htmlFor={htmlFor}>
+      {children}
+    </label>
+  ),
 }));
 
 vi.mock("@/components/ui/select", () => ({
@@ -155,15 +176,41 @@ vi.mock("@/components/ui/select", () => ({
     <div data-testid="select-root" data-value={value}>
       {React.Children.map(children, (child) => {
         if (!React.isValidElement(child)) return child;
-        return React.cloneElement(child as React.ReactElement<{ onValueChange?: (v: string | null) => void }>, { onValueChange });
+        return React.cloneElement(
+          child as React.ReactElement<{
+            onValueChange?: (v: string | null) => void;
+          }>,
+          { onValueChange },
+        );
       })}
     </div>
   ),
-  SelectTrigger: ({ children }: { children: React.ReactNode; id?: string; "aria-labelledby"?: string }) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
-  SelectPopup: ({ children }: { children: React.ReactNode; className?: string }) => <div>{children}</div>,
-  SelectGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ children, value: _v }: { children: React.ReactNode; value: string }) => <div>{children}</div>,
+  SelectTrigger: ({
+    children,
+  }: {
+    children: React.ReactNode;
+    id?: string;
+    "aria-labelledby"?: string;
+  }) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: { placeholder?: string }) => (
+    <span>{placeholder}</span>
+  ),
+  SelectPopup: ({
+    children,
+  }: {
+    children: React.ReactNode;
+    className?: string;
+  }) => <div>{children}</div>,
+  SelectGroup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectItem: ({
+    children,
+    value: _v,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => <div>{children}</div>,
 }));
 
 // Locale constants — use a minimal stub to avoid the Intl.supportedValuesOf call in jsdom
@@ -221,12 +268,16 @@ describe("PreferencesForm", () => {
 
   it("renders the Save preferences button", () => {
     render(<PreferencesForm initial={initialProps} />);
-    expect(screen.getByRole("button", { name: /save preferences/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /save preferences/i }),
+    ).toBeInTheDocument();
   });
 
   it("renders the form with aria-label", () => {
     render(<PreferencesForm initial={initialProps} />);
-    expect(screen.getByRole("form", { name: /preferences settings/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("form", { name: /preferences settings/i }),
+    ).toBeInTheDocument();
   });
 
   it("renders the model defaults section", () => {
@@ -244,13 +295,17 @@ describe("PreferencesForm", () => {
     render(<PreferencesForm initial={initialProps} />);
 
     // Submit the form
-    fireEvent.submit(screen.getByRole("form", { name: /preferences settings/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /preferences settings/i }),
+    );
 
     await waitFor(() => {
       expect(mockUpdatePreferencesAction).toHaveBeenCalledOnce();
     });
 
-    const [arg] = mockUpdatePreferencesAction.mock.calls[0] as [PreferencesInput];
+    const [arg] = mockUpdatePreferencesAction.mock.calls[0] as [
+      PreferencesInput,
+    ];
     expect(arg.fontSize).toBe("medium");
     expect(arg.density).toBe("comfortable");
     expect(arg.enterToSubmit).toBe(true);
@@ -264,7 +319,9 @@ describe("PreferencesForm", () => {
 
     render(<PreferencesForm initial={initialProps} />);
 
-    fireEvent.submit(screen.getByRole("form", { name: /preferences settings/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /preferences settings/i }),
+    );
 
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledOnce();
@@ -280,7 +337,9 @@ describe("PreferencesForm", () => {
 
     render(<PreferencesForm initial={initialProps} />);
 
-    fireEvent.submit(screen.getByRole("form", { name: /preferences settings/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /preferences settings/i }),
+    );
 
     await waitFor(() => {
       expect(screen.getByRole("status")).toBeInTheDocument();
@@ -298,13 +357,17 @@ describe("PreferencesForm", () => {
     // Click the stub button to change the textTier
     await user.click(screen.getByTestId("set-text-tier"));
 
-    fireEvent.submit(screen.getByRole("form", { name: /preferences settings/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /preferences settings/i }),
+    );
 
     await waitFor(() => {
       expect(mockUpdatePreferencesAction).toHaveBeenCalledOnce();
     });
 
-    const [arg] = mockUpdatePreferencesAction.mock.calls[0] as [PreferencesInput];
+    const [arg] = mockUpdatePreferencesAction.mock.calls[0] as [
+      PreferencesInput,
+    ];
     expect(arg.defaultTextTier).toBe("fast");
   });
 
@@ -320,7 +383,9 @@ describe("PreferencesForm", () => {
 
     render(<PreferencesForm initial={initialProps} />);
 
-    fireEvent.submit(screen.getByRole("form", { name: /preferences settings/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /preferences settings/i }),
+    );
 
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledOnce();
@@ -345,7 +410,9 @@ describe("PreferencesForm", () => {
 
     render(<PreferencesForm initial={initialProps} />);
 
-    fireEvent.submit(screen.getByRole("form", { name: /preferences settings/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /preferences settings/i }),
+    );
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /saving/i })).toBeDisabled();

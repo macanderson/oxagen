@@ -102,7 +102,10 @@ describe("billing.usage.breakdown schema", () => {
 
   it("accepts an optional workspace UUID", () => {
     expect(() =>
-      Schema.parse({ ...valid, workspaceId: "22222222-2222-2222-2222-222222222222" }),
+      Schema.parse({
+        ...valid,
+        workspaceId: "22222222-2222-2222-2222-222222222222",
+      }),
     ).not.toThrow();
   });
 
@@ -111,7 +114,9 @@ describe("billing.usage.breakdown schema", () => {
   });
 
   it("rejects a non-UUID workspaceId", () => {
-    expect(() => Schema.parse({ ...valid, workspaceId: "not-a-uuid" })).toThrow();
+    expect(() =>
+      Schema.parse({ ...valid, workspaceId: "not-a-uuid" }),
+    ).toThrow();
   });
 
   it("rejects a missing end bound", () => {

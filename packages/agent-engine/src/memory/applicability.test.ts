@@ -20,7 +20,11 @@ import {
 
 const mockContext: TaskContext = {
   issue: "The database connection is timing out when querying large tables",
-  candidateFiles: ["src/db/connection.ts", "src/db/query.ts", "tests/db.test.ts"],
+  candidateFiles: [
+    "src/db/connection.ts",
+    "src/db/query.ts",
+    "tests/db.test.ts",
+  ],
 };
 
 const mockItems: RecallItem[] = [
@@ -179,7 +183,9 @@ describe("filterRecall stage 1", () => {
       id: `item-${i}`,
       text: "database connection timeout issues",
     }));
-    const result = await filterRecall(items, mockContext, null, { maxSurvivors: 8 });
+    const result = await filterRecall(items, mockContext, null, {
+      maxSurvivors: 8,
+    });
     expect(result.length).toBeLessThanOrEqual(8);
   });
 
@@ -188,7 +194,9 @@ describe("filterRecall stage 1", () => {
       id: `item-${i}`,
       text: "database connection timeout",
     }));
-    const result = await filterRecall(items, mockContext, null, { maxSurvivors: 3 });
+    const result = await filterRecall(items, mockContext, null, {
+      maxSurvivors: 3,
+    });
     expect(result.length).toBeLessThanOrEqual(3);
   });
 
@@ -259,7 +267,9 @@ describe("filterRecall stage 2", () => {
       "item-1": { score: 0.8, reason: "good" },
       "item-4": { score: 0.7, reason: "okay" },
     });
-    const result = await filterRecall(mockItems, mockContext, scorer, { threshold: 0.75 });
+    const result = await filterRecall(mockItems, mockContext, scorer, {
+      threshold: 0.75,
+    });
     expect(result.some((r) => r.item.id === "item-1")).toBe(true);
     expect(result.some((r) => r.item.id === "item-4")).toBe(false);
   });
@@ -449,7 +459,9 @@ describe("filterRecall integration", () => {
       c: { score: 0.75, reason: "somewhat relevant" },
       e: { score: 0.55, reason: "marginally relevant" },
     });
-    const result = await filterRecall(items, mockContext, scorer, { threshold: 0.6 });
+    const result = await filterRecall(items, mockContext, scorer, {
+      threshold: 0.6,
+    });
     // b and d should be dropped in stage 1 (no overlap)
     // e should be dropped in stage 2 (score 0.55 < 0.6)
     // a and c should survive and be sorted by score (0.95 > 0.75)

@@ -5,16 +5,18 @@ import { StepsEditor } from "./automation-create-inline-steps";
 import type { AutomationStep } from "./automation-create-inline-types";
 
 vi.mock("@/components/ui/input", () => ({
-  Input: (props: React.InputHTMLAttributes<HTMLInputElement> & { "data-testid"?: string }) => (
-    <input {...props} />
-  ),
+  Input: (
+    props: React.InputHTMLAttributes<HTMLInputElement> & {
+      "data-testid"?: string;
+    },
+  ) => <input {...props} />,
 }));
 
 vi.mock("@/components/ui/textarea", () => ({
   Textarea: (
     props: React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
       "data-testid"?: string;
-    }
+    },
   ) => <textarea {...props} />,
 }));
 
@@ -49,9 +51,7 @@ vi.mock("@/components/ui/select", () => ({
   SelectValue: ({ placeholder }: { placeholder?: string }) => (
     <span>{placeholder}</span>
   ),
-  SelectPopup: ({ children }: { children: React.ReactNode }) => (
-    <>{children}</>
-  ),
+  SelectPopup: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   SelectItem: ({
     value,
     children,
@@ -117,7 +117,7 @@ describe("StepsEditor", () => {
         {...defaultProps}
         steps={steps}
         onRemoveStep={onRemoveStep}
-      />
+      />,
     );
     fireEvent.click(screen.getByTestId("step-remove-1"));
     expect(onRemoveStep).toHaveBeenCalledWith(1);
@@ -151,7 +151,7 @@ describe("StepsEditor", () => {
         {...defaultProps}
         steps={steps}
         onUpdateStep={onUpdateStep}
-      />
+      />,
     );
     fireEvent.change(screen.getByTestId("step-name-0"), {
       target: { value: "Send notification" },

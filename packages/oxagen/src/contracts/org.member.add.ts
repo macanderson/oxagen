@@ -7,12 +7,17 @@ import { registerCapability } from "../registry";
 export const orgMemberAdd = registerCapability({
   name: "add_org_member",
   domain: "org",
-  description: "Invite a user to join the org by email. Enforces seat/license limits; fails with a typed error when no seat is available.",
+  description:
+    "Invite a user to join the org by email. Enforces seat/license limits; fails with a typed error when no seat is available.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
-  agent: { requiresApproval: true, riskLevel: "medium", category: "organization" },
+  agent: {
+    requiresApproval: true,
+    riskLevel: "medium",
+    category: "organization",
+  },
   sensitivity: "high",
   defaultEffect: "deny",
   defaultRoles: {

@@ -25,7 +25,11 @@ export const automationList = registerCapability({
       id: z.string(),
       name: z.string(),
       status: z.string(),
-      triggerType: z.string().describe("The trigger type for this automation: 'event', 'schedule', or 'api'"),
+      triggerType: z
+        .string()
+        .describe(
+          "The trigger type for this automation: 'event', 'schedule', or 'api'",
+        ),
       triggers: z.array(z.string()),
     }),
   ),

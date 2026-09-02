@@ -9,22 +9,36 @@ vi.mock("../file-lock/lease", () => lease);
 
 import { createFileLeaseLockAdapter } from "./file-lock-lease";
 
-const ADAPTER_ARGS = { orgId: "org-1", workspaceId: "ws-1", owner: "oxageninc", repo: "oxagen-platform" };
+const ADAPTER_ARGS = {
+  orgId: "org-1",
+  workspaceId: "ws-1",
+  owner: "oxageninc",
+  repo: "oxagen-platform",
+};
 
 describe("createFileLeaseLockAdapter", () => {
   beforeEach(() => {
     lease.acquireFileLease.mockReset();
     lease.releaseFileLease.mockReset().mockResolvedValue({ released: true });
-    lease.releaseFileLeasesByExecution.mockReset().mockResolvedValue({ released: 0 });
+    lease.releaseFileLeasesByExecution
+      .mockReset()
+      .mockResolvedValue({ released: 0 });
   });
 
   it("acquires under the SourceFile naturalKey and maps a granted lease (incl. fencing token)", async () => {
     lease.acquireFileLease.mockResolvedValue({
-      acquired: [{ resourceKey: "k", lockId: "lock-9", fencingToken: 4, expiresAt: 99 }],
+      acquired: [
+        { resourceKey: "k", lockId: "lock-9", fencingToken: 4, expiresAt: 99 },
+      ],
       conflicts: [],
     });
     const adapter = createFileLeaseLockAdapter(ADAPTER_ARGS);
-    const grant = await adapter.acquire({ path: "src/a.ts", agentId: "task-1", executionId: "exec-1", action: "write" });
+    const grant = await adapter.acquire({
+      path: "src/a.ts",
+      agentId: "task-1",
+      executionId: "exec-1",
+      action: "write",
+    });
 
     expect(lease.acquireFileLease).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -36,7 +50,13 @@ describe("createFileLeaseLockAdapter", () => {
         action: "write",
       }),
     );
-    expect(grant).toEqual({ granted: true, lockId: "lock-9", heldBy: null, blockedUntil: null, fencingToken: 4 });
+    expect(grant).toEqual({
+      granted: true,
+      lockId: "lock-9",
+      heldBy: null,
+      blockedUntil: null,
+      fencingToken: 4,
+    });
   });
 
   it("maps a conflict to a denial carrying the blocking holder + expiry", async () => {
@@ -50,7 +70,13 @@ describe("createFileLeaseLockAdapter", () => {
       executionId: "exec-1",
       action: "write",
     });
-    expect(grant).toEqual({ granted: false, lockId: "", heldBy: "task-2", blockedUntil: 123, fencingToken: null });
+    expect(grant).toEqual({
+      granted: false,
+      lockId: "",
+      heldBy: "task-2",
+      blockedUntil: 123,
+      fencingToken: null,
+    });
   });
 
   it("fails SOFT (denies) when the lease service throws — a DB outage must never let a write proceed unguarded", async () => {
@@ -66,7 +92,10 @@ describe("createFileLeaseLockAdapter", () => {
   });
 
   it("release delegates to the holder-guarded releaseFileLease", async () => {
-    await createFileLeaseLockAdapter(ADAPTER_ARGS).release({ lockId: "lock-9", agentId: "task-1" });
+    await createFileLeaseLockAdapter(ADAPTER_ARGS).release({
+      lockId: "lock-9",
+      agentId: "task-1",
+    });
     expect(lease.releaseFileLease).toHaveBeenCalledWith({
       orgId: "org-1",
       workspaceId: "ws-1",
@@ -76,7 +105,10 @@ describe("createFileLeaseLockAdapter", () => {
   });
 
   it("release is a no-op for an empty lockId (a denied/degraded grant)", async () => {
-    await createFileLeaseLockAdapter(ADAPTER_ARGS).release({ lockId: "", agentId: "task-1" });
+    await createFileLeaseLockAdapter(ADAPTER_ARGS).release({
+      lockId: "",
+      agentId: "task-1",
+    });
     expect(lease.releaseFileLease).not.toHaveBeenCalled();
   });
 
@@ -93,7 +125,9 @@ describe("createFileLeaseLockAdapter", () => {
     lease.releaseFileLease.mockRejectedValue(new Error("boom"));
     lease.releaseFileLeasesByExecution.mockRejectedValue(new Error("boom"));
     const adapter = createFileLeaseLockAdapter(ADAPTER_ARGS);
-    await expect(adapter.release({ lockId: "lock-9", agentId: "task-1" })).resolves.toBeUndefined();
+    await expect(
+      adapter.release({ lockId: "lock-9", agentId: "task-1" }),
+    ).resolves.toBeUndefined();
     await expect(adapter.releaseAll("exec-1")).resolves.toBeUndefined();
   });
 });

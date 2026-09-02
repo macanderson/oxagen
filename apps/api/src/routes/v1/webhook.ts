@@ -58,7 +58,10 @@ webhookRoute.post("/:connectorId/:connectionId", async (c) => {
       .leftJoin(
         schema.webhookSubscriptions,
         and(
-          eq(schema.webhookSubscriptions.connectionId, schema.sourceConnections.id),
+          eq(
+            schema.webhookSubscriptions.connectionId,
+            schema.sourceConnections.id,
+          ),
           isNull(schema.sourceConnections.deletedAt),
         ),
       )
@@ -89,7 +92,11 @@ webhookRoute.post("/:connectorId/:connectionId", async (c) => {
       // Route by the envelope's stored keyId, not the current provider env var,
       // so a secret wrapped under a previous INGESTION_CRYPTO_PROVIDER still decrypts.
       const { adapter } = resolveIngestionCryptoAdapterForKeyId(enc.keyId);
-      const plain = await decrypt(Buffer.from(enc.ciphertext, "base64"), enc.keyId, { adapter });
+      const plain = await decrypt(
+        Buffer.from(enc.ciphertext, "base64"),
+        enc.keyId,
+        { adapter },
+      );
       webhookSecret = plain.toString("utf8");
     } catch (err) {
       logger.error(
@@ -121,7 +128,11 @@ webhookRoute.post("/:connectorId/:connectionId", async (c) => {
     );
     return c.json({ error: "Webhook verification unavailable" }, 401);
   }
-  const verified = connector.verifyWebhook(payload, headers, webhookSecret ?? null);
+  const verified = connector.verifyWebhook(
+    payload,
+    headers,
+    webhookSecret ?? null,
+  );
   if (!verified) {
     return c.json({ error: "Webhook signature invalid" }, 401);
   }
@@ -146,7 +157,14 @@ webhookRoute.post("/:connectorId/:connectionId", async (c) => {
       ? String((parsedPayload as Record<string, unknown>)["type"])
       : "event");
 
-  // Fire Inngest pipeline event
+  // Fire Inngest pipeline event.
+  //
+  // NOTE on `idempotencyKey` below: the trailing `Date.now()` makes it unique
+  // per delivery, so it does NOT dedupe a provider's at-least-once redelivery of
+  // the same event — it only separates distinct deliveries that would otherwise
+  // collide. Real dedupe needs the provider's own delivery id (GitHub's
+  // `x-github-delivery`, Linear's `linear-delivery`, …); adding that changes
+  // pipeline behaviour, so it is tracked rather than silently swapped in here.
   await eventClient.send({
     name: "ingestion/entity.received",
     data: {

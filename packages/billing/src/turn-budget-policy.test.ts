@@ -111,7 +111,9 @@ describe("resolveTurnBudgetPolicy", () => {
   });
 
   it("falls back to TURN_BUDGET_OFF when there is no saved default either", () => {
-    expect(resolveTurnBudgetPolicy(null, TURN_BUDGET_OFF)).toEqual(TURN_BUDGET_OFF);
+    expect(resolveTurnBudgetPolicy(null, TURN_BUDGET_OFF)).toEqual(
+      TURN_BUDGET_OFF,
+    );
   });
 
   it("an explicit per-turn override wins over the saved default", () => {
@@ -162,7 +164,9 @@ describe("resolveTurnBudgetPolicy", () => {
       mode: "grace",
       graceOveragePct: 0.25,
     };
-    expect(resolveTurnBudgetPolicy(requestBudget, TURN_BUDGET_OFF).limitUsd).toBe(0);
+    expect(
+      resolveTurnBudgetPolicy(requestBudget, TURN_BUDGET_OFF).limitUsd,
+    ).toBe(0);
   });
 
   it("normalizes a null limitUsd to 0 when the request budget is enabled", () => {
@@ -172,7 +176,9 @@ describe("resolveTurnBudgetPolicy", () => {
       mode: "enforce",
       graceOveragePct: 0.25,
     };
-    expect(resolveTurnBudgetPolicy(requestBudget, TURN_BUDGET_OFF).limitUsd).toBe(0);
+    expect(
+      resolveTurnBudgetPolicy(requestBudget, TURN_BUDGET_OFF).limitUsd,
+    ).toBe(0);
   });
 });
 
@@ -214,7 +220,12 @@ describe("governedBudgetFromRead", () => {
       enforcement: "ceiling",
     };
     expect(governedBudgetFromRead(read)).toEqual({
-      policy: { enabled: true, limitUsd: 5, mode: "enforce", graceOveragePct: 0.1 },
+      policy: {
+        enabled: true,
+        limitUsd: 5,
+        mode: "enforce",
+        graceOveragePct: 0.1,
+      },
       enforcement: "ceiling",
     });
   });
@@ -228,7 +239,12 @@ describe("governedBudgetFromRead", () => {
       enforcement: "default",
     };
     expect(governedBudgetFromRead(read)).toEqual({
-      policy: { enabled: true, limitUsd: 2, mode: "grace", graceOveragePct: 0.5 },
+      policy: {
+        enabled: true,
+        limitUsd: 2,
+        mode: "grace",
+        graceOveragePct: 0.5,
+      },
       enforcement: "default",
     });
   });
@@ -261,7 +277,11 @@ describe("route effective-policy resolution (governedBudgetFromRead + resolveEff
       enforcement: "ceiling",
     };
     const governance = governedBudgetFromRead(workspaceRead);
-    const effective = resolveEffectiveTurnBudget(memberPolicy, null, governance);
+    const effective = resolveEffectiveTurnBudget(
+      memberPolicy,
+      null,
+      governance,
+    );
     expect(effective).toEqual({
       enabled: true,
       limitUsd: 5,
@@ -286,7 +306,11 @@ describe("route effective-policy resolution (governedBudgetFromRead + resolveEff
     };
     const governance = governedBudgetFromRead(workspaceRead);
     expect(governance).toBeNull();
-    const effective = resolveEffectiveTurnBudget(memberPolicy, null, governance);
+    const effective = resolveEffectiveTurnBudget(
+      memberPolicy,
+      null,
+      governance,
+    );
     expect(effective).toEqual(memberPolicy);
   });
 
@@ -328,6 +352,8 @@ describe("route effective-policy resolution (governedBudgetFromRead + resolveEff
       mode: "enforce",
       graceOveragePct: 0.25,
     };
-    expect(resolveEffectiveTurnBudget(optedInMember, null, governance)).toEqual(optedInMember);
+    expect(resolveEffectiveTurnBudget(optedInMember, null, governance)).toEqual(
+      optedInMember,
+    );
   });
 });

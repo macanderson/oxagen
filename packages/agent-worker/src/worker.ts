@@ -26,6 +26,14 @@
  * server-side (`ON CONFLICT DO NOTHING` on `(run_id, seq)`); the worker never
  * needs its own dedup bookkeeping.
  *
+ * The buffer has NO size or age cap, so both flush points are the driver's to
+ * schedule. That matters for the driver actually shipped: `@oxagen/agent`'s
+ * `createPlatformTurnDriver` never calls `io.checkpoint`, and it forwards every
+ * engine stream part as its own event — so a long turn holds its entire event
+ * log in memory until the turn settles, and a crash before that single flush
+ * loses all of it. Capping the buffer (flush on N events or T ms) is the fix;
+ * it is not implemented here.
+ *
  * ── V2: fenced immutable attempts (docs/specs/run-evidence-ingress/spec.md) ──
  *
  * When `opts.attempts` is supplied, each claim loop tries the fenced V2 queue
@@ -46,9 +54,11 @@
  *                obligation in the seal transaction. The worker never invokes
  *                evidence finalization itself.
  *
- * `opts.attempts` being optional IS the V2 claim gate: PR 1A wires the V1 path
- * only (see ./main.ts), so no V2 attempt is claimed before PR 2B's
- * finalization consumption exists to satisfy the obligations a seal creates.
+ * `opts.attempts` being optional IS the V2 claim gate: `./main.ts` wires the V1
+ * path only, so no V2 attempt is claimed before finalization consumption
+ * exists to satisfy the obligations a seal creates. Nothing in the tree
+ * implements `AttemptTurnDriver` yet, so `driveOneAttempt` below is exercised
+ * by tests only — read it as a specified-but-unshipped path.
  */
 import { hostname } from "node:os";
 import { isRunLeaseFencedError } from "@oxagen/agent-runner/run-errors";
@@ -87,19 +97,29 @@ export const DEFAULT_CANCEL_POLL_INTERVAL_MS = 5000;
 
 /**
  * The single terminal-stage event type; the seal appends it in its own
- * transaction. Spelled here rather than imported so `worker.ts` keeps its
- * dependency-free structural-port discipline; the store rejects any other
- * spelling against the closed registry, so drift fails loudly at the first
- * seal instead of silently.
+ * transaction.
+ *
+ * Spelled here rather than imported from `@oxagen/agent-runner`, which exports
+ * the canonical constant of the same name: that constant lives in
+ * `event-payload-registry.ts`, and importing it would pull zod and the whole
+ * closed-vocabulary registry into a harness whose only other platform import is
+ * the leaf `run-errors` module. The store checks every event type against the
+ * registry, so a drift between the two spellings fails loudly at the first
+ * seal rather than silently.
  */
 export const TERMINAL_EVENT_TYPE = "terminal.attempt_terminated";
 
 /**
  * `reason_code` shape the V2 terminal-event schema accepts. A reason that does
- * not match is DROPPED rather than sent: the reason is an annotation, and
- * letting a malformed one reject the terminal event would leave the attempt
- * unsealed — no seal means no finalization grant, which is the exact failure
- * the seal transaction exists to prevent.
+ * not match is dropped FROM THE EVENT PAYLOAD rather than sent: the reason is
+ * an annotation, and letting a malformed one reject the terminal event would
+ * leave the attempt unsealed — no seal means no finalization grant, which is
+ * the exact failure the seal transaction exists to prevent.
+ *
+ * The seal row still records the raw value (`sealAttempt`'s own `reasonCode`
+ * argument, unfiltered), so a malformed reason survives as an annotation on
+ * `agent_run_attempt_seals` while being absent from the event stream. The two
+ * can therefore disagree; only the event stream is digested evidence.
  */
 const REASON_CODE_RE = /^[a-z][a-z0-9_]{0,63}$/;
 
@@ -172,7 +192,7 @@ function interruptibleSleep(ms: number): {
 export function createAgentWorker(opts: WorkerOptions): AgentWorker {
   const store: RunStore = opts.store;
   const driveTurn: TurnDriver = opts.driveTurn;
-  // Undefined ⇒ V2 claims disabled for this process (the PR 1A configuration).
+  // Undefined ⇒ V2 claims disabled for this process (the shipped configuration).
   const attempts: AttemptWorkerOptions | undefined = opts.attempts;
   const workerId = opts.workerId ?? defaultWorkerId();
   const concurrency = opts.concurrency ?? DEFAULT_CONCURRENCY;
@@ -235,6 +255,10 @@ export function createAgentWorker(opts: WorkerOptions): AgentWorker {
     }
 
     async function checkpoint(state: unknown): Promise<void> {
+      // Once the lease is gone this RESOLVES without writing anything, the
+      // same shape `commit` uses on the V2 path: the driver's signal is
+      // already aborted, and a rejection here would only add a spurious
+      // driver error to a run the worker is forbidden to touch again.
       if (leaseLost) return;
       await flush();
       const ok = await store.saveCheckpoint(
@@ -375,6 +399,10 @@ export function createAgentWorker(opts: WorkerOptions): AgentWorker {
      * tear apart: either both are durable or neither is.
      */
     async function commit(checkpoint?: AttemptCheckpointRecord): Promise<void> {
+      // A fenced attempt's checkpoint call RESOLVES rather than rejecting:
+      // nothing was written, but there is nothing useful to tell the driver
+      // either, and `controller.signal` is already aborted so a driver that
+      // honors the signal stops on its own.
       if (fenced) return;
       if (pending.length === 0) {
         if (!checkpoint) return;
@@ -408,6 +436,13 @@ export function createAgentWorker(opts: WorkerOptions): AgentWorker {
         // next commit replays it byte-identically: a re-stamped `observedAt`
         // moves `event_digest` and turns a benign retry into a
         // same-sequence/different-digest integrity conflict.
+        //
+        // Only the EVENTS are restored. The `checkpoint` argument is not, so a
+        // driver whose `io.checkpoint(...)` rejected must re-issue it — the
+        // rejection is its notice. A driver that swallows the rejection and
+        // keeps going gets its events committed by the next commit with no
+        // checkpoint bound to them, and a successor restores from the previous
+        // one.
         pending = [...batch, ...pending];
         throw err;
       }

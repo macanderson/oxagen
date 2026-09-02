@@ -18,22 +18,20 @@ const logger = pino({
   base: { app: "agent.subagent.cancel" },
 });
 
-// STATUS-TRANSITION NOTE (HALTED SUB-SLICE):
+// STATUS-TRANSITION NOTE:
 //
-// The `subagent_fanouts.status` column has a CHECK constraint permitting only:
-//   ('pending', 'running', 'completed', 'partial', 'timed_out')
-// The `subagent_runs.status` column has a CHECK constraint permitting only:
-//   ('pending', 'running', 'completed', 'failed')
+// Neither status column can hold 'cancelled'. The CHECK constraints
+// (packages/database/src/schema/agent.ts) permit only:
+//   subagent_fanouts.status → 'pending' | 'running' | 'completed' | 'partial' | 'timed_out'
+//   subagent_runs.status    → 'pending' | 'running' | 'completed' | 'failed'
 //
-// Neither table includes 'cancelled'. Adding it requires a schema migration
-// (new CHECK constraint values). Because the Atlas CLI migration flow was not
-// available in this context, the status-transition sub-slice is HALTED for
-// the migration step and we use the closest available terminal statuses:
+// So a cancel writes the closest available terminal status and encodes the
+// cancellation in error_reason instead:
 //   - fanout  → 'timed_out'  (the only terminal non-success fanout state)
 //   - runs    → 'failed'     (the only terminal non-success run state)
 //
-// Once a migration adds 'cancelled' to both CHECK constraints, replace
-// FANOUT_CANCEL_STATUS and RUN_CANCEL_STATUS below with 'cancelled'.
+// Adding 'cancelled' needs a migration that widens both CHECK constraints.
+// Once that lands, replace FANOUT_CANCEL_STATUS and RUN_CANCEL_STATUS below.
 const FANOUT_CANCEL_STATUS = "timed_out" as const;
 const RUN_CANCEL_STATUS = "failed" as const;
 

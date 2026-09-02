@@ -79,6 +79,10 @@ export async function createCreditLot(
     });
 
     // 3. Mirror into credit_balances (cached derived value).
+    // The mirror tracks grants and spends only — nothing decrements it when a
+    // lot passes its expires_at, so it drifts ABOVE the real spendable balance
+    // once any expiring lot lapses. Treat it as a display cache; every
+    // gating decision must read {@link effectiveBalance}, which sums live lots.
     await tx
       .insert(schema.creditBalances)
       .values({
@@ -252,6 +256,11 @@ export interface ConsumeCreditsResult {
  * A zero or fully-clamped debit writes NO ledger row (the ledger CHECK forbids
  * a zero delta). credit_balances is decremented in the same transaction to keep
  * the cached mirror consistent.
+ *
+ * Caveat on the returned `balanceCents`: for a non-positive `requestedCents`
+ * this returns 0 WITHOUT reading the DB — the call short-circuits before opening
+ * a transaction. Treat `balanceCents` as meaningful only when `requestedCents`
+ * was positive; use {@link effectiveBalance} when you actually need the balance.
  */
 export async function consumeCredits(
   args: ConsumeCreditsArgs,
@@ -339,7 +348,9 @@ export async function consumeCredits(
       referenceId: args.referenceId ?? null,
     });
 
-    // Keep credit_balances mirror in sync.
+    // Keep the credit_balances mirror in sync. This is an UPDATE, so it is a
+    // silent no-op for an org that has no mirror row yet; the lots above are
+    // still debited correctly, since they are the authoritative balance.
     await tx
       .update(schema.creditBalances)
       .set({

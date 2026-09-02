@@ -56,10 +56,14 @@ describe("eval.dataset.get handler", () => {
       expectedOutput: "4",
       metadata: { source: "manual" },
     };
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx([[DATASET_ROW], [ITEM_ROW]])),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) =>
+        fn(makeTx([[DATASET_ROW], [ITEM_ROW]])),
     );
-    const out = await evalDatasetGetHandler({ datasetPublicId: "eds_ABC", limit: 50 }, CTX);
+    const out = await evalDatasetGetHandler(
+      { datasetPublicId: "eds_ABC", limit: 50 },
+      CTX,
+    );
     expect(out.dataset).toEqual({
       datasetId: "eds_ABC",
       name: "Acme Eval",
@@ -81,8 +85,8 @@ describe("eval.dataset.get handler", () => {
   });
 
   it("throws a 404 when the dataset does not exist", async () => {
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx([[]])),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) => fn(makeTx([[]])),
     );
     await expect(
       evalDatasetGetHandler({ datasetPublicId: "eds_missing", limit: 50 }, CTX),
@@ -95,19 +99,26 @@ describe("eval.dataset.get handler", () => {
       { publicId: "edi_2", input: "b", expectedOutput: null, metadata: {} },
     ];
     // limit=1 + 1 overfetch => 2 rows returned, hasMore true, page trimmed to 1.
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx([[DATASET_ROW], rows])),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) =>
+        fn(makeTx([[DATASET_ROW], rows])),
     );
-    const out = await evalDatasetGetHandler({ datasetPublicId: "eds_ABC", limit: 1 }, CTX);
+    const out = await evalDatasetGetHandler(
+      { datasetPublicId: "eds_ABC", limit: 1 },
+      CTX,
+    );
     expect(out.items).toHaveLength(1);
     expect(out.nextCursor).toBe("edi_1");
   });
 
   it("resolves the cursor to an item id before paginating", async () => {
     const cursorRow = { id: "uuid-item-cursor" };
-    const pageRows = [{ publicId: "edi_3", input: "c", expectedOutput: null, metadata: {} }];
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx([[DATASET_ROW], [cursorRow], pageRows])),
+    const pageRows = [
+      { publicId: "edi_3", input: "c", expectedOutput: null, metadata: {} },
+    ];
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) =>
+        fn(makeTx([[DATASET_ROW], [cursorRow], pageRows])),
     );
     const out = await evalDatasetGetHandler(
       { datasetPublicId: "eds_ABC", limit: 50, cursor: "edi_2" },

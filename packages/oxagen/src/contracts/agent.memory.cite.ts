@@ -31,7 +31,9 @@ export const agentMemoryCite = registerCapability({
     executionRef: z
       .string()
       .min(1)
-      .describe("Execution id to attach citations to; created (MERGE) if absent"),
+      .describe(
+        "Execution id to attach citations to; created (MERGE) if absent",
+      ),
     agentId: z.string().optional(),
     runId: z.string().optional(),
     taskSummary: z.string().max(500).optional(),
@@ -43,7 +45,9 @@ export const agentMemoryCite = registerCapability({
           deviated: z
             .boolean()
             .default(false)
-            .describe("true when the output departed from the memory's expected value"),
+            .describe(
+              "true when the output departed from the memory's expected value",
+            ),
           expectedValue: z.string().max(500).optional(),
           observedValue: z.string().max(500).optional(),
           agentRationale: z.string().max(1000).optional(),

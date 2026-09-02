@@ -22,7 +22,16 @@ function truncate(s: string, max: number): string {
 
 /** Split a stream into bounded, tail-capped log rows. */
 function streamRows(
-  base: Omit<SandboxLogRow, "stream" | "level" | "line" | "seq" | "command" | "exit_code" | "duration_ms">,
+  base: Omit<
+    SandboxLogRow,
+    | "stream"
+    | "level"
+    | "line"
+    | "seq"
+    | "command"
+    | "exit_code"
+    | "duration_ms"
+  >,
   text: string,
   stream: "stdout" | "stderr",
   startSeq: number,
@@ -30,7 +39,10 @@ function streamRows(
   const all = text.split("\n");
   // Drop a single trailing empty line from the final newline.
   if (all.length > 0 && all[all.length - 1] === "") all.pop();
-  const kept = all.length > MAX_LINES_PER_STREAM ? all.slice(all.length - MAX_LINES_PER_STREAM) : all;
+  const kept =
+    all.length > MAX_LINES_PER_STREAM
+      ? all.slice(all.length - MAX_LINES_PER_STREAM)
+      : all;
   return kept.map((line, i) => ({
     ...base,
     stream,
@@ -51,12 +63,22 @@ export async function captureSandboxCommandLogs(
   ctx: CapabilityContext,
   sessionId: string,
   command: string,
-  result: { exitCode: number; stdout: string; stderr: string; timedOut: boolean },
+  result: {
+    exitCode: number;
+    stdout: string;
+    stderr: string;
+    timedOut: boolean;
+  },
   durationMs: number,
 ): Promise<void> {
   try {
     const ts = new Date().toISOString();
-    const base = { org_id: ctx.orgId, workspace_id: ctx.workspaceId, session_id: sessionId, ts };
+    const base = {
+      org_id: ctx.orgId,
+      workspace_id: ctx.workspaceId,
+      session_id: sessionId,
+      ts,
+    };
     const cmd = truncate(command, MAX_COMMAND_LEN);
 
     // Command echo + result summary — the 'debug' channel (toggle ON to see it).
@@ -72,7 +94,12 @@ export async function captureSandboxCommandLogs(
     };
 
     const stdoutRows = streamRows(base, result.stdout, "stdout", 1);
-    const stderrRows = streamRows(base, result.stderr, "stderr", 1 + stdoutRows.length);
+    const stderrRows = streamRows(
+      base,
+      result.stderr,
+      "stderr",
+      1 + stdoutRows.length,
+    );
 
     await insertSandboxLogs([systemRow, ...stdoutRows, ...stderrRows]);
   } catch {

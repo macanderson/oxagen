@@ -16,7 +16,14 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, Play, Pencil, Power, PowerOff, Zap } from "lucide-react";
+import {
+  MoreHorizontal,
+  Play,
+  Pencil,
+  Power,
+  PowerOff,
+  Zap,
+} from "lucide-react";
 import {
   Table,
   TableHeader,
@@ -57,7 +64,9 @@ const TRIGGER_LABEL: Record<string, string> = {
   api: "API / manual",
 };
 
-function triggerBadgeVariant(t: string): "info-soft" | "warning-soft" | "muted" {
+function triggerBadgeVariant(
+  t: string,
+): "info-soft" | "warning-soft" | "muted" {
   if (t === "event") return "info-soft";
   if (t === "schedule") return "warning-soft";
   return "muted";
@@ -84,8 +93,12 @@ export function AutomationsTable({
   const toast = useToast();
 
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "event" | "schedule" | "api">("all");
-  const [stateFilter, setStateFilter] = useState<"all" | "enabled" | "disabled">("all");
+  const [typeFilter, setTypeFilter] = useState<
+    "all" | "event" | "schedule" | "api"
+  >("all");
+  const [stateFilter, setStateFilter] = useState<
+    "all" | "enabled" | "disabled"
+  >("all");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [enableTarget, setEnableTarget] = useState<Row | null>(null);
   const [triggerTarget, setTriggerTarget] = useState<Row | null>(null);
@@ -105,26 +118,55 @@ export function AutomationsTable({
 
   async function handleDisable(row: Row) {
     setBusyId(row.id);
-    const res = await disableAutomationAction({ orgSlug, workspaceSlug, automationId: row.id });
-    setBusyId(null);
-    if (res.ok) {
-      toast.add({ title: "Automation disabled", description: row.name, type: "success" });
-      router.refresh();
-    } else {
-      toast.add({ title: "Couldn't disable", description: res.error, type: "error" });
+    // finally: a rejected action would otherwise leave the row's menu item
+    // disabled until the page is reloaded.
+    try {
+      const res = await disableAutomationAction({
+        orgSlug,
+        workspaceSlug,
+        automationId: row.id,
+      });
+      if (res.ok) {
+        toast.add({
+          title: "Automation disabled",
+          description: row.name,
+          type: "success",
+        });
+        router.refresh();
+      } else {
+        toast.add({
+          title: "Couldn't disable",
+          description: res.error,
+          type: "error",
+        });
+      }
+    } finally {
+      setBusyId(null);
     }
   }
 
   async function handleConfirmEnable() {
     if (!enableTarget) return;
     const row = enableTarget;
-    const res = await enableAutomationAction({ orgSlug, workspaceSlug, automationId: row.id });
+    const res = await enableAutomationAction({
+      orgSlug,
+      workspaceSlug,
+      automationId: row.id,
+    });
     if (res.ok) {
-      toast.add({ title: "Automation enabled", description: `${row.name} is now live.`, type: "success" });
+      toast.add({
+        title: "Automation enabled",
+        description: `${row.name} is now live.`,
+        type: "success",
+      });
       setEnableTarget(null);
       router.refresh();
     } else {
-      toast.add({ title: "Couldn't enable", description: res.error, type: "error" });
+      toast.add({
+        title: "Couldn't enable",
+        description: res.error,
+        type: "error",
+      });
       setEnableTarget(null);
     }
   }
@@ -160,8 +202,15 @@ export function AutomationsTable({
           aria-label="Search automations by name"
           data-testid="automations-search"
         />
-        <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as typeof typeFilter)}>
-          <SelectTrigger size="sm" className="w-40" aria-label="Filter by trigger type">
+        <Select
+          value={typeFilter}
+          onValueChange={(v) => setTypeFilter(v as typeof typeFilter)}
+        >
+          <SelectTrigger
+            size="sm"
+            className="w-40"
+            aria-label="Filter by trigger type"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectPopup>
@@ -171,8 +220,15 @@ export function AutomationsTable({
             <SelectItem value="api">API / manual</SelectItem>
           </SelectPopup>
         </Select>
-        <Select value={stateFilter} onValueChange={(v) => setStateFilter(v as typeof stateFilter)}>
-          <SelectTrigger size="sm" className="w-36" aria-label="Filter by enabled state">
+        <Select
+          value={stateFilter}
+          onValueChange={(v) => setStateFilter(v as typeof stateFilter)}
+        >
+          <SelectTrigger
+            size="sm"
+            className="w-36"
+            aria-label="Filter by enabled state"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectPopup>
@@ -195,7 +251,10 @@ export function AutomationsTable({
         <TableBody>
           {rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
+              <TableCell
+                colSpan={4}
+                className="py-8 text-center text-sm text-muted-foreground"
+              >
                 No automations match your filters.
               </TableCell>
             </TableRow>
@@ -214,12 +273,18 @@ export function AutomationsTable({
                     </Link>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={triggerBadgeVariant(row.triggerType)} size="sm">
+                    <Badge
+                      variant={triggerBadgeVariant(row.triggerType)}
+                      size="sm"
+                    >
                       {TRIGGER_LABEL[row.triggerType] ?? row.triggerType}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={enabled ? "success-soft" : "muted"} size="sm">
+                    <Badge
+                      variant={enabled ? "success-soft" : "muted"}
+                      size="sm"
+                    >
                       {enabled ? "Enabled" : "Disabled"}
                     </Badge>
                   </TableCell>
@@ -238,9 +303,7 @@ export function AutomationsTable({
                         <MoreHorizontal className="size-4" />
                       </MenuTrigger>
                       <MenuPopup align="end">
-                        <MenuItem
-                          render={<Link href={detailHref} />}
-                        >
+                        <MenuItem render={<Link href={detailHref} />}>
                           <Pencil className="size-4" /> Edit
                         </MenuItem>
                         {canManage && (
@@ -291,7 +354,8 @@ export function AutomationsTable({
         onOpenChange={(open) => !open && setTriggerTarget(null)}
         automationName={triggerTarget?.name ?? ""}
         onTrigger={async (payload) => {
-          if (!triggerTarget) return { ok: false, error: "No automation selected." };
+          if (!triggerTarget)
+            return { ok: false, error: "No automation selected." };
           const res = await triggerAutomationAction({
             orgSlug,
             workspaceSlug,
@@ -300,7 +364,11 @@ export function AutomationsTable({
           });
           if (res.ok) {
             router.refresh();
-            return { ok: true, executionId: res.result.execution_id, status: res.result.status };
+            return {
+              ok: true,
+              executionId: res.result.execution_id,
+              status: res.result.status,
+            };
           }
           return { ok: false, error: res.error };
         }}

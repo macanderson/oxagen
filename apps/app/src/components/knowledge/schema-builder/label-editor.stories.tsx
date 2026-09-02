@@ -32,7 +32,12 @@ export const EditExisting: Story = {
         description: "A human individual",
         naturalKeyProps: ["email"],
         properties: [
-          { key: "name", dataType: "string", required: true, description: "Full name" },
+          {
+            key: "name",
+            dataType: "string",
+            required: true,
+            description: "Full name",
+          },
           { key: "email", dataType: "email", required: false },
         ],
       }}

@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const agentPlanApprove = registerCapability({
   name: "approve_plan",
   domain: "agent",
-  description: "Approve, deny, or amend a previously-proposed plan; approval releases the agent stream to execute the plan's side-effectful steps",
+  description:
+    "Approve, deny, or amend a previously-proposed plan; approval releases the agent stream to execute the plan's side-effectful steps",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],

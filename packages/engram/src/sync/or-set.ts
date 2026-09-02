@@ -92,7 +92,10 @@ export class ORSet<T> {
         if (existing) {
           for (const tag of entry.tags) existing.tags.add(tag);
         } else {
-          result.entries.set(id, { value: entry.value, tags: new Set(entry.tags) });
+          result.entries.set(id, {
+            value: entry.value,
+            tags: new Set(entry.tags),
+          });
         }
       }
     };
@@ -143,9 +146,15 @@ export class ORSet<T> {
   }
 
   /** Export state for serialization. */
-  toJSON(): { entries: Array<{ value: T; tags: string[] }>; tombstones: string[] } {
+  toJSON(): {
+    entries: Array<{ value: T; tags: string[] }>;
+    tombstones: string[];
+  } {
     return {
-      entries: [...this.entries.values()].map((e) => ({ value: e.value, tags: [...e.tags] })),
+      entries: [...this.entries.values()].map((e) => ({
+        value: e.value,
+        tags: [...e.tags],
+      })),
       tombstones: [...this.tombstones],
     };
   }
@@ -160,7 +169,10 @@ export class ORSet<T> {
   }): ORSet<T> {
     const set = new ORSet<T>();
     for (const e of data.entries) {
-      set.entries.set(elementId(e.value), { value: e.value, tags: new Set(e.tags) });
+      set.entries.set(elementId(e.value), {
+        value: e.value,
+        tags: new Set(e.tags),
+      });
     }
     for (const t of data.tombstones) set.tombstones.add(t);
     return set;

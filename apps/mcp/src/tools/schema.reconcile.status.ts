@@ -11,11 +11,19 @@ export const schema = {
 export const metadata: ToolMetadata = {
   name: schemaReconcileStatus.name,
   description: schemaReconcileStatus.description,
-  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+  },
 };
 
-export default async function schemaReconcileStatusTool(args: InferSchema<typeof schema>) {
+export default async function schemaReconcileStatusTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(schemaReconcileStatus.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(schemaReconcileStatus.name, args, ctx, {
+    surface: "mcp",
+  });
   return schemaReconcileStatus.output.parse(output);
 }

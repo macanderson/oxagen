@@ -40,7 +40,11 @@ function makeMutation(overrides: Partial<EntityMutation> = {}): EntityMutation {
     operation: "insert",
     displayName: "Add OAuth Login",
     properties: { title: "Add OAuth Login", state: "open" },
-    sourceRef: { connectorType: "github", connectionId: "conn-1", externalId: "42" },
+    sourceRef: {
+      connectorType: "github",
+      connectionId: "conn-1",
+      externalId: "42",
+    },
     ...overrides,
   };
 }
@@ -102,7 +106,10 @@ describe("resolveEntity — Pass A: exact naturalKey hit", () => {
 
     expect(mocks.sessionRun).toHaveBeenCalledWith(
       expect.stringContaining("orgId: $orgId"),
-      expect.objectContaining({ orgId: "org-42", naturalKey: "github:conn-1:42" }),
+      expect.objectContaining({
+        orgId: "org-42",
+        naturalKey: "github:conn-1:42",
+      }),
     );
   });
 });
@@ -173,7 +180,9 @@ describe("resolveEntity — Pass B: no natural key match → new principal", () 
     const cypher = String(secondCall![0]);
     // Index is queried with the over-sampled $k, then trimmed via LIMIT $limit
     // after the org/entityType filter so the tenant filter can't starve dedup.
-    expect(cypher).toContain("db.index.vector.queryNodes('entity_node_embedding_index', $k");
+    expect(cypher).toContain(
+      "db.index.vector.queryNodes('entity_node_embedding_index', $k",
+    );
     expect(cypher).toContain("LIMIT $limit");
     const params = secondCall![1] as Record<string, unknown>;
     expect(params["k"]).toBe(BigInt(15)); // CANDIDATE_LIMIT(5) × 3
@@ -221,7 +230,10 @@ describe("resolveEntity — Pass B: alias path", () => {
     //   1st = Pass A MATCH (returns nothing)
     //   2nd = Pass B vector search (returns one high-score candidate)
     //   3rd = batch naturalKey resolve (returns nothing — target not needed for edge creation)
-    const passASession = { run: vi.fn().mockResolvedValue({ records: [] }), close: vi.fn().mockResolvedValue(undefined) };
+    const passASession = {
+      run: vi.fn().mockResolvedValue({ records: [] }),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
     // Pass B: return one high-score candidate (cosine=0.95 gives 0.38; + displayName name similarity ≈ 0.14 → total ≈ 0.52 < 0.70)
     // Use email match to push above threshold: 0.95*0.4=0.38 + 0.4 email + 0.2*name ≈ 0.78 → above ALIAS_THRESHOLD
     const mutation = makeMutation({
@@ -233,13 +245,21 @@ describe("resolveEntity — Pass B: alias path", () => {
         records: [
           {
             get: (k: string) =>
-              ({ nodeId: "principal-id", displayName: "Add OAuth Login", properties: JSON.stringify({ email: "mac@example.com" }), score: 0.95 })[k],
+              ({
+                nodeId: "principal-id",
+                displayName: "Add OAuth Login",
+                properties: JSON.stringify({ email: "mac@example.com" }),
+                score: 0.95,
+              })[k],
           },
         ],
       }),
       close: vi.fn().mockResolvedValue(undefined),
     };
-    const resolveSession = { run: vi.fn().mockResolvedValue({ records: [] }), close: vi.fn().mockResolvedValue(undefined) };
+    const resolveSession = {
+      run: vi.fn().mockResolvedValue({ records: [] }),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
 
     let sessionCallCount = 0;
     mocks.scopedSession.mockImplementation(() => {
@@ -259,19 +279,30 @@ describe("resolveEntity — Pass B: alias path", () => {
 
   it("creates a new principal when combined score is below ALIAS_THRESHOLD", async () => {
     // cosine=0.5 with no email/url/name match → 0.5 * 0.4 = 0.2 < ALIAS_THRESHOLD (0.70)
-    const passASession = { run: vi.fn().mockResolvedValue({ records: [] }), close: vi.fn().mockResolvedValue(undefined) };
+    const passASession = {
+      run: vi.fn().mockResolvedValue({ records: [] }),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
     const passBSession = {
       run: vi.fn().mockResolvedValue({
         records: [
           {
             get: (k: string) =>
-              ({ nodeId: "candidate-id", displayName: "Completely Different Name", properties: null, score: 0.5 })[k],
+              ({
+                nodeId: "candidate-id",
+                displayName: "Completely Different Name",
+                properties: null,
+                score: 0.5,
+              })[k],
           },
         ],
       }),
       close: vi.fn().mockResolvedValue(undefined),
     };
-    const resolveSession = { run: vi.fn().mockResolvedValue({ records: [] }), close: vi.fn().mockResolvedValue(undefined) };
+    const resolveSession = {
+      run: vi.fn().mockResolvedValue({ records: [] }),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
 
     let sessionCallCount = 0;
     mocks.scopedSession.mockImplementation(() => {
@@ -281,7 +312,10 @@ describe("resolveEntity — Pass B: alias path", () => {
       return resolveSession;
     });
 
-    const mutation = makeMutation({ displayName: "Something Unrelated", properties: {} });
+    const mutation = makeMutation({
+      displayName: "Something Unrelated",
+      properties: {},
+    });
     const result = await resolveEntity(mutation, "org-1");
 
     // score = 0.5 * 0.4 = 0.2 < 0.70 → no alias, should create_principal
@@ -307,14 +341,24 @@ describe("scoreCandidate", () => {
   });
 
   it("adds 0.4 for exact URL match", () => {
-    const mutation = makeMutation({ properties: { url: "https://example.com/pr/1" } });
-    const score = scoreCandidate(mutation, { url: "https://example.com/pr/1" }, 0.5);
+    const mutation = makeMutation({
+      properties: { url: "https://example.com/pr/1" },
+    });
+    const score = scoreCandidate(
+      mutation,
+      { url: "https://example.com/pr/1" },
+      0.5,
+    );
     expect(score).toBeCloseTo(0.6, 5);
   });
 
   it("adds fuzzy name weight when displayNames are present", () => {
     const mutation = makeMutation({ displayName: "Add OAuth Login" });
-    const score = scoreCandidate(mutation, { displayName: "Add OAuth Login" }, 0.0);
+    const score = scoreCandidate(
+      mutation,
+      { displayName: "Add OAuth Login" },
+      0.0,
+    );
     // 0 + 0 + 1.0 * 0.2 = 0.2
     expect(score).toBeCloseTo(0.2, 5);
   });
@@ -324,7 +368,11 @@ describe("scoreCandidate", () => {
       displayName: "Match",
       properties: { email: "a@b.com" },
     });
-    const score = scoreCandidate(mutation, { displayName: "Match", email: "a@b.com" }, 1.0);
+    const score = scoreCandidate(
+      mutation,
+      { displayName: "Match", email: "a@b.com" },
+      1.0,
+    );
     expect(score).toBeLessThanOrEqual(1.0);
   });
 });
@@ -349,7 +397,7 @@ describe("fuzzyNameScore", () => {
 
 describe("threshold constants", () => {
   it("ALIAS_THRESHOLD is 0.70", () => {
-    expect(ALIAS_THRESHOLD).toBe(0.70);
+    expect(ALIAS_THRESHOLD).toBe(0.7);
   });
 
   it("CONFIRM_THRESHOLD is 0.92", () => {

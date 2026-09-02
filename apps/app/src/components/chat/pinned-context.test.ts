@@ -17,7 +17,11 @@ const REPO: RepoOption = {
   name: "web",
   defaultBranch: "main",
 };
-const ENV: EnvironmentOption = { id: "env_1", name: "Production", isDefault: false };
+const ENV: EnvironmentOption = {
+  id: "env_1",
+  name: "Production",
+  isDefault: false,
+};
 
 describe("buildPinnedContext", () => {
   it("returns null when neither repo nor environment is set", () => {
@@ -27,7 +31,12 @@ describe("buildPinnedContext", () => {
   it("carries the repo wire fields (dropping the selector key)", () => {
     const payload = buildPinnedContext(REPO, null);
     expect(payload).toEqual({
-      repo: { connectionId: "con_1", owner: "acme", name: "web", defaultBranch: "main" },
+      repo: {
+        connectionId: "con_1",
+        owner: "acme",
+        name: "web",
+        defaultBranch: "main",
+      },
       environment: null,
     });
     // `key` is a client-only selector identity — it must not leak to the wire.
@@ -50,7 +59,9 @@ describe("buildPinnedContext", () => {
 
 describe("pinStorageKey", () => {
   it("uses a conversation-scoped key when a conversation id exists", () => {
-    expect(pinStorageKey("ws", "conv_abc")).toBe("oxagen:chat-pins:conv:conv_abc");
+    expect(pinStorageKey("ws", "conv_abc")).toBe(
+      "oxagen:chat-pins:conv:conv_abc",
+    );
   });
 
   it("uses a workspace-scoped draft key for a not-yet-created conversation", () => {
@@ -72,7 +83,10 @@ describe("readStoredPins / writeStoredPins", () => {
   it("round-trips a stored pin", () => {
     const key = pinStorageKey("ws", "conv_1");
     writeStoredPins(key, { repoKey: "acme/web", envId: "env_1" });
-    expect(readStoredPins(key)).toEqual({ repoKey: "acme/web", envId: "env_1" });
+    expect(readStoredPins(key)).toEqual({
+      repoKey: "acme/web",
+      envId: "env_1",
+    });
   });
 
   it("returns null for an unset key", () => {
@@ -98,7 +112,10 @@ describe("readStoredPins / writeStoredPins", () => {
 
   it("ignores non-string fields in stored json", () => {
     const key = pinStorageKey("ws", "conv_1");
-    window.localStorage.setItem(key, JSON.stringify({ repoKey: 42, envId: "env_1" }));
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({ repoKey: 42, envId: "env_1" }),
+    );
     expect(readStoredPins(key)).toEqual({ repoKey: null, envId: "env_1" });
   });
 });

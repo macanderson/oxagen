@@ -236,4 +236,5 @@ export const EMOJI_CATEGORIES: readonly EmojiCategory[] = [
 ];
 
 /** Flat list of every entry, for the "all categories" filtered view. */
-export const ALL_EMOJI_ENTRIES: readonly EmojiEntry[] = EMOJI_CATEGORIES.flatMap((c) => c.entries);
+export const ALL_EMOJI_ENTRIES: readonly EmojiEntry[] =
+  EMOJI_CATEGORIES.flatMap((c) => c.entries);

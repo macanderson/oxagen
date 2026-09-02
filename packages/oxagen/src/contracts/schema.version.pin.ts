@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const schemaVersionPin = registerCapability({
   name: "pin_schema_version",
   domain: "schema",
-  description: "Point the workspace at a published version; returns whether a pin downgrade occurred.",
+  description:
+    "Point the workspace at a published version; returns whether a pin downgrade occurred.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs"],

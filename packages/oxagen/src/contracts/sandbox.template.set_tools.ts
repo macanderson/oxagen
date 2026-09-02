@@ -3,9 +3,9 @@ import { registerCapability } from "../registry";
 import { sandboxTemplateToolSchema } from "./sandbox-template-manifest";
 import { sandboxTemplateSummarySchema } from "./sandbox.template.create";
 
-// ADR-022: the plan's working name was `sandbox.template.tools.set` (4 segments,
-// illegal). The conforming form folds the compound into the action segment,
-// mirroring the existing set_default / set_enabled / set_secret precedent.
+// The compound object ("template tools") is folded into a single verb-first
+// name rather than split across segments, mirroring the existing
+// set_default_sandbox_template / set_skill_enabled precedent.
 export const sandboxTemplateSetTools = registerCapability({
   name: "set_sandbox_template_tools",
   domain: "sandbox",
@@ -13,7 +13,11 @@ export const sandboxTemplateSetTools = registerCapability({
     "Replace the full set of preloaded tools on a sandbox template (replace-set semantics — the given tools become the template's entire tool set).",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  agent: { requiresApproval: false, riskLevel: "medium", category: "configuration" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "medium",
+    category: "configuration",
+  },
   layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   sensitivity: "medium",
@@ -26,5 +30,9 @@ export const sandboxTemplateSetTools = registerCapability({
   output: z.object({ template: sandboxTemplateSummarySchema }),
 });
 
-export type SandboxTemplateSetToolsInput = z.output<typeof sandboxTemplateSetTools.input>;
-export type SandboxTemplateSetToolsOutput = z.output<typeof sandboxTemplateSetTools.output>;
+export type SandboxTemplateSetToolsInput = z.output<
+  typeof sandboxTemplateSetTools.input
+>;
+export type SandboxTemplateSetToolsOutput = z.output<
+  typeof sandboxTemplateSetTools.output
+>;

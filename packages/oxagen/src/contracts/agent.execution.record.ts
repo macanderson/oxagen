@@ -85,5 +85,9 @@ export const agentExecutionRecord = registerCapability({
   }),
 });
 
-export type AgentExecutionRecordInput = z.output<typeof agentExecutionRecord.input>;
-export type AgentExecutionRecordOutput = z.output<typeof agentExecutionRecord.output>;
+export type AgentExecutionRecordInput = z.output<
+  typeof agentExecutionRecord.input
+>;
+export type AgentExecutionRecordOutput = z.output<
+  typeof agentExecutionRecord.output
+>;

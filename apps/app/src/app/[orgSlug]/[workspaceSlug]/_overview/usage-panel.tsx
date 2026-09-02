@@ -3,8 +3,10 @@
  *
  * Mirrors the gating in spend-section.tsx / metering-kpi-strip.tsx: apps/app
  * does not bootstrap kernel IAM, so billing-manager is asserted explicitly.
- * A non-billing member sees a compact "requires billing access" card instead
- * of the panel (parallel fail-open, same as every other Overview tile).
+ * The gate fails CLOSED (a member without the role, and an unresolvable role,
+ * both get the "requires billing access" card); the DATA read below it fails
+ * open into an error state, so a dead ClickHouse dims this one tile rather
+ * than taking down the Overview page.
  *
  * Fetches month-to-date usage via billing.usage.breakdown and renders the
  * shared reaviz charts (daily tokens + top models by cost) through the
@@ -64,35 +66,38 @@ export async function UsagePanel({
 }: UsagePanelProps) {
   const usageHref = org.billing.usage({ orgSlug });
 
+  // Fails CLOSED on a non-denial error too: an unknown role is not an
+  // authorized one, and falling through would render the org's usage breakdown
+  // to a caller whose billing role was never established.
   try {
     await assertBillingManager(orgId, userId);
   } catch (err) {
-    if (isAuthDenialError(err)) {
-      return (
-        <Card data-testid="overview-usage-panel">
-          <CardPanel className="p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-sm font-medium text-foreground">
-                  Usage hidden
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Usage breakdown requires billing access — ask an org owner,
-                  admin, or billing manager.
-                </span>
-              </div>
-              <Link
-                href={usageHref}
-                className="text-sm font-medium text-primary hover:underline"
-              >
-                View billing →
-              </Link>
-            </div>
-          </CardPanel>
-        </Card>
-      );
+    if (!isAuthDenialError(err)) {
+      console.error("overview usage panel: billing-manager check failed:", err);
     }
-    console.error("overview usage panel: billing-manager check failed:", err);
+    return (
+      <Card data-testid="overview-usage-panel">
+        <CardPanel className="p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium text-foreground">
+                Usage hidden
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Usage breakdown requires billing access — ask an org owner,
+                admin, or billing manager.
+              </span>
+            </div>
+            <Link
+              href={usageHref}
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              View billing →
+            </Link>
+          </div>
+        </CardPanel>
+      </Card>
+    );
   }
 
   let breakdown = EMPTY_BREAKDOWN;

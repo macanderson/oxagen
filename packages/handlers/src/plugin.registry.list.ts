@@ -7,7 +7,13 @@ import { logger } from "./logger";
 export const handler: CapabilityHandlerFn = async (_input, ctx) => {
   const { orgId, workspaceId } = ctx;
 
-  let rows: { id: string; name: string; baseUrl: string; enabled: boolean; isDefault: boolean }[];
+  let rows: {
+    id: string;
+    name: string;
+    baseUrl: string;
+    enabled: boolean;
+    isDefault: boolean;
+  }[];
   try {
     rows = await withTenantDb((tx) =>
       tx
@@ -31,7 +37,10 @@ export const handler: CapabilityHandlerFn = async (_input, ctx) => {
     throw err;
   }
 
-  logger.info({ orgId, workspaceId, count: rows.length }, "plugin.registry.list: ok");
+  logger.info(
+    { orgId, workspaceId, count: rows.length },
+    "plugin.registry.list: ok",
+  );
   return {
     registries: rows.map((r) => ({
       id: r.id,

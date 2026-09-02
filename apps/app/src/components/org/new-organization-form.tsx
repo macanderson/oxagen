@@ -120,7 +120,15 @@ export function NewOrgForm({
     const fd = new FormData(e.currentTarget);
     setError(null);
     startTransition(async () => {
-      const res = await action(fd);
+      // A rejected server action (dropped connection, deploy mid-submit, an
+      // unhandled throw) must not become a silent unhandled rejection that
+      // re-enables the button with no explanation — the user would click again
+      // and hit "slug already taken" on a half-created org. Surface it.
+      const res = await action(fd).catch(() => null);
+      if (res === null) {
+        setError("Could not create the organization. Please try again.");
+        return;
+      }
       if (!res.ok) {
         setError(res.error);
         return;

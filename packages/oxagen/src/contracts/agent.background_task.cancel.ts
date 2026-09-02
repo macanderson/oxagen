@@ -4,12 +4,17 @@ import { registerCapability } from "../registry";
 export const agentTaskBackgroundCancel = registerCapability({
   name: "cancel_background_task",
   domain: "agent",
-  description: "Cancel a running background task; downstream Inngest steps stop on next checkpoint",
+  description:
+    "Cancel a running background task; downstream Inngest steps stop on next checkpoint",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
-  agent: { requiresApproval: true, riskLevel: "medium", category: "background" },
+  agent: {
+    requiresApproval: true,
+    riskLevel: "medium",
+    category: "background",
+  },
   sensitivity: "medium",
   defaultEffect: "deny",
   defaultRoles: {
@@ -26,5 +31,9 @@ export const agentTaskBackgroundCancel = registerCapability({
   }),
 });
 
-export type AgentTaskBackgroundCancelInput = z.output<typeof agentTaskBackgroundCancel.input>;
-export type AgentTaskBackgroundCancelOutput = z.output<typeof agentTaskBackgroundCancel.output>;
+export type AgentTaskBackgroundCancelInput = z.output<
+  typeof agentTaskBackgroundCancel.input
+>;
+export type AgentTaskBackgroundCancelOutput = z.output<
+  typeof agentTaskBackgroundCancel.output
+>;

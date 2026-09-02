@@ -2,9 +2,12 @@
  * Knapsack packer — budget-constrained context packing that maximizes
  * task-value per token.
  *
- * Greedy algorithm with diversity constraints. Guarantees:
- * - Budget is NEVER exceeded
- * - Pinned procedural rules are ALWAYS included
+ * Greedy algorithm with diversity constraints. Guarantees, in priority order:
+ * - Budget is NEVER exceeded — this is the invariant everything else yields to
+ * - Pinned procedural rules are placed FIRST, ahead of every retrieved
+ *   candidate. They are not unconditional: if the pinned set alone overflows
+ *   the budget, the lowest-salience rules are dropped and counted in
+ *   `pinnedTruncated` rather than breaking the budget invariant
  * - Higher value-per-token records are preferred
  * - No single source/tool dominates the window
  */
@@ -113,7 +116,8 @@ function recordTokenCost(record: MemoryRecord, modelId: string): number {
  * in `pinnedTruncated`.
  */
 export function pack(input: PackerInput): PackResult {
-  const { candidates, budget, pinnedRecords, diversityConstraint, modelId } = input;
+  const { candidates, budget, pinnedRecords, diversityConstraint, modelId } =
+    input;
 
   const included: MemoryRecord[] = [];
   const compressed: CompressedItem[] = [];
@@ -126,7 +130,9 @@ export function pack(input: PackerInput): PackResult {
   // MUST-include, but they cannot be allowed to blow the budget — so if the
   // pinned set overflows, drop the lowest-salience rules first (truncate last).
   const pinnedBudget = Math.max(0, budget.total - systemTokens - workingTokens);
-  const pinnedBySalience = [...pinnedRecords].sort((a, b) => b.salience - a.salience);
+  const pinnedBySalience = [...pinnedRecords].sort(
+    (a, b) => b.salience - a.salience,
+  );
   let proceduralTokens = 0;
   let pinnedTruncated = 0;
   for (const record of pinnedBySalience) {
@@ -203,7 +209,8 @@ export function pack(input: PackerInput): PackResult {
     }
   }
 
-  const totalUsed = systemTokens + proceduralTokens + usedTokens + workingTokens;
+  const totalUsed =
+    systemTokens + proceduralTokens + usedTokens + workingTokens;
 
   return {
     included,

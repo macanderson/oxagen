@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { isDirectRunEntry } from "@oxagen/telemetry";
+import { isProductionRuntime } from "@oxagen/config/env";
 import { closeDatabase } from "./client";
 import { withSystemDb } from "./tenant";
 import { deriveNamespace } from "./namespace";
@@ -73,8 +74,26 @@ export async function seedPlatform(): Promise<void> {
 /**
  * Local-dev seed: the `oxagen-dev` org, a dev user, and a Playground workspace.
  * Must NOT run against production — call only from local tooling.
+ *
+ * The rule is enforced, not merely documented: this file is a direct-run
+ * entrypoint (`tsx packages/database/src/seed.ts`), so a shell that still has a
+ * production DATABASE_URL exported would otherwise plant a real `oxagen-dev`
+ * org and a `dev@oxagen.ai` user in the production tenant table — rows that are
+ * then indistinguishable from a customer's. Production migrate calls
+ * `seedPlatform()` only (tools/scripts/seed-platform.ts) and never reaches here.
+ *
+ * @throws in a production runtime, before any write.
  */
 export async function seedDev(): Promise<void> {
+  if (isProductionRuntime()) {
+    throw new Error(
+      "[seed] seedDev() seeds local development fixtures (the oxagen-dev org, " +
+        "dev@oxagen.ai, and a Playground workspace) and must never run against " +
+        "production. Production seeds platform defaults through seedPlatform() " +
+        "only. Refusing to seed.",
+    );
+  }
+
   // Tenant-root bootstrap (org/workspace/user/agent) must run with RLS bypassed
   // since no tenant scope exists yet — withSystemDb sets app.rls_bypass='on' for
   // the whole transaction. Using raw db() would leave the bypass GUC unset and,

@@ -10,12 +10,14 @@ import { logger } from "./logger";
  * The handler maps the simplified conversation.chat input to the full
  * chat.message.send input shape, delegates, and projects the result.
  */
-export const conversationChatHandler: CapabilityHandler<typeof conversationChat> = async (
-  input,
-  ctx,
-) => {
+export const conversationChatHandler: CapabilityHandler<
+  typeof conversationChat
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "conversation.chat: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "conversation.chat: rejected — no authenticated user",
+    );
     throw new Error("conversation.chat requires an authenticated user");
   }
 

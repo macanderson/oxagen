@@ -35,18 +35,15 @@ build and logs a clear error rather than failing silently.
 
 ## Fail-loud behavior
 
-Verification and password-reset emails must return synchronously to the auth layer, so they
-are dispatched without awaiting delivery. Previously a failed send on a misconfigured
-transport was swallowed entirely — users silently never received the email.
+The auth layer has to answer right away, so verification and password-reset emails are sent
+in the background rather than awaited. A send that fails in the background is still recorded:
 
-Now:
-
-- Background dispatch routes through a helper that **logs any send failure** (with the
-  `purpose` — `verification` or `password-reset` — and the recipient) instead of discarding it.
-  Search your logs for `sendEmail failed (fire-and-forget)` to find delivery failures.
-- A startup/health probe can call `isEmailTransportConfigured()` to detect a deployed
-  environment that would silently drop every transactional email — letting you surface the
-  misconfiguration before users hit it.
+- Background dispatch goes through a helper that **logs every send failure**, along with the
+  `purpose` (`verification` or `password-reset`) and the recipient. Search your logs for
+  `sendEmail failed (fire-and-forget)` to find delivery failures.
+- A startup or health probe can call `isEmailTransportConfigured()` to catch a deployed
+  environment that would drop every transactional email, so you find the misconfiguration
+  before your users do.
 
 ## Local development
 

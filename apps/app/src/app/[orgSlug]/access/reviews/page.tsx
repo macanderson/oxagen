@@ -12,7 +12,12 @@ import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { and, desc, eq, max, sql } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
-import { resolveOrg, assertOrgMember, getOrgRole, SECURITY_MANAGER_ROLES } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  assertOrgMember,
+  getOrgRole,
+  SECURITY_MANAGER_ROLES,
+} from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
 import { formatDate } from "@/lib/utils";
 import { ReviewRowActions } from "./_components/review-row-actions";
@@ -108,8 +113,8 @@ export default async function AccessReviewsPage({
       >
         <p className="mb-4 text-sm text-muted-foreground">
           Quarterly review of all org members, roles, and last-active
-          timestamps. Confirm or revoke each member&apos;s access to satisfy
-          SOC 2 CC6.3 access provisioning evidence.
+          timestamps. Confirm or revoke each member&apos;s access to satisfy SOC
+          2 CC6.3 access provisioning evidence.
         </p>
 
         {members.length === 0 ? (
@@ -119,7 +124,9 @@ export default async function AccessReviewsPage({
             {/* Column headers */}
             <div
               className="mb-2 hidden px-4 sm:grid sm:gap-4"
-              style={{ gridTemplateColumns: "minmax(0,1.8fr) 80px 140px 140px 180px" }}
+              style={{
+                gridTemplateColumns: "minmax(0,1.8fr) 80px 140px 140px 180px",
+              }}
             >
               {["Member", "Role", "Joined", "Last active", ""].map((h) => (
                 <span
@@ -136,7 +143,10 @@ export default async function AccessReviewsPage({
                 <div
                   key={m.userId}
                   className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm grid grid-cols-1 gap-y-1.5 sm:gap-4 sm:items-center"
-                  style={{ gridTemplateColumns: "minmax(0,1.8fr) 80px 140px 140px 180px" }}
+                  style={{
+                    gridTemplateColumns:
+                      "minmax(0,1.8fr) 80px 140px 140px 180px",
+                  }}
                 >
                   {/* Member */}
                   <div className="flex flex-col gap-0.5 min-w-0">
@@ -159,10 +169,14 @@ export default async function AccessReviewsPage({
                   </Badge>
 
                   {/* Joined */}
-                  <span className="text-xs text-muted-foreground">{formatDate(m.joinedAt)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDate(m.joinedAt)}
+                  </span>
 
                   {/* Last active */}
-                  <span className="text-xs text-muted-foreground">{formatDate(m.lastActiveAt)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDate(m.lastActiveAt)}
+                  </span>
 
                   {/* Actions */}
                   <ReviewRowActions

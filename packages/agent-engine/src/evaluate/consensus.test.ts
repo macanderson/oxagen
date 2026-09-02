@@ -241,11 +241,15 @@ describe("normalizeDiff", () => {
 
 describe("diffEquivalent", () => {
   it("considers diffs equivalent under different hunk offsets", () => {
-    expect(diffEquivalent(SIMPLE_DIFF, SIMPLE_DIFF_DIFFERENT_OFFSET)).toBe(true);
+    expect(diffEquivalent(SIMPLE_DIFF, SIMPLE_DIFF_DIFFERENT_OFFSET)).toBe(
+      true,
+    );
   });
 
   it("considers diffs equivalent under trailing whitespace", () => {
-    expect(diffEquivalent(SIMPLE_DIFF, SIMPLE_DIFF_TRAILING_WHITESPACE)).toBe(true);
+    expect(diffEquivalent(SIMPLE_DIFF, SIMPLE_DIFF_TRAILING_WHITESPACE)).toBe(
+      true,
+    );
   });
 
   it("considers diffs equivalent with whitespace-only changes canceled", () => {
@@ -260,7 +264,9 @@ describe("diffEquivalent", () => {
   });
 
   it("considers multi-file diffs equivalent regardless of file order", () => {
-    expect(diffEquivalent(MULTI_FILE_DIFF, MULTI_FILE_DIFF_REVERSED_ORDER)).toBe(true);
+    expect(
+      diffEquivalent(MULTI_FILE_DIFF, MULTI_FILE_DIFF_REVERSED_ORDER),
+    ).toBe(true);
   });
 
   it("considers different diffs non-equivalent", () => {
@@ -276,7 +282,11 @@ describe("diffEquivalent", () => {
 
 describe("diffClusters", () => {
   it("groups equivalent diffs into one cluster", () => {
-    const diffs = [SIMPLE_DIFF, SIMPLE_DIFF_DIFFERENT_OFFSET, SIMPLE_DIFF_TRAILING_WHITESPACE];
+    const diffs = [
+      SIMPLE_DIFF,
+      SIMPLE_DIFF_DIFFERENT_OFFSET,
+      SIMPLE_DIFF_TRAILING_WHITESPACE,
+    ];
     const clusters = diffClusters(diffs);
     expect(clusters).toHaveLength(1);
     expect(clusters[0]!.members).toEqual([0, 1, 2]);
@@ -314,7 +324,7 @@ describe("diffClusters", () => {
     // All clusters have size 1, so order should be by first-member index: 1, 2
     if (clusters.length > 1) {
       expect(Math.min(...clusters[0]!.members)).toBeLessThan(
-        Math.min(...clusters[1]!.members)
+        Math.min(...clusters[1]!.members),
       );
     }
   });
@@ -348,7 +358,10 @@ describe("decideSelection", () => {
 
       const decision = decideSelection(candidates);
       expect(decision.method).toBe("consensus");
-      expect((decision as Extract<SelectionDecision, { method: "consensus" }>).cluster).toHaveLength(2);
+      expect(
+        (decision as Extract<SelectionDecision, { method: "consensus" }>)
+          .cluster,
+      ).toHaveLength(2);
     });
 
     it("picks consensus winner with fewest diff lines", () => {
@@ -364,24 +377,38 @@ describe("decideSelection", () => {
       const decision = decideSelection(candidates);
       expect(decision.method).toBe("consensus");
       // Both have same line count, so should pick by index (lowest wins)
-      expect((decision as Extract<SelectionDecision, { winner: number }>).winner).toBe(0); // shortDiff (lower index)
+      expect(
+        (decision as Extract<SelectionDecision, { winner: number }>).winner,
+      ).toBe(0); // shortDiff (lower index)
     });
 
     it("breaks consensus tie by lowest index", () => {
       const candidates: CandidateEvidence[] = [
         { index: 5, diff: SIMPLE_DIFF, testsPassed: true, evidenceScore: 0.8 },
-        { index: 3, diff: SIMPLE_DIFF_DIFFERENT_OFFSET, testsPassed: true, evidenceScore: 0.8 },
+        {
+          index: 3,
+          diff: SIMPLE_DIFF_DIFFERENT_OFFSET,
+          testsPassed: true,
+          evidenceScore: 0.8,
+        },
       ];
 
       const decision = decideSelection(candidates);
       expect(decision.method).toBe("consensus");
-      expect((decision as Extract<SelectionDecision, { winner: number }>).winner).toBe(3); // Lower index
+      expect(
+        (decision as Extract<SelectionDecision, { winner: number }>).winner,
+      ).toBe(3); // Lower index
     });
 
     it("ignores non-passing candidates in consensus", () => {
       const candidates: CandidateEvidence[] = [
         { index: 0, diff: SIMPLE_DIFF, testsPassed: true, evidenceScore: 0.8 },
-        { index: 1, diff: SIMPLE_DIFF_DIFFERENT_OFFSET, testsPassed: false, evidenceScore: 0.8 },
+        {
+          index: 1,
+          diff: SIMPLE_DIFF_DIFFERENT_OFFSET,
+          testsPassed: false,
+          evidenceScore: 0.8,
+        },
       ];
 
       const decision = decideSelection(candidates);
@@ -394,12 +421,19 @@ describe("decideSelection", () => {
     it("selects single-passing when exactly one candidate passes", () => {
       const candidates: CandidateEvidence[] = [
         { index: 0, diff: SIMPLE_DIFF, testsPassed: true, evidenceScore: 0.8 },
-        { index: 1, diff: NEW_FILE_DIFF, testsPassed: false, evidenceScore: 0.5 },
+        {
+          index: 1,
+          diff: NEW_FILE_DIFF,
+          testsPassed: false,
+          evidenceScore: 0.5,
+        },
       ];
 
       const decision = decideSelection(candidates);
       expect(decision.method).toBe("single-passing");
-      expect((decision as Extract<SelectionDecision, { winner: number }>).winner).toBe(0);
+      expect(
+        (decision as Extract<SelectionDecision, { winner: number }>).winner,
+      ).toBe(0);
     });
   });
 
@@ -407,13 +441,24 @@ describe("decideSelection", () => {
     it("selects selector-needed when multiple passing but non-equivalent", () => {
       const candidates: CandidateEvidence[] = [
         { index: 0, diff: SIMPLE_DIFF, testsPassed: true, evidenceScore: 0.8 },
-        { index: 1, diff: DIFF_SEMANTIC_CHANGE, testsPassed: true, evidenceScore: 0.7 },
+        {
+          index: 1,
+          diff: DIFF_SEMANTIC_CHANGE,
+          testsPassed: true,
+          evidenceScore: 0.7,
+        },
       ];
 
       const decision = decideSelection(candidates);
       expect(decision.method).toBe("selector-needed");
-      expect((decision as Extract<SelectionDecision, { method: "selector-needed" }>).candidates).toContain(0);
-      expect((decision as Extract<SelectionDecision, { method: "selector-needed" }>).candidates).toContain(1);
+      expect(
+        (decision as Extract<SelectionDecision, { method: "selector-needed" }>)
+          .candidates,
+      ).toContain(0);
+      expect(
+        (decision as Extract<SelectionDecision, { method: "selector-needed" }>)
+          .candidates,
+      ).toContain(1);
     });
   });
 
@@ -421,23 +466,37 @@ describe("decideSelection", () => {
     it("selects best-effort when no candidates pass", () => {
       const candidates: CandidateEvidence[] = [
         { index: 0, diff: SIMPLE_DIFF, testsPassed: false, evidenceScore: 0.8 },
-        { index: 1, diff: NEW_FILE_DIFF, testsPassed: false, evidenceScore: 0.5 },
+        {
+          index: 1,
+          diff: NEW_FILE_DIFF,
+          testsPassed: false,
+          evidenceScore: 0.5,
+        },
       ];
 
       const decision = decideSelection(candidates);
       expect(decision.method).toBe("best-effort");
-      expect((decision as Extract<SelectionDecision, { winner: number }>).winner).toBe(0); // Highest score
+      expect(
+        (decision as Extract<SelectionDecision, { winner: number }>).winner,
+      ).toBe(0); // Highest score
     });
 
     it("picks best-effort winner with highest evidence score", () => {
       const candidates: CandidateEvidence[] = [
         { index: 0, diff: SIMPLE_DIFF, testsPassed: false, evidenceScore: 0.5 },
-        { index: 1, diff: NEW_FILE_DIFF, testsPassed: false, evidenceScore: 0.9 },
+        {
+          index: 1,
+          diff: NEW_FILE_DIFF,
+          testsPassed: false,
+          evidenceScore: 0.9,
+        },
       ];
 
       const decision = decideSelection(candidates);
       expect(decision.method).toBe("best-effort");
-      expect((decision as Extract<SelectionDecision, { winner: number }>).winner).toBe(1);
+      expect(
+        (decision as Extract<SelectionDecision, { winner: number }>).winner,
+      ).toBe(1);
     });
 
     it("breaks best-effort score tie by smallest diff line count", () => {
@@ -474,18 +533,27 @@ describe("decideSelection", () => {
 
       const decision = decideSelection(candidates);
       expect(decision.method).toBe("best-effort");
-      expect((decision as Extract<SelectionDecision, { winner: number }>).winner).toBe(1); // Shorter diff
+      expect(
+        (decision as Extract<SelectionDecision, { winner: number }>).winner,
+      ).toBe(1); // Shorter diff
     });
 
     it("breaks best-effort diff-tie by lowest index", () => {
       const candidates: CandidateEvidence[] = [
         { index: 5, diff: SIMPLE_DIFF, testsPassed: false, evidenceScore: 0.8 },
-        { index: 3, diff: SIMPLE_DIFF_DIFFERENT_OFFSET, testsPassed: false, evidenceScore: 0.8 },
+        {
+          index: 3,
+          diff: SIMPLE_DIFF_DIFFERENT_OFFSET,
+          testsPassed: false,
+          evidenceScore: 0.8,
+        },
       ];
 
       const decision = decideSelection(candidates);
       expect(decision.method).toBe("best-effort");
-      expect((decision as Extract<SelectionDecision, { winner: number }>).winner).toBe(3); // Lower index
+      expect(
+        (decision as Extract<SelectionDecision, { winner: number }>).winner,
+      ).toBe(3); // Lower index
     });
   });
 
@@ -498,18 +566,27 @@ describe("decideSelection", () => {
 
       const decision = decideSelection(candidates);
       expect(decision.method).toBe("best-effort");
-      expect((decision as Extract<SelectionDecision, { winner: number }>).winner).toBe(1); // Highest score
+      expect(
+        (decision as Extract<SelectionDecision, { winner: number }>).winner,
+      ).toBe(1); // Highest score
     });
 
     it("breaks all-empty score tie by lowest index", () => {
       const candidates: CandidateEvidence[] = [
         { index: 5, diff: EMPTY_DIFF, testsPassed: false, evidenceScore: 0.8 },
-        { index: 3, diff: EMPTY_DIFF_2, testsPassed: false, evidenceScore: 0.8 },
+        {
+          index: 3,
+          diff: EMPTY_DIFF_2,
+          testsPassed: false,
+          evidenceScore: 0.8,
+        },
       ];
 
       const decision = decideSelection(candidates);
       expect(decision.method).toBe("best-effort");
-      expect((decision as Extract<SelectionDecision, { winner: number }>).winner).toBe(3);
+      expect(
+        (decision as Extract<SelectionDecision, { winner: number }>).winner,
+      ).toBe(3);
     });
   });
 
@@ -521,7 +598,9 @@ describe("decideSelection", () => {
 
       const decision = decideSelection(candidates);
       expect(decision.method).toBe("single-passing");
-      expect((decision as Extract<SelectionDecision, { winner: number }>).winner).toBe(0);
+      expect(
+        (decision as Extract<SelectionDecision, { winner: number }>).winner,
+      ).toBe(0);
     });
 
     it("handles empty candidates array gracefully", () => {
@@ -540,7 +619,9 @@ describe("decideSelection", () => {
 
       const decision = decideSelection(candidates);
       // Should pick the non-empty one
-      expect((decision as Extract<SelectionDecision, { winner: number }>).winner).toBe(1);
+      expect(
+        (decision as Extract<SelectionDecision, { winner: number }>).winner,
+      ).toBe(1);
     });
   });
 });

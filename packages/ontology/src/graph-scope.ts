@@ -89,14 +89,71 @@ const MUTATING_CALL =
 /**
  * Replace string literals, backtick identifiers, and comments with empty
  * placeholders so keyword scanning cannot match text inside them.
+ *
+ * Deliberately a single left-to-right scan rather than a chain of independent
+ * regex passes: comments and literals can each contain the other's opening
+ * delimiter, and a pass ordering can only ever be wrong for one of the two.
+ * (A chain that strips `//` comments before strings mangles a URL literal —
+ * `n.url = 'http://x' CREATE (m)` loses everything after `http:`, hiding the
+ * CREATE from `assertReadOnly`; a chain in the other order mangles an
+ * apostrophe inside a comment.) Scanning once means whichever delimiter opens
+ * FIRST wins, which is exactly how Cypher itself reads the text.
  */
 export function stripLiteralsAndComments(cypher: string): string {
-  return cypher
-    .replace(/\/\*[\s\S]*?\*\//g, " ") // block comments
-    .replace(/\/\/[^\n]*/g, " ") // line comments
-    .replace(/'(?:\\.|[^'\\])*'/g, "''") // single-quoted strings
-    .replace(/"(?:\\.|[^"\\])*"/g, '""') // double-quoted strings
-    .replace(/`(?:``|[^`])*`/g, "``"); // backtick identifiers
+  let out = "";
+  let i = 0;
+  const n = cypher.length;
+
+  while (i < n) {
+    const ch = cypher[i]!;
+    const next = cypher[i + 1];
+
+    // Block comment — collapse to a space, keeping tokens on either side apart.
+    if (ch === "/" && next === "*") {
+      const end = cypher.indexOf("*/", i + 2);
+      out += " ";
+      i = end === -1 ? n : end + 2;
+      continue;
+    }
+
+    // Line comment — collapse to a space and resume at the newline, which is
+    // preserved so line structure (and any trailing clause) survives.
+    if (ch === "/" && next === "/") {
+      const end = cypher.indexOf("\n", i + 2);
+      out += " ";
+      i = end === -1 ? n : end;
+      continue;
+    }
+
+    // String literal or backtick-quoted identifier — emit an empty placeholder
+    // of the same delimiter and skip the body.
+    if (ch === "'" || ch === '"' || ch === "`") {
+      const closer = ch;
+      out += closer + closer;
+      i += 1;
+      while (i < n) {
+        const c = cypher[i]!;
+        // Backtick identifiers escape by doubling; strings escape with `\`.
+        if (closer === "`") {
+          if (c === "`" && cypher[i + 1] === "`") {
+            i += 2;
+            continue;
+          }
+        } else if (c === "\\") {
+          i += 2;
+          continue;
+        }
+        i += 1;
+        if (c === closer) break;
+      }
+      continue;
+    }
+
+    out += ch;
+    i += 1;
+  }
+
+  return out;
 }
 
 /**
@@ -119,14 +176,22 @@ export function assertReadOnly(cypher: string): void {
  * the tenancy guard (which requires `\borgId\b`): a query on an agent-scoped
  * session that constrains labels/rel-types but forgets to reference the filter
  * cannot silently return out-of-scope data.
+ *
+ * The marker is looked for in the query with literals and comments removed, so
+ * a marker mentioned only in a comment or a string does not satisfy the guard —
+ * it has to be a real predicate. Error messages quote the original text.
  */
 export function assertScopeMarkers(cypher: string, scope: GraphScope): void {
-  if (scope.labels !== undefined && !LABELS_MARKER.test(cypher)) {
+  const sanitized = stripLiteralsAndComments(cypher);
+  if (scope.labels !== undefined && !LABELS_MARKER.test(sanitized)) {
     throw new GraphScopeError(
       `Agent-scoped Cypher constrains labels but does not reference $${SCOPE_LABELS_PARAM}: ${cypher.slice(0, 80)}`,
     );
   }
-  if (scope.relationshipTypes !== undefined && !REL_TYPES_MARKER.test(cypher)) {
+  if (
+    scope.relationshipTypes !== undefined &&
+    !REL_TYPES_MARKER.test(sanitized)
+  ) {
     throw new GraphScopeError(
       `Agent-scoped Cypher constrains relationship types but does not reference $${SCOPE_REL_TYPES_PARAM}: ${cypher.slice(0, 80)}`,
     );
@@ -189,8 +254,10 @@ export function clampVarLengthHops(cypher: string, maxHops: number): string {
       let token: string;
       if (!dots) {
         if (lowerStr === "") {
-          // `*` → 1..∞
-          token = `*1..${cap}`;
+          // `*` → 1..∞. The lower bound is itself clamped so a `maxHops: 0`
+          // budget (both schemas allow zero) yields the same `*0..0` the
+          // explicit-bounds branch below produces, not an empty `*1..0` range.
+          token = `*${Math.min(1, cap)}..${cap}`;
         } else {
           // `*N` → exactly N
           token = `*${Math.min(Number(lowerStr), cap)}`;

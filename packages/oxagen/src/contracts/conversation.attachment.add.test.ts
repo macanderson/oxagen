@@ -81,7 +81,11 @@ describe("conversation.attachment.add capability", () => {
     expect(conversationAttachmentAdd.defaultEffect).toBe("deny");
     expect(conversationAttachmentAdd.defaultRoles?.org?.Owner).toBe("allow");
     expect(conversationAttachmentAdd.defaultRoles?.org?.Admin).toBe("allow");
-    expect(conversationAttachmentAdd.defaultRoles?.workspace?.Owner).toBe("allow");
-    expect(conversationAttachmentAdd.defaultRoles?.workspace?.Member).toBe("allow");
+    expect(conversationAttachmentAdd.defaultRoles?.workspace?.Owner).toBe(
+      "allow",
+    );
+    expect(conversationAttachmentAdd.defaultRoles?.workspace?.Member).toBe(
+      "allow",
+    );
   });
 });

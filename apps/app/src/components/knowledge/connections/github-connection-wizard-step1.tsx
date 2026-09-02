@@ -17,7 +17,11 @@ export interface GitHubInstallGateProps {
   onClose: () => void;
 }
 
-export function GitHubInstallGate({ orgSlug, workspaceSlug, onClose }: GitHubInstallGateProps) {
+export function GitHubInstallGate({
+  orgSlug,
+  workspaceSlug,
+  onClose,
+}: GitHubInstallGateProps) {
   const settingsHref = workspace.settings.github({ orgSlug, workspaceSlug });
 
   return (
@@ -27,10 +31,12 @@ export function GitHubInstallGate({ orgSlug, workspaceSlug, onClose }: GitHubIns
           <GithubIcon className="h-8 w-8 text-foreground" aria-hidden="true" />
         </div>
         <div className="flex flex-col gap-1.5">
-          <p className="text-sm font-semibold text-foreground">Install the GitHub App</p>
+          <p className="text-sm font-semibold text-foreground">
+            Install the GitHub App
+          </p>
           <p className="text-xs text-muted-foreground max-w-xs">
-            The Oxagen GitHub App must be installed for this workspace before you can
-            add repositories. Visit Workspace Settings to connect it.
+            The Oxagen GitHub App must be installed for this workspace before
+            you can add repositories. Visit Workspace Settings to connect it.
           </p>
         </div>
       </div>

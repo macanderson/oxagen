@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const agentApprovalResolve = registerCapability({
   name: "resolve_approval",
   domain: "agent",
-  description: "Approve or deny a pending tool-call approval request; resolution resumes the paused agent stream",
+  description:
+    "Approve or deny a pending tool-call approval request; resolution resumes the paused agent stream",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
@@ -27,5 +28,9 @@ export const agentApprovalResolve = registerCapability({
   }),
 });
 
-export type AgentApprovalResolveInput = z.output<typeof agentApprovalResolve.input>;
-export type AgentApprovalResolveOutput = z.output<typeof agentApprovalResolve.output>;
+export type AgentApprovalResolveInput = z.output<
+  typeof agentApprovalResolve.input
+>;
+export type AgentApprovalResolveOutput = z.output<
+  typeof agentApprovalResolve.output
+>;

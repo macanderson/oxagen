@@ -28,25 +28,46 @@ vi.mock("@/components/ui/select", () => ({
       {children}
     </div>
   ),
-  SelectTrigger: ({ children, "aria-label": ariaLabel }: { children: React.ReactNode; "aria-label"?: string }) => (
-    <div aria-label={ariaLabel}>{children}</div>
+  SelectTrigger: ({
+    children,
+    "aria-label": ariaLabel,
+  }: {
+    children: React.ReactNode;
+    "aria-label"?: string;
+  }) => <div aria-label={ariaLabel}>{children}</div>,
+  SelectValue: ({ placeholder }: { placeholder?: string }) => (
+    <span>{placeholder}</span>
   ),
-  SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
-  SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ children, value }: { children: React.ReactNode; value: string }) => (
-    <div data-value={value}>{children}</div>
+  SelectPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
   ),
+  SelectItem: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => <div data-value={value}>{children}</div>,
 }));
 
 describe("ListToolbar — search", () => {
   it("renders the search input with the given placeholder", () => {
-    render(<ListToolbar query="" onQueryChange={vi.fn()} searchPlaceholder="Search agents…" onExport={vi.fn()} />);
+    render(
+      <ListToolbar
+        query=""
+        onQueryChange={vi.fn()}
+        searchPlaceholder="Search agents…"
+        onExport={vi.fn()}
+      />,
+    );
     expect(screen.getByPlaceholderText("Search agents…")).toBeInTheDocument();
   });
 
   it("calls onQueryChange as the user types", async () => {
     const onQueryChange = vi.fn();
-    render(<ListToolbar query="" onQueryChange={onQueryChange} onExport={vi.fn()} />);
+    render(
+      <ListToolbar query="" onQueryChange={onQueryChange} onExport={vi.fn()} />,
+    );
     await userEvent.type(screen.getByPlaceholderText("Search…"), "ab");
     expect(onQueryChange).toHaveBeenCalledWith("a");
     expect(onQueryChange).toHaveBeenCalledWith("b");
@@ -109,14 +130,25 @@ describe("ListToolbar — sort", () => {
 describe("ListToolbar — export + children", () => {
   it("renders an Export button that calls onExport when clicked", async () => {
     const onExport = vi.fn();
-    render(<ListToolbar query="" onQueryChange={vi.fn()} onExport={onExport} />);
+    render(
+      <ListToolbar query="" onQueryChange={vi.fn()} onExport={onExport} />,
+    );
     await userEvent.click(screen.getByRole("button", { name: "Export" }));
     expect(onExport).toHaveBeenCalledOnce();
   });
 
   it("supports a custom export label", () => {
-    render(<ListToolbar query="" onQueryChange={vi.fn()} onExport={vi.fn()} exportLabel="Download CSV" />);
-    expect(screen.getByRole("button", { name: "Download CSV" })).toBeInTheDocument();
+    render(
+      <ListToolbar
+        query=""
+        onQueryChange={vi.fn()}
+        onExport={vi.fn()}
+        exportLabel="Download CSV"
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Download CSV" }),
+    ).toBeInTheDocument();
   });
 
   it("renders the children slot", () => {
@@ -125,6 +157,8 @@ describe("ListToolbar — export + children", () => {
         <button type="button">New agent</button>
       </ListToolbar>,
     );
-    expect(screen.getByRole("button", { name: "New agent" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "New agent" }),
+    ).toBeInTheDocument();
   });
 });

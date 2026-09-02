@@ -20,7 +20,8 @@ function makeChain(kind: "select" | "update"): unknown {
       get(_t, prop) {
         if (prop === "then") {
           return (onFulfilled: (v: unknown) => unknown) => {
-            const value = kind === "select" ? (state.selectRows.shift() ?? []) : [];
+            const value =
+              kind === "select" ? (state.selectRows.shift() ?? []) : [];
             return Promise.resolve(value).then(onFulfilled);
           };
         }

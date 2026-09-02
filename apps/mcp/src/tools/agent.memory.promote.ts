@@ -18,9 +18,10 @@ export const schema = {
   rationale: agentMemoryPromote.input.shape.rationale.describe(
     "Why this memory is being promoted",
   ),
-  basedOnEvidenceIds: agentMemoryPromote.input.shape.basedOnEvidenceIds.describe(
-    "Evidence node ids supporting the promotion — creates :BASED_ON edges",
-  ),
+  basedOnEvidenceIds:
+    agentMemoryPromote.input.shape.basedOnEvidenceIds.describe(
+      "Evidence node ids supporting the promotion — creates :BASED_ON edges",
+    ),
 };
 
 export const metadata: ToolMetadata = {
@@ -37,6 +38,8 @@ export default async function agentMemoryPromoteTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentMemoryPromote.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentMemoryPromote.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentMemoryPromote.output.parse(output);
 }

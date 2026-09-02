@@ -12,6 +12,7 @@
  */
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { logger } from "@oxagen/handlers/logger";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { PageHeader } from "@/components/ui/page-header";
 import { workspace } from "@/lib/routes";
@@ -70,8 +71,14 @@ export default async function WorkbenchRepoDetailPage({
   let metrics: RepoMetrics | null = null;
   try {
     metrics = await getRepoMetrics(ctx, connectionId);
-  } catch (e) {
-    console.error("get_repo_metrics failed:", e);
+  } catch (err) {
+    // Non-fatal: the Overview tab renders its own retry card from a null
+    // metrics prop. Logged structurally (same logger the sibling actions use)
+    // so the failure is correlatable instead of a bare stdout line.
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, connectionId },
+      "workbench.repos: repo metrics lookup failed for the detail page",
+    );
   }
 
   const slug = parseRepoSlug(connection.displayName);

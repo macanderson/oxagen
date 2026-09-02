@@ -58,17 +58,24 @@ describe("schema-registry public_id prefixes", () => {
     it(`${tableName} public_id generates '${prefix}_…' values`, () => {
       const cfg = getTableConfig(table);
       const publicIdCol = cfg.columns.find((c) => c.name === "public_id");
-      expect(publicIdCol, `${tableName} must have a public_id column`).toBeDefined();
+      expect(
+        publicIdCol,
+        `${tableName} must have a public_id column`,
+      ).toBeDefined();
       // Access the registered generator via the column builder's config object.
       const colBuilder = publicIdCol as unknown as {
         config: { defaultFn?: () => string };
       };
       const defaultFn = colBuilder.config.defaultFn;
-      expect(defaultFn, `${tableName}.public_id must have a defaultFn`).toBeDefined();
+      expect(
+        defaultFn,
+        `${tableName}.public_id must have a defaultFn`,
+      ).toBeDefined();
       const id = defaultFn!();
-      expect(id, `${tableName} public_id should start with '${prefix}_'`).toMatch(
-        new RegExp(`^${prefix}_[0-9a-z]{22}$`),
-      );
+      expect(
+        id,
+        `${tableName} public_id should start with '${prefix}_'`,
+      ).toMatch(new RegExp(`^${prefix}_[0-9a-z]{22}$`));
     });
   }
 });
@@ -77,7 +84,9 @@ describe("schema-registry public_id prefixes", () => {
 
 describe("schemaRegistries — enforcement_mode CHECK", () => {
   const checks = getChecks(schemaRegistries);
-  const modeCheck = checks.find((c) => c.name === "registries_enforcement_mode_check");
+  const modeCheck = checks.find(
+    (c) => c.name === "registries_enforcement_mode_check",
+  );
 
   it("has 'registries_enforcement_mode_check' constraint", () => {
     expect(
@@ -112,7 +121,9 @@ describe("schemaRegistries — conformance_floor column", () => {
 
 describe("schemaVersions — status CHECK", () => {
   const checks = getChecks(schemaVersions);
-  const statusCheck = checks.find((c) => c.name === "schema_versions_status_check");
+  const statusCheck = checks.find(
+    (c) => c.name === "schema_versions_status_check",
+  );
 
   it("has 'schema_versions_status_check' constraint", () => {
     expect(
@@ -166,7 +177,9 @@ describe("schemas — source CHECK", () => {
 
 describe("relationshipTypes — cardinality CHECK", () => {
   const checks = getChecks(relationshipTypes);
-  const cardCheck = checks.find((c) => c.name === "relationship_types_cardinality_check");
+  const cardCheck = checks.find(
+    (c) => c.name === "relationship_types_cardinality_check",
+  );
 
   it("has 'relationship_types_cardinality_check' constraint", () => {
     expect(
@@ -253,7 +266,9 @@ describe("schemaProperties — unique constraints", () => {
   const uniques = cfg.uniqueConstraints;
 
   it("has unique constraint 'properties_node_label_key_uniq'", () => {
-    const found = uniques.find((u) => u.name === "properties_node_label_key_uniq");
+    const found = uniques.find(
+      (u) => u.name === "properties_node_label_key_uniq",
+    );
     expect(
       found,
       `Expected unique "properties_node_label_key_uniq"; found: [${uniques.map((u) => u.name).join(", ")}]`,
@@ -261,7 +276,9 @@ describe("schemaProperties — unique constraints", () => {
   });
 
   it("has unique constraint 'properties_rel_type_key_uniq'", () => {
-    const found = uniques.find((u) => u.name === "properties_rel_type_key_uniq");
+    const found = uniques.find(
+      (u) => u.name === "properties_rel_type_key_uniq",
+    );
     expect(
       found,
       `Expected unique "properties_rel_type_key_uniq"; found: [${uniques.map((u) => u.name).join(", ")}]`,

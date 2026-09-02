@@ -9,7 +9,11 @@ export const conversationChat = registerCapability({
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "docs", "mcp"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "conversation" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "conversation",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {

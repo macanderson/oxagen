@@ -117,7 +117,9 @@ describe("schemaVersionPinHandler", () => {
   });
 
   it("propagates getOrCreateRegistry errors", async () => {
-    mocks.getOrCreateRegistry.mockRejectedValue(new Error("Failed to create registry"));
+    mocks.getOrCreateRegistry.mockRejectedValue(
+      new Error("Failed to create registry"),
+    );
 
     await expect(
       schemaVersionPinHandler({ versionId: "scv_v2" }, CTX),

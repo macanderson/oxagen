@@ -9,6 +9,8 @@ export const researchSwarmStartRoute = new Hono<AppEnv>();
 researchSwarmStartRoute.post("/", async (c) => {
   const body = researchSwarmStart.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(researchSwarmStart.name, body, ctx, { surface: "api" });
+  const out = await invoke(researchSwarmStart.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out, 202);
 });

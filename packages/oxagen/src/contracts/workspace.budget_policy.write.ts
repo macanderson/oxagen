@@ -13,7 +13,11 @@ export const workspaceBudgetPolicyWrite = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "docs", "mcp", "unit", "app"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "medium", category: "workspace" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "medium",
+    category: "workspace",
+  },
   sensitivity: "medium",
   defaultEffect: "deny",
   defaultRoles: {
@@ -39,5 +43,9 @@ export const workspaceBudgetPolicyWrite = registerCapability({
   }),
 });
 
-export type WorkspaceBudgetPolicyWriteInput = z.output<typeof workspaceBudgetPolicyWrite.input>;
-export type WorkspaceBudgetPolicyWriteOutput = z.output<typeof workspaceBudgetPolicyWrite.output>;
+export type WorkspaceBudgetPolicyWriteInput = z.output<
+  typeof workspaceBudgetPolicyWrite.input
+>;
+export type WorkspaceBudgetPolicyWriteOutput = z.output<
+  typeof workspaceBudgetPolicyWrite.output
+>;

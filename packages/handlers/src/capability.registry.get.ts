@@ -62,7 +62,8 @@ function zodTypeLabel(schema: z.ZodTypeAny): string {
 /** True when the field can be omitted from the payload. */
 function isOptionalField(schema: z.ZodTypeAny): boolean {
   const def = schema._def as { typeName?: string };
-  if (def.typeName === "ZodOptional" || def.typeName === "ZodDefault") return true;
+  if (def.typeName === "ZodOptional" || def.typeName === "ZodDefault")
+    return true;
   if (def.typeName === "ZodNullable") {
     return isOptionalField((schema as z.ZodNullable<z.ZodTypeAny>).unwrap());
   }
@@ -77,14 +78,19 @@ function isOptionalField(schema: z.ZodTypeAny): boolean {
  * objects (ZodEffects) are unwrapped; non-object schemas yield [] — every
  * field list the UI renders is best-effort, never a throw.
  */
-export function describeSchemaFields(schema: z.ZodTypeAny): CapabilityFieldSpec[] {
+export function describeSchemaFields(
+  schema: z.ZodTypeAny,
+): CapabilityFieldSpec[] {
   let node: z.ZodTypeAny = schema;
   // Unwrap effect/optional/default wrappers around the object root.
   for (let i = 0; i < 5; i += 1) {
     const def = node._def as { typeName?: string };
     if (def.typeName === "ZodEffects") {
       node = (node as z.ZodEffects<z.ZodTypeAny>).innerType();
-    } else if (def.typeName === "ZodOptional" || def.typeName === "ZodNullable") {
+    } else if (
+      def.typeName === "ZodOptional" ||
+      def.typeName === "ZodNullable"
+    ) {
       node = (node as z.ZodOptional<z.ZodTypeAny>).unwrap();
     } else if (def.typeName === "ZodDefault") {
       node = (node._def as unknown as { innerType: z.ZodTypeAny }).innerType;

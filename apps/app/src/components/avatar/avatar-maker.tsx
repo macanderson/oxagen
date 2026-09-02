@@ -30,11 +30,22 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTab, TabsPanel } from "@/components/ui/tabs";
-import { SegmentedControl, SegmentedControlItem } from "@/components/ui/segmented-control";
+import {
+  SegmentedControl,
+  SegmentedControlItem,
+} from "@/components/ui/segmented-control";
 import { EntityAvatar, type EntityAvatarShape } from "./entity-avatar";
 import { CropSurface, useCropUpload } from "../media/crop-upload";
-import { parseAvatarValue, serializeDesignedAvatar, type AvatarMode } from "@/lib/avatar/spec";
-import { EMOJI_CATEGORIES, ALL_EMOJI_ENTRIES, type EmojiEntry } from "./emoji-data";
+import {
+  parseAvatarValue,
+  serializeDesignedAvatar,
+  type AvatarMode,
+} from "@/lib/avatar/spec";
+import {
+  EMOJI_CATEGORIES,
+  ALL_EMOJI_ENTRIES,
+  type EmojiEntry,
+} from "./emoji-data";
 
 export interface AvatarMakerProps {
   /** Current avatar value (image URL, `avatar:v1:` designed string, or null/undefined). */
@@ -90,7 +101,10 @@ function initialStateFromValue(value: string | null | undefined): {
 } {
   const spec = parseAvatarValue(value);
   if (spec.kind === "designed") {
-    return { tab: "design", design: { emoji: spec.emoji, bg: spec.bg, mode: spec.mode } };
+    return {
+      tab: "design",
+      design: { emoji: spec.emoji, bg: spec.bg, mode: spec.mode },
+    };
   }
   return { tab: "photo", design: { ...DEFAULT_DESIGN } };
 }
@@ -104,10 +118,18 @@ export function AvatarMaker({
   entityLabel,
 }: AvatarMakerProps): React.JSX.Element {
   const [open, setOpen] = React.useState(false);
-  const [activeTab, setActiveTab] = React.useState<MakerTab>(() => initialStateFromValue(value).tab);
-  const [emoji, setEmoji] = React.useState<string>(() => initialStateFromValue(value).design.emoji);
-  const [bg, setBg] = React.useState<string>(() => initialStateFromValue(value).design.bg);
-  const [mode, setMode] = React.useState<AvatarMode>(() => initialStateFromValue(value).design.mode);
+  const [activeTab, setActiveTab] = React.useState<MakerTab>(
+    () => initialStateFromValue(value).tab,
+  );
+  const [emoji, setEmoji] = React.useState<string>(
+    () => initialStateFromValue(value).design.emoji,
+  );
+  const [bg, setBg] = React.useState<string>(
+    () => initialStateFromValue(value).design.bg,
+  );
+  const [mode, setMode] = React.useState<AvatarMode>(
+    () => initialStateFromValue(value).design.mode,
+  );
   const [hexInput, setHexInput] = React.useState<string>(bg);
   const [hexError, setHexError] = React.useState<string | null>(null);
   const [category, setCategory] = React.useState<string>("all");
@@ -195,10 +217,14 @@ export function AvatarMaker({
     const pool =
       category === "all"
         ? ALL_EMOJI_ENTRIES
-        : (EMOJI_CATEGORIES.find((c) => c.id === category)?.entries ?? ALL_EMOJI_ENTRIES);
+        : (EMOJI_CATEGORIES.find((c) => c.id === category)?.entries ??
+          ALL_EMOJI_ENTRIES);
     const query = search.trim().toLowerCase();
     if (!query) return pool;
-    return pool.filter((entry) => entry.emoji === query || entry.keywords.some((k) => k.includes(query)));
+    return pool.filter(
+      (entry) =>
+        entry.emoji === query || entry.keywords.some((k) => k.includes(query)),
+    );
   }, [category, search]);
 
   const noun = entityLabel ?? "profile";
@@ -209,7 +235,11 @@ export function AvatarMaker({
       <EntityAvatar value={value} name={name} shape={shape} size="xl" />
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogTrigger render={<Button variant="outline" className="h-10" disabled={disabled} />}>
+        <DialogTrigger
+          render={
+            <Button variant="outline" className="h-10" disabled={disabled} />
+          }
+        >
           Edit avatar
         </DialogTrigger>
 
@@ -222,7 +252,10 @@ export function AvatarMaker({
           </DialogHeader>
 
           <DialogPanel className="gap-4">
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as MakerTab)}>
+            <Tabs
+              value={activeTab}
+              onValueChange={(v) => setActiveTab(v as MakerTab)}
+            >
               <TabsList className="w-full">
                 <TabsTab value="photo" className="flex-1">
                   Photo
@@ -247,7 +280,9 @@ export function AvatarMaker({
                     disabled={disabled || cropUpload.uploading}
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    {cropUpload.hasImage ? "Choose a different photo" : "Choose a photo"}
+                    {cropUpload.hasImage
+                      ? "Choose a different photo"
+                      : "Choose a photo"}
                   </Button>
                   <input
                     ref={fileInputRef}
@@ -286,7 +321,12 @@ export function AvatarMaker({
               {/* ---------------------------------------------------------- */}
               <TabsPanel value="design" className="flex flex-col gap-4">
                 <div className="flex items-center justify-center py-2">
-                  <EntityAvatar value={previewValue} name={name} shape={shape} size="xl" />
+                  <EntityAvatar
+                    value={previewValue}
+                    name={name}
+                    shape={shape}
+                    size="xl"
+                  />
                 </div>
 
                 {/* Emoji picker */}
@@ -298,7 +338,11 @@ export function AvatarMaker({
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
-                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Emoji categories">
+                  <div
+                    className="flex flex-wrap gap-1.5"
+                    role="group"
+                    aria-label="Emoji categories"
+                  >
                     <Button
                       type="button"
                       size="sm"
@@ -352,7 +396,11 @@ export function AvatarMaker({
                 {/* Background color */}
                 <div className="flex flex-col gap-2">
                   <Label>Background color</Label>
-                  <div className="flex flex-wrap gap-2" role="group" aria-label="Preset background colors">
+                  <div
+                    className="flex flex-wrap gap-2"
+                    role="group"
+                    aria-label="Preset background colors"
+                  >
                     {BG_PRESETS.map((preset) => (
                       <button
                         key={preset}
@@ -362,7 +410,8 @@ export function AvatarMaker({
                         aria-label={`Background color ${preset}`}
                         className={cn(
                           "size-10 shrink-0 rounded-full ring-1 ring-border",
-                          bg === preset && "ring-2 ring-ring ring-offset-2 ring-offset-background",
+                          bg === preset &&
+                            "ring-2 ring-ring ring-offset-2 ring-offset-background",
                         )}
                         style={{ backgroundColor: preset }}
                       />
@@ -394,10 +443,19 @@ export function AvatarMaker({
                 {/* Color mode */}
                 <div className="flex flex-col gap-2">
                   <Label>Color mode</Label>
-                  <SegmentedControl value={mode} onValueChange={(v) => setMode(v as AvatarMode)}>
-                    <SegmentedControlItem value="full">Full color</SegmentedControlItem>
-                    <SegmentedControlItem value="mono-light">Mono light</SegmentedControlItem>
-                    <SegmentedControlItem value="mono-dark">Mono dark</SegmentedControlItem>
+                  <SegmentedControl
+                    value={mode}
+                    onValueChange={(v) => setMode(v as AvatarMode)}
+                  >
+                    <SegmentedControlItem value="full">
+                      Full color
+                    </SegmentedControlItem>
+                    <SegmentedControlItem value="mono-light">
+                      Mono light
+                    </SegmentedControlItem>
+                    <SegmentedControlItem value="mono-dark">
+                      Mono dark
+                    </SegmentedControlItem>
                   </SegmentedControl>
                 </div>
               </TabsPanel>
@@ -406,7 +464,14 @@ export function AvatarMaker({
 
           <DialogFooter>
             <DialogClose
-              render={<Button variant="outline" size="lg" className="h-10" disabled={cropUpload.uploading} />}
+              render={
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="h-10"
+                  disabled={cropUpload.uploading}
+                />
+              }
             >
               Cancel
             </DialogClose>
@@ -421,7 +486,12 @@ export function AvatarMaker({
                 {cropUpload.uploading ? "Saving…" : "Save"}
               </Button>
             ) : (
-              <Button size="lg" className="h-10" disabled={Boolean(hexError)} onClick={handleSaveDesign}>
+              <Button
+                size="lg"
+                className="h-10"
+                disabled={Boolean(hexError)}
+                onClick={handleSaveDesign}
+              >
                 Save
               </Button>
             )}

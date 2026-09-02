@@ -17,20 +17,23 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mocks — declared before imports (vi.mock is hoisted).
 // ---------------------------------------------------------------------------
 
-const { mockWithSystemDb, mockEmitSecurityEvent, mockRevalidatePath, mockGetSessionOrRedirect } =
-  vi.hoisted(() => ({
-    mockWithSystemDb: vi.fn(),
-    mockEmitSecurityEvent: vi.fn(),
-    mockRevalidatePath: vi.fn(),
-    mockGetSessionOrRedirect: vi.fn(),
-  }));
+const {
+  mockWithSystemDb,
+  mockEmitSecurityEvent,
+  mockRevalidatePath,
+  mockGetSessionOrRedirect,
+} = vi.hoisted(() => ({
+  mockWithSystemDb: vi.fn(),
+  mockEmitSecurityEvent: vi.fn(),
+  mockRevalidatePath: vi.fn(),
+  mockGetSessionOrRedirect: vi.fn(),
+}));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withSystemDb: mockWithSystemDb,
-
+    withSystemDb: mockWithSystemDb,
   };
 });
 
@@ -83,7 +86,9 @@ describe("revokeOwnSessionAction", () => {
       return fn(tx);
     });
 
-    const result = await revokeOwnSessionAction({ sessionId: OTHER_SESSION_ID });
+    const result = await revokeOwnSessionAction({
+      sessionId: OTHER_SESSION_ID,
+    });
 
     expect(result.ok).toBe(true);
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
@@ -99,7 +104,9 @@ describe("revokeOwnSessionAction", () => {
   });
 
   it("self-session guard: returns self_session when revoking the current session", async () => {
-    const result = await revokeOwnSessionAction({ sessionId: CURRENT_SESSION_ID });
+    const result = await revokeOwnSessionAction({
+      sessionId: CURRENT_SESSION_ID,
+    });
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -123,7 +130,9 @@ describe("revokeOwnSessionAction", () => {
       return fn(tx);
     });
 
-    const result = await revokeOwnSessionAction({ sessionId: OTHER_SESSION_ID });
+    const result = await revokeOwnSessionAction({
+      sessionId: OTHER_SESSION_ID,
+    });
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -147,7 +156,9 @@ describe("revokeOwnSessionAction", () => {
       throw new Error("connection timeout");
     });
 
-    const result = await revokeOwnSessionAction({ sessionId: OTHER_SESSION_ID });
+    const result = await revokeOwnSessionAction({
+      sessionId: OTHER_SESSION_ID,
+    });
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -174,7 +185,9 @@ describe("revokeOwnSessionAction", () => {
       return fn(tx);
     });
 
-    const result = await revokeOwnSessionAction({ sessionId: OTHER_SESSION_ID });
+    const result = await revokeOwnSessionAction({
+      sessionId: OTHER_SESSION_ID,
+    });
     // Should succeed — no current session id to compare against.
     expect(result.ok).toBe(true);
   });

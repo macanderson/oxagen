@@ -39,7 +39,9 @@ import { RunDetailSection } from "./run-detail-section";
 afterEach(cleanup);
 beforeEach(() => {
   mockInvoke.mockReset();
-  mockRunInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn());
+  mockRunInTenantScope.mockImplementation(
+    (_scope: unknown, fn: () => unknown) => fn(),
+  );
 });
 
 const BASE = {
@@ -53,7 +55,10 @@ describe("RunDetailSection", () => {
   it("renders the client with the run on success", async () => {
     mockInvoke.mockResolvedValue({ run: { runId: "evr_abc" }, results: [] });
     render(await RunDetailSection(BASE));
-    expect(screen.getByTestId("run-detail-client")).toHaveAttribute("data-run", "evr_abc");
+    expect(screen.getByTestId("run-detail-client")).toHaveAttribute(
+      "data-run",
+      "evr_abc",
+    );
     expect(screen.queryByTestId("error-state")).toBeNull();
   });
 

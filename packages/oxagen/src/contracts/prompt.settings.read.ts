@@ -36,4 +36,6 @@ export const promptSettingsRead = registerCapability({
   }),
 });
 
-export type PromptSettingsReadOutput = z.output<typeof promptSettingsRead.output>;
+export type PromptSettingsReadOutput = z.output<
+  typeof promptSettingsRead.output
+>;

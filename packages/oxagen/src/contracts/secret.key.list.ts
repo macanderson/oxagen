@@ -14,10 +14,15 @@ export const secretKeySummarySchema = z.object({
 export const secretKeyList = registerCapability({
   name: "list_secret_keys",
   domain: "secret",
-  description: "List vault secret keys for the workspace with masked metadata (which environments override each key). Never returns plaintext values.",
+  description:
+    "List vault secret keys for the workspace with masked metadata (which environments override each key). Never returns plaintext values.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   sensitivity: "low",

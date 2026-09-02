@@ -5,7 +5,7 @@
  *
  * The preference lives in a cookie ({@link THEME_COOKIE_NAME}). `"system"`
  * renders no class and is resolved by CSS `@media (prefers-color-scheme)`
- * (see styles/tokens.css). Two no-flash integration modes:
+ * (see styles/globals.css). Two no-flash integration modes:
  *
  *   1. SSR-cookie mode (apps WITHOUT Cache Components): the root layout (a
  *      Server Component) reads the cookie via {@link parseTheme} and renders
@@ -70,7 +70,9 @@ export interface ThemeContextValue {
   themes: readonly Theme[];
 }
 
-const ThemeContext = React.createContext<ThemeContextValue | undefined>(undefined);
+const ThemeContext = React.createContext<ThemeContextValue | undefined>(
+  undefined,
+);
 
 const MEDIA = "(prefers-color-scheme: dark)";
 /** Cross-tab sync channel — preferred over a localStorage `storage` event so we
@@ -93,7 +95,9 @@ function readThemeCookie(name: string): Theme | null {
 function writeThemeCookie(name: string, value: Theme): void {
   if (typeof document === "undefined") return;
   const secure =
-    typeof location !== "undefined" && location.protocol === "https:" ? "; Secure" : "";
+    typeof location !== "undefined" && location.protocol === "https:"
+      ? "; Secure"
+      : "";
   document.cookie = `${name}=${value}; Path=/; Max-Age=${THEME_COOKIE_MAX_AGE}; SameSite=Lax${secure}`;
 }
 
@@ -143,8 +147,11 @@ export function ThemeProvider({
   enableColorScheme = true,
   disableTransitionOnChange = true,
 }: ThemeProviderProps) {
-  const [theme, setThemeState] = React.useState<Theme>(initialTheme ?? defaultTheme);
-  const [systemTheme, setSystemTheme] = React.useState<ResolvedTheme>(getSystemTheme);
+  const [theme, setThemeState] = React.useState<Theme>(
+    initialTheme ?? defaultTheme,
+  );
+  const [systemTheme, setSystemTheme] =
+    React.useState<ResolvedTheme>(getSystemTheme);
 
   // When the server didn't pass a preference (static page), adopt any existing
   // cookie on mount. When it did, the cookie already matches — this is a no-op.
@@ -209,7 +216,9 @@ export function ThemeProvider({
     [theme, resolvedTheme, setTheme],
   );
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+  );
 }
 
 /**

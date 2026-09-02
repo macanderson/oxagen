@@ -31,6 +31,8 @@ export default async function agentMcpConsentResolveTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentMcpConsentResolve.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentMcpConsentResolve.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentMcpConsentResolve.output.parse(output);
 }

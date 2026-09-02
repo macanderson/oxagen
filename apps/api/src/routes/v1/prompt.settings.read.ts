@@ -9,6 +9,8 @@ export const promptSettingsReadRoute = new Hono<AppEnv>();
 promptSettingsReadRoute.get("/", async (c) => {
   const input = promptSettingsRead.input.parse({});
   const ctx = capabilityContext(c);
-  const out = await invoke(promptSettingsRead.name, input, ctx, { surface: "api" });
+  const out = await invoke(promptSettingsRead.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

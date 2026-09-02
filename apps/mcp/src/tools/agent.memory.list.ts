@@ -49,6 +49,8 @@ export default async function agentMemoryListTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentMemoryList.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentMemoryList.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentMemoryList.output.parse(output);
 }

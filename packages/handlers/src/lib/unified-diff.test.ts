@@ -9,7 +9,11 @@ import { diffFileContents, splitCombinedDiff } from "./unified-diff";
 
 describe("diffFileContents", () => {
   it("produces a real unified-diff patch with correct add/del counts for a modified file", () => {
-    const result = diffFileContents("src/a.ts", "export const a = 0;\n", "export const a = 1;\n");
+    const result = diffFileContents(
+      "src/a.ts",
+      "export const a = 0;\n",
+      "export const a = 1;\n",
+    );
 
     expect(result.path).toBe("src/a.ts");
     expect(result.additions).toBe(1);

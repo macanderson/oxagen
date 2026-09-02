@@ -7,16 +7,23 @@
  *   2. Operational Postgres tables — runs, playbooks, triggers, agents,
  *      principals — each filtered by the caller's tenant via withTenantDb.
  *
- * Results are merged, deduplicated by href, and sliced to 8 rows as per the
- * spec (§10) performance target.
+ * Results are merged and sliced to 8 rows as per the spec (§10) performance
+ * target. The dedupe is by href, so it only collapses repeats WITHIN a source —
+ * the same entity found in Postgres and in the graph carries two different
+ * routes (/activity/runs/… vs /knowledge/graph/…) and survives as two rows.
  *
- * Security: every query filters by ctx.orgId + ctx.workspaceId via
- * withTenantDb (RLS-enforced on the oxagen_app role). No cross-tenant leakage
+ * Security: every Postgres query filters by ctx.orgId via withTenantDb
+ * (RLS-enforced on the oxagen_app role) and, except for principals (which are
+ * org-scoped by design), by ctx.workspaceId as well. The ontology arm inherits
+ * the same scope through the search_nodes capability. No cross-tenant leakage
  * is possible even if the input kind/query is manipulated.
  */
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { commandMenuSearch } from "@oxagen/oxagen/contracts/command.menu.search";
-import type { SearchResultRow, SearchableKind } from "@oxagen/oxagen/contracts/command.menu.search";
+import type {
+  SearchResultRow,
+  SearchableKind,
+} from "@oxagen/oxagen/contracts/command.menu.search";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, ilike, isNull, or } from "drizzle-orm";
 import { invoke } from "@oxagen/oxagen/kernel";
@@ -27,16 +34,28 @@ import { logger } from "./logger";
 function runHref(orgSlug: string, workspaceSlug: string, id: string): string {
   return `/${orgSlug}/${workspaceSlug}/activity/runs/${id}`;
 }
-function playbookHref(orgSlug: string, workspaceSlug: string, id: string): string {
+function playbookHref(
+  orgSlug: string,
+  workspaceSlug: string,
+  id: string,
+): string {
   return `/${orgSlug}/${workspaceSlug}/automation/playbooks/${id}`;
 }
-function triggerHref(orgSlug: string, workspaceSlug: string, id: string): string {
+function triggerHref(
+  orgSlug: string,
+  workspaceSlug: string,
+  id: string,
+): string {
   return `/${orgSlug}/${workspaceSlug}/automation/triggers/${id}`;
 }
 function agentHref(orgSlug: string, workspaceSlug: string, id: string): string {
   return `/${orgSlug}/${workspaceSlug}/agents/${id}`;
 }
-function principalHref(orgSlug: string, _workspaceSlug: string, id: string): string {
+function principalHref(
+  orgSlug: string,
+  _workspaceSlug: string,
+  id: string,
+): string {
   return `/${orgSlug}/members/${id}`;
 }
 
@@ -259,13 +278,21 @@ async function searchOntology(
       event: "EventDef",
       principal: "Principal",
     };
-    const labels = kind && labelMap[kind] ? [labelMap[kind] as string] : undefined;
+    const labels =
+      kind && labelMap[kind] ? [labelMap[kind] as string] : undefined;
 
     const result = (await invoke(
       "search_nodes",
       { query, labels, limit: 8 },
       ctx,
-    )) as { nodes: Array<{ nodeId: string; label: string; displayName: string; description: string | null }> };
+    )) as {
+      nodes: Array<{
+        nodeId: string;
+        label: string;
+        displayName: string;
+        description: string | null;
+      }>;
+    };
 
     return result.nodes.map((n) => ({
       kind: (kind ?? "run") as SearchableKind, // best-effort kind
@@ -284,10 +311,9 @@ async function searchOntology(
 
 // ── Main handler ─────────────────────────────────────────────────────────────
 
-export const commandMenuSearchHandler: CapabilityHandler<typeof commandMenuSearch> = async (
-  input,
-  ctx,
-) => {
+export const commandMenuSearchHandler: CapabilityHandler<
+  typeof commandMenuSearch
+> = async (input, ctx) => {
   const { kind, query, orgSlug, workspaceSlug } = input;
   const { orgId, workspaceId } = ctx;
 
@@ -298,18 +324,28 @@ export const commandMenuSearchHandler: CapabilityHandler<typeof commandMenuSearc
     (async (): Promise<SearchResultRow[]> => {
       const wantKind = (k: SearchableKind) => !kind || kind === k;
       const results = await Promise.all([
-        wantKind("run") ? searchRuns(orgId, workspaceId, query, orgSlug, workspaceSlug) : [],
-        wantKind("playbook") ? searchPlaybooks(orgId, workspaceId, query, orgSlug, workspaceSlug) : [],
-        wantKind("trigger") ? searchTriggers(orgId, workspaceId, query, orgSlug, workspaceSlug) : [],
-        wantKind("agent") ? searchAgents(orgId, workspaceId, query, orgSlug, workspaceSlug) : [],
-        wantKind("principal") ? searchPrincipals(orgId, workspaceId, query, orgSlug, workspaceSlug) : [],
+        wantKind("run")
+          ? searchRuns(orgId, workspaceId, query, orgSlug, workspaceSlug)
+          : [],
+        wantKind("playbook")
+          ? searchPlaybooks(orgId, workspaceId, query, orgSlug, workspaceSlug)
+          : [],
+        wantKind("trigger")
+          ? searchTriggers(orgId, workspaceId, query, orgSlug, workspaceSlug)
+          : [],
+        wantKind("agent")
+          ? searchAgents(orgId, workspaceId, query, orgSlug, workspaceSlug)
+          : [],
+        wantKind("principal")
+          ? searchPrincipals(orgId, workspaceId, query, orgSlug, workspaceSlug)
+          : [],
       ]);
       return results.flat();
     })(),
   ]);
 
-  // Merge: Postgres results first (more precise), then ontology results not
-  // already represented by href.
+  // Merge: Postgres results first (more precise), then ontology results whose
+  // href has not already been emitted.
   const seen = new Set<string>();
   const merged: SearchResultRow[] = [];
   for (const row of [...pgRows, ...graphRows]) {

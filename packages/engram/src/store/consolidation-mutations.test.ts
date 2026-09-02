@@ -7,9 +7,17 @@ import { DuckDBEpisodicStore } from "./duckdb-adapter";
 import { createRecord } from "../record";
 import type { Namespace, Provenance } from "../types";
 
-const PROV: Provenance = { author: "t", derivedFrom: [], timestamp: 1_700_000_000_000 };
+const PROV: Provenance = {
+  author: "t",
+  derivedFrom: [],
+  timestamp: 1_700_000_000_000,
+};
 
-function fact(ns: Namespace, text: string, opts: { ttl?: number; createdAt?: number } = {}) {
+function fact(
+  ns: Namespace,
+  text: string,
+  opts: { ttl?: number; createdAt?: number } = {},
+) {
   return createRecord({
     kind: "semantic",
     namespace: ns,

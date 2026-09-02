@@ -11,7 +11,9 @@ import {
   parseCreatedAt,
 } from "./types";
 
-function makeLegacyRow(overrides: Partial<LegacyMemoryRow> = {}): LegacyMemoryRow {
+function makeLegacyRow(
+  overrides: Partial<LegacyMemoryRow> = {},
+): LegacyMemoryRow {
   return {
     id: "neo4j-uuid-123",
     nodeRef: "file:src/main.ts",
@@ -142,7 +144,9 @@ describe("convertLegacyRow", () => {
   it("preserves original createdAt timestamp", () => {
     const row = makeLegacyRow({ createdAt: "2024-01-01T00:00:00.000Z" });
     const record = convertLegacyRow(row);
-    expect(record!.createdAt).toBe(new Date("2024-01-01T00:00:00.000Z").getTime());
+    expect(record!.createdAt).toBe(
+      new Date("2024-01-01T00:00:00.000Z").getTime(),
+    );
   });
 
   it("is idempotent (same input → same ID)", () => {

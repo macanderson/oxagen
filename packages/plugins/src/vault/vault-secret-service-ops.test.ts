@@ -111,9 +111,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 // ── Test data helpers ─────────────────────────────────────────────────────────
 
-const actor = { orgId: "org-1", workspaceId: "ws-1", userId: "u1", requestId: "req-1" };
+const actor = {
+  orgId: "org-1",
+  workspaceId: "ws-1",
+  userId: "u1",
+  requestId: "req-1",
+};
 
-function makeKeyRow(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
+function makeKeyRow(
+  overrides: Partial<Record<string, unknown>> = {},
+): Record<string, unknown> {
   return {
     id: "sk_int_1",
     publicId: "sk_pub_1",
@@ -127,7 +134,9 @@ function makeKeyRow(overrides: Partial<Record<string, unknown>> = {}): Record<st
   };
 }
 
-function makeEnvRow(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
+function makeEnvRow(
+  overrides: Partial<Record<string, unknown>> = {},
+): Record<string, unknown> {
   return { id: "env_int_1", publicId: "env_pub_1", ...overrides };
 }
 
@@ -136,7 +145,9 @@ function makeEnvRow(overrides: Partial<Record<string, unknown>> = {}): Record<st
 describe("setSecretValue", () => {
   beforeEach(() => {
     resetState();
-    process.env.AUTH_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
+    process.env.AUTH_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString(
+      "base64",
+    );
   });
 
   it("stores plaintext for a non-sensitive key", async () => {
@@ -176,7 +187,9 @@ describe("setSecretValue", () => {
     expect(inserted.valueEnc).toBeInstanceOf(Buffer);
     expect(inserted.valueText).toBeNull();
     // Plaintext must never appear in the stored bytes
-    expect(JSON.stringify(Array.from(inserted.valueEnc as Buffer))).not.toContain("super-secret");
+    expect(
+      JSON.stringify(Array.from(inserted.valueEnc as Buffer)),
+    ).not.toContain("super-secret");
   });
 
   it("throws when key is not found", async () => {
@@ -186,7 +199,11 @@ describe("setSecretValue", () => {
     state.selectQueue.push([]);
 
     await expect(
-      setSecretValue(actor, { keyId: "missing", environmentId: "env_pub_1", value: "v" }),
+      setSecretValue(actor, {
+        keyId: "missing",
+        environmentId: "env_pub_1",
+        value: "v",
+      }),
     ).rejects.toThrow(/secret key not found/);
   });
 });
@@ -204,7 +221,10 @@ describe("unsetSecretValue", () => {
     state.selectQueue.push([makeKeyRow()]);
     state.selectQueue.push([makeEnvRow()]);
 
-    const result = await unsetSecretValue(actor, { keyId: "sk_pub_1", environmentId: "env_pub_1" });
+    const result = await unsetSecretValue(actor, {
+      keyId: "sk_pub_1",
+      environmentId: "env_pub_1",
+    });
 
     expect(result).toEqual({ ok: true });
     expect(state.deletes).toBe(1);
@@ -217,7 +237,10 @@ describe("unsetSecretValue", () => {
     state.selectQueue.push([]); // environment not found
 
     await expect(
-      unsetSecretValue(actor, { keyId: "sk_pub_1", environmentId: "missing-env" }),
+      unsetSecretValue(actor, {
+        keyId: "sk_pub_1",
+        environmentId: "missing-env",
+      }),
     ).rejects.toThrow(/environment not found/);
   });
 });
@@ -266,7 +289,10 @@ describe("listSecretKeys", () => {
   it("returns hasDefault=false for a non-sensitive key with no defaultValueText", async () => {
     const { listSecretKeys } = await import("./vault-secret-service");
 
-    const noDefaultKey = makeKeyRow({ sensitive: false, defaultValueText: null });
+    const noDefaultKey = makeKeyRow({
+      sensitive: false,
+      defaultValueText: null,
+    });
 
     state.selectQueue.push([noDefaultKey]); // keys
     state.selectQueue.push([]); // environments
@@ -349,13 +375,17 @@ describe("deleteSecretKey", () => {
 describe("revealSecret", () => {
   beforeEach(() => {
     resetState();
-    process.env.AUTH_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
+    process.env.AUTH_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString(
+      "base64",
+    );
   });
 
   it("returns the non-sensitive default value when no environment is specified", async () => {
     const { revealSecret } = await import("./vault-secret-service");
 
-    state.selectQueue.push([makeKeyRow({ sensitive: false, defaultValueText: "my-default" })]);
+    state.selectQueue.push([
+      makeKeyRow({ sensitive: false, defaultValueText: "my-default" }),
+    ]);
     // writeAccessLog insert is captured but we don't check it here
 
     const result = await revealSecret(actor, { keyId: "sk_pub_1" });
@@ -370,7 +400,9 @@ describe("revealSecret", () => {
   it("returns the environment override value when one exists", async () => {
     const { revealSecret } = await import("./vault-secret-service");
 
-    state.selectQueue.push([makeKeyRow({ sensitive: false, defaultValueText: "default" })]);
+    state.selectQueue.push([
+      makeKeyRow({ sensitive: false, defaultValueText: "default" }),
+    ]);
     state.selectQueue.push([makeEnvRow()]); // loadEnvironmentId
     state.selectQueue.push([
       { valueEnc: null, valueText: "override-val", valueKmsKeyId: null },
@@ -388,7 +420,9 @@ describe("revealSecret", () => {
   it("falls back to default when environment has no override", async () => {
     const { revealSecret } = await import("./vault-secret-service");
 
-    state.selectQueue.push([makeKeyRow({ sensitive: false, defaultValueText: "fallback" })]);
+    state.selectQueue.push([
+      makeKeyRow({ sensitive: false, defaultValueText: "fallback" }),
+    ]);
     state.selectQueue.push([makeEnvRow()]); // loadEnvironmentId
     state.selectQueue.push([]); // no override row
 
@@ -404,7 +438,9 @@ describe("revealSecret", () => {
   it("returns { value: null, source: 'unset' } when no default and no override", async () => {
     const { revealSecret } = await import("./vault-secret-service");
 
-    state.selectQueue.push([makeKeyRow({ sensitive: false, defaultValueText: null })]);
+    state.selectQueue.push([
+      makeKeyRow({ sensitive: false, defaultValueText: null }),
+    ]);
     state.selectQueue.push([makeEnvRow()]);
     state.selectQueue.push([]); // no override
 
@@ -420,12 +456,18 @@ describe("revealSecret", () => {
   it("decrypts a sensitive default value", async () => {
     const { revealSecret } = await import("./vault-secret-service");
     const { encrypt } = await import("@oxagen/crypto");
-    const { createLocalKmsAdapter, loadMasterKey } = await import("@oxagen/crypto/kms");
+    const { createLocalKmsAdapter, loadMasterKey } = await import(
+      "@oxagen/crypto/kms"
+    );
     const { WORKSPACE_VAULT_KEY_ID } = await import("./vault-kms");
 
     const key64 = Buffer.alloc(32, 7).toString("base64");
     const adapter = createLocalKmsAdapter(loadMasterKey(key64));
-    const encDefault = await encrypt("encrypted-default", WORKSPACE_VAULT_KEY_ID, { adapter });
+    const encDefault = await encrypt(
+      "encrypted-default",
+      WORKSPACE_VAULT_KEY_ID,
+      { adapter },
+    );
 
     state.selectQueue.push([
       makeKeyRow({
@@ -445,12 +487,18 @@ describe("revealSecret", () => {
   it("decrypts a sensitive override value", async () => {
     const { revealSecret } = await import("./vault-secret-service");
     const { encrypt } = await import("@oxagen/crypto");
-    const { createLocalKmsAdapter, loadMasterKey } = await import("@oxagen/crypto/kms");
+    const { createLocalKmsAdapter, loadMasterKey } = await import(
+      "@oxagen/crypto/kms"
+    );
     const { WORKSPACE_VAULT_KEY_ID } = await import("./vault-kms");
 
     const key64 = Buffer.alloc(32, 7).toString("base64");
     const adapter = createLocalKmsAdapter(loadMasterKey(key64));
-    const encOverride = await encrypt("encrypted-override", WORKSPACE_VAULT_KEY_ID, { adapter });
+    const encOverride = await encrypt(
+      "encrypted-override",
+      WORKSPACE_VAULT_KEY_ID,
+      { adapter },
+    );
 
     state.selectQueue.push([
       makeKeyRow({
@@ -461,7 +509,11 @@ describe("revealSecret", () => {
     ]);
     state.selectQueue.push([makeEnvRow()]);
     state.selectQueue.push([
-      { valueEnc: encOverride, valueText: null, valueKmsKeyId: WORKSPACE_VAULT_KEY_ID },
+      {
+        valueEnc: encOverride,
+        valueText: null,
+        valueKmsKeyId: WORKSPACE_VAULT_KEY_ID,
+      },
     ]);
 
     const result = await revealSecret(actor, {
@@ -479,7 +531,9 @@ describe("revealSecret", () => {
 describe("exportSecrets", () => {
   beforeEach(() => {
     resetState();
-    process.env.AUTH_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
+    process.env.AUTH_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString(
+      "base64",
+    );
   });
 
   it("returns empty env and minimal dotenv when no keys have set values", async () => {
@@ -501,7 +555,11 @@ describe("exportSecrets", () => {
     const { exportSecrets } = await import("./vault-secret-service");
 
     state.selectQueue.push([
-      makeKeyRow({ key: "API_KEY", sensitive: false, defaultValueText: "my-api-key" }),
+      makeKeyRow({
+        key: "API_KEY",
+        sensitive: false,
+        defaultValueText: "my-api-key",
+      }),
       makeKeyRow({
         id: "sk_int_2",
         publicId: "sk_pub_2",
@@ -522,7 +580,11 @@ describe("exportSecrets", () => {
     const { exportSecrets } = await import("./vault-secret-service");
 
     state.selectQueue.push([
-      makeKeyRow({ key: "MSG", sensitive: false, defaultValueText: "hello world" }),
+      makeKeyRow({
+        key: "MSG",
+        sensitive: false,
+        defaultValueText: "hello world",
+      }),
     ]);
 
     const result = await exportSecrets(actor, {});
@@ -535,11 +597,20 @@ describe("exportSecrets", () => {
     const { exportSecrets } = await import("./vault-secret-service");
 
     state.selectQueue.push([
-      makeKeyRow({ key: "DB_URL", sensitive: false, defaultValueText: "default-url" }),
+      makeKeyRow({
+        key: "DB_URL",
+        sensitive: false,
+        defaultValueText: "default-url",
+      }),
     ]);
     state.selectQueue.push([makeEnvRow()]); // loadEnvironmentId
     state.selectQueue.push([
-      { secretKeyId: "sk_int_1", valueEnc: null, valueText: "override-url", valueKmsKeyId: null },
+      {
+        secretKeyId: "sk_int_1",
+        valueEnc: null,
+        valueText: "override-url",
+        valueKmsKeyId: null,
+      },
     ]); // values for the environment
 
     const result = await exportSecrets(actor, { environmentId: "env_pub_1" });
@@ -553,7 +624,11 @@ describe("exportSecrets", () => {
     // When keyIds is set, the WHERE clause includes an inArray — the mock returns
     // what we seed regardless, so we seed only the targeted key.
     state.selectQueue.push([
-      makeKeyRow({ key: "TARGETED", sensitive: false, defaultValueText: "val" }),
+      makeKeyRow({
+        key: "TARGETED",
+        sensitive: false,
+        defaultValueText: "val",
+      }),
     ]);
 
     const result = await exportSecrets(actor, { keyIds: ["sk_pub_1"] });
@@ -584,7 +659,9 @@ describe("exportSecrets", () => {
 describe("importEnv", () => {
   beforeEach(() => {
     resetState();
-    process.env.AUTH_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
+    process.env.AUTH_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString(
+      "base64",
+    );
   });
 
   it("preview mode (commit=false) returns row metadata without writing", async () => {
@@ -678,7 +755,13 @@ describe("importEnv", () => {
     state.selectQueue.push([]); // 3. existing overrides
     state.selectQueue.push([]); // 4. upsertSecretKeyTx check-existing
     state.selectQueue.push([{ publicId: "sk_pub_new" }]); // 5. loadKeyByKeyName
-    state.selectQueue.push([makeKeyRow({ id: "sk_int_new", publicId: "sk_pub_new", sensitive: false })]); // 6. loadKeyByPublicId
+    state.selectQueue.push([
+      makeKeyRow({
+        id: "sk_int_new",
+        publicId: "sk_pub_new",
+        sensitive: false,
+      }),
+    ]); // 6. loadKeyByPublicId
     state.selectQueue.push([{ id: "env_int_1" }]); // 7. loadEnvironmentId for setSecretValueTx
 
     const result = await importEnv(actor, {
@@ -702,11 +785,15 @@ describe("importEnv", () => {
 describe("resolveEnvironmentSecrets", () => {
   beforeEach(() => {
     resetState();
-    process.env.AUTH_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
+    process.env.AUTH_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString(
+      "base64",
+    );
   });
 
   it("returns an empty object when there are no keys", async () => {
-    const { resolveEnvironmentSecrets } = await import("./vault-secret-service");
+    const { resolveEnvironmentSecrets } = await import(
+      "./vault-secret-service"
+    );
 
     state.selectQueue.push([makeEnvRow()]); // loadEnvironmentId
     state.selectQueue.push([]); // keys
@@ -722,7 +809,9 @@ describe("resolveEnvironmentSecrets", () => {
   });
 
   it("returns env map merging default and override values", async () => {
-    const { resolveEnvironmentSecrets } = await import("./vault-secret-service");
+    const { resolveEnvironmentSecrets } = await import(
+      "./vault-secret-service"
+    );
 
     const keyWithDefault = makeKeyRow({
       id: "sk_int_1",
@@ -742,7 +831,12 @@ describe("resolveEnvironmentSecrets", () => {
     state.selectQueue.push([keyWithDefault, keyWithOverride]); // keys
     state.selectQueue.push([
       // values: only keyWithOverride has a value row
-      { secretKeyId: "sk_int_2", valueEnc: null, valueText: "override-val", valueKmsKeyId: null },
+      {
+        secretKeyId: "sk_int_2",
+        valueEnc: null,
+        valueText: "override-val",
+        valueKmsKeyId: null,
+      },
     ]);
 
     const result = await resolveEnvironmentSecrets({
@@ -756,9 +850,15 @@ describe("resolveEnvironmentSecrets", () => {
   });
 
   it("skips keys with no default and no override (unset)", async () => {
-    const { resolveEnvironmentSecrets } = await import("./vault-secret-service");
+    const { resolveEnvironmentSecrets } = await import(
+      "./vault-secret-service"
+    );
 
-    const unsetKey = makeKeyRow({ key: "UNSET", sensitive: false, defaultValueText: null });
+    const unsetKey = makeKeyRow({
+      key: "UNSET",
+      sensitive: false,
+      defaultValueText: null,
+    });
 
     state.selectQueue.push([makeEnvRow()]); // loadEnvironmentId
     state.selectQueue.push([unsetKey]); // keys
@@ -779,7 +879,9 @@ describe("resolveEnvironmentSecrets", () => {
 describe("upsertSecretKey — update path (existing key)", () => {
   beforeEach(() => {
     resetState();
-    process.env.AUTH_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
+    process.env.AUTH_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString(
+      "base64",
+    );
   });
 
   it("updates an existing key's memo without touching the default value", async () => {

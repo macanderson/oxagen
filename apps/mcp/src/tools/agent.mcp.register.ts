@@ -6,8 +6,11 @@ import { buildContext } from "../context";
 
 export const schema = {
   ...agentMcpRegister.input.shape,
-  name: agentMcpRegister.input.shape.name.describe("Human-readable name for the MCP server"),
-  transportType: agentMcpRegister.input.shape.transportType.describe("Transport protocol"),
+  name: agentMcpRegister.input.shape.name.describe(
+    "Human-readable name for the MCP server",
+  ),
+  transportType:
+    agentMcpRegister.input.shape.transportType.describe("Transport protocol"),
   endpointUrl: agentMcpRegister.input.shape.endpointUrl.describe(
     "URL of the MCP server endpoint",
   ),
@@ -33,6 +36,8 @@ export default async function agentMcpRegisterTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentMcpRegister.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentMcpRegister.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentMcpRegister.output.parse(output);
 }

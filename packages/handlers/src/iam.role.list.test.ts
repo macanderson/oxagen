@@ -104,8 +104,8 @@ beforeEach(() => {
   mocks.countRows = [];
   mocks.grantRows = [];
   mocks.grantQueries = 0;
-  mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn(makeTx()),
+  mocks.withSystemDb.mockImplementation(
+    async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx()),
   );
 });
 
@@ -115,7 +115,11 @@ describe("iamRoleListHandler", () => {
       { includeGrants: true, limit: 100, offset: 0 },
       CTX,
     );
-    expect(out.roles.map((r) => r.id)).toEqual(["rol_member", "rol_owner", "rol_custom"]);
+    expect(out.roles.map((r) => r.id)).toEqual([
+      "rol_member",
+      "rol_owner",
+      "rol_custom",
+    ]);
     expect(out.total).toBe(3);
     expect(out.hasMore).toBe(false);
   });
@@ -123,9 +127,17 @@ describe("iamRoleListHandler", () => {
   it("maps member counts and grants per role", async () => {
     mocks.countRows = [{ roleId: "uuid-owner", count: 2 }];
     mocks.grantRows = [
-      { roleId: "uuid-owner", capabilityId: "query_audit_log", effect: "allow" },
+      {
+        roleId: "uuid-owner",
+        capabilityId: "query_audit_log",
+        effect: "allow",
+      },
       { roleId: "uuid-owner", capabilityId: "create_api_key", effect: "allow" },
-      { roleId: "uuid-member", capabilityId: "query_audit_log", effect: "deny" },
+      {
+        roleId: "uuid-member",
+        capabilityId: "query_audit_log",
+        effect: "deny",
+      },
     ];
     const out = await iamRoleListHandler(
       { includeGrants: true, limit: 100, offset: 0 },
@@ -140,7 +152,9 @@ describe("iamRoleListHandler", () => {
     ]);
     const member = out.roles.find((r) => r.id === "rol_member");
     expect(member?.memberCount).toBe(0);
-    expect(member?.grants).toEqual([{ capability: "query_audit_log", effect: "deny" }]);
+    expect(member?.grants).toEqual([
+      { capability: "query_audit_log", effect: "deny" },
+    ]);
   });
 
   it("skips the grants query when includeGrants=false", async () => {
@@ -168,14 +182,22 @@ describe("iamRoleListHandler", () => {
   });
 
   it("runs every read inside withSystemDb (tenant isolation enforced in-handler)", async () => {
-    await iamRoleListHandler({ includeGrants: true, limit: 100, offset: 0 }, CTX);
+    await iamRoleListHandler(
+      { includeGrants: true, limit: 100, offset: 0 },
+      CTX,
+    );
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
   });
 
   it("scopes every table read to ctx.orgId (structural check, not just call count)", async () => {
     mocks.countRows = [{ roleId: "uuid-owner", count: 1 }];
-    mocks.grantRows = [{ roleId: "uuid-owner", capabilityId: "x", effect: "allow" }];
-    await iamRoleListHandler({ includeGrants: true, limit: 100, offset: 0 }, CTX);
+    mocks.grantRows = [
+      { roleId: "uuid-owner", capabilityId: "x", effect: "allow" },
+    ];
+    await iamRoleListHandler(
+      { includeGrants: true, limit: 100, offset: 0 },
+      CTX,
+    );
 
     // A regression that dropped any of these org-id equality checks would
     // fail this assertion even though the mock's .where() ignores its args.
@@ -188,13 +210,18 @@ describe("iamRoleListHandler", () => {
   });
 
   it("does not build a scopeKind condition when the filter is omitted", async () => {
-    await iamRoleListHandler({ includeGrants: false, limit: 100, offset: 0 }, CTX);
+    await iamRoleListHandler(
+      { includeGrants: false, limit: 100, offset: 0 },
+      CTX,
+    );
     const scopeKindCalls = eqMock.mock.calls.filter(
       (call: unknown[]) => call[0] === schema.roles.scopeKind,
     );
     expect(scopeKindCalls).toHaveLength(0);
     // Only the org-id condition is passed to and(...) for the roles query.
-    expect(andMock.mock.calls.some((call: unknown[]) => call.length === 1)).toBe(true);
+    expect(
+      andMock.mock.calls.some((call: unknown[]) => call.length === 1),
+    ).toBe(true);
   });
 
   it("applies the scopeKind filter when provided (structural check)", async () => {
@@ -204,6 +231,8 @@ describe("iamRoleListHandler", () => {
     );
     expect(eqMock).toHaveBeenCalledWith(schema.roles.scopeKind, "org");
     // and() for the roles query now combines 2 conditions (org-id + scopeKind).
-    expect(andMock.mock.calls.some((call: unknown[]) => call.length === 2)).toBe(true);
+    expect(
+      andMock.mock.calls.some((call: unknown[]) => call.length === 2),
+    ).toBe(true);
   });
 });

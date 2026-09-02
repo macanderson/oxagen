@@ -30,8 +30,12 @@ function setOverflow(overflowing: boolean) {
 afterEach(() => {
   cleanup();
   // Restore jsdom defaults.
-  delete (HTMLElement.prototype as unknown as Record<string, unknown>)["scrollHeight"];
-  delete (HTMLElement.prototype as unknown as Record<string, unknown>)["clientHeight"];
+  delete (HTMLElement.prototype as unknown as Record<string, unknown>)[
+    "scrollHeight"
+  ];
+  delete (HTMLElement.prototype as unknown as Record<string, unknown>)[
+    "clientHeight"
+  ];
 });
 
 describe("TruncatedText", () => {
@@ -42,7 +46,9 @@ describe("TruncatedText", () => {
     // Markdown syntax is stripped from the preview.
     expect(screen.getByText("Heading with bold")).toBeInTheDocument();
     // Not overflowing → no reveal trigger.
-    expect(screen.queryByRole("button", { name: /show full text/i })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /show full text/i }),
+    ).toBeNull();
   });
 
   it("renders plain text unchanged when markdown is disabled", () => {
@@ -54,7 +60,9 @@ describe("TruncatedText", () => {
     setOverflow(true);
     render(<TruncatedText text="A very long **memory** body that overflows" />);
 
-    const trigger = await screen.findByRole("button", { name: /show full text/i });
+    const trigger = await screen.findByRole("button", {
+      name: /show full text/i,
+    });
     expect(trigger).toBeInTheDocument();
 
     await userEvent.click(trigger);
@@ -66,7 +74,13 @@ describe("TruncatedText", () => {
 
   it("reveals full plain text (no markdown) when markdown is disabled and overflowing", async () => {
     setOverflow(true);
-    render(<TruncatedText text="raw *stars* stay" markdown={false} revealLabel="Expand" />);
+    render(
+      <TruncatedText
+        text="raw *stars* stay"
+        markdown={false}
+        revealLabel="Expand"
+      />,
+    );
 
     const trigger = await screen.findByRole("button", { name: /expand/i });
     await userEvent.click(trigger);
@@ -80,6 +94,8 @@ describe("TruncatedText", () => {
   it("honours a custom clamp line count", () => {
     setOverflow(false);
     const { container } = render(<TruncatedText text="clamp me" lines={4} />);
-    expect(within(container).getByText("clamp me").className).toContain("line-clamp-4");
+    expect(within(container).getByText("clamp me").className).toContain(
+      "line-clamp-4",
+    );
   });
 });

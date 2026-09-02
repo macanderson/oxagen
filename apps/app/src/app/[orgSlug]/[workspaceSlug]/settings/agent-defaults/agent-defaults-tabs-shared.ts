@@ -14,8 +14,15 @@
 
 export type AgentDefaultsTab = "models" | "budget" | "prompts" | "memory";
 
-const TAB_VALUES: AgentDefaultsTab[] = ["models", "budget", "prompts", "memory"];
+const TAB_VALUES: AgentDefaultsTab[] = [
+  "models",
+  "budget",
+  "prompts",
+  "memory",
+];
 
-export function isAgentDefaultsTab(value: string | undefined): value is AgentDefaultsTab {
+export function isAgentDefaultsTab(
+  value: string | undefined,
+): value is AgentDefaultsTab {
   return value !== undefined && (TAB_VALUES as string[]).includes(value);
 }

@@ -47,7 +47,10 @@ describe("undeclared", () => {
   it("does not demand duckdb's native toolchain be declared separately", () => {
     // @mapbox/node-pre-gyp and friends arrive with duckdb; requiring explicit
     // entries for them would be noise rather than a guard.
-    const missing = undeclared(["@mapbox/node-pre-gyp", "node-gyp", "aws-sdk"], {});
+    const missing = undeclared(
+      ["@mapbox/node-pre-gyp", "node-gyp", "aws-sdk"],
+      {},
+    );
     expect(missing).toEqual([]);
   });
 });

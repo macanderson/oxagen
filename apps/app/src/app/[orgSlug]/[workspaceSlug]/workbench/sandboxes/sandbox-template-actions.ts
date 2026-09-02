@@ -111,10 +111,14 @@ async function isManager(scope: Scope): Promise<boolean> {
   return role === "owner" || role === "admin";
 }
 
+/**
+ * The transport-level context every sandbox.template.* invoke() carries.
+ * `surface: "app"` labels where the call came FROM; the kernel's surface
+ * allowlist is checked against `opts.surface`, which every call site below
+ * sets to "agent" because the sandbox.template.* contracts expose
+ * ["api","mcp","agent"] and not "app" — same precedent as the vault actions.
+ */
 function templateCtx(scope: Scope) {
-  // The sandbox.template.* contracts surface ["api","mcp","agent"] (not "app"),
-  // so we invoke with opts.surface "agent" — same precedent as the vault
-  // actions. The kernel still scopes to org+workspace from ctx.
   return {
     orgId: scope.orgId,
     workspaceId: scope.workspaceId,
@@ -134,7 +138,8 @@ function revalidate(args: { orgSlug: string; workspaceSlug: string }): void {
   revalidatePath(routes.workbench.sandboxes(args));
 }
 
-// ── Reads (any workspace member) ──────────────────────────────────────────────
+// ── Reads (any ORG member — `resolveScope` asserts org, not workspace,
+//    membership; only the mutation gate below reads the workspace role) ───────
 
 export async function readTemplatesAction(args: {
   orgSlug: string;

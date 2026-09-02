@@ -262,7 +262,14 @@ export async function BillingSubscriptionBody({
               createdAt: e.createdAt.toISOString(),
             }))}
           />
-          {canManageBilling ? <BuyCredits orgSlug={orgSlug} /> : null}
+          {/* id is the scroll target for LowBalanceBanner's "Buy credits" CTA
+              — a Server Component can't hand it a callback, so the banner
+              falls back to this anchor (same shape as #payment-methods). */}
+          {canManageBilling ? (
+            <div id="buy-credits">
+              <BuyCredits orgSlug={orgSlug} />
+            </div>
+          ) : null}
         </div>
       </div>
 

@@ -11,10 +11,15 @@ describe("plugin.registry.add contract", () => {
     expect(pluginRegistryAdd.defaultRoles.org.Owner).toBe("allow");
   });
   it("rejects an invalid (non-URL) baseUrl", () => {
-    expect(() => pluginRegistryAdd.input.parse({ name: "test", baseUrl: "not-a-url" })).toThrow();
+    expect(() =>
+      pluginRegistryAdd.input.parse({ name: "test", baseUrl: "not-a-url" }),
+    ).toThrow();
   });
   it("accepts valid input", () => {
-    const parsed = pluginRegistryAdd.input.parse({ name: "My Registry", baseUrl: "https://registry.example.com" });
+    const parsed = pluginRegistryAdd.input.parse({
+      name: "My Registry",
+      baseUrl: "https://registry.example.com",
+    });
     expect(parsed.name).toBe("My Registry");
     expect(parsed.baseUrl).toBe("https://registry.example.com");
   });

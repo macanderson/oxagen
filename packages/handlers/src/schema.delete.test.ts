@@ -7,7 +7,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./schema.versioning", () => ({
-  getOrCreateRegistry: (...args: unknown[]) => mocks.getOrCreateRegistry(...args),
+  getOrCreateRegistry: (...args: unknown[]) =>
+    mocks.getOrCreateRegistry(...args),
 }));
 
 vi.mock("./logger", () => ({
@@ -118,7 +119,9 @@ describe("schemaDeleteHandler (@oxagen/handlers)", () => {
     });
 
     const { tx } = makeTx({ schemaRow: null, labels: [], rels: [] });
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
 
     const result = await schemaDeleteHandler(BASE_INPUT, CTX);
     expect(result.deleted).toBe(false);
@@ -140,7 +143,9 @@ describe("schemaDeleteHandler (@oxagen/handlers)", () => {
       labels: [],
       rels: [],
     });
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
 
     const result = await schemaDeleteHandler(BASE_INPUT, CTX);
 
@@ -166,7 +171,9 @@ describe("schemaDeleteHandler (@oxagen/handlers)", () => {
       labels: [{ id: "label_1" }, { id: "label_2" }],
       rels: [],
     });
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
 
     const result = await schemaDeleteHandler(BASE_INPUT, CTX);
 
@@ -191,7 +198,9 @@ describe("schemaDeleteHandler (@oxagen/handlers)", () => {
       labels: [],
       rels: [{ id: "rel_1" }],
     });
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
 
     const result = await schemaDeleteHandler(BASE_INPUT, CTX);
 
@@ -216,7 +225,9 @@ describe("schemaDeleteHandler (@oxagen/handlers)", () => {
       labels: [{ id: "label_1" }, { id: "label_2" }, { id: "label_3" }],
       rels: [{ id: "rel_1" }, { id: "rel_2" }],
     });
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
 
     const result = await schemaDeleteHandler(BASE_INPUT, CTX);
 
@@ -248,10 +259,19 @@ describe("schemaDeleteHandler (@oxagen/handlers)", () => {
       draftVersionId: "draft_1",
     });
 
-    const { tx } = makeTx({ schemaRow: { id: "schema_1" }, labels: [], rels: [] });
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => unknown) => fn(tx));
+    const { tx } = makeTx({
+      schemaRow: { id: "schema_1" },
+      labels: [],
+      rels: [],
+    });
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
 
-    const result = await schemaDeleteHandler({ schemaName: "MyCustomSchema" }, CTX);
+    const result = await schemaDeleteHandler(
+      { schemaName: "MyCustomSchema" },
+      CTX,
+    );
     expect(result.schemaName).toBe("MyCustomSchema");
     expect(result.deleted).toBe(true);
   });

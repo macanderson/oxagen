@@ -22,6 +22,8 @@ export default async function browserNavigateTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(browserNavigate.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(browserNavigate.name, args, ctx, {
+    surface: "mcp",
+  });
   return browserNavigate.output.parse(output);
 }

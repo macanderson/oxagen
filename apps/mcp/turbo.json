@@ -5,6 +5,7 @@
       "dependsOn": ["^build"],
       "outputs": [".vercel/output/**", ".xmcp/**", "dist/**"],
       "env": [
+        "MCP_PORT",
         "DATABASE_URL",
         "CLICKHOUSE_URL",
         "CLICKHOUSE_USERNAME",

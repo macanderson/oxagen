@@ -21,7 +21,9 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function documentListTool(args: InferSchema<typeof schema>) {
+export default async function documentListTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   const output = await invoke(documentList.name, args, ctx, { surface: "mcp" });
   return documentList.output.parse(output);

@@ -58,10 +58,18 @@ describe("clusterErrorEvents", () => {
     expect(clusterQuery.query).toContain("ORDER BY count DESC");
     expect(clusterQuery.query).toContain("LIMIT {limit:UInt32}");
     expect(clusterQuery.query).toContain("count() AS count");
-    expect(clusterQuery.query).toContain("argMax(error_class, created_at) AS error_class");
-    expect(clusterQuery.query).toContain("argMax(message, created_at) AS sample_message");
-    expect(clusterQuery.query).toContain("argMax(severity, created_at) AS severity");
-    expect(clusterQuery.query).toContain("argMax(source, created_at) AS source");
+    expect(clusterQuery.query).toContain(
+      "argMax(error_class, created_at) AS error_class",
+    );
+    expect(clusterQuery.query).toContain(
+      "argMax(message, created_at) AS sample_message",
+    );
+    expect(clusterQuery.query).toContain(
+      "argMax(severity, created_at) AS severity",
+    );
+    expect(clusterQuery.query).toContain(
+      "argMax(source, created_at) AS source",
+    );
     expect(clusterQuery.query).toContain("min(created_at) AS first_seen");
     expect(clusterQuery.query).toContain("max(created_at) AS last_seen");
     expect(clusterQuery.query).toContain("org_id = {orgId:UUID}");
@@ -84,9 +92,15 @@ describe("clusterErrorEvents", () => {
 
     const totalsQuery = callAt(1);
     expect(totalsQuery.query).toContain("count() AS total_errors");
-    expect(totalsQuery.query).toContain("uniqExact(fingerprint) AS distinct_clusters");
+    expect(totalsQuery.query).toContain(
+      "uniqExact(fingerprint) AS distinct_clusters",
+    );
     expect(totalsQuery.query).not.toContain("GROUP BY");
-    expect(totalsQuery.query_params).toMatchObject({ orgId: ORG, severity: "error", source: "api" });
+    expect(totalsQuery.query_params).toMatchObject({
+      orgId: ORG,
+      severity: "error",
+      source: "api",
+    });
   });
 
   it("adds severity/source filters only when supplied", async () => {
@@ -99,7 +113,10 @@ describe("clusterErrorEvents", () => {
     await clusterErrorEvents({ orgId: ORG, severity: "fatal", source: "mcp" });
     expect(callAt(2).query).toContain("severity = {severity:String}");
     expect(callAt(2).query).toContain("source = {source:String}");
-    expect(callAt(2).query_params).toMatchObject({ severity: "fatal", source: "mcp" });
+    expect(callAt(2).query_params).toMatchObject({
+      severity: "fatal",
+      source: "mcp",
+    });
   });
 
   it("clamps limit to the 100 ceiling and floors sub-1 values to the default", async () => {

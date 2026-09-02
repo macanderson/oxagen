@@ -8,11 +8,18 @@ const mocks = vi.hoisted(() => ({
   sessionFn: vi.fn(),
   runFn: vi.fn(async () => undefined),
   neo4jDriver: vi.fn(),
-  neo4jAuthBasic: vi.fn(() => ({ scheme: "basic", principal: "neo4j", credentials: "test" })),
+  neo4jAuthBasic: vi.fn(() => ({
+    scheme: "basic",
+    principal: "neo4j",
+    credentials: "test",
+  })),
 }));
 
 // Session mock — close() is observable
-const sessionInstance = { close: vi.fn(async () => undefined), run: mocks.runFn };
+const sessionInstance = {
+  close: vi.fn(async () => undefined),
+  run: mocks.runFn,
+};
 mocks.sessionFn.mockReturnValue(sessionInstance);
 
 // Driver mock — .session() delegates to sessionFn; .close() to closeFn
@@ -54,7 +61,11 @@ async function resetSingleton() {
   mocks.sessionFn.mockClear();
   // Restore return values after mockClear
   mocks.neo4jDriver.mockReturnValue(driverInstance);
-  mocks.neo4jAuthBasic.mockReturnValue({ scheme: "basic", principal: "neo4j", credentials: "test" });
+  mocks.neo4jAuthBasic.mockReturnValue({
+    scheme: "basic",
+    principal: "neo4j",
+    credentials: "test",
+  });
   mocks.sessionFn.mockReturnValue(sessionInstance);
 }
 

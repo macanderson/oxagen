@@ -40,7 +40,10 @@ export async function* interceptFormFillEvents(
   const fillToolCallIds = new Set<string>();
 
   for await (const event of source) {
-    if (event.type === "tool-call-start" && event.capability === "page_form_fill") {
+    if (
+      event.type === "tool-call-start" &&
+      event.capability === "page_form_fill"
+    ) {
       fillToolCallIds.add(event.toolCallId);
       onStart?.();
     } else if (

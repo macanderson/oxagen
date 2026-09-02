@@ -16,7 +16,14 @@
  *   - While pending, the Dialog's own onOpenChange is swallowed (can't be
  *     dismissed mid-confirm).
  */
-import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import * as React from "react";
 
@@ -33,19 +40,32 @@ vi.mock("@/components/ui/dialog", () => ({
   }) =>
     open ? (
       <div data-testid="dialog">
-        <button type="button" data-testid="dialog-dismiss" onClick={() => onOpenChange?.(false)}>
+        <button
+          type="button"
+          data-testid="dialog-dismiss"
+          onClick={() => onOpenChange?.(false)}
+        >
           dismiss
         </button>
         {children}
       </div>
     ) : null,
-  DialogPopup: ({ children, ...rest }: React.HTMLAttributes<HTMLDivElement>) => (
-    <div {...rest}>{children}</div>
+  DialogPopup: ({
+    children,
+    ...rest
+  }: React.HTMLAttributes<HTMLDivElement>) => <div {...rest}>{children}</div>,
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
   ),
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogDescription: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 import { EnableConfirmDialog } from "./enable-confirm-dialog";
@@ -75,7 +95,9 @@ describe("EnableConfirmDialog", () => {
       />,
     );
     expect(screen.getByText("Notify on high-value deal")).toBeTruthy();
-    expect(screen.getByText(/Enabling is a deliberate human action/i)).toBeTruthy();
+    expect(
+      screen.getByText(/Enabling is a deliberate human action/i),
+    ).toBeTruthy();
   });
 
   it("Cancel closes the dialog without calling onConfirm", () => {
@@ -112,13 +134,19 @@ describe("EnableConfirmDialog", () => {
     );
     fireEvent.click(screen.getByTestId("confirm-enable"));
     expect(onConfirm).toHaveBeenCalled();
-    await waitFor(() => expect(screen.getByTestId("confirm-enable").textContent).toBe("Enabling…"));
+    await waitFor(() =>
+      expect(screen.getByTestId("confirm-enable").textContent).toBe(
+        "Enabling…",
+      ),
+    );
 
     await act(async () => {
       resolveConfirm();
     });
     await waitFor(() =>
-      expect(screen.getByTestId("confirm-enable").textContent).toBe("Enable automation"),
+      expect(screen.getByTestId("confirm-enable").textContent).toBe(
+        "Enable automation",
+      ),
     );
   });
 
@@ -140,7 +168,11 @@ describe("EnableConfirmDialog", () => {
       />,
     );
     fireEvent.click(screen.getByTestId("confirm-enable"));
-    await waitFor(() => expect(screen.getByTestId("confirm-enable").textContent).toBe("Enabling…"));
+    await waitFor(() =>
+      expect(screen.getByTestId("confirm-enable").textContent).toBe(
+        "Enabling…",
+      ),
+    );
 
     fireEvent.click(screen.getByTestId("dialog-dismiss"));
     expect(onOpenChange).not.toHaveBeenCalled();

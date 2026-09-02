@@ -11,11 +11,19 @@ export const schema = {
 export const metadata: ToolMetadata = {
   name: schemaPropertyDelete.name,
   description: schemaPropertyDelete.description,
-  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+  },
 };
 
-export default async function schemaPropertyDeleteTool(args: InferSchema<typeof schema>) {
+export default async function schemaPropertyDeleteTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(schemaPropertyDelete.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(schemaPropertyDelete.name, args, ctx, {
+    surface: "mcp",
+  });
   return schemaPropertyDelete.output.parse(output);
 }

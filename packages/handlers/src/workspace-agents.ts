@@ -137,7 +137,10 @@ async function bootstrapWorkspaceAgentsWithTx(
       agentId = reselected.id;
     } else {
       agentId = inserted.id;
-      logger.info({ workspaceId, agentId }, "workspace-agents: qa-chat created");
+      logger.info(
+        { workspaceId, agentId },
+        "workspace-agents: qa-chat created",
+      );
     }
   }
 

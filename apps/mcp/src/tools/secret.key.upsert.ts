@@ -22,6 +22,8 @@ export default async function secretKeyUpsertTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(secretKeyUpsert.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(secretKeyUpsert.name, args, ctx, {
+    surface: "mcp",
+  });
   return secretKeyUpsert.output.parse(output);
 }

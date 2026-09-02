@@ -22,7 +22,16 @@ const meta = {
     },
     size: {
       control: "select",
-      options: ["xs", "sm", "default", "lg", "xl", "icon", "icon-sm", "icon-lg"],
+      options: [
+        "xs",
+        "sm",
+        "default",
+        "lg",
+        "xl",
+        "icon",
+        "icon-sm",
+        "icon-lg",
+      ],
     },
     disabled: { control: "boolean" },
   },

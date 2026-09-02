@@ -90,9 +90,9 @@ describe("billingSubscriptionReadHandler — authorization guards", () => {
       userId: null,
       apiKeyId: null,
     };
-    await expect(billingSubscriptionReadHandler({}, unauthenticatedCtx)).rejects.toThrow(
-      /Unauthorized/,
-    );
+    await expect(
+      billingSubscriptionReadHandler({}, unauthenticatedCtx),
+    ).rejects.toThrow(/Unauthorized/);
   });
 
   it("throws when orgId is empty (session-authenticated, unscoped)", async () => {
@@ -102,9 +102,9 @@ describe("billingSubscriptionReadHandler — authorization guards", () => {
       apiKeyId: null,
       orgId: "",
     };
-    await expect(billingSubscriptionReadHandler({}, unscopedCtx)).rejects.toThrow(
-      /Forbidden/,
-    );
+    await expect(
+      billingSubscriptionReadHandler({}, unscopedCtx),
+    ).rejects.toThrow(/Forbidden/);
   });
 
   it("does not throw when authenticated via userId with a valid orgId", async () => {

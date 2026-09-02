@@ -41,13 +41,15 @@ const validCtx: CapabilityContext = {
   messageId: null,
 };
 
-function makeCheckoutResult(overrides: Partial<{
-  url: string;
-  sessionId: string;
-  grantCents: number;
-  priceCents: number;
-  percent: number;
-}> = {}) {
+function makeCheckoutResult(
+  overrides: Partial<{
+    url: string;
+    sessionId: string;
+    grantCents: number;
+    priceCents: number;
+    percent: number;
+  }> = {},
+) {
   return {
     url: "https://checkout.stripe.com/pay/cs_test",
     sessionId: "cs_test",
@@ -66,7 +68,11 @@ beforeEach(() => {
 
 describe("billingCreditsPurchaseHandler — authorization guards", () => {
   it("throws Unauthorized when no principal is present", async () => {
-    const ctx: CapabilityContext = { ...validCtx, userId: null, apiKeyId: null };
+    const ctx: CapabilityContext = {
+      ...validCtx,
+      userId: null,
+      apiKeyId: null,
+    };
 
     await expect(
       billingCreditsPurchaseHandler({ amountUsd: 50 }, ctx),
@@ -86,7 +92,12 @@ describe("billingCreditsPurchaseHandler — authorization guards", () => {
   });
 
   it("throws Forbidden when orgId is empty even with apiKeyId set", async () => {
-    const ctx: CapabilityContext = { ...validCtx, userId: null, apiKeyId: "aky_xyz", orgId: "" };
+    const ctx: CapabilityContext = {
+      ...validCtx,
+      userId: null,
+      apiKeyId: "aky_xyz",
+      orgId: "",
+    };
 
     await expect(
       billingCreditsPurchaseHandler({ amountUsd: 50 }, ctx),
@@ -100,7 +111,9 @@ describe("billingCreditsPurchaseHandler — authorization guards", () => {
 
 describe("billingCreditsPurchaseHandler — amountUsd to grantCents conversion", () => {
   it("converts amountUsd to grantCents via × 100 (integer)", async () => {
-    mockCreateUsageCreditCheckout.mockResolvedValueOnce(makeCheckoutResult({ grantCents: 5000 }));
+    mockCreateUsageCreditCheckout.mockResolvedValueOnce(
+      makeCheckoutResult({ grantCents: 5000 }),
+    );
 
     await billingCreditsPurchaseHandler({ amountUsd: 50 }, validCtx);
 
@@ -110,12 +123,16 @@ describe("billingCreditsPurchaseHandler — amountUsd to grantCents conversion",
   });
 
   it("rounds decimal amountUsd to the nearest cent", async () => {
-    mockCreateUsageCreditCheckout.mockResolvedValueOnce(makeCheckoutResult({ grantCents: 5001 }));
+    mockCreateUsageCreditCheckout.mockResolvedValueOnce(
+      makeCheckoutResult({ grantCents: 5001 }),
+    );
 
     await billingCreditsPurchaseHandler({ amountUsd: 50.005 }, validCtx);
 
     // Math.round(50.005 * 100) = 5001 (or 5000 depending on float representation)
-    const call = mockCreateUsageCreditCheckout.mock.calls[0]![0] as { grantCents: number };
+    const call = mockCreateUsageCreditCheckout.mock.calls[0]![0] as {
+      grantCents: number;
+    };
     expect(Number.isInteger(call.grantCents)).toBe(true);
   });
 });
@@ -132,7 +149,10 @@ describe("billingCreditsPurchaseHandler — happy path", () => {
     });
     mockCreateUsageCreditCheckout.mockResolvedValueOnce(checkoutResult);
 
-    const result = await billingCreditsPurchaseHandler({ amountUsd: 250 }, validCtx);
+    const result = await billingCreditsPurchaseHandler(
+      { amountUsd: 250 },
+      validCtx,
+    );
 
     expect(result).toEqual({
       url: "https://checkout.stripe.com/session_abc",
@@ -148,8 +168,15 @@ describe("billingCreditsPurchaseHandler — happy path", () => {
   it("works for a valid API-key context (no userId)", async () => {
     mockCreateUsageCreditCheckout.mockResolvedValueOnce(makeCheckoutResult());
 
-    const apiKeyCtx: CapabilityContext = { ...validCtx, userId: null, apiKeyId: "aky_abc" };
-    const result = await billingCreditsPurchaseHandler({ amountUsd: 50 }, apiKeyCtx);
+    const apiKeyCtx: CapabilityContext = {
+      ...validCtx,
+      userId: null,
+      apiKeyId: "aky_abc",
+    };
+    const result = await billingCreditsPurchaseHandler(
+      { amountUsd: 50 },
+      apiKeyCtx,
+    );
 
     expect(result.url).toBeDefined();
     expect(mockCreateUsageCreditCheckout).toHaveBeenCalledOnce();

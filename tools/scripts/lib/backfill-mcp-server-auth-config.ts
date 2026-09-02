@@ -14,7 +14,8 @@ import { isEncryptedAuthConfig } from "@oxagen/agent/runtime/mcp-server-auth-cry
  */
 export function needsBackfill(authConfig: unknown): boolean {
   if (authConfig == null || typeof authConfig !== "object") return false;
-  if (Object.keys(authConfig as Record<string, unknown>).length === 0) return false;
+  if (Object.keys(authConfig as Record<string, unknown>).length === 0)
+    return false;
   return !isEncryptedAuthConfig(authConfig);
 }
 

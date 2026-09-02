@@ -12,7 +12,9 @@ import { logger } from "./middleware/logger";
 // The await lives inside a function rather than at module top level because
 // `build-node.mjs` bundles this file to CJS, and esbuild cannot emit a
 // top-level await in that format at all — it is a hard build error, not a
-// warning. Nothing caught it: that build has never run in CI.
+// warning. `src/__tests__/entrypoint-cjs.test.ts` transforms this file with the
+// same format/platform/target triple on every unit-test run, so reintroducing a
+// top-level await here fails a test rather than a deploy.
 async function main(): Promise<void> {
   // bootstrap() awaits assertRlsConnectionSafe before any traffic is accepted.
   await bootstrap();

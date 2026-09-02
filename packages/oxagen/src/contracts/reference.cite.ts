@@ -38,7 +38,9 @@ export const referenceCite = registerCapability({
     executionRef: z
       .string()
       .min(1)
-      .describe("Execution id (chat turn messageId) to attach citations to; MERGEd if absent"),
+      .describe(
+        "Execution id (chat turn messageId) to attach citations to; MERGEd if absent",
+      ),
     agentId: z.string().optional(),
     taskSummary: z.string().max(500).optional(),
     references: z

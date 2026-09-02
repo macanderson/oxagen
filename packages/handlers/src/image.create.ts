@@ -36,7 +36,10 @@ export const imageCreateHandler: CapabilityHandler<typeof imageCreate> = async (
   ctx,
 ) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "image.create: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "image.create: rejected — no authenticated user",
+    );
     throw new Error("image.create requires an authenticated user");
   }
 

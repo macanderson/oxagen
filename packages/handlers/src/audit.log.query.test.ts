@@ -36,7 +36,10 @@ function makeTx() {
             mocks.whereArgs.push(cond);
             return {
               orderBy: () => ({
-                limit: () => Promise.resolve(isSecurity ? mocks.securityRows : mocks.playbookRows),
+                limit: () =>
+                  Promise.resolve(
+                    isSecurity ? mocks.securityRows : mocks.playbookRows,
+                  ),
               }),
             };
           },
@@ -51,8 +54,8 @@ beforeEach(() => {
   mocks.whereArgs = [];
   mocks.securityRows = [];
   mocks.playbookRows = [];
-  mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn(makeTx()),
+  mocks.withSystemDb.mockImplementation(
+    async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx()),
   );
 });
 
@@ -108,10 +111,20 @@ describe("auditLogQueryHandler", () => {
       },
     ];
     mocks.playbookRows = [
-      { eventType: "run_completed", occurredAt: new Date(), workspaceId: "ws", playbookRunId: "r", sequence: 1, eventData: {} },
+      {
+        eventType: "run_completed",
+        occurredAt: new Date(),
+        workspaceId: "ws",
+        playbookRunId: "r",
+        sequence: 1,
+        eventData: {},
+      },
     ];
 
-    const result = await auditLogQueryHandler({ source: "security", limit: 50, offset: 0 }, CTX);
+    const result = await auditLogQueryHandler(
+      { source: "security", limit: 50, offset: 0 },
+      CTX,
+    );
 
     expect(result.events).toHaveLength(1);
     expect(result.events.every((e) => e.source === "security")).toBe(true);
@@ -130,11 +143,30 @@ describe("auditLogQueryHandler", () => {
   it("reports hasMore when more events exist than the page window", async () => {
     // 2 security rows, limit 1 → after merge, page=1 and hasMore=true.
     mocks.securityRows = [
-      { eventType: "a", occurredAt: new Date("2024-01-02T00:00:00Z"), actorUserId: null, workspaceId: null, capability: null, outcome: "allow", requestId: null },
-      { eventType: "b", occurredAt: new Date("2024-01-01T00:00:00Z"), actorUserId: null, workspaceId: null, capability: null, outcome: "allow", requestId: null },
+      {
+        eventType: "a",
+        occurredAt: new Date("2024-01-02T00:00:00Z"),
+        actorUserId: null,
+        workspaceId: null,
+        capability: null,
+        outcome: "allow",
+        requestId: null,
+      },
+      {
+        eventType: "b",
+        occurredAt: new Date("2024-01-01T00:00:00Z"),
+        actorUserId: null,
+        workspaceId: null,
+        capability: null,
+        outcome: "allow",
+        requestId: null,
+      },
     ];
 
-    const result = await auditLogQueryHandler({ source: "security", limit: 1, offset: 0 }, CTX);
+    const result = await auditLogQueryHandler(
+      { source: "security", limit: 1, offset: 0 },
+      CTX,
+    );
     expect(result.events).toHaveLength(1);
     expect(result.events[0]?.eventType).toBe("a"); // newest
     expect(result.hasMore).toBe(true);

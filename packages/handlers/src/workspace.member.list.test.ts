@@ -23,7 +23,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-    withTenantDb: async (fn: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) => fn(makeTx()),
+    withTenantDb: async (
+      fn: (tx: ReturnType<typeof makeTx>) => Promise<unknown>,
+    ) => fn(makeTx()),
   };
 });
 
@@ -87,7 +89,9 @@ describe("workspaceMemberListHandler (@oxagen/handlers)", () => {
   it("propagates DB error when the query rejects", async () => {
     mocks.selectWhere.mockRejectedValueOnce(new Error("DB connection failed"));
 
-    await expect(workspaceMemberListHandler({}, CTX)).rejects.toThrow("DB connection failed");
+    await expect(workspaceMemberListHandler({}, CTX)).rejects.toThrow(
+      "DB connection failed",
+    );
   });
 
   it("throws when joinedAt is null (non-nullable field returned as null)", async () => {
@@ -95,6 +99,8 @@ describe("workspaceMemberListHandler (@oxagen/handlers)", () => {
     // A corrupted DB row where joinedAt is null surfaces as a TypeError.
     mocks.selectWhere.mockResolvedValueOnce([makeRow({ joinedAt: null })]);
 
-    await expect(workspaceMemberListHandler({}, CTX)).rejects.toThrow(TypeError);
+    await expect(workspaceMemberListHandler({}, CTX)).rejects.toThrow(
+      TypeError,
+    );
   });
 });

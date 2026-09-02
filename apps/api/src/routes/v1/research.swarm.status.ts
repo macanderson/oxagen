@@ -9,7 +9,9 @@ import type { AppEnv } from "../../app";
 export const researchSwarmStatusRoute = new Hono<AppEnv>();
 
 researchSwarmStatusRoute.get("/", async (c) => {
-  const body = researchSwarmStatus.input.parse({ swarmId: c.req.query("swarmId") });
+  const body = researchSwarmStatus.input.parse({
+    swarmId: c.req.query("swarmId"),
+  });
   const ctx = capabilityContext(c);
   let out: unknown;
   try {

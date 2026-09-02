@@ -9,6 +9,8 @@ export const sandboxTemplateUpdateRoute = new Hono<AppEnv>();
 sandboxTemplateUpdateRoute.post("/", async (c) => {
   const body = sandboxTemplateUpdate.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(sandboxTemplateUpdate.name, body, ctx, { surface: "api" });
+  const out = await invoke(sandboxTemplateUpdate.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

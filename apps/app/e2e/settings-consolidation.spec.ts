@@ -24,7 +24,11 @@ import { gotoStable } from "./helpers/nav";
 import { rm, mkdir } from "node:fs/promises";
 import path from "node:path";
 
-const SCREENSHOTS_DIR = path.resolve(import.meta.dirname, "screenshots", "settings-consolidation");
+const SCREENSHOTS_DIR = path.resolve(
+  import.meta.dirname,
+  "screenshots",
+  "settings-consolidation",
+);
 
 test.beforeAll(async () => {
   await rm(SCREENSHOTS_DIR, { recursive: true, force: true });
@@ -36,7 +40,9 @@ test.describe("settings/general — General + Members sub-tabs", () => {
     page,
   }) => {
     test.setTimeout(240_000);
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "settings-gen" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "settings-gen",
+    });
     const ws = `/${orgSlug}/default`;
 
     await gotoStable(page, `${ws}/settings/general`);
@@ -58,8 +64,12 @@ test.describe("settings/general — General + Members sub-tabs", () => {
 
     // Switch to Members — content swaps, no full navigation/reload, URL gains ?tab=members.
     await membersTab.click();
-    await expect(page).toHaveURL(new RegExp(`${ws}/settings/general\\?tab=members`));
-    await expect(page.getByRole("heading", { name: "Workspace members" })).toBeVisible();
+    await expect(page).toHaveURL(
+      new RegExp(`${ws}/settings/general\\?tab=members`),
+    );
+    await expect(
+      page.getByRole("heading", { name: "Workspace members" }),
+    ).toBeVisible();
     // The signed-up user is the workspace owner — their own row is present.
     await expect(page.getByText("(you)")).toBeVisible();
     await page.screenshot({
@@ -69,7 +79,9 @@ test.describe("settings/general — General + Members sub-tabs", () => {
 
     // A direct load of the ?tab=members URL lands straight on the Members panel.
     await gotoStable(page, `${ws}/settings/general?tab=members`);
-    await expect(page.getByRole("heading", { name: "Workspace members" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Workspace members" }),
+    ).toBeVisible();
 
     // Switching back to General clears the query param.
     await page.getByRole("tab", { name: "General" }).click();
@@ -79,9 +91,13 @@ test.describe("settings/general — General + Members sub-tabs", () => {
 });
 
 test.describe("settings/agent-defaults — Models · Budget · Prompts · Memory Policy sub-tabs", () => {
-  test("shows all four sub-tabs and each form renders when selected", async ({ page }) => {
+  test("shows all four sub-tabs and each form renders when selected", async ({
+    page,
+  }) => {
     test.setTimeout(240_000);
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "settings-agdef" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "settings-agdef",
+    });
     const ws = `/${orgSlug}/default`;
 
     await gotoStable(page, `${ws}/settings/agent-defaults`);
@@ -108,7 +124,9 @@ test.describe("settings/agent-defaults — Models · Budget · Prompts · Memory
 
     // Budget sub-tab.
     await budgetTab.click();
-    await expect(page).toHaveURL(new RegExp(`${ws}/settings/agent-defaults\\?tab=budget`));
+    await expect(page).toHaveURL(
+      new RegExp(`${ws}/settings/agent-defaults\\?tab=budget`),
+    );
     await expect(page.getByText("Workspace turn budget")).toBeVisible();
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "04-agent-defaults-budget.png"),
@@ -117,7 +135,9 @@ test.describe("settings/agent-defaults — Models · Budget · Prompts · Memory
 
     // Prompts sub-tab: read-only system prompt viewer + editable settings form.
     await promptsTab.click();
-    await expect(page).toHaveURL(new RegExp(`${ws}/settings/agent-defaults\\?tab=prompts`));
+    await expect(page).toHaveURL(
+      new RegExp(`${ws}/settings/agent-defaults\\?tab=prompts`),
+    );
     await expect(
       page.getByText("Effective workspace system prompt"),
     ).toBeVisible();
@@ -125,7 +145,9 @@ test.describe("settings/agent-defaults — Models · Budget · Prompts · Memory
     // the "Workspace instructions" accessible name on both its root <div>
     // (via the visible <Label htmlFor>) and its inner contenteditable
     // (via aria-label), so scope to the first to avoid strict-mode ambiguity.
-    await expect(page.getByLabel("Workspace instructions").first()).toBeVisible();
+    await expect(
+      page.getByLabel("Workspace instructions").first(),
+    ).toBeVisible();
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "05-agent-defaults-prompts.png"),
       fullPage: false,
@@ -133,8 +155,12 @@ test.describe("settings/agent-defaults — Models · Budget · Prompts · Memory
 
     // Memory Policy sub-tab.
     await memoryTab.click();
-    await expect(page).toHaveURL(new RegExp(`${ws}/settings/agent-defaults\\?tab=memory`));
-    await expect(page.getByRole("heading", { name: "Memory Policy" })).toBeVisible();
+    await expect(page).toHaveURL(
+      new RegExp(`${ws}/settings/agent-defaults\\?tab=memory`),
+    );
+    await expect(
+      page.getByRole("heading", { name: "Memory Policy" }),
+    ).toBeVisible();
     await expect(page.getByLabel("Observation half-life (days)")).toBeVisible();
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "06-agent-defaults-memory.png"),

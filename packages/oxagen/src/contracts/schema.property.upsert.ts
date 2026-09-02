@@ -5,7 +5,8 @@ import { dataTypeEnum, constraintsSchema } from "./schema.types";
 export const schemaPropertyUpsert = registerCapability({
   name: "upsert_schema_property",
   domain: "schema",
-  description: "Create/update a property on a node label or relationship type in the draft.",
+  description:
+    "Create/update a property on a node label or relationship type in the draft.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli", "agent"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -18,8 +19,15 @@ export const schemaPropertyUpsert = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    ownerKind: z.enum(["node", "relationship"]).describe("Whether the property belongs to a node label or relationship type"),
-    ownerName: z.string().min(1).describe("The label or relationship type name"),
+    ownerKind: z
+      .enum(["node", "relationship"])
+      .describe(
+        "Whether the property belongs to a node label or relationship type",
+      ),
+    ownerName: z
+      .string()
+      .min(1)
+      .describe("The label or relationship type name"),
     key: z.string().min(1).max(200).describe("Property name"),
     dataType: dataTypeEnum,
     required: z.boolean().default(false),
@@ -35,5 +43,9 @@ export const schemaPropertyUpsert = registerCapability({
   }),
 });
 
-export type SchemaPropertyUpsertInput = z.output<typeof schemaPropertyUpsert.input>;
-export type SchemaPropertyUpsertOutput = z.output<typeof schemaPropertyUpsert.output>;
+export type SchemaPropertyUpsertInput = z.output<
+  typeof schemaPropertyUpsert.input
+>;
+export type SchemaPropertyUpsertOutput = z.output<
+  typeof schemaPropertyUpsert.output
+>;

@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const integrationGet = registerCapability({
   name: "get_integration",
   domain: "integration",
-  description: "Get full details of a single plugin instance including schema and configuration.",
+  description:
+    "Get full details of a single plugin instance including schema and configuration.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],

@@ -80,7 +80,8 @@ export function MobileBottomBar({ ctx, user, planTier }: MobileBottomBarProps) {
   React.useEffect(() => {
     function onVisibility(e: Event) {
       const detail = (e as CustomEvent<{ hidden: boolean }>).detail;
-      if (detail && typeof detail.hidden === "boolean") setHidden(detail.hidden);
+      if (detail && typeof detail.hidden === "boolean")
+        setHidden(detail.hidden);
     }
     window.addEventListener(NAV_VISIBILITY_EVENT, onVisibility);
     return () => window.removeEventListener(NAV_VISIBILITY_EVENT, onVisibility);

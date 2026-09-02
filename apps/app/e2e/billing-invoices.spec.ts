@@ -37,7 +37,9 @@ test("billing invoices: fresh org renders the empty state inside the billing tab
   // resolve the wrapper that carries both halves, and pin both strings —
   // invoice-list.test.tsx asserts the same two, so the unit test and this spec
   // now agree about one component instead of contradicting.
-  await expect(page.getByText("No invoices yet", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("No invoices yet", { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByText("Invoices appear here after your first billing cycle."),
   ).toBeVisible();

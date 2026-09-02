@@ -1,19 +1,20 @@
 #!/usr/bin/env tsx
 /**
- * Static lint for the Postgres migration folder. Runs in CI's `checks` job
+ * Static lint for both Postgres migration folders. Runs in CI's `checks` job
  * (no DB connection) so structural mistakes are caught before a migrate ever
- * runs. Enforces the conventions the custom runner (tools/scripts/db-migrate.ts)
- * relies on:
+ * runs.
+ *
+ * `main()` lints packages/database/drizzle — the pre-Atlas ordinal series. No
+ * runner applies it any more (Atlas owns Postgres), so this is a freeze guard:
+ * the numbering must stay coherent because the files are still the historical
+ * record the baseline snapshot was cut from.
  *
  *  1. Every file is named `NNNN_snake_case_description.sql` (4-digit ordinal).
- *  2. No duplicate ordinals — every migration owns a unique number. (The two
- *     historical 0002/0003 collisions were consolidated/renumbered, so the
- *     folder is clean; this guard keeps it that way.)
- *  3. No gaps in the ordinal sequence (0000, 0001, … contiguous).
+ *  2. No duplicate ordinals — every migration owns a unique number.
+ *  3. No gaps in the ordinal sequence, apart from the squashed range below.
  *
- * The custom runner applies files in `readdirSync().sort()` (lexicographic)
- * order and tracks them by filename, so a clean, unique, contiguous ordinal
- * sequence keeps apply-order unambiguous going forward.
+ * `lintAtlas()` lints the LIVE dir, packages/database/atlas/migrations — see
+ * its own docblock.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve, join } from "node:path";
@@ -34,6 +35,11 @@ const NAME_RE = /^(\d{4})_[a-z0-9]+(?:_[a-z0-9]+)*\.sql$/;
  * unrenameable already-shipped collision, per engineering policy §5.)
  */
 const FROZEN_DUPLICATE_ORDINALS = new Set<number>();
+
+/** Format an ordinal the way the filenames do: zero-padded to four digits. */
+function pad4(ordinal: number): string {
+  return String(ordinal).padStart(4, "0");
+}
 
 /**
  * Ordinals that were squashed into the 0000_baseline.sql snapshot and will
@@ -72,21 +78,21 @@ function main(): void {
   for (const [ordinal, group] of byOrdinal) {
     if (group.length > 1 && !FROZEN_DUPLICATE_ORDINALS.has(ordinal)) {
       errors.push(
-        `duplicate ordinal ${String(ordinal).padStart(4, "0")}: ${group.join(", ")} — ` +
-          `pick the next free ordinal (${String((ordinals.at(-1) ?? 0) + 1).padStart(4, "0")}) instead`,
+        `duplicate ordinal ${pad4(ordinal)}: ${group.join(", ")} — ` +
+          `pick the next free ordinal (${pad4((ordinals.at(-1) ?? 0) + 1)}) instead`,
       );
     }
   }
 
   // Gap detection — the ordinal sequence must be contiguous, accounting for
-  // squashed ordinals (5–27) that are permanently absent because they were
-  // folded into the 0000_baseline.sql snapshot.
+  // the squashed ordinals (0011–0027) that are permanently absent because they
+  // were folded into the 0000_baseline.sql snapshot.
   let expectedOrdinal = 0;
   for (const actual of ordinals) {
     while (expectedOrdinal < actual) {
       if (!SQUASHED_ORDINALS.has(expectedOrdinal)) {
         errors.push(
-          `gap in ordinal sequence: expected ${String(expectedOrdinal).padStart(4, "0")}, found ${String(actual).padStart(4, "0")}`,
+          `gap in ordinal sequence: expected ${pad4(expectedOrdinal)}, found ${pad4(actual)}`,
         );
         break;
       }
@@ -102,9 +108,11 @@ function main(): void {
     process.exit(1);
   }
 
-  const next = String((ordinals.at(-1) ?? -1) + 1).padStart(4, "0");
+  const next = pad4((ordinals.at(-1) ?? -1) + 1);
   console.log(
-    kleur.green(`[db:lint-migrations] ok — ${files.length} files, next ordinal ${next}`),
+    kleur.green(
+      `[db:lint-migrations] ok — ${files.length} files, next ordinal ${next}`,
+    ),
   );
 }
 
@@ -132,7 +140,9 @@ function lintAtlas(): void {
   for (const file of files) {
     const match = ATLAS_NAME_RE.exec(file);
     if (!match) {
-      errors.push(`${file}: name must match YYYYMMDDHHMMSS_snake_case_description.sql`);
+      errors.push(
+        `${file}: name must match YYYYMMDDHHMMSS_snake_case_description.sql`,
+      );
       continue;
     }
     const version = match[1]!;
@@ -161,14 +171,19 @@ function lintAtlas(): void {
   const fileSet = new Set(files);
   const sumSet = new Set(sumEntries);
   if (sumEntries.length !== sumSet.size) {
-    errors.push(`atlas.sum lists a file more than once — regenerate with \`atlas migrate hash\``);
+    errors.push(
+      `atlas.sum lists a file more than once — regenerate with \`atlas migrate hash\``,
+    );
   }
   for (const f of files) {
-    if (!sumSet.has(f)) errors.push(`${f} missing from atlas.sum — run \`atlas migrate hash\``);
+    if (!sumSet.has(f))
+      errors.push(`${f} missing from atlas.sum — run \`atlas migrate hash\``);
   }
   for (const s of sumSet) {
     if (!fileSet.has(s)) {
-      errors.push(`atlas.sum lists ${s} which does not exist on disk (stale/spliced entry) — run \`atlas migrate hash\``);
+      errors.push(
+        `atlas.sum lists ${s} which does not exist on disk (stale/spliced entry) — run \`atlas migrate hash\``,
+      );
     }
   }
 
@@ -179,7 +194,9 @@ function lintAtlas(): void {
   }
 
   console.log(
-    kleur.green(`[db:lint-migrations] atlas ok — ${files.length} files, ${sumSet.size} sum entries, no duplicate versions`),
+    kleur.green(
+      `[db:lint-migrations] atlas ok — ${files.length} files, ${sumSet.size} sum entries, no duplicate versions`,
+    ),
   );
 }
 

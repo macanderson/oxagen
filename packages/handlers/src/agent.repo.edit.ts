@@ -149,7 +149,10 @@ export const agentRepoEditHandler: CapabilityHandler<
 
   // 6. Collect the changed files. The sandbox reads them back from the real git
   //    working tree; the GitHub-API workspace returns its in-memory staged set.
-  //    Always tear the sandbox session down afterwards.
+  //    The finally below tears the sandbox session down for everything from
+  //    here on. NOTE: it does NOT cover step 5 — a throw out of
+  //    executePipelineTurn leaves the Modal session alive until Modal's own
+  //    idle timeout reclaims it.
   try {
     const changed = sandboxWs
       ? await sandboxWs.getChangedFiles()

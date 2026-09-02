@@ -25,6 +25,8 @@ export default async function agentSubagentCancelTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentSubagentCancel.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentSubagentCancel.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentSubagentCancel.output.parse(output);
 }

@@ -25,23 +25,42 @@ type ActiveTab = "preview" | "source";
  *  - referrerPolicy="no-referrer" — no referrer header leaks on sub-requests.
  *  - No allow-forms, allow-top-navigation, allow-popups etc.
  *
- * This makes the component safe to embed arbitrary model-generated HTML
+ * This makes the INLINE PREVIEW safe to embed arbitrary model-generated HTML
  * without risk of session hijacking or parent-frame access.
+ *
+ * The "Open in new tab" action does NOT share that guarantee — see the note on
+ * `handleOpenInNew` below.
  */
-export default function HtmlArtifact({ html, title = "Artifact" }: HtmlArtifactProps) {
+export default function HtmlArtifact({
+  html,
+  title = "Artifact",
+}: HtmlArtifactProps) {
   const [activeTab, setActiveTab] = React.useState<ActiveTab>("preview");
   const [expanded, setExpanded] = React.useState(false);
 
-  // Open the html in a new tab via a blob URL (safe, isolated origin).
+  // Open the html in a new tab via a blob URL.
+  //
+  // WARNING — this escapes the iframe sandbox above. A `blob:` URL INHERITS the
+  // creating document's origin, so the new tab runs the model-authored HTML as
+  // first-party script on the app's own origin: it can read non-HttpOnly
+  // cookies and localStorage and issue credentialed same-origin API calls.
+  // `noopener` severs `window.opener`; it does not change the origin. Serving
+  // the artifact from an opaque origin (a dedicated sandboxed route, or a
+  // separate artifact host) is the fix — see the audit finding on this file.
+  //
+  // `window.open` with `noopener` returns null in every current browser, so the
+  // revocation always takes the timeout path; the `win` branch is kept for the
+  // engines that still hand back a handle.
   const handleOpenInNew = React.useCallback(() => {
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     const blobUrl = URL.createObjectURL(blob);
     const win = window.open(blobUrl, "_blank", "noopener,noreferrer");
     // Revoke the object URL after the window has loaded to avoid memory leaks.
     if (win) {
-      win.addEventListener("load", () => URL.revokeObjectURL(blobUrl), { once: true });
+      win.addEventListener("load", () => URL.revokeObjectURL(blobUrl), {
+        once: true,
+      });
     } else {
-      // Popup blocked — schedule revocation.
       setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
     }
   }, [html]);
@@ -170,9 +189,7 @@ export default function HtmlArtifact({ html, title = "Artifact" }: HtmlArtifactP
         role="tabpanel"
         aria-label="Source code"
         hidden={activeTab !== "source"}
-        className={cn(
-          activeTab === "source" ? "block" : "hidden",
-        )}
+        className={cn(activeTab === "source" ? "block" : "hidden")}
       >
         <pre
           className={cn(

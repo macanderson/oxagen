@@ -8,24 +8,22 @@
  */
 
 // A 12-hue qualitative palette chosen for contrast on both light and dark
-// canvases. Order matters only in that it stays stable across releases, so the
-// three indigo/violet/purple entries were substituted IN PLACE rather than
-// dropped — reindexing would have recoloured every existing node. The purple
-// family is gone on purpose: it is not a brand hue, and at partial opacity it
-// composited into the same muted slate-purple the hero backdrop was retired for.
+// canvases. The ORDER is load-bearing: colorForLabel() hashes a label into an
+// index, so inserting, removing, or reordering an entry recolours every node in
+// every existing graph. Swap a hex value in place; never change the length.
 const PALETTE = [
-  "#4E6A7A", // slate   (was indigo #6366f1)
+  "#4E6A7A", // slate
   "#0ea5e9", // sky
   "#10b981", // emerald
   "#f59e0b", // amber
   "#ef4444", // red
-  "#a16207", // bronze  (was violet #8b5cf6)
+  "#a16207", // bronze
   "#ec4899", // pink
   "#14b8a6", // teal
   "#f97316", // orange
   "#84cc16", // lime
   "#06b6d4", // cyan
-  "#A9AAB5", // silver  (was purple #a855f7)
+  "#A9AAB5", // silver
 ] as const;
 
 /**

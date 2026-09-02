@@ -18,7 +18,14 @@
 /// <reference types="@testing-library/jest-dom" />
 
 import * as React from "react";
-import { render, screen, cleanup, waitFor, fireEvent, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  waitFor,
+  fireEvent,
+  act,
+} from "@testing-library/react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { GitHubConnectionWizard } from "./github-connection-wizard";
 import { fetchGithubStatus } from "@/lib/github";
@@ -39,11 +46,21 @@ vi.mock("@oxagen/ui", () => ({
     onOpenChange?: (v: boolean) => void;
     children: React.ReactNode;
   }) => (open ? <div data-testid="dialog">{children}</div> : null),
-  DialogPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
-  DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
-  DialogPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2>{children}</h2>
+  ),
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
+  DialogPanel: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 // Step2 / Step3 / success mocked to keep the gate logic isolated — their own
@@ -122,7 +139,12 @@ describe("GitHubConnectionWizard — gate: not connected", () => {
     mockFetchStatus.mockResolvedValueOnce(STATUS_NOT_CONNECTED);
 
     render(
-      <GitHubConnectionWizard open orgSlug={ORG} workspaceSlug={WS} onClose={vi.fn()} />,
+      <GitHubConnectionWizard
+        open
+        orgSlug={ORG}
+        workspaceSlug={WS}
+        onClose={vi.fn()}
+      />,
     );
 
     // Spinner shows while the check runs, then the gate panel appears.
@@ -140,7 +162,12 @@ describe("GitHubConnectionWizard — gate: connected", () => {
     mockFetchStatus.mockResolvedValueOnce(STATUS_CONNECTED);
 
     render(
-      <GitHubConnectionWizard open orgSlug={ORG} workspaceSlug={WS} onClose={vi.fn()} />,
+      <GitHubConnectionWizard
+        open
+        orgSlug={ORG}
+        workspaceSlug={WS}
+        onClose={vi.fn()}
+      />,
     );
 
     // After the status check + connection create, step2 should be visible.
@@ -148,8 +175,11 @@ describe("GitHubConnectionWizard — gate: connected", () => {
     expect(screen.queryByTestId("github-install-gate")).toBeNull();
 
     // The connection-create POST must have fired.
-    const calls = (global.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls;
-    const createCall = calls.find(([url]) => String(url).includes("/connections"));
+    const calls = (global.fetch as unknown as { mock: { calls: unknown[][] } })
+      .mock.calls;
+    const createCall = calls.find(([url]) =>
+      String(url).includes("/connections"),
+    );
     expect(createCall).toBeDefined();
   });
 });
@@ -162,7 +192,12 @@ describe("GitHubConnectionWizard — gate: error + retry", () => {
       .mockResolvedValueOnce(STATUS_NOT_CONNECTED);
 
     render(
-      <GitHubConnectionWizard open orgSlug={ORG} workspaceSlug={WS} onClose={vi.fn()} />,
+      <GitHubConnectionWizard
+        open
+        orgSlug={ORG}
+        workspaceSlug={WS}
+        onClose={vi.fn()}
+      />,
     );
 
     // Error panel with retry button should appear.

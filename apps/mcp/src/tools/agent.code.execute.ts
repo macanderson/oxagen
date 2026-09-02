@@ -34,6 +34,8 @@ export default async function agentCodeExecuteTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentCodeExecute.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentCodeExecute.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentCodeExecute.output.parse(output);
 }

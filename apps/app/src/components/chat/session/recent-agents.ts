@@ -24,7 +24,9 @@ export function recentAgentsKey(workspaceSlug: string | undefined): string {
  * workspace. Returns `[]` for no storage, malformed JSON, a non-array value,
  * or an unavailable/disabled store.
  */
-export function readRecentAgentIds(workspaceSlug: string | undefined): string[] {
+export function readRecentAgentIds(
+  workspaceSlug: string | undefined,
+): string[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(recentAgentsKey(workspaceSlug));
@@ -53,7 +55,10 @@ export function pushRecentAgentId(
   ].slice(0, MAX_RECENT_AGENTS);
   if (typeof window !== "undefined") {
     try {
-      window.localStorage.setItem(recentAgentsKey(workspaceSlug), JSON.stringify(next));
+      window.localStorage.setItem(
+        recentAgentsKey(workspaceSlug),
+        JSON.stringify(next),
+      );
     } catch {
       // Storage unavailable — recency just doesn't persist across reloads.
     }

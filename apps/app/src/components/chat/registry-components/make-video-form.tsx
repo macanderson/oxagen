@@ -13,9 +13,11 @@
  * generated_assets row and dispatches the async Inngest render worker
  * (agent.video-render), returning a typed { queued: true, jobId } result.
  *
- * Note on RSC: the form uses a client component with a bound server action.
- * True streamUI/RSC streaming inside the live chat transport would require
- * re-architecting the chat stream route — that is a separate follow-up.
+ * Note on RSC: this is a client component with a bound server action, which is
+ * the only shape allowed here. `ai/rsc` (streamUI / createStreamableUI /
+ * createAI) is banned platform-wide — generative UI arrives as `generateObject`
+ * structured output and is mapped to a React component by this registry, never
+ * as a server-rendered React tree. Do not "upgrade" this form to streamUI.
  */
 
 import * as React from "react";
@@ -76,7 +78,9 @@ export default function MakeVideoForm({
     initialAspectRatio ?? "16:9",
   );
   const [durationSeconds, setDurationSeconds] = React.useState<string>(
-    initialDurationSeconds !== undefined ? String(initialDurationSeconds) : "10",
+    initialDurationSeconds !== undefined
+      ? String(initialDurationSeconds)
+      : "10",
   );
   const [style, setStyle] = React.useState(initialStyle);
   const [formState, setFormState] = React.useState<FormState>("idle");
@@ -99,7 +103,9 @@ export default function MakeVideoForm({
     const parsedDuration = parseInt(durationSeconds, 10);
     const result = await videoGenerateAction({
       prompt,
-      durationSeconds: Number.isFinite(parsedDuration) ? parsedDuration : undefined,
+      durationSeconds: Number.isFinite(parsedDuration)
+        ? parsedDuration
+        : undefined,
       aspectRatio: aspectRatio as "16:9" | "9:16" | "1:1",
       style: style.trim() !== "" ? style.trim() : undefined,
       orgSlug,
@@ -135,7 +141,8 @@ export default function MakeVideoForm({
           <div className="min-w-0">
             <p className="text-sm font-medium text-foreground">Video queued</p>
             <p className="truncate text-xs text-muted-foreground">
-              Job{jobId ? ` · ${jobId}` : ""} — rendering now, this can take a few minutes
+              Job{jobId ? ` · ${jobId}` : ""} — rendering now, this can take a
+              few minutes
             </p>
           </div>
         </div>
@@ -163,8 +170,12 @@ export default function MakeVideoForm({
           className="h-4 w-4 shrink-0 text-muted-foreground"
           aria-hidden="true"
         />
-        <span className="text-sm font-semibold text-foreground">Generate video</span>
-        <span className="ml-auto text-xs font-medium text-muted-foreground">Preview</span>
+        <span className="text-sm font-semibold text-foreground">
+          Generate video
+        </span>
+        <span className="ml-auto text-xs font-medium text-muted-foreground">
+          Preview
+        </span>
       </div>
 
       {/* Prompt */}
@@ -190,7 +201,10 @@ export default function MakeVideoForm({
         {/* Duration */}
         <div className="space-y-1.5">
           <Label htmlFor={durationId} className="flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+            <Clock
+              className="h-3.5 w-3.5 text-muted-foreground"
+              aria-hidden="true"
+            />
             Duration (seconds)
           </Label>
           <Input
@@ -218,7 +232,9 @@ export default function MakeVideoForm({
           </Label>
           <Select
             value={aspectRatio}
-            onValueChange={(v) => { if (v !== null) setAspectRatio(v); }}
+            onValueChange={(v) => {
+              if (v !== null) setAspectRatio(v);
+            }}
             disabled={isSubmitting}
             name="aspectRatio"
           >
@@ -242,9 +258,14 @@ export default function MakeVideoForm({
       {/* Style */}
       <div className="space-y-1.5">
         <Label htmlFor={styleId} className="flex items-center gap-1.5">
-          <Wand2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+          <Wand2
+            className="h-3.5 w-3.5 text-muted-foreground"
+            aria-hidden="true"
+          />
           Style
-          <span className="ml-1 font-normal text-muted-foreground">(optional)</span>
+          <span className="ml-1 font-normal text-muted-foreground">
+            (optional)
+          </span>
         </Label>
         <Input
           id={styleId}

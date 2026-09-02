@@ -22,6 +22,8 @@ export default async function environmentDeleteTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(environmentDelete.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(environmentDelete.name, args, ctx, {
+    surface: "mcp",
+  });
   return environmentDelete.output.parse(output);
 }

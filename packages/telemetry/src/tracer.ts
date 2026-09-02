@@ -7,11 +7,15 @@
 //   no-ops when OTEL_EXPORTER_OTLP_ENDPOINT is unset.
 // - initTracer() is called ONCE per process at bootstrap time. It is safe
 //   to call from server components, edge functions, and service entrypoints.
-// - PII safety: an attribute allowlist (ALLOWED_SPAN_ATTRIBUTES) ensures
-//   that prompt text, user data, and secrets can never be attached to a span.
-//   Use setSpanAttrs() — never set attributes directly from call-site code.
-// - Async-safe: BatchSpanProcessor sends spans in background goroutine-style
-//   workers; hot-path latency impact is negligible.
+// - PII safety: an attribute allowlist (ALLOWED_SPAN_ATTRIBUTES) drops every
+//   key it does not name, so prompt text, user data, and secrets cannot be
+//   attached under an ad-hoc key. Use setSpanAttrs() — never set attributes
+//   directly from call-site code. The allowlist is a KEY filter, not a value
+//   filter: `error.message` is on it and error messages routinely interpolate
+//   caller input, so an allowlisted key can still carry user text to the
+//   collector. Treat the trace backend as trusted for that field.
+// - Async-safe: BatchSpanProcessor buffers spans and flushes them on its own
+//   timer off the caller's path; hot-path latency impact is negligible.
 // - Rollback: leave OTEL_EXPORTER_OTLP_ENDPOINT unset → all calls are no-ops.
 
 import {
@@ -188,17 +192,26 @@ export function getTracer(name: string = SERVICE_NAME): Tracer {
 // ── PII-safe attribute setter ─────────────────────────────────────────────────
 
 /**
- * Set span attributes using the allowlist. Unknown keys are silently dropped.
- * Always call this instead of `span.setAttributes(attrs)` directly.
+ * Drop every key not on {@link ALLOWED_SPAN_ATTRIBUTES}, plus null/undefined
+ * values. The single filtering point for both `setSpanAttrs` and `withSpan`, so
+ * the two can never diverge on what counts as safe to export.
  */
-export function setSpanAttrs(span: Span, attrs: Attributes): void {
+function filteredAttrs(attrs: Attributes): Attributes {
   const safe: Attributes = {};
   for (const [k, v] of Object.entries(attrs)) {
     if (ALLOWED_SPAN_ATTRIBUTES.has(k) && v !== undefined && v !== null) {
       safe[k] = v;
     }
   }
-  span.setAttributes(safe);
+  return safe;
+}
+
+/**
+ * Set span attributes using the allowlist. Unknown keys are silently dropped.
+ * Always call this instead of `span.setAttributes(attrs)` directly.
+ */
+export function setSpanAttrs(span: Span, attrs: Attributes): void {
+  span.setAttributes(filteredAttrs(attrs));
 }
 
 // ── withSpan ─────────────────────────────────────────────────────────────────
@@ -250,17 +263,6 @@ export async function withSpan<T>(
       }
     },
   );
-}
-
-/** Internal: filter attrs through allowlist before starting a span. */
-function filteredAttrs(attrs: Attributes): Attributes {
-  const safe: Attributes = {};
-  for (const [k, v] of Object.entries(attrs)) {
-    if (ALLOWED_SPAN_ATTRIBUTES.has(k) && v !== undefined && v !== null) {
-      safe[k] = v;
-    }
-  }
-  return safe;
 }
 
 // ── Trace context extraction ──────────────────────────────────────────────────

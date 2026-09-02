@@ -6,10 +6,9 @@ import { eventClient } from "./event-client";
 import { HTTPException } from "hono/http-exception";
 import { logger } from "./logger";
 
-export const connectionDeleteHandler: CapabilityHandler<typeof connectionDelete> = async (
-  input,
-  ctx,
-) => {
+export const connectionDeleteHandler: CapabilityHandler<
+  typeof connectionDelete
+> = async (input, ctx) => {
   if (!ctx.userId) {
     throw new Error("connection.delete requires an authenticated user");
   }
@@ -17,7 +16,10 @@ export const connectionDeleteHandler: CapabilityHandler<typeof connectionDelete>
   // Verify connection belongs to this org/workspace and is not already deleted
   const [conn] = await withTenantDb((tx) =>
     tx
-      .select({ id: schema.sourceConnections.id, status: schema.sourceConnections.status })
+      .select({
+        id: schema.sourceConnections.id,
+        status: schema.sourceConnections.status,
+      })
       .from(schema.sourceConnections)
       .where(
         and(
@@ -58,7 +60,10 @@ export const connectionDeleteHandler: CapabilityHandler<typeof connectionDelete>
         status: "running",
         startedAt: now,
       })
-      .returning({ id: schema.deletionJobs.id, publicId: schema.deletionJobs.publicId }),
+      .returning({
+        id: schema.deletionJobs.id,
+        publicId: schema.deletionJobs.publicId,
+      }),
   );
 
   if (!job) throw new Error("connection.delete: failed to create deletion job");

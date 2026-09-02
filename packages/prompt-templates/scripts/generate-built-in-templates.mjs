@@ -28,9 +28,10 @@ const TEMPLATES_DIR = resolve(__dirname, "../src/templates");
 const OUT_FILE = resolve(__dirname, "../src/built-in-templates.ts");
 
 /**
- * Deterministic file order: alphabetical by filename. Registry ranking does not
- * depend on file order (it ranks by route specificity), and a stable order
- * keeps the generated file diff-clean across regens.
+ * Deterministic file order: alphabetical by filename. Ranking is primarily by
+ * route specificity, but ties fall back to registry insertion order — i.e. this
+ * order — so it must stay stable. Alphabetical also keeps the generated file
+ * diff-clean across regens.
  */
 function builtinYamlFiles() {
   return readdirSync(TEMPLATES_DIR)
@@ -43,7 +44,9 @@ function loadTemplates() {
     const raw = readFileSync(resolve(TEMPLATES_DIR, file), "utf8");
     const parsed = parseYaml(raw);
     if (typeof parsed !== "object" || parsed === null) {
-      throw new Error(`generate-built-in-templates: ${file} did not parse to an object`);
+      throw new Error(
+        `generate-built-in-templates: ${file} did not parse to an object`,
+      );
     }
     return parsed;
   });

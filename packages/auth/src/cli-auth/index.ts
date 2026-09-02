@@ -79,8 +79,14 @@ export function pkceChallengeFromVerifier(codeVerifier: string): string {
  * True iff `codeVerifier` corresponds to `codeChallenge` under S256. Constant
  * time in the comparison so a timing side-channel can't reveal the challenge.
  */
-export function verifyPkceS256(codeVerifier: string, codeChallenge: string): boolean {
-  if (!isValidCodeVerifier(codeVerifier) || !isValidCodeChallenge(codeChallenge)) {
+export function verifyPkceS256(
+  codeVerifier: string,
+  codeChallenge: string,
+): boolean {
+  if (
+    !isValidCodeVerifier(codeVerifier) ||
+    !isValidCodeChallenge(codeChallenge)
+  ) {
     return false;
   }
   const expected = Buffer.from(pkceChallengeFromVerifier(codeVerifier), "utf8");
@@ -116,7 +122,10 @@ export function isLoopbackRedirectUri(uri: string): boolean {
   if (url.protocol !== "http:") return false;
   const host = url.hostname;
   const isLoopback =
-    host === "127.0.0.1" || host === "localhost" || host === "::1" || host === "[::1]";
+    host === "127.0.0.1" ||
+    host === "localhost" ||
+    host === "::1" ||
+    host === "[::1]";
   if (!isLoopback) return false;
   // An explicit ephemeral port is required — the CLI's listener.
   if (!url.port) return false;

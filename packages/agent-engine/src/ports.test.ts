@@ -9,7 +9,11 @@ describe("ports", () => {
     // pins the structural shape and the generateObject contract.
     const impl = {
       stream: (() => undefined) as unknown,
-      generateObject: async <T>({ schema }: { schema: { parse: (x: unknown) => T } }) => ({
+      generateObject: async <T>({
+        schema,
+      }: {
+        schema: { parse: (x: unknown) => T };
+      }) => ({
         object: schema.parse({}),
         usage: { totalTokens: 0 },
       }),
@@ -18,7 +22,10 @@ describe("ports", () => {
   });
 
   it("MemoryProvider and TraceStore are structurally satisfiable", async () => {
-    const mem: MemoryProvider = { recallContext: async () => "recalled", remember: () => undefined };
+    const mem: MemoryProvider = {
+      recallContext: async () => "recalled",
+      remember: () => undefined,
+    };
     const trace: TraceStore = { record: () => undefined };
     expect(await mem.recallContext()).toBe("recalled");
     expect(mem.remember("k", { a: 1 })).toBeUndefined();

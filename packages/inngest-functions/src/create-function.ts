@@ -29,11 +29,20 @@ function adaptStep(inngestStep: {
     run<T>(name: string, fn: () => T | Promise<T>): Promise<T> {
       return inngestStep.run(name, fn) as Promise<T>;
     },
-    async sendEvent(label: string, event: EventPayload | EventPayload[]): Promise<void> {
+    async sendEvent(
+      label: string,
+      event: EventPayload | EventPayload[],
+    ): Promise<void> {
       await inngestStep.sendEvent(label, event);
     },
-    waitForEvent<T>(label: string, opts: { event: string; timeout: string; match?: string }) {
-      return inngestStep.waitForEvent(label, opts) as Promise<EventPayload<T> | null>;
+    waitForEvent<T>(
+      label: string,
+      opts: { event: string; timeout: string; match?: string },
+    ) {
+      return inngestStep.waitForEvent(
+        label,
+        opts,
+      ) as Promise<EventPayload<T> | null>;
     },
     async sleep(label: string, duration: string | Date): Promise<void> {
       await inngestStep.sleep(label, duration);
@@ -55,7 +64,9 @@ function wrapHandler(handler: DurableFunctionHandler) {
     runId?: string;
   }) => {
     const step = adaptStep(ctx.step);
-    const toPayload = (e: { data: unknown; name?: string } | undefined): EventPayload => ({
+    const toPayload = (
+      e: { data: unknown; name?: string } | undefined,
+    ): EventPayload => ({
       name: e?.name ?? "",
       data: (e?.data ?? {}) as Record<string, unknown>,
     });
@@ -87,7 +98,10 @@ function wrapHandler(handler: DurableFunctionHandler) {
 /**
  * Translates abstract DurableFunctionConfig into Inngest-native config.
  */
-function buildInngestConfig(config: DurableFunctionConfig, idOverride?: string) {
+function buildInngestConfig(
+  config: DurableFunctionConfig,
+  idOverride?: string,
+) {
   const inngestConfig: Record<string, unknown> = {
     id: idOverride ?? config.id,
   };
@@ -112,12 +126,23 @@ function buildInngestConfig(config: DurableFunctionConfig, idOverride?: string) 
 
 /**
  * Translates abstract DurableFunctionTrigger into Inngest-native trigger.
+ *
+ * A trigger with neither an event name nor a cron expression is rejected here.
+ * Passing `{ cron: undefined }` through to Inngest registers a function nothing
+ * can ever fire, and the SDK's own complaint arrives at dev-server sync time
+ * with no clue which definition produced it.
  */
 function buildInngestTrigger(trigger: DurableFunctionTrigger) {
   if ("event" in trigger && trigger.event) {
     return { event: trigger.event };
   }
-  return { cron: trigger.cron! };
+  if (!trigger.cron) {
+    throw new Error(
+      "createFunction: trigger must specify either `event` or `cron`, " +
+        `got ${JSON.stringify(trigger)}`,
+    );
+  }
+  return { cron: trigger.cron };
 }
 
 /**

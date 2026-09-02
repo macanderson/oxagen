@@ -37,7 +37,10 @@ const REQ: CompletionRequest = {
 function provider(over: CloudProviderDeps = {}) {
   return new AnthropicProvider("haiku", HAIKU, {
     resolveKey: () => "gw-key",
-    generate: vi.fn(async () => ({ text: "here you go", usage: { inputTokens: 12, outputTokens: 5 } })),
+    generate: vi.fn(async () => ({
+      text: "here you go",
+      usage: { inputTokens: 12, outputTokens: 5 },
+    })),
     ...over,
   });
 }
@@ -59,13 +62,15 @@ describe("GatewayCloudProvider", () => {
 
   it("is available only when a credential resolves", async () => {
     expect(await provider().isAvailable()).toBe(true);
-    expect(await provider({ resolveKey: () => null }).isAvailable()).toBe(false);
+    expect(await provider({ resolveKey: () => null }).isAvailable()).toBe(
+      false,
+    );
   });
 
   it("ensureReady throws MissingCredentialError with no key", async () => {
-    await expect(provider({ resolveKey: () => null }).ensureReady()).rejects.toBeInstanceOf(
-      MissingCredentialError,
-    );
+    await expect(
+      provider({ resolveKey: () => null }).ensureReady(),
+    ).rejects.toBeInstanceOf(MissingCredentialError);
   });
 
   it("completes and prices the usage on the gateway slug", async () => {
@@ -78,7 +83,9 @@ describe("GatewayCloudProvider", () => {
   });
 
   it("estimates usage when the model returns none", async () => {
-    const p = provider({ generate: vi.fn(async () => ({ text: "hello world", usage: {} })) });
+    const p = provider({
+      generate: vi.fn(async () => ({ text: "hello world", usage: {} })),
+    });
     const res = await p.complete(REQ);
     expect(res.usage.inputTokens).toBeGreaterThan(0);
     expect(res.usage.outputTokens).toBeGreaterThan(0);
@@ -121,7 +128,12 @@ describe("default credential resolution (no injected resolveKey)", () => {
     });
     const openaiProvider = new OpenAiProvider(
       "judge",
-      { slug: "openai/gpt-5-codex", vendor: "openai", contextWindow: 400000, tools: true },
+      {
+        slug: "openai/gpt-5-codex",
+        vendor: "openai",
+        contextWindow: 400000,
+        tools: true,
+      },
       { generate: vi.fn(async () => ({ text: "x", usage: {} })) },
     );
     expect(await anthropicProvider.isAvailable()).toBe(true);
@@ -135,7 +147,12 @@ describe("default credential resolution (no injected resolveKey)", () => {
     envState.credential = { source: "gateway", key: "vck_test" };
     const openaiProvider = new OpenAiProvider(
       "judge",
-      { slug: "openai/gpt-5-codex", vendor: "openai", contextWindow: 400000, tools: true },
+      {
+        slug: "openai/gpt-5-codex",
+        vendor: "openai",
+        contextWindow: 400000,
+        tools: true,
+      },
       { generate: vi.fn(async () => ({ text: "x", usage: {} })) },
     );
     expect(await openaiProvider.isAvailable()).toBe(true);
@@ -144,12 +161,17 @@ describe("default credential resolution (no injected resolveKey)", () => {
 
 describe("vendor subclasses", () => {
   it("expose the concrete anthropic and openai providers", () => {
-    expect(new AnthropicProvider("haiku", HAIKU, { resolveKey: () => "k" })).toBeInstanceOf(
-      GatewayCloudProvider,
-    );
+    expect(
+      new AnthropicProvider("haiku", HAIKU, { resolveKey: () => "k" }),
+    ).toBeInstanceOf(GatewayCloudProvider);
     const openai = new OpenAiProvider(
       "judge",
-      { slug: "openai/gpt-5-codex", vendor: "openai", contextWindow: 400000, tools: true },
+      {
+        slug: "openai/gpt-5-codex",
+        vendor: "openai",
+        contextWindow: 400000,
+        tools: true,
+      },
       { resolveKey: () => "k" },
     );
     expect(openai.capabilities().vendor).toBe("openai");

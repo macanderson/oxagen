@@ -16,8 +16,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function workspaceSettingsReadTool(_args: InferSchema<typeof schema>) {
+export default async function workspaceSettingsReadTool(
+  _args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(workspaceSettingsRead.name, {}, ctx, { surface: "mcp" });
+  const output = await invoke(workspaceSettingsRead.name, {}, ctx, {
+    surface: "mcp",
+  });
   return workspaceSettingsRead.output.parse(output);
 }

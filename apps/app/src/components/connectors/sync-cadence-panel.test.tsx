@@ -112,14 +112,18 @@ describe("SyncCadencePanel — webhook + polling", () => {
 
   it("shows polling interval input when polling is selected", async () => {
     renderPanel(WEBHOOK_POLLING_SCHEMA);
-    const pollingRadio = screen.getByRole("radio", { name: /scheduled polling/i });
+    const pollingRadio = screen.getByRole("radio", {
+      name: /scheduled polling/i,
+    });
     await userEvent.click(pollingRadio);
     expect(screen.getByLabelText("Polling interval")).toBeInTheDocument();
   });
 
   it("shows default polling interval value", async () => {
     renderPanel(WEBHOOK_POLLING_SCHEMA);
-    const pollingRadio = screen.getByRole("radio", { name: /scheduled polling/i });
+    const pollingRadio = screen.getByRole("radio", {
+      name: /scheduled polling/i,
+    });
     await userEvent.click(pollingRadio);
     const intervalInput = screen.getByLabelText("Polling interval");
     expect(intervalInput).toHaveValue(300);

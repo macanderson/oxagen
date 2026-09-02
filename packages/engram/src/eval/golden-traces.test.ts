@@ -45,7 +45,9 @@ describe("validateTurn", () => {
     const turn = makeTurn({ requiredInContext: ["r1", "r2", "r3"] });
     const result = validateTurn(["r1"], turn);
     expect(result.pass).toBe(false);
-    expect(result.missingRequired).toEqual(expect.arrayContaining(["r2", "r3"]));
+    expect(result.missingRequired).toEqual(
+      expect.arrayContaining(["r2", "r3"]),
+    );
     expect(result.missingRequired).toHaveLength(2);
   });
 
@@ -64,7 +66,9 @@ describe("validateTurn", () => {
     // Only 2 of 4 required records present
     const result = validateTurn(["r1", "r2", "extra"], turn);
     expect(result.precision).toBeCloseTo(0.5, 5);
-    expect(result.missingRequired).toEqual(expect.arrayContaining(["r3", "r4"]));
+    expect(result.missingRequired).toEqual(
+      expect.arrayContaining(["r3", "r4"]),
+    );
   });
 
   it("returns precision 1.0 when no records are required (empty required list)", () => {

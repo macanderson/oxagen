@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * TypewriterTerminal — an animated macOS-style terminal that types each
@@ -49,7 +49,6 @@ export function TypewriterTerminal({
   minHeightClass?: string;
 }) {
   const [lines, setLines] = useState<Line[]>([]);
-  const cancelled = useRef(false);
 
   useEffect(() => {
     const reduce =
@@ -60,22 +59,31 @@ export function TypewriterTerminal({
       return;
     }
 
-    cancelled.current = false;
-    const timers: ReturnType<typeof setTimeout>[] = [];
+    // `cancelled` and `pending` are per-effect-run locals, not refs: the loop
+    // never terminates on its own, so under StrictMode's mount/unmount/mount
+    // a shared flag would let the first run un-cancel itself and race the
+    // second, writing two interleaved transcripts into the same state.
+    let cancelled = false;
+    // Only the timer currently being awaited is tracked. The loop is infinite,
+    // so accumulating every handle in an array would grow without bound for as
+    // long as the tab stays open.
+    let pending: ReturnType<typeof setTimeout> | undefined;
     const wait = (ms: number) =>
-      new Promise<void>((res) => timers.push(setTimeout(res, ms)));
+      new Promise<void>((res) => {
+        pending = setTimeout(res, ms);
+      });
 
     async function run() {
-      while (!cancelled.current) {
+      while (!cancelled) {
         setLines([]);
         for (const step of steps) {
-          if (cancelled.current) return;
+          if (cancelled) return;
           const id = nextId();
           setLines((p) => [...p, { id, kind: "cmd", text: "", caret: true }]);
           // type the command
           for (let i = 1; i <= step.cmd.length; i++) {
-            if (cancelled.current) return;
             await wait(36 + Math.random() * 46);
+            if (cancelled) return;
             const slice = step.cmd.slice(0, i);
             setLines((p) =>
               p.map((l) => (l.id === id ? { ...l, text: slice } : l)),
@@ -86,15 +94,17 @@ export function TypewriterTerminal({
             p.map((l) => (l.id === id ? { ...l, caret: false } : l)),
           );
           await wait(440);
+          if (cancelled) return;
           for (const o of step.out) {
-            if (cancelled.current) return;
             await wait(240 + Math.random() * 160);
+            if (cancelled) return;
             setLines((p) => [
               ...p,
               { id: nextId(), kind: o.kind, text: o.text },
             ]);
           }
           await wait(720);
+          if (cancelled) return;
         }
         // rest at a fresh prompt, then loop
         setLines((p) => [
@@ -107,8 +117,8 @@ export function TypewriterTerminal({
 
     void run();
     return () => {
-      cancelled.current = true;
-      timers.forEach(clearTimeout);
+      cancelled = true;
+      if (pending !== undefined) clearTimeout(pending);
     };
   }, [steps]);
 

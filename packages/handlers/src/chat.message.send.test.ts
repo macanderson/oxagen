@@ -25,45 +25,47 @@ mocks.txUpdateSetWhere.mockResolvedValue(undefined);
 //   insert call #2 → user message
 //   insert call #3 → assistant message
 //   update call #1 → conversation.activeLeafMessageId
-mocks.txFn.mockImplementation(async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
-  let insertCount = 0;
-  const tx = {
-    insert: (_table: unknown): unknown => {
-      insertCount++;
-      if (insertCount === 1) {
-        // First insert: conversation row (new-conversation path)
+mocks.txFn.mockImplementation(
+  async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
+    let insertCount = 0;
+    const tx = {
+      insert: (_table: unknown): unknown => {
+        insertCount++;
+        if (insertCount === 1) {
+          // First insert: conversation row (new-conversation path)
+          return {
+            values: (_vals: unknown) => ({
+              returning: mocks.txConvInsertReturning,
+            }),
+          } as unknown;
+        }
+        if (insertCount === 2) {
+          // Second insert: user message
+          return {
+            values: (_vals: unknown) => ({
+              returning: mocks.txUserMsgInsertReturning,
+            }),
+          } as unknown;
+        }
+        // Third insert: assistant message
         return {
           values: (_vals: unknown) => ({
-            returning: mocks.txConvInsertReturning,
+            returning: mocks.txAsstMsgInsertReturning,
           }),
         } as unknown;
-      }
-      if (insertCount === 2) {
-        // Second insert: user message
-        return {
-          values: (_vals: unknown) => ({
-            returning: mocks.txUserMsgInsertReturning,
-          }),
-        } as unknown;
-      }
-      // Third insert: assistant message
-      return {
-        values: (_vals: unknown) => ({
-          returning: mocks.txAsstMsgInsertReturning,
+      },
+      query: {
+        conversations: { findFirst: mocks.convFindFirst },
+      },
+      update: (_table: unknown) => ({
+        set: (_vals: unknown) => ({
+          where: mocks.txUpdateSetWhere,
         }),
-      } as unknown;
-    },
-    query: {
-      conversations: { findFirst: mocks.convFindFirst },
-    },
-    update: (_table: unknown) => ({
-      set: (_vals: unknown) => ({
-        where: mocks.txUpdateSetWhere,
       }),
-    }),
-  };
-  return cb(tx as unknown as Parameters<typeof cb>[0]);
-});
+    };
+    return cb(tx as unknown as Parameters<typeof cb>[0]);
+  },
+);
 
 // ── module mocks ──────────────────────────────────────────────────────────────
 
@@ -71,14 +73,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => ({
-    query: {
-      conversations: { findFirst: mocks.convFindFirst },
-    },
-    transaction: mocks.txFn,
-  }),
-  withTenantDb: (fn: (tx: unknown) => Promise<unknown>): Promise<unknown> => mocks.txFn(fn) as Promise<unknown>,
-
+    db: () => ({
+      query: {
+        conversations: { findFirst: mocks.convFindFirst },
+      },
+      transaction: mocks.txFn,
+    }),
+    withTenantDb: (fn: (tx: unknown) => Promise<unknown>): Promise<unknown> =>
+      mocks.txFn(fn) as Promise<unknown>,
   };
 });
 
@@ -94,7 +96,12 @@ const BASE_INPUT = {
   parentMessageId: null as string | null,
   content: "Hello, assistant",
   contentBlocks: [] as unknown[],
-  branchReason: null as "edit" | "regenerate" | "tool_retry" | "manual_fork" | null,
+  branchReason: null as
+    | "edit"
+    | "regenerate"
+    | "tool_retry"
+    | "manual_fork"
+    | null,
 };
 
 describe("chatMessageSendHandler (@oxagen/handlers)", () => {
@@ -154,9 +161,9 @@ describe("chatMessageSendHandler (@oxagen/handlers)", () => {
 
   it("throws when userId is null (unauthenticated request)", async () => {
     const anonCtx: CapabilityContext = { ...CTX, userId: null };
-    await expect(
-      chatMessageSendHandler(BASE_INPUT, anonCtx),
-    ).rejects.toThrow("chat.message.send requires an authenticated user");
+    await expect(chatMessageSendHandler(BASE_INPUT, anonCtx)).rejects.toThrow(
+      "chat.message.send requires an authenticated user",
+    );
   });
 
   // ── cross-tenant guard ───────────────────────────────────────────────────

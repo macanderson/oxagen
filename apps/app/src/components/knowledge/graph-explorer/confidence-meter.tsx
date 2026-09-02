@@ -16,13 +16,16 @@ export interface ConfidenceMeterProps {
 export function ConfidenceMeter({ confidence }: ConfidenceMeterProps) {
   const clamped = Math.max(0, Math.min(1, confidence));
   const pct = Math.round(clamped * 100);
-  const color = clamped >= 0.8 ? "#10b981" : clamped >= 0.5 ? "#0ea5e9" : "#f59e0b";
+  const color =
+    clamped >= 0.8 ? "#10b981" : clamped >= 0.5 ? "#0ea5e9" : "#f59e0b";
   const band = clamped >= 0.8 ? "High" : clamped >= 0.5 ? "Medium" : "Low";
 
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-sm font-semibold tabular-nums text-foreground">{formatConfidence(clamped)}</span>
+        <span className="text-sm font-semibold tabular-nums text-foreground">
+          {formatConfidence(clamped)}
+        </span>
         <span className="text-xs text-muted-foreground">{band}</span>
       </div>
       <div
@@ -33,7 +36,10 @@ export function ConfidenceMeter({ confidence }: ConfidenceMeterProps) {
         aria-valuemax={100}
         aria-label="Inference confidence"
       >
-        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+        <div
+          className="h-full rounded-full transition-all"
+          style={{ width: `${pct}%`, backgroundColor: color }}
+        />
       </div>
     </div>
   );

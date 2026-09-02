@@ -57,9 +57,11 @@ export function NotificationsBell() {
     }
   }, [orgSlug, workspaceSlug]);
 
-  // Load when sheet opens; also poll on mount for the badge count. The load is
-  // deferred a tick so the setState calls inside it don't run synchronously
-  // within the effect (react-hooks/set-state-in-effect).
+  // Load once on mount (for the badge count) and again each time the sheet
+  // opens. There is no background polling — the badge only refreshes on mount,
+  // on open, or after a failed mutation reverts. The load is deferred a tick so
+  // the setState calls inside it don't run synchronously within the effect
+  // (react-hooks/set-state-in-effect).
   React.useEffect(() => {
     const t = setTimeout(() => void load(), 0);
     return () => clearTimeout(t);

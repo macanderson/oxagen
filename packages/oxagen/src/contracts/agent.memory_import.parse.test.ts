@@ -38,7 +38,9 @@ describe("agent.memory.import.parse capability", () => {
   });
 
   it("rejects an empty documents array", () => {
-    expect(() => agentMemoryImportParse.input.parse({ documents: [] })).toThrow();
+    expect(() =>
+      agentMemoryImportParse.input.parse({ documents: [] }),
+    ).toThrow();
   });
 
   it("rejects more than 25 documents", () => {
@@ -46,7 +48,9 @@ describe("agent.memory.import.parse capability", () => {
       filename: `f${i}.md`,
       content: "x",
     }));
-    expect(() => agentMemoryImportParse.input.parse({ documents: docs })).toThrow();
+    expect(() =>
+      agentMemoryImportParse.input.parse({ documents: docs }),
+    ).toThrow();
   });
 
   it("rejects a document with empty content", () => {
@@ -68,7 +72,12 @@ describe("agent.memory.import.parse capability", () => {
   it("validates output drafts/documentCount/skipped", () => {
     const parsed = agentMemoryImportParse.output.parse({
       drafts: [
-        { lesson: "L", memoryClass: "RULE", memoryKind: "constraint", enforcementScore: 80 },
+        {
+          lesson: "L",
+          memoryClass: "RULE",
+          memoryKind: "constraint",
+          enforcementScore: 80,
+        },
       ],
       documentCount: 1,
       skipped: [{ filename: "empty.md", reason: "No durable rules found." }],

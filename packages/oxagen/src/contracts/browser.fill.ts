@@ -22,7 +22,10 @@ export const browserFill = registerCapability({
   },
   input: z.object({
     sessionId: z.string().min(1).describe("Durable-session id (sbx_…)."),
-    selector: z.string().min(1).describe("CSS selector for the input/textarea/select."),
+    selector: z
+      .string()
+      .min(1)
+      .describe("CSS selector for the input/textarea/select."),
     value: z.string().describe("Value to set (empty string clears the field)."),
     timeoutMs: z.number().int().min(1_000).max(60_000).default(30_000),
   }),

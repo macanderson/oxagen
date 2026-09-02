@@ -48,23 +48,30 @@ interface ChainShape {
 
 function readChain(output: unknown): ChainShape {
   const o =
-    typeof output === "object" && output !== null ? (output as Record<string, unknown>) : {};
+    typeof output === "object" && output !== null
+      ? (output as Record<string, unknown>)
+      : {};
   const steps = Array.isArray(o.steps)
     ? o.steps.flatMap((s): ChainStep[] => {
         if (typeof s !== "object" || s === null) return [];
         const ss = s as Record<string, unknown>;
         const status: StepStatus =
-          ss.status === "success" || ss.status === "error" || ss.status === "skipped"
+          ss.status === "success" ||
+          ss.status === "error" ||
+          ss.status === "skipped"
             ? ss.status
             : "skipped";
         return [
           {
             id: typeof ss.id === "string" ? ss.id : "",
-            capability: typeof ss.capability === "string" ? ss.capability : "unknown",
+            capability:
+              typeof ss.capability === "string" ? ss.capability : "unknown",
             rationale: typeof ss.rationale === "string" ? ss.rationale : "",
             status,
             input:
-              ss.input && typeof ss.input === "object" && !Array.isArray(ss.input)
+              ss.input &&
+              typeof ss.input === "object" &&
+              !Array.isArray(ss.input)
                 ? (ss.input as Record<string, unknown>)
                 : null,
             output: ss.output,
@@ -84,17 +91,32 @@ function readChain(output: unknown): ChainShape {
 
 const STATUS_META: Record<
   StepStatus,
-  { Icon: React.ComponentType<{ className?: string }>; cls: string; label: string }
+  {
+    Icon: React.ComponentType<{ className?: string }>;
+    cls: string;
+    label: string;
+  }
 > = {
   success: { Icon: CheckCircle2, cls: "text-success", label: "Success" },
   error: { Icon: XCircle, cls: "text-error", label: "Error" },
-  skipped: { Icon: MinusCircle, cls: "text-muted-foreground", label: "Skipped" },
+  skipped: {
+    Icon: MinusCircle,
+    cls: "text-muted-foreground",
+    label: "Skipped",
+  },
 };
 
-function StepRow({ step, index }: { step: ChainStep; index: number }): React.ReactElement {
+function StepRow({
+  step,
+  index,
+}: {
+  step: ChainStep;
+  index: number;
+}): React.ReactElement {
   const [open, setOpen] = React.useState(false);
   const { Icon, cls, label } = STATUS_META[step.status];
-  const hasDetail = step.input !== null || step.output !== undefined || Boolean(step.error);
+  const hasDetail =
+    step.input !== null || step.output !== undefined || Boolean(step.error);
 
   return (
     <li className="relative pl-6">
@@ -103,7 +125,10 @@ function StepRow({ step, index }: { step: ChainStep; index: number }): React.Rea
         className="absolute left-[7px] top-5 bottom-0 w-px bg-border"
         aria-hidden="true"
       />
-      <Icon className={cn("absolute left-0 top-1 size-3.5", cls)} aria-label={label} />
+      <Icon
+        className={cn("absolute left-0 top-1 size-3.5", cls)}
+        aria-label={label}
+      />
 
       <div className="pb-3">
         <button
@@ -122,8 +147,12 @@ function StepRow({ step, index }: { step: ChainStep; index: number }): React.Rea
           ) : (
             <span className="w-3.5 shrink-0" />
           )}
-          <span className="text-xs text-muted-foreground tabular-nums">{index + 1}.</span>
-          <span className="text-xs text-muted-foreground">{step.capability}</span>
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {index + 1}.
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {step.capability}
+          </span>
           {step.durationMs > 0 ? (
             <span className="ml-auto shrink-0 text-[10px] text-muted-foreground tabular-nums">
               {step.durationMs}ms
@@ -184,7 +213,9 @@ export default function CapabilityChainCard(
         <Workflow className="size-4 shrink-0 text-primary" aria-hidden="true" />
         <span className="text-sm font-semibold">Composed chain</span>
         <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-          {chain.executed ? `${succeeded}/${chain.steps.length} ran` : "Plan only"}
+          {chain.executed
+            ? `${succeeded}/${chain.steps.length} ran`
+            : "Plan only"}
         </span>
       </div>
 
@@ -205,7 +236,9 @@ export default function CapabilityChainCard(
             ))}
           </ol>
         ) : (
-          <p className="text-xs text-muted-foreground">No steps were planned.</p>
+          <p className="text-xs text-muted-foreground">
+            No steps were planned.
+          </p>
         )}
       </div>
     </div>

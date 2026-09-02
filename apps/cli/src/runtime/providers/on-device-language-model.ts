@@ -32,7 +32,11 @@ import type {
   LanguageModelV3ToolResultOutput,
   LanguageModelV3Usage,
 } from "@ai-sdk/provider";
-import type { CompletionMessage, CompletionUsage, ReasoningEffort } from "../types.js";
+import type {
+  CompletionMessage,
+  CompletionUsage,
+  ReasoningEffort,
+} from "../types.js";
 
 /** Render one tool-result output part into the flat text the local model reads. */
 function renderToolOutput(output: LanguageModelV3ToolResultOutput): string {
@@ -123,7 +127,9 @@ export function renderJsonInstructions(
   responseFormat: LanguageModelV3CallOptions["responseFormat"],
 ): string {
   if (!responseFormat || responseFormat.type !== "json") return "";
-  const schema = responseFormat.schema ? JSON.stringify(responseFormat.schema) : "";
+  const schema = responseFormat.schema
+    ? JSON.stringify(responseFormat.schema)
+    : "";
   return [
     "Respond with ONLY a single JSON object and nothing else — no prose, no code fence.",
     schema ? `The object MUST conform to this JSON schema: ${schema}` : "",
@@ -137,7 +143,9 @@ export function renderJsonInstructions(
  * runtime consumes. Assistant tool calls and `tool` results are rendered as text
  * so the model sees its own prior calls and their outcomes on the next step.
  */
-export function flattenPrompt(prompt: LanguageModelV3Prompt): CompletionMessage[] {
+export function flattenPrompt(
+  prompt: LanguageModelV3Prompt,
+): CompletionMessage[] {
   const out: CompletionMessage[] = [];
 
   for (const message of prompt) {
@@ -149,7 +157,9 @@ export function flattenPrompt(prompt: LanguageModelV3Prompt): CompletionMessage[
     if (message.role === "user") {
       const text = message.content
         .map((part) =>
-          part.type === "text" ? part.text : `[${part.type} attachment omitted]`,
+          part.type === "text"
+            ? part.text
+            : `[${part.type} attachment omitted]`,
         )
         .join("\n");
       out.push({ role: "user", content: text });
@@ -178,7 +188,10 @@ export function flattenPrompt(prompt: LanguageModelV3Prompt): CompletionMessage[
     if (message.role === "tool") {
       const results = message.content
         .filter((p) => p.type === "tool-result")
-        .map((p) => `Tool "${p.toolName}" returned:\n${renderToolOutput(p.output)}`)
+        .map(
+          (p) =>
+            `Tool "${p.toolName}" returned:\n${renderToolOutput(p.output)}`,
+        )
         .join("\n\n");
       // Tool outputs come back to the model as a user-visible observation.
       out.push({ role: "user", content: results });
@@ -203,7 +216,10 @@ function toToolCall(candidate: unknown): ParsedToolCall | null {
   const name = call["name"];
   if (typeof name !== "string" || name.length === 0) return null;
   const args = call["arguments"] ?? call["input"] ?? {};
-  return { name, input: typeof args === "string" ? args : JSON.stringify(args) };
+  return {
+    name,
+    input: typeof args === "string" ? args : JSON.stringify(args),
+  };
 }
 
 /**
@@ -264,7 +280,11 @@ function toV3Usage(usage: CompletionUsage): LanguageModelV3Usage {
       cacheRead: 0,
       cacheWrite: 0,
     },
-    outputTokens: { total: usage.outputTokens, text: usage.outputTokens, reasoning: 0 },
+    outputTokens: {
+      total: usage.outputTokens,
+      text: usage.outputTokens,
+      reasoning: 0,
+    },
   };
 }
 
@@ -318,7 +338,8 @@ export function createOnDeviceLanguageModel(
 
     const rawEffort = options.providerOptions?.["oxagen"]?.["effort"];
     const effort =
-      typeof rawEffort === "string" && REASONING_EFFORTS.has(rawEffort as ReasoningEffort)
+      typeof rawEffort === "string" &&
+      REASONING_EFFORTS.has(rawEffort as ReasoningEffort)
         ? (rawEffort as ReasoningEffort)
         : undefined;
 
@@ -335,7 +356,9 @@ export function createOnDeviceLanguageModel(
       ...(options.maxOutputTokens !== undefined
         ? { maxOutputTokens: options.maxOutputTokens }
         : {}),
-      ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+      ...(options.temperature !== undefined
+        ? { temperature: options.temperature }
+        : {}),
       ...(effort ? { effort } : {}),
       ...(options.abortSignal ? { signal: options.abortSignal } : {}),
     });
@@ -405,7 +428,12 @@ export function createOnDeviceLanguageModel(
             if (part.type === "text") {
               const id = generateId();
               controller.enqueue({ type: "text-start", id });
-              if (part.text) controller.enqueue({ type: "text-delta", id, delta: part.text });
+              if (part.text)
+                controller.enqueue({
+                  type: "text-delta",
+                  id,
+                  delta: part.text,
+                });
               controller.enqueue({ type: "text-end", id });
             } else if (part.type === "tool-call") {
               controller.enqueue({
@@ -418,7 +446,10 @@ export function createOnDeviceLanguageModel(
                 id: part.toolCallId,
                 delta: part.input,
               });
-              controller.enqueue({ type: "tool-input-end", id: part.toolCallId });
+              controller.enqueue({
+                type: "tool-input-end",
+                id: part.toolCallId,
+              });
               controller.enqueue(part);
             }
           }

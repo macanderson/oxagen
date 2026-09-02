@@ -22,6 +22,15 @@
  * - Primitives: JSON semantics (`undefined` inside objects is dropped, exactly
  *   as `JSON.stringify` does, so an absent key and an explicit `undefined` hash
  *   identically).
+ *
+ * Two deliberate departures from `JSON.stringify`, both of which matter when
+ * the value came from an arbitrary tool payload:
+ * - `toJSON()` is NOT honored. A `Date`, and any other class that relies on
+ *   `toJSON`, serializes by its own enumerable keys — for a `Date` that is
+ *   `{}`, so two different instants hash identically. Convert such values to a
+ *   primitive (e.g. `date.getTime()`) before they reach a hashed body.
+ * - Cycles are NOT detected. `JSON.stringify` throws a `TypeError` on a
+ *   circular value; this recurses until the stack overflows.
  */
 export function canonicalStringify(value: unknown): string {
   return serialize(value);
@@ -31,7 +40,8 @@ function serialize(value: unknown): string {
   if (value === null) return "null";
 
   const t = typeof value;
-  if (t === "number") return Number.isFinite(value as number) ? String(value) : "null";
+  if (t === "number")
+    return Number.isFinite(value as number) ? String(value) : "null";
   if (t === "boolean") return value ? "true" : "false";
   if (t === "string") return JSON.stringify(value);
   if (t === "bigint") return JSON.stringify((value as bigint).toString());

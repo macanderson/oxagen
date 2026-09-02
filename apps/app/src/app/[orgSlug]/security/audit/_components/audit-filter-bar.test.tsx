@@ -20,7 +20,13 @@
  */
 
 import * as React from "react";
-import { render, screen, waitFor, cleanup, fireEvent } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  cleanup,
+  fireEvent,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -67,10 +73,17 @@ vi.mock("@/components/ui/badge", () => ({
   }) => <span data-testid="badge">{children}</span>,
 }));
 
-vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
-  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
-  has: (_t, prop) => prop !== "then",
-}));
+vi.mock(
+  "lucide-react",
+  () =>
+    new Proxy({} as Record<string | symbol, unknown>, {
+      get: (_t, prop) =>
+        prop === "then"
+          ? undefined
+          : () => <svg aria-hidden="true" data-icon={String(prop)} />,
+      has: (_t, prop) => prop !== "then",
+    }),
+);
 
 // ---------------------------------------------------------------------------
 // Import under test + lib constants used in assertions
@@ -119,7 +132,9 @@ describe("AuditFilterBar", () => {
   it("renders the 'All events' chip and at least one group chip", () => {
     render(<AuditFilterBar {...noFiltersProps()} />);
 
-    expect(screen.getByRole("button", { name: "All events" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "All events" }),
+    ).toBeInTheDocument();
     // At least one group chip should be present (e.g. "auth.*")
     expect(EVENT_TYPE_GROUPS.length).toBeGreaterThan(0);
     expect(
@@ -130,14 +145,18 @@ describe("AuditFilterBar", () => {
   // (b) Free-text search input
   it("renders the free-text filter input with correct aria-label", () => {
     render(<AuditFilterBar {...noFiltersProps()} />);
-    expect(screen.getByLabelText(/free-text audit filter/i)).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/free-text audit filter/i),
+    ).toBeInTheDocument();
   });
 
   // (c) Outcome select
   it("renders the outcome select with 'All outcomes' as default option", () => {
     render(<AuditFilterBar {...noFiltersProps()} />);
 
-    const select = screen.getByLabelText(/outcome filter/i) as HTMLSelectElement;
+    const select = screen.getByLabelText(
+      /outcome filter/i,
+    ) as HTMLSelectElement;
     expect(select).toBeInTheDocument();
     // The first option should be "All outcomes"
     expect(select.options[0]!.text).toBe("All outcomes");
@@ -154,7 +173,9 @@ describe("AuditFilterBar", () => {
   // (e) No Clear button when no filters active
   it("does not render a Clear button when no filters are active", () => {
     render(<AuditFilterBar {...noFiltersProps()} />);
-    expect(screen.queryByRole("button", { name: /clear/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /clear/i }),
+    ).not.toBeInTheDocument();
   });
 
   // (f) Clear button appears with active event types
@@ -166,15 +187,15 @@ describe("AuditFilterBar", () => {
 
   // (f2) Clear button appears with active outcome
   it("renders a Clear button when selectedOutcome is set", () => {
-    render(
-      <AuditFilterBar {...noFiltersProps()} selectedOutcome="allow" />,
-    );
+    render(<AuditFilterBar {...noFiltersProps()} selectedOutcome="allow" />);
     expect(screen.getByRole("button", { name: /clear/i })).toBeInTheDocument();
   });
 
   // (g) Clicking "All events" removes event_type params
   it("clicking 'All events' deletes event_type params and navigates", () => {
-    mockSearchParamsValue.value = new URLSearchParams("event_type=auth.sign_in");
+    mockSearchParamsValue.value = new URLSearchParams(
+      "event_type=auth.sign_in",
+    );
 
     const types = eventTypesInGroup(EVENT_TYPE_GROUPS[0]!);
     render(<AuditFilterBar {...noFiltersProps()} selectedEventTypes={types} />);
@@ -241,7 +262,9 @@ describe("AuditFilterBar", () => {
     mockSearchParamsValue.value = new URLSearchParams("q=previous");
     render(<AuditFilterBar {...noFiltersProps()} q="previous" />);
 
-    const input = screen.getByLabelText(/free-text audit filter/i) as HTMLInputElement;
+    const input = screen.getByLabelText(
+      /free-text audit filter/i,
+    ) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "" } });
     fireEvent.submit(input.closest("form")!);
 
@@ -282,15 +305,21 @@ describe("AuditFilterBar", () => {
     const badges = screen.getAllByTestId("badge");
     expect(badges.length).toBeGreaterThanOrEqual(types.length);
     for (const t of types) {
-      expect(screen.getAllByTestId("badge").some((b) => b.textContent === t)).toBe(true);
+      expect(
+        screen.getAllByTestId("badge").some((b) => b.textContent === t),
+      ).toBe(true);
     }
   });
 
   // (m) External Q change re-syncs the text input
   it("re-syncs text input when the q prop changes (derived state pattern)", () => {
-    const { rerender } = render(<AuditFilterBar {...noFiltersProps()} q="first" />);
+    const { rerender } = render(
+      <AuditFilterBar {...noFiltersProps()} q="first" />,
+    );
 
-    const input = screen.getByLabelText(/free-text audit filter/i) as HTMLInputElement;
+    const input = screen.getByLabelText(
+      /free-text audit filter/i,
+    ) as HTMLInputElement;
     expect(input.value).toBe("first");
 
     rerender(<AuditFilterBar {...noFiltersProps()} q="second" />);

@@ -19,9 +19,7 @@ describe("connection.preview capability", () => {
   });
 
   it("rejects empty connectionId (below min 1)", () => {
-    expect(() =>
-      connectionPreview.input.parse({ connectionId: "" }),
-    ).toThrow();
+    expect(() => connectionPreview.input.parse({ connectionId: "" })).toThrow();
   });
 
   it("rejects missing connectionId", () => {
@@ -54,7 +52,11 @@ describe("connection.preview capability", () => {
     expect(parsed.recordTypes).toHaveLength(1);
     expect(parsed.recordTypes[0]?.sourceRecordType).toBe("Contact");
     expect(parsed.recordTypes[0]?.sampleCount).toBe(42);
-    expect(parsed.recordTypes[0]?.sampleFields).toEqual(["id", "name", "email"]);
+    expect(parsed.recordTypes[0]?.sampleFields).toEqual([
+      "id",
+      "name",
+      "email",
+    ]);
   });
 
   it("parses output with optional description omitted", () => {

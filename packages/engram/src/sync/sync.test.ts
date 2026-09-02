@@ -9,7 +9,11 @@ import { createRecord } from "../record";
 import type { Namespace } from "../types";
 
 const NS: Namespace = { org: "org", workspace: "ws" };
-const PROV = { author: "test", derivedFrom: [] as string[], timestamp: Date.now() };
+const PROV = {
+  author: "test",
+  derivedFrom: [] as string[],
+  timestamp: Date.now(),
+};
 
 describe("VectorClock", () => {
   it("tick increments a node's counter", () => {
@@ -125,7 +129,9 @@ describe("PNCounter", () => {
     expect(() => c.increment("n", -1)).toThrow(RangeError);
     expect(() => c.decrement("n", -1)).toThrow(RangeError);
     expect(() => c.increment("n", Number.NaN)).toThrow(RangeError);
-    expect(() => c.increment("n", Number.POSITIVE_INFINITY)).toThrow(RangeError);
+    expect(() => c.increment("n", Number.POSITIVE_INFINITY)).toThrow(
+      RangeError,
+    );
     // Zero is a permitted no-op.
     expect(() => c.increment("n", 0)).not.toThrow();
   });
@@ -133,15 +139,40 @@ describe("PNCounter", () => {
 
 describe("mergeRecordSets", () => {
   it("union of non-overlapping sets includes all records", () => {
-    const local = [createRecord({ kind: "episodic", namespace: NS, body: { event: "a", payload: {} }, salience: 0.5, confidence: 1, provenance: PROV })];
-    const remote = [createRecord({ kind: "episodic", namespace: NS, body: { event: "b", payload: {} }, salience: 0.5, confidence: 1, provenance: PROV })];
+    const local = [
+      createRecord({
+        kind: "episodic",
+        namespace: NS,
+        body: { event: "a", payload: {} },
+        salience: 0.5,
+        confidence: 1,
+        provenance: PROV,
+      }),
+    ];
+    const remote = [
+      createRecord({
+        kind: "episodic",
+        namespace: NS,
+        body: { event: "b", payload: {} },
+        salience: 0.5,
+        confidence: 1,
+        provenance: PROV,
+      }),
+    ];
     const result = mergeRecordSets(local, remote);
     expect(result.merged).toHaveLength(2);
     expect(result.newFromRemote).toHaveLength(1);
   });
 
   it("same record in both: takes max salience and confidence", () => {
-    const record = createRecord({ kind: "semantic", namespace: NS, body: { fact: "x", domain: "t" }, salience: 0.5, confidence: 0.8, provenance: PROV });
+    const record = createRecord({
+      kind: "semantic",
+      namespace: NS,
+      body: { fact: "x", domain: "t" },
+      salience: 0.5,
+      confidence: 0.8,
+      provenance: PROV,
+    });
     const local = [{ ...record, salience: 0.3, confidence: 0.4 }];
     const remote = [{ ...record, salience: 0.9, confidence: 0.6 }];
     const result = mergeRecordSets(local, remote);
@@ -151,7 +182,14 @@ describe("mergeRecordSets", () => {
   });
 
   it("unions causality edges deterministically", () => {
-    const record = createRecord({ kind: "semantic", namespace: NS, body: { fact: "y", domain: "t" }, salience: 0.5, confidence: 0.5, provenance: PROV });
+    const record = createRecord({
+      kind: "semantic",
+      namespace: NS,
+      body: { fact: "y", domain: "t" },
+      salience: 0.5,
+      confidence: 0.5,
+      provenance: PROV,
+    });
     const local = [{ ...record, causality: ["b", "a"] }];
     const remote = [{ ...record, causality: ["c", "a"] }];
     const result = mergeRecordSets(local, remote);
@@ -166,18 +204,33 @@ describe("Merkle tree", () => {
       { id: "bbb", versionDigest: "v1" },
       { id: "ccc", versionDigest: "v1" },
     ];
-    expect(buildMerkleTree(vs).rootHash).toBe(buildMerkleTree([...vs].reverse()).rootHash);
+    expect(buildMerkleTree(vs).rootHash).toBe(
+      buildMerkleTree([...vs].reverse()).rootHash,
+    );
   });
 
   it("different id sets produce different root hashes", () => {
-    const t1 = buildMerkleTree([{ id: "aaa", versionDigest: "v1" }, { id: "bbb", versionDigest: "v1" }]);
-    const t2 = buildMerkleTree([{ id: "aaa", versionDigest: "v1" }, { id: "ccc", versionDigest: "v1" }]);
+    const t1 = buildMerkleTree([
+      { id: "aaa", versionDigest: "v1" },
+      { id: "bbb", versionDigest: "v1" },
+    ]);
+    const t2 = buildMerkleTree([
+      { id: "aaa", versionDigest: "v1" },
+      { id: "ccc", versionDigest: "v1" },
+    ]);
     expect(t1.rootHash).not.toBe(t2.rootHash);
   });
 
   it("diff finds records in remote but not local", () => {
-    const local = buildMerkleTree([{ id: "aaa", versionDigest: "v1" }, { id: "bbb", versionDigest: "v1" }]);
-    const remote = buildMerkleTree([{ id: "aaa", versionDigest: "v1" }, { id: "bbb", versionDigest: "v1" }, { id: "ccc", versionDigest: "v1" }]);
+    const local = buildMerkleTree([
+      { id: "aaa", versionDigest: "v1" },
+      { id: "bbb", versionDigest: "v1" },
+    ]);
+    const remote = buildMerkleTree([
+      { id: "aaa", versionDigest: "v1" },
+      { id: "bbb", versionDigest: "v1" },
+      { id: "ccc", versionDigest: "v1" },
+    ]);
     const diff = diffMerkleTrees(local, remote);
     expect(diff.remoteOnly).toContain("ccc");
     expect(diff.remoteOnly).not.toContain("aaa");
@@ -185,22 +238,52 @@ describe("Merkle tree", () => {
   });
 
   it("diff returns empty groups for identical trees", () => {
-    const tree = buildMerkleTree([{ id: "a", versionDigest: "v1" }, { id: "b", versionDigest: "v1" }]);
-    expect(diffMerkleTrees(tree, tree)).toEqual({ remoteOnly: [], localOnly: [], divergent: [] });
+    const tree = buildMerkleTree([
+      { id: "a", versionDigest: "v1" },
+      { id: "b", versionDigest: "v1" },
+    ]);
+    expect(diffMerkleTrees(tree, tree)).toEqual({
+      remoteOnly: [],
+      localOnly: [],
+      divergent: [],
+    });
   });
 
   it("toRecordVersion digests real records by mergeable metadata", () => {
-    const r = createRecord({ kind: "semantic", namespace: NS, body: { fact: "z", domain: "t" }, salience: 0.5, confidence: 0.5, provenance: PROV });
+    const r = createRecord({
+      kind: "semantic",
+      namespace: NS,
+      body: { fact: "z", domain: "t" },
+      salience: 0.5,
+      confidence: 0.5,
+      provenance: PROV,
+    });
     expect(toRecordVersion(r).id).toBe(r.id);
-    expect(toRecordVersion({ ...r, salience: 0.9 }).versionDigest).not.toBe(toRecordVersion(r).versionDigest);
+    expect(toRecordVersion({ ...r, salience: 0.9 }).versionDigest).not.toBe(
+      toRecordVersion(r).versionDigest,
+    );
   });
 });
 
 describe("prioritizeForSync", () => {
   it("sorts by salience descending", () => {
     const records = [
-      createRecord({ kind: "episodic", namespace: NS, body: { event: "low", payload: {} }, salience: 0.2, confidence: 1, provenance: PROV }),
-      createRecord({ kind: "semantic", namespace: NS, body: { fact: "high", domain: "t" }, salience: 0.9, confidence: 1, provenance: PROV }),
+      createRecord({
+        kind: "episodic",
+        namespace: NS,
+        body: { event: "low", payload: {} },
+        salience: 0.2,
+        confidence: 1,
+        provenance: PROV,
+      }),
+      createRecord({
+        kind: "semantic",
+        namespace: NS,
+        body: { fact: "high", domain: "t" },
+        salience: 0.9,
+        confidence: 1,
+        provenance: PROV,
+      }),
     ];
     const sorted = prioritizeForSync(records);
     expect(sorted[0]!.salience).toBeGreaterThan(sorted[1]!.salience);

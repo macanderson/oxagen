@@ -33,11 +33,18 @@ describe("createSkillRegistry", () => {
       fsRoot: NO_FS,
       dbAdapter: async () => [
         skill("summarize", { name: "Summarize", description: "condense text" }),
-        skill("translate", { name: "Translate", description: "convert languages" }),
+        skill("translate", {
+          name: "Translate",
+          description: "convert languages",
+        }),
       ],
     });
-    expect((await reg.list("SUMMAR")).map((s) => s.slug)).toEqual(["summarize"]);
-    expect((await reg.list("languages")).map((s) => s.slug)).toEqual(["translate"]);
+    expect((await reg.list("SUMMAR")).map((s) => s.slug)).toEqual([
+      "summarize",
+    ]);
+    expect((await reg.list("languages")).map((s) => s.slug)).toEqual([
+      "translate",
+    ]);
     expect(await reg.list("nope")).toEqual([]);
   });
 

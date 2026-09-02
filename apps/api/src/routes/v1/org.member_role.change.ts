@@ -9,6 +9,8 @@ export const orgMemberRoleChangeRoute = new Hono<AppEnv>();
 orgMemberRoleChangeRoute.patch("/", async (c) => {
   const body = orgMemberRoleChange.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const result = await invoke(orgMemberRoleChange.name, body, ctx, { surface: "api" });
+  const result = await invoke(orgMemberRoleChange.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(result, 200);
 });

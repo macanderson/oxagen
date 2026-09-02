@@ -49,7 +49,10 @@ function formatWhen(iso: string | null): string {
   return d.toLocaleString();
 }
 
-function formatDuration(startedAt: string | null, completedAt: string | null): string {
+function formatDuration(
+  startedAt: string | null,
+  completedAt: string | null,
+): string {
   if (!startedAt || !completedAt) return "—";
   const ms = new Date(completedAt).getTime() - new Date(startedAt).getTime();
   if (Number.isNaN(ms) || ms < 0) return "—";
@@ -61,7 +64,9 @@ function formatDuration(startedAt: string | null, completedAt: string | null): s
 export function RunHistory({ runs }: RunHistoryProps) {
   return (
     <Card className="p-4">
-      <h2 className="mb-3 text-sm font-semibold text-foreground">Run history</h2>
+      <h2 className="mb-3 text-sm font-semibold text-foreground">
+        Run history
+      </h2>
 
       {runs.length === 0 ? (
         <p className="text-sm text-muted-foreground">
@@ -80,7 +85,9 @@ export function RunHistory({ runs }: RunHistoryProps) {
           <TableBody>
             {runs.map((run) => (
               <TableRow key={run.id}>
-                <TableCell className="text-sm">{formatWhen(run.startedAt ?? run.createdAt)}</TableCell>
+                <TableCell className="text-sm">
+                  {formatWhen(run.startedAt ?? run.createdAt)}
+                </TableCell>
                 <TableCell>
                   <Badge variant="muted" size="sm">
                     {run.source}

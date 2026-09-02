@@ -1,21 +1,37 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  existsSync,
+  readFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadSettings, getScopePaths, clearSettingsCache, migrateUserSettings } from "../resolve.js";
+import {
+  loadSettings,
+  getScopePaths,
+  clearSettingsCache,
+  migrateUserSettings,
+} from "../resolve.js";
 import type { OxagenSettings } from "../schema.js";
 
 let dir: string;
 let userPath: string;
 
-function write(scope: "user" | "project" | "local", body: OxagenSettings): void {
+function write(
+  scope: "user" | "project" | "local",
+  body: OxagenSettings,
+): void {
   const paths = getScopePaths({ cwd: dir, userSettingsPath: userPath });
   mkdirSync(join(paths[scope], ".."), { recursive: true });
   writeFileSync(paths[scope], JSON.stringify(body), "utf8");
 }
 
 function resolve(): OxagenSettings {
-  return loadSettings({ cwd: dir, userSettingsPath: userPath, noCache: true }).settings;
+  return loadSettings({ cwd: dir, userSettingsPath: userPath, noCache: true })
+    .settings;
 }
 
 beforeEach(() => {
@@ -62,7 +78,13 @@ describe("loadSettings precedence", () => {
   });
 
   it("concatenates and dedupes permission allow/deny; higher scope's mode wins", () => {
-    write("user", { permissions: { defaultMode: "default", deny: ["Bash(rm*)"], allow: ["Read"] } });
+    write("user", {
+      permissions: {
+        defaultMode: "default",
+        deny: ["Bash(rm*)"],
+        allow: ["Read"],
+      },
+    });
     write("project", {
       permissions: { defaultMode: "deny", deny: ["Bash(rm*)", "Write(.env*)"] },
     });
@@ -73,8 +95,20 @@ describe("loadSettings precedence", () => {
   });
 
   it("concatenates hooks per event across scopes", () => {
-    write("user", { hooks: { PreToolUse: [{ matcher: "bash", hooks: [{ type: "command", command: "a" }] }] } });
-    write("local", { hooks: { PreToolUse: [{ matcher: "write_file", hooks: [{ type: "command", command: "b" }] }] } });
+    write("user", {
+      hooks: {
+        PreToolUse: [
+          { matcher: "bash", hooks: [{ type: "command", command: "a" }] },
+        ],
+      },
+    });
+    write("local", {
+      hooks: {
+        PreToolUse: [
+          { matcher: "write_file", hooks: [{ type: "command", command: "b" }] },
+        ],
+      },
+    });
     const pre = resolve().hooks?.PreToolUse;
     expect(pre).toHaveLength(2);
     expect(pre?.[0]?.matcher).toBe("bash");
@@ -82,8 +116,12 @@ describe("loadSettings precedence", () => {
   });
 
   it("merges mcpServers by key", () => {
-    write("user", { mcpServers: { a: { transport: "stdio", command: "x", args: [] } } });
-    write("project", { mcpServers: { b: { transport: "stdio", command: "y", args: [] } } });
+    write("user", {
+      mcpServers: { a: { transport: "stdio", command: "x", args: [] } },
+    });
+    write("project", {
+      mcpServers: { b: { transport: "stdio", command: "y", args: [] } },
+    });
     expect(Object.keys(resolve().mcpServers ?? {})).toEqual(["a", "b"]);
   });
 });
@@ -106,7 +144,11 @@ describe("invalid files", () => {
     // hand-write an invalid local file (bad apiUrl)
     const paths = getScopePaths({ cwd: dir, userSettingsPath: userPath });
     writeFileSync(paths.local, JSON.stringify({ apiUrl: "nope" }), "utf8");
-    const resolved = loadSettings({ cwd: dir, userSettingsPath: userPath, noCache: true });
+    const resolved = loadSettings({
+      cwd: dir,
+      userSettingsPath: userPath,
+      noCache: true,
+    });
     expect(resolved.settings.model).toBe("good/model");
     const local = resolved.scopes.find((s) => s.scope === "local");
     expect(local?.error).toBeTruthy();
@@ -116,8 +158,14 @@ describe("invalid files", () => {
     const paths = getScopePaths({ cwd: dir, userSettingsPath: userPath });
     mkdirSync(join(paths.project, ".."), { recursive: true });
     writeFileSync(paths.project, "{ not json", "utf8");
-    const resolved = loadSettings({ cwd: dir, userSettingsPath: userPath, noCache: true });
-    expect(resolved.scopes.find((s) => s.scope === "project")?.error).toContain("invalid JSON");
+    const resolved = loadSettings({
+      cwd: dir,
+      userSettingsPath: userPath,
+      noCache: true,
+    });
+    expect(resolved.scopes.find((s) => s.scope === "project")?.error).toContain(
+      "invalid JSON",
+    );
   });
 });
 
@@ -128,9 +176,13 @@ describe("cache", () => {
     expect(first.settings.model).toBe("v1/model");
     // overwrite on disk; cached read still returns the old value
     write("project", { model: "v2/model" });
-    expect(loadSettings({ cwd: dir, userSettingsPath: userPath }).settings.model).toBe("v1/model");
+    expect(
+      loadSettings({ cwd: dir, userSettingsPath: userPath }).settings.model,
+    ).toBe("v1/model");
     clearSettingsCache();
-    expect(loadSettings({ cwd: dir, userSettingsPath: userPath }).settings.model).toBe("v2/model");
+    expect(
+      loadSettings({ cwd: dir, userSettingsPath: userPath }).settings.model,
+    ).toBe("v2/model");
   });
 });
 
@@ -159,7 +211,9 @@ describe("migrateUserSettings", () => {
     const migrated = migrateUserSettings(canonical, legacy);
     expect(migrated).toBe(true);
     expect(existsSync(canonical)).toBe(true);
-    expect(JSON.parse(readFileSync(canonical, "utf8"))).toMatchObject({ model: "migrated/model" });
+    expect(JSON.parse(readFileSync(canonical, "utf8"))).toMatchObject({
+      model: "migrated/model",
+    });
   });
 
   it("does not overwrite a canonical file that already exists", () => {
@@ -169,12 +223,18 @@ describe("migrateUserSettings", () => {
     mkdirSync(join(migrationDir, "legacy"), { recursive: true });
     mkdirSync(join(migrationDir, "canonical"), { recursive: true });
     writeFileSync(legacy, JSON.stringify({ model: "legacy/model" }), "utf8");
-    writeFileSync(canonical, JSON.stringify({ model: "canonical/model" }), "utf8");
+    writeFileSync(
+      canonical,
+      JSON.stringify({ model: "canonical/model" }),
+      "utf8",
+    );
 
     const migrated = migrateUserSettings(canonical, legacy);
     expect(migrated).toBe(false);
     // Canonical content must be untouched
-    expect(JSON.parse(readFileSync(canonical, "utf8"))).toMatchObject({ model: "canonical/model" });
+    expect(JSON.parse(readFileSync(canonical, "utf8"))).toMatchObject({
+      model: "canonical/model",
+    });
   });
 
   it("returns false and does nothing when neither file exists", () => {
@@ -187,7 +247,13 @@ describe("migrateUserSettings", () => {
 
   it("creates parent directories for the canonical path when they are absent", () => {
     const legacy = join(migrationDir, "legacy.json");
-    const canonical = join(migrationDir, "deep", "nested", "dir", "settings.json");
+    const canonical = join(
+      migrationDir,
+      "deep",
+      "nested",
+      "dir",
+      "settings.json",
+    );
 
     writeFileSync(legacy, JSON.stringify({ model: "deep/model" }), "utf8");
 

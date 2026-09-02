@@ -105,7 +105,7 @@ export default async function SecurityTrustPage({
               className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3"
             >
               <CheckCircle2
-                className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(142_71%_45%)]"
+                className="mt-0.5 h-4 w-4 shrink-0 text-success"
                 aria-hidden="true"
               />
               <div className="flex flex-col gap-0.5">

@@ -39,8 +39,8 @@ export const researchSwarmStartHandler: CapabilityHandler<
 
   const queries = object.queries.slice(0, queryCount);
 
-  // Fan out a web.search task per query via agent.subagent.dispatch.
-  // The agent.subagent.dispatch handler is registered at boot by @oxagen/agent/register.
+  // Fan out one search_web task per query via dispatch_subagent, whose handler
+  // is registered at boot by @oxagen/agent/register.
   const dispatchResult = (await invoke(
     "dispatch_subagent",
     {
@@ -58,12 +58,11 @@ export const researchSwarmStartHandler: CapabilityHandler<
     ctx,
   )) as AgentSubagentDispatchOutput;
 
-  // The swarm IS its subagent fanout — use the fanout's durable public_id as the
-  // swarmId rather than minting a random UUID kept in an in-process map. That map
-  // only lived in whichever process ran the start (the in-app agent runtime), so
-  // research.swarm.status polled from a different process (apps/api) always 500'd
-  // with "swarm not found". The fanout public_id is persisted in Postgres and
-  // tenant-scoped by agent.subagent.aggregate, so any process can resolve it.
+  // The swarm IS its subagent fanout, so the swarmId must be the fanout's
+  // durable public_id — it is persisted in Postgres and tenant-scoped by
+  // aggregate_subagents, so get_research_status resolves it from any process.
+  // A locally-minted id would only be resolvable in the process that started
+  // the swarm.
   const swarmId = dispatchResult.dispatchId;
 
   logger.info(

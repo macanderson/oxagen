@@ -25,12 +25,14 @@ export function mapWorkspaceSettingsRow(row: {
 
 // Reads workspace.workspaces for the active workspace (RLS limits the row to
 // ctx.workspaceId). Kernel handles metering + IAM via invoke().
-export const workspaceSettingsReadHandler: CapabilityHandler<typeof workspaceSettingsRead> = async (
-  _input,
-  ctx,
-) => {
+export const workspaceSettingsReadHandler: CapabilityHandler<
+  typeof workspaceSettingsRead
+> = async (_input, ctx) => {
   if (!ctx.workspaceId) {
-    logger.warn({ orgId: ctx.orgId }, "workspace.settings.read: rejected — no workspace context");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "workspace.settings.read: rejected — no workspace context",
+    );
     throw new Error("workspace.settings.read requires a workspace context");
   }
 
@@ -42,7 +44,10 @@ export const workspaceSettingsReadHandler: CapabilityHandler<typeof workspaceSet
   );
 
   if (!row) {
-    logger.warn({ workspaceId: ctx.workspaceId }, "workspace.settings.read: workspace not found");
+    logger.warn(
+      { workspaceId: ctx.workspaceId },
+      "workspace.settings.read: workspace not found",
+    );
     throw new Error("Workspace not found");
   }
 

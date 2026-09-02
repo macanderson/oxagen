@@ -108,4 +108,11 @@ const SliderValue = React.forwardRef<
 ));
 SliderValue.displayName = "SliderValue";
 
-export { Slider, SliderControl, SliderTrack, SliderIndicator, SliderThumb, SliderValue };
+export {
+  Slider,
+  SliderControl,
+  SliderTrack,
+  SliderIndicator,
+  SliderThumb,
+  SliderValue,
+};

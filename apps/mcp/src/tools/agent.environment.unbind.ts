@@ -22,6 +22,8 @@ export default async function agentEnvironmentUnbindTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentEnvironmentUnbind.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentEnvironmentUnbind.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentEnvironmentUnbind.output.parse(output);
 }

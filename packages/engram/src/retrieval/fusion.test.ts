@@ -9,7 +9,11 @@ import type { RetrievalCandidate } from "./types";
 import type { MemoryRecord, Namespace, Provenance } from "../types";
 
 const NS: Namespace = { org: "o", workspace: "w" };
-const PROV: Provenance = { author: "t", derivedFrom: [], timestamp: 1700000000000 };
+const PROV: Provenance = {
+  author: "t",
+  derivedFrom: [],
+  timestamp: 1700000000000,
+};
 
 function rec(fact: string, salience = 0.5): MemoryRecord {
   return createRecord({
@@ -81,7 +85,9 @@ describe("fuseAndRank", () => {
   });
 
   it("applies the optional topK cap (R-4)", () => {
-    const cands = [rec("a"), rec("b"), rec("c"), rec("d")].map((r) => cand(r, 0.5));
+    const cands = [rec("a"), rec("b"), rec("c"), rec("d")].map((r) =>
+      cand(r, 0.5),
+    );
     expect(fuseAndRank([cands])).toHaveLength(4);
     expect(fuseAndRank([cands], undefined, 2)).toHaveLength(2);
     expect(fuseAndRank([cands], undefined, 0)).toHaveLength(0);

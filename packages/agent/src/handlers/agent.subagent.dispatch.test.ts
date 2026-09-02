@@ -11,7 +11,9 @@ vi.mock("@oxagen/iam", () => ({
 // Track DB insert calls and Inngest send calls. The fan-out insert returns BOTH
 // the internal uuid (`id`) and the external `publicId`; the handler stores `id`
 // as subagent_runs.fanout_id and returns `publicId` as the dispatchId.
-const insertFanoutSpy = vi.fn(async () => [{ id: "fanuuid_123", publicId: "fan_123" }]);
+const insertFanoutSpy = vi.fn(async () => [
+  { id: "fanuuid_123", publicId: "fan_123" },
+]);
 // Captures the rows passed to the subagent_runs batch insert so tests can
 // assert the fanout_id uuid and per-child message ids are correct.
 let insertedRuns: Array<Record<string, unknown>> = [];
@@ -35,34 +37,37 @@ const drizzleTableName = (table: unknown): string => {
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
-  ...real,
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      insert: (table: unknown) => ({
-        values: (vals: unknown) => {
-          if (drizzleTableName(table) === "subagent_runs" && Array.isArray(vals)) {
-            insertedRuns.push(...(vals as Array<Record<string, unknown>>));
-          }
-          return {
-            returning: insertFanoutSpy,
-            // The runs insert is awaited without .returning(); make it thenable.
-            then: (resolve: (x: unknown) => void) => resolve(undefined),
-          };
-        },
-      }),
-      execute: () => Promise.resolve([{ descendant_count: descendantCountResult }]),
-      update: (table: unknown) => ({
-        set: (vals: Record<string, unknown>) => ({
-          where: () => {
-            const name = drizzleTableName(table);
-            if (name === "subagent_fanouts") fanoutUpdates.push(vals);
-            if (name === "subagent_runs") runUpdates.push(vals);
-            return Promise.resolve(undefined);
+    ...real,
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        insert: (table: unknown) => ({
+          values: (vals: unknown) => {
+            if (
+              drizzleTableName(table) === "subagent_runs" &&
+              Array.isArray(vals)
+            ) {
+              insertedRuns.push(...(vals as Array<Record<string, unknown>>));
+            }
+            return {
+              returning: insertFanoutSpy,
+              // The runs insert is awaited without .returning(); make it thenable.
+              then: (resolve: (x: unknown) => void) => resolve(undefined),
+            };
           },
         }),
+        execute: () =>
+          Promise.resolve([{ descendant_count: descendantCountResult }]),
+        update: (table: unknown) => ({
+          set: (vals: Record<string, unknown>) => ({
+            where: () => {
+              const name = drizzleTableName(table);
+              if (name === "subagent_fanouts") fanoutUpdates.push(vals);
+              if (name === "subagent_runs") runUpdates.push(vals);
+              return Promise.resolve(undefined);
+            },
+          }),
+        }),
       }),
-    }),
-
   };
 });
 
@@ -79,11 +84,14 @@ vi.mock("../registry-loader", () => ({
     getSurfaces: () => [],
     getCapability: (name: string) =>
       (
-        {
-          "list_agent_tools": { name, agent: { riskLevel: "low" as const } },
-          "recall_memory": { name, agent: { riskLevel: "low" as const } },
-          "execute_code": { name, agent: { riskLevel: "high" as const } },
-        } as Record<string, { name: string; agent: { riskLevel: "low" | "medium" | "high" } }>
+        ({
+          list_agent_tools: { name, agent: { riskLevel: "low" as const } },
+          recall_memory: { name, agent: { riskLevel: "low" as const } },
+          execute_code: { name, agent: { riskLevel: "high" as const } },
+        }) as Record<
+          string,
+          { name: string; agent: { riskLevel: "low" | "medium" | "high" } }
+        >
       )[name],
   }),
 }));
@@ -101,7 +109,9 @@ describe("agent.subagent.dispatch handler", () => {
     runUpdates = [];
     descendantCountResult = 0;
     // Reset insert mock to return fanout row by default
-    insertFanoutSpy.mockResolvedValue([{ id: "fanuuid_123", publicId: "fan_123" }]);
+    insertFanoutSpy.mockResolvedValue([
+      { id: "fanuuid_123", publicId: "fan_123" },
+    ]);
     // Reset send mock to the success shape by default.
     inngestSendSpy.mockResolvedValue({ ids: ["evt_abc"] });
   });
@@ -124,7 +134,14 @@ describe("agent.subagent.dispatch handler", () => {
     expect(result.totalTasks).toBe(2);
     expect(result.status).toBe("pending");
     expect(inngestSendSpy).toHaveBeenCalledTimes(1);
-    const sentEvent = (inngestSendSpy.mock.calls[0] as unknown as [{ name: string; data: { fanoutId: string; depth: number; maxParallel: number } }])[0];
+    const sentEvent = (
+      inngestSendSpy.mock.calls[0] as unknown as [
+        {
+          name: string;
+          data: { fanoutId: string; depth: number; maxParallel: number };
+        },
+      ]
+    )[0];
     expect(sentEvent.name).toBe("agent/subagent.dispatch");
     // The executor matches on the uuid, NOT the public_id.
     expect(sentEvent.data.fanoutId).toBe("fanuuid_123");
@@ -182,7 +199,11 @@ describe("agent.subagent.dispatch handler", () => {
       },
       CTX,
     );
-    const sentEvent = (inngestSendSpy.mock.calls[0] as unknown as [{ name: string; data: { maxParallel: number } }])[0];
+    const sentEvent = (
+      inngestSendSpy.mock.calls[0] as unknown as [
+        { name: string; data: { maxParallel: number } },
+      ]
+    )[0];
     expect(sentEvent.data.maxParallel).toBe(10);
   });
 
@@ -211,7 +232,11 @@ describe("agent.subagent.dispatch handler", () => {
       },
       CTX,
     );
-    const sentEvent = (inngestSendSpy.mock.calls[0] as unknown as [{ data: { timeoutSeconds: number } }])[0];
+    const sentEvent = (
+      inngestSendSpy.mock.calls[0] as unknown as [
+        { data: { timeoutSeconds: number } },
+      ]
+    )[0];
     expect(sentEvent.data.timeoutSeconds).toBe(300);
   });
 
@@ -232,7 +257,9 @@ describe("agent.subagent.dispatch handler", () => {
   });
 
   it("marks child runs failed and rethrows when the Inngest emit throws", async () => {
-    inngestSendSpy.mockRejectedValueOnce(new Error("INNGEST_EVENT_KEY missing"));
+    inngestSendSpy.mockRejectedValueOnce(
+      new Error("INNGEST_EVENT_KEY missing"),
+    );
     await expect(
       agentSubagentDispatchHandler(
         {
@@ -245,7 +272,9 @@ describe("agent.subagent.dispatch handler", () => {
         },
         CTX,
       ),
-    ).rejects.toThrow(/Failed to emit subagent dispatch event: INNGEST_EVENT_KEY missing/);
+    ).rejects.toThrow(
+      /Failed to emit subagent dispatch event: INNGEST_EVENT_KEY missing/,
+    );
     // The just-created child runs are marked failed with the cause, not left
     // orphaned as perpetually `pending`. No event id was persisted.
     expect(runUpdates).toEqual([
@@ -319,10 +348,7 @@ describe("agent.subagent.dispatch — role scope narrowing", () => {
    * for that capability with the given outcome; `refs` sets the effective
    * agents.refs allow-list (undefined = no extra ceiling).
    */
-  function agentCtx(
-    caps: Record<string, "allow" | "deny">,
-    refs?: string[],
-  ) {
+  function agentCtx(caps: Record<string, "allow" | "deny">, refs?: string[]) {
     const byCapability = new Map<string, unknown>();
     for (const [name, outcome] of Object.entries(caps)) {
       byCapability.set(name, {

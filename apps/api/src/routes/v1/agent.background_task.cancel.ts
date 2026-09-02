@@ -9,6 +9,8 @@ export const agentTaskBackgroundCancelRoute = new Hono<AppEnv>();
 agentTaskBackgroundCancelRoute.post("/", async (c) => {
   const body = agentTaskBackgroundCancel.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(agentTaskBackgroundCancel.name, body, ctx, { surface: "api" });
+  const out = await invoke(agentTaskBackgroundCancel.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

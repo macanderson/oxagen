@@ -28,7 +28,11 @@ vi.mock("@/components/ui/button", () => ({
     variant?: string;
     type?: string;
   }) => (
-    <button type={(type as "button" | "submit" | "reset") ?? "button"} onClick={onClick} data-variant={variant}>
+    <button
+      type={(type as "button" | "submit" | "reset") ?? "button"}
+      onClick={onClick}
+      data-variant={variant}
+    >
       {children}
     </button>
   ),
@@ -63,7 +67,9 @@ describe("ConfirmDestructiveInline", () => {
     render(
       <ConfirmDestructiveInline description="This action cannot be undone." />,
     );
-    expect(screen.getByText("This action cannot be undone.")).toBeInTheDocument();
+    expect(
+      screen.getByText("This action cannot be undone."),
+    ).toBeInTheDocument();
   });
 
   it("renders default Confirm and Cancel buttons", () => {
@@ -73,7 +79,12 @@ describe("ConfirmDestructiveInline", () => {
   });
 
   it("renders custom confirmLabel and denyLabel", () => {
-    render(<ConfirmDestructiveInline confirmLabel="Yes, delete" denyLabel="No, keep" />);
+    render(
+      <ConfirmDestructiveInline
+        confirmLabel="Yes, delete"
+        denyLabel="No, keep"
+      />,
+    );
     expect(screen.getByText("Yes, delete")).toBeInTheDocument();
     expect(screen.getByText("No, keep")).toBeInTheDocument();
   });

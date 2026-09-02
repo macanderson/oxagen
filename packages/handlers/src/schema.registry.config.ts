@@ -3,19 +3,25 @@ import { schemaRegistryConfig } from "@oxagen/oxagen/contracts/schema.registry.c
 import { schema as db, withTenantDb } from "@oxagen/database";
 import { eq, and, isNull } from "drizzle-orm";
 import { getOrCreateRegistry } from "./schema.versioning";
+import { invalidatePinnedSchemaCache } from "./schema.pinned";
 import { logger } from "./logger";
 
-export const schemaRegistryConfigHandler: CapabilityHandler<typeof schemaRegistryConfig> = async (
-  input,
-  ctx,
-) => {
-  const registry = await getOrCreateRegistry(ctx.orgId, ctx.workspaceId, ctx.userId);
+export const schemaRegistryConfigHandler: CapabilityHandler<
+  typeof schemaRegistryConfig
+> = async (input, ctx) => {
+  const registry = await getOrCreateRegistry(
+    ctx.orgId,
+    ctx.workspaceId,
+    ctx.userId,
+  );
 
   const updated = await withTenantDb(async (tx) => {
     const [row] = await tx
       .update(db.schemaRegistries)
       .set({
-        ...(input.enforcementMode !== undefined ? { enforcementMode: input.enforcementMode } : {}),
+        ...(input.enforcementMode !== undefined
+          ? { enforcementMode: input.enforcementMode }
+          : {}),
         ...(input.conformanceFloor !== undefined
           ? { conformanceFloor: String(input.conformanceFloor) }
           : {}),
@@ -32,6 +38,12 @@ export const schemaRegistryConfigHandler: CapabilityHandler<typeof schemaRegistr
     if (!row) throw new Error("Failed to update registry config");
     return row;
   });
+
+  // enforcementMode and conformanceFloor are baked into the cached PinnedSchema,
+  // and a cache hit is keyed only on version + activation fingerprint — neither
+  // of which moves here. Without this drop, a lenient→strict switch keeps
+  // validating against the old mode for the life of the process.
+  invalidatePinnedSchemaCache(ctx.workspaceId);
 
   logger.info(
     {

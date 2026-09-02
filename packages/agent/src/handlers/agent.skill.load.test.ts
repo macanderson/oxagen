@@ -73,7 +73,10 @@ describe("agent.skill.load handler", () => {
   it("returns loaded=false when no version matches constraint", async () => {
     enqueue([{ id: "skl_1", activeVersionId: null }]); // skill found
     enqueue([{ id: "slv_1", versionNumber: 1, body: "# Skill" }]); // only version 1 available
-    const result = await agentSkillLoadHandler({ skillSlug: "summarize", version: "5" }, CTX);
+    const result = await agentSkillLoadHandler(
+      { skillSlug: "summarize", version: "5" },
+      CTX,
+    );
     expect(result.loaded).toBe(false);
     expect(result.dependencyErrors[0]!.reason).toContain("version constraint");
   });
@@ -115,7 +118,10 @@ describe("agent.skill.load handler", () => {
       { id: "slv_1", versionNumber: 1, body: "old body" },
     ]);
     enqueue([{}]); // usage bump update
-    const result = await agentSkillLoadHandler({ skillSlug: "summarize", version: "3" }, CTX);
+    const result = await agentSkillLoadHandler(
+      { skillSlug: "summarize", version: "3" },
+      CTX,
+    );
     expect(result.loaded).toBe(true);
     expect(result.versionLoaded).toBe(3);
     expect(result.body).toBe("latest body");
@@ -180,7 +186,10 @@ describe("agent.skill.load handler", () => {
       { id: "slv_2", versionNumber: 2, body: "" },
     ]);
     enqueue([{}]); // usage bump update
-    const result = await agentSkillLoadHandler({ skillSlug: "summarize", version: "^3" }, CTX);
+    const result = await agentSkillLoadHandler(
+      { skillSlug: "summarize", version: "^3" },
+      CTX,
+    );
     expect(result.loaded).toBe(true);
     expect(result.versionLoaded).toBe(5);
   });
@@ -192,7 +201,10 @@ describe("agent.skill.load handler", () => {
       { id: "slv_2", versionNumber: 2, body: "" },
     ]);
     enqueue([{}]); // usage bump update
-    const result = await agentSkillLoadHandler({ skillSlug: "summarize", version: "~2" }, CTX);
+    const result = await agentSkillLoadHandler(
+      { skillSlug: "summarize", version: "~2" },
+      CTX,
+    );
     expect(result.loaded).toBe(true);
     expect(result.versionLoaded).toBe(2);
   });

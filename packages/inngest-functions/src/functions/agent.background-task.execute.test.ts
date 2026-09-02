@@ -26,11 +26,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => fakeDb,
-  // withTenantDb pass-through: invokes the callback with the same fake tx so
-  // handler assertions keep working without a real transaction or GUC.
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fakeDb),
-
+    db: () => fakeDb,
+    // withTenantDb pass-through: invokes the callback with the same fake tx so
+    // handler assertions keep working without a real transaction or GUC.
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fakeDb),
   };
 });
 
@@ -74,19 +73,17 @@ vi.mock("@oxagen/config/env", () => ({
 // ── Capture the handler fn passed to createFunction ──────────────────────────
 // agentBackgroundTaskExecute.ts calls inngest.createFunction(opts, trigger, handlerFn).
 // We capture handlerFn so tests can invoke it directly without Inngest.
-let capturedHandler: ((ctx: {
-  event: { data: Record<string, unknown> };
-  step: {
-    run: (name: string, fn: () => Promise<unknown>) => Promise<unknown>;
-  };
-}) => Promise<unknown>) | null = null;
+let capturedHandler:
+  | ((ctx: {
+      event: { data: Record<string, unknown> };
+      step: {
+        run: (name: string, fn: () => Promise<unknown>) => Promise<unknown>;
+      };
+    }) => Promise<unknown>)
+  | null = null;
 
 mocks.inngestCreateFunction.mockImplementation(
-  (
-    _opts: unknown,
-    _trigger: unknown,
-    handler: typeof capturedHandler,
-  ) => {
+  (_opts: unknown, _trigger: unknown, handler: typeof capturedHandler) => {
     capturedHandler = handler;
     return {}; // return value is the registered function object
   },
@@ -187,7 +184,9 @@ describe("agentBackgroundTaskExecute Inngest handler", () => {
     ).rejects.toThrow("capability error");
 
     // The mark-failed update must have been called
-    const setCalls = mocks.dbUpdateSet.mock.calls as Array<[Record<string, unknown>]>;
+    const setCalls = mocks.dbUpdateSet.mock.calls as Array<
+      [Record<string, unknown>]
+    >;
     const failedCall = setCalls.find(
       ([arg]) => (arg as Record<string, unknown>).status === "failed",
     );
@@ -236,11 +235,15 @@ describe("agentBackgroundTaskExecute Inngest handler", () => {
       capturedHandler!({ event: BASE_EVENT, step: makeStep() }),
     ).rejects.toBe("plain string error");
 
-    const setCalls = mocks.dbUpdateSet.mock.calls as Array<[Record<string, unknown>]>;
+    const setCalls = mocks.dbUpdateSet.mock.calls as Array<
+      [Record<string, unknown>]
+    >;
     const failedCall = setCalls.find(
       ([arg]) => (arg as Record<string, unknown>).status === "failed",
     );
-    expect((failedCall![0] as Record<string, unknown>).failureReason).toBe("plain string error");
+    expect((failedCall![0] as Record<string, unknown>).failureReason).toBe(
+      "plain string error",
+    );
   });
 
   it("does not double-insert the tool_invocations telemetry row when the run is replayed with memoized steps (Inngest retry simulation)", async () => {
@@ -268,9 +271,14 @@ describe("agentBackgroundTaskExecute Inngest handler", () => {
     // Exactly one completed tool_invocations row for the single logical
     // task execution — not doubled by the replay.
     expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
-    const telArgs = mocks.insertToolInvocation.mock.calls[0]![0] as Record<string, unknown>;
+    const telArgs = mocks.insertToolInvocation.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
     expect(telArgs.status).toBe("completed");
     // Deterministic invocation_id — not a fresh crypto.randomUUID() per replay.
-    expect(telArgs.invocation_id).toEqual(expect.stringMatching(/^[0-9a-f-]{36}$/));
+    expect(telArgs.invocation_id).toEqual(
+      expect.stringMatching(/^[0-9a-f-]{36}$/),
+    );
   });
 });

@@ -6,18 +6,22 @@ import { buildContext } from "../context";
 
 export const schema = {
   ...workspaceModelSettingsWrite.input.shape,
-  defaultTextTier: workspaceModelSettingsWrite.input.shape.defaultTextTier.describe(
-    "Workspace text model tier override (null clears the override)",
-  ),
-  defaultTextModel: workspaceModelSettingsWrite.input.shape.defaultTextModel.describe(
-    "Explicit workspace text model id (null clears)",
-  ),
-  defaultImageModel: workspaceModelSettingsWrite.input.shape.defaultImageModel.describe(
-    "Explicit workspace image model id (null clears)",
-  ),
-  defaultVideoModel: workspaceModelSettingsWrite.input.shape.defaultVideoModel.describe(
-    "Explicit workspace video model id (null clears)",
-  ),
+  defaultTextTier:
+    workspaceModelSettingsWrite.input.shape.defaultTextTier.describe(
+      "Workspace text model tier override (null clears the override)",
+    ),
+  defaultTextModel:
+    workspaceModelSettingsWrite.input.shape.defaultTextModel.describe(
+      "Explicit workspace text model id (null clears)",
+    ),
+  defaultImageModel:
+    workspaceModelSettingsWrite.input.shape.defaultImageModel.describe(
+      "Explicit workspace image model id (null clears)",
+    ),
+  defaultVideoModel:
+    workspaceModelSettingsWrite.input.shape.defaultVideoModel.describe(
+      "Explicit workspace video model id (null clears)",
+    ),
 };
 
 export const metadata: ToolMetadata = {
@@ -34,6 +38,8 @@ export default async function workspaceModelSettingsWriteTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(workspaceModelSettingsWrite.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(workspaceModelSettingsWrite.name, args, ctx, {
+    surface: "mcp",
+  });
   return workspaceModelSettingsWrite.output.parse(output);
 }

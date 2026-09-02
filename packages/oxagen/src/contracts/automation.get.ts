@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const automationGet = registerCapability({
   name: "get_automation",
   domain: "automation",
-  description: "Get one automation's trigger config, description, steps, and recent run history",
+  description:
+    "Get one automation's trigger config, description, steps, and recent run history",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "docs", "unit", "app"],
@@ -18,7 +19,10 @@ export const automationGet = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    automation_id: z.string().min(1).describe("Trigger public ID (plt_*) from automation.list"),
+    automation_id: z
+      .string()
+      .min(1)
+      .describe("Trigger public ID (plt_*) from automation.list"),
   }),
   output: z.object({
     automation_id: z.string(),

@@ -19,7 +19,15 @@ afterEach(cleanup);
 
 // Mock next/image
 vi.mock("next/image", () => ({
-  default: ({ src, alt, ...rest }: { src: string; alt: string; [key: string]: unknown }) => (
+  default: ({
+    src,
+    alt,
+    ...rest
+  }: {
+    src: string;
+    alt: string;
+    [key: string]: unknown;
+  }) => (
     // eslint-disable-next-line @next/next/no-img-element -- jsdom test shim; real next/image requires Next.js runtime
     <img src={src} alt={alt} {...rest} />
   ),
@@ -36,7 +44,9 @@ vi.mock("react-easy-crop/react-easy-crop.css", () => ({}));
 describe("AvatarUpload — no image", () => {
   it("renders 'Upload photo' button when value is null", () => {
     render(<AvatarUpload value={null} onChange={vi.fn()} />);
-    expect(screen.getByRole("button", { name: /upload avatar photo/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /upload avatar photo/i }),
+    ).toBeInTheDocument();
   });
 
   it("shows fallback initial when no image and fallback is provided", () => {
@@ -47,12 +57,24 @@ describe("AvatarUpload — no image", () => {
 
 describe("AvatarUpload — with image", () => {
   it("renders 'Change photo' button when value is set", () => {
-    render(<AvatarUpload value="https://example.com/avatar.png" onChange={vi.fn()} />);
-    expect(screen.getByRole("button", { name: /change avatar photo/i })).toBeInTheDocument();
+    render(
+      <AvatarUpload
+        value="https://example.com/avatar.png"
+        onChange={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /change avatar photo/i }),
+    ).toBeInTheDocument();
   });
 
   it("renders an img element with the provided src", () => {
-    render(<AvatarUpload value="https://example.com/avatar.png" onChange={vi.fn()} />);
+    render(
+      <AvatarUpload
+        value="https://example.com/avatar.png"
+        onChange={vi.fn()}
+      />,
+    );
     // The component renders alt="Avatar" on the preview image
     const img = screen.getByAltText("Avatar");
     expect(img).toHaveAttribute("src", "https://example.com/avatar.png");
@@ -62,19 +84,25 @@ describe("AvatarUpload — with image", () => {
 describe("AvatarUpload — disabled", () => {
   it("disables the trigger button when disabled=true", () => {
     render(<AvatarUpload value={null} onChange={vi.fn()} disabled />);
-    expect(screen.getByRole("button", { name: /upload avatar photo/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /upload avatar photo/i }),
+    ).toBeDisabled();
   });
 });
 
 describe("AvatarUpload — shape", () => {
   it("applies rounded-full to the preview when shape='circle' (default)", () => {
-    const { container } = render(<AvatarUpload value={null} onChange={vi.fn()} />);
+    const { container } = render(
+      <AvatarUpload value={null} onChange={vi.fn()} />,
+    );
     const preview = container.querySelector(".rounded-full");
     expect(preview).toBeTruthy();
   });
 
   it("applies rounded-md to the preview when shape='square'", () => {
-    const { container } = render(<AvatarUpload value={null} onChange={vi.fn()} shape="square" />);
+    const { container } = render(
+      <AvatarUpload value={null} onChange={vi.fn()} shape="square" />,
+    );
     // The outer preview wrapper should have rounded-md instead of rounded-full
     const preview = container.querySelector(".rounded-md");
     expect(preview).toBeTruthy();

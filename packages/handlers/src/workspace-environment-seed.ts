@@ -19,7 +19,11 @@ interface SeedArgs {
   tx?: Tx;
 }
 
-async function runSeed(tx: Tx, orgId: string, workspaceId: string): Promise<string> {
+async function runSeed(
+  tx: Tx,
+  orgId: string,
+  workspaceId: string,
+): Promise<string> {
   const [existing] = await tx
     .select({ id: schema.environments.id })
     .from(schema.environments)

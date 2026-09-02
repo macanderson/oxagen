@@ -13,18 +13,34 @@ function Demo() {
   const toast = useToast();
   return (
     <div className="flex flex-wrap gap-2">
-      <Button onClick={() => toast.add({ title: "Saved", description: "Your changes are live." })}>
+      <Button
+        onClick={() =>
+          toast.add({ title: "Saved", description: "Your changes are live." })
+        }
+      >
         Default
       </Button>
       <Button
         variant="outline"
-        onClick={() => toast.add({ title: "Synced", description: "Workspace up to date.", type: "success" })}
+        onClick={() =>
+          toast.add({
+            title: "Synced",
+            description: "Workspace up to date.",
+            type: "success",
+          })
+        }
       >
         Success
       </Button>
       <Button
         variant="destructive"
-        onClick={() => toast.add({ title: "Failed", description: "Could not reach the API.", type: "error" })}
+        onClick={() =>
+          toast.add({
+            title: "Failed",
+            description: "Could not reach the API.",
+            type: "error",
+          })
+        }
       >
         Error
       </Button>

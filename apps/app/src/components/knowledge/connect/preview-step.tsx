@@ -13,7 +13,11 @@
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { LoadingState, ErrorState, EmptyState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
+import {
+  LoadingState,
+  ErrorState,
+  EmptyState,
+} from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { Inbox } from "lucide-react";
 import type { PreviewRecordType } from "./wizard-types";
 
@@ -38,7 +42,8 @@ export interface PreviewStepProps {
 
 function formatSampleValue(value: unknown): string {
   if (value === null || value === undefined) return "—";
-  if (typeof value === "string") return value.length > 60 ? `${value.slice(0, 57)}…` : value;
+  if (typeof value === "string")
+    return value.length > 60 ? `${value.slice(0, 57)}…` : value;
   if (typeof value === "object") return JSON.stringify(value).slice(0, 60);
   return String(value);
 }
@@ -87,19 +92,28 @@ export function PreviewStep({
               data-testid={`preview-record-type-${rt.sourceRecordType}`}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-foreground">{rt.displayName}</span>
+                <span className="text-sm font-semibold text-foreground">
+                  {rt.displayName}
+                </span>
                 <Badge variant="outline" className="text-[10px]">
                   {rt.sampleCount} sample{rt.sampleCount === 1 ? "" : "s"}
                 </Badge>
               </div>
-              {rt.description && <p className="text-xs text-muted-foreground">{rt.description}</p>}
+              {rt.description && (
+                <p className="text-xs text-muted-foreground">
+                  {rt.description}
+                </p>
+              )}
               {rt.sampleRecords.length > 0 && (
                 <div className="overflow-x-auto rounded-md border border-border/40">
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="border-b border-border/40 bg-muted/40">
                         {rt.sampleFields.map((field) => (
-                          <th key={field} className="px-2.5 py-1.5 font-medium text-muted-foreground">
+                          <th
+                            key={field}
+                            className="px-2.5 py-1.5 font-medium text-muted-foreground"
+                          >
                             {field}
                           </th>
                         ))}
@@ -107,10 +121,18 @@ export function PreviewStep({
                     </thead>
                     <tbody>
                       {rt.sampleRecords.slice(0, 3).map((record, idx) => (
-                        <tr key={idx} className="border-b border-border/20 last:border-b-0">
+                        <tr
+                          key={idx}
+                          className="border-b border-border/20 last:border-b-0"
+                        >
                           {rt.sampleFields.map((field) => (
-                            <td key={field} className="px-2.5 py-1.5 text-foreground">
-                              {formatSampleValue((record as Record<string, unknown>)[field])}
+                            <td
+                              key={field}
+                              className="px-2.5 py-1.5 text-foreground"
+                            >
+                              {formatSampleValue(
+                                (record as Record<string, unknown>)[field],
+                              )}
                             </td>
                           ))}
                         </tr>
@@ -125,10 +147,22 @@ export function PreviewStep({
       )}
 
       <div className="flex items-center justify-between gap-3 border-t border-border/40 pt-4">
-        <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={submitting}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onCancel}
+          disabled={submitting}
+        >
           Cancel
         </Button>
-        <Button type="button" size="sm" onClick={onNext} disabled={submitting} data-testid="preview-next-btn">
+        <Button
+          type="button"
+          size="sm"
+          onClick={onNext}
+          disabled={submitting}
+          data-testid="preview-next-btn"
+        >
           Next: Mappings
         </Button>
       </div>

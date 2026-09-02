@@ -201,10 +201,17 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
   const [query, setQuery] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement>(null);
 
+  // The active index is stored alongside the query it was chosen for. When the
+  // query moves on, the stored index is stale (the item list has been rebuilt),
+  // so it reads back as 0 — the first row of the new list — without an extra
+  // render to reset it. This is a query-scoped reset, NOT a clamp: the index is
+  // only bounded against `items.length` when ArrowDown/ArrowUp move it, so a
+  // list that shrinks asynchronously under a *stable* query can leave the index
+  // past the end, in which case Enter finds no item and does nothing.
   const [activeIndex, setActiveIndex] = React.useState(0);
   const [indexQuery, setIndexQuery] = React.useState("");
-  const clampedActiveIndex = indexQuery === query ? activeIndex : 0;
-  const setClampedActiveIndex = React.useCallback(
+  const activeIndexForQuery = indexQuery === query ? activeIndex : 0;
+  const setActiveIndexForQuery = React.useCallback(
     (next: number | ((prev: number) => number)) => {
       setActiveIndex(next);
       setIndexQuery(query);
@@ -413,17 +420,17 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
     (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setClampedActiveIndex((i) => Math.min(i + 1, items.length - 1));
+        setActiveIndexForQuery((i) => Math.min(i + 1, items.length - 1));
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        setClampedActiveIndex((i) => Math.max(i - 1, 0));
+        setActiveIndexForQuery((i) => Math.max(i - 1, 0));
       } else if (e.key === "Enter") {
         e.preventDefault();
-        const item = items[clampedActiveIndex];
+        const item = items[activeIndexForQuery];
         if (item) void activateItem(item);
       }
     },
-    [items, clampedActiveIndex, activateItem, setClampedActiveIndex],
+    [items, activeIndexForQuery, activateItem, setActiveIndexForQuery],
   );
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -460,7 +467,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
             role="combobox"
             aria-label="Search or ask"
             aria-controls="cmd-listbox"
-            aria-activedescendant={`cmd-item-${clampedActiveIndex}`}
+            aria-activedescendant={`cmd-item-${activeIndexForQuery}`}
             aria-expanded
             aria-haspopup="listbox"
             autoComplete="off"
@@ -518,8 +525,8 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
                         icon={
                           <Sparkles className="h-4 w-4" aria-hidden="true" />
                         }
-                        active={clampedActiveIndex === baseIdx + i}
-                        onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
+                        active={activeIndexForQuery === baseIdx + i}
+                        onMouseEnter={() => setActiveIndexForQuery(baseIdx + i)}
                         onSelect={() =>
                           void activateItem({
                             type: "suggestion",
@@ -547,8 +554,8 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
                       id={`cmd-item-${baseIdx + i}`}
                       label={template.title}
                       icon={categoryIcon(template.category)}
-                      active={clampedActiveIndex === baseIdx + i}
-                      onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
+                      active={activeIndexForQuery === baseIdx + i}
+                      onMouseEnter={() => setActiveIndexForQuery(baseIdx + i)}
                       onSelect={() =>
                         void activateItem({
                           type: "quick-action",
@@ -596,8 +603,8 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
                         id={`cmd-item-${baseIdx + i}`}
                         label={row.label}
                         icon={entityKindIcon(row.kind)}
-                        active={clampedActiveIndex === baseIdx + i}
-                        onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
+                        active={activeIndexForQuery === baseIdx + i}
+                        onMouseEnter={() => setActiveIndexForQuery(baseIdx + i)}
                         onSelect={() =>
                           void activateItem({
                             type: "search-result",
@@ -639,8 +646,8 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
                       icon={
                         <Navigation className="h-4 w-4" aria-hidden="true" />
                       }
-                      active={clampedActiveIndex === baseIdx + i}
-                      onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
+                      active={activeIndexForQuery === baseIdx + i}
+                      onMouseEnter={() => setActiveIndexForQuery(baseIdx + i)}
                       onSelect={() =>
                         void activateItem({
                           type: "navigate",
@@ -673,8 +680,8 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
                       id={`cmd-item-${baseIdx + i}`}
                       label={entry.query}
                       icon={<Clock className="h-4 w-4" aria-hidden="true" />}
-                      active={clampedActiveIndex === baseIdx + i}
-                      onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
+                      active={activeIndexForQuery === baseIdx + i}
+                      onMouseEnter={() => setActiveIndexForQuery(baseIdx + i)}
                       onSelect={() =>
                         void activateItem({
                           type: "recent",
@@ -712,8 +719,8 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
                       aria-hidden="true"
                     />
                   }
-                  active={clampedActiveIndex === askIdx}
-                  onMouseEnter={() => setClampedActiveIndex(askIdx)}
+                  active={activeIndexForQuery === askIdx}
+                  onMouseEnter={() => setActiveIndexForQuery(askIdx)}
                   onSelect={() =>
                     void activateItem({
                       type: "ask",
@@ -832,11 +839,17 @@ function CommandItemRow({
 /**
  * Best-effort extraction of route params from a pathname.
  *
- * Splits the pathname into segments and returns a map keyed by common param
- * names inferred from position. This is intentionally simple — templates that
- * require specific params (e.g. runId) will only match on detail pages where
- * those params are present and the page entity is registered via
- * useRegisterPageEntity.
+ * Splits the pathname into segments and, on any path with at least five
+ * segments, binds the fifth segment to EVERY id param name at once
+ * (runId / triggerId / eventId / playbookId) because the segment's kind is not
+ * knowable from position alone. A template gated on `runId` therefore also
+ * matches a trigger or event detail page and will render that page's id as if
+ * it were a run id.
+ *
+ * The narrowing that keeps this honest is `pageEntity` (registered by the page
+ * via useRegisterPageEntity), which carries the real kind — templates that
+ * depend on the id being a specific entity should gate on the entity, not on
+ * the param.
  */
 function extractRouteParams(pathname: string): Record<string, string> {
   const segments = pathname.split("/").filter(Boolean);

@@ -1,11 +1,12 @@
 /**
  * review-links.tsx — Overview → "Needs attention" quick links.
  *
- * The spec sanctions only the four invoked tile capabilities (spend, runs,
- * graph, sources) — reviewable-item counts for memory promotions and plan
- * approvals are out of scope for this page. This row is
- * therefore a static list of links to the surfaces that own those reviews,
- * not a live capability invocation.
+ * A STATIC list of links to the surfaces that own reviewable work (memory
+ * promotions, open sessions). It invokes no capability and therefore shows no
+ * counts: it cannot tell you whether anything actually needs attention, only
+ * where to go and look. Wiring real pending-item counts needs a capability that
+ * returns them; until then, keep this honest — do not add a badge here that is
+ * not backed by a live read.
  */
 import Link from "next/link";
 import { BrainCircuit, Sparkles } from "lucide-react";

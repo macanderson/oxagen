@@ -48,7 +48,9 @@ describe("RunHistory — empty state", () => {
 
 describe("RunHistory — Started column", () => {
   it("prefers startedAt and renders the locale-formatted timestamp", () => {
-    render(<RunHistory runs={[run({ startedAt: "2026-07-01T12:30:00.000Z" })]} />);
+    render(
+      <RunHistory runs={[run({ startedAt: "2026-07-01T12:30:00.000Z" })]} />,
+    );
     const expected = new Date("2026-07-01T12:30:00.000Z").toLocaleString();
     expect(screen.getByText(expected)).toBeTruthy();
   });
@@ -64,8 +66,14 @@ describe("RunHistory — Started column", () => {
   });
 
   it("renders a dash for an invalid ISO string", () => {
-    render(<RunHistory runs={[run({ startedAt: "not-a-date", createdAt: "not-a-date" })]} />);
-    const row = screen.getByTestId("run-history-table").querySelector("tbody tr");
+    render(
+      <RunHistory
+        runs={[run({ startedAt: "not-a-date", createdAt: "not-a-date" })]}
+      />,
+    );
+    const row = screen
+      .getByTestId("run-history-table")
+      .querySelector("tbody tr");
     expect(row?.textContent).toContain("—");
   });
 });
@@ -101,8 +109,12 @@ describe("RunHistory — Duration column", () => {
 
   it("renders a dash when either endpoint is null", () => {
     render(<RunHistory runs={[run({ completedAt: null })]} />);
-    const row = screen.getByTestId("run-history-table").querySelector("tbody tr");
-    expect(within(row as HTMLElement).getAllByText("—").length).toBeGreaterThan(0);
+    const row = screen
+      .getByTestId("run-history-table")
+      .querySelector("tbody tr");
+    expect(within(row as HTMLElement).getAllByText("—").length).toBeGreaterThan(
+      0,
+    );
   });
 
   it("renders a dash for a negative duration (completedAt before startedAt)", () => {
@@ -116,8 +128,12 @@ describe("RunHistory — Duration column", () => {
         ]}
       />,
     );
-    const row = screen.getByTestId("run-history-table").querySelector("tbody tr");
-    expect(within(row as HTMLElement).getAllByText("—").length).toBeGreaterThan(0);
+    const row = screen
+      .getByTestId("run-history-table")
+      .querySelector("tbody tr");
+    expect(within(row as HTMLElement).getAllByText("—").length).toBeGreaterThan(
+      0,
+    );
   });
 });
 

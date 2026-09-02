@@ -14,7 +14,10 @@ describe("NotFoundPage", () => {
     const { getByText, getByRole } = render(<NotFoundPage />);
     expect(getByText("404")).toBeInTheDocument();
     expect(getByText("Page not found")).toBeInTheDocument();
-    expect(getByRole("link", { name: "Back to home" })).toHaveAttribute("href", "/");
+    expect(getByRole("link", { name: "Back to home" })).toHaveAttribute(
+      "href",
+      "/",
+    );
   });
 
   it("uses a custom homeHref when provided", () => {

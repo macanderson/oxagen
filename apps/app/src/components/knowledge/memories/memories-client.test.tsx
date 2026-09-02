@@ -935,12 +935,10 @@ describe("MemoriesClient — create memory UI", () => {
   });
 
   it("shows an error and keeps the sheet open when create fails", async () => {
-    const mockCreate = vi
-      .fn()
-      .mockResolvedValue({
-        ok: false,
-        error: "You must be a workspace member to add memories.",
-      });
+    const mockCreate = vi.fn().mockResolvedValue({
+      ok: false,
+      error: "You must be a workspace member to add memories.",
+    });
     render(
       <MemoriesClient
         {...baseProps}

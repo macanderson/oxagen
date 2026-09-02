@@ -15,13 +15,27 @@ afterEach(cleanup);
 
 vi.mock("@/components/ui/tabs", () => ({
   Tabs: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  TabsList: ({ children }: { children: React.ReactNode }) => <div role="tablist">{children}</div>,
-  TabsTab: ({ children, value }: { children: React.ReactNode; value: string }) => (
+  TabsList: ({ children }: { children: React.ReactNode }) => (
+    <div role="tablist">{children}</div>
+  ),
+  TabsTab: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => (
     <button role="tab" data-value={value} type="button">
       {children}
     </button>
   ),
-  TabsPanel: ({ children, value }: { children: React.ReactNode; value: string }) => (
+  TabsPanel: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => (
     <div role="tabpanel" data-value={value}>
       {children}
     </div>
@@ -35,13 +49,18 @@ vi.mock("../tool-call-card", () => ({
 describe("parseAnsiLine", () => {
   it("returns a single plain segment for text with no escape codes", async () => {
     const { parseAnsiLine } = await import("./terminal-trace-card");
-    expect(parseAnsiLine("hello world")).toEqual([{ text: "hello world", className: undefined }]);
+    expect(parseAnsiLine("hello world")).toEqual([
+      { text: "hello world", className: undefined },
+    ]);
   });
 
   it("applies a foreground-color class for a basic SGR code", async () => {
     const { parseAnsiLine } = await import("./terminal-trace-card");
     const segments = parseAnsiLine("\x1b[31merror\x1b[0m ok");
-    expect(segments[0]).toMatchObject({ text: "error", className: "text-error" });
+    expect(segments[0]).toMatchObject({
+      text: "error",
+      className: "text-error",
+    });
     expect(segments[1]).toMatchObject({ text: " ok", className: undefined });
   });
 
@@ -94,7 +113,9 @@ describe("parseAnsiLine", () => {
 
 describe("TerminalTraceCard", () => {
   it("renders the exit code as a success-toned status for exit 0", async () => {
-    const { default: TerminalTraceCard } = await import("./terminal-trace-card");
+    const { default: TerminalTraceCard } = await import(
+      "./terminal-trace-card"
+    );
     render(<TerminalTraceCard exitCode={0} stdout="ok" />);
     const status = screen.getByText("exit 0");
     expect(status).toBeInTheDocument();
@@ -102,14 +123,18 @@ describe("TerminalTraceCard", () => {
   });
 
   it("renders a destructive-toned exit code status for a non-zero exit", async () => {
-    const { default: TerminalTraceCard } = await import("./terminal-trace-card");
+    const { default: TerminalTraceCard } = await import(
+      "./terminal-trace-card"
+    );
     render(<TerminalTraceCard exitCode={1} stderr="boom" />);
     const status = screen.getByText("exit 1");
     expect(status.className).toContain("text-destructive");
   });
 
   it("shows a timed-out status when timedOut is true", async () => {
-    const { default: TerminalTraceCard } = await import("./terminal-trace-card");
+    const { default: TerminalTraceCard } = await import(
+      "./terminal-trace-card"
+    );
     render(<TerminalTraceCard exitCode={124} timedOut stdout="" />);
     const timedOut = screen.getByText("Timed out");
     expect(timedOut).toBeInTheDocument();
@@ -117,34 +142,53 @@ describe("TerminalTraceCard", () => {
   });
 
   it("renders duration when provided", async () => {
-    const { default: TerminalTraceCard } = await import("./terminal-trace-card");
+    const { default: TerminalTraceCard } = await import(
+      "./terminal-trace-card"
+    );
     render(<TerminalTraceCard exitCode={0} durationMs={4200} stdout="done" />);
     expect(screen.getByText("4s")).toBeInTheDocument();
   });
 
   it("renders the command line when provided", async () => {
-    const { default: TerminalTraceCard } = await import("./terminal-trace-card");
-    render(<TerminalTraceCard exitCode={0} command="pnpm build" stdout="done" />);
+    const { default: TerminalTraceCard } = await import(
+      "./terminal-trace-card"
+    );
+    render(
+      <TerminalTraceCard exitCode={0} command="pnpm build" stdout="done" />,
+    );
     expect(screen.getByText("$ pnpm build")).toBeInTheDocument();
   });
 
   it("renders stdout content", async () => {
-    const { default: TerminalTraceCard } = await import("./terminal-trace-card");
+    const { default: TerminalTraceCard } = await import(
+      "./terminal-trace-card"
+    );
     render(<TerminalTraceCard exitCode={0} stdout="line one\nline two" />);
-    expect(screen.getByTestId("terminal-trace-stdout")).toHaveTextContent("line one");
-    expect(screen.getByTestId("terminal-trace-stdout")).toHaveTextContent("line two");
+    expect(screen.getByTestId("terminal-trace-stdout")).toHaveTextContent(
+      "line one",
+    );
+    expect(screen.getByTestId("terminal-trace-stdout")).toHaveTextContent(
+      "line two",
+    );
   });
 
   it("shows an empty placeholder when stdout/stderr is absent", async () => {
-    const { default: TerminalTraceCard } = await import("./terminal-trace-card");
+    const { default: TerminalTraceCard } = await import(
+      "./terminal-trace-card"
+    );
     render(<TerminalTraceCard exitCode={0} />);
     const placeholders = screen.getAllByText("(empty)");
     expect(placeholders.length).toBeGreaterThan(0);
   });
 
   it("auto-collapses output beyond 40 lines with an expand control", async () => {
-    const { default: TerminalTraceCard } = await import("./terminal-trace-card");
-    const longOutput = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join("\n");
+    const { default: TerminalTraceCard } = await import(
+      "./terminal-trace-card"
+    );
+    const longOutput = Array.from(
+      { length: 60 },
+      (_, i) => `line ${i + 1}`,
+    ).join("\n");
     render(<TerminalTraceCard exitCode={0} stdout={longOutput} />);
     expect(screen.getByText("line 1")).toBeInTheDocument();
     expect(screen.queryByText("line 60")).not.toBeInTheDocument();
@@ -152,9 +196,14 @@ describe("TerminalTraceCard", () => {
   });
 
   it("expands to show all lines when the expand control is clicked", async () => {
-    const { default: TerminalTraceCard } = await import("./terminal-trace-card");
+    const { default: TerminalTraceCard } = await import(
+      "./terminal-trace-card"
+    );
     const { default: userEvent } = await import("@testing-library/user-event");
-    const longOutput = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join("\n");
+    const longOutput = Array.from(
+      { length: 60 },
+      (_, i) => `line ${i + 1}`,
+    ).join("\n");
     render(<TerminalTraceCard exitCode={0} stdout={longOutput} />);
     await userEvent.click(screen.getByText("Show 20 more lines"));
     expect(screen.getByText("line 60")).toBeInTheDocument();
@@ -162,11 +211,12 @@ describe("TerminalTraceCard", () => {
   });
 
   it("renders data-component and data-status attributes", async () => {
-    const { default: TerminalTraceCard } = await import("./terminal-trace-card");
-    render(<TerminalTraceCard exitCode={1} stdout="x" />);
-    expect(document.querySelector("[data-component='terminal-trace-card']")).toHaveAttribute(
-      "data-status",
-      "failed",
+    const { default: TerminalTraceCard } = await import(
+      "./terminal-trace-card"
     );
+    render(<TerminalTraceCard exitCode={1} stdout="x" />);
+    expect(
+      document.querySelector("[data-component='terminal-trace-card']"),
+    ).toHaveAttribute("data-status", "failed");
   });
 });

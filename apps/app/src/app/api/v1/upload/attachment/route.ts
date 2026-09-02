@@ -90,10 +90,10 @@ export async function POST(req: Request): Promise<NextResponse> {
       { status: 400 },
     );
   }
-  // Narrowed by the membership check above — safe to treat as AttachmentKind
-  // from here on, and it's structurally valid for both the @oxagen/storage
-  // AssetKind (limits/MIME allowlist) and @oxagen/handlers AssetKind
-  // (persistGeneratedAsset's kind union).
+  // Narrowed by the ATTACHMENT_KINDS allowlist check above — safe to treat as
+  // AttachmentKind from here on, and it's structurally valid for both the
+  // @oxagen/storage AssetKind (limits/MIME allowlist) and @oxagen/handlers
+  // AssetKind (persistGeneratedAsset's kind union).
   const kind = kindCandidate as AttachmentKind;
 
   const orgSlug = form.get("orgSlug");

@@ -27,7 +27,9 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function imageCreateTool(args: InferSchema<typeof schema>) {
+export default async function imageCreateTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   const output = await invoke(imageCreate.name, args, ctx, { surface: "mcp" });
   return imageCreate.output.parse(output);

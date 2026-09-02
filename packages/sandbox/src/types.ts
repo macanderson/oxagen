@@ -15,15 +15,26 @@ export interface SandboxRequest {
    */
   files?: Record<string, string>;
   timeoutMs: number;
+  /**
+   * RAM ceiling in MiB. Enforced by docker (`HostConfig.Memory`) and modal
+   * (`memory_mb` on the runner). The vercel driver has no independent memory
+   * knob — @vercel/sandbox derives RAM from vCPU count — so this field is
+   * ignored there.
+   */
   memoryMb: number;
   network: "allow" | "deny";
   /**
-   * Custom container image (a digest-pinned ref) from a sandbox template's
-   * `runtime`. Overrides the language default image in `images.ts`. Only drivers
-   * that can pull an arbitrary image honor it: docker (used as the image string)
-   * and modal (passed to the runner's `image` param). The vercel driver has a
-   * fixed runtime set and throws a clear error when it is set — no silent
-   * fallback to the default image.
+   * Custom container image from a sandbox template's `runtime`. Overrides the
+   * language default image in `images.ts`. Only drivers that can pull an
+   * arbitrary image honor it: docker (used as the image string) and modal
+   * (passed to the runner's `image` param). The vercel driver has a fixed
+   * runtime set and throws a clear error when it is set — no silent fallback
+   * to the default image.
+   *
+   * The value is a workspace-admin-supplied template field, NOT model input,
+   * and it is NOT validated to be digest-pinned: a mutable tag here opts that
+   * template out of the pinning guarantee `images.ts` provides for the
+   * built-in images.
    */
   imageRef?: string;
   /**

@@ -27,7 +27,9 @@ export const browserSubmit = registerCapability({
       .string()
       .min(1)
       .optional()
-      .describe("CSS selector of the submit control. Omit to press Enter on the focused field."),
+      .describe(
+        "CSS selector of the submit control. Omit to press Enter on the focused field.",
+      ),
     timeoutMs: z.number().int().min(1_000).max(120_000).default(60_000),
   }),
   output: z.object({

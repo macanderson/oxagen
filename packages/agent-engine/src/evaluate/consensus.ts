@@ -107,7 +107,10 @@ function countDiffLines(diff: string): number {
   const lines = diff.split("\n");
   let count = 0;
   for (const line of lines) {
-    if (line.length > 0 && (line[0] === " " || line[0] === "+" || line[0] === "-")) {
+    if (
+      line.length > 0 &&
+      (line[0] === " " || line[0] === "+" || line[0] === "-")
+    ) {
       count++;
     }
   }
@@ -188,7 +191,10 @@ export function normalizeDiff(diff: string): NormalizedDiff {
 
       // Normalize the hunk header: keep @@ marker but zero offsets
       // e.g., "@@ -1,4 +1,4 @@" → "@@ -0,0 +0,0 @@"
-      const normalized = line.replace(/@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/, "@@ -0,0 +0,0 @@");
+      const normalized = line.replace(
+        /@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/,
+        "@@ -0,0 +0,0 @@",
+      );
       currentHunkLines.push(normalized);
 
       i++;
@@ -196,7 +202,10 @@ export function normalizeDiff(diff: string): NormalizedDiff {
     }
 
     // Content line: strip trailing whitespace
-    if (line.length > 0 && (line[0] === " " || line[0] === "+" || line[0] === "-")) {
+    if (
+      line.length > 0 &&
+      (line[0] === " " || line[0] === "+" || line[0] === "-")
+    ) {
       // Strip trailing whitespace but preserve leading context marker
       const marker = line[0];
       const content = line.slice(1).trimEnd();
@@ -239,7 +248,11 @@ export function normalizeDiff(diff: string): NormalizedDiff {
         }
 
         // Check if this is a '-' line followed by a '+' line that differ only in whitespace
-        if (line.startsWith("-") && j + 1 < hunkLines.length && hunkLines[j + 1]!.startsWith("+")) {
+        if (
+          line.startsWith("-") &&
+          j + 1 < hunkLines.length &&
+          hunkLines[j + 1]!.startsWith("+")
+        ) {
           const removedContent = line.slice(1);
           const addedContent = hunkLines[j + 1]!.slice(1);
 
@@ -247,7 +260,10 @@ export function normalizeDiff(diff: string): NormalizedDiff {
           const removedCollapsed = removedContent.replace(/\s+/g, "");
           const addedCollapsed = addedContent.replace(/\s+/g, "");
 
-          if (removedCollapsed === addedCollapsed && removedCollapsed.length > 0) {
+          if (
+            removedCollapsed === addedCollapsed &&
+            removedCollapsed.length > 0
+          ) {
             // Whitespace-only change: skip both lines
             j += 2;
             continue;
@@ -304,7 +320,8 @@ export function diffClusters(diffs: string[]): DiffCluster[] {
 
   for (let i = 0; i < diffs.length; i++) {
     const normalized = normalizeDiff(diffs[i]!);
-    const fingerprint = normalized.files.length === 0 ? "empty" : normalized.fingerprint;
+    const fingerprint =
+      normalized.files.length === 0 ? "empty" : normalized.fingerprint;
 
     let members = clusterMap.get(fingerprint);
     if (!members) {
@@ -342,8 +359,18 @@ export function diffClusters(diffs: string[]): DiffCluster[] {
  *     → 'best-effort'; winner = highest evidenceScore, tie → smallest diff,
  *       then lowest index. Special case: if ALL diffs are empty, winner =
  *       highest evidenceScore (lowest index on tie).
+ *
+ * `winner` is the `index` FIELD of the chosen {@link CandidateEvidence}, not a
+ * position in the array — a caller that numbers its evidence differently from
+ * its candidate array must map it back itself.
+ *
+ * CALLER BEWARE: an EMPTY `candidates` array returns `{ method:
+ * "best-effort", winner: 0 }`, an index that refers to nothing. Callers must
+ * check for zero candidates before dereferencing the winner.
  */
-export function decideSelection(candidates: CandidateEvidence[]): SelectionDecision {
+export function decideSelection(
+  candidates: CandidateEvidence[],
+): SelectionDecision {
   // Handle empty candidates array
   if (candidates.length === 0) {
     return { method: "best-effort", winner: 0 };
@@ -358,7 +385,10 @@ export function decideSelection(candidates: CandidateEvidence[]): SelectionDecis
     let bestScore = candidates[0]!.evidenceScore;
     for (let i = 1; i < candidates.length; i++) {
       const score = candidates[i]!.evidenceScore;
-      if (score > bestScore || (score === bestScore && candidates[i]!.index < bestIdx)) {
+      if (
+        score > bestScore ||
+        (score === bestScore && candidates[i]!.index < bestIdx)
+      ) {
         bestScore = score;
         bestIdx = candidates[i]!.index;
       }
@@ -371,7 +401,9 @@ export function decideSelection(candidates: CandidateEvidence[]): SelectionDecis
   const clusters = diffClusters(diffs);
 
   // Check for a consensus cluster among passing candidates
-  const passingSet = new Set(nonEmpty.filter((c) => c.testsPassed === true).map((c) => c.index));
+  const passingSet = new Set(
+    nonEmpty.filter((c) => c.testsPassed === true).map((c) => c.index),
+  );
 
   for (const cluster of clusters) {
     // Find members of this cluster that are passing
@@ -389,7 +421,10 @@ export function decideSelection(candidates: CandidateEvidence[]): SelectionDecis
       for (const memberIdx of passingMembers) {
         const lineCount = countDiffLines(nonEmpty[memberIdx]!.diff);
         const originalIdx = nonEmpty[memberIdx]!.index;
-        if (lineCount < winnerLineCount || (lineCount === winnerLineCount && originalIdx < winnerOriginalIdx)) {
+        if (
+          lineCount < winnerLineCount ||
+          (lineCount === winnerLineCount && originalIdx < winnerOriginalIdx)
+        ) {
           winner = memberIdx;
           winnerLineCount = lineCount;
           winnerOriginalIdx = originalIdx;
@@ -431,7 +466,9 @@ export function decideSelection(candidates: CandidateEvidence[]): SelectionDecis
     if (
       score > bestScore ||
       (score === bestScore && lineCount < bestLineCount) ||
-      (score === bestScore && lineCount === bestLineCount && candidate.index < bestIdx)
+      (score === bestScore &&
+        lineCount === bestLineCount &&
+        candidate.index < bestIdx)
     ) {
       bestIdx = candidate.index;
       bestScore = score;

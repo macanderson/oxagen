@@ -19,7 +19,14 @@ function props(overrides: Partial<CiStatusCardProps> = {}): CiStatusCardProps {
     ref: "main",
     sha: null,
     overall: "passing",
-    counts: { total: 1, passed: 1, failed: 0, pending: 0, skipped: 0, neutral: 0 },
+    counts: {
+      total: 1,
+      passed: 1,
+      failed: 0,
+      pending: 0,
+      skipped: 0,
+      neutral: 0,
+    },
     runs: [
       {
         name: "build",
@@ -57,7 +64,9 @@ describe("CiStatusCard", () => {
   it("renders the run name via the embedded summary", () => {
     render(<CiStatusCard {...props()} />);
     expect(screen.getByText("build")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "View build check" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "View build check" }),
+    ).toBeInTheDocument();
   });
 
   it("shows the empty-state message when there are no runs", () => {
@@ -65,16 +74,27 @@ describe("CiStatusCard", () => {
       <CiStatusCard
         {...props({
           overall: "unknown",
-          counts: { total: 0, passed: 0, failed: 0, pending: 0, skipped: 0, neutral: 0 },
+          counts: {
+            total: 0,
+            passed: 0,
+            failed: 0,
+            pending: 0,
+            skipped: 0,
+            neutral: 0,
+          },
           runs: [],
         })}
       />,
     );
-    expect(screen.getByText("No CI checks reported for this ref.")).toBeInTheDocument();
+    expect(
+      screen.getByText("No CI checks reported for this ref."),
+    ).toBeInTheDocument();
   });
 
   it("exposes a data-component attribute for the registry", () => {
     const { container } = render(<CiStatusCard {...props()} />);
-    expect(container.querySelector('[data-component="ci-status-card"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-component="ci-status-card"]'),
+    ).not.toBeNull();
   });
 });

@@ -9,6 +9,8 @@ export const budgetPolicyWriteRoute = new Hono<AppEnv>();
 budgetPolicyWriteRoute.patch("/", async (c) => {
   const body = budgetPolicyWrite.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(budgetPolicyWrite.name, body, ctx, { surface: "api" });
+  const out = await invoke(budgetPolicyWrite.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

@@ -1,3 +1,4 @@
+import pino from "pino";
 import { z } from "zod";
 import { generateObjectFor, selectModel } from "@oxagen/ai";
 import type { CapabilityContext } from "../types";
@@ -12,6 +13,11 @@ export type {
   AgentMemoryPromotionRationalesInput,
   AgentMemoryPromotionRationalesOutput,
 };
+
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "suggest_promotion_rationales" },
+});
 
 /** Contract cap on a rationale's length. */
 const MAX_RATIONALE_LEN = 200;
@@ -162,9 +168,9 @@ export async function agentMemoryPromotionRationalesHandler(
     return { rationales };
   } catch (err) {
     // Degrade gracefully: a model/gateway failure must not fail the capability.
-    console.warn(
+    logger.warn(
+      { err },
       "suggest_promotion_rationales: model draft failed, using fallback",
-      err,
     );
     return {
       rationales: buildFallbackRationales(memory, input.toClass, input.count),

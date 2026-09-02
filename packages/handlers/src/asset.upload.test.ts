@@ -112,12 +112,16 @@ describe("assertPublicHttpUrl — SSRF protection", () => {
 
   it("rejects 'metadata.google.internal'", () => {
     expect(() =>
-      assertPublicHttpUrl("http://metadata.google.internal/computeMetadata/v1/"),
+      assertPublicHttpUrl(
+        "http://metadata.google.internal/computeMetadata/v1/",
+      ),
     ).toThrow(/non-public/i);
   });
 
   it("rejects 127.0.0.1 (loopback)", () => {
-    expect(() => assertPublicHttpUrl("http://127.0.0.1/")).toThrow(/non-public/i);
+    expect(() => assertPublicHttpUrl("http://127.0.0.1/")).toThrow(
+      /non-public/i,
+    );
   });
 
   it("rejects 10.0.0.1 (private class A)", () => {
@@ -127,11 +131,15 @@ describe("assertPublicHttpUrl — SSRF protection", () => {
   });
 
   it("rejects 172.16.0.1 (private class B)", () => {
-    expect(() => assertPublicHttpUrl("http://172.16.0.1/")).toThrow(/non-public/i);
+    expect(() => assertPublicHttpUrl("http://172.16.0.1/")).toThrow(
+      /non-public/i,
+    );
   });
 
   it("rejects 192.168.1.1 (private class C)", () => {
-    expect(() => assertPublicHttpUrl("http://192.168.1.1/")).toThrow(/non-public/i);
+    expect(() => assertPublicHttpUrl("http://192.168.1.1/")).toThrow(
+      /non-public/i,
+    );
   });
 
   it("rejects 169.254.169.254 (AWS/GCP IMDS)", () => {
@@ -149,11 +157,15 @@ describe("assertPublicHttpUrl — SSRF protection", () => {
   });
 
   it("rejects fe80:: (IPv6 link-local)", () => {
-    expect(() => assertPublicHttpUrl("http://[fe80::1]/")).toThrow(/non-public/i);
+    expect(() => assertPublicHttpUrl("http://[fe80::1]/")).toThrow(
+      /non-public/i,
+    );
   });
 
   it("rejects fd00:: (IPv6 unique-local)", () => {
-    expect(() => assertPublicHttpUrl("http://[fd00::1]/")).toThrow(/non-public/i);
+    expect(() => assertPublicHttpUrl("http://[fd00::1]/")).toThrow(
+      /non-public/i,
+    );
   });
 });
 
@@ -161,7 +173,11 @@ describe("assertPublicHttpUrl — SSRF protection", () => {
 
 describe("assetUploadHandler — authorization guards", () => {
   it("throws Unauthorized when no principal is present", async () => {
-    const ctx: CapabilityContext = { ...validCtx, userId: null, apiKeyId: null };
+    const ctx: CapabilityContext = {
+      ...validCtx,
+      userId: null,
+      apiKeyId: null,
+    };
     await expect(
       assetUploadHandler(
         { sourceUrl: "https://example.com/img.png", kind: "image" },
@@ -202,9 +218,11 @@ describe("assetUploadHandler — SSRF rejection", () => {
 describe("assetUploadHandler — oversize rejection", () => {
   it("rejects an asset that exceeds the kind limit", async () => {
     const oversizeBytes = 6 * 1024 * 1024; // 6 MiB — over the 5 MiB image limit
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      makeResponse(new ArrayBuffer(oversizeBytes), "image/png"),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        makeResponse(new ArrayBuffer(oversizeBytes), "image/png"),
+      );
 
     await expect(
       assetUploadHandler(
@@ -225,9 +243,9 @@ describe("assetUploadHandler — disallowed content-type rejection", () => {
     // gif is allowed for "image" (agent screenshots/recordings are commonly
     // gif) — use svg, which isn't in any kind's allowlist, to stay genuinely
     // unsupported regardless of future allowlist changes.
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      makeResponse(pngBuffer(), "image/svg+xml"),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(makeResponse(pngBuffer(), "image/svg+xml"));
 
     await expect(
       assetUploadHandler(
@@ -254,9 +272,9 @@ describe("assetUploadHandler — happy path", () => {
       access: "public" as const,
     });
 
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      makeResponse(pngBuffer(100), "image/png"),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(makeResponse(pngBuffer(100), "image/png"));
 
     const result = await assetUploadHandler(
       { sourceUrl: "https://example.com/photo.png", kind: "image" },
@@ -321,7 +339,11 @@ describe("assetUploadHandler — happy path", () => {
       makeResponse(pngBuffer(50), "image/webp"),
     );
 
-    const apiKeyCtx: CapabilityContext = { ...validCtx, userId: null, apiKeyId: "aky_abc" };
+    const apiKeyCtx: CapabilityContext = {
+      ...validCtx,
+      userId: null,
+      apiKeyId: "aky_abc",
+    };
     const result = await assetUploadHandler(
       { sourceUrl: "https://example.com/logo.webp", kind: "avatar" },
       apiKeyCtx,
@@ -372,7 +394,11 @@ describe("assetUploadHandler — source: user_upload guards", () => {
   });
 
   it("rejects an API-key-only principal (no userId) with source: user_upload", async () => {
-    const apiKeyCtx: CapabilityContext = { ...validCtx, userId: null, apiKeyId: "aky_abc" };
+    const apiKeyCtx: CapabilityContext = {
+      ...validCtx,
+      userId: null,
+      apiKeyId: "aky_abc",
+    };
     await expect(
       assetUploadHandler(
         {
@@ -448,7 +474,10 @@ describe("assetUploadHandler — source: user_upload happy path", () => {
 
     expect(mockPut).not.toHaveBeenCalled();
     expect(mockPersistGeneratedAsset).toHaveBeenCalledOnce();
-    const arg = mockPersistGeneratedAsset.mock.calls[0]![0] as Record<string, unknown>;
+    const arg = mockPersistGeneratedAsset.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
     expect(arg.orgId).toBe("org-1");
     expect(arg.workspaceId).toBe("ws-1");
     expect(arg.userId).toBe("u-1");
@@ -483,11 +512,18 @@ describe("assetUploadHandler — source: user_upload happy path", () => {
     );
 
     await assetUploadHandler(
-      { sourceUrl: "https://example.com/clip.mp4", kind: "video", source: "user_upload" },
+      {
+        sourceUrl: "https://example.com/clip.mp4",
+        kind: "video",
+        source: "user_upload",
+      },
       validCtx,
     );
 
-    const arg = mockPersistGeneratedAsset.mock.calls[0]![0] as Record<string, unknown>;
+    const arg = mockPersistGeneratedAsset.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
     expect(arg.conversationId).toBeNull();
   });
 });

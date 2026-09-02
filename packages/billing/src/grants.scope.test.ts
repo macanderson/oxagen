@@ -52,15 +52,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: tenantSeam,
-  withSystemDb: systemSeam,
-
+    withTenantDb: tenantSeam,
+    withSystemDb: systemSeam,
   };
 });
 
 // grants.ts imports these at module load; stub to avoid side effects.
 vi.mock("@oxagen/database/security", () => ({ emitSecurityEvent: vi.fn() }));
-vi.mock("./client", () => ({ billingProvider: () => ({ getCheckoutSessionCreditPacks: vi.fn() }) }));
+vi.mock("./client", () => ({
+  billingProvider: () => ({ getCheckoutSessionCreditPacks: vi.fn() }),
+}));
 vi.mock("./subscriptions", () => ({ syncSubscriptionFromStripe: vi.fn() }));
 
 import { grantFreeCredits } from "./grants";
@@ -71,8 +72,12 @@ describe("grantFreeCredits — system seam (no tenant scope required)", () => {
     const tx = makeTx();
     // Both seams execute the callback against the tx so the grant body runs;
     // the assertion is about WHICH seam grantFreeCredits chose.
-    tenantSeam.mockImplementation(async (fn: (t: unknown) => unknown) => fn(tx));
-    systemSeam.mockImplementation(async (fn: (t: unknown) => unknown) => fn(tx));
+    tenantSeam.mockImplementation(async (fn: (t: unknown) => unknown) =>
+      fn(tx),
+    );
+    systemSeam.mockImplementation(async (fn: (t: unknown) => unknown) =>
+      fn(tx),
+    );
   });
 
   it("uses withSystemDb and never withTenantDb (works with no active tenant scope)", async () => {

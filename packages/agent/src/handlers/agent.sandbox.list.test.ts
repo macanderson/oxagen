@@ -75,7 +75,10 @@ describe("agent.sandbox.list handler", () => {
   it("maps registry rows to the output shape with ISO timestamps", async () => {
     fake.enqueue([{ ...ROW }]);
 
-    const out = await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
+    const out = await agentSandboxListHandler(
+      { limit: 50, activeOnly: false },
+      CTX,
+    );
 
     expect(out.sandboxes).toEqual([
       {
@@ -106,7 +109,10 @@ describe("agent.sandbox.list handler", () => {
       { ...ROW, publicId: "sbx_3", metadata: { label: "   " } },
     ]);
 
-    const out = await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
+    const out = await agentSandboxListHandler(
+      { limit: 50, activeOnly: false },
+      CTX,
+    );
 
     // Present, non-blank label surfaces verbatim; a missing or whitespace-only
     // label degrades to null (never leaks the raw metadata bag).
@@ -132,7 +138,10 @@ describe("agent.sandbox.list handler", () => {
       },
     ]);
 
-    const out = await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
+    const out = await agentSandboxListHandler(
+      { limit: 50, activeOnly: false },
+      CTX,
+    );
 
     expect(out.sandboxes[0]).toMatchObject({
       recoveryStatus: "recovered",
@@ -155,7 +164,10 @@ describe("agent.sandbox.list handler", () => {
       },
     ]);
 
-    const out = await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
+    const out = await agentSandboxListHandler(
+      { limit: 50, activeOnly: false },
+      CTX,
+    );
 
     expect(out.sandboxes[0]).toMatchObject({
       sessionKey: null,
@@ -168,7 +180,10 @@ describe("agent.sandbox.list handler", () => {
   it("returns an empty array when the workspace has no sessions", async () => {
     fake.enqueue([]);
 
-    const out = await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
+    const out = await agentSandboxListHandler(
+      { limit: 50, activeOnly: false },
+      CTX,
+    );
 
     expect(out.sandboxes).toEqual([]);
   });
@@ -199,7 +214,10 @@ describe("agent.sandbox.list handler", () => {
       { ...ROW, publicId: "sbx_2", metadata: {} },
     ]);
 
-    const out = await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
+    const out = await agentSandboxListHandler(
+      { limit: 50, activeOnly: false },
+      CTX,
+    );
 
     expect(out.sandboxes[0]!.repos).toEqual([
       { owner: "acme", repo: "api", branch: "main" },
@@ -216,7 +234,10 @@ describe("agent.sandbox.list live reconcile", () => {
     sb.isSandboxAvailable.mockReturnValue(true);
     sb.driver.sessionStatus.mockResolvedValue("gone");
 
-    const out = await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
+    const out = await agentSandboxListHandler(
+      { limit: 50, activeOnly: false },
+      CTX,
+    );
 
     expect(sb.driver.sessionStatus).toHaveBeenCalledWith("sb-aaa");
     expect(out.sandboxes[0]!.status).toBe("stopped");
@@ -257,7 +278,10 @@ describe("agent.sandbox.list live reconcile", () => {
     sb.isSandboxAvailable.mockReturnValue(true);
     sb.driver.sessionStatus.mockRejectedValue(new Error("provider down"));
 
-    const out = await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
+    const out = await agentSandboxListHandler(
+      { limit: 50, activeOnly: false },
+      CTX,
+    );
 
     expect(out.sandboxes[0]!.status).toBe("running");
     expect(fake.mutations.update).toBe(0); // no correction persisted
@@ -267,7 +291,10 @@ describe("agent.sandbox.list live reconcile", () => {
     fake.enqueue([{ ...ROW, status: "running" }]);
     sb.isSandboxAvailable.mockReturnValue(false);
 
-    const out = await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
+    const out = await agentSandboxListHandler(
+      { limit: 50, activeOnly: false },
+      CTX,
+    );
 
     expect(out.sandboxes[0]!.status).toBe("running");
     expect(sb.driver.sessionStatus).not.toHaveBeenCalled();

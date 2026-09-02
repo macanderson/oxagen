@@ -20,6 +20,8 @@ export default async function workspaceBudgetPolicyReadTool(
   _args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(workspaceBudgetPolicyRead.name, {}, ctx, { surface: "mcp" });
+  const output = await invoke(workspaceBudgetPolicyRead.name, {}, ctx, {
+    surface: "mcp",
+  });
   return workspaceBudgetPolicyRead.output.parse(output);
 }

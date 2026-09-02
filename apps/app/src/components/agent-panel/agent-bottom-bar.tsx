@@ -8,7 +8,6 @@
  *     hidden = idle). Clicking the title re-opens the panel.
  *   - "Ask Oxagen" button + send icon on the right side always launches the
  *     agent panel (new chat if none active).
- *   - History icon on the far right (future: opens conversation history).
  *
  * The bar is always visible at the bottom of the content panel (not the
  * viewport — it scrolls with the shell's main content area). It sits above
@@ -17,7 +16,7 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
-import { Send, Clock } from "lucide-react";
+import { Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAgentPanelStore } from "./use-agent-panel-store";
 import type { AgentStatus } from "./use-agent-panel-store";
@@ -68,9 +67,10 @@ export function AgentBottomBar() {
   const pathname = usePathname();
   const { visibility, status, conversationTitle, open } = useAgentPanelStore();
 
-  // Suppress the docked launcher on the full-page agent surface (`/ask`) — the
-  // page there IS the agent, so launching the floating panel would stack a
-  // second agent on top of it. Every other page keeps the bar.
+  // Suppress the docked launcher on the full-page agent surface
+  // (`/{org}/{ws}/sessions`) — the page there IS the agent, so launching the
+  // floating panel would stack a second agent on top of it. Every other page
+  // keeps the bar.
   if (isConversationSurface(pathname)) return null;
 
   // The bar is visible on all other pages. When the panel is open the bar still
@@ -124,19 +124,6 @@ export function AgentBottomBar() {
       >
         <Send className="h-3.5 w-3.5" aria-hidden="true" />
         <span>Ask Oxagen</span>
-      </button>
-
-      {/* History button (placeholder for future conversation history) */}
-      <button
-        type="button"
-        className={cn(
-          "flex items-center justify-center rounded-md p-1.5",
-          "text-muted-foreground transition-colors hover:text-foreground",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        )}
-        aria-label="Conversation history"
-      >
-        <Clock className="h-4 w-4" aria-hidden="true" />
       </button>
     </div>
   );

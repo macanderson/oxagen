@@ -26,7 +26,14 @@
 
 import * as React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import type { Plan } from "@/components/billing/plan-card";
 import type { PlanChangePreview } from "@oxagen/billing";
 
@@ -58,10 +65,17 @@ vi.mock("@/lib/utils", () => ({
   cn: (...args: string[]) => args.filter(Boolean).join(" "),
 }));
 
-vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
-  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
-  has: (_t, prop) => prop !== "then",
-}));
+vi.mock(
+  "lucide-react",
+  () =>
+    new Proxy({} as Record<string | symbol, unknown>, {
+      get: (_t, prop) =>
+        prop === "then"
+          ? undefined
+          : () => <svg aria-hidden="true" data-icon={String(prop)} />,
+      has: (_t, prop) => prop !== "then",
+    }),
+);
 
 vi.mock("@/components/ui/button", () => ({
   Button: ({
@@ -108,12 +122,24 @@ vi.mock("@/components/ui/dialog", () => ({
       </div>
     );
   },
-  DialogPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
-  DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+  DialogPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogPanel: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2>{children}</h2>
+  ),
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
   DialogClose: ({
     children,
     onClick,
@@ -177,11 +203,7 @@ vi.mock("@/components/billing/plan-card", () => ({
     interval: "month" | "year";
     pending?: boolean;
   }) => (
-    <div
-      data-testid="plan-card"
-      data-slug={plan.slug}
-      data-relation={relation}
-    >
+    <div data-testid="plan-card" data-slug={plan.slug} data-relation={relation}>
       <button onClick={() => onSelect(plan.slug, interval)}>{plan.name}</button>
     </div>
   ),
@@ -203,13 +225,31 @@ const makePlan = (
   ...overrides,
 });
 
-const freePlan = makePlan({ slug: "free-plan", tier: "free", name: "Free", monthlyCents: 0, annualCents: 0 });
-const buildPlan = makePlan({ slug: "build-plan", tier: "build", name: "Build", monthlyCents: 2000 });
-const scalePlan = makePlan({ slug: "scale-plan", tier: "scale", name: "Scale", monthlyCents: 9900 });
+const freePlan = makePlan({
+  slug: "free-plan",
+  tier: "free",
+  name: "Free",
+  monthlyCents: 0,
+  annualCents: 0,
+});
+const buildPlan = makePlan({
+  slug: "build-plan",
+  tier: "build",
+  name: "Build",
+  monthlyCents: 2000,
+});
+const scalePlan = makePlan({
+  slug: "scale-plan",
+  tier: "scale",
+  name: "Scale",
+  monthlyCents: 9900,
+});
 
 const defaultPlans = [freePlan, buildPlan, scalePlan];
 
-const makePreview = (overrides: Partial<PlanChangePreview> = {}): PlanChangePreview => ({
+const makePreview = (
+  overrides: Partial<PlanChangePreview> = {},
+): PlanChangePreview => ({
   requiresCheckout: false,
   isCharge: true,
   amountCents: 1500,
@@ -223,7 +263,9 @@ const makePreview = (overrides: Partial<PlanChangePreview> = {}): PlanChangePrev
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function renderGrid(props: Partial<React.ComponentProps<typeof PlansGrid>> = {}) {
+function renderGrid(
+  props: Partial<React.ComponentProps<typeof PlansGrid>> = {},
+) {
   return render(
     <PlansGrid
       orgSlug="acme"
@@ -285,7 +327,12 @@ describe("PlansGrid — rendering", () => {
   });
 
   it("plan at same tier as current but different slug has relation='switch'", () => {
-    const build2 = makePlan({ slug: "build-plan-v2", tier: "build", name: "Build V2", monthlyCents: 2500 });
+    const build2 = makePlan({
+      slug: "build-plan-v2",
+      tier: "build",
+      name: "Build V2",
+      monthlyCents: 2500,
+    });
     renderGrid({
       currentPlanSlug: "build-plan",
       currentTier: "build",
@@ -504,7 +551,9 @@ describe("PlansGrid — confirmation dialog", () => {
 
     // Modal should be gone
     await waitFor(() => {
-      expect(screen.queryByText(/confirm plan change/i)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/confirm plan change/i),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -535,7 +584,9 @@ describe("PlansGrid — confirmation dialog", () => {
     });
 
     await waitFor(() => {
-      expect(window.location.href).toBe("https://checkout.stripe.com/pay/cs_test");
+      expect(window.location.href).toBe(
+        "https://checkout.stripe.com/pay/cs_test",
+      );
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -545,7 +596,10 @@ describe("PlansGrid — confirmation dialog", () => {
   it("changePlanAction error shows toast and dismisses modal", async () => {
     const preview = makePreview({ requiresCheckout: false });
     mockPreviewPlanAction.mockResolvedValue(preview);
-    mockChangePlanAction.mockResolvedValue({ ok: false, error: "Payment declined" });
+    mockChangePlanAction.mockResolvedValue({
+      ok: false,
+      error: "Payment declined",
+    });
 
     renderGrid();
     await act(async () => {
@@ -571,7 +625,9 @@ describe("PlansGrid — confirmation dialog", () => {
     });
 
     await waitFor(() => {
-      expect(screen.queryByText(/confirm plan change/i)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/confirm plan change/i),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -593,7 +649,9 @@ describe("PlansGrid — confirmation dialog", () => {
     });
 
     await waitFor(() => {
-      expect(screen.queryByText(/confirm plan change/i)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/confirm plan change/i),
+      ).not.toBeInTheDocument();
     });
   });
 });
@@ -624,7 +682,10 @@ describe("PlansGrid — requiresCheckout path (no existing subscription)", () =>
   it("shows error toast when changePlanAction fails on checkout path", async () => {
     const preview = makePreview({ requiresCheckout: true });
     mockPreviewPlanAction.mockResolvedValue(preview);
-    mockChangePlanAction.mockResolvedValue({ ok: false, error: "Checkout failed" });
+    mockChangePlanAction.mockResolvedValue({
+      ok: false,
+      error: "Checkout failed",
+    });
 
     renderGrid();
     await act(async () => {
@@ -661,7 +722,9 @@ describe("PlansGrid — requiresCheckout path (no existing subscription)", () =>
     });
 
     await waitFor(() => {
-      expect(window.location.href).toBe("https://checkout.stripe.com/pay/cs_new");
+      expect(window.location.href).toBe(
+        "https://checkout.stripe.com/pay/cs_new",
+      );
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

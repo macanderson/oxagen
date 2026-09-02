@@ -18,9 +18,7 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function evalRunGetTool(
-  args: InferSchema<typeof schema>,
-) {
+export default async function evalRunGetTool(args: InferSchema<typeof schema>) {
   const ctx = await buildContext(headers());
   const output = await invoke(evalRunGet.name, args, ctx, {
     surface: "mcp",

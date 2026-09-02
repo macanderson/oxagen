@@ -298,7 +298,9 @@ export class DuckDBEpisodicStore implements EpisodicStore {
     // so a record matching every query token scores 1.0. `contains()` is a
     // case-sensitive substring test — both the body and the tokens are
     // lowercased first to make this case-insensitive lexical matching.
-    const matchExprs = tokens.map(() => "CASE WHEN contains(lower_body, ?) THEN 1 ELSE 0 END");
+    const matchExprs = tokens.map(
+      () => "CASE WHEN contains(lower_body, ?) THEN 1 ELSE 0 END",
+    );
     const scoreSql = `(${matchExprs.join(" + ")}) / ${tokens.length}.0`;
     const whereOr = tokens.map(() => "contains(lower_body, ?)").join(" OR ");
 
@@ -313,7 +315,13 @@ export class DuckDBEpisodicStore implements EpisodicStore {
       ORDER BY lexical_score DESC
       LIMIT ?
     `;
-    const params = [...tokens, namespace.org, namespace.workspace, ...tokens, limit];
+    const params = [
+      ...tokens,
+      namespace.org,
+      namespace.workspace,
+      ...tokens,
+      limit,
+    ];
 
     const rows = await this.querySql(sql, params);
     return rows.map((r) => ({
@@ -343,10 +351,10 @@ export class DuckDBEpisodicStore implements EpisodicStore {
 
   async updateConfidence(id: string, confidence: number): Promise<void> {
     await this.ready;
-    await this.runSql(`UPDATE episodic_records SET confidence = ? WHERE id = ?`, [
-      confidence,
-      id,
-    ]);
+    await this.runSql(
+      `UPDATE episodic_records SET confidence = ? WHERE id = ?`,
+      [confidence, id],
+    );
   }
 
   async evictExpired(namespace: Namespace, now: number): Promise<number> {

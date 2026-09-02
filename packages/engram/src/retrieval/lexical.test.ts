@@ -9,7 +9,11 @@ import type { Namespace, Provenance } from "../types";
 import type { RetrievalQuery } from "./types";
 
 const NS: Namespace = { org: "test-org", workspace: "test-ws" };
-const PROV: Provenance = { author: "test", derivedFrom: [], timestamp: Date.now() };
+const PROV: Provenance = {
+  author: "test",
+  derivedFrom: [],
+  timestamp: Date.now(),
+};
 
 function makeQuery(overrides: Partial<RetrievalQuery> = {}): RetrievalQuery {
   return {
@@ -50,7 +54,9 @@ describe("LexicalRetrievalEngine", () => {
 
   it("calls searchFn with the task description", async () => {
     const engine = new LexicalRetrievalEngine(store, searchFn);
-    await engine.retrieve(makeQuery({ taskDescription: "NullPointerException auth" }));
+    await engine.retrieve(
+      makeQuery({ taskDescription: "NullPointerException auth" }),
+    );
     expect(searchFn).toHaveBeenCalledWith(
       "NullPointerException auth",
       expect.objectContaining({
@@ -65,7 +71,10 @@ describe("LexicalRetrievalEngine", () => {
     const record = createRecord({
       kind: "episodic",
       namespace: NS,
-      body: { event: "error_observed", payload: { message: "NullPointerException in auth.ts:42" } },
+      body: {
+        event: "error_observed",
+        payload: { message: "NullPointerException in auth.ts:42" },
+      },
       salience: 0.7,
       confidence: 1.0,
       provenance: PROV,
@@ -113,11 +122,20 @@ describe("LexicalRetrievalEngine", () => {
   });
 
   it("passes correct opts to search function", async () => {
-    let capturedOpts: { orgId: string; workspaceId: string; limit: number } = { orgId: "", workspaceId: "", limit: 0 };
-    searchFn = vi.fn(async (_q: string, opts: { orgId: string; workspaceId: string; limit: number }) => {
-      capturedOpts = opts;
-      return [];
-    });
+    let capturedOpts: { orgId: string; workspaceId: string; limit: number } = {
+      orgId: "",
+      workspaceId: "",
+      limit: 0,
+    };
+    searchFn = vi.fn(
+      async (
+        _q: string,
+        opts: { orgId: string; workspaceId: string; limit: number },
+      ) => {
+        capturedOpts = opts;
+        return [];
+      },
+    );
 
     const engine = new LexicalRetrievalEngine(store, searchFn);
     await engine.retrieve(makeQuery({ limit: 15 }));

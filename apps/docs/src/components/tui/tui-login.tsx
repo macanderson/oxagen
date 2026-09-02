@@ -9,7 +9,13 @@ import { tuiColors, tuiGlyphs } from "./tui-theme";
  */
 export function TuiLogin({ className }: { className?: string }) {
   return (
-    <TuiFrame id="tui-login" title="~/acme-web — oxagen" width={560} height={226} className={className}>
+    <TuiFrame
+      id="tui-login"
+      title="~/acme-web — oxagen"
+      width={560}
+      height={226}
+      className={className}
+    >
       <text x={20} y={48} fontSize={12.5}>
         <tspan fill={tuiColors.cyan} fontWeight={700}>
           {tuiGlyphs.pointer}{" "}
@@ -36,7 +42,7 @@ export function TuiLogin({ className }: { className?: string }) {
         </tspan>
       </text>
       <text x={34} y={154} fontSize={12}>
-        <tspan fill={tuiColors.dim}>org       </tspan>
+        <tspan fill={tuiColors.dim}>org </tspan>
         <tspan fill={tuiColors.cyan}>acme</tspan>
       </text>
       <text x={34} y={172} fontSize={12}>
@@ -49,7 +55,15 @@ export function TuiLogin({ className }: { className?: string }) {
           {tuiGlyphs.pointer}{" "}
         </tspan>
       </text>
-      <rect className="tui-caret" x={34} y={190} width={7} height={15} fill={tuiColors.cyan} opacity={0.85} />
+      <rect
+        className="tui-caret"
+        x={34}
+        y={190}
+        width={7}
+        height={15}
+        fill={tuiColors.cyan}
+        opacity={0.85}
+      />
     </TuiFrame>
   );
 }

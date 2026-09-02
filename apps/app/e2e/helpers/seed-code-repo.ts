@@ -15,13 +15,14 @@ import postgres from "postgres";
 
 function deQuote(raw: string | undefined, fallback: string): string {
   if (!raw) return fallback;
-  if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')) return raw.slice(1, -1);
+  if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"'))
+    return raw.slice(1, -1);
   return raw;
 }
 
 const DATABASE_URL = deQuote(
   process.env.DATABASE_URL,
-  "postgres://oxagen:oxagen@localhost:5432/oxagen",
+  "postgres://oxagen:oxagen@localhost:5433/oxagen",
 );
 
 export interface SeedGithubRepoOpts {
@@ -65,13 +66,16 @@ export async function seedConnectedGithubRepo(
     const [org] = await sql<{ id: string }[]>`
       SELECT id FROM org.organizations WHERE slug = ${orgSlug} LIMIT 1
     `;
-    if (!org) throw new Error(`seed-code-repo: org not found for slug "${orgSlug}"`);
+    if (!org)
+      throw new Error(`seed-code-repo: org not found for slug "${orgSlug}"`);
 
     const [workspace] = await sql<{ id: string }[]>`
       SELECT id FROM workspace.workspaces WHERE org_id = ${org.id} AND slug = ${workspaceSlug} LIMIT 1
     `;
     if (!workspace) {
-      throw new Error(`seed-code-repo: workspace not found for slug "${workspaceSlug}" in org "${orgSlug}"`);
+      throw new Error(
+        `seed-code-repo: workspace not found for slug "${workspaceSlug}" in org "${orgSlug}"`,
+      );
     }
 
     const publicId = `con_e2e_${Math.random().toString(36).slice(2, 10)}`;
@@ -88,7 +92,8 @@ export async function seedConnectedGithubRepo(
       )
       RETURNING public_id
     `;
-    if (!conn) throw new Error("seed-code-repo: connection insert returned no row");
+    if (!conn)
+      throw new Error("seed-code-repo: connection insert returned no row");
 
     const [env] = await sql<{ public_id: string }[]>`
       SELECT public_id FROM environments.environments

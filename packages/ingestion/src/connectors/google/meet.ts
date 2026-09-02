@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { registerConnector, type ConnectorDefinition, type NormalizedRecord, type RecordTypeSample } from "../types";
+import {
+  registerConnector,
+  type ConnectorDefinition,
+  type NormalizedRecord,
+  type RecordTypeSample,
+} from "../types";
 
 const connectionConfigSchema = z.object({
   includeRecordings: z.boolean().default(false),
@@ -10,7 +15,9 @@ const connectionConfigSchema = z.object({
 type Config = typeof connectionConfigSchema;
 
 function asRecord(raw: unknown): Record<string, unknown> {
-  return raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return raw !== null && typeof raw === "object"
+    ? (raw as Record<string, unknown>)
+    : {};
 }
 
 function asString(v: unknown): string | undefined {
@@ -24,7 +31,8 @@ function asArray(v: unknown): unknown[] {
 const googleMeet: ConnectorDefinition<Config> = {
   connectorId: "google-meet",
   displayName: "Google Meet",
-  description: "Sync meeting records, participants, and transcripts from Google Meet.",
+  description:
+    "Sync meeting records, participants, and transcripts from Google Meet.",
   icon: "google-meet",
   supportedAuthSchemes: ["oauth2_authorization_code"],
   deliveryMethod: "rest_polling",
@@ -77,13 +85,17 @@ const googleMeet: ConnectorDefinition<Config> = {
             startTime: asString(r["startTime"]),
             endTime: asString(r["endTime"]),
             state: asString(r["state"]),
-            docsDestination: asString(asRecord(r["docsDestination"])["document"]),
+            docsDestination: asString(
+              asRecord(r["docsDestination"])["document"],
+            ),
           },
         };
       }
 
       default:
-        throw new Error(`google-meet.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`);
+        throw new Error(
+          `google-meet.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`,
+        );
     }
   },
 };

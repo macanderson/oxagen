@@ -21,18 +21,28 @@ vi.mock("next/navigation", () => ({
 // Workspace routes lib
 vi.mock("@/lib/routes", () => ({
   workspace: {
-    ask: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-      `/${orgSlug}/${workspaceSlug}/ask`,
+    ask: ({
+      orgSlug,
+      workspaceSlug,
+    }: {
+      orgSlug: string;
+      workspaceSlug: string;
+    }) => `/${orgSlug}/${workspaceSlug}/ask`,
   },
   org: {
-    billing: { subscription: ({ orgSlug }: { orgSlug: string }) => `/${orgSlug}/billing/subscription` },
+    billing: {
+      subscription: ({ orgSlug }: { orgSlug: string }) =>
+        `/${orgSlug}/billing/subscription`,
+    },
   },
 }));
 
 describe("SupportMenu — trigger", () => {
   it("renders a help and support button", () => {
     render(<SupportMenu />);
-    expect(screen.getByRole("button", { name: /help and support/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /help and support/i }),
+    ).toBeInTheDocument();
   });
 });
 

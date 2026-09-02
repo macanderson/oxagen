@@ -10,7 +10,8 @@ import { registerCapability } from "../registry";
 export const billingSubscriptionUpgradeStart = registerCapability({
   name: "start_subscription_upgrade",
   domain: "billing",
-  description: "Start a Stripe Checkout session for a plan change; returns a URL the user opens to complete the upgrade",
+  description:
+    "Start a Stripe Checkout session for a plan change; returns a URL the user opens to complete the upgrade",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
@@ -35,5 +36,9 @@ export const billingSubscriptionUpgradeStart = registerCapability({
   }),
 });
 
-export type BillingSubscriptionUpgradeStartInput = z.output<typeof billingSubscriptionUpgradeStart.input>;
-export type BillingSubscriptionUpgradeStartOutput = z.output<typeof billingSubscriptionUpgradeStart.output>;
+export type BillingSubscriptionUpgradeStartInput = z.output<
+  typeof billingSubscriptionUpgradeStart.input
+>;
+export type BillingSubscriptionUpgradeStartOutput = z.output<
+  typeof billingSubscriptionUpgradeStart.output
+>;

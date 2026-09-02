@@ -5,12 +5,14 @@ import { and, eq, isNull } from "drizzle-orm";
 import { eventClient } from "./event-client";
 import { logger } from "./logger";
 
-export const automationTriggerHandler: CapabilityHandler<typeof automationTrigger> = async (
-  input,
-  ctx,
-) => {
+export const automationTriggerHandler: CapabilityHandler<
+  typeof automationTrigger
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "automation.trigger: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "automation.trigger: rejected — no authenticated user",
+    );
     throw new Error("automation.trigger requires an authenticated user");
   }
 
@@ -23,12 +25,19 @@ export const automationTriggerHandler: CapabilityHandler<typeof automationTrigge
         eq(schema.playbookTriggers.workspaceId, ctx.workspaceId),
         eq(schema.playbookTriggers.isEnabled, true),
       ),
-      columns: { id: true, publicId: true, playbookId: true, pinnedVersionId: true },
+      columns: {
+        id: true,
+        publicId: true,
+        playbookId: true,
+        pinnedVersionId: true,
+      },
     }),
   );
 
   if (!trigger) {
-    throw new Error(`automation.trigger: trigger not found: ${input.automation_id}`);
+    throw new Error(
+      `automation.trigger: trigger not found: ${input.automation_id}`,
+    );
   }
 
   // Load the playbook's active version.
@@ -44,7 +53,9 @@ export const automationTriggerHandler: CapabilityHandler<typeof automationTrigge
   );
 
   if (!playbook?.activeVersionId) {
-    throw new Error(`automation.trigger: playbook has no active version: ${trigger.playbookId}`);
+    throw new Error(
+      `automation.trigger: playbook has no active version: ${trigger.playbookId}`,
+    );
   }
 
   const versionId = trigger.pinnedVersionId ?? playbook.activeVersionId;

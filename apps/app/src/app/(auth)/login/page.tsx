@@ -12,8 +12,12 @@ export default function LoginPage() {
 
       <div className="rounded-xl border border-border/60 bg-card/80 p-8 shadow-xl space-y-6 backdrop-blur-xl">
         <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
-          <p className="text-sm text-muted-foreground">Sign in to your Oxagen workspace</p>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Welcome back
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Sign in to your Oxagen workspace
+          </p>
         </div>
 
         <OAuthButtons callbackURL="/" />
@@ -31,7 +35,10 @@ export default function LoginPage() {
 
         <p className="text-center text-sm text-muted-foreground">
           Don&rsquo;t have an account?{" "}
-          <Link href="/signup" className="font-medium text-primary hover:underline">
+          <Link
+            href="/signup"
+            className="font-medium text-primary hover:underline"
+          >
             Sign up
           </Link>
         </p>

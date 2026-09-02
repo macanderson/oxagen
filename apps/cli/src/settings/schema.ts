@@ -40,9 +40,9 @@ import {
  *   - "deny"                    → block unless an allow rule matches (deny-by-default)
  *   - "bypassPermissions"       → allow everything (deny rules still take priority)
  *
- * Enforced for the agent's local tools in gate.ts. (Interactive "ask"/"plan"
- * prompting lands with the MCP-client PR; only the modes enforced today are
- * accepted here so the schema never advertises behavior that does not exist.)
+ * Enforced for the agent's local tools in gate.ts. Only modes the gate actually
+ * enforces are accepted, so the schema never advertises behavior that does not
+ * exist.
  */
 export const permissionModeSchema = z.enum([
   "default",
@@ -64,8 +64,7 @@ export type PermissionMode = z.infer<typeof permissionModeSchema>;
  *
  * `deny` always wins over `allow` at the same scope. The MCP-specific
  * `defaultMcpPolicy` / `mcpServers` fields are carried through unchanged so the
- * same `permissions` object also feeds @oxagen/mcp-config's per-server gate when
- * the MCP client lands.
+ * same `permissions` object also feeds @oxagen/mcp-config's per-server gate.
  */
 export const permissionsSchema = z.object({
   /** Mode applied when no allow/deny rule matches. Default: "default". */

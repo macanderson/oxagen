@@ -15,17 +15,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => ({
-    update: (_table: unknown) => ({
-      set: (_vals: unknown) => ({
-        where: (_cond: unknown) => ({
-          returning: mocks.updateReturning,
-        }),
-      }),
-    }),
-  }),
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
+    db: () => ({
       update: (_table: unknown) => ({
         set: (_vals: unknown) => ({
           where: (_cond: unknown) => ({
@@ -34,7 +24,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         }),
       }),
     }),
-
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        update: (_table: unknown) => ({
+          set: (_vals: unknown) => ({
+            where: (_cond: unknown) => ({
+              returning: mocks.updateReturning,
+            }),
+          }),
+        }),
+      }),
   };
 });
 

@@ -11,6 +11,8 @@ agentTaskBackgroundReadRoute.get("/:taskId", async (c) => {
     taskId: c.req.param("taskId"),
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(agentTaskBackgroundRead.name, input, ctx, { surface: "api" });
+  const out = await invoke(agentTaskBackgroundRead.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

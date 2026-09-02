@@ -45,18 +45,20 @@ function makeConnRow(deliveryConfig: Record<string, unknown> | null = null) {
 type TxLike = { select: ReturnType<typeof vi.fn> };
 
 function setupDbReturning(row: ReturnType<typeof makeConnRow> | null) {
-  mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) => {
-    const tx: TxLike = {
-      select: vi.fn().mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue(row ? [row] : []),
+  mocks.withTenantDb.mockImplementation(
+    (fn: (tx: TxLike) => Promise<unknown>) => {
+      const tx: TxLike = {
+        select: vi.fn().mockReturnValue({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue(row ? [row] : []),
+            }),
           }),
         }),
-      }),
-    };
-    return fn(tx);
-  });
+      };
+      return fn(tx);
+    },
+  );
 }
 
 // ── tests ─────────────────────────────────────────────────────────────────────
@@ -71,13 +73,18 @@ describe("integrationSyncHandler", () => {
   it("throws when integration is not found", async () => {
     setupDbReturning(null);
     await expect(
-      integrationSyncHandler({ integrationId: "intg_missing", mode: "incremental" }, CTX),
+      integrationSyncHandler(
+        { integrationId: "intg_missing", mode: "incremental" },
+        CTX,
+      ),
     ).rejects.toThrow("integration.sync: integration not found: intg_missing");
     expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
 
   it("queues an Inngest job and returns queued status", async () => {
-    setupDbReturning(makeConnRow({ syncMethod: "polling", syncIntervalSeconds: 600 }));
+    setupDbReturning(
+      makeConnRow({ syncMethod: "polling", syncIntervalSeconds: 600 }),
+    );
     const result = await integrationSyncHandler(
       { integrationId: "intg_abc", mode: "incremental" },
       CTX,
@@ -91,14 +98,18 @@ describe("integrationSyncHandler", () => {
   });
 
   it("sends Inngest event with correct syncMethod from deliveryConfig", async () => {
-    setupDbReturning(makeConnRow({ syncMethod: "polling", syncIntervalSeconds: 600 }));
+    setupDbReturning(
+      makeConnRow({ syncMethod: "polling", syncIntervalSeconds: 600 }),
+    );
     await integrationSyncHandler(
       { integrationId: "intg_abc", mode: "incremental" },
       CTX,
     );
 
     expect(mocks.inngestSend).toHaveBeenCalledOnce();
-    const [sentEvent] = mocks.inngestSend.mock.calls[0] as [Record<string, unknown>];
+    const [sentEvent] = mocks.inngestSend.mock.calls[0] as [
+      Record<string, unknown>,
+    ];
     const data = sentEvent["data"] as Record<string, unknown>;
     expect(data["syncMethod"]).toBe("polling");
     expect(data["syncIntervalSeconds"]).toBe(600);
@@ -115,7 +126,9 @@ describe("integrationSyncHandler", () => {
       CTX,
     );
 
-    const [sentEvent] = mocks.inngestSend.mock.calls[0] as [Record<string, unknown>];
+    const [sentEvent] = mocks.inngestSend.mock.calls[0] as [
+      Record<string, unknown>,
+    ];
     const data = sentEvent["data"] as Record<string, unknown>;
     // row.deliveryMethod = "webhook" (the makeConnRow default)
     expect(data["syncMethod"]).toBe("webhook");
@@ -124,25 +137,29 @@ describe("integrationSyncHandler", () => {
   it("defaults syncMethod to manual when both deliveryConfig and deliveryMethod are absent", async () => {
     // Set deliveryMethod to null to exercise the final fallback
     const row = { ...makeConnRow(null), deliveryMethod: null };
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) => {
-      const tx: TxLike = {
-        select: vi.fn().mockReturnValue({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue([row]),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) => {
+        const tx: TxLike = {
+          select: vi.fn().mockReturnValue({
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue([row]),
+              }),
             }),
           }),
-        }),
-      };
-      return fn(tx);
-    });
+        };
+        return fn(tx);
+      },
+    );
 
     await integrationSyncHandler(
       { integrationId: "intg_abc", mode: "full" },
       CTX,
     );
 
-    const [sentEvent] = mocks.inngestSend.mock.calls[0] as [Record<string, unknown>];
+    const [sentEvent] = mocks.inngestSend.mock.calls[0] as [
+      Record<string, unknown>,
+    ];
     const data = sentEvent["data"] as Record<string, unknown>;
     expect(data["syncMethod"]).toBe("manual");
   });
@@ -154,7 +171,9 @@ describe("integrationSyncHandler", () => {
       CTX,
     );
 
-    const [sentEvent] = mocks.inngestSend.mock.calls[0] as [Record<string, unknown>];
+    const [sentEvent] = mocks.inngestSend.mock.calls[0] as [
+      Record<string, unknown>,
+    ];
     const data = sentEvent["data"] as Record<string, unknown>;
     expect(data["syncIntervalSeconds"]).toBe(300);
   });
@@ -166,7 +185,9 @@ describe("integrationSyncHandler", () => {
       CTX,
     );
 
-    const [sentEvent] = mocks.inngestSend.mock.calls[0] as [Record<string, unknown>];
+    const [sentEvent] = mocks.inngestSend.mock.calls[0] as [
+      Record<string, unknown>,
+    ];
     const data = sentEvent["data"] as Record<string, unknown>;
     expect(data["syncMethod"]).toBe("webhook");
   });

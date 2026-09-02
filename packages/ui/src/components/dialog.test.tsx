@@ -32,11 +32,11 @@ function OpenDialog({ children }: { children?: React.ReactNode }) {
           <DialogTitle>Dialog Title</DialogTitle>
           <DialogDescription>Dialog description text.</DialogDescription>
         </DialogHeader>
-        <DialogPanel>
-          {children ?? <p>Dialog body</p>}
-        </DialogPanel>
+        <DialogPanel>{children ?? <p>Dialog body</p>}</DialogPanel>
         <DialogFooter>
-          <DialogClose render={<button type="button" />}>Close Dialog</DialogClose>
+          <DialogClose render={<button type="button" />}>
+            Close Dialog
+          </DialogClose>
         </DialogFooter>
       </DialogPopup>
     </Dialog>
@@ -60,7 +60,11 @@ describe("Dialog — open state render", () => {
   });
 
   it("renders DialogPanel children", () => {
-    const { getByText } = render(<OpenDialog><span>Panel content</span></OpenDialog>);
+    const { getByText } = render(
+      <OpenDialog>
+        <span>Panel content</span>
+      </OpenDialog>,
+    );
     expect(getByText("Panel content")).toBeInTheDocument();
   });
 
@@ -79,11 +83,13 @@ describe("Dialog — trigger open", () => {
   it("opens dialog when trigger is clicked", async () => {
     const { queryByRole, getByRole, getByText } = render(
       <Dialog>
-        <DialogTrigger render={<button type="button" />}>Open Dialog</DialogTrigger>
+        <DialogTrigger render={<button type="button" />}>
+          Open Dialog
+        </DialogTrigger>
         <DialogPopup>
           <DialogTitle>Triggered Dialog</DialogTitle>
         </DialogPopup>
-      </Dialog>
+      </Dialog>,
     );
     expect(queryByRole("dialog")).not.toBeInTheDocument();
     await userEvent.click(getByRole("button", { name: "Open Dialog" }));

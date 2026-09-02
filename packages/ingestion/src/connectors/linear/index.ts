@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { z } from "zod";
 import {
   registerConnector,
@@ -8,6 +8,7 @@ import {
   type RawRecord,
   type RecordTypeSample,
 } from "../types";
+import { constantTimeStringEqual } from "../safe-compare";
 
 const connectionConfigSchema = z.object({
   teamIds: z.array(z.string()).optional(),
@@ -49,7 +50,10 @@ const QUERY_FIELD: Record<string, string> = {
 };
 
 /** Reshape a GraphQL node into the flat shape normalizeRecord expects. */
-function reshapeLinearNode(recordType: string, node: Record<string, unknown>): unknown {
+function reshapeLinearNode(
+  recordType: string,
+  node: Record<string, unknown>,
+): unknown {
   if (recordType === "issue") {
     const labels = node["labels"] as { nodes?: unknown[] } | undefined;
     return { ...node, labels: labels?.nodes ?? [] };
@@ -58,7 +62,9 @@ function reshapeLinearNode(recordType: string, node: Record<string, unknown>): u
 }
 
 function asRecord(raw: unknown): Record<string, unknown> {
-  return raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return raw !== null && typeof raw === "object"
+    ? (raw as Record<string, unknown>)
+    : {};
 }
 
 function asString(v: unknown): string | undefined {
@@ -90,7 +96,9 @@ const linear: ConnectorDefinition<Config> = {
       case "issue": {
         const state = asRecord(r["state"]);
         const assignee = asRecord(r["assignee"]);
-        const labels = asArray(r["labels"]).map((l) => asString(asRecord(l)["name"])).filter(Boolean);
+        const labels = asArray(r["labels"])
+          .map((l) => asString(asRecord(l)["name"]))
+          .filter(Boolean);
         return {
           externalId: asString(r["id"]) ?? "",
           externalUrl: asString(r["url"]),
@@ -167,7 +175,9 @@ const linear: ConnectorDefinition<Config> = {
       }
 
       default:
-        throw new Error(`linear.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`);
+        throw new Error(
+          `linear.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`,
+        );
     }
   },
 
@@ -176,11 +186,7 @@ const linear: ConnectorDefinition<Config> = {
     const sig = headers["linear-signature"];
     if (!sig) return false;
     const expected = createHmac("sha256", secret).update(payload).digest("hex");
-    try {
-      return timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
-    } catch {
-      return false;
-    }
+    return constantTimeStringEqual(sig, expected);
   },
 
   // Incremental GraphQL poll. Fetches records of `recordType` updated after the
@@ -199,18 +205,25 @@ const linear: ConnectorDefinition<Config> = {
 
     const resp = await fetch(LINEAR_GRAPHQL_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: authHeader },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authHeader,
+      },
       body: JSON.stringify({ query }),
     });
     if (!resp.ok) {
-      throw new Error(`linear.poll: GraphQL API ${resp.status} for ${recordType}`);
+      throw new Error(
+        `linear.poll: GraphQL API ${resp.status} for ${recordType}`,
+      );
     }
     const json = (await resp.json()) as {
       data?: Record<string, { nodes?: Array<Record<string, unknown>> }>;
       errors?: Array<{ message: string }>;
     };
     if (json.errors && json.errors.length > 0) {
-      throw new Error(`linear.poll: GraphQL error — ${json.errors.map((e) => e.message).join("; ")}`);
+      throw new Error(
+        `linear.poll: GraphQL error — ${json.errors.map((e) => e.message).join("; ")}`,
+      );
     }
     const nodes = json.data?.[field]?.nodes ?? [];
     const now = new Date().toISOString();

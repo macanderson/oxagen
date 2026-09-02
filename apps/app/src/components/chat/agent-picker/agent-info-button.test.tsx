@@ -27,7 +27,13 @@ vi.mock("@/components/ui/popover", () => ({
     render: React.ReactElement;
     children?: React.ReactNode;
   }) => React.cloneElement(render, undefined, children),
-  PopoverPopup: ({ children, className }: { children: React.ReactNode; className?: string }) => (
+  PopoverPopup: ({
+    children,
+    className,
+  }: {
+    children: React.ReactNode;
+    className?: string;
+  }) => (
     <div role="dialog" aria-label="Agent info" className={className}>
       {children}
     </div>
@@ -37,9 +43,15 @@ vi.mock("@/components/ui/popover", () => ({
 vi.mock("@/components/ui/sheet", () => ({
   Sheet: ({ children, open }: { children: React.ReactNode; open?: boolean }) =>
     open ? <div data-testid="sheet-root">{children}</div> : null,
-  SheetPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SheetHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SheetTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  SheetPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SheetHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SheetTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2>{children}</h2>
+  ),
 }));
 
 afterEach(() => {
@@ -66,7 +78,9 @@ const CODER: AgentOption = {
 describe("AgentInfoButton — desktop (Popover)", () => {
   it("renders the info affordance with an accessible label", () => {
     render(<AgentInfoButton agent={CODER} onChat={vi.fn()} />);
-    expect(screen.getByRole("button", { name: "About Coder" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "About Coder" }),
+    ).toBeInTheDocument();
   });
 
   it("opens the popover with the full description and skill list", () => {
@@ -104,7 +118,9 @@ describe("AgentInfoButton — mobile (Sheet)", () => {
     expect(
       screen.getByText("Writes and reviews production code end to end."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Chat with Coder" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Chat with Coder" }),
+    ).toBeInTheDocument();
   });
 
   it("the CTA applies the selection via onChat", () => {

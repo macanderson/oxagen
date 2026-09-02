@@ -5,8 +5,7 @@
  *
  * Kept in a pure, dependency-free module (no "use client", no React) so the
  * server loader can import `AgentOption` as a TYPE without pulling any client
- * code into its bundle — the same single-source-of-truth trick the old
- * `agent-selector.tsx` used for this shape, now that the selector is gone.
+ * code into its bundle.
  */
 
 /**

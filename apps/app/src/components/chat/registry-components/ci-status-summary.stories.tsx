@@ -12,7 +12,14 @@ type Story = StoryObj<typeof meta>;
 export const Passing: Story = {
   args: {
     overall: "passing",
-    counts: { total: 2, passed: 2, failed: 0, pending: 0, skipped: 0, neutral: 0 },
+    counts: {
+      total: 2,
+      passed: 2,
+      failed: 0,
+      pending: 0,
+      skipped: 0,
+      neutral: 0,
+    },
     runs: [
       {
         name: "lint",
@@ -42,7 +49,14 @@ export const Passing: Story = {
 export const Failing: Story = {
   args: {
     overall: "failing",
-    counts: { total: 3, passed: 1, failed: 1, pending: 0, skipped: 1, neutral: 0 },
+    counts: {
+      total: 3,
+      passed: 1,
+      failed: 1,
+      pending: 0,
+      skipped: 1,
+      neutral: 0,
+    },
     runs: [
       {
         name: "unit tests",
@@ -82,7 +96,14 @@ export const Failing: Story = {
 export const Pending: Story = {
   args: {
     overall: "pending",
-    counts: { total: 2, passed: 0, failed: 0, pending: 2, skipped: 0, neutral: 0 },
+    counts: {
+      total: 2,
+      passed: 0,
+      failed: 0,
+      pending: 2,
+      skipped: 0,
+      neutral: 0,
+    },
     runs: [
       {
         name: "typecheck",

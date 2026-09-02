@@ -38,7 +38,11 @@
  *   3. Real run: `... --batch-size=5000`. Re-runnable safely if interrupted.
  */
 import neo4j, { type Driver } from "neo4j-driver";
-import { parseRelTypes, runBackfill, validateRelTypes } from "./lib/backfill-edge-validity";
+import {
+  parseRelTypes,
+  runBackfill,
+  validateRelTypes,
+} from "./lib/backfill-edge-validity";
 
 interface CliArgs {
   batchSize: number;
@@ -56,7 +60,9 @@ function parseArgs(): CliArgs {
   try {
     validateRelTypes(relTypes);
   } catch (err) {
-    console.error(`[backfill-validity] ${err instanceof Error ? err.message : String(err)}`);
+    console.error(
+      `[backfill-validity] ${err instanceof Error ? err.message : String(err)}`,
+    );
     process.exit(1);
   }
   return {
@@ -71,17 +77,23 @@ function openDriver(): Driver {
   const user = process.env["NEO4J_USERNAME"];
   const pass = process.env["NEO4J_PASSWORD"];
   if (!uri || !user || !pass) {
-    throw new Error("NEO4J_URI, NEO4J_USERNAME, and NEO4J_PASSWORD must be set");
+    throw new Error(
+      "NEO4J_URI, NEO4J_USERNAME, and NEO4J_PASSWORD must be set",
+    );
   }
   // ECHO the target so a prod run is never a surprise.
-  console.log(`[backfill-validity] Target Neo4j: ${uri} (db=${process.env["NEO4J_DATABASE"] ?? "neo4j"})`);
+  console.log(
+    `[backfill-validity] Target Neo4j: ${uri} (db=${process.env["NEO4J_DATABASE"] ?? "neo4j"})`,
+  );
   return neo4j.driver(uri, neo4j.auth.basic(user, pass));
 }
 
 async function main(): Promise<void> {
   const args = parseArgs();
   const driver = openDriver();
-  const session = driver.session({ database: process.env["NEO4J_DATABASE"] ?? "neo4j" });
+  const session = driver.session({
+    database: process.env["NEO4J_DATABASE"] ?? "neo4j",
+  });
 
   console.log(
     `[backfill-validity] batchSize=${args.batchSize} dryRun=${args.dryRun} relTypes=${args.relTypes?.join(",") ?? "<all>"}`,
@@ -90,9 +102,18 @@ async function main(): Promise<void> {
   try {
     // batchSize must ride the Bolt wire as an INTEGER, so wrap it.
     const result = await runBackfill(
-      { run: (cypher, params) => session.run(cypher, { ...params, batchSize: neo4j.int(args.batchSize) }) },
+      {
+        run: (cypher, params) =>
+          session.run(cypher, {
+            ...params,
+            batchSize: neo4j.int(args.batchSize),
+          }),
+      },
       args,
-      (n, total) => console.log(`[backfill-validity] Stamped ${n} (running total ${total}).`),
+      (n, total) =>
+        console.log(
+          `[backfill-validity] Stamped ${n} (running total ${total}).`,
+        ),
     );
     console.log(
       `[backfill-validity] ${result.remainingBefore} edge(s) missing recordedAt at start.`,

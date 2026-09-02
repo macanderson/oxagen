@@ -22,6 +22,8 @@ export default async function pluginRegistryAddTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(pluginRegistryAdd.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(pluginRegistryAdd.name, args, ctx, {
+    surface: "mcp",
+  });
   return pluginRegistryAdd.output.parse(output);
 }

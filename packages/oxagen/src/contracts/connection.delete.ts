@@ -18,7 +18,10 @@ export const connectionDelete = registerCapability({
     workspace: { Owner: "allow" },
   },
   input: z.object({
-    connectionId: z.string().min(1).describe("Public ID or internal UUID of the connection"),
+    connectionId: z
+      .string()
+      .min(1)
+      .describe("Public ID or internal UUID of the connection"),
     mode: z
       .enum(["connection_only", "data_only", "full"])
       .default("full")
@@ -27,7 +30,9 @@ export const connectionDelete = registerCapability({
       ),
   }),
   output: z.object({
-    deletionJobId: z.string().describe("Public ID of the deletion_jobs row tracking async progress"),
+    deletionJobId: z
+      .string()
+      .describe("Public ID of the deletion_jobs row tracking async progress"),
     mode: z.enum(["connection_only", "data_only", "full"]),
     status: z.literal("running"),
   }),

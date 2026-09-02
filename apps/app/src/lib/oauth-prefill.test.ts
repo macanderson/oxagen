@@ -97,7 +97,10 @@ describe("buildOrgSignupPrefill", () => {
   });
 
   it("trims values and defaults missing fields", () => {
-    const p = buildOrgSignupPrefill({ name: "  Bob  ", email: "  bob@acme.com " });
+    const p = buildOrgSignupPrefill({
+      name: "  Bob  ",
+      email: "  bob@acme.com ",
+    });
     expect(p.name).toBe("Bob");
     expect(p.email).toBe("bob@acme.com");
     expect(p.avatarUrl).toBe("");

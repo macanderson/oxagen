@@ -29,8 +29,6 @@ import {
   type ControlStatus,
 } from "./compliance-controls";
 
-const _ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
-
 async function loadSignals(orgId: string) {
   const now = new Date();
   const rlsEnforced = process.env["TENANT_RLS_ENFORCEMENT_ENABLED"] === "true";
@@ -94,9 +92,11 @@ const STATUS_LABEL: Record<ControlStatus, string> = {
   not_started: "Not started",
 };
 
+// Semantic tokens, not raw hsl() literals — a palette change in
+// packages/ui/src/styles/globals.css must reach this page for free.
 const STATUS_ICON_COLOR: Record<ControlStatus, string> = {
-  active: "text-[hsl(142_71%_45%)]",
-  partial: "text-[hsl(38_92%_50%)]",
+  active: "text-success",
+  partial: "text-warning",
   not_started: "text-destructive",
 };
 
@@ -167,13 +167,11 @@ export default async function SecurityCompliancePage({
         </div>
         <div className="flex gap-4 text-xs text-muted-foreground">
           <span>
-            <span className="font-semibold text-[hsl(142_71%_45%)]">
-              {summary.active}
-            </span>{" "}
+            <span className="font-semibold text-success">{summary.active}</span>{" "}
             active
           </span>
           <span>
-            <span className="font-semibold text-[hsl(38_92%_50%)]">
+            <span className="font-semibold text-warning">
               {summary.partial}
             </span>{" "}
             partial

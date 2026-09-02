@@ -62,13 +62,19 @@ describe("createFsAdapter", () => {
 
   it("defaults access to 'public' when omitted", async () => {
     const adapter = createFsAdapter(root);
-    const result = await adapter.put({ key: "a/b.bin", body: new Uint8Array([9]) });
+    const result = await adapter.put({
+      key: "a/b.bin",
+      body: new Uint8Array([9]),
+    });
     expect(result.access).toBe("public");
   });
 
   it("nests directories for a deep key", async () => {
     const adapter = createFsAdapter(root);
-    await adapter.put({ key: "deep/nested/dir/path/file.bin", body: new Uint8Array([7]) });
+    await adapter.put({
+      key: "deep/nested/dir/path/file.bin",
+      body: new Uint8Array([7]),
+    });
     expect(existsSync(join(root, "deep/nested/dir/path/file.bin"))).toBe(true);
   });
 
@@ -77,9 +83,15 @@ describe("createFsAdapter", () => {
   it("preserves exact binary bytes including the PNG magic header", async () => {
     const adapter = createFsAdapter(root);
     // 8-byte PNG signature + a couple of arbitrary bytes.
-    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff]);
+    const png = new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff,
+    ]);
 
-    await adapter.put({ key: "img/logo.png", body: png, contentType: "image/png" });
+    await adapter.put({
+      key: "img/logo.png",
+      body: png,
+      contentType: "image/png",
+    });
     const got = await adapter.get("img/logo.png");
     const out = await drain(got.body);
 
@@ -91,10 +103,14 @@ describe("createFsAdapter", () => {
 
   it("accepts a Blob body and reports its size", async () => {
     const adapter = createFsAdapter(root);
-    const blob = new Blob([new Uint8Array([1, 2, 3, 4])], { type: "image/webp" });
+    const blob = new Blob([new Uint8Array([1, 2, 3, 4])], {
+      type: "image/webp",
+    });
     const result = await adapter.put({ key: "k/blob.webp", body: blob });
     expect(result.bytes).toBe(4);
-    expect(await drain((await adapter.get("k/blob.webp")).body)).toEqual(Buffer.from([1, 2, 3, 4]));
+    expect(await drain((await adapter.get("k/blob.webp")).body)).toEqual(
+      Buffer.from([1, 2, 3, 4]),
+    );
   });
 
   it("accepts an ArrayBuffer body", async () => {
@@ -116,7 +132,9 @@ describe("createFsAdapter", () => {
     const adapter = createFsAdapter(root);
     await adapter.put({ key: "tmp/x.bin", body: new Uint8Array([1]) });
     await adapter.delete("tmp/x.bin");
-    await expect(adapter.get("tmp/x.bin")).rejects.toBeInstanceOf(StorageNotFoundError);
+    await expect(adapter.get("tmp/x.bin")).rejects.toBeInstanceOf(
+      StorageNotFoundError,
+    );
   });
 
   it("delete is idempotent — deleting a missing key does not throw", async () => {
@@ -128,7 +146,9 @@ describe("createFsAdapter", () => {
 
   it("get throws StorageNotFoundError when the key does not exist", async () => {
     const adapter = createFsAdapter(root);
-    await expect(adapter.get("does/not/exist.png")).rejects.toBeInstanceOf(StorageNotFoundError);
+    await expect(adapter.get("does/not/exist.png")).rejects.toBeInstanceOf(
+      StorageNotFoundError,
+    );
   });
 
   // ── path-traversal rejection ──────────────────────────────────────────────────
@@ -156,9 +176,9 @@ describe("createFsAdapter", () => {
 
   it("rejects an empty key and a null-byte key", async () => {
     const adapter = createFsAdapter(root);
-    await expect(adapter.put({ key: "", body: new Uint8Array([1]) })).rejects.toThrow(
-      /non-empty/,
-    );
+    await expect(
+      adapter.put({ key: "", body: new Uint8Array([1]) }),
+    ).rejects.toThrow(/non-empty/);
     await expect(adapter.get("a\0b")).rejects.toThrow(/null byte/);
   });
 
@@ -167,7 +187,10 @@ describe("createFsAdapter", () => {
     // Even a mixed key that dips out then back in is rejected the moment it
     // escapes — never silently written to a sibling of the root.
     await expect(
-      adapter.put({ key: `../${"oxagen-fs-test-escape"}/pwned.bin`, body: new Uint8Array([1]) }),
+      adapter.put({
+        key: `../${"oxagen-fs-test-escape"}/pwned.bin`,
+        body: new Uint8Array([1]),
+      }),
     ).rejects.toThrow(/outside the storage root/);
   });
 

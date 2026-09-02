@@ -49,7 +49,10 @@ describe("system.install.instructions schema", () => {
   });
 
   it("accepts an optional workspaceSlug string", () => {
-    const result = Schema.parse({ client: "cursor", workspaceSlug: "my-workspace" });
+    const result = Schema.parse({
+      client: "cursor",
+      workspaceSlug: "my-workspace",
+    });
     expect(result.workspaceSlug).toBe("my-workspace");
   });
 
@@ -98,9 +101,7 @@ describe("user.preferences.write schema", () => {
   });
 
   it("rejects an invalid pendingPromptBehavior enum", () => {
-    expect(() =>
-      Schema.parse({ pendingPromptBehavior: "cancel" }),
-    ).toThrow();
+    expect(() => Schema.parse({ pendingPromptBehavior: "cancel" })).toThrow();
   });
 
   it("accepts all valid defaultTextTier values", () => {

@@ -183,16 +183,17 @@ export async function ConversationPage({
             ),
         )
           .then((rows) => rows[0])
-          .catch((err: unknown) => {
+          .catch((err: unknown) =>
             // Non-fatal: degrade to a blank new-conversation state rather than
-            // crashing the page. Log so operators can detect RLS misconfigurations
-            // or DB failures without silent production blind spots.
-            console.error(
-              "[conversation-page] conversation lookup failed",
+            // crashing the page. Logged through the same structured helper as
+            // every other degrade below, so an RLS misconfiguration or DB
+            // failure is never a silent production blind spot.
+            logAndFallback<ConversationRow | undefined>(
               err,
-            );
-            return undefined;
-          });
+              "conversation lookup",
+              undefined,
+            ),
+          );
 
   if (conv) {
     conversationId = conv.id;

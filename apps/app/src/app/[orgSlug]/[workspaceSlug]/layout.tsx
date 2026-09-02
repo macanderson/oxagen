@@ -40,7 +40,15 @@ export default async function WorkspaceLayout({
   // layer up ([orgSlug]/layout.tsx) — if it was stale the redirect already
   // fired before this layout ran, so the orgSlug here is always canonical.
   const hdrs = await headers();
-  const rawUrl = hdrs.get("x-url") ?? `/${orgSlug}/${workspaceSlug}`;
+  // Same header chain as [orgSlug]/layout.tsx: proxy.ts sets `x-url` on every
+  // matched page route, and the two synthetic Next headers are the defensive
+  // fallbacks. Reading only `x-url` would drop the path tail AND the query on
+  // any request that reached this layout without passing the proxy.
+  const rawUrl =
+    hdrs.get("x-url") ??
+    hdrs.get("next-url") ??
+    hdrs.get("x-invoke-path") ??
+    `/${orgSlug}/${workspaceSlug}`;
   const { pathname, search } = parseRequestUrl(rawUrl, orgSlug, workspaceSlug);
   const workspace = await resolveWorkspaceOrRedirect(
     tenant.id,
@@ -52,7 +60,8 @@ export default async function WorkspaceLayout({
   // Tenant isolation: gate every workspace-scoped page on workspace membership.
   // Without this, any org member can read another workspace's data within the
   // same org by guessing the workspace slug (IDOR). Non-members get a 404 via
-  // notFound() — consistent with assertOrgMember above.
+  // notFound() — the same shape as the org-membership gate one layer up in
+  // [orgSlug]/layout.tsx.
   await assertWorkspaceMember(workspace.id, session.user.id);
 
   // Workspace-scoped CommandMenu mount.

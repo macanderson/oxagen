@@ -52,7 +52,9 @@ function served(bytes: Uint8Array, mimeType = "text/plain") {
   };
 }
 
-async function collect(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
+async function collect(
+  stream: ReadableStream<Uint8Array>,
+): Promise<Uint8Array> {
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -130,8 +132,16 @@ describe("archiveGeneratedAssets", () => {
     const zipBytes = await collect(
       archiveGeneratedAssets(
         [
-          { publicId: "gen_1", name: "report.pdf", mimeType: "application/pdf" },
-          { publicId: "gen_2", name: "report.pdf", mimeType: "application/pdf" },
+          {
+            publicId: "gen_1",
+            name: "report.pdf",
+            mimeType: "application/pdf",
+          },
+          {
+            publicId: "gen_2",
+            name: "report.pdf",
+            mimeType: "application/pdf",
+          },
         ],
         PRINCIPAL,
       ),

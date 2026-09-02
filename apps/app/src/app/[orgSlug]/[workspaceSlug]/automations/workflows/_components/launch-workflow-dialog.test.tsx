@@ -23,17 +23,32 @@
  *     input and onSwarmLaunched receives the launched record.
  */
 import * as React from "react";
-import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const { mockAddToast, mockRefresh, mockRunWorkflowAction, mockStartResearchSwarmAction, tabState } =
-  vi.hoisted(() => ({
-    mockAddToast: vi.fn(),
-    mockRefresh: vi.fn(),
-    mockRunWorkflowAction: vi.fn(),
-    mockStartResearchSwarmAction: vi.fn(),
-    tabState: { value: "workflow", onChange: null as ((v: string) => void) | null },
-  }));
+const {
+  mockAddToast,
+  mockRefresh,
+  mockRunWorkflowAction,
+  mockStartResearchSwarmAction,
+  tabState,
+} = vi.hoisted(() => ({
+  mockAddToast: vi.fn(),
+  mockRefresh: vi.fn(),
+  mockRunWorkflowAction: vi.fn(),
+  mockStartResearchSwarmAction: vi.fn(),
+  tabState: {
+    value: "workflow",
+    onChange: null as ((v: string) => void) | null,
+  },
+}));
 
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ add: mockAddToast }),
@@ -45,20 +60,35 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("../actions", () => ({
   runWorkflowAction: (...args: unknown[]) => mockRunWorkflowAction(...args),
-  startResearchSwarmAction: (...args: unknown[]) => mockStartResearchSwarmAction(...args),
+  startResearchSwarmAction: (...args: unknown[]) =>
+    mockStartResearchSwarmAction(...args),
 }));
 
 // Dialog primitives → plain divs (skip Base UI portals/animation in jsdom).
 vi.mock("@/components/ui/dialog", () => ({
-  Dialog: ({ children, open }: { children: React.ReactNode; open?: boolean }) =>
-    open ? <div data-testid="dialog">{children}</div> : null,
-  DialogPopup: ({ children, ...rest }: React.HTMLAttributes<HTMLDivElement>) => (
-    <div {...rest}>{children}</div>
+  Dialog: ({
+    children,
+    open,
+  }: {
+    children: React.ReactNode;
+    open?: boolean;
+  }) => (open ? <div data-testid="dialog">{children}</div> : null),
+  DialogPopup: ({
+    children,
+    ...rest
+  }: React.HTMLAttributes<HTMLDivElement>) => <div {...rest}>{children}</div>,
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
   ),
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogDescription: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 // Tabs → controlled mock that actually switches, so tab-specific fields are
@@ -81,27 +111,45 @@ vi.mock("@/components/ui/tabs", () => ({
       </div>
     );
   },
-  TabsList: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  TabsList: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   TabsTab: ({
     children,
     value,
     ...rest
-  }: { children: React.ReactNode; value: string } & Record<string, unknown>) => (
+  }: { children: React.ReactNode; value: string } & Record<
+    string,
+    unknown
+  >) => (
     <button type="button" onClick={() => tabState.onChange?.(value)} {...rest}>
       {children}
     </button>
   ),
-  TabsPanel: ({ children, value }: { children: React.ReactNode; value: string }) =>
-    value === tabState.value ? <div>{children}</div> : null,
+  TabsPanel: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => (value === tabState.value ? <div>{children}</div> : null),
 }));
 
 // Select → inert (only default values are exercised by these tests).
 vi.mock("@/components/ui/select", () => ({
-  Select: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Select: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectTrigger: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   SelectValue: () => null,
-  SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SelectPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectItem: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 import { LaunchWorkflowDialog } from "./launch-workflow-dialog";
@@ -123,7 +171,12 @@ beforeEach(() => {
   });
   mockStartResearchSwarmAction.mockResolvedValue({
     ok: true,
-    swarm: { swarmId: "s1", dispatchId: "d1", status: "running", estimatedTasks: 8 },
+    swarm: {
+      swarmId: "s1",
+      dispatchId: "d1",
+      status: "running",
+      estimatedTasks: 8,
+    },
   });
 });
 
@@ -141,7 +194,9 @@ describe("LaunchWorkflowDialog — Workflow tab", () => {
       fireEvent.click(screen.getByTestId("launch-submit"));
     });
     await waitFor(() => {
-      expect(screen.getByTestId("launch-error").textContent).toBe("Goal is required.");
+      expect(screen.getByTestId("launch-error").textContent).toBe(
+        "Goal is required.",
+      );
     });
     expect(mockRunWorkflowAction).not.toHaveBeenCalled();
   });
@@ -155,7 +210,9 @@ describe("LaunchWorkflowDialog — Workflow tab", () => {
       fireEvent.click(screen.getByTestId("launch-submit"));
     });
     await waitFor(() => {
-      expect(screen.getByTestId("launch-error").textContent).toContain("2000 characters or fewer");
+      expect(screen.getByTestId("launch-error").textContent).toContain(
+        "2000 characters or fewer",
+      );
     });
     expect(mockRunWorkflowAction).not.toHaveBeenCalled();
   });
@@ -181,16 +238,21 @@ describe("LaunchWorkflowDialog — Workflow tab", () => {
       maxParallelism: 50,
     });
     await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
-    expect(mockAddToast).toHaveBeenCalledWith(expect.objectContaining({ type: "success" }));
+    expect(mockAddToast).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "success" }),
+    );
   });
 
   it("renders the capability's own error message inline on failure", async () => {
     mockRunWorkflowAction.mockResolvedValue({
       ok: false,
-      error: "Only workspace owners and admins can launch or cancel workflows and research swarms.",
+      error:
+        "Only workspace owners and admins can launch or cancel workflows and research swarms.",
     });
     render(<LaunchWorkflowDialog {...BASE_PROPS} />);
-    fireEvent.change(screen.getByTestId("workflow-goal"), { target: { value: "Do the thing" } });
+    fireEvent.change(screen.getByTestId("workflow-goal"), {
+      target: { value: "Do the thing" },
+    });
     await act(async () => {
       fireEvent.click(screen.getByTestId("launch-submit"));
     });
@@ -221,14 +283,21 @@ describe("LaunchWorkflowDialog — Swarm tab", () => {
       fireEvent.click(screen.getByTestId("launch-submit"));
     });
     await waitFor(() => {
-      expect(screen.getByTestId("launch-error").textContent).toBe("Topic is required.");
+      expect(screen.getByTestId("launch-error").textContent).toBe(
+        "Topic is required.",
+      );
     });
     expect(mockStartResearchSwarmAction).not.toHaveBeenCalled();
   });
 
   it("submits contract-valid input and forwards the launched swarm", async () => {
     const onSwarmLaunched = vi.fn();
-    render(<LaunchWorkflowDialog {...BASE_PROPS} onSwarmLaunched={onSwarmLaunched} />);
+    render(
+      <LaunchWorkflowDialog
+        {...BASE_PROPS}
+        onSwarmLaunched={onSwarmLaunched}
+      />,
+    );
     switchToSwarmTab();
     fireEvent.change(screen.getByTestId("swarm-topic"), {
       target: { value: "AI safety funding 2026" },
@@ -236,7 +305,9 @@ describe("LaunchWorkflowDialog — Swarm tab", () => {
     await act(async () => {
       fireEvent.click(screen.getByTestId("launch-submit"));
     });
-    await waitFor(() => expect(mockStartResearchSwarmAction).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(mockStartResearchSwarmAction).toHaveBeenCalled(),
+    );
     expect(mockStartResearchSwarmAction).toHaveBeenCalledWith({
       orgSlug: "acme",
       workspaceSlug: "main",
@@ -247,7 +318,11 @@ describe("LaunchWorkflowDialog — Swarm tab", () => {
     });
     await waitFor(() =>
       expect(onSwarmLaunched).toHaveBeenCalledWith(
-        expect.objectContaining({ swarmId: "s1", status: "running", totalTasks: 8 }),
+        expect.objectContaining({
+          swarmId: "s1",
+          status: "running",
+          totalTasks: 8,
+        }),
       ),
     );
   });

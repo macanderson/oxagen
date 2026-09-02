@@ -32,38 +32,39 @@ interface SegmentedControlProps
   onValueChange?: (value: string) => void;
 }
 
-const SegmentedControl = React.forwardRef<HTMLDivElement, SegmentedControlProps>(
-  ({ className, value, defaultValue, onValueChange, ...props }, ref) => {
-    const groupValue = value !== undefined ? [value] : undefined;
-    const groupDefault = defaultValue !== undefined ? [defaultValue] : undefined;
+const SegmentedControl = React.forwardRef<
+  HTMLDivElement,
+  SegmentedControlProps
+>(({ className, value, defaultValue, onValueChange, ...props }, ref) => {
+  const groupValue = value !== undefined ? [value] : undefined;
+  const groupDefault = defaultValue !== undefined ? [defaultValue] : undefined;
 
-    const handleValueChange = React.useCallback(
-      (groupValues: string[]) => {
-        // Single-select: take the last pressed value; ignore empty (deselect not allowed)
-        const next = groupValues[groupValues.length - 1];
-        if (next !== undefined) {
-          onValueChange?.(next);
-        }
-      },
-      [onValueChange],
-    );
+  const handleValueChange = React.useCallback(
+    (groupValues: string[]) => {
+      // Single-select: take the last pressed value; ignore empty (deselect not allowed)
+      const next = groupValues[groupValues.length - 1];
+      if (next !== undefined) {
+        onValueChange?.(next);
+      }
+    },
+    [onValueChange],
+  );
 
-    return (
-      <ToggleGroup
-        ref={ref}
-        multiple={false}
-        value={groupValue}
-        defaultValue={groupDefault}
-        onValueChange={handleValueChange}
-        className={cn(
-          "inline-flex h-8 items-center rounded-md bg-muted p-0.5 text-muted-foreground",
-          className,
-        )}
-        {...props}
-      />
-    );
-  },
-);
+  return (
+    <ToggleGroup
+      ref={ref}
+      multiple={false}
+      value={groupValue}
+      defaultValue={groupDefault}
+      onValueChange={handleValueChange}
+      className={cn(
+        "inline-flex h-8 items-center rounded-md bg-muted p-0.5 text-muted-foreground",
+        className,
+      )}
+      {...props}
+    />
+  );
+});
 SegmentedControl.displayName = "SegmentedControl";
 
 /**
@@ -83,7 +84,9 @@ const SegmentedControlItem = React.forwardRef<
     ref={ref}
     className={cn(
       "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1 text-sm font-medium",
-      "ring-offset-background transition-all duration-[var(--motion-base,160ms)]",
+      // Fallback matches --motion-base's own value, for the (unexpected) case
+      // where @oxagen/ui's globals.css is not loaded.
+      "ring-offset-background transition-all duration-[var(--motion-base,220ms)]",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
       "disabled:pointer-events-none disabled:opacity-50",
       // Selected state

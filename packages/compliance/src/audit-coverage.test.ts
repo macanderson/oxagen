@@ -15,12 +15,29 @@
 // API-key revocation" without reconstructing them from generic invoke logs. SOC2
 // CC6.1/CC6.2/CC6.3/CC6.8 (logical access + change management) hinge on these.
 //
-// This test does NOT force all 64 mutating handlers to emit (option (a)). It
-// asserts ONLY the security-relevant privileged-mutation domains below. Product
-// mutations OUTSIDE that allowlist (e.g. graph.*, document.*, automation.*,
-// conversation.*) are considered fully covered by the kernel capability.invoke_*
-// audit and are intentionally NOT asserted here. Widening the allowlist is a
-// deliberate decision, not an automatic consequence of adding a handler.
+// This test does NOT force every mutating handler to emit. It asserts ONLY the
+// security-relevant privileged-mutation domains below. Product mutations OUTSIDE
+// that allowlist (e.g. graph.*, document.*, automation.*, conversation.*) are
+// considered fully covered by the kernel capability.invoke_* audit and are
+// intentionally NOT asserted here. Widening the allowlist is a deliberate
+// decision, not an automatic consequence of adding a handler.
+//
+// NOT COVERED, and credential-bearing — read this before citing the allowlist as
+// complete. `secret.*` (reveal / export / value.set / key.delete) and
+// `connection.*` / `integration.*` (third-party data-access grants) are absent
+// from REQUIRED_EMIT_PREFIXES and emit no security_events row. The secret
+// handlers do audit, but to a SEPARATE store — `environments.secret_access_log`,
+// written inside @oxagen/plugins revealSecret — which is not in
+// SECURITY_EVENT_TYPES, not queryable from the audit-log UI, and not correlated
+// with security_events. Closing that gap needs new taxonomy values plus an
+// additive migration, so it is a design decision, not an allowlist edit.
+//
+// KNOWN GAP — this guard is not reached by the affected-package gate.
+// `pnpm gate` runs `turbo ... --filter=...[origin/main]`, which selects a
+// package only when it or one of its dependencies changed. @oxagen/compliance
+// declares no dependency on @oxagen/handlers (deliberately — see the leaf-package
+// note below), so a PR that touches ONLY packages/handlers does not run this
+// file. Adding an unaudited billing handler is exactly that shape of PR.
 //
 // For each allowlisted handler the invariant is: the file must EITHER emit a
 // security event (one of the emit helpers) OR carry an explicit
@@ -47,8 +64,13 @@ const HANDLERS_SRC = join(__dirname, "../../handlers/src");
 // ─────────────────────────────────────────────────────────────────────────────
 // Skip-set — infra / glue files in packages/handlers/src that are NOT capability
 // handlers and therefore have no audit obligation. Hardcoded (not heuristic) so
-// the list is auditable and an accidental new infra file fails loudly until it
-// is classified.
+// the list is auditable.
+//
+// This set is a readability aid, NOT a second gate: a file is asserted only if
+// it matches REQUIRED_EMIT_PREFIXES below, so a new unclassified file that does
+// not match a prefix is silently unasserted whether or not it is listed here.
+// Removing a name from this set therefore does not fail the suite unless the
+// name also matches a prefix.
 // ─────────────────────────────────────────────────────────────────────────────
 const INFRA_SKIP = new Set<string>([
   "index.ts", // barrel re-export
@@ -88,11 +110,19 @@ const REQUIRED_EMIT_PREFIXES: readonly string[] = [
   "prompt.settings.write", // system-prompt customization mutation
 ] as const;
 
-// Matches any of the four emit helpers exported from @oxagen/database/security
-// (sync + async + the older record* aliases). Word-boundaried so a substring in
-// a comment like "emit a security event" does not false-positive.
+// Matches a CALL to any of the four emit helpers exported from
+// @oxagen/database/security (sync + async + the record* aliases). The trailing
+// `\s*\(` is load-bearing: without it a bare `import { emitSecurityEvent }` that
+// is never invoked would satisfy the invariant. Longest alternative first so
+// `emitSecurityEventAsync(` is not mis-anchored. Word-boundaried at the front so
+// prose like "emit a security event" does not false-positive.
+//
+// Deliberately shallow: it proves a call EXISTS, not that the call is reachable,
+// on the success path, or carries a domain-appropriate eventType. A billing
+// handler emitting `capability.invoke_allowed` from inside a dead branch would
+// satisfy it. Per-handler unit tests are what assert the row's contents.
 const EMIT_RE =
-  /\b(emitSecurityEvent|emitSecurityEventAsync|recordSecurityEvent|recordSecurityEventAsync)\b/;
+  /\b(emitSecurityEventAsync|recordSecurityEventAsync|emitSecurityEvent|recordSecurityEvent)\s*\(/;
 
 // Matches `// audit-exempt: <reason>` — the reason must be non-empty.
 const AUDIT_EXEMPT_RE = /\/\/\s*audit-exempt:\s*\S+/;
@@ -107,6 +137,10 @@ function isAllowlisted(basename: string): boolean {
   );
 }
 
+// Top level only — `readdirSync` is not recursive, so a handler moved into a
+// subdirectory (e.g. src/billing/plan.ts) leaves the allowlist silently. Today
+// the only subdirectories are lib/, test-utils/ and __tests__/, none of which
+// hold capability handlers.
 function listHandlerFiles(): string[] {
   return readdirSync(HANDLERS_SRC)
     .filter((f) => f.endsWith(".ts"))

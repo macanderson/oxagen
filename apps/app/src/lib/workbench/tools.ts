@@ -8,6 +8,10 @@
  * Server-only.
  */
 import "@oxagen/handlers/register";
+// `list_agent_tools` is bound by @oxagen/agent's LOADERS map, not the
+// foundation handlers — without this side-effect import the kernel throws
+// "No handler registered for capability" at runtime.
+import "@oxagen/agent/register";
 import { invoke } from "@oxagen/oxagen";
 import type { WorkbenchCtx } from "./scope";
 
@@ -25,11 +29,8 @@ export async function listAgentTools(
   ctx: WorkbenchCtx,
   includeExternal = true,
 ): Promise<AgentToolRow[]> {
-  const out = (await invoke(
-    "list_agent_tools",
-    { includeExternal },
-    ctx,
-    { surface: "agent" },
-  )) as { tools: AgentToolRow[] };
+  const out = (await invoke("list_agent_tools", { includeExternal }, ctx, {
+    surface: "agent",
+  })) as { tools: AgentToolRow[] };
   return out.tools;
 }

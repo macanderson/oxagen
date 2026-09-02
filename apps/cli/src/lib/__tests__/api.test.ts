@@ -20,7 +20,9 @@ vi.mock("../config.js", () => ({
 // Capture debug entries without touching disk. Hoisted (vi.mock lifts its
 // factory above module top-level, so the spy must be created in vi.hoisted).
 const { debugLog } = vi.hoisted(() => ({
-  debugLog: vi.fn((_category: string, _event: string, _data?: unknown) => Promise.resolve()),
+  debugLog: vi.fn((_category: string, _event: string, _data?: unknown) =>
+    Promise.resolve(),
+  ),
 }));
 vi.mock("../debug-log.js", () => ({
   debugLog,
@@ -48,18 +50,23 @@ describe("apiGetOrThrow error diagnostics", () => {
 
   it("captures x-vercel-id, headers, timing, call stack, and a hint on a 5xx", async () => {
     globalThis.fetch = vi.fn(async () => {
-      return new Response("A server error has occurred\n\nFUNCTION_INVOCATION_FAILED", {
-        status: 500,
-        statusText: "Internal Server Error",
-        headers: {
-          "x-vercel-id": "sfo1::iad1::abc123-1700000000000-deadbeef",
-          "x-vercel-error": "FUNCTION_INVOCATION_FAILED",
-          "content-type": "text/plain",
+      return new Response(
+        "A server error has occurred\n\nFUNCTION_INVOCATION_FAILED",
+        {
+          status: 500,
+          statusText: "Internal Server Error",
+          headers: {
+            "x-vercel-id": "sfo1::iad1::abc123-1700000000000-deadbeef",
+            "x-vercel-error": "FUNCTION_INVOCATION_FAILED",
+            "content-type": "text/plain",
+          },
         },
-      });
+      );
     }) as typeof fetch;
 
-    await expect(apiGetOrThrow("agent/file/lock/list")).rejects.toBeInstanceOf(ApiError);
+    await expect(apiGetOrThrow("agent/file/lock/list")).rejects.toBeInstanceOf(
+      ApiError,
+    );
 
     const entry = lastErrorEntry();
     expect(entry).toBeDefined();
@@ -138,7 +145,10 @@ describe("apiGetOrThrow error diagnostics", () => {
       category === "error" ? gate : Promise.resolve(),
     );
     globalThis.fetch = vi.fn(async () => {
-      return new Response("boom", { status: 500, headers: { "x-vercel-id": "x" } });
+      return new Response("boom", {
+        status: 500,
+        headers: { "x-vercel-id": "x" },
+      });
     }) as typeof fetch;
 
     let settled = false;

@@ -4,14 +4,27 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, or } from "drizzle-orm";
 
 /** Org roles permitted to manage API keys. */
 export const API_KEY_AUTHORIZED_ROLES = new Set(["Owner", "Admin"]);
 
 /**
- * Resolve the acting user's org-scoped role name, or null when they have no
- * active principal / org-role assignment in this org.
+ * Resolve ONE of the acting user's org-scoped role names, or null when they
+ * have no active principal / unexpired org-role assignment in this org.
+ *
+ * A principal may hold several org-wide roles at once — `iam.principal_role_
+ * assignments` is unique on (principal, role, org), not on (principal, org) —
+ * and this query takes the first row Postgres returns with no ORDER BY, so
+ * WHICH role comes back is not deterministic. Every caller only asks "is it in
+ * {Owner, Admin}?", so a user holding both Admin and Member can be denied
+ * depending on plan/row order. Fixing that means asking "does ANY assigned role
+ * qualify?" instead of resolving a single name, which changes what this helper
+ * promises to its three callers — tracked separately, not patched here.
+ *
+ * Time-bounded (JIT) assignments are honored the same way the kernel resolver
+ * honors them (`isExpired` in packages/oxagen/src/iam/resolve.ts): an
+ * assignment whose `expires_at` is in the past no longer grants its role.
  */
 export async function resolveActorOrgRole(
   orgId: string,
@@ -47,6 +60,10 @@ export async function resolveActorOrgRole(
           eq(schema.roles.scopeKind, "org"),
           isNull(schema.principalRoleAssignments.workspaceId),
           isNull(schema.principalRoleAssignments.deletedAt),
+          or(
+            isNull(schema.principalRoleAssignments.expiresAt),
+            gt(schema.principalRoleAssignments.expiresAt, new Date()),
+          ),
         ),
       )
       .limit(1);

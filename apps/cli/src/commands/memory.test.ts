@@ -148,7 +148,9 @@ describe("memory list", () => {
     const captured = captureWriter();
     await expect(
       handleMemoryList({ class: "bogus" }, captured.writer),
-    ).rejects.toThrow('Invalid class "bogus". Use one of: OBSERVATION, RULE, FACT.');
+    ).rejects.toThrow(
+      'Invalid class "bogus". Use one of: OBSERVATION, RULE, FACT.',
+    );
     expect(apiPostOrThrow).not.toHaveBeenCalled();
     expect(captured.output()).toContain('Invalid class "bogus"');
   });
@@ -194,7 +196,10 @@ describe("memory list", () => {
 describe("memory show", () => {
   it("fetches one 200-item page and resolves by exact id, printing the detail block", async () => {
     apiPostOrThrow.mockResolvedValue({
-      memories: [record({ id: "mem_other0000000000", publicId: "M-2" }), record()],
+      memories: [
+        record({ id: "mem_other0000000000", publicId: "M-2" }),
+        record(),
+      ],
       total: 2,
     });
     const captured = captureWriter();
@@ -205,14 +210,19 @@ describe("memory show", () => {
     });
     const out = captured.output();
     expect(out).toContain("Memory mem_0123456789abcdef");
-    expect(out).toContain("  lesson:      Never run vitest in watch mode on CI");
+    expect(out).toContain(
+      "  lesson:      Never run vitest in watch mode on CI",
+    );
     expect(out).toContain("  enforcement: 70");
     expect(out).toContain("  nodeRef:     app:web");
   });
 
   it("resolves by publicId, and by short-id prefix when no exact match exists", async () => {
     apiPostOrThrow.mockResolvedValue({
-      memories: [record({ id: "mem_other0000000000", publicId: "M-2" }), record()],
+      memories: [
+        record({ id: "mem_other0000000000", publicId: "M-2" }),
+        record(),
+      ],
       total: 2,
     });
     const byPublicId = captureWriter();
@@ -244,7 +254,9 @@ describe("memory show", () => {
 describe("memory edit", () => {
   it("refuses an empty edit without calling the API", async () => {
     const captured = captureWriter();
-    await expect(handleMemoryEdit("mem_x", {}, captured.writer)).rejects.toThrow(
+    await expect(
+      handleMemoryEdit("mem_x", {}, captured.writer),
+    ).rejects.toThrow(
       "Nothing to edit. Pass at least one of --lesson, --kind, or --source.",
     );
     expect(apiPostOrThrow).not.toHaveBeenCalled();
@@ -273,7 +285,11 @@ describe("memory edit", () => {
     const updated = record({ lesson: "L2" });
     apiPostOrThrow.mockResolvedValue(updated);
     const captured = captureWriter();
-    await handleMemoryEdit("mem_x", { lesson: "L2", json: true }, captured.writer);
+    await handleMemoryEdit(
+      "mem_x",
+      { lesson: "L2", json: true },
+      captured.writer,
+    );
     expect(JSON.parse(captured.output())).toEqual(updated);
   });
 });
@@ -340,7 +356,11 @@ describe("memory salience", () => {
       record({ memoryClass: "OBSERVATION", enforcementScore: null }),
     );
     const captured = captureWriter();
-    await handleMemorySalience("mem_x", { status: "archived" }, captured.writer);
+    await handleMemorySalience(
+      "mem_x",
+      { status: "archived" },
+      captured.writer,
+    );
     expect(apiPostOrThrow).toHaveBeenCalledWith("agent/memory/update", {
       memoryId: "mem_x",
       status: "ARCHIVED",
@@ -385,7 +405,9 @@ describe("memory promote", () => {
         { to: "rule", enforcement: "0" },
         captured.writer,
       ),
-    ).rejects.toThrow('Invalid --enforcement "0". Use an integer between 1 and 100.');
+    ).rejects.toThrow(
+      'Invalid --enforcement "0". Use an integer between 1 and 100.',
+    );
   });
 
   it("promotes with enforcement and rationale and prints the promote summary", async () => {
@@ -426,9 +448,9 @@ describe("memory promote", () => {
 describe("memory demote", () => {
   it("requires --to", async () => {
     const captured = captureWriter();
-    await expect(handleMemoryDemote("mem_x", {}, captured.writer)).rejects.toThrow(
-      "Missing --to. Use `--to rule` or `--to observation`.",
-    );
+    await expect(
+      handleMemoryDemote("mem_x", {}, captured.writer),
+    ).rejects.toThrow("Missing --to. Use `--to rule` or `--to observation`.");
     expect(apiPostOrThrow).not.toHaveBeenCalled();
   });
 
@@ -447,7 +469,9 @@ describe("memory demote", () => {
         { to: "rule", enforcement: "1.5" },
         captured.writer,
       ),
-    ).rejects.toThrow('Invalid --enforcement "1.5". Use an integer between 1 and 100.');
+    ).rejects.toThrow(
+      'Invalid --enforcement "1.5". Use an integer between 1 and 100.',
+    );
   });
 
   it("demotes to OBSERVATION and renders the cleared enforcement as —", async () => {
@@ -545,7 +569,9 @@ describe("memory citations", () => {
     expect(out).toContain("  influence: DECISIVE 5, IGNORED 1");
     expect(out).toContain("  compliance: COMPLIED 6");
     expect(out).toContain("Most-cited memories:");
-    expect(out).toContain("mem_aaaa  cites:  5 dec:  2 viol:  0  Lint before push");
+    expect(out).toContain(
+      "mem_aaaa  cites:  5 dec:  2 viol:  0  Lint before push",
+    );
     expect(out).toContain("web [App]  cites:  4 dec:  1");
     expect(out).not.toContain("Least-useful");
   });
@@ -691,7 +717,11 @@ describe("memory import", () => {
       skipped: [{ filename: "notes.md", reason: "no content" }],
     });
     const captured = captureWriter();
-    await handleMemoryImport(["docs/rules.md"], { node: "app:web" }, captured.writer);
+    await handleMemoryImport(
+      ["docs/rules.md"],
+      { node: "app:web" },
+      captured.writer,
+    );
     expect(readFile).toHaveBeenCalledWith("docs/rules.md", "utf8");
     expect(apiPostOrThrow).toHaveBeenCalledTimes(1);
     expect(apiPostOrThrow).toHaveBeenCalledWith("agent/memory/import/parse", {
@@ -707,7 +737,11 @@ describe("memory import", () => {
 
   it("preview of zero drafts prints the empty message and no rerun hint", async () => {
     readFile.mockResolvedValue("# empty of rules\n");
-    apiPostOrThrow.mockResolvedValue({ drafts: [], documentCount: 1, skipped: [] });
+    apiPostOrThrow.mockResolvedValue({
+      drafts: [],
+      documentCount: 1,
+      skipped: [],
+    });
     const captured = captureWriter();
     await handleMemoryImport(["rules.md"], {}, captured.writer);
     expect(captured.output()).toBe("No memories could be extracted.");
@@ -725,11 +759,17 @@ describe("memory import", () => {
 
   it("--yes with zero extractable drafts fails instead of committing", async () => {
     readFile.mockResolvedValue("# rules\n");
-    apiPostOrThrow.mockResolvedValue({ drafts: [], documentCount: 1, skipped: [] });
+    apiPostOrThrow.mockResolvedValue({
+      drafts: [],
+      documentCount: 1,
+      skipped: [],
+    });
     const captured = captureWriter();
     await expect(
       handleMemoryImport(["rules.md"], { yes: true }, captured.writer),
-    ).rejects.toThrow("No memories could be extracted from the supplied documents.");
+    ).rejects.toThrow(
+      "No memories could be extracted from the supplied documents.",
+    );
     expect(apiPostOrThrow).toHaveBeenCalledTimes(1);
   });
 
@@ -740,8 +780,18 @@ describe("memory import", () => {
         ? { drafts: [draft, draft2], documentCount: 1, skipped: [] }
         : {
             results: [
-              { lesson: draft.lesson, ok: true, memoryId: "mem_9", error: null },
-              { lesson: draft2.lesson, ok: false, memoryId: null, error: "duplicate" },
+              {
+                lesson: draft.lesson,
+                ok: true,
+                memoryId: "mem_9",
+                error: null,
+              },
+              {
+                lesson: draft2.lesson,
+                ok: false,
+                memoryId: null,
+                error: "duplicate",
+              },
             ],
             imported: 1,
             failed: 1,
@@ -749,12 +799,20 @@ describe("memory import", () => {
     );
     const captured = captureWriter();
     await handleMemoryImport(["rules.md"], { yes: true }, captured.writer);
-    expect(apiPostOrThrow).toHaveBeenNthCalledWith(1, "agent/memory/import/parse", {
-      documents: [{ filename: "rules.md", content: "# rules\n" }],
-    });
-    expect(apiPostOrThrow).toHaveBeenNthCalledWith(2, "agent/memory/import/commit", {
-      drafts: [draft, draft2],
-    });
+    expect(apiPostOrThrow).toHaveBeenNthCalledWith(
+      1,
+      "agent/memory/import/parse",
+      {
+        documents: [{ filename: "rules.md", content: "# rules\n" }],
+      },
+    );
+    expect(apiPostOrThrow).toHaveBeenNthCalledWith(
+      2,
+      "agent/memory/import/commit",
+      {
+        drafts: [draft, draft2],
+      },
+    );
     expect(captured.output()).toBe(
       "✓ Imported 1 memory, 1 failed.\n  ✗ Pin toolchain versions: duplicate",
     );
@@ -774,26 +832,39 @@ describe("remember", () => {
     const captured = captureWriter();
     await expect(
       handleRemember("lesson", { enforcement: "101" }, captured.writer),
-    ).rejects.toThrow('Invalid --enforcement "101". Use an integer between 1 and 100.');
+    ).rejects.toThrow(
+      'Invalid --enforcement "101". Use an integer between 1 and 100.',
+    );
   });
 
   it("rejects an unknown --class before calling the API", async () => {
     const captured = captureWriter();
     await expect(
       handleRemember("lesson", { class: "hunch" }, captured.writer),
-    ).rejects.toThrow('Invalid class "hunch". Use one of: OBSERVATION, RULE, FACT.');
+    ).rejects.toThrow(
+      'Invalid class "hunch". Use one of: OBSERVATION, RULE, FACT.',
+    );
     expect(apiPostOrThrow).not.toHaveBeenCalled();
   });
 
   it("trims the text, pins class/kind, and prints the capture summary", async () => {
     apiPostOrThrow.mockResolvedValue({
       memory: record(),
-      inferred: { memoryClass: "OBSERVATION", memoryKind: "gotcha", classified: false },
+      inferred: {
+        memoryClass: "OBSERVATION",
+        memoryKind: "gotcha",
+        classified: false,
+      },
     });
     const captured = captureWriter();
     await handleRemember(
       "  always use rg  ",
-      { class: "observation", kind: "gotcha", enforcement: "40", node: "app:web" },
+      {
+        class: "observation",
+        kind: "gotcha",
+        enforcement: "40",
+        node: "app:web",
+      },
       captured.writer,
     );
     expect(apiPostOrThrow).toHaveBeenCalledWith("agent/memory/remember", {
@@ -824,11 +895,9 @@ describe("remember", () => {
 
 describe("one-shot failure contract", () => {
   it("with the default writer a validation failure writes stderr and exits 1", async () => {
-    const exit = vi
-      .spyOn(process, "exit")
-      .mockImplementation(() => {
-        throw new Error("process.exit(1)");
-      });
+    const exit = vi.spyOn(process, "exit").mockImplementation(() => {
+      throw new Error("process.exit(1)");
+    });
     const errWrite = vi
       .spyOn(process.stderr, "write")
       .mockImplementation(() => true);

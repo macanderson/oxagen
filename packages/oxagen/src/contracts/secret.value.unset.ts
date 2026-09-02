@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const secretValueUnset = registerCapability({
   name: "unset_secret_value",
   domain: "secret",
-  description: "Remove a secret's per-environment override so it falls back to the key's default value.",
+  description:
+    "Remove a secret's per-environment override so it falls back to the key's default value.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: false, riskLevel: "medium", category: "secret" },

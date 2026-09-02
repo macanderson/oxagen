@@ -104,9 +104,17 @@ export async function getOrCreateRegistry(
 // ── Draft dirtiness check ─────────────────────────────────────────────────────
 
 /**
- * A draft is "dirty" if it has any node labels or relationship types not
- * present in the current pinned version. If there is no pinned version, the
- * draft is dirty if it has any content at all.
+ * Whether the draft has anything worth publishing.
+ *
+ * With no pinned version: dirty if the draft holds any node label or
+ * relationship type at all.
+ *
+ * With a pinned version: dirty only when the draft holds MORE labels +
+ * relationship types than the pinned version does. This is a count comparison,
+ * not a set comparison — a draft that renames or replaces a definition without
+ * changing the total, or that only deletes, still reports clean. Tightening
+ * this to a real set difference is tracked separately; the count heuristic is
+ * what schema.toggle's auto-publish currently relies on.
  */
 export async function isDraftDirty(
   orgId: string,
@@ -161,7 +169,8 @@ export async function isDraftDirty(
         ),
       );
 
-    // Dirty if draft has more content than pinned (simple monotonic heuristic)
+    // Dirty if the draft holds more definitions than the pin (count heuristic —
+    // see the doc comment for what this deliberately does not catch).
     const draftTotal = (labelCount?.n ?? 0) + (relCount?.n ?? 0);
     const pinnedTotal = (pinnedLabelCount?.n ?? 0) + (pinnedRelCount?.n ?? 0);
     return draftTotal > pinnedTotal;
@@ -173,6 +182,12 @@ export async function isDraftDirty(
 /**
  * Freeze the current draft into a published snapshot, open a fresh draft.
  * Returns the published version info.
+ *
+ * Numbering: the draft row is RENUMBERED to `max(version_number) + 1` on
+ * publish, and the fresh draft takes the number after that. Because the draft
+ * is normally already the highest-numbered row, published versions therefore
+ * land on 2, 4, 6, … — `versionNumber` is a monotonic ordering key, not a
+ * "this is the Nth publish" counter, and callers must not present it as one.
  */
 export async function publishDraft(
   orgId: string,
@@ -210,10 +225,10 @@ export async function publishDraft(
 
     if (!published) throw new Error("Failed to publish draft version");
 
-    // 3. Snapshot: copy schemas/labels/relationships/properties into published version
-    // (For snapshot fidelity, schemas already reference the versionId; since we update
-    //  in-place the version row, child rows already point to the published version.
-    //  Open a NEW draft that copies schemas/labels/rels/props from the published snapshot.)
+    // 3. No snapshot copy is needed for the published side: the draft row was
+    //    frozen in place, so its existing schema/label/relationship/property
+    //    children already point at the now-published versionId. Steps 4–8 copy
+    //    that snapshot FORWARD into a brand-new draft instead.
 
     // 4. Open a fresh draft (version number = nextNumber + 1 reserved as next draft)
     const [newDraft] = await tx
@@ -264,7 +279,12 @@ export async function publishDraft(
       if (newSchema) schemaIdMap.set(s.id, newSchema.id);
     }
 
-    // 6. Copy node labels
+    // 6. Copy node labels.
+    //    Steps 6–8 skip any child whose parent failed to copy (`continue` on a
+    //    missing map entry). A skip is silent: the forward copy drops the row
+    //    from the new draft with no error and no counter, so a partial failure
+    //    in step 5 shows up later as missing definitions, not as a failed
+    //    publish.
     const publishedLabels = await tx
       .select()
       .from(db.nodeLabels)
@@ -403,6 +423,11 @@ export async function publishDraft(
 /**
  * Point registries.pinnedVersionId at the given published version.
  * Returns previous pin info and downgrade flag.
+ *
+ * `orgId` and `registryId` are unused — every query keys off `registryRowId`,
+ * and both call sites (schema.toggle, schema.version.pin) already pass
+ * `registry.id` for BOTH id parameters. Collapsing them is a signature change,
+ * so it is left to a dedicated change rather than done here.
  */
 export async function pinVersion(
   orgId: string,

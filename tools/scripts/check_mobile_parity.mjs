@@ -100,7 +100,8 @@ export function scanStringLiterals(content) {
     if (c === "/" && c2 === "*") {
       advance();
       advance();
-      while (i < n && !(content[i] === "*" && content[i + 1] === "/")) advance();
+      while (i < n && !(content[i] === "*" && content[i + 1] === "/"))
+        advance();
       if (i < n) {
         advance();
         advance();
@@ -146,7 +147,9 @@ export function extractFindings(content, filePath) {
     if (!literal.includes("hidden")) continue;
     const tokens = literal.split(/\s+/).filter(Boolean);
     const hasHiddenToken = tokens.includes("hidden");
-    const hasVisibleAtBreakpoint = tokens.some((t) => VISIBLE_AT_BREAKPOINT_RE.test(t));
+    const hasVisibleAtBreakpoint = tokens.some((t) =>
+      VISIBLE_AT_BREAKPOINT_RE.test(t),
+    );
     const hasMaxHidden = tokens.some((t) => MAX_HIDDEN_RE.test(t));
     if (!(hasHiddenToken && hasVisibleAtBreakpoint) && !hasMaxHidden) continue;
     if (hasHiddenToken && hasVisibleAtBreakpoint) {
@@ -185,8 +188,18 @@ export function computeMobileParity(findings, manifest) {
 
   // Structural validation of each entry, independent of coverage.
   for (const entry of entries) {
-    if (!entry || typeof entry !== "object" || !entry.file || !entry.match || !entry.kind) {
-      violations.push({ type: "invalid-entry", entry, reason: "entry is missing required file/match/kind" });
+    if (
+      !entry ||
+      typeof entry !== "object" ||
+      !entry.file ||
+      !entry.match ||
+      !entry.kind
+    ) {
+      violations.push({
+        type: "invalid-entry",
+        entry,
+        reason: "entry is missing required file/match/kind",
+      });
       continue;
     }
     if (entry.kind === "hidden") {
@@ -205,7 +218,11 @@ export function computeMobileParity(findings, manifest) {
         });
       }
       if (!entry.approvedBy) {
-        violations.push({ type: "invalid-hidden-approval", entry, reason: "approvedBy is required for kind=hidden" });
+        violations.push({
+          type: "invalid-hidden-approval",
+          entry,
+          reason: "approvedBy is required for kind=hidden",
+        });
       }
     } else if (entry.kind === "reflow") {
       if (!entry.equivalent || entry.equivalent.length < 20) {
@@ -216,7 +233,11 @@ export function computeMobileParity(findings, manifest) {
         });
       }
     } else {
-      violations.push({ type: "invalid-entry-kind", entry, reason: `kind must be "reflow" or "hidden", got ${JSON.stringify(entry.kind)}` });
+      violations.push({
+        type: "invalid-entry-kind",
+        entry,
+        reason: `kind must be "reflow" or "hidden", got ${JSON.stringify(entry.kind)}`,
+      });
     }
   }
 
@@ -224,13 +245,18 @@ export function computeMobileParity(findings, manifest) {
   const coveredEntryIndexes = new Set();
   for (const finding of findings) {
     const idx = entries.findIndex(
-      (e) => e && e.file === finding.file && typeof e.match === "string" && finding.literal.includes(e.match),
+      (e) =>
+        e &&
+        e.file === finding.file &&
+        typeof e.match === "string" &&
+        finding.literal.includes(e.match),
     );
     if (idx === -1) {
       violations.push({
         type: "uncovered-finding",
         finding,
-        reason: "flagged mobile-hiding pattern is not registered in apps/app/mobile-parity.json",
+        reason:
+          "flagged mobile-hiding pattern is not registered in apps/app/mobile-parity.json",
       });
     } else {
       coveredEntryIndexes.add(idx);
@@ -243,9 +269,19 @@ export function computeMobileParity(findings, manifest) {
   entries.forEach((entry, idx) => {
     if (coveredEntryIndexes.has(idx)) return;
     if (entry && entry.pending) {
-      warnings.push({ type: "pending-entry", entry, reason: "registered ahead of an in-flight change — not yet matched by a finding" });
+      warnings.push({
+        type: "pending-entry",
+        entry,
+        reason:
+          "registered ahead of an in-flight change — not yet matched by a finding",
+      });
     } else {
-      violations.push({ type: "stale-entry", entry, reason: "entry does not match any current finding — remove it or fix the match" });
+      violations.push({
+        type: "stale-entry",
+        entry,
+        reason:
+          "entry does not match any current finding — remove it or fix the match",
+      });
     }
   });
 
@@ -254,7 +290,9 @@ export function computeMobileParity(findings, manifest) {
 
 // ── Filesystem scanning ──────────────────────────────────────────────────────
 function shouldSkip(absPath) {
-  return absPath.endsWith(".test.tsx") || absPath.includes(`${sep}__tests__${sep}`);
+  return (
+    absPath.endsWith(".test.tsx") || absPath.includes(`${sep}__tests__${sep}`)
+  );
 }
 
 function listTsxFiles() {
@@ -351,7 +389,13 @@ function main() {
   const { violations, warnings } = computeMobileParity(findings, manifest);
 
   if (JSON_MODE) {
-    process.stdout.write(JSON.stringify({ findings, violations, entries: manifest.entries }, null, 2) + "\n");
+    process.stdout.write(
+      JSON.stringify(
+        { findings, violations, entries: manifest.entries },
+        null,
+        2,
+      ) + "\n",
+    );
     return;
   }
 
@@ -360,24 +404,30 @@ function main() {
   );
 
   for (const w of warnings) {
-    console.log(`::warning title=Mobile parity (pending)::${describeEntry(w.entry)} — ${w.reason}`);
+    console.log(
+      `::warning title=Mobile parity (pending)::${describeEntry(w.entry)} — ${w.reason}`,
+    );
   }
 
   if (!violations.length) {
-    info("Mobile Feature Parity: every desktop-only pattern is covered by a registered, valid manifest entry.");
+    info(
+      "Mobile Feature Parity: every desktop-only pattern is covered by a registered, valid manifest entry.",
+    );
     return;
   }
 
   const annotation = WARN_ONLY ? "warning" : "error";
   for (const v of violations) {
-    console.log(`::${annotation} title=Mobile parity violation::${describeViolation(v)}`);
+    console.log(
+      `::${annotation} title=Mobile parity violation::${describeViolation(v)}`,
+    );
   }
   console.error(`\nMOBILE PARITY VIOLATIONS — ${violations.length}:`);
   for (const v of violations) console.error(`  - ${describeViolation(v)}`);
   console.error(
     "\nMobile is not a second-class surface — every desktop capability must work on mobile (ADR-026). For each" +
       "\nviolation above, either:" +
-      '\n  1) make the feature available on mobile (preferred — drop the hiding class), or' +
+      "\n  1) make the feature available on mobile (preferred — drop the hiding class), or" +
       '\n  2) if this is a genuine reflow, register a kind="reflow" entry in apps/app/mobile-parity.json describing' +
       "\n     the mobile-equivalent surface (>=20 chars), or" +
       '\n  3) if hiding is truly required, register a kind="hidden" entry with a security/performance reason, a' +
@@ -385,13 +435,18 @@ function main() {
   );
 
   if (WARN_ONLY) {
-    console.error("\n--warn-only: not failing the build, but fix this before merge.");
+    console.error(
+      "\n--warn-only: not failing the build, but fix this before merge.",
+    );
     return;
   }
   process.exit(1);
 }
 
 // Only run when executed directly (not when imported by the test).
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   main();
 }

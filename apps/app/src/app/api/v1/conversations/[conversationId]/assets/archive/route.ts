@@ -123,7 +123,11 @@ export async function GET(
   }
 
   const body = archiveGeneratedAssets(
-    files.map((f) => ({ publicId: f.publicId, name: f.name, mimeType: f.mimeType })),
+    files.map((f) => ({
+      publicId: f.publicId,
+      name: f.name,
+      mimeType: f.mimeType,
+    })),
     { userId, surface: "app", requestId },
   );
 

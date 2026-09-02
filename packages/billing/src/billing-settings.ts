@@ -112,7 +112,9 @@ export async function getOrgBillingSettings(
 
   if (!row) {
     // Should never happen after the insert above, but guard defensively.
-    throw new Error(`billing-settings: failed to resolve settings for org ${orgId}`);
+    throw new Error(
+      `billing-settings: failed to resolve settings for org ${orgId}`,
+    );
   }
 
   logger.debug(
@@ -163,7 +165,8 @@ export async function updateAutoReloadSettings(
 
   // Guard: enabling auto-reload requires a payment method on file or being provided.
   if (input.enabled === true) {
-    const hasPaymentMethodId = input.paymentMethodId !== null && input.paymentMethodId !== undefined;
+    const hasPaymentMethodId =
+      input.paymentMethodId !== null && input.paymentMethodId !== undefined;
 
     // If no payment method is provided in this request, check for a default on file.
     let hasValidPaymentMethod = hasPaymentMethodId;
@@ -182,17 +185,24 @@ export async function updateAutoReloadSettings(
             }),
           );
           if (sub?.stripeCustomerId) {
-            const defaultPm = await billingProvider().getDefaultPaymentMethodId(sub.stripeCustomerId);
+            const defaultPm = await billingProvider().getDefaultPaymentMethodId(
+              sub.stripeCustomerId,
+            );
             hasValidPaymentMethod = !!defaultPm;
           }
         } catch (err) {
-          logger.warn({ orgId, err }, "billing-settings: could not check for default payment method");
+          logger.warn(
+            { orgId, err },
+            "billing-settings: could not check for default payment method",
+          );
         }
       }
     }
 
     if (!hasValidPaymentMethod) {
-      throw new Error("billing-settings: cannot enable auto-reload without a saved payment method");
+      throw new Error(
+        "billing-settings: cannot enable auto-reload without a saved payment method",
+      );
     }
   }
 

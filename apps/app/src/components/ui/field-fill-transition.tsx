@@ -14,8 +14,8 @@
  *   - Motion is fully disabled under prefers-reduced-motion — state still
  *     changes but no animation plays.
  *
- * This is a purely CSS-driven transition (no Framer Motion dependency).
- * The `active` state change is owned by the Ask system (Stage 2 — B2).
+ * This is a purely CSS-driven transition (no Framer Motion dependency). The
+ * `active` state change is owned by the Ask system's fill overlay.
  */
 
 "use client";
@@ -74,9 +74,10 @@ export function FieldFillTransition({
       {children}
 
       {/*
-       * Keyframe is injected inline via a <style> tag so this component is
-       * self-contained and doesn't require a global CSS change.
-       * The animation plays once, peaks at 50%, then settles to the resting
+       * Keyframe is injected inline via a <style> tag so the component ships
+       * with its own animation. Note the `@keyframes` name is GLOBAL: several
+       * simultaneously-active fields each emit an identical copy of this rule.
+       * The animation plays once, peaks at 40%, then settles to the resting
        * box-shadow defined on the wrapper above.
        *
        * prefers-reduced-motion: the `motion-safe:` Tailwind variant on the

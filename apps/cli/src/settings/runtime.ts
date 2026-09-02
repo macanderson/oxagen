@@ -42,7 +42,9 @@ export interface AppliedSettingsEnv {
  *   - triage  → OXAGEN_LLM_EVALUATOR  (triageModel) — also drives the planner
  *               via the CLI runtime, which reads triageModel directly.
  */
-export function applySettingsToEnv(opts: ResolveSettingsOptions = {}): AppliedSettingsEnv {
+export function applySettingsToEnv(
+  opts: ResolveSettingsOptions = {},
+): AppliedSettingsEnv {
   const { settings } = loadSettings(opts);
   const envKeys: string[] = [];
 

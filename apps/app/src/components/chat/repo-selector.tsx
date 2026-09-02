@@ -76,7 +76,9 @@ export function RepoSelector({
               key — the SelectItems aren't mounted until the popup first opens. */}
           <SelectValue placeholder={placeholder}>
             {(value: string | null) => {
-              const repo = value ? repositories.find((r) => r.key === value) : null;
+              const repo = value
+                ? repositories.find((r) => r.key === value)
+                : null;
               return repo ? `${repo.owner}/${repo.name}` : placeholder;
             }}
           </SelectValue>

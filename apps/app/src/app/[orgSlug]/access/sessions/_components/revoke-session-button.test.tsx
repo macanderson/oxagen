@@ -59,8 +59,12 @@ describe("RevokeSessionButton", () => {
   });
 
   it("first click shows confirmation prompt with userName", async () => {
-    const { container, getByText } = render(<RevokeSessionButton {...DEFAULT_PROPS} />);
-    const btn = container.querySelector('[title="Revoke session"]') as HTMLElement;
+    const { container, getByText } = render(
+      <RevokeSessionButton {...DEFAULT_PROPS} />,
+    );
+    const btn = container.querySelector(
+      '[title="Revoke session"]',
+    ) as HTMLElement;
     await act(async () => {
       fireEvent.click(btn);
     });
@@ -72,8 +76,12 @@ describe("RevokeSessionButton", () => {
   });
 
   it("Cancel returns to idle (shows Revoke session button)", async () => {
-    const { container, getByText } = render(<RevokeSessionButton {...DEFAULT_PROPS} />);
-    const btn = container.querySelector('[title="Revoke session"]') as HTMLElement;
+    const { container, getByText } = render(
+      <RevokeSessionButton {...DEFAULT_PROPS} />,
+    );
+    const btn = container.querySelector(
+      '[title="Revoke session"]',
+    ) as HTMLElement;
     await act(async () => {
       fireEvent.click(btn);
     });
@@ -82,14 +90,20 @@ describe("RevokeSessionButton", () => {
       fireEvent.click(getByText("Cancel"));
     });
     await waitFor(() => {
-      expect(container.querySelector('[title="Revoke session"]')).not.toBeNull();
+      expect(
+        container.querySelector('[title="Revoke session"]'),
+      ).not.toBeNull();
     });
   });
 
   it("second click Confirm calls revokeSessionAction with correct input", async () => {
-    const { container, getByText } = render(<RevokeSessionButton {...DEFAULT_PROPS} />);
+    const { container, getByText } = render(
+      <RevokeSessionButton {...DEFAULT_PROPS} />,
+    );
     // First click → confirming state
-    const btn = container.querySelector('[title="Revoke session"]') as HTMLElement;
+    const btn = container.querySelector(
+      '[title="Revoke session"]',
+    ) as HTMLElement;
     await act(async () => {
       fireEvent.click(btn);
     });
@@ -113,8 +127,12 @@ describe("RevokeSessionButton", () => {
       code: "internal",
       error: "DB timeout",
     });
-    const { container, getByText } = render(<RevokeSessionButton {...DEFAULT_PROPS} />);
-    const btn = container.querySelector('[title="Revoke session"]') as HTMLElement;
+    const { container, getByText } = render(
+      <RevokeSessionButton {...DEFAULT_PROPS} />,
+    );
+    const btn = container.querySelector(
+      '[title="Revoke session"]',
+    ) as HTMLElement;
     await act(async () => {
       fireEvent.click(btn);
     });
@@ -130,8 +148,12 @@ describe("RevokeSessionButton", () => {
 
   it("shows forbidden message when revokeSessionAction returns forbidden", async () => {
     mockRevokeAction.mockResolvedValue({ ok: false, code: "forbidden" });
-    const { container, getByText } = render(<RevokeSessionButton {...DEFAULT_PROPS} />);
-    const btn = container.querySelector('[title="Revoke session"]') as HTMLElement;
+    const { container, getByText } = render(
+      <RevokeSessionButton {...DEFAULT_PROPS} />,
+    );
+    const btn = container.querySelector(
+      '[title="Revoke session"]',
+    ) as HTMLElement;
     await act(async () => {
       fireEvent.click(btn);
     });
@@ -146,8 +168,12 @@ describe("RevokeSessionButton", () => {
 
   it("Dismiss resets error state back to idle", async () => {
     mockRevokeAction.mockResolvedValue({ ok: false, code: "not_found" });
-    const { container, getByText } = render(<RevokeSessionButton {...DEFAULT_PROPS} />);
-    const btn = container.querySelector('[title="Revoke session"]') as HTMLElement;
+    const { container, getByText } = render(
+      <RevokeSessionButton {...DEFAULT_PROPS} />,
+    );
+    const btn = container.querySelector(
+      '[title="Revoke session"]',
+    ) as HTMLElement;
     await act(async () => {
       fireEvent.click(btn);
     });
@@ -160,7 +186,9 @@ describe("RevokeSessionButton", () => {
       fireEvent.click(getByText("Dismiss"));
     });
     await waitFor(() => {
-      expect(container.querySelector('[title="Revoke session"]')).not.toBeNull();
+      expect(
+        container.querySelector('[title="Revoke session"]'),
+      ).not.toBeNull();
     });
   });
 });

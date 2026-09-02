@@ -11,7 +11,14 @@
  * (jsdom's `navigator.clipboard` is a read-only getter — assign won't take).
  */
 
-import { act, cleanup, render, renderHook, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CopyButton, useCopyToClipboard } from "./copy-button";
@@ -27,7 +34,9 @@ function mockClipboard(writeText: (text: string) => Promise<void>) {
 
 describe("useCopyToClipboard", () => {
   it("writes text and flips copied, then reverts after the timeout", async () => {
-    const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
+    const writeText = vi
+      .fn<(text: string) => Promise<void>>()
+      .mockResolvedValue(undefined);
     mockClipboard(writeText);
     const { result } = renderHook(() => useCopyToClipboard({ timeout: 50 }));
     expect(result.current.copied).toBe(false);
@@ -52,10 +61,14 @@ describe("useCopyToClipboard", () => {
 describe("CopyButton", () => {
   it("copies the value and swaps the accessible name to the copied label", async () => {
     const user = userEvent.setup();
-    render(<CopyButton value="pk_123" label="Copy key" copiedLabel="Key copied" />);
+    render(
+      <CopyButton value="pk_123" label="Copy key" copiedLabel="Key copied" />,
+    );
     await user.click(screen.getByRole("button", { name: "Copy key" }));
     expect(await navigator.clipboard.readText()).toBe("pk_123");
-    expect(await screen.findByRole("button", { name: "Key copied" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Key copied" }),
+    ).toBeInTheDocument();
   });
 
   it("supports a lazy value producer", async () => {
@@ -78,7 +91,13 @@ describe("CopyButton", () => {
   it("does not copy when onClick prevents default", async () => {
     const user = userEvent.setup();
     const onCopied = vi.fn();
-    render(<CopyButton value="x" onClick={(e) => e.preventDefault()} onCopied={onCopied} />);
+    render(
+      <CopyButton
+        value="x"
+        onClick={(e) => e.preventDefault()}
+        onCopied={onCopied}
+      />,
+    );
     await user.click(screen.getByRole("button", { name: "Copy" }));
     expect(onCopied).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();

@@ -1,4 +1,4 @@
-import type { ImportPlatform, UnresolvedTool } from "./types";
+import type { ImportPlatform, UnresolvedTool } from "./types.js";
 
 export const TOOL_MAPPING_VERSION = "2026-07-21.1";
 

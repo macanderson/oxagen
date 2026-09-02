@@ -178,6 +178,14 @@ export interface PollBatchArgs {
    * When true (default), emit token_usage rows and charge credits for every
    * succeeded result once the batch has ended. Set false if an outer system
    * owns metering.
+   *
+   * METERING IS NOT IDEMPOTENT. `chargeUsageCredits` writes a fresh credit
+   * ledger row on every call — `referenceId` is a correlation field, not a
+   * dedupe key, and none is passed here anyway. Every poll that observes
+   * `processing_status === "ended"` re-charges the whole batch and re-inserts
+   * its token_usage rows. Poll an ended batch N times and the org is billed N
+   * times. The caller owns "meter exactly once": poll to completion once, or
+   * pass `meter: false` on every poll after the first.
    */
   meter?: boolean;
 }

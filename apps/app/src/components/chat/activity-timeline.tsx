@@ -91,17 +91,12 @@ export function TimelineItem({
 
         {/* Connector line — fills remaining height toward the next dot */}
         {!isLast && (
-          <div
-            className="mt-1 flex-1 w-px bg-border"
-            aria-hidden="true"
-          />
+          <div className="mt-1 flex-1 w-px bg-border" aria-hidden="true" />
         )}
       </div>
 
       {/* Content column */}
-      <div className="flex-1 min-w-0 pb-3 pt-2">
-        {children}
-      </div>
+      <div className="flex-1 min-w-0 pb-3 pt-2">{children}</div>
     </motion.div>
   );
 }
@@ -115,7 +110,10 @@ export interface ActivityTimelineProps {
   className?: string;
 }
 
-export function ActivityTimeline({ children, className }: ActivityTimelineProps) {
+export function ActivityTimeline({
+  children,
+  className,
+}: ActivityTimelineProps) {
   const reducedMotion = useReducedMotion();
 
   return (

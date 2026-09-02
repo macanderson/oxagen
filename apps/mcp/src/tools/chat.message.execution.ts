@@ -18,8 +18,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function chatMessageExecutionTool(args: InferSchema<typeof schema>) {
+export default async function chatMessageExecutionTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(chatMessageExecution.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(chatMessageExecution.name, args, ctx, {
+    surface: "mcp",
+  });
   return chatMessageExecution.output.parse(output);
 }

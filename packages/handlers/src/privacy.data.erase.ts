@@ -12,14 +12,25 @@ function generatePublicId(prefix: string): string {
   return `${prefix}_${schema.cryptoRandom(22)}`;
 }
 
+const DEFAULT_GRACE_DAYS = 30;
+
 /**
  * Grace period before hard-delete executes.
  * Default: 30 days.
  * Set PRIVACY_ERASURE_GRACE_DAYS=0 for immediate erasure (test envs).
+ *
+ * A missing or unparseable value falls back to the 30-day default rather than
+ * producing NaN — an NaN grace period would make `scheduledAt` an Invalid Date
+ * and fail the erasure-request insert, silently blocking a GDPR request.
  */
 function getGracePeriodMs(): number {
-  const days = parseInt(process.env.PRIVACY_ERASURE_GRACE_DAYS ?? "30", 10);
-  return Math.max(0, days) * 24 * 60 * 60 * 1000;
+  const raw = process.env.PRIVACY_ERASURE_GRACE_DAYS;
+  const parsed =
+    raw === undefined ? DEFAULT_GRACE_DAYS : Number.parseInt(raw, 10);
+  const days = Number.isFinite(parsed)
+    ? Math.max(0, parsed)
+    : DEFAULT_GRACE_DAYS;
+  return days * 24 * 60 * 60 * 1000;
 }
 
 export const privacyDataEraseHandler: CapabilityHandler<

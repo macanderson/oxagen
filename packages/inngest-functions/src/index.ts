@@ -4,7 +4,11 @@ export { functions } from "./functions";
 export { logger } from "./logger";
 
 // ─── Provider-agnostic adapter & types ───────────────────────────────────────
-export { createEventClient, NonRetriableError, createFunction } from "./adapter";
+export {
+  createEventClient,
+  NonRetriableError,
+  createFunction,
+} from "./adapter";
 export type { EventClient } from "./adapter";
 export type {
   EventPayload,

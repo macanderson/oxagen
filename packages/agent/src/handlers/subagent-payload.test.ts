@@ -25,7 +25,9 @@ describe("payloadByteSize", () => {
 
 describe("fallbackRunSummary", () => {
   it("prefers a declared summary field, trimmed", () => {
-    expect(fallbackRunSummary({ summary: "  done  ", rest: 1 }, null)).toBe("done");
+    expect(fallbackRunSummary({ summary: "  done  ", rest: 1 }, null)).toBe(
+      "done",
+    );
   });
 
   it("falls back message → text in order", () => {

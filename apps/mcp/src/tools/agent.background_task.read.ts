@@ -25,6 +25,8 @@ export default async function agentTaskBackgroundReadTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentTaskBackgroundRead.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentTaskBackgroundRead.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentTaskBackgroundRead.output.parse(output);
 }

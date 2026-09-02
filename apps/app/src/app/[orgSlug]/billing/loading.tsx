@@ -1,4 +1,9 @@
-import { LoadingRegion, PageHeaderSkeleton, StatCardsSkeleton, CardGridSkeleton } from "@/components/loading";
+import {
+  LoadingRegion,
+  PageHeaderSkeleton,
+  StatCardsSkeleton,
+  CardGridSkeleton,
+} from "@/components/loading";
 
 export default function Loading() {
   return (

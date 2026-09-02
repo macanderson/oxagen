@@ -85,7 +85,9 @@ async function main(): Promise<void> {
 
   if (!DRY_RUN && !isLocalHost(host)) {
     console.log(kleur.red("  ⚠  Non-local database detected in --apply mode."));
-    const ok = await confirm("  Proceed with write to production database? [y/N] ");
+    const ok = await confirm(
+      "  Proceed with write to production database? [y/N] ",
+    );
     if (!ok) {
       console.log(kleur.yellow("  Aborted."));
       await closeDatabase();
@@ -107,7 +109,9 @@ async function main(): Promise<void> {
     .orderBy(schema.workspaces.createdAt);
 
   console.log(
-    kleur.cyan(`[seed-interactive-agent] ${allWorkspaces.length} workspace(s) found`),
+    kleur.cyan(
+      `[seed-interactive-agent] ${allWorkspaces.length} workspace(s) found`,
+    ),
   );
   console.log();
 
@@ -148,7 +152,12 @@ async function main(): Promise<void> {
     const userId = owner?.userId ?? ws.createdByUserId;
     if (!userId) {
       const msg = "no owner or creator user to attribute the seed write to";
-      results.push({ workspaceId: ws.id, slug: ws.slug, status: "failed", error: msg });
+      results.push({
+        workspaceId: ws.id,
+        slug: ws.slug,
+        status: "failed",
+        error: msg,
+      });
       console.log(kleur.red(`  [fail] ${ws.slug} — ${msg}`));
       continue;
     }
@@ -172,7 +181,12 @@ async function main(): Promise<void> {
       console.log(kleur.green(`  [seeded] ${ws.slug} — qa-chat published`));
     } catch (err: unknown) {
       const msg = formatError(err);
-      results.push({ workspaceId: ws.id, slug: ws.slug, status: "failed", error: msg });
+      results.push({
+        workspaceId: ws.id,
+        slug: ws.slug,
+        status: "failed",
+        error: msg,
+      });
       console.log(kleur.red(`  [fail] ${ws.slug} — ${msg}`));
     }
   }
@@ -183,15 +197,21 @@ async function main(): Promise<void> {
   const failed = results.filter((r) => r.status === "failed").length;
 
   console.log();
-  console.log(kleur.cyan(`[seed-interactive-agent] Summary (${Date.now() - start}ms)`));
+  console.log(
+    kleur.cyan(`[seed-interactive-agent] Summary (${Date.now() - start}ms)`),
+  );
   console.log(`  Workspaces scanned : ${results.length}`);
   if (DRY_RUN) {
     console.log(`  Would seed         : ${kleur.blue(String(dryRun))}`);
   } else {
-    console.log(`  Seeded             : ${seeded > 0 ? kleur.green(String(seeded)) : kleur.dim("0")}`);
+    console.log(
+      `  Seeded             : ${seeded > 0 ? kleur.green(String(seeded)) : kleur.dim("0")}`,
+    );
   }
   console.log(`  Skipped (ok)       : ${kleur.dim(String(skipped))}`);
-  console.log(`  Failed             : ${failed > 0 ? kleur.red(String(failed)) : kleur.dim("0")}`);
+  console.log(
+    `  Failed             : ${failed > 0 ? kleur.red(String(failed)) : kleur.dim("0")}`,
+  );
 
   await closeDatabase();
   if (failed > 0) process.exit(1);
@@ -200,6 +220,9 @@ async function main(): Promise<void> {
 main()
   .then(() => process.exit(0))
   .catch((err: unknown) => {
-    console.error(kleur.red("[seed-interactive-agent] Fatal:"), formatError(err));
+    console.error(
+      kleur.red("[seed-interactive-agent] Fatal:"),
+      formatError(err),
+    );
     process.exit(1);
   });

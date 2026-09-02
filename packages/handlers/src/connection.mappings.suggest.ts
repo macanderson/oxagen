@@ -13,7 +13,9 @@ const SuggestionSchema = z.object({
       sourceRecordType: z.string(),
       suggestedEntityType: z
         .string()
-        .describe("snake_case entity type name e.g. task, code_change, document"),
+        .describe(
+          "snake_case entity type name e.g. task, code_change, document",
+        ),
       suggestedPropertyMappings: z.record(z.string()),
       confidence: z.number().min(0).max(1),
       reasoning: z.string(),
@@ -104,18 +106,20 @@ Return suggestions for all ${input.recordTypes.length} record types.`;
     tx
       .insert(schema.setupSuggestions)
       .values(
-        result.object.suggestions.map((s: z.infer<typeof SuggestionSchema>["suggestions"][number]) => ({
-          publicId: `sug_${Date.now().toString(36)}_${s.sourceRecordType}`,
-          connectionId: conn.id,
-          orgId: ctx.orgId,
-          workspaceId: ctx.workspaceId,
-          sourceRecordType: s.sourceRecordType,
-          suggestedEntityType: s.suggestedEntityType,
-          suggestedPropertyMappings: s.suggestedPropertyMappings,
-          reasoning: s.reasoning,
-          status: "pending" as const,
-          createdAt: now,
-        })),
+        result.object.suggestions.map(
+          (s: z.infer<typeof SuggestionSchema>["suggestions"][number]) => ({
+            publicId: `sug_${Date.now().toString(36)}_${s.sourceRecordType}`,
+            connectionId: conn.id,
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+            sourceRecordType: s.sourceRecordType,
+            suggestedEntityType: s.suggestedEntityType,
+            suggestedPropertyMappings: s.suggestedPropertyMappings,
+            reasoning: s.reasoning,
+            status: "pending" as const,
+            createdAt: now,
+          }),
+        ),
       )
       .returning({ publicId: schema.setupSuggestions.publicId }),
   );

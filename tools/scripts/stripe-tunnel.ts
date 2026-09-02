@@ -19,7 +19,13 @@
 import { execa } from "execa";
 import { spawn } from "node:child_process";
 import kleur from "kleur";
-import { existsSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { resolve } from "node:path";
 import { PORTS } from "@oxagen/config";
 
@@ -69,7 +75,11 @@ export async function startStripeTunnel(): Promise<void> {
   }
 
   if (tunnelAlreadyRunning()) {
-    console.log(kleur.cyan("[dev] stripe listen already running — reusing existing tunnel"));
+    console.log(
+      kleur.cyan(
+        "[dev] stripe listen already running — reusing existing tunnel",
+      ),
+    );
     return;
   }
 
@@ -89,7 +99,11 @@ export async function startStripeTunnel(): Promise<void> {
   }
 
   if (!secret.startsWith("whsec_")) {
-    console.log(kleur.yellow(`[dev] unexpected stripe secret format — skipping webhook tunnel`));
+    console.log(
+      kleur.yellow(
+        `[dev] unexpected stripe secret format — skipping webhook tunnel`,
+      ),
+    );
     return;
   }
 
@@ -109,7 +123,9 @@ export async function startStripeTunnel(): Promise<void> {
   if (child.pid) writeFileSync(STRIPE_PID_FILE, String(child.pid));
 
   console.log(
-    kleur.green(`[dev] stripe webhook tunnel → http://${FORWARD_TO} (logs: ${STRIPE_LOG_FILE})`),
+    kleur.green(
+      `[dev] stripe webhook tunnel → http://${FORWARD_TO} (logs: ${STRIPE_LOG_FILE})`,
+    ),
   );
 }
 

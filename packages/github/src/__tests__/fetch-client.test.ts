@@ -19,8 +19,7 @@ function makeResponse(body: JsonBody, status = 200): Response {
     status,
     statusText: status >= 200 && status < 300 ? "OK" : "Error",
     json: async () => body,
-    text: async () =>
-      typeof body === "string" ? body : JSON.stringify(body),
+    text: async () => (typeof body === "string" ? body : JSON.stringify(body)),
   } as unknown as Response;
 }
 
@@ -78,9 +77,7 @@ describe("getAuthenticatedUser", () => {
     await client.getAuthenticatedUser();
 
     const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe(
-      "https://github.enterprise.example.com/api/v3/user",
-    );
+    expect(url).toBe("https://github.enterprise.example.com/api/v3/user");
   });
 });
 
@@ -189,8 +186,7 @@ describe("putFile (file absent)", () => {
           // PUT contents
           commit: { sha: "abc123" },
           content: {
-            html_url:
-              "https://github.com/acme/my-repo/blob/main/README.md",
+            html_url: "https://github.com/acme/my-repo/blob/main/README.md",
           },
         }),
       );
@@ -252,8 +248,7 @@ describe("putFile (file absent)", () => {
         makeResponse({
           commit: { sha: "abc123" },
           content: {
-            html_url:
-              "https://github.com/acme/my-repo/blob/main/README.md",
+            html_url: "https://github.com/acme/my-repo/blob/main/README.md",
           },
         }),
       );
@@ -290,8 +285,7 @@ describe("putFile (file present)", () => {
           // PUT contents
           commit: { sha: "new-commit-sha" },
           content: {
-            html_url:
-              "https://github.com/acme/my-repo/blob/main/README.md",
+            html_url: "https://github.com/acme/my-repo/blob/main/README.md",
           },
         }),
       );
@@ -394,10 +388,16 @@ describe("forkRepo (fork immediately reachable)", () => {
     vi.stubGlobal("fetch", fetchMock);
     const client = createGitHubClient({ token: "tok", sleepMs: 0 });
 
-    const result = await client.forkRepo({ owner: "upstream", repo: "orig-repo" });
+    const result = await client.forkRepo({
+      owner: "upstream",
+      repo: "orig-repo",
+    });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    const [forkUrl, forkInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [forkUrl, forkInit] = fetchMock.mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
     expect(forkUrl).toBe(
       "https://api.github.com/repos/upstream/orig-repo/forks",
     );
@@ -433,7 +433,11 @@ describe("forkRepo (fork immediately reachable)", () => {
     vi.stubGlobal("fetch", fetchMock);
     const client = createGitHubClient({ token: "tok", sleepMs: 0 });
 
-    await client.forkRepo({ owner: "upstream", repo: "orig-repo", org: "acme" });
+    await client.forkRepo({
+      owner: "upstream",
+      repo: "orig-repo",
+      org: "acme",
+    });
 
     const [, forkInit] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(forkInit.body as string) as Record<string, unknown>;
@@ -532,7 +536,10 @@ describe("createBranch", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        makeResponse({ ref: "refs/heads/develop", object: { sha: "deadbeef" } }),
+        makeResponse({
+          ref: "refs/heads/develop",
+          object: { sha: "deadbeef" },
+        }),
       ) // GET ref
       .mockResolvedValueOnce(
         makeResponse({
@@ -557,10 +564,11 @@ describe("createBranch", () => {
     );
     expect(refInit.method).toBe("GET");
 
-    const [postUrl, postInit] = fetchMock.mock.calls[1] as [string, RequestInit];
-    expect(postUrl).toBe(
-      "https://api.github.com/repos/acme/my-repo/git/refs",
-    );
+    const [postUrl, postInit] = fetchMock.mock.calls[1] as [
+      string,
+      RequestInit,
+    ];
+    expect(postUrl).toBe("https://api.github.com/repos/acme/my-repo/git/refs");
     expect(JSON.parse(postInit.body as string)).toEqual({
       ref: "refs/heads/feature-x",
       sha: "deadbeef",
@@ -635,9 +643,7 @@ describe("openPullRequest", () => {
     });
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe(
-      "https://api.github.com/repos/acme/my-repo/pulls",
-    );
+    expect(url).toBe("https://api.github.com/repos/acme/my-repo/pulls");
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({
       title: "My PR",
@@ -697,9 +703,7 @@ describe("error handling", () => {
   it("includes the GitHub error message in the thrown error", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(
-        makeResponse({ message: "Bad credentials" }, 401),
-      );
+      .mockResolvedValueOnce(makeResponse({ message: "Bad credentials" }, 401));
     vi.stubGlobal("fetch", fetchMock);
     const client = createGitHubClient({ token: "bad" });
 
@@ -721,17 +725,15 @@ describe("getFileContent", () => {
     // we strip them before decoding.
     const contentWithNewline = encoded.slice(0, 4) + "\n" + encoded.slice(4);
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        makeResponse({
-          type: "file",
-          encoding: "base64",
-          content: contentWithNewline,
-          sha: "abc123",
-          path: "README.md",
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse({
+        type: "file",
+        encoding: "base64",
+        content: contentWithNewline,
+        sha: "abc123",
+        path: "README.md",
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
     const client = createGitHubClient({ token: "tok" });
 
@@ -743,7 +745,9 @@ describe("getFileContent", () => {
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("https://api.github.com/repos/acme/my-repo/contents/README.md");
+    expect(url).toBe(
+      "https://api.github.com/repos/acme/my-repo/contents/README.md",
+    );
     expect((init as RequestInit).method).toBe("GET");
     expect(result).toBe("hello world");
   });
@@ -791,7 +795,9 @@ describe("getFileContent", () => {
   it("rethrows non-404 errors", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(makeResponse({ message: "Internal Server Error" }, 500));
+      .mockResolvedValueOnce(
+        makeResponse({ message: "Internal Server Error" }, 500),
+      );
     vi.stubGlobal("fetch", fetchMock);
     const client = createGitHubClient({ token: "tok" });
 
@@ -833,7 +839,11 @@ describe("getTree", () => {
     vi.stubGlobal("fetch", fetchMock);
     const client = createGitHubClient({ token: "tok" });
 
-    const result = await client.getTree({ owner: "acme", repo: "r", ref: "main" });
+    const result = await client.getTree({
+      owner: "acme",
+      repo: "r",
+      ref: "main",
+    });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
@@ -860,9 +870,7 @@ describe("getTree", () => {
           },
         }),
       )
-      .mockResolvedValueOnce(
-        makeResponse({ tree: [], truncated: false }),
-      );
+      .mockResolvedValueOnce(makeResponse({ tree: [], truncated: false }));
     vi.stubGlobal("fetch", fetchMock);
     const client = createGitHubClient({ token: "tok" });
 
@@ -889,7 +897,11 @@ describe("getTree", () => {
     vi.stubGlobal("fetch", fetchMock);
     const client = createGitHubClient({ token: "tok" });
 
-    const result = await client.getTree({ owner: "acme", repo: "r", ref: "main" });
+    const result = await client.getTree({
+      owner: "acme",
+      repo: "r",
+      ref: "main",
+    });
 
     expect(result).toEqual([]);
   });

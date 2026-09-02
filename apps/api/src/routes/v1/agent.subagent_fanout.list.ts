@@ -14,6 +14,8 @@ agentSubagentFanoutListRoute.get("/", async (c) => {
     ...(limitRaw !== undefined ? { limit: Number(limitRaw) } : {}),
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(agentSubagentFanoutList.name, input, ctx, { surface: "api" });
+  const out = await invoke(agentSubagentFanoutList.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

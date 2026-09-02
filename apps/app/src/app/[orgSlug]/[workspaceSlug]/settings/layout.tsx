@@ -21,11 +21,6 @@ export default async function SettingsLayout({
   // Workbench, never here. The one MCP concern that IS settings-shaped is
   // registry administration: which catalog sources the marketplace and MCP
   // install flows discover servers from.
-  // web-app-2.0 Phase 2 consolidation: Models·Budget·Prompts·Memory-policy
-  // merged into Agent Defaults, Members folded into General, and the
-  // ontology/schema builder moved to Knowledge. Environments lives in the
-  // Workbench (see settings/environments -> workbench/environments redirect),
-  // so it is not a Settings tab here.
   const navItems = [
     { label: "General", href: workspace.settings.general(ctx) },
     { label: "Agent Defaults", href: workspace.settings.agentDefaults(ctx) },

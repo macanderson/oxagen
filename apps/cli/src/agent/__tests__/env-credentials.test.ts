@@ -51,7 +51,10 @@ describe("resolveAiCredential", () => {
   it("prefers the gateway key when both are set", () => {
     process.env["AI_GATEWAY_API_KEY"] = "vck_1";
     process.env["ANTHROPIC_API_KEY"] = "sk-ant-1";
-    expect(resolveAiCredential(cwd)).toEqual({ source: "gateway", key: "vck_1" });
+    expect(resolveAiCredential(cwd)).toEqual({
+      source: "gateway",
+      key: "vck_1",
+    });
     // Gateway path must NOT hijack string-model resolution.
     expect(globalProvider()).toBeUndefined();
   });
@@ -77,7 +80,10 @@ describe("resolveAiCredential", () => {
   it("still resolves the gateway key from config first", () => {
     config.gatewayKey = "vck_cfg";
     config.anthropicKey = "sk-ant-cfg";
-    expect(resolveAiCredential(cwd)).toEqual({ source: "gateway", key: "vck_cfg" });
+    expect(resolveAiCredential(cwd)).toEqual({
+      source: "gateway",
+      key: "vck_cfg",
+    });
     expect(process.env["AI_GATEWAY_API_KEY"]).toBe("vck_cfg");
   });
 });
@@ -94,12 +100,16 @@ describe("credentialSupportsModel", () => {
   it("gateway credentials run any vendor", () => {
     const cred = { source: "gateway" as const, key: "vck_1" };
     expect(credentialSupportsModel(cred, "openai/gpt-5.5-pro")).toBe(true);
-    expect(credentialSupportsModel(cred, "anthropic/claude-sonnet-5")).toBe(true);
+    expect(credentialSupportsModel(cred, "anthropic/claude-sonnet-5")).toBe(
+      true,
+    );
   });
 
   it("anthropic credentials run only anthropic/* or bare slugs", () => {
     const cred = { source: "anthropic" as const, key: "sk-ant-1" };
-    expect(credentialSupportsModel(cred, "anthropic/claude-sonnet-5")).toBe(true);
+    expect(credentialSupportsModel(cred, "anthropic/claude-sonnet-5")).toBe(
+      true,
+    );
     expect(credentialSupportsModel(cred, "claude-sonnet-5")).toBe(true);
     expect(credentialSupportsModel(cred, "openai/gpt-5.5-pro")).toBe(false);
     expect(credentialSupportsModel(cred, "google/gemini-3-pro")).toBe(false);

@@ -24,11 +24,7 @@
     },
     "linear": {
       "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote",
-        "https://mcp.linear.app/sse"
-      ]
+      "args": ["-y", "mcp-remote", "https://mcp.linear.app/sse"]
     },
     "vercel": {
       "type": "http",
@@ -162,13 +158,7 @@
       "target",
       "dist"
     ],
-    "sparsePaths": [
-      "apps",
-      "packages",
-      "tools",
-      ".agents",
-      ".claude"
-    ],
+    "sparsePaths": ["apps", "packages", "tools", ".agents", ".claude"],
     "baseRef": "fresh",
     "bgIsolation": "none"
   },

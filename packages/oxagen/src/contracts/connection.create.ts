@@ -18,9 +18,19 @@ export const connectionCreate = registerCapability({
     workspace: { Owner: "allow" },
   },
   input: z.object({
-    connectorId: z.string().min(1).describe("Connector type slug (e.g. 'github', 'google-drive')"),
-    displayName: z.string().min(1).max(255).describe("Human-readable name for this connection"),
-    connectionConfig: z.record(z.unknown()).optional().describe("Connector-specific configuration"),
+    connectorId: z
+      .string()
+      .min(1)
+      .describe("Connector type slug (e.g. 'github', 'google-drive')"),
+    displayName: z
+      .string()
+      .min(1)
+      .max(255)
+      .describe("Human-readable name for this connection"),
+    connectionConfig: z
+      .record(z.unknown())
+      .optional()
+      .describe("Connector-specific configuration"),
     authCredential: z
       .record(z.unknown())
       .describe("Auth credential object — encrypted before storage"),
@@ -30,7 +40,9 @@ export const connectionCreate = registerCapability({
       .describe("Override delivery method (defaults to connector default)"),
   }),
   output: z.object({
-    connectionId: z.string().describe("Internal UUID of the source_connections row"),
+    connectionId: z
+      .string()
+      .describe("Internal UUID of the source_connections row"),
     publicId: z.string().describe("con_* prefixed public ID"),
     status: z.literal("pending_setup"),
     connectorId: z.string(),

@@ -3,7 +3,7 @@
   "version": "2.1.1",
   "private": true,
   "type": "module",
-  "description": "Static hosting for Oxagen JSON Schemas (schemas.oxagen.sh) — generated from the canonical Zod schemas so editors get $schema autocompletion with zero drift.",
+  "description": "Static hosting for Oxagen JSON Schemas (schemas.oxagen.sh), generated from the canonical Zod schemas so editors get $schema autocompletion.",
   "scripts": {
     "settings:schema": "tsx scripts/generate.ts",
     "generate": "pnpm run settings:schema",

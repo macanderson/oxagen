@@ -4,10 +4,9 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { and, asc, eq, or } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const workflowStatusHandler: CapabilityHandler<typeof workflowStatus> = async (
-  input,
-  ctx,
-) => {
+export const workflowStatusHandler: CapabilityHandler<
+  typeof workflowStatus
+> = async (input, ctx) => {
   const execution = await withTenantDb((tx) =>
     tx.query.agentExecutions.findFirst({
       where: and(
@@ -22,7 +21,10 @@ export const workflowStatusHandler: CapabilityHandler<typeof workflowStatus> = a
   );
 
   if (!execution) {
-    logger.warn({ workflowId: input.workflowId, orgId: ctx.orgId }, "workflow.status: not found");
+    logger.warn(
+      { workflowId: input.workflowId, orgId: ctx.orgId },
+      "workflow.status: not found",
+    );
     throw new Error(`workflow not found: ${input.workflowId}`);
   }
 
@@ -57,7 +59,12 @@ export const workflowStatusHandler: CapabilityHandler<typeof workflowStatus> = a
       workspaceId: execution.workspaceId,
       title: inputPayload.title ?? "",
       goal: inputPayload.goal ?? "",
-      status: execution.status as "planning" | "running" | "completed" | "failed" | "cancelled",
+      status: execution.status as
+        | "planning"
+        | "running"
+        | "completed"
+        | "failed"
+        | "cancelled",
       planJson: (inputPayload.plan as object[]) ?? [],
       totalTasks: steps.length,
       completedTasks: steps.filter((s) => s.status === "completed").length,
@@ -79,7 +86,12 @@ export const workflowStatusHandler: CapabilityHandler<typeof workflowStatus> = a
         taskIndex: s.stepNumber,
         title: sp?.title ?? "",
         goal: sp?.goal ?? "",
-        status: s.status as "pending" | "running" | "completed" | "failed" | "cancelled",
+        status: s.status as
+          | "pending"
+          | "running"
+          | "completed"
+          | "failed"
+          | "cancelled",
         inngestRunId: null,
         outputJson: (s.outputPayload as object | null) ?? null,
         error: s.failureReason ?? null,

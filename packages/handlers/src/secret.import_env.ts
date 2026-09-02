@@ -2,8 +2,14 @@ import { importEnv } from "@oxagen/plugins";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { logger } from "./logger";
 
-export const secretImportEnvHandler: CapabilityHandlerFn = async (input, ctx) => {
-  if (!ctx.workspaceId) throw new Error("[secret.import_env] workspaceId is required (scoped capability)");
+export const secretImportEnvHandler: CapabilityHandlerFn = async (
+  input,
+  ctx,
+) => {
+  if (!ctx.workspaceId)
+    throw new Error(
+      "[secret.import_env] workspaceId is required (scoped capability)",
+    );
   const { text, environmentId, commit } = input as {
     text: string;
     environmentId?: string | null;

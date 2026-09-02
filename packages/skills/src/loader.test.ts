@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { serializeArtifactToml } from "@oxagen/agent-artifacts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { loadSkillFile, parseSkill } from "./loader";
 
 function skillToml(
@@ -79,5 +79,30 @@ describe("loadSkillFile", () => {
     expect(() => skillToml({ references: ["../secret.md"] })).toThrow(
       /must stay within/,
     );
+  });
+
+  // A manifest may name a sibling file that was never shipped. The skill still
+  // loads with an empty body for that reference, but the miss must be logged —
+  // an empty reference that nothing announces is indistinguishable from a
+  // reference file that is genuinely empty.
+  it("warns and degrades to an empty body when a reference is missing", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "skill-toml-"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const manifest = join(directory, "skill.toml");
+      await writeFile(
+        manifest,
+        skillToml({ references: ["references/absent.md"] }),
+      );
+      const loaded = await loadSkillFile(manifest);
+      expect(loaded.references).toEqual([
+        { path: "references/absent.md", body: "" },
+      ]);
+      expect(warn).toHaveBeenCalledOnce();
+      expect(warn.mock.calls[0]?.[0]).toMatch(/reference file missing/);
+    } finally {
+      warn.mockRestore();
+      await rm(directory, { recursive: true });
+    }
   });
 });

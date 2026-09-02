@@ -666,9 +666,12 @@ export function enumerateNavTargets(
     href: org.dashboard(ctx),
     parent: "dashboard",
   });
+  // The workspace LISTING, not the org root: `/{org}` immediately redirects
+  // into the first workspace, so a "Workspaces" command-menu hit that pointed
+  // there would never land on the picker the label promises.
   targets.push({
     label: "Workspaces",
-    href: org.root(ctx),
+    href: org.workspaces(ctx),
     parent: "workspaces",
   });
   targets.push({ label: "Members", href: org.members(ctx), parent: "members" });

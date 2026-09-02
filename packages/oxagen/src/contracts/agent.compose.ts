@@ -29,7 +29,9 @@ const composeStepPlan = z.object({
   dependsOn: z
     .array(z.string())
     .default([])
-    .describe("Ids of steps that must complete successfully before this one runs"),
+    .describe(
+      "Ids of steps that must complete successfully before this one runs",
+    ),
 });
 
 const composeStepResult = z.object({

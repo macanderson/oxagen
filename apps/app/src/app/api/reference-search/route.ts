@@ -12,7 +12,11 @@ import "@oxagen/handlers/register";
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertWorkspaceMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertWorkspaceMember,
+} from "@/lib/resolve-org";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { REFERENCE_TYPES } from "@oxagen/oxagen/contracts/reference.search";
 import type { ReferenceSearchOutput } from "@oxagen/oxagen/contracts/reference.search";
@@ -22,7 +26,11 @@ const BodySchema = z.object({
   orgSlug: z.string().min(1),
   workspaceSlug: z.string().min(1),
   query: z.string().min(0).max(500).default(""),
-  types: z.array(z.enum(REFERENCE_TYPES)).min(1).max(REFERENCE_TYPES.length).optional(),
+  types: z
+    .array(z.enum(REFERENCE_TYPES))
+    .min(1)
+    .max(REFERENCE_TYPES.length)
+    .optional(),
   slug: z.string().min(1).max(500).optional(),
   limit: z.number().int().min(1).max(25).default(10),
 });

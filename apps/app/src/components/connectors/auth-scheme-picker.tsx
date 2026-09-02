@@ -25,7 +25,8 @@ const AUTH_KIND_LABELS: Record<string, string> = {
 };
 
 export function AuthSchemePicker() {
-  const { schema, selectedAuthSchemeId, selectAuthScheme } = useConnectorSchema();
+  const { schema, selectedAuthSchemeId, selectAuthScheme } =
+    useConnectorSchema();
 
   const schemes = schema?.auth?.schemes;
   if (!schemes || schemes.length === 0) return null;
@@ -44,10 +45,14 @@ export function AuthSchemePicker() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <p className="text-sm font-medium text-foreground mb-2">Authentication method</p>
+        <p className="text-sm font-medium text-foreground mb-2">
+          Authentication method
+        </p>
         <RadioGroup
           value={selectedAuthSchemeId ?? undefined}
-          onValueChange={(v) => { if (typeof v === "string") selectAuthScheme(v); }}
+          onValueChange={(v) => {
+            if (typeof v === "string") selectAuthScheme(v);
+          }}
           className="gap-2"
         >
           {schemes.map((scheme) => (
@@ -74,9 +79,7 @@ export function AuthSchemePicker() {
         </RadioGroup>
       </div>
 
-      {selectedAuthSchemeId && (
-        <SchemeFields schemeId={selectedAuthSchemeId} />
-      )}
+      {selectedAuthSchemeId && <SchemeFields schemeId={selectedAuthSchemeId} />}
     </div>
   );
 }
@@ -90,7 +93,9 @@ function SchemeFields({ schemeId }: SchemeFieldsProps) {
   const scheme = schema?.auth?.schemes.find((s) => s.id === schemeId);
   if (!scheme) return null;
 
-  const isOAuth = scheme.kind === "oauth2_authorization_code" || scheme.kind === "oauth2_client_credentials";
+  const isOAuth =
+    scheme.kind === "oauth2_authorization_code" ||
+    scheme.kind === "oauth2_client_credentials";
 
   return (
     <div className="flex flex-col gap-4">
@@ -98,7 +103,10 @@ function SchemeFields({ schemeId }: SchemeFieldsProps) {
       {isOAuth && scheme.scopes && scheme.scopes.length > 0 && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-1.5">
-            <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+            <ShieldCheck
+              className="h-3.5 w-3.5 text-muted-foreground"
+              aria-hidden="true"
+            />
             <p className="text-xs font-medium text-muted-foreground">
               Permissions requested
             </p>

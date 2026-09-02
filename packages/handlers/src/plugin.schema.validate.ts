@@ -9,7 +9,9 @@ import {
 import { pluginSchemaGetHandler } from "./plugin.schema.get";
 import { logger } from "./logger";
 
-export const pluginSchemaValidateHandler: CapabilityHandler<typeof pluginSchemaValidate> = async (input, ctx) => {
+export const pluginSchemaValidateHandler: CapabilityHandler<
+  typeof pluginSchemaValidate
+> = async (input, ctx) => {
   const { pluginId, authSchemeId, config } = input;
 
   // Resolve the schema — reuses the DB cache + file-loading logic.

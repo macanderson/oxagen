@@ -25,6 +25,22 @@
  *
  * `${VAR}` references in any string value are expanded from the environment at
  * resolution time (reusing @oxagen/mcp-config's expander).
+ *
+ * TRUST BOUNDARY — read before changing precedence. The project and local
+ * scopes come out of the working directory, so cloning a repo and running the
+ * CLI in it loads whatever that repo committed. Two of the merged sections are
+ * executable, not declarative:
+ *
+ *   - `hooks` matcher lists are CONCATENATED, so a project file can add a
+ *     SessionStart command that runs a shell before the first turn.
+ *   - `permissions.allow` is concatenated and `permissions.defaultMode` is a
+ *     plain overlay-wins scalar, so a project file can widen (or with
+ *     `bypassPermissions`, erase) what the user's global file restricted.
+ *
+ * Nothing here prompts the user to trust a directory first. Until such a gate
+ * exists, running the CLI inside an untrusted checkout is equivalent to running
+ * that checkout's code, and any change that broadens what these scopes can set
+ * widens that exposure.
  */
 import { readFileSync, existsSync, copyFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -91,7 +107,10 @@ function legacyUserSettingsFile(): string {
  * Exported so tests can exercise the migration with controlled temp paths
  * rather than touching the real home directory.
  */
-export function migrateUserSettings(canonicalPath: string, legacyPath: string): boolean {
+export function migrateUserSettings(
+  canonicalPath: string,
+  legacyPath: string,
+): boolean {
   if (existsSync(canonicalPath)) return false;
   if (!existsSync(legacyPath)) return false;
   try {
@@ -120,10 +139,9 @@ function resolvedUserSettingsPath(): string {
 }
 
 /** The three scope file paths for a given project root, in precedence order. */
-export function getScopePaths(opts: ResolveSettingsOptions = {}): Record<
-  SettingsScope,
-  string
-> {
+export function getScopePaths(
+  opts: ResolveSettingsOptions = {},
+): Record<SettingsScope, string> {
   const root = opts.cwd ?? process.cwd();
   const dir = opts.projectDirName ?? DEFAULT_PROJECT_DIR;
   return {
@@ -139,7 +157,11 @@ function loadScope(scope: SettingsScope, path: string): ResolvedScopeFile {
   try {
     raw = readFileSync(path, "utf8");
   } catch (err) {
-    return { scope, path, error: err instanceof Error ? err.message : String(err) };
+    return {
+      scope,
+      path,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
   let json: unknown;
   try {
@@ -153,7 +175,13 @@ function loadScope(scope: SettingsScope, path: string): ResolvedScopeFile {
   }
   const parsed = oxagenSettingsSchema.safeParse(json);
   if (!parsed.success) {
-    return { scope, path, error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") };
+    return {
+      scope,
+      path,
+      error: parsed.error.issues
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; "),
+    };
   }
   return { scope, path, settings: parsed.data };
 }
@@ -188,7 +216,10 @@ function mergePermissions(
   };
 }
 
-function mergeHooks(base: Hooks | undefined, overlay: Hooks | undefined): Hooks | undefined {
+function mergeHooks(
+  base: Hooks | undefined,
+  overlay: Hooks | undefined,
+): Hooks | undefined {
   if (!base) return overlay;
   if (!overlay) return base;
   const concat = (
@@ -212,7 +243,10 @@ const STRUCTURED_KEYS = new Set([
   "toolVisibility",
 ]);
 
-function mergeSettings(base: OxagenSettings, overlay: OxagenSettings): OxagenSettings {
+function mergeSettings(
+  base: OxagenSettings,
+  overlay: OxagenSettings,
+): OxagenSettings {
   const merged: OxagenSettings = { ...base };
 
   // Pass-through + scalar keys: overlay wins (skip the structured ones below).
@@ -228,7 +262,10 @@ function mergeSettings(base: OxagenSettings, overlay: OxagenSettings): OxagenSet
   merged.permissions = mergePermissions(base.permissions, overlay.permissions);
   merged.hooks = mergeHooks(base.hooks, overlay.hooks);
   if (base.mcpServers || overlay.mcpServers) {
-    merged.mcpServers = { ...(base.mcpServers ?? {}), ...(overlay.mcpServers ?? {}) };
+    merged.mcpServers = {
+      ...(base.mcpServers ?? {}),
+      ...(overlay.mcpServers ?? {}),
+    };
   }
   if (base.toolVisibility || overlay.toolVisibility) {
     merged.toolVisibility = {
@@ -253,7 +290,9 @@ export function clearSettingsCache(): void {
  * Results are cached per project root for the life of the process (settings do
  * not change mid-run); pass `noCache` to bypass.
  */
-export function loadSettings(opts: ResolveSettingsOptions = {}): ResolvedSettings {
+export function loadSettings(
+  opts: ResolveSettingsOptions = {},
+): ResolvedSettings {
   const paths = getScopePaths(opts);
   const cacheKey = `${paths.user}|${paths.project}|${paths.local}`;
   if (!opts.noCache) {
@@ -262,7 +301,9 @@ export function loadSettings(opts: ResolveSettingsOptions = {}): ResolvedSetting
   }
 
   const order: SettingsScope[] = ["user", "project", "local"];
-  const scopes: ResolvedScopeFile[] = order.map((scope) => loadScope(scope, paths[scope]));
+  const scopes: ResolvedScopeFile[] = order.map((scope) =>
+    loadScope(scope, paths[scope]),
+  );
 
   let merged: OxagenSettings = {};
   for (const sc of scopes) {

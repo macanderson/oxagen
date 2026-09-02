@@ -17,7 +17,8 @@ const { mockAddSwarm, mockUseSwarmSessionStore } = vi.hoisted(() => ({
 }));
 
 vi.mock("./swarm-session-store", () => ({
-  useSwarmSessionStore: (...args: unknown[]) => mockUseSwarmSessionStore(...args),
+  useSwarmSessionStore: (...args: unknown[]) =>
+    mockUseSwarmSessionStore(...args),
 }));
 
 vi.mock("./launch-workflow-dialog", () => ({
@@ -82,7 +83,9 @@ describe("LaunchWorkflowButton", () => {
   it("clicking the button opens the dialog with the tenant slugs", () => {
     render(<LaunchWorkflowButton orgSlug="acme" workspaceSlug="main" />);
     fireEvent.click(screen.getByTestId("launch-workflow"));
-    expect(screen.getByTestId("launch-workflow-dialog-stub").textContent).toContain("acme/main");
+    expect(
+      screen.getByTestId("launch-workflow-dialog-stub").textContent,
+    ).toContain("acme/main");
   });
 
   it("a launched swarm is forwarded to addSwarm", () => {

@@ -16,12 +16,24 @@ const { generateObjectFor, selectModel } = vi.hoisted(() => ({
 vi.mock("@oxagen/ai", () => ({ generateObjectFor, selectModel }));
 
 // Import after the mock is registered.
-import { extractFactFromCluster, extractFactHeuristic, distill } from "./distill";
+import {
+  extractFactFromCluster,
+  extractFactHeuristic,
+  distill,
+} from "./distill";
 
 const NS: Namespace = { org: "test-org", workspace: "test-ws" };
-const PROV: Provenance = { author: "test", derivedFrom: [], timestamp: Date.now() };
+const PROV: Provenance = {
+  author: "test",
+  derivedFrom: [],
+  timestamp: Date.now(),
+};
 
-function makeEpisodic(event: string, outcome: "success" | "failure", tool: string) {
+function makeEpisodic(
+  event: string,
+  outcome: "success" | "failure",
+  tool: string,
+) {
   return createRecord({
     kind: "episodic",
     namespace: NS,
@@ -69,7 +81,9 @@ describe("extractFactFromCluster — LLM path", () => {
     expect(generateObjectFor).toHaveBeenCalledTimes(1);
     // Fast/cheap tier + temperature 0 for a deterministic background job.
     expect(selectModel).toHaveBeenCalledWith({ tier: "fast" });
-    expect(generateObjectFor.mock.calls[0]![0]).toMatchObject({ temperature: 0 });
+    expect(generateObjectFor.mock.calls[0]![0]).toMatchObject({
+      temperature: 0,
+    });
     expect(fact!.fact).toBe(heuristic.fact); // identity is deterministic
     expect(fact!.domain).toBe("tooling"); // decoration adopted
   });

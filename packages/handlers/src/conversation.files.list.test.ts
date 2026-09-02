@@ -48,7 +48,15 @@ import { TEST_CTX } from "./test-utils/fixtures";
 
 const BASE_INPUT = {
   conversationId: "cnv_abc",
-  kind: undefined as "image" | "video" | "document" | "spreadsheet" | "presentation" | "pdf" | "archive" | undefined,
+  kind: undefined as
+    | "image"
+    | "video"
+    | "document"
+    | "spreadsheet"
+    | "presentation"
+    | "pdf"
+    | "archive"
+    | undefined,
   limit: 50,
   cursor: null,
 };
@@ -195,7 +203,11 @@ describe("conversationFilesListHandler (@oxagen/handlers)", () => {
   it("renders a lowercase-hyphenated slug + mimeType extension for an image", async () => {
     mocks.convSelect.mockResolvedValueOnce([CONV_ROW]);
     mocks.assetSelect.mockResolvedValueOnce([
-      makeAssetRow({ kind: "image", mimeType: "image/png", prompt: "A sunset over the ocean" }),
+      makeAssetRow({
+        kind: "image",
+        mimeType: "image/png",
+        prompt: "A sunset over the ocean",
+      }),
     ]);
     const result = await conversationFilesListHandler(BASE_INPUT, TEST_CTX);
     expect(result.files[0]?.name).toBe("a-sunset-over-the-ocean.png");
@@ -204,7 +216,11 @@ describe("conversationFilesListHandler (@oxagen/handlers)", () => {
   it("uses the precise mimeType extension over the kind fallback (.webp)", async () => {
     mocks.convSelect.mockResolvedValueOnce([CONV_ROW]);
     mocks.assetSelect.mockResolvedValueOnce([
-      makeAssetRow({ kind: "image", mimeType: "image/webp", prompt: "A sunset over the ocean" }),
+      makeAssetRow({
+        kind: "image",
+        mimeType: "image/webp",
+        prompt: "A sunset over the ocean",
+      }),
     ]);
     const result = await conversationFilesListHandler(BASE_INPUT, TEST_CTX);
     expect(result.files[0]?.name).toBe("a-sunset-over-the-ocean.webp");
@@ -220,7 +236,9 @@ describe("conversationFilesListHandler (@oxagen/handlers)", () => {
       }),
     ]);
     const result = await conversationFilesListHandler(BASE_INPUT, TEST_CTX);
-    expect(result.files[0]?.name).toBe("uss-nautilus-the-first-nuclear-submarine.md");
+    expect(result.files[0]?.name).toBe(
+      "uss-nautilus-the-first-nuclear-submarine.md",
+    );
   });
 
   it("prefers a clean metadata.displayName over the noisy prompt", async () => {
@@ -274,7 +292,11 @@ describe("conversationFilesListHandler (@oxagen/handlers)", () => {
   it("falls back to the kind extension when the mimeType is unknown", async () => {
     mocks.convSelect.mockResolvedValueOnce([CONV_ROW]);
     mocks.assetSelect.mockResolvedValueOnce([
-      makeAssetRow({ kind: "archive", mimeType: "application/octet-stream", prompt: "Project export" }),
+      makeAssetRow({
+        kind: "archive",
+        mimeType: "application/octet-stream",
+        prompt: "Project export",
+      }),
     ]);
     const result = await conversationFilesListHandler(BASE_INPUT, TEST_CTX);
     // archive kind → .zip fallback.
@@ -285,7 +307,12 @@ describe("conversationFilesListHandler (@oxagen/handlers)", () => {
     mocks.convSelect.mockResolvedValueOnce([CONV_ROW]);
     mocks.assetSelect.mockResolvedValueOnce([
       // publicId "gen_image_abc12345" → last 8 chars = "_abc12345".slice(-8) = "abc12345".
-      makeAssetRow({ kind: "image", mimeType: "image/png", prompt: "", publicId: "gen_image_abc12345" }),
+      makeAssetRow({
+        kind: "image",
+        mimeType: "image/png",
+        prompt: "",
+        publicId: "gen_image_abc12345",
+      }),
     ]);
     const result = await conversationFilesListHandler(BASE_INPUT, TEST_CTX);
     expect(result.files[0]?.name).toBe("image-abc12345.png");
@@ -295,7 +322,11 @@ describe("conversationFilesListHandler (@oxagen/handlers)", () => {
     mocks.convSelect.mockResolvedValueOnce([CONV_ROW]);
     const longPrompt = "word ".repeat(40);
     mocks.assetSelect.mockResolvedValueOnce([
-      makeAssetRow({ kind: "image", mimeType: "image/png", prompt: longPrompt }),
+      makeAssetRow({
+        kind: "image",
+        mimeType: "image/png",
+        prompt: longPrompt,
+      }),
     ]);
     const result = await conversationFilesListHandler(BASE_INPUT, TEST_CTX);
     const name = result.files[0]!.name;
@@ -311,9 +342,18 @@ describe("conversationFilesListHandler (@oxagen/handlers)", () => {
     mocks.convSelect.mockResolvedValueOnce([CONV_ROW]);
     // 3 visible rows, limit=2 → cursor = rows[1].createdAt
     const rows = [
-      makeAssetRow({ publicId: "gen_1", createdAt: new Date("2024-06-03T00:00:00.000Z") }),
-      makeAssetRow({ publicId: "gen_2", createdAt: new Date("2024-06-02T00:00:00.000Z") }),
-      makeAssetRow({ publicId: "gen_3", createdAt: new Date("2024-06-01T00:00:00.000Z") }),
+      makeAssetRow({
+        publicId: "gen_1",
+        createdAt: new Date("2024-06-03T00:00:00.000Z"),
+      }),
+      makeAssetRow({
+        publicId: "gen_2",
+        createdAt: new Date("2024-06-02T00:00:00.000Z"),
+      }),
+      makeAssetRow({
+        publicId: "gen_3",
+        createdAt: new Date("2024-06-01T00:00:00.000Z"),
+      }),
     ];
     mocks.assetSelect.mockResolvedValueOnce(rows);
 
@@ -343,9 +383,22 @@ describe("conversationFilesListHandler (@oxagen/handlers)", () => {
     // 3 rows returned; middle one excluded by access-policy → only 2 visible,
     // which is equal to limit=2, so nextCursor should be null.
     const rows = [
-      makeAssetRow({ publicId: "gen_1", accessPolicy: "org", createdAt: new Date("2024-06-03T00:00:00.000Z") }),
-      makeAssetRow({ publicId: "gen_hidden", accessPolicy: "user", userId: "u_other", createdAt: new Date("2024-06-02T00:00:00.000Z") }),
-      makeAssetRow({ publicId: "gen_2", accessPolicy: "org", createdAt: new Date("2024-06-01T00:00:00.000Z") }),
+      makeAssetRow({
+        publicId: "gen_1",
+        accessPolicy: "org",
+        createdAt: new Date("2024-06-03T00:00:00.000Z"),
+      }),
+      makeAssetRow({
+        publicId: "gen_hidden",
+        accessPolicy: "user",
+        userId: "u_other",
+        createdAt: new Date("2024-06-02T00:00:00.000Z"),
+      }),
+      makeAssetRow({
+        publicId: "gen_2",
+        accessPolicy: "org",
+        createdAt: new Date("2024-06-01T00:00:00.000Z"),
+      }),
     ];
     mocks.assetSelect.mockResolvedValueOnce(rows);
 

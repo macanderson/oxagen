@@ -65,7 +65,11 @@ export async function assertGithubInstallationAccessible(
     // Route by the envelope's stored keyId, not the current provider env — the
     // token may have been wrapped under a different provider than this runtime.
     const { adapter } = resolveIngestionCryptoAdapterForKeyId(enc.keyId);
-    const plain = await decrypt(Buffer.from(enc.ciphertext, "base64"), enc.keyId, { adapter });
+    const plain = await decrypt(
+      Buffer.from(enc.ciphertext, "base64"),
+      enc.keyId,
+      { adapter },
+    );
     userToken = plain.toString("utf8");
   } catch {
     throw new HTTPException(403, {
@@ -83,10 +87,21 @@ export async function assertGithubInstallationAccessible(
   }
 }
 
+const PER_PAGE = 100;
+// 5,000 installations is far more than any account reaches; the ceiling exists
+// only so a server that keeps reporting a total it never delivers cannot spin
+// the loop forever.
+const MAX_PAGES = 50;
+
 /**
  * True if `GET /user/installations` (paged) contains `installationId`. Throws a
  * 403 on a non-OK GitHub response (revoked/expired token) — fail-closed: we must
  * not allow the bind when we cannot verify access.
+ *
+ * Pagination stops on the first page that comes back empty, and at MAX_PAGES
+ * regardless: `total_count` is the server's claim, and trusting it alone means
+ * an inconsistent or truncated response (a concurrent uninstall, a filtered
+ * page) leaves `seen < total` forever while every further page returns nothing.
  */
 async function userCanReachInstallation(
   userToken: string,
@@ -98,7 +113,7 @@ async function userCanReachInstallation(
 
   do {
     const resp = await fetch(
-      `https://api.github.com/user/installations?per_page=100&page=${page}`,
+      `https://api.github.com/user/installations?per_page=${PER_PAGE}&page=${page}`,
       {
         headers: {
           Authorization: `Bearer ${userToken}`,
@@ -119,17 +134,21 @@ async function userCanReachInstallation(
       });
     }
 
+    // Parsed from a remote response — every field is optional until proven.
     const data = (await resp.json()) as {
-      total_count: number;
-      installations: Array<{ id: number | string }>;
+      total_count?: number;
+      installations?: Array<{ id: number | string }>;
     };
-    total = data.total_count;
-    for (const inst of data.installations) {
+    total = data.total_count ?? 0;
+    const installations = data.installations ?? [];
+    for (const inst of installations) {
       if (String(inst.id) === installationId) return true;
       seen++;
     }
+    // An empty page means the listing is exhausted, whatever total_count says.
+    if (installations.length === 0) break;
     page++;
-  } while (seen < total);
+  } while (seen < total && page <= MAX_PAGES);
 
   return false;
 }

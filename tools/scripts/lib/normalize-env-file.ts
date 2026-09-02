@@ -16,6 +16,14 @@
  * (`"x"`) and genuinely empty values (`""`) untouched. It is multi-line aware:
  * a value may span several physical lines (PEM keys, certs), so entries are
  * reconstructed before the value is inspected.
+ *
+ * KNOWN LIMIT: a value and its trailing blank line or comment cannot be told
+ * apart, because any line that is not `KEY=` is treated as a continuation of the
+ * value above it. So `FOO=""bar""` followed by a blank line or a `# comment`
+ * ends the reconstructed value in `\n`, not `""`, and that entry is left
+ * uncollapsed. Rewriting is byte-preserving either way — the entry is simply
+ * skipped, never corrupted. `vercel env pull` emits one `KEY=value` per line
+ * with no interleaved blanks or comments, which is why this has not bitten.
  */
 
 const KEY_LINE = /^[A-Za-z_][A-Za-z0-9_]*=/;
@@ -50,7 +58,10 @@ export function collapseRedundantQuotes(content: string): {
     if (KEY_LINE.test(line)) {
       const eq = line.indexOf("=");
       entries.push({ key: line.slice(0, eq), value: line.slice(eq + 1) });
-    } else if (entries.length > 0 && typeof entries[entries.length - 1] === "object") {
+    } else if (
+      entries.length > 0 &&
+      typeof entries[entries.length - 1] === "object"
+    ) {
       const prev = entries[entries.length - 1] as Entry;
       prev.value += `\n${line}`;
     } else {

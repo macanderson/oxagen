@@ -22,7 +22,16 @@ const RECORD_TYPES: PreviewRecordType[] = [
 
 describe("PreviewStep", () => {
   it("renders a loading indicator while fetching", () => {
-    render(<PreviewStep loading error={null} recordTypes={[]} onRetry={vi.fn()} onNext={vi.fn()} onCancel={vi.fn()} />);
+    render(
+      <PreviewStep
+        loading
+        error={null}
+        recordTypes={[]}
+        onRetry={vi.fn()}
+        onNext={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
     expect(screen.getByTestId("preview-loading")).toBeInTheDocument();
   });
 
@@ -38,13 +47,24 @@ describe("PreviewStep", () => {
         onCancel={vi.fn()}
       />,
     );
-    expect(screen.getByText("ECONNREFUSED: connection refused at 10.0.0.1:5432")).toBeInTheDocument();
+    expect(
+      screen.getByText("ECONNREFUSED: connection refused at 10.0.0.1:5432"),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /try again/i }));
     expect(onRetry).toHaveBeenCalled();
   });
 
   it("renders an empty state when there are no record types", () => {
-    render(<PreviewStep loading={false} error={null} recordTypes={[]} onRetry={vi.fn()} onNext={vi.fn()} onCancel={vi.fn()} />);
+    render(
+      <PreviewStep
+        loading={false}
+        error={null}
+        recordTypes={[]}
+        onRetry={vi.fn()}
+        onNext={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
     expect(screen.getByText("No records found")).toBeInTheDocument();
   });
 
@@ -61,7 +81,9 @@ describe("PreviewStep", () => {
         onCancel={onCancel}
       />,
     );
-    expect(screen.getByTestId("preview-record-type-custom")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("preview-record-type-custom"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Widget")).toBeInTheDocument();
     expect(screen.getByText("Gadget")).toBeInTheDocument();
 

@@ -88,12 +88,18 @@ describe("research.swarm.start contract", () => {
   });
 
   it("accepts depth=shallow", () => {
-    const parsed = researchSwarmStart.input.parse({ topic: "AI safety", depth: "shallow" });
+    const parsed = researchSwarmStart.input.parse({
+      topic: "AI safety",
+      depth: "shallow",
+    });
     expect(parsed.depth).toBe("shallow");
   });
 
   it("accepts depth=deep", () => {
-    const parsed = researchSwarmStart.input.parse({ topic: "AI safety", depth: "deep" });
+    const parsed = researchSwarmStart.input.parse({
+      topic: "AI safety",
+      depth: "deep",
+    });
     expect(parsed.depth).toBe("deep");
   });
 
@@ -111,12 +117,18 @@ describe("research.swarm.start contract", () => {
   });
 
   it("accepts maxParallel=1 (min)", () => {
-    const parsed = researchSwarmStart.input.parse({ topic: "AI safety", maxParallel: 1 });
+    const parsed = researchSwarmStart.input.parse({
+      topic: "AI safety",
+      maxParallel: 1,
+    });
     expect(parsed.maxParallel).toBe(1);
   });
 
   it("accepts maxParallel=20 (max)", () => {
-    const parsed = researchSwarmStart.input.parse({ topic: "AI safety", maxParallel: 20 });
+    const parsed = researchSwarmStart.input.parse({
+      topic: "AI safety",
+      maxParallel: 20,
+    });
     expect(parsed.maxParallel).toBe(20);
   });
 
@@ -146,7 +158,10 @@ describe("research.swarm.start contract", () => {
   });
 
   it("accepts a custom targetLabel", () => {
-    const parsed = researchSwarmStart.input.parse({ topic: "AI safety", targetLabel: "Concept" });
+    const parsed = researchSwarmStart.input.parse({
+      topic: "AI safety",
+      targetLabel: "Concept",
+    });
     expect(parsed.targetLabel).toBe("Concept");
   });
 
@@ -158,13 +173,19 @@ describe("research.swarm.start contract", () => {
   });
 
   it("accepts searchDepth=advanced", () => {
-    const parsed = researchSwarmStart.input.parse({ topic: "AI safety", searchDepth: "advanced" });
+    const parsed = researchSwarmStart.input.parse({
+      topic: "AI safety",
+      searchDepth: "advanced",
+    });
     expect(parsed.searchDepth).toBe("advanced");
   });
 
   it("rejects an invalid searchDepth value", () => {
     expect(() =>
-      researchSwarmStart.input.parse({ topic: "AI safety", searchDepth: "turbo" }),
+      researchSwarmStart.input.parse({
+        topic: "AI safety",
+        searchDepth: "turbo",
+      }),
     ).toThrow();
   });
 

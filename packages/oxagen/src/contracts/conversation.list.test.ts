@@ -28,9 +28,7 @@ describe("conversation.list capability", () => {
   });
 
   it("rejects an unknown filter value", () => {
-    expect(() =>
-      conversationList.input.parse({ filter: "deleted" }),
-    ).toThrow();
+    expect(() => conversationList.input.parse({ filter: "deleted" })).toThrow();
   });
 
   // ── limit bounds ──────────────────────────────────────────────────────────
@@ -60,7 +58,9 @@ describe("conversation.list capability", () => {
   // ── cursor ────────────────────────────────────────────────────────────────
 
   it("accepts a cursor ISO string", () => {
-    const parsed = conversationList.input.parse({ cursor: "2024-01-01T00:00:00.000Z" });
+    const parsed = conversationList.input.parse({
+      cursor: "2024-01-01T00:00:00.000Z",
+    });
     expect(parsed.cursor).toBe("2024-01-01T00:00:00.000Z");
   });
 

@@ -43,7 +43,11 @@ describe("writeMcpServer", () => {
       ...ctx(),
       scope: "local",
       name: "remote",
-      config: { transport: "streamable-http", url: "https://mcp.example.com", auth: "none" },
+      config: {
+        transport: "streamable-http",
+        url: "https://mcp.example.com",
+        auth: "none",
+      },
     });
     expect(findServerScope("remote", ctx())?.scope).toBe("local");
   });
@@ -51,8 +55,18 @@ describe("writeMcpServer", () => {
 
 describe("findServerScope", () => {
   it("returns the highest-precedence scope that defines a server", () => {
-    writeMcpServer({ ...ctx(), scope: "project", name: "s", config: { transport: "stdio", command: "a", args: [] } });
-    writeMcpServer({ ...ctx(), scope: "local", name: "s", config: { transport: "stdio", command: "b", args: [] } });
+    writeMcpServer({
+      ...ctx(),
+      scope: "project",
+      name: "s",
+      config: { transport: "stdio", command: "a", args: [] },
+    });
+    writeMcpServer({
+      ...ctx(),
+      scope: "local",
+      name: "s",
+      config: { transport: "stdio", command: "b", args: [] },
+    });
     expect(findServerScope("s", ctx())?.scope).toBe("local");
   });
 
@@ -63,7 +77,12 @@ describe("findServerScope", () => {
 
 describe("removeMcpServer", () => {
   it("removes an existing server (auto-detecting its scope)", () => {
-    writeMcpServer({ ...ctx(), scope: "project", name: "s", config: { transport: "stdio", command: "a", args: [] } });
+    writeMcpServer({
+      ...ctx(),
+      scope: "project",
+      name: "s",
+      config: { transport: "stdio", command: "a", args: [] },
+    });
     const res = removeMcpServer({ ...ctx(), name: "s" });
     expect(res.found).toBe(true);
     expect(resolve().mcpServers?.s).toBeUndefined();
@@ -76,8 +95,14 @@ describe("removeMcpServer", () => {
 
 describe("setMcpServerDisabled", () => {
   it("toggles the disabled flag", () => {
-    writeMcpServer({ ...ctx(), name: "s", config: { transport: "stdio", command: "a", args: [] } });
-    expect(setMcpServerDisabled({ ...ctx(), name: "s", disabled: true }).found).toBe(true);
+    writeMcpServer({
+      ...ctx(),
+      name: "s",
+      config: { transport: "stdio", command: "a", args: [] },
+    });
+    expect(
+      setMcpServerDisabled({ ...ctx(), name: "s", disabled: true }).found,
+    ).toBe(true);
     const s = resolve().mcpServers?.s;
     expect(s && "disabled" in s && s.disabled).toBe(true);
     setMcpServerDisabled({ ...ctx(), name: "s", disabled: false });
@@ -86,6 +111,8 @@ describe("setMcpServerDisabled", () => {
   });
 
   it("reports not-found for an unknown server", () => {
-    expect(setMcpServerDisabled({ ...ctx(), name: "ghost", disabled: true }).found).toBe(false);
+    expect(
+      setMcpServerDisabled({ ...ctx(), name: "ghost", disabled: true }).found,
+    ).toBe(false);
   });
 });

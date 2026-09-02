@@ -43,12 +43,12 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  // The handler runs the actor role gate + all reads + writes inside a single
-  // withTenantDb (one RLS-scoped transaction) so the authorization check and the
-  // mutation are atomic (no TOCTOU). The mock routes to the same fluent tx mock
-  // so the call sequence is continuous.
-  withTenantDb: async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx),
-
+    // The handler runs the actor role gate + all reads + writes inside a single
+    // withTenantDb (one RLS-scoped transaction) so the authorization check and the
+    // mutation are atomic (no TOCTOU). The mock routes to the same fluent tx mock
+    // so the call sequence is continuous.
+    withTenantDb: async (fn: (tx: typeof mockTx) => Promise<unknown>) =>
+      fn(mockTx),
   };
 });
 
@@ -56,7 +56,9 @@ const { orgMemberRoleChangeHandler } = await import("./org.member_role.change");
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function makeCtx(overrides: Partial<CapabilityContext> = {}): CapabilityContext {
+function makeCtx(
+  overrides: Partial<CapabilityContext> = {},
+): CapabilityContext {
   return {
     userId: "actor-user-id",
     apiKeyId: null,
@@ -106,7 +108,7 @@ describe("orgMemberRoleChangeHandler", () => {
   it("actor has Member role → throws Forbidden", async () => {
     mockTx.select = buildSelectMock([
       [{ id: "actor-principal-id" }], // actor principal
-      [{ roleName: "Member" }],        // actor PRA = Member
+      [{ roleName: "Member" }], // actor PRA = Member
     ]);
 
     const ctx = makeCtx();
@@ -118,27 +120,33 @@ describe("orgMemberRoleChangeHandler", () => {
   it("target not a member → throws Not found (IDOR guard)", async () => {
     mockTx.select = buildSelectMock([
       [{ id: "actor-principal-id" }], // actor principal
-      [{ roleName: "Admin" }],         // actor PRA = Admin
-      [],                              // target orgUser — NOT found
+      [{ roleName: "Admin" }], // actor PRA = Admin
+      [], // target orgUser — NOT found
     ]);
 
     const ctx = makeCtx();
     await expect(
-      orgMemberRoleChangeHandler({ targetUserId: "stranger", newRole: "Admin" }, ctx),
+      orgMemberRoleChangeHandler(
+        { targetUserId: "stranger", newRole: "Admin" },
+        ctx,
+      ),
     ).rejects.toThrow("Not found");
   });
 
   it("newRole does not exist in org → throws with descriptive message", async () => {
     mockTx.select = buildSelectMock([
-      [{ id: "actor-principal-id" }],               // actor principal
-      [{ roleName: "Owner" }],                       // actor PRA = Owner
-      [{ id: "target-ou", role: "member" }],         // target orgUser found
-      [],                                            // new role row NOT found
+      [{ id: "actor-principal-id" }], // actor principal
+      [{ roleName: "Owner" }], // actor PRA = Owner
+      [{ id: "target-ou", role: "member" }], // target orgUser found
+      [], // new role row NOT found
     ]);
 
     const ctx = makeCtx();
     await expect(
-      orgMemberRoleChangeHandler({ targetUserId: "target", newRole: "Nonexistent" }, ctx),
+      orgMemberRoleChangeHandler(
+        { targetUserId: "target", newRole: "Nonexistent" },
+        ctx,
+      ),
     ).rejects.toThrow("does not exist");
   });
 
@@ -151,14 +159,14 @@ describe("orgMemberRoleChangeHandler", () => {
     // both usages work from the same mock setup.
 
     const callResults: unknown[][] = [
-      [{ id: "actor-principal-id" }],            // 1: actor principal (.limit)
-      [{ roleName: "Owner" }],                    // 2: actor PRA (.limit via innerJoin)
-      [{ id: "target-ou", role: "owner" }],       // 3: target orgUser (.limit)
-      [{ id: "admin-role-id", name: "Admin" }],   // 4: new role row (.limit)
-      [{ id: "owner-role-id" }],                  // 5: Owner role row (.limit)
-      [{ id: "target-principal-id" }],            // 6: target principal (.limit)
-      [{ id: "target-owner-pra-id" }],            // 7: target owner PRA (.limit)
-      [{ id: "only-pra-row" }],                   // 8: allOwnerPras — NO .limit(), direct await
+      [{ id: "actor-principal-id" }], // 1: actor principal (.limit)
+      [{ roleName: "Owner" }], // 2: actor PRA (.limit via innerJoin)
+      [{ id: "target-ou", role: "owner" }], // 3: target orgUser (.limit)
+      [{ id: "admin-role-id", name: "Admin" }], // 4: new role row (.limit)
+      [{ id: "owner-role-id" }], // 5: Owner role row (.limit)
+      [{ id: "target-principal-id" }], // 6: target principal (.limit)
+      [{ id: "target-owner-pra-id" }], // 7: target owner PRA (.limit)
+      [{ id: "only-pra-row" }], // 8: allOwnerPras — NO .limit(), direct await
     ];
     let callCount = 0;
 
@@ -168,17 +176,24 @@ describe("orgMemberRoleChangeHandler", () => {
 
       // Allow both `await chain.where()` and `await chain.where().limit(n)`.
       const limitOnWhere = vi.fn().mockResolvedValue(result);
-      const whereWithLimit = vi.fn().mockReturnValue(Object.assign(Promise.resolve(result), {
-        limit: limitOnWhere,
-      }));
+      const whereWithLimit = vi.fn().mockReturnValue(
+        Object.assign(Promise.resolve(result), {
+          limit: limitOnWhere,
+        }),
+      );
       const innerJoin = vi.fn().mockReturnValue({ where: whereWithLimit });
-      const from = vi.fn().mockReturnValue({ where: whereWithLimit, innerJoin });
+      const from = vi
+        .fn()
+        .mockReturnValue({ where: whereWithLimit, innerJoin });
       return { from };
     });
 
     const ctx = makeCtx();
     await expect(
-      orgMemberRoleChangeHandler({ targetUserId: "target", newRole: "Admin" }, ctx),
+      orgMemberRoleChangeHandler(
+        { targetUserId: "target", newRole: "Admin" },
+        ctx,
+      ),
     ).rejects.toThrow("Cannot demote the last org owner");
   });
 
@@ -186,15 +201,15 @@ describe("orgMemberRoleChangeHandler", () => {
     // All reads run inside withTenantDb on the same tx → continuous sequence:
     // 1-2 resolveActor, 3-7 main guards, 8 mutation principal lookup.
     mockTx.select = buildSelectMock([
-      [{ id: "actor-principal-id" }],                       // 1: actor principal
-      [{ roleName: "Owner" }],                               // 2: actor PRA = Owner
-      [{ id: "target-ou-id", role: "member" }],             // 3: target orgUser (role=member)
-      [{ id: "admin-role-id", name: "Admin" }],             // 4: new role 'Admin' found
+      [{ id: "actor-principal-id" }], // 1: actor principal
+      [{ roleName: "Owner" }], // 2: actor PRA = Owner
+      [{ id: "target-ou-id", role: "member" }], // 3: target orgUser (role=member)
+      [{ id: "admin-role-id", name: "Admin" }], // 4: new role 'Admin' found
       // newRole !== OWNER_ROLE_NAME → last-owner guard runs:
-      [{ id: "owner-role-id" }],                            // 5: Owner role row exists
-      [{ id: "target-principal-id" }],                      // 6: target principal
-      [],                                                   // 7: target does NOT hold Owner PRA → skip guard
-      [{ id: "target-principal-id" }],                      // 8: mutation existing principal
+      [{ id: "owner-role-id" }], // 5: Owner role row exists
+      [{ id: "target-principal-id" }], // 6: target principal
+      [], // 7: target does NOT hold Owner PRA → skip guard
+      [{ id: "target-principal-id" }], // 8: mutation existing principal
     ]);
 
     const txUpdateWhere = vi.fn().mockResolvedValue([]);
@@ -221,7 +236,9 @@ describe("orgMemberRoleChangeHandler", () => {
 
     // Audit event emitted.
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
-    const [event] = mockEmitSecurityEvent.mock.calls[0] as [Record<string, unknown>];
+    const [event] = mockEmitSecurityEvent.mock.calls[0] as [
+      Record<string, unknown>,
+    ];
     expect(event.eventType).toBe("org.role_changed");
     expect(event.orgId).toBe("org-abc");
     expect(event.outcome).toBe("success");

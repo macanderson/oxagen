@@ -6,7 +6,10 @@ import { logger } from "@oxagen/handlers/logger";
  * observable (connection loss, schema mismatch, etc.) even when the UI
  * degrades gracefully.
  */
-export const safeQuery = async <T,>(fn: () => Promise<T>, fallback: T): Promise<T> => {
+export const safeQuery = async <T>(
+  fn: () => Promise<T>,
+  fallback: T,
+): Promise<T> => {
   try {
     return await fn();
   } catch (err) {

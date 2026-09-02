@@ -11,6 +11,14 @@
  *   - Permission evaluation from file-based rules (not platform IAM)
  *   - Tool visibility filtering before contribution
  *   - Managed policy enforcement (org denylist)
+ *   - NO descriptor pinning and NO first-use consent card. Tools are
+ *     materialized from the LIVE listing (materializeMcpTools), so a server
+ *     that rewrites a tool description between turns changes what the model
+ *     sees, and materialize-tools' consent gate never fires because a
+ *     `file-mcp.*` key has no mcp_servers row to record consent against. The
+ *     trust anchor here is the config file itself: whoever can write
+ *     .oxagen/settings.json already controls the process. Do NOT reuse this
+ *     contributor for anything a remote tenant can author.
  *
  * Both contributors feed into the same materializeTools() pipeline, which
  * applies the uniform IAM gate + ClickHouse telemetry wrapping.
@@ -136,6 +144,11 @@ function collectAllowedTools(
 
     out.push({
       realName: rawKey,
+      // No `inputSchema`: materializeMcpTools already collapsed the server's
+      // JSONSchema to a permissive record, so there is nothing precise left to
+      // forward. materialize-tools then presents the model an open object
+      // schema and the remote server re-validates on call — the model has to
+      // infer argument names from the description alone.
       // AI SDK v7 allows function-valued tool descriptions (resolved with
       // call options we don't have here) — only static strings carry over.
       description:

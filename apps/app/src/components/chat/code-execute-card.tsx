@@ -32,6 +32,8 @@ export function looksLikeHtml(text: string): boolean {
 }
 
 export interface CodeExecuteCardProps {
+  /** Not read by this component — accepted so callers can pass the whole live
+   *  tool-call record through without stripping the id first. */
   toolCallId: string;
   language: "node" | "python" | "shell" | string;
   code: string;
@@ -44,7 +46,7 @@ export interface CodeExecuteCardProps {
   defaultOpen?: boolean;
 }
 
-// Specialized variant of `tool-call-card.tsx` for `agent.code.execute`.
+// Specialized variant of `tool-call-card.tsx` for the `execute_code` capability.
 // Same quiet contract as ToolCallCard: the card is COLLAPSED by default — a
 // single muted header row (label, language, status, duration) — because the
 // executed code and its stdout/stderr are tool-call input/output, and tool I/O

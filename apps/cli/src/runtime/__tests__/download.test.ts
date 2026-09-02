@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createHash } from "node:crypto";
-import { mkdtempSync, rmSync, existsSync, writeFileSync, readFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  rmSync,
+  existsSync,
+  writeFileSync,
+  readFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -15,7 +21,9 @@ import {
 } from "../provisioning/download.js";
 import type { ModelSource } from "../types.js";
 
-const CONTENT = Buffer.from("fake gguf weight bytes — enough to hash".repeat(4));
+const CONTENT = Buffer.from(
+  "fake gguf weight bytes — enough to hash".repeat(4),
+);
 const SHA = createHash("sha256").update(CONTENT).digest("hex");
 
 let dir: string;
@@ -36,7 +44,11 @@ function fakeFetch(body: Buffer, ok = true): FetchImpl {
 }
 
 function source(sha = ""): ModelSource {
-  return { url: "https://example.test/model.gguf", sha256: sha, sizeBytes: CONTENT.length };
+  return {
+    url: "https://example.test/model.gguf",
+    sha256: sha,
+    sizeBytes: CONTENT.length,
+  };
 }
 
 beforeEach(() => {
@@ -49,7 +61,11 @@ afterEach(() => {
 describe("downloadModel", () => {
   it("streams to disk and returns the computed checksum", async () => {
     const dest = join(dir, "m.gguf");
-    const res = await downloadModel({ source: source(), dest, fetchImpl: fakeFetch(CONTENT) });
+    const res = await downloadModel({
+      source: source(),
+      dest,
+      fetchImpl: fakeFetch(CONTENT),
+    });
     expect(res.sha256).toBe(SHA);
     expect(res.sizeBytes).toBe(CONTENT.length);
     expect(readFileSync(dest)).toEqual(CONTENT);
@@ -58,7 +74,11 @@ describe("downloadModel", () => {
   it("rejects a checksum mismatch and does not leave the file", async () => {
     const dest = join(dir, "m.gguf");
     await expect(
-      downloadModel({ source: source("deadbeef"), dest, fetchImpl: fakeFetch(CONTENT) }),
+      downloadModel({
+        source: source("deadbeef"),
+        dest,
+        fetchImpl: fakeFetch(CONTENT),
+      }),
     ).rejects.toBeInstanceOf(ChecksumMismatchError);
     expect(existsSync(dest)).toBe(false);
     expect(existsSync(`${dest}.part`)).toBe(false);
@@ -66,7 +86,11 @@ describe("downloadModel", () => {
 
   it("throws a clear error on a non-ok response", async () => {
     await expect(
-      downloadModel({ source: source(), dest: join(dir, "m.gguf"), fetchImpl: fakeFetch(CONTENT, false) }),
+      downloadModel({
+        source: source(),
+        dest: join(dir, "m.gguf"),
+        fetchImpl: fakeFetch(CONTENT, false),
+      }),
     ).rejects.toThrow(/Failed to download/);
   });
 });
@@ -92,23 +116,54 @@ describe("ensureModelCached", () => {
 
   it("never re-downloads when the cache is valid", async () => {
     const fetchImpl = fakeFetch(CONTENT);
-    await ensureModelCached({ dir, modelId: "m", quant: "q4", source: source(), fetchImpl });
-    const again = await ensureModelCached({ dir, modelId: "m", quant: "q4", source: source(), fetchImpl });
+    await ensureModelCached({
+      dir,
+      modelId: "m",
+      quant: "q4",
+      source: source(),
+      fetchImpl,
+    });
+    const again = await ensureModelCached({
+      dir,
+      modelId: "m",
+      quant: "q4",
+      source: source(),
+      fetchImpl,
+    });
     expect(again.fromCache).toBe(true);
     expect(fetchImpl).toHaveBeenCalledTimes(1); // second call served from cache
   });
 
   it("re-downloads when force is set", async () => {
     const fetchImpl = fakeFetch(CONTENT);
-    await ensureModelCached({ dir, modelId: "m", quant: "q4", source: source(), fetchImpl });
-    await ensureModelCached({ dir, modelId: "m", quant: "q4", source: source(), fetchImpl, force: true });
+    await ensureModelCached({
+      dir,
+      modelId: "m",
+      quant: "q4",
+      source: source(),
+      fetchImpl,
+    });
+    await ensureModelCached({
+      dir,
+      modelId: "m",
+      quant: "q4",
+      source: source(),
+      fetchImpl,
+      force: true,
+    });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 });
 
 describe("isCached / verifyIntegrity", () => {
   it("verifies a good cache and detects tampering", async () => {
-    await ensureModelCached({ dir, modelId: "m", quant: "q4", source: source(), fetchImpl: fakeFetch(CONTENT) });
+    await ensureModelCached({
+      dir,
+      modelId: "m",
+      quant: "q4",
+      source: source(),
+      fetchImpl: fakeFetch(CONTENT),
+    });
     expect(isCached(dir, "m", "q4").cached).toBe(true);
     expect(verifyIntegrity(dir, "m", "q4").ok).toBe(true);
 
@@ -121,7 +176,13 @@ describe("isCached / verifyIntegrity", () => {
   });
 
   it("treats a size mismatch as not cached", async () => {
-    await ensureModelCached({ dir, modelId: "m", quant: "q4", source: source(), fetchImpl: fakeFetch(CONTENT) });
+    await ensureModelCached({
+      dir,
+      modelId: "m",
+      quant: "q4",
+      source: source(),
+      fetchImpl: fakeFetch(CONTENT),
+    });
     writeFileSync(cachedPath(dir, "m", "q4"), Buffer.from("short"));
     const status = isCached(dir, "m", "q4");
     expect(status.cached).toBe(false);

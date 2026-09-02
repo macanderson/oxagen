@@ -41,10 +41,6 @@ are grouped in the sidebar by `title`: **Primitives**, **Forms**, **Surfaces**,
 **Navigation**, **Overlays**, **Brand**. Add a story whenever you add or change
 a component.
 
-Rendered proof of the running Storybook lives in
-[`docs/verifications/`](../../docs/verifications) (overview, button/badge
-variants, dark-mode card, dialog overlay).
-
 ## Component inventory
 
 Import from `@oxagen/ui` (barrel) or `@/components/ui/<file>` (app proxy).
@@ -58,6 +54,8 @@ Import from `@oxagen/ui` (barrel) or `@/components/ui/<file>` (app proxy).
 | Alert | `alert.tsx` | `Alert`, `AlertTitle`, `AlertDescription` | variants `default`/`info`/`success`/`warning`/`error`. |
 | Separator | `separator.tsx` | `Separator` | `orientation` `horizontal`/`vertical`. |
 | Skeleton | `skeleton.tsx` | `Skeleton` | loading placeholder. |
+| Spinner | `spinner.tsx` | `Spinner` | `size` `xs`…`xl`; `role="status"` with an `sr-only` `label`. |
+| StatusDot | `status-dot.tsx` | `StatusDot` | `status` `success`/`warning`/`error`/`info`/`neutral`/`primary`; optional `pulse`, `label`, `srLabel`. |
 | Label | `label.tsx` | `Label` | pairs with form controls via `htmlFor`. |
 
 ### Forms
@@ -72,7 +70,8 @@ Import from `@oxagen/ui` (barrel) or `@/components/ui/<file>` (app proxy).
 | SegmentedControl | `segmented-control.tsx` | `SegmentedControl`, `SegmentedControlItem` | single-select pill; `value` is a **string** (not array). |
 | Slider | `slider.tsx` | `Slider` (+ `SliderControl`/`Track`/`Indicator`/`Thumb`/`Value`) | `defaultValue`/`min`/`max`/`step`. |
 | Select | `select.tsx` | `Select`, `SelectTrigger`, `SelectValue`, `SelectPopup`, `SelectGroup`, `SelectLabel`, `SelectItem` | SSR: pass `items` to `Select`. ≤20 options. |
-| Combobox | `combobox.tsx` | `Combobox`, `ComboboxTrigger`, `ComboboxValue`, `ComboboxPopup`, `ComboboxItem` | searchable typeahead — use for >20 options. |
+| Combobox | `combobox.tsx` | `Combobox`, `ComboboxTrigger`, `ComboboxValue`, `ComboboxPopup`, `ComboboxItem` | searchable typeahead — use for >20 options. Item labels must be plain strings, or search will not match them. |
+| SearchInput | `search-input.tsx` | `SearchInput` | `Input` plus a leading glyph and an optional `onClear` button. |
 
 ### Surfaces
 
@@ -80,6 +79,11 @@ Import from `@oxagen/ui` (barrel) or `@/components/ui/<file>` (app proxy).
 |-----------|------|-------------|-------|
 | Card | `card.tsx` | `Card`, `CardHeader`, `CardTitle`, `CardDescription`, `CardPanel`, `CardFooter` | body wrapper is `CardPanel`. |
 | Panel | `panel.tsx` | `Panel` | titled surface block (`eyebrow`/`title`/`actions`/`footer`/`inset`). |
+| Table | `table.tsx` | `Table`, `TableHeader`, `TableBody`, `TableFooter`, `TableRow`, `TableHead`, `TableCell`, `TableCaption`, `TableEmpty` | `density` `default`/`compact`; always scrolls inside its own container. Pair with `<Panel inset>`. |
+| Stat | `stat.tsx` | `Stat`, `StatGroup` | KPI tile (`label`/`value`/`delta`/`trend`/`intent`/`tone`) and its hairline-divided row frame. |
+| EmptyState | `empty-state.tsx` | `EmptyState` | zero-data block (`icon`/`title`/`description`/`action`); `variant` `plain`/`dashed`/`muted`. |
+| KeyValueList | `key-value-list.tsx` | `KeyValueList` | `<dl>` for dense metadata; `dense` and `stacked` layouts. |
+| CopyButton | `copy-button.tsx` | `CopyButton`, `useCopyToClipboard` | copy-to-clipboard affordance with a transient "copied" state. |
 
 ### Navigation
 
@@ -103,6 +107,7 @@ Import from `@oxagen/ui` (barrel) or `@/components/ui/<file>` (app proxy).
 | Component | File | Parts / API | Notes |
 |-----------|------|-------------|-------|
 | Logo | `brand.tsx` | `OxagenLogo`, `OxagenLogomark`, `OxagenWordmark`, `OxagenLockup`, `BrandMark`, `NodeChip`, `ConfidenceBar` | `OxagenLogo` `variant` `mark`/`wordmark`/`horizontal`/`vertical`, `size` in px. |
+| HexField | `hex-field.tsx` | `HexField` | Ambient hexagon backdrop. **Not in the barrel** — deep-import `@oxagen/ui/components/hex-field` through the app's re-export layer. |
 
 ### Providers / utilities
 

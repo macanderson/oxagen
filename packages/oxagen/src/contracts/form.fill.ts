@@ -3,7 +3,13 @@ import { registerCapability } from "../registry";
 
 // ── Nested schemas ────────────────────────────────────────────────────────────
 
-const fieldTypeSchema = z.enum(["text", "textarea", "number", "select", "boolean"]);
+const fieldTypeSchema = z.enum([
+  "text",
+  "textarea",
+  "number",
+  "select",
+  "boolean",
+]);
 
 export const fieldDescriptorSchema = z.object({
   name: z.string().min(1),

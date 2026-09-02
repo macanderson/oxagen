@@ -1,8 +1,12 @@
 /**
- * Compile telemetry — logs every compile() invocation to ClickHouse.
+ * Compile telemetry — an opt-in reporting seam for `compile()` results.
  *
- * Enables dashboards for latency, cache hit rates, retrieval engine contribution,
- * and budget utilization. Data is used by Phase D for fusion weight reinforcement.
+ * `compile()` does NOT call this itself. A surface that wants compile metrics
+ * installs a sink with {@link setCompileTelemetrySink} at bootstrap and calls
+ * {@link emitCompileTelemetry} with the window it got back; with no sink
+ * installed every emit is a no-op. The event shape is flat and column-friendly
+ * so a sink can write it straight to an append-only analytics table for
+ * latency, cache-stability, and budget-utilization dashboards.
  */
 import type { ContextWindow } from "./layout";
 import type { TaskFrame } from "../retrieval/types";

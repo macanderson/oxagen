@@ -110,7 +110,11 @@ describe("getPullRequest", () => {
     vi.stubGlobal("fetch", fetchMock);
     const client = createGitHubClient({ token: "tok" });
 
-    const pr = await client.getPullRequest({ owner: "a", repo: "b", number: 1 });
+    const pr = await client.getPullRequest({
+      owner: "a",
+      repo: "b",
+      number: 1,
+    });
     expect(pr.authorLogin).toBeNull();
     expect(pr.authorAvatarUrl).toBeNull();
     expect(pr.merged).toBe(true);
@@ -224,7 +228,11 @@ describe("listCiChecks", () => {
     vi.stubGlobal("fetch", fetchMock);
     const client = createGitHubClient({ token: "tok" });
 
-    const out = await client.listCiChecks({ owner: "a", repo: "b", ref: "main" });
+    const out = await client.listCiChecks({
+      owner: "a",
+      repo: "b",
+      ref: "main",
+    });
 
     expect(out.sha).toBe("sha123");
     expect(out.checkRuns[0]).toMatchObject({
@@ -277,7 +285,11 @@ describe("listCiChecks", () => {
     vi.stubGlobal("fetch", fetchMock);
     const client = createGitHubClient({ token: "tok" });
 
-    const out = await client.listCiChecks({ owner: "a", repo: "b", ref: "main" });
+    const out = await client.listCiChecks({
+      owner: "a",
+      repo: "b",
+      ref: "main",
+    });
     expect(out.checkRuns[0]?.status).toBe("completed");
     expect(out.checkRuns[0]?.conclusion).toBeNull();
     expect(out.statuses[0]?.state).toBe("pending");
@@ -376,7 +388,10 @@ describe("listBranches", () => {
     vi.stubGlobal("fetch", fetchMock);
     const client = createGitHubClient({ token: "tok" });
 
-    const branches = await client.listBranches({ owner: "acme", repo: "empty" });
+    const branches = await client.listBranches({
+      owner: "acme",
+      repo: "empty",
+    });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(branches).toEqual([]);
@@ -402,14 +417,18 @@ describe("listBranches", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(branches).toHaveLength(240);
-    expect(branches[0]).toEqual({ name: "branch-0", sha: "sha-0", protected: false });
+    expect(branches[0]).toEqual({
+      name: "branch-0",
+      sha: "sha-0",
+      protected: false,
+    });
     expect(branches[239]).toEqual({
       name: "branch-239",
       sha: "sha-239",
       protected: false,
     });
-    const pages = fetchMock.mock.calls.map(
-      ([url]) => new URL(url as string).searchParams.get("page"),
+    const pages = fetchMock.mock.calls.map(([url]) =>
+      new URL(url as string).searchParams.get("page"),
     );
     expect(pages).toEqual(["1", "2", "3"]);
   });

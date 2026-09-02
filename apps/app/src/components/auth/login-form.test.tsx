@@ -26,7 +26,11 @@ vi.mock("next/link", () => ({
     href: string;
     children: React.ReactNode;
     [key: string]: unknown;
-  }) => <a href={href} {...rest}>{children}</a>,
+  }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 
 // Use vi.hoisted so the mocks are available before vi.mock hoisting
@@ -63,12 +67,16 @@ describe("LoginForm — signin mode (default)", () => {
 
   it("renders 'Sign in' submit button", () => {
     render(<LoginForm />);
-    expect(screen.getByRole("button", { name: /sign in/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /sign in/i }),
+    ).toBeInTheDocument();
   });
 
   it("shows 'Forgot password?' link", () => {
     render(<LoginForm />);
-    expect(screen.getByRole("link", { name: /forgot password/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /forgot password/i }),
+    ).toBeInTheDocument();
   });
 
   it("does NOT render the Name field in signin mode", () => {
@@ -141,7 +149,9 @@ describe("LoginForm — signup mode", () => {
 
   it("renders 'Create account' submit button", () => {
     render(<LoginForm mode="signup" />);
-    expect(screen.getByRole("button", { name: /create account/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /create account/i }),
+    ).toBeInTheDocument();
   });
 
   it("does NOT show 'Forgot password?' link in signup mode", () => {
@@ -154,7 +164,9 @@ describe("LoginForm — signup mode", () => {
     await userEvent.type(screen.getByLabelText(/^name$/i), "Jane Smith");
     await userEvent.type(screen.getByLabelText(/email/i), "jane@example.com");
     await userEvent.type(screen.getByLabelText(/password/i), "securepass");
-    await userEvent.click(screen.getByRole("button", { name: /create account/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /create account/i }),
+    );
 
     await waitFor(() => {
       expect(signUpEmailMock).toHaveBeenCalledWith({

@@ -27,7 +27,9 @@ describe("reference.cite handler", () => {
     mocks.isKnowledgeGraphEnabledMock.mockReturnValue(true);
     mocks.recordExecutionMock.mockResolvedValue({ executionId: "exec_1" });
     mocks.recordMentionCitationMock.mockImplementation(
-      async ({ nodePublicId }: { nodePublicId: string }) => ({ citationId: `cit_${nodePublicId}` }),
+      async ({ nodePublicId }: { nodePublicId: string }) => ({
+        citationId: `cit_${nodePublicId}`,
+      }),
     );
   });
 
@@ -35,15 +37,24 @@ describe("reference.cite handler", () => {
     mocks.isKnowledgeGraphEnabledMock.mockReturnValue(false);
 
     const res = await referenceCiteHandler(
-      { executionRef: "msg_1", references: [{ nodeId: "n1" }, { nodeId: "n2" }] },
+      {
+        executionRef: "msg_1",
+        references: [{ nodeId: "n1" }, { nodeId: "n2" }],
+      },
       CTX,
     );
 
     expect(res.executionId).toBe("");
     expect(res.recorded).toBe(0);
     expect(res.results).toHaveLength(2);
-    expect(res.results.every((r) => r.ok === false && r.citationId === null)).toBe(true);
-    expect(res.results.every((r) => typeof r.error === "string" && r.error.length > 0)).toBe(true);
+    expect(
+      res.results.every((r) => r.ok === false && r.citationId === null),
+    ).toBe(true);
+    expect(
+      res.results.every(
+        (r) => typeof r.error === "string" && r.error.length > 0,
+      ),
+    ).toBe(true);
     // No graph writes attempted.
     expect(mocks.recordExecutionMock).not.toHaveBeenCalled();
     expect(mocks.recordMentionCitationMock).not.toHaveBeenCalled();
@@ -62,7 +73,11 @@ describe("reference.cite handler", () => {
 
     expect(mocks.recordExecutionMock).toHaveBeenCalledTimes(1);
     expect(mocks.recordExecutionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ executionRef: "msg_1", agentId: "agt_1", taskSummary: "chat turn" }),
+      expect.objectContaining({
+        executionRef: "msg_1",
+        agentId: "agt_1",
+        taskSummary: "chat turn",
+      }),
     );
     expect(mocks.recordMentionCitationMock).toHaveBeenCalledTimes(2);
     expect(mocks.recordMentionCitationMock).toHaveBeenCalledWith({
@@ -80,18 +95,28 @@ describe("reference.cite handler", () => {
   it("marks a not-found node failed while the rest succeed", async () => {
     mocks.recordMentionCitationMock.mockImplementation(
       async ({ nodePublicId }: { nodePublicId: string }) =>
-        nodePublicId === "missing" ? null : { citationId: `cit_${nodePublicId}` },
+        nodePublicId === "missing"
+          ? null
+          : { citationId: `cit_${nodePublicId}` },
     );
 
     const res = await referenceCiteHandler(
-      { executionRef: "msg_1", references: [{ nodeId: "n1" }, { nodeId: "missing" }] },
+      {
+        executionRef: "msg_1",
+        references: [{ nodeId: "n1" }, { nodeId: "missing" }],
+      },
       CTX,
     );
 
     expect(res.recorded).toBe(1);
     const ok = res.results.find((r) => r.nodeId === "n1");
     const miss = res.results.find((r) => r.nodeId === "missing");
-    expect(ok).toEqual({ nodeId: "n1", ok: true, citationId: "cit_n1", error: null });
+    expect(ok).toEqual({
+      nodeId: "n1",
+      ok: true,
+      citationId: "cit_n1",
+      error: null,
+    });
     expect(miss?.ok).toBe(false);
     expect(miss?.citationId).toBeNull();
     expect(miss?.error).toContain("not found");
@@ -106,7 +131,10 @@ describe("reference.cite handler", () => {
     );
 
     const res = await referenceCiteHandler(
-      { executionRef: "msg_1", references: [{ nodeId: "boom" }, { nodeId: "n2" }] },
+      {
+        executionRef: "msg_1",
+        references: [{ nodeId: "boom" }, { nodeId: "n2" }],
+      },
       CTX,
     );
 

@@ -238,7 +238,9 @@ export function ToolsCatalog({ tools, marketplaceHref }: ToolsCatalogProps) {
             <Button
               variant="outline"
               size="sm"
-              startIcon={<Download className="h-3.5 w-3.5" aria-hidden="true" />}
+              startIcon={
+                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              }
               onClick={() =>
                 downloadCsv(
                   "agent-tools.csv",
@@ -257,7 +259,9 @@ export function ToolsCatalog({ tools, marketplaceHref }: ToolsCatalogProps) {
               render={<Link href={marketplaceHref} />}
               data-testid="tools-install-more-button"
             >
-              <span className="hidden sm:inline">Install more in Marketplace</span>
+              <span className="hidden sm:inline">
+                Install more in Marketplace
+              </span>
               <span className="sm:hidden">Install</span>
             </Button>
           </div>

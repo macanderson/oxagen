@@ -46,7 +46,8 @@ export function ConnectorPickerStep({
   connectors,
   onSelect,
 }: ConnectorPickerStepProps) {
-  const [oauthNotice, setOauthNotice] = React.useState<ConnectorCatalogEntry | null>(null);
+  const [oauthNotice, setOauthNotice] =
+    React.useState<ConnectorCatalogEntry | null>(null);
 
   const ctx: Required<ScopeContext> = { orgSlug, workspaceSlug };
   const sourcesHref = workspace.knowledge.sources(ctx);
@@ -76,7 +77,11 @@ export function ConnectorPickerStep({
               data-testid={`connector-card-${connector.connectorId}`}
             >
               <div className="flex items-start gap-3">
-                <CapabilityIcon iconName={connector.icon} color="var(--primary)" size={28} />
+                <CapabilityIcon
+                  iconName={connector.icon}
+                  color="var(--primary)"
+                  size={28}
+                />
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <span className="text-sm font-semibold text-foreground">
                     {connector.displayName}
@@ -88,7 +93,9 @@ export function ConnectorPickerStep({
                   )}
                 </div>
               </div>
-              <p className="line-clamp-2 text-xs text-muted-foreground">{connector.description}</p>
+              <p className="line-clamp-2 text-xs text-muted-foreground">
+                {connector.description}
+              </p>
 
               {connector.isOAuthOnly ? (
                 <Button
@@ -99,7 +106,10 @@ export function ConnectorPickerStep({
                   data-testid={`connector-select-${connector.connectorId}`}
                 >
                   Connect via OAuth
-                  <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                  <ExternalLink
+                    className="ml-1.5 h-3.5 w-3.5"
+                    aria-hidden="true"
+                  />
                 </Button>
               ) : (
                 <Button
@@ -109,7 +119,10 @@ export function ConnectorPickerStep({
                   data-testid={`connector-select-${connector.connectorId}`}
                 >
                   Select
-                  <ArrowRight className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                  <ArrowRight
+                    className="ml-1.5 h-3.5 w-3.5"
+                    aria-hidden="true"
+                  />
                 </Button>
               )}
             </div>
@@ -124,11 +137,16 @@ export function ConnectorPickerStep({
           data-testid="oauth-redirect-notice"
         >
           <p>
-            <span className="font-medium text-foreground">{oauthNotice.displayName}</span>{" "}
-            authenticates via OAuth, which this wizard doesn&apos;t drive inline yet. Continue in{" "}
-            {oauthNotice.connectorId === "github" ? "Knowledge → Sources" : "Marketplace → Integrations"}{" "}
-            to authorize it — the connection will show up back on the Sources list once it&apos;s
-            connected.
+            <span className="font-medium text-foreground">
+              {oauthNotice.displayName}
+            </span>{" "}
+            authenticates via OAuth, which this wizard doesn&apos;t drive inline
+            yet. Continue in{" "}
+            {oauthNotice.connectorId === "github"
+              ? "Knowledge → Sources"
+              : "Marketplace → Integrations"}{" "}
+            to authorize it — the connection will show up back on the Sources
+            list once it&apos;s connected.
           </p>
           <Link
             href={

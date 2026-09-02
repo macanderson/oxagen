@@ -36,7 +36,8 @@ export const Failure: Story = {
 export const WithAnsiColor: Story = {
   args: {
     command: "pnpm lint",
-    stdout: "\x1b[32m✓\x1b[0m 128 files passed\n\x1b[31m✗\x1b[0m 2 files with warnings",
+    stdout:
+      "\x1b[32m✓\x1b[0m 128 files passed\n\x1b[31m✗\x1b[0m 2 files with warnings",
     exitCode: 0,
     durationMs: 900,
   },

@@ -28,7 +28,7 @@ import { withTenantDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
 
-/** Default lease window (5 min), matching the retired Neo4j lock's TTL. */
+/** Default lease window (5 min). */
 export const DEFAULT_FILE_LOCK_TTL_MS = 300_000;
 
 export interface AcquiredLease {

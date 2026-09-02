@@ -13,11 +13,15 @@ beforeEach(() => {
 
 describe("recentAgentsKey", () => {
   it("scopes the key to the workspace slug", () => {
-    expect(recentAgentsKey("acme")).toBe("oxagen:chat-session:v1:recent-agents:acme");
+    expect(recentAgentsKey("acme")).toBe(
+      "oxagen:chat-session:v1:recent-agents:acme",
+    );
   });
 
   it("falls back to a shared bucket when workspaceSlug is undefined", () => {
-    expect(recentAgentsKey(undefined)).toBe("oxagen:chat-session:v1:recent-agents:_");
+    expect(recentAgentsKey(undefined)).toBe(
+      "oxagen:chat-session:v1:recent-agents:_",
+    );
   });
 });
 
@@ -40,7 +44,10 @@ describe("readRecentAgentIds", () => {
   });
 
   it("returns an empty array for a non-array value", () => {
-    window.localStorage.setItem(recentAgentsKey("acme"), JSON.stringify({ foo: "bar" }));
+    window.localStorage.setItem(
+      recentAgentsKey("acme"),
+      JSON.stringify({ foo: "bar" }),
+    );
     expect(readRecentAgentIds("acme")).toEqual([]);
   });
 

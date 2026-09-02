@@ -48,16 +48,30 @@ describe("resolveLadderConfig", () => {
   });
 
   it("parses OXAGEN_LADDER_MAX_RUNG as 0–3", () => {
-    expect(resolveLadderConfig({ OXAGEN_LADDER_MAX_RUNG: "0" }).maxRung).toBe(0);
-    expect(resolveLadderConfig({ OXAGEN_LADDER_MAX_RUNG: "1" }).maxRung).toBe(1);
-    expect(resolveLadderConfig({ OXAGEN_LADDER_MAX_RUNG: "2" }).maxRung).toBe(2);
-    expect(resolveLadderConfig({ OXAGEN_LADDER_MAX_RUNG: "3" }).maxRung).toBe(3);
+    expect(resolveLadderConfig({ OXAGEN_LADDER_MAX_RUNG: "0" }).maxRung).toBe(
+      0,
+    );
+    expect(resolveLadderConfig({ OXAGEN_LADDER_MAX_RUNG: "1" }).maxRung).toBe(
+      1,
+    );
+    expect(resolveLadderConfig({ OXAGEN_LADDER_MAX_RUNG: "2" }).maxRung).toBe(
+      2,
+    );
+    expect(resolveLadderConfig({ OXAGEN_LADDER_MAX_RUNG: "3" }).maxRung).toBe(
+      3,
+    );
   });
 
   it("falls back to default maxRung for invalid input: out of range", () => {
-    expect(resolveLadderConfig({ OXAGEN_LADDER_MAX_RUNG: "4" }).maxRung).toBe(3);
-    expect(resolveLadderConfig({ OXAGEN_LADDER_MAX_RUNG: "7" }).maxRung).toBe(3);
-    expect(resolveLadderConfig({ OXAGEN_LADDER_MAX_RUNG: "-1" }).maxRung).toBe(3);
+    expect(resolveLadderConfig({ OXAGEN_LADDER_MAX_RUNG: "4" }).maxRung).toBe(
+      3,
+    );
+    expect(resolveLadderConfig({ OXAGEN_LADDER_MAX_RUNG: "7" }).maxRung).toBe(
+      3,
+    );
+    expect(resolveLadderConfig({ OXAGEN_LADDER_MAX_RUNG: "-1" }).maxRung).toBe(
+      3,
+    );
   });
 
   it("falls back to default maxRung for invalid input: non-numeric", () => {
@@ -80,7 +94,9 @@ describe("resolveLadderConfig", () => {
 /**
  * Baseline signals and config for decision tests.
  */
-const baselineSignals = (overrides?: Partial<LadderSignals>): LadderSignals => ({
+const baselineSignals = (
+  overrides?: Partial<LadderSignals>,
+): LadderSignals => ({
   oracle: "none",
   touchedTestsGreen: false,
   diffLines: 50,
@@ -311,8 +327,12 @@ describe("evidenceScore", () => {
   });
 
   it("adds 20 points for touchedTestsGreen", () => {
-    const withGreen = evidenceScore(baselineSignals({ touchedTestsGreen: true }));
-    const withoutGreen = evidenceScore(baselineSignals({ touchedTestsGreen: false }));
+    const withGreen = evidenceScore(
+      baselineSignals({ touchedTestsGreen: true }),
+    );
+    const withoutGreen = evidenceScore(
+      baselineSignals({ touchedTestsGreen: false }),
+    );
     expect(withGreen - withoutGreen).toBe(20);
   });
 
@@ -388,9 +408,12 @@ describe("decide — totality", () => {
           const signals = baselineSignals({ oracle, touchedTestsGreen });
           const decision = decide(signals, baselineConfig, rung);
           expect(decision).toBeDefined();
-          expect(["submit-fast", "revise", "fork", "submit-best-effort"]).toContain(
-            decision.action,
-          );
+          expect([
+            "submit-fast",
+            "revise",
+            "fork",
+            "submit-best-effort",
+          ]).toContain(decision.action);
           expect([0, 1, 2, 3]).toContain(decision.rung);
         }
       }
@@ -433,7 +456,10 @@ describe("decide — totality", () => {
 describe("decide — consistency and edge cases", () => {
   it("maxRung 0 forces all decisions to rung 0", () => {
     const config = { diffBudget: 120, maxRung: 0 as LadderRung };
-    const signals = baselineSignals({ oracle: "flipped", touchedTestsGreen: true });
+    const signals = baselineSignals({
+      oracle: "flipped",
+      touchedTestsGreen: true,
+    });
     const decision = decide(signals, config, 0);
     expect(decision.rung).toBe(0);
   });

@@ -47,7 +47,9 @@ const SCHEMA: ConnectorPluginSchema = {
   },
 };
 
-function baseProps(overrides: Partial<ComponentProps<typeof CredentialsStep>> = {}) {
+function baseProps(
+  overrides: Partial<ComponentProps<typeof CredentialsStep>> = {},
+) {
   return {
     connectorId: "custom-sql",
     connectorDisplayName: "Custom SQL",
@@ -68,7 +70,9 @@ function baseProps(overrides: Partial<ComponentProps<typeof CredentialsStep>> = 
 
 describe("CredentialsStep", () => {
   it("renders a skeleton while the schema is loading", () => {
-    render(<CredentialsStep {...baseProps({ schema: null, schemaLoading: true })} />);
+    render(
+      <CredentialsStep {...baseProps({ schema: null, schemaLoading: true })} />,
+    );
     expect(screen.getByTestId("credentials-skeleton")).toBeInTheDocument();
   });
 
@@ -76,10 +80,17 @@ describe("CredentialsStep", () => {
     const onRetrySchema = vi.fn();
     render(
       <CredentialsStep
-        {...baseProps({ schema: null, schemaLoading: false, schemaError: "network error", onRetrySchema })}
+        {...baseProps({
+          schema: null,
+          schemaLoading: false,
+          schemaError: "network error",
+          onRetrySchema,
+        })}
       />,
     );
-    expect(screen.getByText("Couldn't load this connector's configuration")).toBeInTheDocument();
+    expect(
+      screen.getByText("Couldn't load this connector's configuration"),
+    ).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /try again/i }));
     expect(onRetrySchema).toHaveBeenCalled();
   });
@@ -104,9 +115,15 @@ describe("CredentialsStep", () => {
     const onSubmit = vi.fn();
     render(<CredentialsStep {...baseProps({ onValidate, onSubmit })} />);
 
-    await userEvent.type(screen.getByLabelText("Connection String", { exact: false }), "postgresql://u:p@host/db");
+    await userEvent.type(
+      screen.getByLabelText("Connection String", { exact: false }),
+      "postgresql://u:p@host/db",
+    );
     // Avoid curly braces — userEvent.type() treats {..} as special key sequences.
-    await userEvent.type(screen.getByLabelText("SQL Queries", { exact: false }), "SELECT star FROM orders");
+    await userEvent.type(
+      screen.getByLabelText("SQL Queries", { exact: false }),
+      "SELECT star FROM orders",
+    );
 
     await userEvent.click(screen.getByTestId("credentials-next-btn"));
 
@@ -123,19 +140,35 @@ describe("CredentialsStep", () => {
   it("shows server-side validation errors returned by onValidate and does not submit", async () => {
     const onValidate = vi.fn().mockResolvedValue({
       valid: false,
-      errors: [{ field: "apiKey", message: "Invalid connection string", code: "pattern" }],
+      errors: [
+        {
+          field: "apiKey",
+          message: "Invalid connection string",
+          code: "pattern",
+        },
+      ],
     });
     const onSubmit = vi.fn();
     render(<CredentialsStep {...baseProps({ onValidate, onSubmit })} />);
 
-    await userEvent.type(screen.getByLabelText("Connection String", { exact: false }), "not-a-real-connection-string");
-    await userEvent.type(screen.getByLabelText("SQL Queries", { exact: false }), "SELECT 1");
+    await userEvent.type(
+      screen.getByLabelText("Connection String", { exact: false }),
+      "not-a-real-connection-string",
+    );
+    await userEvent.type(
+      screen.getByLabelText("SQL Queries", { exact: false }),
+      "SELECT 1",
+    );
     await userEvent.click(screen.getByTestId("credentials-next-btn"));
 
     // The message renders both inline (under the field) and in the summary
     // banner — assert at least one match instead of a single getByText,
     // which throws on >1 match.
-    await waitFor(() => expect(screen.getAllByText("Invalid connection string").length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(
+        screen.getAllByText("Invalid connection string").length,
+      ).toBeGreaterThan(0),
+    );
     expect(onSubmit).not.toHaveBeenCalled();
   });
 });

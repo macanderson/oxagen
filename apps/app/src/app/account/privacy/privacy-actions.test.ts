@@ -15,7 +15,11 @@ const { mockGetSession, capturedWhere, dbState } = vi.hoisted(() => {
     mockGetSession: vi.fn(),
     capturedWhere: { value: undefined as unknown },
     dbState: {
-      rows: [] as Array<{ status: string; exportUrl: string | null; completedAt: Date | null }>,
+      rows: [] as Array<{
+        status: string;
+        exportUrl: string | null;
+        completedAt: Date | null;
+      }>,
     },
   };
 });
@@ -37,7 +41,9 @@ vi.mock("@oxagen/database", () => {
     }),
   });
   return {
-    withSystemDb: vi.fn((fn: (tx: ReturnType<typeof makeTx>) => unknown) => fn(makeTx())),
+    withSystemDb: vi.fn((fn: (tx: ReturnType<typeof makeTx>) => unknown) =>
+      fn(makeTx()),
+    ),
     schema: {
       privacyExportRequests: {
         id: "id_col",
@@ -64,19 +70,29 @@ describe("getExportStatusAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedWhere.value = undefined;
-    dbState.rows = [{ status: "ready", exportUrl: "https://blob/export", completedAt: new Date() }];
+    dbState.rows = [
+      {
+        status: "ready",
+        exportUrl: "https://blob/export",
+        completedAt: new Date(),
+      },
+    ];
     mockGetSession.mockResolvedValue(SESSION);
   });
 
   it("requires a session (self-authenticates)", async () => {
     mockGetSession.mockRejectedValue(new Error("unauthenticated"));
-    await expect(getExportStatusAction("prexp-1")).rejects.toThrow("unauthenticated");
+    await expect(getExportStatusAction("prexp-1")).rejects.toThrow(
+      "unauthenticated",
+    );
   });
 
   it("scopes the lookup to the caller's own userId (cross-user IDOR guard)", async () => {
     await getExportStatusAction("prexp-1");
     // The where predicate must include an eq(userId, session.user.id) clause.
-    const where = capturedWhere.value as { __and: Array<{ __eq: [unknown, unknown] }> };
+    const where = capturedWhere.value as {
+      __and: Array<{ __eq: [unknown, unknown] }>;
+    };
     expect(where.__and).toBeDefined();
     const scopedToUser = where.__and.some(
       (c) => c.__eq?.[0] === "userId_col" && c.__eq?.[1] === "user-1",
@@ -86,7 +102,10 @@ describe("getExportStatusAction", () => {
 
   it("returns the row when it belongs to the caller", async () => {
     const res = await getExportStatusAction("prexp-1");
-    expect(res).toMatchObject({ status: "ready", exportUrl: "https://blob/export" });
+    expect(res).toMatchObject({
+      status: "ready",
+      exportUrl: "https://blob/export",
+    });
   });
 
   it("returns null when no owned row matches (foreign or missing export)", async () => {

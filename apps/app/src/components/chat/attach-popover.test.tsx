@@ -73,8 +73,12 @@ import { AttachPopover } from "./attach-popover";
 describe("AttachPopover", () => {
   it("renders the plus trigger and exactly one 'Upload files' row — no Record voice row", () => {
     render(<AttachPopover onPickFiles={vi.fn()} />);
-    expect(screen.getByRole("button", { name: "Add attachment" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Upload files" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add attachment" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Upload files" }),
+    ).toBeInTheDocument();
     // The server has no "audio" asset kind (packages/storage/src/assets.ts)
     // — a voice-recording row would 415 on every attempt, so it must not exist.
     expect(
@@ -84,7 +88,9 @@ describe("AttachPopover", () => {
 
   it("the hidden input accepts every server-supported kind (image, video, document/pdf)", () => {
     const { container } = render(<AttachPopover onPickFiles={vi.fn()} />);
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
     expect(input.accept).toBe("image/*,video/*,application/pdf");
     expect(input.multiple).toBe(true);
   });
@@ -93,7 +99,9 @@ describe("AttachPopover", () => {
     const user = userEvent.setup();
     const onPickFiles = vi.fn();
     const { container } = render(<AttachPopover onPickFiles={onPickFiles} />);
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
     await user.click(screen.getByRole("button", { name: "Upload files" }));
     await user.upload(
       input,
@@ -107,11 +115,15 @@ describe("AttachPopover", () => {
 
   it("forwards disabled to the plus trigger", () => {
     render(<AttachPopover disabled onPickFiles={vi.fn()} />);
-    expect(screen.getByRole("button", { name: "Add attachment" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Add attachment" }),
+    ).toBeDisabled();
   });
 
   it("is not disabled by default", () => {
     render(<AttachPopover onPickFiles={vi.fn()} />);
-    expect(screen.getByRole("button", { name: "Add attachment" })).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Add attachment" }),
+    ).not.toBeDisabled();
   });
 });

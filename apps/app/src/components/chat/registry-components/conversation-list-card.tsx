@@ -36,7 +36,10 @@ function readRows(output: unknown): Row[] {
     if (typeof c.publicId !== "string") continue;
     rows.push({
       publicId: c.publicId,
-      title: typeof c.title === "string" && c.title.length > 0 ? c.title : "Untitled conversation",
+      title:
+        typeof c.title === "string" && c.title.length > 0
+          ? c.title
+          : "Untitled conversation",
       archived: typeof c.archivedAt === "string" && c.archivedAt.length > 0,
       updatedAt: typeof c.updatedAt === "string" ? c.updatedAt : undefined,
     });
@@ -48,7 +51,10 @@ function formatWhen(iso?: string): string | null {
   if (!iso) return null;
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return null;
-  return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return new Date(t).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export default function ConversationListCard(
@@ -63,14 +69,19 @@ export default function ConversationListCard(
       data-component="conversation-list-card"
     >
       <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2.5">
-        <MessageSquare className="size-4 shrink-0 text-primary" aria-hidden="true" />
+        <MessageSquare
+          className="size-4 shrink-0 text-primary"
+          aria-hidden="true"
+        />
         <span className="text-sm font-semibold">
           {rows.length} conversation{rows.length === 1 ? "" : "s"}
         </span>
       </div>
 
       {rows.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-muted-foreground">No conversations.</p>
+        <p className="px-4 py-3 text-sm text-muted-foreground">
+          No conversations.
+        </p>
       ) : (
         <ul className="divide-y divide-border/60">
           {rows.map((row) => {
@@ -84,13 +95,21 @@ export default function ConversationListCard(
                   </p>
                 </div>
                 {row.archived ? (
-                  <Archive className="size-3.5 shrink-0 text-muted-foreground" aria-label="Archived" />
+                  <Archive
+                    className="size-3.5 shrink-0 text-muted-foreground"
+                    aria-label="Archived"
+                  />
                 ) : null}
                 {when ? (
-                  <span className="shrink-0 text-xs text-muted-foreground">{when}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {when}
+                  </span>
                 ) : null}
                 {href ? (
-                  <ArrowUpRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <ArrowUpRight
+                    className="size-4 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                 ) : null}
               </div>
             );

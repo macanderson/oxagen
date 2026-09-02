@@ -40,7 +40,8 @@ vi.mock("drizzle-orm", async (importOriginal) => {
 
 vi.mock("@oxagen/crypto", () => ({
   decrypt: mocks.decrypt,
-  resolveIngestionCryptoAdapterForKeyId: mocks.resolveIngestionCryptoAdapterForKeyId,
+  resolveIngestionCryptoAdapterForKeyId:
+    mocks.resolveIngestionCryptoAdapterForKeyId,
 }));
 
 import { assertGithubInstallationAccessible } from "../lib/github-installation-access";
@@ -51,13 +52,18 @@ const ENC = { keyId: "ingestion:env:v1", ciphertext: "dG9rZW4=" };
 /** A stored, decryptable GitHub OAuth token for the org. */
 function mockHasToken(): void {
   mocks.withTenantDb.mockResolvedValueOnce([{ accessTokenEnc: ENC }]);
-  mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValueOnce({ adapter: {} });
+  mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValueOnce({
+    adapter: {},
+  });
   mocks.decrypt.mockResolvedValueOnce(Buffer.from("ghu_user_token", "utf8"));
 }
 
 /** Stub global fetch to return the given /user/installations pages in order. */
 function mockInstallationsPages(
-  ...pages: Array<{ total_count: number; installations: Array<{ id: number | string }> }>
+  ...pages: Array<{
+    total_count: number;
+    installations: Array<{ id: number | string }>;
+  }>
 ): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn();
   for (const page of pages) {
@@ -83,10 +89,16 @@ describe("assertGithubInstallationAccessible", () => {
       installations: [{ id: 111 }, { id: 9876 }],
     });
 
-    await expect(assertGithubInstallationAccessible(CTX, "9876")).resolves.toBeUndefined();
+    await expect(
+      assertGithubInstallationAccessible(CTX, "9876"),
+    ).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.github.com/user/installations?per_page=100&page=1",
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer ghu_user_token" }) }),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer ghu_user_token",
+        }),
+      }),
     );
   });
 
@@ -94,44 +106,54 @@ describe("assertGithubInstallationAccessible", () => {
     mockHasToken();
     mockInstallationsPages({ total_count: 1, installations: [{ id: 9876 }] });
     // installationId supplied as a number; GitHub returns a number too.
-    await expect(assertGithubInstallationAccessible(CTX, 9876)).resolves.toBeUndefined();
+    await expect(
+      assertGithubInstallationAccessible(CTX, 9876),
+    ).resolves.toBeUndefined();
   });
 
   it("throws 403 when the installation is NOT reachable by the user", async () => {
     mockHasToken();
     mockInstallationsPages({ total_count: 1, installations: [{ id: 111 }] });
 
-    await expect(assertGithubInstallationAccessible(CTX, "9876")).rejects.toThrow(
-      "do not have access to GitHub installation 9876",
-    );
+    await expect(
+      assertGithubInstallationAccessible(CTX, "9876"),
+    ).rejects.toThrow("do not have access to GitHub installation 9876");
   });
 
   it("throws 403 (fail-closed) when the workspace has no GitHub OAuth token", async () => {
     mocks.withTenantDb.mockResolvedValueOnce([]); // no oauth_accounts row
     const fetchMock = mockInstallationsPages(); // fetch must never be called
 
-    await expect(assertGithubInstallationAccessible(CTX, "9876")).rejects.toThrow(
-      "connect GitHub for this workspace first",
-    );
+    await expect(
+      assertGithubInstallationAccessible(CTX, "9876"),
+    ).rejects.toThrow("connect GitHub for this workspace first");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("throws 403 when the stored token cannot be decrypted", async () => {
     mocks.withTenantDb.mockResolvedValueOnce([{ accessTokenEnc: ENC }]);
-    mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValueOnce({ adapter: {} });
+    mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValueOnce({
+      adapter: {},
+    });
     mocks.decrypt.mockRejectedValueOnce(new Error("bad key"));
 
-    await expect(assertGithubInstallationAccessible(CTX, "9876")).rejects.toThrow(
-      "stored GitHub token is unreadable",
-    );
+    await expect(
+      assertGithubInstallationAccessible(CTX, "9876"),
+    ).rejects.toThrow("stored GitHub token is unreadable");
   });
 
   it("throws 403 (fail-closed) when GitHub returns a non-OK status (revoked token)", async () => {
     mockHasToken();
-    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) });
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      json: async () => ({}),
+    });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(assertGithubInstallationAccessible(CTX, "9876")).rejects.toThrow(
+    await expect(
+      assertGithubInstallationAccessible(CTX, "9876"),
+    ).rejects.toThrow(
       "Could not verify GitHub installation access (GitHub returned 401)",
     );
   });
@@ -144,11 +166,43 @@ describe("assertGithubInstallationAccessible", () => {
     };
     const page2 = {
       total_count: 150,
-      installations: [{ id: 9876 }, ...Array.from({ length: 49 }, (_, i) => ({ id: i + 200 }))],
+      installations: [
+        { id: 9876 },
+        ...Array.from({ length: 49 }, (_, i) => ({ id: i + 200 })),
+      ],
     };
     const fetchMock = mockInstallationsPages(page1, page2);
 
-    await expect(assertGithubInstallationAccessible(CTX, "9876")).resolves.toBeUndefined();
+    await expect(
+      assertGithubInstallationAccessible(CTX, "9876"),
+    ).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops paging when a page comes back empty even though total_count is higher", async () => {
+    // GitHub claims 150 installations but the second page is empty (a
+    // concurrent uninstall, a truncated response). Trusting total_count alone
+    // leaves seen < total forever and spins the loop against the API.
+    mockHasToken();
+    const fetchMock = vi.fn();
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        total_count: 150,
+        installations: Array.from({ length: 100 }, (_, i) => ({ id: i + 1 })),
+      }),
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ total_count: 150, installations: [] }),
+    });
+    // Any further page would resolve undefined and throw — proving the loop
+    // stopped rather than continuing past the empty page.
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      assertGithubInstallationAccessible(CTX, "9876"),
+    ).rejects.toThrow("do not have access to GitHub installation 9876");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -170,7 +224,10 @@ describe("GitHub API call hygiene", () => {
   it("passes an abort/timeout signal to every /user/installations fetch (paged loop must not hang on a stalled page)", async () => {
     mockHasToken();
     const fetchMock = mockInstallationsPages(
-      { total_count: 150, installations: Array.from({ length: 100 }, (_, i) => ({ id: i })) },
+      {
+        total_count: 150,
+        installations: Array.from({ length: 100 }, (_, i) => ({ id: i })),
+      },
       { total_count: 150, installations: [{ id: 9876 }] },
     );
 

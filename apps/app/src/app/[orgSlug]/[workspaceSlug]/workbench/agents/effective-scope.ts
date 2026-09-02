@@ -121,7 +121,8 @@ function ceilingScope(
   if (condition === null) return undefined;
   const scope: EffectiveResourceScope = {};
   if (condition.graph !== undefined) scope.graph = condition.graph;
-  if (condition.mcp !== undefined) scope.mcp = { ruleSets: [condition.mcp.rules] };
+  if (condition.mcp !== undefined)
+    scope.mcp = { ruleSets: [condition.mcp.rules] };
   if (condition.skills !== undefined) scope.skills = condition.skills;
   if (condition.agents !== undefined) scope.agents = condition.agents;
   return scope;

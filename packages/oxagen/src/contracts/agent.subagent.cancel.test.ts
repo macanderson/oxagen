@@ -28,7 +28,11 @@ describe("agent.subagent.cancel capability", () => {
 
   it("rejects a non-integer cancelledChildren", () => {
     expect(() =>
-      agentSubagentCancel.output.parse({ fanoutId: "fan_1", status: "timed_out", cancelledChildren: 1.5 }),
+      agentSubagentCancel.output.parse({
+        fanoutId: "fan_1",
+        status: "timed_out",
+        cancelledChildren: 1.5,
+      }),
     ).toThrow();
   });
 

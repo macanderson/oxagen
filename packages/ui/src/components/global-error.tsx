@@ -9,10 +9,12 @@
  * cannot trip the `useContext` null crash that breaks `/_global-error` static
  * export when the default (provider-wrapped) error tree is used instead.
  *
- * Styling is fully self-contained (explicit Stella paper palette, no
- * theme `class` dependency) so the fallback renders correctly with zero app
- * context. Flat: no radius, no shadow — matching the product skin. Keep these
- * hexes in lockstep with docs/brand/tokens.css when the brand changes.
+ * Styling is fully self-contained (hardcoded light-mode hexes, no theme `class`
+ * dependency) so the fallback renders correctly with zero app context. Flat: no
+ * radius, no shadow — matching the product skin. Because no tokens are loaded
+ * here these hexes cannot follow a reskin: when the palette changes, update
+ * them by hand against the light-mode values in
+ * packages/ui/src/styles/globals.css.
  */
 export function GlobalErrorPage({
   error,

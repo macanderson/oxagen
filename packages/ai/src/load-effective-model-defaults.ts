@@ -8,7 +8,10 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { resolveModelDefaults } from "./resolve-model-defaults";
-import type { ResolvedModelDefaults, ModelDefaultsInput } from "./resolve-model-defaults";
+import type {
+  ResolvedModelDefaults,
+  ModelDefaultsInput,
+} from "./resolve-model-defaults";
 
 export type { ResolvedModelDefaults, ModelDefaultsInput };
 

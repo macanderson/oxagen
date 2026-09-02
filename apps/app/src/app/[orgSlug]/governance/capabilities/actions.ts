@@ -9,7 +9,10 @@
 
 import { z } from "zod";
 import type { CapabilityRegistryGetOutput } from "@oxagen/oxagen/contracts/capability.registry.get";
-import type { AuditLogQueryOutput, AuditEvent } from "@oxagen/oxagen/contracts/audit.log.query";
+import type {
+  AuditLogQueryOutput,
+  AuditEvent,
+} from "@oxagen/oxagen/contracts/audit.log.query";
 import type { BillingUsageBreakdownOutput } from "@oxagen/oxagen/contracts/billing.usage.breakdown";
 import { logger } from "@oxagen/handlers/logger";
 import { getSession } from "@/lib/session";
@@ -55,14 +58,24 @@ export async function fetchCapabilityInsights(
 ): Promise<CapabilityInsights> {
   const parsed = inputSchema.safeParse({ orgSlug: rawOrgSlug, name: rawName });
   if (!parsed.success) {
-    return { detail: null, usage: null, audit: null, error: "Invalid request." };
+    return {
+      detail: null,
+      usage: null,
+      audit: null,
+      error: "Invalid request.",
+    };
   }
   const { orgSlug, name } = parsed.data;
 
   const session = await getSession();
   const userId = session?.user?.id;
   if (!userId) {
-    return { detail: null, usage: null, audit: null, error: "Not authenticated." };
+    return {
+      detail: null,
+      usage: null,
+      audit: null,
+      error: "Not authenticated.",
+    };
   }
   const tenant = await resolveOrg(orgSlug);
   try {
@@ -88,12 +101,17 @@ export async function fetchCapabilityInsights(
       "get_usage_breakdown",
       { start, end },
     ),
-    invokeOrgCapability<AuditLogQueryOutput>(tenant.id, userId, "query_audit_log", {
-      source: "security",
-      capability: name,
-      limit: 10,
-      offset: 0,
-    }),
+    invokeOrgCapability<AuditLogQueryOutput>(
+      tenant.id,
+      userId,
+      "query_audit_log",
+      {
+        source: "security",
+        capability: name,
+        limit: 10,
+        offset: 0,
+      },
+    ),
   ]);
 
   if (detailRes.status === "rejected") {

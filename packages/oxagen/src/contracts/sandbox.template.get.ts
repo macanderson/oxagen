@@ -5,10 +5,15 @@ import { sandboxTemplateSummarySchema } from "./sandbox.template.create";
 export const sandboxTemplateGet = registerCapability({
   name: "get_sandbox_template",
   domain: "sandbox",
-  description: "Fetch a single sandbox template (with its tools) by its public id.",
+  description:
+    "Fetch a single sandbox template (with its tools) by its public id.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   sensitivity: "low",
@@ -22,4 +27,6 @@ export const sandboxTemplateGet = registerCapability({
   output: z.object({ template: sandboxTemplateSummarySchema }),
 });
 
-export type SandboxTemplateGetOutput = z.output<typeof sandboxTemplateGet.output>;
+export type SandboxTemplateGetOutput = z.output<
+  typeof sandboxTemplateGet.output
+>;

@@ -90,7 +90,12 @@ export async function agentMemoryImportCommitHandler(
         return { lesson: draft.lesson, ok: true, memoryId, error: null };
       } catch (err) {
         const message = err instanceof Error ? err.message : "Write failed";
-        return { lesson: draft.lesson, ok: false, memoryId: null, error: message };
+        return {
+          lesson: draft.lesson,
+          ok: false,
+          memoryId: null,
+          error: message,
+        };
       }
     },
   );

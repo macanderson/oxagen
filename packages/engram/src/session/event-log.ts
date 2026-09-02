@@ -10,7 +10,12 @@ import type { Session, SessionEvent, SessionEventType } from "./types";
 /**
  * Create a new session.
  */
-export function createSession(id: string, namespace: Namespace, parentId?: string, forkPoint?: number): Session {
+export function createSession(
+  id: string,
+  namespace: Namespace,
+  parentId?: string,
+  forkPoint?: number,
+): Session {
   const session: Session = {
     id,
     namespace,
@@ -42,7 +47,9 @@ export function appendEvent(
   data: unknown,
 ): SessionEvent {
   if (session.status !== "active") {
-    throw new Error(`Cannot append to session ${session.id}: status is ${session.status}`);
+    throw new Error(
+      `Cannot append to session ${session.id}: status is ${session.status}`,
+    );
   }
 
   const event: SessionEvent = {
@@ -66,7 +73,10 @@ export function appendEvent(
 /**
  * Get all events for a specific turn.
  */
-export function getEventsForTurn(session: Session, turnId: string): SessionEvent[] {
+export function getEventsForTurn(
+  session: Session,
+  turnId: string,
+): SessionEvent[] {
   return session.events.filter((e) => e.turnId === turnId);
 }
 

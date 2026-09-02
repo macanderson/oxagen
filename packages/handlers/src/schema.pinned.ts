@@ -9,17 +9,29 @@
  *
  * Enabled-set resolution (§4.3 / §4.8): a schema's enabled state lives in
  * `schema_activations` keyed by stable schema identity (workspace + schema_name),
- * NOT by version. A schema with **no** activation row defaults to enabled for
- * `connector`/`recommended`/legacy sources and disabled for `user`-authored —
- * but the spec's §4.3 rule is "born disabled" for newly authored/recommended
- * schemas, which is enforced at *create* time by writing a disabled activation
- * row. Here the default for a missing row is **enabled** (the §4.8 stated
- * default), so a connector-contributed schema with no explicit toggle is active.
+ * NOT by version. A missing activation row means **enabled**, whatever the
+ * schema's source — the §4.8 default. The §4.3 "born disabled" rule for
+ * user-authored and recommended schemas is enforced at *create* time instead,
+ * by `getOrCreateDraftSchema` writing an explicit disabled activation row, so
+ * nothing here has to branch on source.
  *
  * Caching: definitions are immutable per version, but the enabled set is live
- * config, so the cache key includes an **activation fingerprint** (a hash of the
- * enabled schema names). It is invalidated on pin change OR any `schema.toggle`
- * via `invalidatePinnedSchemaCache(workspaceId)`.
+ * config, so a hit also has to match an **activation fingerprint** (the sorted
+ * enabled schema names). It is dropped on pin change, `schema.toggle`, or a
+ * registry-config change via `invalidatePinnedSchemaCache(workspaceId)`.
+ *
+ * Two limits to know about. The cache is **per process** and holds one entry per
+ * workspace with no TTL and no size cap, so a long-lived server that has served
+ * many workspaces keeps every one of their vocabularies resident; and an
+ * invalidation only reaches the process that ran the write, so an Inngest worker
+ * can keep serving a vocabulary a toggle in the web app already changed. Both are
+ * design gaps that want a shared invalidation channel plus a bounded, expiring
+ * cache — not something a caller can work around.
+ *
+ * The cache sits mid-function, not in front of it: computing the fingerprint
+ * needs the registry, version, schema and activation rows, so a hit still costs
+ * those four queries and only saves the label/relationship/property reads. The
+ * cached `PinnedSchema` is handed back by reference — treat it as read-only.
  *
  * Returns null when no version is pinned (registry inert → today's behavior).
  */
@@ -51,9 +63,13 @@ interface CacheEntry {
 // In-process cache keyed by workspaceId. A single entry per workspace is enough:
 // a workspace has exactly one pinned version + activation set at a time. The
 // stored versionId + fingerprint guard against a stale hit after a pin/toggle.
+// Unbounded and process-local — see the module doc comment for what that costs.
 const cache = new Map<string, CacheEntry>();
 
-/** Invalidate the cached active vocabulary for a workspace (pin change / toggle). */
+/**
+ * Drop the cached active vocabulary for a workspace, in THIS process only.
+ * Call after any pin change, `schema.toggle`, or registry-config change.
+ */
 export function invalidatePinnedSchemaCache(workspaceId: string): void {
   cache.delete(workspaceId);
 }
@@ -114,15 +130,18 @@ export async function getPinnedSchema(
       })
       .from(db.schemas)
       .where(
-        and(
-          eq(db.schemas.versionId, versionId),
-          isNull(db.schemas.deletedAt),
-        ),
+        and(eq(db.schemas.versionId, versionId), isNull(db.schemas.deletedAt)),
       );
 
     if (schemaRows.length === 0) {
       // Pinned version with no schemas — still a valid (empty) active vocabulary.
-      return emptyVocabulary(reg.registryId, versionId, versionNumber, reg.enforcementMode, reg.conformanceFloor);
+      return emptyVocabulary(
+        reg.registryId,
+        versionId,
+        versionNumber,
+        reg.enforcementMode,
+        reg.conformanceFloor,
+      );
     }
 
     // 4) Activation rows for these schema names (live config, version-independent).
@@ -144,16 +163,28 @@ export async function getPinnedSchema(
     for (const a of activationRows) enabledByName.set(a.schemaName, a.enabled);
 
     // Filter to the ENABLED subset. No activation row → enabled default (§4.8).
-    const enabledSchemas = schemaRows.filter((s) => enabledByName.get(s.name) !== false);
+    const enabledSchemas = schemaRows.filter(
+      (s) => enabledByName.get(s.name) !== false,
+    );
     if (enabledSchemas.length === 0) {
-      return emptyVocabulary(reg.registryId, versionId, versionNumber, reg.enforcementMode, reg.conformanceFloor);
+      return emptyVocabulary(
+        reg.registryId,
+        versionId,
+        versionNumber,
+        reg.enforcementMode,
+        reg.conformanceFloor,
+      );
     }
 
     // Activation fingerprint = sorted enabled schema names (live-config cache key).
     const fingerprint = [...enabledSchemas.map((s) => s.name)].sort().join("|");
 
     const cached = cache.get(workspaceId);
-    if (cached && cached.versionId === versionId && cached.fingerprint === fingerprint) {
+    if (
+      cached &&
+      cached.versionId === versionId &&
+      cached.fingerprint === fingerprint
+    ) {
       return cached.value;
     }
 
@@ -199,7 +230,12 @@ export async function getPinnedSchema(
         ),
       );
 
-    // 6) Properties for those labels + relationship types (one query, grouped).
+    // 6) Every property of the pinned version in one query, then grouped by
+    //    owner id. The query filters on versionId only, so properties belonging
+    //    to a DISABLED schema are read and then dropped by the grouping (the
+    //    propsByLabel / propsByRel lookups below are keyed by the enabled
+    //    labels' and relationship types' ids). Correct, but it reads more rows
+    //    than the vocabulary needs on a workspace with many disabled schemas.
     const labelIds = labelRows.map((l) => l.id);
     const relIds = relRows.map((r) => r.id);
     const propRows =
@@ -257,7 +293,8 @@ export async function getPinnedSchema(
       description: r.description ?? null,
       startLabel: r.startLabel ?? null,
       endLabel: r.endLabel ?? null,
-      cardinality: (r.cardinality as PinnedRelationshipType["cardinality"]) ?? null,
+      cardinality:
+        (r.cardinality as PinnedRelationshipType["cardinality"]) ?? null,
       properties: propsByRel.get(r.id) ?? [],
     }));
 

@@ -34,11 +34,15 @@ describe("agent.file.lock.acquire capability", () => {
   });
 
   it("rejects ttlMs above the 1-hour cap", () => {
-    expect(() => agentFileLockAcquire.input.parse({ path: "a.ts", ttlMs: 3_600_001 })).toThrow();
+    expect(() =>
+      agentFileLockAcquire.input.parse({ path: "a.ts", ttlMs: 3_600_001 }),
+    ).toThrow();
   });
 
   it("rejects an invalid action", () => {
-    expect(() => agentFileLockAcquire.input.parse({ path: "a.ts", action: "delete" })).toThrow();
+    expect(() =>
+      agentFileLockAcquire.input.parse({ path: "a.ts", action: "delete" }),
+    ).toThrow();
   });
 
   it("parses a granted output with a fencing token", () => {

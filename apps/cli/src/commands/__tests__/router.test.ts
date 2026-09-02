@@ -3,14 +3,26 @@
  * network is needed; asserts --json emits the exact contract payload, pretty
  * mode renders tables/summaries, and API failures route to stderr.
  */
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from "vitest";
 import type { CommandWriter } from "../../lib/capture-writer.js";
 
 vi.mock("../../lib/api.js", () => ({
   apiGetOrThrow: vi.fn(),
   apiPostOrThrow: vi.fn(),
   printTable: vi.fn(
-    (headers: string[], rows: string[][], writer: { write(l: string): void }) => {
+    (
+      headers: string[],
+      rows: string[][],
+      writer: { write(l: string): void },
+    ) => {
       writer.write(headers.join(" | "));
       for (const row of rows) writer.write(row.join(" | "));
     },
@@ -25,7 +37,11 @@ import {
 } from "../router.js";
 import { apiGetOrThrow, apiPostOrThrow } from "../../lib/api.js";
 
-function memoryWriter(): { writer: CommandWriter; out: string[]; err: string[] } {
+function memoryWriter(): {
+  writer: CommandWriter;
+  out: string[];
+  err: string[];
+} {
   const out: string[] = [];
   const err: string[] = [];
   return {
@@ -151,7 +167,11 @@ describe("router preview", () => {
   it("posts the prompt + signals and renders the decision", async () => {
     (apiPostOrThrow as unknown as Mock).mockResolvedValueOnce(DECISION);
     const { writer, out } = memoryWriter();
-    await routerPreview("refactor the widget", { files: 2, crossPackage: true }, writer);
+    await routerPreview(
+      "refactor the widget",
+      { files: 2, crossPackage: true },
+      writer,
+    );
     expect(apiPostOrThrow).toHaveBeenCalledWith("router/preview", {
       prompt: "refactor the widget",
       fileCount: 2,
@@ -195,7 +215,10 @@ describe("router policy get/set", () => {
       escalateOnRejection: true,
     });
     const { writer, out } = memoryWriter();
-    await routerPolicySet({ mode: "enforce", threshold: 0.9, minSamples: 10 }, writer);
+    await routerPolicySet(
+      { mode: "enforce", threshold: 0.9, minSamples: 10 },
+      writer,
+    );
     expect(apiPostOrThrow).toHaveBeenCalledWith("router/policy/set", {
       scope: undefined,
       mode: "enforce",

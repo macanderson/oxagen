@@ -3,7 +3,8 @@
  * condition-leaf-row.tsx — one comparison row: [n] property · operator · value.
  *
  * Property / operator / value are all schema-driven:
- *   - property: a Select over the watched label's properties (key + displayName),
+ *   - property: a Select over the watched label's properties, listed by their
+ *     schema `key` (the same token the saved condition stores),
  *   - operator: a Select filtered by `operatorsForDataType(property.dataType)`,
  *   - value: rendered per the property's dataType — enum → Select of enumValues
  *     (single, or multi-checkbox for in/not_in), boolean → true/false Select,

@@ -9,7 +9,9 @@ describe("workspace.model.settings.write capability", () => {
   });
 
   it("parses a partial input with only defaultTextTier", () => {
-    const parsed = workspaceModelSettingsWrite.input.parse({ defaultTextTier: "fast" });
+    const parsed = workspaceModelSettingsWrite.input.parse({
+      defaultTextTier: "fast",
+    });
     expect(parsed.defaultTextTier).toBe("fast");
     expect(parsed.defaultTextModel).toBeUndefined();
   });
@@ -63,7 +65,9 @@ describe("workspace.model.settings.write capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("update_model_settings")).toBe(workspaceModelSettingsWrite);
+    expect(getCapability("update_model_settings")).toBe(
+      workspaceModelSettingsWrite,
+    );
   });
 
   it("declares scoped:true (workspace-scoped)", () => {

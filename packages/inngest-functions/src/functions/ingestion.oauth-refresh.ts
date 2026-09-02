@@ -123,7 +123,8 @@ export const [ingestionOauthRefresh] = createFunction(
         // Normalize connector-surface slugs (e.g. google-drive/google-gmail) onto
         // their shared OAuth strategy key so Google Workspace connections refresh
         // instead of silently lapsing at token expiry.
-        const strategy = REFRESH_PROVIDERS[refreshProviderKeyFor(account.provider)];
+        const strategy =
+          REFRESH_PROVIDERS[refreshProviderKeyFor(account.provider)];
 
         // ── No-refresh provider (e.g. Linear) ───────────────────────────────
         if (strategy && strategy.supportsRefresh === false) {
@@ -152,10 +153,16 @@ export const [ingestionOauthRefresh] = createFunction(
         let decryptedRefreshToken: string;
         try {
           // Select the adapter by the stored keyId, not the active provider.
-          const readAdapter = resolveIngestionCryptoAdapterForKeyId(envelope.keyId);
-          const decryptedRaw: unknown = await decrypt(cipherBuf, envelope.keyId, {
-            adapter: readAdapter.adapter,
-          });
+          const readAdapter = resolveIngestionCryptoAdapterForKeyId(
+            envelope.keyId,
+          );
+          const decryptedRaw: unknown = await decrypt(
+            cipherBuf,
+            envelope.keyId,
+            {
+              adapter: readAdapter.adapter,
+            },
+          );
           decryptedRefreshToken = Buffer.isBuffer(decryptedRaw)
             ? decryptedRaw.toString("utf8")
             : String(decryptedRaw);
@@ -169,21 +176,35 @@ export const [ingestionOauthRefresh] = createFunction(
         }
 
         // ── Refresh via the shared strategy executor ─────────────────────────
-        const parsed = await refreshOAuthToken(account.provider, decryptedRefreshToken);
+        const parsed = await refreshOAuthToken(
+          account.provider,
+          decryptedRefreshToken,
+        );
 
         if (isRefreshError(parsed)) {
           // "missing_client_env" / "unsupported_provider" are config gaps, not
           // token revocations — skip without counting a failure.
-          if (parsed.error === "missing_client_env" || parsed.error === "unsupported_provider") {
+          if (
+            parsed.error === "missing_client_env" ||
+            parsed.error === "unsupported_provider"
+          ) {
             logger.warn(
-              { tokenId: account.id, provider: account.provider, error: parsed.error },
+              {
+                tokenId: account.id,
+                provider: account.provider,
+                error: parsed.error,
+              },
               "ingestion-oauth-refresh: provider OAuth client env vars not configured — skipping",
             );
             return;
           }
           if (parsed.error === "http_error") {
             logger.warn(
-              { tokenId: account.id, provider: account.provider, description: parsed.description },
+              {
+                tokenId: account.id,
+                provider: account.provider,
+                description: parsed.description,
+              },
               "ingestion-oauth-refresh: token refresh HTTP call failed — incrementing failure count",
             );
             await recordRefreshFailure(account.id, false);
@@ -207,9 +228,13 @@ export const [ingestionOauthRefresh] = createFunction(
         }
 
         // ── Re-encrypt the new access token ──────────────────────────────────
-        const newAccessCipher = await encrypt(parsed.accessToken, writeAdapter.keyId, {
-          adapter: writeAdapter.adapter,
-        });
+        const newAccessCipher = await encrypt(
+          parsed.accessToken,
+          writeAdapter.keyId,
+          {
+            adapter: writeAdapter.adapter,
+          },
+        );
         const newAccessEnc = {
           keyId: writeAdapter.keyId,
           ciphertext: newAccessCipher.toString("base64"),
@@ -218,17 +243,22 @@ export const [ingestionOauthRefresh] = createFunction(
         // ── Re-encrypt the new refresh token (when rotated) ──────────────────
         let newRefreshEnc: { keyId: string; ciphertext: string } | null = null;
         if (parsed.refreshToken) {
-          const newRefreshCipher = await encrypt(parsed.refreshToken, writeAdapter.keyId, {
-            adapter: writeAdapter.adapter,
-          });
+          const newRefreshCipher = await encrypt(
+            parsed.refreshToken,
+            writeAdapter.keyId,
+            {
+              adapter: writeAdapter.adapter,
+            },
+          );
           newRefreshEnc = {
             keyId: writeAdapter.keyId,
             ciphertext: newRefreshCipher.toString("base64"),
           };
         }
 
-        const newExpiresAt =
-          parsed.expiresInSec ? new Date(Date.now() + parsed.expiresInSec * 1000) : null;
+        const newExpiresAt = parsed.expiresInSec
+          ? new Date(Date.now() + parsed.expiresInSec * 1000)
+          : null;
 
         // ── Persist the refreshed tokens ─────────────────────────────────────
         await withSystemDb((tx) =>

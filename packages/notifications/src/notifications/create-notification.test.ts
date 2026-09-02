@@ -8,14 +8,20 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       values: (_v: unknown) => ({
         returning: () =>
           Promise.resolve([
-            { id: "uuid-1", publicId: "ntf_abc", createdAt: new Date("2026-01-01") },
+            {
+              id: "uuid-1",
+              publicId: "ntf_abc",
+              createdAt: new Date("2026-01-01"),
+            },
           ]),
       }),
     }),
   };
   return {
     ...real,
-    withSystemDb: vi.fn(async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx)),
+    withSystemDb: vi.fn(async (fn: (tx: typeof mockTx) => Promise<unknown>) =>
+      fn(mockTx),
+    ),
   };
 });
 

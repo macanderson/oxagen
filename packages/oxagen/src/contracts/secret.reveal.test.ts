@@ -20,7 +20,11 @@ describe("secret.reveal contract", () => {
   });
   it("accepts a valid output", () => {
     expect(() =>
-      secretReveal.output.parse({ key: "FOO", value: "bar", source: "override" }),
+      secretReveal.output.parse({
+        key: "FOO",
+        value: "bar",
+        source: "override",
+      }),
     ).not.toThrow();
     expect(() =>
       secretReveal.output.parse({ key: "FOO", value: null, source: "unset" }),

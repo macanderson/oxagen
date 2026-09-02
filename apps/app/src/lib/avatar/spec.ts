@@ -37,7 +37,9 @@ const HEX_INPUT_RE = /^#[0-9a-fA-F]{6}$/;
 const MODES: readonly AvatarMode[] = ["full", "mono-light", "mono-dark"];
 
 function isMode(value: unknown): value is AvatarMode {
-  return typeof value === "string" && (MODES as readonly string[]).includes(value);
+  return (
+    typeof value === "string" && (MODES as readonly string[]).includes(value)
+  );
 }
 
 /**
@@ -100,7 +102,12 @@ export function parseAvatarValue(value: string | null | undefined): AvatarSpec {
   if (value.startsWith(DESIGNED_PREFIX)) {
     const payload = parseDesignedPayload(value.slice(DESIGNED_PREFIX.length));
     if (!payload) return { kind: "none" };
-    return { kind: "designed", emoji: payload.emoji, bg: payload.bg, mode: payload.mode };
+    return {
+      kind: "designed",
+      emoji: payload.emoji,
+      bg: payload.bg,
+      mode: payload.mode,
+    };
   }
 
   if (isHttpsUrl(value)) return { kind: "image", url: value };
@@ -109,7 +116,9 @@ export function parseAvatarValue(value: string | null | undefined): AvatarSpec {
 }
 
 /** True iff `value` is a well-formed `avatar:v1:` designed-avatar string. */
-export function isDesignedAvatarValue(value: string | null | undefined): boolean {
+export function isDesignedAvatarValue(
+  value: string | null | undefined,
+): boolean {
   return parseAvatarValue(value).kind === "designed";
 }
 
@@ -127,15 +136,23 @@ export interface SerializeDesignedAvatarInput {
  * avatar maker's Save button) should validate their own form fields before
  * calling this so the throw path is unreachable in normal use.
  */
-export function serializeDesignedAvatar(input: SerializeDesignedAvatarInput): string {
+export function serializeDesignedAvatar(
+  input: SerializeDesignedAvatarInput,
+): string {
   if (!isValidEmoji(input.emoji)) {
-    throw new Error("Invalid avatar emoji: must be a non-empty string of at most 16 UTF-16 code units");
+    throw new Error(
+      "Invalid avatar emoji: must be a non-empty string of at most 16 UTF-16 code units",
+    );
   }
   if (typeof input.bg !== "string" || !HEX_INPUT_RE.test(input.bg)) {
-    throw new Error(`Invalid avatar background color: expected #rrggbb hex, got "${input.bg}"`);
+    throw new Error(
+      `Invalid avatar background color: expected #rrggbb hex, got "${input.bg}"`,
+    );
   }
   if (!isMode(input.mode)) {
-    throw new Error(`Invalid avatar mode: expected one of ${MODES.join(", ")}, got "${String(input.mode)}"`);
+    throw new Error(
+      `Invalid avatar mode: expected one of ${MODES.join(", ")}, got "${String(input.mode)}"`,
+    );
   }
 
   const bg = input.bg.toLowerCase();

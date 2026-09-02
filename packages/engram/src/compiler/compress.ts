@@ -28,7 +28,10 @@ export function compressRecord(
   score: number,
   modelId = "estimate",
 ): CompressedItem {
-  const summary = extractSummary(record.kind, record.body as Record<string, unknown>);
+  const summary = extractSummary(
+    record.kind,
+    record.body as Record<string, unknown>,
+  );
   // Real tokenizer count so the packer's budget math is exact (a chars/4
   // estimate under-counts token-dense code summaries). Defaults to the
   // character estimator when no model id is supplied.
@@ -54,10 +57,15 @@ function extractSummary(kind: string, body: Record<string, unknown>): string {
       const event = (body.event as string) ?? "event";
       const outcome = body.outcome ? ` (${body.outcome})` : "";
       const payload = body.payload;
-      const detail = typeof payload === "string"
-        ? payload.slice(0, MAX_LEN - event.length - 20)
-        : "";
-      return `[episodic] ${event}${outcome}${detail ? ": " + detail : ""}`.slice(0, MAX_LEN);
+      // Clamp the budget to >= 0: a negative end index makes String.slice count
+      // from the end (keeping almost the whole payload) rather than truncating.
+      const detailBudget = Math.max(0, MAX_LEN - event.length - 20);
+      const detail =
+        typeof payload === "string" ? payload.slice(0, detailBudget) : "";
+      return `[episodic] ${event}${outcome}${detail ? ": " + detail : ""}`.slice(
+        0,
+        MAX_LEN,
+      );
     }
     case "semantic": {
       const fact = (body.fact as string) ?? "";

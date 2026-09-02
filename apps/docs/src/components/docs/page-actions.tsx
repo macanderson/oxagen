@@ -82,7 +82,10 @@ export function PageActions({ markdownUrl, fileStem }: PageActionsProps) {
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-      URL.revokeObjectURL(url);
+      // Revoking in the same tick can cancel the download before the browser
+      // has read the blob (Firefox in particular). One turn of the event loop
+      // is enough, and the URL is still released either way.
+      setTimeout(() => URL.revokeObjectURL(url), 0);
     } catch {
       setCopyState("error");
       setTimeout(() => setCopyState("idle"), 2000);

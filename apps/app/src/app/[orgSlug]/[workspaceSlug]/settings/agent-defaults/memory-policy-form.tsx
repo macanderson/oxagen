@@ -4,7 +4,10 @@ import { useState, useTransition } from "react";
 import { Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { saveMemoryPolicyAction, type SaveMemoryPolicyResult } from "./memory-policy-actions";
+import {
+  saveMemoryPolicyAction,
+  type SaveMemoryPolicyResult,
+} from "./memory-policy-actions";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -35,9 +38,15 @@ export function MemoryPolicyForm({
 }: Props) {
   const [halfLifeLow, setHalfLifeLow] = useState(initialHalfLifeLow);
   const [halfLifeHigh, setHalfLifeHigh] = useState(initialHalfLifeHigh);
-  const [recallThreshold, setRecallThreshold] = useState(initialRecallThreshold);
-  const [complianceThreshold, setComplianceThreshold] = useState(initialComplianceThreshold);
-  const [defaultDecayFloor, setDefaultDecayFloor] = useState(initialDefaultDecayFloor);
+  const [recallThreshold, setRecallThreshold] = useState(
+    initialRecallThreshold,
+  );
+  const [complianceThreshold, setComplianceThreshold] = useState(
+    initialComplianceThreshold,
+  );
+  const [defaultDecayFloor, setDefaultDecayFloor] = useState(
+    initialDefaultDecayFloor,
+  );
   const [result, setResult] = useState<SaveMemoryPolicyResult | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -84,7 +93,8 @@ export function MemoryPolicyForm({
             Observation half-life (days)
           </label>
           <p className="text-xs text-muted-foreground">
-            Days until an OBSERVATION memory&rsquo;s confidence drops to 50%. Default: 30.
+            Days until an OBSERVATION memory&rsquo;s confidence drops to 50%.
+            Default: 30.
           </p>
           <Input
             id="half-life-low"
@@ -110,7 +120,8 @@ export function MemoryPolicyForm({
             Rule half-life (days)
           </label>
           <p className="text-xs text-muted-foreground">
-            Days until a RULE memory&rsquo;s confidence drops to 50%. Default: 90.
+            Days until a RULE memory&rsquo;s confidence drops to 50%. Default:
+            90.
           </p>
           <Input
             id="half-life-high"
@@ -136,8 +147,8 @@ export function MemoryPolicyForm({
             Recall confidence threshold
           </label>
           <p className="text-xs text-muted-foreground">
-            Memories below this confidence [0–1] are excluded from recall results.
-            Default: 0.1.
+            Memories below this confidence [0–1] are excluded from recall
+            results. Default: 0.1.
           </p>
           <Input
             id="recall-threshold"

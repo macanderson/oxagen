@@ -11,7 +11,11 @@ import "@oxagen/handlers/register";
 import { logger } from "@oxagen/handlers/logger";
 import { captureError } from "@oxagen/telemetry";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 import { workspace as routes } from "@/lib/routes";
 
 // ── Shared types (mirror the contract outputs; never carries plaintext) ───────
@@ -55,7 +59,10 @@ interface Scope {
 }
 
 /** Resolve org+workspace, assert org membership (IDOR guard), return scope. */
-async function resolveScope(orgSlug: string, workspaceSlug: string): Promise<Scope> {
+async function resolveScope(
+  orgSlug: string,
+  workspaceSlug: string,
+): Promise<Scope> {
   const session = await getSessionOrRedirect();
   const org = await resolveOrg(orgSlug);
   const ws = await resolveWorkspace(org.id, workspaceSlug);
@@ -85,9 +92,17 @@ async function isManager(scope: Scope): Promise<boolean> {
 }
 
 function vaultCtx(scope: Scope) {
-  // The environment.*/secret.* contracts list surfaces ["api","mcp","agent"] —
-  // not "app" — so we invoke with surface "agent" (the workspace.settings.write
-  // / memory precedent). The kernel still scopes to org+workspace from ctx.
+  // Two distinct surface fields, deliberately different values:
+  //   ctx.surface  = "app"   — the transport the call actually arrived on, and
+  //                            what metering/telemetry is tagged with.
+  //   opts.surface = "agent" — what the kernel checks against the contract's
+  //                            `surfaces` allowlist (see kernel.ts's
+  //                            surface_denied branch). The environment.*/secret.*
+  //                            contracts list ["api","mcp","agent"] and not
+  //                            "app", so "agent" is the only value that passes
+  //                            (the workspace.settings.write / memory precedent).
+  // Every invoke() below therefore passes { surface: "agent" } as its options.
+  // The kernel still scopes to org+workspace from ctx either way.
   return {
     orgId: scope.orgId,
     workspaceId: scope.workspaceId,
@@ -142,12 +157,15 @@ export async function readEnvironmentsAction(args: {
   workspaceSlug: string;
 }): Promise<EnvironmentSummary[]> {
   const scope = await resolveScope(args.orgSlug, args.workspaceSlug);
-  return runInTenantScope({ orgId: scope.orgId, workspaceId: scope.workspaceId }, async () => {
-    const out = (await invoke("list_environments", {}, vaultCtx(scope), {
-      surface: "agent",
-    })) as { environments: EnvironmentSummary[] };
-    return out.environments;
-  });
+  return runInTenantScope(
+    { orgId: scope.orgId, workspaceId: scope.workspaceId },
+    async () => {
+      const out = (await invoke("list_environments", {}, vaultCtx(scope), {
+        surface: "agent",
+      })) as { environments: EnvironmentSummary[] };
+      return out.environments;
+    },
+  );
 }
 
 export async function readSecretKeysAction(args: {
@@ -155,12 +173,15 @@ export async function readSecretKeysAction(args: {
   workspaceSlug: string;
 }): Promise<SecretKeySummary[]> {
   const scope = await resolveScope(args.orgSlug, args.workspaceSlug);
-  return runInTenantScope({ orgId: scope.orgId, workspaceId: scope.workspaceId }, async () => {
-    const out = (await invoke("list_secret_keys", {}, vaultCtx(scope), {
-      surface: "agent",
-    })) as { keys: SecretKeySummary[] };
-    return out.keys;
-  });
+  return runInTenantScope(
+    { orgId: scope.orgId, workspaceId: scope.workspaceId },
+    async () => {
+      const out = (await invoke("list_secret_keys", {}, vaultCtx(scope), {
+        surface: "agent",
+      })) as { keys: SecretKeySummary[] };
+      return out.keys;
+    },
+  );
 }
 
 // ── Mutations (owner/admin) ───────────────────────────────────────────────────
@@ -170,12 +191,18 @@ async function asManager<T>(
   fn: (scope: Scope) => Promise<ActionResult<T>>,
 ): Promise<ActionResult<T>> {
   const scope = await resolveScope(args.orgSlug, args.workspaceSlug);
-  return runInTenantScope({ orgId: scope.orgId, workspaceId: scope.workspaceId }, async () => {
-    if (!(await isManager(scope))) {
-      return { ok: false, error: "Only workspace owners or admins can manage the vault." };
-    }
-    return fn(scope);
-  });
+  return runInTenantScope(
+    { orgId: scope.orgId, workspaceId: scope.workspaceId },
+    async () => {
+      if (!(await isManager(scope))) {
+        return {
+          ok: false,
+          error: "Only workspace owners or admins can manage the vault.",
+        };
+      }
+      return fn(scope);
+    },
+  );
 }
 
 function revalidate(args: { orgSlug: string; workspaceSlug: string }): void {
@@ -198,14 +225,24 @@ export async function importEnvAction(args: {
     try {
       const out = (await invoke(
         "import_env_secrets",
-        { text: args.text, environmentId: args.environmentId ?? null, commit: args.commit },
+        {
+          text: args.text,
+          environmentId: args.environmentId ?? null,
+          commit: args.commit,
+        },
         vaultCtx(scope),
         { surface: "agent" },
       )) as { rows: ImportPreviewRow[]; committed: boolean };
       if (out.committed) revalidate(args);
       return { ok: true, rows: out.rows, committed: out.committed };
     } catch (err) {
-      logVaultFailure("importEnvAction", err, scope, { environmentId: args.environmentId ?? null, commit: args.commit }, true);
+      logVaultFailure(
+        "importEnvAction",
+        err,
+        scope,
+        { environmentId: args.environmentId ?? null, commit: args.commit },
+        true,
+      );
       return { ok: false, error: errorMessage(err, "Failed to import .env") };
     }
   });
@@ -235,7 +272,13 @@ export async function upsertKeyAction(args: {
       revalidate(args);
       return { ok: true, id: out.id };
     } catch (err) {
-      logVaultFailure("upsertKeyAction", err, scope, { key: args.key, sensitive: args.sensitive }, true);
+      logVaultFailure(
+        "upsertKeyAction",
+        err,
+        scope,
+        { key: args.key, sensitive: args.sensitive },
+        true,
+      );
       return { ok: false, error: errorMessage(err, "Failed to save key") };
     }
   });
@@ -252,14 +295,24 @@ export async function setValueAction(args: {
     try {
       await invoke(
         "set_secret_value",
-        { keyId: args.keyId, environmentId: args.environmentId, value: args.value },
+        {
+          keyId: args.keyId,
+          environmentId: args.environmentId,
+          value: args.value,
+        },
         vaultCtx(scope),
         { surface: "agent" },
       );
       revalidate(args);
       return { ok: true };
     } catch (err) {
-      logVaultFailure("setValueAction", err, scope, { keyId: args.keyId, environmentId: args.environmentId }, true);
+      logVaultFailure(
+        "setValueAction",
+        err,
+        scope,
+        { keyId: args.keyId, environmentId: args.environmentId },
+        true,
+      );
       return { ok: false, error: errorMessage(err, "Failed to set value") };
     }
   });
@@ -282,8 +335,17 @@ export async function unsetValueAction(args: {
       revalidate(args);
       return { ok: true };
     } catch (err) {
-      logVaultFailure("unsetValueAction", err, scope, { keyId: args.keyId, environmentId: args.environmentId }, true);
-      return { ok: false, error: errorMessage(err, "Failed to remove override") };
+      logVaultFailure(
+        "unsetValueAction",
+        err,
+        scope,
+        { keyId: args.keyId, environmentId: args.environmentId },
+        true,
+      );
+      return {
+        ok: false,
+        error: errorMessage(err, "Failed to remove override"),
+      };
     }
   });
 }
@@ -295,13 +357,24 @@ export async function deleteKeyAction(args: {
 }): Promise<ActionResult> {
   return asManager(args, async (scope) => {
     try {
-      await invoke("delete_secret_key", { keyId: args.keyId }, vaultCtx(scope), {
-        surface: "agent",
-      });
+      await invoke(
+        "delete_secret_key",
+        { keyId: args.keyId },
+        vaultCtx(scope),
+        {
+          surface: "agent",
+        },
+      );
       revalidate(args);
       return { ok: true };
     } catch (err) {
-      logVaultFailure("deleteKeyAction", err, scope, { keyId: args.keyId }, true);
+      logVaultFailure(
+        "deleteKeyAction",
+        err,
+        scope,
+        { keyId: args.keyId },
+        true,
+      );
       return { ok: false, error: errorMessage(err, "Failed to delete key") };
     }
   });
@@ -324,8 +397,17 @@ export async function createEnvironmentAction(args: {
       revalidate(args);
       return { ok: true, environment: out.environment };
     } catch (err) {
-      logVaultFailure("createEnvironmentAction", err, scope, { slug: args.slug }, false);
-      return { ok: false, error: errorMessage(err, "Failed to create environment") };
+      logVaultFailure(
+        "createEnvironmentAction",
+        err,
+        scope,
+        { slug: args.slug },
+        false,
+      );
+      return {
+        ok: false,
+        error: errorMessage(err, "Failed to create environment"),
+      };
     }
   });
 }
@@ -346,8 +428,17 @@ export async function setDefaultEnvironmentAction(args: {
       revalidate(args);
       return { ok: true, environment: out.environment };
     } catch (err) {
-      logVaultFailure("setDefaultEnvironmentAction", err, scope, { environmentId: args.environmentId }, false);
-      return { ok: false, error: errorMessage(err, "Failed to set default environment") };
+      logVaultFailure(
+        "setDefaultEnvironmentAction",
+        err,
+        scope,
+        { environmentId: args.environmentId },
+        false,
+      );
+      return {
+        ok: false,
+        error: errorMessage(err, "Failed to set default environment"),
+      };
     }
   });
 }

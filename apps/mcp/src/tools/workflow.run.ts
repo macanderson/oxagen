@@ -21,7 +21,9 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function workflowRunTool(args: InferSchema<typeof schema>) {
+export default async function workflowRunTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   const output = await invoke(workflowRun.name, args, ctx, { surface: "mcp" });
   return workflowRun.output.parse(output);

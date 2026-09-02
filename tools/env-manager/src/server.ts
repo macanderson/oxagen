@@ -28,26 +28,49 @@ app.get("/", (c) => c.html(HTML));
 app.get("/secrets", (c) => c.html(SECRETS_HTML));
 
 // List every secret row plus the workspace apps/packages for the usage dropdown.
+//
+// This is the one endpoint that hands plaintext secret values to the browser —
+// that is the whole point of the spreadsheet — which is why the server binds to
+// 127.0.0.1 only. openDb() creates secrets.db when it is missing, so an empty
+// list means "never pulled" and only a genuinely broken file reaches the catch.
 app.get("/api/secrets", (c) => {
   try {
     const db = openDb();
-    return c.json({ secrets: listSecrets(db), workspace: listWorkspace(REPO_ROOT) });
+    return c.json({
+      secrets: listSecrets(db),
+      workspace: listWorkspace(REPO_ROOT),
+    });
   } catch (e) {
     return c.json(
-      { error: `secrets.db not available — run \`pnpm env:secrets:pull\` first (${(e as Error).message})` },
+      {
+        error: `could not open secrets.db — run \`pnpm env:secrets:pull\` to rebuild it (${(e as Error).message})`,
+      },
       400,
     );
   }
 });
 
 // Inline edit one column of one secret; the puller won't clobber it afterward.
-const EDITABLE: ReadonlySet<EditableField> = new Set<EditableField>(["value", "description", "vendor_url", "usage"]);
+const EDITABLE: ReadonlySet<EditableField> = new Set<EditableField>([
+  "value",
+  "description",
+  "vendor_url",
+  "usage",
+]);
 app.patch("/api/secrets/:key", async (c) => {
   const key = c.req.param("key");
-  const body = (await c.req.json().catch(() => ({}))) as { field?: string; value?: string | string[] };
+  const body = (await c.req.json().catch(() => ({}))) as {
+    field?: string;
+    value?: string | string[];
+  };
   const field = body.field as EditableField | undefined;
-  if (!field || !EDITABLE.has(field)) return c.json({ error: "field must be value|description|vendor_url|usage" }, 400);
-  if (body.value === undefined) return c.json({ error: "value is required" }, 400);
+  if (!field || !EDITABLE.has(field))
+    return c.json(
+      { error: "field must be value|description|vendor_url|usage" },
+      400,
+    );
+  if (body.value === undefined)
+    return c.json({ error: "value is required" }, 400);
   try {
     const db = openDb();
     const row = editSecret(db, key, field, body.value);
@@ -99,7 +122,8 @@ app.post("/api/deploy", async (c) => {
     services?: ServiceName[];
   };
   const env = body.env;
-  if (!env || !ENV_NAMES.includes(env)) return c.json({ error: "bad or missing env" }, 400);
+  if (!env || !ENV_NAMES.includes(env))
+    return c.json({ error: "bad or missing env" }, 400);
   const onlyKeys = body.keys?.length ? new Set(body.keys) : null;
   const onlyServices = body.services?.length ? new Set(body.services) : null;
 
@@ -133,22 +157,53 @@ app.post("/api/deploy", async (c) => {
     for (const svc of entry.services) {
       if (onlyServices && !onlyServices.has(svc)) continue;
       if (manual) {
-        results.push({ key: entry.key, env, service: svc, status: "manual", detail: "set manually via /api/set or the paste UI" });
+        results.push({
+          key: entry.key,
+          env,
+          service: svc,
+          status: "manual",
+          detail: "set manually via /api/set or the paste UI",
+        });
         continue;
       }
       if (error) {
-        results.push({ key: entry.key, env, service: svc, status: "error", detail: error });
+        results.push({
+          key: entry.key,
+          env,
+          service: svc,
+          status: "error",
+          detail: error,
+        });
         continue;
       }
       if (!value) {
-        results.push({ key: entry.key, env, service: svc, status: "skipped", detail: "no value" });
+        results.push({
+          key: entry.key,
+          env,
+          service: svc,
+          status: "skipped",
+          detail: "no value",
+        });
         continue;
       }
       try {
-        await upsertEnv(cfg, cfg.projects[svc], entry.key, value, env, entry.secret);
+        await upsertEnv(
+          cfg,
+          cfg.projects[svc],
+          entry.key,
+          value,
+          env,
+          entry.secret,
+        );
         results.push({ key: entry.key, env, service: svc, status: "ok" });
       } catch (e) {
-        results.push({ key: entry.key, env, service: svc, status: "error", detail: (e as Error).message.slice(0, 140) });
+        results.push({
+          key: entry.key,
+          env,
+          service: svc,
+          status: "error",
+          detail: (e as Error).message.slice(0, 140),
+        });
       }
     }
   }
@@ -171,8 +226,10 @@ app.post("/api/set", async (c) => {
   if (!key) return c.json({ error: "key is required" }, 400);
   const meta = ENV_REGISTRY[key];
   if (!meta) return c.json({ error: `unknown key: ${key}` }, 400);
-  if (!env || !ENV_NAMES.includes(env)) return c.json({ error: "bad or missing env" }, 400);
-  if (!value || value.trim().length === 0) return c.json({ error: "value is required" }, 400);
+  if (!env || !ENV_NAMES.includes(env))
+    return c.json({ error: "bad or missing env" }, 400);
+  if (!value || value.trim().length === 0)
+    return c.json({ error: "value is required" }, 400);
 
   const targetServices = body.services?.length
     ? meta.services.filter((s) => (body.services as ServiceName[]).includes(s))
@@ -184,7 +241,13 @@ app.post("/api/set", async (c) => {
       await upsertEnv(cfg, cfg.projects[svc], key, value, env, meta.secret);
       results.push({ key, env, service: svc, status: "ok" });
     } catch (e) {
-      results.push({ key, env, service: svc, status: "error", detail: (e as Error).message.slice(0, 140) });
+      results.push({
+        key,
+        env,
+        service: svc,
+        status: "error",
+        detail: (e as Error).message.slice(0, 140),
+      });
     }
   }
   // value is intentionally not included in the response
@@ -196,10 +259,14 @@ app.post("/api/set", async (c) => {
 app.get("/api/gaps", async (c) => {
   if (!cfg.vercelToken) return c.json({ error: "VERCEL_TOKEN not set" }, 400);
   const env = c.req.query("env") as EnvName | undefined;
-  if (!env || !ENV_NAMES.includes(env)) return c.json({ error: "bad or missing env query param" }, 400);
+  if (!env || !ENV_NAMES.includes(env))
+    return c.json({ error: "bad or missing env query param" }, 400);
 
   // Fetch live state for all services in parallel.
-  const liveState: Record<ServiceName, Set<string>> = {} as Record<ServiceName, Set<string>>;
+  const liveState: Record<ServiceName, Set<string>> = {} as Record<
+    ServiceName,
+    Set<string>
+  >;
   const allRegistryKeys = new Set(Object.keys(ENV_REGISTRY));
 
   await Promise.all(
@@ -235,7 +302,6 @@ app.get("/api/gaps", async (c) => {
 });
 
 serve({ fetch: app.fetch, hostname: "127.0.0.1", port: cfg.port }, (info) => {
-   
   console.log(
     `\n  env-manager → http://127.0.0.1:${info.port}` +
       `\n  vercel token: ${cfg.vercelToken ? "set" : "MISSING (set VERCEL_TOKEN in .env.local)"}\n`,

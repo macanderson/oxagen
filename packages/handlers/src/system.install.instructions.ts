@@ -71,12 +71,18 @@ function stepsForCursor(_wsSlug: string | undefined): InstallStep[] {
 
 function stepsForClaudeDesktop(_wsSlug: string | undefined): InstallStep[] {
   const mcpUrl = `${PROD_MCP_URL}/mcp`;
+  // The entry carries a `headers` block with a placeholder bearer token: the
+  // MCP server is API-key scoped, so a snippet without somewhere to put the key
+  // is a config the user can only ever 401 with.
   const configEntry = JSON.stringify(
     {
       mcpServers: {
         oxagen: {
           url: mcpUrl,
           transport: "http",
+          headers: {
+            Authorization: "Bearer <your-api-key>",
+          },
         },
       },
     },
@@ -90,17 +96,17 @@ function stepsForClaudeDesktop(_wsSlug: string | undefined): InstallStep[] {
     },
     {
       label: "Open your Claude Desktop config file",
-      command: "open ~/Library/Application\\ Support/Claude/claude_desktop_config.json",
+      command:
+        "open ~/Library/Application\\ Support/Claude/claude_desktop_config.json",
     },
     {
-      label: "Add the Oxagen server entry (merge into existing config)",
+      label:
+        "Add the Oxagen server entry (merge into existing config) and replace <your-api-key> with the key you just generated",
       command: configEntry,
     },
     {
-      label: "Add your API key as the Authorization header value in the config",
-    },
-    {
-      label: "Restart Claude Desktop — Oxagen tools are now listed in the agent panel",
+      label:
+        "Restart Claude Desktop — Oxagen tools are now listed in the agent panel",
     },
   ];
 }
@@ -132,12 +138,20 @@ function stepsForCodex(_wsSlug: string | undefined): InstallStep[] {
 
 function stepsForVscode(_wsSlug: string | undefined): InstallStep[] {
   const mcpUrl = `${PROD_MCP_URL}/mcp`;
+  // VS Code reads MCP servers from a top-level `mcp` object with a `servers`
+  // map — not a flat "mcp.servers" key. The entry carries a `headers` block
+  // with a placeholder bearer token so the key has somewhere to go.
   const settingsEntry = JSON.stringify(
     {
-      "mcp.servers": {
-        oxagen: {
-          url: mcpUrl,
-          transport: "http",
+      mcp: {
+        servers: {
+          oxagen: {
+            url: mcpUrl,
+            type: "http",
+            headers: {
+              Authorization: "Bearer <your-api-key>",
+            },
+          },
         },
       },
     },
@@ -146,27 +160,25 @@ function stepsForVscode(_wsSlug: string | undefined): InstallStep[] {
   );
   return [
     {
-      label: "Install the MCP extension for VS Code (if not already present)",
-      command: "code --install-extension anthropic.claude-code",
-    },
-    {
       label: "Generate an API key",
       command: `${PROD_APP_URL}/settings/api-keys`,
     },
     {
-      label: "Add the Oxagen server to your VS Code settings.json",
+      label:
+        "Add the Oxagen server to your VS Code settings.json and replace <your-api-key> with the key you just generated",
       command: settingsEntry,
     },
     {
-      label: "Add your API key under the Authorization header in the settings entry",
-    },
-    {
-      label: "Reload the VS Code window — Oxagen tools are available in the Copilot/MCP panel",
+      label:
+        "Reload the VS Code window — Oxagen tools are available in the Copilot/MCP panel",
     },
   ];
 }
 
-const STEP_BUILDERS: Record<InstallClient, (ws: string | undefined) => InstallStep[]> = {
+const STEP_BUILDERS: Record<
+  InstallClient,
+  (ws: string | undefined) => InstallStep[]
+> = {
   "claude-code": stepsForClaudeCode,
   cursor: stepsForCursor,
   "claude-desktop": stepsForClaudeDesktop,

@@ -11,7 +11,13 @@
  *   - save error path: shows the returned error message
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, fireEvent, act, waitFor, cleanup } from "@testing-library/react";
+import {
+  render,
+  fireEvent,
+  act,
+  waitFor,
+  cleanup,
+} from "@testing-library/react";
 import { AuthAlertsPanel } from "./auth-alerts-panel";
 
 afterEach(() => cleanup());
@@ -38,10 +44,18 @@ describe("AuthAlertsPanel", () => {
         canEdit={true}
       />,
     );
-    expect((getByTestId("alert-role-owner") as HTMLInputElement).checked).toBe(true);
-    expect((getByTestId("alert-role-admin") as HTMLInputElement).checked).toBe(true);
-    expect((getByTestId("alert-role-compliance") as HTMLInputElement).checked).toBe(false);
-    expect((getByTestId("alert-role-billing") as HTMLInputElement).checked).toBe(false);
+    expect((getByTestId("alert-role-owner") as HTMLInputElement).checked).toBe(
+      true,
+    );
+    expect((getByTestId("alert-role-admin") as HTMLInputElement).checked).toBe(
+      true,
+    );
+    expect(
+      (getByTestId("alert-role-compliance") as HTMLInputElement).checked,
+    ).toBe(false);
+    expect(
+      (getByTestId("alert-role-billing") as HTMLInputElement).checked,
+    ).toBe(false);
   });
 
   it("notes the platform default when isDefault=true", () => {
@@ -67,13 +81,17 @@ describe("AuthAlertsPanel", () => {
         canEdit={false}
       />,
     );
-    expect(getByText(/Only org owners and admins can change this/)).toBeDefined();
+    expect(
+      getByText(/Only org owners and admins can change this/),
+    ).toBeDefined();
     // jsdom does not reliably compute the descendant <input>'s own .disabled
     // property from a disabled ancestor <fieldset> (unlike a real browser),
     // so assert on the fieldset itself — the actual element the component sets.
     const fieldset = getByTestId("alert-role-owner").closest("fieldset");
     expect(fieldset?.disabled).toBe(true);
-    expect((getByTestId("auth-alerts-save") as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (getByTestId("auth-alerts-save") as HTMLButtonElement).disabled,
+    ).toBe(true);
     expect(queryByTestId("auth-alerts-save")).not.toBeNull();
   });
 
@@ -110,7 +128,9 @@ describe("AuthAlertsPanel", () => {
       fireEvent.click(owner);
     });
     expect(owner.checked).toBe(false);
-    expect((getByTestId("auth-alerts-save") as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (getByTestId("auth-alerts-save") as HTMLButtonElement).disabled,
+    ).toBe(true);
     expect(getByText("Select at least one role.")).toBeDefined();
   });
 
@@ -143,7 +163,10 @@ describe("AuthAlertsPanel", () => {
   });
 
   it("shows the returned error message on save failure", async () => {
-    mockSaveAction.mockResolvedValue({ ok: false, error: "Saving the alert setting failed. Try again." });
+    mockSaveAction.mockResolvedValue({
+      ok: false,
+      error: "Saving the alert setting failed. Try again.",
+    });
     const { getByTestId, getByText } = render(
       <AuthAlertsPanel
         orgSlug="acme"
@@ -157,7 +180,9 @@ describe("AuthAlertsPanel", () => {
       fireEvent.click(getByTestId("auth-alerts-save"));
     });
     await waitFor(() => {
-      expect(getByText("Saving the alert setting failed. Try again.")).toBeDefined();
+      expect(
+        getByText("Saving the alert setting failed. Try again."),
+      ).toBeDefined();
     });
   });
 });

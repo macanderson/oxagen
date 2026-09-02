@@ -101,7 +101,12 @@ export async function ingestImageFromUrl(
     for (;;) {
       res = await fetchImpl(currentUrl, { redirect: "manual" });
       const status = res.status;
-      const isRedirect = status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
+      const isRedirect =
+        status === 301 ||
+        status === 302 ||
+        status === 303 ||
+        status === 307 ||
+        status === 308;
       if (!isRedirect) break;
       if (hops >= MAX_REDIRECTS) return null;
       const location = res.headers.get("location");
@@ -129,7 +134,13 @@ export async function ingestImageFromUrl(
     ?.trim()
     .toLowerCase();
   if (!contentType) return null;
-  const ext = ASSET_ALLOWED_TYPES[kind][contentType];
+  // `Object.hasOwn` guard, not a bare index: the remote host controls this
+  // header, and inherited Object.prototype keys ("constructor", "toString",
+  // "__proto__") resolve to truthy values that would bypass the allowlist.
+  const allowed = ASSET_ALLOWED_TYPES[kind];
+  const ext = Object.hasOwn(allowed, contentType)
+    ? allowed[contentType]
+    : undefined;
   if (!ext) return null;
 
   let body: ArrayBuffer;
@@ -138,7 +149,8 @@ export async function ingestImageFromUrl(
   } catch {
     return null;
   }
-  if (body.byteLength === 0 || body.byteLength > ASSET_LIMITS[kind]) return null;
+  if (body.byteLength === 0 || body.byteLength > ASSET_LIMITS[kind])
+    return null;
 
   const key = deriveAssetKey(kind, ownerId, ext);
   try {

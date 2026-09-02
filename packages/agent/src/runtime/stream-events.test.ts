@@ -31,7 +31,12 @@ function summarize(e: AgentStreamEvent): string {
 describe("AgentStreamEvent variants", () => {
   it("narrows every variant through the discriminated union", () => {
     const events: AgentStreamEvent[] = [
-      { type: "tool-call-start", callId: "c1", capability: "execute_code", input: {} },
+      {
+        type: "tool-call-start",
+        callId: "c1",
+        capability: "execute_code",
+        input: {},
+      },
       { type: "tool-call-output", callId: "c1", chunk: "hello" },
       {
         type: "tool-call-end",
@@ -57,7 +62,12 @@ describe("AgentStreamEvent variants", () => {
         childMessageIds: ["c1", "c2"],
       },
       { type: "subagent-aggregated", fanoutId: "f1", status: "completed" },
-      { type: "background-task-started", taskId: "t1", kind: "scan", inngestRunId: "run_1" },
+      {
+        type: "background-task-started",
+        taskId: "t1",
+        kind: "scan",
+        inngestRunId: "run_1",
+      },
     ];
     const out = events.map(summarize);
     expect(out).toHaveLength(10);

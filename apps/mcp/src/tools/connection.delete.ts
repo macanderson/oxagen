@@ -9,10 +9,16 @@ export const schema = { ...connectionDelete.input.shape };
 export const metadata: ToolMetadata = {
   name: connectionDelete.name,
   description: connectionDelete.description,
-  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+  },
 };
 
-export default async function connectionDeleteTool(args: InferSchema<typeof schema>) {
+export default async function connectionDeleteTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   return invoke(connectionDelete.name, args, ctx, { surface: "mcp" });
 }

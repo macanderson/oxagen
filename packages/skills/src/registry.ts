@@ -2,8 +2,18 @@ import { scanSkillsDir } from "./filesystem";
 import type { Skill, SkillDbAdapter } from "./types";
 
 export interface SkillRegistry {
+  /**
+   * Every merged skill, or those whose slug, name, or description contains
+   * `filter` (case-insensitive substring, not fuzzy).
+   */
   list(filter?: string): Promise<Skill[]>;
+  /** One skill by exact slug, or `undefined` if no layer defines it. */
   get(slug: string): Promise<Skill | undefined>;
+  /**
+   * Drop the cached merge. The layers are read once on first use and then held
+   * for the life of the instance, so a registry that outlives a tenant-skill
+   * edit needs this to see it.
+   */
   refresh(): Promise<void>;
 }
 
@@ -20,6 +30,14 @@ export interface CreateSkillRegistryOptions {
   dbAdapter?: SkillDbAdapter;
 }
 
+/**
+ * Build a registry over up to three layers. Construction is cheap — nothing is
+ * read until the first `list`/`get`.
+ *
+ * The instance caches whatever the layers returned, tenant skills included, so
+ * a registry built with a `dbAdapter` is scoped to exactly one tenant: never
+ * share one across tenants.
+ */
 export function createSkillRegistry(
   options: CreateSkillRegistryOptions,
 ): SkillRegistry {
@@ -45,7 +63,9 @@ export function createSkillRegistry(
   return {
     async list(filter) {
       const skills = await load();
-      if (!filter) return skills;
+      // Copy: `skills` is the live cache, and handing callers the same array on
+      // every call lets one caller's `.push`/`.sort` reshape every later lookup.
+      if (!filter) return [...skills];
       const needle = filter.toLowerCase();
       return skills.filter(
         (s) =>

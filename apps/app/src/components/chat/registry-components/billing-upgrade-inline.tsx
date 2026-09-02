@@ -16,9 +16,24 @@ export interface BillingUpgradeInlineProps {
 type FormState = "idle" | "submitting" | "success" | "error";
 
 const PLANS = [
-  { slug: "build", label: "Build", price: "$20/mo", description: "For individuals and small teams" },
-  { slug: "scale", label: "Scale", price: "$99/mo", description: "For growing teams" },
-  { slug: "enterprise", label: "Enterprise", price: "$500/mo", description: "For large organizations with ACLs" },
+  {
+    slug: "build",
+    label: "Build",
+    price: "$20/mo",
+    description: "For individuals and small teams",
+  },
+  {
+    slug: "scale",
+    label: "Scale",
+    price: "$99/mo",
+    description: "For growing teams",
+  },
+  {
+    slug: "enterprise",
+    label: "Enterprise",
+    price: "$500/mo",
+    description: "For large organizations with ACLs",
+  },
 ] as const;
 
 type PlanSlug = (typeof PLANS)[number]["slug"];
@@ -65,8 +80,13 @@ export default function BillingUpgradeInline({
         aria-live="polite"
       >
         <div className="flex items-center gap-3">
-          <CheckCircle2 className="h-5 w-5 shrink-0 text-success" aria-hidden="true" />
-          <p className="text-sm font-medium text-foreground">Redirecting to checkout…</p>
+          <CheckCircle2
+            className="h-5 w-5 shrink-0 text-success"
+            aria-hidden="true"
+          />
+          <p className="text-sm font-medium text-foreground">
+            Redirecting to checkout…
+          </p>
         </div>
       </div>
     );
@@ -76,11 +96,18 @@ export default function BillingUpgradeInline({
     <form
       onSubmit={handleSubmit}
       aria-label="Upgrade plan"
-      className={cn("rounded-2xl border border-border bg-card p-5 space-y-5 w-full max-w-sm")}
+      className={cn(
+        "rounded-2xl border border-border bg-card p-5 space-y-5 w-full max-w-sm",
+      )}
     >
       <div className="flex items-center gap-2.5">
-        <CreditCard className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="text-sm font-semibold text-foreground">Upgrade plan</span>
+        <CreditCard
+          className="h-4 w-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <span className="text-sm font-semibold text-foreground">
+          Upgrade plan
+        </span>
       </div>
 
       <div className="space-y-2">
@@ -100,10 +127,16 @@ export default function BillingUpgradeInline({
             aria-pressed={selected === plan.slug}
           >
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">{plan.label}</span>
-              <span className="text-xs font-medium text-muted-foreground">{plan.price}</span>
+              <span className="text-sm font-medium text-foreground">
+                {plan.label}
+              </span>
+              <span className="text-xs font-medium text-muted-foreground">
+                {plan.price}
+              </span>
             </div>
-            <p className="mt-0.5 text-xs text-muted-foreground">{plan.description}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {plan.description}
+            </p>
           </button>
         ))}
       </div>
@@ -123,7 +156,9 @@ export default function BillingUpgradeInline({
         className="w-full"
         aria-busy={isSubmitting}
       >
-        {isSubmitting ? "Starting checkout…" : (
+        {isSubmitting ? (
+          "Starting checkout…"
+        ) : (
           <span className="flex items-center gap-1.5">
             Upgrade to {PLANS.find((p) => p.slug === selected)?.label}
             <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />

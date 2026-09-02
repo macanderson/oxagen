@@ -74,7 +74,9 @@ describe("CapabilityStrip", () => {
 
 describe("looksLikeOpaqueId", () => {
   it("flags a UUID", () => {
-    expect(looksLikeOpaqueId("913d6df1-4b2a-4c3d-9e1f-abcdef123456")).toBe(true);
+    expect(looksLikeOpaqueId("913d6df1-4b2a-4c3d-9e1f-abcdef123456")).toBe(
+      true,
+    );
   });
 
   it("flags a ULID", () => {

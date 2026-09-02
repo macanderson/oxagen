@@ -76,6 +76,9 @@ export function ContextWindow() {
     return () => {
       if (raf.current) cancelAnimationFrame(raf.current);
     };
+    // `used` is deliberately read as a one-time snapshot: it is the tween's
+    // starting value, so adding it to the deps would restart the tween on every
+    // frame it produces and the number would never reach its target.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [governed]);
 

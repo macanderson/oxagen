@@ -38,7 +38,11 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
     const newPassword = String(fd.get("newPassword") ?? "");
     const confirmPassword = String(fd.get("confirmPassword") ?? "");
 
-    const result = await resetPasswordAction({ token, newPassword, confirmPassword });
+    const result = await resetPasswordAction({
+      token,
+      newPassword,
+      confirmPassword,
+    });
 
     if (result.ok) {
       setStatus("success");
@@ -67,7 +71,11 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
         <p className="text-sm text-muted-foreground">
           Reset links are single-use and expire after 1 hour.
         </p>
-        <Button render={<Link href="/forgot-password" />} size="sm" className="self-start">
+        <Button
+          render={<Link href="/forgot-password" />}
+          size="sm"
+          className="self-start"
+        >
           Request a new link
         </Button>
       </div>
@@ -132,7 +140,13 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
         </p>
       ) : null}
 
-      <Button type="submit" variant="gradient" size="lg" className="w-full" disabled={isSubmitting}>
+      <Button
+        type="submit"
+        variant="gradient"
+        size="lg"
+        className="w-full"
+        disabled={isSubmitting}
+      >
         {isSubmitting ? "Updating…" : "Set new password"}
       </Button>
     </form>

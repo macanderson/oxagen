@@ -3,12 +3,34 @@ import { z } from "zod";
 export const FieldErrorSchema = z.object({
   field: z.string(),
   message: z.string(),
-  code: z.enum(["required", "min", "max", "minItems", "maxItems", "pattern", "type", "oneOf", "unknown"]),
+  code: z.enum([
+    "required",
+    "min",
+    "max",
+    "minItems",
+    "maxItems",
+    "pattern",
+    "type",
+    "oneOf",
+    "unknown",
+  ]),
 });
 
 export const PropertyInputSchema = z.object({
   key: z.string().min(1),
-  dataType: z.enum(["string", "number", "integer", "boolean", "date", "datetime", "url", "email", "enum", "json", "array"]),
+  dataType: z.enum([
+    "string",
+    "number",
+    "integer",
+    "boolean",
+    "date",
+    "datetime",
+    "url",
+    "email",
+    "enum",
+    "json",
+    "array",
+  ]),
   required: z.boolean().default(false),
   description: z.string().optional(),
   enumValues: z.array(z.string()).optional(),

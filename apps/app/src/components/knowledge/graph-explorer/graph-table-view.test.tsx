@@ -8,7 +8,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  cleanup,
+} from "@testing-library/react";
 import { GraphTableView } from "./graph-table-view";
 import { fetchNodes } from "./api-client";
 
@@ -112,7 +118,13 @@ describe("GraphTableView — row selection", () => {
 
 describe("GraphTableView — empty state", () => {
   it("renders 'No nodes match.' when result is empty", async () => {
-    mockFetch.mockResolvedValue({ nodes: [], total: 0, hasMore: false, limit: 25, offset: 0 });
+    mockFetch.mockResolvedValue({
+      nodes: [],
+      total: 0,
+      hasMore: false,
+      limit: 25,
+      offset: 0,
+    });
     render(
       <GraphTableView
         tenant={tenant}
@@ -120,7 +132,9 @@ describe("GraphTableView — empty state", () => {
         onSelectNode={vi.fn()}
       />,
     );
-    await waitFor(() => expect(screen.getByText("No nodes match.")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("No nodes match.")).toBeInTheDocument(),
+    );
   });
 
   it("renders 'Failed to load nodes.' on error", async () => {
@@ -132,7 +146,9 @@ describe("GraphTableView — empty state", () => {
         onSelectNode={vi.fn()}
       />,
     );
-    await waitFor(() => expect(screen.getByText("Failed to load nodes.")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Failed to load nodes.")).toBeInTheDocument(),
+    );
   });
 });
 
@@ -165,7 +181,15 @@ describe("GraphTableView — pagination", () => {
 
   it("Next button is enabled when hasMore=true", async () => {
     mockFetch.mockResolvedValue({
-      nodes: [{ id: "n1", label: "Issue", displayName: "Bug #1", degree: 0, hydrated: true }],
+      nodes: [
+        {
+          id: "n1",
+          label: "Issue",
+          displayName: "Bug #1",
+          degree: 0,
+          hydrated: true,
+        },
+      ],
       total: 50,
       hasMore: true,
       limit: 25,

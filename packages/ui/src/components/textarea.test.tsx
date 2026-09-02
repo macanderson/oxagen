@@ -38,7 +38,9 @@ describe("Textarea — render", () => {
   });
 
   it("renders with placeholder", () => {
-    const { getByPlaceholderText } = render(<Textarea placeholder="Type here" />);
+    const { getByPlaceholderText } = render(
+      <Textarea placeholder="Type here" />,
+    );
     expect(getByPlaceholderText("Type here")).toBeInTheDocument();
   });
 
@@ -49,12 +51,16 @@ describe("Textarea — render", () => {
 
   it("applies size class", () => {
     const { container } = render(<Textarea size="lg" />);
-    expect(container.querySelector("textarea")?.className).toContain("min-h-[72px]");
+    expect(container.querySelector("textarea")?.className).toContain(
+      "min-h-[72px]",
+    );
   });
 
   it("merges custom className", () => {
     const { container } = render(<Textarea className="my-textarea" />);
-    expect(container.querySelector("textarea")?.className).toContain("my-textarea");
+    expect(container.querySelector("textarea")?.className).toContain(
+      "my-textarea",
+    );
   });
 
   it("accepts user input", async () => {

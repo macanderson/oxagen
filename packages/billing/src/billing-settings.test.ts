@@ -47,13 +47,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => dbMocks,
-  // Spies (not bare passthroughs) so tests can assert WHICH runner a call routed
-  // through — the dunning-sweep fix depends on getOrgBillingSettings using
-  // withSystemDb (no tenant scope) when { system: true } is passed.
-  withTenantDb: vi.fn(async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks)),
-  withSystemDb: vi.fn(async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks)),
-
+    db: () => dbMocks,
+    // Spies (not bare passthroughs) so tests can assert WHICH runner a call routed
+    // through — the dunning-sweep fix depends on getOrgBillingSettings using
+    // withSystemDb (no tenant scope) when { system: true } is passed.
+    withTenantDb: vi.fn(async (fn: (tx: typeof dbMocks) => unknown) =>
+      fn(dbMocks),
+    ),
+    withSystemDb: vi.fn(async (fn: (tx: typeof dbMocks) => unknown) =>
+      fn(dbMocks),
+    ),
   };
 });
 

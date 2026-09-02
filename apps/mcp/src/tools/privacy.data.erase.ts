@@ -7,7 +7,7 @@ import { buildContext } from "../context";
 export const schema = {
   ...privacyDataErase.input.shape,
   scope: privacyDataErase.input.shape.scope.describe(
-    "\"user\" to erase the current user's account and personal data (any authenticated user), \"org\" to erase the entire organization (Owner only).",
+    '"user" to erase the current user\'s account and personal data (any authenticated user), "org" to erase the entire organization (Owner only).',
   ),
   confirm: privacyDataErase.input.shape.confirm.describe(
     "Must be true. Explicit confirmation that you understand this action is irreversible.",
@@ -28,6 +28,8 @@ export default async function privacyDataEraseTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(privacyDataErase.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(privacyDataErase.name, args, ctx, {
+    surface: "mcp",
+  });
   return privacyDataErase.output.parse(output);
 }

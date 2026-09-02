@@ -10,8 +10,9 @@ import type { ScopeContext } from "@/lib/scope";
  *   Agent Tools  — skills, MCP servers, and capabilities agents can be
  *                  equipped with. Installs land in Workbench → Agent Tools.
  *   Integrations — data connectors that ingest external sources into the
- *                  knowledge graph. Connecting hands off to the setup wizard
- *                  under Knowledge → Repos.
+ *                  knowledge graph. Connecting opens the in-app setup wizard
+ *                  at integrations/[connectorId] (GitHub is the exception: it
+ *                  needs its own GitHub-App OAuth flow under Knowledge → Repos).
  *
  * Managing what is already installed does NOT live here — that is
  * Workbench → Agent Tools (skills / MCP servers / capabilities) and

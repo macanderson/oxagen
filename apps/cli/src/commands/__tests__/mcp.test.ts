@@ -54,7 +54,12 @@ describe("mcp command handlers", () => {
   });
 
   it("adds an http server with bearer auth and reminds about the token", () => {
-    mcpAdd("gh", { url: "https://mcp.example.com", auth: "bearer", envToken: "GH_TOKEN" }, ctx, writer);
+    mcpAdd(
+      "gh",
+      { url: "https://mcp.example.com", auth: "bearer", envToken: "GH_TOKEN" },
+      ctx,
+      writer,
+    );
     expect(text()).toContain('Added MCP server "gh" (streamable-http)');
     expect(text()).toContain("export GH_TOKEN");
   });
@@ -72,7 +77,12 @@ describe("mcp command handlers", () => {
   });
 
   it("errors on a bad transport", () => {
-    mcpAdd("x", { url: "https://e.com", transport: "carrier-pigeon" }, ctx, writer);
+    mcpAdd(
+      "x",
+      { url: "https://e.com", transport: "carrier-pigeon" },
+      ctx,
+      writer,
+    );
     expect(text()).toContain("--transport must be");
     expect(process.exitCode).toBe(1);
   });

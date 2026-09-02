@@ -88,13 +88,19 @@ export async function decryptCredentialSecrets(
 }> {
   const keyId = data.tokenKmsKeyId;
   if (!keyId) {
-    return { accessToken: null, refreshToken: null, secret: null, oauthClientSecret: null };
+    return {
+      accessToken: null,
+      refreshToken: null,
+      secret: null,
+      oauthClientSecret: null,
+    };
   }
-  const [accessToken, refreshToken, secret, oauthClientSecret] = await Promise.all([
-    dec1(data.accessTokenEnc, keyId, kms),
-    dec1(data.refreshTokenEnc, keyId, kms),
-    dec1(data.secretEnc, keyId, kms),
-    dec1(data.oauthClientSecretEnc, keyId, kms),
-  ]);
+  const [accessToken, refreshToken, secret, oauthClientSecret] =
+    await Promise.all([
+      dec1(data.accessTokenEnc, keyId, kms),
+      dec1(data.refreshTokenEnc, keyId, kms),
+      dec1(data.secretEnc, keyId, kms),
+      dec1(data.oauthClientSecretEnc, keyId, kms),
+    ]);
   return { accessToken, refreshToken, secret, oauthClientSecret };
 }

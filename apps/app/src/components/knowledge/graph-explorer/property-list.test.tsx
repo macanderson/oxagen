@@ -32,7 +32,9 @@ describe("PropertyList — typed value rendering", () => {
     render(<PropertyList properties={{ itemCount: 1000 }} />);
     expect(screen.getByText("Item count")).toBeInTheDocument();
     // formatPropertyValue uses Intl.NumberFormat
-    expect(screen.getByText(new Intl.NumberFormat().format(1000))).toBeInTheDocument();
+    expect(
+      screen.getByText(new Intl.NumberFormat().format(1000)),
+    ).toBeInTheDocument();
   });
 
   it("renders boolean true as 'Yes'", () => {
@@ -55,7 +57,9 @@ describe("PropertyList — typed value rendering", () => {
   });
 
   it("renders a URL as an <a> with target=_blank", () => {
-    render(<PropertyList properties={{ homepage: "https://example.com/page" }} />);
+    render(
+      <PropertyList properties={{ homepage: "https://example.com/page" }} />,
+    );
     const link = screen.getByRole("link", { name: "https://example.com/page" });
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute("href", "https://example.com/page");
@@ -75,7 +79,9 @@ describe("PropertyList — typed value rendering", () => {
   });
 
   it("renders a nested-object value as compact JSON, not '[object Object]'", () => {
-    render(<PropertyList properties={{ meta: { status: "open", count: 2 } }} />);
+    render(
+      <PropertyList properties={{ meta: { status: "open", count: 2 } }} />,
+    );
     expect(screen.getByText("Meta")).toBeInTheDocument();
     expect(screen.getByText('{"status":"open","count":2}')).toBeInTheDocument();
     expect(screen.queryByText(/\[object Object\]/)).not.toBeInTheDocument();
@@ -90,7 +96,12 @@ describe("PropertyList — typed value rendering", () => {
 
 describe("PropertyList — omit prop", () => {
   it("hides keys listed in omit", () => {
-    render(<PropertyList properties={{ displayName: "Alice", priority: "high" }} omit={["displayName"]} />);
+    render(
+      <PropertyList
+        properties={{ displayName: "Alice", priority: "high" }}
+        omit={["displayName"]}
+      />,
+    );
     expect(screen.queryByText("Display name")).not.toBeInTheDocument();
     expect(screen.getByText("Priority")).toBeInTheDocument();
   });
@@ -115,6 +126,8 @@ describe("PropertyList — multiple properties", () => {
     expect(screen.getByText("Bug Report")).toBeInTheDocument();
     expect(screen.getByText("Count")).toBeInTheDocument();
     expect(screen.getByText("Active")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "https://example.com/page" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "https://example.com/page" }),
+    ).toBeInTheDocument();
   });
 });

@@ -81,7 +81,10 @@ const FAKE_ROW = {
   deliveryConfig: { owner: "acme", repo: "app" },
   orgId: CTX.orgId,
   workspaceId: CTX.workspaceId,
-  encryptedPayload: { keyId: "test-key-id", ciphertext: Buffer.from("{}").toString("base64") },
+  encryptedPayload: {
+    keyId: "test-key-id",
+    ciphertext: Buffer.from("{}").toString("base64"),
+  },
 };
 
 const SAMPLE_RECORDS = [
@@ -94,7 +97,9 @@ const SAMPLE_RECORDS = [
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.selectRows.mockResolvedValue([FAKE_ROW]);
-  mocks.decrypt.mockResolvedValue(JSON.stringify({ scheme: "oauth2", _marker: "oauth2" }));
+  mocks.decrypt.mockResolvedValue(
+    JSON.stringify({ scheme: "oauth2", _marker: "oauth2" }),
+  );
   mocks.previewRecordTypes.mockResolvedValue([
     {
       sourceRecordType: "pull_request",
@@ -125,7 +130,10 @@ describe("connectionPreviewHandler — happy path", () => {
   });
 
   it("maps samples to contract output shape", async () => {
-    const result = await connectionPreviewHandler({ connectionId: "conn-public-id" }, CTX);
+    const result = await connectionPreviewHandler(
+      { connectionId: "conn-public-id" },
+      CTX,
+    );
     expect(result.recordTypes).toHaveLength(1);
     const rt = result.recordTypes[0]!;
     expect(rt.sourceRecordType).toBe("pull_request");
@@ -135,12 +143,17 @@ describe("connectionPreviewHandler — happy path", () => {
   });
 
   it("caps sampleRecords at 3", async () => {
-    const result = await connectionPreviewHandler({ connectionId: "conn-public-id" }, CTX);
+    const result = await connectionPreviewHandler(
+      { connectionId: "conn-public-id" },
+      CTX,
+    );
     expect(result.recordTypes[0]!.sampleRecords).toHaveLength(3);
   });
 
   it("handles empty deliveryConfig gracefully", async () => {
-    mocks.selectRows.mockResolvedValueOnce([{ ...FAKE_ROW, deliveryConfig: null }]);
+    mocks.selectRows.mockResolvedValueOnce([
+      { ...FAKE_ROW, deliveryConfig: null },
+    ]);
     await expect(
       connectionPreviewHandler({ connectionId: "conn-public-id" }, CTX),
     ).resolves.toBeDefined();
@@ -168,7 +181,10 @@ describe("connectionPreviewHandler — multiple record types", () => {
       },
     ]);
 
-    const result = await connectionPreviewHandler({ connectionId: "conn-public-id" }, CTX);
+    const result = await connectionPreviewHandler(
+      { connectionId: "conn-public-id" },
+      CTX,
+    );
     expect(result.recordTypes).toHaveLength(2);
     expect(result.recordTypes[1]!.sourceRecordType).toBe("issue");
     expect(result.recordTypes[1]!.sampleCount).toBe(0);
@@ -195,8 +211,13 @@ describe("connectionPreviewHandler — stored config validation", () => {
     // Validation is the gate, not a transform: the connector sees exactly what
     // the row holds, so parsing cannot quietly inject schema defaults.
     const stored = { owner: "acme", repo: "app", extra: "kept" };
-    mocks.selectRows.mockResolvedValue([{ ...FAKE_ROW, deliveryConfig: stored }]);
+    mocks.selectRows.mockResolvedValue([
+      { ...FAKE_ROW, deliveryConfig: stored },
+    ]);
     await connectionPreviewHandler({ connectionId: FAKE_ROW.id }, CTX);
-    expect(mocks.previewRecordTypes).toHaveBeenCalledWith(expect.anything(), stored);
+    expect(mocks.previewRecordTypes).toHaveBeenCalledWith(
+      expect.anything(),
+      stored,
+    );
   });
 });

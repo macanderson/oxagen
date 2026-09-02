@@ -175,7 +175,13 @@ function SelectStage({
           rejected.push(f.name);
           continue;
         }
-        const content = await f.text();
+        // Check the declared size BEFORE reading. `f.text()` pulls the whole
+        // file into a JS string, so reading first would let a single dropped
+        // multi-hundred-MB file exhaust the tab's memory before the oversized
+        // check below ever ran. An oversized file is still listed (so the row
+        // and its "must be split" warning appear, and Parse stays disabled) —
+        // it just carries no content.
+        const content = f.size > MAX_DOC_BYTES ? "" : await f.text();
         accepted.push({ filename: f.name, content, bytes: f.size });
       }
       setFiles((prev) => {
@@ -776,8 +782,6 @@ export function MemoriesBulkImport({
   const [failed, setFailed] = React.useState(0);
   const [isPending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
-  // Did any commit succeed? Used to decide whether to refresh the list on close.
-  const committedRef = React.useRef(false);
 
   function handleParse() {
     setError(null);
@@ -832,10 +836,7 @@ export function MemoriesBulkImport({
         setCommitResults(result.results);
         setImported(result.imported);
         setFailed(result.failed);
-        if (result.imported > 0) {
-          committedRef.current = true;
-          onImported();
-        }
+        if (result.imported > 0) onImported();
         setStage("result");
       } else {
         setError(result.error);

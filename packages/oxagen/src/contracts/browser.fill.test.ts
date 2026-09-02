@@ -8,7 +8,9 @@ describe("browser.fill capability", () => {
     expect(cap).toBeDefined();
     expect(cap?.domain).toBe("browser");
     expect(cap?.scoped).toBe(true);
-    expect(cap?.surfaces).toEqual(expect.arrayContaining(["api", "mcp", "agent"]));
+    expect(cap?.surfaces).toEqual(
+      expect.arrayContaining(["api", "mcp", "agent"]),
+    );
   });
 
   it("applies a default timeoutMs of 30000", () => {
@@ -34,7 +36,11 @@ describe("browser.fill capability", () => {
 
   it("rejects an empty selector", () => {
     expect(() =>
-      browserFill.input.parse({ sessionId: "sbx_abc", selector: "", value: "x" }),
+      browserFill.input.parse({
+        sessionId: "sbx_abc",
+        selector: "",
+        value: "x",
+      }),
     ).toThrow();
   });
 

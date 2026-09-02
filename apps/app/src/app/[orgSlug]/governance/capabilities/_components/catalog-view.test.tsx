@@ -41,7 +41,9 @@ vi.mock("./contract-drawer", () => ({
     ) : null,
 }));
 
-function row(over: Partial<CapabilityRegistrySummary>): CapabilityRegistrySummary {
+function row(
+  over: Partial<CapabilityRegistrySummary>,
+): CapabilityRegistrySummary {
   return {
     name: "cap_x",
     domain: "test",
@@ -63,13 +65,21 @@ function row(over: Partial<CapabilityRegistrySummary>): CapabilityRegistrySummar
 }
 
 const ROWS: CapabilityRegistrySummary[] = [
-  row({ name: "query_audit_log", domain: "audit", description: "query the spine" }),
+  row({
+    name: "query_audit_log",
+    domain: "audit",
+    description: "query the spine",
+  }),
   row({ name: "list_iam_roles", domain: "iam", layers: ["api", "mcp"] }),
 ];
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockFetchInsights.mockResolvedValue({ detail: null, usage: null, audit: null });
+  mockFetchInsights.mockResolvedValue({
+    detail: null,
+    usage: null,
+    audit: null,
+  });
 });
 
 describe("CatalogView", () => {
@@ -86,7 +96,9 @@ describe("CatalogView", () => {
     const { getByLabelText, getByTestId, queryByTestId, getByText } = render(
       <CatalogView orgSlug="acme" rows={ROWS} domains={["audit", "iam"]} />,
     );
-    fireEvent.change(getByLabelText("Search capabilities"), { target: { value: "spine" } });
+    fireEvent.change(getByLabelText("Search capabilities"), {
+      target: { value: "spine" },
+    });
     expect(getByTestId("capability-row-query_audit_log")).toBeDefined();
     expect(queryByTestId("capability-row-list_iam_roles")).toBeNull();
     expect(getByText("1 of 2 contracts")).toBeDefined();
@@ -131,7 +143,9 @@ describe("CatalogView", () => {
       expect(mockFetchInsights).toHaveBeenCalledWith("acme", "query_audit_log");
     });
     await waitFor(() => {
-      expect(getByTestId("drawer-probe").textContent).toContain("insights-loaded");
+      expect(getByTestId("drawer-probe").textContent).toContain(
+        "insights-loaded",
+      );
     });
   });
 });

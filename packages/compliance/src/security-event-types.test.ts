@@ -14,6 +14,7 @@ import {
   quotedEventTypeList,
   quotedOutcomeList,
 } from "./db-check";
+import * as barrel from "./index";
 
 describe("security event taxonomy invariants", () => {
   it("has no duplicate event types", () => {
@@ -93,23 +94,29 @@ describe("migration drift — the DB CHECK must match the taxonomy", () => {
     new URL("../../database/atlas/migrations/", import.meta.url),
   );
 
-  /** The most recent migration that redefines the event_type CHECK. */
-  function latestEventTypeMigration(): { file: string; sql: string } {
+  /** The most recent migration that redefines the named CHECK constraint. */
+  function latestMigrationDefining(constraint: string): {
+    file: string;
+    sql: string;
+  } {
     const candidates = readdirSync(MIGRATIONS_DIR)
       .filter((f) => f.endsWith(".sql"))
       .sort()
       .reverse();
     for (const file of candidates) {
       const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf8");
-      if (sql.includes("security_events_event_type_check")) {
+      if (sql.includes(constraint)) {
         return { file, sql };
       }
     }
     throw new Error(
-      "No migration defines security_events_event_type_check — the taxonomy " +
-        "has no enforcing constraint.",
+      `No migration defines ${constraint} — that column has no enforcing ` +
+        "constraint.",
     );
   }
+
+  const latestEventTypeMigration = () =>
+    latestMigrationDefining("security_events_event_type_check");
 
   it("the latest event_type migration contains every value in SECURITY_EVENT_TYPES", () => {
     const { file, sql } = latestEventTypeMigration();
@@ -126,6 +133,47 @@ describe("migration drift — the DB CHECK must match the taxonomy", () => {
       sql,
       `${file} drifted from generateEventTypeCheckClause()`,
     ).toContain(generateEventTypeCheckClause("event_type"));
+  });
+
+  it("the latest outcome migration contains every value in SECURITY_OUTCOMES", () => {
+    // Same failure mode as event_type, and previously unguarded: SECURITY_OUTCOMES
+    // is a const-union the emit path type-checks against, so adding a fifth
+    // outcome without an additive migration compiles cleanly and then dies on a
+    // constraint violation in production.
+    //
+    // Value-containment, not byte-identity: the shipped constraint is written as
+    // `outcome = ANY (ARRAY['allow'::text, ...])` (Postgres' normalised form),
+    // which is semantically equal to generateOutcomeCheckClause()'s `IN (...)`
+    // but not textually equal. Requiring byte-identity here would fail on a
+    // correct database.
+    const { file, sql } = latestMigrationDefining(
+      "security_events_outcome_check",
+    );
+    for (const outcome of SECURITY_OUTCOMES) {
+      expect(sql, `${outcome} is missing from ${file}`).toContain(
+        `'${outcome}'`,
+      );
+    }
+  });
+});
+
+describe("public entry point (./index barrel)", () => {
+  // Every external consumer imports "@oxagen/compliance", which resolves to the
+  // barrel — apps/app's audit-filter parser, @oxagen/telemetry's emit helper, and
+  // @oxagen/database's CHECK-constraint builder all do. Dropping a re-export line
+  // from index.ts would break all three, so assert the surface directly rather
+  // than only reaching the modules by their deep paths.
+  it("re-exports the whole taxonomy and generator surface", () => {
+    expect(barrel.SECURITY_EVENT_TYPES).toBe(SECURITY_EVENT_TYPES);
+    expect(barrel.SECURITY_OUTCOMES).toBe(SECURITY_OUTCOMES);
+    expect(barrel.isSecurityEventType).toBe(isSecurityEventType);
+    expect(barrel.isSecurityOutcome).toBe(isSecurityOutcome);
+    expect(barrel.quotedEventTypeList).toBe(quotedEventTypeList);
+    expect(barrel.quotedOutcomeList).toBe(quotedOutcomeList);
+    expect(barrel.generateEventTypeCheckClause).toBe(
+      generateEventTypeCheckClause,
+    );
+    expect(barrel.generateOutcomeCheckClause).toBe(generateOutcomeCheckClause);
   });
 });
 

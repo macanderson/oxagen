@@ -7,7 +7,11 @@ const apiKey: AuthCredential = { scheme: "api_key", apiKey: "lin_api_key" };
 const config = { syncDepthDays: 90 };
 
 function jsonResponse(body: unknown, ok = true, status = 200) {
-  return { ok, status, json: () => Promise.resolve(body) } as unknown as Response;
+  return {
+    ok,
+    status,
+    json: () => Promise.resolve(body),
+  } as unknown as Response;
 }
 
 async function collect(iter: AsyncIterable<RawRecord>): Promise<RawRecord[]> {
@@ -30,33 +34,47 @@ afterEach(() => {
 
 describe("linear.poll — request shape", () => {
   it("yields nothing for an unusable credential", async () => {
-    const out = await collect(linear.poll!({ scheme: "public" }, config, "issue", null));
+    const out = await collect(
+      linear.poll!({ scheme: "public" }, config, "issue", null),
+    );
     expect(out).toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("POSTs GraphQL to the Linear endpoint with a Bearer header for OAuth", async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ data: { issues: { nodes: [] } } }));
+    fetchMock.mockResolvedValue(
+      jsonResponse({ data: { issues: { nodes: [] } } }),
+    );
     await collect(linear.poll!(bearer, config, "issue", null));
     const [url, opts] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://api.linear.app/graphql");
     expect(opts.method).toBe("POST");
-    expect((opts.headers as Record<string, string>).Authorization).toBe("Bearer lin-oauth");
+    expect((opts.headers as Record<string, string>).Authorization).toBe(
+      "Bearer lin-oauth",
+    );
   });
 
   it("sends a raw Authorization header for a personal API key", async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ data: { issues: { nodes: [] } } }));
+    fetchMock.mockResolvedValue(
+      jsonResponse({ data: { issues: { nodes: [] } } }),
+    );
     await collect(linear.poll!(apiKey, config, "issue", null));
     const [, opts] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect((opts.headers as Record<string, string>).Authorization).toBe("lin_api_key");
+    expect((opts.headers as Record<string, string>).Authorization).toBe(
+      "lin_api_key",
+    );
   });
 
   it("embeds the cursor as an updatedAt gt filter", async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ data: { issues: { nodes: [] } } }));
-    await collect(linear.poll!(bearer, config, "issue", "2026-04-01T00:00:00Z"));
+    fetchMock.mockResolvedValue(
+      jsonResponse({ data: { issues: { nodes: [] } } }),
+    );
+    await collect(
+      linear.poll!(bearer, config, "issue", "2026-04-01T00:00:00Z"),
+    );
     const [, opts] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(opts.body as string) as { query: string };
-    expect(body.query).toContain("updatedAt: { gt: \"2026-04-01T00:00:00Z\" }");
+    expect(body.query).toContain('updatedAt: { gt: "2026-04-01T00:00:00Z" }');
     expect(body.query).toContain("orderBy: updatedAt");
   });
 
@@ -96,26 +114,30 @@ describe("linear.poll — record shaping", () => {
   });
 
   it("throws when GraphQL returns an errors array", async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ errors: [{ message: "unauthorized" }] }));
-    await expect(collect(linear.poll!(bearer, config, "issue", null))).rejects.toThrow(
-      /unauthorized/,
+    fetchMock.mockResolvedValue(
+      jsonResponse({ errors: [{ message: "unauthorized" }] }),
     );
+    await expect(
+      collect(linear.poll!(bearer, config, "issue", null)),
+    ).rejects.toThrow(/unauthorized/);
   });
 
   it("throws on a non-ok HTTP response", async () => {
     fetchMock.mockResolvedValue(jsonResponse({}, false, 500));
-    await expect(collect(linear.poll!(bearer, config, "issue", null))).rejects.toThrow(/500/);
+    await expect(
+      collect(linear.poll!(bearer, config, "issue", null)),
+    ).rejects.toThrow(/500/);
   });
 });
 
 describe("linear.cursorOf", () => {
   it("returns updatedAt for every record type", () => {
-    expect(linear.cursorOf!("issue", { updatedAt: "2026-05-01T00:00:00Z" })).toBe(
-      "2026-05-01T00:00:00Z",
-    );
-    expect(linear.cursorOf!("project", { updatedAt: "2026-05-02T00:00:00Z" })).toBe(
-      "2026-05-02T00:00:00Z",
-    );
+    expect(
+      linear.cursorOf!("issue", { updatedAt: "2026-05-01T00:00:00Z" }),
+    ).toBe("2026-05-01T00:00:00Z");
+    expect(
+      linear.cursorOf!("project", { updatedAt: "2026-05-02T00:00:00Z" }),
+    ).toBe("2026-05-02T00:00:00Z");
   });
 
   it("returns null when updatedAt is missing", () => {

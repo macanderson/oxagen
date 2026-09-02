@@ -374,7 +374,9 @@ function SecretsSection({
             {secretKeys.length === 0 && (
               <tr>
                 <td
-                  colSpan={5 + environments.length}
+                  // Key + Sens + Memo + Fallback, one per environment, and the
+                  // trailing actions column only when the viewer can manage.
+                  colSpan={4 + environments.length + (canManage ? 1 : 0)}
                   className="px-3 py-6 text-center text-muted-foreground"
                 >
                   No secrets yet. Click <strong>Paste .env</strong> to

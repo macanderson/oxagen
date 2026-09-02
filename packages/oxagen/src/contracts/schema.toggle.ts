@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const schemaToggle = registerCapability({
   name: "toggle_schema",
   domain: "schema",
-  description: "Enable/disable a schema. Activation auto-publishes the current draft and auto-pins the resulting version — no separate publish/pin step.",
+  description:
+    "Enable/disable a schema. Activation auto-publishes the current draft and auto-pins the resulting version — no separate publish/pin step.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs"],

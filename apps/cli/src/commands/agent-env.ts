@@ -16,7 +16,12 @@
  * Output discipline (ADR-023 §4, via createOutput): stdout carries only the
  * result; progress/warnings go to stderr; every failure is a uniform `✗ …`.
  */
-import { apiGetOrThrow, apiPostOrThrow, ApiError, printTable } from "../lib/api.js";
+import {
+  apiGetOrThrow,
+  apiPostOrThrow,
+  ApiError,
+  printTable,
+} from "../lib/api.js";
 import { createOutput } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
@@ -51,7 +56,9 @@ interface AgentEnvironmentBinding {
 
 async function resolveAgentId(handle: string): Promise<string> {
   if (handle.startsWith("agt_")) return handle;
-  const { agents } = await apiGetOrThrow<{ agents: AgentDefSummary[] }>("agent/definitions");
+  const { agents } = await apiGetOrThrow<{ agents: AgentDefSummary[] }>(
+    "agent/definitions",
+  );
   const lower = handle.toLowerCase();
   const match = agents.find(
     (a) =>
@@ -59,7 +66,10 @@ async function resolveAgentId(handle: string): Promise<string> {
       a.slug.toLowerCase() === lower ||
       (a.agentKey !== null && a.agentKey.toLowerCase() === lower),
   );
-  if (!match) throw new ApiError(`No agent matching '${handle}' (by public id, slug, or agent key).`);
+  if (!match)
+    throw new ApiError(
+      `No agent matching '${handle}' (by public id, slug, or agent key).`,
+    );
   return match.agentId;
 }
 
@@ -69,19 +79,29 @@ async function resolveEnvironmentId(slugOrId: string): Promise<string> {
     "environment/list",
     {},
   );
-  const match = environments.find((e) => e.slug.toLowerCase() === slugOrId.toLowerCase());
+  const match = environments.find(
+    (e) => e.slug.toLowerCase() === slugOrId.toLowerCase(),
+  );
   if (!match) throw new ApiError(`No environment with slug '${slugOrId}'.`);
   return match.id;
 }
 
-async function resolveTemplateId(slugOrId: string, environmentId: string): Promise<string> {
+async function resolveTemplateId(
+  slugOrId: string,
+  environmentId: string,
+): Promise<string> {
   if (slugOrId.startsWith("sbx_")) return slugOrId;
   const { templates } = await apiPostOrThrow<{ templates: TemplateSummary[] }>(
     "sandbox/template/list",
     { environmentId },
   );
-  const match = templates.find((t) => t.slug.toLowerCase() === slugOrId.toLowerCase());
-  if (!match) throw new ApiError(`No sandbox template with slug '${slugOrId}' in that environment.`);
+  const match = templates.find(
+    (t) => t.slug.toLowerCase() === slugOrId.toLowerCase(),
+  );
+  if (!match)
+    throw new ApiError(
+      `No sandbox template with slug '${slugOrId}' in that environment.`,
+    );
   return match.id;
 }
 
@@ -107,10 +127,9 @@ export async function handleAgentEnvBind(
     const body: Record<string, unknown> = { agentId, environmentId };
     if (sandboxTemplateId) body.sandboxTemplateId = sandboxTemplateId;
     if (opts.primary) body.isPrimary = true;
-    const { binding } = await apiPostOrThrow<{ binding: AgentEnvironmentBinding }>(
-      "agent/environment/bind",
-      body,
-    );
+    const { binding } = await apiPostOrThrow<{
+      binding: AgentEnvironmentBinding;
+    }>("agent/environment/bind", body);
     out.data(binding, () => {
       const tpl = binding.sandboxTemplateName
         ? binding.sandboxTemplateName
@@ -138,10 +157,13 @@ export async function handleAgentEnvUnbind(
   try {
     const agentId = await resolveAgentId(agentHandle);
     const environmentId = await resolveEnvironmentId(opts.env);
-    const res = await apiPostOrThrow<{ ok: boolean }>("agent/environment/unbind", {
-      agentId,
-      environmentId,
-    });
+    const res = await apiPostOrThrow<{ ok: boolean }>(
+      "agent/environment/unbind",
+      {
+        agentId,
+        environmentId,
+      },
+    );
     out.data(res, () => `✓ unbound ${agentHandle} from ${opts.env}`);
   } catch (err) {
     out.error(err, "api");
@@ -158,10 +180,9 @@ export async function handleAgentEnvList(
   const out = createOutput({ json: opts.json }, writer);
   try {
     const agentId = await resolveAgentId(agentHandle);
-    const { bindings } = await apiPostOrThrow<{ bindings: AgentEnvironmentBinding[] }>(
-      "agent/environment/list",
-      { agentId },
-    );
+    const { bindings } = await apiPostOrThrow<{
+      bindings: AgentEnvironmentBinding[];
+    }>("agent/environment/list", { agentId });
     out.data(bindings, () => renderBindings(bindings));
   } catch (err) {
     out.error(err, "api");

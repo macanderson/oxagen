@@ -22,6 +22,8 @@ export default async function notificationsMarkTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(notificationsMark.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(notificationsMark.name, args, ctx, {
+    surface: "mcp",
+  });
   return notificationsMark.output.parse(output);
 }

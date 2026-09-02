@@ -1,7 +1,24 @@
-import { boolean, check, index, integer, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  jsonb,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { workflowSchema } from "./_schemas";
-import { auditMixin, citext, idMixin, orgScopeMixin, softDeleteMixin, uuidv7Default } from "./_mixins";
+import {
+  auditMixin,
+  citext,
+  idMixin,
+  orgScopeMixin,
+  softDeleteMixin,
+  uuidv7Default,
+} from "./_mixins";
 
 // ---------------------------------------------------------------------------
 // 1. playbooks — aggregate root
@@ -63,19 +80,24 @@ export const playbookVersions = workflowSchema.table(
     version: integer("version").notNull(),
     changeSummary: text("change_summary"),
     isPublished: boolean("is_published").notNull().default(false),
-    publishedAt: timestamp("published_at", { withTimezone: true, mode: "date" }),
+    publishedAt: timestamp("published_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     createdByUserId: uuid("created_by_user_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
   },
   (t) => ({
-    playbookVersionUniq: uniqueIndex("playbook_versions_playbook_version_uniq").on(
-      t.playbookId,
-      t.version,
-    ),
+    playbookVersionUniq: uniqueIndex(
+      "playbook_versions_playbook_version_uniq",
+    ).on(t.playbookId, t.version),
     playbookIdx: index("playbook_versions_playbook_idx").on(t.playbookId),
-    publishedIdx: index("playbook_versions_published_idx").on(t.playbookId, t.isPublished),
+    publishedIdx: index("playbook_versions_published_idx").on(
+      t.playbookId,
+      t.isPublished,
+    ),
   }),
 );
 
@@ -137,12 +159,9 @@ export const playbookEdges = workflowSchema.table(
       .defaultNow(),
   },
   (t) => ({
-    versionSrcTgtTypeUniq: uniqueIndex("playbook_edges_version_src_tgt_type_uniq").on(
-      t.playbookVersionId,
-      t.sourceStepId,
-      t.targetStepId,
-      t.edgeType,
-    ),
+    versionSrcTgtTypeUniq: uniqueIndex(
+      "playbook_edges_version_src_tgt_type_uniq",
+    ).on(t.playbookVersionId, t.sourceStepId, t.targetStepId, t.edgeType),
     versionIdx: index("playbook_edges_version_idx").on(t.playbookVersionId),
     sourceIdx: index("playbook_edges_source_idx").on(t.sourceStepId),
     edgeTypeCheck: check(
@@ -208,7 +227,10 @@ export const playbookRuns = workflowSchema.table(
     error: jsonb("error"),
     inngestRunId: text("inngest_run_id"),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
-    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     startedByUserId: uuid("started_by_user_id"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
@@ -259,17 +281,18 @@ export const playbookStepRuns = workflowSchema.table(
     // Pins which AgentVersion executed this step for reproducibility.
     agentVersionId: uuid("agent_version_id"),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
-    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
   },
   (t) => ({
-    runStepAttemptUniq: uniqueIndex("playbook_step_runs_run_step_attempt_uniq").on(
-      t.playbookRunId,
-      t.playbookStepId,
-      t.attempt,
-    ),
+    runStepAttemptUniq: uniqueIndex(
+      "playbook_step_runs_run_step_attempt_uniq",
+    ).on(t.playbookRunId, t.playbookStepId, t.attempt),
     runIdx: index("playbook_step_runs_run_idx").on(t.playbookRunId),
     stepIdx: index("playbook_step_runs_step_idx").on(t.playbookStepId),
     statusCheck: check(
@@ -302,12 +325,21 @@ export const playbookEvents = workflowSchema.table(
     prevEventHash: text("prev_event_hash").notNull(),
     // SHA-256 over (prevEventHash || canonical(eventType, eventData, sequence, occurredAt)).
     eventHash: text("event_hash").notNull(),
-    occurredAt: timestamp("occurred_at", { withTimezone: true, mode: "date" }).notNull(),
+    occurredAt: timestamp("occurred_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
   },
   (t) => ({
-    runSeqUniq: uniqueIndex("playbook_events_run_seq_uniq").on(t.playbookRunId, t.sequence),
+    runSeqUniq: uniqueIndex("playbook_events_run_seq_uniq").on(
+      t.playbookRunId,
+      t.sequence,
+    ),
     runIdx: index("playbook_events_run_idx").on(t.playbookRunId),
-    occurredIdx: index("playbook_events_occurred_idx").on(t.orgId, t.occurredAt),
+    occurredIdx: index("playbook_events_occurred_idx").on(
+      t.orgId,
+      t.occurredAt,
+    ),
     eventTypeCheck: check(
       "playbook_events_event_type_check",
       sql`${t.eventType} IN ('run_started','step_started','agent_invoked','tool_called','tool_completed','condition_evaluated','approval_requested','approval_resolved','step_completed','step_failed','step_retried','run_paused','run_resumed','run_completed','run_failed','run_cancelled')`,
@@ -336,7 +368,10 @@ export const playbookApprovals = workflowSchema.table(
   (t) => ({
     runIdx: index("playbook_approvals_run_idx").on(t.playbookRunId),
     stepRunIdx: index("playbook_approvals_step_run_idx").on(t.stepRunId),
-    statusIdx: index("playbook_approvals_status_idx").on(t.workspaceId, t.status),
+    statusIdx: index("playbook_approvals_status_idx").on(
+      t.workspaceId,
+      t.status,
+    ),
     statusCheck: check(
       "playbook_approvals_status_check",
       sql`${t.status} IN ('pending','approved','denied','expired')`,

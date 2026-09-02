@@ -11,7 +11,10 @@ import { z } from "zod";
  */
 
 /** A single address or a non-empty list of addresses. */
-const recipients = z.union([z.string().email(), z.array(z.string().email()).min(1)]);
+const recipients = z.union([
+  z.string().email(),
+  z.array(z.string().email()).min(1),
+]);
 
 /**
  * The `sendEmail` payload. Shared by the facade and every transport so the

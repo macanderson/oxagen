@@ -54,9 +54,16 @@ function decodeState(encoded: string): string {
 /**
  * Decrypt an access token stored as { keyId, ciphertext } JSON payload.
  */
-async function decryptToken(enc: { keyId: string; ciphertext: string }): Promise<string> {
+async function decryptToken(enc: {
+  keyId: string;
+  ciphertext: string;
+}): Promise<string> {
   const { adapter } = createIngestionCryptoAdapter();
-  const plain = await decrypt(Buffer.from(enc.ciphertext, "base64"), enc.keyId, { adapter });
+  const plain = await decrypt(
+    Buffer.from(enc.ciphertext, "base64"),
+    enc.keyId,
+    { adapter },
+  );
   return plain.toString("utf8");
 }
 
@@ -85,7 +92,10 @@ async function selectOrgGithubOauthAccount(
     })
     .from(schema.oauthAccounts)
     .where(
-      and(eq(schema.oauthAccounts.orgId, orgId), eq(schema.oauthAccounts.provider, "github")),
+      and(
+        eq(schema.oauthAccounts.orgId, orgId),
+        eq(schema.oauthAccounts.provider, "github"),
+      ),
     )
     .orderBy(desc(schema.oauthAccounts.updatedAt))
     .limit(1);
@@ -136,7 +146,11 @@ async function resolveWorkspaceGithubToken(
     withTenantDb((tx) => selectOrgGithubOauthAccount(tx, orgId)),
   );
   if (!account?.accessTokenEnc) {
-    return { ok: false, status: 404, error: "GitHub is not connected for this workspace" };
+    return {
+      ok: false,
+      status: 404,
+      error: "GitHub is not connected for this workspace",
+    };
   }
   return decryptAccessTokenResult(account.accessTokenEnc);
 }
@@ -212,10 +226,18 @@ async function resolveConnectionAccessToken(
   );
 
   if (lookup.kind === "no-connection") {
-    return { ok: false, status: 404, error: "Connection not found or OAuth token missing" };
+    return {
+      ok: false,
+      status: 404,
+      error: "Connection not found or OAuth token missing",
+    };
   }
   if (lookup.kind === "no-token") {
-    return { ok: false, status: 404, error: "OAuth token not found for connection" };
+    return {
+      ok: false,
+      status: 404,
+      error: "OAuth token not found for connection",
+    };
   }
 
   return decryptAccessTokenResult(lookup.accessTokenEnc);
@@ -251,7 +273,8 @@ function buildManageInstallationsUrl(
   configuredSlug: string | undefined,
   installations: GitHubInstallation[],
 ): string {
-  const slug = configuredSlug?.trim() || installations.find((i) => i.app_slug)?.app_slug;
+  const slug =
+    configuredSlug?.trim() || installations.find((i) => i.app_slug)?.app_slug;
   return slug
     ? `https://github.com/apps/${slug}/installations/new`
     : "https://github.com/settings/installations";
@@ -297,7 +320,12 @@ interface GithubInstallState {
 function buildInstallAuthUrl(
   appSlug: string,
   stateSecret: string,
-  payload: { orgId: string; workspaceId: string; connectionId: string | null; returnTo: GithubConnectReturnTo },
+  payload: {
+    orgId: string;
+    workspaceId: string;
+    connectionId: string | null;
+    returnTo: GithubConnectReturnTo;
+  },
 ): string {
   const stateJson = JSON.stringify({
     orgId: payload.orgId,
@@ -340,7 +368,12 @@ function buildInstallAuthUrl(
 function buildIdentityAuthUrl(
   clientId: string,
   stateSecret: string,
-  payload: { orgId: string; workspaceId: string; connectionId: string | null; returnTo: GithubConnectReturnTo },
+  payload: {
+    orgId: string;
+    workspaceId: string;
+    connectionId: string | null;
+    returnTo: GithubConnectReturnTo;
+  },
 ): string {
   const stateJson = JSON.stringify({
     orgId: payload.orgId,
@@ -401,7 +434,10 @@ githubOauthRoute.get("/auth-url", async (c) => {
   const stateSecret = env.GITHUB_APP_INSTALL_STATE_SECRET;
   if (!stateSecret) {
     return c.json(
-      { error: "GitHub App is not configured — GITHUB_APP_INSTALL_STATE_SECRET missing" },
+      {
+        error:
+          "GitHub App is not configured — GITHUB_APP_INSTALL_STATE_SECRET missing",
+      },
       503,
     );
   }
@@ -411,16 +447,28 @@ githubOauthRoute.get("/auth-url", async (c) => {
   if (mode === "install") {
     const appSlug = env.GITHUB_APP_SLUG;
     if (!appSlug) {
-      return c.json({ error: "GitHub App is not configured — GITHUB_APP_SLUG missing" }, 503);
+      return c.json(
+        { error: "GitHub App is not configured — GITHUB_APP_SLUG missing" },
+        503,
+      );
     }
-    return c.json({ authUrl: buildInstallAuthUrl(appSlug, stateSecret, statePayload), mode });
+    return c.json({
+      authUrl: buildInstallAuthUrl(appSlug, stateSecret, statePayload),
+      mode,
+    });
   }
 
   const clientId = env.GITHUB_APP_CLIENT_ID;
   if (!clientId) {
-    return c.json({ error: "GitHub App is not configured — GITHUB_APP_CLIENT_ID missing" }, 503);
+    return c.json(
+      { error: "GitHub App is not configured — GITHUB_APP_CLIENT_ID missing" },
+      503,
+    );
   }
-  return c.json({ authUrl: buildIdentityAuthUrl(clientId, stateSecret, statePayload), mode });
+  return c.json({
+    authUrl: buildIdentityAuthUrl(clientId, stateSecret, statePayload),
+    mode,
+  });
 });
 
 // ── GET /connections/github/installations ─────────────────────────────────────
@@ -451,26 +499,44 @@ type FetchInstallationsResult =
   | { ok: true; installations: GitHubInstallation[] }
   | { ok: false; status: number };
 
+const INSTALLATIONS_PER_PAGE = 100;
+/**
+ * Hard ceiling on pages fetched from `/user/installations`. 100 pages × 100 per
+ * page is far beyond any real account, and it is what makes the loop below
+ * provably terminate: the exit condition depends on GitHub's `total_count`,
+ * which is upstream-controlled and need not agree with the rows actually
+ * returned.
+ */
+const INSTALLATIONS_MAX_PAGES = 100;
+
 /**
  * Page through every GitHub App installation the user token can see (GitHub
  * paginates at 100/page). Shared by `/installations` and `/status` so there is
  * one definition of "list the App installations this workspace can reach".
+ *
+ * The loop terminates on the FIRST of three conditions — the collected count
+ * reaching `total_count`, a short/empty page, or the page ceiling. Trusting
+ * `total_count` alone is not safe: a page that returns fewer rows than it
+ * promises (GitHub filters suspended installations out of the rows but not out
+ * of the count) would leave the count unreachable and spin this request against
+ * the GitHub API until the platform request timeout kills it.
  */
-async function fetchAllInstallations(accessToken: string): Promise<FetchInstallationsResult> {
+async function fetchAllInstallations(
+  accessToken: string,
+): Promise<FetchInstallationsResult> {
   const allInstallations: GitHubInstallation[] = [];
-  let page = 1;
   let totalCount = 0;
 
-  do {
+  for (let page = 1; page <= INSTALLATIONS_MAX_PAGES; page++) {
     const resp = await fetch(
-      `https://api.github.com/user/installations?per_page=100&page=${page}`,
+      `https://api.github.com/user/installations?per_page=${INSTALLATIONS_PER_PAGE}&page=${page}`,
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           Accept: "application/vnd.github.v3+json",
           "User-Agent": "oxagen-ingestion/1.0",
         },
-        // Paged do/while — without a timeout one stalled GitHub page hangs
+        // Paged loop — without a timeout one stalled GitHub page hangs
         // the whole request, not just this page.
         signal: AbortSignal.timeout(10_000),
       },
@@ -479,9 +545,13 @@ async function fetchAllInstallations(accessToken: string): Promise<FetchInstalla
 
     const data = (await resp.json()) as GitHubInstallationsResponse;
     totalCount = data.total_count;
-    allInstallations.push(...data.installations);
-    page++;
-  } while (allInstallations.length < totalCount);
+    const rows = data.installations ?? [];
+    allInstallations.push(...rows);
+    // A short page is the last page: GitHub has no more rows to give, whatever
+    // `total_count` claims.
+    if (rows.length < INSTALLATIONS_PER_PAGE) break;
+    if (allInstallations.length >= totalCount) break;
+  }
 
   return { ok: true, installations: allInstallations };
 }
@@ -534,7 +604,11 @@ githubOauthRoute.get("/installations", async (c) => {
   // Resolve the OAuth token: connection-scoped when a connectionId is supplied
   // (also self-heals the connection→oauth_account link), else the workspace's
   // org-level GitHub token.
-  const tokenResult = await resolveGithubListToken(orgId, workspaceId, connectionPublicId);
+  const tokenResult = await resolveGithubListToken(
+    orgId,
+    workspaceId,
+    connectionPublicId,
+  );
   if (!tokenResult.ok) {
     return c.json({ error: tokenResult.error }, tokenResult.status);
   }
@@ -542,7 +616,9 @@ githubOauthRoute.get("/installations", async (c) => {
   const fetched = await fetchAllInstallations(tokenResult.accessToken);
   if (!fetched.ok) {
     return c.json(
-      { error: `GitHub API returned ${fetched.status} when listing installations` },
+      {
+        error: `GitHub API returned ${fetched.status} when listing installations`,
+      },
       502,
     );
   }
@@ -550,14 +626,19 @@ githubOauthRoute.get("/installations", async (c) => {
   // Refresh the platform installations registry from the user's authoritative
   // view (idempotent). Best-effort via allSettled — a registry write hiccup must
   // never break the listing the wizard depends on.
-  await Promise.allSettled(fetched.installations.map(registerInstallationFromApi));
+  await Promise.allSettled(
+    fetched.installations.map(registerInstallationFromApi),
+  );
 
   const { GITHUB_APP_SLUG } = requireEnv(["GITHUB_APP_SLUG"] as const);
 
   return c.json({
     // Top-level link to GitHub's install/configure page so the user can add the
     // App to another org (or remove one) and have it appear after a refresh.
-    manageUrl: buildManageInstallationsUrl(GITHUB_APP_SLUG, fetched.installations),
+    manageUrl: buildManageInstallationsUrl(
+      GITHUB_APP_SLUG,
+      fetched.installations,
+    ),
     installations: fetched.installations.map(mapInstallation),
   });
 });
@@ -592,57 +673,66 @@ interface GitHubRepositoriesResponse {
  * Returns:
  *   { repositories: [...], totalCount: number }
  */
-githubOauthRoute.get("/installations/:installationId/repositories", async (c) => {
-  const installationId = c.req.param("installationId");
-  const connectionPublicId = c.req.query("connectionId") || undefined;
+githubOauthRoute.get(
+  "/installations/:installationId/repositories",
+  async (c) => {
+    const installationId = c.req.param("installationId");
+    const connectionPublicId = c.req.query("connectionId") || undefined;
 
-  const orgId = c.get("orgId");
-  const workspaceId = c.get("workspaceId");
-  if (!orgId || !workspaceId) {
-    return c.json({ error: "Org/workspace scope required" }, 400);
-  }
+    const orgId = c.get("orgId");
+    const workspaceId = c.get("workspaceId");
+    if (!orgId || !workspaceId) {
+      return c.json({ error: "Org/workspace scope required" }, 400);
+    }
 
-  // Same resilient token resolution as /installations.
-  const tokenResult = await resolveGithubListToken(orgId, workspaceId, connectionPublicId);
-  if (!tokenResult.ok) {
-    return c.json({ error: tokenResult.error }, tokenResult.status);
-  }
-  const accessToken = tokenResult.accessToken;
-
-  const resp = await fetch(
-    `https://api.github.com/user/installations/${installationId}/repositories?per_page=100`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/vnd.github.v3+json",
-        "User-Agent": "oxagen-ingestion/1.0",
-      },
-      signal: AbortSignal.timeout(10_000),
-    },
-  );
-
-  if (!resp.ok) {
-    return c.json(
-      { error: `GitHub API returned ${resp.status} when listing repositories` },
-      502,
+    // Same resilient token resolution as /installations.
+    const tokenResult = await resolveGithubListToken(
+      orgId,
+      workspaceId,
+      connectionPublicId,
     );
-  }
+    if (!tokenResult.ok) {
+      return c.json({ error: tokenResult.error }, tokenResult.status);
+    }
+    const accessToken = tokenResult.accessToken;
 
-  const data = (await resp.json()) as GitHubRepositoriesResponse;
+    const resp = await fetch(
+      `https://api.github.com/user/installations/${installationId}/repositories?per_page=100`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/vnd.github.v3+json",
+          "User-Agent": "oxagen-ingestion/1.0",
+        },
+        signal: AbortSignal.timeout(10_000),
+      },
+    );
 
-  return c.json({
-    repositories: data.repositories.map((r) => ({
-      id: r.id,
-      name: r.name,
-      fullName: r.full_name,
-      private: r.private,
-      defaultBranch: r.default_branch,
-      language: r.language,
-      description: r.description,
-    })),
-    totalCount: data.total_count,
-  });
-});
+    if (!resp.ok) {
+      return c.json(
+        {
+          error: `GitHub API returned ${resp.status} when listing repositories`,
+        },
+        502,
+      );
+    }
+
+    const data = (await resp.json()) as GitHubRepositoriesResponse;
+
+    return c.json({
+      repositories: data.repositories.map((r) => ({
+        id: r.id,
+        name: r.name,
+        fullName: r.full_name,
+        private: r.private,
+        defaultBranch: r.default_branch,
+        language: r.language,
+        description: r.description,
+      })),
+      totalCount: data.total_count,
+    });
+  },
+);
 
 // ── GET /connections/github/status ────────────────────────────────────────────
 
@@ -677,7 +767,10 @@ githubOauthRoute.get("/status", async (c) => {
   const stateSecret = env.GITHUB_APP_INSTALL_STATE_SECRET;
   if (!appSlug || !stateSecret) {
     return c.json(
-      { error: "GitHub App is not configured — GITHUB_APP_SLUG / GITHUB_APP_INSTALL_STATE_SECRET missing" },
+      {
+        error:
+          "GitHub App is not configured — GITHUB_APP_SLUG / GITHUB_APP_INSTALL_STATE_SECRET missing",
+      },
       503,
     );
   }
@@ -724,13 +817,17 @@ githubOauthRoute.get("/status", async (c) => {
       return c.json(notConnected);
     }
     return c.json(
-      { error: `GitHub API returned ${fetched.status} when listing installations` },
+      {
+        error: `GitHub API returned ${fetched.status} when listing installations`,
+      },
       502,
     );
   }
 
   // Keep the registry fresh from the user's authoritative view (best-effort).
-  await Promise.allSettled(fetched.installations.map(registerInstallationFromApi));
+  await Promise.allSettled(
+    fetched.installations.map(registerInstallationFromApi),
+  );
 
   return c.json({
     connected: true,
@@ -801,7 +898,10 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
       // record the installation id here (the App webhook + the first tenant to
       // attach enrich + bind it). A completed install means it is live → reactivate.
       if (installationId) {
-        await upsertGithubInstallation({ installationId, reactivate: true }).catch((err) =>
+        await upsertGithubInstallation({
+          installationId,
+          reactivate: true,
+        }).catch((err) =>
           logger.warn(
             { err: String(err), installationId },
             "github_installations registry upsert failed (no-state install leg) — relying on App-webhook backstop",
@@ -853,7 +953,10 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
   }
 
   if (Date.now() > statePayload.expiresAt) {
-    return c.json({ error: "OAuth state has expired — please start the OAuth flow again" }, 400);
+    return c.json(
+      { error: "OAuth state has expired — please start the OAuth flow again" },
+      400,
+    );
   }
 
   const { orgId, workspaceId, connectionId: connectionPublicId } = statePayload;
@@ -898,22 +1001,30 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
   // failing the whole connect.
   let oauthAccountId: string | null = null;
   if (code) {
-    const tokenResp = await fetch("https://github.com/login/oauth/access_token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Accept: "application/json",
+    const tokenResp = await fetch(
+      "https://github.com/login/oauth/access_token",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+        },
+        signal: AbortSignal.timeout(10_000),
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          code,
+        }),
       },
-      signal: AbortSignal.timeout(10_000),
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        code,
-      }),
-    });
+    );
 
     if (!tokenResp.ok) {
-      return c.json({ error: `GitHub token exchange failed with status ${tokenResp.status}` }, 502);
+      return c.json(
+        {
+          error: `GitHub token exchange failed with status ${tokenResp.status}`,
+        },
+        502,
+      );
     }
 
     const tokenData = (await tokenResp.json()) as {
@@ -928,7 +1039,12 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
 
     if (tokenData.error || !tokenData.access_token) {
       return c.json(
-        { error: tokenData.error_description ?? tokenData.error ?? "Token exchange failed" },
+        {
+          error:
+            tokenData.error_description ??
+            tokenData.error ??
+            "Token exchange failed",
+        },
         400,
       );
     }
@@ -939,7 +1055,10 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
     const { adapter, keyId } = createIngestionCryptoAdapter();
 
     const accessTokenBuf = await encrypt(access_token, keyId, { adapter });
-    const accessTokenEnc = { keyId, ciphertext: accessTokenBuf.toString("base64") };
+    const accessTokenEnc = {
+      keyId,
+      ciphertext: accessTokenBuf.toString("base64"),
+    };
 
     let refreshTokenEnc: { keyId: string; ciphertext: string } | null = null;
     if (refresh_token) {
@@ -947,7 +1066,9 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
       refreshTokenEnc = { keyId, ciphertext: refreshBuf.toString("base64") };
     }
 
-    const expiresAt = expires_in ? new Date(Date.now() + expires_in * 1000) : null;
+    const expiresAt = expires_in
+      ? new Date(Date.now() + expires_in * 1000)
+      : null;
 
     // Fetch the authenticated GitHub user to get a stable provider_user_id.
     // Errors here are non-fatal — we fall back to a generated placeholder. The
@@ -976,7 +1097,7 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
         if (userData.id) providerUserId = String(userData.id);
         if (userData.email) providerUserEmail = userData.email;
         if (userData.name ?? userData.login)
-          providerUserName = (userData.name ?? userData.login) ?? null;
+          providerUserName = userData.name ?? userData.login ?? null;
       }
     } catch {
       // Non-fatal: proceed with placeholder providerUserId
@@ -999,7 +1120,9 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
           refreshTokenEnc,
           expiresAt,
           tokenType: tokenData.token_type ?? "Bearer",
-          scopes: tokenData.scope ? tokenData.scope.split(",").map((s) => s.trim()) : [],
+          scopes: tokenData.scope
+            ? tokenData.scope.split(",").map((s) => s.trim())
+            : [],
           lastRefreshedAt: now,
           createdAt: now,
           updatedAt: now,
@@ -1034,11 +1157,12 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
   // listing the UI calls next, and the App webhook, enrich it. A completed
   // install/approval means the installation is live, so reactivate.
   if (installationId) {
-    await upsertGithubInstallation({ installationId, reactivate: true }).catch((err) =>
-      logger.warn(
-        { err: String(err), installationId },
-        "github_installations registry upsert failed (callback install leg) — relying on App-webhook backstop",
-      ),
+    await upsertGithubInstallation({ installationId, reactivate: true }).catch(
+      (err) =>
+        logger.warn(
+          { err: String(err), installationId },
+          "github_installations registry upsert failed (callback install leg) — relying on App-webhook backstop",
+        ),
     );
   }
 
@@ -1063,7 +1187,9 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
         .update(schema.sourceConnections)
         .set({
           ...(oauthAccountId ? { oauthAccountId } : {}),
-          ...(mergedDeliveryConfig ? { deliveryConfig: mergedDeliveryConfig } : {}),
+          ...(mergedDeliveryConfig
+            ? { deliveryConfig: mergedDeliveryConfig }
+            : {}),
           status: "pending_setup",
           updatedAt: now,
         })
@@ -1086,7 +1212,12 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
       tx
         .select({ slug: schema.workspaces.slug })
         .from(schema.workspaces)
-        .where(and(eq(schema.workspaces.id, workspaceId), eq(schema.workspaces.orgId, orgId)))
+        .where(
+          and(
+            eq(schema.workspaces.id, workspaceId),
+            eq(schema.workspaces.orgId, orgId),
+          ),
+        )
         .limit(1),
     ),
   ]);
@@ -1100,7 +1231,9 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
     returnTo === "settings"
       ? `${appBaseUrl}/${orgSlug}/${wsSlug}/settings/github?github_connected=1`
       : `${appBaseUrl}/${orgSlug}/${wsSlug}/knowledge/sources?setup=github` +
-        (connectionPublicId ? `&connectionId=${encodeURIComponent(connectionPublicId)}` : "");
+        (connectionPublicId
+          ? `&connectionId=${encodeURIComponent(connectionPublicId)}`
+          : "");
 
   return c.redirect(redirectUrl, 302);
 });

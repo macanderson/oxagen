@@ -6,7 +6,14 @@ import { render, cleanup, screen } from "@testing-library/react";
 import type { ConnectionListOutput } from "@oxagen/oxagen/contracts/connection.list";
 
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
+  default: ({
+    href,
+    children,
+    ...props
+  }: {
+    href: string;
+    children: React.ReactNode;
+  }) => (
     <a href={href} {...props}>
       {children}
     </a>
@@ -32,7 +39,9 @@ const PROPS = {
   workspaceSlug: "prod",
 };
 
-function connection(overrides: Partial<ConnectionListOutput["connections"][number]> = {}) {
+function connection(
+  overrides: Partial<ConnectionListOutput["connections"][number]> = {},
+) {
   return {
     id: "conn_1",
     publicId: "cn_1",
@@ -59,7 +68,11 @@ afterEach(() => {
 describe("SourcesTile", () => {
   it("renders connection names and health status, capped at 6 rows", async () => {
     const connections = Array.from({ length: 8 }, (_, i) =>
-      connection({ id: `conn_${i}`, displayName: `Source ${i}`, healthStatus: i === 0 ? "degraded" : "healthy" }),
+      connection({
+        id: `conn_${i}`,
+        displayName: `Source ${i}`,
+        healthStatus: i === 0 ? "degraded" : "healthy",
+      }),
     );
     mockInvoke.mockResolvedValue({ connections });
 
@@ -83,10 +96,9 @@ describe("SourcesTile", () => {
     render(element);
 
     expect(screen.getByText(/no sources connected yet/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /connect a source/i })).toHaveAttribute(
-      "href",
-      "/acme/prod/knowledge/sources",
-    );
+    expect(
+      screen.getByRole("link", { name: /connect a source/i }),
+    ).toHaveAttribute("href", "/acme/prod/knowledge/sources");
   });
 
   it("renders a degraded error state when list_connections fails", async () => {

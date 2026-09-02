@@ -142,6 +142,12 @@ export async function readActiveEmergencyDenies(
  * exact — glob expansion would turn an emergency deny into a policy evaluation,
  * and the point of the typed shape is that the live check stays an index lookup
  * on the hot path.
+ *
+ * NOTE: a `resource_scope` row can only match when the caller supplies
+ * `resourceScopeDigest`. The kernel path (check-iam.ts) does not compute one
+ * today, so only `capability` rows fire on a live invocation — a
+ * `resource_scope` emergency deny is currently inert outside this function's
+ * own tests.
  */
 export function matchEmergencyDeny(
   denies: readonly ActiveEmergencyDeny[],
@@ -754,6 +760,14 @@ async function recordDecision(args: {
       denyGeneration: verdict.denyGeneration,
       outcome: persistedOutcomeOf(verdict.outcome, verdict.reason),
       reasonCode: verdict.reason,
+      // Both columns are written NULL on every decision this path records.
+      // `approval_request_id`: the JIT access request is minted later, by the
+      // kernel's pending_approval path, so its id does not exist yet here.
+      // `trace_digest`: this evaluation produces a verdict, not the resolver
+      // trace object the column is meant to cover — so `decision_digest` today
+      // attests the decision's INPUTS and OUTCOME, not the reasoning behind
+      // them. Filling either in means threading a value that no caller
+      // currently has; treat both as known gaps, not as spare columns.
       approvalRequestId: null,
       inputDigest: args.inputDigest,
       traceDigest: null,

@@ -81,7 +81,11 @@ function parseColumn(entry: string): ManifestColumn | null {
   if (!nameMatch || !nameMatch[1] || !nameMatch[2]) return null;
   const name = nameMatch[1];
   const rest = nameMatch[2].trim();
-  // Type is everything up to the first modeling-stop keyword at the top level.
+  // Type is everything up to the first modeling-stop keyword. This scan is NOT
+  // paren-depth-aware: a stop keyword nested inside a type's parens would end
+  // the type early. No ClickHouse type spells DEFAULT/CODEC/TTL/etc. inside its
+  // own parens, so the baseline parses correctly today — but a type that did
+  // would truncate here rather than error.
   const stop = rest.search(TYPE_STOP);
   const typeStr = (stop >= 0 ? rest.slice(0, stop) : rest).trim();
   // Nullability: ClickHouse columns are non-null unless wrapped in Nullable(...).
@@ -126,7 +130,15 @@ export function parseClickhouseSchema(sql: string): ManifestTable[] {
       }
     }
     const body = clean.slice(open + 1, i);
-    const tail = clean.slice(i + 1, clean.indexOf(";", i));
+    // Tail = the clauses between the closing paren and the statement's
+    // terminating semicolon. A missing semicolon (unterminated final statement)
+    // must clamp to end-of-input; indexOf's -1 would otherwise slice from the
+    // end and swallow every following statement into this table's meta.
+    const semicolon = clean.indexOf(";", i);
+    const tail = clean.slice(
+      i + 1,
+      semicolon === -1 ? clean.length : semicolon,
+    );
 
     const columns = splitTopLevel(body)
       .map(parseColumn)

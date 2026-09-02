@@ -53,7 +53,9 @@ type MinimalAutomationOutput = {
   enabled: boolean;
 };
 
-function makeAutomation(overrides: Partial<MinimalAutomationOutput> = {}): MinimalAutomationOutput {
+function makeAutomation(
+  overrides: Partial<MinimalAutomationOutput> = {},
+): MinimalAutomationOutput {
   return {
     automation_id: "auto-123",
     playbook_id: "pb-123",
@@ -83,8 +85,11 @@ describe("CreatedState", () => {
     render(
       <CreatedState
         {...baseProps}
-        createdAutomation={makeAutomation({ automation_id: "auto-123", name: "Notify on merge" })}
-      />
+        createdAutomation={makeAutomation({
+          automation_id: "auto-123",
+          name: "Notify on merge",
+        })}
+      />,
     );
     expect(screen.getByText(/Notify on merge/)).toBeInTheDocument();
   });
@@ -93,8 +98,11 @@ describe("CreatedState", () => {
     render(
       <CreatedState
         {...baseProps}
-        createdAutomation={makeAutomation({ automation_id: "auto-abc", name: "Notify" })}
-      />
+        createdAutomation={makeAutomation({
+          automation_id: "auto-abc",
+          name: "Notify",
+        })}
+      />,
     );
     expect(screen.getByText(/auto-abc/)).toBeInTheDocument();
   });
@@ -123,17 +131,17 @@ describe("CreatedState", () => {
       <CreatedState
         {...baseProps}
         enableError="Something went wrong enabling the automation"
-      />
+      />,
     );
     expect(
-      screen.getByText("Something went wrong enabling the automation")
+      screen.getByText("Something went wrong enabling the automation"),
     ).toBeInTheDocument();
   });
 
   it("shows 'Enabling…' text on the button when isEnabling=true", () => {
     render(<CreatedState {...baseProps} isEnabling={true} />);
     expect(screen.getByTestId("enable-automation-btn")).toHaveTextContent(
-      "Enabling…"
+      "Enabling…",
     );
   });
 
@@ -172,8 +180,11 @@ describe("EnabledState", () => {
     render(
       <EnabledState
         {...baseProps}
-        createdAutomation={makeAutomation({ automation_id: "auto-xyz", name: "Deploy notifier" })}
-      />
+        createdAutomation={makeAutomation({
+          automation_id: "auto-xyz",
+          name: "Deploy notifier",
+        })}
+      />,
     );
     expect(screen.getByText(/Deploy notifier is now live/)).toBeInTheDocument();
   });
@@ -181,7 +192,7 @@ describe("EnabledState", () => {
   it("shows fallbackName when createdAutomation is null", () => {
     render(<EnabledState {...baseProps} createdAutomation={null} />);
     expect(
-      screen.getByText(/Fallback Automation is now live/)
+      screen.getByText(/Fallback Automation is now live/),
     ).toBeInTheDocument();
   });
 
@@ -189,8 +200,11 @@ describe("EnabledState", () => {
     render(
       <EnabledState
         {...baseProps}
-        createdAutomation={makeAutomation({ automation_id: "auto-1", name: "My Bot" })}
-      />
+        createdAutomation={makeAutomation({
+          automation_id: "auto-1",
+          name: "My Bot",
+        })}
+      />,
     );
     expect(screen.getByText("My Bot is now live")).toBeInTheDocument();
   });

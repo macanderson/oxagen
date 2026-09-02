@@ -44,7 +44,12 @@ const state: {
 
 // The mock schema — we distinguish tables by the string value of the schema key.
 const SCHEMA = {
-  creditLots: { orgId: "cl.orgId", remainingCents: "cl.remainingCents", expiresAt: "cl.expiresAt", id: "cl.id" },
+  creditLots: {
+    orgId: "cl.orgId",
+    remainingCents: "cl.remainingCents",
+    expiresAt: "cl.expiresAt",
+    id: "cl.id",
+  },
   creditLedger: { orgId: "led.orgId" },
   creditBalances: { orgId: "cb.orgId", balanceCents: "cb.balanceCents" },
 } as const;
@@ -110,13 +115,15 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => ({
-    transaction: (cb: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) => cb(makeTx()),
-  }),
-  withTenantDb: async (fn: (tx: ReturnType<typeof makeTx>) => unknown) => fn(makeTx()),
-  withSystemDb: async (fn: (tx: ReturnType<typeof makeTx>) => unknown) => fn(makeTx()),
-  schema: SCHEMA,
-
+    db: () => ({
+      transaction: (cb: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) =>
+        cb(makeTx()),
+    }),
+    withTenantDb: async (fn: (tx: ReturnType<typeof makeTx>) => unknown) =>
+      fn(makeTx()),
+    withSystemDb: async (fn: (tx: ReturnType<typeof makeTx>) => unknown) =>
+      fn(makeTx()),
+    schema: SCHEMA,
   };
 });
 
@@ -129,7 +136,11 @@ const { consumeCredits } = await import("./credits");
 const now = new Date();
 const future = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // +30 days
 
-function makeLot(id: string, remaining: bigint, expiresAt: Date | null = null): Lot {
+function makeLot(
+  id: string,
+  remaining: bigint,
+  expiresAt: Date | null = null,
+): Lot {
   return { id, remainingCents: remaining, expiresAt };
 }
 
@@ -149,7 +160,11 @@ describe("consumeCredits — lots model", () => {
 
   it("debits the full request when total lot balance covers it", async () => {
     state.lots = [makeLot("lot-1", 1000n)];
-    const r = await consumeCredits({ orgId: "org-1", requestedCents: 20n, reason: "consume_token_overage" });
+    const r = await consumeCredits({
+      orgId: "org-1",
+      requestedCents: 20n,
+      reason: "consume_token_overage",
+    });
     expect(r.chargedCents).toBe(20n);
     expect(r.shortfallCents).toBe(0n);
     expect(r.balanceCents).toBe(980n); // 1000 - 20
@@ -163,7 +178,11 @@ describe("consumeCredits — lots model", () => {
 
   it("clamps the charge to total lot balance (no overdraft)", async () => {
     state.lots = [makeLot("lot-1", 5n)];
-    const r = await consumeCredits({ orgId: "org-1", requestedCents: 20n, reason: "consume_token_overage" });
+    const r = await consumeCredits({
+      orgId: "org-1",
+      requestedCents: 20n,
+      reason: "consume_token_overage",
+    });
     expect(r.chargedCents).toBe(5n);
     expect(r.shortfallCents).toBe(15n);
     expect(r.balanceCents).toBe(0n);
@@ -172,7 +191,11 @@ describe("consumeCredits — lots model", () => {
 
   it("writes no ledger row and returns zero charge when all lots are empty", async () => {
     state.lots = [makeLot("lot-1", 0n)];
-    const r = await consumeCredits({ orgId: "org-1", requestedCents: 20n, reason: "consume_token_overage" });
+    const r = await consumeCredits({
+      orgId: "org-1",
+      requestedCents: 20n,
+      reason: "consume_token_overage",
+    });
     expect(r.chargedCents).toBe(0n);
     expect(r.shortfallCents).toBe(20n);
     expect(state.ledgerInserts).toHaveLength(0);
@@ -180,7 +203,11 @@ describe("consumeCredits — lots model", () => {
   });
 
   it("returns no-op for a non-positive request without opening a transaction", async () => {
-    const r = await consumeCredits({ orgId: "org-1", requestedCents: 0n, reason: "consume_token_overage" });
+    const r = await consumeCredits({
+      orgId: "org-1",
+      requestedCents: 0n,
+      reason: "consume_token_overage",
+    });
     expect(r.chargedCents).toBe(0n);
     expect(r.shortfallCents).toBe(0n);
     expect(state.ledgerInserts).toHaveLength(0);
@@ -188,7 +215,11 @@ describe("consumeCredits — lots model", () => {
 
   it("treats missing lots (no rows) as zero balance", async () => {
     state.lots = []; // no lots
-    const r = await consumeCredits({ orgId: "org-1", requestedCents: 7n, reason: "consume_token_overage" });
+    const r = await consumeCredits({
+      orgId: "org-1",
+      requestedCents: 7n,
+      reason: "consume_token_overage",
+    });
     expect(r.chargedCents).toBe(0n);
     expect(r.shortfallCents).toBe(7n);
     expect(state.ledgerInserts).toHaveLength(0);
@@ -200,11 +231,15 @@ describe("consumeCredits — lots model", () => {
     // Lot A expires in 30 days; Lot B never expires.
     // The DB mock returns lots in the order we add them to state.lots,
     // simulating ORDER BY expires_at ASC NULLS LAST.
-    const lotA = makeLot("lot-A", 10n, future);   // expires soon → drained first
-    const lotB = makeLot("lot-B", 500n, null);    // never expires → drained last
+    const lotA = makeLot("lot-A", 10n, future); // expires soon → drained first
+    const lotB = makeLot("lot-B", 500n, null); // never expires → drained last
     state.lots = [lotA, lotB];
 
-    const r = await consumeCredits({ orgId: "org-1", requestedCents: 15n, reason: "consume_token_overage" });
+    const r = await consumeCredits({
+      orgId: "org-1",
+      requestedCents: 15n,
+      reason: "consume_token_overage",
+    });
     expect(r.chargedCents).toBe(15n);
     expect(r.shortfallCents).toBe(0n);
     // Lot A (10n) fully drained, then 5n drawn from Lot B.
@@ -218,7 +253,11 @@ describe("consumeCredits — lots model", () => {
     const lotB = makeLot("lot-B", 500n, null);
     state.lots = [lotA, lotB];
 
-    const r = await consumeCredits({ orgId: "org-1", requestedCents: 30n, reason: "consume_token_overage" });
+    const r = await consumeCredits({
+      orgId: "org-1",
+      requestedCents: 30n,
+      reason: "consume_token_overage",
+    });
     expect(r.chargedCents).toBe(30n);
     // Only lot-A was touched (remaining was broken before iterating lot-B).
     expect(state.lotUpdateIds).toHaveLength(1);
@@ -233,14 +272,22 @@ describe("consumeCredits — lots model", () => {
     const liveLot = makeLot("lot-live", 100n, future);
     state.lots = [liveLot]; // expired lot already excluded by WHERE
 
-    const r = await consumeCredits({ orgId: "org-1", requestedCents: 50n, reason: "consume_token_overage" });
+    const r = await consumeCredits({
+      orgId: "org-1",
+      requestedCents: 50n,
+      reason: "consume_token_overage",
+    });
     expect(r.chargedCents).toBe(50n);
     expect(r.balanceCents).toBe(50n); // only the live lot's balance
   });
 
   it("reports zero balance and zero charge when all lots are expired", async () => {
     state.lots = []; // all expired → none returned by WHERE
-    const r = await consumeCredits({ orgId: "org-1", requestedCents: 100n, reason: "consume_token_overage" });
+    const r = await consumeCredits({
+      orgId: "org-1",
+      requestedCents: 100n,
+      reason: "consume_token_overage",
+    });
     expect(r.chargedCents).toBe(0n);
     expect(r.shortfallCents).toBe(100n);
     expect(state.ledgerInserts).toHaveLength(0);
@@ -250,12 +297,20 @@ describe("consumeCredits — lots model", () => {
 
   it("consumes non-expiring (free) lots after expiring ones", async () => {
     // Two expiring lots, then a non-expiring lot (NULLS LAST order).
-    const soonLot = makeLot("lot-soon", 10n, new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000));
+    const soonLot = makeLot(
+      "lot-soon",
+      10n,
+      new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000),
+    );
     const laterLot = makeLot("lot-later", 10n, future);
     const freeLot = makeLot("lot-free", 500n, null); // never expires
     state.lots = [soonLot, laterLot, freeLot];
 
-    const r = await consumeCredits({ orgId: "org-1", requestedCents: 25n, reason: "consume_token_overage" });
+    const r = await consumeCredits({
+      orgId: "org-1",
+      requestedCents: 25n,
+      reason: "consume_token_overage",
+    });
     expect(r.chargedCents).toBe(25n);
     // lot-soon (10) + lot-later (10) + 5 from lot-free = 25
     expect(state.lotUpdateIds).toHaveLength(3);
@@ -268,7 +323,11 @@ describe("consumeCredits — lots model", () => {
 
   it("rejects an invalid reason before touching the DB", async () => {
     await expect(
-      consumeCredits({ orgId: "org-1", requestedCents: 5n, reason: "not_a_reason" }),
+      consumeCredits({
+        orgId: "org-1",
+        requestedCents: 5n,
+        reason: "not_a_reason",
+      }),
     ).rejects.toThrow("invalid credit reason");
     expect(state.ledgerInserts).toHaveLength(0);
   });

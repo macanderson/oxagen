@@ -3,9 +3,11 @@
  *
  * Signs up a fresh user, intercepts the /api/v1/chat/stream SSE endpoint with
  * a minimal scripted text-only scenario, sends a message, and asserts:
- *  - the assistant streaming bubble appears with the streamed text,
  *  - the composer textarea is disabled while streaming is in flight, and
- *  - the composer re-enables once the done sentinel is received.
+ *  - the assistant streaming bubble appears with the streamed text.
+ *
+ * The post-stream "composer re-enables" half of the cycle is deliberately NOT
+ * asserted here — see the NOTE at the end of the test.
  *
  * Gap covered: chat-message-send.spec.ts only verifies that the composer
  * renders and accepts input; it never sends a message or observes the
@@ -31,7 +33,9 @@ test.describe("chat.streaming — streaming assistant bubble", () => {
   test("streamed text appears in the assistant bubble; composer disables during stream and re-enables after", async ({
     page,
   }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "chat-stream" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "chat-stream",
+    });
 
     await page.goto(`/${orgSlug}/default/chat`);
     await expect(page).not.toHaveURL(/\/login/);
@@ -70,7 +74,7 @@ test.describe("chat.streaming — streaming assistant bubble", () => {
     // into a single StreamingText bubble keyed on the messageId.
     const liveTurn = page.locator("[data-live-turn]");
     await expect(liveTurn).toBeVisible({ timeout: 12_000 });
-    await expect(liveTurn).toContainText(/Hello.*from the agent!/si, {
+    await expect(liveTurn).toContainText(/Hello.*from the agent!/is, {
       timeout: 10_000,
     });
 
@@ -79,8 +83,10 @@ test.describe("chat.streaming — streaming assistant bubble", () => {
     // to hydrate the persisted assistant message — but this spec MOCKS the
     // stream route, so nothing was persisted and the refreshed server state
     // diverges from what the client expects, leaving the composer pending in
-    // CI only. The re-enable path is covered by use-tool-stream unit tests and
-    // by chat-message-send.spec, which round-trips against the real route.
+    // CI only. The re-enable path is covered by the use-tool-stream unit tests
+    // ONLY — no e2e spec currently round-trips a send against the real,
+    // unmocked /api/v1/chat/stream route (chat-message-send.spec deliberately
+    // never submits), so the post-stream unlock has no end-to-end proof.
   });
 });
 

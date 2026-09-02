@@ -78,7 +78,9 @@ export async function promptChoice<T>(
   }
   process.stdout.write(`\n${question}\n`);
   items.forEach((item, i) => {
-    process.stdout.write(`  ${String(i + 1).padStart(2)}. ${render(item, i)}\n`);
+    process.stdout.write(
+      `  ${String(i + 1).padStart(2)}. ${render(item, i)}\n`,
+    );
   });
   let choiceIndex: number;
   for (;;) {

@@ -14,10 +14,10 @@
  *
  * TODO(OXA-mcp-cli): add `oxagen mcp auth <server>` — the interactive OAuth
  * flow that writes ~/.config/oxagen/credentials/<server>.json for FILE-BASED
- * oauth servers (referenced by @oxagen/mcp-config credentials.ts). This is
- * orthogonal to Defect 5: DB-backed, workspace-installed servers are
+ * oauth servers (referenced by @oxagen/mcp-config credentials.ts). Only
+ * file-based servers need it: DB-backed, workspace-installed servers are
  * authenticated in the web app and resolved server-side by the CLI turn bridge
- * (mcp/workspace-servers.ts), so they need no CLI auth command.
+ * (mcp/workspace-servers.ts).
  */
 import {
   mcpServerSchema,

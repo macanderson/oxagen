@@ -32,6 +32,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { argv, exit, stdin, stdout } from "node:process";
+import { pathToFileURL } from "node:url";
 import {
   ENV_NAMES,
   ENV_REGISTRY,
@@ -224,7 +225,10 @@ async function main(): Promise<void> {
 }
 
 // `import.meta.url` is the entry point only when run directly, not when a test
-// imports the pure helpers above.
-if (import.meta.url === `file://${argv[1]}`) {
+// imports the pure helpers above. pathToFileURL, not string concatenation: a
+// checkout path with a space or a non-ASCII character percent-encodes in
+// `import.meta.url` but not in argv[1], and the mismatch would leave the build
+// env unwritten while the process still exited 0.
+if (argv[1] && import.meta.url === pathToFileURL(argv[1]).href) {
   await main();
 }

@@ -22,66 +22,76 @@ interface VersionHistoryProps {
 
 function DiffView({ diff }: { diff: VersionDiff }) {
   type DiffSection = { title: string; items: string[]; sign: "+" | "-" | "~" };
-  const sections: DiffSection[] = ([
-    {
-      title: "Schemas Added",
-      items: diff.schemasAdded,
-      sign: "+",
-    },
-    {
-      title: "Schemas Removed",
-      items: diff.schemasRemoved,
-      sign: "-",
-    },
-    {
-      title: "Labels Added",
-      items: diff.labelsAdded.map((l) => `${l.schemaName} / ${l.labelName}`),
-      sign: "+",
-    },
-    {
-      title: "Labels Removed",
-      items: diff.labelsRemoved.map((l) => `${l.schemaName} / ${l.labelName}`),
-      sign: "-",
-    },
-    {
-      title: "Labels Changed",
-      items: diff.labelsChanged.flatMap((l) =>
-        l.changes.map((c) => `${l.schemaName} / ${l.labelName}: ${c}`),
-      ),
-      sign: "~",
-    },
-    {
-      title: "Relationships Added",
-      items: diff.relationshipTypesAdded.map((r) => `${r.schemaName} / ${r.relationshipTypeName}`),
-      sign: "+",
-    },
-    {
-      title: "Relationships Removed",
-      items: diff.relationshipTypesRemoved.map((r) => `${r.schemaName} / ${r.relationshipTypeName}`),
-      sign: "-",
-    },
-    {
-      title: "Properties Added",
-      items: diff.propertiesAdded.map((p) => `${p.ownerName}.${p.key}`),
-      sign: "+",
-    },
-    {
-      title: "Properties Removed",
-      items: diff.propertiesRemoved.map((p) => `${p.ownerName}.${p.key}`),
-      sign: "-",
-    },
-    {
-      title: "Properties Changed",
-      items: diff.propertiesChanged.flatMap((p) =>
-        p.changes.map((c) => `${p.ownerName}.${p.key}: ${c}`),
-      ),
-      sign: "~",
-    },
-  ] as DiffSection[]).filter((s) => s.items.length > 0);
+  const sections: DiffSection[] = (
+    [
+      {
+        title: "Schemas Added",
+        items: diff.schemasAdded,
+        sign: "+",
+      },
+      {
+        title: "Schemas Removed",
+        items: diff.schemasRemoved,
+        sign: "-",
+      },
+      {
+        title: "Labels Added",
+        items: diff.labelsAdded.map((l) => `${l.schemaName} / ${l.labelName}`),
+        sign: "+",
+      },
+      {
+        title: "Labels Removed",
+        items: diff.labelsRemoved.map(
+          (l) => `${l.schemaName} / ${l.labelName}`,
+        ),
+        sign: "-",
+      },
+      {
+        title: "Labels Changed",
+        items: diff.labelsChanged.flatMap((l) =>
+          l.changes.map((c) => `${l.schemaName} / ${l.labelName}: ${c}`),
+        ),
+        sign: "~",
+      },
+      {
+        title: "Relationships Added",
+        items: diff.relationshipTypesAdded.map(
+          (r) => `${r.schemaName} / ${r.relationshipTypeName}`,
+        ),
+        sign: "+",
+      },
+      {
+        title: "Relationships Removed",
+        items: diff.relationshipTypesRemoved.map(
+          (r) => `${r.schemaName} / ${r.relationshipTypeName}`,
+        ),
+        sign: "-",
+      },
+      {
+        title: "Properties Added",
+        items: diff.propertiesAdded.map((p) => `${p.ownerName}.${p.key}`),
+        sign: "+",
+      },
+      {
+        title: "Properties Removed",
+        items: diff.propertiesRemoved.map((p) => `${p.ownerName}.${p.key}`),
+        sign: "-",
+      },
+      {
+        title: "Properties Changed",
+        items: diff.propertiesChanged.flatMap((p) =>
+          p.changes.map((c) => `${p.ownerName}.${p.key}: ${c}`),
+        ),
+        sign: "~",
+      },
+    ] as DiffSection[]
+  ).filter((s) => s.items.length > 0);
 
   if (sections.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground py-4 text-center">No changes between versions.</p>
+      <p className="text-sm text-muted-foreground py-4 text-center">
+        No changes between versions.
+      </p>
     );
   }
 
@@ -114,7 +124,11 @@ function DiffView({ diff }: { diff: VersionDiff }) {
   );
 }
 
-export function VersionHistory({ slugs, pinnedVersionId, onPin }: VersionHistoryProps) {
+export function VersionHistory({
+  slugs,
+  pinnedVersionId,
+  onPin,
+}: VersionHistoryProps) {
   const [versions, setVersions] = React.useState<VersionItem[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [diffDialog, setDiffDialog] = React.useState<{
@@ -147,7 +161,11 @@ export function VersionHistory({ slugs, pinnedVersionId, onPin }: VersionHistory
     };
   }, [slugs]);
 
-  const handleOpenDiff = async (fromVersionId: string, toVersionId: string, toVersionNumber: number) => {
+  const handleOpenDiff = async (
+    fromVersionId: string,
+    toVersionId: string,
+    toVersionNumber: number,
+  ) => {
     setDiffDialog({ open: true, fromVersionId, toVersionId, toVersionNumber });
     setDiff(null);
     setDiffLoading(true);
@@ -193,9 +211,13 @@ export function VersionHistory({ slugs, pinnedVersionId, onPin }: VersionHistory
           >
             <div className="space-y-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono text-sm font-medium">v{v.versionNumber}</span>
+                <span className="font-mono text-sm font-medium">
+                  v{v.versionNumber}
+                </span>
                 {v.label && (
-                  <span className="text-sm text-muted-foreground">— {v.label}</span>
+                  <span className="text-sm text-muted-foreground">
+                    — {v.label}
+                  </span>
                 )}
                 <Badge
                   variant={v.status === "published" ? "default" : "secondary"}
@@ -210,10 +232,14 @@ export function VersionHistory({ slugs, pinnedVersionId, onPin }: VersionHistory
                 )}
               </div>
               {v.changeSummary && (
-                <p className="text-xs text-muted-foreground">{v.changeSummary}</p>
+                <p className="text-xs text-muted-foreground">
+                  {v.changeSummary}
+                </p>
               )}
               {v.publishedAt && (
-                <p className="text-xs text-muted-foreground">{formatDate(v.publishedAt)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatDate(v.publishedAt)}
+                </p>
               )}
             </div>
             <div className="flex items-center gap-2 ml-4 shrink-0">
@@ -234,7 +260,11 @@ export function VersionHistory({ slugs, pinnedVersionId, onPin }: VersionHistory
                   onClick={() => {
                     const prevVersion = versions[idx + 1];
                     if (prevVersion) {
-                      void handleOpenDiff(prevVersion.versionId, v.versionId, v.versionNumber);
+                      void handleOpenDiff(
+                        prevVersion.versionId,
+                        v.versionId,
+                        v.versionNumber,
+                      );
                     }
                   }}
                 >
@@ -254,9 +284,7 @@ export function VersionHistory({ slugs, pinnedVersionId, onPin }: VersionHistory
       >
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>
-              Changes in v{diffDialog?.toVersionNumber}
-            </DialogTitle>
+            <DialogTitle>Changes in v{diffDialog?.toVersionNumber}</DialogTitle>
           </DialogHeader>
           {diffLoading && <Skeleton className="h-48 w-full" />}
           {!diffLoading && diff && <DiffView diff={diff} />}

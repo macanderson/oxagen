@@ -121,7 +121,9 @@ describe("ChatHeaderDesktop — session summary", () => {
     expect(screen.getByText("Coder")).toBeInTheDocument();
     // No explicit branch chosen — sessionSubtitleParts falls back to the
     // repo's default branch ("main"); repo segment isn't long enough to ellipsize.
-    expect(screen.getByText("Fast · acme/platform @ main · Node 22")).toBeInTheDocument();
+    expect(
+      screen.getByText("Fast · acme/platform @ main · Node 22"),
+    ).toBeInTheDocument();
   });
 
   it("omits missing segments (no repo, no environment) cleanly", () => {
@@ -130,14 +132,21 @@ describe("ChatHeaderDesktop — session summary", () => {
   });
 
   it("uses modelLabelOf to prettify an explicit gateway model id", () => {
-    renderHeader({}, { ...BASE_SEED, textModel: "anthropic/claude-sonnet-5", textTier: null });
+    renderHeader(
+      {},
+      { ...BASE_SEED, textModel: "anthropic/claude-sonnet-5", textTier: null },
+    );
     expect(screen.getByText("Claude Sonnet 5")).toBeInTheDocument();
   });
 
   it("middle-ellipsizes a long repo segment, keeping the branch alongside it", () => {
     renderHeader(
       { repos: LONG_REPOS },
-      { ...BASE_SEED, defaultRepoKey: "con_1::acme-corp-engineering/a-very-long-repository-name" },
+      {
+        ...BASE_SEED,
+        defaultRepoKey:
+          "con_1::acme-corp-engineering/a-very-long-repository-name",
+      },
     );
     // "acme-corp-engineering/a-very-long-repository-name" (51 chars) > 24 →
     // first 12 + … + last 8, per middleEllipsis's own defaults.
@@ -157,7 +166,9 @@ describe("middleEllipsis", () => {
   it("keeps the first 12 and last 8 characters, joined by an ellipsis, once over 24 chars", () => {
     const value = "acme-corp-engineering/a-very-long-repository-name";
     const result = middleEllipsis(value);
-    expect(result).toBe(`${value.slice(0, 12)}…${value.slice(value.length - 8)}`);
+    expect(result).toBe(
+      `${value.slice(0, 12)}…${value.slice(value.length - 8)}`,
+    );
     expect(result.length).toBeLessThan(value.length);
   });
 
@@ -180,11 +191,15 @@ describe("ChatHeaderDesktop — interactions", () => {
 describe("ChatHeaderDesktop — activity status dot", () => {
   it("shows the pulsing status dot while streaming", () => {
     renderHeader({ isStreaming: true });
-    expect(screen.getByTestId("chat-header-desktop-activity-dot")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("chat-header-desktop-activity-dot"),
+    ).toBeInTheDocument();
   });
 
   it("omits the status dot when not streaming", () => {
     renderHeader({ isStreaming: false });
-    expect(screen.queryByTestId("chat-header-desktop-activity-dot")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("chat-header-desktop-activity-dot"),
+    ).not.toBeInTheDocument();
   });
 });

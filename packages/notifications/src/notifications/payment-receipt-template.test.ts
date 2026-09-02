@@ -86,9 +86,7 @@ describe("paymentReceiptTemplate", () => {
 
     it("escapes & in receiptUrl (href) as &amp;", () => {
       const { html } = paymentReceiptTemplate(dangerous);
-      expect(html).toContain(
-        'href="https://example.com/receipt?a=1&amp;b=2"'
-      );
+      expect(html).toContain('href="https://example.com/receipt?a=1&amp;b=2"');
     });
 
     it("escapes < in orgName as &lt;", () => {

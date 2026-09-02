@@ -11,9 +11,17 @@
  * it against fixture scope files without touching the real HOME or process
  * env. No network, no writes.
  */
-import { resolveWorkspaceConfig, CONFIG_SCOPE_ORDER, type ResolveWorkspaceConfigOptions } from "./resolve.js";
+import {
+  resolveWorkspaceConfig,
+  CONFIG_SCOPE_ORDER,
+  type ResolveWorkspaceConfigOptions,
+} from "./resolve.js";
 import type { ConfigScope, WorkspaceConfig } from "./schema.js";
-import { loadSettings, type SettingsScope, type ResolveSettingsOptions } from "../settings/resolve.js";
+import {
+  loadSettings,
+  type SettingsScope,
+  type ResolveSettingsOptions,
+} from "../settings/resolve.js";
 
 export type DoctorSeverity = "ok" | "info" | "warn" | "error";
 
@@ -38,7 +46,9 @@ export interface DoctorReport {
   findings: DoctorFinding[];
 }
 
-export interface DoctorOptions extends ResolveWorkspaceConfigOptions, Pick<ResolveSettingsOptions, "userSettingsPath" | "projectDirName"> {
+export interface DoctorOptions
+  extends ResolveWorkspaceConfigOptions,
+    Pick<ResolveSettingsOptions, "userSettingsPath" | "projectDirName"> {
   /** Env snapshot to scan for file-config shadowing. Defaults to process.env. */
   env?: Record<string, string | undefined>;
 }
@@ -46,11 +56,11 @@ export interface DoctorOptions extends ResolveWorkspaceConfigOptions, Pick<Resol
 /**
  * Baseline CLI-wide env vars that shadow file config but have no `settings.env`
  * equivalent (they're read straight off `process.env` by lib/config.ts /
- * agent/model.ts, never projected FROM settings.json) — kept as a fallback
- * "these are active this session" notice. Item 7b's per-key diff below
- * supersedes this list for anything the user has actually declared in
- * `settings.env` (or `settings.model` / `settings.apiUrl`), where we can name
- * the exact scope file being shadowed instead of just the var name.
+ * agent/model.ts, never projected FROM settings.json) — a fallback "these are
+ * active this session" notice. The per-key settings.env diff in
+ * `runConfigDoctor` supersedes this list for anything the user has actually
+ * declared in `settings.env` (or `settings.model` / `settings.apiUrl`), where
+ * the exact scope file being shadowed can be named instead of just the var.
  */
 const SHADOWING_ENV_VARS = [
   "OXAGEN_MODEL",
@@ -83,7 +93,10 @@ export function flattenScopePaths(config: WorkspaceConfig): string[] {
 }
 
 /** Run every check and assemble the report. */
-export function runConfigDoctor(cwd: string, opts: DoctorOptions = {}): DoctorReport {
+export function runConfigDoctor(
+  cwd: string,
+  opts: DoctorOptions = {},
+): DoctorReport {
   const env = opts.env ?? process.env;
   const resolved = resolveWorkspaceConfig(cwd, { ...opts, noCache: true });
   const { config, scopes, provenance } = resolved;
@@ -95,7 +108,12 @@ export function runConfigDoctor(cwd: string, opts: DoctorOptions = {}): DoctorRe
     .reverse() // repo ▸ workspace ▸ user ▸ org — most specific first
     .map((scope) => {
       const s = byScope.get(scope)!;
-      return { scope, path: s.path, present: s.config !== undefined || s.error !== undefined, error: s.error };
+      return {
+        scope,
+        path: s.path,
+        present: s.config !== undefined || s.error !== undefined,
+        error: s.error,
+      };
     });
 
   // ── Errors: unparseable / invalid scope files ──
@@ -126,12 +144,11 @@ export function runConfigDoctor(cwd: string, opts: DoctorOptions = {}): DoctorRe
     }
   }
 
-  // ── Item 7b: settings.env precedence — diff EVERY declared settings.env key
-  // (plus the model/apiUrl scalars, which project the same way) against the
-  // live environment, per key, naming which scope loses. Previously this only
-  // checked a fixed 7-var list and never loaded settings.json at all, so a
-  // `settings set env.MY_KEY <value>` that was actually shadowed by the shell
-  // had no way to surface here short of reading runtime.ts's source.
+  // ── settings.env precedence — diff EVERY declared settings.env key (plus
+  // the model/apiUrl scalars, which project the same way) against the live
+  // environment, per key, naming which scope loses. Without this, a
+  // `settings set env.MY_KEY <value>` that the shell silently overrides has
+  // no way to surface short of reading runtime.ts's source.
   const settingsResult = loadSettings({
     cwd,
     userSettingsPath: opts.userSettingsPath,
@@ -140,10 +157,13 @@ export function runConfigDoctor(cwd: string, opts: DoctorOptions = {}): DoctorRe
   });
   const settingsKeysToCheck = new Map<string, "env" | "model" | "apiUrl">();
   for (const s of settingsResult.scopes) {
-    for (const name of Object.keys(s.settings?.env ?? {})) settingsKeysToCheck.set(name, "env");
+    for (const name of Object.keys(s.settings?.env ?? {}))
+      settingsKeysToCheck.set(name, "env");
   }
-  if (settingsResult.settings.model !== undefined) settingsKeysToCheck.set("OXAGEN_MODEL", "model");
-  if (settingsResult.settings.apiUrl !== undefined) settingsKeysToCheck.set("OXAGEN_API_URL", "apiUrl");
+  if (settingsResult.settings.model !== undefined)
+    settingsKeysToCheck.set("OXAGEN_MODEL", "model");
+  if (settingsResult.settings.apiUrl !== undefined)
+    settingsKeysToCheck.set("OXAGEN_API_URL", "apiUrl");
 
   const findSettingsSource = (
     envVar: string,
@@ -179,7 +199,8 @@ export function runConfigDoctor(cwd: string, opts: DoctorOptions = {}): DoctorRe
   // ── Baseline env shadowing: CLI-wide vars with no settings.json equivalent ──
   const settingsControlledVars = new Set(settingsKeysToCheck.keys());
   const shadowing = SHADOWING_ENV_VARS.filter(
-    (v) => env[v] !== undefined && env[v] !== "" && !settingsControlledVars.has(v),
+    (v) =>
+      env[v] !== undefined && env[v] !== "" && !settingsControlledVars.has(v),
   );
   if (shadowing.length > 0) {
     findings.push({
@@ -192,12 +213,16 @@ export function runConfigDoctor(cwd: string, opts: DoctorOptions = {}): DoctorRe
 
   // ── Presence / linkage ──
   const workspaceTier = byScope.get("workspace")!;
-  const anyLocal = workspaceTier.config !== undefined || byScope.get("repo")!.config !== undefined;
+  const anyLocal =
+    workspaceTier.config !== undefined ||
+    byScope.get("repo")!.config !== undefined;
   if (!anyLocal) {
     findings.push({
       severity: "warn",
-      title: "No project-level config (workspace.json / repo.json) in this directory",
-      detail: "Agents fall back to user/org defaults only — no repo rules are being applied.",
+      title:
+        "No project-level config (workspace.json / repo.json) in this directory",
+      detail:
+        "Agents fall back to user/org defaults only — no repo rules are being applied.",
       fix: "Run `oxagen init` to link the workspace, or `oxagen config init` for a bare starter file.",
     });
   } else if (workspaceTier.config && !workspaceTier.config.workspaceSlug) {
@@ -211,7 +236,8 @@ export function runConfigDoctor(cwd: string, opts: DoctorOptions = {}): DoctorRe
     findings.push({
       severity: "info",
       title: "No org-managed settings on this machine",
-      detail: "~/.oxagen/managed.json is absent — nothing is being enforced org-wide yet.",
+      detail:
+        "~/.oxagen/managed.json is absent — nothing is being enforced org-wide yet.",
       fix: "Run `oxagen config pull` once your organization provisions managed settings.",
     });
   }
@@ -219,7 +245,8 @@ export function runConfigDoctor(cwd: string, opts: DoctorOptions = {}): DoctorRe
     findings.push({
       severity: "info",
       title: "No personal defaults (~/.oxagen/user.json)",
-      detail: "Preferences you set at user scope apply across every repo you work in.",
+      detail:
+        "Preferences you set at user scope apply across every repo you work in.",
       fix: "`oxagen config init --scope user`, then set e.g. vcs.commit.convention once for all projects.",
     });
   }
@@ -230,7 +257,8 @@ export function runConfigDoctor(cwd: string, opts: DoctorOptions = {}): DoctorRe
       findings.push({
         severity: "info",
         title: "No vision statement set",
-        detail: "A one-line vision anchors agent decisions to your product goals.",
+        detail:
+          "A one-line vision anchors agent decisions to your product goals.",
         fix: "/config → highlight vision.statement → e to set it.",
       });
     }
@@ -242,7 +270,8 @@ export function runConfigDoctor(cwd: string, opts: DoctorOptions = {}): DoctorRe
       findings.push({
         severity: "info",
         title: "No project commands declared (dev/build/test/lint/typecheck)",
-        detail: "Declared commands stop agents from guessing how to run your project.",
+        detail:
+          "Declared commands stop agents from guessing how to run your project.",
         fix: '`oxagen config set commands.test \'[{"run":"pnpm test"}]\'`',
       });
     }
@@ -250,21 +279,26 @@ export function runConfigDoctor(cwd: string, opts: DoctorOptions = {}): DoctorRe
       findings.push({
         severity: "info",
         title: "No per-language rules or conventions",
-        detail: "Language rules (enforced or advisory) travel with the repo and steer every agent.",
+        detail:
+          "Language rules (enforced or advisory) travel with the repo and steer every agent.",
         fix: '`oxagen config add typescript rule "no any — use unknown + narrowing"`',
       });
     }
     if (!config.consolidated && config.sources) {
       findings.push({
         severity: "info",
-        title: "Sources are declared but the consolidated index hasn't been built",
+        title:
+          "Sources are declared but the consolidated index hasn't been built",
         fix: "Run `oxagen config build`.",
       });
     }
   }
 
   if (findings.length === 0) {
-    findings.push({ severity: "ok", title: "Configuration looks healthy — no findings." });
+    findings.push({
+      severity: "ok",
+      title: "Configuration looks healthy — no findings.",
+    });
   }
 
   return { tiers, findings };
@@ -277,34 +311,49 @@ const SEVERITY_GLYPH: Record<DoctorSeverity, string> = {
   error: "✗",
 };
 
-const SEVERITY_RANK: Record<DoctorSeverity, number> = { error: 0, warn: 1, info: 2, ok: 3 };
+const SEVERITY_RANK: Record<DoctorSeverity, number> = {
+  error: 0,
+  warn: 1,
+  info: 2,
+  ok: 3,
+};
 
 /** Render the report as the plain-text block /config doctor pushes into the transcript. */
 export function formatDoctorReport(report: DoctorReport): string {
   const lines: string[] = [];
-  lines.push("Config doctor — tier chain (most specific wins; locked/org always wins):");
+  lines.push(
+    "Config doctor — tier chain (most specific wins; locked/org always wins):",
+  );
   for (const tier of report.tiers) {
     const status = tier.error ? "INVALID" : tier.present ? "active" : "absent";
     const label = tier.scope === "org" ? "org (managed, enforced)" : tier.scope;
-    lines.push(`  ${tier.error ? "✗" : tier.present ? "●" : "○"} ${label.padEnd(24)} ${status.padEnd(8)} ${tier.path}`);
+    lines.push(
+      `  ${tier.error ? "✗" : tier.present ? "●" : "○"} ${label.padEnd(24)} ${status.padEnd(8)} ${tier.path}`,
+    );
   }
   lines.push("");
-  // Item 10: the actual, verified-in-code precedence across the CLI's three
-  // overlapping config stores (see fix/cli-config-truth) — printed so a user
-  // never has to read source to know what wins.
+  // The actual, verified-in-code precedence across the CLI's three
+  // overlapping config stores — printed so a user never has to read source to
+  // know what wins.
   lines.push("Effective precedence (highest wins):");
   lines.push(
     "  model / apiUrl:        shell env (OXAGEN_MODEL / OXAGEN_API_URL) > settings.local.json > " +
       "settings (project) > settings (user) > ~/.config/oxagen/config.json (store #2) > built-in default",
   );
-  lines.push("  settings.env.<NAME>:   shell env > settings.local.json > settings (project) > settings (user)");
   lines.push(
-    "  workspace config       managed.json (org, always locked) > any scope's declared \"locked\" path > " +
+    "  settings.env.<NAME>:   shell env > settings.local.json > settings (project) > settings (user)",
+  );
+  lines.push(
+    '  workspace config       managed.json (org, always locked) > any scope\'s declared "locked" path > ' +
       "most-specific unlocked scope (repo > workspace > user)",
   );
-  lines.push("  (vision/commands/languages/vcs/…, this file's own tiers, unrelated to model/apiUrl/settings.env above)");
+  lines.push(
+    "  (vision/commands/languages/vcs/…, this file's own tiers, unrelated to model/apiUrl/settings.env above)",
+  );
   lines.push("");
-  const ordered = [...report.findings].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
+  const ordered = [...report.findings].sort(
+    (a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity],
+  );
   for (const f of ordered) {
     lines.push(`${SEVERITY_GLYPH[f.severity]} ${f.title}`);
     if (f.detail) lines.push(`    ${f.detail}`);

@@ -42,6 +42,16 @@ describe("install command composition", () => {
       "apt-get update && apt-get install -y jq",
     );
   });
+
+  it("interpolates a version pin unquoted (documents the redirect defect)", () => {
+    // Pinned in a test so the defect is visible rather than folklore: the shell
+    // reads `>=2` as a redirect into a file named `=2` and pip installs bare
+    // `requests`. When install() starts single-quoting tokens, this expectation
+    // flips to "pip install 'requests>=2'".
+    expect(PACKAGE_MANAGERS.pip.install(["requests>=2"])).toBe(
+      "pip install requests>=2",
+    );
+  });
 });
 
 describe("isValidPackageToken", () => {

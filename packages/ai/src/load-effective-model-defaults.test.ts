@@ -9,8 +9,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: mockWithTenantDb,
-
+    withTenantDb: mockWithTenantDb,
   };
 });
 
@@ -107,7 +106,10 @@ describe("loadEffectiveModelDefaults", () => {
       userId: "user-1",
       workspaceId: "ws-1",
     });
-    expect(result.text).toEqual({ tier: "precise", model: "anthropic/claude-opus-4.8" });
+    expect(result.text).toEqual({
+      tier: "precise",
+      model: "anthropic/claude-opus-4.8",
+    });
     expect(result.image).toEqual({ model: "bfl/flux-2-max" });
     expect(result.video).toEqual({ model: "google/veo-3.0-generate-001" });
     expect(result.overriddenByWorkspace).toEqual({

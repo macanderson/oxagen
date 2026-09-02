@@ -10,18 +10,12 @@
  * and manage their own sessions and 2FA.
  */
 
-import {
-  Laptop,
-  Smartphone,
-  Bot,
-  Globe,
-} from "lucide-react";
+import { Laptop, Smartphone, Bot, Globe } from "lucide-react";
 import { Panel } from "@/components/ui/panel";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
-import { gt } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
-import { eq, and } from "drizzle-orm";
 import { getSessionOrRedirect } from "@/lib/session";
 import { RevokeOwnSessionButton } from "./_components/revoke-own-session-button";
 import TotpEnrollmentCard from "./_components/totp-enrollment-card";
@@ -185,101 +179,98 @@ export default async function AccountSecurityPage() {
         }
       >
         <p className="mb-4 text-sm text-muted-foreground">
-          All active sessions for your account. You can revoke any session you do not recognize.
+          All active sessions for your account. You can revoke any session you
+          do not recognize.
         </p>
-          {sessions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No active sessions found.
-            </p>
-          ) : (
-            <>
-              {/* Column headers (desktop) */}
-              <div
-                className="mb-2 hidden px-4 sm:grid sm:gap-4"
-                style={{
-                  gridTemplateColumns: "minmax(0,1.4fr) 100px 120px 160px 140px",
-                }}
-              >
-                {["Device", "IP", "Started", "Last active", ""].map((h) => (
-                  <span
-                    key={h}
-                    className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+        {sessions.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No active sessions found.
+          </p>
+        ) : (
+          <>
+            {/* Column headers (desktop) */}
+            <div
+              className="mb-2 hidden px-4 sm:grid sm:gap-4"
+              style={{
+                gridTemplateColumns: "minmax(0,1.4fr) 100px 120px 160px 140px",
+              }}
+            >
+              {["Device", "IP", "Started", "Last active", ""].map((h) => (
+                <span
+                  key={h}
+                  className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                >
+                  {h}
+                </span>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              {sessions.map((s) => {
+                const isCurrent =
+                  currentSessionId !== null && s.id === currentSessionId;
+                return (
+                  <div
+                    key={s.id}
+                    // The 5-column template must stay an sm+-scoped arbitrary
+                    // property, not an inline style: an inline style beats
+                    // `grid-cols-1` at every breakpoint, laying phone rows out
+                    // ~660px wide and clipping the timestamp/revoke columns.
+                    className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm grid grid-cols-1 gap-y-1 sm:gap-4 sm:items-center sm:[grid-template-columns:minmax(0,1.4fr)_100px_120px_160px_140px]"
                   >
-                    {h}
-                  </span>
-                ))}
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                {sessions.map((s) => {
-                  const isCurrent =
-                    currentSessionId !== null && s.id === currentSessionId;
-                  return (
-                    <div
-                      key={s.id}
-                      // The 5-column template is sm+-scoped via an arbitrary
-                      // property: as an inline style it overrode `grid-cols-1`
-                      // at every breakpoint, so phone rows were laid out
-                      // ~660px wide and the timestamp/revoke columns clipped
-                      // off-screen.
-                      className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm grid grid-cols-1 gap-y-1 sm:gap-4 sm:items-center sm:[grid-template-columns:minmax(0,1.4fr)_100px_120px_160px_140px]"
-                    >
-                      {/* Device */}
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <DeviceIcon kind={s.deviceKind} />
-                        <span className="text-xs text-muted-foreground truncate">
-                          {extractBrowser(s.userAgent)}
-                        </span>
-                        {isCurrent && (
-                          <Badge
-                            variant="success"
-                            className="ml-1 text-[10px] shrink-0"
-                          >
-                            Current
-                          </Badge>
-                        )}
-                      </div>
-
-                      {/* IP */}
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
-                        <Globe
-                          className="h-3 w-3 shrink-0"
-                          aria-hidden="true"
-                        />
-                        <span className="truncate">{s.ip ?? "—"}</span>
-                      </div>
-
-                      {/* Started */}
-                      <span className="text-xs text-muted-foreground">
-                        {formatTs(s.createdAt)}
+                    {/* Device */}
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <DeviceIcon kind={s.deviceKind} />
+                      <span className="text-xs text-muted-foreground truncate">
+                        {extractBrowser(s.userAgent)}
                       </span>
-
-                      {/* Last active */}
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-xs text-muted-foreground">
-                          {formatTs(s.updatedAt)}
-                        </span>
-                        <span className="text-[11px] text-muted-foreground/60">
-                          Expires {formatTs(s.expiresAt)}
-                        </span>
-                      </div>
-
-                      {/* Revoke */}
-                      <div className="flex items-center">
-                        {isCurrent ? (
-                          <Badge variant="muted" className="text-[10px]">
-                            This session
-                          </Badge>
-                        ) : (
-                          <RevokeOwnSessionButton sessionId={s.id} />
-                        )}
-                      </div>
+                      {isCurrent && (
+                        <Badge
+                          variant="success"
+                          className="ml-1 text-[10px] shrink-0"
+                        >
+                          Current
+                        </Badge>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
+
+                    {/* IP */}
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
+                      <Globe className="h-3 w-3 shrink-0" aria-hidden="true" />
+                      <span className="truncate">{s.ip ?? "—"}</span>
+                    </div>
+
+                    {/* Started */}
+                    <span className="text-xs text-muted-foreground">
+                      {formatTs(s.createdAt)}
+                    </span>
+
+                    {/* Last active */}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-xs text-muted-foreground">
+                        {formatTs(s.updatedAt)}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground/60">
+                        Expires {formatTs(s.expiresAt)}
+                      </span>
+                    </div>
+
+                    {/* Revoke */}
+                    <div className="flex items-center">
+                      {isCurrent ? (
+                        <Badge variant="muted" className="text-[10px]">
+                          This session
+                        </Badge>
+                      ) : (
+                        <RevokeOwnSessionButton sessionId={s.id} />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </Panel>
     </div>
   );
