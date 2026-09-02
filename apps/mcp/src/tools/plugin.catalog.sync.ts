@@ -19,6 +19,8 @@ export default async function pluginCatalogSyncTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(pluginCatalogSync.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(pluginCatalogSync.name, args, ctx, {
+    surface: "mcp",
+  });
   return pluginCatalogSync.output.parse(output);
 }

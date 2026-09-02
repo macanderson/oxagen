@@ -36,17 +36,13 @@ Accent *copy* never uses `#EFC53F` directly — that is the mark colour and only
 shade in light (`#725A00` — `st-gold-ink`, 6.0:1) and to the gold itself in
 dark (12.0:1). This is exactly what Stella's `--stella-accent-text` does, and
 `--link` follows the same pair. **Links are gold** — and there is no second
-accent anywhere in the skin. The `--ox-indigo*` swatches (`#4C51A8` / `#9CA3E8`)
-were **deleted**: after the gold took links over they lingered as `chart-2` and
-as the "cool" cell of the hero `HexField`, where the breathing pulse's 22–70%
-opacity composited them over the near-black canvas into a muted slate-purple —
-a second brand colour nobody chose, sitting in the largest graphic on the
-product. The categorical ramp now spends palette primitives only.
+accent anywhere in the skin. The categorical ramp spends palette primitives
+only, so no chart, badge or backdrop can introduce a hue the brand never had.
 
-> **Naming note.** The accent identifiers still read `ember`/`amber`
-> (`--ox-ember`, `--_amber-*`, `--_ember-a/b/c`) from the previous skin. They
-> hold Stella gold now. The names were kept rather than swept because ~25 files
-> across `apps/docs` bind to them and a skin owns *values*, not identifiers.
+> **Naming note.** The accent identifiers read `ember`/`amber` (`--ox-ember`,
+> `--_amber-*`, `--_ember-a/b/c`) but hold Stella gold. The names stay because
+> ~25 files across `apps/docs` bind to them, and a skin owns *values*, not
+> identifiers.
 
 The secondary is a quiet neutral fill and the hover/selected accent is neutral
 too — Stella does not tint its rows with the accent. Colour is never smeared
@@ -181,18 +177,14 @@ carry the three stops; `--ox-ember` (#EFC53F) is the master accent knob.
 the one swatch that is intentionally off the gold accent, kept faithful to the
 canonical files in `docs/brand/logos/`.
 
-There is deliberately **no indigo/violet swatch**. `--ox-indigo` (#4C51A8 /
-#9CA3E8) was removed for the reason above, and `chart-2` now takes `--_slate`
-while `chart-5` takes the achromatic `--_stone-500` / `--_stone-400`, so the
+There is deliberately **no indigo/violet swatch**. `chart-2` takes `--_slate`
+and `chart-5` the achromatic `--_stone-500` / `--_stone-400`, so the
 five-series ramp is gold · slate · moss · ochre · silver — four hues roughly
 60° apart plus one neutral, every one of them already in the palette. A new
 categorical hue must come from a primitive in this table, never a fresh one.
 
-The old coral swatches (`--ox-tangerine`, `--ox-rose`, `--ox-teak`,
-`--ox-bronze`, `--ox-sunset-red`, `--ox-gold`, `--ox-wheat`, `--_terracotta*`)
-were **removed**, not re-pointed: they named an earlier brand, had no
-consumers outside the token file, and a swatch called "rose" holding amber is a
-comment that lies.
+When a swatch stops being used, **delete it — do not re-point it.** A swatch
+named for a colour it no longer holds is a comment that lies.
 
 ### Status hues
 
@@ -278,7 +270,7 @@ Base UI data-attributes:
 
 | Primitive | Attribute | Token utility |
 |---|---|---|
-| Tabs | `data-[selected]` | `border-tab-border-active`, `text-tab-fg-active` |
+| Tabs | `data-[active]` | `border-tab-border-active`, `text-tab-fg-active` |
 | Menu / Select item | `data-[highlighted]` | `bg-menu-item-highlighted-bg` |
 | Select item | `data-[selected]` | `bg-menu-item-selected-bg` |
 | Select trigger / submenu | `data-[popup-open]` | open-state styling |
@@ -290,10 +282,10 @@ Base UI data-attributes:
 
 ## 7. Motion policy — **motion is retained**
 
-Tune feel via `--motion-*` / `--ease-*` tokens. The Ember skin keeps
+Tune feel via `--motion-*` / `--ease-*` tokens. The skin keeps
 structural motion: tab slide, overlay enter/exit, control transitions,
-`.hover-lift`, `.hover-glow` (accent ring via `--ring`), `.animate-in`, wand
-pulse. Button hover-grow is neutralized (`--button-hover-scale: 1`) — hover
+`.hover-lift`, `.hover-glow` (accent ring via `--ring`), `.animate-in`.
+Button hover-grow is neutralized (`--button-hover-scale: 1`) — hover
 feedback is the color-mix background shift. The skin stays **flat** — no
 gradients, glows, mesh, or glassmorphism on chrome (depth is a 1px border); the
 ember gradient is reserved for the brand mark and marketing surfaces
@@ -341,15 +333,13 @@ To flatten corners or remove shadows, edit the two control knobs (§2):
 
 - **`.ox-grid-dots`** — a token-driven dotted texture (functional grid, kept).
 - **`.tabs-edge-fade`** — a `linear-gradient` *mask* (structural, kept).
-- **`global-error.tsx`** — top-level crash page uses hardcoded hexes (no theme
-  context available).
-- **`field-fill-transition.tsx` / wand button** — self-contained keyframes
-  (motion-only, flat).
+- **`global-error.tsx`** — the top-level crash boundary loads no `@oxagen/ui`
+  tokens at all, so it hardcodes light-mode hexes. They are NOT theme-aware and
+  do NOT follow a reskin: when the palette changes, update them by hand.
+- **`hex-field.tsx`** — the lit-cell SVG gradient hardcodes the three gold stops
+  (`#725A00` / `#EFC53F` / `#F7D96B`). Same rule: update by hand on a reskin.
 - **Brand mark** — the `--brand-gradient` and `--_ember-*` tokens are
   theme-independent (identical light/dark): the #725A00 → #EFC53F → #F7D96B sweep.
   Recolor them only as a deliberate brand change, in lockstep with the named
   `--ox-ember-deep` / `--ox-ember-light` swatches — never per-theme.
   Only the ink (wordmark strokes) flips via `--_ink` / `--_ink-white`.
-- **`global-error.tsx`** — its hardcoded crash-page hexes are NOT theme-aware; if
-  the brand hues change, update them there too (no `@oxagen/ui` tokens are loaded
-  on the top-level crash boundary).

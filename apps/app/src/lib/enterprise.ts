@@ -30,7 +30,9 @@ export interface EnterpriseAccess {
  * Pure read (no Stripe). Call once per page and thread `isEnterprise` into the
  * UI to toggle the upsell banner + disabled state.
  */
-export async function getEnterpriseAccess(orgId: string): Promise<EnterpriseAccess> {
+export async function getEnterpriseAccess(
+  orgId: string,
+): Promise<EnterpriseAccess> {
   const tier = await resolveOrgTier(orgId);
   return { tier, isEnterprise: meetsMinimumTier(tier, SOC2_MIN_TIER) };
 }
@@ -40,7 +42,10 @@ export async function getEnterpriseAccess(orgId: string): Promise<EnterpriseAcce
  * feature. Throws `TierDeniedError` (catch with `isTierDenied`) when the org is
  * below Enterprise. `feature` is surfaced in the error message for triage.
  */
-export async function assertEnterprise(orgId: string, feature: string): Promise<void> {
+export async function assertEnterprise(
+  orgId: string,
+  feature: string,
+): Promise<void> {
   const tier = await resolveOrgTier(orgId);
   requireTier(tier, SOC2_MIN_TIER, feature);
 }

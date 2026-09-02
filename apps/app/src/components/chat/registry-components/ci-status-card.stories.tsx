@@ -14,7 +14,14 @@ export const Passing: Story = {
     ref: "feat/sandbox-detail-terminal-stories",
     sha: "91e9a8ba5c1d4e2f8a7b9c0d1e2f3a4b5c6d7e8f",
     overall: "passing",
-    counts: { total: 3, passed: 3, failed: 0, pending: 0, skipped: 0, neutral: 0 },
+    counts: {
+      total: 3,
+      passed: 3,
+      failed: 0,
+      pending: 0,
+      skipped: 0,
+      neutral: 0,
+    },
     runs: [
       {
         name: "lint",
@@ -56,7 +63,14 @@ export const Failing: Story = {
     ref: "fix/rls-fail-open",
     sha: "2cc5db2f9a1b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
     overall: "failing",
-    counts: { total: 3, passed: 1, failed: 1, pending: 1, skipped: 0, neutral: 0 },
+    counts: {
+      total: 3,
+      passed: 1,
+      failed: 1,
+      pending: 1,
+      skipped: 0,
+      neutral: 0,
+    },
     runs: [
       {
         name: "lint",
@@ -98,7 +112,14 @@ export const NoChecks: Story = {
     ref: "chore/docs-only",
     sha: null,
     overall: "unknown",
-    counts: { total: 0, passed: 0, failed: 0, pending: 0, skipped: 0, neutral: 0 },
+    counts: {
+      total: 0,
+      passed: 0,
+      failed: 0,
+      pending: 0,
+      skipped: 0,
+      neutral: 0,
+    },
     runs: [],
   },
 };

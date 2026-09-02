@@ -16,12 +16,13 @@ import { AlertTriangle, GitBranch } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { SandboxSummary, SandboxStatus } from "@/lib/workbench/sandboxes";
 
-const STATUS_TONE: Record<SandboxStatus, "success" | "warning" | "secondary"> = {
-  running: "success",
-  idle: "warning",
-  stopped: "secondary",
-  gone: "secondary",
-};
+const STATUS_TONE: Record<SandboxStatus, "success" | "warning" | "secondary"> =
+  {
+    running: "success",
+    idle: "warning",
+    stopped: "secondary",
+    gone: "secondary",
+  };
 
 /** Relative "started N ago" label; never throws on a bad ISO string. */
 function relativeTime(iso: string | null | undefined): string {
@@ -56,7 +57,13 @@ function reapLabel(
   return `reaping in ${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-function StatItem({ label, children }: { label: string; children: React.ReactNode }) {
+function StatItem({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-0.5">
       <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">

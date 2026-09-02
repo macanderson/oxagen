@@ -44,7 +44,10 @@ import { TEST_CTX, makeCTX } from "./test-utils/fixtures";
 const BASE_INPUT = { keyPublicId: "aky_test123" };
 
 /** Build the Drizzle tx mock for resolveActorRole. */
-function makeRoleResolutionTx(principalId: string | null, roleName: string | null) {
+function makeRoleResolutionTx(
+  principalId: string | null,
+  roleName: string | null,
+) {
   let selectCallCount = 0;
   return {
     select: vi.fn().mockImplementation(() => {
@@ -79,7 +82,9 @@ function makeRoleResolutionTx(principalId: string | null, roleName: string | nul
  *   1. select existing key row
  *   2. update the row
  */
-function makeSoftDeleteTx(existingRow: { id: string; publicId: string } | null) {
+function makeSoftDeleteTx(
+  existingRow: { id: string; publicId: string } | null,
+) {
   let selectCallCount = 0;
   return {
     select: vi.fn().mockImplementation(() => {
@@ -114,13 +119,15 @@ function setupHappyPath(
   },
 ) {
   let callCount = 0;
-  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
-    callCount++;
-    if (callCount === 1) {
-      return fn(makeRoleResolutionTx("principal-uuid-1", roleName));
-    }
-    return fn(makeSoftDeleteTx(existingRow));
-  });
+  mocks.withTenantDb.mockImplementation(
+    (fn: (tx: unknown) => Promise<unknown>) => {
+      callCount++;
+      if (callCount === 1) {
+        return fn(makeRoleResolutionTx("principal-uuid-1", roleName));
+      }
+      return fn(makeSoftDeleteTx(existingRow));
+    },
+  );
 }
 
 // ── tests ─────────────────────────────────────────────────────────────────────
@@ -132,7 +139,10 @@ describe("api.key.revoke handler — auth + scope guards", () => {
   });
 
   it("throws CapabilityError authz_denied when both userId and apiKeyId are null", async () => {
-    const anonCtx: CapabilityContext = makeCTX({ userId: null, apiKeyId: null });
+    const anonCtx: CapabilityContext = makeCTX({
+      userId: null,
+      apiKeyId: null,
+    });
     await expect(apiKeyRevokeHandler(BASE_INPUT, anonCtx)).rejects.toSatisfy(
       (e: unknown) =>
         e instanceof CapabilityError &&
@@ -143,7 +153,10 @@ describe("api.key.revoke handler — auth + scope guards", () => {
 
   it("throws CapabilityError authz_denied when orgId is missing", async () => {
     // orgId is string in CapabilityContext but we force-null to exercise the guard
-    const noOrgCtx = { ...TEST_CTX, orgId: null } as unknown as CapabilityContext;
+    const noOrgCtx = {
+      ...TEST_CTX,
+      orgId: null,
+    } as unknown as CapabilityContext;
     await expect(apiKeyRevokeHandler(BASE_INPUT, noOrgCtx)).rejects.toSatisfy(
       (e: unknown) =>
         e instanceof CapabilityError &&
@@ -158,11 +171,15 @@ describe("api.key.revoke handler — role gate", () => {
 
   it("throws CapabilityError authz_denied when no principal row exists", async () => {
     let callCount = 0;
-    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
-      callCount++;
-      if (callCount === 1) return fn(makeRoleResolutionTx(null, null));
-      return fn(makeSoftDeleteTx({ id: "key-uuid-1", publicId: "aky_test123" }));
-    });
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1) return fn(makeRoleResolutionTx(null, null));
+        return fn(
+          makeSoftDeleteTx({ id: "key-uuid-1", publicId: "aky_test123" }),
+        );
+      },
+    );
 
     await expect(apiKeyRevokeHandler(BASE_INPUT, TEST_CTX)).rejects.toSatisfy(
       (e: unknown) =>
@@ -174,11 +191,16 @@ describe("api.key.revoke handler — role gate", () => {
 
   it("throws CapabilityError authz_denied when actor has Member role (insufficient)", async () => {
     let callCount = 0;
-    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
-      callCount++;
-      if (callCount === 1) return fn(makeRoleResolutionTx("principal-uuid-1", "Member"));
-      return fn(makeSoftDeleteTx({ id: "key-uuid-1", publicId: "aky_test123" }));
-    });
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1)
+          return fn(makeRoleResolutionTx("principal-uuid-1", "Member"));
+        return fn(
+          makeSoftDeleteTx({ id: "key-uuid-1", publicId: "aky_test123" }),
+        );
+      },
+    );
 
     await expect(apiKeyRevokeHandler(BASE_INPUT, TEST_CTX)).rejects.toSatisfy(
       (e: unknown) =>
@@ -190,11 +212,16 @@ describe("api.key.revoke handler — role gate", () => {
 
   it("throws CapabilityError authz_denied when actor has Viewer role (insufficient)", async () => {
     let callCount = 0;
-    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
-      callCount++;
-      if (callCount === 1) return fn(makeRoleResolutionTx("principal-uuid-1", "Viewer"));
-      return fn(makeSoftDeleteTx({ id: "key-uuid-1", publicId: "aky_test123" }));
-    });
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1)
+          return fn(makeRoleResolutionTx("principal-uuid-1", "Viewer"));
+        return fn(
+          makeSoftDeleteTx({ id: "key-uuid-1", publicId: "aky_test123" }),
+        );
+      },
+    );
 
     await expect(apiKeyRevokeHandler(BASE_INPUT, TEST_CTX)).rejects.toSatisfy(
       (e: unknown) =>
@@ -208,11 +235,14 @@ describe("api.key.revoke handler — role gate", () => {
 describe("api.key.revoke handler — key not found", () => {
   it("throws Error('Not found...') when key does not exist or is already revoked", async () => {
     let callCount = 0;
-    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
-      callCount++;
-      if (callCount === 1) return fn(makeRoleResolutionTx("principal-uuid-1", "Owner"));
-      return fn(makeSoftDeleteTx(null)); // no existing row
-    });
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1)
+          return fn(makeRoleResolutionTx("principal-uuid-1", "Owner"));
+        return fn(makeSoftDeleteTx(null)); // no existing row
+      },
+    );
 
     await expect(apiKeyRevokeHandler(BASE_INPUT, TEST_CTX)).rejects.toThrow(
       "Not found: API key does not exist, is not in this org, or is already revoked",
@@ -221,11 +251,14 @@ describe("api.key.revoke handler — key not found", () => {
 
   it("not-found error is a plain Error, not a CapabilityError", async () => {
     let callCount = 0;
-    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
-      callCount++;
-      if (callCount === 1) return fn(makeRoleResolutionTx("principal-uuid-1", "Owner"));
-      return fn(makeSoftDeleteTx(null));
-    });
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1)
+          return fn(makeRoleResolutionTx("principal-uuid-1", "Owner"));
+        return fn(makeSoftDeleteTx(null));
+      },
+    );
 
     await expect(apiKeyRevokeHandler(BASE_INPUT, TEST_CTX)).rejects.toSatisfy(
       (e: unknown) => e instanceof Error && !(e instanceof CapabilityError),
@@ -285,7 +318,10 @@ describe("api.key.revoke handler — apiKeyId as actor", () => {
   it("succeeds when userId is null but apiKeyId is set (machine-to-machine auth)", async () => {
     vi.clearAllMocks();
     setupHappyPath("Admin");
-    const machineCtx: CapabilityContext = makeCTX({ userId: null, apiKeyId: "aky_machine123" });
+    const machineCtx: CapabilityContext = makeCTX({
+      userId: null,
+      apiKeyId: "aky_machine123",
+    });
     const result = await apiKeyRevokeHandler(BASE_INPUT, machineCtx);
     expect(result.revoked).toBe(true);
   });

@@ -6,12 +6,16 @@ describe("automation.disable capability", () => {
   // ── input validation ──────────────────────────────────────────────────────
 
   it("accepts a non-empty automation_id", () => {
-    const parsed = automationDisable.input.parse({ automation_id: "trg_abc123" });
+    const parsed = automationDisable.input.parse({
+      automation_id: "trg_abc123",
+    });
     expect(parsed.automation_id).toBe("trg_abc123");
   });
 
   it("rejects an empty automation_id", () => {
-    expect(() => automationDisable.input.parse({ automation_id: "" })).toThrow();
+    expect(() =>
+      automationDisable.input.parse({ automation_id: "" }),
+    ).toThrow();
   });
 
   it("rejects a missing automation_id", () => {
@@ -19,7 +23,9 @@ describe("automation.disable capability", () => {
   });
 
   it("rejects a non-string automation_id", () => {
-    expect(() => automationDisable.input.parse({ automation_id: 42 })).toThrow();
+    expect(() =>
+      automationDisable.input.parse({ automation_id: 42 }),
+    ).toThrow();
   });
 
   // ── output validation ─────────────────────────────────────────────────────
@@ -36,7 +42,10 @@ describe("automation.disable capability", () => {
 
   it("rejects output missing enabled", () => {
     expect(() =>
-      automationDisable.output.parse({ automation_id: "trg_abc123", status: "paused" }),
+      automationDisable.output.parse({
+        automation_id: "trg_abc123",
+        status: "paused",
+      }),
     ).toThrow();
   });
 

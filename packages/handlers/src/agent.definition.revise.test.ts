@@ -85,14 +85,21 @@ function baseSynthesis() {
         strategy: "hybrid" as "semantic" | "lexical" | "hybrid" | "explicit",
         scopeToTypes: ["Deal"] as string[] | undefined,
       },
-      budget: { maxHops: 2, maxNodes: 40, minRelevance: 0.5 as number | undefined },
+      budget: {
+        maxHops: 2,
+        maxNodes: 40,
+        minRelevance: 0.5 as number | undefined,
+      },
     },
     agentTools: [
       { type: "function", ref: "graph.query" },
       { type: "skill", ref: "summarization" },
     ],
     triggers: [{ type: "manual" as const }],
-    changeSummary: ["Equipped the summarization skill", "Renamed to Risk Scanner"],
+    changeSummary: [
+      "Equipped the summarization skill",
+      "Renamed to Risk Scanner",
+    ],
     rationale: "Adding a summariser sharpens the risk write-ups.",
   };
 }
@@ -111,23 +118,44 @@ function setupWorld(currentOverrides: Partial<typeof CURRENT_AGENT> = {}) {
       case "load_skill":
         return { loaded: true, body: SKILL_BODY };
       case "list_schemas":
-        return { schemas: [{ schemaName: "sales", displayName: "Sales", enabled: true }] };
+        return {
+          schemas: [
+            { schemaName: "sales", displayName: "Sales", enabled: true },
+          ],
+        };
       case "list_agent_skills":
         return {
           skills: [
-            { slug: "summarization", name: "Summarise Text", description: "Summarise text" },
+            {
+              slug: "summarization",
+              name: "Summarise Text",
+              description: "Summarise text",
+            },
           ],
         };
       case "list_mcp_servers":
         return { servers: [] };
       case "list_agent_defs":
-        return { agents: [{ slug: "deal-scanner", description: "Scans deals", status: "active" }] };
+        return {
+          agents: [
+            {
+              slug: "deal-scanner",
+              description: "Scans deals",
+              status: "active",
+            },
+          ],
+        };
       case "browse_plugin_catalog":
         return { servers: [] };
       case "list_workspace_skills":
         return {
           skills: [
-            { id: "sk_summ", name: "Summarise Text", description: "Summarise text", enabled: true },
+            {
+              id: "sk_summ",
+              name: "Summarise Text",
+              description: "Summarise text",
+              enabled: true,
+            },
           ],
         };
       case "update_agent_def":
@@ -143,7 +171,10 @@ describe("agentDefinitionReviseHandler (@oxagen/handlers)", () => {
     vi.clearAllMocks();
   });
 
-  const INPUT = { agentId: "agt_DEAL01", prompt: "Add a summariser and rename it Risk Scanner" };
+  const INPUT = {
+    agentId: "agt_DEAL01",
+    prompt: "Add a summariser and rename it Risk Scanner",
+  };
 
   it("persists a new bumped, unpublished version and returns the change summary", async () => {
     setupWorld();
@@ -158,7 +189,9 @@ describe("agentDefinitionReviseHandler (@oxagen/handlers)", () => {
       "Equipped the summarization skill",
       "Renamed to Risk Scanner",
     ]);
-    expect(out.rationale).toBe("Adding a summariser sharpens the risk write-ups.");
+    expect(out.rationale).toBe(
+      "Adding a summariser sharpens the risk write-ups.",
+    );
   });
 
   it("composes update_agent_def with the designed config and never sends a slug", async () => {
@@ -167,7 +200,9 @@ describe("agentDefinitionReviseHandler (@oxagen/handlers)", () => {
 
     await agentDefinitionReviseHandler(INPUT, TEST_CTX);
 
-    const updateCall = mocks.invoke.mock.calls.find((c) => c[0] === "update_agent_def");
+    const updateCall = mocks.invoke.mock.calls.find(
+      (c) => c[0] === "update_agent_def",
+    );
     expect(updateCall).toBeDefined();
     const updateInput = updateCall![1] as Record<string, unknown>;
     // Identity change is allowed via name; slug is immutable and must NOT be sent.
@@ -176,7 +211,10 @@ describe("agentDefinitionReviseHandler (@oxagen/handlers)", () => {
     expect(updateInput.name).toBe("Risk Scanner");
     expect(updateInput.agentType).toBe("custom");
     const config = updateInput.config as { agentTools: Array<{ ref: string }> };
-    expect(config.agentTools.map((t) => t.ref)).toEqual(["graph.query", "summarization"]);
+    expect(config.agentTools.map((t) => t.ref)).toEqual([
+      "graph.query",
+      "summarization",
+    ]);
   });
 
   it("drops a hallucinated tool ref and reports it as a warning", async () => {
@@ -188,28 +226,40 @@ describe("agentDefinitionReviseHandler (@oxagen/handlers)", () => {
     const out = await agentDefinitionReviseHandler(INPUT, TEST_CTX);
 
     expect(out.warnings.some((w) => w.includes("does-not-exist"))).toBe(true);
-    const updateCall = mocks.invoke.mock.calls.find((c) => c[0] === "update_agent_def")!;
-    const config = (updateCall[1] as { config: { agentTools: Array<{ ref: string }> } }).config;
+    const updateCall = mocks.invoke.mock.calls.find(
+      (c) => c[0] === "update_agent_def",
+    )!;
+    const config = (
+      updateCall[1] as { config: { agentTools: Array<{ ref: string }> } }
+    ).config;
     expect(config.agentTools.map((t) => t.ref)).not.toContain("does-not-exist");
   });
 
   it("rejects a product-managed agent before any model call", async () => {
     setupWorld({ managed: true });
 
-    await expect(agentDefinitionReviseHandler(INPUT, TEST_CTX)).rejects.toBeInstanceOf(
-      AgentReviseError,
-    );
+    await expect(
+      agentDefinitionReviseHandler(INPUT, TEST_CTX),
+    ).rejects.toBeInstanceOf(AgentReviseError);
     expect(mocks.generateObjectFor).not.toHaveBeenCalled();
-    expect(mocks.invoke).not.toHaveBeenCalledWith("update_agent_def", expect.anything(), expect.anything());
+    expect(mocks.invoke).not.toHaveBeenCalledWith(
+      "update_agent_def",
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it("wraps a model synthesis failure as AgentSuggestError and never persists", async () => {
     setupWorld();
     mocks.generateObjectFor.mockRejectedValue(new Error("gateway down"));
 
-    await expect(agentDefinitionReviseHandler(INPUT, TEST_CTX)).rejects.toBeInstanceOf(
-      AgentSuggestError,
+    await expect(
+      agentDefinitionReviseHandler(INPUT, TEST_CTX),
+    ).rejects.toBeInstanceOf(AgentSuggestError);
+    expect(mocks.invoke).not.toHaveBeenCalledWith(
+      "update_agent_def",
+      expect.anything(),
+      expect.anything(),
     );
-    expect(mocks.invoke).not.toHaveBeenCalledWith("update_agent_def", expect.anything(), expect.anything());
   });
 });

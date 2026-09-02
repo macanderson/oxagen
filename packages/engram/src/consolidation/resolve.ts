@@ -44,7 +44,14 @@ export function detectContradiction(
   const existingText = existingBody.fact.toLowerCase();
   const newText = newFact.fact.toLowerCase();
 
-  // Check for negation patterns
+  // Check for negation patterns.
+  //
+  // These are plain substring tests, not word matches, so "not" also fires on
+  // "cannot", "another", "notice", and "annotation". That biases the detector
+  // toward FALSE POSITIVES — a spurious contradiction is routed to
+  // `resolveConflict`, which retains both facts (`keep_both`) or escalates,
+  // so the cost is noise rather than data loss. Word-boundary matching would
+  // tighten it but re-baselines the existing detection tests.
   const negations = ["not", "never", "no longer", "doesn't", "isn't", "won't"];
   for (const neg of negations) {
     // One has the negation, the other doesn't, but they reference the same subject

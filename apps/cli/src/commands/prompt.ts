@@ -24,7 +24,10 @@ import {
 import { createOutput } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
-export type PromptCmdCtx = Pick<LoadPromptsOptions, "cwd" | "userPromptsDir"> & {
+export type PromptCmdCtx = Pick<
+  LoadPromptsOptions,
+  "cwd" | "userPromptsDir"
+> & {
   /** `--json`: emit the result as one machine-readable JSON value on stdout (ADR-023 §4). */
   json?: boolean;
 };
@@ -65,7 +68,10 @@ export function promptShow(
   const out = createOutput({ json: ctx.json }, writer);
   const prompt = loadPrompts(ctx).get(name);
   if (!prompt) {
-    out.error(`Unknown prompt "${name}". Run \`oxagen prompt list\`.`, "not_found");
+    out.error(
+      `Unknown prompt "${name}". Run \`oxagen prompt list\`.`,
+      "not_found",
+    );
     return;
   }
   out.data(prompt, () => prettyPrompt(prompt));
@@ -80,7 +86,10 @@ export function promptNew(
   if (!/^[A-Za-z0-9][\w-]*$/.test(name)) {
     // Malformed input → usage error (exit 2). Set before out.error so it wins.
     process.exitCode = 2;
-    out.error(`Invalid prompt name "${name}". Use letters, digits, dashes, underscores.`, "usage");
+    out.error(
+      `Invalid prompt name "${name}". Use letters, digits, dashes, underscores.`,
+      "usage",
+    );
     return;
   }
   const { path, created } = scaffoldPrompt({ name, cwd: ctx.cwd });

@@ -28,7 +28,11 @@ vi.mock("@oxagen/oxagen/contracts/audit.log.query", () => ({
 }));
 
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 import { invoke } from "@oxagen/oxagen";
 import { queryAuditLogAction } from "./audit";
 
@@ -55,7 +59,10 @@ describe("queryAuditLogAction", () => {
     const page = { rows: [], total: 0 };
     mockInvoke.mockResolvedValue(page);
 
-    const result = await queryAuditLogAction({ orgSlug: "acme", workspaceSlug: "main" });
+    const result = await queryAuditLogAction({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+    });
 
     expect(mockResolveOrg).toHaveBeenCalledWith("acme");
     expect(mockResolveWorkspace).toHaveBeenCalledWith("org-1", "main");
@@ -68,7 +75,11 @@ describe("queryAuditLogAction", () => {
         limit: 50,
         offset: 0,
       }),
-      expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }),
+      expect.objectContaining({
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        userId: "user-1",
+      }),
       { surface: "agent" },
     );
     expect(result).toBe(page);

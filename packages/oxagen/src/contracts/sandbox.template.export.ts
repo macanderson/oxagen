@@ -12,7 +12,11 @@ export const sandboxTemplateExport = registerCapability({
     "Export a sandbox template as a portable v1 manifest (config, tools, and required secret key NAMES — never secret values). Distribute it via the plugin/marketplace path.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   sensitivity: "low",
@@ -26,4 +30,6 @@ export const sandboxTemplateExport = registerCapability({
   output: z.object({ manifest: sandboxTemplateManifestSchema }),
 });
 
-export type SandboxTemplateExportOutput = z.output<typeof sandboxTemplateExport.output>;
+export type SandboxTemplateExportOutput = z.output<
+  typeof sandboxTemplateExport.output
+>;

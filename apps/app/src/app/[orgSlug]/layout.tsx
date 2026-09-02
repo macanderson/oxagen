@@ -12,9 +12,6 @@ import {
 } from "@/lib/resolve-org";
 import { loadMfaPolicy } from "@/app/[orgSlug]/security/mfa/actions";
 import { evaluateMfaGate } from "./mfa-enforcement";
-
-// Sentinel workspaceId for org-only routes (no workspace context).
-const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 import { planLabelFrom } from "@/lib/plan-label";
 import { isLowBalance } from "@oxagen/billing";
 import { logger } from "@oxagen/handlers/logger";
@@ -32,6 +29,9 @@ import {
 import type { PlanTier } from "@oxagen/oxagen/types";
 
 type ModelConfig = ReturnType<typeof resolvedTierCatalog>;
+
+// Sentinel workspaceId for org-only routes (no workspace context).
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 /** Agent panel — same deferral as the old WandPanel (overlay, needs the workspace list). */
 async function AgentPanelStreamed({

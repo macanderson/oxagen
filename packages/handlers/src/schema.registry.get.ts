@@ -8,11 +8,14 @@ import { logger } from "./logger";
 
 type Cardinality = "one_to_one" | "one_to_many" | "many_to_many";
 
-export const schemaRegistryGetHandler: CapabilityHandler<typeof schemaRegistryGet> = async (
-  input,
-  ctx,
-) => {
-  const registry = await getOrCreateRegistry(ctx.orgId, ctx.workspaceId, ctx.userId);
+export const schemaRegistryGetHandler: CapabilityHandler<
+  typeof schemaRegistryGet
+> = async (input, ctx) => {
+  const registry = await getOrCreateRegistry(
+    ctx.orgId,
+    ctx.workspaceId,
+    ctx.userId,
+  );
 
   // Determine which version to load. The builder is an editing surface, so the
   // default view must be the DRAFT (the working copy where every agent + manual
@@ -21,7 +24,8 @@ export const schemaRegistryGetHandler: CapabilityHandler<typeof schemaRegistryGe
   // pinned version (publishing copies the draft forward), so this never hides
   // active schemas; the `enabled` flag distinguishes active ones. An explicit
   // `versionId` (e.g. selecting "Pinned version") still wins.
-  const versionId = input.versionId ?? registry.draftVersionId ?? registry.pinnedVersionId;
+  const versionId =
+    input.versionId ?? registry.draftVersionId ?? registry.pinnedVersionId;
 
   const schemas = await withTenantDb(async (tx) => {
     if (!versionId) return [];
@@ -62,7 +66,9 @@ export const schemaRegistryGetHandler: CapabilityHandler<typeof schemaRegistryGe
           isNull(db.schemaActivations.deletedAt),
         ),
       );
-    const enabledMap = new Map(activations.map((a) => [a.schemaName, a.enabled]));
+    const enabledMap = new Map(
+      activations.map((a) => [a.schemaName, a.enabled]),
+    );
 
     // Load node labels
     const labels = await tx
@@ -103,7 +109,10 @@ export const schemaRegistryGetHandler: CapabilityHandler<typeof schemaRegistryGe
       );
 
     const mapProp = (p: (typeof propRows)[number]) => {
-      const constraints = (p.constraints ?? {}) as Record<string, number | string>;
+      const constraints = (p.constraints ?? {}) as Record<
+        string,
+        number | string
+      >;
       return {
         key: p.key,
         dataType: p.dataType as DataType,
@@ -111,7 +120,8 @@ export const schemaRegistryGetHandler: CapabilityHandler<typeof schemaRegistryGe
         description: p.description ?? undefined,
         enumValues: p.enumValues ?? undefined,
         itemType: p.itemType ?? undefined,
-        constraints: Object.keys(constraints).length > 0 ? constraints : undefined,
+        constraints:
+          Object.keys(constraints).length > 0 ? constraints : undefined,
         example: p.example ?? undefined,
       };
     };
@@ -129,7 +139,9 @@ export const schemaRegistryGetHandler: CapabilityHandler<typeof schemaRegistryGe
           displayName: l.displayName,
           description: l.description,
           naturalKeyProps: l.naturalKeyProps ?? [],
-          properties: propRows.filter((p) => p.nodeLabelId === l.id).map(mapProp),
+          properties: propRows
+            .filter((p) => p.nodeLabelId === l.id)
+            .map(mapProp),
         })),
       relationshipTypes: rels
         .filter((r) => r.schemaId === s.id)
@@ -139,13 +151,19 @@ export const schemaRegistryGetHandler: CapabilityHandler<typeof schemaRegistryGe
           startLabel: r.startLabel,
           endLabel: r.endLabel,
           cardinality: (r.cardinality as Cardinality | null) ?? null,
-          properties: propRows.filter((p) => p.relationshipTypeId === r.id).map(mapProp),
+          properties: propRows
+            .filter((p) => p.relationshipTypeId === r.id)
+            .map(mapProp),
         })),
     }));
   });
 
   logger.info(
-    { orgId: ctx.orgId, workspaceId: ctx.workspaceId, schemaCount: schemas.length },
+    {
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      schemaCount: schemas.length,
+    },
     "schema.registry.get: fetched registry",
   );
 

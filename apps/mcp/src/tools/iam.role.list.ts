@@ -18,7 +18,9 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function iamRoleListTool(args: InferSchema<typeof schema>) {
+export default async function iamRoleListTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   const output = await invoke(iamRoleList.name, args, ctx, { surface: "mcp" });
   return iamRoleList.output.parse(output);

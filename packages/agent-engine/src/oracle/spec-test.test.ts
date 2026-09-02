@@ -39,7 +39,9 @@ describe("isTestLikeCommand", () => {
       expect(isTestLikeCommand("npm run test")).toBe(true);
       expect(isTestLikeCommand("pnpm test")).toBe(true);
       expect(isTestLikeCommand("pnpm test:unit")).toBe(true);
-      expect(isTestLikeCommand("pnpm --filter @oxagen/agent-engine test:unit")).toBe(true);
+      expect(
+        isTestLikeCommand("pnpm --filter @oxagen/agent-engine test:unit"),
+      ).toBe(true);
       expect(isTestLikeCommand("yarn test")).toBe(true);
     });
 
@@ -195,8 +197,14 @@ describe("SpecTestTracker", () => {
 
     it("collapses multiple internal spaces", () => {
       const tracker = createSpecTestTracker();
-      tracker.observe({ command: "pnpm   --filter   @oxagen/agent-engine   test:unit", exitCode: 1 });
-      tracker.observe({ command: "pnpm --filter @oxagen/agent-engine test:unit", exitCode: 0 });
+      tracker.observe({
+        command: "pnpm   --filter   @oxagen/agent-engine   test:unit",
+        exitCode: 1,
+      });
+      tracker.observe({
+        command: "pnpm --filter @oxagen/agent-engine test:unit",
+        exitCode: 0,
+      });
       expect(tracker.state()).toBe("flipped");
     });
 
@@ -285,8 +293,14 @@ describe("SpecTestTracker", () => {
 
     it("normalizes paths in scratch scripts", () => {
       const tracker = createSpecTestTracker();
-      tracker.observe({ command: "python  .oxagen/scratch/check.py", exitCode: 1 });
-      tracker.observe({ command: "python .oxagen/scratch/check.py", exitCode: 0 });
+      tracker.observe({
+        command: "python  .oxagen/scratch/check.py",
+        exitCode: 1,
+      });
+      tracker.observe({
+        command: "python .oxagen/scratch/check.py",
+        exitCode: 0,
+      });
       expect(tracker.state()).toBe("flipped");
     });
   });
@@ -362,9 +376,17 @@ describe("SpecTestTracker", () => {
 
     it("flippedBy() returns the specific command that flipped", () => {
       const tracker = createSpecTestTracker();
-      tracker.observe({ command: "pnpm --filter @oxagen/agent-engine test:unit", exitCode: 1 });
-      tracker.observe({ command: "pnpm --filter @oxagen/agent-engine test:unit", exitCode: 0 });
-      expect(tracker.flippedBy()).toBe("pnpm --filter @oxagen/agent-engine test:unit");
+      tracker.observe({
+        command: "pnpm --filter @oxagen/agent-engine test:unit",
+        exitCode: 1,
+      });
+      tracker.observe({
+        command: "pnpm --filter @oxagen/agent-engine test:unit",
+        exitCode: 0,
+      });
+      expect(tracker.flippedBy()).toBe(
+        "pnpm --filter @oxagen/agent-engine test:unit",
+      );
     });
 
     it("flippedBy() returns null before flip", () => {

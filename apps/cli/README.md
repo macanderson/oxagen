@@ -17,8 +17,8 @@ Full reference: **https://docs.oxagen.sh/docs/cli**
 **From the monorepo** (recommended today):
 
 ```bash
-git clone https://github.com/oxagen/oxagen-monorepo.git
-cd oxagen-monorepo
+git clone https://github.com/macanderson/oxagen.git
+cd oxagen
 pnpm install
 
 pnpm --filter @oxagen/cli start -- --version     # run from source (tsx)
@@ -46,6 +46,13 @@ oxagen --version
 > The published npm package expects `tsx` on `PATH`, so it does not run
 > standalone outside the monorepo. Use the monorepo or standalone bundle
 > methods instead.
+>
+> The standalone bundle is what
+> `pnpm --filter @oxagen/cli publish:standalone` ships — the single-file bundle
+> plus a clean manifest. Publishing `apps/cli/package.json` as-is does **not**
+> work: its `bin` points at `dist/index.js`, whose shebang is
+> `#!/usr/bin/env tsx`, and its `dependencies` still carry unpublished
+> `workspace:*` packages.
 
 See https://docs.oxagen.sh/docs/cli/installation for the full walkthrough.
 
@@ -191,7 +198,7 @@ bumps all packages to the same version and syncs it to Vercel.
 ## Support
 
 - Docs: https://docs.oxagen.sh
-- Issues: https://github.com/oxagen/oxagen-monorepo/issues
+- Issues: https://github.com/macanderson/oxagen/issues
 
 ## License
 

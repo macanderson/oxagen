@@ -24,7 +24,13 @@ export interface ReviewRowActionsProps {
   isSelf: boolean;
 }
 
-type ActionStatus = "idle" | "confirming_revoke" | "working" | "confirmed" | "revoked" | "error";
+type ActionStatus =
+  | "idle"
+  | "confirming_revoke"
+  | "working"
+  | "confirmed"
+  | "revoked"
+  | "error";
 
 export function ReviewRowActions({
   orgSlug,
@@ -73,11 +79,19 @@ export function ReviewRowActions({
   }
 
   if (status === "confirmed") {
-    return <Badge variant="success" className="text-xs">Confirmed</Badge>;
+    return (
+      <Badge variant="success" className="text-xs">
+        Confirmed
+      </Badge>
+    );
   }
 
   if (status === "revoked") {
-    return <Badge variant="muted" className="text-xs">Revoked</Badge>;
+    return (
+      <Badge variant="muted" className="text-xs">
+        Revoked
+      </Badge>
+    );
   }
 
   if (status === "error") {
@@ -87,7 +101,10 @@ export function ReviewRowActions({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => { setStatus("idle"); setErrorMsg(null); }}
+          onClick={() => {
+            setStatus("idle");
+            setErrorMsg(null);
+          }}
           className="h-6 px-2 text-xs"
         >
           Dismiss
@@ -99,7 +116,9 @@ export function ReviewRowActions({
   if (status === "confirming_revoke") {
     return (
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">Remove {targetUserName}?</span>
+        <span className="text-xs text-muted-foreground">
+          Remove {targetUserName}?
+        </span>
         <Button
           variant="destructive"
           size="sm"
@@ -147,7 +166,9 @@ export function ReviewRowActions({
         </Button>
       )}
       {isSelf && (
-        <Badge variant="muted" className="text-[10px]">You</Badge>
+        <Badge variant="muted" className="text-[10px]">
+          You
+        </Badge>
       )}
     </div>
   );

@@ -23,7 +23,9 @@ const {
   mockPersistGeneratedAsset: vi.fn(),
 }));
 
-vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSessionOrRedirect }));
+vi.mock("@/lib/session", () => ({
+  getSessionOrRedirect: mockGetSessionOrRedirect,
+}));
 vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: mockResolveOrg,
   resolveWorkspace: mockResolveWorkspace,
@@ -46,7 +48,10 @@ const WORKSPACE = {
   description: "",
 };
 
-function pngFile(name = "screenshot.png", bytes = new Uint8Array([1, 2, 3, 4])): File {
+function pngFile(
+  name = "screenshot.png",
+  bytes = new Uint8Array([1, 2, 3, 4]),
+): File {
   return new File([bytes], name, { type: "image/png" });
 }
 
@@ -126,7 +131,12 @@ describe("POST /api/v1/upload/attachment — success", () => {
 
   it("passes conversationId as null when the composer has no conversation yet", async () => {
     const res = await POST(
-      req({ file: pngFile(), kind: "image", orgSlug: "acme", workspaceSlug: "main" }),
+      req({
+        file: pngFile(),
+        kind: "image",
+        orgSlug: "acme",
+        workspaceSlug: "main",
+      }),
     );
 
     expect(res.status).toBe(201);
@@ -141,7 +151,12 @@ describe("POST /api/v1/upload/attachment — validation and auth", () => {
     mockGetSessionOrRedirect.mockRejectedValueOnce(new Error("no session"));
 
     const res = await POST(
-      req({ file: pngFile(), kind: "image", orgSlug: "acme", workspaceSlug: "main" }),
+      req({
+        file: pngFile(),
+        kind: "image",
+        orgSlug: "acme",
+        workspaceSlug: "main",
+      }),
     );
 
     expect(res.status).toBe(401);
@@ -149,20 +164,29 @@ describe("POST /api/v1/upload/attachment — validation and auth", () => {
   });
 
   it("returns 400 when file is missing", async () => {
-    const res = await POST(req({ kind: "image", orgSlug: "acme", workspaceSlug: "main" }));
+    const res = await POST(
+      req({ kind: "image", orgSlug: "acme", workspaceSlug: "main" }),
+    );
     expect(res.status).toBe(400);
   });
 
   it("returns 400 for an unknown kind", async () => {
     const res = await POST(
-      req({ file: pngFile(), kind: "avatar", orgSlug: "acme", workspaceSlug: "main" }),
+      req({
+        file: pngFile(),
+        kind: "avatar",
+        orgSlug: "acme",
+        workspaceSlug: "main",
+      }),
     );
     expect(res.status).toBe(400);
     expect(mockPersistGeneratedAsset).not.toHaveBeenCalled();
   });
 
   it("returns 400 when orgSlug is missing", async () => {
-    const res = await POST(req({ file: pngFile(), kind: "image", workspaceSlug: "main" }));
+    const res = await POST(
+      req({ file: pngFile(), kind: "image", workspaceSlug: "main" }),
+    );
     expect(res.status).toBe(400);
   });
 
@@ -171,7 +195,12 @@ describe("POST /api/v1/upload/attachment — validation and auth", () => {
       type: "application/x-msdownload",
     });
     const res = await POST(
-      req({ file: badFile, kind: "image", orgSlug: "acme", workspaceSlug: "main" }),
+      req({
+        file: badFile,
+        kind: "image",
+        orgSlug: "acme",
+        workspaceSlug: "main",
+      }),
     );
     expect(res.status).toBe(415);
     expect(mockPersistGeneratedAsset).not.toHaveBeenCalled();
@@ -180,7 +209,12 @@ describe("POST /api/v1/upload/attachment — validation and auth", () => {
   it("returns 400 for an empty file", async () => {
     const empty = new File([], "empty.png", { type: "image/png" });
     const res = await POST(
-      req({ file: empty, kind: "image", orgSlug: "acme", workspaceSlug: "main" }),
+      req({
+        file: empty,
+        kind: "image",
+        orgSlug: "acme",
+        workspaceSlug: "main",
+      }),
     );
     expect(res.status).toBe(400);
   });
@@ -190,7 +224,12 @@ describe("POST /api/v1/upload/attachment — validation and auth", () => {
       type: "image/png",
     });
     const res = await POST(
-      req({ file: huge, kind: "image", orgSlug: "acme", workspaceSlug: "main" }),
+      req({
+        file: huge,
+        kind: "image",
+        orgSlug: "acme",
+        workspaceSlug: "main",
+      }),
     );
     expect(res.status).toBe(413);
     expect(mockPersistGeneratedAsset).not.toHaveBeenCalled();
@@ -200,7 +239,12 @@ describe("POST /api/v1/upload/attachment — validation and auth", () => {
     mockAssertOrgMember.mockRejectedValueOnce(new Error("not a member"));
 
     const res = await POST(
-      req({ file: pngFile(), kind: "image", orgSlug: "acme", workspaceSlug: "main" }),
+      req({
+        file: pngFile(),
+        kind: "image",
+        orgSlug: "acme",
+        workspaceSlug: "main",
+      }),
     );
 
     expect(res.status).toBe(404);
@@ -208,10 +252,17 @@ describe("POST /api/v1/upload/attachment — validation and auth", () => {
   });
 
   it("returns a 500 when persistence fails", async () => {
-    mockPersistGeneratedAsset.mockRejectedValueOnce(new Error("blob store down"));
+    mockPersistGeneratedAsset.mockRejectedValueOnce(
+      new Error("blob store down"),
+    );
 
     const res = await POST(
-      req({ file: pngFile(), kind: "image", orgSlug: "acme", workspaceSlug: "main" }),
+      req({
+        file: pngFile(),
+        kind: "image",
+        orgSlug: "acme",
+        workspaceSlug: "main",
+      }),
     );
 
     expect(res.status).toBe(500);
@@ -223,7 +274,12 @@ describe("POST /api/v1/upload/attachment — validation and auth", () => {
     );
 
     const res = await POST(
-      req({ file: pngFile(), kind: "image", orgSlug: "acme", workspaceSlug: "main" }),
+      req({
+        file: pngFile(),
+        kind: "image",
+        orgSlug: "acme",
+        workspaceSlug: "main",
+      }),
     );
 
     expect(res.status).toBe(503);

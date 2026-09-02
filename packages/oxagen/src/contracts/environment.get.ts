@@ -8,7 +8,11 @@ export const environmentGet = registerCapability({
   description: "Fetch a single workspace environment by its public id.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   sensitivity: "low",

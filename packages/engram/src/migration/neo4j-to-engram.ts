@@ -3,7 +3,10 @@
  *
  * Reads existing memory nodes from Neo4j and emits them as content-addressed
  * Engram MemoryRecords. The migration is:
- * - Idempotent: content addressing means re-running produces identical IDs
+ * - Idempotent, with one exception: the ID is derived from the row's original
+ *   `createdAt`, so re-running yields identical IDs — UNLESS `createdAt` is
+ *   unparseable, in which case `parseCreatedAt` substitutes `Date.now()` and
+ *   that row mints a new ID (and a new duplicate record) on every run.
  * - Additive: does NOT delete from Neo4j (dual-read period)
  * - Batch-oriented: processes one workspace at a time
  */
@@ -57,7 +60,8 @@ export function convertLegacyRow(row: LegacyMemoryRow): MemoryRecord | null {
   const namespace = mapNamespace(row);
   const provenance = mapProvenance(row);
   const salience = WEIGHT_TO_SALIENCE[row.weight] ?? 0.3;
-  const confidence = typeof row.score === "number" ? Math.min(1, Math.max(0, row.score)) : 0.5;
+  const confidence =
+    typeof row.score === "number" ? Math.min(1, Math.max(0, row.score)) : 0.5;
 
   // Pass the original timestamp as createdAt so the content-addressed id is
   // derived from it (episodic records fold occurrence time into the id).

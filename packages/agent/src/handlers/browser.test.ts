@@ -36,7 +36,8 @@ vi.mock("@oxagen/sandbox", () => ({
 
 vi.mock("@oxagen/storage", () => ({
   storage: () => ({ put: h.put }),
-  deriveAssetKey: (kind: string, owner: string, ext: string) => `${kind}/${owner}/fixed.${ext}`,
+  deriveAssetKey: (kind: string, owner: string, ext: string) =>
+    `${kind}/${owner}/fixed.${ext}`,
 }));
 
 const fake = createFakeTx();
@@ -65,7 +66,12 @@ const ROW = {
   snapshotId: null as string | null,
   image: "agent",
   status: "running",
-  metadata: { memoryMb: 2048, ttlSeconds: 86_400, idleTimeoutSeconds: 1_200, network: "allow" },
+  metadata: {
+    memoryMb: 2048,
+    ttlSeconds: 86_400,
+    idleTimeoutSeconds: 1_200,
+    network: "allow",
+  },
 };
 
 function execReturns(stdout: string, over: Record<string, unknown> = {}) {
@@ -103,7 +109,10 @@ describe("browser.* handlers — happy paths", () => {
       expect.objectContaining({
         sandboxId: "sb-aaa",
         command: "browserctl",
-        stdin: JSON.stringify({ op: "navigate", url: "http://localhost:3000/x" }),
+        stdin: JSON.stringify({
+          op: "navigate",
+          url: "http://localhost:3000/x",
+        }),
       }),
     );
   });
@@ -135,14 +144,23 @@ describe("browser.* handlers — happy paths", () => {
     execReturns('{"ok":true}');
 
     const out = await browserFillHandler(
-      { sessionId: "sbx_1", selector: "#email", value: "me@x.com", timeoutMs: 30_000 },
+      {
+        sessionId: "sbx_1",
+        selector: "#email",
+        value: "me@x.com",
+        timeoutMs: 30_000,
+      },
       CTX,
     );
 
     expect(out).toEqual({ ok: true });
     expect(h.driver.execInSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        stdin: JSON.stringify({ op: "fill", selector: "#email", value: "me@x.com" }),
+        stdin: JSON.stringify({
+          op: "fill",
+          selector: "#email",
+          value: "me@x.com",
+        }),
       }),
     );
   });
@@ -150,7 +168,10 @@ describe("browser.* handlers — happy paths", () => {
   it("submit returns ok + resulting url", async () => {
     fake.enqueue([{ ...ROW }]);
     execReturns('{"ok":true,"url":"http://localhost:3000/dash"}');
-    const out = await browserSubmitHandler({ sessionId: "sbx_1", timeoutMs: 60_000 }, CTX);
+    const out = await browserSubmitHandler(
+      { sessionId: "sbx_1", timeoutMs: 60_000 },
+      CTX,
+    );
     expect(out).toEqual({ ok: true, url: "http://localhost:3000/dash" });
   });
 
@@ -167,7 +188,10 @@ describe("browser.* handlers — happy paths", () => {
   it("refresh returns ok + url", async () => {
     fake.enqueue([{ ...ROW }]);
     execReturns('{"ok":true,"url":"http://localhost:3000/x"}');
-    const out = await browserRefreshHandler({ sessionId: "sbx_1", timeoutMs: 60_000 }, CTX);
+    const out = await browserRefreshHandler(
+      { sessionId: "sbx_1", timeoutMs: 60_000 },
+      CTX,
+    );
     expect(out).toEqual({ ok: true, url: "http://localhost:3000/x" });
   });
 
@@ -186,7 +210,10 @@ describe("browser.* handlers — failure paths", () => {
   it("throws when the durable session is unknown", async () => {
     fake.enqueue([]); // getSessionByPublicId → empty
     await expect(
-      browserNavigateHandler({ sessionId: "sbx_x", url: "http://x", timeoutMs: 60_000 }, CTX),
+      browserNavigateHandler(
+        { sessionId: "sbx_x", url: "http://x", timeoutMs: 60_000 },
+        CTX,
+      ),
     ).rejects.toThrow(/was not found/);
   });
 
@@ -194,7 +221,10 @@ describe("browser.* handlers — failure paths", () => {
     fake.enqueue([{ ...ROW }]);
     execReturns('{"ok":false,"error":"selector not found"}');
     await expect(
-      browserClickHandler({ sessionId: "sbx_1", selector: "#missing", timeoutMs: 60_000 }, CTX),
+      browserClickHandler(
+        { sessionId: "sbx_1", selector: "#missing", timeoutMs: 60_000 },
+        CTX,
+      ),
     ).rejects.toThrow(/selector not found/);
   });
 
@@ -210,14 +240,73 @@ describe("browser.* handlers — failure paths", () => {
     fake.enqueue([{ ...ROW }]);
     execReturns("", { gone: true });
     await expect(
-      browserNavigateHandler({ sessionId: "sbx_1", url: "http://x", timeoutMs: 60_000 }, CTX),
+      browserNavigateHandler(
+        { sessionId: "sbx_1", url: "http://x", timeoutMs: 60_000 },
+        CTX,
+      ),
     ).rejects.toThrow(/was reaped/);
   });
 
   it("throws when no durable driver is available", async () => {
+    // Enqueue a row: driveBrowser now loads the session FIRST and resolves the
+    // driver from that row's own `driver` column, so without a row this would
+    // fail with SandboxSessionNotFoundError before reaching the driver check.
+    fake.enqueue([{ ...ROW }]);
     h.isDurableSandboxDriver.mockReturnValue(false);
     await expect(
       browserReadHandler({ sessionId: "sbx_1", timeoutMs: 30_000 }, CTX),
     ).rejects.toThrow(/Durable sandbox sessions are not available/);
+  });
+});
+
+// browserctl is allowed to answer `{"ok":true}` with no `url`/`text` (a submit
+// that navigated nowhere, a read that matched an empty node). Each handler
+// coerces the missing field to "" rather than emitting `undefined` into a
+// typed output, so pin that fallback for every handler that has one.
+describe("browser.* handlers — omitted-field fallbacks", () => {
+  it("submit returns an empty url when the daemon omits one", async () => {
+    fake.enqueue([{ ...ROW }]);
+    execReturns('{"ok":true}');
+    await expect(
+      browserSubmitHandler({ sessionId: "sbx_1", timeoutMs: 60_000 }, CTX),
+    ).resolves.toEqual({ ok: true, url: "" });
+  });
+
+  it("click returns an empty url when the daemon omits one", async () => {
+    fake.enqueue([{ ...ROW }]);
+    execReturns('{"ok":true}');
+    await expect(
+      browserClickHandler(
+        { sessionId: "sbx_1", selector: "button.next", timeoutMs: 60_000 },
+        CTX,
+      ),
+    ).resolves.toEqual({ ok: true, url: "" });
+  });
+
+  it("refresh returns an empty url when the daemon omits one", async () => {
+    fake.enqueue([{ ...ROW }]);
+    execReturns('{"ok":true}');
+    await expect(
+      browserRefreshHandler({ sessionId: "sbx_1", timeoutMs: 60_000 }, CTX),
+    ).resolves.toEqual({ ok: true, url: "" });
+  });
+
+  it("read returns empty text when the daemon omits it", async () => {
+    fake.enqueue([{ ...ROW }]);
+    execReturns('{"ok":true}');
+    await expect(
+      browserReadHandler({ sessionId: "sbx_1", timeoutMs: 30_000 }, CTX),
+    ).resolves.toEqual({ text: "" });
+  });
+
+  it("navigate echoes the requested url and blanks the title when omitted", async () => {
+    fake.enqueue([{ ...ROW }]);
+    execReturns('{"ok":true}');
+    await expect(
+      browserNavigateHandler(
+        { sessionId: "sbx_1", url: "http://x", timeoutMs: 60_000 },
+        CTX,
+      ),
+    ).resolves.toEqual({ url: "http://x", title: "" });
   });
 });

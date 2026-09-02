@@ -27,16 +27,24 @@ export const browserScreenshot = registerCapability({
       .string()
       .min(1)
       .optional()
-      .describe("Optional CSS selector — screenshot only that element instead of the page."),
+      .describe(
+        "Optional CSS selector — screenshot only that element instead of the page.",
+      ),
     fullPage: z
       .boolean()
       .default(false)
-      .describe("Capture the full scrollable page rather than just the viewport."),
+      .describe(
+        "Capture the full scrollable page rather than just the viewport.",
+      ),
     timeoutMs: z.number().int().min(1_000).max(120_000).default(60_000),
   }),
   output: z.object({
-    key: z.string().describe("Private storage key — pass to agent.feature.verify."),
-    url: z.string().describe("Storage URL (private; bytes served via authenticated read)."),
+    key: z
+      .string()
+      .describe("Private storage key — pass to agent.feature.verify."),
+    url: z
+      .string()
+      .describe("Storage URL (private; bytes served via authenticated read)."),
     width: z.number().int(),
     height: z.number().int(),
     bytes: z.number().int().describe("PNG byte length."),

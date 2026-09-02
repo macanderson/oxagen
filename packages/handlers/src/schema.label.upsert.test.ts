@@ -93,14 +93,20 @@ const BASE_INPUT = {
   displayName: "Payment Node",
 };
 
-function setupHappy(overrides: { existing?: boolean; withProps?: boolean } = {}) {
+function setupHappy(
+  overrides: { existing?: boolean; withProps?: boolean } = {},
+) {
   mocks.getOrCreateRegistry.mockResolvedValue(REGISTRY);
   mocks.getOrCreateDraftSchema.mockResolvedValue({ schema: SCHEMA_ROW });
 
   if (overrides.existing) {
     // Existing label found → update path
     mocks.selectExistingLabel.mockResolvedValue([
-      { id: "lbl-internal-1", publicId: "lbl_existing", description: "old desc" },
+      {
+        id: "lbl-internal-1",
+        publicId: "lbl_existing",
+        description: "old desc",
+      },
     ]);
     mocks.updateLabel.mockResolvedValue([{ publicId: "lbl_existing" }]);
     mocks.selectLabelById.mockResolvedValue([{ id: "lbl-internal-1" }]);
@@ -136,7 +142,11 @@ describe("schemaLabelUpsertHandler", () => {
     it("calls getOrCreateRegistry with the correct orgId/workspaceId/userId", async () => {
       setupHappy();
       await schemaLabelUpsertHandler(BASE_INPUT, CTX);
-      expect(mocks.getOrCreateRegistry).toHaveBeenCalledWith(CTX.orgId, CTX.workspaceId, CTX.userId);
+      expect(mocks.getOrCreateRegistry).toHaveBeenCalledWith(
+        CTX.orgId,
+        CTX.workspaceId,
+        CTX.userId,
+      );
     });
 
     it("calls getOrCreateDraftSchema with the correct schemaName", async () => {

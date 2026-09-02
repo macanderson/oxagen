@@ -15,12 +15,13 @@ import { logger } from "../logger";
  * pipeline.
  *
  * Claiming: to keep the *next* scheduler tick from re-enqueuing a connection
- * that's still being polled, this optimistically pushes next_poll_at forward by
- * the connector's steady-state interval at enqueue time (a lease). The
+ * that's still being polled, this optimistically pushes next_poll_at 5 minutes
+ * forward at enqueue time (a short lease, one cron interval). The
  * connection-poll function then overwrites next_poll_at with the real
- * success/backoff schedule when it finishes. Combined with the per-connection
- * concurrency key on connection-poll, a connection is never polled twice
- * concurrently.
+ * success/backoff schedule when it finishes. The lease only suppresses
+ * re-enqueue for one tick; what actually guarantees a connection is never
+ * polled twice concurrently is the per-connection concurrency key on
+ * connection-poll.
  *
  * Only pollable connectors are enqueued — the set is computed from the
  * in-process connector registry, so adding a poll() to a connector
@@ -39,7 +40,10 @@ export const [ingestionPollScheduler] = createFunction(
       .map((c) => c.connectorId);
 
     if (pollableConnectorIds.length === 0) {
-      logger.info({}, "ingestion-poll-scheduler: no pollable connectors registered");
+      logger.info(
+        {},
+        "ingestion-poll-scheduler: no pollable connectors registered",
+      );
       return { enqueued: 0, pollable: 0 };
     }
 
@@ -103,6 +107,8 @@ export const [ingestionPollScheduler] = createFunction(
   },
 );
 
-// Re-exported so tests can assert the claim/backoff scheduling math is wired
-// through the shared pure helper rather than duplicated here.
+// Re-export only. This scheduler does NOT call nextPollAt — the claim above
+// leases a flat 5 minutes; the real interval/backoff math runs in
+// ingestion.connection-poll's finalize step. Any test that reads this export as
+// proof the scheduler uses the helper is asserting something untrue.
 export { nextPollAt };

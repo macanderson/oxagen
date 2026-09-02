@@ -8,9 +8,9 @@ import { toolCallMeta } from "./tool-call-meta";
 import type { RiskLevel, ToolCallStatus } from "./stream-event-types";
 
 /**
- * Graph query results are big machine-shaped documents (node/edge hits with
- * full property bags) where the structured chip/grid tree becomes an
- * unreadable wall. These capabilities render their Result as a clipped,
+ * Graph query results are big, machine-shaped documents — node and edge hits
+ * carrying full property bags — and the structured chip/grid tree turns them
+ * into an unreadable wall. These capabilities render their Result as a clipped,
  * syntax-highlighted JSON snippet with a copy button instead.
  */
 const JSON_RESULT_CAPS = new Set([
@@ -115,8 +115,8 @@ export function ToolCallCard(props: ToolCallCardProps) {
     streamRef.current.scrollTop = streamRef.current.scrollHeight;
   }, [stdout, stderr, status]);
 
-  // Human-readable label + domain icon — the raw dotted capability string is
-  // never the primary label; it lives in the expanded body and `title` only.
+  // Human-readable label + domain icon — the raw capability string is never the
+  // primary label; it lives in the expanded body and `title` only.
   const { label, Icon } = toolCallMeta(capability);
 
   // Input + Result sit side-by-side on wide screens so we use horizontal space

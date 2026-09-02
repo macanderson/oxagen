@@ -10,14 +10,22 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return { ...real, withTenantDb: mocks.withTenantDb };
 });
-vi.mock("@oxagen/ingestion/connectors", () => ({ getConnector: mocks.getConnector }));
-vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("@oxagen/ingestion/connectors", () => ({
+  getConnector: mocks.getConnector,
+}));
+vi.mock("./logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 import { integrationInstallHandler } from "./integration.install";
 
 const CTX = makeCTX({ orgId: "org-1", workspaceId: "ws-1", userId: "u-1" });
 
-function fakeConnector(parseResult: { success: boolean; data?: unknown; error?: unknown }) {
+function fakeConnector(parseResult: {
+  success: boolean;
+  data?: unknown;
+  error?: unknown;
+}) {
   return {
     connectorId: "github",
     deliveryMethod: "webhook",
@@ -27,15 +35,16 @@ function fakeConnector(parseResult: { success: boolean; data?: unknown; error?: 
 }
 
 function setupInsert(publicId = "con_new", id = "uuid-new") {
-  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      insert: () => ({
-        values: (v: unknown) => {
-          mocks.valuesSpy(v);
-          return { returning: () => Promise.resolve([{ id, publicId }]) };
-        },
+  mocks.withTenantDb.mockImplementation(
+    (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        insert: () => ({
+          values: (v: unknown) => {
+            mocks.valuesSpy(v);
+            return { returning: () => Promise.resolve([{ id, publicId }]) };
+          },
+        }),
       }),
-    }),
   );
 }
 
@@ -56,7 +65,10 @@ describe("integration.install handler", () => {
       throw new Error('No connector registered for "nope"');
     });
     await expect(
-      integrationInstallHandler({ pluginId: "nope", config: {}, displayName: "X" }, CTX),
+      integrationInstallHandler(
+        { pluginId: "nope", config: {}, displayName: "X" },
+        CTX,
+      ),
     ).rejects.toThrow("Unknown plugin: nope");
   });
 
@@ -68,7 +80,10 @@ describe("integration.install handler", () => {
       }),
     );
     await expect(
-      integrationInstallHandler({ pluginId: "github", config: {}, displayName: "GH" }, CTX),
+      integrationInstallHandler(
+        { pluginId: "github", config: {}, displayName: "GH" },
+        CTX,
+      ),
     ).rejects.toThrow(/Invalid plugin config: owner: Required/);
   });
 
@@ -79,7 +94,11 @@ describe("integration.install handler", () => {
     setupInsert("con_new", "uuid-new");
 
     const out = await integrationInstallHandler(
-      { pluginId: "github", config: { owner: "acme", repo: "app" }, displayName: "Acme GitHub" },
+      {
+        pluginId: "github",
+        config: { owner: "acme", repo: "app" },
+        displayName: "Acme GitHub",
+      },
       CTX,
     );
 
@@ -90,7 +109,10 @@ describe("integration.install handler", () => {
       displayName: "Acme GitHub",
     });
 
-    const inserted = mocks.valuesSpy.mock.calls[0]![0] as Record<string, unknown>;
+    const inserted = mocks.valuesSpy.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
     expect(inserted["status"]).toBe("pending_setup");
     expect(inserted["connectorId"]).toBe("github");
     expect(inserted["deliveryMethod"]).toBe("webhook");

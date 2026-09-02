@@ -6,7 +6,13 @@
  * star, and roving keyboard focus.
  */
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AgentPickerPanel } from "./agent-picker-panel";
 import { ChatSessionProvider } from "../session/session-store";
@@ -394,14 +400,18 @@ describe("AgentPickerPanel — branch selection", () => {
     expect(
       screen.queryByRole("button", { name: "main" }),
     ).not.toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "develop" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "develop" }),
+    ).toBeInTheDocument();
   });
 
   it("resets a chosen branch when the repository changes (org → repo → branch cascade)", async () => {
     const { onApply } = openSetup();
     fireEvent.click(screen.getByLabelText("Session branch"));
     fireEvent.click(await screen.findByRole("button", { name: "develop" }));
-    expect(screen.getByLabelText("Session branch")).toHaveTextContent("develop");
+    expect(screen.getByLabelText("Session branch")).toHaveTextContent(
+      "develop",
+    );
 
     // Switch the repo — the branch belonged to the repo we just left.
     fireEvent.click(screen.getByRole("button", { name: "acme/web" }));
@@ -415,8 +425,13 @@ describe("AgentPickerPanel — branch selection", () => {
   });
 
   it("preselects the branch already chosen for the conversation", () => {
-    openSetup({ selectedRepoKey: "con_1::acme/api", selectedBranch: "develop" });
-    expect(screen.getByLabelText("Session branch")).toHaveTextContent("develop");
+    openSetup({
+      selectedRepoKey: "con_1::acme/api",
+      selectedBranch: "develop",
+    });
+    expect(screen.getByLabelText("Session branch")).toHaveTextContent(
+      "develop",
+    );
   });
 
   it("omits the branch row without an org+workspace scope to fetch under", () => {
@@ -482,7 +497,6 @@ describe("AgentPickerPanel — keyboard", () => {
   });
 });
 
-
 // ── chat_ux_v2 path ──────────────────────────────────────────────────────────
 // `v2` is NOT a prop — the panel derives it from `useChatSessionContext() !==
 // null`, so exercising this path means mounting a real ChatSessionProvider.
@@ -539,7 +553,9 @@ describe("AgentPickerPanel — chat_ux_v2", () => {
     const { onApply } = renderPanelV2();
     fireEvent.click(screen.getByRole("option", { name: /Chatter/ }));
     expect(onApply).toHaveBeenCalledWith({ agentId: "agt_chat" });
-    expect(screen.queryByLabelText("Session repository")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Session repository"),
+    ).not.toBeInTheDocument();
   });
 
   it("opens the setup step for a CODE agent instead of applying — its target is chosen once, never adjusted later", () => {

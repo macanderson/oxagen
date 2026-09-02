@@ -29,7 +29,7 @@ function deQuote(raw: string | undefined, fallback: string): string {
 
 const DATABASE_URL = deQuote(
   process.env.DATABASE_URL,
-  "postgres://oxagen:oxagen@localhost:5432/oxagen",
+  "postgres://oxagen:oxagen@localhost:5433/oxagen",
 );
 
 async function getOrgId(orgSlug: string): Promise<string> {
@@ -39,7 +39,9 @@ async function getOrgId(orgSlug: string): Promise<string> {
       SELECT id FROM org.organizations WHERE slug = ${orgSlug}
     `;
     if (!row)
-      throw new Error(`billing-credits-purchase: org not found for slug ${orgSlug}`);
+      throw new Error(
+        `billing-credits-purchase: org not found for slug ${orgSlug}`,
+      );
     return row.id;
   } finally {
     await sql.end({ timeout: 5 });
@@ -53,7 +55,9 @@ async function getOrgId(orgSlug: string): Promise<string> {
 test("billing credits: BuyCredits widget renders on subscription page for paid org", async ({
   page,
 }) => {
-  const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "credits-render" });
+  const { orgSlug } = await signUpFreshUser(page, {
+    orgPrefix: "credits-render",
+  });
   const orgId = await getOrgId(orgSlug);
 
   const { cleanup } = await seedSubscription({ orgId, seatCount: 5 });
@@ -90,7 +94,9 @@ test("billing credits: purchase submission reaches Stripe checkout endpoint", as
 }) => {
   test.setTimeout(60_000);
 
-  const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "credits-checkout" });
+  const { orgSlug } = await signUpFreshUser(page, {
+    orgPrefix: "credits-checkout",
+  });
   const orgId = await getOrgId(orgSlug);
 
   const { cleanup } = await seedSubscription({ orgId, seatCount: 5 });
@@ -111,7 +117,10 @@ test("billing credits: purchase submission reaches Stripe checkout endpoint", as
 
     page.on("request", (req) => {
       const url = req.url();
-      if (url.includes("/api/v1/stripe/credits") || url.includes("checkout.stripe.com")) {
+      if (
+        url.includes("/api/v1/stripe/credits") ||
+        url.includes("checkout.stripe.com")
+      ) {
         creditsApiHit = true;
       }
       if (url.includes("checkout.stripe.com")) {
@@ -154,12 +163,15 @@ test("billing credits: purchase submission reaches Stripe checkout endpoint", as
     // show a toast error when Stripe isn't configured instead of redirecting).
     await Promise.race([
       navigationAway,
-      page.waitForResponse(
-        (res) => res.url().includes("/api/v1/stripe/credits"),
-        { timeout: 15_000 },
-      ).catch(() => null),
+      page
+        .waitForResponse(
+          (res) => res.url().includes("/api/v1/stripe/credits"),
+          { timeout: 15_000 },
+        )
+        .catch(() => null),
       // Tolerate toast error: "Purchase failed" means the API path was reached.
-      page.getByText(/purchase failed|redirecting to stripe/i)
+      page
+        .getByText(/purchase failed|redirecting to stripe/i)
         .waitFor({ state: "visible", timeout: 15_000 })
         .catch(() => null),
     ]);
@@ -177,7 +189,10 @@ test("billing credits: purchase submission reaches Stripe checkout endpoint", as
     // endedOnStripe means the redirect happened in-page (window.location.href=url).
     // endedOnBillingOrError means we stayed on the page with a toast error.
     const checkoutPathReached =
-      creditsApiHit || stripeNavCaptured || endedOnStripe || endedOnBillingOrError;
+      creditsApiHit ||
+      stripeNavCaptured ||
+      endedOnStripe ||
+      endedOnBillingOrError;
 
     expect(checkoutPathReached).toBe(true);
 
@@ -202,7 +217,9 @@ test("billing credits: free org cannot complete credits purchase", async ({
   test.setTimeout(60_000);
 
   // No subscription seeded — org stays on Free tier.
-  const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "credits-free" });
+  const { orgSlug } = await signUpFreshUser(page, {
+    orgPrefix: "credits-free",
+  });
 
   await page.goto(`/${orgSlug}/billing/subscription`);
   await expect(page).not.toHaveURL(/\/login/);
@@ -248,11 +265,13 @@ test("billing credits: free org cannot complete credits purchase", async ({
 
   // Wait for any response or toast.
   await Promise.race([
-    page.waitForResponse(
-      (res) => res.url().includes("/api/v1/stripe/credits"),
-      { timeout: 10_000 },
-    ).catch(() => null),
-    page.getByText(/paid plan|upgrade|purchase failed/i)
+    page
+      .waitForResponse((res) => res.url().includes("/api/v1/stripe/credits"), {
+        timeout: 10_000,
+      })
+      .catch(() => null),
+    page
+      .getByText(/paid plan|upgrade|purchase failed/i)
       .waitFor({ state: "visible", timeout: 10_000 })
       .catch(() => null),
   ]);
@@ -261,7 +280,10 @@ test("billing credits: free org cannot complete credits purchase", async ({
   // that results in a "Purchase failed" toast, or we got a 402/422/500 response.
   // Any of these means the plan gate is in place.
   const gateSeen =
-    (await page.getByText(/paid plan|upgrade|purchase failed/i).isVisible().catch(() => false)) ||
+    (await page
+      .getByText(/paid plan|upgrade|purchase failed/i)
+      .isVisible()
+      .catch(() => false)) ||
     (apiStatus !== 0 && apiStatus !== 200);
 
   // Accept either outcome: widget hidden (already returned above) OR an error

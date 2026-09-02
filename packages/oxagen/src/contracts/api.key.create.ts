@@ -25,7 +25,11 @@ export const apiKeyCreate = registerCapability({
   // API key management does not consume AI tokens — billing gate must not
   // block this for orgs with zero credit balance.
   noBillingGate: true,
-  agent: { requiresApproval: false, riskLevel: "medium", category: "organization" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "medium",
+    category: "organization",
+  },
   sensitivity: "high",
   defaultEffect: "deny",
   defaultRoles: {
@@ -33,7 +37,11 @@ export const apiKeyCreate = registerCapability({
     workspace: {},
   },
   input: z.object({
-    name: z.string().min(1).max(120).describe("Human-readable label for the key"),
+    name: z
+      .string()
+      .min(1)
+      .max(120)
+      .describe("Human-readable label for the key"),
     scope: z
       .record(z.unknown())
       .optional()
@@ -43,7 +51,9 @@ export const apiKeyCreate = registerCapability({
       .string()
       .datetime()
       .optional()
-      .describe("Optional ISO-8601 expiry timestamp. Omit for a non-expiring key."),
+      .describe(
+        "Optional ISO-8601 expiry timestamp. Omit for a non-expiring key.",
+      ),
   }),
   output: z.object({
     keyId: z.string().describe("Internal UUID of the created key"),
@@ -55,7 +65,9 @@ export const apiKeyCreate = registerCapability({
     createdAt: z.string().describe("ISO-8601 creation timestamp"),
     render: renderDirectiveSchema
       .optional()
-      .describe("Render directive for displaying the key in the chat UI (agent surface only)"),
+      .describe(
+        "Render directive for displaying the key in the chat UI (agent surface only)",
+      ),
   }),
 });
 

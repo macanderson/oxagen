@@ -24,15 +24,23 @@ vi.mock("../inngest", () => ({
 }));
 
 vi.mock("@oxagen/config/env", () => ({
-  requireEnv: () => ({ INNGEST_EVENT_KEY: "evt-test", INNGEST_SIGNING_KEY: "sign-test", NODE_ENV: "test" }),
+  requireEnv: () => ({
+    INNGEST_EVENT_KEY: "evt-test",
+    INNGEST_SIGNING_KEY: "sign-test",
+    NODE_ENV: "test",
+  }),
   normalizeEnv: (e: unknown) => e,
 }));
 
 // Capture the handler
-let capturedHandler: ((ctx: {
-  event: { data: Record<string, unknown> };
-  step: { run: (name: string, fn: () => Promise<unknown>) => Promise<unknown> };
-}) => Promise<unknown>) | null = null;
+let capturedHandler:
+  | ((ctx: {
+      event: { data: Record<string, unknown> };
+      step: {
+        run: (name: string, fn: () => Promise<unknown>) => Promise<unknown>;
+      };
+    }) => Promise<unknown>)
+  | null = null;
 
 mocks.inngestCreateFunction.mockImplementation(
   (_opts: unknown, _trigger: unknown, handler: typeof capturedHandler) => {
@@ -88,9 +96,13 @@ describe("stripeSyncInvoice Inngest handler", () => {
   });
 
   it("propagates errors thrown by syncInvoiceFromStripe", async () => {
-    mocks.syncInvoiceFromStripe.mockRejectedValueOnce(new Error("Stripe API error"));
+    mocks.syncInvoiceFromStripe.mockRejectedValueOnce(
+      new Error("Stripe API error"),
+    );
     const event = { data: { stripeInvoiceId: "in_fail_001" } };
 
-    await expect(capturedHandler!({ event, step: makeStep() })).rejects.toThrow("Stripe API error");
+    await expect(capturedHandler!({ event, step: makeStep() })).rejects.toThrow(
+      "Stripe API error",
+    );
   });
 });

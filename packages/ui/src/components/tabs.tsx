@@ -15,15 +15,18 @@ import { fadeInUp } from "../lib/motion";
  */
 const Tabs = TabsPrimitive.Root;
 
-const tabsListVariants = cva("group/list inline-flex items-center text-tab-fg", {
-  variants: {
-    variant: {
-      default: "h-9 justify-center rounded-lg bg-muted p-1",
-      underline: "justify-start gap-4 border-b border-border",
+const tabsListVariants = cva(
+  "group/list inline-flex items-center text-tab-fg",
+  {
+    variants: {
+      variant: {
+        default: "h-9 justify-center rounded-lg bg-muted p-1",
+        underline: "justify-start gap-4 border-b border-border",
+      },
     },
+    defaultVariants: { variant: "default" },
   },
-  defaultVariants: { variant: "default" },
-});
+);
 
 interface TabsListProps
   extends React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>,

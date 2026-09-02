@@ -31,9 +31,12 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
       mocks.callCount.value += 1;
       const leaf =
-        [mocks.convSelect, mocks.messageSelect, mocks.orgSelect, mocks.wsSelect][
-          mocks.callCount.value - 1
-        ] ?? mocks.wsSelect;
+        [
+          mocks.convSelect,
+          mocks.messageSelect,
+          mocks.orgSelect,
+          mocks.wsSelect,
+        ][mocks.callCount.value - 1] ?? mocks.wsSelect;
       return fn(makeChain(leaf));
     },
   };
@@ -74,8 +77,18 @@ const MESSAGE_ROWS = [
     contentBlocks: [
       { type: "reasoning", text: "consider the roadmap", durationMs: 1200 },
       { type: "text", text: "Ship the wedge." },
-      { type: "tool-call", capability: "search_graph", status: "success", durationMs: 300 },
-      { type: "code-execute", language: "ts", code: "const x = 1;", status: "success" },
+      {
+        type: "tool-call",
+        capability: "search_graph",
+        status: "success",
+        durationMs: 300,
+      },
+      {
+        type: "code-execute",
+        language: "ts",
+        code: "const x = 1;",
+        status: "success",
+      },
     ],
     metadata: {},
     createdAt: new Date("2026-07-01T10:01:00.000Z"),
@@ -136,20 +149,26 @@ describe("conversationExportHandler (@oxagen/handlers)", () => {
     expect(result.format).toBe("markdown");
     expect(result.url).toBeNull();
     expect(result.messageCount).toBe(2);
-    expect(result.filename).toMatch(/^quarterly-planning-\d{4}-\d{2}-\d{2}\.md$/);
+    expect(result.filename).toMatch(
+      /^quarterly-planning-\d{4}-\d{2}-\d{2}\.md$/,
+    );
     expect(result.content).toContain("# Quarterly Planning");
     expect(result.content).toContain("- **Organization:** Acme");
     expect(result.content).toContain("- **Workspace:** Growth");
     expect(result.content).toContain("## You");
     expect(result.content).toContain("## Assistant");
     expect(result.content).toContain("<summary>Reasoning (1.2s)</summary>");
-    expect(result.content).toContain("tool: search_graph · status: success · duration: 300ms");
+    expect(result.content).toContain(
+      "tool: search_graph · status: success · duration: 300ms",
+    );
     expect(result.content).toContain("```ts\nconst x = 1;\n```");
     expect(mocks.persist).not.toHaveBeenCalled();
   });
 
   it("exports only the active branch when the conversation forks", async () => {
-    mocks.convSelect.mockResolvedValueOnce([{ ...CONV_ROW, activeLeafMessageId: "m3" }]);
+    mocks.convSelect.mockResolvedValueOnce([
+      { ...CONV_ROW, activeLeafMessageId: "m3" },
+    ]);
     mocks.messageSelect.mockResolvedValueOnce([
       ...MESSAGE_ROWS,
       {
@@ -191,7 +210,9 @@ describe("conversationExportHandler (@oxagen/handlers)", () => {
     expect(result.format).toBe("pdf");
     expect(result.content).toBeNull();
     expect(result.url).toBe("/api/v1/assets/gen_export1");
-    expect(result.filename).toMatch(/^quarterly-planning-\d{4}-\d{2}-\d{2}\.pdf$/);
+    expect(result.filename).toMatch(
+      /^quarterly-planning-\d{4}-\d{2}-\d{2}\.pdf$/,
+    );
 
     expect(mocks.persist).toHaveBeenCalledTimes(1);
     const args = mocks.persist.mock.calls[0]![0] as {
@@ -218,9 +239,14 @@ describe("conversationExportHandler (@oxagen/handlers)", () => {
 
   it("does not forward ctx.messageId into the persisted asset", async () => {
     seedHappyPath();
-    const ctxWithMessage: CapabilityContext = { ...TEST_CTX, messageId: "msg-live" };
+    const ctxWithMessage: CapabilityContext = {
+      ...TEST_CTX,
+      messageId: "msg-live",
+    };
     await conversationExportHandler(PDF_INPUT, ctxWithMessage);
-    const args = mocks.persist.mock.calls[0]![0] as { messageId: string | null };
+    const args = mocks.persist.mock.calls[0]![0] as {
+      messageId: string | null;
+    };
     expect(args.messageId).toBeNull();
   });
 

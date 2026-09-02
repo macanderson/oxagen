@@ -6,9 +6,7 @@ import { buildContext } from "../context";
 
 export const schema = {
   ...documentCreate.input.shape,
-  title: documentCreate.input.shape.title.describe(
-    "Document title",
-  ),
+  title: documentCreate.input.shape.title.describe("Document title"),
   content: documentCreate.input.shape.content.describe(
     "Initial document content (optional)",
   ),
@@ -24,8 +22,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function documentCreateTool(args: InferSchema<typeof schema>) {
+export default async function documentCreateTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(documentCreate.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(documentCreate.name, args, ctx, {
+    surface: "mcp",
+  });
   return documentCreate.output.parse(output);
 }

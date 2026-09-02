@@ -13,12 +13,18 @@ export type { AgentSkillLoadInput, AgentSkillLoadOutput };
 type VersionRow = { id: string; versionNumber: number; body: string };
 
 /**
- * Match a version number against a constraint string.
- * Supported forms:
- *   - exact integer string: "3" → must equal 3
- *   - caret prefix "^N"    → must be >= N (same major compatibility)
- *   - tilde prefix "~N"    → must equal N (exact-major, latest patch in range)
- *   - omitted/empty        → any (active version, else latest)
+ * Match a skill version number against a constraint string.
+ *
+ * Skill versions are plain incrementing integers, not semver, so there is no
+ * major/minor/patch to reason about. Supported forms:
+ *   - "N"           → must equal N
+ *   - "^N"          → must be >= N; callers see the highest such version,
+ *                     because resolveSkillVersion scans newest-first
+ *   - "~N"          → must equal N (same as "N"; accepted for symmetry)
+ *   - omitted/empty → any version (the pinned active one, else the newest)
+ *
+ * A constraint whose digits do not parse matches nothing, so the load fails
+ * with "version not available" rather than silently picking a version.
  */
 function matchesConstraint(
   versionNumber: number,

@@ -10,8 +10,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
-  selectOwner: vi.fn(),    // resolves owner (nodeLabel or relType)
-  selectProp: vi.fn(),     // resolves property row
+  selectOwner: vi.fn(), // resolves owner (nodeLabel or relType)
+  selectProp: vi.fn(), // resolves property row
   updateProp: vi.fn(),
   getOrCreateRegistry: vi.fn(),
 }));
@@ -128,7 +128,11 @@ describe("schemaPropertyDeleteHandler", () => {
       mocks.selectOwner.mockResolvedValue([LABEL_ROW]);
       mocks.selectProp.mockResolvedValue([PROP_ROW]);
       await schemaPropertyDeleteHandler(NODE_INPUT, CTX);
-      expect(mocks.getOrCreateRegistry).toHaveBeenCalledWith(CTX.orgId, CTX.workspaceId, CTX.userId);
+      expect(mocks.getOrCreateRegistry).toHaveBeenCalledWith(
+        CTX.orgId,
+        CTX.workspaceId,
+        CTX.userId,
+      );
     });
   });
 

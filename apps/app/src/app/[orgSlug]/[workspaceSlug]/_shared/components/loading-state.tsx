@@ -17,7 +17,10 @@ export interface LoadingStateProps {
   className?: string;
 }
 
-export function LoadingState({ variant = "page", className }: LoadingStateProps) {
+export function LoadingState({
+  variant = "page",
+  className,
+}: LoadingStateProps) {
   return (
     <div className={cn(className)}>
       {variant === "table" && <TableSkeleton />}

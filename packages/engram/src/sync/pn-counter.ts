@@ -74,22 +74,37 @@ export class PNCounter {
     const result = new PNCounter();
 
     // Merge positive vectors
-    const allPosNodes = new Set([...this.positive.keys(), ...other.positive.keys()]);
+    const allPosNodes = new Set([
+      ...this.positive.keys(),
+      ...other.positive.keys(),
+    ]);
     for (const node of allPosNodes) {
-      result.positive.set(node, Math.max(this.positive.get(node) ?? 0, other.positive.get(node) ?? 0));
+      result.positive.set(
+        node,
+        Math.max(this.positive.get(node) ?? 0, other.positive.get(node) ?? 0),
+      );
     }
 
     // Merge negative vectors
-    const allNegNodes = new Set([...this.negative.keys(), ...other.negative.keys()]);
+    const allNegNodes = new Set([
+      ...this.negative.keys(),
+      ...other.negative.keys(),
+    ]);
     for (const node of allNegNodes) {
-      result.negative.set(node, Math.max(this.negative.get(node) ?? 0, other.negative.get(node) ?? 0));
+      result.negative.set(
+        node,
+        Math.max(this.negative.get(node) ?? 0, other.negative.get(node) ?? 0),
+      );
     }
 
     return result;
   }
 
   /** Export state for serialization. */
-  toJSON(): { positive: Record<string, number>; negative: Record<string, number> } {
+  toJSON(): {
+    positive: Record<string, number>;
+    negative: Record<string, number>;
+  } {
     return {
       positive: Object.fromEntries(this.positive),
       negative: Object.fromEntries(this.negative),
@@ -97,10 +112,15 @@ export class PNCounter {
   }
 
   /** Create from serialized state. */
-  static fromJSON(data: { positive: Record<string, number>; negative: Record<string, number> }): PNCounter {
+  static fromJSON(data: {
+    positive: Record<string, number>;
+    negative: Record<string, number>;
+  }): PNCounter {
     const counter = new PNCounter();
-    for (const [k, v] of Object.entries(data.positive)) counter.positive.set(k, v);
-    for (const [k, v] of Object.entries(data.negative)) counter.negative.set(k, v);
+    for (const [k, v] of Object.entries(data.positive))
+      counter.positive.set(k, v);
+    for (const [k, v] of Object.entries(data.negative))
+      counter.negative.set(k, v);
     return counter;
   }
 }

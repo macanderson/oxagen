@@ -64,14 +64,35 @@ import { handler } from "./notification.list";
 
 describe("notifications.list handler", () => {
   it("returns notifications and unreadCount", async () => {
-    const ctx = { orgId: "org-1", workspaceId: "ws-1", userId: "user-1", apiKeyId: null, requestId: "req-1", surface: "api" as const, messageId: null };
-    const result = await handler({ unreadOnly: false, limit: 50 }, ctx) as { notifications: unknown[]; unreadCount: number };
+    const ctx = {
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      userId: "user-1",
+      apiKeyId: null,
+      requestId: "req-1",
+      surface: "api" as const,
+      messageId: null,
+    };
+    const result = (await handler({ unreadOnly: false, limit: 50 }, ctx)) as {
+      notifications: unknown[];
+      unreadCount: number;
+    };
     expect(result.notifications).toHaveLength(1);
     expect(result.unreadCount).toBeGreaterThanOrEqual(0);
   });
 
   it("throws when userId is absent", async () => {
-    const ctx = { orgId: "org-1", workspaceId: "ws-1", userId: null, apiKeyId: null, requestId: "req-1", surface: "api" as const, messageId: null };
-    await expect(handler({ unreadOnly: false, limit: 50 }, ctx)).rejects.toThrow("userId is required");
+    const ctx = {
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      userId: null,
+      apiKeyId: null,
+      requestId: "req-1",
+      surface: "api" as const,
+      messageId: null,
+    };
+    await expect(
+      handler({ unreadOnly: false, limit: 50 }, ctx),
+    ).rejects.toThrow("userId is required");
   });
 });

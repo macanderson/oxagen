@@ -22,12 +22,19 @@ export const connectionPause = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    connectionId: z.string().min(1).describe("Public ID or internal UUID of the connection"),
-    paused: z.boolean().describe("true = pause syncing; false = resume syncing"),
+    connectionId: z
+      .string()
+      .min(1)
+      .describe("Public ID or internal UUID of the connection"),
+    paused: z
+      .boolean()
+      .describe("true = pause syncing; false = resume syncing"),
   }),
   output: z.object({
     connectionId: z.string(),
-    status: z.enum(["connected", "paused"]).describe("Resulting connection status"),
+    status: z
+      .enum(["connected", "paused"])
+      .describe("Resulting connection status"),
   }),
 });
 

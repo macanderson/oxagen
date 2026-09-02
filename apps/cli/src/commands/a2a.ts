@@ -9,7 +9,12 @@
  * stdout; pretty mode renders the human card on stdout; every failure is a
  * uniform stderr error line with exit code 1 (and nothing on stdout).
  */
-import { getApiUrl, getOrgId, getWorkspaceId, getToken } from "../lib/config.js";
+import {
+  getApiUrl,
+  getOrgId,
+  getWorkspaceId,
+  getToken,
+} from "../lib/config.js";
 import { createOutput, errorMessage } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
@@ -59,7 +64,10 @@ export async function handleA2ACard(
   }
 
   if (!res.ok) {
-    out.error(`Failed to fetch A2A card (HTTP ${res.status}). ${await res.text()}`, "http");
+    out.error(
+      `Failed to fetch A2A card (HTTP ${res.status}). ${await res.text()}`,
+      "http",
+    );
     return;
   }
 

@@ -3,11 +3,10 @@
 /**
  * Theme-resolved colours for the chart surfaces.
  *
- * Every chart in the app used to carry its own private array of hex literals
- * plus its own copy of a `useDarkMode()` hook — four separate palettes that
- * belonged to no theme, so they all survived a brand change untouched and drifted
- * from the product around them. This module is the single place a chart gets a
- * colour, and it reads the real design tokens.
+ * This module is the single place a chart gets a colour, and it reads the real
+ * design tokens. A chart must never carry its own array of hex literals: those
+ * belong to no theme, so they survive a brand change untouched and drift from
+ * the product around them.
  *
  * WHY RESOLVE AT RUNTIME instead of importing hexes: the tokens live in
  * `@oxagen/ui`'s value layer as `oklch()`, they differ per theme, and the theme
@@ -39,7 +38,7 @@ export const CHART_SERIES_TOKENS = [
 /** Light-theme values of `--chart-1..5`, for the pre-hydration frame. */
 export const CHART_SERIES_FALLBACK = [
   "#EFC53F", // ember  — the brand gold
-  "#4E6A7A", // slate  — the cool counterpoint (was the retired indigo #4C51A8)
+  "#4E6A7A", // slate  — the cool counterpoint
   "#2F7D4F", // moss
   "#CA6719", // ochre
   "#777782", // silver — achromatic fifth series

@@ -21,7 +21,9 @@ vi.mock("@/lib/utils", () => ({
 }));
 
 vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => <span data-testid="badge">{children}</span>,
+  Badge: ({ children }: { children: React.ReactNode }) => (
+    <span data-testid="badge">{children}</span>
+  ),
 }));
 
 vi.mock("@/components/ui/select", () => ({
@@ -54,15 +56,27 @@ vi.mock("@/components/ui/select", () => ({
     className?: string;
     "aria-label"?: string;
   }) => (
-    <div data-testid="select-trigger" className={className} aria-label={ariaLabel}>
+    <div
+      data-testid="select-trigger"
+      className={className}
+      aria-label={ariaLabel}
+    >
       {children}
     </div>
   ),
-  SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
-  SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ children, value }: { children: React.ReactNode; value: string }) => (
-    <div data-value={value}>{children}</div>
+  SelectValue: ({ placeholder }: { placeholder?: string }) => (
+    <span>{placeholder}</span>
   ),
+  SelectPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectItem: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => <div data-value={value}>{children}</div>,
 }));
 
 vi.mock("lucide-react", async (importOriginal) => {
@@ -70,7 +84,9 @@ vi.mock("lucide-react", async (importOriginal) => {
   return { ...real, Settings: () => <span data-testid="icon-settings" /> };
 });
 
-function makeEnv(overrides: Partial<EnvironmentOption> = {}): EnvironmentOption {
+function makeEnv(
+  overrides: Partial<EnvironmentOption> = {},
+): EnvironmentOption {
   return { id: "env_default", name: "Default", isDefault: true, ...overrides };
 }
 
@@ -79,7 +95,10 @@ describe("EnvironmentSelector", () => {
     const { EnvironmentSelector } = await import("./environment-selector");
     render(
       <EnvironmentSelector
-        environments={[makeEnv(), makeEnv({ id: "env_prod", name: "Production", isDefault: false })]}
+        environments={[
+          makeEnv(),
+          makeEnv({ id: "env_prod", name: "Production", isDefault: false }),
+        ]}
         selectedEnvId={null}
         onSelectEnv={vi.fn()}
       />,
@@ -92,7 +111,10 @@ describe("EnvironmentSelector", () => {
     const { EnvironmentSelector } = await import("./environment-selector");
     render(
       <EnvironmentSelector
-        environments={[makeEnv(), makeEnv({ id: "env_prod", name: "Production", isDefault: false })]}
+        environments={[
+          makeEnv(),
+          makeEnv({ id: "env_prod", name: "Production", isDefault: false }),
+        ]}
         selectedEnvId={null}
         onSelectEnv={vi.fn()}
       />,
@@ -104,7 +126,11 @@ describe("EnvironmentSelector", () => {
     const onSelectEnv = vi.fn();
     const { EnvironmentSelector } = await import("./environment-selector");
     render(
-      <EnvironmentSelector environments={[makeEnv({ id: "env_prod" })]} selectedEnvId={null} onSelectEnv={onSelectEnv} />,
+      <EnvironmentSelector
+        environments={[makeEnv({ id: "env_prod" })]}
+        selectedEnvId={null}
+        onSelectEnv={onSelectEnv}
+      />,
     );
     await userEvent.click(screen.getByTestId("select"));
     expect(onSelectEnv).toHaveBeenCalledWith("env_prod");
@@ -112,19 +138,44 @@ describe("EnvironmentSelector", () => {
 
   it("is disabled when isLoading is true", async () => {
     const { EnvironmentSelector } = await import("./environment-selector");
-    render(<EnvironmentSelector environments={[makeEnv()]} selectedEnvId={null} onSelectEnv={vi.fn()} isLoading />);
-    expect(screen.getByTestId("select")).toHaveAttribute("data-disabled", "true");
+    render(
+      <EnvironmentSelector
+        environments={[makeEnv()]}
+        selectedEnvId={null}
+        onSelectEnv={vi.fn()}
+        isLoading
+      />,
+    );
+    expect(screen.getByTestId("select")).toHaveAttribute(
+      "data-disabled",
+      "true",
+    );
   });
 
   it("is disabled when there are no environments", async () => {
     const { EnvironmentSelector } = await import("./environment-selector");
-    render(<EnvironmentSelector environments={[]} selectedEnvId={null} onSelectEnv={vi.fn()} />);
-    expect(screen.getByTestId("select")).toHaveAttribute("data-disabled", "true");
+    render(
+      <EnvironmentSelector
+        environments={[]}
+        selectedEnvId={null}
+        onSelectEnv={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("select")).toHaveAttribute(
+      "data-disabled",
+      "true",
+    );
   });
 
   it("uses a mobile-first full-width trigger with a fixed desktop width", async () => {
     const { EnvironmentSelector } = await import("./environment-selector");
-    render(<EnvironmentSelector environments={[makeEnv()]} selectedEnvId={null} onSelectEnv={vi.fn()} />);
+    render(
+      <EnvironmentSelector
+        environments={[makeEnv()]}
+        selectedEnvId={null}
+        onSelectEnv={vi.fn()}
+      />,
+    );
     const trigger = screen.getByTestId("select-trigger");
     expect(trigger.className).toContain("w-full");
     expect(trigger.className).toContain("sm:w-40");
@@ -141,6 +192,8 @@ describe("EnvironmentSelector", () => {
         className="custom-class"
       />,
     );
-    expect(screen.getByTestId("select-trigger").className).toContain("custom-class");
+    expect(screen.getByTestId("select-trigger").className).toContain(
+      "custom-class",
+    );
   });
 });

@@ -19,10 +19,17 @@ const h = vi.hoisted(() => {
     driver,
     isSandboxAvailable: vi.fn(() => true),
     isDurableSandboxDriver: vi.fn(() => true),
-    resolveEnvironmentSecrets: vi.fn(async (): Promise<Record<string, string>> => ({})),
+    resolveEnvironmentSecrets: vi.fn(
+      async (): Promise<Record<string, string>> => ({}),
+    ),
     listSecretKeys: vi.fn(
       async (): Promise<
-        Array<{ id: string; key: string; sensitive: boolean; memo: string | null }>
+        Array<{
+          id: string;
+          key: string;
+          sensitive: boolean;
+          memo: string | null;
+        }>
       > => [],
     ),
     insertEvents: vi.fn(async () => undefined),
@@ -79,7 +86,13 @@ function row(meta: Record<string, unknown>) {
     snapshotId: null,
     image: "agent",
     status: "running",
-    metadata: { memoryMb: 2048, ttlSeconds: 86_400, idleTimeoutSeconds: 1_200, network: "allow", ...meta },
+    metadata: {
+      memoryMb: 2048,
+      ttlSeconds: 86_400,
+      idleTimeoutSeconds: 1_200,
+      network: "allow",
+      ...meta,
+    },
   };
 }
 
@@ -96,10 +109,18 @@ describe("agent.sandbox.exec — environment secret injection", () => {
   it("injects the session's bound environment secrets below the caller env", async () => {
     fake.enqueue([row({ environmentId: "env_7" })]); // getSessionByPublicId
     fake.enqueue([]); // touchSession
-    h.resolveEnvironmentSecrets.mockResolvedValue({ API_BASE: "vault", TOKEN: "t" });
+    h.resolveEnvironmentSecrets.mockResolvedValue({
+      API_BASE: "vault",
+      TOKEN: "t",
+    });
 
     await agentSandboxExecHandler(
-      { sessionId: "sbx_1", command: "printenv", timeoutMs: 30_000, env: { API_BASE: "caller" } },
+      {
+        sessionId: "sbx_1",
+        command: "printenv",
+        timeoutMs: 30_000,
+        env: { API_BASE: "caller" },
+      },
       CTX,
     );
 
@@ -120,7 +141,12 @@ describe("agent.sandbox.exec — environment secret injection", () => {
     fake.enqueue([]);
 
     await agentSandboxExecHandler(
-      { sessionId: "sbx_1", command: "ls", timeoutMs: 30_000, env: { SAFE: "x" } },
+      {
+        sessionId: "sbx_1",
+        command: "ls",
+        timeoutMs: 30_000,
+        env: { SAFE: "x" },
+      },
       CTX,
     );
 
@@ -143,7 +169,12 @@ describe("agent.sandbox.exec — environment secret injection", () => {
     ]);
 
     await agentSandboxExecHandler(
-      { sessionId: "sbx_1", command: "printenv", timeoutMs: 30_000, env: { CALLER: "c" } },
+      {
+        sessionId: "sbx_1",
+        command: "printenv",
+        timeoutMs: 30_000,
+        env: { CALLER: "c" },
+      },
       CTX,
     );
 
@@ -194,7 +225,12 @@ describe("agent.sandbox.exec — environment secret injection", () => {
     });
 
     const out = await agentSandboxExecHandler(
-      { sessionId: "sbx_1", command: "ls", timeoutMs: 30_000, env: { API_BASE: "caller" } },
+      {
+        sessionId: "sbx_1",
+        command: "ls",
+        timeoutMs: 30_000,
+        env: { API_BASE: "caller" },
+      },
       CTX,
     );
 
@@ -204,6 +240,8 @@ describe("agent.sandbox.exec — environment secret injection", () => {
     const injected = { TOKEN: "vault", API_BASE: "caller" };
     expect(h.driver.execInSession.mock.calls[0]![0].env).toEqual(injected);
     expect(h.driver.execInSession.mock.calls[1]![0].env).toEqual(injected);
-    expect(h.driver.execInSession.mock.calls[1]![0].sandboxId).toBe("sb-restored");
+    expect(h.driver.execInSession.mock.calls[1]![0].sandboxId).toBe(
+      "sb-restored",
+    );
   });
 });

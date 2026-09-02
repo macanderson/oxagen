@@ -25,9 +25,15 @@ import {
   DialogDescription,
   DialogPanel,
 } from "@oxagen/ui";
-import { type WizardStep, storePendingGithubConnection } from "./github-connection-wizard-types";
+import {
+  type WizardStep,
+  storePendingGithubConnection,
+} from "./github-connection-wizard-types";
 import { GitHubInstallGate } from "./github-connection-wizard-step1";
-import { Step2SelectRepos, type SelectedRepoMeta } from "./github-connection-wizard-step2";
+import {
+  Step2SelectRepos,
+  type SelectedRepoMeta,
+} from "./github-connection-wizard-step2";
 import { Step3Confirm } from "./github-connection-wizard-step3";
 import { SuccessState } from "./github-connection-wizard-success";
 import { Spinner } from "./github-connection-wizard-spinner";
@@ -59,7 +65,8 @@ const STEP_TITLES: Record<WizardStep, string> = {
 
 const STEP_DESCRIPTIONS: Record<WizardStep, string> = {
   gate: "The Oxagen GitHub App must be installed for this workspace.",
-  "select-repos": "Choose which repositories to include in your knowledge graph.",
+  "select-repos":
+    "Choose which repositories to include in your knowledge graph.",
   confirm: "Review your selection and start the initial sync.",
 };
 
@@ -94,7 +101,10 @@ async function createPendingGithubConnection(
     const text = await res.text().catch(() => "Unknown error");
     throw new Error(`Failed to create connection: ${text}`);
   }
-  const created = (await res.json()) as { publicId?: string; connectionId?: string };
+  const created = (await res.json()) as {
+    publicId?: string;
+    connectionId?: string;
+  };
   const id = created.publicId ?? created.connectionId;
   if (!id) throw new Error("No connectionId returned from server");
   return id;
@@ -117,14 +127,18 @@ export function GitHubConnectionWizard({
   const [connectionId, setConnectionId] = React.useState<string | null>(
     initialConnectionId ?? null,
   );
-  const [selectedInstallationId, setSelectedInstallationId] = React.useState<string | null>(null);
-  const [selectedRepos, setSelectedRepos] = React.useState<SelectedRepoMeta[]>([]);
+  const [selectedInstallationId, setSelectedInstallationId] = React.useState<
+    string | null
+  >(null);
+  const [selectedRepos, setSelectedRepos] = React.useState<SelectedRepoMeta[]>(
+    [],
+  );
 
   // Gate sub-states: checking (spinner), not-connected (GitHubInstallGate),
   // error (inline error + retry button).
-  const [gateState, setGateState] = React.useState<"checking" | "not-connected" | "error">(
-    "checking",
-  );
+  const [gateState, setGateState] = React.useState<
+    "checking" | "not-connected" | "error"
+  >("checking");
   const [gateError, setGateError] = React.useState<string | null>(null);
   // Incrementing this triggers a re-run of the status-check effect (retry).
   const [retryNonce, setRetryNonce] = React.useState(0);
@@ -143,7 +157,11 @@ export function GitHubConnectionWizard({
 
     (async () => {
       try {
-        const status = await fetchGithubStatus(orgSlug, workspaceSlug, controller.signal);
+        const status = await fetchGithubStatus(
+          orgSlug,
+          workspaceSlug,
+          controller.signal,
+        );
         if (controller.signal.aborted) return;
 
         if (!status.connected) {
@@ -158,12 +176,18 @@ export function GitHubConnectionWizard({
 
         // Stash the handoff so the wizard can resume at select-repos even if
         // GitHub's stateless Setup-URL leg drops the connectionId from the URL.
-        storePendingGithubConnection({ connectionId: id, orgSlug, workspaceSlug });
+        storePendingGithubConnection({
+          connectionId: id,
+          orgSlug,
+          workspaceSlug,
+        });
         setConnectionId(id);
         setStep("select-repos");
       } catch (e) {
         if (controller.signal.aborted) return;
-        setGateError(e instanceof Error ? e.message : "Failed to check GitHub status");
+        setGateError(
+          e instanceof Error ? e.message : "Failed to check GitHub status",
+        );
         setGateState("error");
       }
     })();
@@ -197,7 +221,10 @@ export function GitHubConnectionWizard({
     [onClose, hasResume],
   );
 
-  const handleReposSelected = (installationId: string, repos: SelectedRepoMeta[]) => {
+  const handleReposSelected = (
+    installationId: string,
+    repos: SelectedRepoMeta[],
+  ) => {
     setSelectedInstallationId(installationId);
     setSelectedRepos(repos);
     setStep("confirm");
@@ -208,14 +235,13 @@ export function GitHubConnectionWizard({
   };
 
   const isGate = step === "gate";
-  const currentVisibleIndex = VISIBLE_STEPS.indexOf(step as (typeof VISIBLE_STEPS)[number]);
+  const currentVisibleIndex = VISIBLE_STEPS.indexOf(
+    step as (typeof VISIBLE_STEPS)[number],
+  );
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogPopup
-        className="max-w-md"
-        data-testid="github-connection-wizard"
-      >
+      <DialogPopup className="max-w-md" data-testid="github-connection-wizard">
         <DialogHeader>
           <DialogTitle>
             {done ? "GitHub Connected" : STEP_TITLES[step]}
@@ -230,17 +256,16 @@ export function GitHubConnectionWizard({
         {!done && !isGate && (
           <div className="flex items-center gap-1.5 py-1">
             {VISIBLE_STEPS.map((s, idx) => (
-              <React.Fragment key={s}>
-                <div
-                  className={`h-1.5 flex-1 rounded-full transition-colors ${
-                    step === s
-                      ? "bg-primary"
-                      : currentVisibleIndex > idx
-                        ? "bg-primary/40"
-                        : "bg-muted"
-                  }`}
-                />
-              </React.Fragment>
+              <div
+                key={s}
+                className={`h-1.5 flex-1 rounded-full transition-colors ${
+                  step === s
+                    ? "bg-primary"
+                    : currentVisibleIndex > idx
+                      ? "bg-primary/40"
+                      : "bg-muted"
+                }`}
+              />
             ))}
           </div>
         )}
@@ -256,7 +281,8 @@ export function GitHubConnectionWizard({
             ) : gateState === "error" ? (
               <div className="flex flex-col gap-4 py-4">
                 <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                  {gateError ?? "Failed to check GitHub status. Please try again."}
+                  {gateError ??
+                    "Failed to check GitHub status. Please try again."}
                 </p>
                 <button
                   type="button"
@@ -293,7 +319,9 @@ export function GitHubConnectionWizard({
             />
           ) : (
             <p className="text-xs text-muted-foreground">
-              Something went wrong. Please close and try again.
+              This step lost the connection it was set up with
+              {connectionId ? " or the organization you picked" : ""}. Close the
+              dialog and start the connection again.
             </p>
           )}
         </DialogPanel>

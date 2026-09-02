@@ -28,7 +28,11 @@ describe("mergeUsage", () => {
       { inputTokens: 10, outputTokens: 5, costUsd: 0.1 },
       { inputTokens: 3, outputTokens: 7, costUsd: 0.25 },
     );
-    expect(merged).toEqual({ inputTokens: 13, outputTokens: 12, costUsd: 0.35 });
+    expect(merged).toEqual({
+      inputTokens: 13,
+      outputTokens: 12,
+      costUsd: 0.35,
+    });
   });
 
   it("does not mutate its operands", () => {

@@ -215,18 +215,20 @@ export default function InstallPage(): ReactNode {
           </div>
 
           <div className="rounded-2xl border border-border bg-card/70 p-6 backdrop-blur sm:p-8">
-            <p className="ox-eyebrow">Prefer a package manager?</p>
+            <p className="ox-eyebrow">Need a different route?</p>
             <p className="mt-3 text-sm text-muted-foreground">
-              The CLI is also published to npm — install it globally with your
-              package manager of choice and get the same binary on your PATH.
+              For a CI runner or an ephemeral container, build the portable
+              single-file bundle — one <code className="font-mono">.mjs</code>{" "}
+              you can copy anywhere and run under plain Node 20.
             </p>
             <div className="mt-5 flex flex-col items-start gap-3">
-              <CopyCommand command="pnpm add -g @oxagen/cli" />
-              <CopyCommand command="npm install -g @oxagen/cli" />
+              <CopyCommand command="pnpm --filter @oxagen/cli bundle" />
             </div>
             <p className="mt-5 text-sm text-muted-foreground">
-              Full options — building from source, the portable single-file
-              bundle for CI runners — are in the{" "}
+              The CLI is on npm too, but a global{" "}
+              <code className="font-mono">npm i -g</code> is not reliably
+              standalone yet. Every option — npm, source builds, the bundle — is
+              covered in the{" "}
               <Link
                 href="/docs/cli/installation"
                 className="font-medium text-[var(--ember-ink)] hover:underline"

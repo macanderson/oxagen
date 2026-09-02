@@ -53,7 +53,8 @@ const {
 vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSession }));
 vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: mockResolveOrg,
-  getOrgRole: vi.fn().mockResolvedValue("owner"),  assertSecurityManager: mockAssertSecurityManager,
+  getOrgRole: vi.fn().mockResolvedValue("owner"),
+  assertSecurityManager: mockAssertSecurityManager,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mockRevalidatePath }));
 vi.mock("@oxagen/handlers/logger", () => ({
@@ -154,7 +155,9 @@ describe("saveMfaPolicyAction", () => {
   it("returns internal (NOT forbidden) when the auth gate hits a DB/infra error", async () => {
     // A plain Error has no notFound digest — a degraded DB must NOT be
     // misclassified as a permission denial.
-    mockAssertSecurityManager.mockRejectedValue(new Error("connection refused"));
+    mockAssertSecurityManager.mockRejectedValue(
+      new Error("connection refused"),
+    );
     const res = await saveMfaPolicyAction({
       orgSlug: "acme",
       mfaRequired: true,

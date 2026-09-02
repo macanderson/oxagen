@@ -166,8 +166,8 @@ export async function GraphHero({
                 data-testid={`overview-graph-stat-${key}`}
               >
                 {/* Wrap to two lines rather than truncate — these tiles are
-                      narrow and "Inferred · pending approval" was rendering as
-                      "INFERRED · PENDING A…" even on a 1440px viewport. */}
+                      narrow enough that a two-word label clips even on a
+                      desktop viewport. */}
                 <span className="flex items-start gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   <Icon
                     className="mt-px size-3.5 shrink-0"

@@ -12,9 +12,22 @@
  *   - permissions.mcpServers: keyed merge; within a server, deny/allow APPEND, defaultPolicy overwrites
  *   - toolVisibility: keyed merge (later scope replaces entire entry for that server)
  *   - Environment variables (${VAR}) are expanded in string values at resolution time
+ *
+ * TRUST BOUNDARY — read before changing precedence. The project and local
+ * scopes are read out of the working directory, so running against a cloned
+ * repo loads whatever that repo committed, and both outrank the user's own
+ * global file. Two of the merged sections widen privilege rather than describe
+ * it: `permissions.mcpServers[*].allow` is APPENDED across scopes, and
+ * `permissions.defaultMcpPolicy` is a plain overlay-wins scalar. A checked-in
+ * `.oxagen/settings.json` can therefore turn a user's global "ask" into
+ * "allow", add `allow: ["*"]` to a server the user gated, and register its own
+ * `mcpServers` entries. Nothing here asks the user to trust the directory
+ * first. The same hazard is documented at the CLI's parallel resolver in
+ * apps/cli/src/settings/resolve.ts; any change that broadens what these scopes
+ * may set widens the same exposure.
  */
 import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname, resolve as resolvePath } from "node:path";
 import { homedir } from "node:os";
 import {
   settingsSchema,
@@ -64,8 +77,14 @@ const ENV_VAR_PATTERN = /\$\{([^}]+)\}/g;
 
 /**
  * Recursively expand ${VAR} references in string values. Non-string values
- * pass through unchanged. Missing env vars are replaced with empty string and
- * the key is added to the returned warnings set.
+ * pass through unchanged. A missing env var is replaced with the empty string
+ * and its name is recorded in `warnings`.
+ *
+ * `warnings` is an in/out parameter, not a return value: a caller that wants
+ * the missing-var names must pass its own Set in and read it afterwards.
+ * `resolveSettings` below does NOT do that, so today an unset var referenced by
+ * e.g. an `Authorization: "Bearer ${TOKEN}"` header silently becomes
+ * `"Bearer "` with nothing reported to the user.
  */
 export function expandEnvVars(
   value: unknown,
@@ -258,20 +277,27 @@ export function resolveSettings(opts: ResolveOptions = {}): ResolvedConfig {
 }
 
 /**
- * Find the project root by walking up from cwd looking for .oxagen/ directory.
- * Falls back to cwd if not found (the settings files won't exist there).
+ * Find the project root by walking up from `startDir` (default: cwd) looking
+ * for a `.oxagen/` directory. Falls back to `startDir` if none is found (the
+ * settings files simply won't exist there).
+ *
+ * `startDir` is resolved to an absolute path first: a relative path walked with
+ * `join(dir, "..")` grows ("." → ".." → "../..") instead of shrinking, so the
+ * ascent would never reach a filesystem root and the loop would not terminate.
+ * `dirname` on an absolute path is fixed-point at the root on every platform,
+ * which is what ends the walk.
  */
 export function findProjectRoot(startDir?: string): string {
-  let dir = startDir ?? process.cwd();
-  const root = "/";
-  while (dir !== root) {
+  const start = startDir ?? process.cwd();
+  let dir = resolvePath(start);
+  for (;;) {
     if (existsSync(join(dir, PROJECT_DIR_NAME))) return dir;
-    const parent = join(dir, "..");
+    const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
-  // Fall back to original start dir
-  return startDir ?? process.cwd();
+  // Fall back to the caller's starting directory
+  return start;
 }
 
 /**

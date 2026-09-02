@@ -8,9 +8,9 @@ Agent skill definitions for the [Oxagen](https://docs.oxagen.sh) CLI.
 npx @oxagen/skills install
 ```
 
-Copies the bundled `skill.toml` bundles into `~/.config/oxagen/skills`, where the
-`oxagen` CLI discovers them automatically on its next run. Existing files are
-left untouched unless you pass `--force`.
+Copies the bundled skills into `~/.config/oxagen/skills`, where the `oxagen` CLI
+finds them on its next run. Skills already in that folder are left alone unless
+you pass `--force`.
 
 ```sh
 npx @oxagen/skills list             # show the bundled skill definitions
@@ -30,10 +30,15 @@ what to run next.
 
 ## What's inside
 
-Each `skills/<slug>/skill.toml` file is a self-contained canonical skill
-manifest (metadata plus instructions) the Oxagen agent loads at startup — entity resolution,
+Each `skills/<slug>/skill.toml` file is one complete skill: some metadata plus
+the instructions the agent follows. The bundled set covers entity resolution,
 relationship extraction, summarization, coding, skill authoring, and more.
 
-The library source in this package (loader, registry, seeding) is used by the
-Oxagen platform monorepo and is not part of the published artifact — the npm
-package ships only the installer and the skill definitions.
+Give every skill its own directory directly under the skills root. The CLI only
+looks one level deep, so it finds `skills/<slug>/skill.toml` but not
+`skills/<category>/<slug>/skill.toml`.
+
+The npm package ships only the installer and the skill definitions. The
+TypeScript source in `src/` is used inside the Oxagen platform monorepo — mostly
+`builtin.ts`, which reads the same skills from an embedded copy so they work in
+serverless bundles — and is not published.

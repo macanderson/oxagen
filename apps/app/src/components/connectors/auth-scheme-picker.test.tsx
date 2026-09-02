@@ -119,7 +119,9 @@ describe("AuthSchemePicker — single scheme", () => {
 
   it("renders OAuth scopes for single OAuth scheme", () => {
     renderPicker(SINGLE_AUTH_SCHEMA);
-    expect(screen.getByText("https://www.googleapis.com/auth/drive.readonly")).toBeInTheDocument();
+    expect(
+      screen.getByText("https://www.googleapis.com/auth/drive.readonly"),
+    ).toBeInTheDocument();
   });
 
   it("renders 'Permissions requested' heading for OAuth", () => {

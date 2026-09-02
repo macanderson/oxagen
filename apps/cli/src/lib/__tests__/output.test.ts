@@ -7,7 +7,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createOutput, errorMessage } from "../output.js";
 import type { CommandWriter } from "../capture-writer.js";
 
-function memoryWriter(): { writer: CommandWriter; out: string[]; err: string[] } {
+function memoryWriter(): {
+  writer: CommandWriter;
+  out: string[];
+  err: string[];
+} {
   const out: string[] = [];
   const err: string[] = [];
   return {
@@ -37,13 +41,19 @@ describe("createOutput mode selection", () => {
 
   it("--json wins regardless of TTY", () => {
     const { writer } = memoryWriter();
-    expect(createOutput({ json: true, stdoutIsTTY: true }, writer).isJson).toBe(true);
+    expect(createOutput({ json: true, stdoutIsTTY: true }, writer).isJson).toBe(
+      true,
+    );
   });
 
   it("autoJson selects json only when stdout is not a TTY", () => {
     const { writer } = memoryWriter();
-    expect(createOutput({ autoJson: true, stdoutIsTTY: false }, writer).isJson).toBe(true);
-    expect(createOutput({ autoJson: true, stdoutIsTTY: true }, writer).isJson).toBe(false);
+    expect(
+      createOutput({ autoJson: true, stdoutIsTTY: false }, writer).isJson,
+    ).toBe(true);
+    expect(
+      createOutput({ autoJson: true, stdoutIsTTY: true }, writer).isJson,
+    ).toBe(false);
     expect(createOutput({ stdoutIsTTY: false }, writer).isJson).toBe(false);
   });
 });
@@ -91,7 +101,10 @@ describe("error contract", () => {
   it("json mode: single typed error line on stderr, stdout untouched, exit code 1", () => {
     const { writer, out, err } = memoryWriter();
     process.exitCode = 0;
-    createOutput({ json: true }, writer).error(new Error("boom"), "store_missing");
+    createOutput({ json: true }, writer).error(
+      new Error("boom"),
+      "store_missing",
+    );
     expect(out).toEqual([]);
     expect(JSON.parse(err[0] as string)).toEqual({
       type: "error",

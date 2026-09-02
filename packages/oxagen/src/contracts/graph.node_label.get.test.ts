@@ -10,12 +10,17 @@ describe("graph.node.labels.get contract", () => {
   });
 
   it("requires a non-empty nodeId", () => {
-    expect(graphNodeLabelsGet.input.parse({ nodeId: "n_1" }).nodeId).toBe("n_1");
+    expect(graphNodeLabelsGet.input.parse({ nodeId: "n_1" }).nodeId).toBe(
+      "n_1",
+    );
     expect(() => graphNodeLabelsGet.input.parse({ nodeId: "" })).toThrow();
   });
 
   it("validates the output label set", () => {
-    const parsed = graphNodeLabelsGet.output.parse({ nodeId: "n_1", labels: ["Payment", "Billing"] });
+    const parsed = graphNodeLabelsGet.output.parse({
+      nodeId: "n_1",
+      labels: ["Payment", "Billing"],
+    });
     expect(parsed.labels).toEqual(["Payment", "Billing"]);
   });
 });

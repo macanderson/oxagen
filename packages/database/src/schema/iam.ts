@@ -1,22 +1,27 @@
 // iam.ts — IAM data layer.
 //
-// All 5 IAM tables live in their own dedicated `iam` Postgres schema
+// Every IAM table lives in its own dedicated `iam` Postgres schema
 // (`iamSchema = pgSchema("iam")` in ./_schemas). Atlas reads the desired state
-// via `drizzle-kit export`, so these tables are picked up automatically — there
-// is no drizzle-kit `schemaFilter` to maintain. There is NO IAM sessions table;
-// auth sessions live in `auth.sessions` (see auth.ts).
+// via `drizzle-kit export`, and `iam` is listed in drizzle.config.ts's
+// `schemaFilter` — a new Postgres schema must be added there or its tables are
+// invisible to the migration pipeline. There is NO IAM sessions table; auth
+// sessions live in `auth.sessions` (see auth.ts).
 //
 // CRITICAL: Do NOT use orgScopeMixin() on these tables. orgScopeMixin() forces
 // workspace_id NOT NULL, but principals/roles/role_grants are org-scoped
 // entities that may not carry a workspace_id. All IAM tables declare their
 // scope columns inline.
 //
-// The five tables and their public-id prefixes (spec §4.3):
-//   principals                 → prn_
-//   roles                      → rol_
-//   role_grants                → rlg_
-//   access_requests            → arq_
-//   principal_role_assignments → pra_
+// The tables and their public-id prefixes (spec §4.3):
+//   principals                     → prn_
+//   roles                          → rol_
+//   role_grants                    → rlg_
+//   access_requests                → arq_
+//   principal_role_assignments     → pra_
+//   authorization_snapshots        → ras_
+//   authorization_deny_generations → (no public id — internal counter)
+//   emergency_denies               → emd_
+//   authorization_decisions        → azd_
 
 import {
   bigint,

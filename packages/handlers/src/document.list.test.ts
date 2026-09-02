@@ -22,17 +22,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            orderBy: mocks.selectQuery,
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              orderBy: mocks.selectQuery,
+            }),
           }),
         }),
       }),
-    }),
-
   };
 });
 
@@ -57,7 +56,10 @@ beforeEach(() => {
 
 describe("documentListHandler — auth guards", () => {
   it("throws when workspaceId is null", async () => {
-    const ctx: CapabilityContext = { ...CTX, workspaceId: null as unknown as string };
+    const ctx: CapabilityContext = {
+      ...CTX,
+      workspaceId: null as unknown as string,
+    };
     await expect(documentListHandler({}, ctx)).rejects.toThrow(
       "document.list requires a workspace scope",
     );

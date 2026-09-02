@@ -9,6 +9,8 @@ export const agentFileLockReleaseRoute = new Hono<AppEnv>();
 agentFileLockReleaseRoute.post("/", async (c) => {
   const body = agentFileLockRelease.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(agentFileLockRelease.name, body, ctx, { surface: "api" });
+  const out = await invoke(agentFileLockRelease.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

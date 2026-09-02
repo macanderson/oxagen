@@ -20,6 +20,8 @@ export default async function agentMemoryPolicyReadTool(
   _args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentMemoryPolicyRead.name, {}, ctx, { surface: "mcp" });
+  const output = await invoke(agentMemoryPolicyRead.name, {}, ctx, {
+    surface: "mcp",
+  });
   return agentMemoryPolicyRead.output.parse(output);
 }

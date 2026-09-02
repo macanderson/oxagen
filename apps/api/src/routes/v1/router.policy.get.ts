@@ -10,6 +10,8 @@ export const routerPolicyGetRoute = new Hono<AppEnv>();
 routerPolicyGetRoute.get("/", async (c) => {
   const input = routerPolicyGet.input.parse({});
   const ctx = capabilityContext(c);
-  const out = await invoke(routerPolicyGet.name, input, ctx, { surface: "api" });
+  const out = await invoke(routerPolicyGet.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

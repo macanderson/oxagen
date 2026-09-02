@@ -10,7 +10,11 @@ export const agentSkillLoad = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {

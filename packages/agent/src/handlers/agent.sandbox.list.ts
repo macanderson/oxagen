@@ -242,7 +242,9 @@ function toSandbox(row: ListRow, correctedToStopped: boolean): Sandbox {
     recoveryStatus: row.recoveryStatus,
     recoveryBranch: row.recoveryBranch,
     recoveryCommit: row.recoveryCommit,
-    graceDeadlineAt: row.graceDeadlineAt ? row.graceDeadlineAt.toISOString() : null,
+    graceDeadlineAt: row.graceDeadlineAt
+      ? row.graceDeadlineAt.toISOString()
+      : null,
     dirty: row.dirty,
     flushedAt: row.flushedAt ? row.flushedAt.toISOString() : null,
     recoveredAt: row.recoveredAt ? row.recoveredAt.toISOString() : null,

@@ -81,8 +81,13 @@ export const NO_VIDEO_SUPPORT_MESSAGE =
 export function decideAttachmentRouting(
   input: AttachmentRoutingInput,
 ): AttachmentRoutingDecision {
-  const { images, videos, supportsVision, supportsVideoInput, upgradeCandidates } =
-    input;
+  const {
+    images,
+    videos,
+    supportsVision,
+    supportsVideoInput,
+    upgradeCandidates,
+  } = input;
   let model = input.model;
 
   let videoPath = false;

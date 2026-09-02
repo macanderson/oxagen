@@ -22,7 +22,11 @@ vi.mock("@/lib/utils", () => ({
 const COMMANDS: readonly SlashCommand[] = [
   { name: "pr", args: "<pr-number>", summary: "Show pull-request stats." },
   { name: "ci", args: "[ref]", summary: "Show CI / check status." },
-  { name: "pin", summary: "Pin the selected repo + environment.", clientAction: "pin" },
+  {
+    name: "pin",
+    summary: "Pin the selected repo + environment.",
+    clientAction: "pin",
+  },
 ];
 
 describe("SlashCommandMenu", () => {

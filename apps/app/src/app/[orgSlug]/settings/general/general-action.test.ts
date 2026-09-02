@@ -42,7 +42,8 @@ const SENTINEL = vi.hoisted(() => ({
 vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSession }));
 vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: mockResolveOrg,
-  getOrgRole: vi.fn().mockResolvedValue("owner"),  assertOrgMember: mockAssertOrgMember,
+  getOrgRole: vi.fn().mockResolvedValue("owner"),
+  assertOrgMember: mockAssertOrgMember,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mockRevalidatePath }));
 vi.mock("@oxagen/tenancy", () => ({
@@ -135,7 +136,9 @@ describe("updateOrgGeneralAction", () => {
 
     expect(result).toEqual({ ok: true, slug: "acme-corp" });
     expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/settings/general");
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme-corp/settings/general");
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/acme-corp/settings/general",
+    );
   });
 
   it("rejects a slug already taken by a different org without writing", async () => {

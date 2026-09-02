@@ -3,7 +3,10 @@
 
 export type UsageRangeKey = "7d" | "30d" | "90d" | "mtd";
 
-export const USAGE_RANGES: ReadonlyArray<{ key: UsageRangeKey; label: string }> = [
+export const USAGE_RANGES: ReadonlyArray<{
+  key: UsageRangeKey;
+  label: string;
+}> = [
   { key: "7d", label: "7 days" },
   { key: "30d", label: "30 days" },
   { key: "90d", label: "90 days" },
@@ -19,10 +22,16 @@ export function parseRange(value: string | undefined): UsageRangeKey {
 }
 
 /** Resolve a preset to a half-open `[start, end)` window ending at `now`. */
-export function rangeToWindow(key: UsageRangeKey, now = new Date()): { start: Date; end: Date } {
+export function rangeToWindow(
+  key: UsageRangeKey,
+  now = new Date(),
+): { start: Date; end: Date } {
   const end = now;
   if (key === "mtd") {
-    return { start: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)), end };
+    return {
+      start: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
+      end,
+    };
   }
   const days = key === "7d" ? 7 : key === "90d" ? 90 : 30;
   return { start: new Date(end.getTime() - days * 24 * 60 * 60 * 1000), end };

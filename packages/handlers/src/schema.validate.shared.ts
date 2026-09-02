@@ -12,15 +12,13 @@ import type { FieldError } from "@oxagen/oxagen/contracts/schema.shared";
  * other code is shared verbatim, so this is the single place that performs the
  * one mapping both validate handlers need.
  */
-export function toContractFieldErrors(errors: SchemaFieldError[]): FieldError[] {
+export function toContractFieldErrors(
+  errors: SchemaFieldError[],
+): FieldError[] {
   return errors.map((e) => ({
     field: e.field,
     message: e.message,
     code:
-      e.code === "minLength"
-        ? "min"
-        : e.code === "maxLength"
-          ? "max"
-          : e.code,
+      e.code === "minLength" ? "min" : e.code === "maxLength" ? "max" : e.code,
   }));
 }

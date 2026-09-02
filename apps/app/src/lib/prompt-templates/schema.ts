@@ -18,8 +18,14 @@ export const templateVariableSchema = z.object({
    *  param   — from a URL route param (e.g. params.runId)
    *  query   — from a query-string param (e.g. query.tab)
    *  session — from the current user session (e.g. session.user.id)
-   *  page    — from the page-registered entity (e.g. page.entity.name)
+   *  page    — from the page-registered entity (e.g. page.entity.label)
    *  ask     — prompt the user inline before sending
+   *
+   * Note: PageContext carries no session field, so getApplicableTemplates()
+   * cannot check whether a required `session` variable is resolvable. Such a
+   * template is always offered and may render with an unsubstituted
+   * {{placeholder}}. Prefer `param`, `page`, or `ask` until PageContext grows
+   * a session field.
    */
   resolver: z.enum(["param", "query", "session", "page", "ask"]),
   /**
@@ -39,11 +45,13 @@ export type TemplateVariable = z.infer<typeof templateVariableSchema>;
 
 export const contextMatcherSchema = z.object({
   /**
-   * Route pattern using Express-style colon params.
-   * e.g. "/{org}/{ws}/activity/runs/:runId"
+   * Route pattern. Named segments are written either curly-brace style
+   * ("{org}") or Express style (":runId"); both match exactly one segment.
+   * e.g. "/{org}/{ws}/knowledge/sources", "/{org}/{ws}/workbench/agents/:agentId"
    *
    * A wildcard "*" matches any single segment; "**" matches any suffix.
-   * An empty routePattern matches all routes (use for universal templates).
+   * An empty routePattern matches NOTHING — matchesRoute() returns false for it.
+   * There is no "matches every route" pattern; use "/**" for that.
    */
   routePattern: z.string(),
   /** Optional scope restriction. Omit for templates valid at all scopes. */
@@ -86,7 +94,8 @@ export const promptTemplateSchema = z.object({
   /**
    * Routes where this template is offered.
    * Multiple matchers = template offered on any matching route (union, not
-   * intersection). An empty array means the template never shows.
+   * intersection). At least one matcher is required — an empty array is a
+   * parse error, not a "never shows" template.
    */
   applicableTo: z.array(contextMatcherSchema).min(1),
   /**
@@ -101,7 +110,8 @@ export const promptTemplateSchema = z.object({
   autoSubmit: z.boolean(),
   /**
    * Optional keyboard shortcut assigned to this template (e.g. "⌘+E").
-   * Must be unique across all loaded templates (CI enforces this).
+   * Should be unique across all loaded templates. Nothing enforces this yet —
+   * duplicate shortcuts parse fine and the first matching template wins.
    */
   shortcut: z.string().optional(),
   /**

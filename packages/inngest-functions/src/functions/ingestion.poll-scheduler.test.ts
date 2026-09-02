@@ -13,8 +13,13 @@ const mocks = vi.hoisted(() => ({
   loggerInfo: vi.fn(),
 }));
 
-vi.mock("@oxagen/database", () => ({ withSystemDb: mocks.withSystemDb, schema: {} }));
-vi.mock("@oxagen/ingestion/connectors", () => ({ listConnectors: mocks.listConnectors }));
+vi.mock("@oxagen/database", () => ({
+  withSystemDb: mocks.withSystemDb,
+  schema: {},
+}));
+vi.mock("@oxagen/ingestion/connectors", () => ({
+  listConnectors: mocks.listConnectors,
+}));
 vi.mock("../logger", () => ({
   logger: { info: mocks.loggerInfo, warn: vi.fn(), error: vi.fn() },
 }));
@@ -56,7 +61,9 @@ beforeEach(() => {
 
 describe("ingestion-poll-scheduler", () => {
   it("no-ops when no registered connector supports polling", async () => {
-    mocks.listConnectors.mockReturnValue([{ connectorId: "webhook-only" /* no poll */ }]);
+    mocks.listConnectors.mockReturnValue([
+      { connectorId: "webhook-only" /* no poll */ },
+    ]);
     const result = await capturedHandler!({ step: makeStep() });
     expect(result).toEqual({ enqueued: 0, pollable: 0 });
     expect(mocks.withSystemDb).not.toHaveBeenCalled();
@@ -72,16 +79,22 @@ describe("ingestion-poll-scheduler", () => {
       { id: "c1", org_id: "o1", workspace_id: "w1", connector_id: "linear" },
       { id: "c2", org_id: "o2", workspace_id: "w2", connector_id: "github" },
     ];
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({ execute: vi.fn().mockResolvedValue(dueRows) }),
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ execute: vi.fn().mockResolvedValue(dueRows) }),
     );
 
     const result = await capturedHandler!({ step: makeStep() });
     expect(result).toEqual({ enqueued: 2, pollable: 2 });
 
-    const dispatch = sentEvents.find((e) => e.id === "dispatch-connection-polls");
+    const dispatch = sentEvents.find(
+      (e) => e.id === "dispatch-connection-polls",
+    );
     expect(dispatch).toBeDefined();
-    const events = dispatch!.events as Array<{ name: string; data: Record<string, unknown> }>;
+    const events = dispatch!.events as Array<{
+      name: string;
+      data: Record<string, unknown>;
+    }>;
     expect(events).toHaveLength(2);
     expect(events[0]!.name).toBe("ingestion/connection.poll");
     expect(events[0]!.data).toEqual({
@@ -93,9 +106,12 @@ describe("ingestion-poll-scheduler", () => {
   });
 
   it("enqueues nothing when no connection is due", async () => {
-    mocks.listConnectors.mockReturnValue([{ connectorId: "linear", poll: async function* () {} }]);
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({ execute: vi.fn().mockResolvedValue([]) }),
+    mocks.listConnectors.mockReturnValue([
+      { connectorId: "linear", poll: async function* () {} },
+    ]);
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ execute: vi.fn().mockResolvedValue([]) }),
     );
     const result = await capturedHandler!({ step: makeStep() });
     expect(result).toEqual({ enqueued: 0, pollable: 1 });

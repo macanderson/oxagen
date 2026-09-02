@@ -22,22 +22,29 @@ describe("plugin.credential.reauth contract", () => {
 
   it("requires orgListingId in input", () => {
     expect(() => pluginCredentialReauth.input.parse({})).toThrow();
-    expect(() => pluginCredentialReauth.input.parse({ orgListingId: "" })).toThrow();
+    expect(() =>
+      pluginCredentialReauth.input.parse({ orgListingId: "" }),
+    ).toThrow();
   });
 
   it("accepts a valid orgListingId", () => {
-    const parsed = pluginCredentialReauth.input.parse({ orgListingId: "ol-123" });
+    const parsed = pluginCredentialReauth.input.parse({
+      orgListingId: "ol-123",
+    });
     expect(parsed.orgListingId).toBe("ol-123");
   });
 
   it("output schema validates a URL", () => {
     const out = pluginCredentialReauth.output.parse({
-      authorizeUrl: "https://app.oxagen.ai/api/v1/mcp/oauth/authorize?orgSlug=acme&workspaceSlug=main&orgListingId=ol-1",
+      authorizeUrl:
+        "https://app.oxagen.ai/api/v1/mcp/oauth/authorize?orgSlug=acme&workspaceSlug=main&orgListingId=ol-1",
     });
     expect(out.authorizeUrl).toContain("authorize");
   });
 
   it("output schema rejects a non-URL", () => {
-    expect(() => pluginCredentialReauth.output.parse({ authorizeUrl: "not-a-url" })).toThrow();
+    expect(() =>
+      pluginCredentialReauth.output.parse({ authorizeUrl: "not-a-url" }),
+    ).toThrow();
   });
 });

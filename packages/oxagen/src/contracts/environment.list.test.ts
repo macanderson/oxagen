@@ -24,7 +24,11 @@ describe("environment.list contract", () => {
     expect(() => environmentList.input.parse(null)).toThrow();
   });
   it("accepts a valid output", () => {
-    expect(() => environmentList.output.parse({ environments: [summary] })).not.toThrow();
-    expect(() => environmentList.output.parse({ environments: [] })).not.toThrow();
+    expect(() =>
+      environmentList.output.parse({ environments: [summary] }),
+    ).not.toThrow();
+    expect(() =>
+      environmentList.output.parse({ environments: [] }),
+    ).not.toThrow();
   });
 });

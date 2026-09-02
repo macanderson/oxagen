@@ -15,8 +15,12 @@ describe("agent.debug.trace capability", () => {
 
   it("requires an executionId and rejects out-of-range depth", () => {
     expect(() => agentDebugTrace.input.parse({})).toThrow();
-    expect(() => agentDebugTrace.input.parse({ executionId: "aex_1", depth: 0 })).toThrow();
-    expect(() => agentDebugTrace.input.parse({ executionId: "aex_1", depth: 99 })).toThrow();
+    expect(() =>
+      agentDebugTrace.input.parse({ executionId: "aex_1", depth: 0 }),
+    ).toThrow();
+    expect(() =>
+      agentDebugTrace.input.parse({ executionId: "aex_1", depth: 99 }),
+    ).toThrow();
   });
 
   it("defaults to deterministic-only (summarize undefined)", () => {
@@ -52,15 +56,49 @@ describe("agent.debug.trace capability", () => {
         },
       ],
       relatedSpans: [
-        { kind: "step", id: "aes_2", label: "step 2 (tool)", status: "failed", failureReason: "TypeError: boom", latencyMs: 20 },
+        {
+          kind: "step",
+          id: "aes_2",
+          label: "step 2 (tool)",
+          status: "failed",
+          failureReason: "TypeError: boom",
+          latencyMs: 20,
+        },
       ],
-      suspectFiles: [{ path: "/repo/src/x.ts", score: 6, reasons: ["stack-frame", "tool-arg"] }],
+      suspectFiles: [
+        {
+          path: "/repo/src/x.ts",
+          score: 6,
+          reasons: ["stack-frame", "tool-arg"],
+        },
+      ],
       errorEvents: [
-        { severity: "error", source: "runner", errorClass: "TypeError", message: "boom", fingerprint: "fp1", stepId: null, createdAt: "2026-07-06 00:00:00.000" },
+        {
+          severity: "error",
+          source: "runner",
+          errorClass: "TypeError",
+          message: "boom",
+          fingerprint: "fp1",
+          stepId: null,
+          createdAt: "2026-07-06 00:00:00.000",
+        },
       ],
-      logsSample: [{ level: "error", message: "edit_file failed", stepId: null, createdAt: "2026-07-06 00:00:00.100" }],
+      logsSample: [
+        {
+          level: "error",
+          message: "edit_file failed",
+          stepId: null,
+          createdAt: "2026-07-06 00:00:00.100",
+        },
+      ],
       diagnosis: null,
-      truncated: { spans: false, frames: false, suspectFiles: false, errorEvents: false, logs: false },
+      truncated: {
+        spans: false,
+        frames: false,
+        suspectFiles: false,
+        errorEvents: false,
+        logs: false,
+      },
     });
     expect(frame.suspectFiles[0]?.path).toBe("/repo/src/x.ts");
     expect(frame.diagnosis).toBeNull();
@@ -85,7 +123,13 @@ describe("agent.debug.trace capability", () => {
         blastRadius: ["/repo/src/x.ts"],
         diffBudget: 8,
       },
-      truncated: { spans: false, frames: false, suspectFiles: false, errorEvents: false, logs: false },
+      truncated: {
+        spans: false,
+        frames: false,
+        suspectFiles: false,
+        errorEvents: false,
+        logs: false,
+      },
     });
     expect(frame.diagnosis?.diffBudget).toBe(8);
   });

@@ -13,7 +13,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { LoadingState, ErrorState, EmptyState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
+import {
+  LoadingState,
+  ErrorState,
+  EmptyState,
+} from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { KeyValueEditor } from "@/components/connectors/key-value-editor";
 import { Waypoints } from "lucide-react";
 import type { MappingDraft } from "./wizard-types";
@@ -52,7 +56,13 @@ export function MappingsStep({
   }
 
   if (error) {
-    return <ErrorState title="Couldn't generate mapping suggestions" description={error} retry={onRetry} />;
+    return (
+      <ErrorState
+        title="Couldn't generate mapping suggestions"
+        description={error}
+        retry={onRetry}
+      />
+    );
   }
 
   if (drafts.length === 0) {
@@ -78,7 +88,10 @@ export function MappingsStep({
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs text-muted-foreground">
-                Source record type: <span className="font-medium text-foreground">{draft.sourceRecordType}</span>
+                Source record type:{" "}
+                <span className="font-medium text-foreground">
+                  {draft.sourceRecordType}
+                </span>
               </span>
               {typeof draft.confidence === "number" && (
                 <Badge variant="outline" className="text-[10px]">
@@ -92,7 +105,11 @@ export function MappingsStep({
               <Input
                 id={`entity-type-${idx}`}
                 value={draft.oxagenEntityType}
-                onChange={(e) => onChangeDraft(idx, { oxagenEntityType: e.currentTarget.value })}
+                onChange={(e) =>
+                  onChangeDraft(idx, {
+                    oxagenEntityType: e.currentTarget.value,
+                  })
+                }
                 disabled={submitting}
                 aria-invalid={!draft.oxagenEntityType.trim()}
               />
@@ -103,7 +120,9 @@ export function MappingsStep({
             )}
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor={`property-mappings-${idx}`}>Property mappings</Label>
+              <Label htmlFor={`property-mappings-${idx}`}>
+                Property mappings
+              </Label>
               <KeyValueEditor
                 id={`property-mappings-${idx}`}
                 value={draft.propertyMappings}
@@ -118,7 +137,13 @@ export function MappingsStep({
       </div>
 
       <div className="flex items-center justify-between gap-3 border-t border-border/40 pt-4">
-        <Button type="button" variant="outline" size="sm" onClick={onBack} disabled={submitting}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onBack}
+          disabled={submitting}
+        >
           Back
         </Button>
         <Button

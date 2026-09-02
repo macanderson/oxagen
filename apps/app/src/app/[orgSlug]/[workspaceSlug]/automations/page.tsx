@@ -20,7 +20,10 @@ interface PageProps {
 
 export default async function AutomationsPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
-  const { ctx, canManage } = await resolveAutomationsScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveAutomationsScope(
+    orgSlug,
+    workspaceSlug,
+  );
   const routeCtx = { orgSlug, workspaceSlug };
 
   return (
@@ -29,7 +32,10 @@ export default async function AutomationsPage({ params }: PageProps) {
         ctx={routeCtx}
         actions={
           canManage ? (
-            <NewAutomationButton orgSlug={orgSlug} workspaceSlug={workspaceSlug} />
+            <NewAutomationButton
+              orgSlug={orgSlug}
+              workspaceSlug={workspaceSlug}
+            />
           ) : undefined
         }
       />

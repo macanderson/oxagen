@@ -25,7 +25,9 @@ afterEach(cleanup);
 
 describe("GitHubInstallGate", () => {
   it("renders the settings link with the correct workspace GitHub settings href", () => {
-    render(<GitHubInstallGate orgSlug={ORG} workspaceSlug={WS} onClose={vi.fn()} />);
+    render(
+      <GitHubInstallGate orgSlug={ORG} workspaceSlug={WS} onClose={vi.fn()} />,
+    );
 
     expect(screen.getByTestId("github-install-gate")).toBeInTheDocument();
 
@@ -38,7 +40,9 @@ describe("GitHubInstallGate", () => {
 
   it("calls onClose when the Cancel button is clicked", () => {
     const onClose = vi.fn();
-    render(<GitHubInstallGate orgSlug={ORG} workspaceSlug={WS} onClose={onClose} />);
+    render(
+      <GitHubInstallGate orgSlug={ORG} workspaceSlug={WS} onClose={onClose} />,
+    );
 
     fireEvent.click(screen.getByTestId("github-gate-cancel-btn"));
     expect(onClose).toHaveBeenCalledOnce();

@@ -6,7 +6,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return { ...real, withTenantDb: mocks.withTenantDb };
 });
-vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("./logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 import { repoPauseHandler } from "./repo.pause";
 
@@ -15,18 +17,23 @@ const CTX = makeCTX({ orgId: "org-1", workspaceId: "ws-1" });
 type Existing = { id: string; status: string } | null;
 
 function setup(existing: Existing, setSpy = vi.fn()) {
-  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      select: () => ({
-        from: () => ({ where: () => ({ limit: () => Promise.resolve(existing ? [existing] : []) }) }),
+  mocks.withTenantDb.mockImplementation(
+    (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: () => Promise.resolve(existing ? [existing] : []),
+            }),
+          }),
+        }),
+        update: () => ({
+          set: (v: unknown) => {
+            setSpy(v);
+            return { where: () => Promise.resolve() };
+          },
+        }),
       }),
-      update: () => ({
-        set: (v: unknown) => {
-          setSpy(v);
-          return { where: () => Promise.resolve() };
-        },
-      }),
-    }),
   );
   return { setSpy };
 }
@@ -40,7 +47,9 @@ describe("repo.pause handler", () => {
     expect(out.repoId).toBe("con_1");
     expect(out.status).toBe("paused");
     expect(() => new Date(out.pausedAt).toISOString()).not.toThrow();
-    expect(setSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "paused" }));
+    expect(setSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "paused" }),
+    );
   });
 
   it("is idempotent on an already-paused connection", async () => {
@@ -58,8 +67,8 @@ describe("repo.pause handler", () => {
 
   it("throws 404 when the connection does not exist", async () => {
     setup(null);
-    await expect(repoPauseHandler({ repoId: "con_missing" }, CTX)).rejects.toThrow(
-      "Repository connection not found",
-    );
+    await expect(
+      repoPauseHandler({ repoId: "con_missing" }, CTX),
+    ).rejects.toThrow("Repository connection not found");
   });
 });

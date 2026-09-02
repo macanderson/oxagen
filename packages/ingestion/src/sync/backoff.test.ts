@@ -58,7 +58,11 @@ describe("nextPollAt", () => {
   const now = new Date("2026-07-04T00:00:00.000Z");
 
   it("schedules steady-state interval on success", () => {
-    const at = nextPollAt({ now, intervalSeconds: 300, consecutiveFailures: 0 });
+    const at = nextPollAt({
+      now,
+      intervalSeconds: 300,
+      consecutiveFailures: 0,
+    });
     expect(at.getTime()).toBe(now.getTime() + 300_000);
   });
 

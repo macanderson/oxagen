@@ -156,7 +156,12 @@ export async function routerStats(
 
 export async function routerPreview(
   prompt: string,
-  opts: { files?: number; crossPackage?: boolean; taskClass?: string; json?: boolean } = {},
+  opts: {
+    files?: number;
+    crossPackage?: boolean;
+    taskClass?: string;
+    json?: boolean;
+  } = {},
   writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   const cmd = createOutput({ json: opts.json }, writer);
@@ -179,13 +184,13 @@ export async function routerPreview(
   writer.write(
     `Task class: ${result.taskClass}  ·  decision: ${result.source}`,
   );
-  writer.write(
-    `→ ${short(result.model)} (${result.tier})`,
-  );
+  writer.write(`→ ${short(result.model)} (${result.tier})`);
   writer.write(`  ${result.rationale}`);
   writer.write("");
   if (result.candidates.length === 0) {
-    writer.write("No observed candidates for this class — deterministic fallback used.");
+    writer.write(
+      "No observed candidates for this class — deterministic fallback used.",
+    );
     return;
   }
   printTable(

@@ -21,20 +21,19 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      insert: () => ({
-        values: () => ({
-          onConflictDoNothing: () => ({
-            returning: mocks.insertReturning,
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        insert: () => ({
+          values: () => ({
+            onConflictDoNothing: () => ({
+              returning: mocks.insertReturning,
+            }),
           }),
         }),
+        query: {
+          invitations: { findFirst: mocks.findFirst },
+        },
       }),
-      query: {
-        invitations: { findFirst: mocks.findFirst },
-      },
-    }),
-
   };
 });
 
@@ -56,7 +55,10 @@ describe("workspaceInviteSendHandler (@oxagen/handlers)", () => {
   it("throws when userId is null", async () => {
     const anonCtx: CapabilityContext = { ...CTX, userId: null };
     await expect(
-      workspaceInviteSendHandler({ email: "alice@example.com", role: "member" }, anonCtx),
+      workspaceInviteSendHandler(
+        { email: "alice@example.com", role: "member" },
+        anonCtx,
+      ),
     ).rejects.toThrow("workspace.invite.send requires an authenticated user");
   });
 
@@ -73,7 +75,10 @@ describe("workspaceInviteSendHandler (@oxagen/handlers)", () => {
   });
 
   it("calls insert once for a new invite", async () => {
-    await workspaceInviteSendHandler({ email: "alice@example.com", role: "admin" }, CTX);
+    await workspaceInviteSendHandler(
+      { email: "alice@example.com", role: "admin" },
+      CTX,
+    );
     expect(mocks.insertReturning).toHaveBeenCalledTimes(1);
   });
 
@@ -103,8 +108,13 @@ describe("workspaceInviteSendHandler (@oxagen/handlers)", () => {
     mocks.findFirst.mockResolvedValueOnce(undefined);
 
     await expect(
-      workspaceInviteSendHandler({ email: "alice@example.com", role: "member" }, CTX),
-    ).rejects.toThrow("conflict on insert but no existing pending invite found");
+      workspaceInviteSendHandler(
+        { email: "alice@example.com", role: "member" },
+        CTX,
+      ),
+    ).rejects.toThrow(
+      "conflict on insert but no existing pending invite found",
+    );
   });
 
   // ── expires_at fallback ───────────────────────────────────────────────────

@@ -71,7 +71,9 @@ function readCapabilities() {
       const layersMatch = src.match(/layers:\s*\[([^\]]*)\]/);
       // The exported identifier bound to registerCapability(...) — this is what
       // app code imports and invokes as `invoke(<ident>.name, ...)`.
-      const identMatch = src.match(/export const (\w+)\s*=\s*registerCapability\s*\(/);
+      const identMatch = src.match(
+        /export const (\w+)\s*=\s*registerCapability\s*\(/,
+      );
       const name = nameMatch ? nameMatch[1] : file.replace(/\.ts$/, "");
       const layers = layersMatch
         ? layersMatch[1]
@@ -112,7 +114,9 @@ function readBaseline() {
     const parsed = JSON.parse(readFileSync(BASELINE, "utf8"));
     return new Set(parsed.grandfathered ?? []);
   } catch (e) {
-    console.error(`capability-ui-parity-baseline.json is not valid JSON: ${e.message}`);
+    console.error(
+      `capability-ui-parity-baseline.json is not valid JSON: ${e.message}`,
+    );
     process.exit(2);
   }
 }
@@ -158,22 +162,39 @@ export function resolveInvoked(src, validNames, identToName) {
  *
  * @param {{caps:Array, bindings:Object, invoked:Set<string>, pageExists:(p:string)=>boolean, baseline?:Set<string>}} args
  */
-export function computeParity({ caps, bindings, invoked, pageExists, baseline = new Set() }) {
+export function computeParity({
+  caps,
+  bindings,
+  invoked,
+  pageExists,
+  baseline = new Set(),
+}) {
   const byName = new Map(caps.map((c) => [c.name, c]));
   const forward = [];
   for (const cap of caps) {
     if (!cap.layers.includes("app")) continue;
     const b = bindings[cap.name];
     if (!b) {
-      forward.push({ capability: cap.name, reason: "declares 'app' layer but has no binding in capability-ui-map.json" });
+      forward.push({
+        capability: cap.name,
+        reason:
+          "declares 'app' layer but has no binding in capability-ui-map.json",
+      });
       continue;
     }
     if (!b.page || !pageExists(b.page)) {
-      forward.push({ capability: cap.name, reason: `binding.page missing on disk: ${b.page ?? "(unset)"}` });
+      forward.push({
+        capability: cap.name,
+        reason: `binding.page missing on disk: ${b.page ?? "(unset)"}`,
+      });
       continue;
     }
     if (!b.proof) {
-      forward.push({ capability: cap.name, reason: "binding has no runtime `proof` (screenshot under verifications/ or an e2e spec)" });
+      forward.push({
+        capability: cap.name,
+        reason:
+          "binding has no runtime `proof` (screenshot under verifications/ or an e2e spec)",
+      });
     }
   }
   const blocking = forward.filter((g) => !baseline.has(g.capability));
@@ -182,25 +203,62 @@ export function computeParity({ caps, bindings, invoked, pageExists, baseline = 
     const cap = byName.get(name);
     if (!cap) continue;
     if (!cap.layers.includes("app")) {
-      reverse.push({ capability: name, reason: "invoked by apps/app but contract does not declare the 'app' layer" });
+      reverse.push({
+        capability: name,
+        reason:
+          "invoked by apps/app but contract does not declare the 'app' layer",
+      });
     } else if (!bindings[name]) {
-      reverse.push({ capability: name, reason: "invoked by apps/app and declares 'app' but has no binding" });
+      reverse.push({
+        capability: name,
+        reason: "invoked by apps/app and declares 'app' but has no binding",
+      });
     }
   }
   return { forward, reverse, blocking };
 }
 
-/** Concatenated source of every .ts/.tsx under apps/app/src (via rg or a walk). */
+/**
+ * Concatenated source of every .ts/.tsx under apps/app/src that mentions
+ * `invoke(`, found via rg when it is available and a directory walk otherwise.
+ *
+ * rg narrows which FILES to read, never which lines: the formatter wraps long
+ * calls, so `invoke(\n  listAgents.name, …)` puts the call and its argument on
+ * different lines and a line-oriented match would drop every one of them (there
+ * are a dozen such sites in apps/app today). Both paths must hand resolveInvoked
+ * whole files, or the fast path silently under-reports.
+ */
 function readAppSource() {
+  let paths;
   try {
-    return execFileSync(
+    paths = execFileSync(
       "rg",
-      ["-N", "--no-messages", "-g", "*.ts", "-g", "*.tsx", "invoke\\(", APP_SRC],
+      [
+        "-l",
+        "--no-messages",
+        "-g",
+        "*.ts",
+        "-g",
+        "*.tsx",
+        "invoke\\(",
+        APP_SRC,
+      ],
       { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
-    );
+    )
+      .split("\n")
+      .filter(Boolean);
   } catch {
     return walkGrep(APP_SRC);
   }
+  let out = "";
+  for (const p of paths) {
+    try {
+      out += readFileSync(p, "utf8") + "\n";
+    } catch {
+      /* ignore */
+    }
+  }
+  return out;
 }
 
 function walkGrep(dir) {
@@ -249,50 +307,76 @@ function main() {
   });
 
   if (JSON_MODE) {
-    process.stdout.write(JSON.stringify({ forward, reverse, blocking }, null, 2) + "\n");
+    process.stdout.write(
+      JSON.stringify({ forward, reverse, blocking }, null, 2) + "\n",
+    );
     return;
   }
 
   const grandfathered = forward.length - blocking.length;
-  info(`UI parity: ${caps.length} capabilities, ${Object.keys(bindings).length} bindings, ${invoked.size} app-invoked, ${grandfathered} grandfathered.`);
+  info(
+    `UI parity: ${caps.length} capabilities, ${Object.keys(bindings).length} bindings, ${invoked.size} app-invoked, ${grandfathered} grandfathered.`,
+  );
 
   for (const g of reverse) {
-    console.log(`::warning title=UI parity (advisory)::${g.capability} — ${g.reason}`);
+    console.log(
+      `::warning title=UI parity (advisory)::${g.capability} — ${g.reason}`,
+    );
   }
   if (reverse.length) {
-    console.error(`\nADVISORY — ${reverse.length} capability(ies) invoked by the app without an 'app'-layer promise:`);
+    console.error(
+      `\nADVISORY — ${reverse.length} capability(ies) invoked by the app without an 'app'-layer promise:`,
+    );
     for (const g of reverse) console.error(`  - ${g.capability}: ${g.reason}`);
   }
 
   if (forward.length) {
-    const baselined = new Set(blocking.map((g) => g.capability));
+    // `blocking` is the NON-grandfathered subset, so this set names the gaps
+    // that fail the build — not the baselined ones.
+    const blockingNames = new Set(blocking.map((g) => g.capability));
     for (const g of forward) {
       // Blocking gaps annotate as ::error:: under --strict so they surface loudly;
       // grandfathered gaps stay ::warning:: (tracked debt, not a build failure).
-      const isBlocking = baselined.has(g.capability);
+      const isBlocking = blockingNames.has(g.capability);
       const level = isBlocking && STRICT ? "error" : "warning";
-      const tag = isBlocking ? "UI parity gap" : "UI parity gap (grandfathered)";
+      const tag = isBlocking
+        ? "UI parity gap"
+        : "UI parity gap (grandfathered)";
       console.log(`::${level} title=${tag}::${g.capability} — ${g.reason}`);
     }
     if (grandfathered) {
-      console.error(`\nGRANDFATHERED — ${grandfathered} pre-existing 'app'-layer gap(s) in capability-ui-parity-baseline.json (shrink this list as Phases 1-6 add each page's proof):`);
+      console.error(
+        `\nGRANDFATHERED — ${grandfathered} pre-existing 'app'-layer gap(s) in capability-ui-parity-baseline.json (shrink this list as Phases 1-6 add each page's proof):`,
+      );
     }
     if (blocking.length) {
-      console.error(`\nUI PARITY GAPS — ${blocking.length} NEW 'app'-layer capability(ies) not backed by a working, proven page:`);
-      for (const g of blocking) console.error(`  - ${g.capability}: ${g.reason}`);
+      console.error(
+        `\nUI PARITY GAPS — ${blocking.length} NEW 'app'-layer capability(ies) not backed by a working, proven page:`,
+      );
+      for (const g of blocking)
+        console.error(`  - ${g.capability}: ${g.reason}`);
       if (STRICT) {
-        console.error("\n--strict: failing because non-grandfathered forward UI-parity gaps exist. Back the page (binding + proof) or drop the 'app' layer — do NOT add it to the baseline.");
+        console.error(
+          "\n--strict: failing because non-grandfathered forward UI-parity gaps exist. Back the page (binding + proof) or drop the 'app' layer — do NOT add it to the baseline.",
+        );
         process.exit(1);
       }
-      console.error("\n(warn-only — pass --strict to fail. A declared 'app' layer is a promise; back it or drop it.)");
+      console.error(
+        "\n(warn-only — pass --strict to fail. A declared 'app' layer is a promise; back it or drop it.)",
+      );
     }
     return;
   }
 
-  info("UI Capability Parity: all 'app'-layer capabilities are bound to a working page.");
+  info(
+    "UI Capability Parity: all 'app'-layer capabilities are bound to a working page.",
+  );
 }
 
 // Only run when executed directly (not when imported by the test).
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   main();
 }

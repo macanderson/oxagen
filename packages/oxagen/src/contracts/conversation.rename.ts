@@ -12,7 +12,11 @@ export const conversationRename = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "docs", "mcp", "unit", "app"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "conversation" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "conversation",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {
@@ -31,4 +35,6 @@ export const conversationRename = registerCapability({
 });
 
 export type ConversationRenameInput = z.output<typeof conversationRename.input>;
-export type ConversationRenameOutput = z.output<typeof conversationRename.output>;
+export type ConversationRenameOutput = z.output<
+  typeof conversationRename.output
+>;

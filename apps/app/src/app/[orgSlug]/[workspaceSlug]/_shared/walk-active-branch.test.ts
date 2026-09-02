@@ -1,6 +1,5 @@
 /**
- * walk-active-branch.test.ts — unit tests for the walkActiveBranch helper
- * exported from conversation-page.tsx.
+ * walk-active-branch.test.ts — unit tests for the walkActiveBranch helper.
  *
  * walkActiveBranch reconstructs the visible message branch by walking
  * parent links from the active leaf to the root. It is a pure function with
@@ -14,8 +13,9 @@
  *   4. Linear chain: leafId = middle message → returns root→middle only
  *   5. Branch: leafId selects the non-default branch
  *   6. Sibling count is correct for a forked node
- *   7. leafId not found in rows → falls back to root
+ *   7. leafId not found in rows → returns an empty path (no root fallback)
  *   8. contentBlocks preserved when present; undefined when absent
+ *   9. metadata.attachments parsed, filtered, and defaulted to undefined
  */
 
 import { describe, it, expect } from "vitest";

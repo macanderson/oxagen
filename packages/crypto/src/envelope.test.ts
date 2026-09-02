@@ -113,7 +113,9 @@ describe("envelope encryption", () => {
 
   it("tamper detection: mutating a ciphertext byte throws", async () => {
     const adapter = makeAdapter();
-    const ciphertext = await encrypt("sensitive-token", FAKE_KEY_ID, { adapter });
+    const ciphertext = await encrypt("sensitive-token", FAKE_KEY_ID, {
+      adapter,
+    });
 
     // Flip a bit in the ciphertext payload (near the end, well past headers).
     const tampered = Buffer.from(ciphertext);
@@ -128,7 +130,8 @@ describe("envelope encryption", () => {
     const ciphertext = await encrypt("another-token", FAKE_KEY_ID, { adapter });
 
     const tampered = Buffer.from(ciphertext);
-    tampered[tampered.length - 1] = (tampered[tampered.length - 1] as number) ^ 0x01;
+    tampered[tampered.length - 1] =
+      (tampered[tampered.length - 1] as number) ^ 0x01;
 
     await expect(decrypt(tampered, FAKE_KEY_ID, { adapter })).rejects.toThrow();
   });
@@ -186,7 +189,9 @@ describe("envelope encryption", () => {
 
   it("invalid DEK length on decryptDataKey: decrypt throws /Expected 32-byte DEK/", async () => {
     const encryptAdapter = makeAdapter();
-    const ciphertext = await encrypt("some-plaintext", FAKE_KEY_ID, { adapter: encryptAdapter });
+    const ciphertext = await encrypt("some-plaintext", FAKE_KEY_ID, {
+      adapter: encryptAdapter,
+    });
 
     const badDecryptAdapter: KmsAdapter = {
       async generateDataKey(_keyId: string) {
@@ -207,10 +212,13 @@ describe("envelope encryption", () => {
     // but whose declared length fields sum to more bytes than are present.
     const buf = Buffer.allocUnsafe(9 + 4); // 9-byte header + 4 payload bytes
     let offset = 0;
-    buf.writeUInt8(0x01, offset); offset += 1;  // version
-    buf.writeUInt16BE(12, offset); offset += 2; // iv_len = 12
-    buf.writeUInt16BE(32, offset); offset += 2; // enc_dek_len = 32
-    buf.writeUInt32BE(100, offset);             // ct_len = 100 (far exceeds remaining 4 bytes)
+    buf.writeUInt8(0x01, offset);
+    offset += 1; // version
+    buf.writeUInt16BE(12, offset);
+    offset += 2; // iv_len = 12
+    buf.writeUInt16BE(32, offset);
+    offset += 2; // enc_dek_len = 32
+    buf.writeUInt32BE(100, offset); // ct_len = 100 (far exceeds remaining 4 bytes)
 
     await expect(
       decrypt(buf, FAKE_KEY_ID, { adapter: makeAdapter() }),
@@ -225,9 +233,12 @@ describe("envelope encryption", () => {
     const encDekLen = 32;
     const buf = Buffer.alloc(9 + ivLen + encDekLen + ctLen, 0);
     let off = 0;
-    buf.writeUInt8(0x01, off); off += 1;
-    buf.writeUInt16BE(ivLen, off); off += 2;
-    buf.writeUInt16BE(encDekLen, off); off += 2;
+    buf.writeUInt8(0x01, off);
+    off += 1;
+    buf.writeUInt16BE(ivLen, off);
+    off += 2;
+    buf.writeUInt16BE(encDekLen, off);
+    off += 2;
     buf.writeUInt32BE(ctLen, off);
 
     await expect(
@@ -253,16 +264,20 @@ describe("envelope encryption", () => {
 
     let offset = 0;
 
-    const version = ct.readUInt8(offset); offset += 1;
+    const version = ct.readUInt8(offset);
+    offset += 1;
     expect(version).toBe(0x01);
 
-    const ivLen = ct.readUInt16BE(offset); offset += 2;
+    const ivLen = ct.readUInt16BE(offset);
+    offset += 2;
     expect(ivLen).toBe(12); // AES-GCM 96-bit nonce is always 12 bytes
 
-    const encDekLen = ct.readUInt16BE(offset); offset += 2;
+    const encDekLen = ct.readUInt16BE(offset);
+    offset += 2;
     expect(encDekLen).toBeGreaterThan(0);
 
-    const ctLen = ct.readUInt32BE(offset); offset += 4;
+    const ctLen = ct.readUInt32BE(offset);
+    offset += 4;
     // plaintext (16 bytes) + AES-GCM auth tag (16 bytes) = 32 bytes minimum
     expect(ctLen).toBeGreaterThanOrEqual(32);
 

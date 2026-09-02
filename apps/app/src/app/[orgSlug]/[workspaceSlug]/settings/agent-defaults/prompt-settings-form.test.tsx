@@ -11,7 +11,14 @@
  */
 
 import * as React from "react";
-import { render, screen, waitFor, cleanup, fireEvent, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  cleanup,
+  fireEvent,
+  act,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { PromptSettingsInput } from "./prompt-settings-action";
 
@@ -19,13 +26,15 @@ import type { PromptSettingsInput } from "./prompt-settings-action";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockUpdatePromptSettingsAction, mockAddToast, mockUseRegisterFillableForm } = vi.hoisted(
-  () => ({
-    mockUpdatePromptSettingsAction: vi.fn(),
-    mockAddToast: vi.fn(),
-    mockUseRegisterFillableForm: vi.fn(),
-  }),
-);
+const {
+  mockUpdatePromptSettingsAction,
+  mockAddToast,
+  mockUseRegisterFillableForm,
+} = vi.hoisted(() => ({
+  mockUpdatePromptSettingsAction: vi.fn(),
+  mockAddToast: vi.fn(),
+  mockUseRegisterFillableForm: vi.fn(),
+}));
 
 vi.mock("./prompt-settings-action", () => ({
   updatePromptSettingsAction: mockUpdatePromptSettingsAction,
@@ -136,7 +145,10 @@ vi.mock("@/components/ui/button", () => ({
     size?: string;
     className?: string;
   }) => (
-    <button type={(type as "button" | "submit" | "reset") ?? "button"} disabled={disabled}>
+    <button
+      type={(type as "button" | "submit" | "reset") ?? "button"}
+      disabled={disabled}
+    >
       {children}
     </button>
   ),
@@ -220,7 +232,9 @@ describe("PromptSettingsForm", () => {
 
   it("renders the Save button", () => {
     render(<PromptSettingsForm {...defaultProps} />);
-    expect(screen.getByRole("button", { name: /save changes/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /save changes/i }),
+    ).toBeInTheDocument();
   });
 
   it("renders the auto-improve switch", () => {
@@ -238,17 +252,21 @@ describe("PromptSettingsForm", () => {
   it("calls useRegisterFillableForm with a formId containing 'workspace-prompts'", () => {
     render(<PromptSettingsForm {...defaultProps} />);
     expect(mockUseRegisterFillableForm).toHaveBeenCalled();
-    const callArg = (mockUseRegisterFillableForm.mock.calls[0] as unknown as [
-      { formId: string; fields: unknown[] },
-    ])[0];
+    const callArg = (
+      mockUseRegisterFillableForm.mock.calls[0] as unknown as [
+        { formId: string; fields: unknown[] },
+      ]
+    )[0];
     expect(callArg.formId).toContain("workspace-prompts");
   });
 
   it("registers 2 fields: autoImprove and additionalInstructions", () => {
     render(<PromptSettingsForm {...defaultProps} />);
-    const callArg = (mockUseRegisterFillableForm.mock.calls[0] as unknown as [
-      { formId: string; fields: { name: string }[] },
-    ])[0];
+    const callArg = (
+      mockUseRegisterFillableForm.mock.calls[0] as unknown as [
+        { formId: string; fields: { name: string }[] },
+      ]
+    )[0];
     expect(callArg.fields).toHaveLength(2);
     const names = callArg.fields.map((f) => f.name);
     expect(names).toContain("autoImprove");
@@ -264,16 +282,23 @@ describe("PromptSettingsForm", () => {
 
     expect(capturedApply).not.toBeNull();
     act(() => {
-      capturedApply!({ autoImprove: true, additionalInstructions: "Be concise." });
+      capturedApply!({
+        autoImprove: true,
+        additionalInstructions: "Be concise.",
+      });
     });
 
-    fireEvent.submit(screen.getByRole("form", { name: /workspace prompt settings/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /workspace prompt settings/i }),
+    );
 
     await waitFor(() => {
       expect(mockUpdatePromptSettingsAction).toHaveBeenCalledOnce();
     });
 
-    const [arg] = mockUpdatePromptSettingsAction.mock.calls[0] as [PromptSettingsInput];
+    const [arg] = mockUpdatePromptSettingsAction.mock.calls[0] as [
+      PromptSettingsInput,
+    ];
     expect(arg.autoImprovePrompts).toBe(true);
     expect(arg.additionalInstructions).toBe("Be concise.");
   });
@@ -287,13 +312,17 @@ describe("PromptSettingsForm", () => {
     // Pass invalid type for autoImprove — should remain false
     capturedApply!({ autoImprove: "yes" });
 
-    fireEvent.submit(screen.getByRole("form", { name: /workspace prompt settings/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /workspace prompt settings/i }),
+    );
 
     await waitFor(() => {
       expect(mockUpdatePromptSettingsAction).toHaveBeenCalledOnce();
     });
 
-    const [arg] = mockUpdatePromptSettingsAction.mock.calls[0] as [PromptSettingsInput];
+    const [arg] = mockUpdatePromptSettingsAction.mock.calls[0] as [
+      PromptSettingsInput,
+    ];
     expect(arg.autoImprovePrompts).toBe(false);
   });
 
@@ -304,13 +333,17 @@ describe("PromptSettingsForm", () => {
 
     render(<PromptSettingsForm {...defaultProps} />);
 
-    fireEvent.submit(screen.getByRole("form", { name: /workspace prompt settings/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /workspace prompt settings/i }),
+    );
 
     await waitFor(() => {
       expect(mockUpdatePromptSettingsAction).toHaveBeenCalledOnce();
     });
 
-    const [arg] = mockUpdatePromptSettingsAction.mock.calls[0] as [PromptSettingsInput];
+    const [arg] = mockUpdatePromptSettingsAction.mock.calls[0] as [
+      PromptSettingsInput,
+    ];
     expect(arg.orgSlug).toBe("test-org");
     expect(arg.workspaceSlug).toBe("test-ws");
   });
@@ -320,7 +353,9 @@ describe("PromptSettingsForm", () => {
 
     render(<PromptSettingsForm {...defaultProps} />);
 
-    fireEvent.submit(screen.getByRole("form", { name: /workspace prompt settings/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /workspace prompt settings/i }),
+    );
 
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledOnce();
@@ -341,7 +376,9 @@ describe("PromptSettingsForm", () => {
 
     render(<PromptSettingsForm {...defaultProps} />);
 
-    fireEvent.submit(screen.getByRole("form", { name: /workspace prompt settings/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /workspace prompt settings/i }),
+    );
 
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledOnce();
@@ -361,7 +398,9 @@ describe("PromptSettingsForm", () => {
 
     render(<PromptSettingsForm {...defaultProps} />);
 
-    fireEvent.submit(screen.getByRole("form", { name: /workspace prompt settings/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /workspace prompt settings/i }),
+    );
 
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledOnce();
@@ -373,11 +412,15 @@ describe("PromptSettingsForm", () => {
   });
 
   it("shows an error toast when the action throws", async () => {
-    mockUpdatePromptSettingsAction.mockRejectedValue(new Error("Network error"));
+    mockUpdatePromptSettingsAction.mockRejectedValue(
+      new Error("Network error"),
+    );
 
     render(<PromptSettingsForm {...defaultProps} />);
 
-    fireEvent.submit(screen.getByRole("form", { name: /workspace prompt settings/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /workspace prompt settings/i }),
+    );
 
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledOnce();
@@ -405,7 +448,9 @@ describe("PromptSettingsForm — per-prompt override entitlement", () => {
    * Opens the collapsible "Per-prompt overrides" panel by clicking its toggle.
    */
   function openOverridesPanel() {
-    fireEvent.click(screen.getByRole("button", { name: /per-prompt overrides/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /per-prompt overrides/i }),
+    );
   }
 
   it("shows 'Requires Enterprise plan' overlay and disabled textareas when isEnterprise is false", () => {
@@ -422,7 +467,9 @@ describe("PromptSettingsForm — per-prompt override entitlement", () => {
     }
 
     // Overlay text present.
-    expect(screen.getAllByText(/requires enterprise plan/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/requires enterprise plan/i).length,
+    ).toBeGreaterThan(0);
   });
 
   it("does not show 'Requires Enterprise plan' overlay and enables textareas when isEnterprise is true", () => {
@@ -443,7 +490,9 @@ describe("PromptSettingsForm — per-prompt override entitlement", () => {
   });
 
   it("disables override textareas even for Enterprise when canEdit is false", () => {
-    render(<PromptSettingsForm {...defaultProps} isEnterprise canEdit={false} />);
+    render(
+      <PromptSettingsForm {...defaultProps} isEnterprise canEdit={false} />,
+    );
     openOverridesPanel();
 
     const overrideTextareas = screen
@@ -459,10 +508,14 @@ describe("PromptSettingsForm — per-prompt override entitlement", () => {
     render(<PromptSettingsForm {...defaultProps} isEnterprise />);
 
     // The section toggle button should not contain the word "Enterprise" as a badge.
-    const toggleButton = screen.getByRole("button", { name: /per-prompt overrides/i });
+    const toggleButton = screen.getByRole("button", {
+      name: /per-prompt overrides/i,
+    });
     // The Enterprise badge (rendered as a <span data-testid="badge">) should not be present
     // inside the toggle button when the org is on Enterprise.
-    const badgesInToggle = Array.from(toggleButton.querySelectorAll("[data-testid='badge']"));
+    const badgesInToggle = Array.from(
+      toggleButton.querySelectorAll("[data-testid='badge']"),
+    );
     const enterpriseBadgeText = badgesInToggle.find((b) =>
       b.textContent?.toLowerCase().includes("enterprise"),
     );

@@ -9,6 +9,8 @@ export const skillVersionUploadRoute = new Hono<AppEnv>();
 skillVersionUploadRoute.post("/", async (c) => {
   const input = skillVersionUpload.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(skillVersionUpload.name, input, ctx, { surface: "api" });
+  const out = await invoke(skillVersionUpload.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

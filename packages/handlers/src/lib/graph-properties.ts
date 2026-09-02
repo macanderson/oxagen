@@ -58,9 +58,15 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 /**
  * Shallow pass converting Neo4j Integer-like `{low, high}` values to plain JS
- * numbers, mirroring the `toNumber` normalisation graph.node.list applies to
- * its count aggregate. Only the exact two-key driver shape is converted; any
- * other object is left untouched.
+ * numbers, the same normalisation graph.node.list applies to its count
+ * aggregate. Only the exact two-key driver shape is converted; any other object
+ * is left untouched.
+ *
+ * A driver Integer is a 64-bit value split into two 32-bit halves, so both
+ * halves have to be recombined — reading `low` alone silently reports 0 for
+ * 2^32, and a wrong number for every value that does not fit in 32 bits.
+ * Magnitudes above Number.MAX_SAFE_INTEGER still lose precision; that is
+ * inherent to handing a JS number back and matches the driver's own toNumber().
  */
 function normalizeDriverIntegers(
   bag: Record<string, unknown>,
@@ -76,9 +82,14 @@ function normalizeDriverIntegers(
 
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(bag)) {
-    out[key] = isDriverInteger(value) ? value.low : value;
+    out[key] = isDriverInteger(value) ? driverIntegerToNumber(value) : value;
   }
   return out;
+}
+
+/** Recombine a driver Integer's two 32-bit halves into one JS number. */
+function driverIntegerToNumber(value: { low: number; high: number }): number {
+  return value.high * 2 ** 32 + (value.low >>> 0);
 }
 
 function isDriverInteger(

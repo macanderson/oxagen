@@ -111,11 +111,12 @@ export const graphSearchHandler: CapabilityHandler<typeof graphSearch> = async (
           labels: input.labels ?? [],
           // BigInt forces the Bolt driver to send INTEGER — plain numbers become
           // Float and Neo4j rejects them for LIMIT. The Cypher LIMIT is
-          // deliberately k (not input.limit): the in-memory kind post-filter
-          // below needs candidate headroom; slice(0, limit) does the final trim.
-          // Under an agent scope the LIMIT must be LITERAL — the seam fails
-          // closed on a parameterized LIMIT when a maxNodes budget is set (and
-          // clamps the literal down to the budget).
+          // deliberately k (not input.limit): the ANN candidates still have to
+          // survive the tenant + label predicates, so we keep the over-sample
+          // headroom all the way out of Cypher and slice(0, input.limit) does
+          // the final trim below. Under an agent scope the LIMIT must be
+          // LITERAL — the seam fails closed on a parameterized LIMIT when a
+          // maxNodes budget is set (and clamps the literal down to the budget).
           ...(scoped ? {} : { limit: BigInt(k) }),
         },
       );

@@ -72,7 +72,10 @@ function makeTxReturning(rows: unknown[]) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.encrypt.mockResolvedValue(Buffer.from("encrypted"));
-  mocks.createIngestionCryptoAdapter.mockReturnValue({ adapter: {}, keyId: "k1" });
+  mocks.createIngestionCryptoAdapter.mockReturnValue({
+    adapter: {},
+    keyId: "k1",
+  });
   mocks.getConnector.mockReturnValue({ deliveryMethod: "webhook" });
 });
 
@@ -96,13 +99,17 @@ describe("connectionListHandler", () => {
   };
 
   it("returns empty connections when none exist", async () => {
-    mocks.withTenantDb.mockImplementation((fn: DbFn) => fn(makeTxReturning([]) as TxLike));
+    mocks.withTenantDb.mockImplementation((fn: DbFn) =>
+      fn(makeTxReturning([]) as TxLike),
+    );
     const result = await connectionListHandler({}, CTX);
     expect(result.connections).toHaveLength(0);
   });
 
   it("returns mapped connections with ISO date strings", async () => {
-    mocks.withTenantDb.mockImplementation((fn: DbFn) => fn(makeTxReturning([BASE_ROW]) as TxLike));
+    mocks.withTenantDb.mockImplementation((fn: DbFn) =>
+      fn(makeTxReturning([BASE_ROW]) as TxLike),
+    );
     const result = await connectionListHandler({}, CTX);
     expect(result.connections).toHaveLength(1);
     expect(result.connections[0]!.publicId).toBe("con_ABC");
@@ -119,14 +126,18 @@ describe("connectionListHandler", () => {
   });
 
   it("passes status filter to query builder", async () => {
-    mocks.withTenantDb.mockImplementation((fn: DbFn) => fn(makeTxReturning([]) as TxLike));
+    mocks.withTenantDb.mockImplementation((fn: DbFn) =>
+      fn(makeTxReturning([]) as TxLike),
+    );
     await connectionListHandler({ status: "connected" }, CTX);
     // We can only assert the call was made — the drizzle chain internals are opaque in tests.
     expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
   });
 
   it("passes connectorId filter to query builder", async () => {
-    mocks.withTenantDb.mockImplementation((fn: DbFn) => fn(makeTxReturning([]) as TxLike));
+    mocks.withTenantDb.mockImplementation((fn: DbFn) =>
+      fn(makeTxReturning([]) as TxLike),
+    );
     await connectionListHandler({ connectorId: "github" }, CTX);
     expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
   });
@@ -155,14 +166,20 @@ describe("connectionGetHandler", () => {
   };
 
   it("throws 404 when connection not found", async () => {
-    mocks.withTenantDb.mockImplementation((fn: DbFn) => fn(makeTxReturning([]) as TxLike));
-    await expect(connectionGetHandler({ connectionId: "missing" }, CTX)).rejects.toMatchObject({
+    mocks.withTenantDb.mockImplementation((fn: DbFn) =>
+      fn(makeTxReturning([]) as TxLike),
+    );
+    await expect(
+      connectionGetHandler({ connectionId: "missing" }, CTX),
+    ).rejects.toMatchObject({
       status: 404,
     });
   });
 
   it("returns connection with ISO date strings on happy path", async () => {
-    mocks.withTenantDb.mockImplementation((fn: DbFn) => fn(makeTxReturning([BASE_ROW]) as TxLike));
+    mocks.withTenantDb.mockImplementation((fn: DbFn) =>
+      fn(makeTxReturning([BASE_ROW]) as TxLike),
+    );
     const result = await connectionGetHandler({ connectionId: "con_ABC" }, CTX);
     expect(result.publicId).toBe("con_ABC");
     expect(result.createdAt).toBe(NOW.toISOString());
@@ -203,13 +220,19 @@ describe("connectionCreateHandler", () => {
     // The handler inserts the connection row and its encrypted credentials in a
     // single atomic transaction (one withTenantDb call). The connection insert
     // returns CONN_ROW; the credentials insert resolves on the same tx.
-    mocks.withTenantDb.mockImplementation((fn: DbFn) => fn(makeTxReturning([CONN_ROW]) as TxLike));
+    mocks.withTenantDb.mockImplementation((fn: DbFn) =>
+      fn(makeTxReturning([CONN_ROW]) as TxLike),
+    );
   });
 
   it("throws when userId is not set (unauthenticated)", async () => {
     await expect(
       connectionCreateHandler(
-        { connectorId: "github", displayName: "My GitHub", authCredential: { type: "pat", token: "ghs_xxx" } },
+        {
+          connectorId: "github",
+          displayName: "My GitHub",
+          authCredential: { type: "pat", token: "ghs_xxx" },
+        },
         { ...CTX, userId: null },
       ),
     ).rejects.toThrow("authenticated user");
@@ -217,7 +240,11 @@ describe("connectionCreateHandler", () => {
 
   it("creates connection and returns publicId and status", async () => {
     const result = await connectionCreateHandler(
-      { connectorId: "github", displayName: "My GitHub", authCredential: { type: "pat", token: "ghs_xxx" } },
+      {
+        connectorId: "github",
+        displayName: "My GitHub",
+        authCredential: { type: "pat", token: "ghs_xxx" },
+      },
       CTX,
     );
     expect(result.publicId).toBe("con_XYZ");
@@ -227,7 +254,11 @@ describe("connectionCreateHandler", () => {
 
   it("encrypts the auth credential before storage", async () => {
     await connectionCreateHandler(
-      { connectorId: "github", displayName: "My GitHub", authCredential: { type: "pat", token: "ghs_xxx" } },
+      {
+        connectorId: "github",
+        displayName: "My GitHub",
+        authCredential: { type: "pat", token: "ghs_xxx" },
+      },
       CTX,
     );
     expect(mocks.encrypt).toHaveBeenCalledTimes(1);
@@ -267,14 +298,24 @@ describe("connectionMappingsGetHandler", () => {
   };
 
   it("returns empty mappings when none exist", async () => {
-    mocks.withTenantDb.mockImplementation((fn: DbFn) => fn(makeTxReturning([]) as TxLike));
-    const result = await connectionMappingsGetHandler({ connectionId: "con_ABC" }, CTX);
+    mocks.withTenantDb.mockImplementation((fn: DbFn) =>
+      fn(makeTxReturning([]) as TxLike),
+    );
+    const result = await connectionMappingsGetHandler(
+      { connectionId: "con_ABC" },
+      CTX,
+    );
     expect(result.mappings).toHaveLength(0);
   });
 
   it("returns mappings with ISO date strings", async () => {
-    mocks.withTenantDb.mockImplementation((fn: DbFn) => fn(makeTxReturning([MAPPING_ROW]) as TxLike));
-    const result = await connectionMappingsGetHandler({ connectionId: "con_ABC" }, CTX);
+    mocks.withTenantDb.mockImplementation((fn: DbFn) =>
+      fn(makeTxReturning([MAPPING_ROW]) as TxLike),
+    );
+    const result = await connectionMappingsGetHandler(
+      { connectionId: "con_ABC" },
+      CTX,
+    );
     expect(result.mappings).toHaveLength(1);
     expect(result.mappings[0]!.sourceRecordType).toBe("pull_request");
     expect(result.mappings[0]!.oxagenEntityType).toBe("code_change");
@@ -284,9 +325,14 @@ describe("connectionMappingsGetHandler", () => {
 
   it("wraps null propertyMappings with empty object", async () => {
     mocks.withTenantDb.mockImplementation((fn: DbFn) =>
-      fn(makeTxReturning([{ ...MAPPING_ROW, propertyMappings: null }]) as TxLike),
+      fn(
+        makeTxReturning([{ ...MAPPING_ROW, propertyMappings: null }]) as TxLike,
+      ),
     );
-    const result = await connectionMappingsGetHandler({ connectionId: "con_ABC" }, CTX);
+    const result = await connectionMappingsGetHandler(
+      { connectionId: "con_ABC" },
+      CTX,
+    );
     expect(result.mappings[0]!.propertyMappings).toEqual({});
   });
 });

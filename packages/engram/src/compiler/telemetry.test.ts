@@ -60,14 +60,18 @@ describe("emitCompileTelemetry", () => {
 
   it("does nothing when no sink is configured", async () => {
     // Should not throw even with no sink
-    await expect(emitCompileTelemetry(taskFrame, contextWindow)).resolves.toBeUndefined();
+    await expect(
+      emitCompileTelemetry(taskFrame, contextWindow),
+    ).resolves.toBeUndefined();
   });
 
   it("calls the sink with correct event fields when configured", async () => {
     const events: CompileTelemetryEvent[] = [];
-    const sink: TelemetrySink = vi.fn(async (event: CompileTelemetryEvent): Promise<void> => {
-      events.push(event);
-    });
+    const sink: TelemetrySink = vi.fn(
+      async (event: CompileTelemetryEvent): Promise<void> => {
+        events.push(event);
+      },
+    );
 
     setCompileTelemetrySink(sink);
     await emitCompileTelemetry(taskFrame, contextWindow);
@@ -96,9 +100,11 @@ describe("emitCompileTelemetry", () => {
 
   it("computes budget_total as budget_used + budget_remaining", async () => {
     const events: CompileTelemetryEvent[] = [];
-    const sink: TelemetrySink = vi.fn(async (event: CompileTelemetryEvent): Promise<void> => {
-      events.push(event);
-    });
+    const sink: TelemetrySink = vi.fn(
+      async (event: CompileTelemetryEvent): Promise<void> => {
+        events.push(event);
+      },
+    );
 
     setCompileTelemetrySink(sink);
     await emitCompileTelemetry(taskFrame, contextWindow);
@@ -109,9 +115,11 @@ describe("emitCompileTelemetry", () => {
 
   it("includes a compile_id UUID", async () => {
     const events: CompileTelemetryEvent[] = [];
-    const sink: TelemetrySink = vi.fn(async (event: CompileTelemetryEvent): Promise<void> => {
-      events.push(event);
-    });
+    const sink: TelemetrySink = vi.fn(
+      async (event: CompileTelemetryEvent): Promise<void> => {
+        events.push(event);
+      },
+    );
 
     setCompileTelemetrySink(sink);
     await emitCompileTelemetry(taskFrame, contextWindow);
@@ -123,16 +131,20 @@ describe("emitCompileTelemetry", () => {
 
   it("includes created_at ISO timestamp", async () => {
     const events: CompileTelemetryEvent[] = [];
-    const sink: TelemetrySink = vi.fn(async (event: CompileTelemetryEvent): Promise<void> => {
-      events.push(event);
-    });
+    const sink: TelemetrySink = vi.fn(
+      async (event: CompileTelemetryEvent): Promise<void> => {
+        events.push(event);
+      },
+    );
 
     setCompileTelemetrySink(sink);
     await emitCompileTelemetry(taskFrame, contextWindow);
 
     const event = events[0]!;
     expect(() => new Date(event.created_at)).not.toThrow();
-    expect(new Date(event.created_at).getFullYear()).toBeGreaterThanOrEqual(2026);
+    expect(new Date(event.created_at).getFullYear()).toBeGreaterThanOrEqual(
+      2026,
+    );
   });
 
   it("uses null for session_id when not provided", async () => {
@@ -142,9 +154,11 @@ describe("emitCompileTelemetry", () => {
       agentId: undefined,
     };
     const events: CompileTelemetryEvent[] = [];
-    const sink: TelemetrySink = vi.fn(async (event: CompileTelemetryEvent): Promise<void> => {
-      events.push(event);
-    });
+    const sink: TelemetrySink = vi.fn(
+      async (event: CompileTelemetryEvent): Promise<void> => {
+        events.push(event);
+      },
+    );
 
     setCompileTelemetrySink(sink);
     await emitCompileTelemetry(frameWithoutSession, contextWindow);
@@ -161,7 +175,9 @@ describe("emitCompileTelemetry", () => {
 
     setCompileTelemetrySink(sink);
     // Should not throw
-    await expect(emitCompileTelemetry(taskFrame, contextWindow)).resolves.toBeUndefined();
+    await expect(
+      emitCompileTelemetry(taskFrame, contextWindow),
+    ).resolves.toBeUndefined();
   });
 
   it("stops emitting after clearCompileTelemetrySinkForTests()", async () => {

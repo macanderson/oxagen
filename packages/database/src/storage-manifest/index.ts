@@ -3,8 +3,8 @@
 // A deterministic, content-addressed self-model of where every domain's data
 // lives across the four stores (Postgres, ClickHouse, Neo4j, blob) plus the
 // capabilities that operate on each table. See docs/adr/ADR-031. Run the CLI
-// via `pnpm schema:manifest` (write) or `pnpm schema:manifest --check` (CI
-// drift gate).
+// via `pnpm schema:manifest` (write) or `pnpm schema:manifest:check` (drift
+// check — a script, not a wired CI gate; see cli.ts).
 
 export * from "./types";
 export {

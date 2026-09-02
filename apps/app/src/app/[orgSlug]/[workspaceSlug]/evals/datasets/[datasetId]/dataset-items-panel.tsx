@@ -1,14 +1,12 @@
 "use client";
 
 /**
- * dataset-items-panel.tsx — the dataset item list + add-item form, lifted out
- * of the dataset detail drawer into a page section.
+ * dataset-items-panel.tsx — the dataset item list + add-item form.
  *
  * Seeded from the RSC-provided first page of items (avoids a load flash), then
  * paginates further pages via getDatasetAction's cursor ("Load more"). The
- * add-item form reuses the drawer's handleAddItem verbatim (single-item batch
- * → addDatasetItemAction), refreshing the RSC fetch on success so the header
- * item count stays current.
+ * add-item form sends a single-item batch through addDatasetItemAction and
+ * refreshes the RSC fetch on success so the header item count stays current.
  */
 
 import * as React from "react";

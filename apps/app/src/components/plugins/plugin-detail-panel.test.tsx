@@ -62,7 +62,9 @@ const mockDetail = {
 const defaultProps = {
   serverName: "github",
   pluginType: "mcp_server" as const,
-  installAction: vi.fn().mockResolvedValue({ ok: true, orgListingId: "listing-1" }),
+  installAction: vi
+    .fn()
+    .mockResolvedValue({ ok: true, orgListingId: "listing-1" }),
   onInstalled: vi.fn(),
   onClose: vi.fn(),
 };
@@ -76,7 +78,8 @@ function fetchAfterTimer(data: unknown) {
   return Promise.resolve({
     ok: true,
     status: 200,
-    json: () => new Promise<unknown>((resolve) => setTimeout(() => resolve(data), 50)),
+    json: () =>
+      new Promise<unknown>((resolve) => setTimeout(() => resolve(data), 50)),
   });
 }
 
@@ -85,7 +88,8 @@ function fetchError(status: number, body: unknown) {
   return Promise.resolve({
     ok: false,
     status,
-    json: () => new Promise<unknown>((resolve) => setTimeout(() => resolve(body), 50)),
+    json: () =>
+      new Promise<unknown>((resolve) => setTimeout(() => resolve(body), 50)),
   });
 }
 
@@ -108,8 +112,12 @@ describe("PluginDetailPanel — loading state", () => {
 
 describe("PluginDetailPanel — fetch URL", () => {
   it("fetches using name+version+workspaceId query params (not catalogId)", async () => {
-    render(<PluginDetailPanel {...defaultProps} serverName="@acme/my-server" />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+    render(
+      <PluginDetailPanel {...defaultProps} serverName="@acme/my-server" />,
+    );
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), {
+      timeout: 3000,
+    });
     const url = mockFetch.mock.calls[0]?.[0] as string;
     expect(url).toContain("name=%40acme%2Fmy-server");
     expect(url).toContain("version=latest");
@@ -122,7 +130,8 @@ describe("PluginDetailPanel — loaded state", () => {
   it("renders the plugin title after fetch", async () => {
     render(<PluginDetailPanel {...defaultProps} />);
     await waitFor(
-      () => expect(screen.getByTestId("plugin-detail-title")).toBeInTheDocument(),
+      () =>
+        expect(screen.getByTestId("plugin-detail-title")).toBeInTheDocument(),
       { timeout: 3000 },
     );
     expect(screen.getByText("GitHub MCP")).toBeInTheDocument();
@@ -131,7 +140,8 @@ describe("PluginDetailPanel — loaded state", () => {
   it("renders the plugin description", async () => {
     render(<PluginDetailPanel {...defaultProps} />);
     await waitFor(
-      () => expect(screen.getByText("Connect to GitHub repos")).toBeInTheDocument(),
+      () =>
+        expect(screen.getByText("Connect to GitHub repos")).toBeInTheDocument(),
       { timeout: 3000 },
     );
   });
@@ -139,7 +149,8 @@ describe("PluginDetailPanel — loaded state", () => {
   it("renders the website link when websiteUrl is set", async () => {
     render(<PluginDetailPanel {...defaultProps} />);
     await waitFor(
-      () => expect(screen.getByTestId("plugin-detail-website")).toBeInTheDocument(),
+      () =>
+        expect(screen.getByTestId("plugin-detail-website")).toBeInTheDocument(),
       { timeout: 3000 },
     );
   });
@@ -147,7 +158,10 @@ describe("PluginDetailPanel — loaded state", () => {
   it("shows 'No README available.' when readmeHtml is null", async () => {
     render(<PluginDetailPanel {...defaultProps} />);
     await waitFor(
-      () => expect(screen.getByTestId("plugin-detail-no-readme")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("plugin-detail-no-readme"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
   });
@@ -155,7 +169,8 @@ describe("PluginDetailPanel — loaded state", () => {
   it("renders transport type badges for mcp_server type", async () => {
     render(<PluginDetailPanel {...defaultProps} />);
     await waitFor(
-      () => expect(screen.getByTestId("plugin-detail-badges")).toBeInTheDocument(),
+      () =>
+        expect(screen.getByTestId("plugin-detail-badges")).toBeInTheDocument(),
       { timeout: 3000 },
     );
     expect(screen.getByText("http")).toBeInTheDocument();
@@ -196,10 +211,9 @@ describe("PluginDetailPanel — loaded state", () => {
         pluginType="agent_capability"
       />,
     );
-    await waitFor(
-      () => expect(screen.getByText("media")).toBeInTheDocument(),
-      { timeout: 3000 },
-    );
+    await waitFor(() => expect(screen.getByText("media")).toBeInTheDocument(), {
+      timeout: 3000,
+    });
     expect(screen.getByText("generation")).toBeInTheDocument();
     // No auth badge for agent types
     expect(screen.queryByText("oauth")).not.toBeInTheDocument();
@@ -232,12 +246,17 @@ describe("PluginDetailPanel — loaded state", () => {
       />,
     );
     await waitFor(
-      () => expect(screen.getByTestId("plugin-detail-panel")).toBeInTheDocument(),
+      () =>
+        expect(screen.getByTestId("plugin-detail-panel")).toBeInTheDocument(),
       { timeout: 3000 },
     );
     // README section intentionally suppressed for agent types
-    expect(screen.queryByTestId("plugin-detail-readme")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("plugin-detail-no-readme")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("plugin-detail-readme"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("plugin-detail-no-readme"),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -246,7 +265,8 @@ describe("PluginDetailPanel — actions", () => {
     const onClose = vi.fn();
     render(<PluginDetailPanel {...defaultProps} onClose={onClose} />);
     await waitFor(
-      () => expect(screen.getByTestId("plugin-detail-close")).toBeInTheDocument(),
+      () =>
+        expect(screen.getByTestId("plugin-detail-close")).toBeInTheDocument(),
       { timeout: 3000 },
     );
     await userEvent.click(screen.getByTestId("plugin-detail-close"));
@@ -254,7 +274,9 @@ describe("PluginDetailPanel — actions", () => {
   });
 
   it("Install button triggers installAction and calls onInstalled", async () => {
-    const installAction = vi.fn().mockResolvedValue({ ok: true, orgListingId: "listing-1" });
+    const installAction = vi
+      .fn()
+      .mockResolvedValue({ ok: true, orgListingId: "listing-1" });
     const onInstalled = vi.fn();
     render(
       <PluginDetailPanel
@@ -264,7 +286,10 @@ describe("PluginDetailPanel — actions", () => {
       />,
     );
     await waitFor(
-      () => expect(screen.getByTestId("plugin-detail-install-btn")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("plugin-detail-install-btn"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
     await userEvent.click(screen.getByTestId("plugin-detail-install-btn"));
@@ -278,7 +303,10 @@ describe("PluginDetailPanel — actions", () => {
 
     render(<PluginDetailPanel {...defaultProps} />);
     await waitFor(
-      () => expect(screen.getByTestId("plugin-detail-install-btn")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("plugin-detail-install-btn"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
     const btn = screen.getByTestId("plugin-detail-install-btn");
@@ -289,7 +317,10 @@ describe("PluginDetailPanel — actions", () => {
   it("shows install button text as 'Install to workspace'", async () => {
     render(<PluginDetailPanel {...defaultProps} />);
     await waitFor(
-      () => expect(screen.getByTestId("plugin-detail-install-btn")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("plugin-detail-install-btn"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
     expect(screen.getByTestId("plugin-detail-install-btn")).toHaveTextContent(
@@ -300,10 +331,13 @@ describe("PluginDetailPanel — actions", () => {
 
 describe("PluginDetailPanel — fetch error", () => {
   it("shows error message when fetch fails", async () => {
-    mockFetch.mockImplementation(() => Promise.reject(new Error("Network error")));
+    mockFetch.mockImplementation(() =>
+      Promise.reject(new Error("Network error")),
+    );
     render(<PluginDetailPanel {...defaultProps} />);
     await waitFor(
-      () => expect(screen.getByTestId("plugin-detail-error")).toBeInTheDocument(),
+      () =>
+        expect(screen.getByTestId("plugin-detail-error")).toBeInTheDocument(),
       { timeout: 3000 },
     );
   });
@@ -318,7 +352,8 @@ describe("PluginDetailPanel — fetch error", () => {
     );
     render(<PluginDetailPanel {...defaultProps} />);
     await waitFor(
-      () => expect(screen.getByTestId("plugin-detail-error")).toBeInTheDocument(),
+      () =>
+        expect(screen.getByTestId("plugin-detail-error")).toBeInTheDocument(),
       { timeout: 3000 },
     );
     expect(screen.getByTestId("plugin-detail-error")).toHaveTextContent(
@@ -328,7 +363,9 @@ describe("PluginDetailPanel — fetch error", () => {
 
   it("does not crash and shows an error on a 404 with an error body", async () => {
     mockFetch.mockImplementation(() =>
-      fetchError(404, { error: "catalog server not found: oxagen/media-image@latest" }),
+      fetchError(404, {
+        error: "catalog server not found: oxagen/media-image@latest",
+      }),
     );
     render(
       <PluginDetailPanel
@@ -338,9 +375,12 @@ describe("PluginDetailPanel — fetch error", () => {
       />,
     );
     await waitFor(
-      () => expect(screen.getByTestId("plugin-detail-error")).toBeInTheDocument(),
+      () =>
+        expect(screen.getByTestId("plugin-detail-error")).toBeInTheDocument(),
       { timeout: 3000 },
     );
-    expect(screen.getByTestId("plugin-detail-error")).toHaveTextContent(/not found/i);
+    expect(screen.getByTestId("plugin-detail-error")).toHaveTextContent(
+      /not found/i,
+    );
   });
 });

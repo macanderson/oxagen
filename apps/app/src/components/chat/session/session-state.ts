@@ -114,10 +114,18 @@ export function applySessionPatch(
     }
   }
   // Model / tier exclusivity — an explicit choice of one clears the other.
-  if (patch.model !== undefined && patch.model !== null && patch.tier === undefined) {
+  if (
+    patch.model !== undefined &&
+    patch.model !== null &&
+    patch.tier === undefined
+  ) {
     next.tier = null;
   }
-  if (patch.tier !== undefined && patch.tier !== null && patch.model === undefined) {
+  if (
+    patch.tier !== undefined &&
+    patch.tier !== null &&
+    patch.model === undefined
+  ) {
     next.model = null;
   }
   return next;
@@ -286,10 +294,7 @@ export function sessionSelectionIssues(
       message: `Branch ${state.branch} was deleted. Pick another branch.`,
     });
   }
-  if (
-    state.envId &&
-    !options.environments.some((e) => e.id === state.envId)
-  ) {
+  if (state.envId && !options.environments.some((e) => e.id === state.envId)) {
     issues.push({
       field: "environment",
       message:
@@ -381,7 +386,13 @@ export function agentMemoryKey(
   return `${KEY_ROOT}:agent:${workspaceSlug ?? "_"}:${agentId}`;
 }
 
-const EFFORTS: readonly EffortLevel[] = ["low", "medium", "high", "xhigh", "max"];
+const EFFORTS: readonly EffortLevel[] = [
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+];
 const TIERS: readonly TextTier[] = ["fast", "balanced", "precise"];
 
 /**
@@ -406,7 +417,11 @@ export function decodeSessionState(
   const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
   return {
     agentId: str(obj.agentId),
-    tier: TIERS.includes(obj.tier as TextTier) ? (obj.tier as TextTier) : obj.tier === null ? null : base.tier,
+    tier: TIERS.includes(obj.tier as TextTier)
+      ? (obj.tier as TextTier)
+      : obj.tier === null
+        ? null
+        : base.tier,
     model: str(obj.model),
     effort: EFFORTS.includes(obj.effort as EffortLevel)
       ? (obj.effort as EffortLevel)
@@ -432,7 +447,8 @@ export function decodeCodeMemory(raw: string | null): CodeContextMemory | null {
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     if (typeof parsed !== "object" || parsed === null) return null;
-    const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+    const str = (v: unknown): string | null =>
+      typeof v === "string" ? v : null;
     return {
       org: str(parsed.org),
       repoKey: str(parsed.repoKey),

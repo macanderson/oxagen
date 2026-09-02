@@ -116,13 +116,15 @@ export interface MarketplaceClient {
     params?: BrowseCatalogParams,
   ): Promise<MarketplaceResult<BrowseCatalogPage>>;
   /** Fetch full detail for one server (by name + version). */
-  getPlugin(
-    ref: { name: string; version?: string },
-  ): Promise<MarketplaceResult<PluginDetail>>;
+  getPlugin(ref: {
+    name: string;
+    version?: string;
+  }): Promise<MarketplaceResult<PluginDetail>>;
   /** Install a plugin into the caller's workspace. */
-  installPlugin(
-    ref: { pluginType: PluginType; id?: string },
-  ): Promise<MarketplaceResult<InstallResult>>;
+  installPlugin(ref: {
+    pluginType: PluginType;
+    id?: string;
+  }): Promise<MarketplaceResult<InstallResult>>;
 }
 
 const NOT_LOGGED_IN =
@@ -182,7 +184,12 @@ function toErrorResult<T>(err: unknown): MarketplaceResult<T> {
   if (err instanceof ApiError) {
     // status 0 ⇒ network/transport failure; >0 ⇒ a real HTTP response.
     if (err.status > 0) {
-      return { ok: false, error: err.message, code: "http", status: err.status };
+      return {
+        ok: false,
+        error: err.message,
+        code: "http",
+        status: err.status,
+      };
     }
     return { ok: false, error: err.message, code: "network" };
   }

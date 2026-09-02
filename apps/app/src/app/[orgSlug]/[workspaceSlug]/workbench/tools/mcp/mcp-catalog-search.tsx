@@ -85,8 +85,12 @@ function RowIcon({ icons }: { icons: CatalogRow["icons"] }) {
   const fallback = PLUGIN_TYPE_DEFAULTS.mcp_server;
   return (
     <CapabilityIcon
-      iconName={resolved.type === "lucide" ? resolved.iconName : fallback.iconName}
-      color={(resolved.type === "lucide" ? resolved.color : null) ?? fallback.color}
+      iconName={
+        resolved.type === "lucide" ? resolved.iconName : fallback.iconName
+      }
+      color={
+        (resolved.type === "lucide" ? resolved.color : null) ?? fallback.color
+      }
       size={28}
     />
   );
@@ -128,7 +132,9 @@ export function McpCatalogSearch({
           workspaceId,
         });
         if (search.trim()) params.set("search", search.trim());
-        const res = await fetch(`/api/v1/plugin/catalog/browse?${params.toString()}`);
+        const res = await fetch(
+          `/api/v1/plugin/catalog/browse?${params.toString()}`,
+        );
         if (!res.ok) throw new Error(await res.text());
         const data = (await res.json()) as { servers: CatalogRow[] };
         if (seq !== requestSeq.current) return; // stale response — a newer search superseded it
@@ -192,13 +198,17 @@ export function McpCatalogSearch({
       if (result.authKind === "oauth") {
         // The server is installed but unusable until the OAuth consent flow
         // completes — prompt immediately.
-        setAuthPrompt({ orgListingId: result.orgListingId, serverTitle: title });
+        setAuthPrompt({
+          orgListingId: result.orgListingId,
+          serverTitle: title,
+        });
       }
       router.refresh();
     } catch (e) {
       toast.add({
         title: "Install failed",
-        description: e instanceof Error ? e.message : `Could not install ${title}.`,
+        description:
+          e instanceof Error ? e.message : `Could not install ${title}.`,
         type: "error",
       });
     } finally {
@@ -209,7 +219,10 @@ export function McpCatalogSearch({
   return (
     <div className="flex flex-col gap-4" data-testid="mcp-catalog-search">
       <div className="flex items-center gap-2 max-w-md">
-        <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-hidden="true" />
+        <Search
+          className="h-4 w-4 text-muted-foreground flex-shrink-0"
+          aria-hidden="true"
+        />
         <Input
           placeholder="Search the MCP catalog — try “Stripe”…"
           value={query}
@@ -227,13 +240,19 @@ export function McpCatalogSearch({
       </div>
 
       {error ? (
-        <p className="text-xs text-destructive" data-testid="mcp-catalog-search-error">
+        <p
+          className="text-xs text-destructive"
+          data-testid="mcp-catalog-search-error"
+        >
           {error}
         </p>
       ) : null}
 
       {rows.length === 0 && !loading && !error ? (
-        <p className="text-sm text-muted-foreground" data-testid="mcp-catalog-search-empty">
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="mcp-catalog-search-empty"
+        >
           No servers match{query.trim() ? ` “${query.trim()}”` : ""} yet.
         </p>
       ) : null}

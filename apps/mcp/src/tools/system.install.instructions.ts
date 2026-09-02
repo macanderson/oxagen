@@ -32,6 +32,8 @@ export default async function systemInstallInstructionsTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(systemInstallInstructions.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(systemInstallInstructions.name, args, ctx, {
+    surface: "mcp",
+  });
   return systemInstallInstructions.output.parse(output);
 }

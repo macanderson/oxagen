@@ -8,7 +8,12 @@
  * This module provides heuristic scoring based on record kind and body
  * content. Callers can override with explicit salience values.
  */
-import type { RecordKind, EpisodicBody, SemanticBody, ProceduralBody } from "./types";
+import type {
+  RecordKind,
+  EpisodicBody,
+  SemanticBody,
+  ProceduralBody,
+} from "./types";
 
 /** Baseline salience by record kind. */
 const KIND_BASELINES: Record<RecordKind, number> = {

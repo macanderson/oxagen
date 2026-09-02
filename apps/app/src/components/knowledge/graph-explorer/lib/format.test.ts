@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { detectKind, formatPropertyValue, humanizeKey, truncate, formatConfidence } from "./format";
+import {
+  detectKind,
+  formatPropertyValue,
+  humanizeKey,
+  truncate,
+  formatConfidence,
+} from "./format";
 
 describe("detectKind", () => {
   it("classifies null and undefined as null", () => {
@@ -34,7 +40,9 @@ describe("formatPropertyValue", () => {
     expect(formatPropertyValue(false)).toBe("No");
   });
   it("formats numbers with separators", () => {
-    expect(formatPropertyValue(1000)).toBe(new Intl.NumberFormat().format(1000));
+    expect(formatPropertyValue(1000)).toBe(
+      new Intl.NumberFormat().format(1000),
+    );
   });
   it("formats arrays as comma lists and empty arrays as a dash", () => {
     expect(formatPropertyValue(["a", "b"])).toBe("a, b");

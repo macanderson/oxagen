@@ -32,7 +32,9 @@ export const MAX_BACKOFF_MS = 6 * 60 * 60 * 1000; // 6 hours
  * Map a consecutive-failure count to a health status.
  * 0 → healthy, 1..3 → degraded, 4+ → errored (with the defaults above).
  */
-export function healthForFailureCount(consecutiveFailures: number): ConnectionHealthStatus {
+export function healthForFailureCount(
+  consecutiveFailures: number,
+): ConnectionHealthStatus {
   if (consecutiveFailures <= 0) return "healthy";
   if (consecutiveFailures >= ERRORED_AFTER_FAILURES) return "errored";
   return "degraded";

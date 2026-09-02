@@ -15,8 +15,12 @@ export interface RegionOption {
 }
 
 /**
- * Complete ISO 3166-1 alpha-2 country list (~249 officially assigned codes),
- * sorted by label (common English country name) ascending.
+ * Country list, sorted by label (common English country name) ascending.
+ *
+ * 250 entries: the 249 officially assigned ISO 3166-1 alpha-2 codes plus `XK`
+ * for Kosovo, which ISO has never assigned but which payment and address
+ * providers expect. Anything validating against a strict ISO list must
+ * therefore treat `XK` as a known exception.
  */
 export const COUNTRY_OPTIONS: ReadonlyArray<CountryOption> = [
   { value: "AF", label: "Afghanistan" },

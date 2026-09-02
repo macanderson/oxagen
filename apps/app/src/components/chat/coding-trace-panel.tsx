@@ -328,8 +328,7 @@ function StageSection({
  * `StageSection`s over a precomputed `groups` map. Split out of
  * `CodingTracePanel` so the calm Agent-activity rail can drop the same stage
  * list into its own "Progress" card without the panel's border / collapse-all
- * header (which would double up with the card's own chrome). `CodingTracePanel`
- * still renders this inside its wrapper, so its existing tests are unaffected.
+ * header (which would double up with the card's own chrome).
  */
 export function CodingTraceStages({
   groups,

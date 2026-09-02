@@ -78,9 +78,13 @@ describe("RouteTransitionLoader — spinner asset paths", () => {
     });
     rerender(<RouteTransitionLoader />);
 
-    // The loader may render null depending on transition timing in jsdom; if it
-    // did render imgs, their src must use the corrected /spinner/ path.
-    for (const img of Array.from(container.querySelectorAll("img"))) {
+    // A pathname change makes the loader visible, so it MUST have rendered its
+    // spinner. Asserting the count first keeps the src checks below from
+    // passing vacuously on an empty NodeList if the loader ever stops
+    // rendering.
+    const imgs = Array.from(container.querySelectorAll("img"));
+    expect(imgs.length).toBeGreaterThan(0);
+    for (const img of imgs) {
       const src = img.getAttribute("src") ?? "";
       expect(src).not.toContain("/pwa/");
       expect(src).toContain("/spinner/");

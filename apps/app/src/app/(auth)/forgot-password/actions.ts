@@ -22,9 +22,7 @@ import { captureError } from "@oxagen/telemetry";
 // Result type
 // ---------------------------------------------------------------------------
 
-export type RequestResetResult =
-  | { ok: true }
-  | { ok: false; error: string };
+export type RequestResetResult = { ok: true } | { ok: false; error: string };
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -67,7 +65,10 @@ export async function requestResetAction(
   try {
     appBaseUrl = loadEnv().BETTER_AUTH_URL;
   } catch (err) {
-    console.error("[forgot-password] loadEnv failed — reset email not sent", err);
+    logger.error(
+      { err: err instanceof Error ? err.message : String(err) },
+      "[forgot-password] loadEnv failed — reset email not sent",
+    );
     return { ok: false, error: "Password reset is temporarily unavailable" };
   }
 

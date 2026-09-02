@@ -21,7 +21,13 @@ function projectKey(cwd: string): string {
 
 /** Path of the JSONL verbose log for a working directory. */
 export function verboseLogPath(cwd: string): string {
-  return join(homedir(), ".config", "oxagen", "verbose", `${projectKey(cwd)}.jsonl`);
+  return join(
+    homedir(),
+    ".config",
+    "oxagen",
+    "verbose",
+    `${projectKey(cwd)}.jsonl`,
+  );
 }
 
 /** Append one turn's trace to the verbose JSONL stream. Best-effort. */

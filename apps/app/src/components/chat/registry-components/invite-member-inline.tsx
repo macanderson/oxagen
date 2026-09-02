@@ -62,9 +62,14 @@ export default function InviteMemberInline({
         aria-live="polite"
       >
         <div className="flex items-center gap-3">
-          <CheckCircle2 className="h-5 w-5 shrink-0 text-success" aria-hidden="true" />
+          <CheckCircle2
+            className="h-5 w-5 shrink-0 text-success"
+            aria-hidden="true"
+          />
           <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground">Invitation sent</p>
+            <p className="text-sm font-medium text-foreground">
+              Invitation sent
+            </p>
             <p className="truncate text-xs text-muted-foreground">
               {email} · {role}
             </p>
@@ -78,11 +83,18 @@ export default function InviteMemberInline({
     <form
       onSubmit={handleSubmit}
       aria-label="Invite member"
-      className={cn("rounded-2xl border border-border bg-card p-5 space-y-5 w-full max-w-sm")}
+      className={cn(
+        "rounded-2xl border border-border bg-card p-5 space-y-5 w-full max-w-sm",
+      )}
     >
       <div className="flex items-center gap-2.5">
-        <UserPlus className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="text-sm font-semibold text-foreground">Invite member</span>
+        <UserPlus
+          className="h-4 w-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <span className="text-sm font-semibold text-foreground">
+          Invite member
+        </span>
       </div>
 
       <div className="space-y-1.5">
@@ -104,7 +116,9 @@ export default function InviteMemberInline({
         <Label htmlFor={roleId}>Role</Label>
         <Select
           value={role}
-          onValueChange={(v) => { if (v !== null) setRole(v as MemberRole); }}
+          onValueChange={(v) => {
+            if (v !== null) setRole(v as MemberRole);
+          }}
           disabled={isSubmitting}
           name="role"
         >

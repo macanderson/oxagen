@@ -57,8 +57,12 @@ describe("under Storybook (no API backend)", () => {
       vi.fn(async () => ({ ok: false, status: 404, json: async () => ({}) })),
     );
 
-    await expect(recommend(SLUGS)).resolves.toMatchObject({ sampledCount: 180 });
-    await expect(fetchRegistry(SLUGS)).resolves.toMatchObject({ registryId: "reg_fixture_01" });
+    await expect(recommend(SLUGS)).resolves.toMatchObject({
+      sampledCount: 180,
+    });
+    await expect(fetchRegistry(SLUGS)).resolves.toMatchObject({
+      registryId: "reg_fixture_01",
+    });
   });
 });
 
@@ -67,7 +71,11 @@ describe("in the live app (real API backend)", () => {
     const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => ({
       ok: true,
       status: 200,
-      json: async () => ({ proposal: { schemas: [] }, rationale: "ok", sampledCount: 5 }),
+      json: async () => ({
+        proposal: { schemas: [] },
+        rationale: "ok",
+        sampledCount: 5,
+      }),
     }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -77,7 +85,7 @@ describe("in the live app (real API backend)", () => {
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("/api/schema/recommend");
     expect(init).toMatchObject({ method: "POST" });
-    expect(JSON.parse((init.body as string))).toEqual({
+    expect(JSON.parse(init.body as string)).toEqual({
       orgSlug: "acme",
       workspaceSlug: "main",
       sampleLimit: 200,

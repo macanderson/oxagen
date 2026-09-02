@@ -48,7 +48,9 @@ describe("SandboxStatePanel", () => {
         summary={summary({ status: "idle", graceDeadlineAt: past })}
       />,
     );
-    expect(screen.getByTestId("sandbox-reap-countdown").textContent).toBe("reaped");
+    expect(screen.getByTestId("sandbox-reap-countdown").textContent).toBe(
+      "reaped",
+    );
   });
 
   it("falls back to — when not idle or missing a deadline", () => {

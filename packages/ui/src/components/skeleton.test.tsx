@@ -17,12 +17,16 @@ describe("Skeleton — render", () => {
 
   it("includes animate-pulse class", () => {
     const { container } = render(<Skeleton />);
-    expect((container.firstChild as HTMLElement).className).toContain("animate-pulse");
+    expect((container.firstChild as HTMLElement).className).toContain(
+      "animate-pulse",
+    );
   });
 
   it("includes rounded-md class", () => {
     const { container } = render(<Skeleton />);
-    expect((container.firstChild as HTMLElement).className).toContain("rounded-md");
+    expect((container.firstChild as HTMLElement).className).toContain(
+      "rounded-md",
+    );
   });
 
   it("merges custom className", () => {

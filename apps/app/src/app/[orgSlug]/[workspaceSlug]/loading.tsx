@@ -1,4 +1,8 @@
-import { LoadingRegion, PageHeaderSkeleton, DetailSkeleton } from "@/components/loading";
+import {
+  LoadingRegion,
+  PageHeaderSkeleton,
+  DetailSkeleton,
+} from "@/components/loading";
 
 export default function Loading() {
   return (

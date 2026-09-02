@@ -25,11 +25,18 @@ vi.mock("node:child_process", () => ({
 import { execFile } from "node:child_process";
 import { readClipboardImage } from "../clipboard-image.js";
 
-type ExecFileCallback = (error: Error | null, stdout?: string, stderr?: string) => void;
+type ExecFileCallback = (
+  error: Error | null,
+  stdout?: string,
+  stderr?: string,
+) => void;
 const mockExecFile = vi.mocked(execFile);
 
 function setPlatform(platform: string): void {
-  Object.defineProperty(process, "platform", { value: platform, configurable: true });
+  Object.defineProperty(process, "platform", {
+    value: platform,
+    configurable: true,
+  });
 }
 
 beforeEach(() => {
@@ -50,34 +57,38 @@ describe("readClipboardImage — graceful degrade on macOS", () => {
     setPlatform("darwin");
     // Every execFile call (which pngpaste, pngpaste itself, which osascript,
     // osascript itself) fails — simulating a machine with none of these tools.
-    (mockExecFile as unknown as { mockImplementation: (fn: (...args: unknown[]) => void) => void }).mockImplementation(
-      (...args: unknown[]) => {
-        const cb = args[args.length - 1] as ExecFileCallback;
-        cb(new Error("ENOENT: command not found"));
-      },
-    );
+    (
+      mockExecFile as unknown as {
+        mockImplementation: (fn: (...args: unknown[]) => void) => void;
+      }
+    ).mockImplementation((...args: unknown[]) => {
+      const cb = args[args.length - 1] as ExecFileCallback;
+      cb(new Error("ENOENT: command not found"));
+    });
 
     await expect(readClipboardImage()).resolves.toBeNull();
   });
 
   it("resolves null when pngpaste is present but the clipboard has no image", async () => {
     setPlatform("darwin");
-    (mockExecFile as unknown as { mockImplementation: (fn: (...args: unknown[]) => void) => void }).mockImplementation(
-      (...args: unknown[]) => {
-        const file = args[0] as string;
-        const cb = args[args.length - 1] as ExecFileCallback;
-        if (file === "which") {
-          // `which pngpaste` succeeds — the tool is on PATH.
-          cb(null, "/usr/local/bin/pngpaste", "");
-          return;
-        }
-        // `pngpaste <dest>` itself "succeeds" (no error) but — because this is
-        // a mock — never actually writes a file, so the dest path stays
-        // missing. The module's own isNonEmptyFile check (a real fs.stat)
-        // then correctly reports "no image was written".
-        cb(null, "", "");
-      },
-    );
+    (
+      mockExecFile as unknown as {
+        mockImplementation: (fn: (...args: unknown[]) => void) => void;
+      }
+    ).mockImplementation((...args: unknown[]) => {
+      const file = args[0] as string;
+      const cb = args[args.length - 1] as ExecFileCallback;
+      if (file === "which") {
+        // `which pngpaste` succeeds — the tool is on PATH.
+        cb(null, "/usr/local/bin/pngpaste", "");
+        return;
+      }
+      // `pngpaste <dest>` itself "succeeds" (no error) but — because this is
+      // a mock — never actually writes a file, so the dest path stays
+      // missing. The module's own isNonEmptyFile check (a real fs.stat)
+      // then correctly reports "no image was written".
+      cb(null, "", "");
+    });
 
     await expect(readClipboardImage()).resolves.toBeNull();
   });

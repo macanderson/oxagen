@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const schemaVersionList = registerCapability({
   name: "list_schema_versions",
   domain: "schema",
-  description: "List versions (number, label, status, published_at, change_summary).",
+  description:
+    "List versions (number, label, status, published_at, change_summary).",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -21,15 +22,17 @@ export const schemaVersionList = registerCapability({
     offset: z.number().int().min(0).default(0).optional(),
   }),
   output: z.object({
-    versions: z.array(z.object({
-      versionId: z.string(),
-      versionNumber: z.number(),
-      status: z.enum(["draft", "published"]),
-      label: z.string().nullable(),
-      changeSummary: z.string().nullable(),
-      publishedAt: z.string().nullable(),
-      isPinned: z.boolean(),
-    })),
+    versions: z.array(
+      z.object({
+        versionId: z.string(),
+        versionNumber: z.number(),
+        status: z.enum(["draft", "published"]),
+        label: z.string().nullable(),
+        changeSummary: z.string().nullable(),
+        publishedAt: z.string().nullable(),
+        isPinned: z.boolean(),
+      }),
+    ),
     total: z.number(),
   }),
 });

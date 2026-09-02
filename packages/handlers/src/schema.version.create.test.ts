@@ -82,7 +82,9 @@ describe("schemaVersionCreateHandler", () => {
   it("calls invalidatePinnedSchemaCache with workspaceId after publish", async () => {
     await schemaVersionCreateHandler({}, CTX);
 
-    expect(mocks.invalidatePinnedSchemaCache).toHaveBeenCalledWith(CTX.workspaceId);
+    expect(mocks.invalidatePinnedSchemaCache).toHaveBeenCalledWith(
+      CTX.workspaceId,
+    );
     expect(mocks.invalidatePinnedSchemaCache).toHaveBeenCalledTimes(1);
   });
 
@@ -132,7 +134,9 @@ describe("schemaVersionCreateHandler", () => {
   });
 
   it("propagates publishDraft errors without swallowing them", async () => {
-    mocks.publishDraft.mockRejectedValue(new Error("Failed to publish draft version"));
+    mocks.publishDraft.mockRejectedValue(
+      new Error("Failed to publish draft version"),
+    );
 
     await expect(schemaVersionCreateHandler({}, CTX)).rejects.toThrow(
       "Failed to publish draft version",

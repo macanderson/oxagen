@@ -71,7 +71,10 @@ describe("ThinkingBubble", () => {
   it("applies custom className alongside defaults", () => {
     render(<ThinkingBubble className="my-custom-class" />);
     const el = screen.getByRole("status");
-    expect(el).toHaveAttribute("class", expect.stringContaining("my-custom-class"));
+    expect(el).toHaveAttribute(
+      "class",
+      expect.stringContaining("my-custom-class"),
+    );
     expect(el).toHaveAttribute("class", expect.stringContaining("flex"));
   });
 

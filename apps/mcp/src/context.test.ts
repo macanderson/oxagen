@@ -97,9 +97,18 @@ describe("extractBearerToken", () => {
   });
 
   it("returns a token that contains underscores (API key format)", () => {
-    expect(extractBearerToken("Bearer oxk_secretkeyvalue")).toBe(
-      "oxk_secretkeyvalue",
+    expect(extractBearerToken("Bearer ox_secretkeyvalue")).toBe(
+      "ox_secretkeyvalue",
     );
+  });
+
+  it("returns a realistic ox_ key verbatim (46-char base64url secret)", () => {
+    // Real keys are minted as `ox_<base64url(32 bytes)>` — see
+    // API_KEY_RAW_PREFIX in packages/auth/src/resolvers/api-key.ts. The
+    // short `ox_...` fixtures elsewhere in this file exercise the same code
+    // path; this one pins the actual on-the-wire shape.
+    const raw = "ox_AbCdEfGhIjKl-_MnOpQrStUvWxYz0123456789AbCd";
+    expect(extractBearerToken(`Bearer ${raw}`)).toBe(raw);
   });
 });
 
@@ -130,7 +139,7 @@ describe("resolveMcpContext", () => {
       apiKeyId: "key-1",
     });
 
-    const result = await resolveMcpContext("Bearer oxk_mysecret", requestId);
+    const result = await resolveMcpContext("Bearer ox_mysecret", requestId);
     expect(result).toEqual({
       ok: true,
       ctx: {
@@ -144,7 +153,7 @@ describe("resolveMcpContext", () => {
         clientIp: null,
       },
     });
-    expect(resolveApiKey).toHaveBeenCalledWith("oxk_mysecret");
+    expect(resolveApiKey).toHaveBeenCalledWith("ox_mysecret");
   });
 
   it("emits an api_key.used security event on a successful API-key resolution", async () => {
@@ -155,7 +164,7 @@ describe("resolveMcpContext", () => {
       apiKeyId: "key-1",
     });
 
-    await resolveMcpContext("Bearer oxk_mysecret", requestId, "203.0.113.7");
+    await resolveMcpContext("Bearer ox_mysecret", requestId, "203.0.113.7");
 
     expect(emitSecurityEventMock).toHaveBeenCalledOnce();
     const [event] = emitSecurityEventMock.mock.calls[0] as [
@@ -173,7 +182,7 @@ describe("resolveMcpContext", () => {
   it("does NOT emit api_key.used when the API key fails to resolve", async () => {
     vi.mocked(resolveApiKey).mockResolvedValue({ ok: false, kind: "invalid" });
 
-    await resolveMcpContext("Bearer oxk_bad", requestId);
+    await resolveMcpContext("Bearer ox_bad", requestId);
 
     expect(emitSecurityEventMock).not.toHaveBeenCalled();
   });
@@ -187,14 +196,14 @@ describe("resolveMcpContext", () => {
   it("returns invalid_token when resolveApiKey reports a non-expired failure", async () => {
     vi.mocked(resolveApiKey).mockResolvedValue({ ok: false, kind: "invalid" });
 
-    const result = await resolveMcpContext("Bearer oxk_bad", requestId);
+    const result = await resolveMcpContext("Bearer ox_bad", requestId);
     expect(result).toEqual({ ok: false, reason: "invalid_token" });
   });
 
   it("returns expired_token when resolveApiKey reports kind=expired", async () => {
     vi.mocked(resolveApiKey).mockResolvedValue({ ok: false, kind: "expired" });
 
-    const result = await resolveMcpContext("Bearer oxk_old", requestId);
+    const result = await resolveMcpContext("Bearer ox_old", requestId);
     expect(result).toEqual({ ok: false, reason: "expired_token" });
   });
 
@@ -238,7 +247,7 @@ describe("resolveMcpContext", () => {
       apiKeyId: "key-1",
     });
 
-    const result = await resolveMcpContext("Bearer oxk_emptyorg", requestId);
+    const result = await resolveMcpContext("Bearer ox_emptyorg", requestId);
     expect(result).toEqual({ ok: false, reason: "invalid_token" });
   });
 
@@ -250,7 +259,7 @@ describe("resolveMcpContext", () => {
       apiKeyId: "key-1",
     });
 
-    const result = await resolveMcpContext("Bearer oxk_emptyws", requestId);
+    const result = await resolveMcpContext("Bearer ox_emptyws", requestId);
     expect(result).toEqual({ ok: false, reason: "invalid_token" });
   });
 
@@ -262,7 +271,7 @@ describe("resolveMcpContext", () => {
       apiKeyId: "key-1",
     });
 
-    await resolveMcpContext("Bearer oxk_emptyorg", requestId);
+    await resolveMcpContext("Bearer ox_emptyorg", requestId);
 
     expect(emitSecurityEventMock).not.toHaveBeenCalled();
   });
@@ -276,10 +285,10 @@ describe("resolveMcpContext", () => {
     });
 
     await expect(
-      buildContext({ authorization: "Bearer oxk_emptyorg" }),
+      buildContext({ authorization: "Bearer ox_emptyorg" }),
     ).rejects.toThrow(McpUnauthorizedError);
     await expect(
-      buildContext({ authorization: "Bearer oxk_emptyorg" }),
+      buildContext({ authorization: "Bearer ox_emptyorg" }),
     ).rejects.toMatchObject({ reason: "invalid_token" });
   });
 });
@@ -302,11 +311,11 @@ describe("firstHeader (via buildContext header extraction)", () => {
       apiKeyId: "key-1",
     });
     const ctx = await buildContext({
-      authorization: "Bearer oxk_plainstring",
+      authorization: "Bearer ox_plainstring",
       "x-request-id": "req-plain",
     });
     expect(ctx.requestId).toBe("req-plain");
-    expect(resolveApiKey).toHaveBeenCalledWith("oxk_plainstring");
+    expect(resolveApiKey).toHaveBeenCalledWith("ox_plainstring");
   });
 
   it("uses the first element when authorization is delivered as an array", async () => {
@@ -318,11 +327,11 @@ describe("firstHeader (via buildContext header extraction)", () => {
     });
     const ctx = await buildContext({
       // xmcp headers() repeats a header as an array; firstHeader() picks [0]
-      authorization: ["Bearer oxk_fromarray", "Bearer oxk_ignored"],
+      authorization: ["Bearer ox_fromarray", "Bearer ox_ignored"],
       "x-request-id": "req-array",
     });
     expect(ctx.requestId).toBe("req-array");
-    expect(resolveApiKey).toHaveBeenCalledWith("oxk_fromarray");
+    expect(resolveApiKey).toHaveBeenCalledWith("ox_fromarray");
   });
 
   it("uses the first element when x-request-id is an array", async () => {
@@ -333,7 +342,7 @@ describe("firstHeader (via buildContext header extraction)", () => {
       apiKeyId: "key-1",
     });
     const ctx = await buildContext({
-      authorization: "Bearer oxk_valid",
+      authorization: "Bearer ox_valid",
       "x-request-id": ["req-first", "req-second"],
     });
     expect(ctx.requestId).toBe("req-first");
@@ -346,7 +355,7 @@ describe("firstHeader (via buildContext header extraction)", () => {
       workspaceId: "ws-1",
       apiKeyId: "key-1",
     });
-    const ctx = await buildContext({ authorization: "Bearer oxk_valid" });
+    const ctx = await buildContext({ authorization: "Bearer ox_valid" });
     // requestId should be a UUID (no x-request-id supplied)
     expect(ctx.requestId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
@@ -372,7 +381,7 @@ describe("extractClientIp (via buildContext clientIp extraction)", () => {
 
   it("extracts the first IP from a comma-separated x-forwarded-for", async () => {
     const ctx = await buildContext({
-      authorization: "Bearer oxk_valid",
+      authorization: "Bearer ox_valid",
       "x-forwarded-for": "1.2.3.4, 5.6.7.8",
     });
     expect(ctx.clientIp).toBe("1.2.3.4");
@@ -380,7 +389,7 @@ describe("extractClientIp (via buildContext clientIp extraction)", () => {
 
   it("trims whitespace from the extracted x-forwarded-for IP", async () => {
     const ctx = await buildContext({
-      authorization: "Bearer oxk_valid",
+      authorization: "Bearer ox_valid",
       "x-forwarded-for": " 1.2.3.4 , 5.6.7.8",
     });
     expect(ctx.clientIp).toBe("1.2.3.4");
@@ -388,20 +397,20 @@ describe("extractClientIp (via buildContext clientIp extraction)", () => {
 
   it("falls back to x-real-ip when x-forwarded-for is absent", async () => {
     const ctx = await buildContext({
-      authorization: "Bearer oxk_valid",
+      authorization: "Bearer ox_valid",
       "x-real-ip": "9.9.9.9",
     });
     expect(ctx.clientIp).toBe("9.9.9.9");
   });
 
   it("returns null when neither x-forwarded-for nor x-real-ip is present", async () => {
-    const ctx = await buildContext({ authorization: "Bearer oxk_valid" });
+    const ctx = await buildContext({ authorization: "Bearer ox_valid" });
     expect(ctx.clientIp).toBeNull();
   });
 
   it("handles x-forwarded-for as an array — uses first element", async () => {
     const ctx = await buildContext({
-      authorization: "Bearer oxk_valid",
+      authorization: "Bearer ox_valid",
       "x-forwarded-for": ["1.2.3.4, 5.6.7.8", "irrelevant"],
     });
     expect(ctx.clientIp).toBe("1.2.3.4");
@@ -423,7 +432,7 @@ describe("buildContext", () => {
       apiKeyId: "key-1",
     });
     const ctx = await buildContext({
-      authorization: "Bearer oxk_valid",
+      authorization: "Bearer ox_valid",
       "x-request-id": "req-123",
     });
     expect(ctx.surface).toBe("mcp");
@@ -437,7 +446,7 @@ describe("buildContext", () => {
       apiKeyId: "key-1",
     });
     const ctx = await buildContext({
-      authorization: "Bearer oxk_valid",
+      authorization: "Bearer ox_valid",
       "x-request-id": "trace-abc-123",
     });
     expect(ctx.requestId).toBe("trace-abc-123");
@@ -450,7 +459,7 @@ describe("buildContext", () => {
       workspaceId: "ws-1",
       apiKeyId: "key-1",
     });
-    const ctx = await buildContext({ authorization: "Bearer oxk_valid" });
+    const ctx = await buildContext({ authorization: "Bearer ox_valid" });
     expect(ctx.requestId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
@@ -464,7 +473,7 @@ describe("buildContext", () => {
       apiKeyId: "key-1",
     });
     const ctx = await buildContext({
-      authorization: "Bearer oxk_valid",
+      authorization: "Bearer ox_valid",
       "x-forwarded-for": "203.0.113.5",
     });
     expect(ctx.clientIp).toBe("203.0.113.5");
@@ -489,20 +498,20 @@ describe("buildContext", () => {
   it("throws McpUnauthorizedError with reason 'expired_token' when resolveApiKey returns expired", async () => {
     vi.mocked(resolveApiKey).mockResolvedValue({ ok: false, kind: "expired" });
     await expect(
-      buildContext({ authorization: "Bearer oxk_expired" }),
+      buildContext({ authorization: "Bearer ox_expired" }),
     ).rejects.toThrow(McpUnauthorizedError);
     await expect(
-      buildContext({ authorization: "Bearer oxk_expired" }),
+      buildContext({ authorization: "Bearer ox_expired" }),
     ).rejects.toMatchObject({ reason: "expired_token" });
   });
 
   it("throws McpUnauthorizedError with reason 'invalid_token' when resolveApiKey returns invalid", async () => {
     vi.mocked(resolveApiKey).mockResolvedValue({ ok: false, kind: "invalid" });
     await expect(
-      buildContext({ authorization: "Bearer oxk_bad" }),
+      buildContext({ authorization: "Bearer ox_bad" }),
     ).rejects.toThrow(McpUnauthorizedError);
     await expect(
-      buildContext({ authorization: "Bearer oxk_bad" }),
+      buildContext({ authorization: "Bearer ox_bad" }),
     ).rejects.toMatchObject({ reason: "invalid_token" });
   });
 
@@ -513,7 +522,7 @@ describe("buildContext", () => {
       workspaceId: "ws-1",
       apiKeyId: "key-1",
     });
-    const ctx = await buildContext({ authorization: "Bearer oxk_valid" });
+    const ctx = await buildContext({ authorization: "Bearer ox_valid" });
     expect(ctx.userId).toBeNull();
   });
 
@@ -524,7 +533,7 @@ describe("buildContext", () => {
       workspaceId: "ws-1",
       apiKeyId: "key-1",
     });
-    const ctx = await buildContext({ authorization: "Bearer oxk_valid" });
+    const ctx = await buildContext({ authorization: "Bearer ox_valid" });
     expect(ctx.messageId).toBeNull();
   });
 });

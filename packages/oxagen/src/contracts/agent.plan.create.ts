@@ -28,11 +28,24 @@ export const agentPlanCreate = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    goals: z.array(z.string()).min(1).max(20).describe("High-level goals this plan achieves"),
-    constraints: z.array(z.string()).default([]).describe("Hard constraints the plan must respect"),
+    goals: z
+      .array(z.string())
+      .min(1)
+      .max(20)
+      .describe("High-level goals this plan achieves"),
+    constraints: z
+      .array(z.string())
+      .default([])
+      .describe("Hard constraints the plan must respect"),
     tasks: z.array(planTaskSchema).min(1).max(100),
-    approvalRequired: z.boolean().default(true).describe("Whether user approval is required before execution"),
-    messageId: z.string().optional().describe("Originating conversation message ID"),
+    approvalRequired: z
+      .boolean()
+      .default(true)
+      .describe("Whether user approval is required before execution"),
+    messageId: z
+      .string()
+      .optional()
+      .describe("Originating conversation message ID"),
   }),
   output: z.object({
     planId: z.string(),

@@ -2,7 +2,13 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // ── DB mock ───────────────────────────────────────────────────────────────────
 // Stores rows by id so reads/deletes work against the same in-memory map.
-type Row = { id: string; identifier: string; value: string; expiresAt: Date; updatedAt?: Date };
+type Row = {
+  id: string;
+  identifier: string;
+  value: string;
+  expiresAt: Date;
+  updatedAt?: Date;
+};
 const store = new Map<string, Row>();
 
 beforeEach(() => {
@@ -110,7 +116,9 @@ describe("state-store", () => {
   });
 
   it("delete removes the row from the store", async () => {
-    const { saveOAuthState, deleteOAuthState, loadOAuthState } = await import("./state-store");
+    const { saveOAuthState, deleteOAuthState, loadOAuthState } = await import(
+      "./state-store"
+    );
     const now = Date.now();
     await saveOAuthState("state-del", data, now);
     await deleteOAuthState("state-del");

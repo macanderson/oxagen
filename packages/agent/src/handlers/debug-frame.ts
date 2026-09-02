@@ -89,7 +89,10 @@ export interface FailingStep {
  * Never throws; a line that doesn't match becomes a frame with null location
  * but a preserved `raw`.
  */
-export function parseStackFrames(stack: string, limit = MAX_TOP_FRAMES): StackFrame[] {
+export function parseStackFrames(
+  stack: string,
+  limit = MAX_TOP_FRAMES,
+): StackFrame[] {
   if (typeof stack !== "string" || stack.trim() === "") return [];
   const frames: StackFrame[] = [];
   for (const rawLine of stack.split("\n")) {
@@ -125,7 +128,14 @@ export function parseStackFrames(stack: string, limit = MAX_TOP_FRAMES): StackFr
       file = location || null;
     }
 
-    frames.push({ functionName, file, line: lineNo, column: colNo, internal, raw: line });
+    frames.push({
+      functionName,
+      file,
+      line: lineNo,
+      column: colNo,
+      internal,
+      raw: line,
+    });
   }
   return frames;
 }
@@ -168,8 +178,14 @@ const NODE_MODULES_RE = /(^|\/)node_modules\//;
  * Ties break by first-seen order (stable). Paths are compared verbatim (already
  * absolute in stacks); no normalisation guessing.
  */
-export function rankSuspectFiles(signals: SuspectSignal[], limit = MAX_SUSPECT_FILES): SuspectFile[] {
-  const byPath = new Map<string, { score: number; reasons: Map<string, number>; order: number }>();
+export function rankSuspectFiles(
+  signals: SuspectSignal[],
+  limit = MAX_SUSPECT_FILES,
+): SuspectFile[] {
+  const byPath = new Map<
+    string,
+    { score: number; reasons: Map<string, number>; order: number }
+  >();
   let order = 0;
   for (const sig of signals) {
     if (!sig.path) continue;
@@ -187,7 +203,9 @@ export function rankSuspectFiles(signals: SuspectSignal[], limit = MAX_SUSPECT_F
       path,
       score: e.score,
       order: e.order,
-      reasons: [...e.reasons.entries()].map(([r, n]) => (n > 1 ? `${r} ×${n}` : r)),
+      reasons: [...e.reasons.entries()].map(([r, n]) =>
+        n > 1 ? `${r} ×${n}` : r,
+      ),
     }))
     .sort((a, b) => b.score - a.score || a.order - b.order)
     .slice(0, limit)
@@ -230,13 +248,18 @@ export function suspectFilesFrom(inputs: {
  * spans sort ahead of the rest so the model reads the relevant ones even under
  * the cap; within each group, tree pre-order is preserved.
  */
-export function flattenSpans(root: TraceExecutionNode, limit = MAX_RELATED_SPANS): RelatedSpan[] {
+export function flattenSpans(
+  root: TraceExecutionNode,
+  limit = MAX_RELATED_SPANS,
+): RelatedSpan[] {
   const all: RelatedSpan[] = [];
   const walk = (node: TraceExecutionNode): void => {
     all.push({
       kind: "execution",
       id: node.executionId,
-      label: node.originType ? `${node.originType}:${node.originId}` : node.executionId,
+      label: node.originType
+        ? `${node.originType}:${node.originId}`
+        : node.executionId,
       status: node.status,
       failureReason: node.failureReason,
       latencyMs: node.latencyMs,
@@ -265,7 +288,8 @@ export function flattenSpans(root: TraceExecutionNode, limit = MAX_RELATED_SPANS
   };
   walk(root);
 
-  const failed = (s: RelatedSpan): boolean => s.status === "failed" || s.status === "cancelled";
+  const failed = (s: RelatedSpan): boolean =>
+    s.status === "failed" || s.status === "cancelled";
   const ordered = [...all.filter(failed), ...all.filter((s) => !failed(s))];
   return ordered.slice(0, limit);
 }
@@ -281,7 +305,8 @@ export function findFailingStep(root: TraceExecutionNode): FailingStep | null {
     const node = queue.shift() as TraceExecutionNode;
     for (const step of node.steps) {
       if (step.status === "failed" || step.status === "cancelled") {
-        const failedCall = step.toolCalls.find((c) => c.status === "failed") ?? null;
+        const failedCall =
+          step.toolCalls.find((c) => c.status === "failed") ?? null;
         return {
           stepId: step.stepId,
           stepNumber: step.stepNumber,
@@ -301,11 +326,16 @@ export function findFailingStep(root: TraceExecutionNode): FailingStep | null {
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
-export function clampMessage(s: string | null | undefined, max = MESSAGE_CLAMP): string | null {
+export function clampMessage(
+  s: string | null | undefined,
+  max = MESSAGE_CLAMP,
+): string | null {
   if (s === null || s === undefined) return null;
   return s.length > max ? `${s.slice(0, max)}… [truncated]` : s;
 }
 
 export function clampLogMessage(s: string): string {
-  return s.length > LOG_MESSAGE_CLAMP ? `${s.slice(0, LOG_MESSAGE_CLAMP)}… [truncated]` : s;
+  return s.length > LOG_MESSAGE_CLAMP
+    ? `${s.slice(0, LOG_MESSAGE_CLAMP)}… [truncated]`
+    : s;
 }

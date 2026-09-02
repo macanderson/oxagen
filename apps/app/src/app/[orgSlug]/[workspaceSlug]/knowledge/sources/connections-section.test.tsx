@@ -29,18 +29,27 @@ vi.mock("@/app/[orgSlug]/[workspaceSlug]/_shared/components", () => ({
   ),
 }));
 
-vi.mock("@/components/knowledge/connections/knowledge-connections-client", () => ({
-  KnowledgeConnectionsClient: ({ connections }: { connections: unknown[] }) => (
-    <div data-testid="connections-client" data-count={connections.length} />
-  ),
-}));
+vi.mock(
+  "@/components/knowledge/connections/knowledge-connections-client",
+  () => ({
+    KnowledgeConnectionsClient: ({
+      connections,
+    }: {
+      connections: unknown[];
+    }) => (
+      <div data-testid="connections-client" data-count={connections.length} />
+    ),
+  }),
+);
 
 import { ConnectionsSection } from "./connections-section";
 
 afterEach(cleanup);
 beforeEach(() => {
   mockInvoke.mockReset();
-  mockRunInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn());
+  mockRunInTenantScope.mockImplementation(
+    (_scope: unknown, fn: () => unknown) => fn(),
+  );
 });
 
 const BASE = {
@@ -59,14 +68,20 @@ describe("ConnectionsSection", () => {
       connections: [{ publicId: "c1" }, { publicId: "c2" }],
     });
     render(await ConnectionsSection(BASE));
-    expect(screen.getByTestId("connections-client")).toHaveAttribute("data-count", "2");
+    expect(screen.getByTestId("connections-client")).toHaveAttribute(
+      "data-count",
+      "2",
+    );
     expect(screen.queryByTestId("error-state")).toBeNull();
   });
 
   it("renders the empty client — not an error — when there are genuinely no connections", async () => {
     mockInvoke.mockResolvedValue({ connections: [] });
     render(await ConnectionsSection(BASE));
-    expect(screen.getByTestId("connections-client")).toHaveAttribute("data-count", "0");
+    expect(screen.getByTestId("connections-client")).toHaveAttribute(
+      "data-count",
+      "0",
+    );
     expect(screen.queryByTestId("error-state")).toBeNull();
   });
 

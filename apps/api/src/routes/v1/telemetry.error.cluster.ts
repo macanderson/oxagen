@@ -18,6 +18,8 @@ telemetryErrorClusterRoute.get("/", async (c) => {
     limit: limitRaw !== undefined ? Number(limitRaw) : undefined,
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(telemetryErrorCluster.name, input, ctx, { surface: "api" });
+  const out = await invoke(telemetryErrorCluster.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

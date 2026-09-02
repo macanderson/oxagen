@@ -19,7 +19,13 @@ export const pluginOrgList = registerCapability({
   },
   input: z.object({
     pluginType: z
-      .enum(["mcp_server", "integration", "agent_skill", "agent_capability", "knowledge_source"])
+      .enum([
+        "mcp_server",
+        "integration",
+        "agent_skill",
+        "agent_capability",
+        "knowledge_source",
+      ])
       .optional(),
   }),
   output: z.object({

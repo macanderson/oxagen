@@ -15,7 +15,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { NewWorkspaceForm, type NewWorkspaceAction } from "./new-workspace-form";
+import {
+  NewWorkspaceForm,
+  type NewWorkspaceAction,
+} from "./new-workspace-form";
 
 afterEach(cleanup);
 
@@ -39,14 +42,19 @@ describe("NewWorkspaceForm — rendering", () => {
 
   it("renders 'Create workspace' submit button", () => {
     render(<NewWorkspaceForm orgSlug="acme" action={vi.fn()} />);
-    expect(screen.getByRole("button", { name: /create workspace/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /create workspace/i }),
+    ).toBeInTheDocument();
   });
 });
 
 describe("NewWorkspaceForm — slug auto-derivation", () => {
   it("derives slug from name while not manually edited", async () => {
     render(<NewWorkspaceForm orgSlug="acme" action={vi.fn()} />);
-    await userEvent.type(screen.getByLabelText(/workspace name/i), "My Project");
+    await userEvent.type(
+      screen.getByLabelText(/workspace name/i),
+      "My Project",
+    );
     const slugInput = screen.getByLabelText(/slug/i) as HTMLInputElement;
     expect(slugInput.value).toBe("my-project");
   });
@@ -74,23 +82,33 @@ describe("NewWorkspaceForm — slug auto-derivation", () => {
 
 describe("NewWorkspaceForm — submission", () => {
   it("calls action with FormData and navigates on success", async () => {
-    const action: NewWorkspaceAction = vi.fn().mockResolvedValue({ ok: true, workspaceSlug: "beta" });
+    const action: NewWorkspaceAction = vi
+      .fn()
+      .mockResolvedValue({ ok: true, workspaceSlug: "beta" });
     render(<NewWorkspaceForm orgSlug="acme" action={action} />);
 
     await userEvent.type(screen.getByLabelText(/workspace name/i), "Beta");
-    await userEvent.click(screen.getByRole("button", { name: /create workspace/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /create workspace/i }),
+    );
 
     await waitFor(() => expect(action).toHaveBeenCalled());
     await waitFor(() => expect(assignMock).toHaveBeenCalledWith("/acme/beta"));
   });
 
   it("shows error when action returns ok:false", async () => {
-    const action: NewWorkspaceAction = vi.fn().mockResolvedValue({ ok: false, error: "Slug taken" });
+    const action: NewWorkspaceAction = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "Slug taken" });
     render(<NewWorkspaceForm orgSlug="acme" action={action} />);
 
     await userEvent.type(screen.getByLabelText(/workspace name/i), "Taken");
-    await userEvent.click(screen.getByRole("button", { name: /create workspace/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /create workspace/i }),
+    );
 
-    await waitFor(() => expect(screen.getByText("Slug taken")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Slug taken")).toBeInTheDocument(),
+    );
   });
 });

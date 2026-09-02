@@ -28,7 +28,9 @@ describe("app manifest route", () => {
       "192x192",
       "512x512",
     ]);
-    const maskable = result.icons?.filter((icon) => icon.purpose === "maskable");
+    const maskable = result.icons?.filter(
+      (icon) => icon.purpose === "maskable",
+    );
     expect(maskable).toHaveLength(2);
     const any = result.icons?.filter((icon) => icon.purpose === "any");
     expect(any).toHaveLength(9);

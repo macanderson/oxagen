@@ -30,7 +30,9 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function agentComposeTool(args: InferSchema<typeof schema>) {
+export default async function agentComposeTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   const output = await invoke(agentCompose.name, args, ctx, { surface: "mcp" });
   return agentCompose.output.parse(output);

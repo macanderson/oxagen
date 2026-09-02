@@ -11,7 +11,12 @@
 
 import Link from "next/link";
 import { Wallet } from "lucide-react";
-import { formatCents, formatCentsCompact, formatCentsWhole, cn } from "@/lib/utils";
+import {
+  formatCents,
+  formatCentsCompact,
+  formatCentsWhole,
+  cn,
+} from "@/lib/utils";
 
 export interface BalancePillProps {
   orgSlug: string;

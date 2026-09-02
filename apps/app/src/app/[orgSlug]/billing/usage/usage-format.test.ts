@@ -31,12 +31,14 @@ describe("rangeToWindow", () => {
   });
 
   it("computes 30 and 90 day windows", () => {
-    expect(rangeToWindow("30d", now).end.getTime() - rangeToWindow("30d", now).start.getTime()).toBe(
-      30 * 24 * 60 * 60 * 1000,
-    );
-    expect(rangeToWindow("90d", now).end.getTime() - rangeToWindow("90d", now).start.getTime()).toBe(
-      90 * 24 * 60 * 60 * 1000,
-    );
+    expect(
+      rangeToWindow("30d", now).end.getTime() -
+        rangeToWindow("30d", now).start.getTime(),
+    ).toBe(30 * 24 * 60 * 60 * 1000);
+    expect(
+      rangeToWindow("90d", now).end.getTime() -
+        rangeToWindow("90d", now).start.getTime(),
+    ).toBe(90 * 24 * 60 * 60 * 1000);
   });
 
   it("month-to-date starts at the first of the (UTC) month", () => {

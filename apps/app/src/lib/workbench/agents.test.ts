@@ -41,10 +41,10 @@ const ctx: WorkbenchCtx = {
 };
 
 describe("isCodingAgent", () => {
-  it("accepts the platform convention \"code\"", () => {
+  it('accepts the platform convention "code"', () => {
     expect(isCodingAgent(CODING_AGENT_TYPE)).toBe(true);
   });
-  it("stays read-tolerant of the earlier \"coding\" spelling", () => {
+  it('stays read-tolerant of the earlier "coding" spelling', () => {
     expect(isCodingAgent("coding")).toBe(true);
   });
   it("returns false for the default conversational type", () => {
@@ -89,12 +89,19 @@ describe("workbench/agents.ts kernel wrappers", () => {
 
   it("suggestAgentDefinition passes the input through unchanged", async () => {
     const input = { description: "A research agent", nameHint: "Researcher" };
-    const suggestion = { suggestion: {}, rationale: "r", warnings: [], recommendations: [] };
+    const suggestion = {
+      suggestion: {},
+      rationale: "r",
+      warnings: [],
+      recommendations: [],
+    };
     mockInvoke.mockResolvedValue(suggestion);
 
     const result = await suggestAgentDefinition(ctx, input);
 
-    expect(mockInvoke).toHaveBeenCalledWith("suggest_agent_def", input, ctx, { surface: "agent" });
+    expect(mockInvoke).toHaveBeenCalledWith("suggest_agent_def", input, ctx, {
+      surface: "agent",
+    });
     expect(result).toBe(suggestion);
   });
 
@@ -110,7 +117,13 @@ describe("workbench/agents.ts kernel wrappers", () => {
 
     expect(mockInvoke).toHaveBeenCalledWith(
       "create_agent_def",
-      { slug: "s", name: "Agent", description: undefined, agentType: DEFAULT_AGENT_TYPE, config: {} },
+      {
+        slug: "s",
+        name: "Agent",
+        description: undefined,
+        agentType: DEFAULT_AGENT_TYPE,
+        config: {},
+      },
       ctx,
       { surface: "agent" },
     );
@@ -118,7 +131,12 @@ describe("workbench/agents.ts kernel wrappers", () => {
   });
 
   it("createAgent passes through an explicit agentType", async () => {
-    mockInvoke.mockResolvedValue({ agentId: "a1", publicId: "pub", slug: "s", version: 1 });
+    mockInvoke.mockResolvedValue({
+      agentId: "a1",
+      publicId: "pub",
+      slug: "s",
+      version: 1,
+    });
 
     await createAgent(ctx, {
       slug: "s",
@@ -130,7 +148,13 @@ describe("workbench/agents.ts kernel wrappers", () => {
 
     expect(mockInvoke).toHaveBeenCalledWith(
       "create_agent_def",
-      { slug: "s", name: "Agent", description: "desc", agentType: CODING_AGENT_TYPE, config: {} },
+      {
+        slug: "s",
+        name: "Agent",
+        description: "desc",
+        agentType: CODING_AGENT_TYPE,
+        config: {},
+      },
       ctx,
       { surface: "agent" },
     );
@@ -143,7 +167,9 @@ describe("workbench/agents.ts kernel wrappers", () => {
 
     const result = await updateAgent(ctx, input);
 
-    expect(mockInvoke).toHaveBeenCalledWith("update_agent_def", input, ctx, { surface: "agent" });
+    expect(mockInvoke).toHaveBeenCalledWith("update_agent_def", input, ctx, {
+      surface: "agent",
+    });
     expect(result).toBe(updated);
   });
 

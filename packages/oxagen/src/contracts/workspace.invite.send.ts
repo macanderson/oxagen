@@ -7,7 +7,7 @@ export const workspaceInviteSend = registerCapability({
   description: "Send a workspace invitation to an email address",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "workspace" },
   sensitivity: "low",
@@ -28,5 +28,9 @@ export const workspaceInviteSend = registerCapability({
   }),
 });
 
-export type WorkspaceInviteSendInput = z.output<typeof workspaceInviteSend.input>;
-export type WorkspaceInviteSendOutput = z.output<typeof workspaceInviteSend.output>;
+export type WorkspaceInviteSendInput = z.output<
+  typeof workspaceInviteSend.input
+>;
+export type WorkspaceInviteSendOutput = z.output<
+  typeof workspaceInviteSend.output
+>;

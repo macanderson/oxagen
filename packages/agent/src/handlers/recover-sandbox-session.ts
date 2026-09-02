@@ -51,7 +51,10 @@ export interface RecoveryOutcome {
 
 /** Derive a filesystem-safe, human-recognizable branch label from the session id. */
 export function recoveryLabel(publicId: string): string {
-  const cleaned = publicId.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase();
+  const cleaned = publicId
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
   return (cleaned || "session").slice(0, 24);
 }
 
@@ -108,15 +111,27 @@ export async function recoverSandboxSession(
       ctx,
     );
     if (res.timedOut) {
-      return { kind: "failed", dirty: null, error: "recovery command timed out" };
+      return {
+        kind: "failed",
+        dirty: null,
+        error: "recovery command timed out",
+      };
     }
     stdout = res.stdout ?? "";
   } catch (err) {
     // The sandbox was reaped before we could recover — its filesystem is gone.
     if (err instanceof SandboxSessionGoneError) {
-      return { kind: "gone", dirty: null, error: "sandbox gone before recovery" };
+      return {
+        kind: "gone",
+        dirty: null,
+        error: "sandbox gone before recovery",
+      };
     }
-    return { kind: "failed", dirty: null, error: err instanceof Error ? err.message : String(err) };
+    return {
+      kind: "failed",
+      dirty: null,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 
   const lines = stdout.split("\n").map((l) => l.trim());
@@ -140,15 +155,33 @@ export async function recoverSandboxSession(
     };
   }
   if (has("OXA_NO_ORIGIN")) {
-    return { kind: "failed", dirty: true, error: "no git remote to push recovery branch to" };
+    return {
+      kind: "failed",
+      dirty: true,
+      error: "no git remote to push recovery branch to",
+    };
   }
   if (has("OXA_COMMIT_FAIL")) {
-    return { kind: "failed", dirty: true, error: "git commit of uncommitted work failed" };
+    return {
+      kind: "failed",
+      dirty: true,
+      error: "git commit of uncommitted work failed",
+    };
   }
   if (has("OXA_PUSH_FAIL")) {
-    const detail = stdout.slice(stdout.indexOf("OXA_PUSH_FAIL") + "OXA_PUSH_FAIL".length).trim();
-    return { kind: "failed", dirty: true, error: `git push failed${detail ? `: ${detail.slice(0, 300)}` : ""}` };
+    const detail = stdout
+      .slice(stdout.indexOf("OXA_PUSH_FAIL") + "OXA_PUSH_FAIL".length)
+      .trim();
+    return {
+      kind: "failed",
+      dirty: true,
+      error: `git push failed${detail ? `: ${detail.slice(0, 300)}` : ""}`,
+    };
   }
   // Dirty but no terminal marker — be conservative and RETAIN.
-  return { kind: "failed", dirty: true, error: "recovery produced no conclusive result" };
+  return {
+    kind: "failed",
+    dirty: true,
+    error: "recovery produced no conclusive result",
+  };
 }

@@ -11,7 +11,14 @@
  */
 
 import * as React from "react";
-import { render, screen, waitFor, cleanup, fireEvent, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  cleanup,
+  fireEvent,
+  act,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -80,7 +87,10 @@ vi.mock("@/components/ui/button", () => ({
     className?: string;
     size?: string;
   }) => (
-    <button type={(type as "button" | "submit" | "reset") ?? "button"} disabled={disabled}>
+    <button
+      type={(type as "button" | "submit" | "reset") ?? "button"}
+      disabled={disabled}
+    >
       {children}
     </button>
   ),
@@ -148,7 +158,9 @@ describe("WorkspaceModelsForm", () => {
 
   it("renders the save button", () => {
     render(<WorkspaceModelsForm {...defaultProps} />);
-    expect(screen.getByRole("button", { name: /save changes/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /save changes/i }),
+    ).toBeInTheDocument();
   });
 
   // ── (b) useRegisterFillableForm called ────────────────────────────────────
@@ -156,17 +168,21 @@ describe("WorkspaceModelsForm", () => {
   it("calls useRegisterFillableForm with a formId containing 'workspace-models'", () => {
     render(<WorkspaceModelsForm {...defaultProps} />);
     expect(mockUseRegisterFillableForm).toHaveBeenCalled();
-    const callArg = (mockUseRegisterFillableForm.mock.calls[0] as unknown as [
-      { formId: string; fields: unknown[]; title: string },
-    ])[0];
+    const callArg = (
+      mockUseRegisterFillableForm.mock.calls[0] as unknown as [
+        { formId: string; fields: unknown[]; title: string },
+      ]
+    )[0];
     expect(callArg.formId).toContain("workspace-models");
   });
 
   it("registers 4 fields", () => {
     render(<WorkspaceModelsForm {...defaultProps} />);
-    const callArg = (mockUseRegisterFillableForm.mock.calls[0] as unknown as [
-      { formId: string; fields: { name: string }[] },
-    ])[0];
+    const callArg = (
+      mockUseRegisterFillableForm.mock.calls[0] as unknown as [
+        { formId: string; fields: { name: string }[] },
+      ]
+    )[0];
     expect(callArg.fields).toHaveLength(4);
     const names = callArg.fields.map((f) => f.name);
     expect(names).toContain("textTier");
@@ -189,7 +205,9 @@ describe("WorkspaceModelsForm", () => {
     });
 
     // Submit the form
-    fireEvent.submit(screen.getByRole("form", { name: /workspace ai model defaults/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /workspace ai model defaults/i }),
+    );
 
     await waitFor(() => {
       expect(mockUpdateAction).toHaveBeenCalledOnce();
@@ -219,13 +237,17 @@ describe("WorkspaceModelsForm", () => {
       capturedApply!({ textTier: "ultra" });
     });
 
-    fireEvent.submit(screen.getByRole("form", { name: /workspace ai model defaults/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /workspace ai model defaults/i }),
+    );
 
     await waitFor(() => {
       expect(mockUpdateAction).toHaveBeenCalledOnce();
     });
 
-    const [arg] = mockUpdateAction.mock.calls[0] as [{ defaultTextTier: string }];
+    const [arg] = mockUpdateAction.mock.calls[0] as [
+      { defaultTextTier: string },
+    ];
     expect(arg.defaultTextTier).toBe("balanced");
   });
 
@@ -236,13 +258,17 @@ describe("WorkspaceModelsForm", () => {
 
     render(<WorkspaceModelsForm {...defaultProps} />);
 
-    fireEvent.submit(screen.getByRole("form", { name: /workspace ai model defaults/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /workspace ai model defaults/i }),
+    );
 
     await waitFor(() => {
       expect(mockUpdateAction).toHaveBeenCalledOnce();
     });
 
-    const [arg] = mockUpdateAction.mock.calls[0] as [{ orgSlug: string; workspaceSlug: string }];
+    const [arg] = mockUpdateAction.mock.calls[0] as [
+      { orgSlug: string; workspaceSlug: string },
+    ];
     expect(arg.orgSlug).toBe("test-org");
     expect(arg.workspaceSlug).toBe("test-ws");
   });
@@ -252,7 +278,9 @@ describe("WorkspaceModelsForm", () => {
 
     render(<WorkspaceModelsForm {...defaultProps} />);
 
-    fireEvent.submit(screen.getByRole("form", { name: /workspace ai model defaults/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /workspace ai model defaults/i }),
+    );
 
     await waitFor(() => {
       expect(screen.getByText(/saved at/i)).toBeInTheDocument();
@@ -262,11 +290,16 @@ describe("WorkspaceModelsForm", () => {
   // ── (e) Error path ────────────────────────────────────────────────────────
 
   it("shows error message when action returns ok:false", async () => {
-    mockUpdateAction.mockResolvedValue({ ok: false, error: "Permission denied" });
+    mockUpdateAction.mockResolvedValue({
+      ok: false,
+      error: "Permission denied",
+    });
 
     render(<WorkspaceModelsForm {...defaultProps} />);
 
-    fireEvent.submit(screen.getByRole("form", { name: /workspace ai model defaults/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /workspace ai model defaults/i }),
+    );
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toBeInTheDocument();
@@ -280,7 +313,9 @@ describe("WorkspaceModelsForm", () => {
 
     render(<WorkspaceModelsForm {...defaultProps} />);
 
-    fireEvent.submit(screen.getByRole("form", { name: /workspace ai model defaults/i }));
+    fireEvent.submit(
+      screen.getByRole("form", { name: /workspace ai model defaults/i }),
+    );
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toBeInTheDocument();

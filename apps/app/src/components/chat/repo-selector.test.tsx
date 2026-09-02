@@ -53,15 +53,27 @@ vi.mock("@/components/ui/select", () => ({
     className?: string;
     "aria-label"?: string;
   }) => (
-    <div data-testid="select-trigger" className={className} aria-label={ariaLabel}>
+    <div
+      data-testid="select-trigger"
+      className={className}
+      aria-label={ariaLabel}
+    >
       {children}
     </div>
   ),
-  SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
-  SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ children, value }: { children: React.ReactNode; value: string }) => (
-    <div data-value={value}>{children}</div>
+  SelectValue: ({ placeholder }: { placeholder?: string }) => (
+    <span>{placeholder}</span>
   ),
+  SelectPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectItem: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => <div data-value={value}>{children}</div>,
 }));
 
 vi.mock("lucide-react", async (importOriginal) => {
@@ -85,7 +97,10 @@ describe("RepoSelector", () => {
     const { RepoSelector } = await import("./repo-selector");
     render(
       <RepoSelector
-        repositories={[makeRepo(), makeRepo({ key: "con_2::acme/gadgets", name: "gadgets" })]}
+        repositories={[
+          makeRepo(),
+          makeRepo({ key: "con_2::acme/gadgets", name: "gadgets" }),
+        ]}
         selectedKey={null}
         onSelectRepo={vi.fn()}
       />,
@@ -96,7 +111,13 @@ describe("RepoSelector", () => {
 
   it("shows the placeholder when nothing is selected", async () => {
     const { RepoSelector } = await import("./repo-selector");
-    render(<RepoSelector repositories={[makeRepo()]} selectedKey={null} onSelectRepo={vi.fn()} />);
+    render(
+      <RepoSelector
+        repositories={[makeRepo()]}
+        selectedKey={null}
+        onSelectRepo={vi.fn()}
+      />,
+    );
     expect(screen.getByText("Select repository")).toBeInTheDocument();
   });
 
@@ -111,7 +132,13 @@ describe("RepoSelector", () => {
       />,
     );
     await userEvent.click(screen.getByTestId("select"));
-    expect(onSelectRepo).toHaveBeenCalledWith(expect.objectContaining({ key: "acme/widgets", owner: "acme", name: "widgets" }));
+    expect(onSelectRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: "acme/widgets",
+        owner: "acme",
+        name: "widgets",
+      }),
+    );
   });
 
   it("does not call onSelectRepo when the resolved value matches no repo", async () => {
@@ -131,20 +158,43 @@ describe("RepoSelector", () => {
   it("is disabled when isLoading is true", async () => {
     const { RepoSelector } = await import("./repo-selector");
     render(
-      <RepoSelector repositories={[makeRepo()]} selectedKey={null} onSelectRepo={vi.fn()} isLoading />,
+      <RepoSelector
+        repositories={[makeRepo()]}
+        selectedKey={null}
+        onSelectRepo={vi.fn()}
+        isLoading
+      />,
     );
-    expect(screen.getByTestId("select")).toHaveAttribute("data-disabled", "true");
+    expect(screen.getByTestId("select")).toHaveAttribute(
+      "data-disabled",
+      "true",
+    );
   });
 
   it("is disabled when there are no repositories", async () => {
     const { RepoSelector } = await import("./repo-selector");
-    render(<RepoSelector repositories={[]} selectedKey={null} onSelectRepo={vi.fn()} />);
-    expect(screen.getByTestId("select")).toHaveAttribute("data-disabled", "true");
+    render(
+      <RepoSelector
+        repositories={[]}
+        selectedKey={null}
+        onSelectRepo={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("select")).toHaveAttribute(
+      "data-disabled",
+      "true",
+    );
   });
 
   it("uses a mobile-first full-width trigger with a fixed desktop width", async () => {
     const { RepoSelector } = await import("./repo-selector");
-    render(<RepoSelector repositories={[makeRepo()]} selectedKey={null} onSelectRepo={vi.fn()} />);
+    render(
+      <RepoSelector
+        repositories={[makeRepo()]}
+        selectedKey={null}
+        onSelectRepo={vi.fn()}
+      />,
+    );
     const trigger = screen.getByTestId("select-trigger");
     expect(trigger.className).toContain("w-full");
     expect(trigger.className).toContain("sm:w-48");
@@ -161,6 +211,8 @@ describe("RepoSelector", () => {
         className="custom-class"
       />,
     );
-    expect(screen.getByTestId("select-trigger").className).toContain("custom-class");
+    expect(screen.getByTestId("select-trigger").className).toContain(
+      "custom-class",
+    );
   });
 });

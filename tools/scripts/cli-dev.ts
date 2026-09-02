@@ -100,13 +100,17 @@ function entryExists(p: string): boolean {
 function uninstallGlobalPackages(): void {
   const pnpmRoot = tryExecFile("pnpm", ["root", "-g"]);
   if (hasGlobalPkg(pnpmRoot, existsSync)) {
-    console.log(kleur.dim(`[cli:dev] removing global pnpm package @oxagen/cli …`));
+    console.log(
+      kleur.dim(`[cli:dev] removing global pnpm package @oxagen/cli …`),
+    );
     tryExecFile("pnpm", ["remove", "-g", "@oxagen/cli"]);
   }
 
   const npmRoot = tryExecFile("npm", ["root", "-g"]);
   if (hasGlobalPkg(npmRoot, existsSync)) {
-    console.log(kleur.dim(`[cli:dev] removing global npm package @oxagen/cli …`));
+    console.log(
+      kleur.dim(`[cli:dev] removing global npm package @oxagen/cli …`),
+    );
     tryExecFile("npm", ["uninstall", "-g", "@oxagen/cli"]);
   }
 }
@@ -130,13 +134,17 @@ function findOxagenBins(dirs: string[]): string[] {
 function main(): void {
   if (!existsSync(TSX_BIN)) {
     console.error(
-      kleur.red(`[cli:dev] repo tsx not found at ${TSX_BIN} — run \`pnpm install\` first.`),
+      kleur.red(
+        `[cli:dev] repo tsx not found at ${TSX_BIN} — run \`pnpm install\` first.`,
+      ),
     );
     process.exit(1);
   }
   if (!existsSync(SRC_ENTRY)) {
     console.error(
-      kleur.red(`[cli:dev] CLI source not found at ${SRC_ENTRY} — are you in the monorepo root?`),
+      kleur.red(
+        `[cli:dev] CLI source not found at ${SRC_ENTRY} — are you in the monorepo root?`,
+      ),
     );
     process.exit(1);
   }
@@ -153,7 +161,9 @@ function main(): void {
     try {
       rmSync(binPath, { force: true });
       const label =
-        kind === "dev-launcher" ? "previous dev launcher" : "external/global install";
+        kind === "dev-launcher"
+          ? "previous dev launcher"
+          : "external/global install";
       console.log(kleur.dim(`[cli:dev] removed ${label}: ${binPath}`));
     } catch {
       failedRemovals.push(binPath);
@@ -170,8 +180,14 @@ function main(): void {
   writeFileSync(linkPath, buildLauncherScript(TSX_BIN, SRC_ENTRY), "utf8");
   chmodSync(linkPath, 0o755);
 
-  console.log(kleur.green(`[cli:dev] installed ${kleur.bold(BIN_NAME)} → ${linkPath}`));
-  console.log(kleur.dim(`[cli:dev]   ↳ runs ${SRC_ENTRY} via tsx (live source, always latest)`));
+  console.log(
+    kleur.green(`[cli:dev] installed ${kleur.bold(BIN_NAME)} → ${linkPath}`),
+  );
+  console.log(
+    kleur.dim(
+      `[cli:dev]   ↳ runs ${SRC_ENTRY} via tsx (live source, always latest)`,
+    ),
+  );
 
   // 3. Warn about anything that still shadows us or keeps us off PATH.
   if (failedRemovals.length > 0) {
@@ -181,16 +197,23 @@ function main(): void {
         `[cli:dev] ⚠ could not remove ${failedRemovals.length} other \`${BIN_NAME}\`(s) (no write permission):`,
       ),
     );
-    for (const p of failedRemovals) console.log(kleur.yellow(`[cli:dev]     ${p}  (remove manually: sudo rm '${p}')`));
+    for (const p of failedRemovals)
+      console.log(
+        kleur.yellow(`[cli:dev]     ${p}  (remove manually: sudo rm '${p}')`),
+      );
   }
 
   if (!onPath) {
     console.log("");
     console.log(
-      kleur.yellow(`[cli:dev] ⚠ ${installDir} is not on your PATH — \`${BIN_NAME}\` won't resolve yet.`),
+      kleur.yellow(
+        `[cli:dev] ⚠ ${installDir} is not on your PATH — \`${BIN_NAME}\` won't resolve yet.`,
+      ),
     );
     console.log(kleur.yellow(`[cli:dev]   Add it to your shell profile:`));
-    console.log(kleur.yellow(`[cli:dev]     export PATH="${installDir}:$PATH"`));
+    console.log(
+      kleur.yellow(`[cli:dev]     export PATH="${installDir}:$PATH"`),
+    );
   }
 
   // Confirm the launcher we just wrote is the one a shell will actually resolve.
@@ -204,7 +227,11 @@ function main(): void {
     );
   }
 
-  console.log(kleur.dim(`[cli:dev] verify with:  ${BIN_NAME} --version  &&  ${BIN_NAME} --help`));
+  console.log(
+    kleur.dim(
+      `[cli:dev] verify with:  ${BIN_NAME} --version  &&  ${BIN_NAME} --help`,
+    ),
+  );
 }
 
 main();

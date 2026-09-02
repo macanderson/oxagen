@@ -26,7 +26,9 @@ export const browserRead = registerCapability({
       .string()
       .min(1)
       .optional()
-      .describe("Optional CSS selector — read only that element's text instead of the page body."),
+      .describe(
+        "Optional CSS selector — read only that element's text instead of the page body.",
+      ),
     timeoutMs: z.number().int().min(1_000).max(60_000).default(30_000),
   }),
   output: z.object({

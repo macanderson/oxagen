@@ -72,10 +72,16 @@ export const ASSET_ALLOWED_TYPES: Record<AssetKind, Record<string, string>> = {
  *
  * Never throws for a valid (kind, mime) pair — callers can rely on the
  * returned extension being a non-empty string.
+ *
+ * `mime` is attacker-controlled (a multipart part's Content-Type header), so
+ * the lookup goes through `Object.hasOwn` rather than a bare index. A bare
+ * index resolves inherited `Object.prototype` keys — `"constructor"`,
+ * `"toString"`, `"__proto__"` — to truthy values, which would sail past the
+ * allowlist and let any bytes be stored under an arbitrary content type.
  */
 export function assertAllowedAssetType(kind: AssetKind, mime: string): string {
   const allowed = ASSET_ALLOWED_TYPES[kind];
-  const ext = allowed[mime];
+  const ext = Object.hasOwn(allowed, mime) ? allowed[mime] : undefined;
   if (!ext) {
     const permitted = Object.keys(allowed).join(", ");
     throw new Error(
@@ -99,6 +105,10 @@ export function assertAllowedAssetType(kind: AssetKind, mime: string): string {
  * @param ownerId  - Server-resolved owner identifier (org id or user id).
  * @param ext      - File extension without a leading dot, e.g. "webp".
  */
-export function deriveAssetKey(kind: AssetKind, ownerId: string, ext: string): string {
+export function deriveAssetKey(
+  kind: AssetKind,
+  ownerId: string,
+  ext: string,
+): string {
   return `${kind}/${ownerId}/${randomUUID()}.${ext}`;
 }

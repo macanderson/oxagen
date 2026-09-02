@@ -228,9 +228,15 @@ export const PROVIDER_RATE_CARD: RateCard = {
 };
 
 /**
- * Model whose rate prices any call whose id is absent from the rate card. We
- * bias to the platform default (Sonnet) so an unknown model never silently
- * under-charges — over-charging a missing model is safer than zero-charging it.
+ * Model whose rate prices any call whose id is absent from the rate card.
+ *
+ * The fallback only guarantees that an unknown model is never billed at $0. It
+ * does NOT guarantee the charge is high enough: a model priced above Sonnet
+ * (any Opus/Fable-tier id that fails to prefix-match) is under-charged at this
+ * rate, and a model priced below Sonnet (a mini/flash tier) is over-charged.
+ * Both directions are wrong, so a model the platform actually routes to must
+ * have its own entry in {@link PROVIDER_RATE_CARD} — the fallback is a floor
+ * against a $0 bill, not a substitute for a real rate.
  */
 export const FALLBACK_RATE_MODEL = "claude-sonnet-5";
 

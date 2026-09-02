@@ -40,7 +40,16 @@ const variantClass = {
 
 const EmptyState = React.forwardRef<HTMLDivElement, EmptyStateProps>(
   (
-    { className, icon, title, description, action, size = "default", variant = "plain", ...props },
+    {
+      className,
+      icon,
+      title,
+      description,
+      action,
+      size = "default",
+      variant = "plain",
+      ...props
+    },
     ref,
   ) => (
     <div
@@ -58,17 +67,29 @@ const EmptyState = React.forwardRef<HTMLDivElement, EmptyStateProps>(
           aria-hidden="true"
           className={cn(
             "mb-1.5 flex items-center justify-center rounded-lg bg-muted text-muted-foreground",
-            size === "default" ? "size-10 [&_svg]:size-5" : "size-8 [&_svg]:size-4",
+            size === "default"
+              ? "size-10 [&_svg]:size-5"
+              : "size-8 [&_svg]:size-4",
           )}
         >
           {icon}
         </div>
       )}
-      <div className={cn("font-medium text-foreground", size === "default" ? "text-sm" : "text-xs")}>
+      <div
+        className={cn(
+          "font-medium text-foreground",
+          size === "default" ? "text-sm" : "text-xs",
+        )}
+      >
         {title}
       </div>
       {description && (
-        <p className={cn("max-w-sm text-muted-foreground", size === "default" ? "text-sm" : "text-xs")}>
+        <p
+          className={cn(
+            "max-w-sm text-muted-foreground",
+            size === "default" ? "text-sm" : "text-xs",
+          )}
+        >
           {description}
         </p>
       )}

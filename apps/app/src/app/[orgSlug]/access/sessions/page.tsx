@@ -8,18 +8,17 @@
  * CC6.1 evidence.
  */
 
-import {
-  Globe,
-  Laptop,
-  Smartphone,
-  Bot,
-  CircleSlash,
-} from "lucide-react";
+import { Globe, Laptop, Smartphone, Bot, CircleSlash } from "lucide-react";
 import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { eq, and, gt, inArray } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
-import { resolveOrg, assertOrgMember, getOrgRole, SECURITY_MANAGER_ROLES } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  assertOrgMember,
+  getOrgRole,
+  SECURITY_MANAGER_ROLES,
+} from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
 import { RevokeSessionButton } from "./_components/revoke-session-button";
 
@@ -41,8 +40,14 @@ interface LiveSession {
 function classifyDevice(ua: string | null): DeviceKind {
   if (!ua) return "headless";
   const u = ua.toLowerCase();
-  if (u.includes("mobile") || u.includes("android") || u.includes("iphone")) return "mobile";
-  if (u.includes("mozilla") || u.includes("chrome") || u.includes("safari") || u.includes("firefox"))
+  if (u.includes("mobile") || u.includes("android") || u.includes("iphone"))
+    return "mobile";
+  if (
+    u.includes("mozilla") ||
+    u.includes("chrome") ||
+    u.includes("safari") ||
+    u.includes("firefox")
+  )
     return "desktop";
   return "headless";
 }
@@ -103,10 +108,25 @@ async function loadOrgSessions(orgId: string): Promise<LiveSession[]> {
 
 function DeviceIcon({ kind }: { kind: DeviceKind }) {
   if (kind === "mobile")
-    return <Smartphone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Mobile" />;
+    return (
+      <Smartphone
+        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+        aria-label="Mobile"
+      />
+    );
   if (kind === "headless")
-    return <Bot className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="API / headless" />;
-  return <Laptop className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Desktop" />;
+    return (
+      <Bot
+        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+        aria-label="API / headless"
+      />
+    );
+  return (
+    <Laptop
+      className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+      aria-label="Desktop"
+    />
+  );
 }
 
 function formatTs(d: Date): string {
@@ -160,12 +180,14 @@ export default async function AccessSessionsPage({
         }
       >
         <p className="mb-4 text-sm text-muted-foreground">
-          All unexpired sessions for members of this organization.
-          Owner and admin roles can revoke any session (CC6.1).
+          All unexpired sessions for members of this organization. Owner and
+          admin roles can revoke any session (CC6.1).
         </p>
 
         {sessions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No active sessions found.</p>
+          <p className="text-sm text-muted-foreground">
+            No active sessions found.
+          </p>
         ) : (
           <>
             {/* Column headers (desktop) */}
@@ -177,7 +199,13 @@ export default async function AccessSessionsPage({
                   : "minmax(0,1.6fr) 110px 110px 160px",
               }}
             >
-              {["User", "Device", "IP", "Last active", ...(canRevoke ? [""] : [])].map((h) => (
+              {[
+                "User",
+                "Device",
+                "IP",
+                "Last active",
+                ...(canRevoke ? [""] : []),
+              ].map((h) => (
                 <span
                   key={h}
                   className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
@@ -211,7 +239,9 @@ export default async function AccessSessionsPage({
                   {/* Device */}
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <DeviceIcon kind={s.deviceKind} />
-                    <span className="truncate">{extractBrowser(s.userAgent)}</span>
+                    <span className="truncate">
+                      {extractBrowser(s.userAgent)}
+                    </span>
                   </div>
 
                   {/* IP */}
@@ -222,7 +252,9 @@ export default async function AccessSessionsPage({
 
                   {/* Last active */}
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-xs text-muted-foreground">{formatTs(s.updatedAt)}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {formatTs(s.updatedAt)}
+                    </span>
                     <span className="text-[11px] text-muted-foreground/60">
                       Expires {formatTs(s.expiresAt)}
                     </span>
@@ -232,7 +264,9 @@ export default async function AccessSessionsPage({
                   {canRevoke && (
                     <div className="flex items-center">
                       {s.userId === session.user.id ? (
-                        <Badge variant="muted" className="text-[10px]">Your session</Badge>
+                        <Badge variant="muted" className="text-[10px]">
+                          Your session
+                        </Badge>
                       ) : (
                         <RevokeSessionButton
                           orgSlug={orgSlug}
@@ -252,7 +286,10 @@ export default async function AccessSessionsPage({
 
       {!canRevoke && (
         <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
-          <CircleSlash className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <CircleSlash
+            className="h-4 w-4 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
           <p className="text-xs text-muted-foreground">
             Owner or admin role required to revoke sessions.
           </p>

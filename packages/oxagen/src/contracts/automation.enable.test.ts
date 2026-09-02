@@ -6,7 +6,9 @@ describe("automation.enable capability", () => {
   // ── input validation ──────────────────────────────────────────────────────
 
   it("accepts a non-empty automation_id", () => {
-    const parsed = automationEnable.input.parse({ automation_id: "trg_abc123" });
+    const parsed = automationEnable.input.parse({
+      automation_id: "trg_abc123",
+    });
     expect(parsed.automation_id).toBe("trg_abc123");
   });
 
@@ -36,7 +38,10 @@ describe("automation.enable capability", () => {
 
   it("rejects output missing enabled", () => {
     expect(() =>
-      automationEnable.output.parse({ automation_id: "trg_abc123", status: "active" }),
+      automationEnable.output.parse({
+        automation_id: "trg_abc123",
+        status: "active",
+      }),
     ).toThrow();
   });
 

@@ -32,8 +32,10 @@ function parseArgs(argv: string[]): Args {
     if (argv[i] === "--cutover" && argv[i + 1]) args.cutover = argv[++i]!;
     if (argv[i] === "--days" && argv[i + 1]) args.days = Number(argv[++i]);
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(args.cutover)) throw new Error(`bad --cutover: ${args.cutover}`);
-  if (!Number.isFinite(args.days) || args.days <= 0) throw new Error(`bad --days: ${args.days}`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(args.cutover))
+    throw new Error(`bad --cutover: ${args.cutover}`);
+  if (!Number.isFinite(args.days) || args.days <= 0)
+    throw new Error(`bad --days: ${args.days}`);
   return args;
 }
 
@@ -109,9 +111,15 @@ async function windowMetrics(from: string, to: string) {
     from,
     to,
     dispatches,
-    aggregatesPerDispatch: dispatches ? Number(fanout!.aggregates) / dispatches : null,
-    resultGetFanBack: childRuns ? Number(fanout!.result_gets) / childRuns : null,
-    siblingReadsPerDispatch: dispatches ? Number(siblingReads?.sibling_reads ?? 0) / dispatches : null,
+    aggregatesPerDispatch: dispatches
+      ? Number(fanout!.aggregates) / dispatches
+      : null,
+    resultGetFanBack: childRuns
+      ? Number(fanout!.result_gets) / childRuns
+      : null,
+    siblingReadsPerDispatch: dispatches
+      ? Number(siblingReads?.sibling_reads ?? 0) / dispatches
+      : null,
     lease_expired: Number(lease?.lease_expired ?? 0),
     tasks_reclaimed: Number(lease?.tasks_reclaimed ?? 0),
     failed_at_cap: Number(lease?.failed_at_cap ?? 0),
@@ -156,10 +164,19 @@ async function main() {
     "avg_duration_ms",
     "p95_duration_ms",
   ] as const;
-  const fmt = (v: unknown) => (v === null || v === undefined ? "—" : typeof v === "number" ? String(Math.round(v * 100) / 100) : String(v));
-  console.log(`${"metric".padEnd(24)} ${"before".padStart(12)} ${"after".padStart(12)}`);
+  const fmt = (v: unknown) =>
+    v === null || v === undefined
+      ? "—"
+      : typeof v === "number"
+        ? String(Math.round(v * 100) / 100)
+        : String(v);
+  console.log(
+    `${"metric".padEnd(24)} ${"before".padStart(12)} ${"after".padStart(12)}`,
+  );
   for (const k of keys) {
-    console.log(`${k.padEnd(24)} ${fmt((before as Row)[k]).padStart(12)} ${fmt((after as Row)[k]).padStart(12)}`);
+    console.log(
+      `${k.padEnd(24)} ${fmt((before as Row)[k]).padStart(12)} ${fmt((after as Row)[k]).padStart(12)}`,
+    );
   }
   console.log(
     "\ntargets: aggregatesPerDispatch ≤ 2 · resultGetFanBack < 0.5 (alert above) · avg_input_tokens trending down on fanout-heavy orgs" +

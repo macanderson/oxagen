@@ -109,35 +109,52 @@ export function NewAutomationDialog({
       triggerType === "event"
         ? { entityType: entityType.trim(), eventType }
         : triggerType === "schedule"
-          ? { cronExpression: cronExpression.trim(), timezone: timezone.trim() || "UTC" }
+          ? {
+              cronExpression: cronExpression.trim(),
+              timezone: timezone.trim() || "UTC",
+            }
           : {};
 
-    const res = await createAutomationAction({
-      orgSlug,
-      workspaceSlug,
-      name: name.trim(),
-      description: description.trim() || undefined,
-      triggerType,
-      triggerConfig,
-      steps: steps
-        .filter((s) => s.name.trim().length > 0)
-        .map((s) => ({ name: s.name.trim(), stepType: s.stepType, config: s.config ?? {} })),
-    });
-    setPending(false);
-
-    if (res.ok) {
-      toast.add({
-        title: "Automation created",
-        description: `${name.trim()} is disabled — enable it to go live.`,
-        type: "success",
+    // finally: the dialog refuses to close while `pending` is true, so a
+    // rejected action without this would trap the user in a dialog stuck on
+    // "Creating…" until the page is reloaded.
+    try {
+      const res = await createAutomationAction({
+        orgSlug,
+        workspaceSlug,
+        name: name.trim(),
+        description: description.trim() || undefined,
+        triggerType,
+        triggerConfig,
+        steps: steps
+          .filter((s) => s.name.trim().length > 0)
+          .map((s) => ({
+            name: s.name.trim(),
+            stepType: s.stepType,
+            config: s.config ?? {},
+          })),
       });
-      const id = res.automation.automation_id;
-      reset();
-      onOpenChange(false);
-      router.push(workspace.automations.automation({ orgSlug, workspaceSlug }, id));
-      router.refresh();
-    } else {
-      setError(res.error);
+
+      if (res.ok) {
+        toast.add({
+          title: "Automation created",
+          description: `${name.trim()} is disabled — enable it to go live.`,
+          type: "success",
+        });
+        const id = res.automation.automation_id;
+        reset();
+        onOpenChange(false);
+        router.push(
+          workspace.automations.automation({ orgSlug, workspaceSlug }, id),
+        );
+        router.refresh();
+      } else {
+        setError(res.error);
+      }
+    } catch {
+      setError("Creating the automation failed. Try again.");
+    } finally {
+      setPending(false);
     }
   }
 
@@ -154,8 +171,8 @@ export function NewAutomationDialog({
         <DialogHeader>
           <DialogTitle>New automation</DialogTitle>
           <DialogDescription>
-            Bind a playbook to a graph event, a schedule, or manual firing. It starts disabled —
-            you enable it deliberately once it looks right.
+            Bind a playbook to a graph event, a schedule, or manual firing. It
+            starts disabled — you enable it deliberately once it looks right.
           </DialogDescription>
         </DialogHeader>
 
@@ -173,7 +190,9 @@ export function NewAutomationDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="automation-description">Description (optional)</Label>
+            <Label htmlFor="automation-description">
+              Description (optional)
+            </Label>
             <Textarea
               id="automation-description"
               value={description}
@@ -186,7 +205,10 @@ export function NewAutomationDialog({
 
           <div className="space-y-1.5">
             <Label>Trigger type</Label>
-            <Select value={triggerType} onValueChange={(v) => setTriggerType(v as TriggerType)}>
+            <Select
+              value={triggerType}
+              onValueChange={(v) => setTriggerType(v as TriggerType)}
+            >
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -214,7 +236,10 @@ export function NewAutomationDialog({
               </div>
               <div className="space-y-1.5">
                 <Label>Event</Label>
-                <Select value={eventType} onValueChange={(v) => setEventType(v as EventType)}>
+                <Select
+                  value={eventType}
+                  onValueChange={(v) => setEventType(v as EventType)}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
@@ -257,8 +282,8 @@ export function NewAutomationDialog({
 
           {triggerType === "api" && (
             <p className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-              An API / manual automation only fires when you use “Trigger now” or call the
-              automation capability via the API, MCP, or CLI.
+              An API / manual automation only fires when you use “Trigger now”
+              or call the automation capability via the API, MCP, or CLI.
             </p>
           )}
 
@@ -287,7 +312,9 @@ export function NewAutomationDialog({
                       value={step.name}
                       onChange={(e) =>
                         setSteps((prev) =>
-                          prev.map((s, j) => (j === i ? { ...s, name: e.target.value } : s)),
+                          prev.map((s, j) =>
+                            j === i ? { ...s, name: e.target.value } : s,
+                          ),
                         )
                       }
                       placeholder="Step name"
@@ -298,7 +325,12 @@ export function NewAutomationDialog({
                       onValueChange={(v) =>
                         setSteps((prev) =>
                           prev.map((s, j) =>
-                            j === i ? { ...s, stepType: v as AutomationStep["stepType"] } : s,
+                            j === i
+                              ? {
+                                  ...s,
+                                  stepType: v as AutomationStep["stepType"],
+                                }
+                              : s,
                           ),
                         )
                       }
@@ -319,7 +351,9 @@ export function NewAutomationDialog({
                       variant="ghost"
                       size="icon"
                       aria-label="Remove step"
-                      onClick={() => setSteps((prev) => prev.filter((_, j) => j !== i))}
+                      onClick={() =>
+                        setSteps((prev) => prev.filter((_, j) => j !== i))
+                      }
                     >
                       <Trash2 className="size-4" />
                     </Button>
@@ -337,10 +371,20 @@ export function NewAutomationDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending} type="button">
+          <Button
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+            disabled={pending}
+            type="button"
+          >
             Cancel
           </Button>
-          <Button onClick={handleCreate} disabled={pending} type="button" data-testid="create-automation">
+          <Button
+            onClick={handleCreate}
+            disabled={pending}
+            type="button"
+            data-testid="create-automation"
+          >
             {pending ? "Creating…" : "Create automation"}
           </Button>
         </DialogFooter>

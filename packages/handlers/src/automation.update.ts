@@ -9,12 +9,14 @@ import { logger } from "./logger";
 // the trigger row. Enable/disable is intentionally NOT handled here — that is the
 // human-gated automation.enable / automation.disable path. Partial: an omitted
 // field is left unchanged.
-export const automationUpdateHandler: CapabilityHandler<typeof automationUpdate> = async (
-  input,
-  ctx,
-) => {
+export const automationUpdateHandler: CapabilityHandler<
+  typeof automationUpdate
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "automation.update: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "automation.update: rejected — no authenticated user",
+    );
     throw new Error("automation.update requires an authenticated user");
   }
   const userId = ctx.userId;
@@ -27,17 +29,25 @@ export const automationUpdateHandler: CapabilityHandler<typeof automationUpdate>
         eq(schema.playbookTriggers.orgId, ctx.orgId),
         eq(schema.playbookTriggers.workspaceId, ctx.workspaceId),
       ),
-      columns: { id: true, playbookId: true, triggerType: true, isEnabled: true },
+      columns: {
+        id: true,
+        playbookId: true,
+        triggerType: true,
+        isEnabled: true,
+      },
     }),
   );
 
   if (!trigger) {
-    throw new Error(`automation.update: trigger not found: ${input.automation_id}`);
+    throw new Error(
+      `automation.update: trigger not found: ${input.automation_id}`,
+    );
   }
 
   const playbookUpdates: Record<string, unknown> = {};
   if (input.name !== undefined) playbookUpdates.name = input.name;
-  if (input.description !== undefined) playbookUpdates.description = input.description;
+  if (input.description !== undefined)
+    playbookUpdates.description = input.description;
 
   // Apply playbook + trigger updates in one transaction, then read back the
   // canonical playbook fields for the response.
@@ -46,7 +56,12 @@ export const automationUpdateHandler: CapabilityHandler<typeof automationUpdate>
       await tx
         .update(schema.playbooks)
         .set({ ...playbookUpdates, updatedByUserId: userId })
-        .where(and(eq(schema.playbooks.id, trigger.playbookId), eq(schema.playbooks.orgId, ctx.orgId)));
+        .where(
+          and(
+            eq(schema.playbooks.id, trigger.playbookId),
+            eq(schema.playbooks.orgId, ctx.orgId),
+          ),
+        );
     }
 
     if (input.triggerConfig !== undefined) {
@@ -57,13 +72,18 @@ export const automationUpdateHandler: CapabilityHandler<typeof automationUpdate>
     }
 
     return tx.query.playbooks.findFirst({
-      where: and(eq(schema.playbooks.id, trigger.playbookId), eq(schema.playbooks.orgId, ctx.orgId)),
+      where: and(
+        eq(schema.playbooks.id, trigger.playbookId),
+        eq(schema.playbooks.orgId, ctx.orgId),
+      ),
       columns: { name: true, description: true, status: true },
     });
   });
 
   if (!playbook) {
-    throw new Error(`automation.update: playbook not found for trigger ${input.automation_id}`);
+    throw new Error(
+      `automation.update: playbook not found for trigger ${input.automation_id}`,
+    );
   }
 
   logger.info(

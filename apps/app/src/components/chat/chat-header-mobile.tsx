@@ -38,8 +38,7 @@ export interface ChatHeaderMobileProps {
   environments: readonly EnvironmentOption[];
   /** Shows a pulsing status dot on the Activity button while true. */
   isStreaming: boolean;
-  /** Opens the conversations list/drawer. Omit to render an inert button
-   * (conversation-list wiring lands in a later PR). */
+  /** Opens the conversations list/drawer. Omit to render an inert button. */
   onOpenConversations?: () => void;
   /** Opens the session-settings drawer. */
   onOpenSettings: () => void;
@@ -65,14 +64,21 @@ export function ChatHeaderMobile({
   const { state } = useChatSession();
 
   const agentName =
-    agents.find((a) => a.agentId === state.agentId)?.name ?? "Default assistant";
+    agents.find((a) => a.agentId === state.agentId)?.name ??
+    "Default assistant";
 
   const modelLabel = state.model
     ? modelLabelOf(state.model)
     : tierLabel(state.tier ?? "fast");
 
-  const parts = sessionSubtitleParts(state, { repos, environments, modelLabel });
-  const subtitle = parts.branch ? `${parts.model} · ${parts.branch}` : parts.model;
+  const parts = sessionSubtitleParts(state, {
+    repos,
+    environments,
+    modelLabel,
+  });
+  const subtitle = parts.branch
+    ? `${parts.model} · ${parts.branch}`
+    : parts.model;
 
   return (
     <header

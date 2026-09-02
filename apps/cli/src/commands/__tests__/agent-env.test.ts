@@ -6,7 +6,15 @@
  * JSON line; pretty prints a summary/table; a missing --env is a usage error
  * (exit 2, no API call); API failures route to a uniform stderr error (exit 1).
  */
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from "vitest";
 import type { CommandWriter } from "../../lib/capture-writer.js";
 
 vi.mock("../../lib/api.js", async (importOriginal) => {
@@ -28,7 +36,10 @@ function makeWriter(): { writer: CommandWriter; out: string[]; err: string[] } {
   const out: string[] = [];
   const err: string[] = [];
   return {
-    writer: { write: (l) => void out.push(l), writeErr: (l) => void err.push(l) },
+    writer: {
+      write: (l) => void out.push(l),
+      writeErr: (l) => void err.push(l),
+    },
     out,
     err,
   };
@@ -76,8 +87,12 @@ describe("handleAgentEnvBind", () => {
   it("resolves agent slug + env slug + template slug then binds", async () => {
     mockGet.mockResolvedValueOnce({ agents: AGENTS });
     mockPost
-      .mockResolvedValueOnce({ environments: [{ id: "env_1", slug: "staging" }] })
-      .mockResolvedValueOnce({ templates: [{ id: "sbx_abc", slug: "swe-bench-prewarmed" }] })
+      .mockResolvedValueOnce({
+        environments: [{ id: "env_1", slug: "staging" }],
+      })
+      .mockResolvedValueOnce({
+        templates: [{ id: "sbx_abc", slug: "swe-bench-prewarmed" }],
+      })
       .mockResolvedValueOnce({ binding: BINDING });
     const { writer, out } = makeWriter();
     await handleAgentEnvBind(
@@ -97,7 +112,9 @@ describe("handleAgentEnvBind", () => {
   });
 
   it("passes an agt_ id and env_ id straight through (no lookups)", async () => {
-    mockPost.mockResolvedValueOnce({ binding: { ...BINDING, sandboxTemplateName: null } });
+    mockPost.mockResolvedValueOnce({
+      binding: { ...BINDING, sandboxTemplateName: null },
+    });
     const { writer } = makeWriter();
     await handleAgentEnvBind("agt_code", { env: "env_1" }, writer);
     expect(mockGet).not.toHaveBeenCalled();
@@ -147,7 +164,9 @@ describe("handleAgentEnvUnbind", () => {
 
   it("unbinds after resolving handles", async () => {
     mockPost
-      .mockResolvedValueOnce({ environments: [{ id: "env_1", slug: "staging" }] })
+      .mockResolvedValueOnce({
+        environments: [{ id: "env_1", slug: "staging" }],
+      })
       .mockResolvedValueOnce({ ok: true });
     const { writer, out } = makeWriter();
     await handleAgentEnvUnbind("agt_code", { env: "staging" }, writer);
@@ -164,7 +183,9 @@ describe("handleAgentEnvList", () => {
     mockPost.mockResolvedValueOnce({ bindings: [BINDING] });
     const { writer, out } = makeWriter();
     await handleAgentEnvList("agt_code", {}, writer);
-    expect(mockPost).toHaveBeenCalledWith("agent/environment/list", { agentId: "agt_code" });
+    expect(mockPost).toHaveBeenCalledWith("agent/environment/list", {
+      agentId: "agt_code",
+    });
     const text = out.join("\n");
     expect(text).toContain("Staging");
     expect(text).toContain("SWE-bench prewarmed");
@@ -173,7 +194,9 @@ describe("handleAgentEnvList", () => {
 
   it("shows the env-default hint when no template is pinned", async () => {
     mockPost.mockResolvedValueOnce({
-      bindings: [{ ...BINDING, sandboxTemplateId: null, sandboxTemplateName: null }],
+      bindings: [
+        { ...BINDING, sandboxTemplateId: null, sandboxTemplateName: null },
+      ],
     });
     const { writer, out } = makeWriter();
     await handleAgentEnvList("agt_code", {}, writer);

@@ -4,12 +4,16 @@ import { getCapability } from "../registry";
 
 describe("connection.mappings.get capability", () => {
   it("parses valid input", () => {
-    const parsed = connectionMappingsGet.input.parse({ connectionId: "con_ABC" });
+    const parsed = connectionMappingsGet.input.parse({
+      connectionId: "con_ABC",
+    });
     expect(parsed.connectionId).toBe("con_ABC");
   });
 
   it("rejects empty connectionId", () => {
-    expect(() => connectionMappingsGet.input.parse({ connectionId: "" })).toThrow();
+    expect(() =>
+      connectionMappingsGet.input.parse({ connectionId: "" }),
+    ).toThrow();
   });
 
   it("parses valid output with mappings", () => {
@@ -37,7 +41,9 @@ describe("connection.mappings.get capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("get_connection_mappings")).toBe(connectionMappingsGet);
+    expect(getCapability("get_connection_mappings")).toBe(
+      connectionMappingsGet,
+    );
   });
 
   it("is a read operation, no approval needed", () => {

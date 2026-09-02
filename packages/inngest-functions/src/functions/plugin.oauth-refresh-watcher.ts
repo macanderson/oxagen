@@ -8,9 +8,14 @@
  *
  * On refresh success: tokens are saved (saveTokens) and the credential stays active.
  * On refresh failure: markCredentialNeedsReauth() flips the credential to
- *   needs_reauth — Plan 5 will notify the org admin.
+ *   needs_reauth, which the org admin must clear by re-authorizing.
  *
  * Each credential is processed in its own step.run() for isolation.
+ *
+ * CAVEAT: any thrown error — including a transient network blip or a provider
+ * 5xx — marks the credential needs_reauth. There is no transient-vs-permanent
+ * split here the way ingestion.oauth-refresh has one, so a flaky provider costs
+ * the org a manual re-authorization.
  */
 import { and, eq, lt, sql } from "drizzle-orm";
 import { auth as mcpAuth } from "@modelcontextprotocol/sdk/client/auth.js";

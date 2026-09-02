@@ -6,6 +6,7 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import "@oxagen/handlers/register";
 import { Suspense } from "react";
 import { listWorkspaceCredentialStatuses } from "@oxagen/plugins";
+import { logger } from "@oxagen/handlers/logger";
 import { resolveWorkbenchScope } from "@/lib/workbench/scope";
 import {
   installPlugin,
@@ -153,8 +154,11 @@ export default async function AgentToolsMcpPage({
           )
           .orderBy(schema.pluginInstalledPlugins.name),
       ),
-  ).catch((e: unknown) => {
-    console.error("installed MCP server query failed:", e);
+  ).catch((err: unknown) => {
+    logger.error(
+      { err, orgSlug, workspaceSlug },
+      "tools/mcp: installed-server read failed — rendering an empty list",
+    );
     return [] as (typeof schema.pluginInstalledPlugins.$inferSelect)[];
   });
 
@@ -163,8 +167,11 @@ export default async function AgentToolsMcpPage({
   const credentialStatuses = await listWorkspaceCredentialStatuses({
     orgId: org.id,
     workspaceId: ws.id,
-  }).catch((e: unknown) => {
-    console.error("MCP credential status query failed:", e);
+  }).catch((err: unknown) => {
+    logger.error(
+      { err, orgSlug, workspaceSlug },
+      "tools/mcp: credential-status read failed — every server shows as unauthenticated",
+    );
     return [];
   });
   const statusByListing = new Map(
@@ -211,9 +218,12 @@ export default async function AgentToolsMcpPage({
     if (active[0]) {
       firstKey = `${active[0].keyPrefix}${"•".repeat(32)}`;
     }
-  } catch (e) {
+  } catch (err) {
     // Degrade gracefully — snippets fall back to $OXAGEN_API_KEY — but never silently.
-    console.error("API key lookup for MCP snippets failed:", e);
+    logger.error(
+      { err, orgSlug },
+      "tools/mcp: API-key lookup for install snippets failed — using the $OXAGEN_API_KEY placeholder",
+    );
   }
 
   const apiKeyDisplay = firstKey ?? "$OXAGEN_API_KEY";

@@ -751,12 +751,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
 
   // ── Google Maps / Places ────────────────────────────────────────────────────
-  // Used by the onboarding billing-address autocomplete. The KEY is the only
-  // value the feature needs in the browser (lock it down with HTTP-referrer
-  // restrictions in the Google Cloud console). The SECRET var has no current
-  // consumer in the codebase; it is a plain server-only var (no NEXT_PUBLIC_
-  // prefix) — renamed from NEXT_PUBLIC_GOOGLE_MAPS_API_SECRET specifically so
-  // Next.js would stop inlining a signing secret into the client bundle.
+  // NEITHER VAR HAS A CONSUMER. Both were declared for a billing-address
+  // autocomplete in onboarding that does not exist in apps/app: a repo-wide
+  // search for either name finds only this registry and baseEnvSchema. They
+  // still render into .env.example and still ask operators for values, so
+  // either build the address form or delete both entries (and their
+  // baseEnvSchema fields, and regenerate .env.example) — do not leave a
+  // deployed secret standing for a feature nothing calls.
+  //
+  // If the form is built: the KEY is the only value it needs in the browser
+  // (lock it down with HTTP-referrer restrictions in the Google Cloud
+  // console); the SECRET is server-only and must never carry a NEXT_PUBLIC_
+  // prefix, because Next.js inlines every NEXT_PUBLIC_ var into the bundle.
   NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: {
     group: "Google Maps",
     description:
@@ -1822,6 +1828,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  // NONE OF THE FOUR OXAGEN_ROUTING_* VARS BELOW HAS A CONSUMER. Their
+  // descriptions promise the CLI orchestrator reads them; a repo-wide search
+  // finds no reader outside this file, and the fallbacks they name
+  // (`workerModels.defaultCode` / `.cheapBasic`, apps/cli/src/runtime) are the
+  // only thing that ever applies. They still render into .env.example, so an
+  // operator can set one and see nothing happen.
+  //
+  // env-check's dead-declaration warning cannot catch them: it skips every
+  // entry with `services: []` (tools/scripts/env-check.ts), which is every
+  // CLI-group entry here. Wire them up or delete them; do not rely on the
+  // gate to notice.
   OXAGEN_ROUTING_TRIVIAL_MAX: {
     group: "CLI",
     description:

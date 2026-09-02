@@ -11,7 +11,7 @@
  *                  .suggest generates a complete config, pre-filled into the
  *                  editable steps below. Skippable — manual setup is always open.
  *   1. Identity  — name, slug, description, and the "code features" switch
- *                  (persisted as agentType "coding" | "custom").
+ *                  (persisted as agentType "code" | "custom").
  *   2. Prompt    — the inline system prompt / instructions.
  *   3. Equip     — the uniform agentTools[] picker (skills/tools/MCP/subagents).
  *   4. Ground    — GraphAccess: ontology binding, mode, retrieval, budget.

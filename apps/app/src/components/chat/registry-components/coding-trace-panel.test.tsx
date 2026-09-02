@@ -19,13 +19,27 @@ afterEach(cleanup);
 
 vi.mock("@/components/ui/tabs", () => ({
   Tabs: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  TabsList: ({ children }: { children: React.ReactNode }) => <div role="tablist">{children}</div>,
-  TabsTab: ({ children, value }: { children: React.ReactNode; value: string }) => (
+  TabsList: ({ children }: { children: React.ReactNode }) => (
+    <div role="tablist">{children}</div>
+  ),
+  TabsTab: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => (
     <button role="tab" data-value={value} type="button">
       {children}
     </button>
   ),
-  TabsPanel: ({ children, value }: { children: React.ReactNode; value: string }) => (
+  TabsPanel: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => (
     <div role="tabpanel" data-value={value}>
       {children}
     </div>
@@ -48,8 +62,16 @@ describe("CodingTracePanel", () => {
     render(
       <CodingTracePanel
         steps={[
-          { kind: "terminal", durationMs: 2000, terminal: { stdout: "ok", exitCode: 0 } },
-          { kind: "diff", durationMs: 3000, diff: { files: [{ path: "a.ts", patch: SAMPLE_PATCH }] } },
+          {
+            kind: "terminal",
+            durationMs: 2000,
+            terminal: { stdout: "ok", exitCode: 0 },
+          },
+          {
+            kind: "diff",
+            durationMs: 3000,
+            diff: { files: [{ path: "a.ts", patch: SAMPLE_PATCH }] },
+          },
         ]}
       />,
     );
@@ -80,24 +102,40 @@ describe("CodingTracePanel", () => {
 
     const toggle = screen.getByRole("button", { name: /Run overview/ });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(document.querySelector("[data-component='terminal-trace-card']")).not.toBeInTheDocument();
-    expect(document.querySelector("[data-component='code-diff-card']")).not.toBeInTheDocument();
+    expect(
+      document.querySelector("[data-component='terminal-trace-card']"),
+    ).not.toBeInTheDocument();
+    expect(
+      document.querySelector("[data-component='code-diff-card']"),
+    ).not.toBeInTheDocument();
 
     await userEvent.click(toggle);
 
     expect(toggle).toHaveAttribute("aria-expanded", "true");
-    expect(document.querySelector("[data-component='terminal-trace-card']")).toBeInTheDocument();
-    expect(document.querySelector("[data-component='code-diff-card']")).toBeInTheDocument();
+    expect(
+      document.querySelector("[data-component='terminal-trace-card']"),
+    ).toBeInTheDocument();
+    expect(
+      document.querySelector("[data-component='code-diff-card']"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Run tests")).toBeInTheDocument();
     expect(screen.getByText("Apply patch")).toBeInTheDocument();
 
     await userEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(document.querySelector("[data-component='terminal-trace-card']")).not.toBeInTheDocument();
+    expect(
+      document.querySelector("[data-component='terminal-trace-card']"),
+    ).not.toBeInTheDocument();
   });
 
   it("has the coding-trace-panel data-component attribute", () => {
-    render(<CodingTracePanel steps={[{ kind: "terminal", terminal: { stdout: "x" } }]} />);
-    expect(document.querySelector("[data-component='coding-trace-panel']")).toBeInTheDocument();
+    render(
+      <CodingTracePanel
+        steps={[{ kind: "terminal", terminal: { stdout: "x" } }]}
+      />,
+    );
+    expect(
+      document.querySelector("[data-component='coding-trace-panel']"),
+    ).toBeInTheDocument();
   });
 });

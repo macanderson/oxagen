@@ -22,12 +22,15 @@ API keys are service-account credentials. They appear in **Organization → Acce
 
 ## Using the key
 
-Include the key in every request as a Bearer token:
+Include the key in every request as a Bearer token. Every capability route also carries your org and workspace slug in the path:
 
 ```http
-GET /v1/agent/tools
+POST /v1/{orgSlug}/{workspaceSlug}/agent/tools
 Host: api.oxagen.sh
 Authorization: Bearer ox_…
+Content-Type: application/json
+
+{}
 ```
 
 For the MCP server:
@@ -52,7 +55,7 @@ When a key is used:
 
 Go to **Organization → Developer → Tokens** and click **Revoke** next to the key. Revocation is immediate — the next request with the revoked key returns `401 Unauthorized`. An `api_key.revoked` security event is written.
 
-Alternatively, use the `api.key.revoke` capability:
+Alternatively, use the `revoke_api_key` capability:
 
 ```http
 POST /v1/{orgSlug}/{workspaceSlug}/api-keys/revoke
@@ -70,12 +73,14 @@ When creating a key, you assign it capability domain scopes. A key can only invo
 
 | Scope | Capabilities included |
 |---|---|
-| `agent` | All `agent.*` capabilities |
-| `chat` | All `chat.*` and `conversation.*` capabilities |
-| `knowledge` | `agent.memory.*`, `asset.upload` |
-| `billing` | `billing.*` capabilities |
-| `org` | `org.*`, `organization.*`, `workspace.*` capabilities |
-| `plugins` | All `plugin.*` capabilities |
+| `agent` | Agent capabilities — `list_agent_tools`, `execute_code`, `dispatch_subagent`, `create_plan`, and the rest |
+| `chat` | Chat and conversation capabilities — `send_message`, `list_conversations`, `archive_conversation`, … |
+| `knowledge` | Memory and asset capabilities — `recall_memory`, `write_memory`, `upload_asset` |
+| `billing` | Billing capabilities — `get_subscription`, `purchase_credits`, `start_subscription_upgrade` |
+| `org` | Org and workspace capabilities — `create_org`, `add_org_member`, `create_workspace`, … |
+| `plugins` | Plugin capabilities — `install_plugin`, `set_plugin_enabled`, `browse_plugin_catalog`, … |
+
+The [Capabilities](/docs/api/capabilities) page lists the capability names in each domain.
 
 Assign only the scopes a key needs — principle of least privilege.
 

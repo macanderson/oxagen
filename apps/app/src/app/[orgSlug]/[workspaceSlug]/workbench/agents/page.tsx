@@ -81,7 +81,7 @@ export default async function WorkbenchAgentsPage({ params }: PageProps) {
           variant="dashed"
           icon={<Bot />}
           title="No agents in this workspace yet"
-          description="Describe an agent in plain language and the builder drafts its full configuration — prompt, tools, graph access, and triggers."
+          description="Describe an agent in plain language and the builder drafts its full configuration — prompt, tools, and graph access."
           data-testid="agents-empty-state"
           action={
             canManage ? (

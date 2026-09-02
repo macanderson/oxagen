@@ -20,7 +20,7 @@ describe("Label — render", () => {
       <>
         <Label htmlFor="email-input">Email</Label>
         <input id="email-input" />
-      </>
+      </>,
     );
     expect(getByText("Email")).toHaveAttribute("for", "email-input");
   });
@@ -33,7 +33,9 @@ describe("Label — render", () => {
   });
 
   it("merges custom className", () => {
-    const { getByText } = render(<Label className="custom-label">Custom</Label>);
+    const { getByText } = render(
+      <Label className="custom-label">Custom</Label>,
+    );
     expect(getByText("Custom").className).toContain("custom-label");
   });
 });

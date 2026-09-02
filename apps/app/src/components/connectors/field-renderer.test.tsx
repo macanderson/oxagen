@@ -41,7 +41,12 @@ describe("validateField — required", () => {
   });
 
   it("returns 'Required' when array is empty", () => {
-    const arrField: SchemaField = { key: "tags", label: "Tags", widget: "tag-input", validation: { required: true } };
+    const arrField: SchemaField = {
+      key: "tags",
+      label: "Tags",
+      widget: "tag-input",
+      validation: { required: true },
+    };
     expect(validateField(arrField, [])).toBe("Required");
   });
 
@@ -105,7 +110,9 @@ describe("validateField — array minItems/maxItems", () => {
   });
 
   it("returns error when above maxItems", () => {
-    expect(validateField(field, ["a", "b", "c", "d"])).toBe("At most 3 items allowed");
+    expect(validateField(field, ["a", "b", "c", "d"])).toBe(
+      "At most 3 items allowed",
+    );
   });
 
   it("returns null when within bounds", () => {
@@ -122,7 +129,9 @@ describe("validateField — itemPattern", () => {
   };
 
   it("returns error when an item does not match itemPattern", () => {
-    expect(validateField(field, ["valid/repo", "INVALID"])).toBe(`"INVALID" is not a valid format`);
+    expect(validateField(field, ["valid/repo", "INVALID"])).toBe(
+      `"INVALID" is not a valid format`,
+    );
   });
 
   it("returns null when all items match itemPattern", () => {
@@ -132,7 +141,11 @@ describe("validateField — itemPattern", () => {
 
 describe("validateField — no validation", () => {
   it("returns null when no validation rule defined", () => {
-    const field: SchemaField = { key: "notes", label: "Notes", widget: "textarea" };
+    const field: SchemaField = {
+      key: "notes",
+      label: "Notes",
+      widget: "textarea",
+    };
     expect(validateField(field, "anything")).toBeNull();
     expect(validateField(field, undefined)).toBeNull();
   });
@@ -141,7 +154,10 @@ describe("validateField — no validation", () => {
 // ── FieldRenderer widget rendering ────────────────────────────────────────────
 // We test widget rendering via a minimal provider wrapper.
 
-import { ConnectorSchemaProvider, useConnectorSchema } from "./connector-schema-provider";
+import {
+  ConnectorSchemaProvider,
+  useConnectorSchema,
+} from "./connector-schema-provider";
 import { FieldRenderer } from "./field-renderer";
 import type { ConnectorPluginSchema } from "@oxagen/oxagen/contracts/plugin.schema.get";
 
@@ -157,7 +173,13 @@ const BASE_SCHEMA: ConnectorPluginSchema = {
   },
 };
 
-function Wrapper({ field, initialValues = {} }: { field: SchemaField; initialValues?: Record<string, unknown> }) {
+function Wrapper({
+  field,
+  initialValues = {},
+}: {
+  field: SchemaField;
+  initialValues?: Record<string, unknown>;
+}) {
   // Inject initial values by extending schema defaults via defaultValue
   const schema: ConnectorPluginSchema = {
     ...BASE_SCHEMA,
@@ -189,13 +211,23 @@ describe("FieldRenderer — text widget", () => {
   });
 
   it("shows required asterisk for required fields", () => {
-    const field: SchemaField = { key: "n", label: "N", widget: "text", validation: { required: true } };
+    const field: SchemaField = {
+      key: "n",
+      label: "N",
+      widget: "text",
+      validation: { required: true },
+    };
     render(<Wrapper field={field} />);
     expect(screen.getByText("*")).toBeInTheDocument();
   });
 
   it("renders description when provided", () => {
-    const field: SchemaField = { key: "n", label: "N", widget: "text", description: "Help text" };
+    const field: SchemaField = {
+      key: "n",
+      label: "N",
+      widget: "text",
+      description: "Help text",
+    };
     render(<Wrapper field={field} />);
     expect(screen.getByText("Help text")).toBeInTheDocument();
   });
@@ -203,7 +235,11 @@ describe("FieldRenderer — text widget", () => {
 
 describe("FieldRenderer — secret widget", () => {
   it("renders a password input", () => {
-    const field: SchemaField = { key: "token", label: "Token", widget: "secret" };
+    const field: SchemaField = {
+      key: "token",
+      label: "Token",
+      widget: "secret",
+    };
     render(<Wrapper field={field} />);
     const input = screen.getByLabelText("Token");
     expect(input).toHaveAttribute("type", "password");
@@ -212,7 +248,11 @@ describe("FieldRenderer — secret widget", () => {
 
 describe("FieldRenderer — number widget", () => {
   it("renders a number input", () => {
-    const field: SchemaField = { key: "depth", label: "Depth", widget: "number" };
+    const field: SchemaField = {
+      key: "depth",
+      label: "Depth",
+      widget: "number",
+    };
     render(<Wrapper field={field} />);
     const input = screen.getByLabelText("Depth");
     expect(input).toHaveAttribute("type", "number");
@@ -234,7 +274,11 @@ describe("FieldRenderer — number widget", () => {
 
 describe("FieldRenderer — textarea widget", () => {
   it("renders a textarea", () => {
-    const field: SchemaField = { key: "notes", label: "Notes", widget: "textarea" };
+    const field: SchemaField = {
+      key: "notes",
+      label: "Notes",
+      widget: "textarea",
+    };
     render(<Wrapper field={field} />);
     expect(screen.getByRole("textbox")).toBeInTheDocument();
   });
@@ -253,7 +297,12 @@ describe("FieldRenderer — checkbox widget (Switch)", () => {
   });
 
   it("renders the label next to the switch", () => {
-    const field: SchemaField = { key: "enabled", label: "Enable sync", widget: "checkbox", defaultValue: false };
+    const field: SchemaField = {
+      key: "enabled",
+      label: "Enable sync",
+      widget: "checkbox",
+      defaultValue: false,
+    };
     render(<Wrapper field={field} />);
     expect(screen.getByText("Enable sync")).toBeInTheDocument();
   });
@@ -265,7 +314,10 @@ describe("FieldRenderer — select widget", () => {
       key: "mode",
       label: "Mode",
       widget: "select",
-      options: [{ value: "a", label: "Option A" }, { value: "b", label: "Option B" }],
+      options: [
+        { value: "a", label: "Option A" },
+        { value: "b", label: "Option B" },
+      ],
     };
     render(<Wrapper field={field} />);
     // Select trigger is a button
@@ -275,7 +327,11 @@ describe("FieldRenderer — select widget", () => {
 
 describe("FieldRenderer — tag-input widget", () => {
   it("renders the tag input area", () => {
-    const field: SchemaField = { key: "tags", label: "Tags", widget: "tag-input" };
+    const field: SchemaField = {
+      key: "tags",
+      label: "Tags",
+      widget: "tag-input",
+    };
     render(<Wrapper field={field} />);
     // The inner input should be present
     expect(screen.getByLabelText("Add tag")).toBeInTheDocument();
@@ -284,7 +340,11 @@ describe("FieldRenderer — tag-input widget", () => {
 
 describe("FieldRenderer — key-value widget", () => {
   it("renders the key-value editor", () => {
-    const field: SchemaField = { key: "headers", label: "Headers", widget: "key-value" };
+    const field: SchemaField = {
+      key: "headers",
+      label: "Headers",
+      widget: "key-value",
+    };
     render(<Wrapper field={field} />);
     expect(screen.getByText("Add row")).toBeInTheDocument();
   });
@@ -318,8 +378,14 @@ describe("FieldRenderer — multi-select widget", () => {
       ],
     };
     render(<Wrapper field={field} />);
-    expect(screen.getByRole("button", { name: "Type A" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "Type B" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Type A" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Type B" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
   });
 
   it("toggles selection when clicked", async () => {
@@ -366,7 +432,11 @@ describe("FieldRenderer — slider widget", () => {
 
 describe("FieldRenderer — email widget", () => {
   it("renders an email input", () => {
-    const field: SchemaField = { key: "email", label: "Email", widget: "email" };
+    const field: SchemaField = {
+      key: "email",
+      label: "Email",
+      widget: "email",
+    };
     render(<Wrapper field={field} />);
     const input = screen.getByLabelText("Email");
     expect(input).toHaveAttribute("type", "email");
@@ -375,7 +445,11 @@ describe("FieldRenderer — email widget", () => {
 
 describe("FieldRenderer — url widget", () => {
   it("renders a url input", () => {
-    const field: SchemaField = { key: "endpoint", label: "Endpoint", widget: "url" };
+    const field: SchemaField = {
+      key: "endpoint",
+      label: "Endpoint",
+      widget: "url",
+    };
     render(<Wrapper field={field} />);
     const input = screen.getByLabelText("Endpoint");
     expect(input).toHaveAttribute("type", "url");
@@ -384,7 +458,11 @@ describe("FieldRenderer — url widget", () => {
 
 describe("FieldRenderer — tag input interactions", () => {
   it("adds tag on Enter key", async () => {
-    const field: SchemaField = { key: "tags", label: "Tags", widget: "tag-input" };
+    const field: SchemaField = {
+      key: "tags",
+      label: "Tags",
+      widget: "tag-input",
+    };
     render(<Wrapper field={field} />);
     const input = screen.getByLabelText("Add tag");
     await userEvent.type(input, "my-tag{Enter}");
@@ -392,7 +470,11 @@ describe("FieldRenderer — tag input interactions", () => {
   });
 
   it("adds tag on comma key", async () => {
-    const field: SchemaField = { key: "tags", label: "Tags", widget: "tag-input" };
+    const field: SchemaField = {
+      key: "tags",
+      label: "Tags",
+      widget: "tag-input",
+    };
     render(<Wrapper field={field} />);
     const input = screen.getByLabelText("Add tag");
     await userEvent.type(input, "tag1,");
@@ -403,11 +485,23 @@ describe("FieldRenderer — tag input interactions", () => {
     const schema: ConnectorPluginSchema = {
       ...BASE_SCHEMA,
       config: {
-        fields: [{ key: "tags", label: "Tags", widget: "tag-input", defaultValue: ["existing-tag"] }],
+        fields: [
+          {
+            key: "tags",
+            label: "Tags",
+            widget: "tag-input",
+            defaultValue: ["existing-tag"],
+          },
+        ],
       },
     };
     render(
-      <ConnectorSchemaProvider pluginId="test" orgSlug="acme" workspaceSlug="main" initialSchema={schema}>
+      <ConnectorSchemaProvider
+        pluginId="test"
+        orgSlug="acme"
+        workspaceSlug="main"
+        initialSchema={schema}
+      >
         <FieldRenderer field={schema.config!.fields[0]!} />
       </ConnectorSchemaProvider>,
     );
@@ -433,11 +527,23 @@ describe("FieldRenderer — tag input interactions", () => {
     const schema: ConnectorPluginSchema = {
       ...BASE_SCHEMA,
       config: {
-        fields: [{ key: "tags", label: "Tags", widget: "tag-input", defaultValue: ["dup"] }],
+        fields: [
+          {
+            key: "tags",
+            label: "Tags",
+            widget: "tag-input",
+            defaultValue: ["dup"],
+          },
+        ],
       },
     };
     render(
-      <ConnectorSchemaProvider pluginId="test" orgSlug="acme" workspaceSlug="main" initialSchema={schema}>
+      <ConnectorSchemaProvider
+        pluginId="test"
+        orgSlug="acme"
+        workspaceSlug="main"
+        initialSchema={schema}
+      >
         <FieldRenderer field={schema.config!.fields[0]!} />
       </ConnectorSchemaProvider>,
     );
@@ -447,7 +553,11 @@ describe("FieldRenderer — tag input interactions", () => {
   });
 
   it("adds tag on blur when input has value", async () => {
-    const field: SchemaField = { key: "tags", label: "Tags", widget: "tag-input" };
+    const field: SchemaField = {
+      key: "tags",
+      label: "Tags",
+      widget: "tag-input",
+    };
     render(<Wrapper field={field} />);
     const input = screen.getByLabelText("Add tag");
     await userEvent.type(input, "blur-tag");
@@ -474,13 +584,23 @@ describe("FieldRenderer — checkbox interactions", () => {
 
 describe("FieldRenderer — secret-file widget", () => {
   it("renders the secret file upload zone", () => {
-    const field: SchemaField = { key: "credentials", label: "Credentials JSON", widget: "secret-file" };
+    const field: SchemaField = {
+      key: "credentials",
+      label: "Credentials JSON",
+      widget: "secret-file",
+    };
     render(<Wrapper field={field} />);
-    expect(screen.getByRole("button", { name: /upload json file/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /upload json file/i }),
+    ).toBeInTheDocument();
   });
 
   it("shows the field label", () => {
-    const field: SchemaField = { key: "credentials", label: "Service Account", widget: "secret-file" };
+    const field: SchemaField = {
+      key: "credentials",
+      label: "Service Account",
+      widget: "secret-file",
+    };
     render(<Wrapper field={field} />);
     expect(screen.getByText("Service Account")).toBeInTheDocument();
   });
@@ -488,7 +608,12 @@ describe("FieldRenderer — secret-file widget", () => {
 
 describe("FieldRenderer — number interactions", () => {
   it("updates value when number input changes", async () => {
-    const field: SchemaField = { key: "depth", label: "Depth", widget: "number", defaultValue: 90 };
+    const field: SchemaField = {
+      key: "depth",
+      label: "Depth",
+      widget: "number",
+      defaultValue: 90,
+    };
     render(<Wrapper field={field} />);
     const input = screen.getByLabelText("Depth");
     await userEvent.clear(input);
@@ -509,7 +634,13 @@ describe("FieldRenderer — text interactions", () => {
 
 describe("FieldRenderer — error display via context", () => {
   // Test that errors set in formState are shown once field is touched
-  function WrapperWithError({ field, error }: { field: SchemaField; error: string }) {
+  function WrapperWithError({
+    field,
+    error,
+  }: {
+    field: SchemaField;
+    error: string;
+  }) {
     const schema: ConnectorPluginSchema = {
       ...BASE_SCHEMA,
       config: { fields: [field] },
@@ -528,24 +659,39 @@ describe("FieldRenderer — error display via context", () => {
     );
   }
 
-  function ErrorInjector({ fieldKey, errorMsg }: { fieldKey: string; errorMsg: string }) {
+  function ErrorInjector({
+    fieldKey,
+    errorMsg,
+  }: {
+    fieldKey: string;
+    errorMsg: string;
+  }) {
     const ctx = useConnectorSchema();
     React.useEffect(() => {
       ctx.setErrors([{ field: fieldKey, message: errorMsg, code: "required" }]);
       ctx.touchField(fieldKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     return null;
   }
 
   it("shows error message for text field when touched", () => {
-    const field: SchemaField = { key: "name", label: "Name", widget: "text", validation: { required: true } };
+    const field: SchemaField = {
+      key: "name",
+      label: "Name",
+      widget: "text",
+      validation: { required: true },
+    };
     render(<WrapperWithError field={field} error="Required" />);
     expect(screen.getByText("Required")).toBeInTheDocument();
   });
 
   it("shows error message for number field when touched", () => {
-    const field: SchemaField = { key: "count", label: "Count", widget: "number" };
+    const field: SchemaField = {
+      key: "count",
+      label: "Count",
+      widget: "number",
+    };
     render(<WrapperWithError field={field} error="Min value is 1" />);
     expect(screen.getByText("Min value is 1")).toBeInTheDocument();
   });
@@ -562,48 +708,79 @@ describe("FieldRenderer — error display via context", () => {
   });
 
   it("shows error message for secret field when touched", () => {
-    const field: SchemaField = { key: "token", label: "Token", widget: "secret", validation: { required: true } };
+    const field: SchemaField = {
+      key: "token",
+      label: "Token",
+      widget: "secret",
+      validation: { required: true },
+    };
     render(<WrapperWithError field={field} error="Required" />);
     expect(screen.getByText("Required")).toBeInTheDocument();
   });
 
   it("shows error message for textarea field when touched", () => {
-    const field: SchemaField = { key: "notes", label: "Notes", widget: "textarea" };
+    const field: SchemaField = {
+      key: "notes",
+      label: "Notes",
+      widget: "textarea",
+    };
     render(<WrapperWithError field={field} error="Too long" />);
     expect(screen.getByText("Too long")).toBeInTheDocument();
   });
 
   it("shows error message for checkbox field when touched", () => {
-    const field: SchemaField = { key: "agree", label: "Agree", widget: "checkbox" };
+    const field: SchemaField = {
+      key: "agree",
+      label: "Agree",
+      widget: "checkbox",
+    };
     render(<WrapperWithError field={field} error="Must agree" />);
     expect(screen.getByText("Must agree")).toBeInTheDocument();
   });
 
   it("shows error message for tag-input field when touched", () => {
-    const field: SchemaField = { key: "tags", label: "Tags", widget: "tag-input" };
+    const field: SchemaField = {
+      key: "tags",
+      label: "Tags",
+      widget: "tag-input",
+    };
     render(<WrapperWithError field={field} error="At least 1 required" />);
     expect(screen.getByText("At least 1 required")).toBeInTheDocument();
   });
 
   it("shows error message for secret-file field when touched", () => {
-    const field: SchemaField = { key: "creds", label: "Credentials", widget: "secret-file" };
+    const field: SchemaField = {
+      key: "creds",
+      label: "Credentials",
+      widget: "secret-file",
+    };
     render(<WrapperWithError field={field} error="File required" />);
     expect(screen.getByText("File required")).toBeInTheDocument();
   });
 });
 
 describe("FieldRenderer — secret-file onChange callback", () => {
-  function ValueSetter({ fieldKey, value }: { fieldKey: string; value: unknown }) {
+  function ValueSetter({
+    fieldKey,
+    value,
+  }: {
+    fieldKey: string;
+    value: unknown;
+  }) {
     const ctx = useConnectorSchema();
     React.useEffect(() => {
       ctx.setFieldValue(fieldKey, value);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     return null;
   }
 
   it("calls setFieldValue when file is cleared via SecretFileUpload", async () => {
-    const field: SchemaField = { key: "credentials", label: "Credentials JSON", widget: "secret-file" };
+    const field: SchemaField = {
+      key: "credentials",
+      label: "Credentials JSON",
+      widget: "secret-file",
+    };
     const schema: ConnectorPluginSchema = {
       ...BASE_SCHEMA,
       config: { fields: [field] },
@@ -620,17 +797,25 @@ describe("FieldRenderer — secret-file onChange callback", () => {
       </ConnectorSchemaProvider>,
     );
     // When a value exists, SecretFileUpload renders a "Clear" button
-    const clearBtn = await screen.findByRole("button", { name: /clear uploaded file/i });
+    const clearBtn = await screen.findByRole("button", {
+      name: /clear uploaded file/i,
+    });
     await userEvent.click(clearBtn);
     // After clearing, the drop zone should appear again
-    expect(screen.getByRole("button", { name: /upload json file/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /upload json file/i }),
+    ).toBeInTheDocument();
   });
 });
 
 describe("FieldRenderer — fallback for unknown widget type", () => {
   it("renders text input for unknown widget type", () => {
     // Force an unknown widget type via type cast
-    const field = { key: "custom", label: "Custom Field", widget: "date" } as unknown as SchemaField;
+    const field = {
+      key: "custom",
+      label: "Custom Field",
+      widget: "date",
+    } as unknown as SchemaField;
     render(<Wrapper field={field} />);
     // Should render a text input (fallback)
     const input = screen.getByLabelText("Custom Field");
@@ -638,7 +823,11 @@ describe("FieldRenderer — fallback for unknown widget type", () => {
   });
 
   it("updates value in fallback text input", async () => {
-    const field = { key: "custom", label: "Custom", widget: "date" } as unknown as SchemaField;
+    const field = {
+      key: "custom",
+      label: "Custom",
+      widget: "date",
+    } as unknown as SchemaField;
     render(<Wrapper field={field} />);
     const input = screen.getByLabelText("Custom");
     await userEvent.type(input, "hello");

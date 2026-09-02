@@ -10,7 +10,11 @@
  */
 
 import { describe, it, expect, afterEach } from "vitest";
-import { inferLang, highlightLine, __resetDiffHighlighter } from "./diff-syntax";
+import {
+  inferLang,
+  highlightLine,
+  __resetDiffHighlighter,
+} from "./diff-syntax";
 
 afterEach(() => __resetDiffHighlighter());
 

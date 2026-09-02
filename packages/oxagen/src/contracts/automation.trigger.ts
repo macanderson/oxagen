@@ -9,7 +9,11 @@ export const automationTrigger = registerCapability({
   surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "docs", "mcp", "app"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "medium", category: "automation" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "medium",
+    category: "automation",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {

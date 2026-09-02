@@ -21,7 +21,13 @@
  */
 
 import * as React from "react";
-import { render, screen, cleanup, within, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  within,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { RepoOption } from "@/components/chat/repo-selector";
@@ -34,7 +40,9 @@ vi.mock("./coding-agent-preferences-actions", () => ({
   updateCodingAgentPreferencesAction: mockAction,
 }));
 
-const SelectContext = React.createContext<{ onValueChange?: (v: string) => void }>({});
+const SelectContext = React.createContext<{
+  onValueChange?: (v: string) => void;
+}>({});
 
 vi.mock("@/components/ui/select", () => ({
   Select: ({
@@ -50,12 +58,24 @@ vi.mock("@/components/ui/select", () => ({
       <div data-current-value={value}>{children}</div>
     </SelectContext.Provider>
   ),
-  SelectTrigger: ({ children, id }: { children: React.ReactNode; id?: string }) => (
-    <div id={id}>{children}</div>
-  ),
+  SelectTrigger: ({
+    children,
+    id,
+  }: {
+    children: React.ReactNode;
+    id?: string;
+  }) => <div id={id}>{children}</div>,
   SelectValue: () => null,
-  SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => {
+  SelectPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectItem: ({
+    value,
+    children,
+  }: {
+    value: string;
+    children: React.ReactNode;
+  }) => {
     const { onValueChange } = React.useContext(SelectContext);
     return (
       <button type="button" onClick={() => onValueChange?.(value)}>
@@ -73,8 +93,20 @@ afterEach(() => {
 });
 
 const REPOS: RepoOption[] = [
-  { key: "con-1::acme/repo-a", connectionId: "con-1", owner: "acme", name: "repo-a", defaultBranch: "main" },
-  { key: "con-1::acme/repo-b", connectionId: "con-1", owner: "acme", name: "repo-b", defaultBranch: "main" },
+  {
+    key: "con-1::acme/repo-a",
+    connectionId: "con-1",
+    owner: "acme",
+    name: "repo-a",
+    defaultBranch: "main",
+  },
+  {
+    key: "con-1::acme/repo-b",
+    connectionId: "con-1",
+    owner: "acme",
+    name: "repo-b",
+    defaultBranch: "main",
+  },
 ];
 const ENVIRONMENTS: EnvironmentOption[] = [
   { id: "env-1", name: "Sandbox", isDefault: true },
@@ -117,13 +149,19 @@ describe("CodingAgentPreferencesForm", () => {
   it("defaults all three fields to 'No default' when nothing is saved", () => {
     render(<CodingAgentPreferencesForm {...baseProps()} />);
     expect(
-      within(fieldScope("Default repository")).getByRole("button", { name: "No default" }),
+      within(fieldScope("Default repository")).getByRole("button", {
+        name: "No default",
+      }),
     ).toBeInTheDocument();
     expect(
-      within(fieldScope("Default environment")).getByRole("button", { name: "No default" }),
+      within(fieldScope("Default environment")).getByRole("button", {
+        name: "No default",
+      }),
     ).toBeInTheDocument();
     expect(
-      within(fieldScope("Default agent")).getByRole("button", { name: "No default" }),
+      within(fieldScope("Default agent")).getByRole("button", {
+        name: "No default",
+      }),
     ).toBeInTheDocument();
   });
 
@@ -138,11 +176,17 @@ describe("CodingAgentPreferencesForm", () => {
       />,
     );
     // The mocked Select wraps its children in a div carrying data-current-value.
-    const repoDiv = fieldScope("Default repository").querySelector("[data-current-value]");
+    const repoDiv = fieldScope("Default repository").querySelector(
+      "[data-current-value]",
+    );
     expect(repoDiv).toHaveAttribute("data-current-value", "con-1::acme/repo-b");
-    const envDiv = fieldScope("Default environment").querySelector("[data-current-value]");
+    const envDiv = fieldScope("Default environment").querySelector(
+      "[data-current-value]",
+    );
     expect(envDiv).toHaveAttribute("data-current-value", "env-2");
-    const agentDiv = fieldScope("Default agent").querySelector("[data-current-value]");
+    const agentDiv = fieldScope("Default agent").querySelector(
+      "[data-current-value]",
+    );
     expect(agentDiv).toHaveAttribute("data-current-value", "agt_1");
   });
 
@@ -154,9 +198,13 @@ describe("CodingAgentPreferencesForm", () => {
         initialAgentId="agt_stale"
       />,
     );
-    const envDiv = fieldScope("Default environment").querySelector("[data-current-value]");
+    const envDiv = fieldScope("Default environment").querySelector(
+      "[data-current-value]",
+    );
     expect(envDiv).toHaveAttribute("data-current-value", "__unset__");
-    const agentDiv = fieldScope("Default agent").querySelector("[data-current-value]");
+    const agentDiv = fieldScope("Default agent").querySelector(
+      "[data-current-value]",
+    );
     expect(agentDiv).toHaveAttribute("data-current-value", "__unset__");
   });
 
@@ -165,16 +213,24 @@ describe("CodingAgentPreferencesForm", () => {
     render(<CodingAgentPreferencesForm {...baseProps()} />);
 
     await userEvent.click(
-      within(fieldScope("Default repository")).getByRole("button", { name: "acme/repo-a" }),
+      within(fieldScope("Default repository")).getByRole("button", {
+        name: "acme/repo-a",
+      }),
     );
     await userEvent.click(
-      within(fieldScope("Default environment")).getByRole("button", { name: /Staging/ }),
+      within(fieldScope("Default environment")).getByRole("button", {
+        name: /Staging/,
+      }),
     );
     await userEvent.click(
-      within(fieldScope("Default agent")).getByRole("button", { name: "Coder" }),
+      within(fieldScope("Default agent")).getByRole("button", {
+        name: "Coder",
+      }),
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Save preferences" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save preferences" }),
+    );
 
     await waitFor(() => expect(mockAction).toHaveBeenCalledTimes(1));
     expect(mockAction).toHaveBeenCalledWith({
@@ -201,15 +257,23 @@ describe("CodingAgentPreferencesForm", () => {
     );
 
     await userEvent.click(
-      within(fieldScope("Default repository")).getByRole("button", { name: "No default" }),
+      within(fieldScope("Default repository")).getByRole("button", {
+        name: "No default",
+      }),
     );
     await userEvent.click(
-      within(fieldScope("Default environment")).getByRole("button", { name: "No default" }),
+      within(fieldScope("Default environment")).getByRole("button", {
+        name: "No default",
+      }),
     );
     await userEvent.click(
-      within(fieldScope("Default agent")).getByRole("button", { name: "No default" }),
+      within(fieldScope("Default agent")).getByRole("button", {
+        name: "No default",
+      }),
     );
-    await userEvent.click(screen.getByRole("button", { name: "Save preferences" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save preferences" }),
+    );
 
     await waitFor(() => expect(mockAction).toHaveBeenCalledTimes(1));
     expect(mockAction).toHaveBeenCalledWith(
@@ -223,10 +287,15 @@ describe("CodingAgentPreferencesForm", () => {
   });
 
   it("shows an inline error and does not throw when the action fails", async () => {
-    mockAction.mockResolvedValue({ ok: false, error: "Failed to save coding-agent preferences." });
+    mockAction.mockResolvedValue({
+      ok: false,
+      error: "Failed to save coding-agent preferences.",
+    });
     render(<CodingAgentPreferencesForm {...baseProps()} />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Save preferences" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save preferences" }),
+    );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Failed to save coding-agent preferences.",

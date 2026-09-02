@@ -22,6 +22,8 @@ export default async function pluginCatalogGetTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(pluginCatalogGet.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(pluginCatalogGet.name, args, ctx, {
+    surface: "mcp",
+  });
   return pluginCatalogGet.output.parse(output);
 }

@@ -62,11 +62,15 @@ describe("seedWorkspaceDefaultRegistry", () => {
     mocks.registryInsertValuesReturning.mockClear();
     // Restore defaults
     mocks.registryFindFirst.mockResolvedValue(undefined);
-    mocks.registryInsertValuesReturning.mockResolvedValue([{ id: "mreg_abc123" }]);
+    mocks.registryInsertValuesReturning.mockResolvedValue([
+      { id: "mreg_abc123" },
+    ]);
     mocks.registryInsertValues.mockReturnValue({
       returning: mocks.registryInsertValuesReturning,
     });
-    mocks.registryInsert.mockReturnValue({ values: mocks.registryInsertValues });
+    mocks.registryInsert.mockReturnValue({
+      values: mocks.registryInsertValues,
+    });
   });
 
   it("inserts exactly one registry row when none exists", async () => {
@@ -77,17 +81,22 @@ describe("seedWorkspaceDefaultRegistry", () => {
 
   it("inserted values include is_default=true and the correct base_url (no /v0.1/servers suffix)", async () => {
     await seedWorkspaceDefaultRegistry({ orgId, workspaceId });
-    const insertPayload = mocks.registryInsertValues.mock.calls[0]?.[0] as Record<string, unknown>;
+    const insertPayload = mocks.registryInsertValues.mock
+      .calls[0]?.[0] as Record<string, unknown>;
     expect(insertPayload).toBeDefined();
     expect(insertPayload["isDefault"]).toBe(true);
-    expect(insertPayload["baseUrl"]).toBe("https://registry.modelcontextprotocol.io");
+    expect(insertPayload["baseUrl"]).toBe(
+      "https://registry.modelcontextprotocol.io",
+    );
     expect(insertPayload["enabled"]).toBe(true);
     expect(insertPayload["orgId"]).toBe(orgId);
     expect(insertPayload["workspaceId"]).toBe(workspaceId);
   });
 
   it("the exported OFFICIAL_MCP_REGISTRY_BASE_URL has no /v0.1/servers suffix", () => {
-    expect(OFFICIAL_MCP_REGISTRY_BASE_URL).toBe("https://registry.modelcontextprotocol.io");
+    expect(OFFICIAL_MCP_REGISTRY_BASE_URL).toBe(
+      "https://registry.modelcontextprotocol.io",
+    );
   });
 
   it("the exported OFFICIAL_MCP_REGISTRY_NAME is correct", () => {
@@ -104,16 +113,18 @@ describe("seedWorkspaceDefaultRegistry", () => {
   });
 
   it("returns the newly inserted registry id", async () => {
-    mocks.registryInsertValuesReturning.mockResolvedValue([{ id: "mreg_fresh_789" }]);
+    mocks.registryInsertValuesReturning.mockResolvedValue([
+      { id: "mreg_fresh_789" },
+    ]);
     const id = await seedWorkspaceDefaultRegistry({ orgId, workspaceId });
     expect(id).toBe("mreg_fresh_789");
   });
 
   it("throws when the insert returns no row (DB anomaly guard)", async () => {
     mocks.registryInsertValuesReturning.mockResolvedValue([]);
-    await expect(seedWorkspaceDefaultRegistry({ orgId, workspaceId })).rejects.toThrow(
-      "registry insert returned no row",
-    );
+    await expect(
+      seedWorkspaceDefaultRegistry({ orgId, workspaceId }),
+    ).rejects.toThrow("registry insert returned no row");
   });
 
   it("produces exactly one default registry (not zero, not two)", async () => {
@@ -139,11 +150,15 @@ describe("seedWorkspaceDefaultRegistrySystem", () => {
     mocks.registryInsertValuesReturning.mockClear();
     // Restore defaults
     mocks.registryFindFirst.mockResolvedValue(undefined);
-    mocks.registryInsertValuesReturning.mockResolvedValue([{ id: "mreg_sys_abc" }]);
+    mocks.registryInsertValuesReturning.mockResolvedValue([
+      { id: "mreg_sys_abc" },
+    ]);
     mocks.registryInsertValues.mockReturnValue({
       returning: mocks.registryInsertValuesReturning,
     });
-    mocks.registryInsert.mockReturnValue({ values: mocks.registryInsertValues });
+    mocks.registryInsert.mockReturnValue({
+      values: mocks.registryInsertValues,
+    });
   });
 
   it("inserts exactly one registry row when none exists (System variant)", async () => {
@@ -154,10 +169,13 @@ describe("seedWorkspaceDefaultRegistrySystem", () => {
 
   it("inserted values include is_default=true and the correct base_url (System variant)", async () => {
     await seedWorkspaceDefaultRegistrySystem({ orgId, workspaceId });
-    const insertPayload = mocks.registryInsertValues.mock.calls[0]?.[0] as Record<string, unknown>;
+    const insertPayload = mocks.registryInsertValues.mock
+      .calls[0]?.[0] as Record<string, unknown>;
     expect(insertPayload).toBeDefined();
     expect(insertPayload["isDefault"]).toBe(true);
-    expect(insertPayload["baseUrl"]).toBe("https://registry.modelcontextprotocol.io");
+    expect(insertPayload["baseUrl"]).toBe(
+      "https://registry.modelcontextprotocol.io",
+    );
     expect(insertPayload["enabled"]).toBe(true);
     expect(insertPayload["orgId"]).toBe(orgId);
     expect(insertPayload["workspaceId"]).toBe(workspaceId);
@@ -172,25 +190,35 @@ describe("seedWorkspaceDefaultRegistrySystem", () => {
 
   it("throws when the insert returns no row (DB anomaly guard — System variant)", async () => {
     mocks.registryInsertValuesReturning.mockResolvedValue([]);
-    await expect(seedWorkspaceDefaultRegistrySystem({ orgId, workspaceId })).rejects.toThrow(
-      "registry insert returned no row",
-    );
+    await expect(
+      seedWorkspaceDefaultRegistrySystem({ orgId, workspaceId }),
+    ).rejects.toThrow("registry insert returned no row");
   });
 
   it("System variant shares the same runSeed logic as the tenant variant (same insert shape)", async () => {
     await seedWorkspaceDefaultRegistrySystem({ orgId, workspaceId });
-    const sysPayload = mocks.registryInsertValues.mock.calls[0]?.[0] as Record<string, unknown>;
+    const sysPayload = mocks.registryInsertValues.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
 
     mocks.registryInsert.mockClear();
     mocks.registryInsertValues.mockClear();
     mocks.registryInsertValuesReturning.mockClear();
     mocks.registryFindFirst.mockResolvedValue(undefined);
-    mocks.registryInsertValuesReturning.mockResolvedValue([{ id: "mreg_tenant_abc" }]);
-    mocks.registryInsertValues.mockReturnValue({ returning: mocks.registryInsertValuesReturning });
-    mocks.registryInsert.mockReturnValue({ values: mocks.registryInsertValues });
+    mocks.registryInsertValuesReturning.mockResolvedValue([
+      { id: "mreg_tenant_abc" },
+    ]);
+    mocks.registryInsertValues.mockReturnValue({
+      returning: mocks.registryInsertValuesReturning,
+    });
+    mocks.registryInsert.mockReturnValue({
+      values: mocks.registryInsertValues,
+    });
 
     await seedWorkspaceDefaultRegistry({ orgId, workspaceId });
-    const tenantPayload = mocks.registryInsertValues.mock.calls[0]?.[0] as Record<string, unknown>;
+    const tenantPayload = mocks.registryInsertValues.mock
+      .calls[0]?.[0] as Record<string, unknown>;
 
     // Both variants produce the same insert payload shape.
     expect(sysPayload["isDefault"]).toBe(tenantPayload["isDefault"]);

@@ -20,7 +20,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Mocks (hoisted) ───────────────────────────────────────────────────────────
 
-type ListingRow = { name: string; pluginType: string; enabled: boolean; deletedAt: Date | null };
+type ListingRow = {
+  name: string;
+  pluginType: string;
+  enabled: boolean;
+  deletedAt: Date | null;
+};
 
 let mockListingRows: ListingRow[] = [];
 let dbCallCount = 0;
@@ -64,7 +69,11 @@ function makeTx() {
 vi.mock("@oxagen/oxagen/plugins", () => ({
   pluginForContract: (name: string) => {
     if (name === "generate_svg")
-      return { id: "oxagen/media-svg", name: "SVG Generation", contracts: ["generate_svg"] };
+      return {
+        id: "oxagen/media-svg",
+        name: "SVG Generation",
+        contracts: ["generate_svg"],
+      };
     if (name === "generate_document")
       return {
         id: "oxagen/documents",
@@ -116,11 +125,13 @@ describe("listEntitledCapabilityPluginIds", () => {
   });
 
   it("returns enabled agent_capability plugin ids", async () => {
-    const { listEntitledCapabilityPluginIds, clearEntitlementCacheForTests } = await import(
-      "./entitlement-service"
-    );
+    const { listEntitledCapabilityPluginIds, clearEntitlementCacheForTests } =
+      await import("./entitlement-service");
     clearEntitlementCacheForTests();
-    mockListingRows = [listing("oxagen/media-svg"), listing("oxagen/documents")];
+    mockListingRows = [
+      listing("oxagen/media-svg"),
+      listing("oxagen/documents"),
+    ];
     const result = await listEntitledCapabilityPluginIds("org-1", WS);
     expect(result.has("oxagen/media-svg")).toBe(true);
     expect(result.has("oxagen/documents")).toBe(true);
@@ -128,9 +139,8 @@ describe("listEntitledCapabilityPluginIds", () => {
   });
 
   it("excludes soft-deleted listings (deletedAt is not null)", async () => {
-    const { listEntitledCapabilityPluginIds, clearEntitlementCacheForTests } = await import(
-      "./entitlement-service"
-    );
+    const { listEntitledCapabilityPluginIds, clearEntitlementCacheForTests } =
+      await import("./entitlement-service");
     clearEntitlementCacheForTests();
     mockListingRows = [
       listing("oxagen/media-svg"),
@@ -142,9 +152,8 @@ describe("listEntitledCapabilityPluginIds", () => {
   });
 
   it("excludes disabled listings (enabled=false)", async () => {
-    const { listEntitledCapabilityPluginIds, clearEntitlementCacheForTests } = await import(
-      "./entitlement-service"
-    );
+    const { listEntitledCapabilityPluginIds, clearEntitlementCacheForTests } =
+      await import("./entitlement-service");
     clearEntitlementCacheForTests();
     mockListingRows = [listing("oxagen/media-svg", { enabled: false })];
     const result = await listEntitledCapabilityPluginIds("org-3", WS);
@@ -153,20 +162,20 @@ describe("listEntitledCapabilityPluginIds", () => {
   });
 
   it("ignores non-capability listings (e.g. mcp_server)", async () => {
-    const { listEntitledCapabilityPluginIds, clearEntitlementCacheForTests } = await import(
-      "./entitlement-service"
-    );
+    const { listEntitledCapabilityPluginIds, clearEntitlementCacheForTests } =
+      await import("./entitlement-service");
     clearEntitlementCacheForTests();
-    mockListingRows = [listing("some-mcp-server", { pluginType: "mcp_server" })];
+    mockListingRows = [
+      listing("some-mcp-server", { pluginType: "mcp_server" }),
+    ];
     const result = await listEntitledCapabilityPluginIds("org-4", WS);
     expect(result.has("some-mcp-server")).toBe(false);
     expect(result.size).toBe(0);
   });
 
   it("hits the TTL cache — DB is queried once for two calls within TTL (same org+workspace)", async () => {
-    const { listEntitledCapabilityPluginIds, clearEntitlementCacheForTests } = await import(
-      "./entitlement-service"
-    );
+    const { listEntitledCapabilityPluginIds, clearEntitlementCacheForTests } =
+      await import("./entitlement-service");
     clearEntitlementCacheForTests();
     mockListingRows = [listing("oxagen/media-svg")];
     await listEntitledCapabilityPluginIds("org-6", WS);
@@ -175,9 +184,8 @@ describe("listEntitledCapabilityPluginIds", () => {
   });
 
   it("does NOT share cache across workspaces (different workspaceId re-queries)", async () => {
-    const { listEntitledCapabilityPluginIds, clearEntitlementCacheForTests } = await import(
-      "./entitlement-service"
-    );
+    const { listEntitledCapabilityPluginIds, clearEntitlementCacheForTests } =
+      await import("./entitlement-service");
     clearEntitlementCacheForTests();
     mockListingRows = [listing("oxagen/media-svg")];
     await listEntitledCapabilityPluginIds("org-6", "ws-a");
@@ -186,9 +194,8 @@ describe("listEntitledCapabilityPluginIds", () => {
   });
 
   it("clearEntitlementCacheForTests forces a re-query on next call", async () => {
-    const { listEntitledCapabilityPluginIds, clearEntitlementCacheForTests } = await import(
-      "./entitlement-service"
-    );
+    const { listEntitledCapabilityPluginIds, clearEntitlementCacheForTests } =
+      await import("./entitlement-service");
     clearEntitlementCacheForTests();
     mockListingRows = [listing("oxagen/media-svg")];
     await listEntitledCapabilityPluginIds("org-7", WS);
@@ -206,9 +213,8 @@ describe("capabilityEntitlementGate", () => {
   });
 
   it("no-ops for unclaimed (builtin) contracts", async () => {
-    const { capabilityEntitlementGate, clearEntitlementCacheForTests } = await import(
-      "./entitlement-service"
-    );
+    const { capabilityEntitlementGate, clearEntitlementCacheForTests } =
+      await import("./entitlement-service");
     clearEntitlementCacheForTests();
     await expect(
       capabilityEntitlementGate("workspace.documents.list", "org-builtin", WS),
@@ -216,9 +222,8 @@ describe("capabilityEntitlementGate", () => {
   });
 
   it("passes (no throw) for an entitled claimed contract", async () => {
-    const { capabilityEntitlementGate, clearEntitlementCacheForTests } = await import(
-      "./entitlement-service"
-    );
+    const { capabilityEntitlementGate, clearEntitlementCacheForTests } =
+      await import("./entitlement-service");
     clearEntitlementCacheForTests();
     mockListingRows = [listing("oxagen/media-svg")];
     await expect(
@@ -227,9 +232,8 @@ describe("capabilityEntitlementGate", () => {
   });
 
   it("throws capability_not_installed for a claimed but unentitled contract", async () => {
-    const { capabilityEntitlementGate, clearEntitlementCacheForTests } = await import(
-      "./entitlement-service"
-    );
+    const { capabilityEntitlementGate, clearEntitlementCacheForTests } =
+      await import("./entitlement-service");
     clearEntitlementCacheForTests();
     mockListingRows = [];
     await expect(

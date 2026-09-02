@@ -80,7 +80,11 @@ export function ChatHeaderDesktop({
     ? modelLabelOf(state.model)
     : tierLabel(state.tier ?? "fast");
 
-  const parts = sessionSubtitleParts(state, { repos, environments, modelLabel });
+  const parts = sessionSubtitleParts(state, {
+    repos,
+    environments,
+    modelLabel,
+  });
   const repoSegment = parts.repo
     ? parts.branch
       ? `${middleEllipsis(parts.repo)} @ ${parts.branch}`

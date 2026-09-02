@@ -58,7 +58,15 @@ export interface BadgeProps
   dot?: boolean;
 }
 
-function Badge({ className, variant, size, render, dot, children, ...props }: BadgeProps) {
+function Badge({
+  className,
+  variant,
+  size,
+  render,
+  dot,
+  children,
+  ...props
+}: BadgeProps) {
   return useRender({
     render: render ?? <span />,
     props: {
@@ -68,7 +76,10 @@ function Badge({ className, variant, size, render, dot, children, ...props }: Ba
       // `render` element), so label content renders in both cases.
       children: dot ? (
         <>
-          <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-current opacity-80" />
+          <span
+            aria-hidden="true"
+            className="size-1.5 shrink-0 rounded-full bg-current opacity-80"
+          />
           {children}
         </>
       ) : (

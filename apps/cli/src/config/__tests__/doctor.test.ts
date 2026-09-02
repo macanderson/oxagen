@@ -4,7 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getConfigScopePaths, clearWorkspaceConfigCache } from "../resolve.js";
 import type { WorkspaceConfig, ConfigScope } from "../schema.js";
-import { runConfigDoctor, formatDoctorReport, flattenScopePaths, type DoctorOptions } from "../doctor.js";
+import {
+  runConfigDoctor,
+  formatDoctorReport,
+  flattenScopePaths,
+  type DoctorOptions,
+} from "../doctor.js";
 
 let cwd: string;
 let homeDir: string;
@@ -24,7 +29,10 @@ function opts(env: Record<string, string | undefined> = {}): DoctorOptions {
 }
 
 function write(scope: ConfigScope, body: WorkspaceConfig): void {
-  const paths = getConfigScopePaths(cwd, { managedConfigPath: managedPath, userConfigPath: userPath });
+  const paths = getConfigScopePaths(cwd, {
+    managedConfigPath: managedPath,
+    userConfigPath: userPath,
+  });
   mkdirSync(join(paths[scope], ".."), { recursive: true });
   writeFileSync(paths[scope], JSON.stringify(body), "utf8");
 }
@@ -59,7 +67,11 @@ describe("flattenScopePaths", () => {
       vision: { statement: "ship", goals: ["a", "b"] },
       vcs: { commit: { convention: "cc" } },
     } as WorkspaceConfig);
-    expect(paths.sort()).toEqual(["vcs.commit.convention", "vision.goals", "vision.statement"]);
+    expect(paths.sort()).toEqual([
+      "vcs.commit.convention",
+      "vision.goals",
+      "vision.statement",
+    ]);
   });
 });
 
@@ -67,13 +79,23 @@ describe("runConfigDoctor — tier chain", () => {
   it("reports the four tiers most-specific-first with presence", () => {
     write("workspace", { workspaceSlug: "ws" });
     const report = runConfigDoctor(cwd, opts());
-    expect(report.tiers.map((t) => t.scope)).toEqual(["repo", "workspace", "user", "org"]);
-    expect(report.tiers.find((t) => t.scope === "workspace")?.present).toBe(true);
+    expect(report.tiers.map((t) => t.scope)).toEqual([
+      "repo",
+      "workspace",
+      "user",
+      "org",
+    ]);
+    expect(report.tiers.find((t) => t.scope === "workspace")?.present).toBe(
+      true,
+    );
     expect(report.tiers.find((t) => t.scope === "org")?.present).toBe(false);
   });
 
   it("flags an unparseable scope file as an error finding", () => {
-    const paths = getConfigScopePaths(cwd, { managedConfigPath: managedPath, userConfigPath: userPath });
+    const paths = getConfigScopePaths(cwd, {
+      managedConfigPath: managedPath,
+      userConfigPath: userPath,
+    });
     mkdirSync(join(paths.repo, ".."), { recursive: true });
     writeFileSync(paths.repo, "{ not json", "utf8");
     const report = runConfigDoctor(cwd, opts());
@@ -87,7 +109,9 @@ describe("runConfigDoctor — governance and shadowing", () => {
     write("org", { packageManagers: { primary: "pnpm" } });
     write("repo", { packageManagers: { primary: "npm" } });
     const report = runConfigDoctor(cwd, opts());
-    const overridden = report.findings.find((f) => f.title.includes("packageManagers.primary"));
+    const overridden = report.findings.find((f) =>
+      f.title.includes("packageManagers.primary"),
+    );
     expect(overridden?.severity).toBe("warn");
     expect(overridden?.detail).toContain("org");
   });
@@ -96,13 +120,20 @@ describe("runConfigDoctor — governance and shadowing", () => {
     write("user", { packageManagers: { primary: "pnpm" } });
     write("repo", { packageManagers: { primary: "bun" } });
     const report = runConfigDoctor(cwd, opts());
-    expect(report.findings.some((f) => f.title.includes("overridden"))).toBe(false);
+    expect(report.findings.some((f) => f.title.includes("overridden"))).toBe(
+      false,
+    );
   });
 
   it("reports env vars that shadow file config", () => {
     write("workspace", { workspaceSlug: "ws" });
-    const report = runConfigDoctor(cwd, opts({ OXAGEN_MODEL: "openai/gpt-5", OXAGEN_EFFORT: "high" }));
-    const env = report.findings.find((f) => f.title.includes("Environment variables"));
+    const report = runConfigDoctor(
+      cwd,
+      opts({ OXAGEN_MODEL: "openai/gpt-5", OXAGEN_EFFORT: "high" }),
+    );
+    const env = report.findings.find((f) =>
+      f.title.includes("Environment variables"),
+    );
     expect(env?.detail).toContain("OXAGEN_MODEL");
     expect(env?.detail).toContain("OXAGEN_EFFORT");
   });
@@ -124,25 +155,39 @@ describe("runConfigDoctor — governance and shadowing", () => {
     it("does not warn when the shell does not export a declared settings.env key", () => {
       writeProjectSettings({ env: { MY_TOKEN: "from-settings" } });
       const report = runConfigDoctor(cwd, opts({}));
-      expect(report.findings.some((f) => f.title.includes("MY_TOKEN"))).toBe(false);
+      expect(report.findings.some((f) => f.title.includes("MY_TOKEN"))).toBe(
+        false,
+      );
     });
 
     it("diffs settings.model against OXAGEN_MODEL specifically (not just the generic env list)", () => {
       writeProjectSettings({ model: "vendor/from-settings" });
-      const report = runConfigDoctor(cwd, opts({ OXAGEN_MODEL: "vendor/from-shell" }));
-      const finding = report.findings.find((f) => f.title.includes("OXAGEN_MODEL"));
+      const report = runConfigDoctor(
+        cwd,
+        opts({ OXAGEN_MODEL: "vendor/from-shell" }),
+      );
+      const finding = report.findings.find((f) =>
+        f.title.includes("OXAGEN_MODEL"),
+      );
       expect(finding?.severity).toBe("warn");
       expect(finding?.detail).toContain("project settings");
       // Superseded by the per-key finding — no longer double-reported in the
       // generic "Environment variables are overriding file config" bucket.
-      const generic = report.findings.find((f) => f.title.includes("Environment variables are overriding"));
+      const generic = report.findings.find((f) =>
+        f.title.includes("Environment variables are overriding"),
+      );
       expect(generic?.detail ?? "").not.toContain("OXAGEN_MODEL");
     });
 
     it("still reports OXAGEN_EFFORT (no settings.json equivalent) via the generic fallback list", () => {
       writeProjectSettings({ model: "vendor/from-settings" });
-      const report = runConfigDoctor(cwd, opts({ OXAGEN_MODEL: "vendor/from-shell", OXAGEN_EFFORT: "high" }));
-      const generic = report.findings.find((f) => f.title.includes("Environment variables are overriding"));
+      const report = runConfigDoctor(
+        cwd,
+        opts({ OXAGEN_MODEL: "vendor/from-shell", OXAGEN_EFFORT: "high" }),
+      );
+      const generic = report.findings.find((f) =>
+        f.title.includes("Environment variables are overriding"),
+      );
       expect(generic?.detail).toContain("OXAGEN_EFFORT");
     });
   });
@@ -162,7 +207,9 @@ describe("formatDoctorReport — precedence table (item 10)", () => {
 describe("runConfigDoctor — recommendations", () => {
   it("recommends init when no project-level config exists", () => {
     const report = runConfigDoctor(cwd, opts());
-    const finding = report.findings.find((f) => f.title.includes("No project-level config"));
+    const finding = report.findings.find((f) =>
+      f.title.includes("No project-level config"),
+    );
     expect(finding?.severity).toBe("warn");
     expect(finding?.fix).toContain("oxagen init");
   });
@@ -180,7 +227,13 @@ describe("runConfigDoctor — recommendations", () => {
       workspaceSlug: "ws",
       vision: { statement: "ship it" },
       commands: { test: [{ run: "pnpm test" }] },
-      languages: { typescript: { items: [{ id: "no-any", kind: "rule", text: "no any", origin: "manual" }] } },
+      languages: {
+        typescript: {
+          items: [
+            { id: "no-any", kind: "rule", text: "no any", origin: "manual" },
+          ],
+        },
+      },
     });
     const titles = runConfigDoctor(cwd, opts()).findings.map((f) => f.title);
     expect(titles.some((t) => t.includes("vision statement"))).toBe(false);

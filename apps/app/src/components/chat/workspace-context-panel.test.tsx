@@ -47,12 +47,24 @@ vi.mock("@/components/ui/tabs", () => ({
   TabsList: ({ children }: { children: React.ReactNode }) => (
     <div role="tablist">{children}</div>
   ),
-  TabsTab: ({ children, value }: { children: React.ReactNode; value: string }) => (
+  TabsTab: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => (
     <button role="tab" data-value={value} type="button">
       {children}
     </button>
   ),
-  TabsPanel: ({ children, value }: { children: React.ReactNode; value: string }) => (
+  TabsPanel: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => (
     <div role="tabpanel" data-value={value}>
       {children}
     </div>
@@ -67,7 +79,10 @@ vi.mock("./conversation-files", () => ({
     conversationPublicId: string | null;
     active: boolean;
   }) => (
-    <div data-testid="conversation-files-list" data-active={active ? "true" : "false"}>
+    <div
+      data-testid="conversation-files-list"
+      data-active={active ? "true" : "false"}
+    >
       files for {conversationPublicId ?? "none"}
     </div>
   ),
@@ -114,38 +129,58 @@ function makeToolCall(overrides: Partial<LiveToolCall> = {}): LiveToolCall {
 
 describe("findActiveSandboxSessionId", () => {
   it("returns null when there are no tool calls", async () => {
-    const { findActiveSandboxSessionId } = await import("./workspace-context-panel");
+    const { findActiveSandboxSessionId } = await import(
+      "./workspace-context-panel"
+    );
     expect(findActiveSandboxSessionId({})).toBeNull();
   });
 
   it("returns null when agent.sandbox.start is still pending", async () => {
-    const { findActiveSandboxSessionId } = await import("./workspace-context-panel");
+    const { findActiveSandboxSessionId } = await import(
+      "./workspace-context-panel"
+    );
     const tc = makeToolCall({ status: "running", output: undefined });
     expect(findActiveSandboxSessionId({ tc_1: tc })).toBeNull();
   });
 
   it("returns null when the completed output has no sessionId", async () => {
-    const { findActiveSandboxSessionId } = await import("./workspace-context-panel");
+    const { findActiveSandboxSessionId } = await import(
+      "./workspace-context-panel"
+    );
     const tc = makeToolCall({ output: {} });
     expect(findActiveSandboxSessionId({ tc_1: tc })).toBeNull();
   });
 
   it("returns the sessionId of a completed agent.sandbox.start call", async () => {
-    const { findActiveSandboxSessionId } = await import("./workspace-context-panel");
+    const { findActiveSandboxSessionId } = await import(
+      "./workspace-context-panel"
+    );
     const tc = makeToolCall();
     expect(findActiveSandboxSessionId({ tc_1: tc })).toBe("sbx_abc123");
   });
 
   it("ignores unrelated capabilities", async () => {
-    const { findActiveSandboxSessionId } = await import("./workspace-context-panel");
+    const { findActiveSandboxSessionId } = await import(
+      "./workspace-context-panel"
+    );
     const tc = makeToolCall({ capability: "execute_code" });
     expect(findActiveSandboxSessionId({ tc_1: tc })).toBeNull();
   });
 
   it("picks the most recently started session when multiple exist", async () => {
-    const { findActiveSandboxSessionId } = await import("./workspace-context-panel");
-    const earlier = makeToolCall({ toolCallId: "tc_early", startedAt: 100, output: { sessionId: "sbx_early" } });
-    const later = makeToolCall({ toolCallId: "tc_late", startedAt: 200, output: { sessionId: "sbx_late" } });
+    const { findActiveSandboxSessionId } = await import(
+      "./workspace-context-panel"
+    );
+    const earlier = makeToolCall({
+      toolCallId: "tc_early",
+      startedAt: 100,
+      output: { sessionId: "sbx_early" },
+    });
+    const later = makeToolCall({
+      toolCallId: "tc_late",
+      startedAt: 200,
+      output: { sessionId: "sbx_late" },
+    });
     expect(
       findActiveSandboxSessionId({ tc_early: earlier, tc_late: later }),
     ).toBe("sbx_late");
@@ -180,7 +215,9 @@ describe("WorkspaceContextPanel", () => {
       />,
     );
     expect(screen.queryByText("Workspace")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("sandbox-workspace-tree")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("sandbox-workspace-tree"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows the Workspace tab and auto-switches to it once a sandbox is active", async () => {
@@ -200,7 +237,10 @@ describe("WorkspaceContextPanel", () => {
     expect(tree).toHaveAttribute("data-org-slug", "acme");
     expect(tree).toHaveAttribute("data-workspace-slug", "main");
     // Auto-switched to the workspace tab on first sandbox appearance.
-    expect(screen.getByTestId("tabs-root")).toHaveAttribute("data-active", "workspace");
+    expect(screen.getByTestId("tabs-root")).toHaveAttribute(
+      "data-active",
+      "workspace",
+    );
   });
 
   it("passes conversationPublicId through even when null", async () => {
@@ -213,6 +253,8 @@ describe("WorkspaceContextPanel", () => {
         toolCalls={{}}
       />,
     );
-    expect(screen.getByTestId("conversation-files-list")).toHaveTextContent("files for none");
+    expect(screen.getByTestId("conversation-files-list")).toHaveTextContent(
+      "files for none",
+    );
   });
 });

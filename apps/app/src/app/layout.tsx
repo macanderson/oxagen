@@ -31,8 +31,7 @@ export const metadata: Metadata = {
   description: "Enterprise agent ontologies as a service",
   // No explicit `manifest` string here — apps/app/src/app/manifest.ts (Next's
   // native metadata-route convention) is auto-detected and linked at
-  // /manifest.webmanifest. The old static apps/app/public/pwa/manifest.json
-  // stays on disk, unreferenced, for backward compatibility only.
+  // /manifest.webmanifest.
   icons: {
     icon: [
       { url: "/favicon/favicon.svg", type: "image/svg+xml" },

@@ -7,8 +7,7 @@
  * Write path: "New dataset" opens CreateDatasetDialog (manual or from-traces
  * creation), which calls router.refresh() on success so this server-fetched
  * list stays current. Read path: each dataset card is a `next/link` to the
- * full dataset detail page (route workspace.evals.dataset) — the old
- * click-to-open detail drawer is gone.
+ * full dataset detail page (route workspace.evals.dataset).
  */
 
 import { useState } from "react";

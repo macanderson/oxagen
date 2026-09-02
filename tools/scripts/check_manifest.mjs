@@ -194,6 +194,12 @@ function layerSatisfied(layer, capName, capSurfaces, fileStem) {
     });
   }
   const candidates = {
+    // NOTE: `schema` and `marketing` are directory checks, not per-capability
+    // ones, so they are effectively constants — `schema` is satisfied for every
+    // capability (the schema dir always exists) and `marketing` for none
+    // (apps/website is not one of this monorepo's apps). Neither proves anything
+    // about the capability being checked; declaring them in a contract's
+    // layers[] buys no real coverage.
     schema: [join(ROOT, "packages/database/src/schema")],
     unit: stems.map((s) => join(CAP_DIR, `${s}.test.ts`)),
     e2e: [join(ROOT, `apps/app/e2e/${slug}.spec.ts`)],

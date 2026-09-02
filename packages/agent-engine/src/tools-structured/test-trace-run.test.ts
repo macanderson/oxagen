@@ -59,7 +59,9 @@ function makeTraceTool(handler: (cmd: string) => CommandResult): {
     commands.push(cmd);
     return handler(cmd);
   });
-  const tool = buildTestTraceRunTool(ws, {}) as unknown as { execute: ExecuteFn };
+  const tool = buildTestTraceRunTool(ws, {}) as unknown as {
+    execute: ExecuteFn;
+  };
   return { execute: (i, o) => tool.execute(i, o), commands };
 }
 
@@ -145,13 +147,19 @@ describe("buildTraceSummarizeCommand / parseTraceSummary", () => {
       }),
     );
     try {
-      const cmd = buildTraceSummarizeCommand({ coverageDir: dir, root, maxFiles: 10 });
+      const cmd = buildTraceSummarizeCommand({
+        coverageDir: dir,
+        root,
+        maxFiles: 10,
+      });
       const stdout = execSync(cmd, { encoding: "utf8" });
       const summary = parseTraceSummary(stdout);
       // foo.ts: "ran" + one anonymous executed (anonymous excluded from names);
       // the (empty-report) placeholder, node_modules, and out-of-root are skipped.
       expect(summary).toEqual({
-        files: [{ path: "src/foo.ts", executedFunctions: 2, topFunctions: ["ran"] }],
+        files: [
+          { path: "src/foo.ts", executedFunctions: 2, topFunctions: ["ran"] },
+        ],
         scanned: 4,
       });
     } finally {
@@ -195,7 +203,11 @@ describe("test_trace_run — execute flow", () => {
     expect(result["failed"]).toBe(1);
     expect(result["executedPath"]).toEqual({
       files: [
-        { path: "src/foo.ts", executedFunctions: 7, topFunctions: ["frobnicate", "helper"] },
+        {
+          path: "src/foo.ts",
+          executedFunctions: 7,
+          topFunctions: ["frobnicate", "helper"],
+        },
         { path: "src/bar.ts", executedFunctions: 2, topFunctions: [] },
       ],
       scanned: 3,
@@ -239,7 +251,12 @@ describe("test_trace_run — execute flow", () => {
   it("falls back to exit code + stderr tail when the reporter JSON is unparseable", async () => {
     const { execute } = makeTraceTool((cmd) => {
       if (cmd.includes("vitest run"))
-        return { exitCode: 1, stdout: "no json here", stderr: "segfault", timedOut: false };
+        return {
+          exitCode: 1,
+          stdout: "no json here",
+          stderr: "segfault",
+          timedOut: false,
+        };
       if (cmd.startsWith("node -e")) return ok(SUMMARY_JSON);
       return ok("");
     });

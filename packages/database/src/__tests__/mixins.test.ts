@@ -32,7 +32,8 @@ function flattenCheckSqlDeep(check: DrizzleCheck): string {
         if (chunk === null || typeof chunk !== "object") return "";
         const c = chunk as Record<string, unknown>;
         // Column reference: carries a `name` string (SQL column name).
-        if (typeof c["name"] === "string" && !("queryChunks" in c)) return c["name"] as string;
+        if (typeof c["name"] === "string" && !("queryChunks" in c))
+          return c["name"] as string;
         // SQL literal: carries a `value` array of strings.
         if (Array.isArray(c["value"])) {
           return (c["value"] as unknown[])

@@ -13,7 +13,7 @@ export const schema = {
     'Asset category: "avatar"/"image" (webp/png/jpeg, max 5 MiB), "document" (image or PDF, max 25 MiB), or "video" (mp4/webm/quicktime, max 100 MiB).',
   ),
   source: assetUpload.input.shape.source.describe(
-    'Omit for a pure public-blob ingest (no DB row). Pass "user_upload" to record a private generated_assets attachment row (accessPolicy=org) servable via /api/v1/assets/:publicId and listable via conversation.files.list. Requires an authenticated user; not valid for kind "avatar".',
+    'Omit for a pure public-blob ingest (no DB row). Pass "user_upload" to record a private generated_assets attachment row (accessPolicy=org) servable via /api/v1/assets/:publicId and listable via list_conversation_files. Requires an authenticated user; not valid for kind "avatar".',
   ),
   conversationId: assetUpload.input.shape.conversationId.describe(
     'Conversation public ID to link the uploaded asset to. Requires source="user_upload".',
@@ -30,7 +30,9 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function assetUploadTool(args: InferSchema<typeof schema>) {
+export default async function assetUploadTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   const output = await invoke(assetUpload.name, args, ctx, { surface: "mcp" });
   return assetUpload.output.parse(output);

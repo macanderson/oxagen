@@ -23,9 +23,13 @@ describe("environment.create contract", () => {
     ).not.toThrow();
   });
   it("rejects input missing the required name", () => {
-    expect(() => environmentCreate.input.parse({ slug: "production" })).toThrow();
+    expect(() =>
+      environmentCreate.input.parse({ slug: "production" }),
+    ).toThrow();
   });
   it("accepts a valid output", () => {
-    expect(() => environmentCreate.output.parse({ environment: summary })).not.toThrow();
+    expect(() =>
+      environmentCreate.output.parse({ environment: summary }),
+    ).not.toThrow();
   });
 });

@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 export interface LongPressBinding {
   handlers: {
@@ -39,6 +39,11 @@ export function useLongPress(
     }
     start.current = null;
   }, []);
+
+  // A pending press must not outlive the row. Without this, deleting or
+  // archiving a conversation mid-press leaves the timer to fire `onLongPress`
+  // against an unmounted component.
+  useEffect(() => clear, [clear]);
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {

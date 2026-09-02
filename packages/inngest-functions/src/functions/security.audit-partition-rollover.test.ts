@@ -27,9 +27,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  // The rollover runs all DDL through withSystemDb (system/cron RLS bypass).
-  withSystemDb: async (fn: (tx: typeof fakeTx) => Promise<unknown>) => fn(fakeTx),
-
+    // The rollover runs all DDL through withSystemDb (system/cron RLS bypass).
+    withSystemDb: async (fn: (tx: typeof fakeTx) => Promise<unknown>) =>
+      fn(fakeTx),
   };
 });
 
@@ -44,7 +44,11 @@ type StepCtx = {
   step: { run: (name: string, fn: () => Promise<unknown>) => Promise<unknown> };
 };
 let capturedHandler: ((ctx: StepCtx) => Promise<unknown>) | null = null;
-let capturedOpts: { id: string; retries: number; concurrency: { limit: number } } | null = null;
+let capturedOpts: {
+  id: string;
+  retries: number;
+  concurrency: { limit: number };
+} | null = null;
 let capturedTrigger: { cron: string } | null = null;
 
 vi.mock("../create-function", () => ({

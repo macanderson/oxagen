@@ -19,7 +19,9 @@ afterEach(cleanup);
 
 // Mock dnd-kit
 vi.mock("@dnd-kit/core", () => ({
-  DndContext: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DndContext: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   closestCenter: vi.fn(),
   PointerSensor: vi.fn(),
   useSensor: vi.fn(() => ({})),
@@ -31,7 +33,9 @@ vi.mock("@dnd-kit/modifiers", () => ({
 }));
 
 vi.mock("@dnd-kit/sortable", () => ({
-  SortableContext: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SortableContext: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   verticalListSortingStrategy: vi.fn(),
   useSortable: () => ({
     attributes: {},
@@ -81,7 +85,9 @@ vi.mock("@/components/ui/button", () => ({
 }));
 
 vi.mock("@/components/ui/input", () => ({
-  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <input {...props} />
+  ),
 }));
 
 vi.mock("@/components/ui/textarea", () => ({
@@ -91,17 +97,31 @@ vi.mock("@/components/ui/textarea", () => ({
 }));
 
 vi.mock("@/components/ui/select", () => ({
-  Select: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
-  SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Select: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectTrigger: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectValue: ({ placeholder }: { placeholder?: string }) => (
+    <span>{placeholder}</span>
+  ),
+  SelectPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectItem: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 vi.mock("@/components/ui/menu", () => ({
   Menu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  MenuPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  MenuGroupLabel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  MenuPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  MenuGroupLabel: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   MenuTrigger: ({ render: renderProp }: { render?: React.ReactElement }) =>
     renderProp ?? null,
 }));
@@ -126,8 +146,20 @@ vi.mock("@/lib/utils", () => ({
 }));
 
 const BASE_STEPS = [
-  { id: "s1", summary: "Load data", intent: "Load CSV", capability: "files.read", dependsOn: [] },
-  { id: "s2", summary: "Clean data", intent: "Remove nulls", capability: "code.run", dependsOn: ["s1"] },
+  {
+    id: "s1",
+    summary: "Load data",
+    intent: "Load CSV",
+    capability: "files.read",
+    dependsOn: [],
+  },
+  {
+    id: "s2",
+    summary: "Clean data",
+    intent: "Remove nulls",
+    capability: "code.run",
+    dependsOn: ["s1"],
+  },
 ];
 
 describe("PlanCard", () => {
@@ -199,12 +231,16 @@ describe("PlanCard", () => {
         rationale="This plan maximizes efficiency."
       />,
     );
-    expect(screen.getByRole("button", { name: /Rationale|Reasoning/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Rationale|Reasoning/i }),
+    ).toBeInTheDocument();
   });
 
   it("shows error when onResolve fails", async () => {
     const { PlanCard } = await import("./plan-card");
-    const onResolve = vi.fn().mockResolvedValue({ ok: false, error: "Not authorized" });
+    const onResolve = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "Not authorized" });
     render(
       <PlanCard
         planId="plan_1"

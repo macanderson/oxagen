@@ -74,7 +74,8 @@ describe("createAppInstallationToken", () => {
     );
     expect(init.method).toBe("POST");
 
-    const authHeader = (init.headers as Record<string, string>)["Authorization"] ?? "";
+    const authHeader =
+      (init.headers as Record<string, string>)["Authorization"] ?? "";
     expect(authHeader).toMatch(/^Bearer /);
     const jwt = authHeader.slice("Bearer ".length);
     expect(jwt.split(".")).toHaveLength(3);
@@ -83,7 +84,9 @@ describe("createAppInstallationToken", () => {
   it("returns { token, expiresAt } parsed from the response", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValueOnce(makeTokenResponse("ghs_abc", FIXED_EXPIRES_AT)),
+      vi
+        .fn()
+        .mockResolvedValueOnce(makeTokenResponse("ghs_abc", FIXED_EXPIRES_AT)),
     );
 
     const result = await createAppInstallationToken({
@@ -101,9 +104,12 @@ describe("createAppInstallationToken", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((_url: string, init: RequestInit) => {
-        const auth = (init.headers as Record<string, string>)["Authorization"] ?? "";
+        const auth =
+          (init.headers as Record<string, string>)["Authorization"] ?? "";
         capturedJwts.push(auth.slice("Bearer ".length));
-        return Promise.resolve(makeTokenResponse("ghs_sig_test", FIXED_EXPIRES_AT));
+        return Promise.resolve(
+          makeTokenResponse("ghs_sig_test", FIXED_EXPIRES_AT),
+        );
       }),
     );
 
@@ -132,9 +138,12 @@ describe("createAppInstallationToken", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((_url: string, init: RequestInit) => {
-        const auth = (init.headers as Record<string, string>)["Authorization"] ?? "";
+        const auth =
+          (init.headers as Record<string, string>)["Authorization"] ?? "";
         capturedJwts.push(auth.slice("Bearer ".length));
-        return Promise.resolve(makeTokenResponse("ghs_claims", FIXED_EXPIRES_AT));
+        return Promise.resolve(
+          makeTokenResponse("ghs_claims", FIXED_EXPIRES_AT),
+        );
       }),
     );
 
@@ -195,9 +204,9 @@ describe("createAppInstallationToken", () => {
   it("throws with the GitHub error message on non-2xx response", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValueOnce(
-        makeResponse({ message: "Not Found" }, 404),
-      ),
+      vi
+        .fn()
+        .mockResolvedValueOnce(makeResponse({ message: "Not Found" }, 404)),
     );
 
     await expect(
@@ -216,7 +225,11 @@ describe("createAppInstallationToken", () => {
 
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValueOnce(makeTokenResponse("ghs_escape", FIXED_EXPIRES_AT)),
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          makeTokenResponse("ghs_escape", FIXED_EXPIRES_AT),
+        ),
     );
 
     // Should not throw — the function normalises \\n → \n internally.
@@ -247,7 +260,11 @@ describe("getInstallationToken", () => {
   it("returns the token on first call", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValueOnce(makeTokenResponse("ghs_first", FIXED_EXPIRES_AT)),
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          makeTokenResponse("ghs_first", FIXED_EXPIRES_AT),
+        ),
     );
 
     const result = await getInstallationToken({

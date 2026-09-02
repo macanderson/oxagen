@@ -67,7 +67,10 @@ test.describe("chat.tool-io — tool calls render typed UI, never raw JSON", () 
     const composer = page.getByPlaceholder(/send a message/i);
     await expect(composer).toBeVisible({ timeout: 10_000 });
 
-    await interceptAgentStream(page, { events: events("e2e-tool-io-01"), delayMs: 50 });
+    await interceptAgentStream(page, {
+      events: events("e2e-tool-io-01"),
+      delayMs: 50,
+    });
 
     await composer.fill("Research Captain William Anderson");
     await page.getByRole("button", { name: /send message/i }).click();
@@ -78,7 +81,9 @@ test.describe("chat.tool-io — tool calls render typed UI, never raw JSON", () 
     // visible immediately once the row is open — no separate expand step.
     const activityGroup = page.getByTestId("tool-activity-group");
     await expect(activityGroup).toBeVisible({ timeout: 12_000 });
-    await activityGroup.getByRole("button", { name: /expand tool activity/i }).click();
+    await activityGroup
+      .getByRole("button", { name: /expand tool activity/i })
+      .click();
 
     const activityRow = page.getByTestId("tool-activity-row-tcl_swarm");
     await expect(activityRow).toBeVisible({ timeout: 8_000 });
@@ -88,14 +93,18 @@ test.describe("chat.tool-io — tool calls render typed UI, never raw JSON", () 
     await expect(toolCard).toBeVisible({ timeout: 8_000 });
 
     // Humanized labels — not raw camelCase JSON keys.
-    await expect(toolCard.getByText("Search depth")).toBeVisible({ timeout: 8_000 });
+    await expect(toolCard.getByText("Search depth")).toBeVisible({
+      timeout: 8_000,
+    });
     await expect(toolCard.getByText("Max parallel")).toBeVisible();
     await expect(toolCard.getByText("Estimated tasks")).toBeVisible();
     // A status enum renders as a pill.
     await expect(toolCard.getByText("running")).toBeVisible();
     // The id renders as a copy chip (full id on the accessible name).
     await expect(
-      toolCard.getByRole("button", { name: /fan_p48e66xt6jag15rqg0t10y/ }).first(),
+      toolCard
+        .getByRole("button", { name: /fan_p48e66xt6jag15rqg0t10y/ })
+        .first(),
     ).toBeVisible();
 
     // Hard guarantee: no raw JSON braces or quoted keys anywhere in the card.
@@ -105,16 +114,25 @@ test.describe("chat.tool-io — tool calls render typed UI, never raw JSON", () 
     expect(cardText).not.toContain("swarmId");
 
     // The approval card's proposed input is structured too.
-    const approvalCard = page.locator('[data-component="approval-card"]').first();
+    const approvalCard = page
+      .locator('[data-component="approval-card"]')
+      .first();
     await expect(approvalCard).toBeVisible({ timeout: 8_000 });
     await expect(approvalCard.getByText("Proposed input")).toBeVisible();
     await expect(approvalCard.getByText("Search depth")).toBeVisible();
     expect((await approvalCard.textContent()) ?? "").not.toContain("{");
 
-    await page.screenshot({ path: "e2e/screenshots/chat-tool-io-structured.png", fullPage: true });
+    await page.screenshot({
+      path: "e2e/screenshots/chat-tool-io-structured.png",
+      fullPage: true,
+    });
     // Focused element shots so the full INPUT+RESULT tree (incl. id chips) and
     // the approval card are visible end-to-end.
-    await toolCard.screenshot({ path: "e2e/screenshots/chat-tool-io-tool-card.png" });
-    await approvalCard.screenshot({ path: "e2e/screenshots/chat-tool-io-approval-card.png" });
+    await toolCard.screenshot({
+      path: "e2e/screenshots/chat-tool-io-tool-card.png",
+    });
+    await approvalCard.screenshot({
+      path: "e2e/screenshots/chat-tool-io-approval-card.png",
+    });
   });
 });

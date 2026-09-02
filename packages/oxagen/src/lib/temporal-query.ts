@@ -38,19 +38,27 @@ export const edgeValiditySchema = z.object({
   validFrom: z
     .string()
     .nullable()
-    .describe("Valid-time start (ISO-8601) — when the fact became true in the world"),
+    .describe(
+      "Valid-time start (ISO-8601) — when the fact became true in the world",
+    ),
   validTo: z
     .string()
     .nullable()
-    .describe("Valid-time end (ISO-8601), or null while the fact is still true"),
+    .describe(
+      "Valid-time end (ISO-8601), or null while the fact is still true",
+    ),
   recordedAt: z
     .string()
     .nullable()
-    .describe("Transaction-time start (ISO-8601) — when we recorded the assertion"),
+    .describe(
+      "Transaction-time start (ISO-8601) — when we recorded the assertion",
+    ),
   invalidatedAt: z
     .string()
     .nullable()
-    .describe("Transaction-time end (ISO-8601), or null while the assertion stands"),
+    .describe(
+      "Transaction-time end (ISO-8601), or null while the assertion stands",
+    ),
 });
 
 export type EdgeValidity = z.output<typeof edgeValiditySchema>;

@@ -4,11 +4,14 @@ import { getOrCreateRegistry, publishDraft } from "./schema.versioning";
 import { invalidatePinnedSchemaCache } from "./schema.pinned";
 import { logger } from "./logger";
 
-export const schemaVersionCreateHandler: CapabilityHandler<typeof schemaVersionCreate> = async (
-  input,
-  ctx,
-) => {
-  const registry = await getOrCreateRegistry(ctx.orgId, ctx.workspaceId, ctx.userId);
+export const schemaVersionCreateHandler: CapabilityHandler<
+  typeof schemaVersionCreate
+> = async (input, ctx) => {
+  const registry = await getOrCreateRegistry(
+    ctx.orgId,
+    ctx.workspaceId,
+    ctx.userId,
+  );
 
   if (!registry.draftVersionId) {
     throw new Error("No draft version found for registry");

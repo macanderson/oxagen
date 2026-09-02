@@ -22,6 +22,8 @@ export default async function secretImportEnvTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(secretImportEnv.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(secretImportEnv.name, args, ctx, {
+    surface: "mcp",
+  });
   return secretImportEnv.output.parse(output);
 }

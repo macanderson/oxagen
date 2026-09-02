@@ -30,14 +30,16 @@ const BodySchema = z.object({
 // do not write subscriptions.* here.
 export async function POST(req: Request) {
   const session = await getSession();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   // Only this route's own key (app origin) — a full loadEnv() would couple the
   // checkout path to every unrelated monorepo env var (e.g. an empty
   // STRIPE_WEBHOOK_SECRET), 500-ing checkout for an irrelevant reason.
   const env = requireEnv(["NEXT_PUBLIC_APP_URL"] as const);
   const body = BodySchema.safeParse(await req.json().catch(() => ({})));
-  if (!body.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+  if (!body.success)
+    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
   const tenant = await resolveOrg(body.data.orgSlug);
 
@@ -61,7 +63,12 @@ export async function POST(req: Request) {
   try {
     const result = (await invoke(
       billingSubscriptionUpgradeStart.name,
-      { planSlug: body.data.planSlug, interval: body.data.interval, successUrl, cancelUrl },
+      {
+        planSlug: body.data.planSlug,
+        interval: body.data.interval,
+        successUrl,
+        cancelUrl,
+      },
       ctx,
       { surface: "api" },
     )) as BillingSubscriptionUpgradeStartOutput;

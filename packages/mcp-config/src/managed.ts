@@ -4,14 +4,24 @@
  * Enterprise orgs can push a managed configuration file that acts as an
  * unoverridable floor, stored at ~/.config/oxagen/managed.json.
  *
- * The managed policy provides:
+ * The managed config file describes:
  *   - Org-provisioned servers (users can't remove or change auth)
- *   - Allowlist: only permitted server URLs/commands can be registered
- *   - Denylist: blocked URLs/commands/tools that no user config can override
+ *   - `allowedServerUrls` / `deniedServerUrls` / `allowedCommands` allow- and
+ *     denylists
+ *   - `deniedTools`: tool-name patterns no user config can re-enable
  *
- * Enforcement today happens at tool materialization time: managed servers
- * are injected into the effective config, and tools matching deniedTools
- * are dropped before they reach the model.
+ * WHAT IS ACTUALLY ENFORCED. Only two of those reach a runtime gate, both in
+ * packages/agent/src/runtime/plugin-types/file-mcp.ts at tool materialization
+ * time: managed servers are injected into the effective config, and tools
+ * matching `deniedTools` are dropped before they reach the model. Nothing in
+ * this repo calls `checkServerUrl`, `checkStdioCommand`,
+ * `validateServerAgainstPolicy` or `formatViolation` below, and `oxagen mcp
+ * add` performs no policy check at all — so `allowedServerUrls`,
+ * `deniedServerUrls` and (via this module) `allowedCommands` currently gate
+ * nothing. file-mcp.ts enforces `allowedCommands` for stdio servers through
+ * its own private copy of the matching logic rather than `checkStdioCommand`.
+ * Treat the functions below as a policy API waiting to be wired, not as a
+ * control that is in force.
  */
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -79,6 +89,14 @@ export type PolicyViolation =
 /**
  * Check whether a server URL is permitted by the managed policy.
  * Returns null if allowed, or a PolicyViolation describing the block.
+ *
+ * The URL is matched as a raw string by `matchGlob`, which is case-sensitive
+ * and expands `*` to `.*` across every separator. That is too weak to be a
+ * boundary on its own: a host allowlist like `https://*.corp.com/*` also admits
+ * `https://evil.com/x.corp.com/y`, and a denylist like `https://evil.com/*`
+ * misses `https://EVIL.com/`, a port, or a userinfo prefix. Anything that
+ * promotes this to an enforced control needs to parse the URL and compare the
+ * host, not glob the string.
  */
 export function checkServerUrl(
   url: string,
@@ -112,6 +130,10 @@ export function checkServerUrl(
  * Check whether a stdio command is permitted by the managed policy.
  * The full command string is "command arg1 arg2 ...".
  * Returns null if allowed, or a PolicyViolation describing the block.
+ *
+ * Only the `allowedCommands` allowlist is consulted — ManagedPolicy has no
+ * `deniedCommands` field, so the `command_denied` variant of PolicyViolation is
+ * unreachable until one is added.
  */
 export function checkStdioCommand(
   command: string,

@@ -138,9 +138,12 @@ describe("MemoriesBulkImport — select stage", () => {
   });
 
   it("calls parseImport with the uploaded documents and default anchor", async () => {
-    const parseImport = vi
-      .fn()
-      .mockResolvedValue({ ok: true, drafts: [draft()], documentCount: 1, skipped: [] });
+    const parseImport = vi.fn().mockResolvedValue({
+      ok: true,
+      drafts: [draft()],
+      documentCount: 1,
+      skipped: [],
+    });
     render(
       <MemoriesBulkImport
         {...baseProps}
@@ -171,9 +174,10 @@ describe("MemoriesBulkImport — select stage", () => {
   });
 
   it("shows an error and stays on the select stage when parse fails", async () => {
-    const parseImport = vi
-      .fn()
-      .mockResolvedValue({ ok: false, error: "You must be a workspace member to import memories." });
+    const parseImport = vi.fn().mockResolvedValue({
+      ok: false,
+      error: "You must be a workspace member to import memories.",
+    });
     render(
       <MemoriesBulkImport
         {...baseProps}
@@ -190,7 +194,9 @@ describe("MemoriesBulkImport — select stage", () => {
     fireEvent.click(screen.getByRole("button", { name: /parse documents/i }));
 
     expect(
-      await screen.findByText("You must be a workspace member to import memories."),
+      await screen.findByText(
+        "You must be a workspace member to import memories.",
+      ),
     ).toBeInTheDocument();
     // Still on the select stage — the drop zone is present, the review grid is not.
     expect(
@@ -244,11 +250,12 @@ describe("MemoriesBulkImport — review stage", () => {
   it("renders each draft lesson in an editable field", async () => {
     await toReview([
       draft({ lesson: "Never push to main." }),
-      draft({ lesson: "Use withTenantDb, never raw db().", memoryKind: "gotcha" }),
+      draft({
+        lesson: "Use withTenantDb, never raw db().",
+        memoryKind: "gotcha",
+      }),
     ]);
-    expect(
-      screen.getByDisplayValue("Never push to main."),
-    ).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Never push to main.")).toBeInTheDocument();
     expect(
       screen.getByDisplayValue("Use withTenantDb, never raw db()."),
     ).toBeInTheDocument();
@@ -257,9 +264,16 @@ describe("MemoriesBulkImport — review stage", () => {
   it("surfaces skipped documents", async () => {
     await toReview(
       [draft()],
-      [{ filename: "toc.md", reason: "No durable rules found in this document." }],
+      [
+        {
+          filename: "toc.md",
+          reason: "No durable rules found in this document.",
+        },
+      ],
     );
-    expect(screen.getByText(/1 document produced no memories/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/1 document produced no memories/i),
+    ).toBeInTheDocument();
     expect(screen.getByText("toc.md")).toBeInTheDocument();
   });
 
@@ -317,7 +331,9 @@ describe("MemoriesBulkImport — review stage", () => {
     // Deselect the only row.
     fireEvent.click(screen.getByLabelText("Include draft 1"));
     expect(screen.getByText("0 of 1 selected")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /import 0 memor/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /import 0 memor/i }),
+    ).toBeDisabled();
   });
 
   it("select-all toggles every row", async () => {
@@ -331,18 +347,23 @@ describe("MemoriesBulkImport — review stage", () => {
   });
 
   it("shows an error and stays on review when commit fails outright", async () => {
-    const commitImport = vi
-      .fn()
-      .mockResolvedValue({ ok: false, error: "You must be a workspace member to import memories." });
+    const commitImport = vi.fn().mockResolvedValue({
+      ok: false,
+      error: "You must be a workspace member to import memories.",
+    });
     await toReview([draft({ lesson: "Keep." })], [], commitImport);
 
     // findByRole (not getByRole): the review heading and the include-flagged
     // drafts can land in separate renders, so the Import button's count settles
     // a tick after the heading appears. Wait for the correctly-labelled button.
-    fireEvent.click(await screen.findByRole("button", { name: /import 1 memory/i }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /import 1 memory/i }),
+    );
 
     expect(
-      await screen.findByText("You must be a workspace member to import memories."),
+      await screen.findByText(
+        "You must be a workspace member to import memories.",
+      ),
     ).toBeInTheDocument();
     // Still on review (the grid + Import button remain), not the result stage.
     expect(screen.getByText("Review draft memories")).toBeInTheDocument();
@@ -368,7 +389,12 @@ describe("MemoriesBulkImport — review stage", () => {
 describe("MemoriesBulkImport — result stage", () => {
   async function importDrafts(commitResult: {
     ok: true;
-    results: { lesson: string; ok: boolean; memoryId: string | null; error: string | null }[];
+    results: {
+      lesson: string;
+      ok: boolean;
+      memoryId: string | null;
+      error: string | null;
+    }[];
     imported: number;
     failed: number;
   }) {
@@ -397,7 +423,9 @@ describe("MemoriesBulkImport — result stage", () => {
     await screen.findByText("Review draft memories");
     // Wait for the useTransition to settle so the Import button is enabled and
     // labelled with the settled selected-count before clicking (see toReview).
-    const importButton = await screen.findByRole("button", { name: /import 2 memories/i });
+    const importButton = await screen.findByRole("button", {
+      name: /import 2 memories/i,
+    });
     await waitFor(() => expect(importButton).toBeEnabled());
     fireEvent.click(importButton);
     await screen.findByText("Import complete");
@@ -427,7 +455,12 @@ describe("MemoriesBulkImport — result stage", () => {
       ok: true,
       results: [
         { lesson: "Lesson A.", ok: true, memoryId: "n1", error: null },
-        { lesson: "Lesson B.", ok: false, memoryId: null, error: "embedding failed" },
+        {
+          lesson: "Lesson B.",
+          ok: false,
+          memoryId: null,
+          error: "embedding failed",
+        },
       ],
       imported: 1,
       failed: 1,

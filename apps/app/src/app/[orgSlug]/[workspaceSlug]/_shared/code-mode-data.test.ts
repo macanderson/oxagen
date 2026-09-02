@@ -33,7 +33,10 @@ vi.mock("@oxagen/handlers/logger", () => ({
 import { loadCodeModeOptions } from "./code-mode-data";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
-const ctx = { orgId: "org-1", workspaceId: "ws-1" } as unknown as CapabilityContext;
+const ctx = {
+  orgId: "org-1",
+  workspaceId: "ws-1",
+} as unknown as CapabilityContext;
 
 function connection(publicId: string, status = "connected") {
   return { publicId, status };
@@ -53,7 +56,11 @@ describe("loadCodeModeOptions", () => {
       connections: [connection("con-1"), connection("con-2", "pending_setup")],
     });
     mocks.connectionGetHandler.mockResolvedValue({
-      deliveryConfig: { owner: "oxagen", repo: "platform", defaultBranch: "main" },
+      deliveryConfig: {
+        owner: "oxagen",
+        repo: "platform",
+        defaultBranch: "main",
+      },
     });
 
     const result = await loadCodeModeOptions("org-1", "ws-1", ctx);
@@ -96,7 +103,9 @@ describe("loadCodeModeOptions", () => {
     mocks.connectionGetHandler.mockImplementation(
       async ({ connectionId }: { connectionId: string }) => {
         if (connectionId === "con-bad") throw new Error("boom");
-        return { deliveryConfig: { owner: "o", repo: "r", defaultBranch: "main" } };
+        return {
+          deliveryConfig: { owner: "o", repo: "r", defaultBranch: "main" },
+        };
       },
     );
 

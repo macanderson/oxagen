@@ -37,7 +37,13 @@ const MAX_BYTES = 10 * 1024 * 1024;
 /** Cap any single string value so one huge payload can't blow up a line. */
 const MAX_STRING = 50_000;
 
-/** Keys whose values are secrets and must never be written to disk. */
+/**
+ * Keys whose values are secrets and must never be written to disk. Matched
+ * case-insensitively but EXACTLY — `sanitize` does not substring-match, so
+ * every real key name in play has to be listed here. Covers the CliConfig
+ * credential fields (`token`, `gatewayKey`, `anthropicKey`), the HTTP auth
+ * headers, and the OAuth/session token names the login + MCP flows POST.
+ */
 const REDACT_KEYS = new Set([
   "token",
   "authorization",
@@ -45,6 +51,22 @@ const REDACT_KEYS = new Set([
   "api_key",
   "apitoken",
   "gatewaykey",
+  "anthropickey",
+  "accesstoken",
+  "access_token",
+  "refreshtoken",
+  "refresh_token",
+  "idtoken",
+  "id_token",
+  "sessiontoken",
+  "session_token",
+  "clientsecret",
+  "client_secret",
+  "privatekey",
+  "private_key",
+  "passphrase",
+  "credential",
+  "credentials",
   "password",
   "secret",
   "bearer",

@@ -24,7 +24,10 @@ describe("plugin.settings.set_auth_alerts contract", () => {
 
   it("rejects invalid role names", () => {
     expect(() =>
-      pluginSettingsSetAuthAlerts.input.parse({ sendEmail: true, roles: ["Member"] }),
+      pluginSettingsSetAuthAlerts.input.parse({
+        sendEmail: true,
+        roles: ["Member"],
+      }),
     ).toThrow();
   });
 });

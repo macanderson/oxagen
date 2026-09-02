@@ -18,6 +18,7 @@ import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 import { invoke } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { logger } from "@oxagen/handlers/logger";
 import type { AgentMemoryPromotionCandidatesOutput } from "@oxagen/oxagen/contracts/agent.memory_promotion.list";
 import { MemoryPromotionQueue } from "@/components/knowledge/memories/memory-promotion-queue";
 import {
@@ -65,10 +66,15 @@ export async function PromotionQueueSection({
       ),
     )) as AgentMemoryPromotionCandidatesOutput;
     candidates = result.candidates;
-  } catch (e) {
-    console.error("agent.memory.promotion.candidates failed:", e);
+  } catch (err) {
+    logger.error(
+      { err, orgId, workspaceId },
+      "knowledge.memory: list_memory_promotions failed",
+    );
     loadError =
-      e instanceof Error ? e.message : "Failed to load promotion candidates.";
+      err instanceof Error
+        ? err.message
+        : "Failed to load promotion candidates.";
   }
 
   return (

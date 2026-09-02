@@ -56,7 +56,9 @@ export function SecretFileUpload({
           return;
         }
         // Strip the data URL prefix (data:application/json;base64,...)
-        const base64 = result.includes(",") ? result.split(",")[1] ?? result : result;
+        const base64 = result.includes(",")
+          ? (result.split(",")[1] ?? result)
+          : result;
         setFileName(file.name);
         onChange(base64);
       };
@@ -92,9 +94,12 @@ export function SecretFileUpload({
     [processFile],
   );
 
-  const handleDragOver = React.useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-  }, []);
+  const handleDragOver = React.useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+    },
+    [],
+  );
 
   const hasFile = Boolean(value) || Boolean(fileName);
 
@@ -103,7 +108,10 @@ export function SecretFileUpload({
       {hasFile ? (
         /* Uploaded state */
         <div className="flex items-center gap-3 rounded-md border border-border/60 bg-muted/30 px-3 py-2.5">
-          <FileJson className="h-4 w-4 shrink-0 text-success" aria-hidden="true" />
+          <FileJson
+            className="h-4 w-4 shrink-0 text-success"
+            aria-hidden="true"
+          />
           <span className="flex-1 truncate text-sm text-foreground">
             {fileName ?? "Uploaded file"}
           </span>
@@ -141,10 +149,15 @@ export function SecretFileUpload({
           )}
           aria-label={label}
         >
-          <Upload className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+          <Upload
+            className="h-5 w-5 text-muted-foreground"
+            aria-hidden="true"
+          />
           <div>
             <p className="text-sm font-medium text-foreground">{label}</p>
-            <p className="text-xs text-muted-foreground">JSON files only. Drag &amp; drop or click.</p>
+            <p className="text-xs text-muted-foreground">
+              JSON files only. Drag &amp; drop or click.
+            </p>
           </div>
         </div>
       )}

@@ -54,9 +54,7 @@ const PNG_1X1_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 
 function minimalTextEvents(messageId: string): StreamEvent[] {
-  return [
-    { type: "text", messageId, text: "I can see the attached image." },
-  ];
+  return [{ type: "text", messageId, text: "I can see the attached image." }];
 }
 
 test.describe("chat attachments — image upload, send, and persisted render", () => {
@@ -69,7 +67,9 @@ test.describe("chat attachments — image upload, send, and persisted render", (
   test("uploads a PNG, shows the chip, sends, and renders the persisted thumbnail after reload", async ({
     page,
   }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "chat-attach" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "chat-attach",
+    });
 
     await page.goto(`/${orgSlug}/default/chat`);
     await expect(page).not.toHaveURL(/\/login/);
@@ -96,7 +96,9 @@ test.describe("chat attachments — image upload, send, and persisted render", (
     // real POST /api/v1/upload/attachment round-trip completes.
     const chip = page.getByTestId("attachment-chip");
     await expect(chip).toBeVisible({ timeout: 10_000 });
-    await expect(chip).toHaveAttribute("data-status", "uploaded", { timeout: 15_000 });
+    await expect(chip).toHaveAttribute("data-status", "uploaded", {
+      timeout: 15_000,
+    });
     await shot(page, "01-chip-uploaded");
 
     // Send must be enabled again now that no upload is in flight.
@@ -131,14 +133,18 @@ test.describe("chat attachments — image upload, send, and persisted render", (
 
     const attachmentsStrip = page.getByTestId("message-attachments");
     await expect(attachmentsStrip).toBeVisible({ timeout: 15_000 });
-    await expect(attachmentsStrip.locator("img")).toBeVisible({ timeout: 10_000 });
+    await expect(attachmentsStrip.locator("img")).toBeVisible({
+      timeout: 10_000,
+    });
     await shot(page, "03-persisted-user-attachment");
   });
 
   test("attaches a video (Phase 2), uploads it as a video asset, and sends", async ({
     page,
   }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "chat-video" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "chat-video",
+    });
 
     await page.goto(`/${orgSlug}/default/chat`);
     await expect(page).not.toHaveURL(/\/login/);
@@ -168,13 +174,17 @@ test.describe("chat attachments — image upload, send, and persisted render", (
         ) {
           return false;
         }
-        const body = (await res.json().catch(() => null)) as { kind?: string } | null;
+        const body = (await res.json().catch(() => null)) as {
+          kind?: string;
+        } | null;
         return body?.kind === "video";
       },
       { timeout: 20_000 },
     );
 
-    const attachBtn = page.getByRole("button", { name: /attach image or video/i });
+    const attachBtn = page.getByRole("button", {
+      name: /attach image or video/i,
+    });
     await expect(attachBtn).toBeVisible({ timeout: 10_000 });
 
     const fileInput = page.locator('input[type="file"]');
@@ -194,7 +204,9 @@ test.describe("chat attachments — image upload, send, and persisted render", (
     // There is exactly one VISIBLE chip (keyframes, if any, are hidden).
     const chip = page.getByTestId("attachment-chip");
     await expect(chip).toBeVisible({ timeout: 10_000 });
-    await expect(chip).toHaveAttribute("data-status", "uploaded", { timeout: 15_000 });
+    await expect(chip).toHaveAttribute("data-status", "uploaded", {
+      timeout: 15_000,
+    });
     await shot(page, "04-video-chip-uploaded");
 
     const sendBtn = page.getByRole("button", { name: /^send message$/i });
@@ -202,7 +214,13 @@ test.describe("chat attachments — image upload, send, and persisted render", (
 
     const testMsgId = "e2e-msg-video-01";
     await interceptAgentStream(page, {
-      events: [{ type: "text", messageId: testMsgId, text: "I can see the attached video." }],
+      events: [
+        {
+          type: "text",
+          messageId: testMsgId,
+          text: "I can see the attached video.",
+        },
+      ],
       delayMs: 50,
     });
 

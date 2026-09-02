@@ -183,6 +183,37 @@ const defaultSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * Percent-encode one URL path segment (an owner, a repo name, a PR number).
+ * Every caller-supplied value that lands between two slashes goes through this:
+ * without it a value containing `/`, `..`, `?` or `#` rewrites the request path
+ * and the call hits an endpoint the caller never named.
+ */
+function seg(value: string | number): string {
+  return encodeURIComponent(String(value));
+}
+
+/**
+ * Percent-encode a repo-relative file path, segment by segment, so real
+ * directory separators survive but nothing else can escape the path.
+ *
+ * `.` and `..` segments are rejected: the URL parser resolves them before the
+ * request goes out, so `../../../user` on a `/repos/{o}/{r}/contents/` call
+ * would silently retarget a different endpoint — or a different repository —
+ * than the `owner`/`repo` arguments name.
+ */
+function filePath(path: string): string {
+  const parts = path.split("/").filter((p) => p.length > 0);
+  for (const part of parts) {
+    if (part === "." || part === "..") {
+      throw new Error(
+        `Invalid repository file path "${path}": "." and ".." segments are not allowed.`,
+      );
+    }
+  }
+  return parts.map(encodeURIComponent).join("/");
+}
+
+/**
  * Create a GitHubClient backed by native fetch.
  *
  * @param opts - Client options (token, optional baseUrl, optional sleepMs/sleep).
@@ -244,7 +275,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
   }): Promise<{ fullName: string; htmlUrl: string; defaultBranch: string }> {
     const data = await request<GHRepo>(
       "GET",
-      `/repos/${args.owner}/${args.repo}`,
+      `/repos/${seg(args.owner)}/${seg(args.repo)}`,
     );
     return {
       fullName: data.full_name,
@@ -269,7 +300,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     // the authenticated user's personal account. `POST /orgs/{user}/repos`
     // 404s for a personal account (a user is not an org), so personal repos
     // MUST go through `/user/repos`.
-    const path = args.org ? `/orgs/${args.org}/repos` : "/user/repos";
+    const path = args.org ? `/orgs/${seg(args.org)}/repos` : "/user/repos";
     const data = await request<GHRepo>("POST", path, body);
     return {
       fullName: data.full_name,
@@ -289,11 +320,14 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     // Check whether the file already exists so we can supply its sha for an
     // update (GitHub requires it; omitting it on an existing file = 422).
     let existingSha: string | undefined;
-    const refQuery = args.branch ? `?ref=${encodeURIComponent(args.branch)}` : "";
+    const contentsPath = `/repos/${seg(args.owner)}/${seg(args.repo)}/contents/${filePath(args.path)}`;
+    const refQuery = args.branch
+      ? `?ref=${encodeURIComponent(args.branch)}`
+      : "";
     try {
       const existing = await request<GHFileContent>(
         "GET",
-        `/repos/${args.owner}/${args.repo}/contents/${args.path}${refQuery}`,
+        `${contentsPath}${refQuery}`,
       );
       existingSha = existing.sha;
     } catch {
@@ -308,11 +342,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     if (args.branch !== undefined) putBody.branch = args.branch;
     if (existingSha !== undefined) putBody.sha = existingSha;
 
-    const data = await request<GHPutFileResponse>(
-      "PUT",
-      `/repos/${args.owner}/${args.repo}/contents/${args.path}`,
-      putBody,
-    );
+    const data = await request<GHPutFileResponse>("PUT", contentsPath, putBody);
 
     return {
       commitSha: data.commit.sha,
@@ -332,7 +362,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     // reachable yet — poll until it resolves.
     const forkData = await request<GHRepo>(
       "POST",
-      `/repos/${args.owner}/${args.repo}/forks`,
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/forks`,
       forkBody,
     );
 
@@ -347,7 +377,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       try {
         const data = await request<GHRepo>(
           "GET",
-          `/repos/${forkOwner}/${forkRepoName}`,
+          `/repos/${seg(forkOwner)}/${seg(forkRepoName)}`,
         );
         return {
           fullName: data.full_name,
@@ -376,26 +406,26 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     branch: string;
     fromBranch?: string;
   }): Promise<{ ref: string; sha: string }> {
+    const repoPath = `/repos/${seg(args.owner)}/${seg(args.repo)}`;
+
     // When fromBranch is not provided, fetch the repo to discover default_branch.
     let baseBranch = args.fromBranch;
     if (!baseBranch) {
-      const repo = await request<GHRepo>(
-        "GET",
-        `/repos/${args.owner}/${args.repo}`,
-      );
+      const repo = await request<GHRepo>("GET", repoPath);
       baseBranch = repo.default_branch;
     }
 
+    // A branch name may legitimately contain `/` (`feature/x`), so encode it
+    // segment by segment rather than as one opaque value.
     const refData = await request<GHRef>(
       "GET",
-      `/repos/${args.owner}/${args.repo}/git/ref/heads/${baseBranch}`,
+      `${repoPath}/git/ref/heads/${filePath(baseBranch)}`,
     );
 
-    const newRef = await request<GHRef>(
-      "POST",
-      `/repos/${args.owner}/${args.repo}/git/refs`,
-      { ref: `refs/heads/${args.branch}`, sha: refData.object.sha },
-    );
+    const newRef = await request<GHRef>("POST", `${repoPath}/git/refs`, {
+      ref: `refs/heads/${args.branch}`,
+      sha: refData.object.sha,
+    });
 
     return { ref: newRef.ref, sha: newRef.object.sha };
   }
@@ -419,7 +449,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
 
     const data = await request<GHPull>(
       "POST",
-      `/repos/${args.owner}/${args.repo}/pulls`,
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/pulls`,
       reqBody,
     );
 
@@ -436,7 +466,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     try {
       const data = await request<GHContentsFile>(
         "GET",
-        `/repos/${args.owner}/${args.repo}/contents/${args.path}${refQuery}`,
+        `/repos/${seg(args.owner)}/${seg(args.repo)}/contents/${filePath(args.path)}${refQuery}`,
       );
       // GitHub encodes content as base64 with embedded newlines — strip them
       // before decoding.
@@ -455,16 +485,17 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     ref?: string;
   }): Promise<string[]> {
     const ref = args.ref ?? "main";
+    const repoPath = `/repos/${seg(args.owner)}/${seg(args.repo)}`;
     // Step 1 — resolve branch → tree SHA via the branches endpoint.
     const branch = await request<GHBranch>(
       "GET",
-      `/repos/${args.owner}/${args.repo}/branches/${encodeURIComponent(ref)}`,
+      `${repoPath}/branches/${encodeURIComponent(ref)}`,
     );
     const treeSha = branch.commit.commit.tree.sha;
     // Step 2 — fetch the recursive tree.
     const treeData = await request<GHTreeResponse>(
       "GET",
-      `/repos/${args.owner}/${args.repo}/git/trees/${treeSha}?recursive=1`,
+      `${repoPath}/git/trees/${seg(treeSha)}?recursive=1`,
     );
     return treeData.tree
       .filter((item) => item.type === "blob")
@@ -478,7 +509,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
   }): Promise<GitHubPullRequest> {
     const data = await request<GHPullDetail>(
       "GET",
-      `/repos/${args.owner}/${args.repo}/pulls/${args.number}`,
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/pulls/${seg(args.number)}`,
     );
     return {
       number: data.number,
@@ -509,14 +540,16 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     repo: string;
     number: number;
   }): Promise<GitHubPrComments> {
+    const repoPath = `/repos/${seg(args.owner)}/${seg(args.repo)}`;
+    const number = seg(args.number);
     const [issueRaw, reviewRaw] = await Promise.all([
       request<GHIssueComment[]>(
         "GET",
-        `/repos/${args.owner}/${args.repo}/issues/${args.number}/comments?per_page=100`,
+        `${repoPath}/issues/${number}/comments?per_page=100`,
       ),
       request<GHReviewComment[]>(
         "GET",
-        `/repos/${args.owner}/${args.repo}/pulls/${args.number}/comments?per_page=100`,
+        `${repoPath}/pulls/${number}/comments?per_page=100`,
       ),
     ]);
 
@@ -549,14 +582,15 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     ref: string;
   }): Promise<GitHubCiChecks> {
     const ref = encodeURIComponent(args.ref);
+    const repoPath = `/repos/${seg(args.owner)}/${seg(args.repo)}`;
     const [checksRes, statusRes] = await Promise.all([
       request<GHCheckRunsResponse>(
         "GET",
-        `/repos/${args.owner}/${args.repo}/commits/${ref}/check-runs?per_page=100`,
+        `${repoPath}/commits/${ref}/check-runs?per_page=100`,
       ),
       request<GHCombinedStatus>(
         "GET",
-        `/repos/${args.owner}/${args.repo}/commits/${ref}/status?per_page=100`,
+        `${repoPath}/commits/${ref}/status?per_page=100`,
       ),
     ]);
 
@@ -590,7 +624,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
   }): Promise<GitHubPrFile[]> {
     const data = await request<GHPullFile[]>(
       "GET",
-      `/repos/${args.owner}/${args.repo}/pulls/${args.number}/files?per_page=100`,
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/pulls/${seg(args.number)}/files?per_page=100`,
     );
     return data.map((f) => ({
       path: f.filename,
@@ -614,7 +648,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     for (let page = 1; page <= maxPages; page++) {
       const data = await request<GHBranchListItem[]>(
         "GET",
-        `/repos/${args.owner}/${args.repo}/branches?per_page=${perPage}&page=${page}`,
+        `/repos/${seg(args.owner)}/${seg(args.repo)}/branches?per_page=${perPage}&page=${page}`,
       );
       branches.push(
         ...data.map((b) => ({
@@ -653,12 +687,8 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
 // Normalisers — coerce loose GitHub string enums to our typed unions
 // ---------------------------------------------------------------------------
 
-function normaliseCheckStatus(
-  status: string,
-): GitHubCheckRun["status"] {
-  return status === "queued" || status === "in_progress"
-    ? status
-    : "completed";
+function normaliseCheckStatus(status: string): GitHubCheckRun["status"] {
+  return status === "queued" || status === "in_progress" ? status : "completed";
 }
 
 function normaliseConclusion(

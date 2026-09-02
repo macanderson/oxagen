@@ -12,9 +12,9 @@ import type { AgentOption } from "./agent-picker-types";
 import type { AgentSelectionApply } from "./chat-selection-context";
 
 /**
- * agent-context-chip.tsx — the composer's compact agent affordance, replacing
- * the old dropdown. Shows the selected agent's avatar + name (or an "Assistant"
- * ghost state), a code badge when the agent governs code mode, and opens the
+ * agent-context-chip.tsx — the composer's compact agent affordance. Shows the
+ * selected agent's avatar + name (or an "Assistant" ghost state), a code badge
+ * when the agent governs code mode, and opens the
  * `AgentPickerPanel` in a popover. Fully controlled: selection + apply flow
  * through props so it shares the composer's single selection store (it must not
  * instantiate its own).
@@ -69,8 +69,7 @@ export function AgentContextChip({
 }: AgentContextChipProps) {
   const [open, setOpen] = React.useState(false);
 
-  // A workspace with no agents keeps the plain composer (no chip), exactly as
-  // the old selector did — agentless workspaces are unaffected.
+  // A workspace with no agents keeps the plain composer — no chip to show.
   if (agents.length === 0) return null;
 
   const selected = selectedAgentId

@@ -104,7 +104,9 @@ function post(body: unknown, extraHeaders?: Record<string, string>): Request {
 }
 
 /** A fake StreamTextResult whose fullStream yields the given parts. */
-function streamResult(parts: unknown[]): { fullStream: AsyncIterable<unknown> } {
+function streamResult(parts: unknown[]): {
+  fullStream: AsyncIterable<unknown>;
+} {
   async function* gen() {
     for (const p of parts) yield p;
   }
@@ -149,7 +151,9 @@ async function readChunks(res: Response): Promise<Record<string, unknown>[]> {
   return out;
 }
 
-function deltasOf(chunks: Record<string, unknown>[]): Record<string, unknown>[] {
+function deltasOf(
+  chunks: Record<string, unknown>[],
+): Record<string, unknown>[] {
   return chunks
     .flatMap((c) => (c.choices as Array<{ delta?: unknown }>) ?? [])
     .map((ch) => (ch.delta ?? {}) as Record<string, unknown>);
@@ -186,7 +190,10 @@ describe("agent.llm: auth guard", () => {
     const req = makeRequest(PATH, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model: "m", messages: [{ role: "user", content: "hi" }] }),
+      body: JSON.stringify({
+        model: "m",
+        messages: [{ role: "user", content: "hi" }],
+      }),
     });
     const res = await app.fetch(req);
     expect(res.status).toBe(401);
@@ -237,7 +244,11 @@ describe("agent.llm: body validation", () => {
 describe("agent.llm: streaming happy path", () => {
   it("returns 200 text/event-stream", async () => {
     const res = await app.fetch(
-      post({ model: "m", messages: [{ role: "user", content: "hi" }], stream: true }),
+      post({
+        model: "m",
+        messages: [{ role: "user", content: "hi" }],
+        stream: true,
+      }),
     );
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("text/event-stream");
@@ -246,7 +257,11 @@ describe("agent.llm: streaming happy path", () => {
 
   it("emits a leading assistant role chunk then content deltas", async () => {
     const res = await app.fetch(
-      post({ model: "m", messages: [{ role: "user", content: "hi" }], stream: true }),
+      post({
+        model: "m",
+        messages: [{ role: "user", content: "hi" }],
+        stream: true,
+      }),
     );
     const deltas = deltasOf(await readChunks(res));
     expect(deltas[0]).toEqual({ role: "assistant" });
@@ -259,7 +274,11 @@ describe("agent.llm: streaming happy path", () => {
 
   it("emits a terminal finish_reason and a trailing usage chunk", async () => {
     const res = await app.fetch(
-      post({ model: "m", messages: [{ role: "user", content: "hi" }], stream: true }),
+      post({
+        model: "m",
+        messages: [{ role: "user", content: "hi" }],
+        stream: true,
+      }),
     );
     const chunks = await readChunks(res);
     const finishChunk = chunks.find((c) => {
@@ -281,7 +300,11 @@ describe("agent.llm: streaming happy path", () => {
 
   it("terminates with the [DONE] sentinel", async () => {
     const res = await app.fetch(
-      post({ model: "m", messages: [{ role: "user", content: "hi" }], stream: true }),
+      post({
+        model: "m",
+        messages: [{ role: "user", content: "hi" }],
+        stream: true,
+      }),
     );
     const text = await res.text();
     expect(text.trimEnd().endsWith("data: [DONE]")).toBe(true);
@@ -415,7 +438,10 @@ describe("agent.llm: tool wiring", () => {
             function: {
               name: "read_file",
               description: "Read a file",
-              parameters: { type: "object", properties: { path: { type: "string" } } },
+              parameters: {
+                type: "object",
+                properties: { path: { type: "string" } },
+              },
             },
           },
         ],
@@ -461,7 +487,11 @@ describe("agent.llm: streaming tool calls", () => {
       ]),
     );
     const res = await app.fetch(
-      post({ model: "m", messages: [{ role: "user", content: "edit" }], stream: true }),
+      post({
+        model: "m",
+        messages: [{ role: "user", content: "edit" }],
+        stream: true,
+      }),
     );
     const chunks = await readChunks(res);
     const deltas = deltasOf(chunks);
@@ -479,7 +509,10 @@ describe("agent.llm: streaming tool calls", () => {
     });
     // Argument fragments are streamed and reassemble to the full JSON.
     const argString = toolDeltas
-      .map((t) => (t.function as { arguments?: string } | undefined)?.arguments ?? "")
+      .map(
+        (t) =>
+          (t.function as { arguments?: string } | undefined)?.arguments ?? "",
+      )
       .join("");
     expect(argString).toBe('{"p":"x"}');
 
@@ -489,7 +522,8 @@ describe("agent.llm: streaming tool calls", () => {
       return choices[0]?.finish_reason != null;
     });
     expect(
-      (finishChunk?.choices as Array<{ finish_reason: string }>)[0]?.finish_reason,
+      (finishChunk?.choices as Array<{ finish_reason: string }>)[0]
+        ?.finish_reason,
     ).toBe("tool_calls");
   });
 
@@ -510,14 +544,21 @@ describe("agent.llm: streaming tool calls", () => {
       ]),
     );
     const res = await app.fetch(
-      post({ model: "m", messages: [{ role: "user", content: "run" }], stream: true }),
+      post({
+        model: "m",
+        messages: [{ role: "user", content: "run" }],
+        stream: true,
+      }),
     );
     const toolDeltas = deltasOf(await readChunks(res))
       .map((d) => d.tool_calls as Array<Record<string, unknown>> | undefined)
       .filter((t): t is Array<Record<string, unknown>> => Array.isArray(t))
       .flat();
     const args = toolDeltas
-      .map((t) => (t.function as { arguments?: string } | undefined)?.arguments ?? "")
+      .map(
+        (t) =>
+          (t.function as { arguments?: string } | undefined)?.arguments ?? "",
+      )
       .join("");
     expect(args).toBe('{"cmd":"ls"}');
   });
@@ -602,7 +643,9 @@ describe("agent.llm: non-streaming", () => {
       post({ model: "m", messages: [{ role: "user", content: "q" }] }),
     );
     expect(res.status).toBe(502);
-    const body = (await res.json()) as { error: { message: string; type: string } };
+    const body = (await res.json()) as {
+      error: { message: string; type: string };
+    };
     expect(body.error.message).toContain("gateway down");
     expect(body.error.type).toBe("upstream_error");
   });
@@ -624,7 +667,11 @@ describe("agent.llm: streaming error handling", () => {
       ]),
     );
     const res = await app.fetch(
-      post({ model: "m", messages: [{ role: "user", content: "q" }], stream: true }),
+      post({
+        model: "m",
+        messages: [{ role: "user", content: "q" }],
+        stream: true,
+      }),
     );
     const text = await res.text();
     expect(text).toContain('"error"');
@@ -638,7 +685,11 @@ describe("agent.llm: streaming error handling", () => {
     }
     mocks.streamAgentReply.mockReturnValue({ fullStream: boom() });
     const res = await app.fetch(
-      post({ model: "m", messages: [{ role: "user", content: "q" }], stream: true }),
+      post({
+        model: "m",
+        messages: [{ role: "user", content: "q" }],
+        stream: true,
+      }),
     );
     expect(res.status).toBe(200);
     const text = await res.text();

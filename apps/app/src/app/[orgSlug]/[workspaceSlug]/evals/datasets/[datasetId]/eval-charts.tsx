@@ -9,9 +9,9 @@
  * Three views:
  *   1. Score over time — a single-series LineChart of `overall` avgScore per
  *      bucketStart (y domain [0,1]).
- *   2. Model comparison (the user's ask, "compare models on the same
- *      dataset") — a grouped multi-line LineChart from `byModel[].points`, one
- *      line per model, with a legend by model + vendor.
+ *   2. Model comparison — a grouped multi-line LineChart from
+ *      `byModel[].points`, one line per model, with a legend by model +
+ *      vendor, so two models can be compared on the same dataset.
  *   3. Gauges — reaviz RadialGauges for avg score and pass rate.
  *
  * Colours are the theme's categorical ramp (--chart-1..5), resolved at runtime

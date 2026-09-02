@@ -19,7 +19,9 @@ afterEach(cleanup);
 
 // Mock the server action
 vi.mock("@/app/[orgSlug]/billing/actions", () => ({
-  buyCreditsAction: vi.fn().mockResolvedValue({ ok: false, error: "Stripe error" }),
+  buyCreditsAction: vi
+    .fn()
+    .mockResolvedValue({ ok: false, error: "Stripe error" }),
   cancelSubscriptionAction: vi.fn(),
   reactivateSubscriptionAction: vi.fn(),
   setSeatsAction: vi.fn(),
@@ -28,7 +30,12 @@ vi.mock("@/app/[orgSlug]/billing/actions", () => ({
 
 // Mock buy-credits-preview-action (dynamic import)
 vi.mock("./buy-credits-preview-action", () => ({
-  getDiscountPreview: vi.fn().mockResolvedValue({ grantCents: 2000, priceCents: 2000, percent: 0, savedCents: 0 }),
+  getDiscountPreview: vi.fn().mockResolvedValue({
+    grantCents: 2000,
+    priceCents: 2000,
+    percent: 0,
+    savedCents: 0,
+  }),
 }));
 
 // Mock toast
@@ -51,7 +58,9 @@ describe("BuyCredits — rendering", () => {
 
   it("renders the 'Buy credits' button", () => {
     render(<BuyCredits orgSlug="acme" />);
-    expect(screen.getByRole("button", { name: /buy credits/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /buy credits/i }),
+    ).toBeInTheDocument();
   });
 
   it("renders credit = penny description", () => {
@@ -79,6 +88,8 @@ describe("BuyCredits — validation", () => {
 
   it("Buy button is enabled for valid amount ($20)", () => {
     render(<BuyCredits orgSlug="acme" />);
-    expect(screen.getByRole("button", { name: /buy credits/i })).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /buy credits/i }),
+    ).not.toBeDisabled();
   });
 });

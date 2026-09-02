@@ -12,7 +12,12 @@ type Story = StoryObj<typeof meta>;
 
 export const Running: Story = {
   args: {
-    output: { swarmId: "swm_1", status: "running", completedTasks: 6, totalTasks: 15 },
+    output: {
+      swarmId: "swm_1",
+      status: "running",
+      completedTasks: 6,
+      totalTasks: 15,
+    },
   },
 };
 
@@ -28,15 +33,29 @@ export const CompleteWithHits: Story = {
           query: "USS Nautilus crew members",
           resultCount: 2,
           hits: [
-            { title: "Crew roster of SSN-571", url: "https://example.com/crew", snippet: "The first crew of the Nautilus served under Commander Eugene Wilkinson." },
-            { title: "Plankowners", url: "https://example.com/plankowners", snippet: "Original commissioning crew." },
+            {
+              title: "Crew roster of SSN-571",
+              url: "https://example.com/crew",
+              snippet:
+                "The first crew of the Nautilus served under Commander Eugene Wilkinson.",
+            },
+            {
+              title: "Plankowners",
+              url: "https://example.com/plankowners",
+              snippet: "Original commissioning crew.",
+            },
           ],
         },
         {
           query: "Nautilus Arctic voyage 1958",
           resultCount: 1,
           hits: [
-            { title: "Operation Sunshine — under the ice", url: "https://example.com/arctic", snippet: "In August 1958 the Nautilus became the first vessel to reach the North Pole submerged." },
+            {
+              title: "Operation Sunshine — under the ice",
+              url: "https://example.com/arctic",
+              snippet:
+                "In August 1958 the Nautilus became the first vessel to reach the North Pole submerged.",
+            },
           ],
         },
       ],
@@ -46,6 +65,11 @@ export const CompleteWithHits: Story = {
 
 export const Failed: Story = {
   args: {
-    output: { swarmId: "swm_3", status: "failed", completedTasks: 0, totalTasks: 4 },
+    output: {
+      swarmId: "swm_3",
+      status: "failed",
+      completedTasks: 0,
+      totalTasks: 4,
+    },
   },
 };

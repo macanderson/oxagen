@@ -46,10 +46,9 @@ export function MiniBars({
       data-testid="overview-mini-bars"
     >
       {values.map((v, i) => {
-        const h =
-          max > 0
-            ? Math.max((v / max) * height, v > 0 ? minStub : minStub)
-            : minStub;
+        // Every bar keeps at least `minStub` height so a zero day still shows a
+        // baseline tick rather than vanishing (and so max === 0 never divides).
+        const h = max > 0 ? Math.max((v / max) * height, minStub) : minStub;
         const x = i * (barWidth + gap);
         const y = height - h;
         const isLast = highlightLast && i === n - 1;

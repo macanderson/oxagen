@@ -51,7 +51,9 @@ export interface RouterOutcomeRow {
  * tenant scope stamps org_id/workspace_id (chInsert), so the caller must run this
  * inside runInTenantScope({ orgId, workspaceId }, …).
  */
-export async function recordRouterOutcome(row: RouterOutcomeRow): Promise<void> {
+export async function recordRouterOutcome(
+  row: RouterOutcomeRow,
+): Promise<void> {
   await chInsert("router_outcomes", [
     row as unknown as Record<string, unknown>,
   ]);

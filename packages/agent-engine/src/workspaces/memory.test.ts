@@ -11,14 +11,23 @@ describe("MemoryWorkspace", () => {
 
   it("editFile replaces a unique substring and rejects non-unique", async () => {
     const ws = new MemoryWorkspace({ "a.txt": "foo bar foo" });
-    await expect(ws.editFile("a.txt", "foo", "x")).rejects.toThrow(/unique|appears/i);
+    await expect(ws.editFile("a.txt", "foo", "x")).rejects.toThrow(
+      /unique|appears/i,
+    );
     await ws.editFile("a.txt", "bar", "baz");
     expect(await ws.readFile("a.txt")).toBe("foo baz foo");
   });
 
   it("glob matches ** and * patterns", async () => {
-    const ws = new MemoryWorkspace({ "src/x.ts": "", "src/deep/y.ts": "", "z.js": "" });
-    expect((await ws.glob("src/**/*.ts")).sort()).toEqual(["src/deep/y.ts", "src/x.ts"]);
+    const ws = new MemoryWorkspace({
+      "src/x.ts": "",
+      "src/deep/y.ts": "",
+      "z.js": "",
+    });
+    expect((await ws.glob("src/**/*.ts")).sort()).toEqual([
+      "src/deep/y.ts",
+      "src/x.ts",
+    ]);
   });
 
   it("grep returns file:line:text hits", async () => {
@@ -35,7 +44,9 @@ describe("MemoryWorkspace", () => {
 
   it("editFile rejects when old_string is absent", async () => {
     const ws = new MemoryWorkspace({ "a.txt": "hello" });
-    await expect(ws.editFile("a.txt", "zzz", "x")).rejects.toThrow(/not found/i);
+    await expect(ws.editFile("a.txt", "zzz", "x")).rejects.toThrow(
+      /not found/i,
+    );
   });
 
   it("editFile replaceAll replaces every occurrence and returns the count", async () => {

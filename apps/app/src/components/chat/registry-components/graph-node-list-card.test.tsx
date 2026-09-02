@@ -38,7 +38,9 @@ describe("GraphNodeListCard", () => {
   it("renders graph.node.search rows with a relevance score", () => {
     render(
       <GraphNodeListCard
-        output={{ nodes: [{ nodeId: "n_3", displayName: "Reactor", score: 0.5 }] }}
+        output={{
+          nodes: [{ nodeId: "n_3", displayName: "Reactor", score: 0.5 }],
+        }}
         orgSlug="acme"
         workspaceSlug="ws"
       />,
@@ -56,7 +58,13 @@ describe("GraphNodeListCard", () => {
     render(
       <GraphNodeListCard
         output={{
-          nodes: [{ id: "n_4", displayName: "Reactor Core", description: "A compact PWR design." }],
+          nodes: [
+            {
+              id: "n_4",
+              displayName: "Reactor Core",
+              description: "A compact PWR design.",
+            },
+          ],
           total: 1,
         }}
         orgSlug="acme"

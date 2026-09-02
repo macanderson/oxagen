@@ -162,7 +162,8 @@ async function bootstrapOrgIAMWithTx(
   for (const spec of roleSpecs) {
     const publicId = makeRolePublicId(orgId, spec.scopeKind, spec.name);
 
-    // Try insert first; on conflict (public_id unique) fall through to select.
+    // Select first; if absent, insert with onConflictDoNothing and re-select on
+    // the (rare, cross-transaction) race where another writer got there first.
     const existing = await d
       .select({ id: schema.roles.id, publicId: schema.roles.publicId })
       .from(schema.roles)

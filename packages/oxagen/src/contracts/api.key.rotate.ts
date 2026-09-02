@@ -25,7 +25,11 @@ export const apiKeyRotate = registerCapability({
   scoped: true,
   // API key management does not consume AI tokens — billing gate must not block.
   noBillingGate: true,
-  agent: { requiresApproval: true, riskLevel: "high", category: "organization" },
+  agent: {
+    requiresApproval: true,
+    riskLevel: "high",
+    category: "organization",
+  },
   sensitivity: "high",
   defaultEffect: "deny",
   defaultRoles: {
@@ -42,18 +46,35 @@ export const apiKeyRotate = registerCapability({
       .min(1)
       .max(120)
       .optional()
-      .describe("Optional new label for the replacement key (defaults to the old key's name)"),
+      .describe(
+        "Optional new label for the replacement key (defaults to the old key's name)",
+      ),
   }),
   output: z.object({
     keyId: z.string().describe("Internal UUID of the new key"),
-    publicId: z.string().describe("Prefixed public identifier of the new key (aky_ prefix)"),
+    publicId: z
+      .string()
+      .describe("Prefixed public identifier of the new key (aky_ prefix)"),
     name: z.string(),
-    keyPrefix: z.string().describe("Short prefix of the new key, stored for index lookup"),
-    rawKey: z.string().describe("The full replacement API key — shown ONCE, never again"),
-    expiresAt: z.string().nullable().describe("ISO-8601 expiry inherited from the old key, or null"),
-    createdAt: z.string().describe("ISO-8601 creation timestamp of the new key"),
-    revokedKeyPublicId: z.string().describe("Public ID of the now-revoked old key"),
-    revokedAt: z.string().describe("ISO-8601 timestamp the old key was revoked"),
+    keyPrefix: z
+      .string()
+      .describe("Short prefix of the new key, stored for index lookup"),
+    rawKey: z
+      .string()
+      .describe("The full replacement API key — shown ONCE, never again"),
+    expiresAt: z
+      .string()
+      .nullable()
+      .describe("ISO-8601 expiry inherited from the old key, or null"),
+    createdAt: z
+      .string()
+      .describe("ISO-8601 creation timestamp of the new key"),
+    revokedKeyPublicId: z
+      .string()
+      .describe("Public ID of the now-revoked old key"),
+    revokedAt: z
+      .string()
+      .describe("ISO-8601 timestamp the old key was revoked"),
   }),
 });
 

@@ -3,14 +3,14 @@
  */
 
 export type SectionType =
-  | "system"           // Position 0 — system prompt (always stable)
-  | "procedural"       // Position 1 — pinned rules (mostly stable)
-  | "project-facts"    // Position 2 — semantic memory (semi-stable)
-  | "code-skeleton"    // Position 3 — code graph context (semi-stable)
-  | "retrieved"        // Position 4 — task-specific retrieved (volatile)
-  | "compressed"       // Position 5 — compressed items with handles (volatile)
-  | "tool-results"     // Position 6 — recent tool outputs (volatile)
-  | "working";         // Position 7 — working memory / scratchpad (volatile)
+  | "system" // Position 0 — system prompt (always stable)
+  | "procedural" // Position 1 — pinned rules (mostly stable)
+  | "project-facts" // Position 2 — semantic memory (semi-stable)
+  | "code-skeleton" // Position 3 — code graph context (semi-stable)
+  | "retrieved" // Position 4 — task-specific retrieved (volatile)
+  | "compressed" // Position 5 — compressed items with handles (volatile)
+  | "tool-results" // Position 6 — recent tool outputs (volatile)
+  | "working"; // Position 7 — working memory / scratchpad (volatile)
 
 export interface ContextSection {
   id: string;

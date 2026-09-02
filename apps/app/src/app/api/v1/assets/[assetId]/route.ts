@@ -62,7 +62,8 @@ export async function GET(
     "content-disposition": out.contentDisposition,
     "x-content-type-options": "nosniff",
   };
-  if (out.sizeBytes !== null) headers["content-length"] = out.sizeBytes.toString();
+  if (out.sizeBytes !== null)
+    headers["content-length"] = out.sizeBytes.toString();
 
   return new Response(out.body, { status: 200, headers });
 }

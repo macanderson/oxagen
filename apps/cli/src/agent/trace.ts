@@ -8,18 +8,14 @@
  * process stays inspectable after the fact — nothing about how the agent reached
  * its answer is hidden from the user.
  *
- * These interfaces USED to be a second, hand-copied set living here. They are
- * the engine's single source of truth — it is the engine that actually runs the
- * pipeline and emits {@link StageEvent}s and builds {@link TurnTrace}s — so the
- * copy had already drifted: the engine's `TurnTrace` carries a `thinkingLog`
- * (per-round chain-of-thought, persisted for `/replay` and memory mining) that
- * the CLI copy had dropped entirely. Re-exporting restores it and removes the
- * drift surface. Every `../agent/trace.js` import in the CLI keeps resolving
- * unchanged because these re-exports keep the same names.
+ * The engine owns these interfaces, because the engine is what runs the pipeline,
+ * emits {@link StageEvent}s, and builds {@link TurnTrace}s. This file only
+ * re-exports them under the same names, so every `../agent/trace.js` import in
+ * the CLI keeps resolving and there is no second copy to drift.
  *
- * The framework-free contract still holds (no Ink, no AI SDK here); the four
- * `Record<StageKind, …>` presentation maps that colour/label stages for the TUI
- * stay CLI-owned in the renderer (`repl/components.tsx`), not here.
+ * This module stays framework-free: no Ink, no AI SDK. The four
+ * `Record<StageKind, …>` maps that colour and label stages for the TUI belong to
+ * the renderer (`repl/components.tsx`), not here.
  */
 export type {
   StageKind,

@@ -27,19 +27,27 @@ describe("KeyValueList", () => {
 
   it("accepts ReactNode values", () => {
     render(
-      <KeyValueList items={[{ label: "Key", value: <code data-testid="code">pk_123</code> }]} />,
+      <KeyValueList
+        items={[
+          { label: "Key", value: <code data-testid="code">pk_123</code> },
+        ]}
+      />,
     );
     expect(screen.getByTestId("code")).toBeInTheDocument();
   });
 
   it("two-column grid by default", () => {
     const { container } = render(<KeyValueList items={items} />);
-    expect((container.firstChild as HTMLElement).className).toContain("grid-cols-[minmax(6rem,auto)_1fr]");
+    expect((container.firstChild as HTMLElement).className).toContain(
+      "grid-cols-[minmax(6rem,auto)_1fr]",
+    );
   });
 
   it("dense tightens the row gap", () => {
     const { container } = render(<KeyValueList items={items} dense />);
-    expect((container.firstChild as HTMLElement).className).toContain("gap-y-1");
+    expect((container.firstChild as HTMLElement).className).toContain(
+      "gap-y-1",
+    );
   });
 
   it("stacked mode wraps each pair so the gap sits between pairs", () => {

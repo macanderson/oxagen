@@ -83,7 +83,10 @@ describe("buildRecentTurns", () => {
       { role: "tool", content: "tool result" },
       { role: "assistant", content: "kept" },
     ] as unknown as ModelMessage[];
-    const turns = buildRecentTurns(history, { userText: "q", assistantText: "" });
+    const turns = buildRecentTurns(history, {
+      userText: "q",
+      assistantText: "",
+    });
     expect(turns).toEqual([
       { role: "assistant", content: "kept" },
       { role: "user", content: "q" },
@@ -287,7 +290,9 @@ describe("generateTurnSuggestions", () => {
     });
     const args = generateObjectFor.mock.calls[0]![0] as Record<string, unknown>;
     const prompt = args.prompt as string;
-    expect(prompt).toContain("run_tests(route.test.ts) — FAILED: 2 assertions failed");
+    expect(prompt).toContain(
+      "run_tests(route.test.ts) — FAILED: 2 assertions failed",
+    );
     expect(prompt).toContain("apps/api/src/routes/v1/billing.ts");
     // Code mode appends the coding-session steer to the system prompt.
     expect(args.system as string).toContain("coding session");

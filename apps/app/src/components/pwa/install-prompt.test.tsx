@@ -13,7 +13,13 @@
  * suppression condition.
  */
 
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Re-export helpers from the component for isolated unit testing ────────────
@@ -117,7 +123,12 @@ describe("InstallPrompt — suppression logic", () => {
       value:
         "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
     });
-    for (const route of ["/login", "/signup", "/new-organization", "/cli/authorize/device"]) {
+    for (const route of [
+      "/login",
+      "/signup",
+      "/new-organization",
+      "/cli/authorize/device",
+    ]) {
       mockPathname = route;
       const { container, unmount } = render(<InstallPrompt />);
       expect(container.innerHTML).toBe("");

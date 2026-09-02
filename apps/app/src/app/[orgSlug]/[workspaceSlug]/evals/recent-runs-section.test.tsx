@@ -38,7 +38,9 @@ import { RecentRunsSection } from "./recent-runs-section";
 afterEach(cleanup);
 beforeEach(() => {
   mockInvoke.mockReset();
-  mockRunInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn());
+  mockRunInTenantScope.mockImplementation(
+    (_scope: unknown, fn: () => unknown) => fn(),
+  );
 });
 
 const BASE = {
@@ -56,14 +58,20 @@ describe("RecentRunsSection", () => {
       allTimeTotal: 2,
     });
     render(await RecentRunsSection(BASE));
-    expect(screen.getByTestId("recent-runs-client")).toHaveAttribute("data-count", "2");
+    expect(screen.getByTestId("recent-runs-client")).toHaveAttribute(
+      "data-count",
+      "2",
+    );
     expect(screen.queryByTestId("error-state")).toBeNull();
   });
 
   it("renders the empty client — not an error — when there are genuinely no runs", async () => {
     mockInvoke.mockResolvedValue({ runs: [], allTimeTotal: 0 });
     render(await RecentRunsSection(BASE));
-    expect(screen.getByTestId("recent-runs-client")).toHaveAttribute("data-count", "0");
+    expect(screen.getByTestId("recent-runs-client")).toHaveAttribute(
+      "data-count",
+      "0",
+    );
     expect(screen.queryByTestId("error-state")).toBeNull();
   });
 

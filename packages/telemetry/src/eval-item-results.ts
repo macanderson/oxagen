@@ -47,6 +47,14 @@ export async function insertEvalItemResults(
  * Read every result row for a run, newest item first. Tenant-filtered by the
  * active scope via chSelect (throws if unscoped). Ordered so eval.run.get can
  * render the drill-down deterministically.
+ *
+ * Unbounded by design — one row per dataset item, and `output`/`rationale` are
+ * free-text. A large dataset therefore returns a payload proportional to the
+ * run's size straight into eval.run.get's response. Every other read helper in
+ * this package clamps (see clampLimit in error-clusters.ts /
+ * execution-diagnostics.ts / sandbox-logs.ts); this one does not, so a run with
+ * thousands of items is a memory and response-size hazard. Pagination belongs
+ * here, but adding it changes the capability's output contract.
  */
 export async function selectEvalItemResults(
   runId: string,

@@ -79,3 +79,4 @@ Content-Type: application/json
 - `graph.node.search` — lexical substring search on displayName and description
 - `graph.node.list` — paginated browse with filters
 - `graph.stats` — aggregate node and edge counts
+- [The ontology read set](_ontology-read-set.md) — the graph reads an agent is granted together, and the `toolPolicy.ontology` opt-in

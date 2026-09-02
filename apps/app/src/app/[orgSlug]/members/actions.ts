@@ -183,12 +183,13 @@ export async function inviteMemberAction(
         revalidatePath(`/${orgSlug}/members/pending`);
         return { ok: true };
       } catch (err) {
-        // Unique violation on (orgId, email) for pending invitations.
+        // Unique violation on the partial index over (org_id, email) WHERE
+        // status = 'pending'. The index is named "n" (see
+        // packages/database/src/schema/org.ts), so Postgres reports
+        // `duplicate key value violates unique constraint "n"` — match on the
+        // stable "unique" substring rather than an index name.
         const msg = err instanceof Error ? err.message : String(err);
-        if (
-          msg.includes("invitations_org_email_pending_idx") ||
-          msg.includes("unique")
-        ) {
+        if (msg.includes("unique")) {
           return {
             ok: false,
             code: "already_invited",
@@ -215,12 +216,33 @@ export type InvitationActionResult =
   | { ok: true }
   | { ok: false; error: string };
 
+/**
+ * Revoke a pending invitation (status → "declined").
+ *
+ * Both call sites (the People panel and the Invited tab) only render the
+ * control for an owner/admin, but the UI is not the gate: this is a server
+ * action, so it must gate itself. Without the role check any authenticated
+ * user who learns an invitation's publicId could revoke invitations in any
+ * org by passing that org's slug — apps/app does not bootstrap kernel IAM and
+ * resolveOrg only maps slug→id.
+ */
 export async function declineInvitationAction(input: {
   orgSlug: string;
   invitationPublicId: string;
 }): Promise<InvitationActionResult> {
-  await getSessionOrRedirect();
+  const session = await getSessionOrRedirect();
   const tenant = await resolveOrg(input.orgSlug);
+
+  const actorRole = await getOrgRole(tenant.id, session.user.id);
+  if (!actorRole || !INVITER_ROLES.has(actorRole)) {
+    // A non-member and a non-privileged member get the same answer, so org
+    // existence is never confirmed to an outsider (mirrors inviteMemberAction).
+    return {
+      ok: false,
+      error:
+        "You don't have permission to manage invitations for this organization.",
+    };
+  }
 
   return await runInTenantScope(
     { orgId: tenant.id, workspaceId: ORG_ONLY_WS },

@@ -51,7 +51,9 @@ test.describe("workspace settings general — save + persist across reload", () 
     test.setTimeout(90_000);
 
     // ── 1. Fresh user + org (owner of the default workspace) ────────────────
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "ws-settings" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "ws-settings",
+    });
 
     // ── 2. Navigate to the workspace General settings page ──────────────────
     await page.goto(`/${orgSlug}/default/settings/general`);

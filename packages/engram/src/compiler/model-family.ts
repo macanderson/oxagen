@@ -34,7 +34,8 @@ export function resolveFamily(modelId: string): ModelFamily {
   ) {
     return "openai";
   }
-  if (lower.includes("claude") || lower.includes("anthropic")) return "anthropic";
+  if (lower.includes("claude") || lower.includes("anthropic"))
+    return "anthropic";
   if (lower.includes("gemini") || lower.includes("google")) return "google";
   return "default";
 }

@@ -46,11 +46,11 @@ bootstrapEntitlementRuntime();
 bootstrapDecisionRulesRuntime();
 
 // Wire the Postgres security event emitter (SOC2 CC6/CC7 audit trail).
-// Registered ONCE, immediately after bootstrapIAMRuntime(), so the db
-// client is available before any tool invocation can emit a kernel event.
-const _securityInsert = makeSecurityEventInserter();
+// Registered ONCE, after the three gate bootstraps above, so the emitter is
+// in place before any tool invocation can produce a kernel event to record.
+const securityInsert = makeSecurityEventInserter();
 setSecurityEventEmitter((kernelEvent) => {
-  recordSecurityEvent(_securityInsert, {
+  recordSecurityEvent(securityInsert, {
     eventType:
       kernelEvent.outcome === "allow"
         ? "capability.invoke_allowed"

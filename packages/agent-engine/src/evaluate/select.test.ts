@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { selectBestCandidate, looksPassing, DEFAULT_SELECTOR_MODEL, type Candidate } from "./select";
+import {
+  selectBestCandidate,
+  looksPassing,
+  DEFAULT_SELECTOR_MODEL,
+  type Candidate,
+} from "./select";
 import type { AgentAi } from "../ports";
 
 function makeAi(overrides: Partial<AgentAi> = {}): AgentAi {
@@ -106,7 +111,9 @@ describe("selectBestCandidate", () => {
   });
 
   it("falls back to a heuristic (tests-pass wins) when the selector model errors", async () => {
-    const ai = makeAi({ generateObject: vi.fn().mockRejectedValue(new Error("gateway down")) });
+    const ai = makeAi({
+      generateObject: vi.fn().mockRejectedValue(new Error("gateway down")),
+    });
     const res = await selectBestCandidate({
       request: "fix",
       candidates: [
@@ -123,9 +130,13 @@ describe("selectBestCandidate", () => {
     // Every other candidate's selector call would fail identically, so a
     // heuristic fallback here would just mask the real (unrecoverable) error.
     const ai = makeAi({
-      generateObject: vi.fn().mockRejectedValue(
-        new Error("A positive credit balance is required for all requests, please add credits."),
-      ),
+      generateObject: vi
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            "A positive credit balance is required for all requests, please add credits.",
+          ),
+        ),
     });
     await expect(
       selectBestCandidate({
@@ -141,14 +152,27 @@ describe("selectBestCandidate", () => {
 
   it("uses DEFAULT_SELECTOR_MODEL (Fable 5) when no selectorModel or env override is set", async () => {
     const gen = vi.fn().mockResolvedValue({
-      object: { winnerId: "c1", reasoning: "x", ranking: [{ id: "c1", score: 90, note: "ok" }, { id: "c2", score: 10, note: "meh" }] },
+      object: {
+        winnerId: "c1",
+        reasoning: "x",
+        ranking: [
+          { id: "c1", score: 90, note: "ok" },
+          { id: "c2", score: 10, note: "meh" },
+        ],
+      },
       usage: emptyUsageLike(),
     });
     const ai = makeAi({ generateObject: gen });
-    const res = await selectBestCandidate({ request: "fix", candidates: [cand("c1"), cand("c2")], ai });
+    const res = await selectBestCandidate({
+      request: "fix",
+      candidates: [cand("c1"), cand("c2")],
+      ai,
+    });
     expect(res.model).toBe(DEFAULT_SELECTOR_MODEL);
     expect(res.model).toBe("anthropic/claude-fable-5");
-    expect((gen.mock.calls[0]![0] as { model: string }).model).toBe("anthropic/claude-fable-5");
+    expect((gen.mock.calls[0]![0] as { model: string }).model).toBe(
+      "anthropic/claude-fable-5",
+    );
   });
 
   describe("OXAGEN_LLM_SELECTOR override", () => {
@@ -159,18 +183,36 @@ describe("selectBestCandidate", () => {
     it("uses OXAGEN_LLM_SELECTOR when no explicit selectorModel is given", async () => {
       process.env["OXAGEN_LLM_SELECTOR"] = "openai/gpt-5.5-pro";
       const gen = vi.fn().mockResolvedValue({
-        object: { winnerId: "c1", reasoning: "x", ranking: [{ id: "c1", score: 90, note: "ok" }, { id: "c2", score: 10, note: "meh" }] },
+        object: {
+          winnerId: "c1",
+          reasoning: "x",
+          ranking: [
+            { id: "c1", score: 90, note: "ok" },
+            { id: "c2", score: 10, note: "meh" },
+          ],
+        },
         usage: emptyUsageLike(),
       });
       const ai = makeAi({ generateObject: gen });
-      const res = await selectBestCandidate({ request: "fix", candidates: [cand("c1"), cand("c2")], ai });
+      const res = await selectBestCandidate({
+        request: "fix",
+        candidates: [cand("c1"), cand("c2")],
+        ai,
+      });
       expect(res.model).toBe("openai/gpt-5.5-pro");
     });
 
     it("an explicit selectorModel wins over OXAGEN_LLM_SELECTOR", async () => {
       process.env["OXAGEN_LLM_SELECTOR"] = "openai/gpt-5.5-pro";
       const gen = vi.fn().mockResolvedValue({
-        object: { winnerId: "c1", reasoning: "x", ranking: [{ id: "c1", score: 90, note: "ok" }, { id: "c2", score: 10, note: "meh" }] },
+        object: {
+          winnerId: "c1",
+          reasoning: "x",
+          ranking: [
+            { id: "c1", score: 90, note: "ok" },
+            { id: "c2", score: 10, note: "meh" },
+          ],
+        },
         usage: emptyUsageLike(),
       });
       const ai = makeAi({ generateObject: gen });
@@ -187,14 +229,24 @@ describe("selectBestCandidate", () => {
 
 describe("testsPassed — verified evidence beats sniffed testOutput text", () => {
   it("the heuristic fallback prefers a verified-passing candidate even when its testOutput text reads ambiguous", async () => {
-    const ai = makeAi({ generateObject: vi.fn().mockRejectedValue(new Error("gateway down")) });
+    const ai = makeAi({
+      generateObject: vi.fn().mockRejectedValue(new Error("gateway down")),
+    });
     const res = await selectBestCandidate({
       request: "fix",
       candidates: [
         // Text alone would look like a pass (no "fail"/"error" keywords) but
         // verifyAuto's real exit code says it failed.
-        cand("c1", { testOutput: "ran 3 cases, 1 broke", testsPassed: false, changedFiles: ["a.py"] }),
-        cand("c2", { testOutput: "ran 3 cases", testsPassed: true, changedFiles: ["a.py"] }),
+        cand("c1", {
+          testOutput: "ran 3 cases, 1 broke",
+          testsPassed: false,
+          changedFiles: ["a.py"],
+        }),
+        cand("c2", {
+          testOutput: "ran 3 cases",
+          testsPassed: true,
+          changedFiles: ["a.py"],
+        }),
       ],
       ai,
     });
@@ -207,7 +259,10 @@ describe("testsPassed — verified evidence beats sniffed testOutput text", () =
       object: {
         winnerId: "c2",
         reasoning: "c2 verified passing",
-        ranking: [{ id: "c2", score: 95, note: "verified" }, { id: "c1", score: 20, note: "verified failing" }],
+        ranking: [
+          { id: "c2", score: 95, note: "verified" },
+          { id: "c1", score: 20, note: "verified failing" },
+        ],
       },
       usage: emptyUsageLike(),
     });

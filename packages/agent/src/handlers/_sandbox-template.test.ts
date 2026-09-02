@@ -3,19 +3,23 @@ import { TEST_CTX as CTX } from "../test-utils/fixtures";
 import type { ResolvedSandboxTemplate } from "@oxagen/plugins";
 
 const h = vi.hoisted(() => ({
-  resolveSandboxTemplateForRun: vi.fn<
-    (
-      actor: unknown,
-      input: { sandboxTemplateId?: string },
-    ) => Promise<ResolvedSandboxTemplate>
-  >(),
+  resolveSandboxTemplateForRun:
+    vi.fn<
+      (
+        actor: unknown,
+        input: { sandboxTemplateId?: string },
+      ) => Promise<ResolvedSandboxTemplate>
+    >(),
 }));
 
 // Spread the real module so sibling exports the helper needs transitively stay
 // intact; only override the resolver we drive.
 vi.mock("@oxagen/plugins", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/plugins")>();
-  return { ...real, resolveSandboxTemplateForRun: h.resolveSandboxTemplateForRun };
+  return {
+    ...real,
+    resolveSandboxTemplateForRun: h.resolveSandboxTemplateForRun,
+  };
 });
 
 import { driverNetworkForMode, resolveRunTemplate } from "./_sandbox-template";
@@ -33,7 +37,12 @@ describe("driverNetworkForMode", () => {
     expect(driverNetworkForMode("static_egress")).toBe("allow");
   });
 
-  it.each(["aws_privatelink", "gcp_psc", "reverse_tunnel", "ssh_bastion"] as const)(
+  it.each([
+    "aws_privatelink",
+    "gcp_psc",
+    "reverse_tunnel",
+    "ssh_bastion",
+  ] as const)(
     "fails fast with a Phase 2/3 error for the unimplemented mode %s",
     (mode) => {
       expect(() => driverNetworkForMode(mode)).toThrow(/Phase 2\/3/);

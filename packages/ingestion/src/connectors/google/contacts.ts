@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { registerConnector, type ConnectorDefinition, type NormalizedRecord, type RecordTypeSample } from "../types";
+import {
+  registerConnector,
+  type ConnectorDefinition,
+  type NormalizedRecord,
+  type RecordTypeSample,
+} from "../types";
 
 const connectionConfigSchema = z.object({
   includeOtherContacts: z.boolean().default(false),
@@ -9,7 +14,9 @@ const connectionConfigSchema = z.object({
 type Config = typeof connectionConfigSchema;
 
 function asRecord(raw: unknown): Record<string, unknown> {
-  return raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return raw !== null && typeof raw === "object"
+    ? (raw as Record<string, unknown>)
+    : {};
 }
 
 function asString(v: unknown): string | undefined {
@@ -56,18 +63,32 @@ const googleContacts: ConnectorDefinition<Config> = {
             givenName: asString(primaryName["givenName"]),
             familyName: asString(primaryName["familyName"]),
             email: asString(primaryEmail["value"]),
-            emails: emailAddresses.map((e) => asString(asRecord(e)["value"])).filter(Boolean),
-            phoneNumbers: phoneNumbers.map((p) => asString(asRecord(p)["value"])).filter(Boolean),
+            emails: emailAddresses
+              .map((e) => asString(asRecord(e)["value"]))
+              .filter(Boolean),
+            phoneNumbers: phoneNumbers
+              .map((p) => asString(asRecord(p)["value"]))
+              .filter(Boolean),
             organization: asString(primaryOrg["name"]),
             jobTitle: asString(primaryOrg["title"]),
             etag: asString(r["etag"]),
-            updatedAt: asString(asRecord(r["metadata"])["sources"] ? asString(asRecord(asArray(asRecord(r["metadata"])["sources"])[0])["updateTime"]) : undefined),
+            updatedAt: asString(
+              asRecord(r["metadata"])["sources"]
+                ? asString(
+                    asRecord(asArray(asRecord(r["metadata"])["sources"])[0])[
+                      "updateTime"
+                    ],
+                  )
+                : undefined,
+            ),
           },
         };
       }
 
       default:
-        throw new Error(`google-contacts.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`);
+        throw new Error(
+          `google-contacts.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`,
+        );
     }
   },
 };

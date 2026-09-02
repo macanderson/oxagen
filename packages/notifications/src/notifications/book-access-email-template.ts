@@ -12,13 +12,7 @@
  * not surprising.
  */
 
-function esc(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
+import { esc } from "./html-escape";
 
 export interface BookAccessEmailTemplateInput {
   /** Full reader URL including the single-use access code. */

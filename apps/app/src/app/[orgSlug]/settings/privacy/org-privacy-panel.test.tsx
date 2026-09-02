@@ -15,7 +15,14 @@
  */
 
 import * as React from "react";
-import { render, screen, fireEvent, act, waitFor, cleanup } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  act,
+  waitFor,
+  cleanup,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -104,7 +111,9 @@ describe("OrgPrivacyPanel", () => {
 
     render(<OrgPrivacyPanel orgSlug={ORG_SLUG} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /request organization export/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /request organization export/i }),
+    );
 
     // While the action is in-flight, show "Submitting request…"
     expect(await screen.findByText(/submitting request/i)).toBeInTheDocument();
@@ -114,9 +123,7 @@ describe("OrgPrivacyPanel", () => {
       resolveExport({ exportId: "export-abc", status: "queued" });
     });
 
-    expect(
-      await screen.findByText(/being prepared/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/being prepared/i)).toBeInTheDocument();
     expect(mockExport).toHaveBeenCalledWith(ORG_SLUG);
   });
 
@@ -127,13 +134,21 @@ describe("OrgPrivacyPanel", () => {
     // then manually advance through the setInterval with fake timers.
     vi.useFakeTimers({ shouldAdvanceTime: true });
 
-    mockExport.mockResolvedValue({ exportId: "export-ready", status: "queued" });
-    mockPoll.mockResolvedValue({ status: "ready", exportUrl: "https://cdn.example.com/export.zip" });
+    mockExport.mockResolvedValue({
+      exportId: "export-ready",
+      status: "queued",
+    });
+    mockPoll.mockResolvedValue({
+      status: "ready",
+      exportUrl: "https://cdn.example.com/export.zip",
+    });
 
     render(<OrgPrivacyPanel orgSlug={ORG_SLUG} />);
 
     // Click export button
-    fireEvent.click(screen.getByRole("button", { name: /request organization export/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /request organization export/i }),
+    );
 
     // Flush the requestOrgDataExportAction promise
     await act(async () => {
@@ -157,15 +172,15 @@ describe("OrgPrivacyPanel", () => {
 
     render(<OrgPrivacyPanel orgSlug={ORG_SLUG} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /request organization export/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /request organization export/i }),
+    );
 
     await act(async () => {
       await vi.runAllTimersAsync();
     });
 
-    expect(
-      screen.getByText(/export failed/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/export failed/i)).toBeInTheDocument();
 
     vi.useRealTimers();
   });
@@ -177,7 +192,9 @@ describe("OrgPrivacyPanel", () => {
     render(<OrgPrivacyPanel orgSlug={ORG_SLUG} />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /request organization export/i }));
+      fireEvent.click(
+        screen.getByRole("button", { name: /request organization export/i }),
+      );
     });
 
     expect(await screen.findByText(/network error/i)).toBeInTheDocument();
@@ -187,21 +204,23 @@ describe("OrgPrivacyPanel", () => {
   it("shows confirming state with confirm and cancel buttons after delete click", () => {
     render(<OrgPrivacyPanel orgSlug={ORG_SLUG} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /delete organization/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /delete organization/i }),
+    );
 
     expect(
       screen.getByRole("button", { name: /yes, delete organization/i }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /cancel/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument();
   });
 
   // (7) Cancel: returns to idle
   it("returns to idle when Cancel is clicked in confirming state", () => {
     render(<OrgPrivacyPanel orgSlug={ORG_SLUG} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /delete organization/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /delete organization/i }),
+    );
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
 
     // The "Delete organization" button must be back
@@ -226,11 +245,15 @@ describe("OrgPrivacyPanel", () => {
     render(<OrgPrivacyPanel orgSlug={ORG_SLUG} />);
 
     // Open confirming state
-    fireEvent.click(screen.getByRole("button", { name: /delete organization/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /delete organization/i }),
+    );
 
     // Confirm the deletion
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /yes, delete organization/i }));
+      fireEvent.click(
+        screen.getByRole("button", { name: /yes, delete organization/i }),
+      );
     });
 
     expect(mockErase).toHaveBeenCalledWith(ORG_SLUG);
@@ -253,10 +276,14 @@ describe("OrgPrivacyPanel", () => {
 
     render(<OrgPrivacyPanel orgSlug={ORG_SLUG} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /delete organization/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /delete organization/i }),
+    );
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /yes, delete organization/i }));
+      fireEvent.click(
+        screen.getByRole("button", { name: /yes, delete organization/i }),
+      );
     });
 
     expect(

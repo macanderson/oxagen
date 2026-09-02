@@ -17,7 +17,6 @@ const config: XmcpConfig = {
   // verbatimModuleSyntax / ESM relative imports with .js extensions in
   // TypeScript source. extensionAlias maps each .js import to its .ts
   // equivalent so rspack finds the TypeScript source.
-  // See docs/specs/mcp/xmcp-migration-plan.md ("Risk 2").
   bundler: (config) => {
     config.resolve = config.resolve ?? {};
 
@@ -39,17 +38,27 @@ const config: XmcpConfig = {
     };
 
     // Keep heavy packages out of the bundle to stay under the Vercel 250MB
-    // serverless function size limit. These are either:
-    //   - native-addon packages rspack cannot parse (dockerode -> ssh2)
-    //   - large document/media libs loaded lazily via `await import()` in handlers
-    //   - SDKs used only at runtime (inngest, ai, neo4j-driver)
-    // They resolve from node_modules at runtime because the xmcp Vercel preset
-    // runs `pnpm install` at the monorepo root alongside the function bundle.
+    // serverless function size limit. These fall into four groups:
+    //   - native addons rspack cannot parse (duckdb + its node-pre-gyp chain,
+    //     dockerode -> ssh2)
+    //   - large document/media libs loaded lazily via `await import()` in
+    //     handlers (exceljs, pptxgenjs, docx, pdf-lib)
+    //   - SDKs used only at runtime (inngest, ai, neo4j-driver,
+    //     @vercel/sandbox, stripe, better-auth)
+    //   - store clients reached only from inside handlers (drizzle-orm,
+    //     postgres, @clickhouse/client)
+    //
+    // Every name below is also declared in this app's package.json even though
+    // no file under src/ imports it. That is deliberate and load-bearing: an
+    // externalized module is `require()`d from node_modules at runtime, and
+    // pnpm's strict layout only exposes packages this app declares. Adding an
+    // entry here without the matching dependency yields a runtime MODULE_NOT_FOUND
+    // that no build step catches.
     const heavyPackages = [
-      // duckdb is a native CJS addon reached via `require("duckdb")` in
-      // @oxagen/engram's graph-store, pulled into this build transitively:
+      // duckdb is a native CJS addon, pulled into this build transitively:
       //   src/middleware.ts -> @oxagen/agent register/handlers
-      //   -> agent.trace.get.ts -> @oxagen/engram barrel -> store/graph-store.ts.
+      //   -> agent.trace.get.ts -> @oxagen/engram barrel
+      //   -> store/index.ts -> store/duckdb-adapter.ts.
       // Its node-pre-gyp/node-gyp toolchain ships non-JS assets rspack cannot
       // parse (C# Find-VisualStudio.cs, HTML, s3_setup.js) and dynamically
       // require()s aws-sdk/mock-aws-s3/nock. Externalize the whole chain so it
@@ -61,7 +70,6 @@ const config: XmcpConfig = {
       "mock-aws-s3",
       "aws-sdk",
       "nock",
-      "blake3",
       "dockerode",
       "exceljs",
       "pptxgenjs",

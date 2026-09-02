@@ -22,6 +22,8 @@ export default async function environmentUpdateTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(environmentUpdate.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(environmentUpdate.name, args, ctx, {
+    surface: "mcp",
+  });
   return environmentUpdate.output.parse(output);
 }

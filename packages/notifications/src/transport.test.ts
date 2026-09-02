@@ -7,12 +7,19 @@ vi.mock("@oxagen/config/env", () => ({
   requireEnv: (...args: unknown[]): unknown => requireEnvMock(...args),
 }));
 
-const createSmtpMock = vi.fn((..._args: unknown[]) => ({ driver: "smtp", send: vi.fn() }));
+const createSmtpMock = vi.fn((..._args: unknown[]) => ({
+  driver: "smtp",
+  send: vi.fn(),
+}));
 vi.mock("./smtp-transport", () => ({
   createSmtpTransport: (...args: unknown[]): unknown => createSmtpMock(...args),
 }));
 
-import { emailTransport, isEmailTransportConfigured, __resetTransportForTests } from "./transport";
+import {
+  emailTransport,
+  isEmailTransportConfigured,
+  __resetTransportForTests,
+} from "./transport";
 
 const FULL_ENV = {
   SMTP_HOST: "smtp.resend.com",
@@ -47,7 +54,10 @@ describe("emailTransport", () => {
     requireEnvMock.mockReturnValue({ ...FULL_ENV, SMTP_FROM_NAME: undefined });
     expect(() => emailTransport()).not.toThrow();
     expect(createSmtpMock).toHaveBeenCalledWith(
-      expect.objectContaining({ fromName: undefined, fromEmail: "noreply@notifications.oxagen.sh" }),
+      expect.objectContaining({
+        fromName: undefined,
+        fromEmail: "noreply@notifications.oxagen.sh",
+      }),
     );
   });
 

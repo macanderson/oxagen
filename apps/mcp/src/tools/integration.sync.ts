@@ -6,7 +6,9 @@ import { buildContext } from "../context";
 
 export const schema = {
   ...integrationSync.input.shape,
-  integrationId: integrationSync.input.shape.integrationId.describe("Plugin instance ID to sync"),
+  integrationId: integrationSync.input.shape.integrationId.describe(
+    "Plugin instance ID to sync",
+  ),
   mode: integrationSync.input.shape.mode.describe(
     "Sync mode: incremental (since last cursor) or full (re-index from scratch)",
   ),
@@ -22,8 +24,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function integrationSyncTool(args: InferSchema<typeof schema>) {
+export default async function integrationSyncTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(integrationSync.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(integrationSync.name, args, ctx, {
+    surface: "mcp",
+  });
   return integrationSync.output.parse(output);
 }

@@ -66,7 +66,12 @@ describe("orgListHandler", () => {
 
     const result = await orgListHandler(
       {},
-      makeCTX({ userId: "usr_session", apiKeyId: null, orgId: "", workspaceId: "" }),
+      makeCTX({
+        userId: "usr_session",
+        apiKeyId: null,
+        orgId: "",
+        workspaceId: "",
+      }),
     );
 
     expect(result.organizations).toHaveLength(1);
@@ -81,13 +86,20 @@ describe("orgListHandler", () => {
 
   it("resolves the effective user from the API key and returns their orgs", async () => {
     // Call 1: API-key lookup returns the key's creator.
-    mocks.withSystemDb.mockResolvedValueOnce({ createdByUserId: "usr_key_creator" });
+    mocks.withSystemDb.mockResolvedValueOnce({
+      createdByUserId: "usr_key_creator",
+    });
     // Call 2: membership query returns ORG_ROWS.
     mocks.withSystemDb.mockResolvedValueOnce(ORG_ROWS);
 
     const result = await orgListHandler(
       {},
-      makeCTX({ userId: null, apiKeyId: "aky_test", orgId: "org_bound", workspaceId: "ws_bound" }),
+      makeCTX({
+        userId: null,
+        apiKeyId: "aky_test",
+        orgId: "org_bound",
+        workspaceId: "ws_bound",
+      }),
     );
 
     expect(result.organizations).toHaveLength(1);
@@ -101,10 +113,7 @@ describe("orgListHandler", () => {
     mocks.withSystemDb.mockResolvedValueOnce({ createdByUserId: null });
 
     await expect(
-      orgListHandler(
-        {},
-        makeCTX({ userId: null, apiKeyId: "aky_no_creator" }),
-      ),
+      orgListHandler({}, makeCTX({ userId: null, apiKeyId: "aky_no_creator" })),
     ).rejects.toThrow("org.list requires an authenticated user");
 
     // Should not proceed to the membership query.
@@ -116,10 +125,7 @@ describe("orgListHandler", () => {
     mocks.withSystemDb.mockResolvedValueOnce(null);
 
     await expect(
-      orgListHandler(
-        {},
-        makeCTX({ userId: null, apiKeyId: "aky_deleted" }),
-      ),
+      orgListHandler({}, makeCTX({ userId: null, apiKeyId: "aky_deleted" })),
     ).rejects.toThrow("org.list requires an authenticated user");
 
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
@@ -129,10 +135,7 @@ describe("orgListHandler", () => {
 
   it("throws immediately when neither userId nor apiKeyId is set (unauthenticated)", async () => {
     await expect(
-      orgListHandler(
-        {},
-        makeCTX({ userId: null, apiKeyId: null }),
-      ),
+      orgListHandler({}, makeCTX({ userId: null, apiKeyId: null })),
     ).rejects.toThrow("org.list requires an authenticated user");
 
     // No DB calls should be made for unauthenticated requests.

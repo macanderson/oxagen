@@ -36,7 +36,10 @@ export function mergeClock(a: VectorClock, b: VectorClock): VectorClock {
  * - "concurrent": neither dominates (conflict)
  * - "equal": identical
  */
-export function compareClock(a: VectorClock, b: VectorClock): "before" | "after" | "concurrent" | "equal" {
+export function compareClock(
+  a: VectorClock,
+  b: VectorClock,
+): "before" | "after" | "concurrent" | "equal" {
   const allKeys = new Set([...Object.keys(a), ...Object.keys(b)]);
   let aLeads = false;
   let bLeads = false;

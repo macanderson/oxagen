@@ -64,11 +64,9 @@ function fail(message: string, writer: CommandWriter = stdoutWriter): never {
   throw new Error(message);
 }
 
-// memoryKind is an open string per the two-axis model — accept anything, but
-// keep the recommended set around for hinting.
-function normalizeKind(v: string | undefined): string | undefined {
-  return v === undefined ? undefined : v;
-}
+// memoryKind is an open string per the two-axis model: it is passed through
+// unvalidated. RECOMMENDED_MEMORY_KINDS exists only to hint the flag's help
+// text — it is deliberately not an allow-list.
 
 function parseClass(
   v: string | undefined,
@@ -144,7 +142,7 @@ export async function handleMemoryList(
   try {
     const result = await listMemories({
       memoryClass: parseClass(opts.class, writer),
-      memoryKind: normalizeKind(opts.kind),
+      memoryKind: opts.kind,
       minEnforcement: parseIntOpt(
         opts.minEnforcement,
         "--min-enforcement",
@@ -217,7 +215,7 @@ export async function handleMemoryEdit(
     const updated = await updateMemory({
       memoryId: id,
       lesson: opts.lesson,
-      memoryKind: normalizeKind(opts.kind),
+      memoryKind: opts.kind,
       source: opts.source,
     });
     if (opts.json) {
@@ -639,7 +637,7 @@ export async function handleRemember(
     const result = await rememberMemory({
       text: trimmed,
       memoryClass: parseClass(opts.class, writer),
-      memoryKind: normalizeKind(opts.kind),
+      memoryKind: opts.kind,
       enforcementScore,
       nodeRef: opts.node,
     });

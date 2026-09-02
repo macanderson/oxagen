@@ -1,7 +1,4 @@
 {
   "title": "Enterprise",
-  "pages": [
-    "overview",
-    "use-cases"
-  ]
+  "pages": ["overview", "use-cases"]
 }

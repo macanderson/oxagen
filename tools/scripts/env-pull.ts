@@ -35,7 +35,13 @@ async function pull(target: { name: string; dir: string }): Promise<void> {
     return;
   }
   console.log(kleur.cyan(`[env-pull] ${target.name}`));
-  const args = ["env", "pull", ".env.local", "--environment=development", "--yes"];
+  const args = [
+    "env",
+    "pull",
+    ".env.local",
+    "--environment=development",
+    "--yes",
+  ];
   if (VERCEL_TEAM_SLUG) args.push(`--scope=${VERCEL_TEAM_SLUG}`);
   await execa("vercel", args, { cwd: target.dir, stdio: "inherit" });
 
@@ -45,10 +51,16 @@ async function pull(target: { name: string; dir: string }): Promise<void> {
   // requireEnv on BETTER_AUTH_*/NODE_ENV) crash on boot. Heal it in place so
   // every pull self-corrects regardless of the upstream quoting.
   const envFile = resolve(target.dir, ".env.local");
-  const { content, collapsed } = collapseRedundantQuotes(readFileSync(envFile, "utf8"));
+  const { content, collapsed } = collapseRedundantQuotes(
+    readFileSync(envFile, "utf8"),
+  );
   if (collapsed > 0) {
     writeFileSync(envFile, content);
-    console.log(kleur.yellow(`[env-pull] ${target.name}: healed ${collapsed} doubly-quoted value(s)`));
+    console.log(
+      kleur.yellow(
+        `[env-pull] ${target.name}: healed ${collapsed} doubly-quoted value(s)`,
+      ),
+    );
   }
 }
 

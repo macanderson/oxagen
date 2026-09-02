@@ -32,7 +32,7 @@ import {
   assertOrgMember,
   assertBillingManager,
 } from "@/lib/resolve-org";
-import { getSession } from "@/lib/session";
+import { getSessionOrRedirect } from "@/lib/session";
 import { Stat, StatGroup } from "@/components/ui/stat";
 import { Panel } from "@/components/ui/panel";
 import {
@@ -121,8 +121,8 @@ const CAP_LABELS: Record<string, string> = {
   create_pdf: "PDFs",
   generate_document: "Documents",
   generate_svg: "SVG",
-  "mermaid.generate": "Diagrams",
-  "markdown.generate": "Markdown",
+  generate_mermaid: "Diagrams",
+  generate_markdown: "Markdown",
 };
 
 export default async function OrgDashboardPage({
@@ -133,19 +133,23 @@ export default async function OrgDashboardPage({
   searchParams: Promise<{ range?: string }>;
 }) {
   const [{ orgSlug }, sp] = await Promise.all([params, searchParams]);
-  const [org, session] = await Promise.all([resolveOrg(orgSlug), getSession()]);
+  const [org, session] = await Promise.all([
+    resolveOrg(orgSlug),
+    getSessionOrRedirect(),
+  ]);
 
-  const viewerUserId = session?.user?.id ?? "";
+  // getSessionOrRedirect guarantees a signed-in user, so the membership gate is
+  // unconditional: an anonymous (or stale-cookie) visitor never reaches the org
+  // usage read below.
+  const viewerUserId = session.user.id;
+  await assertOrgMember(org.id, viewerUserId);
+  // Spend is gated to owner/admin/billing roles; usage counts are not.
   let canSeeCost = false;
-  if (viewerUserId) {
-    await assertOrgMember(org.id, viewerUserId);
-    // Spend is gated to owner/admin/billing roles; usage counts are not.
-    try {
-      await assertBillingManager(org.id, viewerUserId);
-      canSeeCost = true;
-    } catch {
-      canSeeCost = false;
-    }
+  try {
+    await assertBillingManager(org.id, viewerUserId);
+    canSeeCost = true;
+  } catch {
+    canSeeCost = false;
   }
 
   const rangeKey = parseRange(sp.range);

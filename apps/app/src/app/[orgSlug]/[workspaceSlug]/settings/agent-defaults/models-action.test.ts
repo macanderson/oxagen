@@ -36,11 +36,11 @@ const {
   const mockFrom = vi.fn(() => ({ where: mockWhere }));
   const mockSelect = vi.fn(() => ({ from: mockFrom }));
   const mockTx = { select: mockSelect };
-  const mockWithTenantDb = vi.fn(
-    (fn: (tx: typeof mockTx) => unknown) => fn(mockTx),
+  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) =>
+    fn(mockTx),
   );
-  const mockRunInTenantScope = vi.fn(
-    (_scope: unknown, fn: () => unknown) => fn(),
+  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) =>
+    fn(),
   );
 
   return {
@@ -73,8 +73,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: mockWithTenantDb,
-
+    withTenantDb: mockWithTenantDb,
   };
 });
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
@@ -82,8 +81,13 @@ vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@/lib/routes", () => ({
   workspace: {
     settings: {
-      agentDefaults: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-        `/${orgSlug}/${workspaceSlug}/settings/agent-defaults`,
+      agentDefaults: ({
+        orgSlug,
+        workspaceSlug,
+      }: {
+        orgSlug: string;
+        workspaceSlug: string;
+      }) => `/${orgSlug}/${workspaceSlug}/settings/agent-defaults`,
     },
   },
 }));
@@ -184,7 +188,9 @@ describe("updateWorkspaceModelsAction", () => {
       defaultImageModel: null,
       defaultVideoModel: null,
     });
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/settings/agent-defaults");
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/acme/main/settings/agent-defaults",
+    );
   });
 
   it("returns ok:false with error message when invoke throws", async () => {

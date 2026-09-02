@@ -285,7 +285,9 @@ describe("planWitnessCommands", () => {
   });
 
   it("ignores a flip whose latest outcome is failing", () => {
-    const outcomes = new Map<string, number>([["pnpm vitest run a.test.ts", 1]]);
+    const outcomes = new Map<string, number>([
+      ["pnpm vitest run a.test.ts", 1],
+    ]);
     expect(
       planWitnessCommands(
         { lastOutcomes: outcomes, flippedBy: "pnpm vitest run a.test.ts" },
@@ -296,7 +298,10 @@ describe("planWitnessCommands", () => {
 });
 
 describe("hasWitnessClaim", () => {
-  const noEvidence = { lastOutcomes: new Map<string, number>(), flippedBy: null };
+  const noEvidence = {
+    lastOutcomes: new Map<string, number>(),
+    flippedBy: null,
+  };
   it("claims via a fail→pass flip or changed test files", () => {
     expect(hasWitnessClaim({ ...noEvidence, flippedBy: "cmd" }, 0)).toBe(true);
     expect(hasWitnessClaim(noEvidence, 1)).toBe(true);
@@ -325,13 +330,13 @@ describe("witnessOutcome", () => {
 
 // ── verdict override ───────────────────────────────────────────────────────────
 
-function gateResult(
-  status: MutationGateResult["status"],
-): MutationGateResult {
+function gateResult(status: MutationGateResult["status"]): MutationGateResult {
   return {
     status,
     reason: "r",
-    runs: [{ command: "pnpm vitest run a.test.ts", exitCode: 0, timedOut: false }],
+    runs: [
+      { command: "pnpm vitest run a.test.ts", exitCode: 0, timedOut: false },
+    ],
     revertedFiles: ["src/calc.ts"],
     testFiles: ["src/calc.test.ts"],
     durationMs: 5,
@@ -434,7 +439,8 @@ describe("generateMutants", () => {
       "+import { a } from './a';",
     ].join("\n");
     const file = parseUnifiedDiff(d)[0]!;
-    const current = "const keep = 1;\n// a === b comment\nimport { a } from './a';\n";
+    const current =
+      "const keep = 1;\n// a === b comment\nimport { a } from './a';\n";
     expect(generateMutants(file, current, 10)).toEqual([]);
     // Diverged content produces nothing rather than mis-targeted mutants.
     expect(generateMutants(file, "totally\ndifferent\nfile\n", 10)).toEqual([]);
@@ -456,7 +462,12 @@ describe("generateMutants", () => {
       "if (a >= b) go();",
       "return compute(a);",
     ];
-    const current = ["function f(a, b) {", ...opLines.map((l) => "  " + l), "}", ""].join("\n");
+    const current = [
+      "function f(a, b) {",
+      ...opLines.map((l) => "  " + l),
+      "}",
+      "",
+    ].join("\n");
     const d = [
       "--- a/src/ops.ts",
       "+++ b/src/ops.ts",

@@ -17,13 +17,19 @@ describe("agent.memory.delete capability", () => {
   });
 
   it("output parses { deleted: true, memoryId }", () => {
-    const parsed = agentMemoryDelete.output.parse({ deleted: true, memoryId: "mem_abc" });
+    const parsed = agentMemoryDelete.output.parse({
+      deleted: true,
+      memoryId: "mem_abc",
+    });
     expect(parsed.deleted).toBe(true);
     expect(parsed.memoryId).toBe("mem_abc");
   });
 
   it("output parses { deleted: false, memoryId } when none matched", () => {
-    const parsed = agentMemoryDelete.output.parse({ deleted: false, memoryId: "mem_abc" });
+    const parsed = agentMemoryDelete.output.parse({
+      deleted: false,
+      memoryId: "mem_abc",
+    });
     expect(parsed.deleted).toBe(false);
     expect(parsed.memoryId).toBe("mem_abc");
   });

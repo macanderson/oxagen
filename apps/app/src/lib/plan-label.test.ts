@@ -15,7 +15,12 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { planTierLabel, planLabelFrom, TIER_LABELS, VALID_TIERS } from "./plan-label";
+import {
+  planTierLabel,
+  planLabelFrom,
+  TIER_LABELS,
+  VALID_TIERS,
+} from "./plan-label";
 
 // Iterable array derived from the source-of-truth set (Set has no .map/.length).
 const TIERS = [...VALID_TIERS];
@@ -167,7 +172,14 @@ describe("CONFIG-DERIVED tier coverage", () => {
   });
 
   it("no tier outside VALID_TIERS is recognized (label falls to 'Free')", () => {
-    const outsiders = ["gold", "platinum", "pro", "starter", "ENTERPRISE", "Free"];
+    const outsiders = [
+      "gold",
+      "platinum",
+      "pro",
+      "starter",
+      "ENTERPRISE",
+      "Free",
+    ];
     for (const t of outsiders) {
       // An "outsider" that happens to collide with a real tier string would be a
       // genuine tier — guard the fixture against that so the assertion stays valid.

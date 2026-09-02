@@ -21,7 +21,11 @@ export function slugify(input: string, maxLen?: number): string {
     .trim()
     .replace(/[^a-z0-9]+/g, "-") // any run of non-alphanumerics → single hyphen
     .replace(/^-+|-+$/g, ""); // trim leading/trailing hyphens
-  return typeof maxLen === "number" ? slug.slice(0, maxLen) : slug;
+  if (typeof maxLen !== "number") return slug;
+  // Re-trim after truncating: a cut that lands on a hyphen ("my-agent" → "my-")
+  // would otherwise emit a slug the server's SLUG_PATTERN rejects, so the
+  // builder would show a valid-looking value that fails on save.
+  return slug.slice(0, maxLen).replace(/-+$/, "");
 }
 
 /**

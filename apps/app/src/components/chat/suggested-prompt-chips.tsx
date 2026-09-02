@@ -1,15 +1,18 @@
 "use client";
 
 /**
- * SuggestedPromptChips — renders exactly 3 context-aware prompt chips above
- * the composer (and/or in the empty-state area).
+ * SuggestedPromptChips — renders a short row of context-aware prompt chips
+ * above the composer (and/or in the empty-state area).
  *
  * Each chip auto-submits its prompt through the existing ComposerAction send
- * path (no second transport). Chips are keyboard-navigable (role="button",
- * tabIndex, Enter/Space to activate).
+ * path (no second transport). Every chip is a real `<button>`, so Enter/Space
+ * and focus order come from the browser.
  *
- * The chip list is derived from `useSuggestedPrompts()` which is always
- * length-3 and updates reactively as the page context changes.
+ * Two sources feed the row. The `suggestions` prop — this turn's LLM-generated
+ * chips — wins whenever it is non-empty. Otherwise the row falls back to
+ * `useSuggestedPrompts()`, which returns 3 chips derived from the page context
+ * and updates reactively as that context changes. `maxPrompts` caps whichever
+ * source is in play.
  */
 
 import * as React from "react";
@@ -122,7 +125,9 @@ export function SuggestedPromptChips({
   // chat_ux_v2 copy pass: chips are sentence case, capped at 3.
   const prompts = React.useMemo(() => {
     const capped =
-      maxPrompts !== undefined ? sourcePrompts.slice(0, maxPrompts) : sourcePrompts;
+      maxPrompts !== undefined
+        ? sourcePrompts.slice(0, maxPrompts)
+        : sourcePrompts;
     if (!sentenceCase) return capped;
     return capped.map((p) => ({ ...p, label: toSentenceCase(p.label) }));
   }, [sourcePrompts, maxPrompts, sentenceCase]);
@@ -131,7 +136,9 @@ export function SuggestedPromptChips({
   // emits a fresh set), so the chips gently fade/slide in rather than snapping.
   const animationKey = prompts.map((p) => p.label).join("|");
   const [pending, startTransition] = React.useTransition();
-  const [activatingIndex, setActivatingIndex] = React.useState<number | null>(null);
+  const [activatingIndex, setActivatingIndex] = React.useState<number | null>(
+    null,
+  );
   const [chipError, setChipError] = React.useState<string | null>(null);
   // Per-suggestion dismissal (only meaningful when `dismissable`): the user can
   // wave away the current next-step pill; it returns undismissed the moment a
@@ -162,7 +169,11 @@ export function SuggestedPromptChips({
 
   // Keyboard handler: activate on Enter or Space.
   const handleKeyDown = React.useCallback(
-    (e: React.KeyboardEvent<HTMLButtonElement>, prompt: string, index: number) => {
+    (
+      e: React.KeyboardEvent<HTMLButtonElement>,
+      prompt: string,
+      index: number,
+    ) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         handleActivate(prompt, index);
@@ -171,9 +182,9 @@ export function SuggestedPromptChips({
     [handleActivate],
   );
 
-  // Hide the entire chip group while the user is typing. We use CSS visibility
-  // (not conditional render) so the layout space is preserved and there's no
-  // layout shift when the chips reappear on clear.
+  // Hide the entire chip group while the user is typing, and bring it back when
+  // the input is cleared. The group is unmounted rather than hidden, so the row
+  // gives its space back to the composer instead of leaving a blank gap.
   if (inputHasContent) return null;
   // Dismissed for this turn — stays hidden until the next suggestion arrives.
   if (dismissable && dismissed) return null;
@@ -189,116 +200,117 @@ export function SuggestedPromptChips({
           {chipError}
         </p>
       ) : null}
-    <div
-      key={animationKey}
-      className={cn(
-        "gap-2 animate-in fade-in slide-in-from-bottom-1 duration-300",
-        stacked
-          ? "flex w-full flex-col items-stretch"
-          : align === "start"
-            ? "flex flex-wrap items-center justify-start"
-            : "flex flex-wrap items-center justify-center",
-      )}
-      role="group"
-      aria-label="Suggested prompts"
-    >
-      {prompts.map(({ label, prompt }, index) => {
-        const labelContent =
-          activatingIndex === index ? (
-            // Minimal in-flight indicator — a single spinning dot replacing the label.
-            <span
-              className="inline-block size-3 animate-spin rounded-full border border-current border-t-transparent"
-              aria-hidden="true"
-            />
-          ) : (
-            <span className="truncate max-w-[220px]">{label}</span>
-          );
+      <div
+        key={animationKey}
+        className={cn(
+          "gap-2 animate-in fade-in slide-in-from-bottom-1 duration-300",
+          stacked
+            ? "flex w-full flex-col items-stretch"
+            : align === "start"
+              ? "flex flex-wrap items-center justify-start"
+              : "flex flex-wrap items-center justify-center",
+        )}
+        role="group"
+        aria-label="Suggested prompts"
+      >
+        {prompts.map(({ label, prompt }, index) => {
+          const labelContent =
+            activatingIndex === index ? (
+              // Minimal in-flight indicator — a single spinning dot replacing the label.
+              <span
+                className="inline-block size-3 animate-spin rounded-full border border-current border-t-transparent"
+                aria-hidden="true"
+              />
+            ) : (
+              <span className="truncate max-w-[220px]">{label}</span>
+            );
 
-        if (dismissable) {
-          // Pill-with-dismiss: the wrapper is styled as the chip so the label
-          // button and the "×" read as a single pill, but they stay SEPARATE
-          // buttons — a dismiss button nested inside the submit button would be
-          // invalid (interactive-inside-interactive) HTML.
+          if (dismissable) {
+            // Pill-with-dismiss: the wrapper is styled as the chip so the label
+            // button and the "×" read as a single pill, but they stay SEPARATE
+            // buttons — a dismiss button nested inside the submit button would be
+            // invalid (interactive-inside-interactive) HTML.
+            return (
+              <div
+                key={`${index}-${label}`}
+                className={cn(
+                  "inline-flex items-center gap-0.5 rounded-full border border-border bg-muted/60 pl-3 pr-1 text-xs font-medium text-foreground",
+                  "transition-all hover:border-border/80 hover:shadow-sm",
+                  stacked && "min-h-11 w-full rounded-xl text-sm",
+                  pending &&
+                    activatingIndex !== index &&
+                    "pointer-events-none opacity-40",
+                )}
+              >
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => handleActivate(prompt, index)}
+                  onKeyDown={(e) => handleKeyDown(e, prompt, index)}
+                  title={prompt}
+                  aria-label={`Suggested prompt: ${label}`}
+                  aria-busy={activatingIndex === index}
+                  className={cn(
+                    "flex min-w-0 flex-1 items-center rounded-full py-1.5 text-left",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    "active:scale-[0.98]",
+                    activatingIndex === index &&
+                      "pointer-events-none opacity-60",
+                  )}
+                >
+                  {labelContent}
+                </button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => setDismissed(true)}
+                  aria-label="Dismiss suggestion"
+                  className={cn(
+                    "flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground",
+                    "hover:bg-background/70 hover:text-foreground",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  )}
+                >
+                  <X className="size-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            );
+          }
+
           return (
-            <div
+            <button
               key={`${index}-${label}`}
+              type="button"
+              role="button"
+              tabIndex={0}
+              disabled={pending}
+              onClick={() => handleActivate(prompt, index)}
+              onKeyDown={(e) => handleKeyDown(e, prompt, index)}
+              title={prompt}
+              aria-label={`Suggested prompt: ${label}`}
+              aria-busy={activatingIndex === index}
               className={cn(
-                "inline-flex items-center gap-0.5 rounded-full border border-border bg-muted/60 pl-3 pr-1 text-xs font-medium text-foreground",
-                "transition-all hover:border-border/80 hover:shadow-sm",
-                stacked && "min-h-11 w-full rounded-xl text-sm",
+                // Base chip style
+                "inline-flex items-center rounded-full border border-border",
+                "bg-muted/60 px-3 py-1.5 text-xs font-medium text-foreground",
+                "transition-all hover:bg-muted hover:border-border/80 hover:shadow-sm",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "active:scale-95",
+                // v2 mobile empty state: thumb-friendly full-width rows.
+                stacked && "min-h-11 w-full justify-center rounded-xl text-sm",
+                // Activating state
+                activatingIndex === index && "opacity-60 pointer-events-none",
+                // Disabled while any chip is activating
                 pending &&
                   activatingIndex !== index &&
-                  "pointer-events-none opacity-40",
+                  "opacity-40 pointer-events-none",
               )}
             >
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => handleActivate(prompt, index)}
-                onKeyDown={(e) => handleKeyDown(e, prompt, index)}
-                title={prompt}
-                aria-label={`Suggested prompt: ${label}`}
-                aria-busy={activatingIndex === index}
-                className={cn(
-                  "flex min-w-0 flex-1 items-center rounded-full py-1.5 text-left",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  "active:scale-[0.98]",
-                  activatingIndex === index && "pointer-events-none opacity-60",
-                )}
-              >
-                {labelContent}
-              </button>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => setDismissed(true)}
-                aria-label="Dismiss suggestion"
-                className={cn(
-                  "flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground",
-                  "hover:bg-background/70 hover:text-foreground",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                )}
-              >
-                <X className="size-3.5" aria-hidden="true" />
-              </button>
-            </div>
+              {labelContent}
+            </button>
           );
-        }
-
-        return (
-          <button
-            key={`${index}-${label}`}
-            type="button"
-            role="button"
-            tabIndex={0}
-            disabled={pending}
-            onClick={() => handleActivate(prompt, index)}
-            onKeyDown={(e) => handleKeyDown(e, prompt, index)}
-            title={prompt}
-            aria-label={`Suggested prompt: ${label}`}
-            aria-busy={activatingIndex === index}
-            className={cn(
-              // Base chip style
-              "inline-flex items-center rounded-full border border-border",
-              "bg-muted/60 px-3 py-1.5 text-xs font-medium text-foreground",
-              "transition-all hover:bg-muted hover:border-border/80 hover:shadow-sm",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              "active:scale-95",
-              // v2 mobile empty state: thumb-friendly full-width rows.
-              stacked && "min-h-11 w-full justify-center rounded-xl text-sm",
-              // Activating state
-              activatingIndex === index && "opacity-60 pointer-events-none",
-              // Disabled while any chip is activating
-              pending &&
-                activatingIndex !== index &&
-                "opacity-40 pointer-events-none",
-            )}
-          >
-            {labelContent}
-          </button>
-        );
-      })}
-    </div>
+        })}
+      </div>
     </div>
   );
 }

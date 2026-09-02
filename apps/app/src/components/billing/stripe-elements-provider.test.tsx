@@ -144,13 +144,19 @@ describe("StripeElementsProvider", () => {
       ).length;
 
       render(
-        <StripeElementsProvider publishableKey={memoKey} clientSecret="secret_a">
+        <StripeElementsProvider
+          publishableKey={memoKey}
+          clientSecret="secret_a"
+        >
           <div>first</div>
         </StripeElementsProvider>,
       );
       cleanup();
       render(
-        <StripeElementsProvider publishableKey={memoKey} clientSecret="secret_b">
+        <StripeElementsProvider
+          publishableKey={memoKey}
+          clientSecret="secret_b"
+        >
           <div>second</div>
         </StripeElementsProvider>,
       );

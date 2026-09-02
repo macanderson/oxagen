@@ -15,9 +15,10 @@ for the full primitive inventory.
 
 ## Storybook
 
-This app's Storybook covers the **chat generative-UI layer** — the registry
-components a model can render as structured output in a conversation. (Shared
-primitives like Button/Dialog/Select are documented in the
+This app's Storybook covers UI that only lives in `apps/app` — most of it the
+**chat generative-UI layer**, the registry components a model can render as
+structured output in a conversation. (Shared primitives like Button, Dialog,
+and Select are documented in the
 [`@oxagen/ui` Storybook](../../packages/ui/README.md#storybook).)
 
 ```bash
@@ -29,22 +30,20 @@ pnpm --filter @oxagen/app build-storybook  # static build → storybook-static/
 pnpm storybook
 ```
 
-Config lives in `.storybook/`; stories are
-`src/components/chat/**/*.stories.tsx`.
+Config lives in `.storybook/`. Four directories are picked up — add a story
+outside them and Storybook will not see it:
 
-### Chat component inventory (`Chat/*`)
+| Glob | What it covers |
+|------|----------------|
+| `src/components/chat/**` | chat cards, panels, and the generative-UI registry |
+| `src/components/knowledge/**` | the schema builder |
+| `src/components/sandbox/**` | the sandbox terminal |
+| `src/app/**/workbench/**` | workbench surfaces (e.g. the agents grid) |
 
-| Story | Component | Renders |
-|-------|-----------|---------|
-| `Chat/CapabilityChainCard` | `capability-chain-card` | a chained capability run |
-| `Chat/CapabilityResult` | `capability-result` | a single capability result |
-| `Chat/ConversationListCard` | `conversation-list-card` | a list of conversations |
-| `Chat/GraphEdgeCard` | `graph-edge-card` | a knowledge-graph edge |
-| `Chat/GraphIngestCard` | `graph-ingest-card` | a graph ingestion summary |
-| `Chat/GraphNodeCard` | `graph-node-card` | a single graph node |
-| `Chat/GraphNodeListCard` | `graph-node-list-card` | a list of graph nodes |
-| `Chat/ResearchSwarmCard` | `research-swarm-card` | a research swarm run |
-| `Chat/WebSearchCard` | `web-search-card` | web-search results |
+Each story sets its own `title`, which is what groups it in the sidebar —
+chat stories use the `Chat/*` prefix. Do not maintain a story list here; it
+goes stale. Run Storybook, or `rg "title:" -g "*.stories.tsx" src` for the
+current inventory.
 
 ## Common commands
 

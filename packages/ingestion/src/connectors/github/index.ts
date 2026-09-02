@@ -1,5 +1,6 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { z } from "zod";
+import { constantTimeStringEqual } from "../safe-compare";
 import {
   registerConnector,
   type AuthCredential,
@@ -31,7 +32,14 @@ function githubToken(auth: AuthCredential): string | null {
   return null;
 }
 
-/** Derive the { owner, repo } targets to poll from the stored config. */
+/**
+ * Derive the { owner, repo } targets to poll from the stored config.
+ *
+ * Reads `owner`/`repo` first, then the `repositories` "owner/name" list.
+ * `config.organizations` is accepted by the config schema but NOT expanded
+ * here — polling an org requires a repo-listing API call this pure helper does
+ * not make, so an org-only connection polls nothing.
+ */
 function pollTargets(config: Config): Array<{ owner: string; repo: string }> {
   if (config.owner && config.repo)
     return [{ owner: config.owner, repo: config.repo }];
@@ -51,6 +59,11 @@ function ghHeaders(token: string): Record<string, string> {
   };
 }
 
+/**
+ * Fetch ONE page of a GitHub list endpoint. There is no `Link`-header
+ * pagination: a poll that finds more than `per_page` changed records since the
+ * cursor sees only the first page, and the cursor still advances past the rest.
+ */
 async function ghListPage(url: string, token: string): Promise<unknown[]> {
   const resp = await fetch(url, { headers: ghHeaders(token) });
   if (resp.status === 404) return [];
@@ -440,15 +453,7 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
     if (!sig || typeof sig !== "string") return false;
     const expected =
       "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
-    try {
-      // Normalize lengths before timingSafeEqual to prevent crash
-      const sigBuf = Buffer.from(sig, "utf8");
-      const expBuf = Buffer.from(expected, "utf8");
-      if (sigBuf.length !== expBuf.length) return false;
-      return timingSafeEqual(sigBuf, expBuf);
-    } catch {
-      return false;
-    }
+    return constantTimeStringEqual(sig, expected);
   },
 
   // Incremental poll. GitHub webhooks give realtime deltas, but a poll fills

@@ -10,7 +10,9 @@ import { looksLikeHtml } from "./code-execute-card";
 
 describe("looksLikeHtml", () => {
   it("returns true for a standard DOCTYPE declaration", () => {
-    expect(looksLikeHtml("<!DOCTYPE html>\n<html><body></body></html>")).toBe(true);
+    expect(looksLikeHtml("<!DOCTYPE html>\n<html><body></body></html>")).toBe(
+      true,
+    );
   });
 
   it("returns true for lowercase doctype", () => {

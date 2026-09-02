@@ -1,4 +1,7 @@
-import { oxagenPluginManifestSchema, type OxagenPluginManifest } from "./manifest";
+import {
+  oxagenPluginManifestSchema,
+  type OxagenPluginManifest,
+} from "./manifest";
 import { mediaVideoManifest } from "./catalog/media-video/manifest";
 import { mediaImageManifest } from "./catalog/media-image/manifest";
 import { mediaSvgManifest } from "./catalog/media-svg/manifest";
@@ -94,7 +97,9 @@ export function getOxagenPlugin(id: string): OxagenPluginManifest | undefined {
  * O(1) lookup: which plugin (if any) claims the given capability contract name?
  * Returns undefined when the contract is builtin (not claimed by any plugin).
  */
-export function pluginForContract(capabilityName: string): OxagenPluginManifest | undefined {
+export function pluginForContract(
+  capabilityName: string,
+): OxagenPluginManifest | undefined {
   return getStore().contractIndex.get(capabilityName);
 }
 

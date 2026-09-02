@@ -21,7 +21,10 @@ export const MOBILE_BREAKPOINT_QUERY = "(max-width: 767px)";
 export function useMediaQuery(query: string): boolean {
   const subscribe = React.useCallback(
     (onStoreChange: () => void) => {
-      if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      if (
+        typeof window === "undefined" ||
+        typeof window.matchMedia !== "function"
+      ) {
         return () => {};
       }
       const mql = window.matchMedia(query);
@@ -31,7 +34,10 @@ export function useMediaQuery(query: string): boolean {
     [query],
   );
   const getSnapshot = React.useCallback(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    if (
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
+    ) {
       return false;
     }
     return window.matchMedia(query).matches;

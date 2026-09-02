@@ -44,9 +44,9 @@ function buildTimezoneOptions(): SelectOption[] {
   // Intl.supportedValuesOf is available in Node 18+ and all modern browsers.
   const zones: string[] =
     typeof Intl !== "undefined" && "supportedValuesOf" in Intl
-      ? (Intl as unknown as { supportedValuesOf(key: string): string[] }).supportedValuesOf(
-          "timeZone",
-        )
+      ? (
+          Intl as unknown as { supportedValuesOf(key: string): string[] }
+        ).supportedValuesOf("timeZone")
       : FALLBACK_TIMEZONES;
 
   const now = Date.now();

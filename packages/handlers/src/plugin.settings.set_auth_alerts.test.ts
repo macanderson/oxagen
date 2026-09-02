@@ -28,13 +28,19 @@ describe("plugin.settings.set_auth_alerts handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Default: DB update succeeds
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({ update: () => ({ set: () => ({ where: () => Promise.resolve() }) }) }),
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          update: () => ({ set: () => ({ where: () => Promise.resolve() }) }),
+        }),
     );
   });
 
   it("returns ok:true", async () => {
-    const result = await handler({ sendEmail: true, roles: ["Owner", "Admin"] }, ctx);
+    const result = await handler(
+      { sendEmail: true, roles: ["Owner", "Admin"] },
+      ctx,
+    );
     expect(result).toEqual({ ok: true });
   });
 
@@ -47,18 +53,20 @@ describe("plugin.settings.set_auth_alerts handler", () => {
   });
 
   it("propagates DB error when the update query throws", async () => {
-    mocks.withSystemDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) => {
-      return fn({
-        update: () => ({
-          set: () => ({
-            where: () => Promise.reject(new Error("constraint violation")),
+    mocks.withSystemDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        return fn({
+          update: () => ({
+            set: () => ({
+              where: () => Promise.reject(new Error("constraint violation")),
+            }),
           }),
-        }),
-      });
-    });
+        });
+      },
+    );
 
-    await expect(
-      handler({ sendEmail: false, roles: [] }, ctx),
-    ).rejects.toThrow("constraint violation");
+    await expect(handler({ sendEmail: false, roles: [] }, ctx)).rejects.toThrow(
+      "constraint violation",
+    );
   });
 });

@@ -22,7 +22,12 @@ export interface PropertyListProps {
   dense?: boolean;
 }
 
-export function PropertyList({ properties, omit, className, dense }: PropertyListProps) {
+export function PropertyList({
+  properties,
+  omit,
+  className,
+  dense,
+}: PropertyListProps) {
   const omitSet = React.useMemo(() => new Set(omit ?? []), [omit]);
   const entries = React.useMemo(
     () =>
@@ -37,13 +42,30 @@ export function PropertyList({ properties, omit, className, dense }: PropertyLis
   }
 
   return (
-    <dl className={cn("grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)]", dense ? "gap-x-3 gap-y-1" : "gap-x-4 gap-y-2", className)}>
+    <dl
+      className={cn(
+        "grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)]",
+        dense ? "gap-x-3 gap-y-1" : "gap-x-4 gap-y-2",
+        className,
+      )}
+    >
       {entries.map(([key, value]) => (
         <React.Fragment key={key}>
-          <dt className={cn("truncate text-muted-foreground", dense ? "text-[11px]" : "text-xs")} title={humanizeKey(key)}>
+          <dt
+            className={cn(
+              "truncate text-muted-foreground",
+              dense ? "text-[11px]" : "text-xs",
+            )}
+            title={humanizeKey(key)}
+          >
             {humanizeKey(key)}
           </dt>
-          <dd className={cn("min-w-0 break-words text-foreground", dense ? "text-[11px]" : "text-xs")}>
+          <dd
+            className={cn(
+              "min-w-0 break-words text-foreground",
+              dense ? "text-[11px]" : "text-xs",
+            )}
+          >
             <PropertyValue value={value} />
           </dd>
         </React.Fragment>

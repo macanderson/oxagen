@@ -150,7 +150,12 @@ describe("buildSeededModelState", () => {
       textTier: null,
       imageModel: null,
       videoModel: null,
-      budget: { enabled: true, limitUsd: 2, mode: "enforce", graceOveragePct: 0.5 },
+      budget: {
+        enabled: true,
+        limitUsd: 2,
+        mode: "enforce",
+        graceOveragePct: 0.5,
+      },
     });
     expect(state.budgetEnabled).toBe(true);
     expect(state.budgetUsd).toBe(2);
@@ -164,7 +169,12 @@ describe("buildSeededModelState", () => {
       textTier: null,
       imageModel: null,
       videoModel: null,
-      budget: { enabled: false, limitUsd: 5, mode: "prompt", graceOveragePct: 0.25 },
+      budget: {
+        enabled: false,
+        limitUsd: 5,
+        mode: "prompt",
+        graceOveragePct: 0.25,
+      },
     });
     expect(state.budgetEnabled).toBe(false);
     expect(state.budgetUsd).toBeNull();

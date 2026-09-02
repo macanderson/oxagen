@@ -10,8 +10,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
-  selectOwner: vi.fn(),    // first select inside tx — resolves the owner
-  selectProp: vi.fn(),     // second select — checks for existing property
+  selectOwner: vi.fn(), // first select inside tx — resolves the owner
+  selectProp: vi.fn(), // second select — checks for existing property
   updateProp: vi.fn(),
   insertProp: vi.fn(),
   getOrCreateRegistry: vi.fn(),
@@ -73,7 +73,15 @@ import { TEST_CTX as CTX } from "./test-utils/fixtures";
 const REGISTRY = { draftVersionId: "ver-draft-1" };
 const LABEL_ROW = { id: "lbl-internal-1", publicId: "lbl_123" };
 const REL_ROW = { id: "rel-internal-1", publicId: "rel_456" };
-const PROP_EXISTING = { id: "prop-internal-1", publicId: "prop_existing", description: null, enumValues: null, itemType: null, constraints: {}, example: null };
+const PROP_EXISTING = {
+  id: "prop-internal-1",
+  publicId: "prop_existing",
+  description: null,
+  enumValues: null,
+  itemType: null,
+  constraints: {},
+  example: null,
+};
 const PROP_INSERTED = { publicId: "prop_new_1" };
 
 const NODE_INPUT = {
@@ -100,9 +108,9 @@ describe("schemaPropertyUpsertHandler", () => {
   describe("no draft version", () => {
     it("throws when draftVersionId is null", async () => {
       mocks.getOrCreateRegistry.mockResolvedValue({ draftVersionId: null });
-      await expect(schemaPropertyUpsertHandler(NODE_INPUT, CTX)).rejects.toThrow(
-        "No draft version found for registry",
-      );
+      await expect(
+        schemaPropertyUpsertHandler(NODE_INPUT, CTX),
+      ).rejects.toThrow("No draft version found for registry");
     });
   });
 
@@ -121,7 +129,9 @@ describe("schemaPropertyUpsertHandler", () => {
     it("throws when node label is not found in draft", async () => {
       mocks.getOrCreateRegistry.mockResolvedValue(REGISTRY);
       mocks.selectOwner.mockResolvedValue([]);
-      await expect(schemaPropertyUpsertHandler(NODE_INPUT, CTX)).rejects.toThrow(
+      await expect(
+        schemaPropertyUpsertHandler(NODE_INPUT, CTX),
+      ).rejects.toThrow(
         `Node label "${NODE_INPUT.ownerName}" not found in draft`,
       );
     });
@@ -131,9 +141,9 @@ describe("schemaPropertyUpsertHandler", () => {
       mocks.selectOwner.mockResolvedValue([LABEL_ROW]);
       mocks.selectProp.mockResolvedValue([]);
       mocks.insertProp.mockResolvedValue([]);
-      await expect(schemaPropertyUpsertHandler(NODE_INPUT, CTX)).rejects.toThrow(
-        `Failed to insert property ${NODE_INPUT.key}`,
-      );
+      await expect(
+        schemaPropertyUpsertHandler(NODE_INPUT, CTX),
+      ).rejects.toThrow(`Failed to insert property ${NODE_INPUT.key}`);
     });
   });
 

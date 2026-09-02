@@ -34,7 +34,9 @@ describe("alertVariants", () => {
     expect(alertVariants({ variant: "info" })).toContain("bg-info/10");
     expect(alertVariants({ variant: "info" })).toContain("[&>svg]:text-info");
     expect(alertVariants({ variant: "success" })).toContain("bg-success/10");
-    expect(alertVariants({ variant: "success" })).toContain("[&>svg]:text-success");
+    expect(alertVariants({ variant: "success" })).toContain(
+      "[&>svg]:text-success",
+    );
     expect(alertVariants({ variant: "warning" })).toContain("bg-warning/10");
     expect(alertVariants({ variant: "error" })).toContain("bg-destructive/10");
     // Body text stays on the readable --foreground token for all semantic variants.
@@ -79,7 +81,9 @@ describe("AlertTitle — render", () => {
 
 describe("AlertDescription — render", () => {
   it("renders with muted-foreground class", () => {
-    const { getByText } = render(<AlertDescription>Detailed info</AlertDescription>);
+    const { getByText } = render(
+      <AlertDescription>Detailed info</AlertDescription>,
+    );
     const el = getByText("Detailed info");
     expect(el.className).toContain("text-muted-foreground");
   });
@@ -91,7 +95,7 @@ describe("Alert — composition", () => {
       <Alert variant="success">
         <AlertTitle>Success</AlertTitle>
         <AlertDescription>Your changes were saved.</AlertDescription>
-      </Alert>
+      </Alert>,
     );
     expect(getByRole("alert")).toBeInTheDocument();
     expect(getByText("Success")).toBeInTheDocument();

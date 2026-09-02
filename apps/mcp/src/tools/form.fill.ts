@@ -1,6 +1,9 @@
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
-import { formFill, fieldDescriptorSchema } from "@oxagen/oxagen/contracts/form.fill";
+import {
+  formFill,
+  fieldDescriptorSchema,
+} from "@oxagen/oxagen/contracts/form.fill";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 

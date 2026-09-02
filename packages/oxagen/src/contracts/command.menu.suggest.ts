@@ -65,7 +65,13 @@ const suggestion = z.object({
    * Semantic category for icon/grouping.
    * Mirrors PromptTemplate.category from spec §6.
    */
-  category: z.enum(["create", "investigate", "configure", "communicate", "analyze"]),
+  category: z.enum([
+    "create",
+    "investigate",
+    "configure",
+    "communicate",
+    "analyze",
+  ]),
   /** LLM confidence in this suggestion's relevance (0–1). */
   confidence: z.number().min(0).max(1),
 });
@@ -96,6 +102,8 @@ export const commandMenuSuggest = registerCapability({
 });
 
 export type CommandMenuSuggestInput = z.output<typeof commandMenuSuggest.input>;
-export type CommandMenuSuggestOutput = z.output<typeof commandMenuSuggest.output>;
+export type CommandMenuSuggestOutput = z.output<
+  typeof commandMenuSuggest.output
+>;
 export type SuggestionContext = z.output<typeof suggestionContext>;
 export type Suggestion = z.output<typeof suggestion>;

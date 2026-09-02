@@ -129,7 +129,8 @@ export function resolveActivePins(
     if (!isPin && !isUnpin) continue;
 
     const payload = body.payload as { ruleId?: unknown } | undefined;
-    const ruleId = typeof payload?.ruleId === "string" ? payload.ruleId : undefined;
+    const ruleId =
+      typeof payload?.ruleId === "string" ? payload.ruleId : undefined;
     if (!ruleId) continue;
 
     const at = Number(ev.createdAt);

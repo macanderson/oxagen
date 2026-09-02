@@ -48,16 +48,24 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
 vi.mock("@oxagen/handlers", () => ({
   serveFile: vi.fn(),
   FileNotFoundError: class FileNotFoundError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileNotFoundError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileNotFoundError";
+    }
   },
   FileForbiddenError: class FileForbiddenError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileForbiddenError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileForbiddenError";
+    }
   },
 }));
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -96,7 +104,11 @@ describe("orgMiddleware — API key short-circuit", () => {
     // resolveOrgScope must NOT be called (API key pre-binds scope)
     expect(mocks.resolveOrgScope).not.toHaveBeenCalled();
     // Route proceeds — status is not 4xx from org middleware
-    expect([200, 401, 403, 404].includes(res.status) && res.status !== 403 && res.status !== 404).toBe(true);
+    expect(
+      [200, 401, 403, 404].includes(res.status) &&
+        res.status !== 403 &&
+        res.status !== 404,
+    ).toBe(true);
     // More specifically: 200 means org middleware passed
     expect(res.status).toBe(200);
   });
@@ -125,10 +137,11 @@ describe("orgMiddleware — session-auth paths", () => {
     expect(body.error.message).toBe("Organization not found");
   });
 
-
   it("org resolution success → proceeds to workspace middleware", async () => {
     mocks.resolveOrgScope.mockResolvedValue(makeOrgScopeOk("org-111"));
-    mocks.resolveWorkspaceScope.mockResolvedValue(makeWorkspaceScopeOk("ws-111"));
+    mocks.resolveWorkspaceScope.mockResolvedValue(
+      makeWorkspaceScopeOk("ws-111"),
+    );
     mocks.invoke.mockResolvedValue({ conversations: [], nextCursor: null });
 
     const res = await app.fetch(
@@ -139,7 +152,10 @@ describe("orgMiddleware — session-auth paths", () => {
 
   it("assertNever unknown org kind → 500", async () => {
     // Inject a kind that isn't in the union — simulates future enum addition
-    mocks.resolveOrgScope.mockResolvedValue({ ok: false, kind: "new_unknown_kind" });
+    mocks.resolveOrgScope.mockResolvedValue({
+      ok: false,
+      kind: "new_unknown_kind",
+    });
 
     const res = await app.fetch(
       makeRequest(orgWsPath("any-org"), { headers: sessionAuthHeaders() }),

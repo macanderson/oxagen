@@ -59,7 +59,7 @@ export const skillWorkspaceInstallHandler: CapabilityHandler<
     if (!builtin) {
       throw new Error(
         `[skill.workspace.install] Builtin skill template "${templateSlug}" not found. ` +
-          `Available slugs can be listed via agent.skill.list.`,
+          `Available slugs can be listed via the list_agent_skills capability.`,
       );
     }
     targetSlug = builtin.slug;
@@ -245,6 +245,14 @@ export const skillWorkspaceInstallHandler: CapabilityHandler<
     if (isUniqueViolation(err)) {
       // Concurrent install won the race: re-read and return the idempotent
       // response rather than surfacing a 23505 unique-violation 500.
+      //
+      // Caveat: skills_workspace_slug_idx is a FULL unique index on
+      // (workspace_id, slug) and does not exclude soft-deleted rows, whereas
+      // buildExistingResponse filters deleted_at IS NULL. A 23505 raised by a
+      // tombstoned row therefore re-reads nothing and falls through to
+      // `throw err`. Unreachable today (nothing sets skills.deleted_at); a
+      // delete-skill capability must revive the tombstone or make the index
+      // partial. Same caveat as skill.create.
       const raceResponse = await buildExistingResponse();
       if (raceResponse) {
         logger.info(

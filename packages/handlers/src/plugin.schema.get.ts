@@ -7,7 +7,9 @@ import { HTTPException } from "hono/http-exception";
 import { loadBuiltInSchema } from "@oxagen/ingestion/connector-schema-loader";
 import { logger } from "./logger";
 
-export const pluginSchemaGetHandler: CapabilityHandler<typeof pluginSchemaGet> = async (input, _ctx) => {
+export const pluginSchemaGetHandler: CapabilityHandler<
+  typeof pluginSchemaGet
+> = async (input, _ctx) => {
   const { pluginId } = input;
 
   // 1. Built-in connectors ship a bundled YAML schema — the source of truth.
@@ -43,16 +45,24 @@ export const pluginSchemaGetHandler: CapabilityHandler<typeof pluginSchemaGet> =
         .limit(1),
     );
     if (cached[0]) {
-      logger.info({ pluginId, source: "db_cache" }, "plugin.schema.get: cache hit");
+      logger.info(
+        { pluginId, source: "db_cache" },
+        "plugin.schema.get: cache hit",
+      );
       return cached[0].schema as ConnectorPluginSchema;
     }
   } catch (err) {
-    logger.warn({ err, pluginId }, "plugin.schema.get: connector_schemas read failed (non-fatal)");
+    logger.warn(
+      { err, pluginId },
+      "plugin.schema.get: connector_schemas read failed (non-fatal)",
+    );
   }
 
   // 3. Partner plugin URL fetch is not yet implemented.
   logger.warn({ pluginId }, "plugin.schema.get: schema not found");
-  throw new HTTPException(404, { message: `Schema not found for plugin: ${pluginId}` });
+  throw new HTTPException(404, {
+    message: `Schema not found for plugin: ${pluginId}`,
+  });
 };
 
 /**
@@ -76,7 +86,10 @@ async function cacheBuiltInSchema(
           pluginVersion: builtIn.metadata.version,
         })
         .onConflictDoUpdate({
-          target: [schema.connectorSchemas.pluginId, schema.connectorSchemas.pluginVersion],
+          target: [
+            schema.connectorSchemas.pluginId,
+            schema.connectorSchemas.pluginVersion,
+          ],
           set: {
             schema: builtIn as Record<string, unknown>,
             schemaVersion: builtIn.metadata.schemaVersion,
@@ -85,8 +98,14 @@ async function cacheBuiltInSchema(
           },
         }),
     );
-    logger.info({ pluginId, source: "built_in_yaml" }, "plugin.schema.get: loaded + cached");
+    logger.info(
+      { pluginId, source: "built_in_yaml" },
+      "plugin.schema.get: loaded + cached",
+    );
   } catch (err) {
-    logger.warn({ err, pluginId }, "plugin.schema.get: DB cache write failed, returning from file");
+    logger.warn(
+      { err, pluginId },
+      "plugin.schema.get: DB cache write failed, returning from file",
+    );
   }
 }

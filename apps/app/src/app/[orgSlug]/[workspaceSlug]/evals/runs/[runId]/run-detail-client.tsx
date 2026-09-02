@@ -36,7 +36,10 @@ const RunScoreChart = dynamic(
   },
 );
 
-const STATUS_VARIANT: Record<Run["status"], "success" | "info" | "warning" | "error" | "muted"> = {
+const STATUS_VARIANT: Record<
+  Run["status"],
+  "success" | "info" | "warning" | "error" | "muted"
+> = {
   pending: "muted",
   queued: "muted",
   running: "info",
@@ -70,12 +73,16 @@ export function RunDetailClient({ run, results }: RunDetailClientProps) {
         data-testid="eval-run-empty-state"
       >
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-          <FlaskConical className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+          <FlaskConical
+            className="h-6 w-6 text-muted-foreground"
+            aria-hidden="true"
+          />
         </div>
         <div className="flex flex-col gap-1">
           <p className="text-sm font-semibold text-foreground">Run not found</p>
           <p className="max-w-xs text-xs text-muted-foreground">
-            This eval run doesn&apos;t exist, or you don&apos;t have access to it.
+            This eval run doesn&apos;t exist, or you don&apos;t have access to
+            it.
           </p>
         </div>
       </div>
@@ -83,7 +90,8 @@ export function RunDetailClient({ run, results }: RunDetailClientProps) {
   }
 
   const passedCount = results.filter((r) => r.passed).length;
-  const passRate = results.length > 0 ? (passedCount / results.length) * 100 : null;
+  const passRate =
+    results.length > 0 ? (passedCount / results.length) * 100 : null;
   const scoreBreakdownEntries = Object.entries(run.scoreBreakdown);
 
   const chartData = results.map((r, i) => ({
@@ -97,7 +105,11 @@ export function RunDetailClient({ run, results }: RunDetailClientProps) {
       <div className="grid grid-cols-2 gap-3 rounded-lg border border-border/60 p-4 sm:grid-cols-4">
         <div className="flex flex-col gap-1">
           <span className="text-xs text-muted-foreground">Status</span>
-          <Badge variant={STATUS_VARIANT[run.status]} size="sm" className="w-fit capitalize">
+          <Badge
+            variant={STATUS_VARIANT[run.status]}
+            size="sm"
+            className="w-fit capitalize"
+          >
             {run.status}
           </Badge>
         </div>
@@ -110,18 +122,25 @@ export function RunDetailClient({ run, results }: RunDetailClientProps) {
         <div className="flex flex-col gap-1">
           <span className="text-xs text-muted-foreground">Pass rate</span>
           <span className="text-sm font-semibold tabular-nums text-foreground">
-            {passRate === null ? "—" : `${passRate.toFixed(0)}% (${passedCount}/${results.length})`}
+            {passRate === null
+              ? "—"
+              : `${passRate.toFixed(0)}% (${passedCount}/${results.length})`}
           </span>
         </div>
         <div className="flex flex-col gap-1">
           <span className="text-xs text-muted-foreground">Judge model</span>
-          <span className="truncate text-sm font-medium text-foreground" title={run.judgeModel}>
+          <span
+            className="truncate text-sm font-medium text-foreground"
+            title={run.judgeModel}
+          >
             {run.judgeModel}
           </span>
         </div>
         <div className="flex flex-col gap-1 sm:col-span-2">
           <span className="text-xs text-muted-foreground">Target</span>
-          <span className="text-sm font-medium text-foreground">{formatTarget(run.target)}</span>
+          <span className="text-sm font-medium text-foreground">
+            {formatTarget(run.target)}
+          </span>
         </div>
         <div className="flex flex-col gap-1">
           <span className="text-xs text-muted-foreground">Pass threshold</span>
@@ -138,7 +157,9 @@ export function RunDetailClient({ run, results }: RunDetailClientProps) {
         </div>
         {scoreBreakdownEntries.length > 0 && (
           <div className="col-span-2 flex flex-col gap-1.5 sm:col-span-4">
-            <span className="text-xs text-muted-foreground">Score breakdown</span>
+            <span className="text-xs text-muted-foreground">
+              Score breakdown
+            </span>
             <div className="flex flex-wrap gap-1.5">
               {scoreBreakdownEntries.map(([key, value]) => (
                 <Badge key={key} variant="outline" size="sm">
@@ -168,13 +189,18 @@ export function RunDetailClient({ run, results }: RunDetailClientProps) {
       {/* Per-item results */}
       {results.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/60 bg-card/50 px-8 py-10 text-center">
-          <p className="text-sm font-semibold text-foreground">No item results yet</p>
+          <p className="text-sm font-semibold text-foreground">
+            No item results yet
+          </p>
           <p className="max-w-xs text-xs text-muted-foreground">
             Results land here once the run has processed at least one item.
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border/60" data-testid="eval-run-results-table">
+        <div
+          className="overflow-x-auto rounded-lg border border-border/60"
+          data-testid="eval-run-results-table"
+        >
           <table className="w-full min-w-[720px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-border/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -194,10 +220,15 @@ export function RunDetailClient({ run, results }: RunDetailClientProps) {
                   key={result.itemId}
                   className="border-b border-border/50 last:border-b-0 transition-colors hover:bg-muted/40"
                 >
-                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground" title={result.itemId}>
+                  <td
+                    className="px-4 py-2 font-mono text-xs text-muted-foreground"
+                    title={result.itemId}
+                  >
                     #{i + 1} · {truncateId(result.itemId)}
                   </td>
-                  <td className="px-4 py-2 tabular-nums text-foreground">{formatScore(result.score)}</td>
+                  <td className="px-4 py-2 tabular-nums text-foreground">
+                    {formatScore(result.score)}
+                  </td>
                   <td className="px-4 py-2 tabular-nums text-muted-foreground">
                     {formatScore(result.correctness)}
                   </td>
@@ -205,7 +236,10 @@ export function RunDetailClient({ run, results }: RunDetailClientProps) {
                     {formatScore(result.faithfulness)}
                   </td>
                   <td className="px-4 py-2">
-                    <Badge variant={result.passed ? "success" : "error"} size="sm">
+                    <Badge
+                      variant={result.passed ? "success" : "error"}
+                      size="sm"
+                    >
                       {result.passed ? "Passed" : "Failed"}
                     </Badge>
                   </td>
@@ -213,7 +247,8 @@ export function RunDetailClient({ run, results }: RunDetailClientProps) {
                     {result.latencyMs.toLocaleString()} ms
                   </td>
                   <td className="whitespace-nowrap px-4 py-2 tabular-nums text-muted-foreground">
-                    {result.inputTokens.toLocaleString()} in / {result.outputTokens.toLocaleString()} out
+                    {result.inputTokens.toLocaleString()} in /{" "}
+                    {result.outputTokens.toLocaleString()} out
                   </td>
                   <td className="whitespace-nowrap px-4 py-2 tabular-nums text-muted-foreground">
                     {formatCost(result.costUsdMicros)}

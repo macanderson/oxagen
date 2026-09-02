@@ -11,7 +11,7 @@
  *
  * Source of truth is a cookie (not localStorage) precisely so the server can see
  * it. `"system"` is represented as the *absence* of a class — CSS
- * `@media (prefers-color-scheme)` drives those colors (see styles/tokens.css),
+ * `@media (prefers-color-scheme)` drives those colors (see styles/globals.css),
  * so a static page that never reads the cookie still themes correctly with no
  * flash.
  */
@@ -32,7 +32,9 @@ export const THEME_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 /** Narrow an arbitrary cookie value to a {@link Theme}, defaulting to "system". */
 export function parseTheme(value: string | null | undefined): Theme {
-  return value === "light" || value === "dark" || value === "system" ? value : "system";
+  return value === "light" || value === "dark" || value === "system"
+    ? value
+    : "system";
 }
 
 /**

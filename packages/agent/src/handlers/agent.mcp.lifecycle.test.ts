@@ -41,7 +41,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return {
     ...real,
     db: () => fakeDb,
-    withTenantDb: async (fn: (tx: typeof fakeDb) => Promise<unknown>) => fn(fakeDb),
+    withTenantDb: async (fn: (tx: typeof fakeDb) => Promise<unknown>) =>
+      fn(fakeDb),
     schema: {
       mcpServers: {
         id: "m.id",
@@ -73,7 +74,9 @@ const depMocks = vi.hoisted(() => ({
   captureToolSnapshots: vi.fn(async () => 1),
   recordServerChange: vi.fn(async () => undefined),
 }));
-vi.mock("../dispatch/mcp-client", () => ({ healthcheck: depMocks.healthcheck }));
+vi.mock("../dispatch/mcp-client", () => ({
+  healthcheck: depMocks.healthcheck,
+}));
 vi.mock("../runtime/mcp-snapshots", () => ({
   captureToolSnapshots: depMocks.captureToolSnapshots,
   recordServerChange: depMocks.recordServerChange,
@@ -118,7 +121,11 @@ describe("agent.mcp.set_enabled handler", () => {
       { mcpServerId: "mcs_pub_1", enabled: true },
       CTX,
     );
-    expect(out).toEqual({ mcpServerId: "mcs_pub_1", enabled: true, snapshotCount: 1 });
+    expect(out).toEqual({
+      mcpServerId: "mcs_pub_1",
+      enabled: true,
+      snapshotCount: 1,
+    });
     expect(depMocks.healthcheck).toHaveBeenCalledTimes(1);
     expect(depMocks.captureToolSnapshots).toHaveBeenCalledTimes(1);
     expect(depMocks.recordServerChange).toHaveBeenCalledWith(
@@ -136,18 +143,27 @@ describe("agent.mcp.set_enabled handler", () => {
     expect(depMocks.healthcheck).not.toHaveBeenCalled();
     expect(depMocks.captureToolSnapshots).not.toHaveBeenCalled();
     expect(depMocks.recordServerChange).toHaveBeenCalledWith(
-      expect.objectContaining({ serverId: "mcs_uuid_1", changeType: "disable" }),
+      expect.objectContaining({
+        serverId: "mcs_uuid_1",
+        changeType: "disable",
+      }),
     );
   });
 
   it("logs a warning and enables with a 0 baseline when snapshot capture fails", async () => {
-    depMocks.captureToolSnapshots.mockRejectedValueOnce(new Error("neo4j down"));
+    depMocks.captureToolSnapshots.mockRejectedValueOnce(
+      new Error("neo4j down"),
+    );
     const out = await agentMcpSetEnabledHandler(
       { mcpServerId: "mcs_pub_1", enabled: true },
       CTX,
     );
     // Enable still proceeds — best-effort fallback keeps the count at 0.
-    expect(out).toEqual({ mcpServerId: "mcs_pub_1", enabled: true, snapshotCount: 0 });
+    expect(out).toEqual({
+      mcpServerId: "mcs_pub_1",
+      enabled: true,
+      snapshotCount: 0,
+    });
     expect(depMocks.recordServerChange).toHaveBeenCalledWith(
       expect.objectContaining({ serverId: "mcs_uuid_1", changeType: "enable" }),
     );

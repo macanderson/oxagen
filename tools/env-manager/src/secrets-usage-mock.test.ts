@@ -6,7 +6,13 @@
 // Kept in a separate file so the top-level vi.mock does not affect the
 // real-rg tests in secrets-usage.test.ts.
 
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  chmodSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -82,7 +88,10 @@ beforeAll(() => {
 
   // Hidden directory — skipped by the walker
   mkdirSync(join(root, "apps", ".hidden"), { recursive: true });
-  writeFileSync(join(root, "apps", ".hidden", "secret.ts"), "const h = process.env.HIDDEN_VAR;\n");
+  writeFileSync(
+    join(root, "apps", ".hidden", "secret.ts"),
+    "const h = process.env.HIDDEN_VAR;\n",
+  );
 
   // node_modules / dist / build / coverage dirs — all skipped
   for (const ignored of ["node_modules", "dist", "build", "coverage"]) {
@@ -155,7 +164,9 @@ describe("buildEnvRefIndex — rg exits non-zero with stdout", () => {
   });
 
   it("ignores rg output lines that do not contain a colon separator", () => {
-    mockExecFileSync.mockImplementationOnce(() => throwWithStdout("no-colon-line\n"));
+    mockExecFileSync.mockImplementationOnce(() =>
+      throwWithStdout("no-colon-line\n"),
+    );
     const index = buildEnvRefIndex(root);
     // No crash and no spurious entries
     expect(index.size).toBe(0);

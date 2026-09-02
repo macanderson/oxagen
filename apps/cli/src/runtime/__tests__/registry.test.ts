@@ -57,7 +57,9 @@ describe("cloudModel", () => {
 
   it("resolves known cloud ids to gateway slugs", () => {
     expect(cloudModel("haiku")?.slug).toMatch(/anthropic\//);
-    expect(cloudModel("openai-most-capable-coding-model")?.vendor).toBe("openai");
+    expect(cloudModel("openai-most-capable-coding-model")?.vendor).toBe(
+      "openai",
+    );
     expect(cloudModel("unknown")).toBeUndefined();
   });
 
@@ -67,7 +69,9 @@ describe("cloudModel", () => {
   });
 
   it("lists every cloud id and the registry roles", () => {
-    expect(cloudModelIds()).toEqual(expect.arrayContaining(["haiku", "sonnet-5"]));
+    expect(cloudModelIds()).toEqual(
+      expect.arrayContaining(["haiku", "sonnet-5"]),
+    );
     expect(roles().workerModels.defaultCode).toBe("sonnet-5");
     expect(roles().coordinatorCandidates).toContain("on-device");
   });
@@ -76,7 +80,9 @@ describe("cloudModel", () => {
 describe("expandHome", () => {
   it("expands ~ and ~/… but leaves absolute paths alone", () => {
     expect(expandHome("~")).toBe(homedir());
-    expect(expandHome("~/.oxagen/models")).toBe(join(homedir(), ".oxagen/models"));
+    expect(expandHome("~/.oxagen/models")).toBe(
+      join(homedir(), ".oxagen/models"),
+    );
     expect(expandHome("/tmp/x")).toBe("/tmp/x");
   });
 });

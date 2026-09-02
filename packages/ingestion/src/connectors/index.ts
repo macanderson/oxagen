@@ -7,6 +7,10 @@
  * import list below is the set, and BUILT_IN_PLUGIN_IDS in
  * connector-schema-loader.ts is what pairs each id with its schema.yaml.
  *
+ * `example-saas` ships a schema.yaml for the plugin-schema docs but has no
+ * connector implementation, so it is deliberately absent here and
+ * getConnector("example-saas") throws.
+ *
  * Connector layout:
  *   packages/ingestion/src/connectors/
  *     github/          — pull requests, issues, commits, releases (webhook)

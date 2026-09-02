@@ -1,39 +1,47 @@
 /**
- * Session replay — deterministic re-execution of a recorded session.
+ * Session replay analysis — inspects a recorded session's event log.
  *
- * Replay steps through the event log and verifies that context compilation
- * produces consistent results. Useful for debugging agent behavior and
- * detecting non-determinism or regressions.
+ * Nothing here re-executes the session or re-runs `compile()`. These functions
+ * read the events that were already written and report on them. Real replay —
+ * re-compiling each turn against a live store and diffing the result — is not
+ * implemented; see {@link analyzeReplay} for exactly what is checked today.
  */
 import type { Session, SessionEvent, ContextCompiledData } from "./types";
 
 export interface ReplayStep {
-  /** Event being replayed. */
+  /** The `context_compiled` event that failed its check. */
   event: SessionEvent;
-  /** Whether the replayed output matches the recorded output. */
+  /** Always false — a step is only recorded here when it failed. */
   matches: boolean;
-  /** Description of any divergence. */
+  /** Which recorded value was out of range. */
   divergence?: string;
 }
 
 export interface ReplayResult {
   sessionId: string;
   totalEvents: number;
+  /** How many `context_compiled` events were inspected. */
   stepsReplayed: number;
   divergences: ReplayStep[];
-  /** True if all steps matched — deterministic replay. */
+  /**
+   * True when every inspected event carried in-range compile metrics.
+   *
+   * This is a plausibility check on recorded data, NOT a proof that a re-run
+   * would produce the same window — no re-compilation happens. Treat it as
+   * "the trace is not obviously corrupt", and do not surface it to a user as
+   * evidence that the agent's context is reproducible.
+   */
   deterministic: boolean;
 }
 
 /**
- * Replay a session's context compilations to check for determinism.
+ * Check a session's recorded compile metrics for obviously impossible values.
  *
- * For each turn, reconstructs the TaskFrame and verifies the compile()
- * output metadata matches what was recorded. Full content comparison
- * is impractical (depends on store state), so we compare metrics:
- * - candidatesRetrieved
- * - candidatesPacked
- * - cacheHitRate (within tolerance)
+ * For every `context_compiled` event, assert `totalTokens >= 0` and
+ * `cacheHitRate` in [0, 1]. Anything out of range is reported as a divergence
+ * and clears the `deterministic` flag. No TaskFrame is reconstructed and
+ * `compile()` is never called — comparing against a fresh compile would
+ * require the original store state, which the event log does not carry.
  */
 export function analyzeReplay(session: Session): ReplayResult {
   const result: ReplayResult = {
@@ -52,7 +60,8 @@ export function analyzeReplay(session: Session): ReplayResult {
     result.stepsReplayed++;
     const data = event.data as ContextCompiledData;
 
-    // Basic sanity checks on the recorded data
+    // Range checks on the recorded data — a value outside these bounds means
+    // the writer, not the agent, was wrong.
     if (
       data.totalTokens < 0 ||
       data.cacheHitRate < 0 ||

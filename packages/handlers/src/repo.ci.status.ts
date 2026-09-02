@@ -4,10 +4,9 @@ import { createGitHubClient } from "@oxagen/github";
 import { resolveGitHubToken } from "./lib/github-token";
 import { buildCiSummary } from "./lib/ci-status";
 
-export const repoCiStatusHandler: CapabilityHandler<typeof repoCiStatus> = async (
-  input,
-  ctx,
-) => {
+export const repoCiStatusHandler: CapabilityHandler<
+  typeof repoCiStatus
+> = async (input, ctx) => {
   const token = await resolveGitHubToken(ctx);
   const gh = createGitHubClient({ token });
   const checks = await gh.listCiChecks({

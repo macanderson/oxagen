@@ -31,7 +31,13 @@ const ROWS: readonly SettingRow[] = [
  */
 export function TuiSettingsShow({ className }: { className?: string }) {
   return (
-    <TuiFrame id="tui-settings" title="~/acme-web — oxagen" width={560} height={228} className={className}>
+    <TuiFrame
+      id="tui-settings"
+      title="~/acme-web — oxagen"
+      width={560}
+      height={228}
+      className={className}
+    >
       <text x={20} y={48} fontSize={13}>
         <tspan fill={tuiColors.cyan} fontWeight={700}>
           {tuiGlyphs.pointer}{" "}
@@ -59,7 +65,13 @@ export function TuiSettingsShow({ className }: { className?: string }) {
             <text x={220} y={y} fontSize={12} fill="#e6e6e6">
               {row.value}
             </text>
-            <text x={470} y={y} fontSize={11.5} fill={SCOPE_COLOR[row.scope]} fontWeight={700}>
+            <text
+              x={470}
+              y={y}
+              fontSize={11.5}
+              fill={SCOPE_COLOR[row.scope]}
+              fontWeight={700}
+            >
               {row.scope}
             </text>
           </g>
@@ -75,7 +87,15 @@ export function TuiSettingsShow({ className }: { className?: string }) {
           {tuiGlyphs.pointer}{" "}
         </tspan>
       </text>
-      <rect className="tui-caret" x={34} y={202} width={7} height={15} fill={tuiColors.cyan} opacity={0.85} />
+      <rect
+        className="tui-caret"
+        x={34}
+        y={202}
+        width={7}
+        height={15}
+        fill={tuiColors.cyan}
+        opacity={0.85}
+      />
     </TuiFrame>
   );
 }

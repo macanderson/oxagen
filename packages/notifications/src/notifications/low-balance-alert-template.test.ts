@@ -86,9 +86,7 @@ describe("lowBalanceAlertTemplate", () => {
 
     it("escapes & in topUpUrl (href) as &amp;", () => {
       const { html } = lowBalanceAlertTemplate(dangerous);
-      expect(html).toContain(
-        'href="https://example.com/top-up?a=1&amp;b=2"'
-      );
+      expect(html).toContain('href="https://example.com/top-up?a=1&amp;b=2"');
     });
 
     it("escapes < in orgName as &lt;", () => {

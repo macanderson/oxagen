@@ -30,9 +30,22 @@ import { makeCTX } from "./test-utils/fixtures";
 // ── shared fixtures ────────────────────────────────────────────────────────────
 
 const LIST_RESULT = {
-  organization: { id: "org_1", publicId: "pub_1", slug: "acme", namespace: "acme", name: "Acme Corp" },
+  organization: {
+    id: "org_1",
+    publicId: "pub_1",
+    slug: "acme",
+    namespace: "acme",
+    name: "Acme Corp",
+  },
   workspaces: [
-    { id: "ws_1", publicId: "wpub_1", slug: "core", namespace: "core", name: "Core", role: "admin" },
+    {
+      id: "ws_1",
+      publicId: "wpub_1",
+      slug: "core",
+      namespace: "core",
+      name: "Core",
+      role: "admin",
+    },
   ],
 };
 
@@ -51,7 +64,12 @@ describe("workspaceListHandler", () => {
 
     const result = await workspaceListHandler(
       { orgSlug: "acme" },
-      makeCTX({ userId: "usr_session", apiKeyId: null, orgId: "", workspaceId: "" }),
+      makeCTX({
+        userId: "usr_session",
+        apiKeyId: null,
+        orgId: "",
+        workspaceId: "",
+      }),
     );
 
     expect(result.workspaces).toHaveLength(1);
@@ -63,13 +81,20 @@ describe("workspaceListHandler", () => {
 
   it("resolves the effective user from the API key and returns their workspaces", async () => {
     // Call 1: API-key lookup returns the key's creator.
-    mocks.withSystemDb.mockResolvedValueOnce({ createdByUserId: "usr_key_creator" });
+    mocks.withSystemDb.mockResolvedValueOnce({
+      createdByUserId: "usr_key_creator",
+    });
     // Call 2: org+membership+listing transaction.
     mocks.withSystemDb.mockResolvedValueOnce(LIST_RESULT);
 
     const result = await workspaceListHandler(
       { orgSlug: "acme" },
-      makeCTX({ userId: null, apiKeyId: "aky_test", orgId: "org_bound", workspaceId: "ws_bound" }),
+      makeCTX({
+        userId: null,
+        apiKeyId: "aky_test",
+        orgId: "org_bound",
+        workspaceId: "ws_bound",
+      }),
     );
 
     expect(result.workspaces[0]?.name).toBe("Core");

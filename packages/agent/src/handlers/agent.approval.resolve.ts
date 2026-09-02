@@ -2,7 +2,10 @@ import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq, sql } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
 import { notifyResolution } from "../runtime/approval";
-import type { AgentApprovalResolveInput, AgentApprovalResolveOutput } from "@oxagen/oxagen/contracts/agent.approval.resolve";
+import type {
+  AgentApprovalResolveInput,
+  AgentApprovalResolveOutput,
+} from "@oxagen/oxagen/contracts/agent.approval.resolve";
 
 export type { AgentApprovalResolveInput, AgentApprovalResolveOutput };
 
@@ -36,6 +39,10 @@ export async function agentApprovalResolveHandler(
   const resolution: "approved" | "denied" | "expired" =
     updated.length === 0 ? "expired" : input.decision;
 
-  await notifyResolution({ approvalId: input.approvalId, resolution, note: input.note ?? null });
+  await notifyResolution({
+    approvalId: input.approvalId,
+    resolution,
+    note: input.note ?? null,
+  });
   return { approvalId: input.approvalId, resolution };
 }

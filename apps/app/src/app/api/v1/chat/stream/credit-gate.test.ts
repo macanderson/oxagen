@@ -19,7 +19,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 class InsufficientCreditsError extends Error {
   readonly code = "insufficient_credits" as const;
   constructor() {
-    super("Insufficient credits: your balance is empty. Please add credits to continue.");
+    super(
+      "Insufficient credits: your balance is empty. Please add credits to continue.",
+    );
     this.name = "InsufficientCreditsError";
   }
 }
@@ -47,7 +49,9 @@ describe("evaluateTurnCreditGate", () => {
 
   it("admits the turn when the shared gate resolves", async () => {
     assertCanStartTurnMock.mockResolvedValue(undefined);
-    await expect(evaluateTurnCreditGate("org-1")).resolves.toEqual({ ok: true });
+    await expect(evaluateTurnCreditGate("org-1")).resolves.toEqual({
+      ok: true,
+    });
     expect(assertCanStartTurnMock).toHaveBeenCalledWith("org-1");
   });
 
@@ -71,7 +75,11 @@ describe("evaluateTurnCreditGate", () => {
   });
 
   it("fails OPEN (admits) on a non-billing infra error", async () => {
-    assertCanStartTurnMock.mockRejectedValue(new Error("connection reset by peer"));
-    await expect(evaluateTurnCreditGate("org-1")).resolves.toEqual({ ok: true });
+    assertCanStartTurnMock.mockRejectedValue(
+      new Error("connection reset by peer"),
+    );
+    await expect(evaluateTurnCreditGate("org-1")).resolves.toEqual({
+      ok: true,
+    });
   });
 });

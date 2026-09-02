@@ -6,7 +6,7 @@ import { buildContext } from "../context";
 
 export const schema = {
   sessionId: agentSandboxFileRead.input.shape.sessionId.describe(
-    "Durable-session id (sbx_…) returned by agent.sandbox.start.",
+    "Durable-session id (sbx_…) returned by start_sandbox.",
   ),
   path: agentSandboxFileRead.input.shape.path.describe(
     "Workspace-relative file to read (e.g. `src/index.ts`). Must not be absolute or contain `..` segments.",

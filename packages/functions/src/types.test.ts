@@ -14,8 +14,58 @@ import type {
   CreateFunctionFactory,
 } from "./types";
 import { NonRetriableError } from "./types";
+import * as barrel from "./index";
+import type {
+  EventPayload as BarrelEventPayload,
+  WaitForEventOptions as BarrelWaitForEventOptions,
+  StepContext as BarrelStepContext,
+  ConcurrencyConfig as BarrelConcurrencyConfig,
+  CancelOnConfig as BarrelCancelOnConfig,
+  DurableFunctionConfig as BarrelDurableFunctionConfig,
+  DurableFunctionTrigger as BarrelDurableFunctionTrigger,
+  DurableFunctionHandlerContext as BarrelDurableFunctionHandlerContext,
+  DurableFunctionHandler as BarrelDurableFunctionHandler,
+  DurableFunction as BarrelDurableFunction,
+  EventClient as BarrelEventClient,
+  CreateFunctionFactory as BarrelCreateFunctionFactory,
+} from "./index";
 
 describe("@oxagen/functions type contracts", () => {
+  // The barrel is the package entry point (`main`/`types`/`exports` all point
+  // at src/index.ts), so consumers only ever see what it re-exports. Assert
+  // against it directly — a re-export dropped from index.ts is invisible to a
+  // test that imports "./types".
+  describe("public entry point (src/index.ts)", () => {
+    it("re-exports NonRetriableError as the same class", () => {
+      expect(barrel.NonRetriableError).toBe(NonRetriableError);
+      expect(new barrel.NonRetriableError("boom").isNonRetriable).toBe(true);
+    });
+
+    it("re-exports every declared type unchanged", () => {
+      expectTypeOf<BarrelEventPayload>().toEqualTypeOf<EventPayload>();
+      expectTypeOf<BarrelWaitForEventOptions>().toEqualTypeOf<WaitForEventOptions>();
+      expectTypeOf<BarrelStepContext>().toEqualTypeOf<StepContext>();
+      expectTypeOf<BarrelConcurrencyConfig>().toEqualTypeOf<ConcurrencyConfig>();
+      expectTypeOf<BarrelCancelOnConfig>().toEqualTypeOf<CancelOnConfig>();
+      expectTypeOf<BarrelDurableFunctionConfig>().toEqualTypeOf<DurableFunctionConfig>();
+      expectTypeOf<BarrelDurableFunctionTrigger>().toEqualTypeOf<DurableFunctionTrigger>();
+      expectTypeOf<BarrelDurableFunctionHandlerContext>().toEqualTypeOf<DurableFunctionHandlerContext>();
+      expectTypeOf<BarrelDurableFunctionHandler>().toEqualTypeOf<DurableFunctionHandler>();
+      expectTypeOf<BarrelDurableFunction>().toEqualTypeOf<DurableFunction>();
+      expectTypeOf<BarrelEventClient>().toEqualTypeOf<EventClient>();
+      expectTypeOf<BarrelCreateFunctionFactory>().toEqualTypeOf<CreateFunctionFactory>();
+    });
+
+    it("exports no runtime value other than NonRetriableError", () => {
+      // Everything else in the package is a type and must erase completely.
+      // Interop shims (`__esModule`) are a transform artifact, not an export.
+      const runtimeExports = Object.keys(barrel).filter(
+        (key) => key !== "__esModule" && key !== "default",
+      );
+      expect(runtimeExports).toEqual(["NonRetriableError"]);
+    });
+  });
+
   describe("EventPayload", () => {
     it("accepts name and generic data", () => {
       const event: EventPayload<{ orgId: string }> = {

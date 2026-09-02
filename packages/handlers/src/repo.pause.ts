@@ -14,12 +14,18 @@ import { logger } from "./logger";
  * connections, so no explicit cron cancellation is required here. Tenant-scoped
  * and soft-delete aware; accepts the public ID or the UUID.
  */
-export const repoPauseHandler: CapabilityHandler<typeof repoPause> = async (input, ctx) => {
+export const repoPauseHandler: CapabilityHandler<typeof repoPause> = async (
+  input,
+  ctx,
+) => {
   const now = new Date();
 
   const found = await withTenantDb(async (tx) => {
     const [existing] = await tx
-      .select({ id: schema.sourceConnections.id, status: schema.sourceConnections.status })
+      .select({
+        id: schema.sourceConnections.id,
+        status: schema.sourceConnections.status,
+      })
       .from(schema.sourceConnections)
       .where(
         and(
@@ -41,19 +47,33 @@ export const repoPauseHandler: CapabilityHandler<typeof repoPause> = async (inpu
 
     await tx
       .update(schema.sourceConnections)
-      .set({ status: "paused", updatedByUserId: ctx.userId ?? undefined, updatedAt: now })
+      .set({
+        status: "paused",
+        updatedByUserId: ctx.userId ?? undefined,
+        updatedAt: now,
+      })
       .where(eq(schema.sourceConnections.id, existing.id));
 
     return existing;
   });
 
   if (!found) {
-    logger.warn({ repoId: input.repoId, orgId: ctx.orgId }, "repo.pause: not found");
-    throw new HTTPException(404, { message: "Repository connection not found" });
+    logger.warn(
+      { repoId: input.repoId, orgId: ctx.orgId },
+      "repo.pause: not found",
+    );
+    throw new HTTPException(404, {
+      message: "Repository connection not found",
+    });
   }
 
   logger.info(
-    { repoId: input.repoId, connectionId: found.id, orgId: ctx.orgId, surface: ctx.surface },
+    {
+      repoId: input.repoId,
+      connectionId: found.id,
+      orgId: ctx.orgId,
+      surface: ctx.surface,
+    },
     "repo.pause: paused",
   );
 

@@ -7,8 +7,7 @@ import { TruncatedText } from "@/components/ui/truncated-text";
 
 /**
  * web-search-card — renders web.search output: a ranked list of results with
- * title, source domain, snippet, and an external link. Replaces the raw-JSON
- * blob the user used to see for search calls.
+ * title, source domain, snippet, and an external link.
  *
  * componentId: "web-search-card"
  */
@@ -28,8 +27,12 @@ interface WebSearchCardProps {
 
 const MAX_RESULTS = 12;
 
-function readResults(output: unknown): { results: SearchResult[]; total: number } {
-  if (typeof output !== "object" || output === null) return { results: [], total: 0 };
+function readResults(output: unknown): {
+  results: SearchResult[];
+  total: number;
+} {
+  if (typeof output !== "object" || output === null)
+    return { results: [], total: 0 };
   const o = output as Record<string, unknown>;
   const raw = Array.isArray(o.results) ? o.results : [];
   const results: SearchResult[] = [];
@@ -42,10 +45,12 @@ function readResults(output: unknown): { results: SearchResult[]; total: number 
       url: rr.url,
       content: typeof rr.content === "string" ? rr.content : "",
       score: typeof rr.score === "number" ? rr.score : undefined,
-      publishedDate: typeof rr.publishedDate === "string" ? rr.publishedDate : undefined,
+      publishedDate:
+        typeof rr.publishedDate === "string" ? rr.publishedDate : undefined,
     });
   }
-  const total = typeof o.totalResults === "number" ? o.totalResults : results.length;
+  const total =
+    typeof o.totalResults === "number" ? o.totalResults : results.length;
   return { results, total };
 }
 
@@ -57,7 +62,9 @@ function domainOf(url: string): string {
   }
 }
 
-export default function WebSearchCard(props: WebSearchCardProps): React.ReactElement {
+export default function WebSearchCard(
+  props: WebSearchCardProps,
+): React.ReactElement {
   const { results, total } = readResults(props.output);
   const shown = results.slice(0, MAX_RESULTS);
 
@@ -94,12 +101,19 @@ export default function WebSearchCard(props: WebSearchCardProps): React.ReactEle
                     )}
                   >
                     <span className="min-w-0">{r.title}</span>
-                    <ExternalLink className="mt-0.5 size-3 shrink-0 opacity-70" aria-hidden="true" />
+                    <ExternalLink
+                      className="mt-0.5 size-3 shrink-0 opacity-70"
+                      aria-hidden="true"
+                    />
                   </a>
                 ) : (
-                  <span className="text-sm font-medium text-foreground">{r.title}</span>
+                  <span className="text-sm font-medium text-foreground">
+                    {r.title}
+                  </span>
                 )}
-                <p className="mt-0.5 text-xs text-muted-foreground">{domainOf(r.url)}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {domainOf(r.url)}
+                </p>
                 {r.content ? (
                   <p className="mt-1 text-xs text-foreground/80">
                     <TruncatedText text={r.content} lines={3} />

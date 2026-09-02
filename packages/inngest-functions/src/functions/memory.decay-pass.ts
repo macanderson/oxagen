@@ -2,12 +2,17 @@ import { createFunction } from "../create-function";
 import { withSystemDb, schema } from "@oxagen/database";
 import { asc, gt } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { applyDecayToMemory, listDecayableMemories } from "@oxagen/agent/memory/neo4j";
+import {
+  applyDecayToMemory,
+  listDecayableMemories,
+} from "@oxagen/agent/memory/neo4j";
 import { insertMemoryChange } from "@oxagen/telemetry";
 import { logger } from "../logger";
 
-// Keyset-pagination page size for the workspace sweep. Each page is a single
-// Inngest step, so each step stays well under the per-step timeout budget.
+// Keyset-pagination page size for the WORKSPACE sweep. Note this bounds the
+// number of workspaces per Inngest step, not the work inside one: a page still
+// lists and rewrites every decayable memory of all 200 workspaces in a single
+// step, so a large tenant can push one step past its timeout budget.
 const PAGE_SIZE = 200;
 
 // Below this delta, skip the write — floating point / decay noise, not a
@@ -32,9 +37,11 @@ function calcNewConfidence(
   createdAt: string,
 ): number {
   const anchor = lastEvidenceAt ?? createdAt;
-  const daysSince = (Date.now() - new Date(anchor).getTime()) / (1000 * 60 * 60 * 24);
+  const daysSince =
+    (Date.now() - new Date(anchor).getTime()) / (1000 * 60 * 60 * 24);
   const decayed =
-    decayFloor + (confidenceScore - decayFloor) * Math.pow(0.5, daysSince / halfLifeDays);
+    decayFloor +
+    (confidenceScore - decayFloor) * Math.pow(0.5, daysSince / halfLifeDays);
   // Mathematically the curve never dips below the floor (0.5^x is in (0,1]
   // for x >= 0), but clamp defensively against float drift / bad inputs.
   return Math.max(decayFloor, decayed);
@@ -101,12 +108,16 @@ export const [memoryDecayPass] = createFunction(
                   memory.createdAt,
                 );
                 // Skip if change is below the precision epsilon.
-                if (Math.abs(newConfidence - memory.confidenceScore) < EPSILON) continue;
+                if (Math.abs(newConfidence - memory.confidenceScore) < EPSILON)
+                  continue;
 
                 // Apply the decay update and record the change event.
                 // Both writes are scoped to the correct tenant.
                 await runInTenantScope({ orgId, workspaceId }, async () => {
-                  await applyDecayToMemory({ memoryId: memory.id, newConfidence });
+                  await applyDecayToMemory({
+                    memoryId: memory.id,
+                    newConfidence,
+                  });
                   // Fire-and-forget: telemetry failure must not abort the sweep.
                   // Decay never touches enforcement (policy axis) — 0/0.
                   void insertMemoryChange({

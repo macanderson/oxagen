@@ -27,7 +27,9 @@ afterEach(() => {
   clearWorkspaceConfigCache();
 });
 
-function readDoc(scope: "workspace" | "repo" | "user"): Record<string, unknown> {
+function readDoc(
+  scope: "workspace" | "repo" | "user",
+): Record<string, unknown> {
   const path = getConfigScopePaths(cwd, ctx)[scope];
   return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
 }
@@ -47,22 +49,30 @@ describe("unsetPath", () => {
     setPath("workspace", "vcs.commit.convention", "cc", ctx);
     setPath("workspace", "vcs.pullRequest.base", "main", ctx);
     unsetPath("workspace", "vcs.commit.convention", ctx);
-    expect(readDoc("workspace")["vcs"]).toEqual({ pullRequest: { base: "main" } });
+    expect(readDoc("workspace")["vcs"]).toEqual({
+      pullRequest: { base: "main" },
+    });
   });
 
   it("returns removed:false when the path is not present in that scope", () => {
     setPath("workspace", "vision.statement", "ship", ctx);
-    expect(unsetPath("workspace", "vcs.commit.convention", ctx).removed).toBe(false);
+    expect(unsetPath("workspace", "vcs.commit.convention", ctx).removed).toBe(
+      false,
+    );
     expect(unsetPath("repo", "vision.statement", ctx).removed).toBe(false);
     // A miss on an absent file must not create the file as a side effect.
     expect(existsSync(getConfigScopePaths(cwd, ctx).repo)).toBe(false);
   });
 
   it("refuses the org scope — managed.json is read-only to the CLI", () => {
-    expect(() => unsetPath("org", "vision.statement", ctx)).toThrow(/read-only/);
+    expect(() => unsetPath("org", "vision.statement", ctx)).toThrow(
+      /read-only/,
+    );
   });
 
   it("rejects malformed dotted paths", () => {
-    expect(() => unsetPath("workspace", "a..b", ctx)).toThrow(/invalid dotted path/);
+    expect(() => unsetPath("workspace", "a..b", ctx)).toThrow(
+      /invalid dotted path/,
+    );
   });
 });

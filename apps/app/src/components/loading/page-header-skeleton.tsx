@@ -1,6 +1,15 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
-export function PageHeaderSkeleton({ withAction = false }: { withAction?: boolean }) {
+/**
+ * Placeholder for a `PageHeader`: icon, title, description, and — with
+ * `withAction` — the primary button on the right. Wrap it in `LoadingRegion`;
+ * it is `aria-hidden` on its own.
+ */
+export function PageHeaderSkeleton({
+  withAction = false,
+}: {
+  withAction?: boolean;
+}) {
   return (
     <div className="flex items-start justify-between gap-3" aria-hidden="true">
       <div className="flex items-start gap-3">

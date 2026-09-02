@@ -18,9 +18,14 @@ import type { MediaTier, ResolvedTierCatalog } from "./catalog";
  * check is evaluated at call time so Next.js tree-shakes it in production
  * builds, and @ai-sdk/devtools is a devDependency so it never ships in prod.
  *
- * If the package is somehow missing (e.g. after `--production` install),
- * the catch swallows the error and returns the unwrapped model so the app
- * continues to work.
+ * The catch swallows every failure and leaves the model unwrapped, so the app
+ * keeps working either way. Two different failures land in it: the devDependency
+ * genuinely being absent (a `--production` install), and `require` not existing
+ * at all. This package is `"type": "module"`, so `require` is only defined where
+ * a bundler provides it — Next.js dev does, plain `node`/`tsx` ESM does not.
+ * Devtools therefore attach on the app's dev server and not on the API, MCP, or
+ * CLI dev processes. Losing an inspector is the intended cost of never risking a
+ * production import; do not read a quiet start-up as "devtools are running".
  */
 let _devToolsMiddleware:
   | (() => import("@ai-sdk/provider").LanguageModelV4Middleware)
@@ -140,7 +145,11 @@ export function imageTierModelId(tier: MediaTier): string {
     "OXAGEN_LLM_IMAGE_BASIC",
     "OXAGEN_LLM_IMAGE_ADVANCED",
   ] as const);
-  // Defaults are guaranteed by the schema (env.ts); coalesce for mocked envs.
+  // requireEnv applies the zod schema defaults (env.ts), so both keys are always
+  // strings in any real environment and this coalesce is unreachable there. It
+  // exists only for a test that stubs requireEnv with a partial object — and note
+  // it answers the BASIC model for either tier, so an "advanced" request under
+  // such a stub silently degrades rather than throwing. Do not lean on it.
   return env[IMAGE_TIER_ENV_KEY[tier]] ?? "openai/gpt-image-1";
 }
 

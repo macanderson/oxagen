@@ -42,7 +42,7 @@ type ClaimedSubagentRunRow = {
   capability_name: string;
   input_payload: unknown;
   attempts: number;
-}
+};
 
 /**
  * Atomically claim the next runnable child of a fanout: a pending row, or a
@@ -56,9 +56,11 @@ export async function claimNextSubagentRun(args: {
   fanoutId: string;
   workerId: string;
 }): Promise<ClaimedSubagentRun | null> {
-  return runInTenantScope({ orgId: args.orgId, workspaceId: args.workspaceId }, () =>
-    withTenantDb(async (tx) => {
-      const rows = await tx.execute<ClaimedSubagentRunRow>(sql`
+  return runInTenantScope(
+    { orgId: args.orgId, workspaceId: args.workspaceId },
+    () =>
+      withTenantDb(async (tx) => {
+        const rows = await tx.execute<ClaimedSubagentRunRow>(sql`
         UPDATE agent.subagent_runs SET
           status = 'running',
           claimed_by = ${args.workerId},
@@ -78,16 +80,16 @@ export async function claimNextSubagentRun(args: {
         )
         RETURNING id, child_message_id, capability_name, input_payload, attempts
       `);
-      const row = (rows as unknown as ClaimedSubagentRunRow[])[0];
-      if (!row) return null;
-      return {
-        id: row.id,
-        childMessageId: row.child_message_id,
-        capabilityName: row.capability_name,
-        inputPayload: row.input_payload,
-        attempts: Number(row.attempts),
-      };
-    }),
+        const row = (rows as unknown as ClaimedSubagentRunRow[])[0];
+        if (!row) return null;
+        return {
+          id: row.id,
+          childMessageId: row.child_message_id,
+          capabilityName: row.capability_name,
+          inputPayload: row.input_payload,
+          attempts: Number(row.attempts),
+        };
+      }),
   );
 }
 
@@ -101,9 +103,11 @@ export async function renewSubagentRunLease(args: {
   runId: string;
   workerId: string;
 }): Promise<void> {
-  await runInTenantScope({ orgId: args.orgId, workspaceId: args.workspaceId }, () =>
-    withTenantDb((tx) =>
-      tx.execute(sql`
+  await runInTenantScope(
+    { orgId: args.orgId, workspaceId: args.workspaceId },
+    () =>
+      withTenantDb((tx) =>
+        tx.execute(sql`
         UPDATE agent.subagent_runs SET
           lease_expires_at = now() + make_interval(secs => ${LEASE_INTERVAL_SECONDS}),
           updated_at = now()
@@ -111,7 +115,7 @@ export async function renewSubagentRunLease(args: {
           AND claimed_by = ${args.workerId}
           AND status = 'running'
       `),
-    ),
+      ),
   );
 }
 
@@ -132,9 +136,11 @@ export async function claimExecutionStep(args: {
   stepId: string;
   workerId: string;
 }): Promise<ClaimedExecutionStep | null> {
-  return runInTenantScope({ orgId: args.orgId, workspaceId: args.workspaceId }, () =>
-    withTenantDb(async (tx) => {
-      const rows = await tx.execute<{ id: string; attempts: number }>(sql`
+  return runInTenantScope(
+    { orgId: args.orgId, workspaceId: args.workspaceId },
+    () =>
+      withTenantDb(async (tx) => {
+        const rows = await tx.execute<{ id: string; attempts: number }>(sql`
         UPDATE agent.agent_execution_steps SET
           status = 'running',
           claimed_by = ${args.workerId},
@@ -148,9 +154,9 @@ export async function claimExecutionStep(args: {
           AND (status = 'pending' OR (status = 'running' AND lease_expires_at < now()))
         RETURNING id, attempts
       `);
-      const row = (rows as unknown as { id: string; attempts: number }[])[0];
-      return row ? { id: row.id, attempts: Number(row.attempts) } : null;
-    }),
+        const row = (rows as unknown as { id: string; attempts: number }[])[0];
+        return row ? { id: row.id, attempts: Number(row.attempts) } : null;
+      }),
   );
 }
 
@@ -161,9 +167,11 @@ export async function renewExecutionStepLease(args: {
   stepId: string;
   workerId: string;
 }): Promise<void> {
-  await runInTenantScope({ orgId: args.orgId, workspaceId: args.workspaceId }, () =>
-    withTenantDb((tx) =>
-      tx.execute(sql`
+  await runInTenantScope(
+    { orgId: args.orgId, workspaceId: args.workspaceId },
+    () =>
+      withTenantDb((tx) =>
+        tx.execute(sql`
         UPDATE agent.agent_execution_steps SET
           lease_expires_at = now() + make_interval(secs => ${LEASE_INTERVAL_SECONDS}),
           updated_at = now()
@@ -171,7 +179,7 @@ export async function renewExecutionStepLease(args: {
           AND claimed_by = ${args.workerId}
           AND status = 'running'
       `),
-    ),
+      ),
   );
 }
 
@@ -198,6 +206,9 @@ export function startLeaseRenewal(
  * `attempts` counts claims already taken; below the cap the row gets another
  * chance, at or above it the row is failed terminally.
  */
-export function decideSweepAction(attempts: number, maxAttempts: number = MAX_ATTEMPTS): "requeue" | "fail" {
+export function decideSweepAction(
+  attempts: number,
+  maxAttempts: number = MAX_ATTEMPTS,
+): "requeue" | "fail" {
   return attempts < maxAttempts ? "requeue" : "fail";
 }

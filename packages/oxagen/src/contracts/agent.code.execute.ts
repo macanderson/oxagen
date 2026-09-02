@@ -29,12 +29,31 @@ export const workspaceFilesSchema = z
 // Exported so the handler can re-apply it defensively at the sandbox boundary.
 
 const RESERVED_ENV_KEYS = new Set([
-  "PATH", "HOME", "SHELL", "HOSTNAME", "PWD", "USER", "TERM", "TMPDIR",
-  "NODE_OPTIONS", "LD_PRELOAD", "LD_LIBRARY_PATH",
+  "PATH",
+  "HOME",
+  "SHELL",
+  "HOSTNAME",
+  "PWD",
+  "USER",
+  "TERM",
+  "TMPDIR",
+  "NODE_OPTIONS",
+  "LD_PRELOAD",
+  "LD_LIBRARY_PATH",
 ]);
 const RESERVED_ENV_PREFIXES = [
-  "LD_", "MODAL_", "VERCEL_", "SANDBOX_", "CLICKHOUSE_", "DATABASE_",
-  "AWS_", "OXAGEN_", "NEO4J_", "STRIPE_", "BLOB_", "INNGEST_",
+  "LD_",
+  "MODAL_",
+  "VERCEL_",
+  "SANDBOX_",
+  "CLICKHOUSE_",
+  "DATABASE_",
+  "AWS_",
+  "OXAGEN_",
+  "NEO4J_",
+  "STRIPE_",
+  "BLOB_",
+  "INNGEST_",
 ];
 const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const MAX_ENV_KEYS = 32;

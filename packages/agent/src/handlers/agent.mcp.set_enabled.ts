@@ -114,12 +114,11 @@ export async function agentMcpSetEnabledHandler(
   };
 }
 
-// The lazy resolver derives the camelCase export name by capitalizing each
-// dot-segment; for "agent.mcp.set_enabled" that yields "agentMcpSet_enabledHandler"
-// (underscores are not camelized), which does not match the readable export
-// above. Provide a default export so resolveHandler() falls through to it. The
-// resolver types loaders with `input: unknown`, so the default narrows the raw
-// input through the contract schema before delegating to the typed handler.
+// The lazy resolver's derived export name for the "set_mcp_enabled" capability
+// does not match the readable export above, so it falls through to this default
+// export. The resolver types loaders with `input: unknown`, so the default
+// narrows the raw input through the contract schema before delegating to the
+// typed handler.
 export default async function agentMcpSetEnabledDefault(
   input: unknown,
   ctx: CapabilityContext,

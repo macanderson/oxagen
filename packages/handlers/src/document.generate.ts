@@ -4,7 +4,10 @@
 // which is the single seam for all generated-asset uploads.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
-import { documentsGenerate, type DocumentsGenerateInput } from "@oxagen/oxagen/contracts/document.generate";
+import {
+  documentsGenerate,
+  type DocumentsGenerateInput,
+} from "@oxagen/oxagen/contracts/document.generate";
 import { logger } from "./logger";
 import { persistGeneratedAsset } from "./generated-asset.persist";
 
@@ -14,9 +17,13 @@ async function buildDocx(
   title: string,
   content: DocumentsGenerateInput["content"],
 ): Promise<Uint8Array> {
-  const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import("docx");
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import(
+    "docx"
+  );
 
-  const sections = content?.sections ?? [{ heading: undefined, paragraphs: [title] }];
+  const sections = content?.sections ?? [
+    { heading: undefined, paragraphs: [title] },
+  ];
   const children: InstanceType<typeof Paragraph>[] = [
     new Paragraph({
       text: title,
@@ -27,13 +34,14 @@ async function buildDocx(
   for (const section of sections) {
     if (section.heading) {
       children.push(
-        new Paragraph({ text: section.heading, heading: HeadingLevel.HEADING_1 }),
+        new Paragraph({
+          text: section.heading,
+          heading: HeadingLevel.HEADING_1,
+        }),
       );
     }
     for (const para of section.paragraphs) {
-      children.push(
-        new Paragraph({ children: [new TextRun({ text: para })] }),
-      );
+      children.push(new Paragraph({ children: [new TextRun({ text: para })] }));
     }
   }
 
@@ -129,23 +137,25 @@ const MIME_BY_KIND: Record<
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 };
 
-const EXT_BY_KIND: Record<"document" | "spreadsheet" | "presentation", string> = {
-  document: "docx",
-  spreadsheet: "xlsx",
-  presentation: "pptx",
-};
+const EXT_BY_KIND: Record<"document" | "spreadsheet" | "presentation", string> =
+  {
+    document: "docx",
+    spreadsheet: "xlsx",
+    presentation: "pptx",
+  };
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-export const documentsGenerateHandler: CapabilityHandler<typeof documentsGenerate> = async (
-  input,
-  ctx,
-) => {
+export const documentsGenerateHandler: CapabilityHandler<
+  typeof documentsGenerate
+> = async (input, ctx) => {
   // Document generation requires a real user identity for the asset's ownership
   // row. An API-key-only call (no session user) would persist an anonymous asset,
   // which the access-policy model does not support for `user`-scoped assets.
   if (!ctx.userId) {
-    throw new Error("documents.generate: userId is required — no user identity in context");
+    throw new Error(
+      "documents.generate: userId is required — no user identity in context",
+    );
   }
 
   const { kind, title, content } = input;

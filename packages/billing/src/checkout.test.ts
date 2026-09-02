@@ -37,7 +37,9 @@ vi.mock("@oxagen/config/env", () => ({
 
 import type { PlanTier } from "@oxagen/oxagen/types";
 
-const resolveOrgTierMock = vi.fn<() => Promise<PlanTier>>().mockResolvedValue("build");
+const resolveOrgTierMock = vi
+  .fn<() => Promise<PlanTier>>()
+  .mockResolvedValue("build");
 vi.mock("./tier", () => ({
   resolveOrgTier: resolveOrgTierMock,
 }));
@@ -74,10 +76,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => checkoutDbObj,
-  withTenantDb: async (fn: (tx: typeof checkoutDbObj) => unknown) => fn(checkoutDbObj),
-  withSystemDb: async (fn: (tx: typeof checkoutDbObj) => unknown) => fn(checkoutDbObj),
-
+    db: () => checkoutDbObj,
+    withTenantDb: async (fn: (tx: typeof checkoutDbObj) => unknown) =>
+      fn(checkoutDbObj),
+    withSystemDb: async (fn: (tx: typeof checkoutDbObj) => unknown) =>
+      fn(checkoutDbObj),
   };
 });
 
@@ -111,7 +114,11 @@ describe("createCheckoutSession", () => {
     dbPlansFindFirst.mockResolvedValue(undefined);
 
     await expect(
-      createCheckoutSession({ orgId: "org-abc", planSlug: "missing-plan", interval: "month" }),
+      createCheckoutSession({
+        orgId: "org-abc",
+        planSlug: "missing-plan",
+        interval: "month",
+      }),
     ).rejects.toThrow("missing-plan");
 
     expect(createSubscriptionCheckoutMock).not.toHaveBeenCalled();
@@ -124,7 +131,11 @@ describe("createCheckoutSession", () => {
     });
 
     await expect(
-      createCheckoutSession({ orgId: "org-abc", planSlug: "pro", interval: "month" }),
+      createCheckoutSession({
+        orgId: "org-abc",
+        planSlug: "pro",
+        interval: "month",
+      }),
     ).rejects.toThrow("month");
 
     expect(createSubscriptionCheckoutMock).not.toHaveBeenCalled();
@@ -137,7 +148,11 @@ describe("createCheckoutSession", () => {
     });
 
     await expect(
-      createCheckoutSession({ orgId: "org-abc", planSlug: "pro", interval: "year" }),
+      createCheckoutSession({
+        orgId: "org-abc",
+        planSlug: "pro",
+        interval: "year",
+      }),
     ).rejects.toThrow("year");
 
     expect(createSubscriptionCheckoutMock).not.toHaveBeenCalled();
@@ -150,7 +165,11 @@ describe("createCheckoutSession", () => {
     );
 
     await expect(
-      createCheckoutSession({ orgId: "org-abc", planSlug: "pro", interval: "month" }),
+      createCheckoutSession({
+        orgId: "org-abc",
+        planSlug: "pro",
+        interval: "month",
+      }),
     ).rejects.toThrow("checkout URL");
   });
 
@@ -215,7 +234,10 @@ describe("createCreditPackCheckoutSession", () => {
     );
 
     await expect(
-      createCreditPackCheckoutSession({ orgId: "org-abc", priceId: "price_pack_001" }),
+      createCreditPackCheckoutSession({
+        orgId: "org-abc",
+        priceId: "price_pack_001",
+      }),
     ).rejects.toThrow("checkout URL");
   });
 

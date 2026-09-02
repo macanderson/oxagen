@@ -73,7 +73,7 @@ export interface DatasetDetailClientProps {
   series: EvalRunSeriesOutput | null;
 }
 
-/** Overall avg score across the whole series (item-weighted by runCount). */
+/** Overall avg score across the whole series (run-weighted by runCount). */
 function overallAvgScore(series: EvalRunSeriesOutput | null): number | null {
   if (!series || series.overall.length === 0) return null;
   let weighted = 0;

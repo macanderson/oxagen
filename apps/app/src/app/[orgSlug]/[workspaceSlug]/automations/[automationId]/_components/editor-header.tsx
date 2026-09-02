@@ -39,7 +39,12 @@ export interface EditorHeaderProps {
   canManage: boolean;
 }
 
-export function EditorHeader({ orgSlug, workspaceSlug, automation, canManage }: EditorHeaderProps) {
+export function EditorHeader({
+  orgSlug,
+  workspaceSlug,
+  automation,
+  canManage,
+}: EditorHeaderProps) {
   const router = useRouter();
   const toast = useToast();
 
@@ -58,36 +63,57 @@ export function EditorHeader({ orgSlug, workspaceSlug, automation, canManage }: 
       return;
     }
     setBusy(true);
-    const res = await updateAutomationAction({
-      orgSlug,
-      workspaceSlug,
-      automationId: automation.automation_id,
-      name: name.trim(),
-      description: description.trim().length > 0 ? description.trim() : null,
-    });
-    setBusy(false);
-    if (res.ok) {
-      toast.add({ title: "Automation updated", type: "success" });
-      setEditing(false);
-      router.refresh();
-    } else {
-      toast.add({ title: "Couldn't save", description: res.error, type: "error" });
+    // finally: `busy` disables Save, Cancel and the enabled switch, so a
+    // rejected action without this would freeze the header until a reload.
+    try {
+      const res = await updateAutomationAction({
+        orgSlug,
+        workspaceSlug,
+        automationId: automation.automation_id,
+        name: name.trim(),
+        description: description.trim().length > 0 ? description.trim() : null,
+      });
+      if (res.ok) {
+        toast.add({ title: "Automation updated", type: "success" });
+        setEditing(false);
+        router.refresh();
+      } else {
+        toast.add({
+          title: "Couldn't save",
+          description: res.error,
+          type: "error",
+        });
+      }
+    } catch {
+      toast.add({ title: "Couldn't save", type: "error" });
+    } finally {
+      setBusy(false);
     }
   }
 
   async function handleDisable() {
     setBusy(true);
-    const res = await disableAutomationAction({
-      orgSlug,
-      workspaceSlug,
-      automationId: automation.automation_id,
-    });
-    setBusy(false);
-    if (res.ok) {
-      toast.add({ title: "Automation disabled", type: "success" });
-      router.refresh();
-    } else {
-      toast.add({ title: "Couldn't disable", description: res.error, type: "error" });
+    // finally: `busy` disables the enabled switch — see handleSaveDetails.
+    try {
+      const res = await disableAutomationAction({
+        orgSlug,
+        workspaceSlug,
+        automationId: automation.automation_id,
+      });
+      if (res.ok) {
+        toast.add({ title: "Automation disabled", type: "success" });
+        router.refresh();
+      } else {
+        toast.add({
+          title: "Couldn't disable",
+          description: res.error,
+          type: "error",
+        });
+      }
+    } catch {
+      toast.add({ title: "Couldn't disable", type: "error" });
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -125,7 +151,12 @@ export function EditorHeader({ orgSlug, workspaceSlug, automation, canManage }: 
                 />
               </div>
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleSaveDetails} disabled={busy} data-testid="save-details">
+                <Button
+                  size="sm"
+                  onClick={handleSaveDetails}
+                  disabled={busy}
+                  data-testid="save-details"
+                >
                   {busy ? "Saving…" : "Save"}
                 </Button>
                 <Button
@@ -149,7 +180,8 @@ export function EditorHeader({ orgSlug, workspaceSlug, automation, canManage }: 
                   {automation.name}
                 </h1>
                 <Badge variant="muted" size="sm">
-                  {TRIGGER_LABEL[automation.triggerType] ?? automation.triggerType}
+                  {TRIGGER_LABEL[automation.triggerType] ??
+                    automation.triggerType}
                 </Badge>
                 {canManage && (
                   <Button
@@ -164,9 +196,13 @@ export function EditorHeader({ orgSlug, workspaceSlug, automation, canManage }: 
                 )}
               </div>
               {automation.description ? (
-                <p className="text-sm text-muted-foreground">{automation.description}</p>
+                <p className="text-sm text-muted-foreground">
+                  {automation.description}
+                </p>
               ) : (
-                <p className="text-sm italic text-muted-foreground/70">No description</p>
+                <p className="text-sm italic text-muted-foreground/70">
+                  No description
+                </p>
               )}
             </>
           )}
@@ -193,7 +229,12 @@ export function EditorHeader({ orgSlug, workspaceSlug, automation, canManage }: 
             </span>
           </div>
           {canManage && (
-            <Button variant="outline" size="sm" onClick={() => setTriggerOpen(true)} data-testid="trigger-now">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setTriggerOpen(true)}
+              data-testid="trigger-now"
+            >
               <Play className="size-4" /> Trigger now
             </Button>
           )}
@@ -211,11 +252,19 @@ export function EditorHeader({ orgSlug, workspaceSlug, automation, canManage }: 
             automationId: automation.automation_id,
           });
           if (res.ok) {
-            toast.add({ title: "Automation enabled", description: `${automation.name} is now live.`, type: "success" });
+            toast.add({
+              title: "Automation enabled",
+              description: `${automation.name} is now live.`,
+              type: "success",
+            });
             setEnableOpen(false);
             router.refresh();
           } else {
-            toast.add({ title: "Couldn't enable", description: res.error, type: "error" });
+            toast.add({
+              title: "Couldn't enable",
+              description: res.error,
+              type: "error",
+            });
             setEnableOpen(false);
           }
         }}
@@ -234,7 +283,11 @@ export function EditorHeader({ orgSlug, workspaceSlug, automation, canManage }: 
           });
           if (res.ok) {
             router.refresh();
-            return { ok: true, executionId: res.result.execution_id, status: res.result.status };
+            return {
+              ok: true,
+              executionId: res.result.execution_id,
+              status: res.result.status,
+            };
           }
           return { ok: false, error: res.error };
         }}

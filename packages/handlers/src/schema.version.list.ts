@@ -5,11 +5,14 @@ import { eq, desc, sql } from "drizzle-orm";
 import { getOrCreateRegistry } from "./schema.versioning";
 import { logger } from "./logger";
 
-export const schemaVersionListHandler: CapabilityHandler<typeof schemaVersionList> = async (
-  input,
-  ctx,
-) => {
-  const registry = await getOrCreateRegistry(ctx.orgId, ctx.workspaceId, ctx.userId);
+export const schemaVersionListHandler: CapabilityHandler<
+  typeof schemaVersionList
+> = async (input, ctx) => {
+  const registry = await getOrCreateRegistry(
+    ctx.orgId,
+    ctx.workspaceId,
+    ctx.userId,
+  );
 
   const limit = input.limit ?? 20;
   const offset = input.offset ?? 0;

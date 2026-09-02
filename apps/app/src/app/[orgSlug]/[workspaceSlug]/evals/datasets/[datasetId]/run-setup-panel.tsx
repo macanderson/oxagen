@@ -1,21 +1,18 @@
 "use client";
 
 /**
- * run-setup-panel.tsx — the eval-run launcher, lifted out of the dataset detail
- * drawer into a page section.
+ * run-setup-panel.tsx — the eval-run launcher section on the dataset detail
+ * page.
  *
- * Reuses the drawer's handleStartRun + status-poll logic verbatim, with two
- * changes per the redesign:
- *   1. The free-text `model` and `judgeModel` <Input>s are replaced with two
- *      <ProviderModelPicker>s (provider→model dropdowns). The target model
- *      picker is only shown when the target kind is "model"; the "agent" kind
- *      keeps the free-text slug input (only MODELS use the dropdowns).
- *   2. On a successful launch it calls `router.refresh()` (and an optional
- *      `onRunStarted` callback) so the seeded runs table + score series
- *      re-fetch.
+ * The target and judge models are chosen with <ProviderModelPicker>
+ * (provider→model dropdowns). The target model picker is only shown when the
+ * target kind is "model"; the "agent" kind takes a free-text slug instead
+ * (only MODELS use the dropdowns). On a successful launch it calls
+ * `router.refresh()` (and the optional `onRunStarted` callback) so the seeded
+ * runs table + score series re-fetch.
  *
  * Poll: eval.run.status every 2s, capped at ~30s, terminal = completed |
- * failed | cancelled (identical to the drawer).
+ * failed | cancelled.
  */
 
 import * as React from "react";
@@ -128,7 +125,11 @@ export function RunSetupPanel({
           ? { kind: "model" as const, ...(model ? { model } : {}) }
           : { kind: "agent" as const, agentSlug: agentSlug.trim() };
 
-      const parsedThreshold = Number(passThreshold);
+      // Number("") is 0, not NaN — so an emptied field would silently start the
+      // run at threshold 0 (everything passes). Treat blank as "use the
+      // default" alongside the unparseable case.
+      const trimmedThreshold = passThreshold.trim();
+      const parsedThreshold = trimmedThreshold ? Number(trimmedThreshold) : NaN;
       const result = await startEvalRunAction({
         orgSlug,
         workspaceSlug,

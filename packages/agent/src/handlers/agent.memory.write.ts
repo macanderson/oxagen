@@ -4,7 +4,10 @@ import type { ActorKind } from "../memory/neo4j";
 import { embedText } from "../memory/embed";
 import { isKnowledgeGraphEnabled } from "../runtime/knowledge-graph";
 import { assertMemoryClassInvariants } from "@oxagen/oxagen/contracts/agent.memory.model";
-import type { AgentMemoryWriteInput, AgentMemoryWriteOutput } from "@oxagen/oxagen/contracts/agent.memory.write";
+import type {
+  AgentMemoryWriteInput,
+  AgentMemoryWriteOutput,
+} from "@oxagen/oxagen/contracts/agent.memory.write";
 
 export type { AgentMemoryWriteInput, AgentMemoryWriteOutput };
 

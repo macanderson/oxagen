@@ -962,7 +962,9 @@ async function _invokeCore(
   // not resolve one (non-enterprise tier fast-path).
   let resolvedPrincipal: ResolvedPrincipal | null = null;
   // The platform-created decision reference for THIS invocation. Only ever
-  // written from the IAM check's own result — see the strip below.
+  // written from the IAM check's own result; an inbound caller-supplied value
+  // never reaches here because the forged-binding guard above rejects the
+  // whole invocation first.
   let authorizationDecision: AuthorizationDecisionRef | null = null;
   try {
     output = await withScope(async () => {
@@ -1434,6 +1436,13 @@ export interface AuthorizeExternalCapabilityResult {
  * When no IAM runtime is registered (tests / local dev without bootstrap),
  * the call is unconditionally allowed and emits no event — mirrors the
  * kernel.invoke() behaviour under the same conditions.
+ *
+ * SCOPE: unlike kernel.invoke(), this helper does NOT enter a tenant scope —
+ * there is no contract to read `scoped` off. The registered checkFn reaches the
+ * DB through withTenantDb, so the CALLER must already be inside
+ * runInTenantScope (see the MCP execute() closure in
+ * packages/agent/src/runtime/materialize-tools.ts). Calling it outside a scope
+ * makes checkFn throw, which fails closed to `allowed: false`.
  *
  * @param name          Synthetic capability id, e.g. "mcp.github.list_pull_requests".
  * @param ctx           CapabilityContext built at the surface entry seam.

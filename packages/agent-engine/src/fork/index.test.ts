@@ -70,7 +70,12 @@ describe("messageText", () => {
       role: "assistant" as const,
       content: [
         { type: "text" as const, text: "start" },
-        { type: "tool-call" as const, toolName: "test", toolCallId: "123", input: {} },
+        {
+          type: "tool-call" as const,
+          toolName: "test",
+          toolCallId: "123",
+          input: {},
+        },
         { type: "text" as const, text: "end" },
       ],
     } as ModelMessage;
@@ -318,7 +323,9 @@ HYPOTHESIS: h2 FALSIFIED — nope`,
   });
 
   it("never throws on missing diagnosis marker", () => {
-    const messages: ModelMessage[] = [{ role: "user", content: "no diagnosis" }];
+    const messages: ModelMessage[] = [
+      { role: "user", content: "no diagnosis" },
+    ];
 
     expect(() => snapshotTrunk(messages)).not.toThrow();
     const snapshot = snapshotTrunk(messages);
@@ -500,7 +507,9 @@ describe("planForks", () => {
   });
 
   it("respects minimum cap of 1", () => {
-    const hypotheses: Hypothesis[] = [{ id: "h1", statement: "test", evidence: "" }];
+    const hypotheses: Hypothesis[] = [
+      { id: "h1", statement: "test", evidence: "" },
+    ];
     const snapshot: TrunkSnapshot = {
       messages: [],
       diagnosis: null,

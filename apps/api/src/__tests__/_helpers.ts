@@ -89,7 +89,9 @@ export function makeOrgNotFound(): OrgScopeResolution {
 }
 
 /** Successful workspace scope resolution. */
-export function makeWorkspaceScopeOk(workspaceId = TEST_WORKSPACE_ID): WorkspaceScopeResolution {
+export function makeWorkspaceScopeOk(
+  workspaceId = TEST_WORKSPACE_ID,
+): WorkspaceScopeResolution {
   return { ok: true, workspaceId };
 }
 

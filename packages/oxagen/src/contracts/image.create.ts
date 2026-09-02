@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const imageCreate = registerCapability({
   name: "create_image",
   domain: "image",
-  description: "Generate an image from a prompt and persist it as a workspace asset",
+  description:
+    "Generate an image from a prompt and persist it as a workspace asset",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "docs", "mcp"],

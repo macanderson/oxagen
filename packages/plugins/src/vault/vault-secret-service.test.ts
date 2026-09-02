@@ -50,7 +50,9 @@ const actor = { orgId: "o1", workspaceId: "w1", userId: "u1" };
 
 beforeEach(() => {
   state.inserts = [];
-  process.env.AUTH_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
+  process.env.AUTH_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString(
+    "base64",
+  );
 });
 
 describe("upsertSecretKey — storage column split", () => {
@@ -118,7 +120,11 @@ describe("VaultLockedError — missing master key", () => {
     vi.resetModules();
     const { upsertSecretKey } = await import("./vault-secret-service");
     await expect(
-      upsertSecretKey(actor, { key: "PUBLIC_FLAG", sensitive: false, defaultValue: "on" }),
+      upsertSecretKey(actor, {
+        key: "PUBLIC_FLAG",
+        sensitive: false,
+        defaultValue: "on",
+      }),
     ).resolves.toEqual({ id: "sk_pub_1" });
     const stored = state.inserts[state.inserts.length - 1]!.values;
     expect(stored.defaultValueText).toBe("on");

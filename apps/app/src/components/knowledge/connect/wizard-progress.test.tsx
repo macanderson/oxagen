@@ -9,10 +9,18 @@ describe("WizardProgress", () => {
   it("renders 5 step dots and highlights the current step", () => {
     render(<WizardProgress currentStep="preview" />);
     expect(screen.getByTestId("wizard-progress-dot-pick")).toBeInTheDocument();
-    expect(screen.getByTestId("wizard-progress-dot-credentials")).toBeInTheDocument();
-    expect(screen.getByTestId("wizard-progress-dot-preview")).toBeInTheDocument();
-    expect(screen.getByTestId("wizard-progress-dot-mappings")).toBeInTheDocument();
-    expect(screen.getByTestId("wizard-progress-dot-confirm")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("wizard-progress-dot-credentials"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("wizard-progress-dot-preview"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("wizard-progress-dot-mappings"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("wizard-progress-dot-confirm"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Step 3 of 5")).toBeInTheDocument();
     expect(screen.getByText("Preview")).toBeInTheDocument();
   });

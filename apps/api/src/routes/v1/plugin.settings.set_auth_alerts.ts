@@ -9,6 +9,8 @@ export const pluginSettingsSetAuthAlertsRoute = new Hono<AppEnv>();
 pluginSettingsSetAuthAlertsRoute.post("/", async (c) => {
   const input = pluginSettingsSetAuthAlerts.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(pluginSettingsSetAuthAlerts.name, input, ctx, { surface: "api" });
+  const out = await invoke(pluginSettingsSetAuthAlerts.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

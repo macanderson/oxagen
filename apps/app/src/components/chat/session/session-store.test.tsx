@@ -52,7 +52,9 @@ function Probe() {
       <button onClick={() => store.updateSession({ agentId: "agt_pick" })}>
         pick-agent
       </button>
-      <button onClick={() => store.updateSession({ repoKey: "con_1::acme/site" })}>
+      <button
+        onClick={() => store.updateSession({ repoKey: "con_1::acme/site" })}
+      >
         pick-repo
       </button>
       <button onClick={() => store.updateSession({ branch: "feat/x" })}>
@@ -119,7 +121,9 @@ describe("ChatSessionProvider", () => {
     expect(s.org).toBe("umbrella");
     expect(s.repoKey).toBeNull();
     expect(s.branch).toBeNull();
-    const persisted = window.localStorage.getItem(sessionStorageKey("ws", null));
+    const persisted = window.localStorage.getItem(
+      sessionStorageKey("ws", null),
+    );
     expect(persisted).toContain('"org":"umbrella"');
   });
 
@@ -162,12 +166,16 @@ describe("ChatSessionProvider", () => {
     fireEvent.click(screen.getByText("pick-branch"));
     fireEvent.click(screen.getByText("send"));
     // Agent locked → further agent changes rejected.
-    expect(JSON.parse(screen.getByTestId("locks").textContent ?? "{}")).toEqual({
-      agent: true,
-      code: true,
-    });
+    expect(JSON.parse(screen.getByTestId("locks").textContent ?? "{}")).toEqual(
+      {
+        agent: true,
+        code: true,
+      },
+    );
     // Draft migrated onto the conversation key.
-    expect(window.localStorage.getItem(sessionStorageKey("ws", null))).toBeNull();
+    expect(
+      window.localStorage.getItem(sessionStorageKey("ws", null)),
+    ).toBeNull();
     expect(
       window.localStorage.getItem(sessionStorageKey("ws", "cnv_new")),
     ).toContain('"branch":"feat/x"');

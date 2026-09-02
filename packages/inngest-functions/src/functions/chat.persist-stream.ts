@@ -88,7 +88,7 @@ export const [chatPersistStream] = createFunction(
     }
 
     logger.info(
-      { assistantMessageId, hasTokenUsage: tokenUsage !== null },
+      { assistantMessageId, hasTokenUsage: Boolean(tokenUsage) },
       "chat.persist-stream complete",
     );
     return { persisted: assistantMessageId };

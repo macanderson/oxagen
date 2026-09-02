@@ -44,12 +44,32 @@ const seatUsage = {
 };
 
 const members: MembersPanelProps["members"] = [
-  { publicId: "m-1", displayName: "Jane Smith", email: "jane@example.com", role: "owner", userId: "u-1", joinedAt: "2025-01-01T00:00:00Z" },
-  { publicId: "m-2", displayName: "Bob Jones", email: "bob@example.com", role: "member", userId: "u-2", joinedAt: "2025-02-01T00:00:00Z" },
+  {
+    publicId: "m-1",
+    displayName: "Jane Smith",
+    email: "jane@example.com",
+    role: "owner",
+    userId: "u-1",
+    joinedAt: "2025-01-01T00:00:00Z",
+  },
+  {
+    publicId: "m-2",
+    displayName: "Bob Jones",
+    email: "bob@example.com",
+    role: "member",
+    userId: "u-2",
+    joinedAt: "2025-02-01T00:00:00Z",
+  },
 ];
 
 const pendingInvitations: MembersPanelProps["pendingInvitations"] = [
-  { publicId: "inv-1", email: "alice@example.com", role: "member", createdAt: "2025-03-01T00:00:00Z", expiresAt: "2025-04-01T00:00:00Z" },
+  {
+    publicId: "inv-1",
+    email: "alice@example.com",
+    role: "member",
+    createdAt: "2025-03-01T00:00:00Z",
+    expiresAt: "2025-04-01T00:00:00Z",
+  },
 ];
 
 const defaultProps: MembersPanelProps = {
@@ -95,12 +115,16 @@ describe("MembersPanel — pending invitations", () => {
 describe("MembersPanel — add member button visibility", () => {
   it("shows 'Add member' button for owners", () => {
     render(<MembersPanel {...defaultProps} viewerRole="owner" />);
-    expect(screen.getByRole("button", { name: /add member/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /add member/i }),
+    ).toBeInTheDocument();
   });
 
   it("hides 'Add member' button for regular members", () => {
     render(<MembersPanel {...defaultProps} viewerRole="member" />);
-    expect(screen.queryByRole("button", { name: /add member/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /add member/i }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -113,7 +137,10 @@ describe("MembersPanel — seat usage", () => {
   });
 
   it("does not crash when available=0", () => {
-    const atLimitProps = { ...defaultProps, seatUsage: { licenses: 2, used: 2, available: 0 } };
+    const atLimitProps = {
+      ...defaultProps,
+      seatUsage: { licenses: 2, used: 2, available: 0 },
+    };
     expect(() => render(<MembersPanel {...atLimitProps} />)).not.toThrow();
   });
 });

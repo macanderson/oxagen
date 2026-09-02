@@ -18,7 +18,9 @@ export const routerPolicySetHandler: CapabilityHandler<
       { orgId: ctx.orgId },
       "set_routing_policy: rejected — workspace scope with no workspace context",
     );
-    throw new Error("set_routing_policy workspace scope requires a workspace context");
+    throw new Error(
+      "set_routing_policy workspace scope requires a workspace context",
+    );
   }
   // Org scope ⇒ workspace_id NULL (the org-level default row); workspace scope ⇒
   // this workspace's row.
@@ -38,7 +40,8 @@ export const routerPolicySetHandler: CapabilityHandler<
 
   const next = {
     mode: input.mode ?? normalizeRoutingMode(existing?.mode),
-    successThreshold: input.successThreshold ?? existing?.successThreshold ?? 0.95,
+    successThreshold:
+      input.successThreshold ?? existing?.successThreshold ?? 0.95,
     minSamples: input.minSamples ?? existing?.minSamples ?? 20,
     windowDays: input.windowDays ?? existing?.windowDays ?? 30,
     escalateOnRejection:

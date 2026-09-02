@@ -13,11 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverPopup,
-} from "@/components/ui/popover";
+import { Popover, PopoverTrigger, PopoverPopup } from "@/components/ui/popover";
 import { Globe, Plus, Trash2, HelpCircle } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -40,7 +36,12 @@ interface RegistryManagerProps {
     workspaceSlug: string;
     name: string;
     baseUrl: string;
-  }) => Promise<{ ok: boolean; registryId?: string; isDefault?: boolean; error?: string }>;
+  }) => Promise<{
+    ok: boolean;
+    registryId?: string;
+    isDefault?: boolean;
+    error?: string;
+  }>;
   removeRegistryAction: (input: {
     orgSlug: string;
     workspaceSlug: string;
@@ -65,14 +66,22 @@ function RegistryHelpPopover({ docsBaseUrl }: { docsBaseUrl: string }) {
         <HelpCircle className="h-4 w-4" aria-hidden="true" />
       </PopoverTrigger>
       <PopoverPopup className="w-80">
-        <p className="mb-2 font-semibold text-sm text-foreground">What is a registry?</p>
-        <p className="mb-3 text-xs text-muted-foreground leading-relaxed">
-          A plugin registry is a URL that exposes a list of available MCP servers and tools.
-          Oxagen queries the registry to populate the marketplace and discover installable plugins.
-          Any server implementing the{" "}
-          <span className="font-medium text-foreground">MCP Registry OpenAPI spec</span> can be added.
+        <p className="mb-2 font-semibold text-sm text-foreground">
+          What is a registry?
         </p>
-        <p className="mb-2 text-xs font-medium text-foreground">Example registry URL</p>
+        <p className="mb-3 text-xs text-muted-foreground leading-relaxed">
+          A plugin registry is a URL that exposes a list of available MCP
+          servers and tools. Oxagen queries the registry to populate the
+          marketplace and discover installable plugins. Any server implementing
+          the{" "}
+          <span className="font-medium text-foreground">
+            MCP Registry OpenAPI spec
+          </span>{" "}
+          can be added.
+        </p>
+        <p className="mb-2 text-xs font-medium text-foreground">
+          Example registry URL
+        </p>
         <code className="block mb-3 rounded-md bg-muted px-3 py-2 text-xs font-mono text-foreground break-all">
           https://registry.modelcontextprotocol.io
         </code>
@@ -99,7 +108,8 @@ export function RegistryManager({
   addRegistryAction,
   removeRegistryAction,
 }: RegistryManagerProps) {
-  const [registries, setRegistries] = React.useState<RegistryRow[]>(initialRegistries);
+  const [registries, setRegistries] =
+    React.useState<RegistryRow[]>(initialRegistries);
   const [showForm, setShowForm] = React.useState(false);
   const [name, setName] = React.useState("");
   const [baseUrl, setBaseUrl] = React.useState("");
@@ -127,7 +137,8 @@ export function RegistryManager({
     }
     // Append optimistically — the page will revalidate on next load for full consistency.
     if (result.registryId) {
-      const isFirstAndDefault = registries.length === 0 || result.isDefault === true;
+      const isFirstAndDefault =
+        registries.length === 0 || result.isDefault === true;
       const newReg: RegistryRow = {
         id: result.registryId,
         name: name.trim(),
@@ -157,7 +168,11 @@ export function RegistryManager({
       return;
     setRemovingId(reg.id);
     setError(null);
-    const result = await removeRegistryAction({ orgSlug, workspaceSlug, registryId: reg.id });
+    const result = await removeRegistryAction({
+      orgSlug,
+      workspaceSlug,
+      registryId: reg.id,
+    });
     setRemovingId(null);
     if (!result.ok) {
       setError(result.error ?? "Remove failed");
@@ -187,7 +202,9 @@ export function RegistryManager({
     <div className="rounded-xl border border-border/60 bg-card p-6">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">MCP Server Registries</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            MCP Server Registries
+          </h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Registries are the catalog sources Oxagen discovers and installs MCP
             servers and plugins from.
@@ -280,10 +297,17 @@ export function RegistryManager({
               data-testid={`registry-row-${reg.id}`}
             >
               <div className="flex min-w-0 flex-1 items-center gap-2 font-medium">
-                <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <Globe
+                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
                 <span className="truncate">{reg.name}</span>
                 {reg.isDefault && (
-                  <Badge variant="muted" size="sm" data-testid={`registry-default-badge-${reg.id}`}>
+                  <Badge
+                    variant="muted"
+                    size="sm"
+                    data-testid={`registry-default-badge-${reg.id}`}
+                  >
                     Default
                   </Badge>
                 )}
@@ -303,7 +327,10 @@ export function RegistryManager({
                     Status
                   </dt>
                   <dd className="mt-0.5 text-sm">
-                    <Badge variant={reg.enabled ? "success" : "muted"} size="sm">
+                    <Badge
+                      variant={reg.enabled ? "success" : "muted"}
+                      size="sm"
+                    >
                       {reg.enabled ? "Enabled" : "Disabled"}
                     </Badge>
                   </dd>

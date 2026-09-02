@@ -7,16 +7,27 @@
  * given. Every write validates the whole document against the schema first.
  */
 import type { McpServerConfig } from "@oxagen/mcp-config/schema";
-import { getScopePaths, type SettingsScope, type ResolveSettingsOptions } from "./resolve.js";
+import {
+  getScopePaths,
+  type SettingsScope,
+  type ResolveSettingsOptions,
+} from "./resolve.js";
 import { readScopeDoc, writeScopeDoc } from "./write.js";
 import type { OxagenSettings } from "./schema.js";
 
-type Ctx = Pick<ResolveSettingsOptions, "cwd" | "userSettingsPath" | "projectDirName">;
+type Ctx = Pick<
+  ResolveSettingsOptions,
+  "cwd" | "userSettingsPath" | "projectDirName"
+>;
 
 const SCOPE_ORDER: SettingsScope[] = ["local", "project", "user"];
 
-function serversOf(doc: Record<string, unknown>): Record<string, McpServerConfig> {
-  return (doc["mcpServers"] as Record<string, McpServerConfig> | undefined) ?? {};
+function serversOf(
+  doc: Record<string, unknown>,
+): Record<string, McpServerConfig> {
+  return (
+    (doc["mcpServers"] as Record<string, McpServerConfig> | undefined) ?? {}
+  );
 }
 
 /** Find the highest-precedence scope that defines a server, if any. */
@@ -56,7 +67,10 @@ export interface McpMutateOptions extends Ctx {
 }
 
 /** Remove a server. Returns the path touched and whether it existed. */
-export function removeMcpServer(opts: McpMutateOptions): { path: string; found: boolean } {
+export function removeMcpServer(opts: McpMutateOptions): {
+  path: string;
+  found: boolean;
+} {
   const target = opts.scope
     ? { scope: opts.scope, path: getScopePaths(opts)[opts.scope] }
     : findServerScope(opts.name, opts);

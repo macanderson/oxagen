@@ -18,7 +18,9 @@ if (typeof globalThis.ResizeObserver === "undefined") {
 }
 
 vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  Badge: ({ children }: { children: React.ReactNode }) => (
+    <span>{children}</span>
+  ),
 }));
 
 afterEach(cleanup);
@@ -53,7 +55,13 @@ describe("CapabilityResult render", () => {
           meta: { nested: 1 },
         }}
         links={[
-          { field: "id", recordType: "graph.node", id: "n1", href: "/acme/ws/knowledge/graph/n1", label: "Open node" },
+          {
+            field: "id",
+            recordType: "graph.node",
+            id: "n1",
+            href: "/acme/ws/knowledge/graph/n1",
+            label: "Open node",
+          },
         ]}
       />,
     );

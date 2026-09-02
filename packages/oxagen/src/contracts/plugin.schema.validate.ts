@@ -3,7 +3,9 @@ import { registerCapability } from "../registry";
 
 // Single field validation error
 const fieldErrorSchema = z.object({
-  field: z.string().describe("Dot-path to the invalid field (e.g. 'config.organizations')"),
+  field: z
+    .string()
+    .describe("Dot-path to the invalid field (e.g. 'config.organizations')"),
   message: z.string().describe("Human-readable validation error message"),
   code: z
     .enum([
@@ -38,14 +40,20 @@ export const pluginSchemaValidate = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    pluginId: z.string().describe("Connector plugin identifier (e.g. 'github', 'google-drive')"),
+    pluginId: z
+      .string()
+      .describe("Connector plugin identifier (e.g. 'github', 'google-drive')"),
     authSchemeId: z
       .string()
       .optional()
-      .describe("Auth scheme being used (e.g. 'oauth2', 'pat'). Required when plugin has multiple auth schemes."),
+      .describe(
+        "Auth scheme being used (e.g. 'oauth2', 'pat'). Required when plugin has multiple auth schemes.",
+      ),
     config: z
       .record(z.unknown())
-      .describe("Config values keyed by field key. Nested sections use dot-path or nested objects."),
+      .describe(
+        "Config values keyed by field key. Nested sections use dot-path or nested objects.",
+      ),
   }),
   output: z.object({
     valid: z.boolean().describe("True when all fields pass validation"),

@@ -20,7 +20,9 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   render: () => (
     <Popover>
-      <PopoverTrigger render={<Button variant="outline">Open popover</Button>} />
+      <PopoverTrigger
+        render={<Button variant="outline">Open popover</Button>}
+      />
       <PopoverPopup className="w-72">
         <PopoverTitle>Dimensions</PopoverTitle>
         <PopoverDescription>Set the layout dimensions.</PopoverDescription>

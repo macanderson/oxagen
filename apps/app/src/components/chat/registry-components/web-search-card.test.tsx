@@ -24,7 +24,8 @@ describe("WebSearchCard", () => {
             {
               title: "USS Nautilus (SSN-571)",
               url: "https://www.wikipedia.org/USS_Nautilus",
-              content: "The world's first operational nuclear-powered submarine.",
+              content:
+                "The world's first operational nuclear-powered submarine.",
               score: 0.98,
             },
           ],
@@ -35,17 +36,25 @@ describe("WebSearchCard", () => {
     );
     expect(screen.getByText("Web search · 1 result")).toBeTruthy();
     const link = screen.getByText("USS Nautilus (SSN-571)").closest("a");
-    expect(link?.getAttribute("href")).toBe("https://www.wikipedia.org/USS_Nautilus");
+    expect(link?.getAttribute("href")).toBe(
+      "https://www.wikipedia.org/USS_Nautilus",
+    );
     expect(link?.getAttribute("target")).toBe("_blank");
     // www. stripped from the displayed domain
     expect(screen.getByText("wikipedia.org")).toBeTruthy();
     expect(
-      screen.getByText("The world's first operational nuclear-powered submarine."),
+      screen.getByText(
+        "The world's first operational nuclear-powered submarine.",
+      ),
     ).toBeTruthy();
   });
 
   it("renders an empty state", () => {
-    render(<WebSearchCard output={{ results: [], totalResults: 0, searchId: "s_0" }} />);
+    render(
+      <WebSearchCard
+        output={{ results: [], totalResults: 0, searchId: "s_0" }}
+      />,
+    );
     expect(screen.getByText("No results.")).toBeTruthy();
   });
 });

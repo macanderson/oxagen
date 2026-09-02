@@ -32,8 +32,16 @@ const MOCK_PLAN = {
 };
 
 const MOCK_STEP_ROWS = [
-  { id: "step-uuid-1", stepNumber: 0, inputPayload: { goal: "Find CEO of Apple", outputFormat: "json" } },
-  { id: "step-uuid-2", stepNumber: 1, inputPayload: { goal: "Find CEO of Microsoft", outputFormat: "json" } },
+  {
+    id: "step-uuid-1",
+    stepNumber: 0,
+    inputPayload: { goal: "Find CEO of Apple", outputFormat: "json" },
+  },
+  {
+    id: "step-uuid-2",
+    stepNumber: 1,
+    inputPayload: { goal: "Find CEO of Microsoft", outputFormat: "json" },
+  },
 ];
 
 mocks.dbFindFirst.mockResolvedValue(MOCK_EXECUTION);
@@ -87,10 +95,14 @@ vi.mock("../logger", () => ({
 }));
 
 // Capture the handler from createFunction.
-let capturedHandler: ((ctx: {
-  event: { data: Record<string, unknown> };
-  step: { run: (name: string, fn: () => Promise<unknown>) => Promise<unknown> };
-}) => Promise<unknown>) | null = null;
+let capturedHandler:
+  | ((ctx: {
+      event: { data: Record<string, unknown> };
+      step: {
+        run: (name: string, fn: () => Promise<unknown>) => Promise<unknown>;
+      };
+    }) => Promise<unknown>)
+  | null = null;
 
 mocks.inngestCreateFunction.mockImplementation(
   (_opts: unknown, _trigger: unknown, handler: typeof capturedHandler) => {
@@ -142,7 +154,9 @@ describe("agentWorkflowSupervisor Inngest handler", () => {
 
     // The withTenantDb mock routes tx.update(table).set(...) through mocks.dbUpdateSet.
     // Configure it to succeed so the not-found path can complete its best-effort update.
-    mocks.dbUpdateSet.mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
+    mocks.dbUpdateSet.mockReturnValue({
+      where: vi.fn().mockResolvedValue(undefined),
+    });
 
     await expect(
       capturedHandler!({ event: BASE_EVENT, step: makeStep() }),
@@ -172,7 +186,10 @@ describe("agentWorkflowSupervisor Inngest handler", () => {
   it("calls generateObjectFor with the execution goal", async () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
     expect(mocks.generateObjectFor).toHaveBeenCalledOnce();
-    const args = mocks.generateObjectFor.mock.calls[0]![0] as Record<string, unknown>;
+    const args = mocks.generateObjectFor.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
     expect(args.prompt).toContain("Profile all Fortune 500 CEOs");
     expect(args.telemetry).toMatchObject({
       orgId: "org-1",
@@ -184,10 +201,17 @@ describe("agentWorkflowSupervisor Inngest handler", () => {
   it("inserts agent_execution_steps rows for each planned task", async () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
     expect(mocks.dbInsertValues).toHaveBeenCalledOnce();
-    const insertedSteps = mocks.dbInsertValues.mock.calls[0]![0] as Array<Record<string, unknown>>;
+    const insertedSteps = mocks.dbInsertValues.mock.calls[0]![0] as Array<
+      Record<string, unknown>
+    >;
     expect(insertedSteps).toHaveLength(2);
-    expect(insertedSteps[0]).toMatchObject({ stepNumber: 0, stepType: "research" });
-    expect((insertedSteps[0]!.inputPayload as Record<string, unknown>).goal).toBe("Find CEO of Apple");
+    expect(insertedSteps[0]).toMatchObject({
+      stepNumber: 0,
+      stepType: "research",
+    });
+    expect(
+      (insertedSteps[0]!.inputPayload as Record<string, unknown>).goal,
+    ).toBe("Find CEO of Apple");
   });
 
   it("dispatches inngest events for each step", async () => {
@@ -199,7 +223,10 @@ describe("agentWorkflowSupervisor Inngest handler", () => {
     expect(sendArg).toBeDefined();
     expect(sendArg?.[0]).toMatchObject({
       name: "agent/workflow.task.execute",
-      data: expect.objectContaining({ orgId: "org-1", executionId: "exec-uuid-1" }),
+      data: expect.objectContaining({
+        orgId: "org-1",
+        executionId: "exec-uuid-1",
+      }),
     });
   });
 
@@ -220,7 +247,8 @@ describe("agentWorkflowSupervisor Inngest handler", () => {
       })),
     );
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
-    const insertedSteps = mocks.dbInsertValues.mock.calls[0]![0] as Array<unknown>;
+    const insertedSteps = mocks.dbInsertValues.mock
+      .calls[0]![0] as Array<unknown>;
     expect(insertedSteps.length).toBeLessThanOrEqual(500);
   });
 

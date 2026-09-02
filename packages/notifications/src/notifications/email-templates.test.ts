@@ -82,7 +82,7 @@ describe("reauthEmailTemplate", () => {
       expect(html).toContain("C&gt;");
     });
 
-    it("escapes \" in serverName as &quot;", () => {
+    it('escapes " in serverName as &quot;', () => {
       const { html } = reauthEmailTemplate(dangerousInput);
       expect(html).toContain("&quot;D");
       // Raw double-quote from serverName must not appear unescaped in html
@@ -93,7 +93,7 @@ describe("reauthEmailTemplate", () => {
     it("escapes & in reauthUrl (href) as &amp;", () => {
       const { html } = reauthEmailTemplate(dangerousInput);
       // The href uses esc(reauthUrl), so & in the query string → &amp;
-      expect(html).toContain("href=\"https://example.com/reauth?a=1&amp;b=2\"");
+      expect(html).toContain('href="https://example.com/reauth?a=1&amp;b=2"');
     });
 
     it("escapes < and > in orgName", () => {

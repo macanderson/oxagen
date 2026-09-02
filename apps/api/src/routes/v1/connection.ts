@@ -34,7 +34,9 @@ connectionRoute.get("/", async (c) => {
 connectionRoute.post("/", async (c) => {
   const body = connectionCreate.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(connectionCreate.name, body, ctx, { surface: "api" });
+  const out = await invoke(connectionCreate.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out, 201);
 });
 
@@ -53,47 +55,64 @@ connectionRoute.delete("/:id", async (c) => {
     mode: c.req.query("mode") ?? "full",
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(connectionDelete.name, body, ctx, { surface: "api" });
+  const out = await invoke(connectionDelete.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
 // GET /connections/:id/preview — preview sample records
 connectionRoute.get("/:id/preview", async (c) => {
-  const body = connectionPreview.input.parse({ connectionId: c.req.param("id") });
+  const body = connectionPreview.input.parse({
+    connectionId: c.req.param("id"),
+  });
   const ctx = capabilityContext(c);
-  const out = await invoke(connectionPreview.name, body, ctx, { surface: "api" });
+  const out = await invoke(connectionPreview.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
 // POST /connections/:id/suggest-mappings — LLM-suggested entity type mappings
 connectionRoute.post("/:id/suggest-mappings", async (c) => {
   const json = (await c.req.json()) as Record<string, unknown>;
+  // Path param LAST: the URL identifies the connection, so a `connectionId` in
+  // the body must never redirect the call to a different connection.
   const body = connectionMappingsSuggest.input.parse({
-    connectionId: c.req.param("id"),
     ...json,
+    connectionId: c.req.param("id"),
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(connectionMappingsSuggest.name, body, ctx, { surface: "api" });
+  const out = await invoke(connectionMappingsSuggest.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
 // GET /connections/:id/mappings — get current entity type mappings
 connectionRoute.get("/:id/mappings", async (c) => {
-  const body = connectionMappingsGet.input.parse({ connectionId: c.req.param("id") });
+  const body = connectionMappingsGet.input.parse({
+    connectionId: c.req.param("id"),
+  });
   const ctx = capabilityContext(c);
-  const out = await invoke(connectionMappingsGet.name, body, ctx, { surface: "api" });
+  const out = await invoke(connectionMappingsGet.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
 // PUT /connections/:id/mappings — save confirmed entity type mappings
 connectionRoute.put("/:id/mappings", async (c) => {
   const json = (await c.req.json()) as Record<string, unknown>;
+  // Path param LAST — see the note on /:id/suggest-mappings above.
   const body = connectionMappingsSet.input.parse({
-    connectionId: c.req.param("id"),
     ...json,
+    connectionId: c.req.param("id"),
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(connectionMappingsSet.name, body, ctx, { surface: "api" });
+  const out = await invoke(connectionMappingsSet.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
@@ -147,7 +166,8 @@ connectionRoute.post("/:id/resync", async (c) => {
       workspaceId: ctx.workspaceId,
       owner: (deliveryConfig?.owner as string | undefined) ?? "",
       repo: (deliveryConfig?.repo as string | undefined) ?? "",
-      defaultBranch: (deliveryConfig?.defaultBranch as string | undefined) ?? "main",
+      defaultBranch:
+        (deliveryConfig?.defaultBranch as string | undefined) ?? "main",
     },
   });
 
@@ -157,16 +177,24 @@ connectionRoute.post("/:id/resync", async (c) => {
 // PATCH /connections/:id — rename / reconfigure a connection
 connectionRoute.patch("/:id", async (c) => {
   const json = (await c.req.json()) as Record<string, unknown>;
-  const body = connectionUpdate.input.parse({ connectionId: c.req.param("id"), ...json });
+  const body = connectionUpdate.input.parse({
+    ...json,
+    connectionId: c.req.param("id"),
+  });
   const ctx = capabilityContext(c);
-  const out = await invoke(connectionUpdate.name, body, ctx, { surface: "api" });
+  const out = await invoke(connectionUpdate.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
 // POST /connections/:id/pause — pause or resume syncing ({ paused: boolean })
 connectionRoute.post("/:id/pause", async (c) => {
   const json = (await c.req.json()) as Record<string, unknown>;
-  const body = connectionPause.input.parse({ connectionId: c.req.param("id"), ...json });
+  const body = connectionPause.input.parse({
+    ...json,
+    connectionId: c.req.param("id"),
+  });
   const ctx = capabilityContext(c);
   const out = await invoke(connectionPause.name, body, ctx, { surface: "api" });
   return c.json(out);

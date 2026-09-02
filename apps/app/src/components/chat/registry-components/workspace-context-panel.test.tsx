@@ -45,11 +45,15 @@ function stubSandboxFetch({
   let filesCall = 0;
   const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
     if (url.endsWith("/agent/sandbox/files")) {
-      const body = filesResponses[Math.min(filesCall, filesResponses.length - 1)];
+      const body =
+        filesResponses[Math.min(filesCall, filesResponses.length - 1)];
       filesCall += 1;
       return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
     }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve(fileResponse ?? {}) });
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve(fileResponse ?? {}),
+    });
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -68,18 +72,27 @@ describe("WorkspaceContextPanel", () => {
   it("shows missing-context message and does not fetch when sessionId is absent", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    render(<WorkspaceContextPanel sessionId="" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkspaceContextPanel
+        sessionId=""
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     expect(screen.getByText(/missing workspace context/)).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 
   it("renders a loading skeleton while the fetch is pending", () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockReturnValue(new Promise(() => {})),
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => {})));
+    render(
+      <WorkspaceContextPanel
+        sessionId="sbx_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
     );
-    render(<WorkspaceContextPanel sessionId="sbx_123" orgSlug="acme" workspaceSlug="main" />);
     expect(document.querySelector(".animate-pulse")).toBeInTheDocument();
     vi.unstubAllGlobals();
   });
@@ -97,7 +110,13 @@ describe("WorkspaceContextPanel", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<WorkspaceContextPanel sessionId="sbx_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkspaceContextPanel
+        sessionId="sbx_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
 
     await waitFor(() => {
       expect(screen.getByText("README.md")).toBeInTheDocument();
@@ -124,7 +143,10 @@ describe("WorkspaceContextPanel", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({ entries: [{ path: "a.ts", kind: "file", sizeBytes: 10 }] }),
+        json: () =>
+          Promise.resolve({
+            entries: [{ path: "a.ts", kind: "file", sizeBytes: 10 }],
+          }),
       }),
     );
     render(
@@ -144,27 +166,52 @@ describe("WorkspaceContextPanel", () => {
   it("shows a visible error card when the response is non-ok", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({}) }),
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({}),
+      }),
     );
-    render(<WorkspaceContextPanel sessionId="sbx_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkspaceContextPanel
+        sessionId="sbx_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     await waitFor(() => {
-      expect(screen.getByText(/Failed to load workspace files/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Failed to load workspace files/),
+      ).toBeInTheDocument();
     });
     vi.unstubAllGlobals();
   });
 
   it("shows a visible error card when fetch throws", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
-    render(<WorkspaceContextPanel sessionId="sbx_123" orgSlug="acme" workspaceSlug="main" />);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new Error("Network error")),
+    );
+    render(
+      <WorkspaceContextPanel
+        sessionId="sbx_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     await waitFor(() => {
-      expect(screen.getByText(/Failed to load workspace files: Network error/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Failed to load workspace files: Network error/),
+      ).toBeInTheDocument();
     });
     vi.unstubAllGlobals();
   });
 
   it("renders the sandbox status strip: running chip, shortened session id, refresh button", async () => {
     stubSandboxFetch({
-      filesResponses: [{ entries: [{ path: "a.ts", kind: "file", sizeBytes: 10 }] }],
+      filesResponses: [
+        { entries: [{ path: "a.ts", kind: "file", sizeBytes: 10 }] },
+      ],
     });
     render(
       <WorkspaceContextPanel
@@ -176,14 +223,22 @@ describe("WorkspaceContextPanel", () => {
     await screen.findByText("a.ts");
     expect(screen.getByText("Sandbox running")).toBeInTheDocument();
     // Shortened (14 chars + ellipsis), full id on the copy control's title.
-    expect(screen.getByText(shortSessionId("sbx_0123456789abcdef"))).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Copy session id" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Refresh files" })).toBeInTheDocument();
+    expect(
+      screen.getByText(shortSessionId("sbx_0123456789abcdef")),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Copy session id" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Refresh files" }),
+    ).toBeInTheDocument();
   });
 
   it("copies the full session id to the clipboard", async () => {
     stubSandboxFetch({
-      filesResponses: [{ entries: [{ path: "a.ts", kind: "file", sizeBytes: 10 }] }],
+      filesResponses: [
+        { entries: [{ path: "a.ts", kind: "file", sizeBytes: 10 }] },
+      ],
     });
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(window.navigator, "clipboard", {
@@ -198,22 +253,36 @@ describe("WorkspaceContextPanel", () => {
       />,
     );
     await screen.findByText("a.ts");
-    await userEvent.click(screen.getByRole("button", { name: "Copy session id" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Copy session id" }),
+    );
     expect(writeText).toHaveBeenCalledWith("sbx_0123456789abcdef");
   });
 
   it("refetches the root listing when the refresh button is pressed", async () => {
     const fetchMock = stubSandboxFetch({
-      filesResponses: [{ entries: [{ path: "a.ts", kind: "file", sizeBytes: 10 }] }],
+      filesResponses: [
+        { entries: [{ path: "a.ts", kind: "file", sizeBytes: 10 }] },
+      ],
     });
-    render(<WorkspaceContextPanel sessionId="sbx_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkspaceContextPanel
+        sessionId="sbx_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     await screen.findByText("a.ts");
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    await userEvent.click(screen.getByRole("button", { name: "Refresh files" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Refresh files" }),
+    );
     await screen.findByText("a.ts");
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[1]![0]).toBe("/api/v1/acme/main/agent/sandbox/files");
+    expect(fetchMock.mock.calls[1]![0]).toBe(
+      "/api/v1/acme/main/agent/sandbox/files",
+    );
   });
 
   it("lazily fetches a deeper listing when expanding a dir beyond the fetched depth", async () => {
@@ -225,10 +294,18 @@ describe("WorkspaceContextPanel", () => {
             { path: "src/deep", kind: "dir", sizeBytes: 0 },
           ],
         },
-        { entries: [{ path: "src/deep/inner.ts", kind: "file", sizeBytes: 5 }] },
+        {
+          entries: [{ path: "src/deep/inner.ts", kind: "file", sizeBytes: 5 }],
+        },
       ],
     });
-    render(<WorkspaceContextPanel sessionId="sbx_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkspaceContextPanel
+        sessionId="sbx_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
 
     // Root listing (depth 2): "src" is open by default and already loaded —
     // no extra fetch for it. "deep" sits AT the depth boundary → unloaded.
@@ -256,7 +333,9 @@ describe("WorkspaceContextPanel", () => {
 
   it("opens the file viewer on tap: fetches /agent/sandbox/file and shows the content", async () => {
     const fetchMock = stubSandboxFetch({
-      filesResponses: [{ entries: [{ path: "README.md", kind: "file", sizeBytes: 11 }] }],
+      filesResponses: [
+        { entries: [{ path: "README.md", kind: "file", sizeBytes: 11 }] },
+      ],
       fileResponse: {
         path: "README.md",
         content: "hello sandbox",
@@ -265,10 +344,18 @@ describe("WorkspaceContextPanel", () => {
         truncated: false,
       },
     });
-    render(<WorkspaceContextPanel sessionId="sbx_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkspaceContextPanel
+        sessionId="sbx_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     await screen.findByText("README.md");
 
-    await userEvent.click(screen.getByRole("button", { name: "View README.md" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "View README.md" }),
+    );
     await screen.findByText("hello sandbox");
 
     const fileCall = fetchMock.mock.calls.find(([u]) =>
@@ -284,7 +371,9 @@ describe("WorkspaceContextPanel", () => {
 
   it("shows a binary notice for base64 file payloads", async () => {
     stubSandboxFetch({
-      filesResponses: [{ entries: [{ path: "logo.png", kind: "file", sizeBytes: 2048 }] }],
+      filesResponses: [
+        { entries: [{ path: "logo.png", kind: "file", sizeBytes: 2048 }] },
+      ],
       fileResponse: {
         path: "logo.png",
         content: "iVBORw0KGgo=",
@@ -293,17 +382,27 @@ describe("WorkspaceContextPanel", () => {
         truncated: false,
       },
     });
-    render(<WorkspaceContextPanel sessionId="sbx_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkspaceContextPanel
+        sessionId="sbx_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     await screen.findByText("logo.png");
 
-    await userEvent.click(screen.getByRole("button", { name: "View logo.png" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "View logo.png" }),
+    );
     await screen.findByText(/Binary file/);
     expect(screen.getByText("iVBORw0KGgo=")).toBeInTheDocument();
   });
 
   it("shows a truncation notice when the file was larger than maxBytes", async () => {
     stubSandboxFetch({
-      filesResponses: [{ entries: [{ path: "big.log", kind: "file", sizeBytes: 999999 }] }],
+      filesResponses: [
+        { entries: [{ path: "big.log", kind: "file", sizeBytes: 999999 }] },
+      ],
       fileResponse: {
         path: "big.log",
         content: "first part",
@@ -312,7 +411,13 @@ describe("WorkspaceContextPanel", () => {
         truncated: true,
       },
     });
-    render(<WorkspaceContextPanel sessionId="sbx_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkspaceContextPanel
+        sessionId="sbx_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     await screen.findByText("big.log");
 
     await userEvent.click(screen.getByRole("button", { name: "View big.log" }));
@@ -325,13 +430,25 @@ describe("WorkspaceContextPanel", () => {
         return Promise.resolve({
           ok: true,
           json: () =>
-            Promise.resolve({ entries: [{ path: "a.ts", kind: "file", sizeBytes: 5 }] }),
+            Promise.resolve({
+              entries: [{ path: "a.ts", kind: "file", sizeBytes: 5 }],
+            }),
         });
       }
-      return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
+      return Promise.resolve({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({}),
+      });
     });
     vi.stubGlobal("fetch", fetchMock);
-    render(<WorkspaceContextPanel sessionId="sbx_123" orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <WorkspaceContextPanel
+        sessionId="sbx_123"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     await screen.findByText("a.ts");
 
     await userEvent.click(screen.getByRole("button", { name: "View a.ts" }));

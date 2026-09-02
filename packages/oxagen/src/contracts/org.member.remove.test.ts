@@ -27,7 +27,11 @@ describe("org.member.remove capability", () => {
 
   it("rejects an output with a non-boolean removed flag", () => {
     expect(() =>
-      orgMemberRemove.output.parse({ removed: "yes", targetUserId: "usr_abc", orgId: "org_1" }),
+      orgMemberRemove.output.parse({
+        removed: "yes",
+        targetUserId: "usr_abc",
+        orgId: "org_1",
+      }),
     ).toThrow();
   });
 

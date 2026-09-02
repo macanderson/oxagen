@@ -12,7 +12,9 @@ export const privacyDataExportRoute = new Hono<AppEnv>();
 privacyDataExportRoute.post("/", async (c) => {
   const body = privacyDataExport.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const result = await invoke(privacyDataExport.name, body, ctx, { surface: "api" });
+  const result = await invoke(privacyDataExport.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(result, 202);
 });
 

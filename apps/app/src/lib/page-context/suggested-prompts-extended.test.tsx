@@ -83,7 +83,11 @@ describe("deriveSuggestions — account route, no form, user entity", () => {
 // Organization entity chip
 // ---------------------------------------------------------------------------
 describe("deriveSuggestions — organization entity", () => {
-  const entity: PageEntity = { kind: "organization", id: "org-1", label: "Acme" };
+  const entity: PageEntity = {
+    kind: "organization",
+    id: "org-1",
+    label: "Acme",
+  };
   const prompts = deriveSuggestions(ctx("/acme/prod", entity));
 
   it("returns org overview chip for organization entity", () => {

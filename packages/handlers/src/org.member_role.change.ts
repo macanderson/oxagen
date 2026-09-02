@@ -154,8 +154,11 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
         { orgId: ctx.orgId, newRole: input.newRole },
         "org.member.role.change: requested role does not exist in this org",
       );
+      // Org-scoped system roles are seeded by bootstrapOrgIAM's ORG_ROLES list
+      // (Owner, Admin, Compliance, Billing). "Member" and "Viewer" are
+      // WORKSPACE-scoped and are deliberately not offered here.
       throw new Error(
-        `Role '${input.newRole}' does not exist in this org. Valid roles: Owner, Admin, Member, Billing, Compliance.`,
+        `Role '${input.newRole}' does not exist in this org. Valid org roles: Owner, Admin, Compliance, Billing.`,
       );
     }
 
@@ -207,7 +210,11 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
             .limit(1);
 
           if (targetOwnerPra) {
-            // Count total active owners.
+            // Count the org's live Owner assignments. NOTE: this counts
+            // assignment rows only — it does NOT join principals to exclude a
+            // suspended/disabled Owner principal, so an org whose only usable
+            // Owner is this target can still pass the guard when a second,
+            // non-active Owner principal holds an undeleted assignment.
             const allOwnerPras = await tx
               .select({ id: schema.principalRoleAssignments.id })
               .from(schema.principalRoleAssignments)

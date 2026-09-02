@@ -18,12 +18,16 @@ describe("environment.set_default contract", () => {
     expect(environmentSetDefault.surfaces).toEqual(["api", "mcp", "agent"]);
   });
   it("accepts a valid input", () => {
-    expect(() => environmentSetDefault.input.parse({ environmentId: "env_1" })).not.toThrow();
+    expect(() =>
+      environmentSetDefault.input.parse({ environmentId: "env_1" }),
+    ).not.toThrow();
   });
   it("rejects input missing the required environmentId", () => {
     expect(() => environmentSetDefault.input.parse({})).toThrow();
   });
   it("accepts a valid output", () => {
-    expect(() => environmentSetDefault.output.parse({ environment: summary })).not.toThrow();
+    expect(() =>
+      environmentSetDefault.output.parse({ environment: summary }),
+    ).not.toThrow();
   });
 });

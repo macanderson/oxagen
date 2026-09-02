@@ -116,7 +116,8 @@ export function resolveVariables(
       const key = variable.source.replace(/^session\./, "");
       value = context.session?.[key];
     } else if (variable.resolver === "page") {
-      // source = "page.entity.name" → look up pageEntity.label etc.
+      // source = "page.entity.label" → look up pageEntity.label.
+      // Only these four sources are recognised; anything else stays undefined.
       if (variable.source === "page.entity.id") value = context.pageEntity?.id;
       else if (variable.source === "page.entity.kind")
         value = context.pageEntity?.kind;

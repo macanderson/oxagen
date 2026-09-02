@@ -15,14 +15,19 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockInvoke, mockGetSession, mockResolveOrg, mockResolveWorkspace, mockAssertWorkspaceMember } =
-  vi.hoisted(() => ({
-    mockInvoke: vi.fn(),
-    mockGetSession: vi.fn(),
-    mockResolveOrg: vi.fn(),
-    mockResolveWorkspace: vi.fn(),
-    mockAssertWorkspaceMember: vi.fn(),
-  }));
+const {
+  mockInvoke,
+  mockGetSession,
+  mockResolveOrg,
+  mockResolveWorkspace,
+  mockAssertWorkspaceMember,
+} = vi.hoisted(() => ({
+  mockInvoke: vi.fn(),
+  mockGetSession: vi.fn(),
+  mockResolveOrg: vi.fn(),
+  mockResolveWorkspace: vi.fn(),
+  mockAssertWorkspaceMember: vi.fn(),
+}));
 
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mockInvoke }));
@@ -66,7 +71,13 @@ describe("schemaReconcileDispatchAction", () => {
     const [capability, input, ctx, opts] = mockInvoke.mock.calls[0]!;
     expect(capability).toBe("dispatch_schema_reconcile");
     expect(input).toEqual({ versionId: "scv_1", prune: true });
-    expect(ctx).toEqual(expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }));
+    expect(ctx).toEqual(
+      expect.objectContaining({
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        userId: "user-1",
+      }),
+    );
     // The crux of the fix: contract surface must be one the contract exposes.
     expect(opts).toEqual({ surface: "api" });
     expect((opts as { surface: string }).surface).not.toBe("agent");
@@ -111,7 +122,11 @@ describe("schemaReconcileStatusAction", () => {
       prunedRelationships: 0,
     });
 
-    const result = await schemaReconcileStatusAction("acme", "default", "aex_1");
+    const result = await schemaReconcileStatusAction(
+      "acme",
+      "default",
+      "aex_1",
+    );
 
     expect(result.status).toBe("running");
     expect(result.totalNodes).toBe(28);

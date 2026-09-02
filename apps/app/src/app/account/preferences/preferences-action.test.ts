@@ -40,6 +40,11 @@ vi.mock("@oxagen/oxagen", () => ({
 // Side-effect import — bind handlers. Mock as no-op.
 vi.mock("@oxagen/handlers/register", () => ({}));
 
+// Silence logger output — the invoke-failure branch logs before returning.
+vi.mock("@oxagen/handlers/logger", () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
 vi.mock("next/cache", () => ({
   revalidatePath: mockRevalidatePath,
 }));

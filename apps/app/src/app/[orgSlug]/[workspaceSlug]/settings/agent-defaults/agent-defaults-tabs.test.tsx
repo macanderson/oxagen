@@ -62,7 +62,9 @@ describe("AgentDefaultsTabs", () => {
     expect(screen.getByRole("tab", { name: "Models" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Budget" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Prompts" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Memory Policy" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: "Memory Policy" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Models panel content")).toBeInTheDocument();
   });
 
@@ -95,8 +97,11 @@ describe("AgentDefaultsTabs", () => {
     renderTabs("budget");
     await userEvent.click(screen.getByRole("tab", { name: "Models" }));
     expect(screen.getByText("Models panel content")).toBeInTheDocument();
-    expect(mockReplace).toHaveBeenCalledWith("/acme/prod/settings/agent-defaults", {
-      scroll: false,
-    });
+    expect(mockReplace).toHaveBeenCalledWith(
+      "/acme/prod/settings/agent-defaults",
+      {
+        scroll: false,
+      },
+    );
   });
 });

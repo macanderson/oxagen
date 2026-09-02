@@ -64,7 +64,9 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -96,7 +98,14 @@ describe("environment.create route", () => {
   const VALID_BODY = { name: "Production", slug: "production" };
 
   it("happy path POST: returns 200 with environment", async () => {
-    const invokeResult = { environment: { id: "env-1", name: "Production", slug: "production", isDefault: false } };
+    const invokeResult = {
+      environment: {
+        id: "env-1",
+        name: "Production",
+        slug: "production",
+        isDefault: false,
+      },
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
 
     const res = await app.fetch(post(PATH, VALID_BODY));
@@ -112,7 +121,9 @@ describe("environment.create route", () => {
   });
 
   it("passes name and slug to invoke", async () => {
-    await app.fetch(post(PATH, { name: "Staging", slug: "staging", description: "Pre-prod" }));
+    await app.fetch(
+      post(PATH, { name: "Staging", slug: "staging", description: "Pre-prod" }),
+    );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.name).toBe("Staging");
     expect(body.slug).toBe("staging");
@@ -165,7 +176,14 @@ describe("environment.get route", () => {
   const PATH = "/environment/get";
 
   it("happy path POST: returns 200 with environment", async () => {
-    const invokeResult = { environment: { id: "env-1", name: "Production", slug: "production", isDefault: true } };
+    const invokeResult = {
+      environment: {
+        id: "env-1",
+        name: "Production",
+        slug: "production",
+        isDefault: true,
+      },
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
 
     const res = await app.fetch(post(PATH, { environmentId: "env-1" }));
@@ -199,10 +217,19 @@ describe("environment.update route", () => {
   const PATH = "/environment/update";
 
   it("happy path POST: returns 200 with updated environment", async () => {
-    const invokeResult = { environment: { id: "env-1", name: "Prod v2", slug: "prod-v2", isDefault: false } };
+    const invokeResult = {
+      environment: {
+        id: "env-1",
+        name: "Prod v2",
+        slug: "prod-v2",
+        isDefault: false,
+      },
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
 
-    const res = await app.fetch(post(PATH, { environmentId: "env-1", name: "Prod v2" }));
+    const res = await app.fetch(
+      post(PATH, { environmentId: "env-1", name: "Prod v2" }),
+    );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(invokeResult);
   });
@@ -215,7 +242,9 @@ describe("environment.update route", () => {
   });
 
   it("passes environmentId and optional fields to invoke", async () => {
-    await app.fetch(post(PATH, { environmentId: "env-1", name: "Updated", isActive: false }));
+    await app.fetch(
+      post(PATH, { environmentId: "env-1", name: "Updated", isActive: false }),
+    );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.environmentId).toBe("env-1");
     expect(body.name).toBe("Updated");
@@ -262,7 +291,14 @@ describe("environment.set_default route", () => {
   const PATH = "/environment/set-default";
 
   it("happy path POST: returns 200", async () => {
-    const invokeResult = { environment: { id: "env-1", name: "Production", slug: "production", isDefault: true } };
+    const invokeResult = {
+      environment: {
+        id: "env-1",
+        name: "Production",
+        slug: "production",
+        isDefault: true,
+      },
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
 
     const res = await app.fetch(post(PATH, { environmentId: "env-1" }));
@@ -305,7 +341,14 @@ describe("secret.key.upsert route", () => {
   });
 
   it("passes key and optional fields to invoke", async () => {
-    await app.fetch(post(PATH, { key: "STRIPE_SECRET", sensitive: true, memo: "Stripe API key", defaultValue: null }));
+    await app.fetch(
+      post(PATH, {
+        key: "STRIPE_SECRET",
+        sensitive: true,
+        memo: "Stripe API key",
+        defaultValue: null,
+      }),
+    );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.key).toBe("STRIPE_SECRET");
     expect(body.sensitive).toBe(true);
@@ -378,7 +421,11 @@ describe("secret.key.delete route", () => {
 
 describe("secret.value.set route", () => {
   const PATH = "/secret/value/set";
-  const VALID_BODY = { keyId: "sk-1", environmentId: "env-1", value: "my-secret-value" };
+  const VALID_BODY = {
+    keyId: "sk-1",
+    environmentId: "env-1",
+    value: "my-secret-value",
+  };
 
   it("happy path POST: returns 200 with ok", async () => {
     mocks.invoke.mockResolvedValue({ ok: true });
@@ -404,7 +451,9 @@ describe("secret.value.set route", () => {
   });
 
   it("missing keyId → 400, invoke not called", async () => {
-    const res = await app.fetch(post(PATH, { environmentId: "env-1", value: "v" }));
+    const res = await app.fetch(
+      post(PATH, { environmentId: "env-1", value: "v" }),
+    );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -444,7 +493,11 @@ describe("secret.reveal route", () => {
   const PATH = "/secret/reveal";
 
   it("happy path POST: returns 200 with revealed value", async () => {
-    const invokeResult = { key: "DATABASE_URL", value: "postgres://...", source: "override" };
+    const invokeResult = {
+      key: "DATABASE_URL",
+      value: "postgres://...",
+      source: "override",
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
 
     const res = await app.fetch(post(PATH, { keyId: "sk-1" }));
@@ -498,7 +551,9 @@ describe("secret.export route", () => {
   });
 
   it("passes optional environmentId and keyIds to invoke", async () => {
-    await app.fetch(post(PATH, { environmentId: "env-1", keyIds: ["sk-1", "sk-2"] }));
+    await app.fetch(
+      post(PATH, { environmentId: "env-1", keyIds: ["sk-1", "sk-2"] }),
+    );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.environmentId).toBe("env-1");
     expect(body.keyIds).toEqual(["sk-1", "sk-2"]);
@@ -509,7 +564,9 @@ describe("secret.export route", () => {
 
 describe("secret.import_env route", () => {
   const PATH = "/secret/import-env";
-  const VALID_BODY = { text: "DATABASE_URL=postgres://localhost/db\nAPI_KEY=secret123\n" };
+  const VALID_BODY = {
+    text: "DATABASE_URL=postgres://localhost/db\nAPI_KEY=secret123\n",
+  };
 
   it("happy path POST: returns 200 with rows", async () => {
     const invokeResult = {
@@ -533,7 +590,9 @@ describe("secret.import_env route", () => {
   });
 
   it("passes text and optional commit flag to invoke", async () => {
-    await app.fetch(post(PATH, { text: "KEY=value", commit: true, environmentId: "env-1" }));
+    await app.fetch(
+      post(PATH, { text: "KEY=value", commit: true, environmentId: "env-1" }),
+    );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.text).toBe("KEY=value");
     expect(body.commit).toBe(true);

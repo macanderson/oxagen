@@ -20,11 +20,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => fakeDb,
-  // withTenantDb pass-through: invokes the callback with the same fake tx so
-  // handler assertions keep working without a real transaction or GUC.
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fakeDb),
-
+    db: () => fakeDb,
+    // withTenantDb pass-through: invokes the callback with the same fake tx so
+    // handler assertions keep working without a real transaction or GUC.
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fakeDb),
   };
 });
 
@@ -51,15 +50,23 @@ vi.mock("../inngest", () => ({
 }));
 
 vi.mock("@oxagen/config/env", () => ({
-  requireEnv: () => ({ INNGEST_EVENT_KEY: "evt-test", INNGEST_SIGNING_KEY: "sign-test", NODE_ENV: "test" }),
+  requireEnv: () => ({
+    INNGEST_EVENT_KEY: "evt-test",
+    INNGEST_SIGNING_KEY: "sign-test",
+    NODE_ENV: "test",
+  }),
   normalizeEnv: (e: unknown) => e,
 }));
 
 // Capture the handler
-let capturedHandler: ((ctx: {
-  event: { data: Record<string, unknown> };
-  step: { run: (name: string, fn: () => Promise<unknown>) => Promise<unknown> };
-}) => Promise<unknown>) | null = null;
+let capturedHandler:
+  | ((ctx: {
+      event: { data: Record<string, unknown> };
+      step: {
+        run: (name: string, fn: () => Promise<unknown>) => Promise<unknown>;
+      };
+    }) => Promise<unknown>)
+  | null = null;
 
 mocks.inngestCreateFunction.mockImplementation(
   (_opts: unknown, _trigger: unknown, handler: typeof capturedHandler) => {
@@ -104,7 +111,10 @@ describe("chatPersistStream Inngest handler", () => {
   });
 
   it("updates the message in Postgres and returns the persisted id", async () => {
-    const result = await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
+    const result = await capturedHandler!({
+      event: BASE_EVENT,
+      step: makeStep(),
+    });
 
     expect(mocks.dbUpdate).toHaveBeenCalledTimes(1);
     const r = result as Record<string, unknown>;
@@ -137,7 +147,9 @@ describe("chatPersistStream Inngest handler", () => {
     await capturedHandler!({ event, step: makeStep() });
 
     expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
-    const [rows] = mocks.insertTokenUsage.mock.calls[0] as [Array<Record<string, unknown>>];
+    const [rows] = mocks.insertTokenUsage.mock.calls[0] as [
+      Array<Record<string, unknown>>,
+    ];
     expect(rows).toHaveLength(1);
     const row = rows[0];
     if (!row) throw new Error("expected exactly one token_usage row");

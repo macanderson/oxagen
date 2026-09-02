@@ -47,7 +47,9 @@ vi.mock("@/components/ui/menu", () => ({
     children: React.ReactNode;
     render: React.ReactElement;
   }) => React.cloneElement(render, undefined, children),
-  MenuPopup: ({ children }: { children: React.ReactNode }) => <div role="menu">{children}</div>,
+  MenuPopup: ({ children }: { children: React.ReactNode }) => (
+    <div role="menu">{children}</div>
+  ),
   MenuItem: ({
     children,
     onClick,
@@ -75,8 +77,12 @@ vi.mock("@/components/ui/sheet", () => ({
   SheetPopup: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="sheet-popup">{children}</div>
   ),
-  SheetHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SheetTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  SheetHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SheetTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2>{children}</h2>
+  ),
 }));
 
 import { ConversationExportMenu } from "./conversation-export-menu";
@@ -118,7 +124,11 @@ const PDF_RESPONSE = {
 };
 
 function okJson(body: unknown): Response {
-  return { ok: true, status: 200, json: async () => body } as unknown as Response;
+  return {
+    ok: true,
+    status: 200,
+    json: async () => body,
+  } as unknown as Response;
 }
 
 beforeEach(() => {
@@ -151,7 +161,9 @@ describe("ConversationExportMenu", () => {
       .mockImplementation(() => undefined);
 
     render(<ConversationExportMenu {...BASE_PROPS} />);
-    await userEvent.click(screen.getByRole("menuitem", { name: /export as markdown/i }));
+    await userEvent.click(
+      screen.getByRole("menuitem", { name: /export as markdown/i }),
+    );
 
     await waitFor(() => expect(clickSpy).toHaveBeenCalledOnce());
     expect(fetchMock).toHaveBeenCalledWith(
@@ -168,7 +180,9 @@ describe("ConversationExportMenu", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<ConversationExportMenu {...BASE_PROPS} />);
-    await userEvent.click(screen.getByRole("menuitem", { name: /export as pdf/i }));
+    await userEvent.click(
+      screen.getByRole("menuitem", { name: /export as pdf/i }),
+    );
 
     await waitFor(() =>
       expect(window.open).toHaveBeenCalledWith(
@@ -186,11 +200,15 @@ describe("ConversationExportMenu", () => {
   it("shows an error toast when the export request fails", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({ ok: false, status: 500 } as unknown as Response),
+      vi
+        .fn()
+        .mockResolvedValue({ ok: false, status: 500 } as unknown as Response),
     );
 
     render(<ConversationExportMenu {...BASE_PROPS} />);
-    await userEvent.click(screen.getByRole("menuitem", { name: /export as pdf/i }));
+    await userEvent.click(
+      screen.getByRole("menuitem", { name: /export as pdf/i }),
+    );
 
     await waitFor(() =>
       expect(toastAdd).toHaveBeenCalledWith(
@@ -207,7 +225,9 @@ describe("ConversationExportMenu", () => {
     );
 
     render(<ConversationExportMenu {...BASE_PROPS} />);
-    await userEvent.click(screen.getByRole("menuitem", { name: /export as markdown/i }));
+    await userEvent.click(
+      screen.getByRole("menuitem", { name: /export as markdown/i }),
+    );
 
     await waitFor(() =>
       expect(toastAdd).toHaveBeenCalledWith(

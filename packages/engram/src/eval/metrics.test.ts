@@ -23,9 +23,9 @@ describe("DEFAULT_THRESHOLDS", () => {
   it("has expected keys and sensible values", () => {
     expect(DEFAULT_THRESHOLDS.contextPrecision).toBe(0.05);
     expect(DEFAULT_THRESHOLDS.contextRecall).toBe(0.05);
-    expect(DEFAULT_THRESHOLDS.tokensToSuccess).toBe(0.10);
+    expect(DEFAULT_THRESHOLDS.tokensToSuccess).toBe(0.1);
     expect(DEFAULT_THRESHOLDS.retrievalHitRate).toBe(0.05);
-    expect(DEFAULT_THRESHOLDS.cacheHitRate).toBe(0.10);
+    expect(DEFAULT_THRESHOLDS.cacheHitRate).toBe(0.1);
     expect(DEFAULT_THRESHOLDS.costPerTask).toBe(0.15);
   });
 });
@@ -39,14 +39,14 @@ describe("detectRegressions", () => {
   it("detects contextPrecision regression beyond threshold", () => {
     const current: EvalMetrics = {
       ...perfectMetrics,
-      contextPrecision: 0.90, // degraded from 1.0 by 10%, threshold is 5%
+      contextPrecision: 0.9, // degraded from 1.0 by 10%, threshold is 5%
     };
     const regressions = detectRegressions(current, perfectMetrics);
     const hit = regressions.find((r) => r.metric === "contextPrecision");
     expect(hit).toBeDefined();
-    expect(hit!.degradation).toBeCloseTo(0.10, 5);
+    expect(hit!.degradation).toBeCloseTo(0.1, 5);
     expect(hit!.baseline).toBe(1.0);
-    expect(hit!.current).toBe(0.90);
+    expect(hit!.current).toBe(0.9);
   });
 
   it("does not flag contextPrecision that is within threshold", () => {
@@ -55,19 +55,23 @@ describe("detectRegressions", () => {
       contextPrecision: 0.97, // only 3% degradation, threshold is 5%
     };
     const regressions = detectRegressions(current, perfectMetrics);
-    expect(regressions.find((r) => r.metric === "contextPrecision")).toBeUndefined();
+    expect(
+      regressions.find((r) => r.metric === "contextPrecision"),
+    ).toBeUndefined();
   });
 
   it("detects contextRecall regression", () => {
-    const current: EvalMetrics = { ...perfectMetrics, contextRecall: 0.80 };
+    const current: EvalMetrics = { ...perfectMetrics, contextRecall: 0.8 };
     const regressions = detectRegressions(current, perfectMetrics);
     expect(regressions.find((r) => r.metric === "contextRecall")).toBeDefined();
   });
 
   it("detects retrievalHitRate regression", () => {
-    const current: EvalMetrics = { ...perfectMetrics, retrievalHitRate: 0.90 };
+    const current: EvalMetrics = { ...perfectMetrics, retrievalHitRate: 0.9 };
     const regressions = detectRegressions(current, perfectMetrics);
-    expect(regressions.find((r) => r.metric === "retrievalHitRate")).toBeDefined();
+    expect(
+      regressions.find((r) => r.metric === "retrievalHitRate"),
+    ).toBeDefined();
   });
 
   it("detects cacheHitRate regression", () => {
@@ -90,7 +94,9 @@ describe("detectRegressions", () => {
     const baseline: EvalMetrics = { ...perfectMetrics, tokensToSuccess: 1000 };
     const current: EvalMetrics = { ...perfectMetrics, tokensToSuccess: 1050 }; // 5% more
     const regressions = detectRegressions(current, baseline);
-    expect(regressions.find((r) => r.metric === "tokensToSuccess")).toBeUndefined();
+    expect(
+      regressions.find((r) => r.metric === "tokensToSuccess"),
+    ).toBeUndefined();
   });
 
   it("detects costPerTask inflation", () => {
@@ -104,14 +110,18 @@ describe("detectRegressions", () => {
     const baseline: EvalMetrics = { ...perfectMetrics, contextPrecision: 0 };
     const current: EvalMetrics = { ...perfectMetrics, contextPrecision: 0 };
     const regressions = detectRegressions(current, baseline);
-    expect(regressions.find((r) => r.metric === "contextPrecision")).toBeUndefined();
+    expect(
+      regressions.find((r) => r.metric === "contextPrecision"),
+    ).toBeUndefined();
   });
 
   it("skips lower-is-better metrics when baseline is 0", () => {
     const baseline: EvalMetrics = { ...perfectMetrics, tokensToSuccess: 0 };
     const current: EvalMetrics = { ...perfectMetrics, tokensToSuccess: 1000 };
     const regressions = detectRegressions(current, baseline);
-    expect(regressions.find((r) => r.metric === "tokensToSuccess")).toBeUndefined();
+    expect(
+      regressions.find((r) => r.metric === "tokensToSuccess"),
+    ).toBeUndefined();
   });
 
   it("uses custom thresholds when provided", () => {
@@ -120,14 +130,16 @@ describe("detectRegressions", () => {
     const current: EvalMetrics = { ...perfectMetrics, contextPrecision: 0.98 };
     // 1% drop exceeds 0.1% threshold
     const regressions = detectRegressions(current, baseline, strictThresholds);
-    expect(regressions.find((r) => r.metric === "contextPrecision")).toBeDefined();
+    expect(
+      regressions.find((r) => r.metric === "contextPrecision"),
+    ).toBeDefined();
   });
 
   it("returns multiple regressions when multiple metrics fail", () => {
     const current: EvalMetrics = {
       ...perfectMetrics,
       contextPrecision: 0.8, // 20% drop
-      contextRecall: 0.8,    // 20% drop
+      contextRecall: 0.8, // 20% drop
       retrievalHitRate: 0.8, // 20% drop
     };
     const regressions = detectRegressions(current, perfectMetrics);

@@ -17,18 +17,26 @@
  */
 
 import * as React from "react";
-import { render, screen, waitFor, cleanup, fireEvent } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  cleanup,
+  fireEvent,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockInviteMember, mockDeclineInvitation, mockAddToast } = vi.hoisted(() => ({
-  mockInviteMember: vi.fn(),
-  mockDeclineInvitation: vi.fn(),
-  mockAddToast: vi.fn(),
-}));
+const { mockInviteMember, mockDeclineInvitation, mockAddToast } = vi.hoisted(
+  () => ({
+    mockInviteMember: vi.fn(),
+    mockDeclineInvitation: vi.fn(),
+    mockAddToast: vi.fn(),
+  }),
+);
 
 vi.mock("@/app/[orgSlug]/members/actions", () => ({
   inviteMemberAction: mockInviteMember,
@@ -93,7 +101,9 @@ describe("PendingInvitationsActions", () => {
 
   // (a) Render
   it("renders Resend and Revoke buttons with accessible aria-labels", () => {
-    render(<PendingInvitationsActions orgSlug={ORG_SLUG} invitation={INVITATION} />);
+    render(
+      <PendingInvitationsActions orgSlug={ORG_SLUG} invitation={INVITATION} />,
+    );
 
     expect(
       screen.getByRole("button", {
@@ -111,10 +121,14 @@ describe("PendingInvitationsActions", () => {
   it("calls inviteMemberAction with correct args on Resend and shows success toast", async () => {
     mockInviteMember.mockResolvedValue({ ok: true });
 
-    render(<PendingInvitationsActions orgSlug={ORG_SLUG} invitation={INVITATION} />);
+    render(
+      <PendingInvitationsActions orgSlug={ORG_SLUG} invitation={INVITATION} />,
+    );
 
     fireEvent.click(
-      screen.getByRole("button", { name: `Resend invitation to ${INVITATION.email}` }),
+      screen.getByRole("button", {
+        name: `Resend invitation to ${INVITATION.email}`,
+      }),
     );
 
     await waitFor(() => {
@@ -134,12 +148,19 @@ describe("PendingInvitationsActions", () => {
 
   // (c) Resend failure with error string
   it("shows error toast when resend returns ok:false with error string", async () => {
-    mockInviteMember.mockResolvedValue({ ok: false, error: "Something went wrong" });
+    mockInviteMember.mockResolvedValue({
+      ok: false,
+      error: "Something went wrong",
+    });
 
-    render(<PendingInvitationsActions orgSlug={ORG_SLUG} invitation={INVITATION} />);
+    render(
+      <PendingInvitationsActions orgSlug={ORG_SLUG} invitation={INVITATION} />,
+    );
 
     fireEvent.click(
-      screen.getByRole("button", { name: `Resend invitation to ${INVITATION.email}` }),
+      screen.getByRole("button", {
+        name: `Resend invitation to ${INVITATION.email}`,
+      }),
     );
 
     await waitFor(() => {
@@ -157,12 +178,19 @@ describe("PendingInvitationsActions", () => {
 
   // (d) Resend failure — seat_limit_reached
   it("shows seat-limit message when code is seat_limit_reached", async () => {
-    mockInviteMember.mockResolvedValue({ ok: false, code: "seat_limit_reached" });
+    mockInviteMember.mockResolvedValue({
+      ok: false,
+      code: "seat_limit_reached",
+    });
 
-    render(<PendingInvitationsActions orgSlug={ORG_SLUG} invitation={INVITATION} />);
+    render(
+      <PendingInvitationsActions orgSlug={ORG_SLUG} invitation={INVITATION} />,
+    );
 
     fireEvent.click(
-      screen.getByRole("button", { name: `Resend invitation to ${INVITATION.email}` }),
+      screen.getByRole("button", {
+        name: `Resend invitation to ${INVITATION.email}`,
+      }),
     );
 
     await waitFor(() => {
@@ -181,10 +209,14 @@ describe("PendingInvitationsActions", () => {
   it("calls declineInvitationAction on Revoke and shows success toast", async () => {
     mockDeclineInvitation.mockResolvedValue({ ok: true });
 
-    render(<PendingInvitationsActions orgSlug={ORG_SLUG} invitation={INVITATION} />);
+    render(
+      <PendingInvitationsActions orgSlug={ORG_SLUG} invitation={INVITATION} />,
+    );
 
     fireEvent.click(
-      screen.getByRole("button", { name: `Revoke invitation for ${INVITATION.email}` }),
+      screen.getByRole("button", {
+        name: `Revoke invitation for ${INVITATION.email}`,
+      }),
     );
 
     await waitFor(() => {
@@ -205,10 +237,14 @@ describe("PendingInvitationsActions", () => {
   it("shows error toast when revoke returns ok:false", async () => {
     mockDeclineInvitation.mockResolvedValue({ ok: false, error: "Not found" });
 
-    render(<PendingInvitationsActions orgSlug={ORG_SLUG} invitation={INVITATION} />);
+    render(
+      <PendingInvitationsActions orgSlug={ORG_SLUG} invitation={INVITATION} />,
+    );
 
     fireEvent.click(
-      screen.getByRole("button", { name: `Revoke invitation for ${INVITATION.email}` }),
+      screen.getByRole("button", {
+        name: `Revoke invitation for ${INVITATION.email}`,
+      }),
     );
 
     await waitFor(() => {
@@ -216,7 +252,11 @@ describe("PendingInvitationsActions", () => {
     });
 
     expect(mockAddToast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Failed to revoke", description: "Not found", type: "error" }),
+      expect.objectContaining({
+        title: "Failed to revoke",
+        description: "Not found",
+        type: "error",
+      }),
     );
   });
 
@@ -225,7 +265,12 @@ describe("PendingInvitationsActions", () => {
     mockInviteMember.mockResolvedValue({ ok: true });
 
     const invitationWithBadRole = { ...INVITATION, role: "compliance" };
-    render(<PendingInvitationsActions orgSlug={ORG_SLUG} invitation={invitationWithBadRole} />);
+    render(
+      <PendingInvitationsActions
+        orgSlug={ORG_SLUG}
+        invitation={invitationWithBadRole}
+      />,
+    );
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -251,7 +296,9 @@ describe("PendingInvitationsActions", () => {
       render(<PendingInvitationsActions orgSlug={ORG_SLUG} invitation={inv} />);
 
       fireEvent.click(
-        screen.getByRole("button", { name: `Resend invitation to ${inv.email}` }),
+        screen.getByRole("button", {
+          name: `Resend invitation to ${inv.email}`,
+        }),
       );
 
       await waitFor(() => {

@@ -9,16 +9,22 @@ import type { AppEnv } from "../../app";
 export const agentSubagentSiblingsRoute = new Hono<AppEnv>();
 
 agentSubagentSiblingsRoute.get("/:runId", async (c) => {
-  const input = agentSubagentSiblings.input.parse({ runId: c.req.param("runId") });
+  const input = agentSubagentSiblings.input.parse({
+    runId: c.req.param("runId"),
+  });
   const ctx = capabilityContext(c);
   try {
-    const out = await invoke(agentSubagentSiblings.name, input, ctx, { surface: "api" });
+    const out = await invoke(agentSubagentSiblings.name, input, ctx, {
+      surface: "api",
+    });
     return c.json(out);
   } catch (err) {
     // Unknown or cross-tenant runId is a clean 404, never a 500 — matched
     // structurally (typed error), not via a brittle message regex.
     if (isSubagentRunNotFoundError(err)) {
-      throw new HTTPException(404, { message: `Subagent run not found: ${input.runId}` });
+      throw new HTTPException(404, {
+        message: `Subagent run not found: ${input.runId}`,
+      });
     }
     throw err;
   }

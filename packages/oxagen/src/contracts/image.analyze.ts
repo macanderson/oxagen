@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const imageAnalyze = registerCapability({
   name: "analyze_image",
   domain: "image",
-  description: "Analyze an image by ID — returns description, tags, and analysis",
+  description:
+    "Analyze an image by ID — returns description, tags, and analysis",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "docs", "mcp"],

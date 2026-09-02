@@ -8,7 +8,9 @@ describe("agent.subagent.aggregate capability", () => {
   // ── input: required fanoutId ──────────────────────────────────────────────
 
   it("parses minimal input with only fanoutId", () => {
-    const parsed = agentSubagentAggregate.input.parse({ fanoutId: "fanout_abc123" });
+    const parsed = agentSubagentAggregate.input.parse({
+      fanoutId: "fanout_abc123",
+    });
     expect(parsed.fanoutId).toBe("fanout_abc123");
   });
 
@@ -17,18 +19,25 @@ describe("agent.subagent.aggregate capability", () => {
   });
 
   it("rejects wrong type for fanoutId", () => {
-    expect(() => agentSubagentAggregate.input.parse({ fanoutId: 99 })).toThrow();
+    expect(() =>
+      agentSubagentAggregate.input.parse({ fanoutId: 99 }),
+    ).toThrow();
   });
 
   // ── input: timeoutMs defaults and bounds ──────────────────────────────────
 
   it("defaults timeoutMs to 300000 (5 min)", () => {
-    const parsed = agentSubagentAggregate.input.parse({ fanoutId: "fanout_abc" });
+    const parsed = agentSubagentAggregate.input.parse({
+      fanoutId: "fanout_abc",
+    });
     expect(parsed.timeoutMs).toBe(5 * 60 * 1000);
   });
 
   it("accepts timeoutMs=0 (min)", () => {
-    const parsed = agentSubagentAggregate.input.parse({ fanoutId: "fanout_abc", timeoutMs: 0 });
+    const parsed = agentSubagentAggregate.input.parse({
+      fanoutId: "fanout_abc",
+      timeoutMs: 0,
+    });
     expect(parsed.timeoutMs).toBe(0);
   });
 
@@ -42,19 +51,28 @@ describe("agent.subagent.aggregate capability", () => {
 
   it("rejects timeoutMs=-1 (below min)", () => {
     expect(() =>
-      agentSubagentAggregate.input.parse({ fanoutId: "fanout_abc", timeoutMs: -1 }),
+      agentSubagentAggregate.input.parse({
+        fanoutId: "fanout_abc",
+        timeoutMs: -1,
+      }),
     ).toThrow();
   });
 
   it("rejects timeoutMs above max", () => {
     expect(() =>
-      agentSubagentAggregate.input.parse({ fanoutId: "fanout_abc", timeoutMs: MAX_TIMEOUT_MS + 1 }),
+      agentSubagentAggregate.input.parse({
+        fanoutId: "fanout_abc",
+        timeoutMs: MAX_TIMEOUT_MS + 1,
+      }),
     ).toThrow();
   });
 
   it("rejects a non-integer timeoutMs", () => {
     expect(() =>
-      agentSubagentAggregate.input.parse({ fanoutId: "fanout_abc", timeoutMs: 1000.5 }),
+      agentSubagentAggregate.input.parse({
+        fanoutId: "fanout_abc",
+        timeoutMs: 1000.5,
+      }),
     ).toThrow();
   });
 
@@ -141,8 +159,8 @@ describe("agent.subagent.aggregate capability", () => {
         timeline: [],
         children: [],
         aggregatedDataTruncated: false,
-      recheckAfterMs: null,
-      firstError: null,
+        recheckAfterMs: null,
+        firstError: null,
       }),
     ).toThrow();
   });
@@ -295,8 +313,8 @@ describe("agent.subagent.aggregate capability", () => {
         timeline: [],
         children: [],
         aggregatedDataTruncated: false,
-      recheckAfterMs: null,
-      firstError: null,
+        recheckAfterMs: null,
+        firstError: null,
       }),
     ).toThrow();
   });
@@ -313,8 +331,8 @@ describe("agent.subagent.aggregate capability", () => {
         timeline: [],
         children: [],
         aggregatedDataTruncated: false,
-      recheckAfterMs: null,
-      firstError: null,
+        recheckAfterMs: null,
+        firstError: null,
       }),
     ).toThrow();
   });

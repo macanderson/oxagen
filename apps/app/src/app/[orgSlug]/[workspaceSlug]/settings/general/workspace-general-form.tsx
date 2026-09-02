@@ -6,7 +6,10 @@ import { Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useRegisterFillableForm, useRegisterPageEntity } from "@/lib/page-context";
+import {
+  useRegisterFillableForm,
+  useRegisterPageEntity,
+} from "@/lib/page-context";
 import type { FillableFormSpec, FieldDescriptor } from "@/lib/ask/fill-types";
 import { slugify } from "@/lib/slug";
 import { AvatarMaker } from "@/components/avatar/avatar-maker";
@@ -52,9 +55,12 @@ export function WorkspaceGeneralForm({
     description: initialDescription,
   });
   // Avatar value (photo URL or designed spec string) — saved with the form.
-  const [avatarUrl, setAvatarUrl] = React.useState<string>(initialAvatarUrl ?? "");
+  const [avatarUrl, setAvatarUrl] = React.useState<string>(
+    initialAvatarUrl ?? "",
+  );
   const [isSaving, setIsSaving] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<Date | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
   // -------------------------------------------------------------------------
   // Register the workspace entity with the Ask system.
@@ -110,13 +116,21 @@ export function WorkspaceGeneralForm({
 
   // apply callback: receives AI-proposed values and merges them into local state.
   const apply = React.useCallback(
-    (proposed: Record<string, unknown>, _mode: "field" | "all", _fieldName?: string) => {
+    (
+      proposed: Record<string, unknown>,
+      _mode: "field" | "all",
+      _fieldName?: string,
+    ) => {
       setValues((prev) => ({
         name: typeof proposed.name === "string" ? proposed.name : prev.name,
         slug:
-          typeof proposed.slug === "string" ? slugify(proposed.slug) : prev.slug,
+          typeof proposed.slug === "string"
+            ? slugify(proposed.slug)
+            : prev.slug,
         description:
-          typeof proposed.description === "string" ? proposed.description : prev.description,
+          typeof proposed.description === "string"
+            ? proposed.description
+            : prev.description,
       }));
     },
     [],
@@ -127,10 +141,15 @@ export function WorkspaceGeneralForm({
 
   // -------------------------------------------------------------------------
   // Save handler — calls the server action, never throws on the happy path.
+  // A rejected save (slug conflict, role denial) is reported inline rather
+  // than dropped: the action already maps those to user-facing copy, and a
+  // silent no-op reads to the user as a successful save. Mirrors
+  // ../agent-defaults/models-form.tsx.
   // -------------------------------------------------------------------------
   async function handleSave(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     setIsSaving(true);
+    setError(null);
     try {
       const result = await updateWorkspaceGeneralAction({
         orgSlug,
@@ -147,11 +166,12 @@ export function WorkspaceGeneralForm({
         if (result.slug !== workspaceSlug) {
           router.replace(`/${orgSlug}/${result.slug}/settings/general`);
         }
+      } else {
+        setError(result.error);
       }
-      // On error: result.ok is false but we intentionally do not crash the
-      // form — the user can retry. A future iteration may show a toast.
     } catch {
-      // Policy §0.5: never surface an error that crashes the form.
+      // Policy §0.5: never surface a raw thrown error that crashes the form.
+      setError("An unexpected error occurred. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -298,6 +318,13 @@ export function WorkspaceGeneralForm({
             Displayed in the workspace switcher and surfaced to the Ask system.
           </p>
         </div>
+
+        {/* Error state */}
+        {error !== null && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
 
         {/* Footer: save button + saved indicator */}
         <div className="flex items-center gap-3 pt-2">

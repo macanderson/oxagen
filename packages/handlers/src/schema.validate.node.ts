@@ -18,10 +18,9 @@ import { logger } from "./logger";
  * so the node is fully conformant: score 1, accepted, no errors — matching the
  * validator's own "unknown label" pass-through behavior.
  */
-export const schemaValidateNodeHandler: CapabilityHandler<typeof schemaValidateNode> = async (
-  input,
-  ctx,
-) => {
+export const schemaValidateNodeHandler: CapabilityHandler<
+  typeof schemaValidateNode
+> = async (input, ctx) => {
   const pinned = await getPinnedSchema(ctx.orgId, ctx.workspaceId);
 
   if (!pinned) {

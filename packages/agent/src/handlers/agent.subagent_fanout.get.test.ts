@@ -46,13 +46,17 @@ function setup(fanoutRow: FanoutRow | null, runs: RunRow[]) {
       ? {
           select: () => ({
             from: () => ({
-              where: () => ({ limit: () => Promise.resolve(fanoutRow ? [fanoutRow] : []) }),
+              where: () => ({
+                limit: () => Promise.resolve(fanoutRow ? [fanoutRow] : []),
+              }),
             }),
           }),
         }
       : {
           select: () => ({
-            from: () => ({ where: () => ({ orderBy: () => Promise.resolve(runs) }) }),
+            from: () => ({
+              where: () => ({ orderBy: () => Promise.resolve(runs) }),
+            }),
           }),
         };
     return fn(tx as unknown as Parameters<typeof fn>[0]);

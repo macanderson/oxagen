@@ -49,7 +49,10 @@ export function McpServerPicker({
   React.useEffect(() => {
     if (!open || isMobile) return;
     function handleMouseDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
       }
     }
@@ -106,7 +109,9 @@ export function McpServerPicker({
               <Switch
                 id={switchId}
                 checked={isActive}
-                onCheckedChange={(checked) => toggleServer(server.publicId, checked)}
+                onCheckedChange={(checked) =>
+                  toggleServer(server.publicId, checked)
+                }
                 disabled={server.healthStatus === "unreachable"}
                 aria-label={`${isActive ? "Deactivate" : "Activate"} ${server.name}`}
               />
@@ -145,7 +150,8 @@ export function McpServerPicker({
         className={cn(
           "p-0",
           isMobile ? "h-11 w-11" : "h-8 w-8",
-          activeCount > 0 && "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
+          activeCount > 0 &&
+            "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
         )}
       >
         <Server className="h-4 w-4" />

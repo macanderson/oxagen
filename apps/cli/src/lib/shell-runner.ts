@@ -176,7 +176,12 @@ export function runShellCommandBuffered({
   return new Promise<BufferedShellResult>((resolve) => {
     // Already-aborted turn: don't spawn at all.
     if (signal?.aborted) {
-      resolve({ exitCode: 124, stdout: "", stderr: "Aborted before start.", timedOut: false });
+      resolve({
+        exitCode: 124,
+        stdout: "",
+        stderr: "Aborted before start.",
+        timedOut: false,
+      });
       return;
     }
     const child = spawn("bash", ["-c", command], {

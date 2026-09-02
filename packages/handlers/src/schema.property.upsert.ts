@@ -5,11 +5,14 @@ import { eq, and, isNull } from "drizzle-orm";
 import { getOrCreateRegistry } from "./schema.versioning";
 import { logger } from "./logger";
 
-export const schemaPropertyUpsertHandler: CapabilityHandler<typeof schemaPropertyUpsert> = async (
-  input,
-  ctx,
-) => {
-  const registry = await getOrCreateRegistry(ctx.orgId, ctx.workspaceId, ctx.userId);
+export const schemaPropertyUpsertHandler: CapabilityHandler<
+  typeof schemaPropertyUpsert
+> = async (input, ctx) => {
+  const registry = await getOrCreateRegistry(
+    ctx.orgId,
+    ctx.workspaceId,
+    ctx.userId,
+  );
 
   if (!registry.draftVersionId) {
     throw new Error("No draft version found for registry");
@@ -32,7 +35,8 @@ export const schemaPropertyUpsertHandler: CapabilityHandler<typeof schemaPropert
           ),
         )
         .limit(1);
-      if (!label) throw new Error(`Node label "${input.ownerName}" not found in draft`);
+      if (!label)
+        throw new Error(`Node label "${input.ownerName}" not found in draft`);
       nodeLabelId = label.id;
     } else {
       const [rel] = await tx
@@ -46,7 +50,10 @@ export const schemaPropertyUpsertHandler: CapabilityHandler<typeof schemaPropert
           ),
         )
         .limit(1);
-      if (!rel) throw new Error(`Relationship type "${input.ownerName}" not found in draft`);
+      if (!rel)
+        throw new Error(
+          `Relationship type "${input.ownerName}" not found in draft`,
+        );
       relationshipTypeId = rel.id;
     }
 
@@ -86,7 +93,10 @@ export const schemaPropertyUpsertHandler: CapabilityHandler<typeof schemaPropert
         .where(eq(db.schemaProperties.id, existing.id))
         .returning();
 
-      return { propertyId: updated?.publicId ?? existing.publicId, created: false };
+      return {
+        propertyId: updated?.publicId ?? existing.publicId,
+        created: false,
+      };
     }
 
     const [inserted] = await tx
@@ -116,7 +126,13 @@ export const schemaPropertyUpsertHandler: CapabilityHandler<typeof schemaPropert
   });
 
   logger.info(
-    { orgId: ctx.orgId, workspaceId: ctx.workspaceId, ownerName: input.ownerName, key: input.key, created: result.created },
+    {
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      ownerName: input.ownerName,
+      key: input.key,
+      created: result.created,
+    },
     "schema.property.upsert: upserted property",
   );
 

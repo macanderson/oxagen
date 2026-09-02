@@ -25,6 +25,16 @@ import type { HookAction, HookEvent, HookMatcher, Hooks } from "./schema.js";
 
 const DEFAULT_HOOK_TIMEOUT_MS = 60_000;
 
+/**
+ * Per-stream ceiling on what one hook's output may accumulate in memory.
+ * SessionStart stdout is appended verbatim to the system prompt and PreToolUse
+ * stderr becomes the block reason, so a hook that streams without bound (a
+ * runaway `cat`, a chatty build tool) would otherwise grow the REPL's heap for
+ * the whole timeout window. Past the cap, extra bytes are dropped and a marker
+ * is appended — the same "cap and mark" idiom the diff panel uses.
+ */
+const MAX_HOOK_STREAM_BYTES = 256 * 1024;
+
 export interface HookPayload {
   event: HookEvent;
   cwd: string;
@@ -57,6 +67,9 @@ function execHook(
   signal?: AbortSignal,
 ): Promise<HookResult> {
   return new Promise((resolvePromise) => {
+    // POSIX-only: `/bin/bash` is hardcoded, so on Windows (and on a distro
+    // without bash at that path) `spawn` emits 'error' and every hook resolves
+    // with code 1 — which, for PreToolUse, blocks the tool it guards.
     const child = spawn("/bin/bash", ["-c", action.command], {
       cwd,
       env: process.env,
@@ -70,13 +83,32 @@ function execHook(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      // Drop the abort listener explicitly: the gate runs this once per tool
+      // call against ONE long-lived turn signal, so leaving them attached
+      // accumulates a listener (and a reference to a dead child) per call.
+      signal?.removeEventListener("abort", onAbort);
       resolvePromise(result);
     };
 
-    const timeoutMs = Math.min(action.timeoutMs ?? DEFAULT_HOOK_TIMEOUT_MS, 600_000);
+    /** Append `chunk` to `current`, stopping at {@link MAX_HOOK_STREAM_BYTES}. */
+    const appendCapped = (current: string, chunk: string): string => {
+      if (current.length >= MAX_HOOK_STREAM_BYTES) return current;
+      const room = MAX_HOOK_STREAM_BYTES - current.length;
+      if (chunk.length <= room) return current + chunk;
+      return `${current}${chunk.slice(0, room)}\n[hook output truncated at ${MAX_HOOK_STREAM_BYTES} bytes]`;
+    };
+
+    const timeoutMs = Math.min(
+      action.timeoutMs ?? DEFAULT_HOOK_TIMEOUT_MS,
+      600_000,
+    );
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
-      finish({ code: 124, stdout, stderr: stderr + `\n[hook timed out after ${timeoutMs}ms]` });
+      finish({
+        code: 124,
+        stdout,
+        stderr: stderr + `\n[hook timed out after ${timeoutMs}ms]`,
+      });
     }, timeoutMs);
 
     const onAbort = () => {
@@ -88,9 +120,15 @@ function execHook(
       else signal.addEventListener("abort", onAbort, { once: true });
     }
 
-    child.stdout.on("data", (d: Buffer) => (stdout += d.toString()));
-    child.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
-    child.on("error", (err) => finish({ code: 1, stdout, stderr: stderr + String(err) }));
+    child.stdout.on("data", (d: Buffer) => {
+      stdout = appendCapped(stdout, d.toString());
+    });
+    child.stderr.on("data", (d: Buffer) => {
+      stderr = appendCapped(stderr, d.toString());
+    });
+    child.on("error", (err) =>
+      finish({ code: 1, stdout, stderr: stderr + String(err) }),
+    );
     child.on("close", (code) => finish({ code: code ?? 0, stdout, stderr }));
 
     // A hook that exits before reading stdin makes the write below emit EPIPE

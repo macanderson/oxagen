@@ -32,7 +32,9 @@ export async function resolveDataset(
     )
     .limit(1);
   if (!row) {
-    throw new HTTPException(404, { message: `eval dataset ${publicId} not found` });
+    throw new HTTPException(404, {
+      message: `eval dataset ${publicId} not found`,
+    });
   }
   return row;
 }

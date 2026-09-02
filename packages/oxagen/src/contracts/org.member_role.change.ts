@@ -18,7 +18,11 @@ export const orgMemberRoleChange = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["api", "docs", "mcp", "unit", "app"],
   scoped: true,
-  agent: { requiresApproval: true, riskLevel: "high", category: "organization" },
+  agent: {
+    requiresApproval: true,
+    riskLevel: "high",
+    category: "organization",
+  },
   sensitivity: "high",
   defaultEffect: "deny",
   defaultRoles: {
@@ -27,10 +31,16 @@ export const orgMemberRoleChange = registerCapability({
   },
   input: z.object({
     // UUID of the user whose role should change.
-    targetUserId: z.string().min(1).describe("The UUID of the user whose role to change"),
+    targetUserId: z
+      .string()
+      .min(1)
+      .describe("The UUID of the user whose role to change"),
     // New org role name — must match a system role for this org
     // (e.g. 'Owner', 'Admin', 'Member', 'Billing', 'Compliance').
-    newRole: z.string().min(1).describe("The new org role name (e.g. 'Admin', 'Member')"),
+    newRole: z
+      .string()
+      .min(1)
+      .describe("The new org role name (e.g. 'Admin', 'Member')"),
   }),
   output: z.object({
     changed: z.boolean(),
@@ -41,5 +51,9 @@ export const orgMemberRoleChange = registerCapability({
   }),
 });
 
-export type OrgMemberRoleChangeInput = z.output<typeof orgMemberRoleChange.input>;
-export type OrgMemberRoleChangeOutput = z.output<typeof orgMemberRoleChange.output>;
+export type OrgMemberRoleChangeInput = z.output<
+  typeof orgMemberRoleChange.input
+>;
+export type OrgMemberRoleChangeOutput = z.output<
+  typeof orgMemberRoleChange.output
+>;

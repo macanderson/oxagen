@@ -28,4 +28,3 @@ export function platformVersion(): string {
   if (!raw) return "0.0.0";
   return stripOneQuotePair(raw);
 }
-

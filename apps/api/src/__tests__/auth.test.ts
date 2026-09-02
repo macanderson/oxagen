@@ -50,16 +50,24 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
 vi.mock("@oxagen/handlers", () => ({
   serveFile: vi.fn(),
   FileNotFoundError: class FileNotFoundError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileNotFoundError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileNotFoundError";
+    }
   },
   FileForbiddenError: class FileForbiddenError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileForbiddenError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileForbiddenError";
+    }
   },
 }));
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -126,7 +134,10 @@ describe("authMiddleware — API key errors", () => {
 
   it("unknown error kind → 401 'Unauthorized' (fallback)", async () => {
     // Return an unrecognised kind not in the messages map
-    mocks.resolveApiKey.mockResolvedValue({ ok: false, kind: "unknown_future_kind" });
+    mocks.resolveApiKey.mockResolvedValue({
+      ok: false,
+      kind: "unknown_future_kind",
+    });
     const res = await app.fetch(
       makeRequest(AUTH_ONLY_PATH, {
         method: "POST",

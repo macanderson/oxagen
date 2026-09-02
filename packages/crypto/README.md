@@ -44,15 +44,46 @@ from memory immediately after use.
 
 ## Swapping the KEK provider (Policy 2 — no vendor lock-in)
 
-The `KmsAdapter` interface is the vendor seam.  The shipped implementation is
-`createLocalKmsAdapter` (native AES-256-GCM key wrapping under an env-held KEK).
-To use a cloud KMS (AWS/GCP/Vault) instead:
+The `KmsAdapter` interface is the vendor seam. Two adapters ship in the box:
+
+- `createLocalKmsAdapter` — AES-256-GCM key wrapping under a KEK held in an env
+  var. No cloud dependency. This is the default.
+- `createAwsKmsAdapter` — wraps and unwraps DEKs with AWS KMS. Give it a full
+  key ARN; the region is read out of the ARN, and both the wrap and the unwrap
+  call pin that key.
+
+To add a third provider (GCP, Vault, an HSM):
 
 1. Implement `KmsAdapter` (`generateDataKey` + `decryptDataKey`).
 2. Pass your adapter instance via `{ adapter }` to `encrypt` / `decrypt`.
 
-The existing ciphertext format remains valid — no re-encryption needed when
-switching providers, as long as the new provider can unwrap the old DEKs.
+A wrapped DEK can only be unwrapped by the provider that wrapped it, so a
+ciphertext written under one provider still needs that provider on the read
+path. Store a per-row key-version label and route on it — that is exactly what
+`resolveIngestionCryptoAdapterForKeyId` does for connector credentials.
+
+## Ingestion credentials
+
+Connector credentials in `ingestion.auth_credentials` use two helpers instead of
+building an adapter by hand:
+
+- `createIngestionCryptoAdapter()` — the **write** path. It picks the adapter for
+  whichever provider `INGESTION_CRYPTO_PROVIDER` currently names, and returns the
+  `keyId` to store next to the ciphertext.
+- `resolveIngestionCryptoAdapterForKeyId(storedKeyId)` — the **read** path. It
+  picks the adapter from the row's own stored `keyId`, so a row written before a
+  provider switch still decrypts afterwards.
+
+Never decrypt with the write-path helper. A row may predate the current setting.
+
+Switching from the env KEK to AWS KMS is therefore a flip, not a migration:
+provision the key, set `AWS_KMS_INGESTION_KEY_ARN`, set
+`INGESTION_CRYPTO_PROVIDER=kms`. Old rows keep decrypting under the env KEK and
+pick up the KMS key the next time they are written.
+
+Both helpers build a new adapter on every call, and for the KMS provider that
+means a new `KMSClient`. Build one per request or per batch and reuse it — do
+not call either helper inside a per-row loop.
 
 ## Key rotation
 
@@ -64,15 +95,27 @@ in the wire format reserves space for a future per-row format migration.
 
 ## Environment variables
 
-| Variable                    | Required | Description                                                         |
-|-----------------------------|----------|---------------------------------------------------------------------|
-| `AUTH_TOKEN_ENCRYPTION_KEY` | Yes      | Base64-encoded 256-bit (32-byte) master key (KEK) that wraps DEKs.  |
+| Variable                    | Required                | Description                                                                    |
+|-----------------------------|-------------------------|--------------------------------------------------------------------------------|
+| `AUTH_TOKEN_ENCRYPTION_KEY` | Yes                     | Base64 256-bit (32-byte) KEK for auth and plugin credentials.                  |
+| `INGESTION_CRYPTO_PROVIDER` | No (defaults to `env`)  | `env` for the local KEK, `kms` for AWS KMS. Applies to connector credentials.  |
+| `INGESTION_ENCRYPTION_KEY`  | When provider is `env`  | Base64 256-bit (32-byte) KEK for connector credentials.                        |
+| `AWS_KMS_INGESTION_KEY_ARN` | When provider is `kms`  | Full ARN of the KMS key that wraps connector DEKs. The region comes from it.   |
 
 `AUTH_TOKEN_ENCRYPTION_KEY` is validated at boot by `@oxagen/config`.
-Generate one with `openssl rand -base64 32`.
+Generate any of the base64 keys with `openssl rand -base64 32`.
 
 ## Security notes
 
 - Plaintext tokens are never logged anywhere in this module.
 - AES-256-GCM auth tag verification is mandatory; any tamper throws.
 - Each encrypt call uses a fresh random IV — ciphertext is non-deterministic.
+- The envelope carries no additional authenticated data. Nothing inside a
+  ciphertext ties it to the row, tenant, or column it was stored in, so anyone
+  who can overwrite one stored blob with another blob wrapped under the same KEK
+  gets a clean decrypt of the substituted value. Authorization on the storage
+  layer is what prevents that today.
+- The local KEK wraps every DEK under one long-lived key with a random 96-bit
+  nonce. NIST SP 800-38D caps a random-IV GCM key at roughly 2^32 invocations;
+  rotate the KEK well before a deployment approaches that many credential
+  writes.

@@ -24,13 +24,28 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight as ChevronRightIcon, Boxes, Network } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight as ChevronRightIcon,
+  Boxes,
+  Network,
+} from "lucide-react";
 import type { GraphNodeListOutput } from "@oxagen/oxagen/contracts/graph.node.list";
 import type { OntologyNeighborsOutput } from "@oxagen/oxagen/contracts/ontology.neighbors";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select, SelectTrigger, SelectValue, SelectPopup, SelectItem } from "@/components/ui/select";
-import { EmptyState, ErrorState, LoadingState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectPopup,
+  SelectItem,
+} from "@/components/ui/select";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+} from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { workspace } from "@/lib/routes";
 import { listNodesAction, ontologyNeighborsAction } from "../actions";
 import { fromListNode, fromNeighbor } from "./node-ref-adapters";
@@ -51,21 +66,33 @@ export interface BrowsePanelProps {
   workspaceSlug: string;
   /** Label chip choices — derived by the parent from graph.stats's nodesByLabel. */
   availableLabels: string[];
-  /** Called whenever the active label filter changes (feeds the panel-header Export button's scope). */
+  /**
+   * Called whenever the active label filter changes, so a parent can mirror
+   * the panel's scope. Optional and currently unused by `GraphSidePanel`.
+   */
   onLabelsChange?: (labels: string[]) => void;
 }
 
-export function BrowsePanel({ orgSlug, workspaceSlug, availableLabels, onLabelsChange }: BrowsePanelProps) {
+export function BrowsePanel({
+  orgSlug,
+  workspaceSlug,
+  availableLabels,
+  onLabelsChange,
+}: BrowsePanelProps) {
   const [selectedLabels, setSelectedLabels] = React.useState<string[]>([]);
   const [sort, setSort] = React.useState<SortMode>("recent");
   const [offset, setOffset] = React.useState(0);
-  const [status, setStatus] = React.useState<"loading" | "ready" | "error">("loading");
+  const [status, setStatus] = React.useState<"loading" | "ready" | "error">(
+    "loading",
+  );
   const [error, setError] = React.useState("");
   const [rows, setRows] = React.useState<GraphNodeListOutput["nodes"]>([]);
   const [total, setTotal] = React.useState(0);
   const [hasMore, setHasMore] = React.useState(false);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
-  const [neighborState, setNeighborState] = React.useState<Record<string, NeighborState>>({});
+  const [neighborState, setNeighborState] = React.useState<
+    Record<string, NeighborState>
+  >({});
 
   const load = React.useCallback(async () => {
     setStatus("loading");
@@ -127,9 +154,17 @@ export function BrowsePanel({ orgSlug, workspaceSlug, availableLabels, onLabelsC
     if (!expandedId || requestedNeighborsRef.current.has(expandedId)) return;
     const nodeId = expandedId;
     requestedNeighborsRef.current.add(nodeId);
-    setNeighborState((prev) => ({ ...prev, [nodeId]: { status: "loading", neighbors: [] } }));
+    setNeighborState((prev) => ({
+      ...prev,
+      [nodeId]: { status: "loading", neighbors: [] },
+    }));
     void (async () => {
-      const res = await ontologyNeighborsAction({ orgSlug, workspaceSlug, nodeId, limit: 25 });
+      const res = await ontologyNeighborsAction({
+        orgSlug,
+        workspaceSlug,
+        nodeId,
+        limit: 25,
+      });
       if (!mountedRef.current) return;
       // On failure, drop the guard so a later re-expand retries instead of
       // sticking on the error state forever.
@@ -159,14 +194,24 @@ export function BrowsePanel({ orgSlug, workspaceSlug, availableLabels, onLabelsC
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       {availableLabels.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by label">
+        <div
+          className="flex flex-wrap gap-1.5"
+          role="group"
+          aria-label="Filter by label"
+        >
           {availableLabels.map((label) => {
             const active = selectedLabels.includes(label);
             return (
               <Badge
                 key={label}
                 variant={active ? "brand" : "outline"}
-                render={<button type="button" aria-pressed={active} onClick={() => toggleLabel(label)} />}
+                render={
+                  <button
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => toggleLabel(label)}
+                  />
+                }
                 className="cursor-pointer"
               >
                 {label}
@@ -178,7 +223,9 @@ export function BrowsePanel({ orgSlug, workspaceSlug, availableLabels, onLabelsC
 
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-muted-foreground">
-          {status === "ready" ? `${rangeStart}–${rangeEnd} of ${total.toLocaleString()}` : null}
+          {status === "ready"
+            ? `${rangeStart}–${rangeEnd} of ${total.toLocaleString()}`
+            : null}
         </span>
         <Select value={sort} onValueChange={(v) => v && setSort(v as SortMode)}>
           <SelectTrigger size="sm" className="w-36" aria-label="Sort">
@@ -195,14 +242,30 @@ export function BrowsePanel({ orgSlug, workspaceSlug, availableLabels, onLabelsC
         {status === "loading" ? (
           <LoadingState variant="table" />
         ) : status === "error" ? (
-          <ErrorState title="Couldn't load nodes" description={error} retry={() => void load()} />
-        ) : sortedRows.length === 0 && total === 0 && selectedLabels.length === 0 ? (
+          <ErrorState
+            title="Couldn't load nodes"
+            description={error}
+            retry={() => void load()}
+          />
+        ) : sortedRows.length === 0 &&
+          total === 0 &&
+          selectedLabels.length === 0 ? (
           <EmptyState
             icon={Network}
             title="Connect a source"
             description="No nodes have been ingested into this workspace's graph yet."
             action={
-              <Button size="sm" render={<Link href={workspace.knowledge.sources({ orgSlug, workspaceSlug })} />}>
+              <Button
+                size="sm"
+                render={
+                  <Link
+                    href={workspace.knowledge.sources({
+                      orgSlug,
+                      workspaceSlug,
+                    })}
+                  />
+                }
+              >
                 Go to Sources
               </Button>
             }
@@ -212,7 +275,8 @@ export function BrowsePanel({ orgSlug, workspaceSlug, availableLabels, onLabelsC
         ) : (
           <div className="flex flex-col gap-1.5">
             {sortedRows.map((node) => {
-              const state = expandedId === node.id ? neighborState[node.id] : undefined;
+              const state =
+                expandedId === node.id ? neighborState[node.id] : undefined;
               return (
                 <GraphResultRow
                   key={node.id}
@@ -227,7 +291,9 @@ export function BrowsePanel({ orgSlug, workspaceSlug, availableLabels, onLabelsC
                 >
                   {state?.status === "ready" ? (
                     state.neighbors.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No connected entities.</p>
+                      <p className="text-xs text-muted-foreground">
+                        No connected entities.
+                      </p>
                     ) : (
                       <div className="flex flex-col gap-1">
                         {state.neighbors.map((n) => (

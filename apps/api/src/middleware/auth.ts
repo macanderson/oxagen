@@ -26,7 +26,9 @@ export const authMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
         expired: "API key expired",
       };
       const { kind } = result as ApiKeyResolutionError;
-      throw new HTTPException(401, { message: messages[kind] ?? "Unauthorized" });
+      throw new HTTPException(401, {
+        message: messages[kind] ?? "Unauthorized",
+      });
     }
     c.set("userId", null);
     c.set("apiKeyId", result.apiKeyId);
@@ -39,7 +41,8 @@ export const authMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
 
   // Better Auth session cookie path.
   const cookieToken = parseSessionCookie(c.req.header("cookie"));
-  if (!cookieToken) throw new HTTPException(401, { message: "Missing credentials" });
+  if (!cookieToken)
+    throw new HTTPException(401, { message: "Missing credentials" });
 
   const session = await resolveSession(cookieToken);
   if (!session) throw new HTTPException(401, { message: "Session expired" });

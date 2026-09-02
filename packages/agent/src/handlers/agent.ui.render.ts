@@ -1,5 +1,8 @@
 import type { CapabilityContext } from "../types";
-import type { AgentUiRenderInput, AgentUiRenderOutput } from "@oxagen/oxagen/contracts/agent.ui.render";
+import type {
+  AgentUiRenderInput,
+  AgentUiRenderOutput,
+} from "@oxagen/oxagen/contracts/agent.ui.render";
 
 export type { AgentUiRenderInput, AgentUiRenderOutput };
 

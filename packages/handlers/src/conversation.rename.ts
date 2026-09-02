@@ -4,12 +4,14 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const conversationRenameHandler: CapabilityHandler<typeof conversationRename> = async (
-  input,
-  ctx,
-) => {
+export const conversationRenameHandler: CapabilityHandler<
+  typeof conversationRename
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "conversation.rename: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "conversation.rename: rejected — no authenticated user",
+    );
     throw new Error("conversation.rename requires an authenticated user");
   }
 

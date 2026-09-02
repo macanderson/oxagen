@@ -27,7 +27,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   // The governance handlers run inside the tenant scope (withTenantDb); install
   // also touches withSystemDb. Mock both so the fake tx is used either way.
-  return { ...real, withSystemDb: mocks.withSystemDb, withTenantDb: mocks.withTenantDb };
+  return {
+    ...real,
+    withSystemDb: mocks.withSystemDb,
+    withTenantDb: mocks.withTenantDb,
+  };
 });
 
 vi.mock("@oxagen/database/security", () => ({
@@ -80,7 +84,9 @@ const fakeManifest = {
 function makeTx(opts?: { listingId?: string }) {
   const rows: unknown[] = [];
   const selectWhere = () =>
-    Object.assign(Promise.resolve(rows), { limit: () => Promise.resolve(rows) });
+    Object.assign(Promise.resolve(rows), {
+      limit: () => Promise.resolve(rows),
+    });
   return {
     select: () => ({ from: () => ({ where: selectWhere }) }),
     update: () => ({ set: () => ({ where: () => Promise.resolve() }) }),
@@ -89,7 +95,8 @@ function makeTx(opts?: { listingId?: string }) {
       values: () => ({
         onConflictDoNothing: () => Promise.resolve(),
         onConflictDoUpdate: () => ({
-          returning: () => Promise.resolve([{ id: opts?.listingId ?? "porg-1" }]),
+          returning: () =>
+            Promise.resolve([{ id: opts?.listingId ?? "porg-1" }]),
         }),
       }),
     }),
@@ -116,7 +123,9 @@ beforeEach(() => {
 describe("plugin.org.uninstall — audit event", () => {
   it("emits plugin.uninstalled on success", async () => {
     mockDbOk();
-    const out = (await uninstallHandler({ orgListingId: "porg-1" }, ctx)) as { ok: boolean };
+    const out = (await uninstallHandler({ orgListingId: "porg-1" }, ctx)) as {
+      ok: boolean;
+    };
     expect(out.ok).toBe(true);
     expect(mocks.emitSecurityEvent).toHaveBeenCalledTimes(1);
     expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
@@ -134,7 +143,9 @@ describe("plugin.org.uninstall — audit event", () => {
 
   it("does NOT emit when the delete fails", async () => {
     mockDbFail();
-    await expect(uninstallHandler({ orgListingId: "porg-1" }, ctx)).rejects.toThrow("db down");
+    await expect(
+      uninstallHandler({ orgListingId: "porg-1" }, ctx),
+    ).rejects.toThrow("db down");
     expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
   });
 });
@@ -165,7 +176,10 @@ describe("set_plugin_enabled (org scope) — audit event", () => {
   it("does NOT emit when the update fails", async () => {
     mockDbFail();
     await expect(
-      setEnabledHandler({ scope: "org", orgListingId: "porg-1", enabled: true }, ctx),
+      setEnabledHandler(
+        { scope: "org", orgListingId: "porg-1", enabled: true },
+        ctx,
+      ),
     ).rejects.toThrow("db down");
     expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
   });
@@ -185,7 +199,9 @@ describe("plugin.org.install_bulk — audit event", () => {
         ],
       },
       ctx,
-    )) as { installed: Array<{ orgListingId: string | null; error: string | null }> };
+    )) as {
+      installed: Array<{ orgListingId: string | null; error: string | null }>;
+    };
     expect(out.installed).toHaveLength(2);
     expect(out.installed.every((r) => r.error === null)).toBe(true);
     expect(mocks.emitSecurityEvent).toHaveBeenCalledTimes(2);
@@ -212,7 +228,9 @@ describe("plugin.org.install_bulk — audit event", () => {
         ],
       },
       ctx,
-    )) as { installed: Array<{ orgListingId: string | null; error: string | null }> };
+    )) as {
+      installed: Array<{ orgListingId: string | null; error: string | null }>;
+    };
     expect(out.installed.filter((r) => r.error === null)).toHaveLength(1);
     expect(out.installed.filter((r) => r.error !== null)).toHaveLength(1);
     expect(mocks.emitSecurityEvent).toHaveBeenCalledTimes(1);

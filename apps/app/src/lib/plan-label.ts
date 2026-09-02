@@ -18,7 +18,12 @@ export const TIER_LABELS: Record<PlanTier, string> = {
   enterprise: "Enterprise",
 };
 
-export const VALID_TIERS = new Set<PlanTier>(["free", "build", "scale", "enterprise"]);
+export const VALID_TIERS = new Set<PlanTier>([
+  "free",
+  "build",
+  "scale",
+  "enterprise",
+]);
 
 function isTier(value: string | null | undefined): value is PlanTier {
   return value != null && VALID_TIERS.has(value as PlanTier);

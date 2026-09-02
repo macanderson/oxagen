@@ -15,7 +15,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...real, withTenantDb: mocks.withTenantDb, withSystemDb: mocks.withSystemDb };
+  return {
+    ...real,
+    withTenantDb: mocks.withTenantDb,
+    withSystemDb: mocks.withSystemDb,
+  };
 });
 
 vi.mock("@oxagen/database/security", () => ({
@@ -73,15 +77,16 @@ const fakeServerResponse = {
 };
 
 /** Mock withSystemDb to return a list of registries. */
-function mockRegistryQuery(registries: typeof fakeRegistry[]) {
-  mocks.withSystemDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      select: () => ({
-        from: () => ({
-          where: () => Promise.resolve(registries),
+function mockRegistryQuery(registries: (typeof fakeRegistry)[]) {
+  mocks.withSystemDb.mockImplementationOnce(
+    async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => Promise.resolve(registries),
+          }),
         }),
       }),
-    }),
   );
 }
 
@@ -103,16 +108,18 @@ function mockUpsert(returnId = "porg-registry-listing") {
   mockIconLookup();
   // Second: the actual upsert. returning() echoes the inserted authKind, like
   // the real DB does for a fresh insert.
-  mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      insert: () => ({
-        values: (vals: Record<string, unknown>) => ({
-          onConflictDoUpdate: () => ({
-            returning: () => Promise.resolve([{ id: returnId, authKind: vals.authKind }]),
+  mocks.withTenantDb.mockImplementationOnce(
+    async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        insert: () => ({
+          values: (vals: Record<string, unknown>) => ({
+            onConflictDoUpdate: () => ({
+              returning: () =>
+                Promise.resolve([{ id: returnId, authKind: vals.authKind }]),
+            }),
           }),
         }),
       }),
-    }),
   );
 }
 
@@ -136,26 +143,30 @@ describe("installOne — registry install (empty endpointUrl)", () => {
     mockIconLookup();
 
     let capturedValues: Record<string, unknown> | null = null;
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({
-        insert: () => ({
-          values: (vals: Record<string, unknown>) => {
-            capturedValues = vals;
-            return {
-              onConflictDoUpdate: () => ({
-                returning: () => Promise.resolve([{ id: "porg-resolved", authKind: vals.authKind }]),
-              }),
-            };
-          },
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          insert: () => ({
+            values: (vals: Record<string, unknown>) => {
+              capturedValues = vals;
+              return {
+                onConflictDoUpdate: () => ({
+                  returning: () =>
+                    Promise.resolve([
+                      { id: "porg-resolved", authKind: vals.authKind },
+                    ]),
+                }),
+              };
+            },
+          }),
         }),
-      }),
     );
 
     const { id } = await installOne(ctx, {
       pluginType: "mcp_server",
       custom: {
         name: "my-mcp-server",
-        endpointUrl: "",        // empty → registry install
+        endpointUrl: "", // empty → registry install
         transport: "sse",
         authKind: "none",
       },
@@ -189,7 +200,9 @@ describe("installOne — registry install (empty endpointUrl)", () => {
           authKind: "none",
         },
       }),
-    ).rejects.toThrow('Server "nonexistent-server" not found in any connected registry');
+    ).rejects.toThrow(
+      'Server "nonexistent-server" not found in any connected registry',
+    );
   });
 
   it("throws when no registries are enabled for the workspace", async () => {
@@ -205,7 +218,9 @@ describe("installOne — registry install (empty endpointUrl)", () => {
           authKind: "none",
         },
       }),
-    ).rejects.toThrow('Server "some-server" not found in any connected registry');
+    ).rejects.toThrow(
+      'Server "some-server" not found in any connected registry',
+    );
     expect(mocks.listServers).not.toHaveBeenCalled();
   });
 
@@ -243,33 +258,39 @@ describe("installOne — registry install (empty endpointUrl)", () => {
 
     mockIconLookup();
     let capturedValues: Record<string, unknown> | null = null;
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({
-        insert: () => ({
-          values: (vals: Record<string, unknown>) => {
-            capturedValues = vals;
-            return {
-              onConflictDoUpdate: () => ({
-                returning: () => Promise.resolve([{ id: "porg-registry-oauth", authKind: vals.authKind }]),
-              }),
-            };
-          },
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          insert: () => ({
+            values: (vals: Record<string, unknown>) => {
+              capturedValues = vals;
+              return {
+                onConflictDoUpdate: () => ({
+                  returning: () =>
+                    Promise.resolve([
+                      { id: "porg-registry-oauth", authKind: vals.authKind },
+                    ]),
+                }),
+              };
+            },
+          }),
         }),
-      }),
     );
 
     const res = await installOne(ctx, {
       pluginType: "mcp_server",
       custom: {
         name: "my-mcp-server",
-        endpointUrl: "",        // empty → resolved from the registry
+        endpointUrl: "", // empty → resolved from the registry
         transport: "sse",
         authKind: "none",
       },
     });
 
     // Probed the endpoint the registry resolved, not the (empty) input URL.
-    expect(mocks.detectOAuthProtected).toHaveBeenCalledWith("https://mcp.example.com/mcp");
+    expect(mocks.detectOAuthProtected).toHaveBeenCalledWith(
+      "https://mcp.example.com/mcp",
+    );
     expect(capturedValues!.authKind).toBe("oauth");
     expect(res).toEqual({ id: "porg-registry-oauth", authKind: "oauth" });
   });
@@ -286,19 +307,23 @@ describe("installOne — truly-custom install (endpointUrl provided)", () => {
     mockIconLookup();
 
     let capturedValues: Record<string, unknown> | null = null;
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({
-        insert: () => ({
-          values: (vals: Record<string, unknown>) => {
-            capturedValues = vals;
-            return {
-              onConflictDoUpdate: () => ({
-                returning: () => Promise.resolve([{ id: "porg-custom", authKind: vals.authKind }]),
-              }),
-            };
-          },
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          insert: () => ({
+            values: (vals: Record<string, unknown>) => {
+              capturedValues = vals;
+              return {
+                onConflictDoUpdate: () => ({
+                  returning: () =>
+                    Promise.resolve([
+                      { id: "porg-custom", authKind: vals.authKind },
+                    ]),
+                }),
+              };
+            },
+          }),
         }),
-      }),
     );
 
     const { id } = await installOne(ctx, {

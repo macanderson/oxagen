@@ -77,7 +77,9 @@ describe("kernel trace sink", () => {
     const events: KernelTraceEvent[] = [];
     setKernelTraceSink((e) => events.push(e));
 
-    await expect(invoke("test.trace.echo", { value: "x" }, ctx)).rejects.toThrow("boom");
+    await expect(
+      invoke("test.trace.echo", { value: "x" }, ctx),
+    ).rejects.toThrow("boom");
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ status: "error", input: { value: "x" } });
     expect(events[0]?.output).toBeUndefined();
@@ -89,7 +91,9 @@ describe("kernel trace sink", () => {
     const events: KernelTraceEvent[] = [];
     setKernelTraceSink((e) => events.push(e));
 
-    await expect(invoke("test.trace.echo", { value: 42 }, ctx)).rejects.toMatchObject({
+    await expect(
+      invoke("test.trace.echo", { value: 42 }, ctx),
+    ).rejects.toMatchObject({
       code: "invalid_input",
     });
     expect(events).toHaveLength(1);
@@ -102,11 +106,15 @@ describe("kernel trace sink", () => {
 
   it("emits an invalid_output error trace carrying the bad output", async () => {
     echoCap();
-    registerHandler("test.trace.echo", async () => async () => ({ wrong: true }));
+    registerHandler("test.trace.echo", async () => async () => ({
+      wrong: true,
+    }));
     const events: KernelTraceEvent[] = [];
     setKernelTraceSink((e) => events.push(e));
 
-    await expect(invoke("test.trace.echo", { value: "x" }, ctx)).rejects.toMatchObject({
+    await expect(
+      invoke("test.trace.echo", { value: "x" }, ctx),
+    ).rejects.toMatchObject({
       code: "invalid_output",
     });
     expect(events[0]).toMatchObject({
@@ -122,7 +130,9 @@ describe("kernel trace sink", () => {
     setKernelTraceSink(() => {
       throw new Error("sink exploded");
     });
-    await expect(invoke("test.trace.echo", { value: "ok" }, ctx)).resolves.toEqual({
+    await expect(
+      invoke("test.trace.echo", { value: "ok" }, ctx),
+    ).resolves.toEqual({
       value: "ok",
     });
   });
@@ -130,7 +140,9 @@ describe("kernel trace sink", () => {
   it("does nothing (no crash) when no sink is registered", async () => {
     echoCap();
     registerHandler("test.trace.echo", async () => async (input) => input);
-    await expect(invoke("test.trace.echo", { value: "ok" }, ctx)).resolves.toEqual({
+    await expect(
+      invoke("test.trace.echo", { value: "ok" }, ctx),
+    ).resolves.toEqual({
       value: "ok",
     });
   });

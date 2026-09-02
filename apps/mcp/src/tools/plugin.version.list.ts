@@ -27,8 +27,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function pluginVersionListTool(args: InferSchema<typeof schema>) {
+export default async function pluginVersionListTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(pluginVersionList.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(pluginVersionList.name, args, ctx, {
+    surface: "mcp",
+  });
   return pluginVersionList.output.parse(output);
 }

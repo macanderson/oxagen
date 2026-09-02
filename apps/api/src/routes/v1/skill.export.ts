@@ -9,7 +9,8 @@ export const skillExportRoute = new Hono<AppEnv>();
 skillExportRoute.get("/", async (c) => {
   const skillId = c.req.query("skillId");
   const versionNumberRaw = c.req.query("versionNumber");
-  const versionNumber = versionNumberRaw !== undefined ? Number(versionNumberRaw) : undefined;
+  const versionNumber =
+    versionNumberRaw !== undefined ? Number(versionNumberRaw) : undefined;
 
   const input = skillExport.input.parse({ skillId, versionNumber });
   const ctx = capabilityContext(c);

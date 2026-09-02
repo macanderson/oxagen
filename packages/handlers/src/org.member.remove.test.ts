@@ -52,11 +52,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  // The handler runs all reads + writes inside a single withTenantDb (one
-  // RLS-scoped transaction); resolveActorPrincipalAndRole uses its own. Both
-  // route to the same fluent tx mock so the call sequence is continuous.
-  withTenantDb: async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx),
-
+    // The handler runs all reads + writes inside a single withTenantDb (one
+    // RLS-scoped transaction); resolveActorPrincipalAndRole uses its own. Both
+    // route to the same fluent tx mock so the call sequence is continuous.
+    withTenantDb: async (fn: (tx: typeof mockTx) => Promise<unknown>) =>
+      fn(mockTx),
   };
 });
 
@@ -64,7 +64,9 @@ const { orgMemberRemoveHandler } = await import("./org.member.remove");
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function makeCtx(overrides: Partial<CapabilityContext> = {}): CapabilityContext {
+function makeCtx(
+  overrides: Partial<CapabilityContext> = {},
+): CapabilityContext {
   return {
     userId: "actor-user-id",
     apiKeyId: null,
@@ -157,8 +159,8 @@ describe("orgMemberRemoveHandler", () => {
         return { from };
       };
       if (callCount === 1) return buildChain([{ id: "actor-principal-id" }]); // actor principal
-      if (callCount === 2) return buildChain([{ roleName: "Owner" }]);         // actor PRA
-      if (callCount === 3) return buildChain([]);                              // target orgUser — NOT found
+      if (callCount === 2) return buildChain([{ roleName: "Owner" }]); // actor PRA
+      if (callCount === 3) return buildChain([]); // target orgUser — NOT found
       return buildChain([]);
     });
 
@@ -179,14 +181,14 @@ describe("orgMemberRemoveHandler", () => {
         const from = vi.fn().mockReturnValue({ where, innerJoin });
         return { from };
       };
-      if (callCount === 1) return build([{ id: "actor-principal-id" }]);           // actor principal
-      if (callCount === 2) return build([{ roleName: "Owner" }]);                   // actor PRA = Owner
-      if (callCount === 3) return build([{ id: "target-ou", role: "owner" }]);      // target orgUser found
-      if (callCount === 4) return build([{ id: "owner-role-id" }]);                 // Owner role exists
+      if (callCount === 1) return build([{ id: "actor-principal-id" }]); // actor principal
+      if (callCount === 2) return build([{ roleName: "Owner" }]); // actor PRA = Owner
+      if (callCount === 3) return build([{ id: "target-ou", role: "owner" }]); // target orgUser found
+      if (callCount === 4) return build([{ id: "owner-role-id" }]); // Owner role exists
       // ownerCountResult — count query, return via limit
-      if (callCount === 5) return build([{ n: 1 }]);                               // only 1 owner
-      if (callCount === 6) return build([{ id: "target-principal-id" }]);           // target principal
-      if (callCount === 7) return build([{ id: "target-pra-id" }]);                 // target IS an owner
+      if (callCount === 5) return build([{ n: 1 }]); // only 1 owner
+      if (callCount === 6) return build([{ id: "target-principal-id" }]); // target principal
+      if (callCount === 7) return build([{ id: "target-pra-id" }]); // target IS an owner
       return build([]);
     });
 
@@ -209,14 +211,14 @@ describe("orgMemberRemoveHandler", () => {
         const from = vi.fn().mockReturnValue({ where, innerJoin });
         return { from };
       };
-      if (callCount === 1) return build([{ id: "actor-principal-id" }]);         // actor principal
-      if (callCount === 2) return build([{ roleName: "Admin" }]);                 // actor PRA = Admin
-      if (callCount === 3) return build([{ id: "target-ou", role: "member" }]);  // target orgUser found
-      if (callCount === 4) return build([{ id: "owner-role-id" }]);               // Owner role row
-      if (callCount === 5) return build([{ n: 2 }]);                             // 2 owners — no lockout
-      if (callCount === 6) return build([{ id: "target-principal-id" }]);         // target principal (last owner check)
-      if (callCount === 7) return build([]);                                      // target has no Owner PRA → no lockout
-      if (callCount === 8) return build([{ id: "target-principal-id" }]);         // mutation: existing principal
+      if (callCount === 1) return build([{ id: "actor-principal-id" }]); // actor principal
+      if (callCount === 2) return build([{ roleName: "Admin" }]); // actor PRA = Admin
+      if (callCount === 3) return build([{ id: "target-ou", role: "member" }]); // target orgUser found
+      if (callCount === 4) return build([{ id: "owner-role-id" }]); // Owner role row
+      if (callCount === 5) return build([{ n: 2 }]); // 2 owners — no lockout
+      if (callCount === 6) return build([{ id: "target-principal-id" }]); // target principal (last owner check)
+      if (callCount === 7) return build([]); // target has no Owner PRA → no lockout
+      if (callCount === 8) return build([{ id: "target-principal-id" }]); // mutation: existing principal
       return build([]);
     });
 
@@ -228,7 +230,10 @@ describe("orgMemberRemoveHandler", () => {
     mockTx.delete = vi.fn().mockReturnValue({ where: deleteWhere });
 
     const ctx = makeCtx();
-    const result = await orgMemberRemoveHandler({ targetUserId: "target-user" }, ctx);
+    const result = await orgMemberRemoveHandler(
+      { targetUserId: "target-user" },
+      ctx,
+    );
 
     expect(result).toMatchObject({
       removed: true,
@@ -238,7 +243,9 @@ describe("orgMemberRemoveHandler", () => {
 
     // Audit event must have been emitted.
     expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
-    const [event] = mockEmitSecurityEvent.mock.calls[0] as [Record<string, unknown>];
+    const [event] = mockEmitSecurityEvent.mock.calls[0] as [
+      Record<string, unknown>,
+    ];
     expect(event.eventType).toBe("org.member_removed");
     expect(event.orgId).toBe("org-abc");
     expect(event.outcome).toBe("success");

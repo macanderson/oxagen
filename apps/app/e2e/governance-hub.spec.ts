@@ -34,24 +34,43 @@ test("governance hub: renders the accountability-chain cards and audit feed for 
 
   await page.goto(`/${orgSlug}/governance`);
   await expect(page).not.toHaveURL(/\/login/);
-  await expect(page.getByTestId("governance-hub")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("governance-hub")).toBeVisible({
+    timeout: 15_000,
+  });
 
   // Summary tiles always render (zero-state for a fresh org).
-  await expect(page.getByText("Active contracts", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Active contracts", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Audit events", { exact: true })).toBeVisible();
-  await expect(page.getByText("Denied invocations", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Denied invocations", { exact: true }),
+  ).toBeVisible();
 
   // The six accountability-chain cards.
   await expect(page.getByText("Identity", { exact: true })).toBeVisible();
-  await expect(page.getByText("Knowledge scope", { exact: true })).toBeVisible();
-  await expect(page.getByText("Permitted action", { exact: true })).toBeVisible();
-  await expect(page.getByText("Commercial terms", { exact: true })).toBeVisible();
-  await expect(page.getByText("Verified outcome", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Knowledge scope", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Permitted action", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Commercial terms", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Verified outcome", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Audit record", { exact: true })).toBeVisible();
 
   // A fresh org has no denied invocations — the all-clear state proves the
   // query_audit_log read completed successfully (not degraded to null).
-  await expect(page.getByTestId("denied-all-clear")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId("denied-all-clear")).toBeVisible({
+    timeout: 10_000,
+  });
 
-  await page.screenshot({ path: `${SCREENSHOT_DIR}/governance-hub.png`, fullPage: true });
+  await page.screenshot({
+    path: `${SCREENSHOT_DIR}/governance-hub.png`,
+    fullPage: true,
+  });
 });

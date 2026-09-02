@@ -12,12 +12,16 @@ afterEach(cleanup);
 
 describe("ListPagination", () => {
   it("renders nothing when pageCount is 1", () => {
-    const { container } = render(<ListPagination page={1} pageCount={1} onPageChange={vi.fn()} />);
+    const { container } = render(
+      <ListPagination page={1} pageCount={1} onPageChange={vi.fn()} />,
+    );
     expect(container).toBeEmptyDOMElement();
   });
 
   it("renders nothing when pageCount is 0", () => {
-    const { container } = render(<ListPagination page={1} pageCount={0} onPageChange={vi.fn()} />);
+    const { container } = render(
+      <ListPagination page={1} pageCount={0} onPageChange={vi.fn()} />,
+    );
     expect(container).toBeEmptyDOMElement();
   });
 
@@ -28,7 +32,9 @@ describe("ListPagination", () => {
 
   it("disables Prev on the first page", () => {
     render(<ListPagination page={1} pageCount={5} onPageChange={vi.fn()} />);
-    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Previous page" }),
+    ).toBeDisabled();
     expect(screen.getByRole("button", { name: "Next page" })).toBeEnabled();
   });
 
@@ -40,14 +46,20 @@ describe("ListPagination", () => {
 
   it("calls onPageChange with page - 1 when Prev is clicked", async () => {
     const onPageChange = vi.fn();
-    render(<ListPagination page={3} pageCount={5} onPageChange={onPageChange} />);
-    await userEvent.click(screen.getByRole("button", { name: "Previous page" }));
+    render(
+      <ListPagination page={3} pageCount={5} onPageChange={onPageChange} />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Previous page" }),
+    );
     expect(onPageChange).toHaveBeenCalledWith(2);
   });
 
   it("calls onPageChange with page + 1 when Next is clicked", async () => {
     const onPageChange = vi.fn();
-    render(<ListPagination page={3} pageCount={5} onPageChange={onPageChange} />);
+    render(
+      <ListPagination page={3} pageCount={5} onPageChange={onPageChange} />,
+    );
     await userEvent.click(screen.getByRole("button", { name: "Next page" }));
     expect(onPageChange).toHaveBeenCalledWith(4);
   });

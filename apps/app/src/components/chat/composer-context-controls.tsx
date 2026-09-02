@@ -2,15 +2,14 @@
 
 import * as React from "react";
 import { Pin } from "lucide-react";
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipPopup,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipTrigger, TooltipPopup } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { RepoSelector, type RepoOption } from "./repo-selector";
-import { EnvironmentSelector, type EnvironmentOption } from "./environment-selector";
+import {
+  EnvironmentSelector,
+  type EnvironmentOption,
+} from "./environment-selector";
 import {
   ComposerPrStatusChip,
   type ComposerPrStatus,
@@ -20,10 +19,7 @@ import {
  * composer-context-controls — the single, compact footer row of chat context
  * controls that lives directly UNDER the prompt textarea (inside the composer).
  *
- * It replaces the two previous heavy, duplicated bars (`ChatAgentToolbar` for
- * code mode and `ChatContextBar` for pinning): both showed full-width repo +
- * environment selectors ABOVE the composer. This unifies them into one small
- * row that both code mode and pin mode share:
+ * One small row shared by both code mode and pin mode:
  *
  *   [ org/repo ]                              [ PR #123 ● ] [ environment ] [pin]
  *   └── bottom-left ──┘                       └───────── bottom-right ─────────┘
@@ -89,7 +85,8 @@ export function ComposerContextControls({
 }: ComposerContextControlsProps) {
   const hasRepos = repositories.length > 0;
   const hasEnvironments = environments.length > 0;
-  const selectedRepo = repositories.find((r) => r.key === selectedRepoKey) ?? null;
+  const selectedRepo =
+    repositories.find((r) => r.key === selectedRepoKey) ?? null;
   const selectedEnv = environments.find((e) => e.id === selectedEnvId) ?? null;
   const canPin = Boolean(selectedRepo || selectedEnv);
   // A locked conversation never shows the pin toggle (code mode never pins) and
@@ -159,9 +156,7 @@ export function ComposerContextControls({
                 isLoading={disabled || locked}
                 className={COMPACT_TRIGGER}
                 ariaLabel={
-                  mode === "pin"
-                    ? "Pinned environment"
-                    : "Select environment"
+                  mode === "pin" ? "Pinned environment" : "Select environment"
                 }
                 placeholder="Environment"
               />,
@@ -189,7 +184,10 @@ export function ComposerContextControls({
                 />
               }
             >
-              <Pin className={cn("size-3.5", isPinned && "fill-current")} aria-hidden="true" />
+              <Pin
+                className={cn("size-3.5", isPinned && "fill-current")}
+                aria-hidden="true"
+              />
             </TooltipTrigger>
             <TooltipPopup>{pinLabel}</TooltipPopup>
           </Tooltip>

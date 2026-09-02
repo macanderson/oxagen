@@ -138,23 +138,30 @@ export function TriggerConfigPanel({
           ? { cronExpression: cron.trim(), timezone: timezone.trim() || "UTC" }
           : {};
 
-    const res = await updateAutomationAction({
-      orgSlug,
-      workspaceSlug,
-      automationId,
-      triggerConfig: nextConfig,
-    });
-    setBusy(false);
-    if (res.ok) {
-      toast.add({ title: "Trigger updated", type: "success" });
-      setEditing(false);
-      router.refresh();
-    } else {
-      toast.add({
-        title: "Couldn't update trigger",
-        description: res.error,
-        type: "error",
+    // finally: `busy` disables Save AND Cancel, so a rejected action without
+    // this would strand the panel in edit mode until the page is reloaded.
+    try {
+      const res = await updateAutomationAction({
+        orgSlug,
+        workspaceSlug,
+        automationId,
+        triggerConfig: nextConfig,
       });
+      if (res.ok) {
+        toast.add({ title: "Trigger updated", type: "success" });
+        setEditing(false);
+        router.refresh();
+      } else {
+        toast.add({
+          title: "Couldn't update trigger",
+          description: res.error,
+          type: "error",
+        });
+      }
+    } catch {
+      toast.add({ title: "Couldn't update trigger", type: "error" });
+    } finally {
+      setBusy(false);
     }
   }
 

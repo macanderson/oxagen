@@ -6,12 +6,19 @@ import { logger } from "./logger";
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
   if (!ctx.workspaceId) {
-    throw new Error("[plugin.org.list] workspaceId is required (scoped capability)");
+    throw new Error(
+      "[plugin.org.list] workspaceId is required (scoped capability)",
+    );
   }
   const orgId = ctx.orgId;
   const workspaceId = ctx.workspaceId;
   const { pluginType } = input as {
-    pluginType?: "mcp_server" | "integration" | "agent_skill" | "agent_capability" | "knowledge_source";
+    pluginType?:
+      | "mcp_server"
+      | "integration"
+      | "agent_skill"
+      | "agent_capability"
+      | "knowledge_source";
   };
 
   const conds = [
@@ -31,7 +38,10 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         .where(and(...conds))
         .orderBy(asc(schema.pluginInstalledPlugins.name));
 
-      logger.info({ orgId, workspaceId, listingCount: rows.length }, "plugin.org.list: ok");
+      logger.info(
+        { orgId, workspaceId, listingCount: rows.length },
+        "plugin.org.list: ok",
+      );
       return {
         listings: rows.map((r) => ({
           id: r.id,

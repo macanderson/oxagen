@@ -17,32 +17,36 @@ import { ContractDrawer } from "./contract-drawer";
 
 afterEach(() => cleanup());
 
-vi.mock("@/app/[orgSlug]/[workspaceSlug]/_shared/components", async (importOriginal) => {
-  const real = await importOriginal<
-    typeof import("@/app/[orgSlug]/[workspaceSlug]/_shared/components")
-  >();
-  return {
-    ...real,
-    Drawer: ({
-      open,
-      title,
-      description,
-      children,
-    }: {
-      open: boolean;
-      title?: string;
-      description?: string;
-      children: React.ReactNode;
-    }) =>
-      open ? (
-        <div data-testid="drawer">
-          <div>{title}</div>
-          <div>{description}</div>
-          {children}
-        </div>
-      ) : null,
-  };
-});
+vi.mock(
+  "@/app/[orgSlug]/[workspaceSlug]/_shared/components",
+  async (importOriginal) => {
+    const real =
+      await importOriginal<
+        typeof import("@/app/[orgSlug]/[workspaceSlug]/_shared/components")
+      >();
+    return {
+      ...real,
+      Drawer: ({
+        open,
+        title,
+        description,
+        children,
+      }: {
+        open: boolean;
+        title?: string;
+        description?: string;
+        children: React.ReactNode;
+      }) =>
+        open ? (
+          <div data-testid="drawer">
+            <div>{title}</div>
+            <div>{description}</div>
+            {children}
+          </div>
+        ) : null,
+    };
+  },
+);
 
 const SUMMARY: CapabilityRegistrySummary = {
   name: "query_audit_log",
@@ -65,16 +69,33 @@ const SUMMARY: CapabilityRegistrySummary = {
 const DETAIL = {
   ...SUMMARY,
   inputFields: [
-    { name: "source", type: "enum(all | security | playbook)", required: false, description: "spine" },
+    {
+      name: "source",
+      type: "enum(all | security | playbook)",
+      required: false,
+      description: "spine",
+    },
   ],
-  outputFields: [{ name: "events", type: "array<object>", required: true, description: null }],
+  outputFields: [
+    {
+      name: "events",
+      type: "array<object>",
+      required: true,
+      description: null,
+    },
+  ],
   auditTargetIdField: "name",
   produces: ["audit.event"],
   consumes: [],
   chainHints: ["query_audit_log"],
 };
 
-const USAGE = { costMicros: 1_500_000, executions: 4, inputTokens: 100, outputTokens: 50 };
+const USAGE = {
+  costMicros: 1_500_000,
+  executions: 4,
+  inputTokens: 100,
+  outputTokens: 50,
+};
 
 const AUDIT_EVENTS = [
   {
@@ -92,19 +113,33 @@ const AUDIT_EVENTS = [
   },
 ];
 
-const FULL_INSIGHTS: CapabilityInsights = { detail: DETAIL, usage: USAGE, audit: AUDIT_EVENTS };
+const FULL_INSIGHTS: CapabilityInsights = {
+  detail: DETAIL,
+  usage: USAGE,
+  audit: AUDIT_EVENTS,
+};
 
 describe("ContractDrawer", () => {
   it("shows a loading state when summary is not yet selected", () => {
     const { getByText } = render(
-      <ContractDrawer open onOpenChange={() => {}} summary={null} insights={null} />,
+      <ContractDrawer
+        open
+        onOpenChange={() => {}}
+        summary={null}
+        insights={null}
+      />,
     );
     expect(getByText("Contract")).toBeDefined();
   });
 
   it("renders the six accountability-chain sections with the summary immediately", () => {
     const { getByRole, getByText } = render(
-      <ContractDrawer open onOpenChange={() => {}} summary={SUMMARY} insights={null} />,
+      <ContractDrawer
+        open
+        onOpenChange={() => {}}
+        summary={SUMMARY}
+        insights={null}
+      />,
     );
     // Each ChainSection is a <section aria-label="<title>">, giving it an
     // accessible "region" role — robust against the numbered-badge span
@@ -127,7 +162,12 @@ describe("ContractDrawer", () => {
 
   it("renders the formatted 30-day usage line once insights resolve", () => {
     const { getByText } = render(
-      <ContractDrawer open onOpenChange={() => {}} summary={SUMMARY} insights={FULL_INSIGHTS} />,
+      <ContractDrawer
+        open
+        onOpenChange={() => {}}
+        summary={SUMMARY}
+        insights={FULL_INSIGHTS}
+      />,
     );
     // formatUsdFromMicros(1_500_000) === "$1.50" (a distinct leaf <span>, no
     // ambiguity with the numbered chain-section badges' own digit text).
@@ -140,7 +180,12 @@ describe("ContractDrawer", () => {
 
   it("renders input/output field tables from the detail read", () => {
     const { getByText } = render(
-      <ContractDrawer open onOpenChange={() => {}} summary={SUMMARY} insights={FULL_INSIGHTS} />,
+      <ContractDrawer
+        open
+        onOpenChange={() => {}}
+        summary={SUMMARY}
+        insights={FULL_INSIGHTS}
+      />,
     );
     expect(getByText("source")).toBeDefined();
     expect(getByText("enum(all | security | playbook)")).toBeDefined();
@@ -149,15 +194,29 @@ describe("ContractDrawer", () => {
 
   it("renders recent audit events with the formatted timestamp", () => {
     const { getByText } = render(
-      <ContractDrawer open onOpenChange={() => {}} summary={SUMMARY} insights={FULL_INSIGHTS} />,
+      <ContractDrawer
+        open
+        onOpenChange={() => {}}
+        summary={SUMMARY}
+        insights={FULL_INSIGHTS}
+      />,
     );
     expect(getByText("capability.invoked")).toBeDefined();
   });
 
   it("degrades usage independently when insights.usage is null", () => {
-    const degraded: CapabilityInsights = { detail: DETAIL, usage: null, audit: AUDIT_EVENTS };
+    const degraded: CapabilityInsights = {
+      detail: DETAIL,
+      usage: null,
+      audit: AUDIT_EVENTS,
+    };
     const { getByText } = render(
-      <ContractDrawer open onOpenChange={() => {}} summary={SUMMARY} insights={degraded} />,
+      <ContractDrawer
+        open
+        onOpenChange={() => {}}
+        summary={SUMMARY}
+        insights={degraded}
+      />,
     );
     expect(getByText("Usage data unavailable.")).toBeDefined();
     // Audit sub-section still renders since only usage degraded.
@@ -165,19 +224,39 @@ describe("ContractDrawer", () => {
   });
 
   it("degrades audit independently when insights.audit is null", () => {
-    const degraded: CapabilityInsights = { detail: DETAIL, usage: USAGE, audit: null };
+    const degraded: CapabilityInsights = {
+      detail: DETAIL,
+      usage: USAGE,
+      audit: null,
+    };
     const { getByText } = render(
-      <ContractDrawer open onOpenChange={() => {}} summary={SUMMARY} insights={degraded} />,
+      <ContractDrawer
+        open
+        onOpenChange={() => {}}
+        summary={SUMMARY}
+        insights={degraded}
+      />,
     );
     expect(getByText("Audit feed unavailable.")).toBeDefined();
   });
 
   it("shows an empty-audit message distinct from the unavailable state", () => {
-    const empty: CapabilityInsights = { detail: DETAIL, usage: USAGE, audit: [] };
+    const empty: CapabilityInsights = {
+      detail: DETAIL,
+      usage: USAGE,
+      audit: [],
+    };
     const { getByText } = render(
-      <ContractDrawer open onOpenChange={() => {}} summary={SUMMARY} insights={empty} />,
+      <ContractDrawer
+        open
+        onOpenChange={() => {}}
+        summary={SUMMARY}
+        insights={empty}
+      />,
     );
-    expect(getByText(/No recent audit events name this capability/)).toBeDefined();
+    expect(
+      getByText(/No recent audit events name this capability/),
+    ).toBeDefined();
   });
 
   it("shows the insights-level error banner when the detail read failed", () => {
@@ -188,23 +267,42 @@ describe("ContractDrawer", () => {
       error: "Unable to load the contract detail.",
     };
     const { getByText } = render(
-      <ContractDrawer open onOpenChange={() => {}} summary={SUMMARY} insights={errored} />,
+      <ContractDrawer
+        open
+        onOpenChange={() => {}}
+        summary={SUMMARY}
+        insights={errored}
+      />,
     );
     expect(getByText("Unable to load the contract detail.")).toBeDefined();
     expect(getByText("Field specs unavailable.")).toBeDefined();
   });
 
   it("renders 'No default grants' for an empty role-grant map", () => {
-    const noGrants: CapabilityRegistrySummary = { ...SUMMARY, orgRoles: {}, workspaceRoles: {} };
+    const noGrants: CapabilityRegistrySummary = {
+      ...SUMMARY,
+      orgRoles: {},
+      workspaceRoles: {},
+    };
     const { getAllByText } = render(
-      <ContractDrawer open onOpenChange={() => {}} summary={noGrants} insights={null} />,
+      <ContractDrawer
+        open
+        onOpenChange={() => {}}
+        summary={noGrants}
+        insights={null}
+      />,
     );
     expect(getAllByText("No default grants").length).toBeGreaterThan(0);
   });
 
   it("renders chaining tags when the detail declares produces/consumes/chainHints", () => {
     const { getByText } = render(
-      <ContractDrawer open onOpenChange={() => {}} summary={SUMMARY} insights={FULL_INSIGHTS} />,
+      <ContractDrawer
+        open
+        onOpenChange={() => {}}
+        summary={SUMMARY}
+        insights={FULL_INSIGHTS}
+      />,
     );
     expect(getByText("produces audit.event")).toBeDefined();
     expect(getByText("then query_audit_log")).toBeDefined();

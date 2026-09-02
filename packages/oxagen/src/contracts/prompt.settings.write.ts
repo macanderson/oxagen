@@ -21,7 +21,11 @@ export const promptSettingsWrite = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "docs", "mcp", "unit"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "medium", category: "workspace" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "medium",
+    category: "workspace",
+  },
   sensitivity: "medium",
   defaultEffect: "deny",
   defaultRoles: {
@@ -42,5 +46,9 @@ export const promptSettingsWrite = registerCapability({
   }),
 });
 
-export type PromptSettingsWriteInput = z.output<typeof promptSettingsWrite.input>;
-export type PromptSettingsWriteOutput = z.output<typeof promptSettingsWrite.output>;
+export type PromptSettingsWriteInput = z.output<
+  typeof promptSettingsWrite.input
+>;
+export type PromptSettingsWriteOutput = z.output<
+  typeof promptSettingsWrite.output
+>;

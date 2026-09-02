@@ -36,8 +36,8 @@ test.describe("workspace.create — happy path", () => {
     await expect(page).toHaveURL(new RegExp(`${orgSlug}/default`));
 
     // The chat composer (textarea) must be present in the workspace shell.
-    await expect(
-      page.getByPlaceholder(/send a message/i),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByPlaceholder(/send a message/i)).toBeVisible({
+      timeout: 10_000,
+    });
   });
 });

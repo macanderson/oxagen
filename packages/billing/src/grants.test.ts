@@ -125,30 +125,47 @@ function makeDb(
     insert: txMock.insert,
     transaction: vi.fn((fn: (tx: TxMock) => Promise<unknown>) => fn(txMock)),
     query: {
-      creditLedger: { findFirst: queryOverrides.creditLedger ?? vi.fn().mockResolvedValue(undefined) },
-      subscriptions: { findFirst: queryOverrides.subscriptions ?? vi.fn().mockResolvedValue(undefined) },
-      plans: { findFirst: queryOverrides.plans ?? vi.fn().mockResolvedValue(undefined) },
-      invoices: { findFirst: queryOverrides.invoices ?? vi.fn().mockResolvedValue(undefined) },
+      creditLedger: {
+        findFirst:
+          queryOverrides.creditLedger ?? vi.fn().mockResolvedValue(undefined),
+      },
+      subscriptions: {
+        findFirst:
+          queryOverrides.subscriptions ?? vi.fn().mockResolvedValue(undefined),
+      },
+      plans: {
+        findFirst: queryOverrides.plans ?? vi.fn().mockResolvedValue(undefined),
+      },
+      invoices: {
+        findFirst:
+          queryOverrides.invoices ?? vi.fn().mockResolvedValue(undefined),
+      },
     },
   };
 }
 
-const dbState: { instance: ReturnType<typeof makeDb> | null } = { instance: null };
+const dbState: { instance: ReturnType<typeof makeDb> | null } = {
+  instance: null,
+};
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => dbState.instance,
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => dbState.instance?.transaction(fn),
-  withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(dbState.instance),
-
+    db: () => dbState.instance,
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      dbState.instance?.transaction(fn),
+    withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(dbState.instance),
   };
 });
 
 // Import after mocks.
-const { grantFreeCredits, grantPlanCreditsForInvoicePaid, grantCreditPackForCheckout } =
-  await import("./grants");
+const {
+  grantFreeCredits,
+  grantPlanCreditsForInvoicePaid,
+  grantCreditPackForCheckout,
+} = await import("./grants");
 
 // ---------------------------------------------------------------------------
 // Fixture helpers
@@ -178,7 +195,9 @@ function makeInvoice(overrides: Partial<BillingInvoice> = {}): BillingInvoice {
   };
 }
 
-function makeSession(overrides: Partial<BillingCheckoutSession> = {}): BillingCheckoutSession {
+function makeSession(
+  overrides: Partial<BillingCheckoutSession> = {},
+): BillingCheckoutSession {
   return {
     id: "cs_test_001",
     mode: "payment",
@@ -253,7 +272,9 @@ describe("grantPlanCreditsForInvoicePaid", () => {
     // No local invoice row until syncInvoiceFromStripe runs.
     const invoicesFindFirst = vi.fn().mockResolvedValue(undefined);
     dbState.instance = makeDb(txMock, {
-      subscriptions: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
+      subscriptions: vi
+        .fn()
+        .mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
       plans: vi.fn().mockResolvedValue({ includedCreditCents: 2400 }),
       invoices: invoicesFindFirst,
     });
@@ -276,12 +297,16 @@ describe("grantPlanCreditsForInvoicePaid", () => {
   it("subscription_create billing reason — grants plan credits via withSystemDb", async () => {
     const txMock = makeTx(false);
     dbState.instance = makeDb(txMock, {
-      subscriptions: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
+      subscriptions: vi
+        .fn()
+        .mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
       plans: vi.fn().mockResolvedValue({ includedCreditCents: 5000 }),
       invoices: vi.fn().mockResolvedValue({ id: "invoice-uuid-1" }),
     });
 
-    await grantPlanCreditsForInvoicePaid(makeInvoice({ billingReason: "subscription_create" }));
+    await grantPlanCreditsForInvoicePaid(
+      makeInvoice({ billingReason: "subscription_create" }),
+    );
 
     expect(syncSubscriptionMock).toHaveBeenCalledWith("sub_test_001");
     // withSystemDb passes dbState.instance as tx; insert is called directly on it.
@@ -293,12 +318,16 @@ describe("grantPlanCreditsForInvoicePaid", () => {
   it("subscription_cycle billing reason — grants plan credits", async () => {
     const txMock = makeTx(false);
     dbState.instance = makeDb(txMock, {
-      subscriptions: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
+      subscriptions: vi
+        .fn()
+        .mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
       plans: vi.fn().mockResolvedValue({ includedCreditCents: 3000 }),
       invoices: vi.fn().mockResolvedValue({ id: "invoice-uuid-2" }),
     });
 
-    await grantPlanCreditsForInvoicePaid(makeInvoice({ billingReason: "subscription_cycle" }));
+    await grantPlanCreditsForInvoicePaid(
+      makeInvoice({ billingReason: "subscription_cycle" }),
+    );
 
     expect(txMock._lotInsertCalled).toBe(true);
   });
@@ -306,7 +335,9 @@ describe("grantPlanCreditsForInvoicePaid", () => {
   it("already granted (ledger conflict) — lot NOT inserted", async () => {
     const txMock = makeTx(true); // conflict
     dbState.instance = makeDb(txMock, {
-      subscriptions: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
+      subscriptions: vi
+        .fn()
+        .mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
       plans: vi.fn().mockResolvedValue({ includedCreditCents: 5000 }),
       invoices: vi.fn().mockResolvedValue({ id: "invoice-uuid-1" }),
     });
@@ -319,7 +350,9 @@ describe("grantPlanCreditsForInvoicePaid", () => {
   it("missing invoice row — grant not applied (referenceId undefined)", async () => {
     const txMock = makeTx(false);
     dbState.instance = makeDb(txMock, {
-      subscriptions: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
+      subscriptions: vi
+        .fn()
+        .mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
       plans: vi.fn().mockResolvedValue({ includedCreditCents: 5000 }),
       invoices: vi.fn().mockResolvedValue(undefined), // no row
     });
@@ -334,7 +367,9 @@ describe("grantPlanCreditsForInvoicePaid", () => {
     const txMock = makeTx(false);
     dbState.instance = makeDb(txMock);
 
-    await grantPlanCreditsForInvoicePaid(makeInvoice({ billingReason: "manual" }));
+    await grantPlanCreditsForInvoicePaid(
+      makeInvoice({ billingReason: "manual" }),
+    );
 
     expect(syncSubscriptionMock).not.toHaveBeenCalled();
     expect(txMock.insert).not.toHaveBeenCalled();
@@ -344,7 +379,12 @@ describe("grantPlanCreditsForInvoicePaid", () => {
     const txMock = makeTx(false);
     dbState.instance = makeDb(txMock);
 
-    await grantPlanCreditsForInvoicePaid(makeInvoice({ subscriptionId: null, billingReason: "subscription_create" }));
+    await grantPlanCreditsForInvoicePaid(
+      makeInvoice({
+        subscriptionId: null,
+        billingReason: "subscription_create",
+      }),
+    );
 
     expect(syncSubscriptionMock).not.toHaveBeenCalled();
   });
@@ -357,7 +397,9 @@ describe("grantPlanCreditsForInvoicePaid", () => {
       subscriptions: vi.fn().mockResolvedValue(undefined), // no subscription row
     });
 
-    await grantPlanCreditsForInvoicePaid(makeInvoice({ billingReason: "subscription_create" }));
+    await grantPlanCreditsForInvoicePaid(
+      makeInvoice({ billingReason: "subscription_create" }),
+    );
 
     expect(txMock._lotInsertCalled).toBe(false);
     expect(loggerWarnMock).toHaveBeenCalledOnce();
@@ -369,15 +411,21 @@ describe("grantPlanCreditsForInvoicePaid", () => {
     // caused a silent return with no log. A misconfigured plan now surfaces.
     const txMock = makeTx(false);
     dbState.instance = makeDb(txMock, {
-      subscriptions: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
+      subscriptions: vi
+        .fn()
+        .mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
       plans: vi.fn().mockResolvedValue({ includedCreditCents: 0 }),
     });
 
-    await grantPlanCreditsForInvoicePaid(makeInvoice({ billingReason: "subscription_create" }));
+    await grantPlanCreditsForInvoicePaid(
+      makeInvoice({ billingReason: "subscription_create" }),
+    );
 
     expect(txMock._lotInsertCalled).toBe(false);
     expect(loggerWarnMock).toHaveBeenCalledOnce();
-    expect(loggerWarnMock.mock.calls[0]![1]).toMatch(/zero\/null includedCreditCents/);
+    expect(loggerWarnMock.mock.calls[0]![1]).toMatch(
+      /zero\/null includedCreditCents/,
+    );
   });
 
   it("plan row missing (undefined) — emits logger.warn (not silent)", async () => {
@@ -385,15 +433,21 @@ describe("grantPlanCreditsForInvoicePaid", () => {
     // the warn must fire in both the plan-missing and the zero-credits cases.
     const txMock = makeTx(false);
     dbState.instance = makeDb(txMock, {
-      subscriptions: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
+      subscriptions: vi
+        .fn()
+        .mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
       plans: vi.fn().mockResolvedValue(undefined), // plan not found
     });
 
-    await grantPlanCreditsForInvoicePaid(makeInvoice({ billingReason: "subscription_create" }));
+    await grantPlanCreditsForInvoicePaid(
+      makeInvoice({ billingReason: "subscription_create" }),
+    );
 
     expect(txMock._lotInsertCalled).toBe(false);
     expect(loggerWarnMock).toHaveBeenCalledOnce();
-    expect(loggerWarnMock.mock.calls[0]![1]).toMatch(/zero\/null includedCreditCents/);
+    expect(loggerWarnMock.mock.calls[0]![1]).toMatch(
+      /zero\/null includedCreditCents/,
+    );
   });
 
   it("missing local invoice row — emits logger.warn (not silent)", async () => {
@@ -401,12 +455,16 @@ describe("grantPlanCreditsForInvoicePaid", () => {
     // void with no log, silently skipping the credit grant.
     const txMock = makeTx(false);
     dbState.instance = makeDb(txMock, {
-      subscriptions: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
+      subscriptions: vi
+        .fn()
+        .mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
       plans: vi.fn().mockResolvedValue({ includedCreditCents: 5000 }),
       invoices: vi.fn().mockResolvedValue(undefined), // no local invoice row
     });
 
-    await grantPlanCreditsForInvoicePaid(makeInvoice({ billingReason: "subscription_create" }));
+    await grantPlanCreditsForInvoicePaid(
+      makeInvoice({ billingReason: "subscription_create" }),
+    );
 
     expect(txMock._lotInsertCalled).toBe(false);
     expect(loggerWarnMock).toHaveBeenCalledOnce();
@@ -430,12 +488,14 @@ describe("grantCreditPackForCheckout", () => {
 
     getCheckoutSessionCreditPacksMock.mockResolvedValue([
       { creditsPerUnit: 100, quantity: 2 }, // 200 credits
-      { creditsPerUnit: 50, quantity: 1 },  // 50 credits
+      { creditsPerUnit: 50, quantity: 1 }, // 50 credits
     ]);
 
     await grantCreditPackForCheckout(makeSession());
 
-    expect(getCheckoutSessionCreditPacksMock).toHaveBeenCalledWith("cs_test_001");
+    expect(getCheckoutSessionCreditPacksMock).toHaveBeenCalledWith(
+      "cs_test_001",
+    );
     // withSystemDb passes dbState.instance as tx; insert called directly on it.
     expect(txMock.insert).toHaveBeenCalled();
     expect(txMock._lotInsertCalled).toBe(true);

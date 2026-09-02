@@ -3,7 +3,7 @@ title: Chat streaming
 description: How to consume the chat SSE stream — event types, request fields, and connection management.
 ---
 
-The chat capability (`chat.message.send`) streams its response as Server-Sent Events (SSE). This is the same stream the in-app agent uses — there is no separate "streaming API vs. web API."
+The chat capability (`send_message`) streams its response as Server-Sent Events (SSE). This is the same stream the in-app agent uses — there is no separate "streaming API vs. web API."
 
 ## Endpoint
 
@@ -66,7 +66,7 @@ data: [DONE]
 | `tool-input-delta` | `toolCallId`, `delta` | Incremental tool-input text chunk. |
 | `tool-call-start` | `toolCallId`, `capability`, `inputPreview`, `riskLevel` | The tool is about to execute. |
 | `tool-call-end` | `toolCallId`, `status`, `durationMs`, `output?`, `errorReason?` | Tool execution finished. `status` is `"completed"` or `"failed"`. |
-| `approval-required` | `approvalId`, `capability`, `inputPreview`, `riskLevel`, `expiresAt` | The agent has paused for user approval. Resolve with `agent.approval.resolve`. |
+| `approval-required` | `approvalId`, `capability`, `inputPreview`, `riskLevel`, `expiresAt` | The agent has paused for user approval. Resolve with `resolve_approval`. |
 | `usage` | `usage.promptTokens`, `usage.completionTokens`, `usage.totalTokens` | Token usage totals for the turn, emitted after the model call finishes. |
 | `error` | `message` | An error occurred. The stream closes after this event. |
 

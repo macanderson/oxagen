@@ -114,7 +114,8 @@ describe("createIngestionCryptoAdapter", () => {
     withEnv(
       {
         INGESTION_CRYPTO_PROVIDER: "kms",
-        AWS_KMS_INGESTION_KEY_ARN: "arn:aws:kms:us-east-2:123456789012:key/test-key",
+        AWS_KMS_INGESTION_KEY_ARN:
+          "arn:aws:kms:us-east-2:123456789012:key/test-key",
       },
       () => {
         const result = createIngestionCryptoAdapter();
@@ -159,11 +160,13 @@ describe("resolveIngestionCryptoAdapterForKeyId (decrypt-path routing)", () => {
     withEnv(
       {
         INGESTION_CRYPTO_PROVIDER: "kms",
-        AWS_KMS_INGESTION_KEY_ARN: "arn:aws:kms:us-east-2:123456789012:key/test-key",
+        AWS_KMS_INGESTION_KEY_ARN:
+          "arn:aws:kms:us-east-2:123456789012:key/test-key",
         INGESTION_ENCRYPTION_KEY: validBase64Key,
       },
       () => {
-        const result = resolveIngestionCryptoAdapterForKeyId(INGESTION_KEY_ID_ENV);
+        const result =
+          resolveIngestionCryptoAdapterForKeyId(INGESTION_KEY_ID_ENV);
         expect(result.keyId).toBe(INGESTION_KEY_ID_ENV);
       },
     );
@@ -174,10 +177,12 @@ describe("resolveIngestionCryptoAdapterForKeyId (decrypt-path routing)", () => {
       {
         INGESTION_CRYPTO_PROVIDER: "env",
         INGESTION_ENCRYPTION_KEY: validBase64Key,
-        AWS_KMS_INGESTION_KEY_ARN: "arn:aws:kms:us-east-2:123456789012:key/test-key",
+        AWS_KMS_INGESTION_KEY_ARN:
+          "arn:aws:kms:us-east-2:123456789012:key/test-key",
       },
       () => {
-        const result = resolveIngestionCryptoAdapterForKeyId(INGESTION_KEY_ID_KMS);
+        const result =
+          resolveIngestionCryptoAdapterForKeyId(INGESTION_KEY_ID_KMS);
         expect(result.keyId).toBe(INGESTION_KEY_ID_KMS);
       },
     );
@@ -188,11 +193,16 @@ describe("resolveIngestionCryptoAdapterForKeyId (decrypt-path routing)", () => {
     let cipher: Buffer = Buffer.alloc(0);
     let storedKeyId = "";
     await withEnv(
-      { INGESTION_CRYPTO_PROVIDER: "env", INGESTION_ENCRYPTION_KEY: validBase64Key },
+      {
+        INGESTION_CRYPTO_PROVIDER: "env",
+        INGESTION_ENCRYPTION_KEY: validBase64Key,
+      },
       async () => {
         const w = createIngestionCryptoAdapter();
         storedKeyId = w.keyId;
-        cipher = await encrypt("ghp_secret_token", w.keyId, { adapter: w.adapter });
+        cipher = await encrypt("ghp_secret_token", w.keyId, {
+          adapter: w.adapter,
+        });
       },
     );
     expect(storedKeyId).toBe(INGESTION_KEY_ID_ENV);
@@ -203,12 +213,15 @@ describe("resolveIngestionCryptoAdapterForKeyId (decrypt-path routing)", () => {
     await withEnv(
       {
         INGESTION_CRYPTO_PROVIDER: "kms",
-        AWS_KMS_INGESTION_KEY_ARN: "arn:aws:kms:us-east-2:123456789012:key/test-key",
+        AWS_KMS_INGESTION_KEY_ARN:
+          "arn:aws:kms:us-east-2:123456789012:key/test-key",
         INGESTION_ENCRYPTION_KEY: validBase64Key,
       },
       async () => {
         const r = resolveIngestionCryptoAdapterForKeyId(storedKeyId);
-        const plain = await decrypt(cipher, storedKeyId, { adapter: r.adapter });
+        const plain = await decrypt(cipher, storedKeyId, {
+          adapter: r.adapter,
+        });
         expect(plain.toString("utf8")).toBe("ghp_secret_token");
       },
     );
@@ -227,7 +240,10 @@ describe("resolveIngestionCryptoAdapterForKeyId (decrypt-path routing)", () => {
 
   it("throws an actionable error when the KMS keyId's ARN is absent", () => {
     withEnv(
-      { INGESTION_CRYPTO_PROVIDER: "env", AWS_KMS_INGESTION_KEY_ARN: undefined },
+      {
+        INGESTION_CRYPTO_PROVIDER: "env",
+        AWS_KMS_INGESTION_KEY_ARN: undefined,
+      },
       () => {
         expect(() =>
           resolveIngestionCryptoAdapterForKeyId(INGESTION_KEY_ID_KMS),
@@ -237,13 +253,10 @@ describe("resolveIngestionCryptoAdapterForKeyId (decrypt-path routing)", () => {
   });
 
   it("throws on an unrecognized keyId", () => {
-    withEnv(
-      { INGESTION_ENCRYPTION_KEY: validBase64Key },
-      () => {
-        expect(() =>
-          resolveIngestionCryptoAdapterForKeyId("ingestion:bogus:v9"),
-        ).toThrow(/unrecognized credential keyId/);
-      },
-    );
+    withEnv({ INGESTION_ENCRYPTION_KEY: validBase64Key }, () => {
+      expect(() =>
+        resolveIngestionCryptoAdapterForKeyId("ingestion:bogus:v9"),
+      ).toThrow(/unrecognized credential keyId/);
+    });
   });
 });

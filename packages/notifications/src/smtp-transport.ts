@@ -13,9 +13,13 @@ import type {
  * bare string or an `{ address, name }` object) down to plain address strings,
  * so {@link SendEmailResult} never leaks a provider-specific shape.
  */
-function toAddressStrings(list: ReadonlyArray<string | Address> | undefined): string[] {
+function toAddressStrings(
+  list: ReadonlyArray<string | Address> | undefined,
+): string[] {
   if (!list) return [];
-  return list.map((entry) => (typeof entry === "string" ? entry : entry.address));
+  return list.map((entry) =>
+    typeof entry === "string" ? entry : entry.address,
+  );
 }
 
 /**
@@ -27,7 +31,9 @@ function toAddressStrings(list: ReadonlyArray<string | Address> | undefined): st
  * the vendor-neutrality seam the policy requires. Never import `nodemailer`
  * outside this file.
  */
-export function createSmtpTransport(config: SmtpTransportConfig): EmailTransport {
+export function createSmtpTransport(
+  config: SmtpTransportConfig,
+): EmailTransport {
   // Port 465 is implicit TLS; 587 and 25 negotiate STARTTLS. We require TLS on
   // the STARTTLS path (`requireTLS: true`) so a misconfigured server can never
   // silently downgrade a transactional email to plaintext on the wire.
@@ -69,7 +75,10 @@ export function createSmtpTransport(config: SmtpTransportConfig): EmailTransport
           rejected: toAddressStrings(info.rejected),
         };
         // Instrument every send — recipient count, subject, latency, outcome.
-        // Never email addresses or body (PII / compliance non-negotiable).
+        // The transport itself never logs an address or a message body. Note
+        // that the failure paths outside this file (sendEmailFireAndForget,
+        // notifyOrgManagers) currently DO log the recipient address, so this
+        // file alone is not the whole PII story for the package.
         logger.info(
           {
             driver: "smtp",
@@ -84,7 +93,13 @@ export function createSmtpTransport(config: SmtpTransportConfig): EmailTransport
         return result;
       } catch (err) {
         logger.error(
-          { driver: "smtp", recipientCount: to.length, subject: input.subject, err, durationMs: Date.now() - start },
+          {
+            driver: "smtp",
+            recipientCount: to.length,
+            subject: input.subject,
+            err,
+            durationMs: Date.now() - start,
+          },
           "notifications.email.send: failed",
         );
         throw err;

@@ -41,7 +41,8 @@ import { svgGenerateHandler } from "./svg.generate";
 
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
-const VALID_SVG = '<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><circle cx="200" cy="200" r="100" fill="currentColor"/></svg>';
+const VALID_SVG =
+  '<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><circle cx="200" cy="200" r="100" fill="currentColor"/></svg>';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -107,9 +108,14 @@ describe("svgGenerateHandler", () => {
   });
 
   it("returns a placeholder SVG and does not throw when model errors", async () => {
-    mocks.generateObjectFor.mockRejectedValueOnce(new Error("Model unavailable"));
+    mocks.generateObjectFor.mockRejectedValueOnce(
+      new Error("Model unavailable"),
+    );
 
-    const result = await svgGenerateHandler({ prompt: "A mountain", title: "Mountain" }, CTX);
+    const result = await svgGenerateHandler(
+      { prompt: "A mountain", title: "Mountain" },
+      CTX,
+    );
 
     // Handler must not throw — it returns a valid fallback.
     expect(result.svg).toContain("<svg");
@@ -131,7 +137,10 @@ describe("svgGenerateHandler", () => {
     );
 
     expect(mocks.persistGeneratedAsset).toHaveBeenCalledTimes(1);
-    const args = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    const args = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(args["orgId"]).toBe("org_1");
     expect(args["workspaceId"]).toBe("ws_1");
     expect(args["userId"]).toBe("u_1");
@@ -142,7 +151,9 @@ describe("svgGenerateHandler", () => {
     expect(args["displayName"]).toBe("Circle");
     expect(args["messageId"]).toBe("msg_42");
     // Bytes are the SANITIZED markup, UTF-8 encoded.
-    expect(new TextDecoder().decode(args["bytes"] as Uint8Array)).toBe(result.svg);
+    expect(new TextDecoder().decode(args["bytes"] as Uint8Array)).toBe(
+      result.svg,
+    );
 
     // Output + render directive carry the persisted asset reference.
     expect(result.assetPublicId).toBe("gen_abc123");
@@ -157,7 +168,9 @@ describe("svgGenerateHandler", () => {
       object: { svg: VALID_SVG, title: "Circle" },
       usage: { promptTokens: 5, completionTokens: 20, totalTokens: 25 },
     });
-    mocks.persistGeneratedAsset.mockRejectedValueOnce(new Error("blob storage down"));
+    mocks.persistGeneratedAsset.mockRejectedValueOnce(
+      new Error("blob storage down"),
+    );
 
     const result = await svgGenerateHandler({ prompt: "A blue circle" }, CTX);
 
@@ -177,7 +190,10 @@ describe("svgGenerateHandler", () => {
       usage: { promptTokens: 5, completionTokens: 20, totalTokens: 25 },
     });
 
-    const result = await svgGenerateHandler({ prompt: "test" }, { ...CTX, userId: null });
+    const result = await svgGenerateHandler(
+      { prompt: "test" },
+      { ...CTX, userId: null },
+    );
 
     expect(mocks.persistGeneratedAsset).not.toHaveBeenCalled();
     expect(result.persistWarning).toContain("no user identity");
@@ -185,7 +201,9 @@ describe("svgGenerateHandler", () => {
   });
 
   it("does not persist the failure-placeholder SVG", async () => {
-    mocks.generateObjectFor.mockRejectedValueOnce(new Error("Model unavailable"));
+    mocks.generateObjectFor.mockRejectedValueOnce(
+      new Error("Model unavailable"),
+    );
 
     const result = await svgGenerateHandler({ prompt: "A mountain" }, CTX);
 
@@ -223,7 +241,10 @@ describe("svgGenerateHandler", () => {
       },
     );
 
-    await svgGenerateHandler({ prompt: "test" }, { ...CTX, messageId: "msg_1" });
+    await svgGenerateHandler(
+      { prompt: "test" },
+      { ...CTX, messageId: "msg_1" },
+    );
 
     expect(capturedTelemetry?.["orgId"]).toBe("org_1");
     expect(capturedTelemetry?.["workspaceId"]).toBe("ws_1");

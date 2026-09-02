@@ -52,7 +52,8 @@ export async function agentSandboxStopHandler(
   // retire the row. Otherwise resolve the session's own driver; a null result
   // (driver unavailable/unconfigured/not durable) means we retire without a
   // provider call rather than throwing.
-  const driver = row.status === "gone" ? null : resolveSessionDriver(row.driver);
+  const driver =
+    row.status === "gone" ? null : resolveSessionDriver(row.driver);
   if (driver) {
     try {
       await driver.stopSession(row.sandboxId);

@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type { SandboxResult, SandboxDriver, SandboxRequest } from "@oxagen/sandbox";
+import type {
+  SandboxResult,
+  SandboxDriver,
+  SandboxRequest,
+} from "@oxagen/sandbox";
 
 const SENTINEL = "<<<OXAGEN_FMT_RESULT>>>";
 
@@ -15,7 +19,11 @@ const mockRun = vi.fn(
   }),
 );
 
-const mockDriver: SandboxDriver = { name: "mock", run: mockRun, async *stream() {} };
+const mockDriver: SandboxDriver = {
+  name: "mock",
+  run: mockRun,
+  async *stream() {},
+};
 
 vi.mock("@oxagen/sandbox", () => ({
   isSandboxAvailable: vi.fn(() => true),
@@ -57,13 +65,18 @@ describe("code.format handler", () => {
 
   it("builds a python driver embedding the base64 source and the json formatter", async () => {
     nextStdout = driverLine({ ok: true, formatted: "{}" });
-    await codeFormatHandler({ language: "json", source: '{"a":1}', indent: 4 }, CTX);
+    await codeFormatHandler(
+      { language: "json", source: '{"a":1}', indent: 4 },
+      CTX,
+    );
     const call = mockRun.mock.calls[0]![0];
     expect(call.language).toBe("python");
     expect(call.network).toBe("deny");
     expect(call.code).toContain("json.dumps");
     expect(call.code).toContain("indent=4");
-    expect(call.code).toContain(Buffer.from('{"a":1}', "utf-8").toString("base64"));
+    expect(call.code).toContain(
+      Buffer.from('{"a":1}', "utf-8").toString("base64"),
+    );
   });
 
   it("formats python via the ast round-trip driver", async () => {
@@ -97,7 +110,10 @@ describe("code.format handler", () => {
   it("surfaces a formatter syntax error from the driver", async () => {
     nextStdout = driverLine({ ok: false, error: "SyntaxError: invalid" });
     await expect(
-      codeFormatHandler({ language: "python", source: "def (", indent: 2 }, CTX),
+      codeFormatHandler(
+        { language: "python", source: "def (", indent: 2 },
+        CTX,
+      ),
     ).rejects.toThrow(/SyntaxError/);
   });
 
@@ -126,10 +142,15 @@ describe("code.format handler", () => {
     nextStdout = driverLine({ ok: true, formatted: "{}" });
     await codeFormatHandler({ language: "json", source: "{}", indent: 2 }, CTX);
     expect(mockInsertEvents).toHaveBeenCalledTimes(1);
-    const rows = mockInsertEvents.mock.calls[0]![0] as Array<Record<string, unknown>>;
+    const rows = mockInsertEvents.mock.calls[0]![0] as Array<
+      Record<string, unknown>
+    >;
     const row = rows[0]!;
     expect(row.event_type).toBe("code.format.ran");
-    const payload = JSON.parse(row.payload as string) as Record<string, unknown>;
+    const payload = JSON.parse(row.payload as string) as Record<
+      string,
+      unknown
+    >;
     expect(payload.language).toBe("json");
     expect(payload.capability).toBe("format_code");
   });

@@ -12,7 +12,9 @@ import type { ConditionEvalContext } from "./conditions";
 function ctx(
   overrides: Partial<ConditionEvalContext> & { nowIso?: string },
 ): ConditionEvalContext {
-  const now = overrides.nowIso ? new Date(overrides.nowIso) : (overrides.now ?? new Date());
+  const now = overrides.nowIso
+    ? new Date(overrides.nowIso)
+    : (overrides.now ?? new Date());
   return {
     now,
     clientIp: overrides.clientIp ?? null,
@@ -47,7 +49,9 @@ describe("evaluateConditions — empty/null/malformed", () => {
   });
 
   it("unknown key → false (fail-closed)", () => {
-    expect(evaluateConditions({ unknown_condition: true }, ctx({}))).toBe(false);
+    expect(evaluateConditions({ unknown_condition: true }, ctx({}))).toBe(
+      false,
+    );
   });
 
   it("mix of known and unknown keys → false (fail-closed)", () => {
@@ -157,7 +161,9 @@ describe("evaluateConditions — time_window", () => {
   it("weekday filter: Mon in [1,2,3,4,5] → true", () => {
     expect(
       evaluateConditions(
-        { time_window: { days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00" } },
+        {
+          time_window: { days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00" },
+        },
         ctx({ nowIso: MON_14_UTC }),
       ),
     ).toBe(true);
@@ -166,7 +172,9 @@ describe("evaluateConditions — time_window", () => {
   it("weekday filter: Sat not in [1,2,3,4,5] → false", () => {
     expect(
       evaluateConditions(
-        { time_window: { days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00" } },
+        {
+          time_window: { days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00" },
+        },
         ctx({ nowIso: SAT_14_UTC }),
       ),
     ).toBe(false);
@@ -175,7 +183,13 @@ describe("evaluateConditions — time_window", () => {
   it("weekday filter: all days [0,1,2,3,4,5,6] → true for any day", () => {
     expect(
       evaluateConditions(
-        { time_window: { days: [0, 1, 2, 3, 4, 5, 6], start: "09:00", end: "18:00" } },
+        {
+          time_window: {
+            days: [0, 1, 2, 3, 4, 5, 6],
+            start: "09:00",
+            end: "18:00",
+          },
+        },
         ctx({ nowIso: SAT_14_UTC }),
       ),
     ).toBe(true);
@@ -197,7 +211,9 @@ describe("evaluateConditions — time_window", () => {
     // Window 13:00–17:00 EST → 09:00 is before window → false
     expect(
       evaluateConditions(
-        { time_window: { tz: "America/New_York", start: "13:00", end: "17:00" } },
+        {
+          time_window: { tz: "America/New_York", start: "13:00", end: "17:00" },
+        },
         ctx({ nowIso: MON_14_UTC }),
       ),
     ).toBe(false);
@@ -207,7 +223,9 @@ describe("evaluateConditions — time_window", () => {
     // 2025-01-06T19:00Z = 14:00 EST → inside 13:00–17:00
     expect(
       evaluateConditions(
-        { time_window: { tz: "America/New_York", start: "13:00", end: "17:00" } },
+        {
+          time_window: { tz: "America/New_York", start: "13:00", end: "17:00" },
+        },
         ctx({ nowIso: "2025-01-06T19:00:00Z" }),
       ),
     ).toBe(true);
@@ -363,19 +381,13 @@ describe("evaluateConditions — ip_ranges", () => {
 
   it("IPv6 loopback in /128 → true", () => {
     expect(
-      evaluateConditions(
-        { ip_ranges: ["::1/128"] },
-        ctx({ clientIp: "::1" }),
-      ),
+      evaluateConditions({ ip_ranges: ["::1/128"] }, ctx({ clientIp: "::1" })),
     ).toBe(true);
   });
 
   it("IPv6 loopback /128 mismatch → false", () => {
     expect(
-      evaluateConditions(
-        { ip_ranges: ["::1/128"] },
-        ctx({ clientIp: "::2" }),
-      ),
+      evaluateConditions({ ip_ranges: ["::1/128"] }, ctx({ clientIp: "::2" })),
     ).toBe(false);
   });
 

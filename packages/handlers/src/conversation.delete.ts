@@ -4,12 +4,14 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const conversationDeleteHandler: CapabilityHandler<typeof conversationDelete> = async (
-  input,
-  ctx,
-) => {
+export const conversationDeleteHandler: CapabilityHandler<
+  typeof conversationDelete
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "conversation.delete: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "conversation.delete: rejected — no authenticated user",
+    );
     throw new Error("conversation.delete requires an authenticated user");
   }
 

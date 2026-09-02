@@ -22,17 +22,24 @@ export const skillMetricsRead = registerCapability({
     skillId: z
       .string()
       .optional()
-      .describe("Public ID of a specific skill (omit for workspace-wide aggregation)"),
+      .describe(
+        "Public ID of a specific skill (omit for workspace-wide aggregation)",
+      ),
   }),
   output: z.object({
     skills: z.array(
       z.object({
         skillId: z.string().describe("Public ID of the skill"),
         slug: z.string().describe("Slug identifier for the skill"),
-        activeVersion: z.number().nullable().describe("Currently active version number"),
+        activeVersion: z
+          .number()
+          .nullable()
+          .describe("Currently active version number"),
         usageCount: z
           .number()
-          .describe("Total recorded invocations from Postgres (fast-path denormalized column)"),
+          .describe(
+            "Total recorded invocations from Postgres (fast-path denormalized column)",
+          ),
         lastUsedAt: z
           .string()
           .nullable()

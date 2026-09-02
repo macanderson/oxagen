@@ -6,7 +6,7 @@ export const skillDraft = registerCapability({
   name: "draft_skill",
   domain: "skill",
   description:
-    "Draft a skill configuration from a natural-language description without persisting anything. The model synthesises the full skill shape — display name, kebab-case slug, matcher description, weight, optional category, and the instruction body — and returns it for human review, along with the assembled canonical skill.toml content. Feed the confirmed draft to skill.create (or skill.workspace.install with custom.content) to save it. This is the AI-assisted first step of the skill setup flow.",
+    "Draft a skill configuration from a natural-language description without persisting anything. The model synthesises the full skill shape — display name, kebab-case slug, matcher description, weight, optional category, and the instruction body — and returns it for human review, along with the assembled canonical skill.toml content. Feed the confirmed draft to create_skill (or install_skill with custom.content) to save it. This is the AI-assisted first step of the skill setup flow.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],

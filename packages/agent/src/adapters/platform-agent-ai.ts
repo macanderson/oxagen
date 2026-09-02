@@ -1,5 +1,10 @@
 import { selectModel, streamAgentReply, generateObjectFor } from "@oxagen/ai";
-import type { AgentAi, ModelRunArgs, ObjectRunArgs, ObjectRunResult } from "@oxagen/agent-engine";
+import type {
+  AgentAi,
+  ModelRunArgs,
+  ObjectRunArgs,
+  ObjectRunResult,
+} from "@oxagen/agent-engine";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type { Surface } from "@oxagen/telemetry";
 
@@ -32,8 +37,7 @@ import type { Surface } from "@oxagen/telemetry";
  *                  credit ledger.  Pass `ctx.messageId ?? ctx.requestId`.
  * @param surface   Telemetry surface tag. Defaults to `"agent"` (the
  *                  `agent.repo.edit` sync capability); the in-app chat route
- *                  passes `"app"` so its usage attributes to the app surface,
- *                  matching the pre-unification `streamAgentReply` telemetry.
+ *                  passes `"app"` so its usage attributes to the app surface.
  */
 export function createPlatformAgentAi(
   ctx: CapabilityContext,
@@ -62,12 +66,16 @@ export function createPlatformAgentAi(
         // flaky provider and block abort while they spin. Same treatment the
         // generateObject path already gets.
         maxRetries: 0,
-        ...(args.abortSignal !== undefined ? { abortSignal: args.abortSignal } : {}),
+        ...(args.abortSignal !== undefined
+          ? { abortSignal: args.abortSignal }
+          : {}),
         telemetry,
       });
     },
 
-    async generateObject<T>(args: ObjectRunArgs<T>): Promise<ObjectRunResult<T>> {
+    async generateObject<T>(
+      args: ObjectRunArgs<T>,
+    ): Promise<ObjectRunResult<T>> {
       const result = await generateObjectFor<T>({
         schema: args.schema,
         model: selectModel({ model: args.model }),

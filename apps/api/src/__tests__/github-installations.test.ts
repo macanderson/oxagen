@@ -30,13 +30,17 @@ function captureTx(): Captured {
       captured.values = v;
       return chain;
     }),
-    onConflictDoUpdate: vi.fn((c: { target: unknown; set: Record<string, unknown> }) => {
-      captured.conflict = c;
-      return chain;
-    }),
+    onConflictDoUpdate: vi.fn(
+      (c: { target: unknown; set: Record<string, unknown> }) => {
+        captured.conflict = c;
+        return chain;
+      },
+    ),
   };
   const tx = { insert: vi.fn(() => chain) };
-  mocks.withSystemDb.mockImplementation((fn: (t: unknown) => unknown) => fn(tx));
+  mocks.withSystemDb.mockImplementation((fn: (t: unknown) => unknown) =>
+    fn(tx),
+  );
   return captured;
 }
 
@@ -59,7 +63,10 @@ describe("upsertGithubInstallation", () => {
       suspendedAt: null,
       deletedAt: null,
     });
-    expect(cap.conflict?.set).toMatchObject({ accountLogin: "acme", accountType: "Organization" });
+    expect(cap.conflict?.set).toMatchObject({
+      accountLogin: "acme",
+      accountType: "Organization",
+    });
     // A plain metadata refresh must NOT touch lifecycle flags (never un-suspend).
     expect(cap.conflict?.set).not.toHaveProperty("suspendedAt");
     expect(cap.conflict?.set).not.toHaveProperty("deletedAt");

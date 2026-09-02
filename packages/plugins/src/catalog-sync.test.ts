@@ -112,7 +112,9 @@ function makeServerEntry(
   };
 }
 
-function makeNamespacedMeta(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function makeNamespacedMeta(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
   return {
     "io.modelcontextprotocol.registry/official": {
       status: "active",
@@ -135,11 +137,10 @@ describe("syncRegistry — basic paging", () => {
   it("syncs a single page and updates the registry state", async () => {
     const { syncRegistry } = await import("./catalog-sync");
 
-    listServersMock
-      .mockResolvedValueOnce({
-        servers: [makeServerEntry("test-server")],
-        nextCursor: undefined,
-      });
+    listServersMock.mockResolvedValueOnce({
+      servers: [makeServerEntry("test-server")],
+      nextCursor: undefined,
+    });
 
     const result = await syncRegistry({
       registryId: "reg-1",
@@ -192,15 +193,23 @@ describe("syncRegistry — basic paging", () => {
 
     // Second call was made with the cursor
     expect(listServersMock).toHaveBeenCalledTimes(2);
-    expect(listServersMock.mock.calls[1]?.[1]).toMatchObject({ cursor: "cursor-abc" });
+    expect(listServersMock.mock.calls[1]?.[1]).toMatchObject({
+      cursor: "cursor-abc",
+    });
   });
 
   it("stops after an empty first page (0 servers) and still updates state", async () => {
     const { syncRegistry } = await import("./catalog-sync");
 
-    listServersMock.mockResolvedValueOnce({ servers: [], nextCursor: undefined });
+    listServersMock.mockResolvedValueOnce({
+      servers: [],
+      nextCursor: undefined,
+    });
 
-    const result = await syncRegistry({ registryId: "reg-empty", baseUrl: "https://r.io" });
+    const result = await syncRegistry({
+      registryId: "reg-empty",
+      baseUrl: "https://r.io",
+    });
 
     expect(result.pagesProcessed).toBe(1);
     expect(result.entriesUpserted).toBe(0);
@@ -234,7 +243,10 @@ describe("syncRegistry — basic paging", () => {
   it("resumes from a stored cursor for incremental sync", async () => {
     const { syncRegistry } = await import("./catalog-sync");
 
-    listServersMock.mockResolvedValueOnce({ servers: [], nextCursor: undefined });
+    listServersMock.mockResolvedValueOnce({
+      servers: [],
+      nextCursor: undefined,
+    });
 
     await syncRegistry({
       registryId: "reg-incr",
@@ -264,13 +276,22 @@ describe("syncRegistry — meta extraction", () => {
     const { syncRegistry } = await import("./catalog-sync");
 
     listServersMock.mockResolvedValueOnce({
-      servers: [makeServerEntry("ns-server", "2.0.0", makeNamespacedMeta({ isLatest: true }))],
+      servers: [
+        makeServerEntry(
+          "ns-server",
+          "2.0.0",
+          makeNamespacedMeta({ isLatest: true }),
+        ),
+      ],
       nextCursor: undefined,
     });
 
     await syncRegistry({ registryId: "r1", baseUrl: "https://r.io" });
 
-    const row = (state.inserts[0]!.values as unknown[])[0] as Record<string, unknown>;
+    const row = (state.inserts[0]!.values as unknown[])[0] as Record<
+      string,
+      unknown
+    >;
     expect(row.isLatest).toBe(true);
     expect(row.publishedAt).toBeInstanceOf(Date);
     expect(row.upstreamUpdatedAt).toBeInstanceOf(Date);
@@ -287,7 +308,10 @@ describe("syncRegistry — meta extraction", () => {
 
     await syncRegistry({ registryId: "r2", baseUrl: "https://r.io" });
 
-    const row = (state.inserts[0]!.values as unknown[])[0] as Record<string, unknown>;
+    const row = (state.inserts[0]!.values as unknown[])[0] as Record<
+      string,
+      unknown
+    >;
     expect(row.status).toBe("deprecated");
     expect(row.isLatest).toBe(false);
   });
@@ -302,7 +326,10 @@ describe("syncRegistry — meta extraction", () => {
 
     await syncRegistry({ registryId: "r3", baseUrl: "https://r.io" });
 
-    const row = (state.inserts[0]!.values as unknown[])[0] as Record<string, unknown>;
+    const row = (state.inserts[0]!.values as unknown[])[0] as Record<
+      string,
+      unknown
+    >;
     expect(row.status).toBe("active");
     expect(row.isLatest).toBe(false);
     expect(row.publishedAt).toBeNull();
@@ -325,7 +352,10 @@ describe("syncRegistry — meta extraction", () => {
 
     await syncRegistry({ registryId: "r4", baseUrl: "https://r.io" });
 
-    const row = (state.inserts[0]!.values as unknown[])[0] as Record<string, unknown>;
+    const row = (state.inserts[0]!.values as unknown[])[0] as Record<
+      string,
+      unknown
+    >;
     expect(row.publishedAt).toBeNull();
   });
 
@@ -339,7 +369,10 @@ describe("syncRegistry — meta extraction", () => {
 
     await syncRegistry({ registryId: "r5", baseUrl: "https://r.io" });
 
-    const row = (state.inserts[0]!.values as unknown[])[0] as Record<string, unknown>;
+    const row = (state.inserts[0]!.values as unknown[])[0] as Record<
+      string,
+      unknown
+    >;
     expect(row.repositoryUrl).toBe("https://github.com/org/rich-server");
     expect(row.websiteUrl).toBe("https://rich-server.io");
   });
@@ -361,11 +394,17 @@ describe("syncRegistry — meta extraction", () => {
       _meta: null,
     };
 
-    listServersMock.mockResolvedValueOnce({ servers: [entry], nextCursor: undefined });
+    listServersMock.mockResolvedValueOnce({
+      servers: [entry],
+      nextCursor: undefined,
+    });
 
     await syncRegistry({ registryId: "r6", baseUrl: "https://r.io" });
 
-    const row = (state.inserts[0]!.values as unknown[])[0] as Record<string, unknown>;
+    const row = (state.inserts[0]!.values as unknown[])[0] as Record<
+      string,
+      unknown
+    >;
     expect(row.repositoryUrl).toBeNull();
     expect(row.websiteUrl).toBeNull();
     expect(row.title).toBeNull();
@@ -434,7 +473,11 @@ describe("syncAllRegistries", () => {
     const { syncAllRegistries } = await import("./catalog-sync");
 
     state.selectQueue.push([
-      { id: "reg-full", baseUrl: "https://r.io", lastSyncedCursor: "old-cursor" },
+      {
+        id: "reg-full",
+        baseUrl: "https://r.io",
+        lastSyncedCursor: "old-cursor",
+      },
     ]);
 
     listServersMock.mockResolvedValue({ servers: [], nextCursor: undefined });
@@ -452,7 +495,11 @@ describe("syncAllRegistries", () => {
     const { syncAllRegistries } = await import("./catalog-sync");
 
     state.selectQueue.push([
-      { id: "reg-incr", baseUrl: "https://r.io", lastSyncedCursor: "stored-cursor" },
+      {
+        id: "reg-incr",
+        baseUrl: "https://r.io",
+        lastSyncedCursor: "stored-cursor",
+      },
     ]);
 
     listServersMock.mockResolvedValue({ servers: [], nextCursor: undefined });
@@ -468,7 +515,9 @@ describe("syncAllRegistries", () => {
   it("SyncResult from each registry contains correct metadata", async () => {
     const { syncAllRegistries } = await import("./catalog-sync");
 
-    state.selectQueue.push([{ id: "reg-z", baseUrl: "https://z.io", lastSyncedCursor: null }]);
+    state.selectQueue.push([
+      { id: "reg-z", baseUrl: "https://z.io", lastSyncedCursor: null },
+    ]);
 
     listServersMock.mockResolvedValueOnce({
       servers: [makeServerEntry("s1"), makeServerEntry("s2")],
@@ -511,12 +560,22 @@ describe("syncAllRegistries", () => {
     const { syncAllRegistries } = await import("./catalog-sync");
 
     state.selectQueue.push([
-      { id: "reg-scoped", baseUrl: "https://scoped.io", lastSyncedCursor: null },
+      {
+        id: "reg-scoped",
+        baseUrl: "https://scoped.io",
+        lastSyncedCursor: null,
+      },
     ]);
 
-    listServersMock.mockResolvedValueOnce({ servers: [], nextCursor: undefined });
+    listServersMock.mockResolvedValueOnce({
+      servers: [],
+      nextCursor: undefined,
+    });
 
-    const result = await syncAllRegistries({ orgId: "org-1", workspaceId: "ws-1" });
+    const result = await syncAllRegistries({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+    });
 
     expect(result.total).toBe(1);
     expect(result.succeeded).toBe(1);

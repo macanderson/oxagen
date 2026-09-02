@@ -33,7 +33,10 @@ export default async function AgentToolsLayout({
     { label: "All Tools", href: workspace.workbench.tools.root(ctx) },
     { label: "Skills", href: workspace.workbench.tools.skills(ctx) },
     { label: "MCP Servers", href: workspace.workbench.tools.mcp(ctx) },
-    { label: "Capabilities", href: workspace.workbench.tools.capabilities(ctx) },
+    {
+      label: "Capabilities",
+      href: workspace.workbench.tools.capabilities(ctx),
+    },
   ];
 
   return (

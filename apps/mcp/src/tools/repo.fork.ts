@@ -6,7 +6,9 @@ import { buildContext } from "../context";
 
 export const schema = {
   ...repoFork.input.shape,
-  owner: repoFork.input.shape.owner.describe("Repository owner (user or organisation)"),
+  owner: repoFork.input.shape.owner.describe(
+    "Repository owner (user or organisation)",
+  ),
   repo: repoFork.input.shape.repo.describe("Repository name"),
   intoOrg: repoFork.input.shape.intoOrg.describe(
     "Fork into this organisation instead of the authenticated user's personal account",
@@ -16,7 +18,7 @@ export const schema = {
 export const metadata: ToolMetadata = {
   name: repoFork.name,
   description:
-    "Forks an existing GitHub repository into the caller's account or a target organisation, preserving its history. Prefer over repo.create when work needs to be based on an existing repo's code. Do not use to create a brand-new empty repository — use repo.create instead.",
+    "Forks an existing GitHub repository into the caller's account or a target organisation, preserving its history. Prefer over create_repo when work needs to be based on an existing repo's code. Do not use to create a brand-new empty repository — use create_repo instead.",
   annotations: {
     readOnlyHint: false,
     destructiveHint: false,

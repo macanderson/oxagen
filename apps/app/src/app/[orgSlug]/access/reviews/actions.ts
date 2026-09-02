@@ -16,7 +16,11 @@ import { eq, and } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, assertSecurityManager, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  assertSecurityManager,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 import { isAuthDenialError } from "@/lib/auth-denial";
 import { logger } from "@oxagen/handlers/logger";
 
@@ -62,7 +66,10 @@ export async function confirmMemberAccessAction(
     if (isAuthDenialError(err)) {
       return { ok: false, code: "forbidden" };
     }
-    logger.error({ orgSlug, err: String(err) }, "confirm-member: auth gate failed unexpectedly");
+    logger.error(
+      { orgSlug, err: String(err) },
+      "confirm-member: auth gate failed unexpectedly",
+    );
     return { ok: false, code: "internal", error: "Failed to verify access" };
   }
 
@@ -108,7 +115,10 @@ export async function revokeMemberAccessAction(
     if (isAuthDenialError(err)) {
       return { ok: false, code: "forbidden" };
     }
-    logger.error({ orgSlug, err: String(err) }, "revoke-member: auth gate failed unexpectedly");
+    logger.error(
+      { orgSlug, err: String(err) },
+      "revoke-member: auth gate failed unexpectedly",
+    );
     return { ok: false, code: "internal", error: "Failed to verify access" };
   }
 

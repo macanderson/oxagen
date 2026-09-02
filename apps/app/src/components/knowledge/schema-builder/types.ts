@@ -79,9 +79,19 @@ export interface VersionDiff {
   schemasRemoved: string[];
   labelsAdded: Array<{ schemaName: string; labelName: string }>;
   labelsRemoved: Array<{ schemaName: string; labelName: string }>;
-  labelsChanged: Array<{ schemaName: string; labelName: string; changes: string[] }>;
-  relationshipTypesAdded: Array<{ schemaName: string; relationshipTypeName: string }>;
-  relationshipTypesRemoved: Array<{ schemaName: string; relationshipTypeName: string }>;
+  labelsChanged: Array<{
+    schemaName: string;
+    labelName: string;
+    changes: string[];
+  }>;
+  relationshipTypesAdded: Array<{
+    schemaName: string;
+    relationshipTypeName: string;
+  }>;
+  relationshipTypesRemoved: Array<{
+    schemaName: string;
+    relationshipTypeName: string;
+  }>;
   relationshipTypesChanged: Array<{
     schemaName: string;
     relationshipTypeName: string;
@@ -89,7 +99,11 @@ export interface VersionDiff {
   }>;
   propertiesAdded: Array<{ ownerName: string; key: string }>;
   propertiesRemoved: Array<{ ownerName: string; key: string }>;
-  propertiesChanged: Array<{ ownerName: string; key: string; changes: string[] }>;
+  propertiesChanged: Array<{
+    ownerName: string;
+    key: string;
+    changes: string[];
+  }>;
 }
 
 export interface SchemaRegistryData {

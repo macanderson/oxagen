@@ -22,7 +22,9 @@ vi.mock("@/lib/utils", () => ({
 // Popover shim: render trigger + popup inline so we can assert both without
 // Base UI portals / hover machinery.
 vi.mock("@/components/ui/popover", () => ({
-  Popover: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Popover: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   PopoverTrigger: ({
     render: renderEl,
     children,
@@ -42,8 +44,18 @@ vi.mock("@/components/ui/popover", () => ({
 
 // CiStatusSummary shim — assert it's fed the fetched CI shape.
 vi.mock("./registry-components/ci-status-summary", () => ({
-  CiStatusSummary: ({ overall, counts }: { overall: string; counts: { total: number } }) => (
-    <div data-testid="ci-summary" data-overall={overall} data-total={counts.total} />
+  CiStatusSummary: ({
+    overall,
+    counts,
+  }: {
+    overall: string;
+    counts: { total: number };
+  }) => (
+    <div
+      data-testid="ci-summary"
+      data-overall={overall}
+      data-total={counts.total}
+    />
   ),
 }));
 
@@ -58,7 +70,11 @@ function tc(over: Partial<PrDerivationToolCall>): PrDerivationToolCall {
     capability: "edit_repo_file",
     status: "completed",
     inputPreview: { owner: "acme", repo: "widgets" },
-    output: { prNumber: 42, prUrl: "https://github.com/acme/widgets/pull/42", branch: "feat/x" },
+    output: {
+      prNumber: 42,
+      prUrl: "https://github.com/acme/widgets/pull/42",
+      branch: "feat/x",
+    },
     ...over,
   };
 }
@@ -115,7 +131,9 @@ describe("deriveComposerPr", () => {
   });
 
   it("skips a call missing owner/repo in its input", () => {
-    expect(deriveComposerPr([tc({ inputPreview: { repo: "widgets" } })])).toBeNull();
+    expect(
+      deriveComposerPr([tc({ inputPreview: { repo: "widgets" } })]),
+    ).toBeNull();
   });
 });
 
@@ -133,8 +151,13 @@ describe("ComposerPrStatusChip", () => {
   });
 
   it("renders the PR link with number and href", () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
-    render(<ComposerPrStatusChip pr={PR} orgSlug="acme" workspaceSlug="main" />);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, status: 500 }),
+    );
+    render(
+      <ComposerPrStatusChip pr={PR} orgSlug="acme" workspaceSlug="main" />,
+    );
     const link = screen.getByTestId("composer-pr-link");
     expect(link).toHaveTextContent("PR #42");
     expect(link).toHaveAttribute("href", PR.url);
@@ -146,16 +169,39 @@ describe("ComposerPrStatusChip", () => {
       status: 200,
       json: async () => ({
         overall: "passing",
-        counts: { total: 3, passed: 3, failed: 0, pending: 0, skipped: 0, neutral: 0 },
-        runs: [{ name: "build", status: "completed", conclusion: "success", url: null, startedAt: null, completedAt: null, durationMs: 1200, app: "GitHub Actions" }],
+        counts: {
+          total: 3,
+          passed: 3,
+          failed: 0,
+          pending: 0,
+          skipped: 0,
+          neutral: 0,
+        },
+        runs: [
+          {
+            name: "build",
+            status: "completed",
+            conclusion: "success",
+            url: null,
+            startedAt: null,
+            completedAt: null,
+            durationMs: 1200,
+            app: "GitHub Actions",
+          },
+        ],
       }),
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ComposerPrStatusChip pr={PR} orgSlug="acme" workspaceSlug="main" />);
+    render(
+      <ComposerPrStatusChip pr={PR} orgSlug="acme" workspaceSlug="main" />,
+    );
 
     await waitFor(() => {
-      expect(screen.getByTestId("composer-ci-dot")).toHaveAttribute("data-overall", "passing");
+      expect(screen.getByTestId("composer-ci-dot")).toHaveAttribute(
+        "data-overall",
+        "passing",
+      );
     });
     expect(fetchMock.mock.calls[0]![0]).toBe(
       "/api/v1/acme/main/repos/ci/status?owner=acme&repo=widgets&ref=feat%2Fx",
@@ -167,9 +213,16 @@ describe("ComposerPrStatusChip", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     render(
-      <ComposerPrStatusChip pr={{ ...PR, headRef: null }} orgSlug="acme" workspaceSlug="main" />,
+      <ComposerPrStatusChip
+        pr={{ ...PR, headRef: null }}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
     );
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(screen.getByTestId("composer-ci-dot")).toHaveAttribute("data-overall", "unknown");
+    expect(screen.getByTestId("composer-ci-dot")).toHaveAttribute(
+      "data-overall",
+      "unknown",
+    );
   });
 });

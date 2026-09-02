@@ -25,6 +25,8 @@ export default async function billingCreditsPurchaseTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(billingCreditsPurchase.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(billingCreditsPurchase.name, args, ctx, {
+    surface: "mcp",
+  });
   return billingCreditsPurchase.output.parse(output);
 }

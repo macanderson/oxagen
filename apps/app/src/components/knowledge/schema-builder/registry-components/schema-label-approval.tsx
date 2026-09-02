@@ -30,8 +30,12 @@ export default function SchemaLabelApproval({
       )}
       <div className="flex gap-2 pt-1">
         {/* Buttons are display-only — approval flow is via the chat stream */}
-        <Button size="sm" variant="default">Accept</Button>
-        <Button size="sm" variant="outline">Dismiss</Button>
+        <Button size="sm" variant="default">
+          Accept
+        </Button>
+        <Button size="sm" variant="outline">
+          Dismiss
+        </Button>
       </div>
     </div>
   );

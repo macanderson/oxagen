@@ -3,5 +3,10 @@
   "compilerOptions": {
     "outDir": "dist"
   },
-  "include": ["src/**/*.ts", "drizzle.config.ts", "integration/**/*.ts", "vitest.integration.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "drizzle.config.ts",
+    "integration/**/*.ts",
+    "vitest.integration.config.ts"
+  ]
 }

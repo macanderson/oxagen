@@ -17,7 +17,12 @@ export const WorkspaceTree: Story = {
       { path: "src/index.ts", kind: "file", sizeBytes: 512, changed: true },
       { path: "src/lib/greet.ts", kind: "file", sizeBytes: 640, changed: true },
       { path: "src/lib/greet.test.ts", kind: "file", sizeBytes: 480 },
-      { path: "src/routes/health.ts", kind: "file", sizeBytes: 300, changed: true },
+      {
+        path: "src/routes/health.ts",
+        kind: "file",
+        sizeBytes: 300,
+        changed: true,
+      },
     ],
   },
 };

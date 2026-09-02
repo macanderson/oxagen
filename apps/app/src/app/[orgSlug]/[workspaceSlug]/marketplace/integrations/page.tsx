@@ -45,8 +45,12 @@ const DELIVERY_LABELS: Record<string, string> = {
 /**
  * Marketplace → Integrations — the catalog of data connectors that ingest
  * external sources (GitHub, Slack, Google Workspace, Linear, Salesforce, …)
- * into the knowledge graph. Connecting hands off to the setup flow under
- * Knowledge → Repos; managing existing connections lives there too.
+ * into the knowledge graph.
+ *
+ * "Connect" goes to the in-app setup wizard at ./[connectorId] for every
+ * connector except the ones in GITHUB_APP_FLOW, which need their own GitHub-App
+ * OAuth handshake under Knowledge → Repos. Managing connections that already
+ * exist always lives under Knowledge → Repos, never here.
  */
 export default async function MarketplaceIntegrationsPage({
   params,
@@ -111,7 +115,7 @@ export default async function MarketplaceIntegrationsPage({
                 </CardDescription>
               </CardHeader>
               <CardFooter className="flex flex-col gap-2">
-                {/* Outline, not filled: a catalog of 9+ connectors would
+                {/* Outline, not filled: a whole grid of connectors would
                     otherwise be a wall of equal-weight primaries. Each card's
                     Connect is a peer action, so it reads as secondary. */}
                 <Button

@@ -71,7 +71,11 @@ describe("fetchSandboxLogs", () => {
   it("does NOT alias toString(ts) back to `ts` (String-vs-DateTime64 regression)", async () => {
     queryMock.mockResolvedValue({ json: vi.fn().mockResolvedValue([]) });
 
-    await mod.fetchSandboxLogs({ orgId: ORG, workspaceId: WS, sessionId: "sbx_1" });
+    await mod.fetchSandboxLogs({
+      orgId: ORG,
+      workspaceId: WS,
+      sessionId: "sbx_1",
+    });
 
     const sql: string = queryMock.mock.calls[0]![0].query;
     // The offending alias must never come back: it re-binds `ts` in WHERE/ORDER BY
@@ -158,7 +162,9 @@ describe("fetchSandboxLogs", () => {
       sessionId: "sbx_1",
       level: "debug",
     });
-    expect(queryMock.mock.calls[0]![0].query).not.toContain("AND level = 'normal'");
+    expect(queryMock.mock.calls[0]![0].query).not.toContain(
+      "AND level = 'normal'",
+    );
   });
 
   it("clamps the limit to the 2000 ceiling and passes a DateTime64 `since` param", async () => {

@@ -102,7 +102,22 @@ function renderStep(step: StepNode, indent: string, out: string[]): void {
   for (const tc of step.toolCalls) renderToolCall(tc, `${indent}    `, out);
 }
 
-function renderExecution(node: ExecNode, indent: string, out: string[]): void {
+/**
+ * Render one execution and its children. `seen` carries the executionIds
+ * already rendered on the current path: the child list is server-supplied, so a
+ * malformed trace (an execution reachable from itself) must terminate with a
+ * marker rather than recurse until the stack overflows.
+ */
+function renderExecution(
+  node: ExecNode,
+  indent: string,
+  out: string[],
+  seen: ReadonlySet<string> = new Set(),
+): void {
+  if (seen.has(node.executionId)) {
+    out.push(`${indent}↺ execution ${node.executionId} — cycle, not expanded`);
+    return;
+  }
   const cost = node.estimatedCostUsd ? ` $${node.estimatedCostUsd}` : "";
   out.push(
     `${indent}${statusMark(node.status)} execution ${node.executionId} ` +
@@ -110,8 +125,10 @@ function renderExecution(node: ExecNode, indent: string, out: string[]): void {
       `${fmtTokens(node.inputTokens, node.outputTokens)}${cost}` +
       (node.failureReason ? ` — ${node.failureReason}` : ""),
   );
+  const path = new Set(seen).add(node.executionId);
   for (const step of node.steps) renderStep(step, `${indent}  `, out);
-  for (const child of node.children) renderExecution(child, `${indent}  `, out);
+  for (const child of node.children)
+    renderExecution(child, `${indent}  `, out, path);
 }
 
 export async function handleTrace(

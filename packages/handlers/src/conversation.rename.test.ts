@@ -5,23 +5,15 @@ const mocks = vi.hoisted(() => ({
   updateReturning: vi.fn(),
 }));
 
-mocks.updateReturning.mockResolvedValue([{ publicId: "cnv_abc", title: "New Title" }]);
+mocks.updateReturning.mockResolvedValue([
+  { publicId: "cnv_abc", title: "New Title" },
+]);
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => ({
-    update: (_table: unknown) => ({
-      set: (_vals: unknown) => ({
-        where: (_cond: unknown) => ({
-          returning: mocks.updateReturning,
-        }),
-      }),
-    }),
-  }),
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
+    db: () => ({
       update: (_table: unknown) => ({
         set: (_vals: unknown) => ({
           where: (_cond: unknown) => ({
@@ -30,7 +22,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         }),
       }),
     }),
-
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        update: (_table: unknown) => ({
+          set: (_vals: unknown) => ({
+            where: (_cond: unknown) => ({
+              returning: mocks.updateReturning,
+            }),
+          }),
+        }),
+      }),
   };
 });
 
@@ -49,16 +50,18 @@ const BASE_INPUT = {
 describe("conversationRenameHandler (@oxagen/handlers)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.updateReturning.mockResolvedValue([{ publicId: "cnv_abc", title: "New Title" }]);
+    mocks.updateReturning.mockResolvedValue([
+      { publicId: "cnv_abc", title: "New Title" },
+    ]);
   });
 
   // ── auth guard ────────────────────────────────────────────────────────────
 
   it("throws when userId is null", async () => {
     const anonCtx: CapabilityContext = { ...CTX, userId: null };
-    await expect(conversationRenameHandler(BASE_INPUT, anonCtx)).rejects.toThrow(
-      "conversation.rename requires an authenticated user",
-    );
+    await expect(
+      conversationRenameHandler(BASE_INPUT, anonCtx),
+    ).rejects.toThrow("conversation.rename requires an authenticated user");
   });
 
   // ── happy path ────────────────────────────────────────────────────────────
@@ -88,8 +91,8 @@ describe("conversationRenameHandler (@oxagen/handlers)", () => {
   it("throws when update returns empty rows (cross-tenant scenario returns no match)", async () => {
     mocks.updateReturning.mockResolvedValueOnce([]);
     const otherCtx: CapabilityContext = { ...CTX, orgId: "org_other" };
-    await expect(conversationRenameHandler(BASE_INPUT, otherCtx)).rejects.toThrow(
-      "conversation.rename: conversation not found",
-    );
+    await expect(
+      conversationRenameHandler(BASE_INPUT, otherCtx),
+    ).rejects.toThrow("conversation.rename: conversation not found");
   });
 });

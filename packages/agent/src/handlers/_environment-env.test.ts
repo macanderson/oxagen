@@ -2,19 +2,26 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 const h = vi.hoisted(() => ({
-  resolveEnvironmentSecrets: vi.fn<
-    (a: {
-      orgId: string;
-      workspaceId: string;
-      environmentId: string;
-      selection?: unknown;
-    }) => Promise<Record<string, string>>
-  >(),
-  listSecretKeys: vi.fn<
-    (a: { orgId: string; workspaceId: string }) => Promise<
-      Array<{ id: string; key: string; sensitive: boolean; memo: string | null }>
-    >
-  >(),
+  resolveEnvironmentSecrets:
+    vi.fn<
+      (a: {
+        orgId: string;
+        workspaceId: string;
+        environmentId: string;
+        selection?: unknown;
+      }) => Promise<Record<string, string>>
+    >(),
+  listSecretKeys:
+    vi.fn<
+      (a: { orgId: string; workspaceId: string }) => Promise<
+        Array<{
+          id: string;
+          key: string;
+          sensitive: boolean;
+          memo: string | null;
+        }>
+      >
+    >(),
 }));
 
 vi.mock("@oxagen/plugins", async (importOriginal) => {
@@ -38,7 +45,11 @@ describe("injectEnvironmentSecrets", () => {
     const { env, strippedKeys, injectedKeys } = await injectEnvironmentSecrets(
       CTX,
       undefined,
-      { API_BASE: "https://x", DATABASE_URL: "postgres://secret", PATH: "/evil" },
+      {
+        API_BASE: "https://x",
+        DATABASE_URL: "postgres://secret",
+        PATH: "/evil",
+      },
     );
     expect(env).toEqual({ API_BASE: "https://x" });
     expect(strippedKeys.sort()).toEqual(["DATABASE_URL", "PATH"]);
@@ -82,9 +93,13 @@ describe("injectEnvironmentSecrets", () => {
   });
 
   it("returns undefined env when nothing safe remains", async () => {
-    const { env, strippedKeys } = await injectEnvironmentSecrets(CTX, undefined, {
-      MODAL_TOKEN: "x",
-    });
+    const { env, strippedKeys } = await injectEnvironmentSecrets(
+      CTX,
+      undefined,
+      {
+        MODAL_TOKEN: "x",
+      },
+    );
     expect(env).toBeUndefined();
     expect(strippedKeys).toEqual(["MODAL_TOKEN"]);
   });
@@ -95,13 +110,18 @@ describe("injectEnvironmentSecrets", () => {
       VAULT_ONLY: "v",
       LITERAL_AND_VAULT: "vault-wins-over-literal",
     });
-    const { env } = await injectEnvironmentSecrets(CTX, "env_1", { SHARED: "caller" }, {
-      literalEnv: {
-        SHARED: "literal",
-        LITERAL_ONLY: "l",
-        LITERAL_AND_VAULT: "literal-loses",
+    const { env } = await injectEnvironmentSecrets(
+      CTX,
+      "env_1",
+      { SHARED: "caller" },
+      {
+        literalEnv: {
+          SHARED: "literal",
+          LITERAL_ONLY: "l",
+          LITERAL_AND_VAULT: "literal-loses",
+        },
       },
-    });
+    );
     expect(env).toEqual({
       SHARED: "caller", // caller beats vault beats literal
       VAULT_ONLY: "v",
@@ -159,9 +179,14 @@ describe("injectEnvironmentSecrets", () => {
 
   it("does not run the preflight for an 'all' selection (no specifically-required keys)", async () => {
     h.resolveEnvironmentSecrets.mockResolvedValue({ A: "1" });
-    const { missingRequiredKeys } = await injectEnvironmentSecrets(CTX, "env_1", undefined, {
-      selection: "all",
-    });
+    const { missingRequiredKeys } = await injectEnvironmentSecrets(
+      CTX,
+      "env_1",
+      undefined,
+      {
+        selection: "all",
+      },
+    );
     expect(missingRequiredKeys).toEqual([]);
     expect(h.listSecretKeys).not.toHaveBeenCalled();
   });

@@ -45,8 +45,12 @@ describe("budget.policy.write capability", () => {
   });
 
   it("rejects a grace cushion outside 0..10", () => {
-    expect(() => budgetPolicyWrite.input.parse({ graceOveragePct: -0.1 })).toThrow();
-    expect(() => budgetPolicyWrite.input.parse({ graceOveragePct: 11 })).toThrow();
+    expect(() =>
+      budgetPolicyWrite.input.parse({ graceOveragePct: -0.1 }),
+    ).toThrow();
+    expect(() =>
+      budgetPolicyWrite.input.parse({ graceOveragePct: 11 }),
+    ).toThrow();
   });
 
   it("parses a valid output", () => {

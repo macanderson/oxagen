@@ -59,12 +59,12 @@ import type { AgentSelectionApply } from "./chat-selection-context";
  * chat_ux_v2 (`useChatSessionContext() !== null`) changes three things, all
  * gated on the same `v2` boolean: (1) a "Recent" row of up to 5 avatars for
  * quick re-pick, persisted per workspace (`session/recent-agents.ts`); (2)
- * EVERY pick — a Recent avatar or a list row, code agent or chat agent —
- * applies immediately (no repo/env setup step: a code agent's session is
- * prefilled from its remembered code context, see `session-store.tsx`'s
- * agent-switch overlay) and focuses the composer (`FOCUS_COMPOSER_EVENT`);
- * (3) each row gets an "About {name}" info affordance. Flag off keeps every
- * existing behavior byte-identical.
+ * picking a NON-code agent — a Recent avatar or a list row — applies
+ * immediately and focuses the composer (`FOCUS_COMPOSER_EVENT`); a code agent
+ * still goes through the setup step in both trees, because its target is
+ * chosen once and is then immutable for the conversation; (3) each row gets an
+ * "About {name}" info affordance. Flag off keeps every existing behavior
+ * byte-identical.
  */
 
 export interface AgentPickerPanelProps {

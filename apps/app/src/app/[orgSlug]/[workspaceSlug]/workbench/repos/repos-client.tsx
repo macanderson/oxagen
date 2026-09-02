@@ -33,7 +33,6 @@ import {
   TableRow,
   TableHead,
   TableCell,
-  TableEmpty,
 } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { ErrorState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
@@ -101,6 +100,10 @@ export function ReposClient({
 }: ReposClientProps) {
   const { add: toast } = useToast();
   const [repos, setRepos] = React.useState<RepoRow[]>(initialRepos);
+  // The server render's failure flag seeds client state rather than being read
+  // directly, so a successful Refresh/retry actually clears the error card —
+  // reading the prop meant the ErrorState stuck forever once it appeared.
+  const [loadFailed, setLoadFailed] = React.useState(unavailable);
   const [rowBusy, setRowBusy] = React.useState<
     Record<string, string | undefined>
   >({});
@@ -120,7 +123,12 @@ export function ReposClient({
   const refresh = React.useCallback(async () => {
     setRefreshing(true);
     const res = await refreshReposAction(scope);
-    if (res.ok) setRepos(res.repos);
+    if (res.ok) {
+      setRepos(res.repos);
+      setLoadFailed(false);
+    } else {
+      setLoadFailed(true);
+    }
     setRefreshing(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgSlug, workspaceSlug]);
@@ -229,7 +237,7 @@ export function ReposClient({
         </div>
       )}
 
-      {unavailable ? (
+      {loadFailed ? (
         <ErrorState
           title="Couldn't load repos"
           description="Failed to list GitHub connections for this workspace. Try refreshing."
@@ -279,9 +287,6 @@ export function ReposClient({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {repos.length === 0 && (
-              <TableEmpty colSpan={6}>No repos connected.</TableEmpty>
-            )}
             {repos.map((row) => {
               const slug = parseRepoSlug(row.displayName);
               // repo.metrics uses a coarser status enum (pending_setup/active/

@@ -46,7 +46,8 @@ export async function agentSubagentFanoutListHandler(
     fanouts: rows.map((r) => ({
       fanoutId: r.publicId,
       parentMessageId: r.parentMessageId,
-      status: r.status as AgentSubagentFanoutListOutput["fanouts"][number]["status"],
+      status:
+        r.status as AgentSubagentFanoutListOutput["fanouts"][number]["status"],
       totalChildren: r.totalChildren,
       completedChildren: r.completedChildren,
       createdAt: r.createdAt.toISOString(),

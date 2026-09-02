@@ -34,7 +34,11 @@ let capturedOnFailure: ((ctx: HandlerCtx) => unknown) | null = null;
 // by id; capturing `opts.onFailure` (the old shape) left capturedOnFailure null
 // and let the companion registration overwrite capturedHandler.
 mocks.createFunction.mockImplementation(
-  (opts: { id?: string }, _trigger: unknown, handler: typeof capturedHandler) => {
+  (
+    opts: { id?: string },
+    _trigger: unknown,
+    handler: typeof capturedHandler,
+  ) => {
     if (typeof opts?.id === "string" && opts.id.endsWith(".on-failure")) {
       capturedOnFailure = handler;
     } else {

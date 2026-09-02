@@ -15,6 +15,11 @@
  *
  *   [12 bytes iv ][16 bytes tag][N bytes ciphertext]
  *
+ * Rotation budget: every wrap uses a fresh random 96-bit nonce under the SAME
+ * long-lived KEK. NIST SP 800-38D caps a random-IV GCM key at about 2^32
+ * invocations before nonce-collision risk stops being negligible, so the KEK
+ * must be rotated well before a deployment reaches that many wraps.
+ *
  * This module NEVER logs plaintext key material.
  */
 
@@ -76,8 +81,11 @@ export function createLocalKmsAdapter(masterKey: Buffer): KmsAdapter {
 }
 
 /**
- * Decode and validate a base64-encoded 256-bit master key (the value of the
- * `AUTH_TOKEN_ENCRYPTION_KEY` env var).
+ * Decode and validate a base64-encoded 256-bit master key.
+ *
+ * Callers source the value from different env vars — `AUTH_TOKEN_ENCRYPTION_KEY`
+ * for auth/plugin credentials, `INGESTION_ENCRYPTION_KEY` for connector
+ * credentials — so the error names the value, not any one variable.
  *
  * @throws with a generation hint if the value does not decode to 32 bytes.
  */
@@ -85,7 +93,7 @@ export function loadMasterKey(base64Key: string): Buffer {
   const key = Buffer.from(base64Key, "base64");
   if (key.length !== MASTER_KEY_BYTES) {
     throw new Error(
-      `[crypto/kms/local] AUTH_TOKEN_ENCRYPTION_KEY must decode to ${MASTER_KEY_BYTES} bytes ` +
+      `[crypto/kms/local] base64 master key must decode to ${MASTER_KEY_BYTES} bytes ` +
         `(got ${key.length}). Generate one with: openssl rand -base64 32`,
     );
   }

@@ -9,6 +9,8 @@ export const agentMemoryPolicyWriteRoute = new Hono<AppEnv>();
 agentMemoryPolicyWriteRoute.post("/", async (c) => {
   const body = agentMemoryPolicyWrite.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(agentMemoryPolicyWrite.name, body, ctx, { surface: "api" });
+  const out = await invoke(agentMemoryPolicyWrite.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

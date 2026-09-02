@@ -4,12 +4,14 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const automationGetHandler: CapabilityHandler<typeof automationGet> = async (
-  input,
-  ctx,
-) => {
+export const automationGetHandler: CapabilityHandler<
+  typeof automationGet
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "automation.get: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "automation.get: rejected — no authenticated user",
+    );
     throw new Error("automation.get requires an authenticated user");
   }
 
@@ -69,7 +71,12 @@ export const automationGetHandler: CapabilityHandler<typeof automationGet> = asy
             config: schema.playbookSteps.config,
           })
           .from(schema.playbookSteps)
-          .where(eq(schema.playbookSteps.playbookVersionId, playbook.activeVersionId))
+          .where(
+            eq(
+              schema.playbookSteps.playbookVersionId,
+              playbook.activeVersionId,
+            ),
+          )
           .orderBy(schema.playbookSteps.createdAt)
       : [];
 

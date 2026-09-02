@@ -27,8 +27,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function agentDebugTraceTool(args: InferSchema<typeof schema>) {
+export default async function agentDebugTraceTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentDebugTrace.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentDebugTrace.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentDebugTrace.output.parse(output);
 }

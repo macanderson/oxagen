@@ -37,7 +37,10 @@ describe("image.create capability", () => {
   // ── model enum ────────────────────────────────────────────────────────────
 
   it("accepts model='flux-2-max'", () => {
-    const parsed = imageCreate.input.parse({ prompt: "sky", model: "flux-2-max" });
+    const parsed = imageCreate.input.parse({
+      prompt: "sky",
+      model: "flux-2-max",
+    });
     expect(parsed.model).toBe("flux-2-max");
   });
 
@@ -50,7 +53,10 @@ describe("image.create capability", () => {
   // ── size optional ─────────────────────────────────────────────────────────
 
   it("accepts a size string when provided", () => {
-    const parsed = imageCreate.input.parse({ prompt: "sky", size: "1024x1024" });
+    const parsed = imageCreate.input.parse({
+      prompt: "sky",
+      size: "1024x1024",
+    });
     expect(parsed.size).toBe("1024x1024");
   });
 

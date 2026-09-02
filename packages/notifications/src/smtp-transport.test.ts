@@ -5,9 +5,14 @@ import type { SmtpTransportConfig } from "./types";
 // `nodemailer` is a default (CJS interop) import in the module under test, so
 // the mock exposes `default.createTransport`.
 const sendMailMock = vi.fn();
-const createTransportMock = vi.fn((..._args: unknown[]) => ({ sendMail: sendMailMock }));
+const createTransportMock = vi.fn((..._args: unknown[]) => ({
+  sendMail: sendMailMock,
+}));
 vi.mock("nodemailer", () => ({
-  default: { createTransport: (...args: unknown[]): unknown => createTransportMock(...args) },
+  default: {
+    createTransport: (...args: unknown[]): unknown =>
+      createTransportMock(...args),
+  },
 }));
 
 import { createSmtpTransport } from "./smtp-transport";
@@ -62,7 +67,11 @@ describe("createSmtpTransport", () => {
   });
 
   it("sends with the structured default From and returns accepted/rejected", async () => {
-    sendMailMock.mockResolvedValue({ messageId: "<id@x>", accepted: ["a@x.com"], rejected: [] });
+    sendMailMock.mockResolvedValue({
+      messageId: "<id@x>",
+      accepted: ["a@x.com"],
+      rejected: [],
+    });
 
     const result = await createSmtpTransport(cfg()).send({
       to: "a@x.com",
@@ -72,17 +81,28 @@ describe("createSmtpTransport", () => {
 
     expect(sendMailMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        from: { name: "Oxagen (DO NOT REPLY)", address: "noreply@notifications.oxagen.sh" },
+        from: {
+          name: "Oxagen (DO NOT REPLY)",
+          address: "noreply@notifications.oxagen.sh",
+        },
         to: "a@x.com",
         subject: "Hi",
         text: "yo",
       }),
     );
-    expect(result).toEqual({ id: "<id@x>", accepted: ["a@x.com"], rejected: [] });
+    expect(result).toEqual({
+      id: "<id@x>",
+      accepted: ["a@x.com"],
+      rejected: [],
+    });
   });
 
   it("uses a bare address as From when no display name is configured", async () => {
-    sendMailMock.mockResolvedValue({ messageId: "<id>", accepted: [], rejected: [] });
+    sendMailMock.mockResolvedValue({
+      messageId: "<id>",
+      accepted: [],
+      rejected: [],
+    });
     await createSmtpTransport(cfg({ fromName: undefined })).send({
       to: "a@x.com",
       subject: "s",
@@ -94,7 +114,11 @@ describe("createSmtpTransport", () => {
   });
 
   it("honors an explicit `from` override and passes html/cc/bcc/replyTo through", async () => {
-    sendMailMock.mockResolvedValue({ messageId: "<id>", accepted: [], rejected: [] });
+    sendMailMock.mockResolvedValue({
+      messageId: "<id>",
+      accepted: [],
+      rejected: [],
+    });
     await createSmtpTransport(cfg()).send({
       to: "a@x.com",
       subject: "s",
@@ -135,7 +159,11 @@ describe("createSmtpTransport", () => {
   it("propagates a transport failure to the caller", async () => {
     sendMailMock.mockRejectedValue(new Error("SMTP 535 authentication failed"));
     await expect(
-      createSmtpTransport(cfg()).send({ to: "a@x.com", subject: "s", text: "t" }),
+      createSmtpTransport(cfg()).send({
+        to: "a@x.com",
+        subject: "s",
+        text: "t",
+      }),
     ).rejects.toThrow("SMTP 535");
   });
 });

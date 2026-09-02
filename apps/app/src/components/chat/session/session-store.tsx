@@ -259,7 +259,11 @@ export function ChatSessionProvider({
     let persisted = decodeSessionState(readStorage(key), defaults);
     // Carry a draft session onto the real conversation key the first time a
     // new chat gets an id (draft → conv, never conv → conv).
-    if (!persisted && prevKey !== key && prevKey.startsWith(SESSION_DRAFT_PREFIX)) {
+    if (
+      !persisted &&
+      prevKey !== key &&
+      prevKey.startsWith(SESSION_DRAFT_PREFIX)
+    ) {
       const carried = decodeSessionState(readStorage(prevKey), defaults);
       if (carried) {
         writeStorage(key, encodeSessionState(carried));
@@ -285,7 +289,13 @@ export function ChatSessionProvider({
     if (!codeBinding) return;
     setState((prev) => applyCodeBinding(prev, codeBinding));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- force to primitive binding values; the object identity churns each render
-  }, [codeBinding?.agentId, codeBinding?.connectionId, codeBinding?.owner, codeBinding?.name, codeBinding?.environmentId]);
+  }, [
+    codeBinding?.agentId,
+    codeBinding?.connectionId,
+    codeBinding?.owner,
+    codeBinding?.name,
+    codeBinding?.environmentId,
+  ]);
 
   const isDirty = sessionDiffersFromDefaults(state, defaults);
 
@@ -299,7 +309,15 @@ export function ChatSessionProvider({
       resetToDefaults,
       noteMessageSent,
     }),
-    [state, defaults, locks, isDirty, updateSession, resetToDefaults, noteMessageSent],
+    [
+      state,
+      defaults,
+      locks,
+      isDirty,
+      updateSession,
+      resetToDefaults,
+      noteMessageSent,
+    ],
   );
 
   return (

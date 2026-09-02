@@ -17,7 +17,13 @@ import type { AutomationGetOutput } from "@oxagen/oxagen/contracts/automation.ge
 type Step = AutomationGetOutput["steps"][number];
 
 function step(overrides: Partial<Step> = {}): Step {
-  return { stepKey: "s1", name: "Run agent", stepType: "agent", config: {}, ...overrides };
+  return {
+    stepKey: "s1",
+    name: "Run agent",
+    stepType: "agent",
+    config: {},
+    ...overrides,
+  };
 }
 
 afterEach(() => cleanup());
@@ -25,7 +31,9 @@ afterEach(() => cleanup());
 describe("PlaybookSteps", () => {
   it("shows the empty-state copy when there are no steps", () => {
     render(<PlaybookSteps steps={[]} />);
-    expect(screen.getByText("This automation has no steps configured yet.")).toBeTruthy();
+    expect(
+      screen.getByText("This automation has no steps configured yet."),
+    ).toBeTruthy();
   });
 
   it("always shows the Read-only badge and explanation", () => {

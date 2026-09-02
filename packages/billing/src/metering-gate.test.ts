@@ -21,13 +21,19 @@ vi.mock("./dunning", () => ({
   },
 }));
 
-const maybeAutoReloadMock = vi.fn().mockResolvedValue({ reloaded: false, reason: "above_threshold" });
+const maybeAutoReloadMock = vi
+  .fn()
+  .mockResolvedValue({ reloaded: false, reason: "above_threshold" });
 vi.mock("./autoreload", () => ({
   maybeAutoReload: maybeAutoReloadMock,
 }));
 
 const effectiveBalanceMock = vi.fn().mockResolvedValue(0n);
-const consumeCreditsMock = vi.fn().mockResolvedValue({ chargedCents: 0n, shortfallCents: 0n, balanceCents: 0n });
+const consumeCreditsMock = vi.fn().mockResolvedValue({
+  chargedCents: 0n,
+  shortfallCents: 0n,
+  balanceCents: 0n,
+});
 vi.mock("./credits", () => ({
   effectiveBalance: effectiveBalanceMock,
   consumeCredits: consumeCreditsMock,
@@ -37,8 +43,12 @@ vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
-const { assertCanStartTurn, chargeImageCredits, chargeVideoCredits, InsufficientCreditsError } =
-  await import("./metering");
+const {
+  assertCanStartTurn,
+  chargeImageCredits,
+  chargeVideoCredits,
+  InsufficientCreditsError,
+} = await import("./metering");
 
 // ---------------------------------------------------------------------------
 // assertCanStartTurn
@@ -49,7 +59,10 @@ describe("assertCanStartTurn", () => {
     vi.clearAllMocks();
     effectiveBalanceMock.mockResolvedValue(100n);
     assertOrgCanConsumeMock.mockResolvedValue(undefined);
-    maybeAutoReloadMock.mockResolvedValue({ reloaded: false, reason: "above_threshold" });
+    maybeAutoReloadMock.mockResolvedValue({
+      reloaded: false,
+      reason: "above_threshold",
+    });
   });
 
   it("resolves when org is in good standing with positive balance", async () => {
@@ -62,18 +75,24 @@ describe("assertCanStartTurn", () => {
 
   it("throws InsufficientCreditsError when balance is zero after reload attempt", async () => {
     effectiveBalanceMock.mockResolvedValue(0n);
-    await expect(assertCanStartTurn("org-2")).rejects.toBeInstanceOf(InsufficientCreditsError);
+    await expect(assertCanStartTurn("org-2")).rejects.toBeInstanceOf(
+      InsufficientCreditsError,
+    );
   });
 
   it("throws InsufficientCreditsError when balance is negative (should not happen but guard)", async () => {
     effectiveBalanceMock.mockResolvedValue(-5n);
-    await expect(assertCanStartTurn("org-3")).rejects.toBeInstanceOf(InsufficientCreditsError);
+    await expect(assertCanStartTurn("org-3")).rejects.toBeInstanceOf(
+      InsufficientCreditsError,
+    );
   });
 
   it("propagates BillingSuspendedError from assertOrgCanConsume", async () => {
     const { BillingSuspendedError } = await import("./dunning");
     assertOrgCanConsumeMock.mockRejectedValue(new BillingSuspendedError(null));
-    await expect(assertCanStartTurn("org-4")).rejects.toBeInstanceOf(BillingSuspendedError);
+    await expect(assertCanStartTurn("org-4")).rejects.toBeInstanceOf(
+      BillingSuspendedError,
+    );
     // auto-reload and balance check must NOT be called when dunning rejects
     expect(effectiveBalanceMock).not.toHaveBeenCalled();
   });
@@ -89,7 +108,9 @@ describe("assertCanStartTurn", () => {
   it("throws InsufficientCreditsError when auto-reload fails AND balance is zero", async () => {
     maybeAutoReloadMock.mockRejectedValue(new Error("Stripe timeout"));
     effectiveBalanceMock.mockResolvedValue(0n);
-    await expect(assertCanStartTurn("org-6")).rejects.toBeInstanceOf(InsufficientCreditsError);
+    await expect(assertCanStartTurn("org-6")).rejects.toBeInstanceOf(
+      InsufficientCreditsError,
+    );
   });
 });
 
@@ -100,7 +121,11 @@ describe("assertCanStartTurn", () => {
 describe("chargeImageCredits", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    consumeCreditsMock.mockResolvedValue({ chargedCents: 10n, shortfallCents: 0n, balanceCents: 90n });
+    consumeCreditsMock.mockResolvedValue({
+      chargedCents: 10n,
+      shortfallCents: 0n,
+      balanceCents: 90n,
+    });
   });
 
   it("returns a ChargeUsageResult with imageCount in logFields", async () => {
@@ -149,7 +174,11 @@ describe("chargeImageCredits", () => {
 describe("chargeVideoCredits", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    consumeCreditsMock.mockResolvedValue({ chargedCents: 50n, shortfallCents: 0n, balanceCents: 50n });
+    consumeCreditsMock.mockResolvedValue({
+      chargedCents: 50n,
+      shortfallCents: 0n,
+      balanceCents: 50n,
+    });
   });
 
   it("returns a ChargeUsageResult with video model", async () => {
@@ -178,7 +207,11 @@ describe("chargeVideoCredits", () => {
   });
 
   it("surfaces shortfall from consumeCredits for video charges", async () => {
-    consumeCreditsMock.mockResolvedValue({ chargedCents: 5n, shortfallCents: 45n, balanceCents: 0n });
+    consumeCreditsMock.mockResolvedValue({
+      chargedCents: 5n,
+      shortfallCents: 45n,
+      balanceCents: 0n,
+    });
     const result = await chargeVideoCredits({
       orgId: "org-1",
       model: "google/veo-3.0-generate-001",

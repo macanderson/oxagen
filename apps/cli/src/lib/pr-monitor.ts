@@ -41,7 +41,13 @@ const PASS = new Set(["SUCCESS", "NEUTRAL", "SKIPPED"]);
 // real failure — treat it as ignorable rather than red so a stale cancelled run
 // doesn't wedge "watch until green".
 const IGNORE = new Set(["CANCELLED", "STALE", "EXPECTED"]);
-const FAIL = new Set(["FAILURE", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE", "ERROR"]);
+const FAIL = new Set([
+  "FAILURE",
+  "TIMED_OUT",
+  "ACTION_REQUIRED",
+  "STARTUP_FAILURE",
+  "ERROR",
+]);
 
 function itemName(item: CheckRollupItem): string {
   return item.name || item.context || "check";
@@ -52,7 +58,9 @@ function itemUrl(item: CheckRollupItem): string | undefined {
 }
 
 /** Classify one rollup item as pass / fail / pending / ignore. */
-function classify(item: CheckRollupItem): "pass" | "fail" | "pending" | "ignore" {
+function classify(
+  item: CheckRollupItem,
+): "pass" | "fail" | "pending" | "ignore" {
   const c = (item.conclusion || "").toUpperCase();
   const s = (item.state || "").toUpperCase();
   if (FAIL.has(c) || FAIL.has(s)) return "fail";

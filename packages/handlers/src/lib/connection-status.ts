@@ -20,14 +20,21 @@ import { loadBuiltInSchema } from "@oxagen/ingestion/connector-schema-loader";
  *   'pending_setup' | 'active' | 'paused' | 'failed'
  */
 
-export type ContractConnectionStatus = "pending_setup" | "active" | "paused" | "failed";
+export type ContractConnectionStatus =
+  | "pending_setup"
+  | "active"
+  | "paused"
+  | "failed";
 
 /**
  * DB status → contract status. `deleting`/`deleted` collapse to `pending_setup`
  * because a connection mid-deletion has no live data to report on and the
  * contract has no terminal "deleted" state.
  */
-export const DB_STATUS_TO_CONTRACT_STATUS: Record<string, ContractConnectionStatus> = {
+export const DB_STATUS_TO_CONTRACT_STATUS: Record<
+  string,
+  ContractConnectionStatus
+> = {
   pending_setup: "pending_setup",
   connected: "active",
   paused: "paused",
@@ -42,7 +49,10 @@ export const DB_STATUS_TO_CONTRACT_STATUS: Record<string, ContractConnectionStat
  * `connected` (the GitHub-connector live state — see CLAUDE.md / memory: writing
  * `active` silently fails the CHECK constraint).
  */
-export const CONTRACT_STATUS_TO_DB_STATUS: Record<ContractConnectionStatus, string> = {
+export const CONTRACT_STATUS_TO_DB_STATUS: Record<
+  ContractConnectionStatus,
+  string
+> = {
   active: "connected",
   paused: "paused",
   failed: "error",
@@ -71,7 +81,8 @@ export function resolveConnectorVersion(connectorId?: string): string {
   return platformVersion();
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * The repo.* contracts accept a repoId that may be EITHER the public ID
@@ -83,6 +94,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 export function sourceConnectionRefCondition(ref: string) {
   return UUID_RE.test(ref)
-    ? or(eq(schema.sourceConnections.publicId, ref), eq(schema.sourceConnections.id, ref))
+    ? or(
+        eq(schema.sourceConnections.publicId, ref),
+        eq(schema.sourceConnections.id, ref),
+      )
     : eq(schema.sourceConnections.publicId, ref);
 }

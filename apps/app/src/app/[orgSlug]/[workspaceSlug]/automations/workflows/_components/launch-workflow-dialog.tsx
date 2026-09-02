@@ -98,9 +98,15 @@ export function LaunchWorkflowDialog({
 
   function validateWorkflow(): string | null {
     if (goal.trim().length === 0) return "Goal is required.";
-    if (goal.length > GOAL_MAX) return `Goal must be ${GOAL_MAX} characters or fewer.`;
-    if (title.length > TITLE_MAX) return `Title must be ${TITLE_MAX} characters or fewer.`;
-    if (!Number.isInteger(maxParallelism) || maxParallelism < 1 || maxParallelism > 100) {
+    if (goal.length > GOAL_MAX)
+      return `Goal must be ${GOAL_MAX} characters or fewer.`;
+    if (title.length > TITLE_MAX)
+      return `Title must be ${TITLE_MAX} characters or fewer.`;
+    if (
+      !Number.isInteger(maxParallelism) ||
+      maxParallelism < 1 ||
+      maxParallelism > 100
+    ) {
       return "Max parallelism must be a whole number between 1 and 100.";
     }
     return null;
@@ -108,11 +114,13 @@ export function LaunchWorkflowDialog({
 
   function validateSwarm(): string | null {
     if (topic.trim().length === 0) return "Topic is required.";
-    if (topic.length > TOPIC_MAX) return `Topic must be ${TOPIC_MAX} characters or fewer.`;
+    if (topic.length > TOPIC_MAX)
+      return `Topic must be ${TOPIC_MAX} characters or fewer.`;
     if (!Number.isInteger(maxParallel) || maxParallel < 1 || maxParallel > 20) {
       return "Max parallel searches must be a whole number between 1 and 20.";
     }
-    if (targetLabel.trim().length === 0) return "Target knowledge-node label is required.";
+    if (targetLabel.trim().length === 0)
+      return "Target knowledge-node label is required.";
     return null;
   }
 
@@ -124,28 +132,36 @@ export function LaunchWorkflowDialog({
     }
     setError(null);
     setPending(true);
-    const res = await runWorkflowAction({
-      orgSlug,
-      workspaceSlug,
-      goal: goal.trim(),
-      title: title.trim() || undefined,
-      outputFormat,
-      maxParallelism,
-    });
-    setPending(false);
-
-    if (res.ok) {
-      toast.add({
-        title: "Workflow launched",
-        description: res.workflow.publicId,
-        type: "success",
+    // finally: the dialog refuses to close while `pending` is true, so a
+    // rejected action without this would trap the user in a dialog stuck on
+    // "Launching…" until the page is reloaded.
+    try {
+      const res = await runWorkflowAction({
+        orgSlug,
+        workspaceSlug,
+        goal: goal.trim(),
+        title: title.trim() || undefined,
+        outputFormat,
+        maxParallelism,
       });
-      onWorkflowLaunched?.(res.workflow.workflowId);
-      reset();
-      onOpenChange(false);
-      router.refresh();
-    } else {
-      setError(res.error);
+
+      if (res.ok) {
+        toast.add({
+          title: "Workflow launched",
+          description: res.workflow.publicId,
+          type: "success",
+        });
+        onWorkflowLaunched?.(res.workflow.workflowId);
+        reset();
+        onOpenChange(false);
+        router.refresh();
+      } else {
+        setError(res.error);
+      }
+    } catch {
+      setError("Launching the workflow failed. Try again.");
+    } finally {
+      setPending(false);
     }
   }
 
@@ -159,38 +175,44 @@ export function LaunchWorkflowDialog({
     setPending(true);
     const trimmedTopic = topic.trim();
     const trimmedLabel = targetLabel.trim();
-    const res = await startResearchSwarmAction({
-      orgSlug,
-      workspaceSlug,
-      topic: trimmedTopic,
-      depth,
-      maxParallel,
-      targetLabel: trimmedLabel,
-    });
-    setPending(false);
-
-    if (res.ok) {
-      toast.add({
-        title: "Research swarm started",
-        description: `${res.swarm.estimatedTasks} search task${res.swarm.estimatedTasks === 1 ? "" : "s"} dispatched`,
-        type: "success",
-      });
-      onSwarmLaunched?.({
-        swarmId: res.swarm.swarmId,
-        dispatchId: res.swarm.dispatchId,
+    // finally: see handleLaunchWorkflow — `pending` also latches the dialog shut.
+    try {
+      const res = await startResearchSwarmAction({
+        orgSlug,
+        workspaceSlug,
         topic: trimmedTopic,
         depth,
         maxParallel,
         targetLabel: trimmedLabel,
-        status: "running",
-        completedTasks: 0,
-        totalTasks: res.swarm.estimatedTasks,
-        launchedAt: new Date().toISOString(),
       });
-      reset();
-      onOpenChange(false);
-    } else {
-      setError(res.error);
+
+      if (res.ok) {
+        toast.add({
+          title: "Research swarm started",
+          description: `${res.swarm.estimatedTasks} search task${res.swarm.estimatedTasks === 1 ? "" : "s"} dispatched`,
+          type: "success",
+        });
+        onSwarmLaunched?.({
+          swarmId: res.swarm.swarmId,
+          dispatchId: res.swarm.dispatchId,
+          topic: trimmedTopic,
+          depth,
+          maxParallel,
+          targetLabel: trimmedLabel,
+          status: "running",
+          completedTasks: 0,
+          totalTasks: res.swarm.estimatedTasks,
+          launchedAt: new Date().toISOString(),
+        });
+        reset();
+        onOpenChange(false);
+      } else {
+        setError(res.error);
+      }
+    } catch {
+      setError("Starting the research swarm failed. Try again.");
+    } finally {
+      setPending(false);
     }
   }
 
@@ -212,8 +234,9 @@ export function LaunchWorkflowDialog({
         <DialogHeader>
           <DialogTitle>Launch a workflow or research swarm</DialogTitle>
           <DialogDescription>
-            Workflows decompose one goal into N parallel sub-tasks dispatched via Inngest. Research
-            swarms fan out diverse web-search variations on a topic as concurrent subagent tasks.
+            Workflows decompose one goal into N parallel sub-tasks dispatched
+            via Inngest. Research swarms fan out diverse web-search variations
+            on a topic as concurrent subagent tasks.
           </DialogDescription>
         </DialogHeader>
 
@@ -278,7 +301,9 @@ export function LaunchWorkflowDialog({
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="workflow-max-parallelism">Max parallelism (1-100)</Label>
+                  <Label htmlFor="workflow-max-parallelism">
+                    Max parallelism (1-100)
+                  </Label>
                   <Input
                     id="workflow-max-parallelism"
                     type="number"
@@ -313,19 +338,28 @@ export function LaunchWorkflowDialog({
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Depth</Label>
-                  <Select value={depth} onValueChange={(v) => setDepth(v as typeof depth)}>
+                  <Select
+                    value={depth}
+                    onValueChange={(v) => setDepth(v as typeof depth)}
+                  >
                     <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectPopup>
-                      <SelectItem value="shallow">Shallow (~3 searches)</SelectItem>
-                      <SelectItem value="medium">Medium (~8 searches)</SelectItem>
+                      <SelectItem value="shallow">
+                        Shallow (~3 searches)
+                      </SelectItem>
+                      <SelectItem value="medium">
+                        Medium (~8 searches)
+                      </SelectItem>
                       <SelectItem value="deep">Deep (~15 searches)</SelectItem>
                     </SelectPopup>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="swarm-max-parallel">Max parallel (1-20)</Label>
+                  <Label htmlFor="swarm-max-parallel">
+                    Max parallel (1-20)
+                  </Label>
                   <Input
                     id="swarm-max-parallel"
                     type="number"
@@ -338,7 +372,9 @@ export function LaunchWorkflowDialog({
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="swarm-target-label">Target knowledge-node label</Label>
+                <Label htmlFor="swarm-target-label">
+                  Target knowledge-node label
+                </Label>
                 <Input
                   id="swarm-target-label"
                   value={targetLabel}
@@ -352,7 +388,11 @@ export function LaunchWorkflowDialog({
         </Tabs>
 
         {error && (
-          <p className="text-sm text-error" role="alert" data-testid="launch-error">
+          <p
+            className="text-sm text-error"
+            role="alert"
+            data-testid="launch-error"
+          >
             {error}
           </p>
         )}
@@ -372,7 +412,11 @@ export function LaunchWorkflowDialog({
             type="button"
             data-testid="launch-submit"
           >
-            {pending ? "Launching…" : tab === "workflow" ? "Launch workflow" : "Start swarm"}
+            {pending
+              ? "Launching…"
+              : tab === "workflow"
+                ? "Launch workflow"
+                : "Start swarm"}
           </Button>
         </DialogFooter>
       </DialogPopup>

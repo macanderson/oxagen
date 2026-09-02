@@ -3,7 +3,8 @@
  *
  * Up to 6 connections via connection.list, each with a healthy/degraded/errored
  * status chip. Uses the shared <StatusDot> primitive (packages/ui) rather than
- * hand-rolling a health dot — see CLAUDE.md "status chip" guidance.
+ * hand-rolling a health dot, so every health indicator in the app reskins from
+ * one place.
  */
 import "@oxagen/handlers/register";
 import { invoke } from "@oxagen/oxagen";
@@ -67,7 +68,10 @@ export async function SourcesTile({
 
   const visible = connections.slice(0, MAX_ROWS);
   const footer = (
-    <Link href={reposHref} className="text-sm font-medium text-primary hover:underline">
+    <Link
+      href={reposHref}
+      className="text-sm font-medium text-primary hover:underline"
+    >
       View sources →
     </Link>
   );
@@ -86,7 +90,10 @@ export async function SourcesTile({
             title="No sources connected yet"
             description="Connect a data source to start ingesting knowledge."
             action={
-              <Link href={reposHref} className="text-sm font-medium text-primary hover:underline">
+              <Link
+                href={reposHref}
+                className="text-sm font-medium text-primary hover:underline"
+              >
                 Connect a source →
               </Link>
             }
@@ -94,8 +101,13 @@ export async function SourcesTile({
         ) : (
           <ul className="flex flex-col gap-2.5">
             {visible.map((c) => (
-              <li key={c.id} className="flex items-center justify-between gap-2 text-sm">
-                <span className="min-w-0 truncate text-foreground">{c.displayName}</span>
+              <li
+                key={c.id}
+                className="flex items-center justify-between gap-2 text-sm"
+              >
+                <span className="min-w-0 truncate text-foreground">
+                  {c.displayName}
+                </span>
                 <StatusDot
                   status={HEALTH_TONE[c.healthStatus] ?? "neutral"}
                   size="sm"

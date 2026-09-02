@@ -6,7 +6,8 @@ vi.mock("@oxagen/database", () => {
     select: () => ({
       from: (_t: unknown) => ({
         where: (_w: unknown) => ({
-          limit: (_n: number) => Promise.resolve([{ name: "Acme Inc.", settings: {} }]),
+          limit: (_n: number) =>
+            Promise.resolve([{ name: "Acme Inc.", settings: {} }]),
         }),
       }),
     }),
@@ -24,18 +25,30 @@ vi.mock("@oxagen/database", () => {
       users: "users_sentinel",
       notifications: "notifications_sentinel",
     },
-    withSystemDb: vi.fn(async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx)),
+    withSystemDb: vi.fn(async (fn: (tx: typeof mockTx) => Promise<unknown>) =>
+      fn(mockTx),
+    ),
   };
 });
 
 // ── Sibling mock ─────────────────────────────────────────────────────────────
 // Use vi.hoisted so these are available inside the vi.mock factory closures.
 const { mockCreateNotification, mockSendEmail } = vi.hoisted(() => ({
-  mockCreateNotification: vi.fn().mockResolvedValue({ id: "notif-1", publicId: "ntf_X", createdAt: new Date() }),
-  mockSendEmail: vi.fn().mockResolvedValue({ id: "msg-1", accepted: ["owner@acme.com"], rejected: [] }),
+  mockCreateNotification: vi.fn().mockResolvedValue({
+    id: "notif-1",
+    publicId: "ntf_X",
+    createdAt: new Date(),
+  }),
+  mockSendEmail: vi.fn().mockResolvedValue({
+    id: "msg-1",
+    accepted: ["owner@acme.com"],
+    rejected: [],
+  }),
 }));
 
-vi.mock("./create-notification", () => ({ createNotification: mockCreateNotification }));
+vi.mock("./create-notification", () => ({
+  createNotification: mockCreateNotification,
+}));
 
 // ── sendEmail mock ────────────────────────────────────────────────────────────
 vi.mock("../send-email", () => ({ sendEmail: mockSendEmail }));
@@ -45,8 +58,16 @@ import { notifyOrgManagers } from "./notify-org-managers";
 describe("notifyOrgManagers", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCreateNotification.mockResolvedValue({ id: "notif-1", publicId: "ntf_X", createdAt: new Date() });
-    mockSendEmail.mockResolvedValue({ id: "msg-1", accepted: ["owner@acme.com"], rejected: [] });
+    mockCreateNotification.mockResolvedValue({
+      id: "notif-1",
+      publicId: "ntf_X",
+      createdAt: new Date(),
+    });
+    mockSendEmail.mockResolvedValue({
+      id: "msg-1",
+      accepted: ["owner@acme.com"],
+      rejected: [],
+    });
   });
 
   it("creates one notification per resolved recipient (Owner + Admin by default)", async () => {
@@ -92,25 +113,27 @@ describe("notifyOrgManagers", () => {
         title: "Reconnect GitHub",
         deepLink: "/reauth/porg_123",
         emailHtml: "<p>Reconnect</p>",
-        _recipientsOverride: [{ userId: "user-owner", email: "owner@acme.com" }],
+        _recipientsOverride: [
+          { userId: "user-owner", email: "owner@acme.com" },
+        ],
       }),
     ).resolves.not.toThrow();
     // In-app notification must still have been created.
     expect(mockCreateNotification).toHaveBeenCalledOnce();
   });
 
-  it("filters recipients by custom roles when settings override present", async () => {
-    // Only "Owner" role should get notified when roles=["Owner"] is set.
+  it("notifies exactly the injected recipients and no one else", async () => {
+    // The override path bypasses role resolution entirely, so this asserts only
+    // that the loop honours the injected list verbatim. Role filtering itself is
+    // covered against the real DB-resolution branch in
+    // notify-org-managers.production.test.ts ("honors custom alert roles").
     await notifyOrgManagers({
       orgId: "org-1",
       kind: "security",
       title: "Test",
       deepLink: "/reauth/x",
       emailHtml: "<p>x</p>",
-      _recipientsOverride: [
-        { userId: "user-owner", email: "owner@acme.com" },
-        // user-admin would normally be included; test that roles param excludes them
-      ],
+      _recipientsOverride: [{ userId: "user-owner", email: "owner@acme.com" }],
     });
     expect(mockCreateNotification).toHaveBeenCalledOnce();
     expect(mockCreateNotification).toHaveBeenCalledWith(

@@ -17,7 +17,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ---------------------------------------------------------------------------
 
 const effectiveBalanceMock = vi.fn().mockResolvedValue(0n);
-const createCreditLotMock = vi.fn().mockResolvedValue({ lotId: "lot-1", effectiveBalanceCents: 1000n });
+const createCreditLotMock = vi
+  .fn()
+  .mockResolvedValue({ lotId: "lot-1", effectiveBalanceCents: 1000n });
 
 vi.mock("./credits", () => ({
   effectiveBalance: effectiveBalanceMock,
@@ -73,16 +75,17 @@ function makeDb(state: DbState) {
   };
 }
 
-const dbHolder: { instance: ReturnType<typeof makeDb> | null } = { instance: null };
+const dbHolder: { instance: ReturnType<typeof makeDb> | null } = {
+  instance: null,
+};
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => dbHolder.instance,
-  withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbHolder.instance),
-  withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbHolder.instance),
-
+    db: () => dbHolder.instance,
+    withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbHolder.instance),
+    withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbHolder.instance),
   };
 });
 
@@ -93,18 +96,20 @@ const { isLowBalance, maybeAutoReload } = await import("./autoreload");
 // Default settings factory
 // ---------------------------------------------------------------------------
 
-function makeSettings(overrides: Partial<{
-  autoReloadEnabled: boolean;
-  autoReloadThresholdCents: bigint;
-  autoReloadAmountCents: bigint;
-  autoReloadPaymentMethodId: string | null;
-  lowBalanceThresholdCents: bigint;
-  lastAutoReloadAt: Date | null;
-  dunningState: "active" | "grace" | "suspended";
-  delinquentSince: Date | null;
-  graceEndsAt: Date | null;
-  suspendedAt: Date | null;
-}> = {}) {
+function makeSettings(
+  overrides: Partial<{
+    autoReloadEnabled: boolean;
+    autoReloadThresholdCents: bigint;
+    autoReloadAmountCents: bigint;
+    autoReloadPaymentMethodId: string | null;
+    lowBalanceThresholdCents: bigint;
+    lastAutoReloadAt: Date | null;
+    dunningState: "active" | "grace" | "suspended";
+    delinquentSince: Date | null;
+    graceEndsAt: Date | null;
+    suspendedAt: Date | null;
+  }> = {},
+) {
   return {
     orgId: "org-abc",
     autoReloadEnabled: true,
@@ -133,7 +138,9 @@ describe("isLowBalance", () => {
   });
 
   it("returns low=true when balance < threshold", async () => {
-    getOrgBillingSettingsMock.mockResolvedValue(makeSettings({ lowBalanceThresholdCents: 500n }));
+    getOrgBillingSettingsMock.mockResolvedValue(
+      makeSettings({ lowBalanceThresholdCents: 500n }),
+    );
     effectiveBalanceMock.mockResolvedValue(200n);
     const result = await isLowBalance("org-abc");
     expect(result.low).toBe(true);
@@ -142,24 +149,33 @@ describe("isLowBalance", () => {
   });
 
   it("returns low=false when balance >= threshold", async () => {
-    getOrgBillingSettingsMock.mockResolvedValue(makeSettings({ lowBalanceThresholdCents: 500n }));
+    getOrgBillingSettingsMock.mockResolvedValue(
+      makeSettings({ lowBalanceThresholdCents: 500n }),
+    );
     effectiveBalanceMock.mockResolvedValue(1000n);
     const result = await isLowBalance("org-abc");
     expect(result.low).toBe(false);
   });
 
   it("returns low=false when balance exactly equals threshold", async () => {
-    getOrgBillingSettingsMock.mockResolvedValue(makeSettings({ lowBalanceThresholdCents: 500n }));
+    getOrgBillingSettingsMock.mockResolvedValue(
+      makeSettings({ lowBalanceThresholdCents: 500n }),
+    );
     effectiveBalanceMock.mockResolvedValue(500n);
     const result = await isLowBalance("org-abc");
     expect(result.low).toBe(false);
   });
 
   it("forwards no db options by default (request path → RLS-enforced reads)", async () => {
-    getOrgBillingSettingsMock.mockResolvedValue(makeSettings({ lowBalanceThresholdCents: 500n }));
+    getOrgBillingSettingsMock.mockResolvedValue(
+      makeSettings({ lowBalanceThresholdCents: 500n }),
+    );
     effectiveBalanceMock.mockResolvedValue(200n);
     await isLowBalance("org-abc");
-    expect(getOrgBillingSettingsMock).toHaveBeenCalledWith("org-abc", undefined);
+    expect(getOrgBillingSettingsMock).toHaveBeenCalledWith(
+      "org-abc",
+      undefined,
+    );
     expect(effectiveBalanceMock).toHaveBeenCalledWith("org-abc", undefined);
   });
 
@@ -168,28 +184,43 @@ describe("isLowBalance", () => {
     // scope, so its billing reads must go through withSystemDb. isLowBalance
     // must thread the system flag down to getOrgBillingSettings AND
     // effectiveBalance, or the withTenantDb inside them throws TenantScopeError.
-    getOrgBillingSettingsMock.mockResolvedValue(makeSettings({ lowBalanceThresholdCents: 500n }));
+    getOrgBillingSettingsMock.mockResolvedValue(
+      makeSettings({ lowBalanceThresholdCents: 500n }),
+    );
     effectiveBalanceMock.mockResolvedValue(200n);
     const result = await isLowBalance("org-abc", { system: true });
     expect(result.low).toBe(true);
-    expect(getOrgBillingSettingsMock).toHaveBeenCalledWith("org-abc", { system: true });
-    expect(effectiveBalanceMock).toHaveBeenCalledWith("org-abc", { system: true });
+    expect(getOrgBillingSettingsMock).toHaveBeenCalledWith("org-abc", {
+      system: true,
+    });
+    expect(effectiveBalanceMock).toHaveBeenCalledWith("org-abc", {
+      system: true,
+    });
   });
 });
 
 describe("maybeAutoReload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    chargeOffSessionMock.mockResolvedValue({ paymentIntentId: "pi_test_001", status: "succeeded", succeeded: true });
+    chargeOffSessionMock.mockResolvedValue({
+      paymentIntentId: "pi_test_001",
+      status: "succeeded",
+      succeeded: true,
+    });
     getDefaultPaymentMethodIdMock.mockResolvedValue("pm_default");
-    createCreditLotMock.mockResolvedValue({ lotId: "lot-1", effectiveBalanceCents: 3000n });
+    createCreditLotMock.mockResolvedValue({
+      lotId: "lot-1",
+      effectiveBalanceCents: 3000n,
+    });
   });
 
   it("skips when auto-reload is disabled", async () => {
     const state = makeState();
     state.subRow = { stripeCustomerId: "cus_test" };
     dbHolder.instance = makeDb(state);
-    getOrgBillingSettingsMock.mockResolvedValue(makeSettings({ autoReloadEnabled: false }));
+    getOrgBillingSettingsMock.mockResolvedValue(
+      makeSettings({ autoReloadEnabled: false }),
+    );
     effectiveBalanceMock.mockResolvedValue(200n);
 
     const result = await maybeAutoReload("org-abc");
@@ -201,7 +232,9 @@ describe("maybeAutoReload", () => {
   it("skips when balance is above threshold", async () => {
     const state = makeState();
     dbHolder.instance = makeDb(state);
-    getOrgBillingSettingsMock.mockResolvedValue(makeSettings({ autoReloadThresholdCents: 500n }));
+    getOrgBillingSettingsMock.mockResolvedValue(
+      makeSettings({ autoReloadThresholdCents: 500n }),
+    );
     effectiveBalanceMock.mockResolvedValue(600n);
 
     const result = await maybeAutoReload("org-abc");
@@ -214,7 +247,10 @@ describe("maybeAutoReload", () => {
     dbHolder.instance = makeDb(state);
     const recentReload = new Date(Date.now() - 10 * 60 * 1000); // 10 minutes ago
     getOrgBillingSettingsMock.mockResolvedValue(
-      makeSettings({ autoReloadThresholdCents: 500n, lastAutoReloadAt: recentReload }),
+      makeSettings({
+        autoReloadThresholdCents: 500n,
+        lastAutoReloadAt: recentReload,
+      }),
     );
     effectiveBalanceMock.mockResolvedValue(100n);
 
@@ -228,7 +264,9 @@ describe("maybeAutoReload", () => {
     const state = makeState();
     state.subRow = null; // no subscription
     dbHolder.instance = makeDb(state);
-    getOrgBillingSettingsMock.mockResolvedValue(makeSettings({ autoReloadThresholdCents: 500n }));
+    getOrgBillingSettingsMock.mockResolvedValue(
+      makeSettings({ autoReloadThresholdCents: 500n }),
+    );
     effectiveBalanceMock.mockResolvedValue(100n);
 
     const result = await maybeAutoReload("org-abc");
@@ -241,28 +279,34 @@ describe("maybeAutoReload", () => {
     const state = makeState();
     state.subRow = { stripeCustomerId: "cus_test_001" };
     dbHolder.instance = makeDb(state);
-    getOrgBillingSettingsMock.mockResolvedValue(makeSettings({
-      autoReloadThresholdCents: 500n,
-      autoReloadAmountCents: 2000n,
-      autoReloadPaymentMethodId: "pm_saved_001",
-    }));
+    getOrgBillingSettingsMock.mockResolvedValue(
+      makeSettings({
+        autoReloadThresholdCents: 500n,
+        autoReloadAmountCents: 2000n,
+        autoReloadPaymentMethodId: "pm_saved_001",
+      }),
+    );
     effectiveBalanceMock.mockResolvedValue(100n);
 
     const result = await maybeAutoReload("org-abc");
 
     expect(result.reloaded).toBe(true);
     expect(result.amountCents).toBe(2000);
-    expect(chargeOffSessionMock).toHaveBeenCalledWith(expect.objectContaining({
-      customerId: "cus_test_001",
-      amountCents: 2000,
-      paymentMethodId: "pm_saved_001",
-    }));
-    expect(createCreditLotMock).toHaveBeenCalledWith(expect.objectContaining({
-      orgId: "org-abc",
-      amountCents: 2000n,
-      source: "purchase",
-      reason: "grant_auto_reload",
-    }));
+    expect(chargeOffSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customerId: "cus_test_001",
+        amountCents: 2000,
+        paymentMethodId: "pm_saved_001",
+      }),
+    );
+    expect(createCreditLotMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: "org-abc",
+        amountCents: 2000n,
+        source: "purchase",
+        reason: "grant_auto_reload",
+      }),
+    );
     // lastAutoReloadAt should be updated.
     expect(state.updateCalled).toBe(true);
   });
@@ -271,17 +315,21 @@ describe("maybeAutoReload", () => {
     const state = makeState();
     state.subRow = { stripeCustomerId: "cus_test_001" };
     dbHolder.instance = makeDb(state);
-    getOrgBillingSettingsMock.mockResolvedValue(makeSettings({
-      autoReloadPaymentMethodId: null,
-    }));
+    getOrgBillingSettingsMock.mockResolvedValue(
+      makeSettings({
+        autoReloadPaymentMethodId: null,
+      }),
+    );
     effectiveBalanceMock.mockResolvedValue(100n);
     getDefaultPaymentMethodIdMock.mockResolvedValue("pm_customer_default");
 
     await maybeAutoReload("org-abc");
 
-    expect(chargeOffSessionMock).toHaveBeenCalledWith(expect.objectContaining({
-      paymentMethodId: "pm_customer_default",
-    }));
+    expect(chargeOffSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paymentMethodId: "pm_customer_default",
+      }),
+    );
   });
 
   it("returns reloaded=false with reason on charge failure", async () => {

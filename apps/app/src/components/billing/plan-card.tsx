@@ -41,10 +41,19 @@ const RELATION_LABEL: Record<PlanRelation, string> = {
   switch: "Switch",
 };
 
-export function PlanCard({ plan, interval, relation, onSelect, pending }: PlanCardProps) {
+export function PlanCard({
+  plan,
+  interval,
+  relation,
+  onSelect,
+  pending,
+}: PlanCardProps) {
   const effectiveRelation: PlanRelation = relation ?? "switch";
 
-  const price = interval === "month" ? plan.monthlyCents : (plan.annualCents ?? plan.monthlyCents * 12);
+  const price =
+    interval === "month"
+      ? plan.monthlyCents
+      : (plan.annualCents ?? plan.monthlyCents * 12);
   const isCur = effectiveRelation === "current";
 
   return (
@@ -74,14 +83,18 @@ export function PlanCard({ plan, interval, relation, onSelect, pending }: PlanCa
     >
       <div className="text-3xl font-semibold">
         {formatCents(price)}
-        <span className="ml-1 text-sm font-normal text-muted-foreground">/{interval}</span>
+        <span className="ml-1 text-sm font-normal text-muted-foreground">
+          /{interval}
+        </span>
       </div>
       <ul className="mt-4 space-y-2 text-sm">
         <li className="flex items-center gap-2">
-          <Check className="h-3.5 w-3.5 text-primary" /> {plan.includedSeats} seats included
+          <Check className="h-3.5 w-3.5 text-primary" /> {plan.includedSeats}{" "}
+          seats included
         </li>
         <li className="flex items-center gap-2">
-          <Check className="h-3.5 w-3.5 text-primary" /> {formatCents(plan.includedCreditCents)} in credits / month
+          <Check className="h-3.5 w-3.5 text-primary" />{" "}
+          {formatCents(plan.includedCreditCents)} in credits / month
         </li>
         {plan.features.map((f) => (
           <li key={f.label} className="flex items-center gap-2">

@@ -6,10 +6,16 @@
  * swap — never an import-site change. App / API / MCP code depends on
  * `StorageAdapter`, never on `@vercel/blob` directly.
  *
- * A stored object always yields a public, durable URL plus the canonical key
- * used to address it for later deletion. Binary payloads are accepted as the
- * web-standard shapes a route handler already has in hand (a `File`/`Blob` from
- * `formData()`, or a raw byte buffer).
+ * A stored object always yields the canonical key used to address it later,
+ * plus a `url`. That `url` is a durable public CDN URL only for a
+ * `access: "public"` object on a driver that has a CDN; for private objects —
+ * and for every object on the filesystem driver — it is the key itself, and
+ * bytes must be read back through {@link StorageAdapter.get}. Never render a
+ * `url` in a browser without first checking the returned `access`.
+ *
+ * Binary payloads are accepted as the web-standard shapes a route handler
+ * already has in hand (a `File`/`Blob` from `formData()`, or a raw byte
+ * buffer).
  */
 export type StorageBody = Blob | ArrayBuffer | Uint8Array;
 

@@ -36,21 +36,38 @@ interface TooltipPopupProps
 const TooltipPopup = React.forwardRef<
   React.ComponentRef<typeof TooltipPrimitive.Popup>,
   TooltipPopupProps
->(({ className, sideOffset = 6, align = "center", side = "top", portalProps, ...props }, ref) => (
-  <TooltipPrimitive.Portal {...portalProps}>
-    <TooltipPrimitive.Positioner sideOffset={sideOffset} align={align} side={side} className="z-50">
-      <TooltipPrimitive.Popup
-        ref={ref}
-        className={cn(
-          "z-50 max-w-xs rounded-md border border-tooltip-border bg-tooltip-bg px-2 py-1 text-xs font-medium text-tooltip-fg",
-          "origin-[var(--transform-origin)] transition-[opacity,transform,translate,scale] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.96] data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.96]",
-          className,
-        )}
-        {...props}
-      />
-    </TooltipPrimitive.Positioner>
-  </TooltipPrimitive.Portal>
-));
+>(
+  (
+    {
+      className,
+      sideOffset = 6,
+      align = "center",
+      side = "top",
+      portalProps,
+      ...props
+    },
+    ref,
+  ) => (
+    <TooltipPrimitive.Portal {...portalProps}>
+      <TooltipPrimitive.Positioner
+        sideOffset={sideOffset}
+        align={align}
+        side={side}
+        className="z-50"
+      >
+        <TooltipPrimitive.Popup
+          ref={ref}
+          className={cn(
+            "z-50 max-w-xs rounded-md border border-tooltip-border bg-tooltip-bg px-2 py-1 text-xs font-medium text-tooltip-fg",
+            "origin-[var(--transform-origin)] transition-[opacity,transform,translate,scale] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.96] data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.96]",
+            className,
+          )}
+          {...props}
+        />
+      </TooltipPrimitive.Positioner>
+    </TooltipPrimitive.Portal>
+  ),
+);
 TooltipPopup.displayName = "TooltipPopup";
 
 export { Tooltip, TooltipTrigger, TooltipPopup, TooltipProvider };

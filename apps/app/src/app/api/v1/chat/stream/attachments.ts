@@ -60,7 +60,9 @@ export interface ResolveAttachmentMediaResult {
  * `packages/agent/src/handlers/agent.feature.verify.ts`'s judge-image fetch —
  * duplicated locally since it's a tiny, dependency-free helper and the two
  * call sites live in different packages). */
-async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
+async function streamToBuffer(
+  stream: ReadableStream<Uint8Array>,
+): Promise<Buffer> {
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];
   for (;;) {

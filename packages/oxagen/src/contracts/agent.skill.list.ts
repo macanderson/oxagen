@@ -4,12 +4,17 @@ import { registerCapability } from "../registry";
 export const agentSkillList = registerCapability({
   name: "list_agent_skills",
   domain: "agent",
-  description: "List skills available in the active workspace — built-in filesystem skills plus tenant-defined skills",
+  description:
+    "List skills available in the active workspace — built-in filesystem skills plus tenant-defined skills",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   sensitivity: "low",
   mutates: false,
   defaultEffect: "deny",

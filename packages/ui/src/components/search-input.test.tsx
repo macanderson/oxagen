@@ -30,13 +30,25 @@ describe("SearchInput", () => {
 
   it("hides the clear button while empty, shows it with a value", () => {
     const { rerender } = render(
-      <SearchInput placeholder="Search" value="" onChange={() => {}} onClear={() => {}} />,
+      <SearchInput
+        placeholder="Search"
+        value=""
+        onChange={() => {}}
+        onClear={() => {}}
+      />,
     );
     expect(screen.queryByRole("button", { name: "Clear search" })).toBeNull();
     rerender(
-      <SearchInput placeholder="Search" value="neo4j" onChange={() => {}} onClear={() => {}} />,
+      <SearchInput
+        placeholder="Search"
+        value="neo4j"
+        onChange={() => {}}
+        onClear={() => {}}
+      />,
     );
-    expect(screen.getByRole("button", { name: "Clear search" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Clear search" }),
+    ).toBeInTheDocument();
   });
 
   it("never shows a clear button without onClear", () => {
@@ -47,7 +59,14 @@ describe("SearchInput", () => {
   it("calls onClear when the clear button is clicked", async () => {
     const user = userEvent.setup();
     const onClear = vi.fn();
-    render(<SearchInput placeholder="Search" value="x" onChange={() => {}} onClear={onClear} />);
+    render(
+      <SearchInput
+        placeholder="Search"
+        value="x"
+        onChange={() => {}}
+        onClear={onClear}
+      />,
+    );
     await user.click(screen.getByRole("button", { name: "Clear search" }));
     expect(onClear).toHaveBeenCalledOnce();
   });

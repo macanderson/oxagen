@@ -12,8 +12,12 @@ export default function SignupPage() {
 
       <div className="rounded-xl border border-border/60 bg-card/80 p-8 shadow-xl space-y-6 backdrop-blur-xl">
         <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Create an account</h1>
-          <p className="text-sm text-muted-foreground">Start your Oxagen workspace today</p>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Create an account
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Start your Oxagen workspace today
+          </p>
         </div>
 
         <OAuthButtons callbackURL="/" />
@@ -31,7 +35,10 @@ export default function SignupPage() {
 
         <p className="text-center text-sm text-muted-foreground">
           Already have an account?{" "}
-          <Link href="/login" className="font-medium text-primary hover:underline">
+          <Link
+            href="/login"
+            className="font-medium text-primary hover:underline"
+          >
             Sign in
           </Link>
         </p>

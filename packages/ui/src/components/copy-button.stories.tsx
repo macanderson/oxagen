@@ -27,7 +27,12 @@ export const OutlineWithLabel: Story = {
   render: () => (
     <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-2 py-1 font-mono text-xs">
       913d6df1-4c2a
-      <CopyButton value="913d6df1-4c2a" label="Copy ID" size="icon-sm" variant="outline" />
+      <CopyButton
+        value="913d6df1-4c2a"
+        label="Copy ID"
+        size="icon-sm"
+        variant="outline"
+      />
     </div>
   ),
 };

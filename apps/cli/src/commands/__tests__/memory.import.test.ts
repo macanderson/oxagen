@@ -11,7 +11,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../lib/memory-client.js", async (importActual) => {
-  const actual = await importActual<typeof import("../../lib/memory-client.js")>();
+  const actual =
+    await importActual<typeof import("../../lib/memory-client.js")>();
   return {
     ...actual,
     parseImportMemories: mocks.parseImportMemories,
@@ -49,14 +50,18 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "oxagen-mem-import-"));
   out = [];
   err = [];
-  vi.spyOn(process.stdout, "write").mockImplementation((s: string | Uint8Array) => {
-    out.push(String(s));
-    return true;
-  });
-  vi.spyOn(process.stderr, "write").mockImplementation((s: string | Uint8Array) => {
-    err.push(String(s));
-    return true;
-  });
+  vi.spyOn(process.stdout, "write").mockImplementation(
+    (s: string | Uint8Array) => {
+      out.push(String(s));
+      return true;
+    },
+  );
+  vi.spyOn(process.stderr, "write").mockImplementation(
+    (s: string | Uint8Array) => {
+      err.push(String(s));
+      return true;
+    },
+  );
   // fail() calls process.exit(1); make it throw so tests can assert on it.
   vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
     throw new Error(`process.exit:${code}`);
@@ -76,7 +81,10 @@ const errText = () => err.join("");
 describe("handleMemoryImport", () => {
   it("previews drafts and writes nothing without --yes", async () => {
     mocks.parseImportMemories.mockResolvedValue({
-      drafts: [draft({ lesson: "Lesson one." }), draft({ lesson: "Lesson two." })],
+      drafts: [
+        draft({ lesson: "Lesson one." }),
+        draft({ lesson: "Lesson two." }),
+      ],
       documentCount: 1,
       skipped: [],
     });
@@ -127,7 +135,9 @@ describe("handleMemoryImport", () => {
       skipped: [],
     });
     mocks.commitImportMemories.mockResolvedValue({
-      results: [{ lesson: "Lesson one.", ok: true, memoryId: "m_1", error: null }],
+      results: [
+        { lesson: "Lesson one.", ok: true, memoryId: "m_1", error: null },
+      ],
       imported: 1,
       failed: 0,
     });
@@ -151,7 +161,10 @@ describe("handleMemoryImport", () => {
       imported: 1,
       failed: 0,
     });
-    await handleMemoryImport([md("rules.md", "- content")], { yes: true, json: true });
+    await handleMemoryImport([md("rules.md", "- content")], {
+      yes: true,
+      json: true,
+    });
     const parsed = JSON.parse(text());
     expect(parsed.imported).toBe(1);
   });

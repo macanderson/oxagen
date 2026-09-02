@@ -36,7 +36,8 @@ function buildModeOptions(
       options.push({
         value: "webhook",
         label: "Real-time (webhook)",
-        description: "Events are pushed in real time. Fastest option; requires a reachable endpoint.",
+        description:
+          "Events are pushed in real time. Fastest option; requires a reachable endpoint.",
       });
     }
     if (pollingSupported) {
@@ -72,12 +73,19 @@ export function SyncCadencePanel() {
   const sync = schema?.sync;
   if (!sync) return null;
 
-  const modeOptions = buildModeOptions(sync.delivery, sync.pollingSupported ?? false);
+  const modeOptions = buildModeOptions(
+    sync.delivery,
+    sync.pollingSupported ?? false,
+  );
   // Only show panel if there are 2+ options (otherwise no choice to make)
   if (modeOptions.length < 2) return null;
 
   const defaultMode: SyncMode =
-    sync.delivery === "webhook" ? "webhook" : sync.pollingSupported ? "polling" : "manual";
+    sync.delivery === "webhook"
+      ? "webhook"
+      : sync.pollingSupported
+        ? "polling"
+        : "manual";
 
   const selectedMode: SyncMode =
     (formState.values[SYNC_MODE_KEY] as SyncMode | undefined) ?? defaultMode;
@@ -88,7 +96,9 @@ export function SyncCadencePanel() {
       : (sync.polling?.defaultIntervalSeconds ?? 300);
 
   const minInterval = sync.polling?.minIntervalSeconds ?? 60;
-  const maxInterval = (sync.polling as { maxIntervalSeconds?: number } | undefined)?.maxIntervalSeconds ?? 86400;
+  const maxInterval =
+    (sync.polling as { maxIntervalSeconds?: number } | undefined)
+      ?.maxIntervalSeconds ?? 86400;
 
   const handleIntervalChange = (val: string) => {
     const n = parseInt(val, 10);
@@ -133,8 +143,12 @@ export function SyncCadencePanel() {
           >
             <Radio value={opt.value} className="mt-0.5 shrink-0" />
             <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="text-sm font-medium text-foreground">{opt.label}</span>
-              <span className="text-xs text-muted-foreground">{opt.description}</span>
+              <span className="text-sm font-medium text-foreground">
+                {opt.label}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {opt.description}
+              </span>
             </div>
           </label>
         ))}
@@ -143,9 +157,7 @@ export function SyncCadencePanel() {
       {/* Polling interval input */}
       {selectedMode === "polling" && sync.polling && (
         <div className="flex flex-col gap-1.5 pl-0">
-          <Label htmlFor="sync-interval">
-            Polling interval
-          </Label>
+          <Label htmlFor="sync-interval">Polling interval</Label>
           <div className="flex items-center gap-2">
             <Input
               id="sync-interval"
@@ -162,10 +174,13 @@ export function SyncCadencePanel() {
             </span>
           </div>
           {intervalError ? (
-            <p role="alert" className="text-xs text-destructive">{intervalError}</p>
+            <p role="alert" className="text-xs text-destructive">
+              {intervalError}
+            </p>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Min: {formatSeconds(minInterval)} — Max: {formatSeconds(maxInterval)}
+              Min: {formatSeconds(minInterval)} — Max:{" "}
+              {formatSeconds(maxInterval)}
             </p>
           )}
         </div>

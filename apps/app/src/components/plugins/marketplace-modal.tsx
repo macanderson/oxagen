@@ -174,7 +174,20 @@ export function MarketplaceModal({
         const res = await fetch(
           `/api/v1/plugin/catalog/browse?${params.toString()}`,
         );
-        if (!res.ok) throw new Error(await res.text());
+        // Do NOT surface the raw response body — a 5xx from the edge returns an
+        // HTML error page, and a handler error can carry internal detail. Log
+        // the body for the console, show the user a stable, actionable line.
+        if (!res.ok) {
+          console.error(
+            `plugin/catalog/browse failed (${res.status})`,
+            await res.text().catch(() => ""),
+          );
+          throw new Error(
+            res.status === 403
+              ? "You don't have access to the plugin catalog for this workspace."
+              : `Couldn't load the plugin catalog (${res.status}). Try again in a moment.`,
+          );
+        }
         const data = (await res.json()) as {
           servers: CatalogServer[];
           nextOffset: number | null;

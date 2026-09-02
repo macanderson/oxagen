@@ -80,10 +80,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 
   // pdf-lib's save() returns a Uint8Array starting with %PDF
-  const fakePdfBytes = new Uint8Array([
-    ...PDF_MAGIC,
-    ...new Uint8Array(100),
-  ]);
+  const fakePdfBytes = new Uint8Array([...PDF_MAGIC, ...new Uint8Array(100)]);
   mocks.pdfDocSave.mockResolvedValue(fakePdfBytes);
 
   mocks.persistGeneratedAsset.mockResolvedValue(FAKE_ASSET);
@@ -98,7 +95,10 @@ describe("documentsPdfCreateHandler", () => {
           sections: [
             {
               heading: "Executive Summary",
-              paragraphs: ["Results were positive.", "Growth exceeded targets."],
+              paragraphs: [
+                "Results were positive.",
+                "Growth exceeded targets.",
+              ],
             },
           ],
         },
@@ -109,7 +109,10 @@ describe("documentsPdfCreateHandler", () => {
     expect(mocks.pdfDocSave).toHaveBeenCalledTimes(1);
     expect(mocks.persistGeneratedAsset).toHaveBeenCalledTimes(1);
 
-    const persistArg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    const persistArg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(persistArg.kind).toBe("pdf");
     expect(persistArg.mimeType).toBe("application/pdf");
 
@@ -137,10 +140,7 @@ describe("documentsPdfCreateHandler", () => {
   });
 
   it("emits a file-attachment render directive with .pdf filename", async () => {
-    const result = await documentsPdfCreateHandler(
-      { title: "My Report" },
-      CTX,
-    );
+    const result = await documentsPdfCreateHandler({ title: "My Report" }, CTX);
 
     expect(result.render.componentId).toBe("file-attachment");
     expect(result.render.props.kind).toBe("pdf");
@@ -179,12 +179,17 @@ describe("documentsPdfCreateHandler", () => {
 
   it("persists with accessPolicy=org", async () => {
     await documentsPdfCreateHandler({ title: "Shared PDF" }, CTX);
-    const persistArg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    const persistArg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(persistArg.accessPolicy).toBe("org");
   });
 
   it("throws when persistGeneratedAsset rejects", async () => {
-    mocks.persistGeneratedAsset.mockRejectedValueOnce(new Error("blob write failure"));
+    mocks.persistGeneratedAsset.mockRejectedValueOnce(
+      new Error("blob write failure"),
+    );
     await expect(
       documentsPdfCreateHandler({ title: "Fail" }, CTX),
     ).rejects.toThrow("blob write failure");

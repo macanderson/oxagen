@@ -26,7 +26,9 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-export async function handleSecretList(opts: { json?: boolean }): Promise<void> {
+export async function handleSecretList(opts: {
+  json?: boolean;
+}): Promise<void> {
   const { keys } = await apiPost<{ keys: KeySummary[] }>("secret/key/list", {});
   if (opts.json) {
     process.stdout.write(JSON.stringify(keys, null, 2) + "\n");
@@ -55,19 +57,37 @@ export async function handleSecretSet(
     await apiPost<{ id: string }>("secret/key/upsert", { key, sensitive });
     const keyId = await resolveSecretKeyId(key);
     const environmentId = await resolveEnvironmentId(opts.env);
-    await apiPost<{ ok: boolean }>("secret/value/set", { keyId, environmentId, value });
-    process.stdout.write(`✓ key ${key} (${sensitive ? "sensitive" : "plain"}) · override set for ${opts.env}\n`);
+    await apiPost<{ ok: boolean }>("secret/value/set", {
+      keyId,
+      environmentId,
+      value,
+    });
+    process.stdout.write(
+      `✓ key ${key} (${sensitive ? "sensitive" : "plain"}) · override set for ${opts.env}\n`,
+    );
   } else {
-    await apiPost<{ id: string }>("secret/key/upsert", { key, sensitive, defaultValue: value });
-    process.stdout.write(`✓ key ${key} (${sensitive ? "sensitive" : "plain"}) · default value set\n`);
+    await apiPost<{ id: string }>("secret/key/upsert", {
+      key,
+      sensitive,
+      defaultValue: value,
+    });
+    process.stdout.write(
+      `✓ key ${key} (${sensitive ? "sensitive" : "plain"}) · default value set\n`,
+    );
   }
 }
 
-export async function handleSecretRemove(key: string, opts: { env?: string }): Promise<void> {
+export async function handleSecretRemove(
+  key: string,
+  opts: { env?: string },
+): Promise<void> {
   const keyId = await resolveSecretKeyId(key);
   if (opts.env) {
     const environmentId = await resolveEnvironmentId(opts.env);
-    await apiPost<{ ok: boolean }>("secret/value/unset", { keyId, environmentId });
+    await apiPost<{ ok: boolean }>("secret/value/unset", {
+      keyId,
+      environmentId,
+    });
     process.stdout.write(`✓ removed override of ${key} for ${opts.env}\n`);
   } else {
     await apiPost<{ ok: boolean }>("secret/key/delete", { keyId });
@@ -75,27 +95,34 @@ export async function handleSecretRemove(key: string, opts: { env?: string }): P
   }
 }
 
-export async function handleSecretReveal(key: string, opts: { env?: string }): Promise<void> {
+export async function handleSecretReveal(
+  key: string,
+  opts: { env?: string },
+): Promise<void> {
   const keyId = await resolveSecretKeyId(key);
   const environmentId = opts.env ? await resolveEnvironmentId(opts.env) : null;
-  const { value, source } = await apiPost<{ key: string; value: string | null; source: string }>(
-    "secret/reveal",
-    { keyId, environmentId },
-  );
+  const { value, source } = await apiPost<{
+    key: string;
+    value: string | null;
+    source: string;
+  }>("secret/reveal", { keyId, environmentId });
   process.stderr.write("⚠ access recorded (actor, time)\n");
   process.stdout.write(value === null ? `‹unset›\n` : `${value}\n`);
-  if (source === "unset") process.stderr.write("(no override and no default)\n");
+  if (source === "unset")
+    process.stderr.write("(no override and no default)\n");
 }
 
-export async function handleSecretImport(
-  opts: { env?: string; file?: string; yes?: boolean },
-): Promise<void> {
+export async function handleSecretImport(opts: {
+  env?: string;
+  file?: string;
+  yes?: boolean;
+}): Promise<void> {
   const text = opts.file ? readFileSync(opts.file, "utf8") : await readStdin();
   const environmentId = opts.env ? await resolveEnvironmentId(opts.env) : null;
-  const { rows, committed } = await apiPost<{ rows: ImportRow[]; committed: boolean }>(
-    "secret/import-env",
-    { text, environmentId, commit: !!opts.yes },
-  );
+  const { rows, committed } = await apiPost<{
+    rows: ImportRow[];
+    committed: boolean;
+  }>("secret/import-env", { text, environmentId, commit: !!opts.yes });
   const newCount = rows.filter((r) => r.isNewKey).length;
   process.stdout.write(
     `${committed ? "imported" : "preview"} — ${rows.length} parsed (${newCount} new, ${rows.length - newCount} existing):\n`,
@@ -113,12 +140,15 @@ export async function handleSecretImport(
   if (!committed) process.stdout.write("rerun with --yes to apply\n");
 }
 
-export async function handleSecretExport(opts: { env?: string; out?: string }): Promise<void> {
+export async function handleSecretExport(opts: {
+  env?: string;
+  out?: string;
+}): Promise<void> {
   const environmentId = opts.env ? await resolveEnvironmentId(opts.env) : null;
-  const { dotenv, env } = await apiPost<{ dotenv: string; env: Array<{ key: string }> }>(
-    "secret/export",
-    { environmentId },
-  );
+  const { dotenv, env } = await apiPost<{
+    dotenv: string;
+    env: Array<{ key: string }>;
+  }>("secret/export", { environmentId });
   process.stderr.write("⚠ access recorded (actor, time)\n");
   if (opts.out) {
     const { writeFileSync } = await import("fs");

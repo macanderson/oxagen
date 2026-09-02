@@ -3,11 +3,14 @@ import { schemaVersionPin } from "@oxagen/oxagen/contracts/schema.version.pin";
 import { getOrCreateRegistry, pinVersion } from "./schema.versioning";
 import { logger } from "./logger";
 
-export const schemaVersionPinHandler: CapabilityHandler<typeof schemaVersionPin> = async (
-  input,
-  ctx,
-) => {
-  const registry = await getOrCreateRegistry(ctx.orgId, ctx.workspaceId, ctx.userId);
+export const schemaVersionPinHandler: CapabilityHandler<
+  typeof schemaVersionPin
+> = async (input, ctx) => {
+  const registry = await getOrCreateRegistry(
+    ctx.orgId,
+    ctx.workspaceId,
+    ctx.userId,
+  );
 
   const result = await pinVersion(
     ctx.orgId,

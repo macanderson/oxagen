@@ -283,7 +283,9 @@ export function buildTestTraceRunTool(
           durationMs: parsed.durationMs,
           failures: parsed.failures,
           executedPath: executedPath ?? undefined,
-          traceDegraded: executedPath === null || undefined,
+          // Only reported when the trace actually degraded — `undefined` drops
+          // the key from the model-facing payload rather than saying "false".
+          traceDegraded: executedPath === null ? true : undefined,
           hint:
             parsed.failed > 0 && executedPath && executedPath.files.length > 0
               ? "Ground the debugging in executedPath: these files/functions actually ran during the failure — read the top entries before searching elsewhere."

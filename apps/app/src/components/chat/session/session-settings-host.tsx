@@ -8,7 +8,12 @@
 import * as React from "react";
 import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Sheet, SheetPopup, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetPopup,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 // ---------------------------------------------------------------------------
 // Mobile — full-screen drawer
@@ -26,7 +31,11 @@ export interface SessionSettingsDrawerProps {
  * a home indicator. `SheetPopup` already renders the close X (accessible name
  * "Close") — no need to add a second one.
  */
-export function SessionSettingsDrawer({ open, onOpenChange, children }: SessionSettingsDrawerProps) {
+export function SessionSettingsDrawer({
+  open,
+  onOpenChange,
+  children,
+}: SessionSettingsDrawerProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetPopup
@@ -58,10 +67,17 @@ export interface SessionSettingsSlideOverProps {
 
 /** Right slide-over panel. Esc closes and focus is trapped — both are the
  * Base UI `Dialog` (Sheet)'s default modal behavior, not custom code here. */
-export function SessionSettingsSlideOver({ open, onOpenChange, children }: SessionSettingsSlideOverProps) {
+export function SessionSettingsSlideOver({
+  open,
+  onOpenChange,
+  children,
+}: SessionSettingsSlideOverProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetPopup side="right" className="flex w-[360px] max-w-[90vw] flex-col gap-0 p-0">
+      <SheetPopup
+        side="right"
+        className="flex w-[360px] max-w-[90vw] flex-col gap-0 p-0"
+      >
         <SheetHeader className="border-b border-border px-4 py-3 text-left">
           <SheetTitle>Session settings</SheetTitle>
         </SheetHeader>
@@ -86,7 +102,11 @@ export interface SessionSettingsRailProps {
  * (icon · title · collapse chevron) — that component isn't exported, so this
  * reproduces the same look rather than importing it.
  */
-export function SessionSettingsRail({ children, className, defaultOpen = true }: SessionSettingsRailProps) {
+export function SessionSettingsRail({
+  children,
+  className,
+  defaultOpen = true,
+}: SessionSettingsRailProps) {
   const [open, setOpen] = React.useState(defaultOpen);
   return (
     <section
@@ -102,14 +122,24 @@ export function SessionSettingsRail({ children, className, defaultOpen = true }:
         aria-expanded={open}
         className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
-        <SlidersHorizontal className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <SlidersHorizontal
+          className="size-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
         <span className="flex-1 truncate text-sm font-semibold">Session</span>
         <ChevronDown
-          className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
+          className={cn(
+            "size-4 shrink-0 text-muted-foreground transition-transform",
+            open && "rotate-180",
+          )}
           aria-hidden="true"
         />
       </button>
-      {open ? <div className="border-t border-border/60 px-3 pb-3 pt-2.5">{children}</div> : null}
+      {open ? (
+        <div className="border-t border-border/60 px-3 pb-3 pt-2.5">
+          {children}
+        </div>
+      ) : null}
     </section>
   );
 }

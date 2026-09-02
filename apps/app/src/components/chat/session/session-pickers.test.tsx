@@ -5,7 +5,11 @@
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
-import { SessionPickerList, ModelPickerRows, type SessionPickerGroup } from "./session-pickers";
+import {
+  SessionPickerList,
+  ModelPickerRows,
+  type SessionPickerGroup,
+} from "./session-pickers";
 import { ChatSessionProvider, useChatSession } from "./session-store";
 import type { SessionSeed } from "./session-state";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
@@ -33,11 +37,19 @@ const GROUPS: SessionPickerGroup[] = [
 
 describe("SessionPickerList", () => {
   it("filters rows as the search query changes", () => {
-    render(<SessionPickerList groups={GROUPS} selectedId={null} onSelect={() => {}} />);
+    render(
+      <SessionPickerList
+        groups={GROUPS}
+        selectedId={null}
+        onSelect={() => {}}
+      />,
+    );
     expect(screen.getByText("Alpha")).toBeInTheDocument();
     expect(screen.getByText("Charlie")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "char" } });
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "char" },
+    });
 
     expect(screen.queryByText("Alpha")).not.toBeInTheDocument();
     expect(screen.queryByText("Bravo")).not.toBeInTheDocument();
@@ -45,8 +57,17 @@ describe("SessionPickerList", () => {
   });
 
   it("shows the empty message when nothing matches", () => {
-    render(<SessionPickerList groups={GROUPS} selectedId={null} onSelect={() => {}} emptyMessage="Nothing here" />);
-    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "zzz-no-match" } });
+    render(
+      <SessionPickerList
+        groups={GROUPS}
+        selectedId={null}
+        onSelect={() => {}}
+        emptyMessage="Nothing here"
+      />,
+    );
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "zzz-no-match" },
+    });
     expect(screen.getByText("Nothing here")).toBeInTheDocument();
   });
 
@@ -66,9 +87,17 @@ describe("SessionPickerList", () => {
   });
 
   it("marks the currently selected row aria-selected", () => {
-    render(<SessionPickerList groups={GROUPS} selectedId="c" onSelect={() => {}} />);
-    expect(screen.getByRole("option", { name: /Charlie/ })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("option", { name: /Alpha/ })).toHaveAttribute("aria-selected", "false");
+    render(
+      <SessionPickerList groups={GROUPS} selectedId="c" onSelect={() => {}} />,
+    );
+    expect(screen.getByRole("option", { name: /Charlie/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("option", { name: /Alpha/ })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
   });
 });
 
@@ -133,7 +162,9 @@ describe("ModelPickerRows", () => {
   it("shows the Anthropic provider group before any other vendor", () => {
     renderModelHarness();
     fireEvent.click(screen.getByText("All providers"));
-    const groupHeaders = screen.getAllByRole("group").map((el) => el.getAttribute("aria-label"));
+    const groupHeaders = screen
+      .getAllByRole("group")
+      .map((el) => el.getAttribute("aria-label"));
     const anthropicIndex = groupHeaders.indexOf("Anthropic");
     const openaiIndex = groupHeaders.indexOf("OpenAI");
     expect(anthropicIndex).toBeGreaterThanOrEqual(0);

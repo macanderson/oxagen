@@ -6,7 +6,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return { ...real, withTenantDb: mocks.withTenantDb };
 });
-vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("./logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 import { repoResumeHandler } from "./repo.resume";
 
@@ -20,18 +22,23 @@ type Existing = {
 } | null;
 
 function setup(existing: Existing, setSpy = vi.fn()) {
-  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      select: () => ({
-        from: () => ({ where: () => ({ limit: () => Promise.resolve(existing ? [existing] : []) }) }),
+  mocks.withTenantDb.mockImplementation(
+    (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: () => Promise.resolve(existing ? [existing] : []),
+            }),
+          }),
+        }),
+        update: () => ({
+          set: (v: unknown) => {
+            setSpy(v);
+            return { where: () => Promise.resolve() };
+          },
+        }),
       }),
-      update: () => ({
-        set: (v: unknown) => {
-          setSpy(v);
-          return { where: () => Promise.resolve() };
-        },
-      }),
-    }),
   );
   return { setSpy };
 }
@@ -51,7 +58,9 @@ describe("repo.resume handler", () => {
     expect(out.nextSyncAt).toBeNull();
     expect(() => new Date(out.resumedAt).toISOString()).not.toThrow();
     // DB status is the live 'connected' even though the contract exposes 'active'.
-    expect(setSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "connected" }));
+    expect(setSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "connected" }),
+    );
   });
 
   it("computes nextSyncAt for a polling connection", async () => {
@@ -63,19 +72,30 @@ describe("repo.resume handler", () => {
     });
     const out = await repoResumeHandler({ repoId: "con_1" }, CTX);
     expect(out.nextSyncAt).not.toBeNull();
-    const delta = new Date(out.nextSyncAt!).getTime() - new Date(out.resumedAt).getTime();
+    const delta =
+      new Date(out.nextSyncAt!).getTime() - new Date(out.resumedAt).getTime();
     expect(delta).toBe(900 * 1000);
   });
 
   it("is idempotent when resuming an already-connected connection", async () => {
-    setup({ id: "c1", status: "connected", deliveryMethod: "webhook", deliveryConfig: null });
+    setup({
+      id: "c1",
+      status: "connected",
+      deliveryMethod: "webhook",
+      deliveryConfig: null,
+    });
     const out = await repoResumeHandler({ repoId: "con_1" }, CTX);
     expect(out.status).toBe("active");
     expect(out.nextSyncAt).toBeNull();
   });
 
   it("rejects resuming a connection in the error state (409)", async () => {
-    setup({ id: "c1", status: "error", deliveryMethod: "webhook", deliveryConfig: null });
+    setup({
+      id: "c1",
+      status: "error",
+      deliveryMethod: "webhook",
+      deliveryConfig: null,
+    });
     await expect(repoResumeHandler({ repoId: "con_1" }, CTX)).rejects.toThrow(
       /only paused\/connected/,
     );
@@ -83,8 +103,8 @@ describe("repo.resume handler", () => {
 
   it("throws 404 when the connection does not exist", async () => {
     setup(null);
-    await expect(repoResumeHandler({ repoId: "con_missing" }, CTX)).rejects.toThrow(
-      "Repository connection not found",
-    );
+    await expect(
+      repoResumeHandler({ repoId: "con_missing" }, CTX),
+    ).rejects.toThrow("Repository connection not found");
   });
 });

@@ -30,7 +30,9 @@ export const memoryImportDraftSchema = z.object({
   memoryClass: memoryClassEnum
     .default("OBSERVATION")
     .describe("The epistemic class the parser classified this as"),
-  memoryKind: memoryKindSchema.describe("The content domain the parser classified this as"),
+  memoryKind: memoryKindSchema.describe(
+    "The content domain the parser classified this as",
+  ),
   enforcementScore: z
     .number()
     .int()
@@ -56,11 +58,15 @@ export const memoryImportDraftSchema = z.object({
     .string()
     .max(256)
     .default("")
-    .describe("Filename the draft was extracted from — provenance only, not persisted as a field"),
+    .describe(
+      "Filename the draft was extracted from — provenance only, not persisted as a field",
+    ),
   classified: z
     .boolean()
     .default(false)
-    .describe("true when the model inferred kind/weight rather than them being supplied"),
+    .describe(
+      "true when the model inferred kind/weight rather than them being supplied",
+    ),
 });
 
 export type MemoryImportDraft = z.output<typeof memoryImportDraftSchema>;

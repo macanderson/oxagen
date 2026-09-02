@@ -87,7 +87,11 @@ describe("deleteWorkspaceSecret", () => {
   it("deletes from mcp.credentials only", async () => {
     const { deleteWorkspaceSecret } = await import("./workspace-credential");
     const { schema } = await import("@oxagen/database");
-    await deleteWorkspaceSecret({ orgId: "o1", workspaceId: "w1", orgListingId: "l1" });
+    await deleteWorkspaceSecret({
+      orgId: "o1",
+      workspaceId: "w1",
+      orgListingId: "l1",
+    });
 
     expect(deletedTables).toEqual([schema.mcpCredentials]);
   });
@@ -113,7 +117,9 @@ describe("deleteWorkspaceSecret", () => {
 
   it("works with AUTH_TOKEN_ENCRYPTION_KEY unset and logs no misconfiguration error", async () => {
     expect(process.env.AUTH_TOKEN_ENCRYPTION_KEY).toBeUndefined();
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const errorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     try {
       deleteResult = [{ id: "cred-1" }];
       const { deleteWorkspaceSecret } = await import("./workspace-credential");

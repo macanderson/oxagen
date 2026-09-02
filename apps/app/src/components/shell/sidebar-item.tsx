@@ -11,14 +11,18 @@
  *     active={true}
  *   />
  *
- * Visual states (neutral coss/Base UI tokens — no brand styling):
- *   active   — `bg-sidebar-accent` + `text-sidebar-accent-foreground`
+ * Visual states (sidebar nav-link component tokens — see AGENTS.md "Design
+ * Token Usage in Shell Components"):
+ *   active   — `bg-sidebar-nav-link-active-bg` + `text-sidebar-nav-link-active-fg`,
+ *              plus a `bg-sidebar-primary` accent bar on the left edge
+ *   inactive — `text-sidebar-nav-link-fg`, hovering to the nav-link hover pair
  *   external — renders an ↗ icon (ArrowUpRight) on the right edge
- *   isReturn — renders a ← icon (ArrowLeft) on the left, before the main icon
+ *   isReturn — renders a ← icon (ArrowLeft) on the left, replacing the main icon
+ *              in full mode (the rail keeps the main icon so the row has a glyph)
  *
- * Mobile: min 44px tap target via py-2.5.
+ * Mobile: min 44px tap target via min-h-[2.75rem] + py-2.5.
  *
- * Pure affordance logic lives in @/lib/sidebar-item-affordance (node-testable).
+ * Pure affordance logic lives in ./sidebar-item-affordance (node-testable).
  */
 
 import Link from "next/link";

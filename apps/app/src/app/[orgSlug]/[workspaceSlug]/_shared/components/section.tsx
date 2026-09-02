@@ -18,7 +18,9 @@ export interface SectionProps {
 export function Section({ children, fallback, className }: SectionProps) {
   return (
     <div className={cn(className)}>
-      <Suspense fallback={fallback ?? <LoadingState variant="page" />}>{children}</Suspense>
+      <Suspense fallback={fallback ?? <LoadingState variant="page" />}>
+        {children}
+      </Suspense>
     </div>
   );
 }

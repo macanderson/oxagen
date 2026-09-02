@@ -31,7 +31,9 @@ export interface EpisodicQuery {
 }
 
 /**
- * The episodic store contract. All adapters (DuckDB, ClickHouse) implement this.
+ * The episodic store contract. `DuckDBEpisodicStore` is the only shipped
+ * implementation; the interface exists so a caller can substitute a fake in
+ * tests or a different backing store later.
  */
 export interface EpisodicStore {
   /** Append a single record. Deduplicates by ID (content address). */
@@ -50,17 +52,23 @@ export interface EpisodicStore {
   getByIds(ids: string[]): Promise<MemoryRecord[]>;
 
   /** Get the most recent records in a namespace, optionally filtered by salience. */
-  recent(namespace: Namespace, limit: number, minSalience?: number): Promise<MemoryRecord[]>;
+  recent(
+    namespace: Namespace,
+    limit: number,
+    minSalience?: number,
+  ): Promise<MemoryRecord[]>;
 
   /**
-   * Lexical/full-text search over record bodies, scoped to `namespace`.
-   * Scores each record by the fraction of query tokens matched via a
-   * case-insensitive substring test (0.0-1.0) — real term-frequency recall
-   * for exact matches (error messages, function names, file paths, stack
-   * traces) that vector similarity alone misses. Backs
-   * `LexicalRetrievalEngine`'s injected `LexicalSearchFn`. DuckDB implements
-   * this with `contains()` over the JSON body cast to text; ClickHouse with
-   * `positionCaseInsensitive()`.
+   * Lexical/full-text search over record bodies. Scores each record by the
+   * fraction of query tokens matched via a case-insensitive substring test
+   * (0.0-1.0) — term-frequency recall for exact matches (error messages,
+   * function names, file paths, stack traces) that vector similarity alone
+   * misses. Backs `LexicalRetrievalEngine`'s injected `LexicalSearchFn`. The
+   * DuckDB adapter implements it with `contains()` over the JSON body cast to
+   * text.
+   *
+   * Scope note: only `namespace.org` and `namespace.workspace` are applied —
+   * a session/agent-narrowed namespace still searches the whole workspace.
    */
   searchLexical(
     namespace: Namespace,

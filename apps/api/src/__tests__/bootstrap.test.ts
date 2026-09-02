@@ -41,8 +41,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  assertRlsConnectionSafe: mocks.assertRlsConnectionSafe,
-
+    assertRlsConnectionSafe: mocks.assertRlsConnectionSafe,
   };
 });
 
@@ -156,7 +155,9 @@ describe("bootstrap() retry on transient failure", () => {
   it("clears the memo on failure so a later call retries and recovers", async () => {
     // A transient cold-start failure (e.g. DB briefly unreachable during
     // assertRlsConnectionSafe) must NOT permanently wedge the instance.
-    mocks.assertRlsConnectionSafe.mockRejectedValueOnce(new Error("db unreachable"));
+    mocks.assertRlsConnectionSafe.mockRejectedValueOnce(
+      new Error("db unreachable"),
+    );
 
     await expect(bootstrap()).rejects.toThrow("db unreachable");
     // Failed at step 2 (assertRls) → later wiring steps never ran.
@@ -202,7 +203,10 @@ describe("bootstrap() email-transport probe (OXA-1753)", () => {
 
     expect(mocks.loggerError).toHaveBeenCalledTimes(1);
     const [meta, msg] = mocks.loggerError.mock.calls[0]!;
-    expect(meta).toMatchObject({ check: "email_transport", ticket: "OXA-1753" });
+    expect(meta).toMatchObject({
+      check: "email_transport",
+      ticket: "OXA-1753",
+    });
     expect(msg).toContain("email transport is unconfigured");
   });
 

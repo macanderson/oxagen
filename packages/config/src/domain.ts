@@ -51,7 +51,10 @@ export const INDUSTRY_VALUES = [
 
 export type Industry = (typeof INDUSTRY_VALUES)[number];
 
-export const INDUSTRY_OPTIONS: ReadonlyArray<{ value: Industry; label: string }> = [
+export const INDUSTRY_OPTIONS: ReadonlyArray<{
+  value: Industry;
+  label: string;
+}> = [
   { value: "software-it", label: "Software & IT" },
   { value: "financial-services", label: "Financial Services" },
   { value: "healthcare", label: "Healthcare & Life Sciences" },
@@ -94,7 +97,10 @@ export const EMPLOYEE_SIZE_VALUES = [
 
 export type EmployeeSize = (typeof EMPLOYEE_SIZE_VALUES)[number];
 
-export const EMPLOYEE_SIZE_OPTIONS: ReadonlyArray<{ value: EmployeeSize; label: string }> = [
+export const EMPLOYEE_SIZE_OPTIONS: ReadonlyArray<{
+  value: EmployeeSize;
+  label: string;
+}> = [
   { value: "1", label: "1 (just me)" },
   { value: "2-10", label: "2–10" },
   { value: "11-50", label: "11–50" },

@@ -12,12 +12,10 @@ import { pluginSchema } from "./_schemas";
 import { auditMixin, idMixin, softDeleteMixin } from "./_mixins";
 
 /** The six installable plugin types. The discriminator stored in
- *  plugin.installed_plugins.plugin_type and used by the runtime PluginType registry.
- *  `content_tool` and `capability` were collapsed into `agent_capability` in the
- *  workspace-scoping migration (2026-06-17). `mcp_server_local` (the local-file
- *  MCP runtime type, packages/agent/.../file-mcp.ts) is included in PLUGIN_TYPES
- *  and the in-code CHECK; a forward migration to widen the LIVE installed_plugins
- *  CHECK belongs to the local-MCP feature when those plugins are persisted. */
+ *  plugin.installed_plugins.plugin_type and used by the runtime PluginType
+ *  registry. `mcp_server_local` is the local-file MCP runtime type
+ *  (packages/agent/.../file-mcp.ts); the live installed_plugins CHECK accepts
+ *  it, so this list and the DB constraint below agree. */
 export const PLUGIN_TYPES = [
   "agent_skill",
   "agent_capability",
@@ -30,13 +28,12 @@ export type PluginType = (typeof PLUGIN_TYPES)[number];
 
 /**
  * plugin.installed_plugins — the org+workspace allow-list. Polymorphic across
- * plugin types (agent_skill | agent_capability | mcp_server | knowledge_source |
- * integration). workspace_id is always required; org-level defaults are
- * represented by a sentinel workspace id at the handler layer.
+ * the six PLUGIN_TYPES above. workspace_id is always required; org-level
+ * defaults are represented by a sentinel workspace id at the handler layer.
  *
- * `catalog_server_id` was removed in the workspace-scoping rebuild — the
- * marketplace no longer syncs a registry cache; installed plugins carry their
- * own name/title/description/url inline (source='registry' identifies origin).
+ * An installed plugin carries its own name/title/description/url inline; there
+ * is no registry cache to join against, and `source` records the origin
+ * ('registry' | 'custom' | 'oxagen').
  */
 export const pluginInstalledPlugins = pluginSchema.table(
   "installed_plugins",
@@ -55,13 +52,9 @@ export const pluginInstalledPlugins = pluginSchema.table(
     endpointUrl: text("endpoint_url"),
     transport: text("transport"),
     authKind: text("auth_kind").notNull(), // oauth | secret | none
-    authConfig: jsonb("auth_config")
-      .notNull()
-      .default(sql`'{}'::jsonb`),
+    authConfig: jsonb("auth_config").notNull().default(sql`'{}'::jsonb`),
     enabled: boolean("enabled").notNull().default(false),
-    config: jsonb("config")
-      .notNull()
-      .default(sql`'{}'::jsonb`),
+    config: jsonb("config").notNull().default(sql`'{}'::jsonb`),
   },
   (t) => ({
     uniqueName: uniqueIndex("installed_plugins_org_ws_type_name_uniq").on(

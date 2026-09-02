@@ -6,7 +6,10 @@ describe("repo.branch.list capability", () => {
   // ── input: required fields ────────────────────────────────────────────────
 
   it("accepts a valid owner and repo", () => {
-    const parsed = repoBranchList.input.parse({ owner: "myorg", repo: "myrepo" });
+    const parsed = repoBranchList.input.parse({
+      owner: "myorg",
+      repo: "myrepo",
+    });
     expect(parsed.owner).toBe("myorg");
     expect(parsed.repo).toBe("myrepo");
   });
@@ -25,7 +28,12 @@ describe("repo.branch.list capability", () => {
     const parsed = repoBranchList.output.parse({
       branches: [
         { name: "main", sha: "abc123", isDefault: true, protected: true },
-        { name: "feature/x", sha: "def456", isDefault: false, protected: false },
+        {
+          name: "feature/x",
+          sha: "def456",
+          isDefault: false,
+          protected: false,
+        },
       ],
       defaultBranch: "main",
     });
@@ -49,7 +57,9 @@ describe("repo.branch.list capability", () => {
 
   it("accepts a null defaultBranch when it could not be resolved", () => {
     const parsed = repoBranchList.output.parse({
-      branches: [{ name: "main", sha: "abc123", isDefault: false, protected: false }],
+      branches: [
+        { name: "main", sha: "abc123", isDefault: false, protected: false },
+      ],
       defaultBranch: null,
     });
     expect(parsed.defaultBranch).toBeNull();

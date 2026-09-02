@@ -45,4 +45,6 @@ export const agentSandboxRename = registerCapability({
 });
 
 export type AgentSandboxRenameInput = z.output<typeof agentSandboxRename.input>;
-export type AgentSandboxRenameOutput = z.output<typeof agentSandboxRename.output>;
+export type AgentSandboxRenameOutput = z.output<
+  typeof agentSandboxRename.output
+>;

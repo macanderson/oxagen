@@ -20,23 +20,26 @@ interface ConnectedAccountsProps {
 
 type ProviderKey = "google" | "github";
 
-const PROVIDERS: { key: ProviderKey; label: string; icon: React.ReactNode }[] = [
-  {
-    key: "google",
-    label: "Google",
-    icon: <GoogleIcon />,
-  },
-  {
-    key: "github",
-    label: "GitHub",
-    icon: <Github className="h-4 w-4" aria-hidden />,
-  },
-];
+const PROVIDERS: { key: ProviderKey; label: string; icon: React.ReactNode }[] =
+  [
+    {
+      key: "google",
+      label: "Google",
+      icon: <GoogleIcon />,
+    },
+    {
+      key: "github",
+      label: "GitHub",
+      icon: <Github className="h-4 w-4" aria-hidden />,
+    },
+  ];
 
 export function ConnectedAccounts({ state }: ConnectedAccountsProps) {
   const router = useRouter();
   const [pending, setPending] = React.useState<ProviderKey | null>(null);
-  const [errors, setErrors] = React.useState<Partial<Record<ProviderKey, string>>>({});
+  const [errors, setErrors] = React.useState<
+    Partial<Record<ProviderKey, string>>
+  >({});
 
   const accountsByProvider = React.useMemo(() => {
     const map: Partial<Record<ProviderKey, LinkedAccount>> = {};
@@ -52,9 +55,11 @@ export function ConnectedAccounts({ state }: ConnectedAccountsProps) {
     setPending(provider);
     setErrors((prev) => ({ ...prev, [provider]: undefined }));
     // linkSocial redirects; pending state is cleared naturally on return.
-    authClient.linkSocial({ provider, callbackURL: "/account/profile" }).catch(() => {
-      setPending(null);
-    });
+    authClient
+      .linkSocial({ provider, callbackURL: "/account/profile" })
+      .catch(() => {
+        setPending(null);
+      });
   };
 
   const handleDisconnect = async (provider: ProviderKey) => {
@@ -97,9 +102,13 @@ export function ConnectedAccounts({ state }: ConnectedAccountsProps) {
                 <div className="flex flex-col">
                   <span className="text-sm font-medium">{label}</span>
                   {linked ? (
-                    <span className="text-xs text-muted-foreground">Connected</span>
+                    <span className="text-xs text-muted-foreground">
+                      Connected
+                    </span>
                   ) : (
-                    <span className="text-xs text-muted-foreground">Not connected</span>
+                    <span className="text-xs text-muted-foreground">
+                      Not connected
+                    </span>
                   )}
                 </div>
               </div>
@@ -134,7 +143,8 @@ export function ConnectedAccounts({ state }: ConnectedAccountsProps) {
                 {/* Last-method safety note */}
                 {isLastMethod && (
                   <p className="text-xs text-muted-foreground max-w-[200px] text-right">
-                    Set a password or connect another account before disconnecting.
+                    Set a password or connect another account before
+                    disconnecting.
                   </p>
                 )}
 

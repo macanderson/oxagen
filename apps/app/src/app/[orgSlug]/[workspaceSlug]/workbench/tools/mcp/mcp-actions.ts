@@ -103,8 +103,7 @@ const SetMcpServerSecretSchema = z.object({
  * usable. This is the secret-auth counterpart to the OAuth authorize flow —
  * Stripe and other API-key servers have no consent screen, so the key is
  * entered directly here. Wires the app surface to the `set_plugin_secret`
- * capability (previously api/mcp-only, leaving secret servers un-activatable
- * from the product — a UI-capability-parity gap).
+ * capability.
  */
 export async function setMcpServerSecret(
   input: z.infer<typeof SetMcpServerSecretSchema>,

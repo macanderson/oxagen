@@ -29,8 +29,8 @@ interface SourceConnectionRow {
  *
  * Retries: 3 (Inngest default). Idempotent — re-dispatching an already-running
  * `ingestion/github.initial-sync` for the same connection is safe: the
- * initial-sync function marks the connection `active` at the end, so a
- * duplicate dispatch re-runs the full tree fetch and overwrites.
+ * initial-sync function marks the connection `connected` at the end, so a
+ * duplicate dispatch re-runs the full fetch and overwrites.
  */
 export const [ingestionSyncRequested] = createFunction(
   {

@@ -11,10 +11,16 @@ export const schema = {
 export const metadata: ToolMetadata = {
   name: schemaToggle.name,
   description: schemaToggle.description,
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+  },
 };
 
-export default async function schemaToggleTool(args: InferSchema<typeof schema>) {
+export default async function schemaToggleTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   const output = await invoke(schemaToggle.name, args, ctx, { surface: "mcp" });
   return schemaToggle.output.parse(output);

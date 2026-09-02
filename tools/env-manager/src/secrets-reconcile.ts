@@ -33,14 +33,16 @@ export function parseEnvText(text: string): Map<string, string> {
     const key = line.slice(0, eq).trim();
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
     let value = line.slice(eq + 1).trim();
-    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"'))
+      value = value.slice(1, -1);
     map.set(key.toUpperCase(), value);
   }
   return map;
 }
 
 /** GCP secrets whose values are stage-specific and must not take a dev override. */
-export const STAGE_SUFFIX = /-(production|staging|sandbox|prod)$|-public-(staging|production)$/;
+export const STAGE_SUFFIX =
+  /-(production|staging|sandbox|prod)$|-public-(staging|production)$/;
 
 export interface Reconciled {
   value: string | null;
@@ -68,14 +70,16 @@ export function reconcile(
     canonicalize(gcpName),
     gcpName.replace(/[^A-Za-z0-9]+/g, "_").toUpperCase(),
   ].filter((x): x is string => Boolean(x));
-  const find = (m: Map<string, string>) => lookups.map((k) => m.get(k)).find((v) => v && v.length > 0) ?? null;
+  const find = (m: Map<string, string>) =>
+    lookups.map((k) => m.get(k)).find((v) => v && v.length > 0) ?? null;
 
   const credsVal = find(creds);
   const envVal = find(envLocal);
   const isStage = STAGE_SUFFIX.test(gcpName);
   const isDuplicate = Boolean(credsVal || envVal);
 
-  if (credsVal && !isStage) return { value: credsVal, source: "creds.txt", isDuplicate };
+  if (credsVal && !isStage)
+    return { value: credsVal, source: "creds.txt", isDuplicate };
   if (gcpValue !== null) return { value: gcpValue, source: "gcp", isDuplicate };
   if (credsVal) return { value: credsVal, source: "creds.txt", isDuplicate };
   if (envVal) return { value: envVal, source: ".env.local", isDuplicate };

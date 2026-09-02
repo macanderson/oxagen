@@ -26,7 +26,12 @@ interface LabelTagInputProps {
   placeholder?: string;
 }
 
-function LabelTagInput({ id, value, onChange, placeholder }: LabelTagInputProps) {
+function LabelTagInput({
+  id,
+  value,
+  onChange,
+  placeholder,
+}: LabelTagInputProps) {
   const [inputVal, setInputVal] = React.useState("");
 
   const addTag = (raw: string) => {
@@ -40,9 +45,7 @@ function LabelTagInput({ id, value, onChange, placeholder }: LabelTagInputProps)
   };
 
   return (
-    <div
-      className="flex min-h-[2rem] flex-wrap items-center gap-1.5 rounded-md border border-input bg-transparent px-2 py-1.5 focus-within:ring-1 focus-within:ring-ring"
-    >
+    <div className="flex min-h-[2rem] flex-wrap items-center gap-1.5 rounded-md border border-input bg-transparent px-2 py-1.5 focus-within:ring-1 focus-within:ring-ring">
       {value.map((tag) => (
         <span
           key={tag}
@@ -72,7 +75,9 @@ function LabelTagInput({ id, value, onChange, placeholder }: LabelTagInputProps)
             onChange(value.slice(0, -1));
           }
         }}
-        onBlur={() => { if (inputVal.trim()) addTag(inputVal); }}
+        onBlur={() => {
+          if (inputVal.trim()) addTag(inputVal);
+        }}
         placeholder={value.length === 0 ? placeholder : ""}
         className="flex-1 min-w-[100px] bg-transparent text-sm outline-none placeholder:text-muted-foreground"
         aria-label="Add label filter"
@@ -100,7 +105,9 @@ export function FiltersPanel() {
       ? (formState.values[PATH_FILTERS_KEY] as string)
       : (filters.pathFilters?.defaultIgnore ?? []).join("\n");
 
-  const labelFilters: string[] = Array.isArray(formState.values[LABEL_FILTERS_KEY])
+  const labelFilters: string[] = Array.isArray(
+    formState.values[LABEL_FILTERS_KEY],
+  )
     ? (formState.values[LABEL_FILTERS_KEY] as string[])
     : [];
 
@@ -108,31 +115,31 @@ export function FiltersPanel() {
     <div className="flex flex-col gap-5">
       {showPath && (
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor={`filter-paths`}>
-            Path ignore patterns
-          </Label>
+          <Label htmlFor={`filter-paths`}>Path ignore patterns</Label>
           <Textarea
             id="filter-paths"
             value={pathFilterLines}
-            onChange={(e) => setFieldValue(PATH_FILTERS_KEY, e.currentTarget.value)}
+            onChange={(e) =>
+              setFieldValue(PATH_FILTERS_KEY, e.currentTarget.value)
+            }
             placeholder={"node_modules/**\ndist/**\n*.lock"}
             className="resize-y min-h-[80px] font-mono text-xs"
             rows={4}
           />
           <p className="text-xs text-muted-foreground">
-            One glob pattern per line. Matching paths will be excluded from sync.
-            {filters.pathFilters?.appliesTo && filters.pathFilters.appliesTo.length > 0 && (
-              <> Applies to: {filters.pathFilters.appliesTo.join(", ")}.</>
-            )}
+            One glob pattern per line. Matching paths will be excluded from
+            sync.
+            {filters.pathFilters?.appliesTo &&
+              filters.pathFilters.appliesTo.length > 0 && (
+                <> Applies to: {filters.pathFilters.appliesTo.join(", ")}.</>
+              )}
           </p>
         </div>
       )}
 
       {showLabel && (
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="filter-labels">
-            Label filters
-          </Label>
+          <Label htmlFor="filter-labels">Label filters</Label>
           <LabelTagInput
             id="filter-labels"
             value={labelFilters}
@@ -141,9 +148,10 @@ export function FiltersPanel() {
           />
           <p className="text-xs text-muted-foreground">
             Only sync items with these labels. Leave empty to sync all.
-            {filters.labelFilters?.appliesTo && filters.labelFilters.appliesTo.length > 0 && (
-              <> Applies to: {filters.labelFilters.appliesTo.join(", ")}.</>
-            )}
+            {filters.labelFilters?.appliesTo &&
+              filters.labelFilters.appliesTo.length > 0 && (
+                <> Applies to: {filters.labelFilters.appliesTo.join(", ")}.</>
+              )}
           </p>
         </div>
       )}

@@ -8,7 +8,10 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { NewWorkspaceForm, type NewWorkspaceAction } from "./new-workspace-form";
+import {
+  NewWorkspaceForm,
+  type NewWorkspaceAction,
+} from "./new-workspace-form";
 
 export interface NewWorkspaceDialogProps {
   orgSlug: string;

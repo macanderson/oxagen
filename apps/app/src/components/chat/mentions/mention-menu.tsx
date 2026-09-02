@@ -51,19 +51,28 @@ export function MentionMenu({
             const Icon = MENTION_TYPE_META[selectedType.type].icon;
             return (
               <Icon
-                className={cn("size-3.5", MENTION_TYPE_META[selectedType.type].iconClassName)}
+                className={cn(
+                  "size-3.5",
+                  MENTION_TYPE_META[selectedType.type].iconClassName,
+                )}
                 aria-hidden="true"
               />
             );
           })()}
-          <span className="text-xs font-medium">{selectedType.pluralLabel}</span>
-          <span className="text-xs text-muted-foreground">— type to search</span>
+          <span className="text-xs font-medium">
+            {selectedType.pluralLabel}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            — type to search
+          </span>
         </div>
       ) : null}
       <ul className="max-h-64 overflow-y-auto py-1">
         {stage === "type" ? (
           types.length === 0 ? (
-            <li className="px-3 py-1.5 text-xs text-muted-foreground">No reference types match.</li>
+            <li className="px-3 py-1.5 text-xs text-muted-foreground">
+              No reference types match.
+            </li>
           ) : (
             types.map((info, index) => {
               const Icon = MENTION_TYPE_META[info.type].icon;
@@ -92,8 +101,12 @@ export function MentionMenu({
                       aria-hidden="true"
                     />
                     <span className="flex min-w-0 flex-col gap-0.5">
-                      <span className="text-xs font-medium">{info.pluralLabel}</span>
-                      <span className="text-xs text-muted-foreground">{info.summary}</span>
+                      <span className="text-xs font-medium">
+                        {info.pluralLabel}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {info.summary}
+                      </span>
                     </span>
                   </button>
                 </li>
@@ -101,7 +114,9 @@ export function MentionMenu({
             })
           )
         ) : loading && results.length === 0 ? (
-          <li className="px-3 py-1.5 text-xs text-muted-foreground">Searching…</li>
+          <li className="px-3 py-1.5 text-xs text-muted-foreground">
+            Searching…
+          </li>
         ) : results.length === 0 ? (
           <li className="px-3 py-1.5 text-xs text-muted-foreground">
             {query.trim() ? "No matches." : "Type to search."}
@@ -132,7 +147,9 @@ export function MentionMenu({
                     aria-hidden="true"
                   />
                   <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className="truncate text-xs font-medium">{result.label}</span>
+                    <span className="truncate text-xs font-medium">
+                      {result.label}
+                    </span>
                     {result.description || result.location ? (
                       <span className="truncate text-xs text-muted-foreground">
                         {result.description ?? result.location}

@@ -21,7 +21,10 @@ import * as React from "react";
 import Link from "next/link";
 import { ArrowUpRight, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/knowledge.node-ref";
-import { NodeRef } from "@/components/knowledge/graph/node-ref";
+import {
+  NodeRef,
+  nodeCitationLabel,
+} from "@/components/knowledge/graph/node-ref";
 import { Button } from "@/components/ui/button";
 import { workspace } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -54,6 +57,11 @@ export function GraphResultRow({
   className,
 }: GraphResultRowProps) {
   const canOpen = node.id != null;
+  // The button labels are citations too: `displayName` is the server's
+  // coalesce fallback (displayName → name → publicId), so using it raw would
+  // read a UUID out to a screen reader. `nodeCitationLabel` is the same
+  // never-the-raw-id rule NodeRef's visible chip applies.
+  const label = nodeCitationLabel(node);
 
   return (
     <div
@@ -67,8 +75,8 @@ export function GraphResultRow({
             onClick={expand.onToggle}
             aria-label={
               expand.expanded
-                ? `Collapse ${node.displayName} neighbors`
-                : `Expand ${node.displayName} neighbors`
+                ? `Collapse ${label} neighbors`
+                : `Expand ${label} neighbors`
             }
             className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
@@ -95,7 +103,7 @@ export function GraphResultRow({
                 )}
               />
             }
-            aria-label={`Open ${node.displayName} detail`}
+            aria-label={`Open ${label} detail`}
           >
             <ArrowUpRight className="size-3.5" aria-hidden="true" />
           </Button>

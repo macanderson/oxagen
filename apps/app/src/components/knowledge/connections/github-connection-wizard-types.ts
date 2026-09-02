@@ -11,7 +11,11 @@ export type WizardStep = "gate" | "select-repos" | "confirm";
 //    and existing callers keep their current import paths unchanged ─────────────
 
 export { API_BASE } from "@/lib/github";
-export type { Installation, InstallationsResponse, Repository } from "@/lib/github";
+export type {
+  Installation,
+  InstallationsResponse,
+  Repository,
+} from "@/lib/github";
 
 // ── Sync depth ────────────────────────────────────────────────────────────────
 
@@ -43,10 +47,15 @@ export interface PendingGithubConnection {
 }
 
 /** Persist the in-progress connection just before leaving for GitHub. */
-export function storePendingGithubConnection(pending: PendingGithubConnection): void {
+export function storePendingGithubConnection(
+  pending: PendingGithubConnection,
+): void {
   if (typeof window === "undefined") return;
   try {
-    window.sessionStorage.setItem(PENDING_GITHUB_CONNECTION_KEY, JSON.stringify(pending));
+    window.sessionStorage.setItem(
+      PENDING_GITHUB_CONNECTION_KEY,
+      JSON.stringify(pending),
+    );
   } catch {
     // sessionStorage can throw (private mode / quota) — a lost handoff merely
     // means the wizard restarts at the gate, never a crash.

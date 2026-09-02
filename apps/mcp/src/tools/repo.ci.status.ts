@@ -6,9 +6,13 @@ import { buildContext } from "../context";
 
 export const schema = {
   ...repoCiStatus.input.shape,
-  owner: repoCiStatus.input.shape.owner.describe("Repository owner (user or organisation)"),
+  owner: repoCiStatus.input.shape.owner.describe(
+    "Repository owner (user or organisation)",
+  ),
   repo: repoCiStatus.input.shape.repo.describe("Repository name"),
-  ref: repoCiStatus.input.shape.ref.describe("Branch name, commit SHA, or PR head ref to read CI for"),
+  ref: repoCiStatus.input.shape.ref.describe(
+    "Branch name, commit SHA, or PR head ref to read CI for",
+  ),
 };
 
 export const metadata: ToolMetadata = {
@@ -22,7 +26,9 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function repoCiStatusTool(args: InferSchema<typeof schema>) {
+export default async function repoCiStatusTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   const output = await invoke(repoCiStatus.name, args, ctx, { surface: "mcp" });
   return repoCiStatus.output.parse(output);

@@ -23,7 +23,9 @@ export const workspaceBudgetPolicyWriteHandler: CapabilityHandler<
       { orgId: ctx.orgId },
       "workspace.budget.policy.write: rejected — no workspace context",
     );
-    throw new Error("workspace.budget.policy.write requires a workspace context");
+    throw new Error(
+      "workspace.budget.policy.write requires a workspace context",
+    );
   }
 
   const workspaceId = ctx.workspaceId;
@@ -43,8 +45,14 @@ export const workspaceBudgetPolicyWriteHandler: CapabilityHandler<
     graceOveragePct: number;
     enforcement: "default" | "ceiling";
   } = {
-    enabled: input.enabled !== undefined ? input.enabled : (existing?.enabled ?? false),
-    limitUsd: "limitUsd" in input ? (input.limitUsd ?? null) : (existing?.limitUsd ?? null),
+    enabled:
+      input.enabled !== undefined
+        ? input.enabled
+        : (existing?.enabled ?? false),
+    limitUsd:
+      "limitUsd" in input
+        ? (input.limitUsd ?? null)
+        : (existing?.limitUsd ?? null),
     mode: input.mode !== undefined ? input.mode : normalizeMode(existing?.mode),
     graceOveragePct:
       input.graceOveragePct !== undefined

@@ -15,7 +15,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { TaskTrayProvider, useTaskTray, BackgroundTaskTray } from "./background-task-tray";
+import {
+  TaskTrayProvider,
+  useTaskTray,
+  BackgroundTaskTray,
+} from "./background-task-tray";
 import { useEffect } from "react";
 
 afterEach(cleanup);
@@ -34,7 +38,12 @@ vi.mock("@/components/ui/button", () => ({
     variant?: string;
     size?: string;
   }) => (
-    <button onClick={onClick} disabled={disabled} data-variant={variant} data-size={size}>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      data-variant={variant}
+      data-size={size}
+    >
       {children}
     </button>
   ),
@@ -63,7 +72,12 @@ vi.mock("./tool-call-card", () => ({
 
 const makeSnapshot = (
   taskId: string,
-  status: "pending" | "running" | "completed" | "failed" | "cancelled" = "running",
+  status:
+    | "pending"
+    | "running"
+    | "completed"
+    | "failed"
+    | "cancelled" = "running",
 ) => ({
   taskId,
   kind: "video.render",
@@ -157,9 +171,7 @@ describe("TaskTrayProvider + useTaskTray", () => {
 
 describe("BackgroundTaskTray", () => {
   it("renders null when no task IDs", () => {
-    const { container } = render(
-      <BackgroundTaskTray fetchTask={vi.fn()} />,
-    );
+    const { container } = render(<BackgroundTaskTray fetchTask={vi.fn()} />);
     expect(container.firstChild).toBeNull();
   });
 
@@ -167,10 +179,7 @@ describe("BackgroundTaskTray", () => {
     // Pass a fetchTask that never resolves so there is no timer runaway
     const fetchTask = vi.fn().mockReturnValue(new Promise(() => {}));
     render(
-      <BackgroundTaskTray
-        initialTaskIds={["t1"]}
-        fetchTask={fetchTask}
-      />,
+      <BackgroundTaskTray initialTaskIds={["t1"]} fetchTask={fetchTask} />,
     );
     expect(screen.getByText("Background tasks")).toBeInTheDocument();
   });
@@ -190,10 +199,7 @@ describe("BackgroundTaskTray", () => {
   it("collapses and expands on button click", async () => {
     const fetchTask = vi.fn().mockReturnValue(new Promise(() => {}));
     render(
-      <BackgroundTaskTray
-        initialTaskIds={["t1"]}
-        fetchTask={fetchTask}
-      />,
+      <BackgroundTaskTray initialTaskIds={["t1"]} fetchTask={fetchTask} />,
     );
     const toggle = screen.getByText("Background tasks").closest("button")!;
     // Expanded by default — chevron-down visible

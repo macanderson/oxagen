@@ -28,8 +28,11 @@ export interface ReinforcementStats {
 }
 
 /**
- * In-memory stats tracker. In production this would be persisted to
- * DuckDB/ClickHouse, but the interface is the same.
+ * In-memory stats tracker. Nothing here is persisted: the map lives for the
+ * lifetime of the tracker instance, so counts are lost on process exit and
+ * grow without bound while the process runs (one entry per distinct record id
+ * ever retrieved). A long-lived host should scope a tracker to a job and drop
+ * it, or call {@link ReinforcementTracker.clear} between batches.
  */
 export class ReinforcementTracker {
   private stats = new Map<string, ReinforcementStats>();
@@ -130,25 +133,32 @@ export class ReinforcementTracker {
       const base = s.baseSalience ?? record.salience;
       s.baseSalience = base;
 
-      const target = targetSalience(base, s.successCount, s.failureCount, s.retrievalCount);
+      const target = targetSalience(
+        base,
+        s.successCount,
+        s.failureCount,
+        s.retrievalCount,
+      );
 
       if (target > base) boosted++;
       else if (target < base) penalized++;
 
-      // Advance the checkpoint regardless, so the next run only reacts to
-      // genuinely new activity.
-      s.appliedRetrievalCount = s.retrievalCount;
-      this.stats.set(id, s);
-
+      // Write first, then advance the checkpoint. Advancing before the write
+      // would mean a rejected `updateSalience` permanently loses the
+      // adjustment: the next run sees `retrievalCount <= appliedRetrievalCount`
+      // and skips the record entirely, so the store keeps the stale salience
+      // with nothing recording that the reconciliation never landed.
       if (target !== record.salience) {
         await updateSalience(id, target);
       }
+      s.appliedRetrievalCount = s.retrievalCount;
+      this.stats.set(id, s);
     }
 
     return { boosted, penalized };
   }
 
-  /** Clear all stats (for tests). */
+  /** Drop all tracked stats — also the way to bound the map in a long-lived host. */
   clear(): void {
     this.stats.clear();
   }

@@ -38,21 +38,33 @@ export interface Step2Props {
   onNext: (selectedInstallationId: string, repos: SelectedRepoMeta[]) => void;
 }
 
-export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext }: Step2Props) {
+export function Step2SelectRepos({
+  orgSlug,
+  workspaceSlug,
+  connectionId,
+  onNext,
+}: Step2Props) {
   const [installations, setInstallations] = React.useState<Installation[]>([]);
   const [manageUrl, setManageUrl] = React.useState<string | null>(null);
   const [installationsLoading, setInstallationsLoading] = React.useState(true);
-  const [installationsRefreshing, setInstallationsRefreshing] = React.useState(false);
-  const [installationsError, setInstallationsError] = React.useState<string | null>(null);
+  const [installationsRefreshing, setInstallationsRefreshing] =
+    React.useState(false);
+  const [installationsError, setInstallationsError] = React.useState<
+    string | null
+  >(null);
 
-  const [selectedInstallationId, setSelectedInstallationId] = React.useState<number | null>(null);
+  const [selectedInstallationId, setSelectedInstallationId] = React.useState<
+    number | null
+  >(null);
 
   const [repositories, setRepositories] = React.useState<Repository[]>([]);
   const [reposLoading, setReposLoading] = React.useState(false);
   const [reposError, setReposError] = React.useState<string | null>(null);
   const [reposReloadNonce, setReposReloadNonce] = React.useState(0);
 
-  const [selectedRepos, setSelectedRepos] = React.useState<Set<string>>(new Set());
+  const [selectedRepos, setSelectedRepos] = React.useState<Set<string>>(
+    new Set(),
+  );
 
   // Armed when the user opens GitHub's manage page; the next time the window
   // regains focus we re-fetch so any orgs/repos they just (un)installed appear.
@@ -75,17 +87,22 @@ export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext 
           `${API_BASE}/v1/${orgSlug}/${workspaceSlug}/connections/github/installations?connectionId=${connectionId}`,
           { credentials: "include" },
         );
-        if (!res.ok) throw new Error(`Failed to load organizations: ${res.status}`);
+        if (!res.ok)
+          throw new Error(`Failed to load organizations: ${res.status}`);
         const data = (await res.json()) as InstallationsResponse;
         setInstallations(data.installations);
         setManageUrl(data.manageUrl);
         // Drop the selection only if the org it pointed at is gone (e.g. removed
         // on GitHub); otherwise keep it so the repo list stays put.
         setSelectedInstallationId((prev) =>
-          prev !== null && data.installations.some((i) => i.id === prev) ? prev : null,
+          prev !== null && data.installations.some((i) => i.id === prev)
+            ? prev
+            : null,
         );
       } catch (e) {
-        setInstallationsError(e instanceof Error ? e.message : "Failed to load organizations");
+        setInstallationsError(
+          e instanceof Error ? e.message : "Failed to load organizations",
+        );
       } finally {
         setInstallationsLoading(false);
         setInstallationsRefreshing(false);
@@ -134,8 +151,12 @@ export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext 
       { credentials: "include" },
     )
       .then(async (res) => {
-        if (!res.ok) throw new Error(`Failed to load repositories: ${res.status}`);
-        return res.json() as Promise<{ repositories: Repository[]; totalCount: number }>;
+        if (!res.ok)
+          throw new Error(`Failed to load repositories: ${res.status}`);
+        return res.json() as Promise<{
+          repositories: Repository[];
+          totalCount: number;
+        }>;
       })
       .then((data) => {
         if (!cancelled) {
@@ -145,7 +166,9 @@ export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext 
       })
       .catch((e) => {
         if (!cancelled) {
-          setReposError(e instanceof Error ? e.message : "Failed to load repositories");
+          setReposError(
+            e instanceof Error ? e.message : "Failed to load repositories",
+          );
           setReposLoading(false);
         }
       });
@@ -153,10 +176,17 @@ export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext 
     return () => {
       cancelled = true;
     };
-  }, [orgSlug, workspaceSlug, connectionId, selectedInstallationId, reposReloadNonce]);
+  }, [
+    orgSlug,
+    workspaceSlug,
+    connectionId,
+    selectedInstallationId,
+    reposReloadNonce,
+  ]);
 
   const allSelected =
-    repositories.length > 0 && repositories.every((r) => selectedRepos.has(r.fullName));
+    repositories.length > 0 &&
+    repositories.every((r) => selectedRepos.has(r.fullName));
 
   const toggleAll = () => {
     if (allSelected) {
@@ -178,7 +208,9 @@ export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext 
     });
   };
 
-  const selectedInstallation = installations.find((i) => i.id === selectedInstallationId);
+  const selectedInstallation = installations.find(
+    (i) => i.id === selectedInstallationId,
+  );
 
   // Arm the on-focus re-fetch and open GitHub's manage page in a new tab.
   const openManagePage = (url: string) => {
@@ -230,8 +262,8 @@ export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext 
           </p>
         ) : installations.length === 0 ? (
           <p className="rounded-md border border-border/60 px-3 py-2 text-xs text-muted-foreground">
-            No GitHub App installations found. Install the GitHub App on your account or
-            organization using the link below, then refresh.
+            No GitHub App installations found. Install the GitHub App on your
+            account or organization using the link below, then refresh.
           </p>
         ) : (
           <ul
@@ -249,7 +281,9 @@ export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext 
                   }`}
                   onClick={() => setSelectedInstallationId(installation.id)}
                   data-testid={`installation-item-${installation.id}`}
-                  data-selected={selectedInstallationId === installation.id ? "" : undefined}
+                  data-selected={
+                    selectedInstallationId === installation.id ? "" : undefined
+                  }
                 >
                   {installation.avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element -- GitHub avatars are external
@@ -263,7 +297,9 @@ export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext 
                       <GithubIcon className="h-3 w-3" aria-hidden="true" />
                     </div>
                   )}
-                  <span className="flex-1 truncate font-medium">{installation.accountLogin}</span>
+                  <span className="flex-1 truncate font-medium">
+                    {installation.accountLogin}
+                  </span>
                   <span className="text-[11px] text-muted-foreground">
                     {installation.accountType}
                   </span>

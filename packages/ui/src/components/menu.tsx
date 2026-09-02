@@ -37,21 +37,31 @@ interface MenuPopupProps
 const MenuPopup = React.forwardRef<
   React.ComponentRef<typeof MenuPrimitive.Popup>,
   MenuPopupProps
->(({ className, sideOffset = 4, align = "start", side, portalProps, ...props }, ref) => (
-  <MenuPrimitive.Portal {...portalProps}>
-    <MenuPrimitive.Positioner sideOffset={sideOffset} align={align} side={side} className="z-50">
-      <MenuPrimitive.Popup
-        ref={ref}
-        className={cn(
-          "z-50 min-w-[8rem] overflow-hidden rounded-lg border border-menu-popup-border bg-menu-popup-bg p-1 text-menu-popup-fg",
-          "origin-[var(--transform-origin)] transition-[opacity,transform,translate,scale] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:-translate-y-1 data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:-translate-y-1",
-          className,
-        )}
-        {...props}
-      />
-    </MenuPrimitive.Positioner>
-  </MenuPrimitive.Portal>
-));
+>(
+  (
+    { className, sideOffset = 4, align = "start", side, portalProps, ...props },
+    ref,
+  ) => (
+    <MenuPrimitive.Portal {...portalProps}>
+      <MenuPrimitive.Positioner
+        sideOffset={sideOffset}
+        align={align}
+        side={side}
+        className="z-50"
+      >
+        <MenuPrimitive.Popup
+          ref={ref}
+          className={cn(
+            "z-50 min-w-[8rem] overflow-hidden rounded-lg border border-menu-popup-border bg-menu-popup-bg p-1 text-menu-popup-fg",
+            "origin-[var(--transform-origin)] transition-[opacity,transform,translate,scale] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:-translate-y-1 data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:-translate-y-1",
+            className,
+          )}
+          {...props}
+        />
+      </MenuPrimitive.Positioner>
+    </MenuPrimitive.Portal>
+  ),
+);
 MenuPopup.displayName = "MenuPopup";
 
 interface MenuItemProps
@@ -139,7 +149,11 @@ const MenuGroupLabel = React.forwardRef<
   <div
     ref={ref}
     role="presentation"
-    className={cn("px-2 py-1.5 text-sm font-semibold text-menu-group-label-fg", inset && "pl-8", className)}
+    className={cn(
+      "px-2 py-1.5 text-sm font-semibold text-menu-group-label-fg",
+      inset && "pl-8",
+      className,
+    )}
     {...props}
   />
 ));
@@ -149,20 +163,32 @@ const MenuSeparator = React.forwardRef<
   React.ComponentRef<typeof MenuPrimitive.Separator>,
   React.ComponentPropsWithoutRef<typeof MenuPrimitive.Separator>
 >(({ className, ...props }, ref) => (
-  <MenuPrimitive.Separator ref={ref} className={cn("-mx-1 my-1 h-px bg-menu-separator", className)} {...props} />
+  <MenuPrimitive.Separator
+    ref={ref}
+    className={cn("-mx-1 my-1 h-px bg-menu-separator", className)}
+    {...props}
+  />
 ));
 MenuSeparator.displayName = "MenuSeparator";
 
-function MenuShortcut({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) {
+function MenuShortcut({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLSpanElement>) {
   return (
-    <span className={cn("ml-auto text-xs tracking-widest opacity-60", className)} {...props} />
+    <span
+      className={cn("ml-auto text-xs tracking-widest opacity-60", className)}
+      {...props}
+    />
   );
 }
 MenuShortcut.displayName = "MenuShortcut";
 
 const MenuSubTrigger = React.forwardRef<
   React.ComponentRef<typeof MenuPrimitive.SubmenuTrigger>,
-  React.ComponentPropsWithoutRef<typeof MenuPrimitive.SubmenuTrigger> & { inset?: boolean }
+  React.ComponentPropsWithoutRef<typeof MenuPrimitive.SubmenuTrigger> & {
+    inset?: boolean;
+  }
 >(({ className, inset, children, ...props }, ref) => (
   <MenuPrimitive.SubmenuTrigger
     ref={ref}
@@ -182,21 +208,31 @@ MenuSubTrigger.displayName = "MenuSubTrigger";
 const MenuSubPopup = React.forwardRef<
   React.ComponentRef<typeof MenuPrimitive.Popup>,
   MenuPopupProps
->(({ className, sideOffset = 0, align = "start", side, portalProps, ...props }, ref) => (
-  <MenuPrimitive.Portal {...portalProps}>
-    <MenuPrimitive.Positioner sideOffset={sideOffset} align={align} side={side} className="z-50">
-      <MenuPrimitive.Popup
-        ref={ref}
-        className={cn(
-          "z-50 min-w-[8rem] overflow-hidden rounded-lg border border-menu-popup-border bg-menu-popup-bg p-1 text-menu-popup-fg",
-          "origin-[var(--transform-origin)] transition-[opacity,transform,translate,scale] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:-translate-y-1 data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:-translate-y-1",
-          className,
-        )}
-        {...props}
-      />
-    </MenuPrimitive.Positioner>
-  </MenuPrimitive.Portal>
-));
+>(
+  (
+    { className, sideOffset = 0, align = "start", side, portalProps, ...props },
+    ref,
+  ) => (
+    <MenuPrimitive.Portal {...portalProps}>
+      <MenuPrimitive.Positioner
+        sideOffset={sideOffset}
+        align={align}
+        side={side}
+        className="z-50"
+      >
+        <MenuPrimitive.Popup
+          ref={ref}
+          className={cn(
+            "z-50 min-w-[8rem] overflow-hidden rounded-lg border border-menu-popup-border bg-menu-popup-bg p-1 text-menu-popup-fg",
+            "origin-[var(--transform-origin)] transition-[opacity,transform,translate,scale] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:-translate-y-1 data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:-translate-y-1",
+            className,
+          )}
+          {...props}
+        />
+      </MenuPrimitive.Positioner>
+    </MenuPrimitive.Portal>
+  ),
+);
 MenuSubPopup.displayName = "MenuSubPopup";
 
 export {

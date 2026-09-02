@@ -5,13 +5,7 @@
  * engine, HTML-escaping via esc() for all user-derived values.
  */
 
-function esc(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
+import { esc } from "./html-escape";
 
 export interface LowBalanceAlertTemplateInput {
   /** Organization/workspace name. */

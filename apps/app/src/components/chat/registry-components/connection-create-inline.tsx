@@ -32,15 +32,18 @@ export default function ConnectionCreateInline({
           data-testid="connection-create-inline-github"
         >
           <div className="flex items-center gap-2.5">
-            <GithubIcon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <GithubIcon
+              className="h-4 w-4 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
             <span className="text-sm font-semibold text-foreground">
               Connect a GitHub repository
             </span>
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Authorize Oxagen to read your repositories and start indexing commits,
-            branches, and pull requests into your knowledge graph.
+            Authorize Oxagen to read your repositories and start indexing
+            commits, branches, and pull requests into your knowledge graph.
           </p>
 
           <Button
@@ -64,7 +67,9 @@ export default function ConnectionCreateInline({
 
   // Fallback for connectors that don't have an inline connect flow yet.
   const sourcesHref =
-    orgSlug && workspaceSlug ? `/${orgSlug}/${workspaceSlug}/knowledge/sources` : "/";
+    orgSlug && workspaceSlug
+      ? `/${orgSlug}/${workspaceSlug}/knowledge/sources`
+      : "/";
 
   return (
     <div
@@ -74,13 +79,18 @@ export default function ConnectionCreateInline({
       data-testid="connection-create-inline-fallback"
     >
       <div className="flex items-center gap-2.5">
-        <LinkIcon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="text-sm font-semibold text-foreground">Connect a source</span>
+        <LinkIcon
+          className="h-4 w-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <span className="text-sm font-semibold text-foreground">
+          Connect a source
+        </span>
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Inline connect is not available for this connector yet. Open the Sources page to
-        set it up manually.
+        Inline connect is not available for this connector yet. Open the Sources
+        page to set it up manually.
       </p>
 
       <Link

@@ -8,7 +8,9 @@ import {
   EMPTY_FILTER,
 } from "./catalog-filter";
 
-function row(over: Partial<CapabilityRegistrySummary>): CapabilityRegistrySummary {
+function row(
+  over: Partial<CapabilityRegistrySummary>,
+): CapabilityRegistrySummary {
   return {
     name: "cap_x",
     domain: "test",
@@ -31,7 +33,9 @@ function row(over: Partial<CapabilityRegistrySummary>): CapabilityRegistrySummar
 
 describe("hasSurfaceGap / missingCoreLayers", () => {
   it("is gap-free when all core layers are declared", () => {
-    const full = row({ layers: ["schema", "api", "mcp", "unit", "docs", "app"] });
+    const full = row({
+      layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+    });
     expect(hasSurfaceGap(full)).toBe(false);
     expect(missingCoreLayers(full)).toEqual([]);
   });
@@ -51,9 +55,17 @@ describe("allowedOrgRoles", () => {
 
 describe("filterCatalog", () => {
   const rows = [
-    row({ name: "query_audit_log", domain: "audit", description: "query the spine" }),
+    row({
+      name: "query_audit_log",
+      domain: "audit",
+      description: "query the spine",
+    }),
     row({ name: "list_iam_roles", domain: "iam", layers: ["api", "mcp"] }),
-    row({ name: "get_usage_breakdown", domain: "billing", layers: ["api", "mcp", "docs"] }),
+    row({
+      name: "get_usage_breakdown",
+      domain: "billing",
+      layers: ["api", "mcp", "docs"],
+    }),
   ];
 
   it("passes everything through with the empty filter", () => {
@@ -76,7 +88,10 @@ describe("filterCatalog", () => {
 
   it("filters to surface gaps only", () => {
     const out = filterCatalog(rows, { ...EMPTY_FILTER, gapOnly: true });
-    expect(out.map((r) => r.name)).toEqual(["list_iam_roles", "get_usage_breakdown"]);
+    expect(out.map((r) => r.name)).toEqual([
+      "list_iam_roles",
+      "get_usage_breakdown",
+    ]);
   });
 
   it("filters by missingLayer (hub deep link)", () => {

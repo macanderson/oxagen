@@ -6,7 +6,7 @@ export const evalRunStart = registerCapability({
   name: "start_eval_run",
   domain: "eval",
   description:
-    "Start an eval run: enqueue a background job that runs every dataset item through the target (a model+prompt or an agent) and scores each output with an LLM judge. Target and judge calls flow through @oxagen/ai, so tokens, latency, and cost land in the metering pipe. Poll eval.run.status / eval.run.get for results.",
+    "Start an eval run: enqueue a background job that runs every dataset item through the target (a model+prompt or an agent) and scores each output with an LLM judge. Target and judge calls flow through @oxagen/ai, so tokens, latency, and cost land in the metering pipe. Poll get_eval_status / get_eval_run for results.",
   // Async: returns a run handle immediately; the Inngest worker does the work.
   mode: "async",
   surfaces: ["api", "mcp", "cli"],

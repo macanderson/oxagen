@@ -19,9 +19,10 @@ export const skillWorkspaceInstall = registerCapability({
   },
   input: z.object({
     // Install a named builtin template from packages/skills by its slug.
-    // Mutually exclusive with `custom`; at least one must be provided.
+    // Supply exactly one of `slug` or `custom`. The handler rejects a request
+    // with neither; when both are given `slug` wins and `custom` is ignored.
     slug: z.string().min(1).optional(),
-    // Install a custom (uploaded) skill definition. Mutually exclusive with `slug`.
+    // Install a custom (uploaded) skill definition. See the note on `slug`.
     custom: z
       .object({
         content: z.string().min(1).describe("Canonical skill.toml content"),

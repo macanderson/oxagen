@@ -73,7 +73,8 @@ export function createOutput(
     isJson,
     data: (value, pretty) => {
       if (isJson) writer.write(JSON.stringify(value));
-      else writer.write(pretty ? pretty(value) : JSON.stringify(value, null, 2));
+      else
+        writer.write(pretty ? pretty(value) : JSON.stringify(value, null, 2));
     },
     event: (event) => {
       if (isJson) writer.write(JSON.stringify(event));
@@ -86,9 +87,11 @@ export function createOutput(
     },
     error: (err, code = "error") => {
       const message = errorMessage(err);
-      if (isJson) writer.writeErr(JSON.stringify({ type: "error", code, message }));
+      if (isJson)
+        writer.writeErr(JSON.stringify({ type: "error", code, message }));
       else writer.writeErr(`✗ ${message}`);
-      if (process.exitCode === undefined || process.exitCode === 0) process.exitCode = 1;
+      if (process.exitCode === undefined || process.exitCode === 0)
+        process.exitCode = 1;
     },
   };
 }

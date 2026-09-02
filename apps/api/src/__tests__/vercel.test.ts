@@ -56,7 +56,10 @@ describe("vercel entrypoint bootstrap guard", () => {
     const mod = await import("../vercel");
     const res = makeRes();
 
-    await (mod.default as (req: unknown, res: unknown) => Promise<void>)({}, res);
+    await (mod.default as (req: unknown, res: unknown) => Promise<void>)(
+      {},
+      res,
+    );
 
     expect(res.statusCode).toBe(503);
     expect(res.headers["content-type"]).toBe("application/json");
@@ -70,7 +73,10 @@ describe("vercel entrypoint bootstrap guard", () => {
     const res = makeRes();
     const req = { method: "GET" };
 
-    await (mod.default as (req: unknown, res: unknown) => Promise<void>)(req, res);
+    await (mod.default as (req: unknown, res: unknown) => Promise<void>)(
+      req,
+      res,
+    );
 
     expect(mockHonoHandler).toHaveBeenCalledWith(req, res);
     expect(res.statusCode).toBe(200);
@@ -81,7 +87,8 @@ describe("vercel entrypoint bootstrap guard", () => {
     const onUnhandled = (err: unknown) => seen.push(err);
     process.on("unhandledRejection", onUnhandled);
     try {
-      state.bootstrapImpl = () => Promise.reject(new Error("assertRlsConnectionSafe failed"));
+      state.bootstrapImpl = () =>
+        Promise.reject(new Error("assertRlsConnectionSafe failed"));
       await import("../vercel");
       // Flush microtasks + a macrotask so any unhandled rejection would fire.
       await new Promise((r) => setTimeout(r, 20));

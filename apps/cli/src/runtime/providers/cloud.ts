@@ -14,7 +14,10 @@
  * errors into {@link OfflineError}; the on-device coordinator keeps running.
  */
 import { generateText } from "ai";
-import { credentialSupportsModel, resolveAiCredential } from "../../agent/env.js";
+import {
+  credentialSupportsModel,
+  resolveAiCredential,
+} from "../../agent/env.js";
 import { estimateCostUsd } from "../../agent/rate-card.js";
 import { estimateInputTokens, estimateTokens } from "../tokens.js";
 import type {
@@ -78,8 +81,12 @@ const defaultGenerate: GenerateFn = (args) =>
     // Coordinator/judge requests carry their system prompt as a system-role
     // message; AI SDK v7 rejects that in `messages` unless explicitly allowed.
     allowSystemInMessages: true,
-    ...(args.maxOutputTokens !== undefined ? { maxOutputTokens: args.maxOutputTokens } : {}),
-    ...(args.temperature !== undefined ? { temperature: args.temperature } : {}),
+    ...(args.maxOutputTokens !== undefined
+      ? { maxOutputTokens: args.maxOutputTokens }
+      : {}),
+    ...(args.temperature !== undefined
+      ? { temperature: args.temperature }
+      : {}),
     ...(args.abortSignal ? { abortSignal: args.abortSignal } : {}),
   }) as ReturnType<GenerateFn>;
 
@@ -96,7 +103,16 @@ export interface CloudProviderDeps {
 /** Detect the "you're offline / DNS failed / connection refused" family. */
 function isNetworkError(err: unknown): boolean {
   const code = (err as { code?: string })?.code;
-  if (code && ["ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "ETIMEDOUT", "ENETUNREACH"].includes(code)) {
+  if (
+    code &&
+    [
+      "ENOTFOUND",
+      "EAI_AGAIN",
+      "ECONNREFUSED",
+      "ETIMEDOUT",
+      "ENETUNREACH",
+    ].includes(code)
+  ) {
     return true;
   }
   const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
@@ -157,7 +173,8 @@ export class GatewayCloudProvider implements ModelProvider {
   }
 
   async ensureReady(): Promise<void> {
-    if (this.resolveKey() === null) throw new MissingCredentialError(this.registryId);
+    if (this.resolveKey() === null)
+      throw new MissingCredentialError(this.registryId);
   }
 
   async complete(req: CompletionRequest): Promise<CompletionResult> {
@@ -167,8 +184,12 @@ export class GatewayCloudProvider implements ModelProvider {
       out = await this.generate({
         model: this.entry.slug,
         messages: req.messages,
-        ...(req.maxOutputTokens !== undefined ? { maxOutputTokens: req.maxOutputTokens } : {}),
-        ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
+        ...(req.maxOutputTokens !== undefined
+          ? { maxOutputTokens: req.maxOutputTokens }
+          : {}),
+        ...(req.temperature !== undefined
+          ? { temperature: req.temperature }
+          : {}),
         ...(req.signal ? { abortSignal: req.signal } : {}),
       });
     } catch (err) {

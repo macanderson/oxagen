@@ -42,7 +42,8 @@ export function StripeElementsProvider({
       <Alert variant="warning">
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          Card management is unavailable — STRIPE publishable key not configured.
+          Card management is unavailable — STRIPE publishable key not
+          configured.
         </AlertDescription>
       </Alert>
     );

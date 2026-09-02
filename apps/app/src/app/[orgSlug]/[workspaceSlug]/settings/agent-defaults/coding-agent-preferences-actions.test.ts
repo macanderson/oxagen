@@ -17,14 +17,19 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockGetSession, mockResolveOrg, mockResolveWorkspace, mockAssertOrgMember, mockInvoke } =
-  vi.hoisted(() => ({
-    mockGetSession: vi.fn(),
-    mockResolveOrg: vi.fn(),
-    mockResolveWorkspace: vi.fn(),
-    mockAssertOrgMember: vi.fn(),
-    mockInvoke: vi.fn(),
-  }));
+const {
+  mockGetSession,
+  mockResolveOrg,
+  mockResolveWorkspace,
+  mockAssertOrgMember,
+  mockInvoke,
+} = vi.hoisted(() => ({
+  mockGetSession: vi.fn(),
+  mockResolveOrg: vi.fn(),
+  mockResolveWorkspace: vi.fn(),
+  mockAssertOrgMember: vi.fn(),
+  mockInvoke: vi.fn(),
+}));
 
 vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSession }));
 vi.mock("@/lib/resolve-org", () => ({
@@ -41,12 +46,14 @@ const SESSION = { user: { id: "user-1" } };
 const ORG = { id: "org-1", slug: "acme" };
 const WS = { id: "ws-1", slug: "main" };
 
-function base(overrides: Partial<{
-  defaultRepoConnectionId: string | null;
-  defaultRepoSlug: string | null;
-  defaultEnvironmentId: string | null;
-  defaultAgentId: string | null;
-}> = {}) {
+function base(
+  overrides: Partial<{
+    defaultRepoConnectionId: string | null;
+    defaultRepoSlug: string | null;
+    defaultEnvironmentId: string | null;
+    defaultAgentId: string | null;
+  }> = {},
+) {
   return {
     orgSlug: "acme",
     workspaceSlug: "main",
@@ -75,7 +82,10 @@ describe("updateCodingAgentPreferencesAction", () => {
   });
 
   it("rejects an empty orgSlug before invoking", async () => {
-    const res = await updateCodingAgentPreferencesAction({ ...base(), orgSlug: "" });
+    const res = await updateCodingAgentPreferencesAction({
+      ...base(),
+      orgSlug: "",
+    });
     expect(res.ok).toBe(false);
     expect(mockInvoke).not.toHaveBeenCalled();
   });
@@ -100,7 +110,11 @@ describe("updateCodingAgentPreferencesAction", () => {
         defaultEnvironmentId: "env-1",
         defaultAgentId: "agt_1",
       },
-      expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }),
+      expect.objectContaining({
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        userId: "user-1",
+      }),
     );
     // Exactly 3 positional args — no 4th { surface } opts object, matching the
     // app-only contract's surfaces:["api"] precedent (setDefaultAgentAction).

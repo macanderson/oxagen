@@ -3,13 +3,21 @@ import { systemInstallInstructions } from "./system.install.instructions";
 
 describe("system.install.instructions capability", () => {
   it("parses a minimal valid input for claude-code", () => {
-    const parsed = systemInstallInstructions.input.parse({ client: "claude-code" });
+    const parsed = systemInstallInstructions.input.parse({
+      client: "claude-code",
+    });
     expect(parsed.client).toBe("claude-code");
     expect(parsed.workspaceSlug).toBeUndefined();
   });
 
   it("parses all supported client values", () => {
-    const clients = ["claude-code", "cursor", "claude-desktop", "codex", "vscode"] as const;
+    const clients = [
+      "claude-code",
+      "cursor",
+      "claude-desktop",
+      "codex",
+      "vscode",
+    ] as const;
     for (const client of clients) {
       const parsed = systemInstallInstructions.input.parse({ client });
       expect(parsed.client).toBe(client);

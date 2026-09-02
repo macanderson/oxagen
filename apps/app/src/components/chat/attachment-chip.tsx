@@ -54,7 +54,9 @@ export interface PendingAttachment {
 }
 
 /** True when every attachment finished uploading (used to gate the send button). */
-export function hasInFlightUploads(attachments: readonly PendingAttachment[]): boolean {
+export function hasInFlightUploads(
+  attachments: readonly PendingAttachment[],
+): boolean {
   return attachments.some((a) => a.status === "uploading");
 }
 
@@ -84,12 +86,18 @@ export function AttachmentChip({
   const displayName = attachment.name ?? attachment.file.name;
 
   return (
-    <div className={cn("flex flex-col items-center", compact ? "w-10 gap-0.5" : "gap-1")}>
+    <div
+      className={cn(
+        "flex flex-col items-center",
+        compact ? "w-10 gap-0.5" : "gap-1",
+      )}
+    >
       <div
         className={cn(
           "group relative shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted flex",
           compact ? "h-10 w-10" : "h-16 w-16",
-          attachment.status === "error" && "border-destructive/50 bg-destructive/5",
+          attachment.status === "error" &&
+            "border-destructive/50 bg-destructive/5",
         )}
         data-testid="attachment-chip"
         data-status={attachment.status}
@@ -106,7 +114,10 @@ export function AttachmentChip({
         ) : isVideo ? (
           <Film className="size-6 text-muted-foreground" aria-hidden="true" />
         ) : (
-          <FileText className="size-6 text-muted-foreground" aria-hidden="true" />
+          <FileText
+            className="size-6 text-muted-foreground"
+            aria-hidden="true"
+          />
         )}
 
         {attachment.status === "uploading" ? (
@@ -118,7 +129,9 @@ export function AttachmentChip({
             aria-valuemax={100}
           >
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-            <span className="text-[10px] tabular-nums">{attachment.progress}%</span>
+            <span className="text-[10px] tabular-nums">
+              {attachment.progress}%
+            </span>
           </div>
         ) : null}
 

@@ -32,24 +32,33 @@ async function resolveReadmeHtml(
   try {
     return await fetchAndRenderReadme(repository);
   } catch (err) {
-    logger.warn({ err, name, version }, "plugin.catalog.get: readme fetch failed, returning without readme");
+    logger.warn(
+      { err, name, version },
+      "plugin.catalog.get: readme fetch failed, returning without readme",
+    );
     return null;
   }
 }
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
-  const { name, version = "latest" } = input as { name: string; version?: string };
+  const { name, version = "latest" } = input as {
+    name: string;
+    version?: string;
+  };
 
   // ── First-party Oxagen capability packs ─────────────────────────────────────
   // Capability packs (agent_capability / knowledge_source / integration) live in
   // the in-repo Oxagen plugin registry, NOT in MCP registries. Resolve them here
   // so the marketplace detail panel works for ids like "oxagen/media-image"
-  // WITHOUT requiring any enabled MCP registry. Before this, catalog.get always
-  // hit the registry path and threw (→ 500) for every first-party pack, which
-  // crashed the marketplace detail panel. Hidden packs are treated as not-found.
+  // WITHOUT requiring any enabled MCP registry — the registry path below cannot
+  // resolve a first-party pack and would throw for every one of them. Hidden
+  // packs are treated as not-found.
   const manifest = getOxagenPlugin(name);
   if (manifest && manifest.visibility !== "hidden") {
-    logger.info({ name, version: manifest.version }, "plugin.catalog.get: oxagen plugin ok");
+    logger.info(
+      { name, version: manifest.version },
+      "plugin.catalog.get: oxagen plugin ok",
+    );
     return {
       name: manifest.id,
       title: manifest.name,
@@ -59,7 +68,9 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       websiteUrl: null,
       // Forward Lucide icon name + hex accent color per the SHARED ICON DATA CONTRACT.
       // UI branches: http(s)/data URI → <Image>; plain string → CapabilityIcon(color).
-      icons: manifest.icon ? [{ src: manifest.icon, color: manifest.color }] : [],
+      icons: manifest.icon
+        ? [{ src: manifest.icon, color: manifest.color }]
+        : [],
       packages: [],
       remotes: [],
       transportTypes: [],
@@ -88,8 +99,11 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   );
 
   // Not a first-party pack and no registries to search → genuinely not found.
-  // Surface as a not-found error (route maps this to 404, not a 500) so the
-  // marketplace renders a clean "not found" instead of crashing.
+  // NOTE: a bare Error carries no status, so apps/api's errorMiddleware falls
+  // through to its catch-all and returns 500 "Unexpected server error" (and
+  // fires captureError). Only HTTPException or a CapabilityError with
+  // unknown_capability/no_handler reach 404 there. Making the marketplace show
+  // a clean "not found" needs a typed error, not just this message.
   if (registries.length === 0) {
     throw new Error(`catalog server not found: ${name}@${version}`);
   }
@@ -101,13 +115,19 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       if (version === "latest") {
         // listServers with exact name search; the registry returns the latest
         // version when no version is specified.
-        const result = await listServers(reg.baseUrl, { search: name, limit: 10 });
+        const result = await listServers(reg.baseUrl, {
+          search: name,
+          limit: 10,
+        });
         const match = result.servers.find((s) => s.server.name === name);
         if (!match) continue;
 
         const sd = match.server;
         const meta = match._meta;
-        logger.info({ name, version: sd.version, registryId: reg.id }, "plugin.catalog.get: ok");
+        logger.info(
+          { name, version: sd.version, registryId: reg.id },
+          "plugin.catalog.get: ok",
+        );
         return {
           name: sd.name,
           title: sd.title ?? null,
@@ -121,14 +141,17 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
           transportTypes: deriveTransportTypes(sd),
           authKind: deriveAuthKind(sd),
           categories: (meta as Record<string, unknown> | undefined)?.categories
-            ? (meta as Record<string, unknown>).categories as string[]
+            ? ((meta as Record<string, unknown>).categories as string[])
             : [],
           readmeHtml: await resolveReadmeHtml(sd.repository, name, sd.version),
         };
       } else {
         const s = await getServerVersion(reg.baseUrl, name, version);
         const sd = s.server;
-        logger.info({ name, version, registryId: reg.id }, "plugin.catalog.get: ok");
+        logger.info(
+          { name, version, registryId: reg.id },
+          "plugin.catalog.get: ok",
+        );
         return {
           name: sd.name,
           title: sd.title ?? null,
@@ -146,7 +169,10 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         };
       }
     } catch (err) {
-      logger.warn({ err, registryId: reg.id, name, version }, "plugin.catalog.get: registry fetch failed, trying next");
+      logger.warn(
+        { err, registryId: reg.id, name, version },
+        "plugin.catalog.get: registry fetch failed, trying next",
+      );
     }
   }
 

@@ -23,9 +23,22 @@ const WORDMARK: readonly string[] = [
  */
 export function TuiReplBanner({ className }: { className?: string }) {
   return (
-    <TuiFrame id="tui-banner" title="~/acme-web — oxagen" width={560} height={222} className={className}>
+    <TuiFrame
+      id="tui-banner"
+      title="~/acme-web — oxagen"
+      width={560}
+      height={222}
+      className={className}
+    >
       {WORDMARK.map((line, i) => (
-        <text key={i} x={20} y={48 + i * 13} fontSize={9} fill={tuiColors.violet} fontWeight={700}>
+        <text
+          key={i}
+          x={20}
+          y={48 + i * 13}
+          fontSize={9}
+          fill={tuiColors.violet}
+          fontWeight={700}
+        >
           {line}
         </text>
       ))}
@@ -37,18 +50,39 @@ export function TuiReplBanner({ className }: { className?: string }) {
         <tspan fill={tuiColors.violet} fontWeight={700}>
           Oxagen
         </tspan>
-        <tspan fill={tuiColors.dim}>{`  ·  agentic coding CLI  ·  v${CLI_VERSION}`}</tspan>
+        <tspan
+          fill={tuiColors.dim}
+        >{`  ·  agentic coding CLI  ·  v${CLI_VERSION}`}</tspan>
       </text>
 
       {/* Prompt bar */}
-      <rect x={20} y={144} width={520} height={32} rx={8} fill="none" stroke={tuiColors.cyan} strokeWidth={1.5} />
+      <rect
+        x={20}
+        y={144}
+        width={520}
+        height={32}
+        rx={8}
+        fill="none"
+        stroke={tuiColors.cyan}
+        strokeWidth={1.5}
+      />
       <text x={34} y={165} fontSize={13}>
         <tspan fill={tuiColors.cyan} fontWeight={700}>
           {tuiGlyphs.pointer}{" "}
         </tspan>
-        <tspan fill={tuiColors.dim}>refactor the billing meter to bill per-seat</tspan>
+        <tspan fill={tuiColors.dim}>
+          refactor the billing meter to bill per-seat
+        </tspan>
       </text>
-      <rect className="tui-caret" x={330} y={153} width={7} height={15} fill={tuiColors.cyan} opacity={0.85} />
+      <rect
+        className="tui-caret"
+        x={330}
+        y={153}
+        width={7}
+        height={15}
+        fill={tuiColors.cyan}
+        opacity={0.85}
+      />
 
       {/* Status line */}
       <text x={20} y={196} fontSize={11.5}>

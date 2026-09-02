@@ -2,10 +2,8 @@
  *  customer context graph, via the workspace-scoped `/graph/search` API.
  *
  *  Output follows the universal discipline (ADR-023 §4): `--json` or a piped
- *  stdout emits ONE machine line; a TTY without the flag keeps the historical
- *  2-space-indented JSON view (same shape either way, so `| jq` consumers see
- *  no change — this command previously ignored its context and always printed
- *  the indented form). */
+ *  stdout emits ONE machine line; a TTY without the flag prints the same shape
+ *  2-space-indented, so `| jq` consumers see identical data either way. */
 import { apiPost } from "../lib/api.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 import { createOutput } from "../lib/output.js";

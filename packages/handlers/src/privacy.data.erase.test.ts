@@ -82,7 +82,9 @@ const { privacyDataEraseHandler } = await import("./privacy.data.erase");
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const ORG_ID = "22222222-2222-4222-8222-222222222222";
 
-function makeCtx(overrides: Partial<CapabilityContext> = {}): CapabilityContext {
+function makeCtx(
+  overrides: Partial<CapabilityContext> = {},
+): CapabilityContext {
   return {
     userId: "user-1",
     apiKeyId: null,

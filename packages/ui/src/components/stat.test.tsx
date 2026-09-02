@@ -27,17 +27,31 @@ describe("Stat — render", () => {
 
   it("up trend derives a positive (success) delta", () => {
     render(<Stat label="Runs" value="120" delta="+12%" trend="up" />);
-    expect(screen.getByText("+12%").closest("span")?.className).toContain("text-success");
+    expect(screen.getByText("+12%").closest("span")?.className).toContain(
+      "text-success",
+    );
   });
 
   it("down trend derives a negative (error) delta", () => {
     render(<Stat label="Runs" value="90" delta="-8%" trend="down" />);
-    expect(screen.getByText("-8%").closest("span")?.className).toContain("text-error");
+    expect(screen.getByText("-8%").closest("span")?.className).toContain(
+      "text-error",
+    );
   });
 
   it("intent override wins over trend direction (cost going up is bad)", () => {
-    render(<Stat label="Spend" value="$99" delta="+40%" trend="up" intent="negative" />);
-    expect(screen.getByText("+40%").closest("span")?.className).toContain("text-error");
+    render(
+      <Stat
+        label="Spend"
+        value="$99"
+        delta="+40%"
+        trend="up"
+        intent="negative"
+      />,
+    );
+    expect(screen.getByText("+40%").closest("span")?.className).toContain(
+      "text-error",
+    );
   });
 
   it("tone tints the value itself", () => {
@@ -73,7 +87,9 @@ describe("StatGroup — render", () => {
         <Stat label="C" value="3" />
       </StatGroup>,
     );
-    expect((container.firstChild as HTMLElement).className).toContain("lg:grid-cols-3");
+    expect((container.firstChild as HTMLElement).className).toContain(
+      "lg:grid-cols-3",
+    );
   });
 
   it("accepts an explicit column count", () => {
@@ -84,6 +100,8 @@ describe("StatGroup — render", () => {
         <Stat label="C" value="3" />
       </StatGroup>,
     );
-    expect((container.firstChild as HTMLElement).className).toContain("lg:grid-cols-2");
+    expect((container.firstChild as HTMLElement).className).toContain(
+      "lg:grid-cols-2",
+    );
   });
 });

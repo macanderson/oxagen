@@ -68,7 +68,14 @@ self.addEventListener("fetch", (event) => {
           if (response.ok) cache.put(event.request, response.clone());
           return response;
         })
-        .catch(() => cached);
+        .catch((err) => {
+          // Nothing cached and the network is gone: let the rejection through.
+          // Resolving with `undefined` here would make respondWith() throw a
+          // TypeError, which surfaces as an opaque failure instead of the
+          // browser's normal offline error for the asset.
+          if (!cached) throw err;
+          return cached;
+        });
       return cached ?? network;
     }),
   );

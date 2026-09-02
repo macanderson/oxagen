@@ -31,7 +31,8 @@ import { FieldFillTransition } from "@/components/ui/field-fill-transition";
 import type { FieldDiff } from "@/lib/ask/fill-types";
 
 export function FillOverlay() {
-  const { fillResult, fillableForm, _setFillResult, isFilling } = usePageContext();
+  const { fillResult, fillableForm, _setFillResult, isFilling } =
+    usePageContext();
 
   // An incrementing key drives a full remount of the inner panel whenever a
   // new fillResult arrives, resetting all per-field state in one React
@@ -74,11 +75,17 @@ function FillOverlayPanel({
   _setFillResult,
 }: FillOverlayPanelProps) {
   // Track which fields have been individually accepted (for transition feedback).
-  const [acceptedFields, setAcceptedFields] = React.useState<Set<string>>(new Set());
+  const [acceptedFields, setAcceptedFields] = React.useState<Set<string>>(
+    new Set(),
+  );
   // Track which fields have been individually rejected.
-  const [rejectedFields, setRejectedFields] = React.useState<Set<string>>(new Set());
+  const [rejectedFields, setRejectedFields] = React.useState<Set<string>>(
+    new Set(),
+  );
   // Expanded rationale per field.
-  const [expandedRationale, setExpandedRationale] = React.useState<Set<string>>(new Set());
+  const [expandedRationale, setExpandedRationale] = React.useState<Set<string>>(
+    new Set(),
+  );
 
   // Dismiss when all fields are resolved.
   const changedFields = React.useMemo(
@@ -113,7 +120,9 @@ function FillOverlayPanel({
   const handleApplyAll = React.useCallback(() => {
     if (!fillableForm || !fillResult) return;
     const values = Object.fromEntries(
-      changedFields.filter((f) => !rejectedFields.has(f.name)).map((f) => [f.name, f.proposed]),
+      changedFields
+        .filter((f) => !rejectedFields.has(f.name))
+        .map((f) => [f.name, f.proposed]),
     );
     fillableForm.apply(values, "all");
     setAcceptedFields(new Set(changedFields.map((f) => f.name)));
@@ -156,7 +165,9 @@ function FillOverlayPanel({
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-foreground" aria-hidden="true" />
           <span className="text-sm font-medium text-foreground">
-            {isFilling ? "Filling form…" : `${changedFields.length} suggestion${changedFields.length !== 1 ? "s" : ""}`}
+            {isFilling
+              ? "Filling form…"
+              : `${changedFields.length} suggestion${changedFields.length !== 1 ? "s" : ""}`}
           </span>
         </div>
         {!isFilling && (
@@ -196,7 +207,10 @@ function FillOverlayPanel({
       {/* Loading state */}
       {isFilling && (
         <div className="flex items-center justify-center gap-2 px-4 py-6 text-sm text-muted-foreground">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-accent" aria-hidden="true" />
+          <div
+            className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-accent"
+            aria-hidden="true"
+          />
           Generating suggestions…
         </div>
       )}
@@ -257,10 +271,14 @@ function FillOverlayPanel({
                     )}
                     {/* Accepted / rejected badge */}
                     {isAccepted && (
-                      <span className="text-[10px] font-medium text-foreground">Applied</span>
+                      <span className="text-[10px] font-medium text-foreground">
+                        Applied
+                      </span>
                     )}
                     {isRejected && (
-                      <span className="text-[10px] font-medium text-muted-foreground">Skipped</span>
+                      <span className="text-[10px] font-medium text-muted-foreground">
+                        Skipped
+                      </span>
                     )}
                   </div>
 
@@ -271,10 +289,13 @@ function FillOverlayPanel({
                       <span className="mt-0.5 shrink-0 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/50 w-14">
                         Current
                       </span>
-                      <span className={cn(
-                        "break-words text-muted-foreground/70",
-                        isPending && "line-through decoration-muted-foreground/40",
-                      )}>
+                      <span
+                        className={cn(
+                          "break-words text-muted-foreground/70",
+                          isPending &&
+                            "line-through decoration-muted-foreground/40",
+                        )}
+                      >
                         {formatFieldValue(diff.current)}
                       </span>
                     </div>
@@ -299,7 +320,9 @@ function FillOverlayPanel({
                         type="button"
                         onClick={() => toggleRationale(diff.name)}
                         aria-expanded={isRationaleOpen}
-                        aria-label={isRationaleOpen ? "Hide reasoning" : "Show reasoning"}
+                        aria-label={
+                          isRationaleOpen ? "Hide reasoning" : "Show reasoning"
+                        }
                         className={cn(
                           "flex items-center gap-1 text-[10px] text-muted-foreground/50",
                           "transition-colors hover:text-muted-foreground",

@@ -22,7 +22,9 @@ describe("extensionForAsset", () => {
   });
 
   it("ignores mimeType parameters (charset)", () => {
-    expect(extensionForAsset("text/markdown; charset=utf-8", "document")).toBe(".md");
+    expect(extensionForAsset("text/markdown; charset=utf-8", "document")).toBe(
+      ".md",
+    );
   });
 
   it("maps Mermaid diagram source to .mmd", () => {
@@ -34,9 +36,13 @@ describe("extensionForAsset", () => {
   });
 
   it("falls back to the kind extension when the mimeType is unknown", () => {
-    expect(extensionForAsset("application/octet-stream", "archive")).toBe(".zip");
+    expect(extensionForAsset("application/octet-stream", "archive")).toBe(
+      ".zip",
+    );
     expect(extensionForAsset("application/octet-stream", "image")).toBe(".png");
-    expect(extensionForAsset("application/octet-stream", "spreadsheet")).toBe(".xlsx");
+    expect(extensionForAsset("application/octet-stream", "spreadsheet")).toBe(
+      ".xlsx",
+    );
   });
 
   it("returns empty string for a fully unknown type+kind", () => {
@@ -46,7 +52,9 @@ describe("extensionForAsset", () => {
 
 describe("slugify", () => {
   it("lowercases and hyphenates", () => {
-    expect(slugify("USS Nautilus Polar Crossing")).toBe("uss-nautilus-polar-crossing");
+    expect(slugify("USS Nautilus Polar Crossing")).toBe(
+      "uss-nautilus-polar-crossing",
+    );
   });
 
   it("collapses punctuation and whitespace runs into single hyphens", () => {
@@ -164,6 +172,16 @@ describe("assetDispositionType", () => {
 
   it("forces SVG to attachment (stored-XSS defence)", () => {
     expect(assetDispositionType("image/svg+xml")).toBe("attachment");
+  });
+
+  it("forces every browser-executable markup type to attachment, not just SVG", () => {
+    // nosniff stops a GUESSED type, not an honest text/html — an inline one
+    // would be stored XSS on the app's own origin.
+    expect(assetDispositionType("text/html")).toBe("attachment");
+    expect(assetDispositionType("text/html; charset=utf-8")).toBe("attachment");
+    expect(assetDispositionType("application/xhtml+xml")).toBe("attachment");
+    expect(assetDispositionType("text/xml")).toBe("attachment");
+    expect(assetDispositionType("application/xml")).toBe("attachment");
   });
 
   it("serves Mermaid source inline (text/*, safe under nosniff)", () => {

@@ -98,9 +98,7 @@ describe("invitationEmailTemplate", () => {
 
     it("escapes & in inviteUrl (href) as &amp;", () => {
       const { html } = invitationEmailTemplate(dangerous);
-      expect(html).toContain(
-        'href="https://example.com/invite?a=1&amp;b=2"'
-      );
+      expect(html).toContain('href="https://example.com/invite?a=1&amp;b=2"');
     });
 
     it("escapes < in inviterName as &lt;", () => {

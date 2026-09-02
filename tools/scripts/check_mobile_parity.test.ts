@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { extractFindings, scanStringLiterals, computeMobileParity } from "./check_mobile_parity.mjs";
+import {
+  extractFindings,
+  scanStringLiterals,
+  computeMobileParity,
+} from "./check_mobile_parity.mjs";
 
 describe("scanStringLiterals", () => {
   it("does not desync on an apostrophe inside a block comment", () => {
@@ -33,7 +37,9 @@ describe("scanStringLiterals", () => {
 
   it("reports the correct line number for a literal", () => {
     const src = `const a = 1;\nconst b = 2;\nconst c = "hidden md:block";\n`;
-    const found = scanStringLiterals(src).find((l) => l.value === "hidden md:block");
+    const found = scanStringLiterals(src).find(
+      (l) => l.value === "hidden md:block",
+    );
     expect(found?.line).toBe(3);
   });
 });
@@ -43,7 +49,11 @@ describe("extractFindings — token detection", () => {
     const src = `<div className="hidden md:block">x</div>`;
     const findings = extractFindings(src, "f.tsx");
     expect(findings).toHaveLength(1);
-    expect(findings[0]).toMatchObject({ file: "f.tsx", type: "A", literal: "hidden md:block" });
+    expect(findings[0]).toMatchObject({
+      file: "f.tsx",
+      type: "A",
+      literal: "hidden md:block",
+    });
   });
 
   it("does NOT flag `md:hidden` alone (not the standalone `hidden` token)", () => {
@@ -78,7 +88,12 @@ describe("extractFindings — token detection", () => {
 
 describe("computeMobileParity — coverage", () => {
   const findings = [
-    { file: "a.tsx", line: 10, literal: "hidden w-48 md:block", type: "A" as const },
+    {
+      file: "a.tsx",
+      line: 10,
+      literal: "hidden w-48 md:block",
+      type: "A" as const,
+    },
   ];
 
   it("flags an uncovered finding", () => {
@@ -89,15 +104,31 @@ describe("computeMobileParity — coverage", () => {
 
   it("covers a finding whose literal includes the entry's match, in the same file", () => {
     const manifest = {
-      entries: [{ file: "a.tsx", match: "hidden w-48", kind: "reflow" as const, equivalent: "Shown via MobileNav instead of the sidebar." }],
+      entries: [
+        {
+          file: "a.tsx",
+          match: "hidden w-48",
+          kind: "reflow" as const,
+          equivalent: "Shown via MobileNav instead of the sidebar.",
+        },
+      ],
     };
     const { violations } = computeMobileParity(findings, manifest);
-    expect(violations.filter((v) => v.type === "uncovered-finding")).toHaveLength(0);
+    expect(
+      violations.filter((v) => v.type === "uncovered-finding"),
+    ).toHaveLength(0);
   });
 
   it("does not cover a finding when the entry is for a different file", () => {
     const manifest = {
-      entries: [{ file: "b.tsx", match: "hidden w-48", kind: "reflow" as const, equivalent: "Shown via MobileNav instead of the sidebar." }],
+      entries: [
+        {
+          file: "b.tsx",
+          match: "hidden w-48",
+          kind: "reflow" as const,
+          equivalent: "Shown via MobileNav instead of the sidebar.",
+        },
+      ],
     };
     const { violations } = computeMobileParity(findings, manifest);
     expect(violations.some((v) => v.type === "uncovered-finding")).toBe(true);
@@ -107,7 +138,14 @@ describe("computeMobileParity — coverage", () => {
 describe("computeMobileParity — stale and pending entries", () => {
   it("flags a stale entry that covers no finding", () => {
     const manifest = {
-      entries: [{ file: "a.tsx", match: "not-present", kind: "reflow" as const, equivalent: "Some mobile equivalent surface." }],
+      entries: [
+        {
+          file: "a.tsx",
+          match: "not-present",
+          kind: "reflow" as const,
+          equivalent: "Some mobile equivalent surface.",
+        },
+      ],
     };
     const { violations } = computeMobileParity([], manifest);
     expect(violations.some((v) => v.type === "stale-entry")).toBe(true);
@@ -115,7 +153,15 @@ describe("computeMobileParity — stale and pending entries", () => {
 
   it("suppresses the stale violation for a pending entry but warns instead", () => {
     const manifest = {
-      entries: [{ file: "a.tsx", match: "not-present", kind: "reflow" as const, equivalent: "Some mobile equivalent surface.", pending: true }],
+      entries: [
+        {
+          file: "a.tsx",
+          match: "not-present",
+          kind: "reflow" as const,
+          equivalent: "Some mobile equivalent surface.",
+          pending: true,
+        },
+      ],
     };
     const { violations, warnings } = computeMobileParity([], manifest);
     expect(violations.some((v) => v.type === "stale-entry")).toBe(false);
@@ -125,7 +171,9 @@ describe("computeMobileParity — stale and pending entries", () => {
 });
 
 describe("computeMobileParity — kind=hidden validation", () => {
-  const findings = [{ file: "a.tsx", line: 1, literal: "hidden md:block", type: "A" as const }];
+  const findings = [
+    { file: "a.tsx", line: 1, literal: "hidden md:block", type: "A" as const },
+  ];
 
   it("rejects a reason outside security/performance", () => {
     const manifest = {
@@ -141,7 +189,9 @@ describe("computeMobileParity — kind=hidden validation", () => {
       ],
     };
     const { violations } = computeMobileParity(findings, manifest);
-    expect(violations.some((v) => v.type === "invalid-hidden-reason")).toBe(true);
+    expect(violations.some((v) => v.type === "invalid-hidden-reason")).toBe(
+      true,
+    );
   });
 
   it("rejects a justification shorter than 120 chars", () => {
@@ -158,17 +208,27 @@ describe("computeMobileParity — kind=hidden validation", () => {
       ],
     };
     const { violations } = computeMobileParity(findings, manifest);
-    expect(violations.some((v) => v.type === "invalid-hidden-justification")).toBe(true);
+    expect(
+      violations.some((v) => v.type === "invalid-hidden-justification"),
+    ).toBe(true);
   });
 
   it("rejects a missing approvedBy", () => {
     const manifest = {
       entries: [
-        { file: "a.tsx", match: "hidden md:block", kind: "hidden" as const, reason: "performance", justification: "x".repeat(130) },
+        {
+          file: "a.tsx",
+          match: "hidden md:block",
+          kind: "hidden" as const,
+          reason: "performance",
+          justification: "x".repeat(130),
+        },
       ],
     };
     const { violations } = computeMobileParity(findings, manifest);
-    expect(violations.some((v) => v.type === "invalid-hidden-approval")).toBe(true);
+    expect(violations.some((v) => v.type === "invalid-hidden-approval")).toBe(
+      true,
+    );
   });
 
   it("accepts a fully valid hidden entry", () => {
@@ -190,20 +250,36 @@ describe("computeMobileParity — kind=hidden validation", () => {
 });
 
 describe("computeMobileParity — kind=reflow validation", () => {
-  const findings = [{ file: "a.tsx", line: 1, literal: "hidden md:block", type: "A" as const }];
+  const findings = [
+    { file: "a.tsx", line: 1, literal: "hidden md:block", type: "A" as const },
+  ];
 
   it("rejects an equivalent shorter than 20 chars", () => {
     const manifest = {
-      entries: [{ file: "a.tsx", match: "hidden md:block", kind: "reflow" as const, equivalent: "too short" }],
+      entries: [
+        {
+          file: "a.tsx",
+          match: "hidden md:block",
+          kind: "reflow" as const,
+          equivalent: "too short",
+        },
+      ],
     };
     const { violations } = computeMobileParity(findings, manifest);
-    expect(violations.some((v) => v.type === "invalid-reflow-equivalent")).toBe(true);
+    expect(violations.some((v) => v.type === "invalid-reflow-equivalent")).toBe(
+      true,
+    );
   });
 
   it("accepts a fully valid reflow entry", () => {
     const manifest = {
       entries: [
-        { file: "a.tsx", match: "hidden md:block", kind: "reflow" as const, equivalent: "Re-presented via MobileBottomBar navigation." },
+        {
+          file: "a.tsx",
+          match: "hidden md:block",
+          kind: "reflow" as const,
+          equivalent: "Re-presented via MobileBottomBar navigation.",
+        },
       ],
     };
     const { violations } = computeMobileParity(findings, manifest);

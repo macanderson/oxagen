@@ -27,27 +27,19 @@ describe("organization.create schema", () => {
   });
 
   it("rejects an empty name", () => {
-    expect(() =>
-      Schema.parse({ name: "", slug: "acme-corp" }),
-    ).toThrow();
+    expect(() => Schema.parse({ name: "", slug: "acme-corp" })).toThrow();
   });
 
   it("rejects a slug with uppercase letters", () => {
-    expect(() =>
-      Schema.parse({ name: "Acme", slug: "Acme-Corp" }),
-    ).toThrow();
+    expect(() => Schema.parse({ name: "Acme", slug: "Acme-Corp" })).toThrow();
   });
 
   it("rejects a slug with spaces", () => {
-    expect(() =>
-      Schema.parse({ name: "Acme", slug: "acme corp" }),
-    ).toThrow();
+    expect(() => Schema.parse({ name: "Acme", slug: "acme corp" })).toThrow();
   });
 
   it("rejects a slug shorter than 2 characters", () => {
-    expect(() =>
-      Schema.parse({ name: "Acme", slug: "a" }),
-    ).toThrow();
+    expect(() => Schema.parse({ name: "Acme", slug: "a" })).toThrow();
   });
 
   it("rejects a slug longer than 40 characters", () => {
@@ -71,21 +63,15 @@ describe("workspace.create schema", () => {
   });
 
   it("rejects an empty name", () => {
-    expect(() =>
-      Schema.parse({ name: "", slug: "my-workspace" }),
-    ).toThrow();
+    expect(() => Schema.parse({ name: "", slug: "my-workspace" })).toThrow();
   });
 
   it("rejects a slug with special characters", () => {
-    expect(() =>
-      Schema.parse({ name: "WS", slug: "my_workspace!" }),
-    ).toThrow();
+    expect(() => Schema.parse({ name: "WS", slug: "my_workspace!" })).toThrow();
   });
 
   it("rejects a slug longer than 40 characters", () => {
-    expect(() =>
-      Schema.parse({ name: "WS", slug: "w".repeat(41) }),
-    ).toThrow();
+    expect(() => Schema.parse({ name: "WS", slug: "w".repeat(41) })).toThrow();
   });
 });
 
@@ -117,9 +103,7 @@ describe("image.generate schema", () => {
   });
 
   it("rejects an invalid size enum value", () => {
-    expect(() =>
-      Schema.parse({ prompt: "test", size: "800x600" }),
-    ).toThrow();
+    expect(() => Schema.parse({ prompt: "test", size: "800x600" })).toThrow();
   });
 
   it("accepts all valid size values", () => {
@@ -212,7 +196,7 @@ describe("chat.message.send schema", () => {
     expect(() =>
       Schema.parse({
         conversationId: null,
-  
+
         parentMessageId: null,
         branchReason: null,
         content: "",
@@ -224,7 +208,7 @@ describe("chat.message.send schema", () => {
     expect(() =>
       Schema.parse({
         conversationId: null,
-  
+
         parentMessageId: null,
         branchReason: "bad_reason",
         content: "Hello",
@@ -233,11 +217,16 @@ describe("chat.message.send schema", () => {
   });
 
   it("accepts all valid branchReason values", () => {
-    for (const branchReason of ["edit", "regenerate", "tool_retry", "manual_fork"] as const) {
+    for (const branchReason of [
+      "edit",
+      "regenerate",
+      "tool_retry",
+      "manual_fork",
+    ] as const) {
       expect(() =>
         Schema.parse({
           conversationId: "c",
-    
+
           parentMessageId: "p",
           branchReason,
           content: "Hi",
@@ -353,7 +342,13 @@ describe("form.fill schema", () => {
   });
 
   it("accepts all valid field types", () => {
-    for (const type of ["text", "textarea", "number", "select", "boolean"] as const) {
+    for (const type of [
+      "text",
+      "textarea",
+      "number",
+      "select",
+      "boolean",
+    ] as const) {
       expect(() =>
         Schema.parse({
           route: "/form",

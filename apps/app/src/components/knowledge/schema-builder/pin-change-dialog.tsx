@@ -48,8 +48,9 @@ export function PinChangeDialog({
         <DialogHeader>
           <DialogTitle>Schema pinned — run reconciliation?</DialogTitle>
           <DialogDescription>
-            Version {versionNumber} is now pinned. Worker agents can prune, improve, polish, and
-            coerce existing graph nodes to match this schema.
+            Version {versionNumber} is now pinned. Worker agents can prune,
+            improve, polish, and coerce existing graph nodes to match this
+            schema.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
@@ -60,7 +61,10 @@ export function PinChangeDialog({
               onCheckedChange={(checked) => setPrune(Boolean(checked))}
               className="mt-0.5"
             />
-            <Label htmlFor="prune-toggle" className="text-sm leading-snug cursor-pointer">
+            <Label
+              htmlFor="prune-toggle"
+              className="text-sm leading-snug cursor-pointer"
+            >
               Prune properties not in the schema
             </Label>
           </div>
@@ -68,14 +72,18 @@ export function PinChangeDialog({
             <Alert className="border-destructive/30 bg-destructive/10">
               <AlertTriangle className="h-4 w-4 text-destructive" />
               <AlertDescription className="text-destructive text-sm">
-                Destructive: properties not in the schema will be permanently removed from existing
-                nodes.
+                Destructive: properties not in the schema will be permanently
+                removed from existing nodes.
               </AlertDescription>
             </Alert>
           )}
         </div>
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={dispatching}>
+          <Button
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+            disabled={dispatching}
+          >
             Skip
           </Button>
           <Button onClick={() => void handleDispatch()} disabled={dispatching}>

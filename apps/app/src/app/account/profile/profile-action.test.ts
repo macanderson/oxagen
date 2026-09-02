@@ -16,13 +16,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockGetSessionOrRedirect, mockWithSystemDb, mockRevalidatePath } = vi.hoisted(
-  () => ({
+const { mockGetSessionOrRedirect, mockWithSystemDb, mockRevalidatePath } =
+  vi.hoisted(() => ({
     mockGetSessionOrRedirect: vi.fn(),
     mockWithSystemDb: vi.fn(),
     mockRevalidatePath: vi.fn(),
-  }),
-);
+  }));
 
 vi.mock("@/lib/session", () => ({
   getSessionOrRedirect: mockGetSessionOrRedirect,
@@ -32,8 +31,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withSystemDb: mockWithSystemDb,
-
+    withSystemDb: mockWithSystemDb,
   };
 });
 
@@ -67,8 +65,8 @@ describe("updateProfileAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetSessionOrRedirect.mockResolvedValue(mockSession);
-    mockWithSystemDb.mockImplementation((fn: (tx: ReturnType<typeof makeDbTx>) => unknown) =>
-      fn(makeDbTx()),
+    mockWithSystemDb.mockImplementation(
+      (fn: (tx: ReturnType<typeof makeDbTx>) => unknown) => fn(makeDbTx()),
     );
   });
 
@@ -82,7 +80,10 @@ describe("updateProfileAction", () => {
   });
 
   it("calls withSystemDb with an update", async () => {
-    await updateProfileAction({ displayName: "Alice", avatarUrl: "https://example.com/a.png" });
+    await updateProfileAction({
+      displayName: "Alice",
+      avatarUrl: "https://example.com/a.png",
+    });
     expect(mockWithSystemDb).toHaveBeenCalledOnce();
   });
 

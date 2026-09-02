@@ -123,9 +123,8 @@ export async function createPaymentMethodSetupIntent(
 ): Promise<{ clientSecret: string }> {
   const start = Date.now();
   const customerId = await resolveCustomerId(orgId);
-  const { clientSecret } = await billingProvider().createSetupIntent(
-    customerId,
-  );
+  const { clientSecret } =
+    await billingProvider().createSetupIntent(customerId);
 
   logger.info(
     { orgId, customerId, durationMs: Date.now() - start },
@@ -148,7 +147,9 @@ export async function createPaymentMethodSetupIntent(
  *
  * Call this after a SetupIntent succeeds or whenever a fresh view is needed.
  */
-export async function syncPaymentMethodsFromStripe(orgId: string): Promise<void> {
+export async function syncPaymentMethodsFromStripe(
+  orgId: string,
+): Promise<void> {
   const start = Date.now();
   const customerId = await resolveCustomerId(orgId);
   const provider = billingProvider();
@@ -291,7 +292,10 @@ export async function setOrgDefaultPaymentMethod(
       .set({ isDefault: true, updatedAt: new Date() })
       .where(
         and(
-          eq(schema.paymentMethods.stripePaymentMethodId, stripePaymentMethodId),
+          eq(
+            schema.paymentMethods.stripePaymentMethodId,
+            stripePaymentMethodId,
+          ),
           eq(schema.paymentMethods.orgId, orgId),
         ),
       );
@@ -390,7 +394,10 @@ export async function removeOrgPaymentMethod(
       .set({ deletedAt: now, isDefault: false, updatedAt: now })
       .where(
         and(
-          eq(schema.paymentMethods.stripePaymentMethodId, stripePaymentMethodId),
+          eq(
+            schema.paymentMethods.stripePaymentMethodId,
+            stripePaymentMethodId,
+          ),
           eq(schema.paymentMethods.orgId, orgId),
         ),
       ),
@@ -442,7 +449,12 @@ export async function removeOrgPaymentMethod(
   }
 
   logger.info(
-    { orgId, stripePaymentMethodId, wasDefault, durationMs: Date.now() - start },
+    {
+      orgId,
+      stripePaymentMethodId,
+      wasDefault,
+      durationMs: Date.now() - start,
+    },
     "billing: payment method removed",
   );
 }

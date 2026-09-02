@@ -20,10 +20,8 @@
  *
  * The lint validates every REAL capability — a contract file under
  * packages/oxagen/src/contracts that calls registerCapability(). Shared schema
- * modules (no registerCapability) are ignored. The GRANDFATHER map is EMPTY:
- * ADR-025 renamed every previously-grandfathered name to a conforming
- * verb-first snake form. A non-conforming name is a bug to fix, never a
- * grandfather entry.
+ * modules (no registerCapability) are ignored. There is no grandfather list: a
+ * non-conforming name is a bug to fix, never an exemption.
  *
  * Exit codes: 0 clean · 1 violations · 2 script error.
  */
@@ -160,16 +158,6 @@ const ACTIONS = new Set([
   // associative verbs — bind/unbind an agent to an environment (Spec §5.6).
   "bind",
   "unbind",
-  // imperative verbs used by shipped capabilities that predate this list
-  // (draft_skill, save_memory, post_conversation_message, debug_execution,
-  // revise_agent_def, revise_skill) — renaming a shipped capability requires
-  // the seed-then-deploy runbook (docs/specs/adr025-reland-runbook.md), so the
-  // verbs are admitted instead.
-  "draft",
-  "save",
-  "post",
-  "debug",
-  "revise",
   // snake_case compound actions
   "set_enabled",
   "set_default",
@@ -180,12 +168,6 @@ const ACTIONS = new Set([
   "install_bulk",
   "from_traces",
 ]);
-
-// ── Grandfather list (emptied by ADR-025) ────────────────────────────────────
-// ADR-022 left 14 non-conforming names here. ADR-025 renamed all of them to
-// verb-first snake forms. This map is now empty and MUST stay empty — a
-// non-conforming name is a bug to fix, never a grandfather entry.
-const GRANDFATHER = new Map([]);
 
 // Charset: 2+ lowercase [a-z0-9] words joined by `_`. No dots, no kebab, no
 // uppercase, no empty word. (Word-count > 3 is a warning, not a failure.)
@@ -251,7 +233,6 @@ function main() {
   const warnings = [];
 
   for (const { name, file } of caps) {
-    if (GRANDFATHER.has(name)) continue;
     const { problems, warnings: w } = validate(name);
     if (problems.length) violations.push({ name, file, problems });
     for (const msg of w) warnings.push({ name, file, msg });

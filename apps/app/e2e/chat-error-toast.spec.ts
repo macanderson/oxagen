@@ -74,7 +74,9 @@ test.describe("chat.error-toast — turn error surfaces a toast, not inline JSON
       timeout: 12_000,
     });
     // And the friendly, code-derived title.
-    await expect(page.getByText("Insufficient credits", { exact: true })).toBeVisible({
+    await expect(
+      page.getByText("Insufficient credits", { exact: true }),
+    ).toBeVisible({
       timeout: 5_000,
     });
     const purchaseLink = page.getByRole("link", { name: "here" });
@@ -104,6 +106,8 @@ test.describe("chat.error-toast — turn error surfaces a toast, not inline JSON
     // Next's router readiness and often no-ops within a run — a test-harness
     // artifact, not a user-facing issue (the href is a plain, correct anchor).
     await page.goto(`/${orgSlug}/billing/subscription`);
-    await expect(page).toHaveURL(new RegExp(`/${orgSlug}/billing/subscription`));
+    await expect(page).toHaveURL(
+      new RegExp(`/${orgSlug}/billing/subscription`),
+    );
   });
 });

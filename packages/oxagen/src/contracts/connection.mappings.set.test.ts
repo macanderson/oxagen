@@ -29,7 +29,10 @@ describe("connection.mappings.set capability", () => {
       activateConnection: false,
     });
     expect(parsed.activateConnection).toBe(false);
-    expect(parsed.mappings[0]?.propertyMappings).toEqual({ title: "title", body: "description" });
+    expect(parsed.mappings[0]?.propertyMappings).toEqual({
+      title: "title",
+      body: "description",
+    });
   });
 
   it("rejects empty mappings array", () => {
@@ -62,7 +65,9 @@ describe("connection.mappings.set capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("set_connection_mappings")).toBe(connectionMappingsSet);
+    expect(getCapability("set_connection_mappings")).toBe(
+      connectionMappingsSet,
+    );
   });
 
   it("requires approval and is write category", () => {

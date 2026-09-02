@@ -29,10 +29,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
               }
               if (table === schema.playbookRuns) {
                 return {
-                  orderBy: () => ({ limit: () => Promise.resolve(mocks.runsRows) }),
+                  orderBy: () => ({
+                    limit: () => Promise.resolve(mocks.runsRows),
+                  }),
                 };
               }
-              throw new Error(`unexpected table passed to mocked tx.select: ${String(table)}`);
+              throw new Error(
+                `unexpected table passed to mocked tx.select: ${String(table)}`,
+              );
             },
           }),
         }),
@@ -133,7 +137,10 @@ describe("automationGetHandler (@oxagen/handlers)", () => {
     mocks.stepsRows = [makeStep()];
     mocks.runsRows = [makeRun()];
 
-    const result = await automationGetHandler({ automation_id: "plt_abc" }, CTX);
+    const result = await automationGetHandler(
+      { automation_id: "plt_abc" },
+      CTX,
+    );
 
     expect(result.automation_id).toBe("plt_abc");
     expect(result.playbook_id).toBe("plb_xyz");
@@ -168,7 +175,10 @@ describe("automationGetHandler (@oxagen/handlers)", () => {
     mocks.playbookRows = [makePlaybook({ activeVersionId: null })];
     mocks.runsRows = [];
 
-    const result = await automationGetHandler({ automation_id: "plt_abc" }, CTX);
+    const result = await automationGetHandler(
+      { automation_id: "plt_abc" },
+      CTX,
+    );
     expect(result.steps).toEqual([]);
   });
 
@@ -176,9 +186,14 @@ describe("automationGetHandler (@oxagen/handlers)", () => {
     mocks.triggerRows = [makeTrigger()];
     mocks.playbookRows = [makePlaybook()];
     mocks.stepsRows = [];
-    mocks.runsRows = [makeRun({ startedAt: null, completedAt: null, status: "pending" })];
+    mocks.runsRows = [
+      makeRun({ startedAt: null, completedAt: null, status: "pending" }),
+    ];
 
-    const result = await automationGetHandler({ automation_id: "plt_abc" }, CTX);
+    const result = await automationGetHandler(
+      { automation_id: "plt_abc" },
+      CTX,
+    );
     expect(result.runs[0]?.startedAt).toBeNull();
     expect(result.runs[0]?.completedAt).toBeNull();
     expect(result.runs[0]?.createdAt).toBe("2026-07-01T00:00:00.000Z");
@@ -190,7 +205,10 @@ describe("automationGetHandler (@oxagen/handlers)", () => {
     mocks.stepsRows = [];
     mocks.runsRows = [];
 
-    const result = await automationGetHandler({ automation_id: "plt_abc" }, CTX);
+    const result = await automationGetHandler(
+      { automation_id: "plt_abc" },
+      CTX,
+    );
     expect(result.enabled).toBe(false);
     expect(result.status).toBe("draft");
   });
@@ -207,7 +225,10 @@ describe("automationGetHandler (@oxagen/handlers)", () => {
       makeRun({ id: "run_b", status: "failed" }),
     ];
 
-    const result = await automationGetHandler({ automation_id: "plt_abc" }, CTX);
+    const result = await automationGetHandler(
+      { automation_id: "plt_abc" },
+      CTX,
+    );
     expect(result.steps).toHaveLength(2);
     expect(result.steps[0]?.stepKey).toBe("step_1");
     expect(result.steps[1]?.stepKey).toBe("step_2");

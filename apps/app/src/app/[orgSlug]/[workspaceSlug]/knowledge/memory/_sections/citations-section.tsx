@@ -16,7 +16,10 @@ interface CitationsSectionProps {
   workspaceSlug: string;
 }
 
-export function CitationsSection({ orgSlug, workspaceSlug }: CitationsSectionProps) {
+export function CitationsSection({
+  orgSlug,
+  workspaceSlug,
+}: CitationsSectionProps) {
   return (
     <MemoryCitationsPanel
       orgSlug={orgSlug}

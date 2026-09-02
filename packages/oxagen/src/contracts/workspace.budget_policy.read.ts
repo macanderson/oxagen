@@ -19,7 +19,12 @@ export const workspaceBudgetPolicyRead = registerCapability({
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow", Member: "allow", Viewer: "allow" },
-    workspace: { Owner: "allow", Admin: "allow", Member: "allow", Viewer: "allow" },
+    workspace: {
+      Owner: "allow",
+      Admin: "allow",
+      Member: "allow",
+      Viewer: "allow",
+    },
   },
   input: z.object({}),
   output: z.object({
@@ -34,4 +39,6 @@ export const workspaceBudgetPolicyRead = registerCapability({
   }),
 });
 
-export type WorkspaceBudgetPolicyReadOutput = z.output<typeof workspaceBudgetPolicyRead.output>;
+export type WorkspaceBudgetPolicyReadOutput = z.output<
+  typeof workspaceBudgetPolicyRead.output
+>;

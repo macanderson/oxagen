@@ -9,9 +9,10 @@ import {
   type EvalRunStatus,
 } from "@oxagen/oxagen/contracts/eval-schema";
 
-export const evalRunGetHandler: CapabilityHandler<
-  typeof evalRunGet
-> = async (input, ctx) => {
+export const evalRunGetHandler: CapabilityHandler<typeof evalRunGet> = async (
+  input,
+  ctx,
+) => {
   const [row] = await withTenantDb((tx) =>
     tx
       .select({

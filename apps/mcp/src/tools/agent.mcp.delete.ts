@@ -25,6 +25,8 @@ export default async function agentMcpDeleteTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentMcpDelete.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentMcpDelete.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentMcpDelete.output.parse(output);
 }

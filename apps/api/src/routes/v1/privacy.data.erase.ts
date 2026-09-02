@@ -9,6 +9,8 @@ export const privacyDataEraseRoute = new Hono<AppEnv>();
 privacyDataEraseRoute.post("/", async (c) => {
   const body = privacyDataErase.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const result = await invoke(privacyDataErase.name, body, ctx, { surface: "api" });
+  const result = await invoke(privacyDataErase.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(result, 202);
 });

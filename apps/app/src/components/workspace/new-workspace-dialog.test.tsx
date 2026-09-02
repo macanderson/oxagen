@@ -44,7 +44,9 @@ describe("NewWorkspaceDialog — open", () => {
 
   it("renders the description when open", () => {
     render(<NewWorkspaceDialog {...defaultProps} open />);
-    expect(screen.getByText(/workspaces scope the knowledge graph/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/workspaces scope the knowledge graph/i),
+    ).toBeInTheDocument();
   });
 
   it("renders workspace name and slug inputs from NewWorkspaceForm", () => {

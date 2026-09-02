@@ -36,7 +36,10 @@ export const pluginSettingsGetAuthAlerts = registerCapability({
     sendEmail: z
       .boolean()
       .describe("Whether email is sent in addition to in-app notification"),
-    roles: z.array(orgRole).min(1).describe("Org roles that receive MCP auth alerts"),
+    roles: z
+      .array(orgRole)
+      .min(1)
+      .describe("Org roles that receive MCP auth alerts"),
     isDefault: z
       .boolean()
       .describe("True when the org has never customised the setting"),

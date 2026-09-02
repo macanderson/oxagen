@@ -30,7 +30,10 @@ describe("conversation.rename capability", () => {
 
   it("rejects empty title (after trim)", () => {
     expect(() =>
-      conversationRename.input.parse({ conversationId: "cnv_abc", title: "   " }),
+      conversationRename.input.parse({
+        conversationId: "cnv_abc",
+        title: "   ",
+      }),
     ).toThrow();
   });
 
@@ -63,9 +66,7 @@ describe("conversation.rename capability", () => {
   });
 
   it("rejects output missing publicId", () => {
-    expect(() =>
-      conversationRename.output.parse({ title: "Hello" }),
-    ).toThrow();
+    expect(() => conversationRename.output.parse({ title: "Hello" })).toThrow();
   });
 
   // ── registry ──────────────────────────────────────────────────────────────

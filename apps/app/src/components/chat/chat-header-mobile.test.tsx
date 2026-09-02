@@ -45,10 +45,18 @@ const CODER: AgentOption = {
 };
 
 const REPOS: RepoOption[] = [
-  { key: "con_1::acme/platform", connectionId: "con_1", owner: "acme", name: "platform", defaultBranch: "main" },
+  {
+    key: "con_1::acme/platform",
+    connectionId: "con_1",
+    owner: "acme",
+    name: "platform",
+    defaultBranch: "main",
+  },
 ];
 
-const ENVIRONMENTS: EnvironmentOption[] = [{ id: "env_1", name: "Node 22", isDefault: true }];
+const ENVIRONMENTS: EnvironmentOption[] = [
+  { id: "env_1", name: "Node 22", isDefault: true },
+];
 
 const BASE_SEED: SessionSeed = {
   defaultAgentId: null,
@@ -95,7 +103,11 @@ describe("ChatHeaderMobile — session summary", () => {
   it("renders the current agent's name and `{model} · {branch}` subtitle when an agent + repo are seeded", () => {
     renderHeader(
       { agents: [CODER] },
-      { ...BASE_SEED, defaultAgentId: "agt_code", defaultRepoKey: "con_1::acme/platform" },
+      {
+        ...BASE_SEED,
+        defaultAgentId: "agt_code",
+        defaultRepoKey: "con_1::acme/platform",
+      },
     );
     expect(screen.getByText("Coder")).toBeInTheDocument();
     // No explicit branch chosen — sessionSubtitleParts falls back to the
@@ -104,7 +116,10 @@ describe("ChatHeaderMobile — session summary", () => {
   });
 
   it("uses modelLabelOf to prettify an explicit gateway model id", () => {
-    renderHeader({}, { ...BASE_SEED, textModel: "anthropic/claude-sonnet-5", textTier: null });
+    renderHeader(
+      {},
+      { ...BASE_SEED, textModel: "anthropic/claude-sonnet-5", textTier: null },
+    );
     expect(screen.getByText("Claude Sonnet 5")).toBeInTheDocument();
   });
 });
@@ -132,7 +147,9 @@ describe("ChatHeaderMobile — interactions", () => {
   });
 
   it("does not throw when onOpenConversations is omitted", () => {
-    expect(() => renderHeader({ onOpenConversations: undefined })).not.toThrow();
+    expect(() =>
+      renderHeader({ onOpenConversations: undefined }),
+    ).not.toThrow();
     fireEvent.click(screen.getByRole("button", { name: "Conversations" }));
   });
 });
@@ -141,22 +158,34 @@ describe("ChatHeaderMobile — activity status dot", () => {
   it("shows the pulsing status dot on the Activity button while streaming", () => {
     renderHeader({ isStreaming: true });
     expect(screen.getByTestId("chat-header-activity-dot")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Activity, in progress" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Activity, in progress" }),
+    ).toBeInTheDocument();
   });
 
   it("omits the status dot when not streaming", () => {
     renderHeader({ isStreaming: false });
-    expect(screen.queryByTestId("chat-header-activity-dot")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Activity" })).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("chat-header-activity-dot"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Activity" }),
+    ).toBeInTheDocument();
   });
 });
 
 describe("ChatHeaderMobile — accessibility", () => {
   it("gives every icon button an accessible name", () => {
     renderHeader();
-    expect(screen.getByRole("button", { name: "Conversations" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Session settings" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Activity" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Conversations" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Session settings" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Activity" }),
+    ).toBeInTheDocument();
   });
 
   it("renders the notificationsSlot when provided", () => {

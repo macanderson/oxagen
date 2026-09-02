@@ -1,7 +1,10 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
-import type { AgentTaskBackgroundReadInput, AgentTaskBackgroundReadOutput } from "@oxagen/oxagen/contracts/agent.background_task.read";
+import type {
+  AgentTaskBackgroundReadInput,
+  AgentTaskBackgroundReadOutput,
+} from "@oxagen/oxagen/contracts/agent.background_task.read";
 
 export type { AgentTaskBackgroundReadInput, AgentTaskBackgroundReadOutput };
 

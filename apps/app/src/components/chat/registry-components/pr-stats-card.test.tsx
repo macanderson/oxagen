@@ -13,7 +13,10 @@
 
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup, within } from "@testing-library/react";
-import PrStatsCard, { relativeTime, type PrStatsCardProps } from "./pr-stats-card";
+import PrStatsCard, {
+  relativeTime,
+  type PrStatsCardProps,
+} from "./pr-stats-card";
 
 afterEach(cleanup);
 
@@ -62,7 +65,14 @@ function props(overrides: Partial<PrStatsCardProps> = {}): PrStatsCardProps {
     ],
     ci: {
       overall: "passing",
-      counts: { total: 1, passed: 1, failed: 0, pending: 0, skipped: 0, neutral: 0 },
+      counts: {
+        total: 1,
+        passed: 1,
+        failed: 0,
+        pending: 0,
+        skipped: 0,
+        neutral: 0,
+      },
       runs: [
         {
           name: "build",
@@ -104,7 +114,10 @@ describe("PrStatsCard header", () => {
     render(<PrStatsCard {...props()} />);
     expect(screen.getByText("#42")).toBeInTheDocument();
     const link = screen.getByRole("link", { name: /Add repo CI cards/ });
-    expect(link).toHaveAttribute("href", "https://github.com/acme/repo/pull/42");
+    expect(link).toHaveAttribute(
+      "href",
+      "https://github.com/acme/repo/pull/42",
+    );
   });
 
   it("renders a success-toned Open label for an open non-draft PR", () => {
@@ -114,7 +127,9 @@ describe("PrStatsCard header", () => {
 
   it("renders a muted Draft label for a draft PR", () => {
     render(<PrStatsCard {...props({ state: "open", draft: true })} />);
-    expect(screen.getByText("Draft").className).toContain("text-muted-foreground");
+    expect(screen.getByText("Draft").className).toContain(
+      "text-muted-foreground",
+    );
   });
 
   it("renders a Merged label for a merged PR", () => {
@@ -148,7 +163,9 @@ describe("PrStatsCard stat row", () => {
 
 describe("PrStatsCard comments", () => {
   it("shows the total comment count (issue + review)", () => {
-    render(<PrStatsCard {...props({ commentCount: 2, reviewCommentCount: 1 })} />);
+    render(
+      <PrStatsCard {...props({ commentCount: 2, reviewCommentCount: 1 })} />,
+    );
     expect(screen.getByText("3 comments")).toBeInTheDocument();
   });
 
@@ -163,18 +180,21 @@ describe("PrStatsCard comments", () => {
   });
 
   it("shows a 'latest N of M' notice when comments are truncated", () => {
-    render(<PrStatsCard {...props({ commentCount: 40, reviewCommentCount: 12 })} />);
+    render(
+      <PrStatsCard {...props({ commentCount: 40, reviewCommentCount: 12 })} />,
+    );
     // total 52, only 2 fetched
     expect(screen.getByText(/Showing latest 2 of 52/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "view all on GitHub" })).toHaveAttribute(
-      "href",
-      "https://github.com/acme/repo/pull/42",
-    );
+    expect(
+      screen.getByRole("link", { name: "view all on GitHub" }),
+    ).toHaveAttribute("href", "https://github.com/acme/repo/pull/42");
   });
 
   it("shows 'No comments' with no disclosure when there are none", () => {
     render(
-      <PrStatsCard {...props({ commentCount: 0, reviewCommentCount: 0, comments: [] })} />,
+      <PrStatsCard
+        {...props({ commentCount: 0, reviewCommentCount: 0, comments: [] })}
+      />,
     );
     expect(screen.getByText("No comments")).toBeInTheDocument();
     // No expandable "N comments" disclosure summary should render.
@@ -196,20 +216,31 @@ describe("PrStatsCard CI section", () => {
         {...props({
           ci: {
             overall: "unknown",
-            counts: { total: 0, passed: 0, failed: 0, pending: 0, skipped: 0, neutral: 0 },
+            counts: {
+              total: 0,
+              passed: 0,
+              failed: 0,
+              pending: 0,
+              skipped: 0,
+              neutral: 0,
+            },
             runs: [],
           },
         })}
       />,
     );
-    expect(screen.getByText("No CI checks reported for this PR.")).toBeInTheDocument();
+    expect(
+      screen.getByText("No CI checks reported for this PR."),
+    ).toBeInTheDocument();
   });
 });
 
 describe("PrStatsCard author avatar", () => {
   it("renders an avatar image when a url is present", () => {
     const { container } = render(
-      <PrStatsCard {...props({ authorAvatarUrl: "https://avatars.example.com/u/1.png" })} />,
+      <PrStatsCard
+        {...props({ authorAvatarUrl: "https://avatars.example.com/u/1.png" })}
+      />,
     );
     const img = container.querySelector("img");
     expect(img).not.toBeNull();
@@ -217,7 +248,9 @@ describe("PrStatsCard author avatar", () => {
   });
 
   it("falls back to an initial tile when no avatar url", () => {
-    const { container } = render(<PrStatsCard {...props({ author: "octocat" })} />);
+    const { container } = render(
+      <PrStatsCard {...props({ author: "octocat" })} />,
+    );
     // Header meta-row author chip carries the title attr for the initial tile.
     const meta = within(container).getAllByTitle("octocat");
     expect(meta.length).toBeGreaterThan(0);

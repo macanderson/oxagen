@@ -7,7 +7,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 const { apiPost, printTable, resolveEnvironmentId } = vi.hoisted(() => ({
-  apiPost: vi.fn<(path: string, body: unknown, writer?: unknown) => Promise<unknown>>(),
+  apiPost:
+    vi.fn<
+      (path: string, body: unknown, writer?: unknown) => Promise<unknown>
+    >(),
   printTable: vi.fn(),
   resolveEnvironmentId: vi.fn<(slugOrId: string) => Promise<string>>(),
 }));
@@ -47,7 +50,11 @@ describe("env list", () => {
     apiPost.mockResolvedValue({ environments: [prod, staging] });
     const captured = captureWriter();
     await handleEnvList({}, captured.writer);
-    expect(apiPost).toHaveBeenCalledWith("environment/list", {}, captured.writer);
+    expect(apiPost).toHaveBeenCalledWith(
+      "environment/list",
+      {},
+      captured.writer,
+    );
     expect(printTable).toHaveBeenCalledWith(
       ["NAME", "SLUG", "DEFAULT", "ACTIVE", "ID"],
       [
@@ -74,7 +81,11 @@ describe("env get", () => {
     const captured = captureWriter();
     await handleEnvGet("prod", {}, captured.writer);
     expect(resolveEnvironmentId).toHaveBeenCalledWith("prod");
-    expect(apiPost).toHaveBeenCalledWith("environment/get", { environmentId: "env_1" }, captured.writer);
+    expect(apiPost).toHaveBeenCalledWith(
+      "environment/get",
+      { environmentId: "env_1" },
+      captured.writer,
+    );
     expect(JSON.parse(captured.output())).toEqual(prod);
   });
 });
@@ -83,13 +94,19 @@ describe("env create", () => {
   it("sends an explicit slug and description verbatim", async () => {
     apiPost.mockResolvedValue({ environment: prod });
     const captured = captureWriter();
-    await handleEnvCreate("Production", { slug: "prod", description: "live" }, captured.writer);
+    await handleEnvCreate(
+      "Production",
+      { slug: "prod", description: "live" },
+      captured.writer,
+    );
     expect(apiPost).toHaveBeenCalledWith(
       "environment/create",
       { name: "Production", slug: "prod", description: "live" },
       captured.writer,
     );
-    expect(captured.output()).toBe("✓ created environment Production (prod) env_1");
+    expect(captured.output()).toBe(
+      "✓ created environment Production (prod) env_1",
+    );
   });
 
   it("derives the slug from the name (lowercase, runs of non-alphanumerics to dashes, trimmed)", async () => {
@@ -103,14 +120,18 @@ describe("env create", () => {
       { name: "  QA / Load 2! ", slug: "qa-load-2", description: null },
       captured.writer,
     );
-    expect(captured.output()).toBe("✓ created environment QA / Load 2 (qa-load-2) env_2");
+    expect(captured.output()).toBe(
+      "✓ created environment QA / Load 2 (qa-load-2) env_2",
+    );
   });
 });
 
 describe("env update", () => {
   it("resolves the target and forwards every provided field, mapping active to isActive", async () => {
     resolveEnvironmentId.mockResolvedValue("env_2");
-    apiPost.mockResolvedValue({ environment: { ...staging, name: "Stage", slug: "stage" } });
+    apiPost.mockResolvedValue({
+      environment: { ...staging, name: "Stage", slug: "stage" },
+    });
     const captured = captureWriter();
     await handleEnvUpdate(
       "staging",

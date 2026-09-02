@@ -16,6 +16,12 @@ import { z } from "zod";
 
 // ── Transport Definitions ─────────────────────────────────────────────────────
 
+// `url` on the three network transports below is only checked for non-emptiness,
+// not parsed as a URL — unlike `oauthServerUrl`, which uses .url(). A malformed
+// or non-http scheme therefore survives validation and fails later at connect
+// time. Tightening it is a compatibility decision (it would reject configs that
+// load today), so it is deliberately left loose here rather than changed in
+// passing.
 const streamableHttpServerSchema = z.object({
   transport: z.literal("streamable-http"),
   url: z.string().min(1),
@@ -149,7 +155,9 @@ export const managedConfigSchema = z.object({
   _orgId: z.string(),
   _syncedAt: z.string(),
   /** Org-provisioned servers that users cannot remove or override auth for. */
-  mcpServers: z.record(mcpServerSchema.and(z.object({ managed: z.literal(true) }))).optional(),
+  mcpServers: z
+    .record(mcpServerSchema.and(z.object({ managed: z.literal(true) })))
+    .optional(),
   /** Org-level allowlist/denylist enforcement. */
   managedPolicy: managedPolicySchema.optional(),
 });

@@ -49,7 +49,8 @@ const {
 vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSession }));
 vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: mockResolveOrg,
-  getOrgRole: vi.fn().mockResolvedValue("owner"),  assertSecurityManager: mockAssertSecurityManager,
+  getOrgRole: vi.fn().mockResolvedValue("owner"),
+  assertSecurityManager: mockAssertSecurityManager,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mockRevalidatePath }));
 vi.mock("@oxagen/handlers/logger", () => ({
@@ -168,7 +169,9 @@ describe("revokeSessionAction", () => {
   it("returns internal (NOT forbidden) when the auth gate hits a DB/infra error", async () => {
     // A plain Error has no notFound digest — it must NOT be misclassified as a
     // permission denial, or a degraded DB looks like an access denial to admins.
-    mockAssertSecurityManager.mockRejectedValue(new Error("connection refused"));
+    mockAssertSecurityManager.mockRejectedValue(
+      new Error("connection refused"),
+    );
     const res = await revokeSessionAction({
       orgSlug: "acme",
       sessionId: "sess-xyz",

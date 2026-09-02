@@ -10,7 +10,11 @@ const config = {
 };
 
 function jsonResponse(body: unknown, ok = true, status = 200) {
-  return { ok, status, json: () => Promise.resolve(body) } as unknown as Response;
+  return {
+    ok,
+    status,
+    json: () => Promise.resolve(body),
+  } as unknown as Response;
 }
 
 async function collect(iter: AsyncIterable<RawRecord>): Promise<RawRecord[]> {
@@ -39,7 +43,9 @@ afterEach(() => {
 
 describe("salesforce.poll — request shape", () => {
   it("yields nothing for an unusable credential", async () => {
-    const out = await collect(salesforce.poll!({ scheme: "public" }, config, "Opportunity", null));
+    const out = await collect(
+      salesforce.poll!({ scheme: "public" }, config, "Opportunity", null),
+    );
     expect(out).toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -48,7 +54,9 @@ describe("salesforce.poll — request shape", () => {
     fetchMock.mockResolvedValue(jsonResponse({ records: [] }));
     await collect(salesforce.poll!(bearer, config, "Opportunity", null));
     const [url, opts] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect((opts.headers as Record<string, string>).Authorization).toBe("Bearer sf-token");
+    expect((opts.headers as Record<string, string>).Authorization).toBe(
+      "Bearer sf-token",
+    );
     const soql = soqlOf(url);
     expect(soql).toContain("FROM Opportunity");
     expect(soql).toContain("ORDER BY SystemModstamp ASC");
@@ -57,7 +65,14 @@ describe("salesforce.poll — request shape", () => {
 
   it("adds a SystemModstamp > cursor predicate on incremental polls", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ records: [] }));
-    await collect(salesforce.poll!(bearer, config, "Contact", "2026-01-01T00:00:00.000+0000"));
+    await collect(
+      salesforce.poll!(
+        bearer,
+        config,
+        "Contact",
+        "2026-01-01T00:00:00.000+0000",
+      ),
+    );
     const soql = soqlOf((fetchMock.mock.calls[0] as [string])[0]);
     expect(soql).toContain("FROM Contact");
     expect(soql).toContain("WHERE SystemModstamp > 2026-01-01T00:00:00.000Z");
@@ -65,7 +80,9 @@ describe("salesforce.poll — request shape", () => {
 
   it("guards the object name against SOQL injection characters", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ records: [] }));
-    await collect(salesforce.poll!(bearer, config, "Opportunity; DROP TABLE", null));
+    await collect(
+      salesforce.poll!(bearer, config, "Opportunity; DROP TABLE", null),
+    );
     const soql = soqlOf((fetchMock.mock.calls[0] as [string])[0]);
     expect(soql).toContain("FROM OpportunityDROPTABLE");
     expect(soql).not.toContain(";");
@@ -73,9 +90,9 @@ describe("salesforce.poll — request shape", () => {
 
   it("throws on a non-ok response", async () => {
     fetchMock.mockResolvedValue(jsonResponse({}, false, 401));
-    await expect(collect(salesforce.poll!(bearer, config, "Opportunity", null))).rejects.toThrow(
-      /401/,
-    );
+    await expect(
+      collect(salesforce.poll!(bearer, config, "Opportunity", null)),
+    ).rejects.toThrow(/401/);
   });
 });
 
@@ -84,31 +101,47 @@ describe("salesforce.poll — record shaping", () => {
     fetchMock.mockResolvedValue(
       jsonResponse({
         records: [
-          { Id: "006AAA", Name: "Deal A", SystemModstamp: "2026-02-01T00:00:00.000+0000" },
-          { Id: "006BBB", Name: "Deal B", SystemModstamp: "2026-02-02T00:00:00.000+0000" },
+          {
+            Id: "006AAA",
+            Name: "Deal A",
+            SystemModstamp: "2026-02-01T00:00:00.000+0000",
+          },
+          {
+            Id: "006BBB",
+            Name: "Deal B",
+            SystemModstamp: "2026-02-02T00:00:00.000+0000",
+          },
         ],
       }),
     );
-    const out = await collect(salesforce.poll!(bearer, config, "Opportunity", null));
+    const out = await collect(
+      salesforce.poll!(bearer, config, "Opportunity", null),
+    );
     expect(out.map((r) => r.externalId)).toEqual(["006AAA", "006BBB"]);
     expect(out[0]!.sourceRecordType).toBe("Opportunity");
   });
 
   it("skips records missing an Id", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ records: [{ Name: "no id" }] }));
-    const out = await collect(salesforce.poll!(bearer, config, "Opportunity", null));
+    const out = await collect(
+      salesforce.poll!(bearer, config, "Opportunity", null),
+    );
     expect(out).toEqual([]);
   });
 });
 
 describe("salesforce.cursorOf", () => {
   it("returns SystemModstamp, falling back to LastModifiedDate", () => {
-    expect(salesforce.cursorOf!("Opportunity", { SystemModstamp: "2026-03-01T00:00:00Z" })).toBe(
-      "2026-03-01T00:00:00Z",
-    );
-    expect(salesforce.cursorOf!("Opportunity", { LastModifiedDate: "2026-03-02T00:00:00Z" })).toBe(
-      "2026-03-02T00:00:00Z",
-    );
+    expect(
+      salesforce.cursorOf!("Opportunity", {
+        SystemModstamp: "2026-03-01T00:00:00Z",
+      }),
+    ).toBe("2026-03-01T00:00:00Z");
+    expect(
+      salesforce.cursorOf!("Opportunity", {
+        LastModifiedDate: "2026-03-02T00:00:00Z",
+      }),
+    ).toBe("2026-03-02T00:00:00Z");
   });
 
   it("returns null when no watermark is present", () => {

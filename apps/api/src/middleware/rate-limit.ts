@@ -26,18 +26,23 @@ function defaultKeyFn(c: Context<AppEnv>): string {
 }
 
 /**
- * Minimal in-memory, fixed-window rate limiter.
+ * Minimal in-memory, fixed-window rate limiter for the public, unauthenticated
+ * routes (`/v1/telemetry/usage`, `/v1/cms/*`).
  *
- * This codebase has no shared rate-limit infrastructure yet (Better Auth's own
- * `rateLimits` table only guards its own auth routes), and a public,
- * unauthenticated route needs SOME abuse guard now rather than waiting on a
- * distributed limiter. Caveat, documented rather than hidden: the bucket map
- * is per-process, so on a multi-instance/serverless deploy the effective
- * limit is `max` per warm instance, not globally. Rate limiting here is a
- * SECONDARY defense — the primary one is the route's strict `.strict()`
- * schema validation, which bounds the damage even if a caller blows past the
- * limit. Swap the store for Redis/Upstash later without changing any call
- * site — `RateLimitOptions` and the returned middleware shape stay the same.
+ * Rate limiting here is a SECONDARY defense. The primary one is each route's
+ * `.strict()` schema validation, which bounds the damage even if a caller
+ * blows past the limit. Two limits of this limiter are real and deliberate:
+ *
+ *  - The bucket map is per-process, so on a multi-instance / serverless deploy
+ *    the effective ceiling is `max` per warm instance, not globally. The
+ *    authenticated expensive surfaces use `distributedRateLimiter`
+ *    (distributed-rate-limit.ts) instead, whose counters live in Postgres and
+ *    are therefore global.
+ *  - `defaultKeyFn` reads `x-forwarded-for` / `x-real-ip`, which any client can
+ *    set. A caller who varies that header per request gets a fresh bucket every
+ *    time, and each distinct value costs a map entry. Pass an explicit `keyFn`
+ *    (see `trustedVercelIpBucketKey` in distributed-rate-limit.ts for the shape
+ *    of a trustworthy one) on any route where that matters.
  */
 export function rateLimiter(opts: RateLimitOptions): MiddlewareHandler<AppEnv> {
   const buckets = new Map<string, Bucket>();
@@ -63,9 +68,15 @@ export function rateLimiter(opts: RateLimitOptions): MiddlewareHandler<AppEnv> {
     }
 
     if (bucket.count >= opts.max) {
-      const retryAfterSec = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
+      const retryAfterSec = Math.max(
+        1,
+        Math.ceil((bucket.resetAt - now) / 1000),
+      );
       c.header("Retry-After", String(retryAfterSec));
-      return c.json({ error: "rate_limited", message: "Too many requests" }, 429);
+      return c.json(
+        { error: "rate_limited", message: "Too many requests" },
+        429,
+      );
     }
 
     bucket.count += 1;

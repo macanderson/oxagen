@@ -32,7 +32,10 @@ vi.mock("@/components/ui/button", () => ({
     disabled,
     "aria-label": ariaLabel,
     ...rest
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: string; size?: string }) => (
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    variant?: string;
+    size?: string;
+  }) => (
     <button
       type={(type as "button" | "submit" | "reset") ?? "button"}
       onClick={onClick}
@@ -76,7 +79,9 @@ async function renderQueue(
   handlers = makeHandlers(),
 ) {
   const { MessageQueue } = await import("./message-queue");
-  render(<MessageQueue items={items} isStreaming={isStreaming} {...handlers} />);
+  render(
+    <MessageQueue items={items} isStreaming={isStreaming} {...handlers} />,
+  );
   return handlers;
 }
 
@@ -120,7 +125,9 @@ describe("MessageQueue — rendering", () => {
 
   it("shows streaming copy when isStreaming is true", async () => {
     await renderQueue(ITEMS, true);
-    expect(screen.getByText("Sends when this turn finishes")).toBeInTheDocument();
+    expect(
+      screen.getByText("Sends when this turn finishes"),
+    ).toBeInTheDocument();
   });
 
   it("shows draining copy when isStreaming is false", async () => {
@@ -187,15 +194,21 @@ describe("MessageQueue — inline edit", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Edit queued message 1" }),
     );
-    expect(screen.getByRole("textbox", { name: "Edit queued message 1" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: "Edit queued message 1" }),
+    ).toBeInTheDocument();
   });
 
   it("opens the editor when the content button is clicked", async () => {
     await renderQueue();
     await userEvent.click(
-      screen.getByRole("button", { name: /Edit queued message 1: first message/ }),
+      screen.getByRole("button", {
+        name: /Edit queued message 1: first message/,
+      }),
     );
-    expect(screen.getByRole("textbox", { name: "Edit queued message 1" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: "Edit queued message 1" }),
+    ).toBeInTheDocument();
   });
 
   it("commits an edit on Enter via onEdit with trimmed content", async () => {
@@ -245,7 +258,9 @@ describe("MessageQueue — inline edit", () => {
     expect(handlers.onEdit).not.toHaveBeenCalled();
     // Editor closed → content button is back.
     expect(
-      screen.getByRole("button", { name: /Edit queued message 1: first message/ }),
+      screen.getByRole("button", {
+        name: /Edit queued message 1: first message/,
+      }),
     ).toBeInTheDocument();
   });
 
@@ -259,7 +274,9 @@ describe("MessageQueue — inline edit", () => {
     );
     expect(handlers.onEdit).not.toHaveBeenCalled();
     expect(
-      screen.getByRole("button", { name: /Edit queued message 1: first message/ }),
+      screen.getByRole("button", {
+        name: /Edit queued message 1: first message/,
+      }),
     ).toBeInTheDocument();
   });
 

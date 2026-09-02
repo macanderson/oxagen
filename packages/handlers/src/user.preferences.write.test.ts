@@ -9,7 +9,9 @@ const mocks = vi.hoisted(() => ({
 
 // Simulate the chained drizzle insert().values().onConflictDoUpdate() API
 mocks.insertOnConflict.mockResolvedValue([]);
-mocks.insertValues.mockReturnValue({ onConflictDoUpdate: mocks.insertOnConflict });
+mocks.insertValues.mockReturnValue({
+  onConflictDoUpdate: mocks.insertOnConflict,
+});
 
 const UPDATED_ROW = {
   fontSize: "large" as const,
@@ -30,20 +32,19 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => ({
-    insert: (_table: unknown) => ({ values: mocks.insertValues }),
-    query: {
-      userPreferences: { findFirst: mocks.prefsFindFirst },
-    },
-  }),
-  withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
+    db: () => ({
       insert: (_table: unknown) => ({ values: mocks.insertValues }),
       query: {
         userPreferences: { findFirst: mocks.prefsFindFirst },
       },
     }),
-
+    withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        insert: (_table: unknown) => ({ values: mocks.insertValues }),
+        query: {
+          userPreferences: { findFirst: mocks.prefsFindFirst },
+        },
+      }),
   };
 });
 
@@ -60,7 +61,9 @@ describe("userPreferencesWriteHandler (@oxagen/handlers)", () => {
     mocks.insertOnConflict.mockClear();
     mocks.prefsFindFirst.mockClear();
     mocks.insertOnConflict.mockResolvedValue([]);
-    mocks.insertValues.mockReturnValue({ onConflictDoUpdate: mocks.insertOnConflict });
+    mocks.insertValues.mockReturnValue({
+      onConflictDoUpdate: mocks.insertOnConflict,
+    });
     mocks.prefsFindFirst.mockResolvedValue(UPDATED_ROW);
   });
 
@@ -90,7 +93,10 @@ describe("userPreferencesWriteHandler (@oxagen/handlers)", () => {
   // ── re-read after upsert ───────────────────────────────────────────────────
 
   it("re-reads the row after upsert to return canonical state", async () => {
-    await userPreferencesWriteHandler({ pendingPromptBehavior: "interrupt" }, CTX);
+    await userPreferencesWriteHandler(
+      { pendingPromptBehavior: "interrupt" },
+      CTX,
+    );
     expect(mocks.prefsFindFirst).toHaveBeenCalledTimes(1);
   });
 
@@ -139,7 +145,10 @@ describe("userPreferencesWriteHandler (@oxagen/handlers)", () => {
       timezone: "Europe/London",
       language: "en",
     });
-    const result = await userPreferencesWriteHandler({ timezone: "Europe/London" }, CTX);
+    const result = await userPreferencesWriteHandler(
+      { timezone: "Europe/London" },
+      CTX,
+    );
     expect(result.timezone).toBe("Europe/London");
   });
 
@@ -179,7 +188,10 @@ describe("userPreferencesWriteHandler (@oxagen/handlers)", () => {
       timezone: "UTC",
       language: "en",
     });
-    const result = await userPreferencesWriteHandler({ fontSize: "small" }, CTX);
+    const result = await userPreferencesWriteHandler(
+      { fontSize: "small" },
+      CTX,
+    );
     // Verify upsert was called (insert sets default timezone/language).
     expect(mocks.insertValues).toHaveBeenCalledTimes(1);
     // The insert values carry the default timezone and language on first insert.

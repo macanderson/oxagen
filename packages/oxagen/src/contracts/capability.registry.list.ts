@@ -37,7 +37,9 @@ const capabilitySummary = z.object({
   scoped: z.boolean().describe("Whether invocations are tenant-scope enforced"),
   noBillingGate: z
     .boolean()
-    .describe("True when the billing admission gate is skipped (management reads)"),
+    .describe(
+      "True when the billing admission gate is skipped (management reads)",
+    ),
   agent: z
     .object({
       requiresApproval: z.boolean(),
@@ -49,15 +51,21 @@ const capabilitySummary = z.object({
   auditTargetKind: z
     .string()
     .nullable()
-    .describe("Declared audit-target kind (accountability-chain target extraction)"),
+    .describe(
+      "Declared audit-target kind (accountability-chain target extraction)",
+    ),
   plugin: z
     .object({
-      id: z.string().describe("Capability-pack plugin id (e.g. oxagen/media-svg)"),
+      id: z
+        .string()
+        .describe("Capability-pack plugin id (e.g. oxagen/media-svg)"),
       tier: z.enum(["free", "premium"]),
       minPlanTier: z.enum(["free", "build", "scale", "enterprise"]).nullable(),
     })
     .nullable()
-    .describe("Entitlement gate: the plugin pack that must be installed, if any"),
+    .describe(
+      "Entitlement gate: the plugin pack that must be installed, if any",
+    ),
   orgRoles: z
     .record(grantEffect)
     .describe("Default org-role grants (role name → effect)"),
@@ -91,11 +99,16 @@ export const capabilityRegistryList = registerCapability({
     workspace: { Owner: "allow" },
   },
   input: z.object({
-    domain: z.string().optional().describe("Exact domain filter (e.g. 'billing')"),
+    domain: z
+      .string()
+      .optional()
+      .describe("Exact domain filter (e.g. 'billing')"),
     q: z
       .string()
       .optional()
-      .describe("Case-insensitive substring match on name, domain, or description"),
+      .describe(
+        "Case-insensitive substring match on name, domain, or description",
+      ),
     surface: z
       .enum(["api", "mcp", "agent", "cli"])
       .optional()
@@ -103,12 +116,20 @@ export const capabilityRegistryList = registerCapability({
     missingLayer: z
       .enum(["schema", "api", "mcp", "unit", "e2e", "docs", "app"])
       .optional()
-      .describe("Only capabilities that do NOT declare this layer (surface-gap filter)"),
+      .describe(
+        "Only capabilities that do NOT declare this layer (surface-gap filter)",
+      ),
     sensitivity: z
       .enum(["low", "medium", "high", "destructive"])
       .optional()
       .describe("Only capabilities with this sensitivity classification"),
-    limit: z.number().int().min(1).max(1000).default(500).describe("Max rows to return"),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(1000)
+      .default(500)
+      .describe("Max rows to return"),
     offset: z.number().int().min(0).default(0).describe("Pagination offset"),
   }),
   output: z.object({
@@ -125,8 +146,12 @@ export const capabilityRegistryList = registerCapability({
   }),
 });
 
-export type CapabilityRegistryListInput = z.output<typeof capabilityRegistryList.input>;
-export type CapabilityRegistryListOutput = z.output<typeof capabilityRegistryList.output>;
+export type CapabilityRegistryListInput = z.output<
+  typeof capabilityRegistryList.input
+>;
+export type CapabilityRegistryListOutput = z.output<
+  typeof capabilityRegistryList.output
+>;
 export type CapabilityRegistrySummary = z.output<typeof capabilitySummary>;
 
 // Shared with capability.registry.get (the detail view extends the summary).

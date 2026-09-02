@@ -41,7 +41,8 @@ describe("command.menu.search contract", () => {
 
   it("rejects missing orgSlug", () => {
     expect(
-      commandMenuSearch.input.safeParse({ query: "x", workspaceSlug: "prod" }).success,
+      commandMenuSearch.input.safeParse({ query: "x", workspaceSlug: "prod" })
+        .success,
     ).toBe(false);
   });
 
@@ -56,7 +57,14 @@ describe("command.menu.search contract", () => {
   });
 
   it("validates the SEARCHABLE_KINDS list covers all spec §10 entity types", () => {
-    const expected = ["run", "principal", "playbook", "trigger", "event", "agent"] as const;
+    const expected = [
+      "run",
+      "principal",
+      "playbook",
+      "trigger",
+      "event",
+      "agent",
+    ] as const;
     expect(SEARCHABLE_KINDS).toEqual(expected);
   });
 
@@ -87,7 +95,9 @@ describe("command.menu.search contract", () => {
       contextLine: null,
       href: `/acme/prod/activity/runs/aex_${i}`,
     }));
-    expect(commandMenuSearch.output.safeParse({ rows: manyRows }).success).toBe(false);
+    expect(commandMenuSearch.output.safeParse({ rows: manyRows }).success).toBe(
+      false,
+    );
   });
 
   it("allows contextLine to be null", () => {

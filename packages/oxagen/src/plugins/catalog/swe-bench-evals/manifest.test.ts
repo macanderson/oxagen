@@ -12,7 +12,10 @@ import {
 describe("swe-bench-evals proof pack (Spec §6)", () => {
   it("passes the plugin manifest schema", () => {
     const result = oxagenPluginManifestSchema.safeParse(sweBenchEvalsManifest);
-    expect(result.success, result.success ? "" : JSON.stringify(result.error.issues)).toBe(true);
+    expect(
+      result.success,
+      result.success ? "" : JSON.stringify(result.error.issues),
+    ).toBe(true);
   });
 
   it("is a template-distribution pack — claims no capability contract", () => {
@@ -25,7 +28,10 @@ describe("swe-bench-evals proof pack (Spec §6)", () => {
     expect(templates).toHaveLength(1);
     for (const tpl of templates) {
       const result = sandboxTemplateManifestSchema.safeParse(tpl);
-      expect(result.success, result.success ? "" : JSON.stringify(result.error.issues)).toBe(true);
+      expect(
+        result.success,
+        result.success ? "" : JSON.stringify(result.error.issues),
+      ).toBe(true);
     }
   });
 
@@ -42,7 +48,10 @@ describe("swe-bench-evals proof pack (Spec §6)", () => {
       timeoutMs: 300_000,
       diskMb: 10_240,
     });
-    // Digest-pinned image ref for reproducible evals.
+    // Checks the SHAPE of the ref only — that it is digest-pinned rather than
+    // tag-pinned, so eval runs are reproducible. It does NOT prove the digest
+    // resolves to a published image; the pack currently ships an all-zero
+    // placeholder digest (see manifest.ts) that no registry can serve.
     expect(tpl.runtime).toMatch(/@sha256:[0-9a-f]{64}$/);
   });
 
@@ -58,7 +67,9 @@ describe("swe-bench-evals proof pack (Spec §6)", () => {
 
   it("requires the AI_GATEWAY_API_KEY secret by NAME only (never a value)", () => {
     const tpl = (sweBenchEvalsManifest.sandboxTemplates ?? [])[0]!;
-    const gatewayKey = tpl.secretKeys.find((k) => k.key === "AI_GATEWAY_API_KEY");
+    const gatewayKey = tpl.secretKeys.find(
+      (k) => k.key === "AI_GATEWAY_API_KEY",
+    );
     expect(gatewayKey).toBeDefined();
     expect(gatewayKey?.required).toBe(true);
     expect(gatewayKey?.sensitive).toBe(true);

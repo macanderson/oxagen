@@ -37,7 +37,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-    withTenantDb: async (fn: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) => fn(makeTx()),
+    withTenantDb: async (
+      fn: (tx: ReturnType<typeof makeTx>) => Promise<unknown>,
+    ) => fn(makeTx()),
   };
 });
 
@@ -114,7 +116,10 @@ describe("skillVersionActivateHandler (@oxagen/handlers)", () => {
     mocks.skillRows.mockResolvedValueOnce([]);
 
     await expect(
-      skillVersionActivateHandler({ skillId: "skl_unknown", versionNumber: 1 }, CTX),
+      skillVersionActivateHandler(
+        { skillId: "skl_unknown", versionNumber: 1 },
+        CTX,
+      ),
     ).rejects.toThrow("skill not found");
   });
 
@@ -122,7 +127,10 @@ describe("skillVersionActivateHandler (@oxagen/handlers)", () => {
     mocks.versionRows.mockResolvedValueOnce([]);
 
     await expect(
-      skillVersionActivateHandler({ skillId: "skl_abc", versionNumber: 99 }, CTX),
+      skillVersionActivateHandler(
+        { skillId: "skl_abc", versionNumber: 99 },
+        CTX,
+      ),
     ).rejects.toThrow("version 99 not found");
   });
 
@@ -130,7 +138,10 @@ describe("skillVersionActivateHandler (@oxagen/handlers)", () => {
     mocks.skillRows.mockRejectedValueOnce(new Error("DB connection failed"));
 
     await expect(
-      skillVersionActivateHandler({ skillId: "skl_abc", versionNumber: 1 }, CTX),
+      skillVersionActivateHandler(
+        { skillId: "skl_abc", versionNumber: 1 },
+        CTX,
+      ),
     ).rejects.toThrow("DB connection failed");
   });
 
@@ -138,7 +149,10 @@ describe("skillVersionActivateHandler (@oxagen/handlers)", () => {
     mocks.updateWhere.mockRejectedValueOnce(new Error("update failed"));
 
     await expect(
-      skillVersionActivateHandler({ skillId: "skl_abc", versionNumber: 3 }, CTX),
+      skillVersionActivateHandler(
+        { skillId: "skl_abc", versionNumber: 3 },
+        CTX,
+      ),
     ).rejects.toThrow("update failed");
   });
 
@@ -147,10 +161,16 @@ describe("skillVersionActivateHandler (@oxagen/handlers)", () => {
     // is scoped by workspaceId + orgId in the WHERE clause.
     mocks.skillRows.mockResolvedValueOnce([]);
 
-    const alienCtx: CapabilityContext = makeCTX({ workspaceId: "ws_other", orgId: "org_other" });
+    const alienCtx: CapabilityContext = makeCTX({
+      workspaceId: "ws_other",
+      orgId: "org_other",
+    });
 
     await expect(
-      skillVersionActivateHandler({ skillId: "skl_abc", versionNumber: 3 }, alienCtx),
+      skillVersionActivateHandler(
+        { skillId: "skl_abc", versionNumber: 3 },
+        alienCtx,
+      ),
     ).rejects.toThrow("skill not found");
   });
 

@@ -22,12 +22,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => fakeDb,
-  // withTenantDb / withSystemDb pass-through: invokes the callback with the
-  // same fake tx so handler assertions keep working without a real tx or GUC.
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fakeDb),
-  withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fakeDb),
-
+    db: () => fakeDb,
+    // withTenantDb / withSystemDb pass-through: invokes the callback with the
+    // same fake tx so handler assertions keep working without a real tx or GUC.
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fakeDb),
+    withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fakeDb),
   };
 });
 
@@ -69,20 +68,33 @@ vi.mock("@oxagen/storage", () => ({
 }));
 
 // Mock inngest client — capture handler
-let capturedHandler: ((ctx: {
-  event: { data: Record<string, unknown> };
-  step: { run: (name: string, fn: () => Promise<unknown>) => Promise<unknown> };
-}) => Promise<unknown>) | null = null;
+let capturedHandler:
+  | ((ctx: {
+      event: { data: Record<string, unknown> };
+      step: {
+        run: (name: string, fn: () => Promise<unknown>) => Promise<unknown>;
+      };
+    }) => Promise<unknown>)
+  | null = null;
 
-let capturedOnFailureHandler: ((ctx: {
-  event: { data: Record<string, unknown> };
-  step: { run: (name: string, fn: () => Promise<unknown>) => Promise<unknown> };
-}) => Promise<unknown>) | null = null;
+let capturedOnFailureHandler:
+  | ((ctx: {
+      event: { data: Record<string, unknown> };
+      step: {
+        run: (name: string, fn: () => Promise<unknown>) => Promise<unknown>;
+      };
+    }) => Promise<unknown>)
+  | null = null;
 
 mocks.inngestCreateFunction.mockImplementation(
-  (opts: { id: string }, _trigger: unknown, handler: typeof capturedHandler) => {
+  (
+    opts: { id: string },
+    _trigger: unknown,
+    handler: typeof capturedHandler,
+  ) => {
     if (opts.id === "agent.video-render") capturedHandler = handler;
-    if (opts.id === "agent.video-render.on-failure") capturedOnFailureHandler = handler;
+    if (opts.id === "agent.video-render.on-failure")
+      capturedOnFailureHandler = handler;
     return {};
   },
 );
@@ -153,7 +165,10 @@ describe("agentVideoRender Inngest handler", () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
 
     expect(mocks.selectVideoModel).toHaveBeenCalledTimes(1);
-    const arg = mocks.selectVideoModel.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.selectVideoModel.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(arg.model).toBe("google/veo-3.0-fast-generate-001");
   });
 
@@ -161,7 +176,10 @@ describe("agentVideoRender Inngest handler", () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
 
     expect(mocks.generateVideoFor).toHaveBeenCalledTimes(1);
-    const arg = mocks.generateVideoFor.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.generateVideoFor.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(arg.prompt).toBe("A sunset timelapse");
     expect(arg.durationSeconds).toBe(5);
     expect(arg.aspectRatio).toBe("16:9");
@@ -176,7 +194,10 @@ describe("agentVideoRender Inngest handler", () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
 
     expect(mocks.storagePut).toHaveBeenCalledTimes(1);
-    const putArg = mocks.storagePut.mock.calls[0]?.[0] as Record<string, unknown>;
+    const putArg = mocks.storagePut.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(putArg.key).toBe("generated/videos/org_1/asset_1.mp4");
     expect(putArg.body).toBe(FAKE_BYTES);
     expect(putArg.contentType).toBe("video/mp4");
@@ -189,17 +210,24 @@ describe("agentVideoRender Inngest handler", () => {
 
     // db().update called once for mark-ready
     expect(mocks.dbUpdate.mock.calls.length).toBeGreaterThanOrEqual(1);
-    const setCalls = mocks.dbUpdateSet.mock.calls as Array<[Record<string, unknown>]>;
+    const setCalls = mocks.dbUpdateSet.mock.calls as Array<
+      [Record<string, unknown>]
+    >;
     const readyCall = setCalls.find(([arg]) => arg.status === "ready");
     expect(readyCall).toBeTruthy();
     const setArg = readyCall![0] as Record<string, unknown>;
     expect(setArg.storageKey).toBe("generated/videos/org_1/asset_1.mp4");
-    expect(setArg.storageUrl).toBe("https://blob.vercel.sh/generated/videos/org_1/asset_1.mp4");
+    expect(setArg.storageUrl).toBe(
+      "https://blob.vercel.sh/generated/videos/org_1/asset_1.mp4",
+    );
     expect(setArg.sizeBytes).toBe(BigInt(1024));
   });
 
   it("returns the asset id, status, and storage refs on success", async () => {
-    const result = await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
+    const result = await capturedHandler!({
+      event: BASE_EVENT,
+      step: makeStep(),
+    });
     const r = result as Record<string, unknown>;
     expect(r.assetId).toBe("asset_1");
     expect(r.status).toBe("ready");
@@ -207,7 +235,9 @@ describe("agentVideoRender Inngest handler", () => {
   });
 
   it("rethrows when generateVideoFor fails (Inngest records failure)", async () => {
-    mocks.generateVideoFor.mockRejectedValueOnce(new Error("veo provider error"));
+    mocks.generateVideoFor.mockRejectedValueOnce(
+      new Error("veo provider error"),
+    );
 
     await expect(
       capturedHandler!({ event: BASE_EVENT, step: makeStep() }),
@@ -244,11 +274,15 @@ describe("agentVideoRenderOnFailure handler", () => {
 
     await capturedOnFailureHandler!({ event: failureEvent, step: makeStep() });
 
-    const setCalls = mocks.dbUpdateSet.mock.calls as Array<[Record<string, unknown>]>;
+    const setCalls = mocks.dbUpdateSet.mock.calls as Array<
+      [Record<string, unknown>]
+    >;
     const failedCall = setCalls.find(([arg]) => arg.status === "failed");
     expect(failedCall).toBeTruthy();
     const setArg = failedCall![0] as Record<string, unknown>;
-    expect((setArg.metadata as Record<string, unknown>).failureReason).toBe("veo timed out");
+    expect((setArg.metadata as Record<string, unknown>).failureReason).toBe(
+      "veo timed out",
+    );
   });
 
   it("is a no-op when assetId is missing from the original event", async () => {
@@ -261,7 +295,10 @@ describe("agentVideoRenderOnFailure handler", () => {
     };
 
     // Should not throw
-    await capturedOnFailureHandler!({ event: failureEventNoAsset, step: makeStep() });
+    await capturedOnFailureHandler!({
+      event: failureEventNoAsset,
+      step: makeStep(),
+    });
 
     // DB should not have been called
     expect(mocks.dbUpdate.mock.calls.length).toBe(0);

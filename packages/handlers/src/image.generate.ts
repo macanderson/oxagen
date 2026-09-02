@@ -15,10 +15,9 @@ import { persistGeneratedAsset } from "./generated-asset.persist";
 // When AI_GATEWAY_API_KEY is absent this handler returns a typed placeholder —
 // it never throws (policy §0.5).
 
-export const imageGenerateHandler: CapabilityHandler<typeof imageGenerate> = async (
-  input,
-  ctx,
-) => {
+export const imageGenerateHandler: CapabilityHandler<
+  typeof imageGenerate
+> = async (input, ctx) => {
   const alt = input.alt ?? input.prompt.slice(0, 120);
 
   // Image generation routes 100% through the Vercel AI Gateway. Read the gateway
@@ -106,7 +105,8 @@ export const imageGenerateHandler: CapabilityHandler<typeof imageGenerate> = asy
             // Record the resolved gateway model id (never a hard-coded slug —
             // AI Gateway slug-drift gotcha). AI SDK v6's `ImageModel` is
             // `string | ImageModelV3`, so narrow before touching `.modelId`.
-            model: typeof imageModel === "string" ? imageModel : imageModel.modelId,
+            model:
+              typeof imageModel === "string" ? imageModel : imageModel.modelId,
             messageId: ctx.messageId ?? undefined,
           });
           assetPublicId = asset.publicId;
@@ -153,7 +153,12 @@ export const imageGenerateHandler: CapabilityHandler<typeof imageGenerate> = asy
       placeholder: true,
       render: {
         componentId: "image-preview",
-        props: { alt, placeholder: true, errorReason: reason, prompt: input.prompt },
+        props: {
+          alt,
+          placeholder: true,
+          errorReason: reason,
+          prompt: input.prompt,
+        },
       },
     };
   }

@@ -216,7 +216,16 @@ export function evaluateTurnBudget(
   }
 }
 
-/** Shape of the engine's cumulative usage accumulator (a subset of RunCodingAgentResult["usage"]). */
+/**
+ * Shape of the engine's cumulative usage accumulator (a subset of
+ * RunCodingAgentResult["usage"]).
+ *
+ * Note the missing cache-WRITE count: the engine does not accumulate one, so
+ * {@link turnCostUsd} prices cache-creation tokens at the fresh-input rate. On
+ * Anthropic models (cache writes bill at 1.25x input) that makes a budget
+ * estimate slightly LOWER than what the gate actually debits via
+ * chargeUsageCredits, which does receive cacheWriteTokens.
+ */
 export interface TurnUsageSnapshot {
   inputTokens?: number;
   outputTokens?: number;
@@ -276,10 +285,12 @@ export interface TurnBudgetGuardHooks {
  *
  * This is the SINGLE enforcement implementation every surface shares: the CLI,
  * the app chat route, and any future runner wire the SAME guard and differ only
- * in the {@link TurnBudgetGuardHooks} they supply. The guard is resilient —
- * `onPause` rejecting or `hooks` throwing must never wedge a turn, so callers
- * should keep hooks side-effect-only; a throw here would be misclassified by the
- * engine as a model error.
+ * in the {@link TurnBudgetGuardHooks} they supply.
+ *
+ * The guard does NOT catch hook failures: a rejecting `onPause` or a throwing
+ * `onTick`/`onStop`/`onWithinGrace` propagates out of the guard, and the engine
+ * misclassifies it as a model error. Callers must keep hooks side-effect-only
+ * and swallow their own failures.
  */
 export function createTurnBudgetGuard(
   policy: TurnBudgetPolicy,

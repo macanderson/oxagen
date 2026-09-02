@@ -49,7 +49,7 @@ The fonts are already self-hosted and active via the shared CSS — no further
 step is required. As an optimisation you may migrate `apps/app/src/app/
 layout.tsx` to `next/font/local` for automatic preloading and size-adjust
 fallback metrics; this is per-app, so weigh it against the no-drift cost of
-repeating the config across `app` / `website` / `admin`.
+repeating the config across every Next.js app (`app`, `docs`, `web`).
 
 ### Committing the binaries
 
@@ -73,6 +73,15 @@ The three typefaces are wired to these CSS custom properties (set in
 | `--font-sans` | `"Aeonik"` — body + UI | `<body>` default (+ `font-sans` utility) |
 | `--font-display` | `"Aeonik Fono"` — headings | `h1`–`h6` base rule (+ `font-display` utility) |
 | `--font-mono` | `"Aeonik Mono"` — mono | `code`/`kbd`/`samp`/`pre` base rule (+ `font-mono` utility) |
+| `--font-wordmark` | `"Aeonik"` — the lowercase "oxagen" lockup | `.ox-wordmark` (weight 660, tracking -0.02em) |
 
-These Tailwind `@theme` tokens also flow through as utility classes:
+The first three Tailwind `@theme` tokens also flow through as utility classes:
 `font-sans`, `font-display`, `font-mono`.
+
+## Unreferenced files
+
+`SpaceGrotesk-VF.woff2` and `space-grotesk.css` sit in this directory but
+nothing imports them — the wordmark was their only consumer and it is set in
+Aeonik now. They are kept rather than deleted so the choice stays reversible:
+removing a licensed binary is a separate decision from changing which face the
+wordmark uses. If nothing adopts them, they can go.

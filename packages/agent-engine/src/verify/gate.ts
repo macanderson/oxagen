@@ -117,7 +117,11 @@ export async function runMutationGate(
   const testFilePaths = testFiles.map((f) => f.path);
 
   if (sourceFiles.length === 0) {
-    return skipped("no source files changed (nothing to revert)", startedAt, testFilePaths);
+    return skipped(
+      "no source files changed (nothing to revert)",
+      startedAt,
+      testFilePaths,
+    );
   }
   if (!hasWitnessClaim(evidence, testFiles.length)) {
     return skipped(
@@ -216,7 +220,11 @@ export async function runMutationGate(
       });
     }
   } catch (err) {
-    return skipped(`shadow run failed: ${String(err)}`, startedAt, testFilePaths);
+    return skipped(
+      `shadow run failed: ${String(err)}`,
+      startedAt,
+      testFilePaths,
+    );
   } finally {
     // ── ALWAYS restore the fix — a broken restore must be LOUD ──
     const failures: string[] = [];
@@ -245,6 +253,10 @@ export async function runMutationGate(
   const status = witnessOutcome(runs);
 
   // ── Layer 2 (opt-in): mutation-score the patch, fix restored ──
+  // `commands[0]` is the first PLANNED witness — the fail→pass flip when the
+  // oracle saw one (planWitnessCommands puts it first), otherwise the first
+  // passing test-like command. Only one is used: scoring re-runs it once per
+  // mutant, so a second command would multiply the cost.
   if (status === "witnessed" && opts.score) {
     score = await scorePatch(workspace, reverts, commands[0]!, {
       timeoutMs,
@@ -270,8 +282,14 @@ export async function runMutationGate(
 
 /**
  * Layer 2: apply deterministic one-line mutants to the fix's added lines (one
- * file at a time, fix otherwise intact) and measure how many the fastest
- * witness command kills. Every mutant write is individually restored.
+ * file at a time, fix otherwise intact) and measure how many the witness
+ * command kills. Every mutant write is individually restored.
+ *
+ * Fail-open on the way in, LOUD on the way out: a workspace read/write/exec
+ * failure while trying a mutant just ends the scoring pass (the score is
+ * advisory — it must not sink an otherwise-witnessed turn), but a failure to
+ * RESTORE a mutated file throws, because leaving a deliberately-broken line in
+ * the user's tree silently is the one outcome worse than no score at all.
  */
 async function scorePatch(
   workspace: Workspace,
@@ -292,6 +310,7 @@ async function scorePatch(
       continue; // created-then-restored files always exist; belt & braces
     }
     const mutants = generateMutants(file, current, opts.maxMutants - tried);
+    let workspaceFailed = false;
     for (const mutant of mutants) {
       if (opts.signal?.aborted) break;
       tried++;
@@ -310,10 +329,25 @@ async function scorePatch(
             description: mutant.description,
           });
         }
+      } catch {
+        // Could not apply or run this mutant — the score is advisory, so stop
+        // scoring instead of failing a turn the witness runs already cleared.
+        tried--;
+        workspaceFailed = true;
       } finally {
-        await workspace.writeFile(mutant.path, current);
+        try {
+          await workspace.writeFile(mutant.path, current);
+        } catch (err) {
+          throw new Error(
+            `mutation gate could not restore ${mutant.path} after mutant "${mutant.description}" ` +
+              `(line ${mutant.line}) — the file may still contain the mutation; restore it from ` +
+              `the turn diff before continuing. Cause: ${String(err)}`,
+          );
+        }
       }
+      if (workspaceFailed) break;
     }
+    if (workspaceFailed) break;
   }
 
   return {

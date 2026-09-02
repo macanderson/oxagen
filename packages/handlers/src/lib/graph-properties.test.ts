@@ -74,6 +74,17 @@ describe("safeParseProperties", () => {
     ).toEqual({ count: 7, name: "x" });
   });
 
+  it("recombines both halves of a driver Integer larger than 32 bits", () => {
+    // 2^32 is {low: 0, high: 1}; reading `low` alone would report 0.
+    expect(safeParseProperties({ bytes: { low: 0, high: 1 } })).toEqual({
+      bytes: 4294967296,
+    });
+    // Negative values are two's-complement across both halves: -1 is {-1, -1}.
+    expect(safeParseProperties({ delta: { low: -1, high: -1 } })).toEqual({
+      delta: -1,
+    });
+  });
+
   it("leaves objects that merely resemble driver integers untouched", () => {
     // Extra keys or non-number members mean it is user data, not a driver int.
     const range = { low: 1, high: 10, unit: "ms" };

@@ -82,11 +82,25 @@ function readSwarm(output: unknown): SwarmShape {
           ? rr.hits.flatMap((h): SwarmHit[] => {
               if (typeof h !== "object" || h === null) return [];
               const hh = h as Record<string, unknown>;
-              if (typeof hh.title !== "string" || typeof hh.url !== "string") return [];
-              return [{ title: hh.title, url: hh.url, snippet: typeof hh.snippet === "string" ? hh.snippet : "" }];
+              if (typeof hh.title !== "string" || typeof hh.url !== "string")
+                return [];
+              return [
+                {
+                  title: hh.title,
+                  url: hh.url,
+                  snippet: typeof hh.snippet === "string" ? hh.snippet : "",
+                },
+              ];
             })
           : [];
-        return [{ query: rr.query, resultCount: typeof rr.resultCount === "number" ? rr.resultCount : hits.length, hits }];
+        return [
+          {
+            query: rr.query,
+            resultCount:
+              typeof rr.resultCount === "number" ? rr.resultCount : hits.length,
+            hits,
+          },
+        ];
       })
     : [];
   return {
@@ -125,7 +139,8 @@ export default function ResearchSwarmCard(
 ): React.ReactElement {
   const initial = readSwarm(props.output);
   const orgSlug = typeof props.orgSlug === "string" ? props.orgSlug : "";
-  const workspaceSlug = typeof props.workspaceSlug === "string" ? props.workspaceSlug : "";
+  const workspaceSlug =
+    typeof props.workspaceSlug === "string" ? props.workspaceSlug : "";
 
   // Live state overrides the initial snapshot once polling returns. Null until
   // the first successful poll, so the very first paint uses the tool output.
@@ -154,7 +169,9 @@ export default function ResearchSwarmCard(
     async function poll(): Promise<void> {
       polls += 1;
       try {
-        const res = await fetch(url, { headers: { "Content-Type": "application/json" } });
+        const res = await fetch(url, {
+          headers: { "Content-Type": "application/json" },
+        });
         // 404 → the swarmId is unknown (never existed or cross-tenant).  Stop
         // polling immediately — retrying will never produce a different result.
         if (res.status === 404) {
@@ -185,7 +202,12 @@ export default function ResearchSwarmCard(
     };
   }, [shouldPoll, swarmId, orgSlug, workspaceSlug]);
 
-  const pct = s.total > 0 ? Math.round((s.completed / s.total) * 100) : s.status === "complete" ? 100 : 0;
+  const pct =
+    s.total > 0
+      ? Math.round((s.completed / s.total) * 100)
+      : s.status === "complete"
+        ? 100
+        : 0;
 
   return (
     <div
@@ -229,9 +251,15 @@ export default function ResearchSwarmCard(
         {s.results.length > 0 ? (
           <ul className="space-y-2">
             {s.results.slice(0, 20).map((r, i) => (
-              <li key={i} className="rounded-md bg-muted/30 px-2.5 py-2 text-xs">
+              <li
+                key={i}
+                className="rounded-md bg-muted/30 px-2.5 py-2 text-xs"
+              >
                 <div className="flex items-center justify-between gap-3">
-                  <span className="min-w-0 truncate font-medium" title={r.query}>
+                  <span
+                    className="min-w-0 truncate font-medium"
+                    title={r.query}
+                  >
                     {r.query}
                   </span>
                   <span className="shrink-0 tabular-nums text-muted-foreground">
@@ -272,7 +300,9 @@ export default function ResearchSwarmCard(
                       );
                     })}
                     {r.hits.length > 3 ? (
-                      <li className="text-muted-foreground">+{r.hits.length - 3} more</li>
+                      <li className="text-muted-foreground">
+                        +{r.hits.length - 3} more
+                      </li>
                     ) : null}
                   </ul>
                 ) : null}
@@ -286,7 +316,10 @@ export default function ResearchSwarmCard(
         ) : null}
 
         {s.swarmId ? (
-          <p className="font-mono text-[11px] text-muted-foreground" title={s.swarmId}>
+          <p
+            className="font-mono text-[11px] text-muted-foreground"
+            title={s.swarmId}
+          >
             {s.swarmId}
           </p>
         ) : null}

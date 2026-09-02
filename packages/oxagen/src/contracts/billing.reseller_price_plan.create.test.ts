@@ -48,7 +48,9 @@ describe("create_reseller_price_plan contract", () => {
       expect(res.success).toBe(false);
       if (!res.success) {
         expect(res.error.issues[0]?.path).toEqual(["pricingMode"]);
-        expect(res.error.issues[0]?.message).toMatch(/markup plans require markupBps/);
+        expect(res.error.issues[0]?.message).toMatch(
+          /markup plans require markupBps/,
+        );
       }
     });
 
@@ -82,7 +84,9 @@ describe("create_reseller_price_plan contract", () => {
       });
       expect(res.success).toBe(false);
       if (!res.success) {
-        expect(res.error.issues[0]?.message).toMatch(/per_unit plans require unitPriceCents/);
+        expect(res.error.issues[0]?.message).toMatch(
+          /per_unit plans require unitPriceCents/,
+        );
       }
     });
   });

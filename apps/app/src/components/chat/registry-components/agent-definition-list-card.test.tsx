@@ -27,7 +27,12 @@ describe("AgentDefinitionListCard", () => {
     render(
       <AgentDefinitionListCard
         capability="agent.definition.list"
-        output={{ agents: [agent(), agent({ publicId: "agt_2", name: "Feature Inference Agent" })] }}
+        output={{
+          agents: [
+            agent(),
+            agent({ publicId: "agt_2", name: "Feature Inference Agent" }),
+          ],
+        }}
         orgSlug="acme"
         workspaceSlug="ws"
       />,
@@ -63,7 +68,9 @@ describe("AgentDefinitionListCard", () => {
   it("uses a grey (muted) dot for an undeployed/draft agent", () => {
     render(
       <AgentDefinitionListCard
-        output={{ agents: [agent({ status: "draft", deploymentStatus: "inactive" })] }}
+        output={{
+          agents: [agent({ status: "draft", deploymentStatus: "inactive" })],
+        }}
       />,
     );
     const dot = document.querySelector("span.bg-muted-foreground");
@@ -76,7 +83,12 @@ describe("AgentDefinitionListCard", () => {
   it("shows a Managed tag only for product-managed agents", () => {
     render(
       <AgentDefinitionListCard
-        output={{ agents: [agent({ managed: true }), agent({ publicId: "agt_2", managed: false })] }}
+        output={{
+          agents: [
+            agent({ managed: true }),
+            agent({ publicId: "agt_2", managed: false }),
+          ],
+        }}
       />,
     );
     expect(screen.getAllByText("Managed")).toHaveLength(1);

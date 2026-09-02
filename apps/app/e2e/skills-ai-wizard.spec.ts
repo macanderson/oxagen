@@ -22,7 +22,11 @@ import { gotoStable } from "./helpers/nav";
 import { rm, mkdir } from "node:fs/promises";
 import path from "node:path";
 
-const SCREENSHOTS_DIR = path.resolve(import.meta.dirname, "screenshots", "skills-ai-wizard");
+const SCREENSHOTS_DIR = path.resolve(
+  import.meta.dirname,
+  "screenshots",
+  "skills-ai-wizard",
+);
 
 // Recreate this spec's screenshot sub-directory on each run (CLAUDE.md convention).
 test.beforeAll(async () => {
@@ -31,7 +35,9 @@ test.beforeAll(async () => {
 });
 
 test.describe("skills AI-assisted setup wizard", () => {
-  test("describe step gates AI generation; manual path creates a skill", async ({ page }) => {
+  test("describe step gates AI generation; manual path creates a skill", async ({
+    page,
+  }) => {
     test.setTimeout(120_000);
 
     // ── 1. Fresh owner + org ─────────────────────────────────────────────────
@@ -58,7 +64,9 @@ test.describe("skills AI-assisted setup wizard", () => {
       "Teach the agent how to triage production incidents: check dashboards, page on-call, keep a timeline.",
     );
     await expect(generateBtn).toBeEnabled();
-    await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "01-describe-step.png") });
+    await page.screenshot({
+      path: path.join(SCREENSHOTS_DIR, "01-describe-step.png"),
+    });
 
     // ── 4. Manual path: skip AI → Review form (blank) ────────────────────────
     await page.getByTestId("skill-wizard-skip-btn").click();
@@ -69,42 +77,66 @@ test.describe("skills AI-assisted setup wizard", () => {
     const slugValue = `incident-triage-${Date.now()}`;
     await nameInput.fill("Incident Triage");
     // Name → slug auto-derivation happens on the manual path.
-    await expect(page.getByTestId("new-skill-slug-input")).toHaveValue("incident-triage");
+    await expect(page.getByTestId("new-skill-slug-input")).toHaveValue(
+      "incident-triage",
+    );
     await page.getByTestId("new-skill-slug-input").fill(slugValue);
     await page
       .getByTestId("new-skill-description-input")
       .fill("How to triage production incidents calmly and completely.");
     await page
       .getByTestId("new-skill-body-textarea")
-      .fill("## When to use\n\nLoad when an incident is declared.\n\n1. Check dashboards.\n2. Page on-call.");
-    await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "02-review-step.png") });
+      .fill(
+        "## When to use\n\nLoad when an incident is declared.\n\n1. Check dashboards.\n2. Page on-call.",
+      );
+    await page.screenshot({
+      path: path.join(SCREENSHOTS_DIR, "02-review-step.png"),
+    });
 
     // ── 5. Continue → Step 3 (Save) summary reflects the form ───────────────
     await page.getByTestId("skill-wizard-continue-btn").click();
-    await expect(page.getByTestId("skill-wizard-summary-name")).toHaveText("Incident Triage");
-    await expect(page.getByTestId("skill-wizard-summary-slug")).toHaveText(slugValue);
-    await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "03-save-step.png") });
+    await expect(page.getByTestId("skill-wizard-summary-name")).toHaveText(
+      "Incident Triage",
+    );
+    await expect(page.getByTestId("skill-wizard-summary-slug")).toHaveText(
+      slugValue,
+    );
+    await page.screenshot({
+      path: path.join(SCREENSHOTS_DIR, "03-save-step.png"),
+    });
 
     // ── 6. Save → land on the new skill's detail page ────────────────────────
     await page.getByTestId("new-skill-submit-btn").click();
-    await expect(page).toHaveURL(new RegExp(`/workbench/tools/skills/${slugValue}`), { timeout: 30_000 });
-    await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "04-skill-created.png") });
+    await expect(page).toHaveURL(
+      new RegExp(`/workbench/tools/skills/${slugValue}`),
+      { timeout: 30_000 },
+    );
+    await page.screenshot({
+      path: path.join(SCREENSHOTS_DIR, "04-skill-created.png"),
+    });
   });
 
-  test("back navigation returns from review to describe with prompt intact", async ({ page }) => {
+  test("back navigation returns from review to describe with prompt intact", async ({
+    page,
+  }) => {
     test.setTimeout(90_000);
 
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "skill-wiz-back" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "skill-wiz-back",
+    });
 
     await gotoStable(page, `/${orgSlug}/default/workbench/tools/skills`);
     await page.getByTestId("new-skill-btn").click();
 
-    const promptText = "Teach the agent our code review checklist and when to apply it.";
+    const promptText =
+      "Teach the agent our code review checklist and when to apply it.";
     await page.getByTestId("skill-wizard-describe-input").fill(promptText);
     await page.getByTestId("skill-wizard-skip-btn").click();
     await expect(page.getByTestId("new-skill-name-input")).toBeVisible();
 
     await page.getByTestId("skill-wizard-back-btn").click();
-    await expect(page.getByTestId("skill-wizard-describe-input")).toHaveValue(promptText);
+    await expect(page.getByTestId("skill-wizard-describe-input")).toHaveValue(
+      promptText,
+    );
   });
 });

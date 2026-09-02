@@ -122,7 +122,9 @@ describe("FiltersPanel — label filters", () => {
 
   it("shows label filter description", () => {
     renderPanel(PATH_AND_LABEL_SCHEMA);
-    expect(screen.getByText(/Only sync items with these labels/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Only sync items with these labels/i),
+    ).toBeInTheDocument();
   });
 
   it("shows appliesTo for label filters", () => {
@@ -183,11 +185,17 @@ describe("FiltersPanel — path and label together", () => {
 });
 
 describe("FiltersPanel — pre-set form values", () => {
-  function ValueSetter({ fieldKey, value }: { fieldKey: string; value: unknown }) {
+  function ValueSetter({
+    fieldKey,
+    value,
+  }: {
+    fieldKey: string;
+    value: unknown;
+  }) {
     const ctx = useConnectorSchema();
     React.useEffect(() => {
       ctx.setFieldValue(fieldKey, value);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     return null;
   }

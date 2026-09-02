@@ -72,7 +72,8 @@ function ok(exitCode: number, timedOut = false): CommandResult {
 
 const FIXED = "export const answer = () => 42;\n";
 const ORIGINAL = "export const answer = () => 41;\n";
-const TEST_FILE = "import { answer } from './calc';\ntest('answer', () => {});\n";
+const TEST_FILE =
+  "import { answer } from './calc';\ntest('answer', () => {});\n";
 
 const DIFF = [
   "diff --git a/src/calc.ts b/src/calc.ts",
@@ -204,7 +205,9 @@ describe("runMutationGate — layer 1", () => {
     // …and BOTH are byte-for-byte restored, test file untouched.
     expect(ws.files.get("src/a.ts")).toBe("export const a = 2;\n");
     expect(ws.files.get("src/b.ts")).toBe("export const b = 2;\n");
-    expect(ws.files.get("src/ab.test.ts")).toBe("import './a'; import './b';\n");
+    expect(ws.files.get("src/ab.test.ts")).toBe(
+      "import './a'; import './b';\n",
+    );
   });
 
   it("reverts a fix that DELETED a source file by recreating it, then removes it again", async () => {
@@ -223,7 +226,8 @@ describe("runMutationGate — layer 1", () => {
       "@@ -0,0 +1 @@",
       "+import './calc';",
     ].join("\n");
-    const ORIGINAL_LEGACY = "export const legacy = true;\nexport const gone = 1;\n";
+    const ORIGINAL_LEGACY =
+      "export const legacy = true;\nexport const gone = 1;\n";
     // The fix deleted src/legacy.ts, so it is ABSENT from the current tree.
     const ws = new FakeWorkspace({
       "src/legacy.test.ts": "import './calc';\n",

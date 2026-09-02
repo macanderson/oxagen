@@ -147,12 +147,18 @@ export class GitHubWorkspace implements Workspace {
   // Workspace — reads
   // ---------------------------------------------------------------------------
 
-  async readFile(p: string, opts?: { offset?: number; limit?: number }): Promise<string> {
+  async readFile(
+    p: string,
+    opts?: { offset?: number; limit?: number },
+  ): Promise<string> {
     const text = await this.currentContent(p);
     if (text === null) throw new Error(`ENOENT: ${p}`);
     if (opts?.offset == null && opts?.limit == null) return text;
     const lines = text.split("\n");
-    const start = opts?.offset != null ? opts.offset - 1 : 0;
+    // `offset` is 1-based. Clamp at 0 so a caller-supplied 0 (or a negative)
+    // reads from the top of the file rather than wrapping to the last line,
+    // which is what a bare `offset - 1` would hand to Array#slice.
+    const start = opts?.offset != null ? Math.max(0, opts.offset - 1) : 0;
     const end = opts?.limit != null ? start + opts.limit : lines.length;
     return lines.slice(start, end).join("\n");
   }
@@ -184,9 +190,7 @@ export class GitHubWorkspace implements Workspace {
   ): Promise<string[]> {
     const re = new RegExp(pattern);
     const fileRe = opts?.glob
-      ? globToRegExp(
-          opts.glob.includes("/") ? opts.glob : `**/${opts.glob}`,
-        )
+      ? globToRegExp(opts.glob.includes("/") ? opts.glob : `**/${opts.glob}`)
       : null;
 
     let candidates = await this.getTree();
@@ -247,9 +251,9 @@ export class GitHubWorkspace implements Workspace {
     if (text === null) throw new Error(`ENOENT: ${p}`);
     const count = oldString === "" ? 0 : text.split(oldString).length - 1;
     if (count === 0) throw new Error(`old_string not found in ${p}`);
-    // Ensure initial is recorded before staging (currentContent may have set it
-    // via fetchFromGitHub; if content came from files map initial was set by
-    // the earlier writeFile call that put it there).
+    // `initial` is already recorded by this point: currentContent() either
+    // fetched the path (fetchFromGitHub sets it) or read it from `files`, which
+    // only the writeFile/editFile paths populate — and both set it first.
     if (opts?.replaceAll) {
       this.files.set(p, text.split(oldString).join(newString));
       return count;

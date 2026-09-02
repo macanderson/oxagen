@@ -59,13 +59,19 @@ function resolveRepoKey(
 }
 
 /** Resolve the saved environment id if it still exists in the live list. */
-function resolveEnvId(environments: readonly EnvironmentOption[], envId: string | null): string {
+function resolveEnvId(
+  environments: readonly EnvironmentOption[],
+  envId: string | null,
+): string {
   if (!envId) return UNSET;
   return environments.some((e) => e.id === envId) ? envId : UNSET;
 }
 
 /** Resolve the saved agent id if it still exists in the live list. */
-function resolveAgentId(agents: readonly AgentOption[], agentId: string | null): string {
+function resolveAgentId(
+  agents: readonly AgentOption[],
+  agentId: string | null,
+): string {
   if (!agentId) return UNSET;
   return agents.some((a) => a.agentId === agentId) ? agentId : UNSET;
 }
@@ -84,8 +90,12 @@ export function CodingAgentPreferencesForm({
   const [repoKey, setRepoKey] = React.useState(
     resolveRepoKey(repos, initialRepoConnectionId, initialRepoSlug),
   );
-  const [envId, setEnvId] = React.useState(resolveEnvId(environments, initialEnvironmentId));
-  const [agentId, setAgentId] = React.useState(resolveAgentId(agents, initialAgentId));
+  const [envId, setEnvId] = React.useState(
+    resolveEnvId(environments, initialEnvironmentId),
+  );
+  const [agentId, setAgentId] = React.useState(
+    resolveAgentId(agents, initialAgentId),
+  );
   const [isSaving, setIsSaving] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<Date | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -95,15 +105,19 @@ export function CodingAgentPreferencesForm({
     setIsSaving(true);
     setError(null);
     try {
-      const repo = repoKey === UNSET ? null : (repos.find((r) => r.key === repoKey) ?? null);
-      const result: UpdateCodingAgentPreferencesResult = await updateCodingAgentPreferencesAction({
-        orgSlug,
-        workspaceSlug,
-        defaultRepoConnectionId: repo?.connectionId ?? null,
-        defaultRepoSlug: repo ? `${repo.owner}/${repo.name}` : null,
-        defaultEnvironmentId: envId === UNSET ? null : envId,
-        defaultAgentId: agentId === UNSET ? null : agentId,
-      });
+      const repo =
+        repoKey === UNSET
+          ? null
+          : (repos.find((r) => r.key === repoKey) ?? null);
+      const result: UpdateCodingAgentPreferencesResult =
+        await updateCodingAgentPreferencesAction({
+          orgSlug,
+          workspaceSlug,
+          defaultRepoConnectionId: repo?.connectionId ?? null,
+          defaultRepoSlug: repo ? `${repo.owner}/${repo.name}` : null,
+          defaultEnvironmentId: envId === UNSET ? null : envId,
+          defaultAgentId: agentId === UNSET ? null : agentId,
+        });
       if (result.ok) {
         setSavedAt(new Date());
       } else {
@@ -120,12 +134,18 @@ export function CodingAgentPreferencesForm({
   return (
     <div className="max-w-2xl border-t border-border/40 pt-6">
       <div className="mb-4 flex items-start gap-3">
-        <Bot className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+        <Bot
+          className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
         <div>
-          <p className="text-sm font-semibold text-foreground">Your coding-agent preferences</p>
+          <p className="text-sm font-semibold text-foreground">
+            Your coding-agent preferences
+          </p>
           <p className="text-xs text-muted-foreground">
-            Personal defaults for repo, environment, and agent when you start a code session in
-            this workspace. Only visible to you — not governed by workspace admins.
+            Personal defaults for repo, environment, and agent when you start a
+            code session in this workspace. Only visible to you — not governed
+            by workspace admins.
           </p>
         </div>
       </div>
@@ -137,13 +157,27 @@ export function CodingAgentPreferencesForm({
         noValidate
       >
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="coding-prefs-repo" className="text-xs text-muted-foreground">
+          <Label
+            htmlFor="coding-prefs-repo"
+            className="text-xs text-muted-foreground"
+          >
             Default repository
           </Label>
           <div className="flex items-center gap-2">
-            <GitBranch className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <Select value={repoKey} onValueChange={(v) => setRepoKey(v ?? "")} disabled={isSaving}>
-              <SelectTrigger id="coding-prefs-repo" size="sm" className="w-full max-md:h-11">
+            <GitBranch
+              className="size-4 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Select
+              value={repoKey}
+              onValueChange={(v) => setRepoKey(v ?? "")}
+              disabled={isSaving}
+            >
+              <SelectTrigger
+                id="coding-prefs-repo"
+                size="sm"
+                className="w-full max-md:h-11"
+              >
                 <SelectValue>
                   {(value: string | null) => {
                     if (!value || value === UNSET) return "No default";
@@ -165,17 +199,34 @@ export function CodingAgentPreferencesForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="coding-prefs-env" className="text-xs text-muted-foreground">
+          <Label
+            htmlFor="coding-prefs-env"
+            className="text-xs text-muted-foreground"
+          >
             Default environment
           </Label>
           <div className="flex items-center gap-2">
-            <EnvIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <Select value={envId} onValueChange={(v) => setEnvId(v ?? "")} disabled={isSaving}>
-              <SelectTrigger id="coding-prefs-env" size="sm" className="w-full max-md:h-11">
+            <EnvIcon
+              className="size-4 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Select
+              value={envId}
+              onValueChange={(v) => setEnvId(v ?? "")}
+              disabled={isSaving}
+            >
+              <SelectTrigger
+                id="coding-prefs-env"
+                size="sm"
+                className="w-full max-md:h-11"
+              >
                 <SelectValue>
                   {(value: string | null) => {
                     if (!value || value === UNSET) return "No default";
-                    return environments.find((e) => e.id === value)?.name ?? "No default";
+                    return (
+                      environments.find((e) => e.id === value)?.name ??
+                      "No default"
+                    );
                   }}
                 </SelectValue>
               </SelectTrigger>
@@ -193,17 +244,34 @@ export function CodingAgentPreferencesForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="coding-prefs-agent" className="text-xs text-muted-foreground">
+          <Label
+            htmlFor="coding-prefs-agent"
+            className="text-xs text-muted-foreground"
+          >
             Default agent
           </Label>
           <div className="flex items-center gap-2">
-            <Bot className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <Select value={agentId} onValueChange={(v) => setAgentId(v ?? "")} disabled={isSaving}>
-              <SelectTrigger id="coding-prefs-agent" size="sm" className="w-full max-md:h-11">
+            <Bot
+              className="size-4 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Select
+              value={agentId}
+              onValueChange={(v) => setAgentId(v ?? "")}
+              disabled={isSaving}
+            >
+              <SelectTrigger
+                id="coding-prefs-agent"
+                size="sm"
+                className="w-full max-md:h-11"
+              >
                 <SelectValue>
                   {(value: string | null) => {
                     if (!value || value === UNSET) return "No default";
-                    return agents.find((a) => a.agentId === value)?.name ?? "No default";
+                    return (
+                      agents.find((a) => a.agentId === value)?.name ??
+                      "No default"
+                    );
                   }}
                 </SelectValue>
               </SelectTrigger>
@@ -240,7 +308,10 @@ export function CodingAgentPreferencesForm({
           {savedAt !== null && (
             <p className="text-xs text-muted-foreground">
               Saved at{" "}
-              {savedAt.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+              {savedAt.toLocaleTimeString(undefined, {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </p>
           )}
         </div>

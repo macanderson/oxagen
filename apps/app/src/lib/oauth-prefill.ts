@@ -45,12 +45,17 @@ export function emailDomain(email: string | null | undefined): string | null {
   if (!email) return null;
   const at = email.lastIndexOf("@");
   if (at < 0) return null;
-  const domain = email.slice(at + 1).trim().toLowerCase();
+  const domain = email
+    .slice(at + 1)
+    .trim()
+    .toLowerCase();
   return domain.length > 0 && domain.includes(".") ? domain : null;
 }
 
 /** True for consumer mailbox domains (and for null/empty — treat as personal). */
-export function isConsumerEmailDomain(domain: string | null | undefined): boolean {
+export function isConsumerEmailDomain(
+  domain: string | null | undefined,
+): boolean {
   if (!domain) return true;
   return CONSUMER_EMAIL_DOMAINS.has(domain.toLowerCase());
 }
@@ -61,9 +66,14 @@ export function isConsumerEmailDomain(domain: string | null | undefined): boolea
  * Uses the second-to-last label so common subdomains don't leak in. Returns
  * `""` when no sensible name can be derived.
  */
-export function companyNameFromDomain(domain: string | null | undefined): string {
+export function companyNameFromDomain(
+  domain: string | null | undefined,
+): string {
   if (!domain) return "";
-  const labels = domain.toLowerCase().replace(/^www\./, "").split(".");
+  const labels = domain
+    .toLowerCase()
+    .replace(/^www\./, "")
+    .split(".");
   if (labels.length < 2) return "";
   const brand = labels[labels.length - 2] ?? "";
   return brand
@@ -108,7 +118,9 @@ export function buildOrgSignupPrefill(input: {
     email,
     avatarUrl: (input.image ?? "").trim(),
     provider: input.provider ?? null,
-    suggestedBusinessName: isBusinessDomain ? companyNameFromDomain(domain) : "",
+    suggestedBusinessName: isBusinessDomain
+      ? companyNameFromDomain(domain)
+      : "",
     suggestedWebsite: isBusinessDomain ? `https://${domain}` : "",
   };
 }

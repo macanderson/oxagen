@@ -16,15 +16,24 @@
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup, waitFor, fireEvent, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  waitFor,
+  fireEvent,
+  act,
+} from "@testing-library/react";
 import MermaidDiagram from "./mermaid-diagram";
 
 afterEach(cleanup);
 
 // ── mermaid mock ──────────────────────────────────────────────────────────────
 // vi.mock is hoisted — vitest intercepts dynamic import("mermaid") too.
-const mockMermaidRender = vi.fn<(id: string, source: string) => Promise<{ svg: string }>>();
-const mockMermaidInitialize = vi.fn<(config: Record<string, unknown>) => void>();
+const mockMermaidRender =
+  vi.fn<(id: string, source: string) => Promise<{ svg: string }>>();
+const mockMermaidInitialize =
+  vi.fn<(config: Record<string, unknown>) => void>();
 
 vi.mock("mermaid", () => ({
   default: {
@@ -47,7 +56,9 @@ vi.mock("lucide-react", () => ({
 }));
 
 // ── clipboard mock ────────────────────────────────────────────────────────────
-const writeTextMock = vi.fn<(text: string) => Promise<void>>(() => Promise.resolve());
+const writeTextMock = vi.fn<(text: string) => Promise<void>>(() =>
+  Promise.resolve(),
+);
 
 beforeEach(() => {
   mockMermaidRender.mockReset();
@@ -78,7 +89,11 @@ function renderDiagram(
 
 describe("MermaidDiagram", () => {
   it("shows a Download link for the persisted .mmd source when sourceUrl is set", () => {
-    mockMermaidRender.mockReturnValue(new Promise(() => { /* never resolves */ }));
+    mockMermaidRender.mockReturnValue(
+      new Promise(() => {
+        /* never resolves */
+      }),
+    );
 
     render(
       <MermaidDiagram
@@ -94,7 +109,11 @@ describe("MermaidDiagram", () => {
   });
 
   it("hides the Download link when sourceUrl is absent (persistence skipped/failed)", () => {
-    mockMermaidRender.mockReturnValue(new Promise(() => { /* never resolves */ }));
+    mockMermaidRender.mockReturnValue(
+      new Promise(() => {
+        /* never resolves */
+      }),
+    );
 
     renderDiagram({ title: "No Persist" });
 
@@ -105,7 +124,11 @@ describe("MermaidDiagram", () => {
 
   it("renders the title in header and as aria-label on figure", () => {
     // Keep render in loading state so we can inspect synchronously
-    mockMermaidRender.mockReturnValue(new Promise(() => { /* never resolves */ }));
+    mockMermaidRender.mockReturnValue(
+      new Promise(() => {
+        /* never resolves */
+      }),
+    );
 
     renderDiagram({ title: "My Flow Chart" });
 
@@ -114,11 +137,18 @@ describe("MermaidDiagram", () => {
 
     // aria-label on the figure wrapper
     const figure = screen.getByRole("figure");
-    expect(figure).toHaveAttribute("aria-label", "Mermaid diagram: My Flow Chart");
+    expect(figure).toHaveAttribute(
+      "aria-label",
+      "Mermaid diagram: My Flow Chart",
+    );
   });
 
   it("shows spinner/loading state initially before mermaid renders", () => {
-    mockMermaidRender.mockReturnValue(new Promise(() => { /* never resolves */ }));
+    mockMermaidRender.mockReturnValue(
+      new Promise(() => {
+        /* never resolves */
+      }),
+    );
 
     renderDiagram();
 
@@ -184,7 +214,11 @@ describe("MermaidDiagram", () => {
   });
 
   it("Show source toggle: clicking shows the source, clicking again hides it", () => {
-    mockMermaidRender.mockReturnValue(new Promise(() => { /* never resolves */ }));
+    mockMermaidRender.mockReturnValue(
+      new Promise(() => {
+        /* never resolves */
+      }),
+    );
     const source = "graph LR\nA-->B";
 
     renderDiagram({ source });
@@ -193,7 +227,9 @@ describe("MermaidDiagram", () => {
     expect(document.querySelector("pre")).toBeNull();
 
     // Click "Source" button
-    const sourceBtn = screen.getByRole("button", { name: /show mermaid source/i });
+    const sourceBtn = screen.getByRole("button", {
+      name: /show mermaid source/i,
+    });
     fireEvent.click(sourceBtn);
 
     // Source panel should now be visible
@@ -204,7 +240,9 @@ describe("MermaidDiagram", () => {
     expect(screen.queryByText("Rendering diagram…")).not.toBeInTheDocument();
 
     // Click again to hide
-    const hideBtn = screen.getByRole("button", { name: /hide mermaid source/i });
+    const hideBtn = screen.getByRole("button", {
+      name: /hide mermaid source/i,
+    });
     fireEvent.click(hideBtn);
 
     // Source panel should be hidden again
@@ -213,11 +251,17 @@ describe("MermaidDiagram", () => {
 
   it("Copy button calls navigator.clipboard.writeText with source", () => {
     const source = "sequenceDiagram\nAlice->>Bob: Hello";
-    mockMermaidRender.mockReturnValue(new Promise(() => { /* never resolves */ }));
+    mockMermaidRender.mockReturnValue(
+      new Promise(() => {
+        /* never resolves */
+      }),
+    );
 
     renderDiagram({ source });
 
-    const copyBtn = screen.getByRole("button", { name: /copy diagram source/i });
+    const copyBtn = screen.getByRole("button", {
+      name: /copy diagram source/i,
+    });
     fireEvent.click(copyBtn);
 
     expect(writeTextMock).toHaveBeenCalledOnce();
@@ -225,7 +269,11 @@ describe("MermaidDiagram", () => {
   });
 
   it("Copy button label changes to 'Copied' after click, then reverts to 'Copy'", async () => {
-    mockMermaidRender.mockReturnValue(new Promise(() => { /* never resolves */ }));
+    mockMermaidRender.mockReturnValue(
+      new Promise(() => {
+        /* never resolves */
+      }),
+    );
 
     // Use real timers so waitFor and setTimeout work correctly
     vi.useRealTimers();
@@ -234,7 +282,9 @@ describe("MermaidDiagram", () => {
 
     expect(screen.getByText("Copy")).toBeInTheDocument();
 
-    const copyBtn = screen.getByRole("button", { name: /copy diagram source/i });
+    const copyBtn = screen.getByRole("button", {
+      name: /copy diagram source/i,
+    });
     fireEvent.click(copyBtn);
 
     // After click the label should update to "Copied"
@@ -244,7 +294,9 @@ describe("MermaidDiagram", () => {
       },
       { timeout: 2000 },
     );
-    expect(screen.getByRole("button", { name: /source copied/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /source copied/i }),
+    ).toBeInTheDocument();
 
     // After 2000ms it should revert to "Copy"
     await waitFor(
@@ -253,16 +305,24 @@ describe("MermaidDiagram", () => {
       },
       { timeout: 3000 },
     );
-    expect(screen.getByRole("button", { name: /copy diagram source/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /copy diagram source/i }),
+    ).toBeInTheDocument();
   });
 
   it("Source panel shows raw source text when toggled", () => {
-    const source = "pie title Pets\n  \"Dogs\" : 386\n  \"Cats\" : 85";
-    mockMermaidRender.mockReturnValue(new Promise(() => { /* never resolves */ }));
+    const source = 'pie title Pets\n  "Dogs" : 386\n  "Cats" : 85';
+    mockMermaidRender.mockReturnValue(
+      new Promise(() => {
+        /* never resolves */
+      }),
+    );
 
     renderDiagram({ source });
 
-    const sourceBtn = screen.getByRole("button", { name: /show mermaid source/i });
+    const sourceBtn = screen.getByRole("button", {
+      name: /show mermaid source/i,
+    });
     fireEvent.click(sourceBtn);
 
     // The source text should be visible inside <pre><code>

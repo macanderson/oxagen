@@ -117,9 +117,10 @@ function replaceSimpleDbWrapper(inner: string): string {
   return result;
 }
 
-function transformObjectLiteralFactory(
-  mockBlock: string,
-): { transformed: string; changed: boolean } {
+function transformObjectLiteralFactory(mockBlock: string): {
+  transformed: string;
+  changed: boolean;
+} {
   // Pattern: vi.mock("@oxagen/database", () => ({
   //   ...
   // }));
@@ -154,7 +155,6 @@ function transformObjectLiteralFactory(
   //         });
 
   const prefix = mockBlock.slice(0, m.index);
-  const suffix = mockBlock.slice(braceEndPos + 1); // skip `)` + `;` after `}`
 
   // The suffix after `}` should be `))`+optional `;` — trim it
   // braceEndPos points just after `}`, next chars should be `));` or `));\n`
@@ -176,9 +176,10 @@ function transformObjectLiteralFactory(
   return { transformed, changed: true };
 }
 
-function transformExplicitReturnFactory(
-  mockBlock: string,
-): { transformed: string; changed: boolean } {
+function transformExplicitReturnFactory(mockBlock: string): {
+  transformed: string;
+  changed: boolean;
+} {
   // Pattern: vi.mock("@oxagen/database", () => {
   //   ...
   //   return { ... };
@@ -208,7 +209,10 @@ function transformExplicitReturnFactory(
       let inner = transformed.slice(retObjStart + 1, retObjEnd - 1);
       inner = removeSchemaLiteral(inner);
       inner = replaceSimpleDbWrapper(inner);
-      transformed = transformed.slice(0, retObjStart + 1) + inner + transformed.slice(retObjEnd - 1);
+      transformed =
+        transformed.slice(0, retObjStart + 1) +
+        inner +
+        transformed.slice(retObjEnd - 1);
     }
   }
 
@@ -250,7 +254,10 @@ function transformFile(path: string): boolean {
     }
 
     if (result.changed) {
-      content = content.slice(0, start) + result.transformed + content.slice(trailingEnd);
+      content =
+        content.slice(0, start) +
+        result.transformed +
+        content.slice(trailingEnd);
       anyChanged = true;
     }
   }
@@ -281,4 +288,6 @@ for (const f of files) {
   }
 }
 
-console.log(`\nDone: ${changed} changed, ${unchanged} unchanged, ${errors} errors`);
+console.log(
+  `\nDone: ${changed} changed, ${unchanged} unchanged, ${errors} errors`,
+);

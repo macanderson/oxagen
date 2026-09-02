@@ -49,12 +49,18 @@ export function validateTurn(
 ): TurnValidation {
   const packed = new Set(packedRecordIds);
 
-  const missingRequired = turn.requiredInContext.filter((id) => !packed.has(id));
-  const includedForbidden = turn.forbiddenInContext.filter((id) => packed.has(id));
+  const missingRequired = turn.requiredInContext.filter(
+    (id) => !packed.has(id),
+  );
+  const includedForbidden = turn.forbiddenInContext.filter((id) =>
+    packed.has(id),
+  );
 
-  const precision = turn.requiredInContext.length > 0
-    ? (turn.requiredInContext.length - missingRequired.length) / turn.requiredInContext.length
-    : 1.0;
+  const precision =
+    turn.requiredInContext.length > 0
+      ? (turn.requiredInContext.length - missingRequired.length) /
+        turn.requiredInContext.length
+      : 1.0;
 
   return {
     pass: missingRequired.length === 0 && includedForbidden.length === 0,
@@ -66,6 +72,12 @@ export function validateTurn(
 
 export interface TurnValidation {
   pass: boolean;
+  /**
+   * Fraction of `requiredInContext` that was actually packed (1.0 when the
+   * turn requires nothing). Despite the name — and despite being averaged into
+   * `EvalMetrics.contextPrecision` — this is a RECALL measure: it says nothing
+   * about how much of the packed window was relevant.
+   */
   precision: number;
   missingRequired: string[];
   includedForbidden: string[];

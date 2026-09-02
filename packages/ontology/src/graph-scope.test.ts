@@ -33,6 +33,24 @@ describe("stripLiteralsAndComments", () => {
     expect(out).toContain("MATCH");
     expect(out).toContain("RETURN n");
   });
+
+  it("does not let a `//` inside a string literal swallow the rest of the line", () => {
+    // A URL literal contains `//`. A comment-first pass would delete everything
+    // after `http:`, hiding the CREATE from the write-keyword scan.
+    const out = stripLiteralsAndComments(
+      "MATCH (n {u:'http://example.com/x'}) CREATE (m)",
+    );
+    expect(out).toContain("CREATE");
+    expect(out).not.toContain("example.com");
+  });
+
+  it("does not let an apostrophe inside a comment swallow the next literal", () => {
+    const out = stripLiteralsAndComments(
+      "// don't do this\nMATCH (n) WHERE n.a = 'CREATE' RETURN n",
+    );
+    expect(out).not.toMatch(/CREATE/);
+    expect(out).toContain("RETURN n");
+  });
 });
 
 describe("assertReadOnly", () => {
@@ -117,6 +135,24 @@ describe("assertScopeMarkers", () => {
 
   it("does not require markers for unconstrained dimensions", () => {
     expect(() => assertScopeMarkers("MATCH (n) RETURN n", {})).not.toThrow();
+  });
+
+  it("treats a marker mentioned only in a comment as absent", () => {
+    expect(() =>
+      assertScopeMarkers(
+        `// filtered elsewhere by $${SCOPE_LABELS_PARAM}\nMATCH (n) RETURN n`,
+        withMarkers(true, false),
+      ),
+    ).toThrow(GraphScopeError);
+  });
+
+  it("treats a marker mentioned only in a string literal as absent", () => {
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (a)-[r]->(b) WHERE b.note = '$${SCOPE_REL_TYPES_PARAM}' RETURN r`,
+        withMarkers(false, true),
+      ),
+    ).toThrow(GraphScopeError);
   });
 
   it("treats a prefix-collision marker as absent (word boundary)", () => {

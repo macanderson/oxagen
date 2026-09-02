@@ -94,7 +94,11 @@ export const Streaming: Story = {
     turnUsage: undefined,
     toolCalls: {
       a: tc({ toolCallId: "a", capability: "read_file" }),
-      b: tc({ toolCallId: "b", capability: "edit_repo_file", status: "running" }),
+      b: tc({
+        toolCallId: "b",
+        capability: "edit_repo_file",
+        status: "running",
+      }),
     },
     order: ["plan:p1", "tool:a", "tool:b"],
   },

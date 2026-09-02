@@ -10,10 +10,14 @@
 // download individually.
 //
 // Memory profile: entries are streamed into the archive SEQUENTIALLY via
-// fflate's streaming Zip, so peak memory is one storage chunk — not the sum of
-// all files (unlike archive.create.ts, which zipSync's in-memory blobs it
-// already holds). Already-compressed media (image/video/audio/zip/gzip) is
-// STORED rather than re-deflated to keep CPU flat on large binaries.
+// fflate's streaming Zip, so no whole file is ever held at once (unlike
+// archive.create.ts, which zipSync's in-memory blobs it already holds).
+// Caveat: production happens in `start()`, which enqueues without consulting
+// `controller.desiredSize`, so there is no backpressure — a consumer slower
+// than the blob reads lets the stream's internal queue grow. Bounded in
+// practice only because each entry read awaits I/O, which lets the reader
+// drain. Already-compressed media (image/video/audio/zip/gzip) is STORED
+// rather than re-deflated to keep CPU flat on large binaries.
 
 import { Zip, ZipPassThrough, ZipDeflate } from "fflate";
 import {

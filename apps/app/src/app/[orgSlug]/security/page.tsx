@@ -3,17 +3,19 @@
 // docs/architecture/security/soc2-simplification.html.
 //
 // Every figure here is read from live data. Controls that are not yet built
-// (org-wide MFA / SSO enforcement, automated evidence snapshots, automated
-// access review) must show as "Not configured" / "Pending", never a faked
-// green. The audit trail is live (security_events + the consolidated emit
-// path), so CC7.2 reflects that.
+// (SSO enforcement, automated evidence snapshots, automated access review) must
+// show as "Not configured" / "Pending", never a faked green. The audit trail is
+// live (security_events + the consolidated emit path), so CC7.2 reflects that,
+// and org-wide MFA enforcement is read from the policy the MFA tab writes.
 
 import { and, count, desc, eq, gte, isNull, or } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { logger } from "@oxagen/handlers/logger";
 import { resolveOrg } from "@/lib/resolve-org";
 import { getEnterpriseAccess } from "@/lib/enterprise";
 import { EnterpriseUpsell } from "@/components/security/enterprise-upsell";
+import { loadMfaPolicy } from "./mfa/actions";
 import { formatDateTime } from "@/lib/utils";
 import { org } from "@/lib/routes";
 import Link from "next/link";
@@ -115,7 +117,15 @@ async function loadPosture(orgId: string): Promise<Posture> {
         };
       }),
     );
-  } catch {
+  } catch (err) {
+    // Degrade to zeroes so a DB blip does not 500 the whole security section.
+    // This is the one place the page can show a figure that is not live, so it
+    // MUST leave a trace: an all-zero posture that nobody logged is
+    // indistinguishable from a genuinely clean org.
+    logger.error(
+      { err, orgId },
+      "security-overview: posture query failed; rendering an empty posture",
+    );
     return EMPTY_POSTURE;
   }
 }
@@ -170,13 +180,15 @@ export default async function SecurityOverviewPage({
 }) {
   const { orgSlug } = await params;
   const tenant = await resolveOrg(orgSlug);
-  const [posture, access] = await Promise.all([
+  const [posture, access, mfaPolicy] = await Promise.all([
     loadPosture(tenant.id),
     getEnterpriseAccess(tenant.id),
+    loadMfaPolicy(tenant.id),
   ]);
   const ctx = { orgSlug };
 
   const auditLive = posture.totalAuditEvents > 0;
+  const mfaRequired = mfaPolicy?.mfaRequired ?? false;
 
   const controls: Array<{
     criterion: string;
@@ -187,11 +199,14 @@ export default async function SecurityOverviewPage({
     {
       criterion: "CC6.1",
       title: "Logical access controls",
-      // RLS + auth rate limiting are platform foundations (always on); org-wide
-      // MFA / SSO enforcement is not yet available, so this is partial.
-      state: "partial",
-      rationale:
-        "Postgres RLS and auth rate limiting enforced platform-wide. Org-wide MFA / SSO enforcement not yet configurable.",
+      // RLS + auth rate limiting are platform foundations (always on). Org-wide
+      // MFA enforcement is opt-in per org (the MFA tab), so this reaches
+      // "active" only once this org has turned it on — the same derivation the
+      // Compliance tab uses (deriveComplianceControls).
+      state: mfaRequired ? "active" : "partial",
+      rationale: mfaRequired
+        ? "Postgres RLS and auth rate limiting enforced platform-wide, and org-wide MFA is required for privileged roles. SSO enforcement not yet configurable."
+        : "Postgres RLS and auth rate limiting enforced platform-wide. Org-wide MFA enforcement is available but not enabled for this org (configure it on the MFA tab); SSO enforcement not yet configurable.",
     },
     {
       criterion: "CC6.2",
@@ -261,8 +276,13 @@ export default async function SecurityOverviewPage({
         <Stat
           icon={<ShieldCheck />}
           label="MFA enforcement"
-          value="—"
-          hint="Org-wide policy coming soon"
+          value={mfaRequired ? "Required" : "Not required"}
+          hint={
+            mfaRequired
+              ? `${mfaPolicy?.mfaGraceHours ?? 0}h enrollment grace period`
+              : "Enable it on the MFA tab"
+          }
+          tone={mfaRequired ? "success" : undefined}
         />
         <Stat
           icon={<ShieldCheck />}

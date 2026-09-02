@@ -11,11 +11,19 @@ export const schema = {
 export const metadata: ToolMetadata = {
   name: schemaVersionCreate.name,
   description: schemaVersionCreate.description,
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+  },
 };
 
-export default async function schemaVersionCreateTool(args: InferSchema<typeof schema>) {
+export default async function schemaVersionCreateTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(schemaVersionCreate.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(schemaVersionCreate.name, args, ctx, {
+    surface: "mcp",
+  });
   return schemaVersionCreate.output.parse(output);
 }

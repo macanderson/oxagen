@@ -43,7 +43,10 @@ export function Sparkline({
       className={className}
       role="img"
       aria-label={ariaLabel}
-      data-testid="overview-spend-sparkline"
+      // Generic: the KPI strip renders one of these per metric (spend, tokens,
+      // runs), so this id is never unique in the document — select the owning
+      // StatCard's testid and scope the query, don't getByTestId this one.
+      data-testid="overview-sparkline"
     >
       <polyline
         points={points}

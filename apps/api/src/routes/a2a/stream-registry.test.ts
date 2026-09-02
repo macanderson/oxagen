@@ -81,7 +81,9 @@ describe("stream-registry", () => {
     // Listener failures now go through the structured pino logger (not
     // console.error) so they land in the queryable log stream.
     const { logger } = await import("../../middleware/logger");
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+    const warnSpy = vi
+      .spyOn(logger, "warn")
+      .mockImplementation(() => undefined);
     const received: unknown[] = [];
     const unsubBad = subscribe("a2a_throws", () => {
       throw new Error("listener boom");

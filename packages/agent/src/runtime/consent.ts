@@ -61,7 +61,12 @@ export type ConsentSubjectKind = "user" | "agent";
 
 export interface ConsentDecision {
   status: ConsentStatus;
-  /** True when the row is an unexpired wildcard or per-tool grant. */
+  /**
+   * Always true on a returned decision — `checkConsent` filters expired rows
+   * out in SQL, so any row it returns (granted OR denied) is in force. An
+   * absent/expired decision is signalled by a `null` return, not by
+   * `active: false`.
+   */
   active: boolean;
 }
 

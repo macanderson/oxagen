@@ -78,7 +78,9 @@ export function KeyValueEditor({
   const updateRow = React.useCallback(
     (id: string, field: "key" | "value", newVal: string) => {
       setRows((prev) => {
-        const next = prev.map((r) => (r.id === id ? { ...r, [field]: newVal } : r));
+        const next = prev.map((r) =>
+          r.id === id ? { ...r, [field]: newVal } : r,
+        );
         onChange(rowsToRecord(next));
         return next;
       });
@@ -87,7 +89,10 @@ export function KeyValueEditor({
   );
 
   const addRow = React.useCallback(() => {
-    setRows((prev) => [...prev, { id: crypto.randomUUID(), key: "", value: "" }]);
+    setRows((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), key: "", value: "" },
+    ]);
   }, []);
 
   const removeRow = React.useCallback(

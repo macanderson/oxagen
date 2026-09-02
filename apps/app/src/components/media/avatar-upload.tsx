@@ -59,6 +59,10 @@ export function AvatarUpload({
 
   // Hidden file input ref — triggered by the visible button.
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  // Per-instance id. A page can render more than one AvatarUpload (user avatar
+  // + org avatar on the same settings form), and a hard-coded id would make
+  // both labels point at whichever input mounted first.
+  const fileInputId = React.useId();
 
   /** Called whenever the Dialog closes (X button, Escape, or Cancel). */
   const handleOpenChange = React.useCallback(
@@ -130,7 +134,7 @@ export function AvatarUpload({
           Accessible label wired to the hidden input; the visible Button is a
           presentational trigger that forwards the click to the real input.
         */}
-        <Label htmlFor="avatar-file-input" className="sr-only">
+        <Label htmlFor={fileInputId} className="sr-only">
           {hasImage ? "Change photo" : "Upload photo"}
         </Label>
         <Button
@@ -144,7 +148,7 @@ export function AvatarUpload({
         </Button>
         <input
           ref={fileInputRef}
-          id="avatar-file-input"
+          id={fileInputId}
           type="file"
           accept="image/png,image/jpeg,image/webp"
           className="sr-only"
@@ -163,7 +167,7 @@ export function AvatarUpload({
           </DialogHeader>
 
           <DialogPanel className="gap-4">
-            {cropUpload.imageSrc && (
+            {cropUpload.imageSrc ? (
               <CropSurface
                 imageSrc={cropUpload.imageSrc}
                 shape={shape}
@@ -175,6 +179,12 @@ export function AvatarUpload({
                 onZoomChange={cropUpload.setZoom}
                 onCropComplete={cropUpload.onCropComplete}
               />
+            ) : (
+              // The cropper needs a source. When the read failed there isn't
+              // one, so the reason has to surface here or the dialog is blank.
+              <p className="text-sm text-destructive" role="alert">
+                {cropUpload.error ?? "Loading photo…"}
+              </p>
             )}
           </DialogPanel>
 

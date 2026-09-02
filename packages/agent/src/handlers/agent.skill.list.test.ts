@@ -9,7 +9,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 // Build a minimal chain: select → from → leftJoin → where → (returns result)
-mocks.whereMock.mockImplementation(async (): Promise<unknown> => mocks.queryResult() as unknown);
+mocks.whereMock.mockImplementation(
+  async (): Promise<unknown> => mocks.queryResult() as unknown,
+);
 mocks.leftJoinMock.mockReturnValue({ where: mocks.whereMock });
 mocks.fromMock.mockReturnValue({ leftJoin: mocks.leftJoinMock });
 mocks.selectMock.mockReturnValue({ from: mocks.fromMock });
@@ -19,10 +21,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => fakeSkillListDb,
-  withTenantDb: async (fn: (tx: typeof fakeSkillListDb) => Promise<unknown>) =>
-    fn(fakeSkillListDb),
-
+    db: () => fakeSkillListDb,
+    withTenantDb: async (
+      fn: (tx: typeof fakeSkillListDb) => Promise<unknown>,
+    ) => fn(fakeSkillListDb),
   };
 });
 
@@ -44,8 +46,20 @@ describe("agent.skill.list handler", () => {
 
   it("maps rows to the expected output shape", async () => {
     mocks.queryResult.mockReturnValueOnce([
-      { slug: "summarize", name: "Summarize", description: "Summarizes text", source: "builtin", version: 3 },
-      { slug: "custom-one", name: "Custom One", description: null, source: "tenant", version: null },
+      {
+        slug: "summarize",
+        name: "Summarize",
+        description: "Summarizes text",
+        source: "builtin",
+        version: 3,
+      },
+      {
+        slug: "custom-one",
+        name: "Custom One",
+        description: null,
+        source: "tenant",
+        version: null,
+      },
     ]);
     const result = await agentSkillListHandler({}, CTX);
     expect(result.skills).toHaveLength(2);
@@ -110,7 +124,13 @@ describe("agent.skill.list — role scope index filter", () => {
 
   it("adds a slug filter condition when the allow-list is constrained", async () => {
     mocks.queryResult.mockReturnValue([
-      { slug: "allowed", name: "Allowed", description: "", source: "tenant", version: 1 },
+      {
+        slug: "allowed",
+        name: "Allowed",
+        description: "",
+        source: "tenant",
+        version: 1,
+      },
     ]);
     const result = await agentSkillListHandler({}, agentCtx(["allowed"]));
     expect(result.skills).toHaveLength(1);

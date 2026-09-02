@@ -77,20 +77,45 @@ describe("PlanCard — rendering", () => {
 
 describe("PlanCard — relation states", () => {
   it("shows 'Current plan' badge and disabled button for relation=current", () => {
-    render(<PlanCard plan={basePlan} interval="month" relation="current" onSelect={vi.fn()} />);
+    render(
+      <PlanCard
+        plan={basePlan}
+        interval="month"
+        relation="current"
+        onSelect={vi.fn()}
+      />,
+    );
     expect(screen.getByText("Current")).toBeInTheDocument();
     const btn = screen.getByRole("button", { name: /current plan/i });
     expect(btn).toBeDisabled();
   });
 
   it("shows 'Upgrade' CTA for relation=upgrade", () => {
-    render(<PlanCard plan={basePlan} interval="month" relation="upgrade" onSelect={vi.fn()} />);
-    expect(screen.getByRole("button", { name: /upgrade/i })).toBeInTheDocument();
+    render(
+      <PlanCard
+        plan={basePlan}
+        interval="month"
+        relation="upgrade"
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /upgrade/i }),
+    ).toBeInTheDocument();
   });
 
   it("shows 'Downgrade' CTA for relation=downgrade", () => {
-    render(<PlanCard plan={basePlan} interval="month" relation="downgrade" onSelect={vi.fn()} />);
-    expect(screen.getByRole("button", { name: /downgrade/i })).toBeInTheDocument();
+    render(
+      <PlanCard
+        plan={basePlan}
+        interval="month"
+        relation="downgrade"
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /downgrade/i }),
+    ).toBeInTheDocument();
   });
 
   it("shows 'Switch' CTA for relation=switch (and for no relation)", () => {
@@ -102,13 +127,28 @@ describe("PlanCard — relation states", () => {
 describe("PlanCard — interactions", () => {
   it("calls onSelect with slug and interval on button click", async () => {
     const onSelect = vi.fn();
-    render(<PlanCard plan={basePlan} interval="month" relation="upgrade" onSelect={onSelect} />);
+    render(
+      <PlanCard
+        plan={basePlan}
+        interval="month"
+        relation="upgrade"
+        onSelect={onSelect}
+      />,
+    );
     await userEvent.click(screen.getByRole("button", { name: /upgrade/i }));
     expect(onSelect).toHaveBeenCalledWith("build", "month");
   });
 
   it("shows 'Processing…' and disables button while pending", () => {
-    render(<PlanCard plan={basePlan} interval="month" relation="upgrade" pending onSelect={vi.fn()} />);
+    render(
+      <PlanCard
+        plan={basePlan}
+        interval="month"
+        relation="upgrade"
+        pending
+        onSelect={vi.fn()}
+      />,
+    );
     const btn = screen.getByRole("button");
     expect(btn).toBeDisabled();
     expect(btn).toHaveTextContent("Processing…");
@@ -116,7 +156,14 @@ describe("PlanCard — interactions", () => {
 
   it("does not call onSelect when button is disabled (current plan)", async () => {
     const onSelect = vi.fn();
-    render(<PlanCard plan={basePlan} interval="month" relation="current" onSelect={onSelect} />);
+    render(
+      <PlanCard
+        plan={basePlan}
+        interval="month"
+        relation="current"
+        onSelect={onSelect}
+      />,
+    );
     // Button is disabled — click should not propagate
     const btn = screen.getByRole("button");
     expect(btn).toBeDisabled();

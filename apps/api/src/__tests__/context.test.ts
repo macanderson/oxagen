@@ -12,7 +12,9 @@ import { describe, it, expect, vi } from "vitest";
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 vi.mock("@oxagen/auth", () => ({
@@ -41,10 +43,16 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
 vi.mock("@oxagen/handlers", () => ({
   serveFile: vi.fn(),
   FileNotFoundError: class FileNotFoundError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileNotFoundError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileNotFoundError";
+    }
   },
   FileForbiddenError: class FileForbiddenError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileForbiddenError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileForbiddenError";
+    }
   },
 }));
 
@@ -68,10 +76,13 @@ async function withContext(
   // Set context variables before the handler
   app.use("*", async (c, next) => {
     if (contextVars?.orgId !== undefined) c.set("orgId", contextVars.orgId);
-    if (contextVars?.workspaceId !== undefined) c.set("workspaceId", contextVars.workspaceId);
+    if (contextVars?.workspaceId !== undefined)
+      c.set("workspaceId", contextVars.workspaceId);
     if (contextVars?.userId !== undefined) c.set("userId", contextVars.userId);
-    if (contextVars?.apiKeyId !== undefined) c.set("apiKeyId", contextVars.apiKeyId);
-    if (contextVars?.requestId !== undefined) c.set("requestId", contextVars.requestId);
+    if (contextVars?.apiKeyId !== undefined)
+      c.set("apiKeyId", contextVars.apiKeyId);
+    if (contextVars?.requestId !== undefined)
+      c.set("requestId", contextVars.requestId);
     await next();
   });
 
@@ -96,7 +107,12 @@ async function withContext(
 // capabilityContext.clientIp.
 
 describe("extractClientIp (via capabilityContext.clientIp)", () => {
-  const scope = { orgId: "o1", workspaceId: "w1", userId: null, apiKeyId: null };
+  const scope = {
+    orgId: "o1",
+    workspaceId: "w1",
+    userId: null,
+    apiKeyId: null,
+  };
 
   it("returns the leftmost IP from a single XFF header", async () => {
     const res = await withContext(
@@ -139,11 +155,7 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
   });
 
   it("returns null when both headers are absent", async () => {
-    const res = await withContext(
-      {},
-      (c) => capabilityContext(c),
-      scope,
-    );
+    const res = await withContext({}, (c) => capabilityContext(c), scope);
     const body = (await res.json()) as { clientIp: string | null };
     expect(body.clientIp).toBeNull();
   });
@@ -187,11 +199,12 @@ describe("capabilityContext requireOrg", () => {
   });
 
   it("throws 400 when workspaceId is null and requireOrg is default (true)", async () => {
-    const res = await withContext(
-      {},
-      (c) => capabilityContext(c),
-      { orgId: "o1", workspaceId: null, userId: null, apiKeyId: null },
-    );
+    const res = await withContext({}, (c) => capabilityContext(c), {
+      orgId: "o1",
+      workspaceId: null,
+      userId: null,
+      apiKeyId: null,
+    });
     expect(res.status).toBe(400);
   });
 
@@ -208,11 +221,12 @@ describe("capabilityContext requireOrg", () => {
   });
 
   it("surface is always 'api'", async () => {
-    const res = await withContext(
-      {},
-      (c) => capabilityContext(c),
-      { orgId: "o1", workspaceId: "w1", userId: null, apiKeyId: null },
-    );
+    const res = await withContext({}, (c) => capabilityContext(c), {
+      orgId: "o1",
+      workspaceId: "w1",
+      userId: null,
+      apiKeyId: null,
+    });
     const body = (await res.json()) as { surface: string };
     expect(body.surface).toBe("api");
   });
@@ -232,41 +246,46 @@ describe("capabilityContext requireOrg", () => {
 
   it("requestId uses context value when set", async () => {
     const fixedId = "a1b2c3d4-e5f6-4abc-8def-000000000001";
-    const res = await withContext(
-      {},
-      (c) => capabilityContext(c),
-      { orgId: "o1", workspaceId: "w1", userId: null, apiKeyId: null, requestId: fixedId },
-    );
+    const res = await withContext({}, (c) => capabilityContext(c), {
+      orgId: "o1",
+      workspaceId: "w1",
+      userId: null,
+      apiKeyId: null,
+      requestId: fixedId,
+    });
     const body = (await res.json()) as { requestId: string };
     expect(body.requestId).toBe(fixedId);
   });
 
   it("messageId is always null", async () => {
-    const res = await withContext(
-      {},
-      (c) => capabilityContext(c),
-      { orgId: "o1", workspaceId: "w1", userId: null, apiKeyId: null },
-    );
+    const res = await withContext({}, (c) => capabilityContext(c), {
+      orgId: "o1",
+      workspaceId: "w1",
+      userId: null,
+      apiKeyId: null,
+    });
     const body = (await res.json()) as { messageId: null };
     expect(body.messageId).toBeNull();
   });
 
   it("userId comes from context variable (null for api-key auth)", async () => {
-    const res = await withContext(
-      {},
-      (c) => capabilityContext(c),
-      { orgId: "o1", workspaceId: "w1", userId: null, apiKeyId: "k1" },
-    );
+    const res = await withContext({}, (c) => capabilityContext(c), {
+      orgId: "o1",
+      workspaceId: "w1",
+      userId: null,
+      apiKeyId: "k1",
+    });
     const body = (await res.json()) as { userId: string | null };
     expect(body.userId).toBeNull();
   });
 
   it("userId comes from context variable (set for session auth)", async () => {
-    const res = await withContext(
-      {},
-      (c) => capabilityContext(c),
-      { orgId: "o1", workspaceId: "w1", userId: "user-123", apiKeyId: null },
-    );
+    const res = await withContext({}, (c) => capabilityContext(c), {
+      orgId: "o1",
+      workspaceId: "w1",
+      userId: "user-123",
+      apiKeyId: null,
+    });
     const body = (await res.json()) as { userId: string };
     expect(body.userId).toBe("user-123");
   });

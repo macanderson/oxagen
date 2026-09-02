@@ -22,7 +22,11 @@ export const apiKeyRevoke = registerCapability({
   // API key management does not consume AI tokens — billing gate must not
   // block this for orgs with zero credit balance.
   noBillingGate: true,
-  agent: { requiresApproval: true, riskLevel: "high", category: "organization" },
+  agent: {
+    requiresApproval: true,
+    riskLevel: "high",
+    category: "organization",
+  },
   sensitivity: "high",
   defaultEffect: "deny",
   defaultRoles: {

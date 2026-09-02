@@ -4,12 +4,14 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const documentListHandler: CapabilityHandler<typeof documentList> = async (
-  input,
-  ctx,
-) => {
+export const documentListHandler: CapabilityHandler<
+  typeof documentList
+> = async (input, ctx) => {
   if (!ctx.workspaceId) {
-    logger.warn({ orgId: ctx.orgId }, "document.list: rejected — no workspace scope");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "document.list: rejected — no workspace scope",
+    );
     throw new Error("document.list requires a workspace scope");
   }
 

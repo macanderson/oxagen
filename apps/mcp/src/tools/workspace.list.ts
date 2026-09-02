@@ -21,8 +21,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function workspaceListTool(args: InferSchema<typeof schema>) {
+export default async function workspaceListTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(workspaceList.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(workspaceList.name, args, ctx, {
+    surface: "mcp",
+  });
   return workspaceList.output.parse(output);
 }

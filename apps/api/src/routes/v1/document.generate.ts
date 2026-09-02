@@ -11,6 +11,8 @@ export const documentsGenerateRoute = new Hono<AppEnv>();
 documentsGenerateRoute.post("/", async (c) => {
   const body = documentsGenerate.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(documentsGenerate.name, body, ctx, { surface: "api" });
+  const out = await invoke(documentsGenerate.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out, 200);
 });

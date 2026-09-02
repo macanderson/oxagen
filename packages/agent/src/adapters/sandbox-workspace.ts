@@ -11,7 +11,11 @@
 // restore-on-reap, tenant scoping, and exec metering. File reads/writes are
 // implemented as base64-framed shell commands over the same `execInSession`
 // primitive `agent.sandbox.files.list` already uses — no per-driver FS surface.
-import { isSandboxAvailable, WORKSPACE_ROOT, isSafeWorkspacePath } from "@oxagen/sandbox";
+import {
+  isSandboxAvailable,
+  WORKSPACE_ROOT,
+  isSafeWorkspacePath,
+} from "@oxagen/sandbox";
 import type { Workspace, CommandResult } from "@oxagen/agent-engine";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { CapabilityContext } from "../types";
@@ -108,7 +112,13 @@ export class ModalSandboxWorkspace implements Workspace {
   private async ensureSession(): Promise<string> {
     if (this.sessionPromise) return this.sessionPromise;
     if (!isSandboxAvailable()) throw new SandboxWorkspaceUnavailableError();
-    this.sessionPromise = this.bootstrap();
+    // Clear the memo on failure. Caching a REJECTED promise would poison the
+    // instance: every later op would replay one transient start/clone error for
+    // the life of the turn instead of retrying.
+    this.sessionPromise = this.bootstrap().catch((err: unknown) => {
+      this.sessionPromise = null;
+      throw err;
+    });
     return this.sessionPromise;
   }
 
@@ -152,7 +162,10 @@ export class ModalSandboxWorkspace implements Workspace {
    * staged into git's credential store through env (never in the command line
    * or stdout), so it cannot leak via clone error output.
    */
-  private async ensureCloned(sessionId: string, repo: SandboxRepoSpec): Promise<void> {
+  private async ensureCloned(
+    sessionId: string,
+    repo: SandboxRepoSpec,
+  ): Promise<void> {
     const url = `https://github.com/${repo.owner}/${repo.repo}.git`;
     const branchFlag = repo.ref ? `--branch ${shq(repo.ref)} ` : "";
 
@@ -170,7 +183,10 @@ export class ModalSandboxWorkspace implements Workspace {
     const clone =
       `if [ ! -e ${root}/.git ]; then rm -rf ${root} && ` +
       `git clone --depth 1 ${branchFlag}${shq(url)} ${root}; fi`;
-    const res = await this.execRaw(sessionId, { command: clone, timeoutMs: 600_000 });
+    const res = await this.execRaw(sessionId, {
+      command: clone,
+      timeoutMs: 600_000,
+    });
     if (res.exitCode !== 0) {
       throw new Error(
         `git clone failed for ${repo.owner}/${repo.repo} (exit ${res.exitCode}): ${res.stderr.slice(0, 500)}`,
@@ -183,7 +199,9 @@ export class ModalSandboxWorkspace implements Workspace {
     if (!this.sessionId) return;
     const sessionId = this.sessionId;
     try {
-      await this.withScope(() => agentSandboxStopHandler({ sessionId }, this.ctx));
+      await this.withScope(() =>
+        agentSandboxStopHandler({ sessionId }, this.ctx),
+      );
     } catch {
       // Best-effort teardown; the registry TTL reaps an orphaned session anyway.
     }
@@ -214,7 +232,12 @@ export class ModalSandboxWorkspace implements Workspace {
   /** Run a command in the session, restoring-on-reap via the shared handler. */
   private async execRaw(
     sessionId: string,
-    opts: { command: string; timeoutMs: number; env?: Record<string, string>; stdin?: string },
+    opts: {
+      command: string;
+      timeoutMs: number;
+      env?: Record<string, string>;
+      stdin?: string;
+    },
   ): Promise<CommandResult> {
     const out = await this.withScope(() =>
       agentSandboxExecHandler(
@@ -236,8 +259,18 @@ export class ModalSandboxWorkspace implements Workspace {
     };
   }
 
-  /** Public Workspace.exec — runs the caller's command in the repo root. */
-  async exec(command: string, opts?: { timeoutMs?: number; signal?: AbortSignal }): Promise<CommandResult> {
+  /**
+   * Public Workspace.exec — runs the caller's command in the repo root.
+   *
+   * LIMITATION: `opts.signal` is accepted for port compatibility but is NOT
+   * honored — the durable-session exec handler has no cancellation seam, so an
+   * abort mid-command only abandons the caller's await; the command keeps
+   * running in the sandbox until its `timeoutMs` elapses.
+   */
+  async exec(
+    command: string,
+    opts?: { timeoutMs?: number; signal?: AbortSignal },
+  ): Promise<CommandResult> {
     const sessionId = await this.ensureSession();
     // Run in the workspace root so relative paths resolve against the clone.
     const wrapped = `cd ${shq(this.root)} && ${command}`;
@@ -250,13 +283,22 @@ export class ModalSandboxWorkspace implements Workspace {
     // console (fire-and-forget; the ORIGINAL command, not the `cd` wrapper).
     // Only exec() is captured — internal FS ops via execRaw are excluded so the
     // console shows agent commands, not readFile/list/grep plumbing.
-    void captureSandboxCommandLogs(this.ctx, sessionId, command, result, Date.now() - startedAt);
+    void captureSandboxCommandLogs(
+      this.ctx,
+      sessionId,
+      command,
+      result,
+      Date.now() - startedAt,
+    );
     return result;
   }
 
   // ── Filesystem: reads ──────────────────────────────────────────────────────
 
-  async readFile(p: string, opts?: { offset?: number; limit?: number }): Promise<string> {
+  async readFile(
+    p: string,
+    opts?: { offset?: number; limit?: number },
+  ): Promise<string> {
     const sessionId = await this.ensureSession();
     const abs = `${this.root}/${toRelPath(p)}`;
     // base64 so exact bytes/newlines survive the shell round-trip; Node's decoder
@@ -269,7 +311,10 @@ export class ModalSandboxWorkspace implements Workspace {
     const text = Buffer.from(res.stdout, "base64").toString("utf8");
     if (opts?.offset == null && opts?.limit == null) return text;
     const lines = text.split("\n");
-    const startLine = opts?.offset != null ? opts.offset - 1 : 0;
+    // `offset` is a 1-based line number. Clamp at 0 so offset 0 (or a negative)
+    // reads from the top — an unclamped negative index would make slice() count
+    // back from the END of the file and silently return the wrong lines.
+    const startLine = Math.max(0, opts?.offset != null ? opts.offset - 1 : 0);
     const end = opts?.limit != null ? startLine + opts.limit : lines.length;
     return lines.slice(startLine, end).join("\n");
   }
@@ -282,7 +327,10 @@ export class ModalSandboxWorkspace implements Workspace {
       command: `ls -1A ${shq(abs)} 2>/dev/null`,
       timeoutMs: FS_TIMEOUT_MS,
     });
-    return res.stdout.split("\n").filter((l) => l.length > 0).sort();
+    return res.stdout
+      .split("\n")
+      .filter((l) => l.length > 0)
+      .sort();
   }
 
   async glob(pattern: string): Promise<string[]> {
@@ -308,7 +356,10 @@ export class ModalSandboxWorkspace implements Workspace {
       .sort();
   }
 
-  async grep(pattern: string, opts?: { path?: string; glob?: string }): Promise<string[]> {
+  async grep(
+    pattern: string,
+    opts?: { path?: string; glob?: string },
+  ): Promise<string[]> {
     const sessionId = await this.ensureSession();
     const searchPath = opts?.path ? shq(toRelPath(opts.path) || ".") : "'.'";
     // Real recursive search in the sandbox: ripgrep when the image ships it
@@ -328,7 +379,10 @@ export class ModalSandboxWorkspace implements Workspace {
     const cmd =
       `cd ${shq(this.root)} && { ${search}; } 2>/dev/null ` +
       `| sed 's|^\\./||' | command grep -v '^\\.git/' | head -n ${GREP_MAX_HITS}`;
-    const res = await this.execRaw(sessionId, { command: cmd, timeoutMs: FS_TIMEOUT_MS });
+    const res = await this.execRaw(sessionId, {
+      command: cmd,
+      timeoutMs: FS_TIMEOUT_MS,
+    });
     return res.stdout.split("\n").filter((l) => l.length > 0);
   }
 
@@ -346,7 +400,9 @@ export class ModalSandboxWorkspace implements Workspace {
       stdin: Buffer.from(content, "utf8").toString("base64"),
     });
     if (res.exitCode !== 0) {
-      throw new Error(`write failed for ${p} (exit ${res.exitCode}): ${res.stderr.slice(0, 300)}`);
+      throw new Error(
+        `write failed for ${p} (exit ${res.exitCode}): ${res.stderr.slice(0, 300)}`,
+      );
     }
   }
 
@@ -366,7 +422,9 @@ export class ModalSandboxWorkspace implements Workspace {
       return count;
     }
     if (count > 1) {
-      throw new Error(`old_string appears ${count} times in ${p}; must be unique`);
+      throw new Error(
+        `old_string appears ${count} times in ${p}; must be unique`,
+      );
     }
     await this.writeFile(p, text.replace(oldString, newString));
     return 1;
@@ -374,6 +432,11 @@ export class ModalSandboxWorkspace implements Workspace {
 
   // ── Diff / changed files ───────────────────────────────────────────────────
 
+  /**
+   * The full working-tree diff. NOT read-only: it runs `git add -A` first so
+   * untracked files show up, which leaves everything staged in the session's
+   * index.
+   */
   async diff(): Promise<string> {
     const sessionId = await this.ensureSession();
     const res = await this.execRaw(sessionId, {
@@ -397,7 +460,10 @@ export class ModalSandboxWorkspace implements Workspace {
         `git --no-pager diff --cached --name-only --diff-filter=d`,
       timeoutMs: FS_TIMEOUT_MS,
     });
-    const paths = res.stdout.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+    const paths = res.stdout
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
     const out: { path: string; content: string }[] = [];
     for (const path of paths) {
       out.push({ path, content: await this.readFile(path) });

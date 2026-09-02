@@ -8,14 +8,18 @@ describe("agent.compose contract", () => {
   });
 
   it("applies input defaults (maxSteps=6, autoExecute=true)", () => {
-    const parsed = agentCompose.input.parse({ goal: "Research USS Nautilus and add nodes" });
+    const parsed = agentCompose.input.parse({
+      goal: "Research USS Nautilus and add nodes",
+    });
     expect(parsed.maxSteps).toBe(6);
     expect(parsed.autoExecute).toBe(true);
   });
 
   it("rejects an empty goal and an out-of-range maxSteps", () => {
     expect(agentCompose.input.safeParse({ goal: "" }).success).toBe(false);
-    expect(agentCompose.input.safeParse({ goal: "x", maxSteps: 99 }).success).toBe(false);
+    expect(
+      agentCompose.input.safeParse({ goal: "x", maxSteps: 99 }).success,
+    ).toBe(false);
   });
 
   it("accepts a full execution result in the output schema", () => {

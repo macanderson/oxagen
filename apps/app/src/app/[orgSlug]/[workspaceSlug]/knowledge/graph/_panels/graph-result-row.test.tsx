@@ -17,10 +17,27 @@ vi.mock("@/components/knowledge/graph/node-ref", () => ({
   NodeRef: ({ node }: { node: { displayName: string } }) => (
     <span data-testid="node-ref">{node.displayName}</span>
   ),
+  // Same never-the-raw-id rule as the real helper: a displayName that is just
+  // the node's own id falls back to the domain label.
+  nodeCitationLabel: (node: {
+    displayName: string;
+    label: string;
+    id: string | null;
+  }) =>
+    node.displayName && node.displayName !== node.id
+      ? node.displayName
+      : node.label || "Unknown node",
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ children, href, ...rest }: { children: React.ReactNode; href: string }) => (
+  default: ({
+    children,
+    href,
+    ...rest
+  }: {
+    children: React.ReactNode;
+    href: string;
+  }) => (
     <a href={String(href)} {...rest}>
       {children}
     </a>
@@ -41,7 +58,9 @@ const NODE = {
 describe("GraphResultRow", () => {
   it("renders an open-detail link to the node-detail route", () => {
     render(<GraphResultRow node={NODE} orgSlug="acme" workspaceSlug="core" />);
-    const link = screen.getByRole("link", { name: /open billing streaming detail/i });
+    const link = screen.getByRole("link", {
+      name: /open billing streaming detail/i,
+    });
     expect(link).toHaveAttribute("href", "/acme/core/knowledge/graph/pub-1");
   });
 
@@ -58,7 +77,12 @@ describe("GraphResultRow", () => {
 
   it("renders optional trailing meta content", () => {
     render(
-      <GraphResultRow node={NODE} orgSlug="acme" workspaceSlug="core" meta={<span>0.92</span>} />,
+      <GraphResultRow
+        node={NODE}
+        orgSlug="acme"
+        workspaceSlug="core"
+        meta={<span>0.92</span>}
+      />,
     );
     expect(screen.getByText("0.92")).toBeInTheDocument();
   });
@@ -82,7 +106,9 @@ describe("GraphResultRow", () => {
     );
     expect(screen.queryByText("Neighbor content")).not.toBeInTheDocument();
 
-    const toggle = screen.getByRole("button", { name: /expand billing streaming neighbors/i });
+    const toggle = screen.getByRole("button", {
+      name: /expand billing streaming neighbors/i,
+    });
     fireEvent.click(toggle);
     expect(onToggle).toHaveBeenCalledTimes(1);
 
@@ -98,7 +124,9 @@ describe("GraphResultRow", () => {
     );
     expect(screen.getByText("Neighbor content")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /collapse billing streaming neighbors/i }),
+      screen.getByRole("button", {
+        name: /collapse billing streaming neighbors/i,
+      }),
     ).toBeInTheDocument();
   });
 
@@ -113,7 +141,9 @@ describe("GraphResultRow", () => {
     );
     // The toggle button still renders (with its aria-label); loading swaps the icon only.
     expect(
-      screen.getByRole("button", { name: /expand billing streaming neighbors/i }),
+      screen.getByRole("button", {
+        name: /expand billing streaming neighbors/i,
+      }),
     ).toBeInTheDocument();
   });
 });

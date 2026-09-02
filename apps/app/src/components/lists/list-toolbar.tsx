@@ -24,7 +24,13 @@ import * as React from "react";
 import { Search, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectTrigger, SelectValue, SelectPopup, SelectItem } from "@/components/ui/select";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectPopup,
+  SelectItem,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 /** Display-only subset of `ListSortOption` — the toolbar never needs `compare`. */
@@ -75,10 +81,15 @@ export function ListToolbar({
   children,
   className,
 }: ListToolbarProps) {
-  const showSort = Boolean(sortOptions && sortOptions.length > 1 && onSortChange);
+  const showSort = Boolean(
+    sortOptions && sortOptions.length > 1 && onSortChange,
+  );
 
   return (
-    <div className={cn("flex flex-wrap items-center gap-2", className)} data-testid="list-toolbar">
+    <div
+      className={cn("flex flex-wrap items-center gap-2", className)}
+      data-testid="list-toolbar"
+    >
       <div className="relative w-full sm:w-64">
         <Search
           className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
@@ -96,7 +107,11 @@ export function ListToolbar({
 
       {showSort && (
         <Select value={sortId} onValueChange={(v) => v && onSortChange?.(v)}>
-          <SelectTrigger size="sm" className="w-40 shrink-0" aria-label="Sort by">
+          <SelectTrigger
+            size="sm"
+            className="w-40 shrink-0"
+            aria-label="Sort by"
+          >
             <SelectValue placeholder="Sort by" />
           </SelectTrigger>
           <SelectPopup>

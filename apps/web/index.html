@@ -207,13 +207,15 @@
         <p class="hero-note">Free 14-part ebook by our founder · <a class="ext" href="https://docs.oxagen.sh" target="_blank" rel="noopener">or dive straight into the docs</a></p>
       </div>
 
-      <div class="term" aria-label="Oxagen CLI demo (simulated)">
+      <!-- role="img": without a role the aria-label on a plain div is dropped,
+           and the typed-out lines below are decoration, not readable content. -->
+      <div class="term" role="img" aria-label="A simulated Oxagen CLI session: the agent reads the workspace map, plans a fix, edits two files, and reports passing tests.">
         <div class="app-bar" aria-hidden="true">
           <span class="tl"></span><span class="tl"></span><span class="tl live"></span>
           <span class="app-title">oxagen — zsh</span>
           <span class="app-meta">live</span>
         </div>
-        <div class="term-body" id="termBody" data-term="#heroScript" aria-live="off"></div>
+        <div class="term-body" data-term="#heroScript"></div>
       </div>
       <script type="application/json" id="heroScript">
       [

@@ -50,7 +50,11 @@ beforeEach(() => {
 
 describe("saveAuthAlertsAction", () => {
   it("rejects an empty roles list without invoking", async () => {
-    const out = await saveAuthAlertsAction({ orgSlug: "acme", sendEmail: true, roles: [] });
+    const out = await saveAuthAlertsAction({
+      orgSlug: "acme",
+      sendEmail: true,
+      roles: [],
+    });
     expect(out.ok).toBe(false);
     expect(mockInvoke).not.toHaveBeenCalled();
   });
@@ -95,11 +99,18 @@ describe("saveAuthAlertsAction", () => {
       roles: ["Owner", "Compliance"],
     });
     expect(out).toEqual({ ok: true });
-    expect(mockInvoke).toHaveBeenCalledWith("org-1", "user-1", "set_auth_alerts", {
-      sendEmail: false,
-      roles: ["Owner", "Compliance"],
-    });
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/governance/policies");
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "org-1",
+      "user-1",
+      "set_auth_alerts",
+      {
+        sendEmail: false,
+        roles: ["Owner", "Compliance"],
+      },
+    );
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/acme/governance/policies",
+    );
   });
 
   it("surfaces invoke failures", async () => {

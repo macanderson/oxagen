@@ -51,7 +51,9 @@ export async function referenceCiteHandler(
         nodeId: reference.nodeId,
         ok: citation !== null,
         citationId: citation?.citationId ?? null,
-        error: citation ? null : `Node ${reference.nodeId} not found in this workspace.`,
+        error: citation
+          ? null
+          : `Node ${reference.nodeId} not found in this workspace.`,
       });
     } catch (err) {
       results.push({

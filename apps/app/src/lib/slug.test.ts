@@ -131,6 +131,18 @@ describe("slugify — leading/trailing hyphen trim", () => {
 // 5. Empty string → ""
 // ---------------------------------------------------------------------------
 
+describe("slugify — maxLen truncation", () => {
+  it("truncates to maxLen", () => {
+    expect(slugify("hello world", 5)).toBe("hello");
+  });
+
+  it("never leaves a trailing hyphen when the cut lands on one", () => {
+    // "hello-world".slice(0, 6) === "hello-", which SLUG_PATTERN rejects.
+    expect(slugify("hello world", 6)).toBe("hello");
+    expect(SLUG_PATTERN.test(slugify("hello world", 6))).toBe(true);
+  });
+});
+
 describe("slugify — empty input", () => {
   it("returns empty string for empty input", () => {
     expect(slugify("")).toBe("");
@@ -234,7 +246,17 @@ describe("isValidSlug / SLUG_PATTERN", () => {
   });
 
   it("rejects malformed slugs (empty, spaces, punctuation, bad hyphens, caps)", () => {
-    for (const s of ["", " ", "a b", "a_b", "-lead", "trail-", "a--b", "Acme", "café"]) {
+    for (const s of [
+      "",
+      " ",
+      "a b",
+      "a_b",
+      "-lead",
+      "trail-",
+      "a--b",
+      "Acme",
+      "café",
+    ]) {
       expect(isValidSlug(s)).toBe(false);
     }
   });
@@ -244,7 +266,12 @@ describe("isValidSlug / SLUG_PATTERN", () => {
   });
 
   it("accepts every slugify() output that is non-empty", () => {
-    for (const input of ["Hello World", "Ácme Inc.", "  multi   space  ", "a@#b"]) {
+    for (const input of [
+      "Hello World",
+      "Ácme Inc.",
+      "  multi   space  ",
+      "a@#b",
+    ]) {
       const out = slugify(input);
       if (out.length > 0) expect(isValidSlug(out)).toBe(true);
     }

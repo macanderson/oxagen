@@ -3,17 +3,21 @@
 //
 //   pnpm schema:manifest            regenerate + write the committed manifest,
 //                                   print the content hash + summary counts.
-//   pnpm schema:manifest --check    CI drift gate: regenerate in-memory and
-//                                   exit 1 with a diff summary if the committed
-//                                   file is stale (does not write).
+//   pnpm schema:manifest:check      drift check: regenerate in-memory and exit 1
+//                                   with a hash summary if the committed file is
+//                                   stale (does not write).
 //
 // Determinism is the whole point: --check compares the freshly generated
 // canonical bytes against the committed file byte-for-byte, so any drift in an
-// input (a new table, a renamed column, an added capability) fails CI until the
-// committed manifest is regenerated.
+// input (a new table, a renamed column, an added capability) is caught.
+//
+// --check is NOT wired into `pnpm gate` or any CI workflow today, so it only
+// catches drift when someone runs it. Adding a schema table or capability
+// without re-running `pnpm schema:manifest` therefore lands a stale manifest
+// silently.
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { buildManifest, manifestSummary } from "./generate";
 import { canonicalJson } from "./canonical-json";
@@ -78,10 +82,12 @@ function main(): void {
 }
 
 // Run only when executed directly, so importing MANIFEST_PATH from the barrel
-// (or a test) never triggers a write.
+// (or a test) never triggers a write. pathToFileURL — not `file://` + path —
+// because manual concatenation mis-encodes a checkout path containing a space,
+// `#` or `?`, which would make this comparison fail and silently no-op the CLI.
 if (
   process.argv[1] &&
-  import.meta.url === new URL(`file://${process.argv[1]}`).href
+  import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
   main();
 }

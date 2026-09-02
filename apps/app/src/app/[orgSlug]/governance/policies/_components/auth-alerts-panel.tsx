@@ -36,9 +36,10 @@ export function AuthAlertsPanel({
 }: AuthAlertsPanelProps) {
   const [sendEmail, setSendEmail] = useState(initialSendEmail);
   const [roles, setRoles] = useState<Set<string>>(new Set(initialRoles));
-  const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(
-    null,
-  );
+  const [status, setStatus] = useState<{
+    kind: "ok" | "error";
+    text: string;
+  } | null>(null);
   const [saving, startTransition] = useTransition();
 
   function toggleRole(role: OrgRole): void {
@@ -69,14 +70,18 @@ export function AuthAlertsPanel({
   return (
     <div className="flex flex-col gap-3" data-testid="auth-alerts-panel">
       <p className="text-sm text-muted-foreground">
-        When an MCP credential expires or fails re-authentication, these org roles are
-        alerted{isDefault ? " (using the platform default — not yet customised)" : ""}.
+        When an MCP credential expires or fails re-authentication, these org
+        roles are alerted
+        {isDefault ? " (using the platform default — not yet customised)" : ""}.
       </p>
 
       <fieldset className="flex flex-wrap gap-4" disabled={!canEdit || saving}>
         <legend className="sr-only">Roles that receive MCP auth alerts</legend>
         {ORG_ROLES.map((role) => (
-          <label key={role} className="flex items-center gap-2 text-sm text-foreground">
+          <label
+            key={role}
+            className="flex items-center gap-2 text-sm text-foreground"
+          >
             <input
               type="checkbox"
               className="size-4 accent-foreground"
@@ -115,13 +120,17 @@ export function AuthAlertsPanel({
             Only org owners and admins can change this.
           </span>
         ) : roles.size === 0 ? (
-          <span className="text-xs text-warning">Select at least one role.</span>
+          <span className="text-xs text-warning">
+            Select at least one role.
+          </span>
         ) : null}
         {status ? (
           <span
             role="status"
             className={
-              status.kind === "ok" ? "text-xs text-success" : "text-xs text-error"
+              status.kind === "ok"
+                ? "text-xs text-success"
+                : "text-xs text-error"
             }
           >
             {status.text}

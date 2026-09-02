@@ -24,7 +24,12 @@ export interface ListPaginationProps {
   className?: string;
 }
 
-export function ListPagination({ page, pageCount, onPageChange, className }: ListPaginationProps) {
+export function ListPagination({
+  page,
+  pageCount,
+  onPageChange,
+  className,
+}: ListPaginationProps) {
   if (pageCount <= 1) return null;
 
   const canPrev = page > 1;
@@ -32,7 +37,10 @@ export function ListPagination({ page, pageCount, onPageChange, className }: Lis
 
   return (
     <div
-      className={cn("flex items-center justify-between gap-3 sm:justify-end", className)}
+      className={cn(
+        "flex items-center justify-between gap-3 sm:justify-end",
+        className,
+      )}
       data-testid="list-pagination"
     >
       {/* size="default" (32px) rather than the "sm" density used elsewhere in
@@ -49,7 +57,10 @@ export function ListPagination({ page, pageCount, onPageChange, className }: Lis
       >
         Prev
       </Button>
-      <span className="text-sm text-muted-foreground tabular-nums" aria-live="polite">
+      <span
+        className="text-sm text-muted-foreground tabular-nums"
+        aria-live="polite"
+      >
         Page {page} of {pageCount}
       </span>
       <Button

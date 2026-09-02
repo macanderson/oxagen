@@ -49,14 +49,19 @@ vi.mock("@/components/ui/button", () => ({
     variant?: string;
     className?: string;
   }) => (
-    <button type={(type as "button" | "submit" | "reset") ?? "button"} disabled={disabled}>
+    <button
+      type={(type as "button" | "submit" | "reset") ?? "button"}
+      disabled={disabled}
+    >
       {children}
     </button>
   ),
 }));
 
 vi.mock("@/components/ui/input", () => ({
-  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <input {...props} />
+  ),
 }));
 
 vi.mock("@/components/ui/label", () => ({
@@ -93,13 +98,21 @@ describe("SetPasswordForm", () => {
 
     expect(screen.getByLabelText(/new password/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /set password/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /set password/i }),
+    ).toBeInTheDocument();
   });
 
   it("password inputs are of type=password", () => {
     render(<SetPasswordForm />);
-    expect(screen.getByLabelText(/new password/i)).toHaveAttribute("type", "password");
-    expect(screen.getByLabelText(/confirm password/i)).toHaveAttribute("type", "password");
+    expect(screen.getByLabelText(/new password/i)).toHaveAttribute(
+      "type",
+      "password",
+    );
+    expect(screen.getByLabelText(/confirm password/i)).toHaveAttribute(
+      "type",
+      "password",
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -118,7 +131,9 @@ describe("SetPasswordForm", () => {
     render(<SetPasswordForm />);
 
     await user.type(screen.getByLabelText(/new password/i), "mypassword1");
-    expect(screen.getByRole("button", { name: /set password/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /set password/i }),
+    ).toBeDisabled();
   });
 
   // ---------------------------------------------------------------------------
@@ -186,7 +201,9 @@ describe("SetPasswordForm", () => {
       expect(screen.getByRole("alert")).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("alert")).toHaveTextContent(/passwords do not match/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /passwords do not match/i,
+    );
     // Action must NOT be called when the client catches the mismatch
     expect(mockSetPasswordAction).not.toHaveBeenCalled();
   });
@@ -212,7 +229,9 @@ describe("SetPasswordForm", () => {
       expect(screen.getByRole("alert")).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Password is already set.");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Password is already set.",
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -235,7 +254,9 @@ describe("SetPasswordForm", () => {
     await user.click(screen.getByRole("button"));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /setting password/i })).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: /setting password/i }),
+      ).toBeDisabled();
     });
 
     resolve({ ok: true });

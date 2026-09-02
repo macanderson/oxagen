@@ -5,7 +5,9 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
 export const schema = {
-  nodeId: graphNodeGet.input.shape.nodeId.describe("publicId of the KnowledgeNode to retrieve"),
+  nodeId: graphNodeGet.input.shape.nodeId.describe(
+    "publicId of the KnowledgeNode to retrieve",
+  ),
 };
 
 export const metadata: ToolMetadata = {
@@ -18,7 +20,9 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function graphNodeGetTool(args: InferSchema<typeof schema>) {
+export default async function graphNodeGetTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   const output = await invoke(graphNodeGet.name, args, ctx, { surface: "mcp" });
   return graphNodeGet.output.parse(output);

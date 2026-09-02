@@ -40,7 +40,10 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
-const fakeModel = { type: "image-model", modelId: "openai/gpt-image-1" } as const;
+const fakeModel = {
+  type: "image-model",
+  modelId: "openai/gpt-image-1",
+} as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -107,7 +110,9 @@ describe("imageGenerateHandler", () => {
     expect(result.dataUri).toBe("data:image/png;base64,AAABBA==");
     expect(result.alt).toBe("Mountain photo");
     expect(result.render.componentId).toBe("image-preview");
-    expect(result.render.props["dataUri"]).toBe("data:image/png;base64,AAABBA==");
+    expect(result.render.props["dataUri"]).toBe(
+      "data:image/png;base64,AAABBA==",
+    );
     expect(mocks.selectImageModel).toHaveBeenCalledTimes(1);
   });
 
@@ -146,7 +151,9 @@ describe("imageGenerateHandler", () => {
 
   it("returns a placeholder and does not throw when generateImageFor throws", async () => {
     mocks.requireEnv.mockReturnValueOnce({ AI_GATEWAY_API_KEY: "vck_gateway" });
-    mocks.generateImageFor.mockRejectedValueOnce(new Error("Rate limit exceeded"));
+    mocks.generateImageFor.mockRejectedValueOnce(
+      new Error("Rate limit exceeded"),
+    );
 
     const result = await imageGenerateHandler({ prompt: "A city" }, CTX);
 
@@ -171,7 +178,10 @@ describe("imageGenerateHandler", () => {
     );
 
     expect(mocks.persistGeneratedAsset).toHaveBeenCalledTimes(1);
-    const args = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    const args = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(args["kind"]).toBe("image");
     expect(args["mimeType"]).toBe("image/png");
     expect(args["accessPolicy"]).toBe("org");
@@ -179,13 +189,17 @@ describe("imageGenerateHandler", () => {
     expect(args["messageId"]).toBe("msg_7");
     // Model id comes from the resolved gateway model, never a hard-coded slug.
     expect(args["model"]).toBe("openai/gpt-image-1");
-    expect(Buffer.from(args["bytes"] as Uint8Array).toString("base64")).toBe("AAABBA==");
+    expect(Buffer.from(args["bytes"] as Uint8Array).toString("base64")).toBe(
+      "AAABBA==",
+    );
 
     expect(result.assetPublicId).toBe("gen_img1");
     expect(result.serveUrl).toBe("/api/v1/assets/gen_img1");
     // The render directive prefers the access-controlled serving URL.
     expect(result.render.props["url"]).toBe("/api/v1/assets/gen_img1");
-    expect(result.render.props["dataUri"]).toBe("data:image/png;base64,AAABBA==");
+    expect(result.render.props["dataUri"]).toBe(
+      "data:image/png;base64,AAABBA==",
+    );
   });
 
   it("persistence failure is non-fatal: data URI returned with persistWarning", async () => {
@@ -248,6 +262,8 @@ describe("imageGenerateHandler", () => {
     );
 
     expect(result.alt.length).toBeLessThanOrEqual(120);
-    expect(result.alt).toBe("A very long prompt describing the desired image in detail");
+    expect(result.alt).toBe(
+      "A very long prompt describing the desired image in detail",
+    );
   });
 });

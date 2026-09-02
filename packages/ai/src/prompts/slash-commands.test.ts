@@ -27,8 +27,12 @@ describe("SLASH_COMMANDS registry", () => {
 
   it("exposes the expected core commands", () => {
     const names = SLASH_COMMANDS.map((c) => c.name);
-    expect(names).toEqual(expect.arrayContaining(["pr", "diff", "ci", "repos", "pin"]));
-    expect(SLASH_COMMANDS.find((c) => c.name === "pin")?.clientAction).toBe("pin");
+    expect(names).toEqual(
+      expect.arrayContaining(["pr", "diff", "ci", "repos", "pin"]),
+    );
+    expect(SLASH_COMMANDS.find((c) => c.name === "pin")?.clientAction).toBe(
+      "pin",
+    );
   });
 });
 
@@ -38,7 +42,11 @@ describe("matchSlashCommands", () => {
   });
 
   it("prefix-filters by name (case-insensitive)", () => {
-    expect(matchSlashCommands("p").map((c) => c.name).sort()).toEqual(["pin", "pr"]);
+    expect(
+      matchSlashCommands("p")
+        .map((c) => c.name)
+        .sort(),
+    ).toEqual(["pin", "pr"]);
     expect(matchSlashCommands("CI").map((c) => c.name)).toEqual(["ci"]);
   });
 

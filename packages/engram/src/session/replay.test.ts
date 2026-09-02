@@ -8,7 +8,10 @@ import type { Namespace } from "../types";
 
 const NS: Namespace = { org: "test-org", workspace: "test-ws" };
 
-function makeSession(events: SessionEvent[], overrides: Partial<Session> = {}): Session {
+function makeSession(
+  events: SessionEvent[],
+  overrides: Partial<Session> = {},
+): Session {
   return {
     id: "session-1",
     namespace: NS,
@@ -164,8 +167,16 @@ describe("extractTurnMetrics", () => {
         compileMs: 30,
       }),
       makeEvent(2, "tool_call", "t1", { tool: "grep", input: {} }),
-      makeEvent(3, "tool_result", "t1", { tool: "grep", success: true, outputTokens: 50 }),
-      makeEvent(4, "turn_end", "t1", { outcome: "success", totalTokens: 1250, durationMs: 500 }),
+      makeEvent(3, "tool_result", "t1", {
+        tool: "grep",
+        success: true,
+        outputTokens: 50,
+      }),
+      makeEvent(4, "turn_end", "t1", {
+        outcome: "success",
+        totalTokens: 1250,
+        durationMs: 500,
+      }),
     ];
 
     const result = extractTurnMetrics(makeSession(events));
@@ -183,18 +194,34 @@ describe("extractTurnMetrics", () => {
     const events: SessionEvent[] = [
       makeEvent(0, "turn_start", "t1", {}),
       makeEvent(1, "context_compiled", "t1", {
-        candidatesRetrieved: 5, candidatesPacked: 3, candidatesEvicted: 2,
-        totalTokens: 800, cacheHitRate: 0.6, compileMs: 15,
+        candidatesRetrieved: 5,
+        candidatesPacked: 3,
+        candidatesEvicted: 2,
+        totalTokens: 800,
+        cacheHitRate: 0.6,
+        compileMs: 15,
       }),
-      makeEvent(2, "turn_end", "t1", { outcome: "success", totalTokens: 800, durationMs: 200 }),
+      makeEvent(2, "turn_end", "t1", {
+        outcome: "success",
+        totalTokens: 800,
+        durationMs: 200,
+      }),
       makeEvent(3, "turn_start", "t2", {}),
       makeEvent(4, "context_compiled", "t2", {
-        candidatesRetrieved: 8, candidatesPacked: 4, candidatesEvicted: 4,
-        totalTokens: 950, cacheHitRate: 0.7, compileMs: 20,
+        candidatesRetrieved: 8,
+        candidatesPacked: 4,
+        candidatesEvicted: 4,
+        totalTokens: 950,
+        cacheHitRate: 0.7,
+        compileMs: 20,
       }),
       makeEvent(5, "tool_call", "t2", { tool: "bash", input: {} }),
       makeEvent(6, "tool_call", "t2", { tool: "read", input: {} }),
-      makeEvent(7, "turn_end", "t2", { outcome: "failure", totalTokens: 1050, durationMs: 300 }),
+      makeEvent(7, "turn_end", "t2", {
+        outcome: "failure",
+        totalTokens: 1050,
+        durationMs: 300,
+      }),
     ];
 
     const result = extractTurnMetrics(makeSession(events));
@@ -210,7 +237,11 @@ describe("extractTurnMetrics", () => {
   it("handles turn with no context_compiled event (defaults to 0)", () => {
     const events: SessionEvent[] = [
       makeEvent(0, "turn_start", "t1", {}),
-      makeEvent(1, "turn_end", "t1", { outcome: "success", totalTokens: 0, durationMs: 0 }),
+      makeEvent(1, "turn_end", "t1", {
+        outcome: "success",
+        totalTokens: 0,
+        durationMs: 0,
+      }),
     ];
 
     const result = extractTurnMetrics(makeSession(events));
@@ -227,8 +258,12 @@ describe("extractTurnMetrics", () => {
     const events: SessionEvent[] = [
       makeEvent(0, "turn_start", "t1", {}),
       makeEvent(1, "context_compiled", "t1", {
-        candidatesRetrieved: 5, candidatesPacked: 3, candidatesEvicted: 2,
-        totalTokens: 700, cacheHitRate: 0.5, compileMs: 10,
+        candidatesRetrieved: 5,
+        candidatesPacked: 3,
+        candidatesEvicted: 2,
+        totalTokens: 700,
+        cacheHitRate: 0.5,
+        compileMs: 10,
       }),
       // No turn_end — flush happens at end of events
     ];

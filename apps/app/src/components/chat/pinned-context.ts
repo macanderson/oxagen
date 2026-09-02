@@ -99,6 +99,8 @@ export function buildPinnedContext(
           defaultBranch: repo.defaultBranch,
         }
       : null,
-    environment: environment ? { id: environment.id, name: environment.name } : null,
+    environment: environment
+      ? { id: environment.id, name: environment.name }
+      : null,
   };
 }

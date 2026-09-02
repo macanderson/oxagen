@@ -163,7 +163,11 @@ export class OnDeviceProvider implements ModelProvider {
     if (!this.resolution.row || !this.resolution.quant) return false;
     const runtime = await this.loadRuntime();
     if (!runtime) return false;
-    return isCached(this.cacheDir, this.resolution.row.modelId, this.resolution.quant).cached;
+    return isCached(
+      this.cacheDir,
+      this.resolution.row.modelId,
+      this.resolution.quant,
+    ).cached;
   }
 
   /**
@@ -173,7 +177,8 @@ export class OnDeviceProvider implements ModelProvider {
    */
   async ensureReady(onProgress?: ProgressFn): Promise<void> {
     const { row, quant } = this.resolution;
-    if (!row || !quant) throw new NoFittingModelError(this.resolution.rationale);
+    if (!row || !quant)
+      throw new NoFittingModelError(this.resolution.rationale);
 
     const runtime = await this.loadRuntime();
     if (!runtime) throw new OptionalDepMissingError();
@@ -189,9 +194,12 @@ export class OnDeviceProvider implements ModelProvider {
    * Download + cache the resolved model's weights (checksum-verified). Idempotent
    * against a valid cache. Exposed for `oxagen models pull`.
    */
-  async pull(onProgress?: ProgressFn): Promise<{ path: string; fromCache: boolean }> {
+  async pull(
+    onProgress?: ProgressFn,
+  ): Promise<{ path: string; fromCache: boolean }> {
     const { row, quant } = this.resolution;
-    if (!row || !quant) throw new NoFittingModelError(this.resolution.rationale);
+    if (!row || !quant)
+      throw new NoFittingModelError(this.resolution.rationale);
     const source = row.sources?.[quant];
     if (!source) {
       throw new Error(

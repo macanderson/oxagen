@@ -90,7 +90,9 @@ describe("agent.subagent.fanout.list handler", () => {
     // The contract defaults limit at parse time; the handler also guards with
     // `?? 50` so a runtime-undefined limit still falls back safely.
     await agentSubagentFanoutListHandler(
-      { limit: undefined } as unknown as Parameters<typeof agentSubagentFanoutListHandler>[0],
+      { limit: undefined } as unknown as Parameters<
+        typeof agentSubagentFanoutListHandler
+      >[0],
       CTX,
     );
     expect(limitSpy).toHaveBeenCalledWith(50);

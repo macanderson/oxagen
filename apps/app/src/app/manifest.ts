@@ -2,13 +2,11 @@ import type { MetadataRoute } from "next";
 
 /**
  * Next-native web app manifest route — served at /manifest.webmanifest and
- * auto-linked into <head> by Next's metadata file-convention system (no
- * `metadata.manifest` string needed in layout.tsx once this file exists).
+ * auto-linked into <head> by Next's metadata file-convention system, so
+ * layout.tsx needs no `metadata.manifest` string.
  *
- * Mirrors the icon set formerly hand-maintained in the static
- * apps/app/public/pwa/manifest.json (left on disk, unreferenced, purely for
- * backward compatibility with anything that bookmarked that URL directly).
- * Reuses every existing public/pwa/* icon — no new image assets needed.
+ * Every icon below is an existing file under public/pwa/ — this route adds no
+ * new image assets.
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {

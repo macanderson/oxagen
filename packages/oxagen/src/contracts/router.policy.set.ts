@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import {
-  routingModeSchema,
-  routingPolicyScopeSchema,
-} from "./router-schema";
+import { routingModeSchema, routingPolicyScopeSchema } from "./router-schema";
 
 // `set_routing_policy` updates the Verified-Outcome Market Router policy at the
 // org OR workspace scope (partial update — only provided fields change). This

@@ -59,9 +59,7 @@ vi.mock("./mobile-bottom-bar", () => ({
     ctx,
   }: {
     ctx: { orgSlug: string; workspaceSlug?: string };
-  }) => (
-    <div data-testid="mobile-bottom-bar" data-org={ctx.orgSlug} />
-  ),
+  }) => <div data-testid="mobile-bottom-bar" data-org={ctx.orgSlug} />,
 }));
 
 // ---------------------------------------------------------------------------
@@ -103,7 +101,12 @@ const workspace: ResolvedWorkspace = {
   description: "",
   avatarUrl: null,
 };
-const user = { id: "u1", name: "Alice", email: "alice@example.com", image: null };
+const user = {
+  id: "u1",
+  name: "Alice",
+  email: "alice@example.com",
+  image: null,
+};
 const navDataPromise: Promise<ShellNavData> = Promise.resolve({
   availableOrgs: [],
   availableWorkspaces: [],
@@ -179,7 +182,10 @@ describe("AppShell — structure", () => {
         <p>content</p>
       </AppShell>,
     );
-    expect(screen.getByTestId("shell-frame")).toHaveAttribute("data-org", "acme");
+    expect(screen.getByTestId("shell-frame")).toHaveAttribute(
+      "data-org",
+      "acme",
+    );
   });
 
   it("passes workspace slug to ShellFrame", () => {
@@ -193,20 +199,21 @@ describe("AppShell — structure", () => {
         <p>content</p>
       </AppShell>,
     );
-    expect(screen.getByTestId("shell-frame")).toHaveAttribute("data-workspace", "prod");
+    expect(screen.getByTestId("shell-frame")).toHaveAttribute(
+      "data-workspace",
+      "prod",
+    );
   });
 
   it("renders without a workspace (org-only route)", () => {
     render(
-      <AppShell
-        org={org}
-        navDataPromise={navDataPromise}
-        user={user}
-      >
+      <AppShell org={org} navDataPromise={navDataPromise} user={user}>
         <p>content</p>
       </AppShell>,
     );
     expect(screen.getByTestId("shell-frame")).toBeInTheDocument();
-    expect(screen.getByTestId("shell-frame")).not.toHaveAttribute("data-workspace");
+    expect(screen.getByTestId("shell-frame")).not.toHaveAttribute(
+      "data-workspace",
+    );
   });
 });

@@ -102,7 +102,9 @@ export function RecommendedConnections({
                 variant="outline"
                 size="sm"
                 className="h-7 flex-shrink-0"
-                endIcon={<ExternalLink className="h-3 w-3" aria-hidden="true" />}
+                endIcon={
+                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                }
                 data-testid={`agent-recommendation-connect-${rec.ref}`}
                 render={<Link href={href} target="_blank" rel="noreferrer" />}
               >

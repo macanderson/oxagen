@@ -14,11 +14,8 @@
  *      ["api","mcp","agent","cli"], never "app"),
  *   5. return a discriminated union { ok: true, … } | { ok: false, error }.
  *
- * Root-cause note: the old file panel (chat's WorkspaceContextPanel) fetched a
- * scoped `/api/v1/:org/:ws/agent/sandbox/{files,file}` path that fell through a
- * next.config `fallback` rewrite to the Hono API. That cross-service hop (rewrite
- * + auth + path drift) is why the tree rendered empty. These actions replace the
- * HTTP hop with a DIRECT capability invoke inside the app's own tenant scope.
+ * The file browser reads the sandbox through a DIRECT capability invoke inside
+ * the app's own tenant scope — never a cross-service HTTP hop to the Hono API.
  */
 import "@oxagen/handlers/register";
 import "@oxagen/agent/register";

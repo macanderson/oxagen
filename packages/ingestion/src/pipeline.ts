@@ -15,6 +15,16 @@
  *
  * Filtered records (record-type / path / label) return null with a reason
  * attached so callers can emit the `pipeline:record:filtered` telemetry event.
+ *
+ * NOT THE PRODUCTION PATH. Nothing outside this package calls `runPipeline`.
+ * Real ingestion runs through
+ * `packages/inngest-functions/src/functions/ingestion.pipeline.ts`, which
+ * re-implements these same five stages as durable Inngest steps. The two have
+ * already drifted: this one threads `getPinnedSchema` into the write so the
+ * workspace schema registry is enforced, and the Inngest one calls
+ * `resolveEntity` / `upsertEntityNode` with no `pinnedSchema` at all — so
+ * enforcement_mode, the conformance floor, and `schema_conformance_events` are
+ * inert in production. Collapse onto one implementation.
  */
 
 import { getConnector } from "./connectors/types";
@@ -198,6 +208,13 @@ export async function runPipeline(
   const principalNodeId = dedup.principalNodeId;
 
   // ── Stage 5: Embed (honor the tenant's embedding opt-out) ─────────────────
+  // KNOWN GAP: on the alias branch `principalNodeId` is the pre-existing
+  // principal, not the alias node this record just created. So the principal's
+  // vector is overwritten with the alias's rendered text, and the alias node is
+  // left with no embedding at all — which makes it invisible to every later
+  // Pass-B similarity search. The alias node id is available as
+  // `dedup.aliasNodeId`; deciding which of the two to embed is a dedup-design
+  // question, not a local edit.
   const embeddingEnabled = shouldRunInference(
     event.sourceRecordType,
     deliveryConfig?.semanticInference,

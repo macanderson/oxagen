@@ -56,7 +56,13 @@ describe("buildPageContextMessage", () => {
         formId: "settings-form",
         title: "Workspace settings",
         fields: [
-          { name: "displayName", label: "Display name", type: "text", current: "Acme", required: true },
+          {
+            name: "displayName",
+            label: "Display name",
+            type: "text",
+            current: "Acme",
+            required: true,
+          },
           {
             name: "tier",
             label: "Tier",
@@ -76,10 +82,12 @@ describe("buildPageContextMessage", () => {
     expect(content).toContain('Form: "Workspace settings" (id: settings-form)');
     // Required marker + live current value are surfaced.
     expect(content).toContain(
-      "  - displayName (Display name) type=text required current=\"Acme\"",
+      '  - displayName (Display name) type=text required current="Acme"',
     );
     // Empty current value is omitted; options are listed by label.
-    expect(content).toContain('  - tier (Tier) type=select options=["Free", "Pro"]');
+    expect(content).toContain(
+      '  - tier (Tier) type=select options=["Free", "Pro"]',
+    );
     expect(content).not.toContain("tier (Tier) type=select required");
     // Behavior rules for the page_form_fill tool are present.
     expect(content).toContain("**Behavior rules for form fill:**");

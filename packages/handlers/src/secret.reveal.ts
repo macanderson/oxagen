@@ -7,8 +7,14 @@ import { logger } from "./logger";
 // the api/mcp surfaces; app call sites must add an explicit gate (apps/app does
 // not bootstrap IAM). NEVER log the revealed value.
 export const secretRevealHandler: CapabilityHandlerFn = async (input, ctx) => {
-  if (!ctx.workspaceId) throw new Error("[secret.reveal] workspaceId is required (scoped capability)");
-  const { keyId, environmentId } = input as { keyId: string; environmentId?: string | null };
+  if (!ctx.workspaceId)
+    throw new Error(
+      "[secret.reveal] workspaceId is required (scoped capability)",
+    );
+  const { keyId, environmentId } = input as {
+    keyId: string;
+    environmentId?: string | null;
+  };
   try {
     const result = await revealSecret(
       {

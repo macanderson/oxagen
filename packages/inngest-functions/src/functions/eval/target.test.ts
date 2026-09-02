@@ -50,7 +50,9 @@ describe("runTarget", () => {
     });
 
     expect(mocks.tierModelId).not.toHaveBeenCalled();
-    expect(mocks.selectModel).toHaveBeenCalledWith({ model: "anthropic/claude-haiku" });
+    expect(mocks.selectModel).toHaveBeenCalledWith({
+      model: "anthropic/claude-haiku",
+    });
     const call = mocks.generateObjectFor.mock.calls[0]?.[0] as {
       system: string | undefined;
       prompt: string;
@@ -78,8 +80,12 @@ describe("runTarget", () => {
 
     expect(mocks.tierModelId).toHaveBeenCalledWith("balanced");
     expect(result.modelId).toBe("balanced/default-model");
-    expect(mocks.selectModel).toHaveBeenCalledWith({ model: "balanced/default-model" });
-    const call = mocks.generateObjectFor.mock.calls[0]?.[0] as { system: string | undefined };
+    expect(mocks.selectModel).toHaveBeenCalledWith({
+      model: "balanced/default-model",
+    });
+    const call = mocks.generateObjectFor.mock.calls[0]?.[0] as {
+      system: string | undefined;
+    };
     expect(call.system).toBeUndefined();
   });
 
@@ -104,7 +110,11 @@ describe("runTarget", () => {
       modelId: "balanced/default-model",
       usage: { promptTokens: 50, completionTokens: 15 },
     });
-    const call = mocks.generateObjectFor.mock.calls[0]?.[0] as { system: string | undefined };
-    expect(call.system).toBe("You are the published instructions for agent 'my-agent'.");
+    const call = mocks.generateObjectFor.mock.calls[0]?.[0] as {
+      system: string | undefined;
+    };
+    expect(call.system).toBe(
+      "You are the published instructions for agent 'my-agent'.",
+    );
   });
 });

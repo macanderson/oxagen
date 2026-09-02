@@ -53,7 +53,9 @@ export function pickJudgeModelId(builderModel: string | undefined): string {
   return candidates[0]?.id ?? vision[0]?.id ?? "openai/gpt-5.2";
 }
 
-async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
+async function streamToBuffer(
+  stream: ReadableStream<Uint8Array>,
+): Promise<Buffer> {
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];
   for (;;) {
@@ -92,7 +94,10 @@ export async function agentFeatureVerifyHandler(
       return {
         type: "image" as const,
         image: new Uint8Array(bytes),
-        mediaType: (obj.contentType ?? "image/png") as "image/png" | "image/jpeg" | "image/webp",
+        mediaType: (obj.contentType ?? "image/png") as
+          | "image/png"
+          | "image/jpeg"
+          | "image/webp",
       };
     }),
   );

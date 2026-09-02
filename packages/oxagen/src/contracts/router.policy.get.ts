@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import {
-  routingModeSchema,
-  routingPolicySourceSchema,
-} from "./router-schema";
+import { routingModeSchema, routingPolicySourceSchema } from "./router-schema";
 
 // `get_routing_policy` reads the EFFECTIVE Verified-Outcome Market Router policy
 // for the current org/workspace scope, together with its provenance (which scope
@@ -24,7 +21,12 @@ export const routerPolicyGet = registerCapability({
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
-    workspace: { Owner: "allow", Admin: "allow", Member: "allow", Viewer: "allow" },
+    workspace: {
+      Owner: "allow",
+      Admin: "allow",
+      Member: "allow",
+      Viewer: "allow",
+    },
   },
   input: z.object({}),
   output: z.object({

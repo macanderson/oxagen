@@ -141,7 +141,8 @@ export function buildFileTree(entries: FileTreeEntry[]): TreeNode[] {
 
 export function formatBytes(bytes: number | null | undefined): string | null {
   // Also reject NaN/Infinity — otherwise a missing size renders as "NaN KB".
-  if (bytes === null || bytes === undefined || !Number.isFinite(bytes)) return null;
+  if (bytes === null || bytes === undefined || !Number.isFinite(bytes))
+    return null;
   if (bytes < 1024) return `${bytes} B`;
   const units = ["KB", "MB", "GB", "TB"];
   let value = bytes / 1024;
@@ -177,26 +178,73 @@ function isHidden(name: string): boolean {
 // — a file tree that colour-codes by type reads as noise at a glance.
 const EXT_ICON: Record<string, LucideIcon> = {
   // code
-  ts: FileCode, tsx: FileCode, js: FileCode, jsx: FileCode, mjs: FileCode,
-  cjs: FileCode, py: FileCode, rb: FileCode, go: FileCode, rs: FileCode,
-  java: FileCode, kt: FileCode, c: FileCode, cc: FileCode, cpp: FileCode,
-  h: FileCode, hpp: FileCode, cs: FileCode, php: FileCode, swift: FileCode,
-  scala: FileCode, sh: FileCode, bash: FileCode, zsh: FileCode, sql: FileCode,
-  vue: FileCode, svelte: FileCode, css: FileCode, scss: FileCode, less: FileCode,
+  ts: FileCode,
+  tsx: FileCode,
+  js: FileCode,
+  jsx: FileCode,
+  mjs: FileCode,
+  cjs: FileCode,
+  py: FileCode,
+  rb: FileCode,
+  go: FileCode,
+  rs: FileCode,
+  java: FileCode,
+  kt: FileCode,
+  c: FileCode,
+  cc: FileCode,
+  cpp: FileCode,
+  h: FileCode,
+  hpp: FileCode,
+  cs: FileCode,
+  php: FileCode,
+  swift: FileCode,
+  scala: FileCode,
+  sh: FileCode,
+  bash: FileCode,
+  zsh: FileCode,
+  sql: FileCode,
+  vue: FileCode,
+  svelte: FileCode,
+  css: FileCode,
+  scss: FileCode,
+  less: FileCode,
   html: FileCode,
   // data
-  json: FileJson, jsonc: FileJson,
+  json: FileJson,
+  jsonc: FileJson,
   // prose
-  md: FileText, mdx: FileText, txt: FileText, rst: FileText, adoc: FileText,
+  md: FileText,
+  mdx: FileText,
+  txt: FileText,
+  rst: FileText,
+  adoc: FileText,
   // config
-  yml: FileCog, yaml: FileCog, toml: FileCog, ini: FileCog, env: FileCog,
-  conf: FileCog, cfg: FileCog, lock: FileCog, xml: FileCog,
+  yml: FileCog,
+  yaml: FileCog,
+  toml: FileCog,
+  ini: FileCog,
+  env: FileCog,
+  conf: FileCog,
+  cfg: FileCog,
+  lock: FileCog,
+  xml: FileCog,
   // images
-  png: FileImage, jpg: FileImage, jpeg: FileImage, gif: FileImage,
-  svg: FileImage, webp: FileImage, ico: FileImage, bmp: FileImage, avif: FileImage,
+  png: FileImage,
+  jpg: FileImage,
+  jpeg: FileImage,
+  gif: FileImage,
+  svg: FileImage,
+  webp: FileImage,
+  ico: FileImage,
+  bmp: FileImage,
+  avif: FileImage,
   // archives
-  zip: FileArchive, tar: FileArchive, gz: FileArchive, tgz: FileArchive,
-  rar: FileArchive, "7z": FileArchive,
+  zip: FileArchive,
+  tar: FileArchive,
+  gz: FileArchive,
+  tgz: FileArchive,
+  rar: FileArchive,
+  "7z": FileArchive,
 };
 
 /** Extension key for a file name (case-insensitive); "" for no ext or a bare dotfile like ".env". */
@@ -219,7 +267,10 @@ function GitignoreLock() {
     <Tooltip>
       <TooltipTrigger
         render={
-          <span className="inline-flex shrink-0" aria-label="Ignored by .gitignore" />
+          <span
+            className="inline-flex shrink-0"
+            aria-label="Ignored by .gitignore"
+          />
         }
       >
         <Lock className="size-3 text-muted-foreground/70" aria-hidden="true" />
@@ -229,9 +280,9 @@ function GitignoreLock() {
   );
 }
 
-// The name label: full extension always survives (truncateMiddle keeps the tail;
-// the previous CSS `truncate` clipped it) and long names scroll with the
-// container (`whitespace-nowrap`) instead of being end-ellipsised.
+// The name label: `truncateMiddle` cuts the middle of a long name so the file
+// extension always survives, and `whitespace-nowrap` lets long names scroll
+// with the container instead of being end-ellipsised.
 function NameLabel({ node, muted }: { node: TreeNode; muted: boolean }) {
   return (
     <span
@@ -292,7 +343,10 @@ function DirRow({
           aria-hidden="true"
         />
         <FolderIcon
-          className={cn("size-4 shrink-0", muted ? "text-muted-foreground/50" : "text-muted-foreground")}
+          className={cn(
+            "size-4 shrink-0",
+            muted ? "text-muted-foreground/50" : "text-muted-foreground",
+          )}
           aria-hidden="true"
         />
         <NameLabel node={node} muted={muted} />
@@ -351,7 +405,10 @@ function FileRow({
   const name = (
     <>
       <FileIcon
-        className={cn("size-4 shrink-0", muted ? "text-muted-foreground/50" : "text-muted-foreground")}
+        className={cn(
+          "size-4 shrink-0",
+          muted ? "text-muted-foreground/50" : "text-muted-foreground",
+        )}
         aria-hidden="true"
       />
       <NameLabel node={node} muted={muted} />
@@ -378,7 +435,11 @@ function FileRow({
       ) : (
         name
       )}
-      {size ? <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{size}</span> : null}
+      {size ? (
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+          {size}
+        </span>
+      ) : null}
       {node.changed ? (
         <a
           href={`#${diffAnchorId(node.path)}`}
@@ -405,9 +466,19 @@ function TreeRow({
   inheritedIgnored?: boolean;
 }) {
   return node.kind === "dir" ? (
-    <DirRow node={node} depth={depth} interactions={interactions} inheritedIgnored={inheritedIgnored} />
+    <DirRow
+      node={node}
+      depth={depth}
+      interactions={interactions}
+      inheritedIgnored={inheritedIgnored}
+    />
   ) : (
-    <FileRow node={node} depth={depth} interactions={interactions} inheritedIgnored={inheritedIgnored} />
+    <FileRow
+      node={node}
+      depth={depth}
+      interactions={interactions}
+      inheritedIgnored={inheritedIgnored}
+    />
   );
 }
 
@@ -420,7 +491,11 @@ export default function FileTreeCard({
   loadingDirs,
 }: FileTreeCardProps): ReactElement {
   const tree = buildFileTree(entries);
-  const interactions: TreeInteractions = { onFileSelect, onDirExpand, loadingDirs };
+  const interactions: TreeInteractions = {
+    onFileSelect,
+    onDirExpand,
+    loadingDirs,
+  };
 
   if (entries.length === 0 && !actions) {
     return (
@@ -439,8 +514,12 @@ export default function FileTreeCard({
       data-component="file-tree-card"
     >
       <div className="flex items-center justify-between gap-2 border-b border-border/60 px-4 py-2.5">
-        <span className="truncate text-sm font-semibold">{title ?? "Files"}</span>
-        {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
+        <span className="truncate text-sm font-semibold">
+          {title ?? "Files"}
+        </span>
+        {actions ? (
+          <div className="flex shrink-0 items-center gap-1">{actions}</div>
+        ) : null}
       </div>
       {entries.length === 0 ? (
         <div className="px-4 py-3 text-sm text-muted-foreground">No files.</div>
@@ -448,7 +527,12 @@ export default function FileTreeCard({
         <div className="max-h-96 overflow-y-auto overflow-x-auto px-2 py-2">
           <ul>
             {tree.map((node) => (
-              <TreeRow key={node.path} node={node} depth={0} interactions={interactions} />
+              <TreeRow
+                key={node.path}
+                node={node}
+                depth={0}
+                interactions={interactions}
+              />
             ))}
           </ul>
         </div>

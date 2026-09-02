@@ -36,7 +36,9 @@ describe("ORSet.fromJSON", () => {
     b.add("y", "b:1");
 
     const restoredA = ORSet.fromJSON(a.toJSON());
-    expect(restoredA.merge(b).values().sort()).toEqual(a.merge(b).values().sort());
+    expect(restoredA.merge(b).values().sort()).toEqual(
+      a.merge(b).values().sort(),
+    );
   });
 });
 

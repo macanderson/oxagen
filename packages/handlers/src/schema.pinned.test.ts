@@ -43,9 +43,7 @@ const WS_ID = "ws_1";
  * and `.offset()` also return Promises so that:
  *   `await tx.select().from().where().limit(1)` also resolves.
  */
-function buildTx(
-  selectResults: unknown[][],
-): Record<string, unknown> {
+function buildTx(selectResults: unknown[][]): Record<string, unknown> {
   let callIndex = 0;
   const tx = {
     select: vi.fn(() => {
@@ -57,7 +55,8 @@ function buildTx(
         then: <T1 = unknown, T2 = never>(
           onfulfilled?: ((value: unknown) => T1 | PromiseLike<T1>) | null,
           onrejected?: ((reason: unknown) => T2 | PromiseLike<T2>) | null,
-        ): PromiseLike<T1 | T2> => Promise.resolve(result).then(onfulfilled, onrejected),
+        ): PromiseLike<T1 | T2> =>
+          Promise.resolve(result).then(onfulfilled, onrejected),
         from: vi.fn(() => chain),
         where: vi.fn(() => chain),
         limit: vi.fn(() => Promise.resolve(result)),
@@ -147,9 +146,7 @@ describe("getPinnedSchema", () => {
   });
 
   it("returns null when registry exists but pinnedVersionId is null", async () => {
-    const tx = buildTx([
-      [{ ...REG_ROW, pinnedVersionId: null }],
-    ]);
+    const tx = buildTx([[{ ...REG_ROW, pinnedVersionId: null }]]);
     installTx(tx);
 
     const result = await getPinnedSchema(ORG_ID, WS_ID);
@@ -160,9 +157,9 @@ describe("getPinnedSchema", () => {
 
   it("returns empty vocabulary when pinned version has no schemas", async () => {
     const tx = buildTx([
-      [REG_ROW],         // registry
-      [VERSION_ROW],     // version row
-      [],                // schemas → empty
+      [REG_ROW], // registry
+      [VERSION_ROW], // version row
+      [], // schemas → empty
     ]);
     installTx(tx);
 
@@ -180,8 +177,8 @@ describe("getPinnedSchema", () => {
     const tx = buildTx([
       [REG_ROW],
       [VERSION_ROW],
-      [SCHEMA_ROW],                                      // schemas
-      [{ schemaName: "core", enabled: false }],          // activations (disabled)
+      [SCHEMA_ROW], // schemas
+      [{ schemaName: "core", enabled: false }], // activations (disabled)
     ]);
     installTx(tx);
 
@@ -198,10 +195,10 @@ describe("getPinnedSchema", () => {
       [REG_ROW],
       [VERSION_ROW],
       [SCHEMA_ROW],
-      [],            // activations → no row → defaults to enabled
-      [LABEL_ROW],   // labels
-      [REL_ROW],     // rels
-      [PROP_ROW],    // props
+      [], // activations → no row → defaults to enabled
+      [LABEL_ROW], // labels
+      [REL_ROW], // rels
+      [PROP_ROW], // props
     ]);
     installTx(tx);
 
@@ -235,10 +232,10 @@ describe("getPinnedSchema", () => {
       [REG_ROW],
       [VERSION_ROW],
       [SCHEMA_ROW],
-      [],            // activations → empty → enabled by default
+      [], // activations → empty → enabled by default
       [LABEL_ROW],
       [REL_ROW],
-      [],            // props
+      [], // props
     ]);
     installTx(tx);
 
@@ -255,7 +252,7 @@ describe("getPinnedSchema", () => {
       [REG_ROW],
       [VERSION_ROW],
       [SCHEMA_ROW],
-      [],            // activations
+      [], // activations
       [LABEL_ROW],
       [REL_ROW],
       [PROP_ROW],
@@ -273,7 +270,7 @@ describe("getPinnedSchema", () => {
       [REG_ROW],
       [VERSION_ROW],
       [SCHEMA_ROW],
-      [],            // activations
+      [], // activations
       // NO label/rel/prop selects — cache hit avoids them
     ]);
     installTx(tx2);
@@ -290,7 +287,7 @@ describe("getPinnedSchema", () => {
       [REG_ROW],
       [VERSION_ROW],
       [SCHEMA_ROW],
-      [],          // no activation → enabled
+      [], // no activation → enabled
       [LABEL_ROW],
       [REL_ROW],
       [],
@@ -359,7 +356,7 @@ describe("getPinnedSchema", () => {
       [VERSION_ROW],
       [SCHEMA_ROW],
       [],
-      [],            // no labels → labelIds empty
+      [], // no labels → labelIds empty
       [REL_ROW],
       [relPropRow],
     ]);
@@ -405,8 +402,8 @@ describe("getPinnedSchema", () => {
   it("defaults versionNumber to 0 when version row is missing", async () => {
     const tx = buildTx([
       [REG_ROW],
-      [],  // version row → empty
-      [],  // schemas → empty (triggers emptyVocabulary)
+      [], // version row → empty
+      [], // schemas → empty (triggers emptyVocabulary)
     ]);
     installTx(tx);
 
@@ -442,11 +439,7 @@ describe("invalidatePinnedSchemaCache", () => {
 
     // Next call: different version → should see new data (not cached)
     const newReg = { ...REG_ROW, pinnedVersionId: "ver-after-invalidate" };
-    const tx2 = buildTx([
-      [newReg],
-      [{ versionNumber: 99 }],
-      [],
-    ]);
+    const tx2 = buildTx([[newReg], [{ versionNumber: 99 }], []]);
     installTx(tx2);
 
     const result = await getPinnedSchema(ORG_ID, WS_ID);
@@ -479,11 +472,7 @@ describe("_clearPinnedSchemaCacheForTest", () => {
 
     // Cache is empty → re-fetches and sees new version
     const newReg = { ...REG_ROW, pinnedVersionId: "after-clear" };
-    const tx2 = buildTx([
-      [newReg],
-      [{ versionNumber: 77 }],
-      [],
-    ]);
+    const tx2 = buildTx([[newReg], [{ versionNumber: 77 }], []]);
     installTx(tx2);
 
     const result = await getPinnedSchema(ORG_ID, WS_ID);

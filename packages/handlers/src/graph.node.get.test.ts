@@ -132,7 +132,10 @@ describe("graphNodeGetHandler", () => {
     );
 
     const result = await graphNodeGetHandler({ nodeId: "node-native" }, CTX);
-    expect(result.node?.properties).toEqual({ status: "open", nested: { deep: true } });
+    expect(result.node?.properties).toEqual({
+      status: "open",
+      nested: { deep: true },
+    });
   });
 
   it("returns {} properties for a JSON blob that is not an object", async () => {
@@ -170,7 +173,9 @@ describe("graphNodeGetHandler", () => {
 
   it("closes the session even when run throws", async () => {
     mocks.run.mockRejectedValueOnce(new Error("Neo4j down"));
-    await expect(graphNodeGetHandler({ nodeId: "x" }, CTX)).rejects.toThrow("Neo4j down");
+    await expect(graphNodeGetHandler({ nodeId: "x" }, CTX)).rejects.toThrow(
+      "Neo4j down",
+    );
     expect(mocks.close).toHaveBeenCalled();
   });
 });

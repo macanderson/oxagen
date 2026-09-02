@@ -3,7 +3,8 @@ import type { OxagenPluginManifest } from "../../manifest";
 export const mediaSvgManifest: OxagenPluginManifest = {
   id: "oxagen/media-svg",
   name: "SVG Generation",
-  description: "Generate scalable vector graphics from natural language descriptions.",
+  description:
+    "Generate scalable vector graphics from natural language descriptions.",
   version: "1.0.0",
   pluginType: "agent_capability",
   tier: "free",

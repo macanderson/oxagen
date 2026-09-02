@@ -8,12 +8,14 @@
  * (`@oxagen/agent`'s `createPlatformTurnDriver`, which reaches the engine via
  * `executeTurn`).
  *
- * This is the ONLY file in this package that imports either of those two
- * packages. `./worker.ts`, `./types.ts`, and the rest of this package's
- * internals stay dependency-pure (structural `RunStore`/`TurnDriver` ports
- * only) — see `./types.ts`'s module doc. Keep it that way: a future test or
- * bespoke wiring script should still be able to import `createAgentWorker`
- * directly with its own fakes, without pulling in Postgres or the engine.
+ * This file and `./bootstrap.ts` are the only ones that import the concrete
+ * store, the concrete driver, or the kernel. The harness core stays on
+ * structural `RunStore`/`TurnDriver` ports — `./types.ts`, `./seq.ts`, and
+ * `./terminal.ts` import nothing, and `./worker.ts` imports only the leaf
+ * `@oxagen/agent-runner/run-errors` module for its fenced-lease type guard;
+ * see `./types.ts`'s module doc. Keep it that way: a future test or bespoke
+ * wiring script should still be able to import `createAgentWorker` directly
+ * with its own fakes, without pulling in Postgres or the engine.
  *
  * Env vars (registered in `packages/config/src/registry.ts` ENV_REGISTRY;
  * `.env.example` regenerated via `pnpm env:check --write`):
@@ -21,13 +23,21 @@
  *   OXAGEN_WORKER_ID          — claim/lease owner identity (default `${hostname}:${pid}`).
  *
  * V2 fenced-attempt claims are deliberately NOT wired here. `createAgentWorker`
- * grows a `attempts` option (store + attempt driver + resolved engine identity)
- * that turns the V2 queue on; omitting it is the gate. Enabling V2 execution
- * before PR 2B deploys finalization consumption would mint one-shot
+ * takes an `attempts` option (store + attempt driver + resolved engine
+ * identity) that turns the V2 queue on; omitting it is the gate. Enabling V2
+ * execution before finalization consumption is deployed would mint one-shot
  * finalization grants and durable obligations that no running worker can
  * satisfy — so this process claims only already-enqueued V1 work, which
  * `createPostgresRunStore().claimNextRun(workerId)` (no engine options) is
- * exactly what does. PR 1B flips it on behind `OXAGEN_RUN_V2_CLAIMS_ENABLED`.
+ * exactly what does.
+ *
+ * Two consequences worth knowing before changing this file:
+ *   - `OXAGEN_RUN_V2_CLAIMS_ENABLED` is registered in `packages/config`'s
+ *     ENV_REGISTRY but NO code reads it. Setting it changes nothing today;
+ *     the gate is this file not passing `attempts`.
+ *   - No `AttemptTurnDriver` implementation exists yet, so `attempts` cannot
+ *     be constructed even by hand. Turning V2 on means writing that driver,
+ *     not flipping a flag.
  */
 import { createPostgresRunStore } from "@oxagen/agent-runner";
 // The subpath, not the barrel: this module supervises sidecar processes and so
@@ -90,7 +100,7 @@ async function main(): Promise<void> {
   // `./types.ts` hand-mirrors @oxagen/agent-runner's V2 surface so the harness
   // stays testable with plain fakes; this line is the one place the mirror is
   // compared against the real thing, so a divergence fails typecheck here
-  // instead of surfacing in PR 1B the moment V2 claims are switched on.
+  // instead of surfacing the moment V2 claims are switched on.
   const store: RunStore & AttemptRunStore = createPostgresRunStore();
   const driveTurn = createPlatformTurnDriver();
 

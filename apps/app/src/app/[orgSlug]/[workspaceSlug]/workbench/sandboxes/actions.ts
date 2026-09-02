@@ -13,9 +13,11 @@
  *   5. return a discriminated union { ok: true, … } | { ok: false, error }.
  *
  * `refreshSandboxesAction` is the one exception to step 3 — it's a read of the
- * session registry only (no shell access), so it mirrors the page's own
- * gating (any resolved workspace member) to let the list's live-tail poll run
- * for every viewer, not just managers.
+ * session registry only (no shell access), so it mirrors the page's own gating
+ * to let the list's live-tail poll run for every viewer, not just managers.
+ * NOTE that gate is ORG membership, not workspace membership: `resolveWorkbenchScope`
+ * asserts org membership and only derives `canManage` from the workspace role.
+ * An org member who is not in this workspace can therefore list its sessions.
  *
  * `run_sandbox_command` is invoked from here rather than the client so the
  * SandboxTerminal stays pure UI (it receives an injected runner).
@@ -325,6 +327,10 @@ export async function listSandboxLogsAction(
     );
     return { ok: true, lines };
   } catch (err) {
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, sessionId },
+      "studio.sandboxes: listSandboxLogsAction failed",
+    );
     return {
       ok: false,
       error: errMessage(err, "Failed to load sandbox logs."),

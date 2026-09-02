@@ -9,10 +9,16 @@ export const schema = { ...connectionCreate.input.shape };
 export const metadata: ToolMetadata = {
   name: connectionCreate.name,
   description: connectionCreate.description,
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+  },
 };
 
-export default async function connectionCreateTool(args: InferSchema<typeof schema>) {
+export default async function connectionCreateTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   return invoke(connectionCreate.name, args, ctx, { surface: "mcp" });
 }

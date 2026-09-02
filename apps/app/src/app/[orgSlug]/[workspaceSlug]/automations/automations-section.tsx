@@ -7,6 +7,7 @@
  * would bubble to the route error boundary and blank the whole section).
  */
 import { AlertCircle } from "lucide-react";
+import { logger } from "@oxagen/handlers/logger";
 import type { AutomationsCtx } from "@/lib/automations/scope";
 import { listAutomations } from "@/lib/automations/automations";
 import type { AutomationListOutput } from "@oxagen/oxagen/contracts/automation.list";
@@ -31,7 +32,10 @@ export async function AutomationsSection({
     automations = await listAutomations(ctx);
   } catch (err) {
     failed = true;
-    console.error("automation.list failed:", err);
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "automations: automation.list failed",
+    );
   }
 
   if (failed) {

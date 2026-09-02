@@ -17,10 +17,10 @@ import type { BillingCheckoutSession, BillingInvoice } from "./provider";
  *  2. INSERT INTO credit_lots
  *  3. Upsert credit_balances
  *
- * The ON CONFLICT DO NOTHING on step 1 requires a UNIQUE constraint on
- * credit_ledger(org_id, reason, reference_type, reference_id). This replaces
- * the prior TOCTOU check-then-insert. See the agent summary for the
- * cross-agent schema dependency.
+ * The ON CONFLICT DO NOTHING on step 1 requires the partial UNIQUE index on
+ * credit_ledger(org_id, reason, reference_type, reference_id) declared in
+ * schema/billing.ts. It is what makes a grant idempotent under concurrent
+ * webhook deliveries; without it every insert succeeds and double-grants.
  *
  * EXPIRY RULES:
  *   free_grant   → expires_at NULL (never expires; used for signup grants too)
@@ -46,10 +46,20 @@ type DbTx = Tx;
  * Atomicity depends on the partial UNIQUE index
  *   credit_ledger_grant_idempotency_idx
  *   ON credit_ledger(org_id, reason, reference_type, reference_id)
- *   WHERE reference_type IS NOT NULL AND reference_id IS NOT NULL
+ *   WHERE reference_type IS NOT NULL
+ *     AND reference_id IS NOT NULL
+ *     AND reason LIKE 'grant_%'
  * declared in the Drizzle schema (schema/billing.ts). ON CONFLICT DO NOTHING
  * uses it as the arbiter; without it every insert would succeed and
  * duplicate-grant.
+ *
+ * The `reason LIKE 'grant_%'` half of that predicate is load-bearing for THIS
+ * function: a `reason` that does not start with `grant_` falls outside the index
+ * and the insert is NOT deduplicated — it always succeeds, and the caller then
+ * grants a second lot. Every reason passed here must be a CREDIT_REASONS.GRANT_*
+ * value. (The predicate exists because spend rows legitimately repeat a
+ * reference id — one turn makes several billable calls under one message id —
+ * so constraining them would make the second debit throw and go unbilled.)
  */
 async function tryInsertGrantLedger(
   tx: DbTx,
@@ -214,18 +224,17 @@ export async function grantPlanCreditsForInvoicePaid(
   // Make sure our subscriptions row exists before resolving the plan.
   await syncSubscriptionFromStripe(invoice.subscriptionId);
 
-  // Make sure our local invoice row exists before we key the grant on it.
-  // Stripe does not guarantee webhook ordering and the API processes events
-  // concurrently, so invoice.paid can be handled BEFORE subscription.created /
-  // invoice.created. When that happens the earlier syncInvoiceFromStripe in the
-  // webhook dispatch bailed: a subscription invoice carries no org_id metadata
-  // (only subscription_data.metadata does), so it could not resolve a tenant
-  // until the subscription row existed — leaving no local invoice row and
-  // silently dropping the plan's included-credit grant (the user upgrades free
-  // → paid and never receives their credits). Now that the subscription is
-  // synced above, re-sync the invoice so its row — and thus our idempotency
-  // reference id — is guaranteed present regardless of event ordering. This
-  // mirrors the self-healing syncSubscriptionFromStripe call above.
+  // Make sure our local invoice row exists before we key the grant on it — its
+  // id IS the idempotency reference id below.
+  //
+  // Stripe does not guarantee webhook ordering and events are processed
+  // concurrently, so invoice.paid can arrive before subscription.created. A
+  // subscription invoice carries no org_id of its own (only
+  // subscription_data.metadata does), so an invoice sync that runs before the
+  // subscription row exists cannot resolve a tenant and writes nothing. The
+  // subscription is synced just above, so re-syncing the invoice here makes its
+  // row present whatever order the events arrived in. Same self-healing pattern
+  // as the syncSubscriptionFromStripe call above.
   await syncInvoiceFromStripe(invoice.providerInvoiceId);
 
   let granted = false;

@@ -63,7 +63,10 @@ describe("isDenial", () => {
 
 describe("getSurfaces", () => {
   it("returns the declared surfaces when present", () => {
-    expect(getSurfaces({ surfaces: ["api", "agent"] })).toEqual(["api", "agent"]);
+    expect(getSurfaces({ surfaces: ["api", "agent"] })).toEqual([
+      "api",
+      "agent",
+    ]);
   });
 
   it("falls back to DEFAULT_SURFACES when surfaces is undefined", () => {

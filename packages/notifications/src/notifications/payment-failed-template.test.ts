@@ -79,9 +79,7 @@ describe("paymentFailedTemplate", () => {
 
     it("escapes & in billingUrl (href) as &amp;", () => {
       const { html } = paymentFailedTemplate(dangerous);
-      expect(html).toContain(
-        'href="https://example.com/billing?a=1&amp;b=2"'
-      );
+      expect(html).toContain('href="https://example.com/billing?a=1&amp;b=2"');
     });
 
     it("escapes < in orgName as &lt;", () => {

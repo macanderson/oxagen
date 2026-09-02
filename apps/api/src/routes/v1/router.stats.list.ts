@@ -17,6 +17,8 @@ routerStatsListRoute.get("/", async (c) => {
     minSamples: minSamples ? Number(minSamples) : undefined,
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(routerStatsList.name, input, ctx, { surface: "api" });
+  const out = await invoke(routerStatsList.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

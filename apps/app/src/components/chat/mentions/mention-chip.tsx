@@ -26,7 +26,11 @@ import { MENTION_TYPE_META, type MentionSearchResult } from "./mention-meta";
 
 type HydrationState =
   | { status: "idle" | "loading" | "error" }
-  | { status: "done"; properties: Record<string, unknown>; description: string | null };
+  | {
+      status: "done";
+      properties: Record<string, unknown>;
+      description: string | null;
+    };
 
 export interface MentionChipProps {
   mention: ChatMention;
@@ -50,11 +54,15 @@ export function MentionChip({
   const meta = MENTION_TYPE_META[mention.type];
   const Icon = meta.icon;
 
-  const [hydration, setHydration] = React.useState<HydrationState>({ status: "idle" });
+  const [hydration, setHydration] = React.useState<HydrationState>({
+    status: "idle",
+  });
 
   const orgSlug = typeof params?.orgSlug === "string" ? params.orgSlug : null;
-  const workspaceSlug = typeof params?.workspaceSlug === "string" ? params.workspaceSlug : null;
-  const canHydrate = properties === null && orgSlug !== null && workspaceSlug !== null;
+  const workspaceSlug =
+    typeof params?.workspaceSlug === "string" ? params.workspaceSlug : null;
+  const canHydrate =
+    properties === null && orgSlug !== null && workspaceSlug !== null;
 
   // Recreated every render, so it closes over the CURRENT hydration state —
   // no ref needed (and writing a ref during render violates react-hooks/refs).
@@ -79,7 +87,11 @@ export function MentionChip({
         const row = json.results?.[0];
         setHydration(
           row
-            ? { status: "done", properties: row.properties, description: row.description }
+            ? {
+                status: "done",
+                properties: row.properties,
+                description: row.description,
+              }
             : { status: "error" },
         );
       } catch {
@@ -94,7 +106,12 @@ export function MentionChip({
     description ?? (hydration.status === "done" ? hydration.description : null);
 
   return (
-    <span className={cn("inline-flex max-w-full items-center align-middle", className)}>
+    <span
+      className={cn(
+        "inline-flex max-w-full items-center align-middle",
+        className,
+      )}
+    >
       <Popover onOpenChange={handleOpenChange}>
         <PopoverTrigger
           openOnHover
@@ -108,7 +125,10 @@ export function MentionChip({
           aria-label={`Inspect ${typeInfo.label} ${mention.label}`}
           data-testid={`mention-chip-${mention.type}`}
         >
-          <Icon className={cn("size-3.5 shrink-0", meta.iconClassName)} aria-hidden="true" />
+          <Icon
+            className={cn("size-3.5 shrink-0", meta.iconClassName)}
+            aria-hidden="true"
+          />
           <span className="truncate text-sm font-medium text-foreground">
             {truncate(mention.label, 40)}
           </span>
@@ -146,12 +166,17 @@ export function MentionChip({
             </div>
           </div>
           <div className="max-h-72 overflow-y-auto px-3 py-2.5">
-            {resolvedProperties && Object.keys(resolvedProperties).length > 0 ? (
+            {resolvedProperties &&
+            Object.keys(resolvedProperties).length > 0 ? (
               <PropertyList properties={resolvedProperties} dense />
             ) : hydration.status === "loading" ? (
-              <p className="text-xs text-muted-foreground">Loading properties…</p>
+              <p className="text-xs text-muted-foreground">
+                Loading properties…
+              </p>
             ) : (
-              <p className="text-xs text-muted-foreground">{typeInfo.summary}</p>
+              <p className="text-xs text-muted-foreground">
+                {typeInfo.summary}
+              </p>
             )}
           </div>
         </PopoverPopup>

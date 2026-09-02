@@ -4,16 +4,23 @@ import { getCapability } from "../registry";
 
 describe("org.member.add capability", () => {
   it("parses a valid invite input", () => {
-    const parsed = orgMemberAdd.input.parse({ email: "alice@example.com", role: "Admin" });
+    const parsed = orgMemberAdd.input.parse({
+      email: "alice@example.com",
+      role: "Admin",
+    });
     expect(parsed).toEqual({ email: "alice@example.com", role: "Admin" });
   });
 
   it("rejects an invalid email", () => {
-    expect(() => orgMemberAdd.input.parse({ email: "not-an-email", role: "Admin" })).toThrow();
+    expect(() =>
+      orgMemberAdd.input.parse({ email: "not-an-email", role: "Admin" }),
+    ).toThrow();
   });
 
   it("rejects an empty role", () => {
-    expect(() => orgMemberAdd.input.parse({ email: "a@b.com", role: "" })).toThrow();
+    expect(() =>
+      orgMemberAdd.input.parse({ email: "a@b.com", role: "" }),
+    ).toThrow();
   });
 
   it("rejects a missing email", () => {

@@ -31,7 +31,9 @@ describe("parseTokensFile", () => {
   });
 
   it("rejects entries missing slug or token", () => {
-    expect(() => parseTokensFile('[{"token":"t"}]')).toThrow(/missing a non-empty "slug"/);
+    expect(() => parseTokensFile('[{"token":"t"}]')).toThrow(
+      /missing a non-empty "slug"/,
+    );
     expect(() => parseTokensFile('[{"slug":"oxagen","token":""}]')).toThrow(
       /"oxagen".*missing a non-empty "token"/,
     );
@@ -49,7 +51,9 @@ describe("tokenForSlug", () => {
   });
 
   it("throws listing known slugs when absent", () => {
-    expect(() => tokenForSlug(entries, "acme")).toThrow(/"manderson", "oxagen"/);
+    expect(() => tokenForSlug(entries, "acme")).toThrow(
+      /"manderson", "oxagen"/,
+    );
   });
 });
 
@@ -62,7 +66,8 @@ describe("upsertGatewayKey", () => {
   });
 
   it("replaces every live assignment but leaves comments untouched", () => {
-    const input = "# AI_GATEWAY_API_KEY=vck_commented\nAI_GATEWAY_API_KEY=vck_a\nAI_GATEWAY_API_KEY=vck_b\n";
+    const input =
+      "# AI_GATEWAY_API_KEY=vck_commented\nAI_GATEWAY_API_KEY=vck_a\nAI_GATEWAY_API_KEY=vck_b\n";
     const { content } = upsertGatewayKey(input, "vck_new");
     expect(content).toBe(
       "# AI_GATEWAY_API_KEY=vck_commented\nAI_GATEWAY_API_KEY=vck_new\nAI_GATEWAY_API_KEY=vck_new\n",
@@ -73,7 +78,9 @@ describe("upsertGatewayKey", () => {
     const input = "MY_AI_GATEWAY_API_KEY=other\n";
     const { content, action } = upsertGatewayKey(input, "vck_new");
     expect(action).toBe("appended");
-    expect(content).toBe("MY_AI_GATEWAY_API_KEY=other\nAI_GATEWAY_API_KEY=vck_new\n");
+    expect(content).toBe(
+      "MY_AI_GATEWAY_API_KEY=other\nAI_GATEWAY_API_KEY=vck_new\n",
+    );
   });
 
   it("appends to an empty file", () => {
@@ -90,15 +97,21 @@ describe("upsertGatewayKey", () => {
 
 describe("extractGatewayKey", () => {
   it("prefers well-known field names", () => {
-    expect(extractGatewayKey({ key: "vck_direct", note: "vck_decoy" })).toBe("vck_direct");
+    expect(extractGatewayKey({ key: "vck_direct", note: "vck_decoy" })).toBe(
+      "vck_direct",
+    );
   });
 
   it("finds a nested key under an envelope object", () => {
-    expect(extractGatewayKey({ apiKey: { id: "ak_1", token: "vck_nested" } })).toBe("vck_nested");
+    expect(
+      extractGatewayKey({ apiKey: { id: "ak_1", token: "vck_nested" } }),
+    ).toBe("vck_nested");
   });
 
   it("falls back to a recursive vck_ scan", () => {
-    expect(extractGatewayKey({ data: { items: [{ opaque: "vck_found" }] } })).toBe("vck_found");
+    expect(
+      extractGatewayKey({ data: { items: [{ opaque: "vck_found" }] } }),
+    ).toBe("vck_found");
   });
 
   it("returns null when no key material is present", () => {
@@ -109,17 +122,29 @@ describe("extractGatewayKey", () => {
 
 describe("resolveTeam", () => {
   it("resolves a slug to its team id", () => {
-    const teams = { teams: [{ id: "team_1", slug: "manderson" }, { id: "team_2", slug: "oxagen" }] };
-    expect(resolveTeam(teams, "oxagen")).toEqual({ id: "team_2", slug: "oxagen" });
+    const teams = {
+      teams: [
+        { id: "team_1", slug: "manderson" },
+        { id: "team_2", slug: "oxagen" },
+      ],
+    };
+    expect(resolveTeam(teams, "oxagen")).toEqual({
+      id: "team_2",
+      slug: "oxagen",
+    });
   });
 
   it("throws with accessible slugs when the token cannot see the team", () => {
     const teams = { teams: [{ id: "team_1", slug: "manderson" }] };
-    expect(() => resolveTeam(teams, "oxagen")).toThrow(/accessible teams: manderson/);
+    expect(() => resolveTeam(teams, "oxagen")).toThrow(
+      /accessible teams: manderson/,
+    );
   });
 
   it("handles a malformed response", () => {
-    expect(() => resolveTeam({}, "oxagen")).toThrow(/accessible teams: \(none\)/);
+    expect(() => resolveTeam({}, "oxagen")).toThrow(
+      /accessible teams: \(none\)/,
+    );
   });
 });
 

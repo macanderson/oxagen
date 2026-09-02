@@ -23,7 +23,9 @@ describe("GlobalErrorPage", () => {
 
   it("shows the error digest when present", () => {
     const error = Object.assign(new Error("x"), { digest: "DIGEST_ABC123" });
-    const { getByText } = render(<GlobalErrorPage error={error} reset={() => {}} />);
+    const { getByText } = render(
+      <GlobalErrorPage error={error} reset={() => {}} />,
+    );
     expect(getByText("DIGEST_ABC123")).toBeInTheDocument();
   });
 

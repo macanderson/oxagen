@@ -3,8 +3,8 @@
  * (summary + per-item results) and renders RunDetailClient.
  *
  * Rendered inside a <Suspense> boundary in page.tsx. Never throws from RSC —
- * a handler failure (including "run not found") renders the client
- * component's empty state instead of a 500.
+ * a handler failure (including "run not found") renders an ErrorState instead
+ * of a 500, so a failed read is never mistaken for an empty run.
  */
 import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";

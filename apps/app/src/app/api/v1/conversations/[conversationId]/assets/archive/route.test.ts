@@ -24,8 +24,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-    withSystemDb: async (fn: (tx: Record<string, unknown>) => Promise<unknown>) =>
-      fn({ select: mocks.select } as unknown as Record<string, unknown>),
+    withSystemDb: async (
+      fn: (tx: Record<string, unknown>) => Promise<unknown>,
+    ) => fn({ select: mocks.select } as unknown as Record<string, unknown>),
   };
 });
 
@@ -43,7 +44,11 @@ function selectBuilder(rows: unknown[]): unknown {
   return { from };
 }
 
-const CONV = { orgId: "org-1", workspaceId: "ws-1", title: "Q3 Revenue Deep-Dive!" };
+const CONV = {
+  orgId: "org-1",
+  workspaceId: "ws-1",
+  title: "Q3 Revenue Deep-Dive!",
+};
 const MEMBER = { id: "member-row" };
 const FILES = [
   { publicId: "gen_1", name: "chart.png", mimeType: "image/png" },
@@ -121,13 +126,21 @@ describe("GET /api/v1/conversations/[id]/assets/archive", () => {
     expect(mocks.invoke).toHaveBeenCalledWith(
       "list_conversation_files",
       expect.objectContaining({ conversationId: "cnv_abc", limit: 200 }),
-      expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }),
+      expect.objectContaining({
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        userId: "user-1",
+      }),
       { surface: "api" },
     );
     // The archive helper got exactly the listed entries + the app principal,
     // so each file's access policy is re-enforced server-side.
     expect(mocks.archive).toHaveBeenCalledWith(
-      FILES.map((f) => ({ publicId: f.publicId, name: f.name, mimeType: f.mimeType })),
+      FILES.map((f) => ({
+        publicId: f.publicId,
+        name: f.name,
+        mimeType: f.mimeType,
+      })),
       expect.objectContaining({ userId: "user-1", surface: "app" }),
     );
 

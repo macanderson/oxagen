@@ -146,7 +146,12 @@ function KindIcon({ kind, className }: KindIconProps) {
     case "archive":
       return <FileArchive className={merged} aria-hidden="true" />;
     default:
-      return <File className={cn("text-muted-foreground", className)} aria-hidden="true" />;
+      return (
+        <File
+          className={cn("text-muted-foreground", className)}
+          aria-hidden="true"
+        />
+      );
   }
 }
 
@@ -243,7 +248,12 @@ function AssetRow({
       {/* Name + meta — the full filename wraps so the extension is always visible */}
       <div className="min-w-0 flex-1">
         {svg ? (
-          <button type="button" onClick={() => onPreview(item)} className={nameCls} title={`Preview ${item.name}`}>
+          <button
+            type="button"
+            onClick={() => onPreview(item)}
+            className={nameCls}
+            title={`Preview ${item.name}`}
+          >
             {item.name}
           </button>
         ) : (
@@ -321,7 +331,9 @@ function AssetPreviewDialog({
         {item ? (
           <>
             <DialogHeader>
-              <DialogTitle className="break-words pr-8 text-base">{item.name}</DialogTitle>
+              <DialogTitle className="break-words pr-8 text-base">
+                {item.name}
+              </DialogTitle>
             </DialogHeader>
             <div className="flex items-center justify-center rounded-lg bg-muted/30 p-4">
               {/* eslint-disable-next-line @next/next/no-img-element -- auth-gated same-origin asset URL; <img> ignores Content-Disposition and never executes SVG scripts */}
@@ -385,10 +397,14 @@ export function ConversationFilesList({
   conversationPublicId,
   active,
 }: ConversationFilesListProps) {
-  const [assets, setAssets] = React.useState<ConversationAssetItem[] | null>(null);
+  const [assets, setAssets] = React.useState<ConversationAssetItem[] | null>(
+    null,
+  );
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [preview, setPreview] = React.useState<ConversationAssetItem | null>(null);
+  const [preview, setPreview] = React.useState<ConversationAssetItem | null>(
+    null,
+  );
   const [retryKey, setRetryKey] = React.useState(0);
 
   // Fetch (or re-fetch) the asset list whenever the list becomes active.
@@ -406,7 +422,8 @@ export function ConversationFilesList({
         // there are simply no files to show. Treat it as an empty list rather
         // than surfacing "HTTP 404" to the user.
         if (res.status === 404) return [] as ConversationAssetItem[];
-        if (!res.ok) throw new Error(`Couldn't load files (HTTP ${res.status})`);
+        if (!res.ok)
+          throw new Error(`Couldn't load files (HTTP ${res.status})`);
         return res.json() as Promise<ConversationAssetItem[]>;
       })
       .then((data) => {
@@ -417,7 +434,8 @@ export function ConversationFilesList({
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          const msg = err instanceof Error ? err.message : "Couldn't load files";
+          const msg =
+            err instanceof Error ? err.message : "Couldn't load files";
           setError(msg);
           setLoading(false);
         }

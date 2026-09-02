@@ -24,10 +24,9 @@ function validateDiagramSource(source: string): void {
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-export const mermaidGenerateHandler: CapabilityHandler<typeof mermaidGenerate> = async (
-  input,
-  ctx,
-) => {
+export const mermaidGenerateHandler: CapabilityHandler<
+  typeof mermaidGenerate
+> = async (input, ctx) => {
   validateDiagramSource(input.diagram);
 
   const theme = input.theme ?? "default";
@@ -68,7 +67,12 @@ export const mermaidGenerateHandler: CapabilityHandler<typeof mermaidGenerate> =
       serveUrl = asset.serveUrl;
     } catch (err) {
       logger.warn(
-        { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, title: input.title },
+        {
+          err,
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          title: input.title,
+        },
         "mermaid.generate: source persistence failed (non-fatal) — returning inline result only",
       );
       persistWarning =

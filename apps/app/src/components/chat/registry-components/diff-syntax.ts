@@ -167,7 +167,10 @@ export async function highlightLine(
       defaultColor: "light",
     });
     const row = tokens[0] ?? [];
-    return row.map((t) => ({ content: t.content, style: normalizeStyle(t.htmlStyle) }));
+    return row.map((t) => ({
+      content: t.content,
+      style: normalizeStyle(t.htmlStyle),
+    }));
   } catch {
     return [{ content: line }];
   }

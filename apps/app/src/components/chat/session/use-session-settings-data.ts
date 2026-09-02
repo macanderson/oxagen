@@ -67,7 +67,13 @@ export function useRepoBranches({
       { owner: repo.owner, repo: repo.name },
     )
       .then((result) => {
-        if ("error" in result) return;
+        if ("error" in result) {
+          // The picker has nowhere to put this yet, so it renders as "No
+          // branches found" — indistinguishable from a repo with no branches.
+          // Log it so the difference is at least visible in a support session.
+          console.error("session-settings: branch list failed", result.error);
+          return;
+        }
         setBranchCache((prev) => ({
           ...prev,
           [repo.key]: {

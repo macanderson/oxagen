@@ -70,7 +70,8 @@ vi.mock("./seats", () => ({
     }
   },
   isSeatLimitError: (err: unknown) =>
-    err instanceof Error && (err as { code?: string }).code === "seat_limit_reached",
+    err instanceof Error &&
+    (err as { code?: string }).code === "seat_limit_reached",
 }));
 
 // ---------------------------------------------------------------------------
@@ -117,10 +118,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => dbMocks,
-  withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-  withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-
+    db: () => dbMocks,
+    withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
+    withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
   };
 });
 
@@ -143,7 +143,9 @@ function makeActiveSubRow(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-function makeProrationPreview(overrides: Partial<Record<string, unknown>> = {}) {
+function makeProrationPreview(
+  overrides: Partial<Record<string, unknown>> = {},
+) {
   return {
     amountCents: 2000,
     isCharge: true,
@@ -166,8 +168,12 @@ describe("previewSeatChange", () => {
   });
 
   it("increase direction — provider called with always_invoice, returns charge", async () => {
-    subscriptionsFindFirstMock.mockResolvedValue(makeActiveSubRow({ seatCount: 3 }));
-    previewSeatChangeMock.mockResolvedValue(makeProrationPreview({ amountCents: 1500, isCharge: true }));
+    subscriptionsFindFirstMock.mockResolvedValue(
+      makeActiveSubRow({ seatCount: 3 }),
+    );
+    previewSeatChangeMock.mockResolvedValue(
+      makeProrationPreview({ amountCents: 1500, isCharge: true }),
+    );
 
     const result = await previewSeatChange("org-001", 5);
 
@@ -185,8 +191,14 @@ describe("previewSeatChange", () => {
   });
 
   it("decrease direction — provider called with create_prorations, returns credit", async () => {
-    subscriptionsFindFirstMock.mockResolvedValue(makeActiveSubRow({ seatCount: 5 }));
-    getOrgSeatUsageMock.mockResolvedValue({ licenses: 5, used: 2, available: 3 });
+    subscriptionsFindFirstMock.mockResolvedValue(
+      makeActiveSubRow({ seatCount: 5 }),
+    );
+    getOrgSeatUsageMock.mockResolvedValue({
+      licenses: 5,
+      used: 2,
+      available: 3,
+    });
     previewSeatChangeMock.mockResolvedValue(
       makeProrationPreview({ amountCents: -800, isCharge: false }),
     );
@@ -206,7 +218,9 @@ describe("previewSeatChange", () => {
   });
 
   it("no change (none) — returns amountCents=0 without calling provider", async () => {
-    subscriptionsFindFirstMock.mockResolvedValue(makeActiveSubRow({ seatCount: 5 }));
+    subscriptionsFindFirstMock.mockResolvedValue(
+      makeActiveSubRow({ seatCount: 5 }),
+    );
 
     const result = await previewSeatChange("org-001", 5);
 
@@ -218,8 +232,14 @@ describe("previewSeatChange", () => {
   });
 
   it("decrease below current usage — returns blocked without calling provider", async () => {
-    subscriptionsFindFirstMock.mockResolvedValue(makeActiveSubRow({ seatCount: 5 }));
-    getOrgSeatUsageMock.mockResolvedValue({ licenses: 5, used: 4, available: 1 });
+    subscriptionsFindFirstMock.mockResolvedValue(
+      makeActiveSubRow({ seatCount: 5 }),
+    );
+    getOrgSeatUsageMock.mockResolvedValue({
+      licenses: 5,
+      used: 4,
+      available: 1,
+    });
 
     const result = await previewSeatChange("org-001", 2);
 
@@ -242,7 +262,9 @@ describe("previewSeatChange", () => {
     subscriptionsFindFirstMock.mockResolvedValue(
       makeActiveSubRow({ seatCount: 2, stripeCustomerId: "cus_card" }),
     );
-    previewSeatChangeMock.mockResolvedValue(makeProrationPreview({ amountCents: 500 }));
+    previewSeatChangeMock.mockResolvedValue(
+      makeProrationPreview({ amountCents: 500 }),
+    );
     getDefaultPaymentMethodIdMock.mockResolvedValue("pm_abc");
     listPaymentMethodsMock.mockResolvedValue([
       {
@@ -262,8 +284,12 @@ describe("previewSeatChange", () => {
   });
 
   it("card is null when no default payment method is on file", async () => {
-    subscriptionsFindFirstMock.mockResolvedValue(makeActiveSubRow({ seatCount: 2 }));
-    previewSeatChangeMock.mockResolvedValue(makeProrationPreview({ amountCents: 500 }));
+    subscriptionsFindFirstMock.mockResolvedValue(
+      makeActiveSubRow({ seatCount: 2 }),
+    );
+    previewSeatChangeMock.mockResolvedValue(
+      makeProrationPreview({ amountCents: 500 }),
+    );
     getDefaultPaymentMethodIdMock.mockResolvedValue(null);
 
     const result = await previewSeatChange("org-001", 5);
@@ -280,8 +306,14 @@ describe("setSubscriptionSeats — direction-aware proration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     insertUpsertChain.onConflictDoUpdate.mockResolvedValue(undefined);
-    insertMock.mockReturnValue({ values: vi.fn().mockReturnValue(insertUpsertChain) });
-    getOrgSeatUsageMock.mockResolvedValue({ licenses: 5, used: 1, available: 4 });
+    insertMock.mockReturnValue({
+      values: vi.fn().mockReturnValue(insertUpsertChain),
+    });
+    getOrgSeatUsageMock.mockResolvedValue({
+      licenses: 5,
+      used: 1,
+      available: 4,
+    });
 
     // For syncSubscriptionFromStripe: provider.getSubscription + plan lookup
     getSubscriptionMock.mockResolvedValue({
@@ -322,7 +354,11 @@ describe("setSubscriptionSeats — direction-aware proration", () => {
     subscriptionsFindFirstMock.mockResolvedValue(
       makeActiveSubRow({ seatCount: 5 }),
     );
-    getOrgSeatUsageMock.mockResolvedValue({ licenses: 5, used: 2, available: 3 });
+    getOrgSeatUsageMock.mockResolvedValue({
+      licenses: 5,
+      used: 2,
+      available: 3,
+    });
 
     await setSubscriptionSeats("org-001", 3);
 
@@ -391,8 +427,8 @@ describe("previewPlanChange", () => {
     // First call (active sub check), second call (current plan lookup),
     // third call (resolveCustomerId).
     subscriptionsFindFirstMock
-      .mockResolvedValueOnce(makeActiveSubRow({ planId: "plan-build" }))   // active sub
-      .mockResolvedValueOnce({ stripeCustomerId: "cus_001" });               // resolveCustomerId
+      .mockResolvedValueOnce(makeActiveSubRow({ planId: "plan-build" })) // active sub
+      .mockResolvedValueOnce({ stripeCustomerId: "cus_001" }); // resolveCustomerId
 
     // plansFindFirstMock called twice: target plan + current plan
     plansFindFirstMock

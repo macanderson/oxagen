@@ -10,6 +10,7 @@
  * installed from the Marketplace (Agent Tools side).
  */
 import type { Metadata } from "next";
+import { logger } from "@oxagen/handlers/logger";
 import { resolveWorkbenchScope } from "@/lib/workbench/scope";
 import { listAgentTools, type AgentToolRow } from "@/lib/workbench/tools";
 import { workspace } from "@/lib/routes";
@@ -30,23 +31,29 @@ export default async function WorkbenchToolsPage({ params }: PageProps) {
   let tools: AgentToolRow[] = [];
   try {
     tools = await listAgentTools(ctx);
-  } catch (e) {
+  } catch (err) {
     // Degrade gracefully — the catalog renders its empty state — but never
     // silently: an invisible broken catalog looks like "no tools installed".
-    console.error("agent.tool.list failed:", e);
+    logger.error(
+      { err, orgSlug, workspaceSlug },
+      "workbench/tools: agent.tool.list failed — rendering an empty catalog",
+    );
     tools = [];
   }
 
-  const marketplaceHref = workspace.marketplace.agentTools({ orgSlug, workspaceSlug });
+  const marketplaceHref = workspace.marketplace.agentTools({
+    orgSlug,
+    workspaceSlug,
+  });
 
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-1">
         <h2 className="text-lg font-semibold">All Tools</h2>
         <p className="text-sm text-muted-foreground">
-          Every tool available to agents in this workspace — from skills, MCP servers, and
-          capabilities — after allowlist and risk filtering. Equip tools in the Agent
-          Builder; install more from the Marketplace.
+          Every tool available to agents in this workspace — from skills, MCP
+          servers, and capabilities — after allowlist and risk filtering. Equip
+          tools in the Agent Builder; install more from the Marketplace.
         </p>
       </div>
       <ToolsCatalog tools={tools} marketplaceHref={marketplaceHref} />

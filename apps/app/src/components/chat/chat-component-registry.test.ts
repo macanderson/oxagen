@@ -18,12 +18,34 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock react before importing the registry (which uses React.lazy)
 vi.mock("react", () => ({
-  default: { createElement: vi.fn((type: unknown, props: unknown, ...children: unknown[]) => ({ type, props, children })) },
-  createElement: vi.fn((type: unknown, props: unknown, ...children: unknown[]) => ({ type, props, children })),
-  lazy: (loader: unknown) => ({ $$typeof: Symbol("react.lazy"), _payload: loader, _init: () => null }),
+  default: {
+    createElement: vi.fn(
+      (type: unknown, props: unknown, ...children: unknown[]) => ({
+        type,
+        props,
+        children,
+      }),
+    ),
+  },
+  createElement: vi.fn(
+    (type: unknown, props: unknown, ...children: unknown[]) => ({
+      type,
+      props,
+      children,
+    }),
+  ),
+  lazy: (loader: unknown) => ({
+    $$typeof: Symbol("react.lazy"),
+    _payload: loader,
+    _init: () => null,
+  }),
 }));
 
-import { CHAT_COMPONENTS, logUnknownComponent, UnknownComponentCard } from "./chat-component-registry";
+import {
+  CHAT_COMPONENTS,
+  logUnknownComponent,
+  UnknownComponentCard,
+} from "./chat-component-registry";
 
 // ---------------------------------------------------------------------------
 // 1 & 2. CONFIG-DERIVED completeness
@@ -90,12 +112,16 @@ describe("UnknownComponentCard", () => {
   });
 
   it("renders without throwing when called with a componentId", () => {
-    expect(() => UnknownComponentCard({ componentId: "mystery-widget" })).not.toThrow();
+    expect(() =>
+      UnknownComponentCard({ componentId: "mystery-widget" }),
+    ).not.toThrow();
   });
 
   it("returns an object (React element-like) containing the componentId", () => {
     // We called React.createElement with a mock, so the result is a plain object.
-    const result = UnknownComponentCard({ componentId: "mystery-widget" }) as unknown;
+    const result = UnknownComponentCard({
+      componentId: "mystery-widget",
+    }) as unknown;
     // The componentId should appear somewhere in the serialized structure.
     expect(JSON.stringify(result)).toContain("mystery-widget");
   });
@@ -124,7 +150,9 @@ describe("logUnknownComponent", () => {
   });
 
   it("calls console.warn (not console.error) for an unknown id", () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const errorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     logUnknownComponent("some-id");
     expect(console.warn).toHaveBeenCalled();
     expect(errorSpy).not.toHaveBeenCalled();

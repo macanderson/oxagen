@@ -57,7 +57,12 @@ const NOT_FOUND_MESSAGE =
   "We couldn’t find that email. Please fill out the form to get the book.";
 
 const optionalTrimmed = (max: number) =>
-  z.string().trim().max(max).optional().or(z.literal("").transform(() => undefined));
+  z
+    .string()
+    .trim()
+    .max(max)
+    .optional()
+    .or(z.literal("").transform(() => undefined));
 
 // Strict lead payload: any unknown key is rejected so a bad/compromised client
 // cannot smuggle unexpected content into cms.leads.
@@ -106,7 +111,9 @@ const resendSchema = z
 
 function clientCtx(c: { req: { header: (n: string) => string | undefined } }) {
   const forwarded = c.req.header("x-forwarded-for");
-  const ip = forwarded ? forwarded.split(",")[0]!.trim() : c.req.header("x-real-ip") ?? null;
+  const ip = forwarded
+    ? forwarded.split(",")[0]!.trim()
+    : (c.req.header("x-real-ip") ?? null);
   return { ip, userAgent: c.req.header("user-agent") ?? null };
 }
 
@@ -132,7 +139,12 @@ async function emailReaderLink(
       editionTitle: EDITION_TITLES[edition],
       email: to,
     });
-    await sendEmail({ to, subject: tpl.subject, text: tpl.text, html: tpl.html });
+    await sendEmail({
+      to,
+      subject: tpl.subject,
+      text: tpl.text,
+      html: tpl.html,
+    });
   } catch (err) {
     logger.error(
       { err, to },
@@ -149,12 +161,18 @@ cmsRoute.post("/leads", async (c) => {
   try {
     raw = await c.req.json();
   } catch {
-    return c.json({ error: "invalid_request", message: "Invalid JSON body" }, 400);
+    return c.json(
+      { error: "invalid_request", message: "Invalid JSON body" },
+      400,
+    );
   }
   const parsed = leadSchema.safeParse(raw);
   if (!parsed.success) {
     return c.json(
-      { error: "invalid_request", message: parsed.error.issues[0]?.message ?? "Invalid input" },
+      {
+        error: "invalid_request",
+        message: parsed.error.issues[0]?.message ?? "Invalid input",
+      },
       400,
     );
   }
@@ -204,7 +222,10 @@ cmsRoute.post("/leads", async (c) => {
     }
   } catch (err) {
     logger.error({ err }, "[cms] lead capture failed");
-    return c.json({ error: "internal_error", message: "Failed to record your details" }, 500);
+    return c.json(
+      { error: "internal_error", message: "Failed to record your details" },
+      500,
+    );
   }
   return c.json({ ok: true, message: successMessage }, 200);
 });
@@ -217,18 +238,28 @@ cmsRoute.post("/book/redeem", async (c) => {
   try {
     raw = await c.req.json();
   } catch {
-    return c.json({ error: "invalid_request", message: "Invalid JSON body" }, 400);
+    return c.json(
+      { error: "invalid_request", message: "Invalid JSON body" },
+      400,
+    );
   }
   const parsed = redeemSchema.safeParse(raw);
   if (!parsed.success) {
     return c.json({ error: "invalid_request", message: "Invalid input" }, 400);
   }
   try {
-    const result = await redeemAndRotate(parsed.data.edition, parsed.data.code, clientCtx(c));
+    const result = await redeemAndRotate(
+      parsed.data.edition,
+      parsed.data.code,
+      clientCtx(c),
+    );
     return c.json(result, 200);
   } catch (err) {
     logger.error({ err }, "[cms] redeem failed");
-    return c.json({ error: "internal_error", message: "Failed to open the book" }, 500);
+    return c.json(
+      { error: "internal_error", message: "Failed to open the book" },
+      500,
+    );
   }
 });
 
@@ -240,7 +271,10 @@ cmsRoute.post("/book/resend", async (c) => {
   try {
     raw = await c.req.json();
   } catch {
-    return c.json({ error: "invalid_request", message: "Invalid JSON body" }, 400);
+    return c.json(
+      { error: "invalid_request", message: "Invalid JSON body" },
+      400,
+    );
   }
   const parsed = resendSchema.safeParse(raw);
   if (!parsed.success) {
@@ -260,6 +294,9 @@ cmsRoute.post("/book/resend", async (c) => {
     return c.json({ ok: true, sent: true, message: SENT_MESSAGE }, 200);
   } catch (err) {
     logger.error({ err }, "[cms] resend failed");
-    return c.json({ error: "internal_error", message: "Failed to send the link" }, 500);
+    return c.json(
+      { error: "internal_error", message: "Failed to send the link" },
+      500,
+    );
   }
 });

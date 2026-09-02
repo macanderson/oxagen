@@ -25,7 +25,10 @@ describe("buildTaskFrame — namespace", () => {
   });
 
   it("reflects different orgId / workspaceId values", () => {
-    const frame = buildTaskFrame({ ...BASE_CTX, orgId: "org_2", workspaceId: "ws_2" }, []);
+    const frame = buildTaskFrame(
+      { ...BASE_CTX, orgId: "org_2", workspaceId: "ws_2" },
+      [],
+    );
     expect(frame.namespace.org).toBe("org_2");
     expect(frame.namespace.workspace).toBe("ws_2");
   });
@@ -75,7 +78,9 @@ describe("buildTaskFrame — taskDescription (extractTaskDescription)", () => {
   });
 
   it("returns content of a single user message", () => {
-    const messages = [{ role: "user", content: "what is the capital of France?" }];
+    const messages = [
+      { role: "user", content: "what is the capital of France?" },
+    ];
     expect(buildTaskFrame(BASE_CTX, messages).taskDescription).toBe(
       "what is the capital of France?",
     );
@@ -97,7 +102,9 @@ describe("buildTaskFrame — taskDescription (extractTaskDescription)", () => {
       { role: "user", content: "user turn" },
       { role: "assistant", content: "assistant turn" },
     ];
-    expect(buildTaskFrame(BASE_CTX, messages).taskDescription).toBe("user turn");
+    expect(buildTaskFrame(BASE_CTX, messages).taskDescription).toBe(
+      "user turn",
+    );
   });
 
   it("handles interleaved roles and returns the last user message", () => {
@@ -114,7 +121,9 @@ describe("buildTaskFrame — taskDescription (extractTaskDescription)", () => {
 
   it("truncates content at 2000 characters", () => {
     const longContent = "x".repeat(3000);
-    const frame = buildTaskFrame(BASE_CTX, [{ role: "user", content: longContent }]);
+    const frame = buildTaskFrame(BASE_CTX, [
+      { role: "user", content: longContent },
+    ]);
     expect(frame.taskDescription).toHaveLength(2000);
     expect(frame.taskDescription).toBe("x".repeat(2000));
   });

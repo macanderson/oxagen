@@ -9,11 +9,10 @@
  * the parent page.tsx) and this component never talks to
  * `/api/v1/graph/explore`.
  *
- * The zero-node "Connect a source" empty state (per the spec) lives INSIDE
- * `BrowsePanel`, not here — Search and the Query console (Cypher/traversal)
- * don't need any customer data ingested to be useful (a Cypher query can
- * still confirm the graph really is empty, or inspect system-owned nodes), so
- * the tab strip itself is never hidden behind a workspace-wide empty gate.
+ * The zero-node "Connect a source" empty state lives INSIDE `BrowsePanel`, not
+ * here — Search and the Query console still confirm for themselves that the
+ * graph really is empty, so the tab strip is never hidden behind a
+ * workspace-wide empty gate.
  *
  * `useTenant()` supplies orgSlug/workspaceSlug so this can mount without any
  * props threaded from the server page, mirroring how `GraphExplorer` itself

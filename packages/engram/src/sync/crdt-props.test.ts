@@ -27,7 +27,8 @@ function rng(seed: number): () => number {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-const pick = <T>(r: () => number, xs: T[]): T => xs[Math.floor(r() * xs.length)]!;
+const pick = <T>(r: () => number, xs: T[]): T =>
+  xs[Math.floor(r() * xs.length)]!;
 
 // --------------------------------------------------------------------------
 // ORSet
@@ -37,11 +38,17 @@ function normalizeORSet<T>(set: ORSet<T>): string {
   const j = set.toJSON();
   const entries = j.entries
     .map((e) => ({ value: e.value, tags: [...e.tags].sort() }))
-    .sort((a, b) => JSON.stringify(a.value).localeCompare(JSON.stringify(b.value)));
+    .sort((a, b) =>
+      JSON.stringify(a.value).localeCompare(JSON.stringify(b.value)),
+    );
   return JSON.stringify({ entries, tombstones: [...j.tombstones].sort() });
 }
 
-function randomORSet(r: () => number, node: string, ops: number): ORSet<string> {
+function randomORSet(
+  r: () => number,
+  node: string,
+  ops: number,
+): ORSet<string> {
   const set = new ORSet<string>();
   const vals = ["a", "b", "c", "d", "e"];
   let clock = 0;
@@ -62,7 +69,9 @@ describe("ORSet convergence properties", () => {
       const c = randomORSet(r, "c", 12);
 
       expect(normalizeORSet(a.merge(b))).toBe(normalizeORSet(b.merge(a)));
-      expect(normalizeORSet(a.merge(b).merge(c))).toBe(normalizeORSet(a.merge(b.merge(c))));
+      expect(normalizeORSet(a.merge(b).merge(c))).toBe(
+        normalizeORSet(a.merge(b.merge(c))),
+      );
       expect(normalizeORSet(a.merge(a))).toBe(normalizeORSet(a));
     }
   });
@@ -75,8 +84,13 @@ describe("ORSet convergence properties", () => {
 function normalizePN(c: PNCounter): string {
   const j = c.toJSON();
   const sortObj = (o: Record<string, number>) =>
-    Object.fromEntries(Object.entries(o).sort(([x], [y]) => x.localeCompare(y)));
-  return JSON.stringify({ positive: sortObj(j.positive), negative: sortObj(j.negative) });
+    Object.fromEntries(
+      Object.entries(o).sort(([x], [y]) => x.localeCompare(y)),
+    );
+  return JSON.stringify({
+    positive: sortObj(j.positive),
+    negative: sortObj(j.negative),
+  });
 }
 
 function randomPN(r: () => number, ops: number): PNCounter {
@@ -99,7 +113,9 @@ describe("PNCounter convergence properties", () => {
       const c = randomPN(r, 15);
 
       expect(normalizePN(a.merge(b))).toBe(normalizePN(b.merge(a)));
-      expect(normalizePN(a.merge(b).merge(c))).toBe(normalizePN(a.merge(b.merge(c))));
+      expect(normalizePN(a.merge(b).merge(c))).toBe(
+        normalizePN(a.merge(b.merge(c))),
+      );
       expect(normalizePN(a.merge(a))).toBe(normalizePN(a));
       // Value is order-independent too.
       expect(a.merge(b).value()).toBe(b.merge(a).value());
@@ -125,7 +141,12 @@ const BASE_RECORDS: MemoryRecord[] = Array.from({ length: 6 }, (_, i) =>
 function normalizeRecords(records: MemoryRecord[]): string {
   return JSON.stringify(
     records
-      .map((r) => ({ id: r.id, salience: r.salience, confidence: r.confidence, causality: [...r.causality].sort() }))
+      .map((r) => ({
+        id: r.id,
+        salience: r.salience,
+        confidence: r.confidence,
+        causality: [...r.causality].sort(),
+      }))
       .sort((a, b) => a.id.localeCompare(b.id)),
   );
 }
@@ -144,7 +165,8 @@ function randomRecordSet(r: () => number): MemoryRecord[] {
   return out;
 }
 
-const mergeAll = (x: MemoryRecord[], y: MemoryRecord[]): MemoryRecord[] => mergeRecordSets(x, y).merged;
+const mergeAll = (x: MemoryRecord[], y: MemoryRecord[]): MemoryRecord[] =>
+  mergeRecordSets(x, y).merged;
 
 describe("mergeRecordSets convergence properties", () => {
   it("merge is commutative, associative, and idempotent", () => {
@@ -154,7 +176,9 @@ describe("mergeRecordSets convergence properties", () => {
       const b = randomRecordSet(r);
       const c = randomRecordSet(r);
 
-      expect(normalizeRecords(mergeAll(a, b))).toBe(normalizeRecords(mergeAll(b, a)));
+      expect(normalizeRecords(mergeAll(a, b))).toBe(
+        normalizeRecords(mergeAll(b, a)),
+      );
       expect(normalizeRecords(mergeAll(mergeAll(a, b), c))).toBe(
         normalizeRecords(mergeAll(a, mergeAll(b, c))),
       );

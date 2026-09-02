@@ -9,6 +9,8 @@ export const pluginCredentialSetSecretRoute = new Hono<AppEnv>();
 pluginCredentialSetSecretRoute.post("/", async (c) => {
   const body = pluginCredentialSetSecret.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(pluginCredentialSetSecret.name, body, ctx, { surface: "api" });
+  const out = await invoke(pluginCredentialSetSecret.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

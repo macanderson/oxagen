@@ -35,7 +35,9 @@ export const agentMemoryDelete = registerCapability({
   output: z.object({
     deleted: z
       .boolean()
-      .describe("true when a memory matched and was deleted; false when none matched in this workspace"),
+      .describe(
+        "true when a memory matched and was deleted; false when none matched in this workspace",
+      ),
     memoryId: z.string(),
   }),
 });

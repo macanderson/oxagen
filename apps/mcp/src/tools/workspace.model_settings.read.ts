@@ -20,6 +20,8 @@ export default async function workspaceModelSettingsReadTool(
   _args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(workspaceModelSettingsRead.name, {}, ctx, { surface: "mcp" });
+  const output = await invoke(workspaceModelSettingsRead.name, {}, ctx, {
+    surface: "mcp",
+  });
   return workspaceModelSettingsRead.output.parse(output);
 }

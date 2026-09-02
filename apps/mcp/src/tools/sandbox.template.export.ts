@@ -22,6 +22,8 @@ export default async function sandboxTemplateExportTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(sandboxTemplateExport.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(sandboxTemplateExport.name, args, ctx, {
+    surface: "mcp",
+  });
   return sandboxTemplateExport.output.parse(output);
 }

@@ -10,7 +10,15 @@ import { TUI_MONO, tuiChrome } from "./tui-theme";
  * landing-page hero terminal.
  *
  * Children render inside a `<g>` in the same viewBox coordinate space; callers
- * lay out their own SVG content below `contentY` (the row under the title bar).
+ * lay out their own SVG content below the title bar.
+ *
+ * The SVG is marked `aria-hidden` and every screen is decorative: it recreates
+ * a terminal a reader is not expected to operate, and the surrounding MDX
+ * always states the same information in prose. The `<title>` is therefore NOT
+ * an accessible name — `aria-hidden` removes the whole subtree from the
+ * accessibility tree — it only supplies the browser's hover tooltip. Any screen
+ * that ever carries information the prose does not must drop `aria-hidden`, not
+ * rely on the `<title>` being read.
  */
 export function TuiFrame({
   id,
@@ -22,7 +30,7 @@ export function TuiFrame({
 }: {
   /** Unique id prefix for this screen's `<defs>` (e.g. "tui-banner"). */
   id: string;
-  /** Window title shown in the chrome bar, and the SVG's accessible name. */
+  /** Window title drawn in the chrome bar (also the SVG's hover tooltip). */
   title: string;
   width?: number;
   height: number;
@@ -68,7 +76,13 @@ export function TuiFrame({
       <circle cx={20} cy={16} r={5} fill={tuiChrome.trafficRed} />
       <circle cx={38} cy={16} r={5} fill={tuiChrome.trafficAmber} />
       <circle cx={56} cy={16} r={5} fill={tuiChrome.trafficGreen} />
-      <text x={78} y={20.5} fontFamily={TUI_MONO} fontSize={11} fill={tuiChrome.titleColor}>
+      <text
+        x={78}
+        y={20.5}
+        fontFamily={TUI_MONO}
+        fontSize={11}
+        fill={tuiChrome.titleColor}
+      >
         {title}
       </text>
 
@@ -84,6 +98,8 @@ export function TuiFrame({
  * whole window." Used when a doc section covers one specific part of a screen
  * (e.g. the slash-command menu) and a full terminal window would be mostly
  * empty space around it.
+ *
+ * Decorative and `aria-hidden`, on the same terms as TuiFrame above.
  */
 export function TuiZoom({
   id,
@@ -95,7 +111,7 @@ export function TuiZoom({
 }: {
   /** Unique id prefix for this screen's `<defs>` (e.g. "tui-slash-menu"). */
   id: string;
-  /** Accessible name for the crop. */
+  /** Label for the crop (hover tooltip only — the SVG is `aria-hidden`). */
   title: string;
   width?: number;
   height: number;
@@ -138,7 +154,13 @@ export function TuiZoom({
       </g>
 
       {/* Corner "zoom" brackets — a close-up, not a full window. */}
-      <g stroke="#7CE8F4" strokeWidth={2} strokeLinecap="round" fill="none" opacity={0.5}>
+      <g
+        stroke="#7CE8F4"
+        strokeWidth={2}
+        strokeLinecap="round"
+        fill="none"
+        opacity={0.5}
+      >
         <path d={`M ${8} ${8 + bracket} L 8 8 L ${8 + bracket} 8`} />
         <path
           d={`M ${width - 8 - bracket} ${height - 8} L ${width - 8} ${height - 8} L ${width - 8} ${height - 8 - bracket}`}

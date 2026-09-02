@@ -1,4 +1,9 @@
 "use client";
+/**
+ * LoginForm — the email + password form behind both /login and /signup; `mode`
+ * picks which. Sign-in stops at /two-factor when Better Auth withholds the
+ * session for a second factor, so the app is never entered without one.
+ */
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -51,12 +56,24 @@ export function LoginForm({ mode = "signin" }: { mode?: "signin" | "signup" }) {
       {mode === "signup" ? (
         <div className="space-y-1.5">
           <Label htmlFor="name">Name</Label>
-          <Input id="name" name="name" type="text" required autoComplete="name" />
+          <Input
+            id="name"
+            name="name"
+            type="text"
+            required
+            autoComplete="name"
+          />
         </div>
       ) : null}
       <div className="space-y-1.5">
         <Label htmlFor="email">Email</Label>
-        <Input id="email" name="email" type="email" required autoComplete="email" />
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          required
+          autoComplete="email"
+        />
       </div>
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
@@ -79,7 +96,13 @@ export function LoginForm({ mode = "signin" }: { mode?: "signin" | "signup" }) {
           autoComplete={mode === "signup" ? "new-password" : "current-password"}
         />
       </div>
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {/* role="alert" so a failed sign-in is announced — without it the only
+          signal is a colour change a screen-reader user never hears. */}
+      {error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
       {/* Ember gradient CTA — the brand's primary call-to-action treatment
           (matches the docs landing page). `.ox-grad-surface` paints the
           gold→flame→crimson fill over the button; the DS button keeps its
@@ -94,7 +117,11 @@ export function LoginForm({ mode = "signin" }: { mode?: "signin" | "signup" }) {
         className="ox-grad-surface w-full border-0 text-primary-foreground shadow-sm"
         disabled={pending}
       >
-        {pending ? "Working…" : mode === "signup" ? "Create account" : "Sign in"}
+        {pending
+          ? "Working…"
+          : mode === "signup"
+            ? "Create account"
+            : "Sign in"}
       </Button>
     </form>
   );

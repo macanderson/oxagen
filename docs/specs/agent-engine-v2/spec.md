@@ -266,6 +266,19 @@ while (true) {
 - **Judge evidence via `ReadOnlyTools`.** The judge/verify stages get the same
   registry through the read-only view — real evidence-gathering, structural
   no-mutation guarantee, no approval prompts triggered by a judge.
+- **The ontology read set is declared, and opted into.** The graph reads an
+  agent reasons with are named in `ONTOLOGY_READ_CAPABILITIES`
+  (`packages/agent/src/runtime/ontology-tools.ts`) rather than inferred from
+  whichever contracts happen to carry the `agent` surface, so dropping that
+  surface from one of them fails a check instead of silently costing every
+  agent a graph read. A run that declares no `toolPolicy.allowlist`
+  materializes them already; a run that narrows itself gets them back with
+  `toolPolicy.ontology: true`, which `withOntologyReads` unions into that
+  allowlist. The flag defaults off, and it widens the one `materializeTools`
+  call rather than adding a second path to the graph — every read still lands
+  on `invoke()` behind IAM, billing admission, the entitlement gate and
+  `runInTenantScope`. Reference: [the ontology read
+  set](../../capabilities/_ontology-read-set.md).
 
 ### 4.5 Verification plane in production
 

@@ -58,18 +58,44 @@ function scopePath(scope: ConfigScope, ctx: ConfigWriteCtx): string {
 }
 
 /** Validate a full document against the schema and write it, busting the resolution cache. */
-export function writeConfigScopeDoc(path: string, doc: Record<string, unknown>): void {
+export function writeConfigScopeDoc(
+  path: string,
+  doc: Record<string, unknown>,
+): void {
   const validated = workspaceConfigSchema.parse(doc);
   mkdirSync(dirname(path), { recursive: true });
   atomicWriteFileSync(path, JSON.stringify(validated, null, 2) + "\n");
   clearWorkspaceConfigCache();
 }
 
+/**
+ * Segments that address `Object.prototype` machinery rather than a config key.
+ * Assigning through one of these mutates the document's prototype instead of
+ * writing an own property, so the value never reaches JSON and the write
+ * reports success while doing nothing. Refuse them by name instead.
+ */
+const RESERVED_PATH_SEGMENTS = new Set([
+  "__proto__",
+  "constructor",
+  "prototype",
+]);
+
 /** Set `doc[a][b]...[z] = value`, creating intermediate objects as needed. Mutates `doc`. */
-function setAtPath(doc: Record<string, unknown>, dottedPath: string, value: unknown): void {
+function setAtPath(
+  doc: Record<string, unknown>,
+  dottedPath: string,
+  value: unknown,
+): void {
   const segments = dottedPath.split(".");
   if (segments.length === 0 || segments.some((s) => s.length === 0)) {
     throw new Error(`invalid dotted path: "${dottedPath}"`);
+  }
+  const reserved = segments.find((s) => RESERVED_PATH_SEGMENTS.has(s));
+  if (reserved !== undefined) {
+    throw new Error(
+      `cannot set "${dottedPath}": "${reserved}" is a reserved JavaScript property name, ` +
+        `not a config key — a write there would be silently dropped.`,
+    );
   }
   let cur = doc;
   for (let i = 0; i < segments.length - 1; i++) {
@@ -142,7 +168,11 @@ export interface UnsetPathResult {
  * shadowing simply resurfaces on the next resolve — that's the tiering
  * working, not a bug.
  */
-export function unsetPath(scope: ConfigScope, dottedPath: string, ctx: ConfigWriteCtx = {}): UnsetPathResult {
+export function unsetPath(
+  scope: ConfigScope,
+  dottedPath: string,
+  ctx: ConfigWriteCtx = {},
+): UnsetPathResult {
   assertWritableScope(scope);
   const path = scopePath(scope, ctx);
   const doc = readScopeDoc(path);
@@ -156,7 +186,12 @@ export function unsetPath(scope: ConfigScope, dottedPath: string, ctx: ConfigWri
   for (let i = 0; i < segments.length - 1; i++) {
     const key = segments[i]!;
     const next = cur[key];
-    if (next === undefined || next === null || typeof next !== "object" || Array.isArray(next)) {
+    if (
+      next === undefined ||
+      next === null ||
+      typeof next !== "object" ||
+      Array.isArray(next)
+    ) {
       return { path, removed: false };
     }
     chain.push({ parent: cur, key });
@@ -168,7 +203,12 @@ export function unsetPath(scope: ConfigScope, dottedPath: string, ctx: ConfigWri
   for (let i = chain.length - 1; i >= 0; i--) {
     const { parent, key } = chain[i]!;
     const child = parent[key];
-    if (child && typeof child === "object" && !Array.isArray(child) && Object.keys(child).length === 0) {
+    if (
+      child &&
+      typeof child === "object" &&
+      !Array.isArray(child) &&
+      Object.keys(child).length === 0
+    ) {
       delete parent[key];
     } else {
       break;
@@ -183,8 +223,12 @@ interface RawLanguageEntry {
   items?: LanguageItem[];
 }
 
-function languagesOf(doc: Record<string, unknown>): Record<string, RawLanguageEntry> {
-  return (doc["languages"] as Record<string, RawLanguageEntry> | undefined) ?? {};
+function languagesOf(
+  doc: Record<string, unknown>,
+): Record<string, RawLanguageEntry> {
+  return (
+    (doc["languages"] as Record<string, RawLanguageEntry> | undefined) ?? {}
+  );
 }
 
 /** Add or replace (by `item.id`) a rule/preference/policy/convention/reference for `lang`. */
@@ -218,7 +262,11 @@ export interface RemoveItemResult {
 }
 
 /** Remove a language item by `id`, searching every language in the scope file. */
-export function removeItem(scope: ConfigScope, id: string, ctx: ConfigWriteCtx = {}): RemoveItemResult {
+export function removeItem(
+  scope: ConfigScope,
+  id: string,
+  ctx: ConfigWriteCtx = {},
+): RemoveItemResult {
   assertWritableScope(scope);
   const path = scopePath(scope, ctx);
   const doc = readScopeDoc(path);
@@ -229,7 +277,8 @@ export function removeItem(scope: ConfigScope, id: string, ctx: ConfigWriteCtx =
     const before = entry.items.length;
     const items = entry.items.filter((i) => i.id !== id);
     if (items.length !== before) touched.push(lang);
-    languages[lang] = items.length > 0 ? { ...entry, items } : { ...entry, items: undefined };
+    languages[lang] =
+      items.length > 0 ? { ...entry, items } : { ...entry, items: undefined };
   }
   if (touched.length > 0) {
     doc["languages"] = languages;
@@ -281,7 +330,10 @@ export function setWorktreeSeed(
   const path = scopePath(scope, ctx);
   const doc = readScopeDoc(path);
   const worktrees = (doc["worktrees"] as WorktreesConfig | undefined) ?? {};
-  doc["worktrees"] = { ...worktrees, seed: { ...(worktrees.seed ?? {}), ...seed } };
+  doc["worktrees"] = {
+    ...worktrees,
+    seed: { ...(worktrees.seed ?? {}), ...seed },
+  };
   writeConfigScopeDoc(path, doc);
   return path;
 }
@@ -291,7 +343,10 @@ export function setWorktreeSeed(
  * (`<cwd>/.oxagen/workspace.json`) — `consolidated` is a workspace-level,
  * generated artifact (schema.ts, design.md §4/§5), never per-user or org.
  */
-export function writeConsolidated(consolidated: ConsolidatedConfig, ctx: ConfigWriteCtx = {}): string {
+export function writeConsolidated(
+  consolidated: ConsolidatedConfig,
+  ctx: ConfigWriteCtx = {},
+): string {
   const path = scopePath("workspace", ctx);
   const doc = readScopeDoc(path);
   doc["consolidated"] = consolidated;

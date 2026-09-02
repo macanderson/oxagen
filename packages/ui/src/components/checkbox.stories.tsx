@@ -15,7 +15,11 @@ export const Default: Story = {
     const [checked, setChecked] = React.useState(true);
     return (
       <div className="flex items-center gap-2">
-        <Checkbox id="terms" checked={checked} onCheckedChange={(v) => setChecked(Boolean(v))} />
+        <Checkbox
+          id="terms"
+          checked={checked}
+          onCheckedChange={(v) => setChecked(Boolean(v))}
+        />
         <Label htmlFor="terms">Accept terms and conditions</Label>
       </div>
     );

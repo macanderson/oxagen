@@ -15,9 +15,7 @@ describe("integration.get capability", () => {
   });
 
   it("rejects integrationId of wrong type", () => {
-    expect(() =>
-      integrationGet.input.parse({ integrationId: 123 }),
-    ).toThrow();
+    expect(() => integrationGet.input.parse({ integrationId: 123 })).toThrow();
   });
 
   // ── output: valid full parse ──────────────────────────────────────────────

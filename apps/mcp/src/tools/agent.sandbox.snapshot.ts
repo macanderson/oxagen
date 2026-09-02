@@ -7,7 +7,7 @@ import { buildContext } from "../context";
 export const schema = {
   ...agentSandboxSnapshot.input.shape,
   sessionId: agentSandboxSnapshot.input.shape.sessionId.describe(
-    "Durable-session id (sbx_…) returned by agent.sandbox.start; cannot snapshot while a command is mid-flight",
+    "Durable-session id (sbx_…) returned by start_sandbox; cannot snapshot while a command is mid-flight",
   ),
 };
 
@@ -25,6 +25,8 @@ export default async function agentSandboxSnapshotTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentSandboxSnapshot.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentSandboxSnapshot.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentSandboxSnapshot.output.parse(output);
 }

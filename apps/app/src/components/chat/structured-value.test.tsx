@@ -94,9 +94,13 @@ describe("looksLikeEnum", () => {
   });
 
   it("rejects long strings and multi-word phrases", () => {
-    expect(looksLikeEnum("Captain William Anderson nuclear submarine")).toBe(false);
+    expect(looksLikeEnum("Captain William Anderson nuclear submarine")).toBe(
+      false,
+    );
     expect(looksLikeEnum("a sentence with spaces")).toBe(false);
-    expect(looksLikeEnum("supercalifragilisticexpialidocious_and_then_some")).toBe(false);
+    expect(
+      looksLikeEnum("supercalifragilisticexpialidocious_and_then_some"),
+    ).toBe(false);
   });
 });
 
@@ -132,7 +136,9 @@ describe("StructuredValue — object rendering", () => {
   it("renders the long string value as plain readable text", () => {
     render(<StructuredValue value={SWARM_INPUT} />);
     expect(
-      screen.getByText("Captain William Anderson nuclear submarine career biography"),
+      screen.getByText(
+        "Captain William Anderson nuclear submarine career biography",
+      ),
     ).toBeInTheDocument();
   });
 
@@ -153,7 +159,8 @@ describe("StructuredValue — typed scalars", () => {
     // CopyableId truncates the visible text but the button's accessible name
     // carries the full id.
     expect(
-      screen.getAllByRole("button", { name: /fan_p48e66xt6jag15rqg0t10y/ }).length,
+      screen.getAllByRole("button", { name: /fan_p48e66xt6jag15rqg0t10y/ })
+        .length,
     ).toBeGreaterThan(0);
   });
 
@@ -163,8 +170,14 @@ describe("StructuredValue — typed scalars", () => {
   });
 
   it("formats numbers with grouping and renders booleans as Yes/No", () => {
-    render(<StructuredValue value={{ count: 12345, enabled: true, archived: false }} />);
-    expect(screen.getByText(new Intl.NumberFormat().format(12345))).toBeInTheDocument();
+    render(
+      <StructuredValue
+        value={{ count: 12345, enabled: true, archived: false }}
+      />,
+    );
+    expect(
+      screen.getByText(new Intl.NumberFormat().format(12345)),
+    ).toBeInTheDocument();
     expect(screen.getByText("Yes")).toBeInTheDocument();
     expect(screen.getByText("No")).toBeInTheDocument();
   });
@@ -178,7 +191,9 @@ describe("StructuredValue — typed scalars", () => {
     render(<StructuredValue value={{ phase: "in_progress" }} />);
     expect(screen.getByText("in_progress")).toBeInTheDocument();
     // A misclassified id would render a CopyableId button.
-    expect(screen.queryByRole("button", { name: /in_progress/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /in_progress/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders an ISO date as a localized value, not the raw ISO string", () => {
@@ -203,7 +218,9 @@ describe("StructuredValue — nested + arrays", () => {
   });
 
   it("renders a scalar array as chips, not JSON", () => {
-    const { container } = render(<StructuredValue value={{ tags: ["alpha", "beta", "gamma"] }} />);
+    const { container } = render(
+      <StructuredValue value={{ tags: ["alpha", "beta", "gamma"] }} />,
+    );
     expect(screen.getByText("alpha")).toBeInTheDocument();
     expect(screen.getByText("gamma")).toBeInTheDocument();
     expect(container.textContent ?? "").not.toContain("[");
@@ -211,7 +228,14 @@ describe("StructuredValue — nested + arrays", () => {
 
   it("renders an array of objects as numbered records, never [object Object] or JSON", () => {
     const { container } = render(
-      <StructuredValue value={{ rows: [{ name: "a", score: 1 }, { name: "b", score: 2 }] }} />,
+      <StructuredValue
+        value={{
+          rows: [
+            { name: "a", score: 1 },
+            { name: "b", score: 2 },
+          ],
+        }}
+      />,
     );
     // Each object renders as its own humanized record.
     expect(screen.getAllByText("Name")).toHaveLength(2);
@@ -233,11 +257,15 @@ describe("StructuredField", () => {
     render(<StructuredField label="Result" value={SWARM_RESULT} />);
     expect(screen.getByText("Result")).toBeInTheDocument();
     expect(screen.getByText("Estimated tasks")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /copy value as json/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /copy value as json/i }),
+    ).toBeInTheDocument();
   });
 
   it("omits the copy affordance for nullish values", () => {
     render(<StructuredField label="Input" value={null} />);
-    expect(screen.queryByRole("button", { name: /copy value as json/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /copy value as json/i }),
+    ).not.toBeInTheDocument();
   });
 });

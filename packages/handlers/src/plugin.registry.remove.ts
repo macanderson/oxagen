@@ -14,12 +14,21 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       removeRegistry(tx, { orgId, workspaceId, registryId }),
     );
   } catch (err) {
-    logger.error({ err, registryId, orgId, workspaceId }, "plugin.registry.remove: failed");
+    logger.error(
+      { err, registryId, orgId, workspaceId },
+      "plugin.registry.remove: failed",
+    );
     throw err;
   }
 
   logger.info(
-    { registryId, orgId, workspaceId, removed: result.removed, promotedId: result.promotedId },
+    {
+      registryId,
+      orgId,
+      workspaceId,
+      removed: result.removed,
+      promotedId: result.promotedId,
+    },
     "plugin.registry.remove: ok",
   );
   return { ok: result.removed, promotedId: result.promotedId };

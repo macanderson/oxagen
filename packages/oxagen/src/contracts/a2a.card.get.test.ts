@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  a2aCardGet,
-  a2aAgentCard,
-  A2A_PROTOCOL_VERSION,
-} from "./a2a.card.get";
+import { a2aCardGet, a2aAgentCard, A2A_PROTOCOL_VERSION } from "./a2a.card.get";
 
 describe("a2a.card.get contract", () => {
   it("declares the expected capability metadata", () => {
@@ -50,8 +46,6 @@ describe("a2a.card.get contract", () => {
   });
 
   it("rejects a card with the wrong protocol version or transport", () => {
-    expect(() =>
-      a2aAgentCard.parse({ protocolVersion: "0.9" }),
-    ).toThrow();
+    expect(() => a2aAgentCard.parse({ protocolVersion: "0.9" })).toThrow();
   });
 });

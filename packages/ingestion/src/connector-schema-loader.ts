@@ -347,9 +347,13 @@ async function assertPublicHost(parsed: URL): Promise<void> {
   }
 
   // DNS name: resolve every address and reject if any is non-public. This
-  // closes the public-name → private-IP rebinding vector. A resolution failure
-  // (ENOTFOUND/ENODATA) is left to the subsequent fetch to surface, so the
-  // guard never throws on a host it could not look up.
+  // rejects a name that already points at an internal IP. It does NOT close
+  // DNS rebinding: `fetch` below resolves the name a second time, so a
+  // short-TTL record can answer public here and private there. Closing that
+  // needs a pinned-IP dispatcher (fetch to the resolved address with the Host
+  // header preserved), which the platform fetch does not expose. A resolution
+  // failure (ENOTFOUND/ENODATA) is left to the subsequent fetch to surface, so
+  // the guard never throws on a host it could not look up.
   let addresses: { address: string; family: number }[];
   try {
     addresses = await lookup(host, { all: true });
@@ -516,6 +520,10 @@ async function fetchPartnerSchema(
         continue;
       }
 
+      // NOTE: the abort timer above is already cleared, and there is no
+      // Content-Length check or byte cap here — a partner endpoint that drips
+      // an unbounded body buffers it whole, with no deadline. Cap the read and
+      // move the timer to cover it.
       const text = await response.text();
       if (!text.trim()) {
         throw new Error(
@@ -697,6 +705,14 @@ function validateField(
   }
 
   // String / pattern check.
+  //
+  // HAZARD: `validation.pattern` comes from the connector schema, which for a
+  // partner plugin is fetched from a partner-controlled URL. An unparseable
+  // pattern throws SyntaxError straight out of this function — unlike the
+  // sibling validator in validate/schema.ts (`safeTest`), which catches it and
+  // passes. Wrap both `new RegExp` calls in this function the same way, and add
+  // a pattern lint at schema-publish time so a backtracking pattern cannot
+  // stall the validating worker either.
   if (validation.pattern !== undefined && typeof value === "string") {
     const regex = new RegExp(validation.pattern);
     if (!regex.test(value)) {

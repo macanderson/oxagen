@@ -29,7 +29,13 @@
  */
 import { spawn } from "node:child_process";
 import kleur from "kleur";
-import { existsSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { resolve } from "node:path";
 import { PORTS } from "@oxagen/config";
 
@@ -74,7 +80,9 @@ export async function startInngestDevServer(): Promise<void> {
   process.env.INNGEST_DEV ??= "1";
 
   if (devServerAlreadyRunning()) {
-    console.log(kleur.cyan("[dev] inngest dev server already running — reusing it"));
+    console.log(
+      kleur.cyan("[dev] inngest dev server already running — reusing it"),
+    );
     return;
   }
 
@@ -104,7 +112,9 @@ export async function startInngestDevServer(): Promise<void> {
   // A binary that exits immediately (e.g. missing native build) should warn,
   // not silently leave a dead pidfile.
   child.on("error", (err) => {
-    console.log(kleur.yellow(`[dev] inngest dev server failed to launch: ${err.message}`));
+    console.log(
+      kleur.yellow(`[dev] inngest dev server failed to launch: ${err.message}`),
+    );
   });
 
   child.unref();

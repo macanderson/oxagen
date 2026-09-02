@@ -25,7 +25,9 @@ vi.mock("./agent-picker/chat-selection-context", () => ({
   useChatSelectionContext: () => mockSelection,
 }));
 
-function makeSelection(over: Partial<ChatSelectionStore> = {}): ChatSelectionStore {
+function makeSelection(
+  over: Partial<ChatSelectionStore> = {},
+): ChatSelectionStore {
   return {
     selectedAgentId: null,
     selectedRepoKey: null,
@@ -41,7 +43,9 @@ function makeSelection(over: Partial<ChatSelectionStore> = {}): ChatSelectionSto
   };
 }
 
-function tc(over: Partial<LiveToolCall> & Pick<LiveToolCall, "toolCallId" | "capability">): LiveToolCall {
+function tc(
+  over: Partial<LiveToolCall> & Pick<LiveToolCall, "toolCallId" | "capability">,
+): LiveToolCall {
   return {
     messageId: "m1",
     inputPreview: null,
@@ -54,7 +58,9 @@ function tc(over: Partial<LiveToolCall> & Pick<LiveToolCall, "toolCallId" | "cap
   };
 }
 
-function baseProps(over: Partial<AgentActivityRailProps> = {}): AgentActivityRailProps {
+function baseProps(
+  over: Partial<AgentActivityRailProps> = {},
+): AgentActivityRailProps {
   return {
     order: [],
     plans: {},
@@ -95,7 +101,9 @@ afterEach(() => {
 describe("AgentActivityRail", () => {
   it("renders the three cards (Progress / Context / Outputs)", () => {
     render(<AgentActivityRail {...baseProps()} />);
-    expect(document.querySelector('[data-card="progress"]')).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-card="progress"]'),
+    ).toBeInTheDocument();
     expect(document.querySelector('[data-card="context"]')).toBeInTheDocument();
     expect(document.querySelector('[data-card="outputs"]')).toBeInTheDocument();
     // Outputs always mounts the tabs (files surface).
@@ -113,7 +121,9 @@ describe("AgentActivityRail", () => {
 
   it("renders repo/branch/env from a durable code binding, locked", () => {
     render(
-      <AgentActivityRail {...baseProps({ conversationCodeBinding: BINDING })} />,
+      <AgentActivityRail
+        {...baseProps({ conversationCodeBinding: BINDING })}
+      />,
     );
     const grounded = screen.getByTestId("context-grounded");
     expect(grounded).toBeInTheDocument();
@@ -121,7 +131,9 @@ describe("AgentActivityRail", () => {
     expect(screen.getByText("main")).toBeInTheDocument();
     expect(screen.getByText("Node 24")).toBeInTheDocument();
     // A binding locks the conversation → lock affordance present.
-    expect(screen.getByLabelText("Locked to this conversation")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Locked to this conversation"),
+    ).toBeInTheDocument();
   });
 
   it("resolves the selected repo (no binding) from availableRepos, unlocked", () => {
@@ -191,7 +203,13 @@ describe("AgentActivityRail", () => {
         {...baseProps({
           isStreaming: true,
           order: ["tool:a"],
-          toolCalls: { a: tc({ toolCallId: "a", capability: "read_file", status: "running" }) },
+          toolCalls: {
+            a: tc({
+              toolCallId: "a",
+              capability: "read_file",
+              status: "running",
+            }),
+          },
         })}
       />,
     );
@@ -235,8 +253,12 @@ describe("AgentActivityRail — chat_ux_v2 desktop rail (v2)", () => {
       />,
     );
     expect(screen.getByTestId("session-panel-slot")).toBeInTheDocument();
-    expect(document.querySelector('[data-card="context"]')).not.toBeInTheDocument();
-    expect(document.querySelector('[data-card="progress"]')).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-card="context"]'),
+    ).not.toBeInTheDocument();
+    expect(
+      document.querySelector('[data-card="progress"]'),
+    ).toBeInTheDocument();
     expect(document.querySelector('[data-card="outputs"]')).toBeInTheDocument();
   });
 
@@ -259,16 +281,25 @@ describe("AgentActivityRail — chat_ux_v2 desktop rail (v2)", () => {
           v2: true,
           isStreaming: true,
           order: ["tool:a"],
-          toolCalls: { a: tc({ toolCallId: "a", capability: "read_file", status: "running" }) },
+          toolCalls: {
+            a: tc({
+              toolCallId: "a",
+              capability: "read_file",
+              status: "running",
+            }),
+          },
         })}
       />,
     );
     expect(screen.getByText("Progress")).toBeInTheDocument();
     expect(screen.queryByText("Progress · idle")).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /^Progress/ }),
-    ).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByTestId("progress-status-line")).toHaveTextContent("Working");
+    expect(screen.getByRole("button", { name: /^Progress/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByTestId("progress-status-line")).toHaveTextContent(
+      "Working",
+    );
   });
 
   it("Progress auto-expands once the first row appears (even without isStreaming)", () => {
@@ -285,9 +316,10 @@ describe("AgentActivityRail — chat_ux_v2 desktop rail (v2)", () => {
         })}
       />,
     );
-    expect(
-      screen.getByRole("button", { name: /^Progress/ }),
-    ).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: /^Progress/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
   });
 
   it("Files reads 'Files · 0' collapsed when there's no file tool activity yet", () => {
@@ -299,19 +331,26 @@ describe("AgentActivityRail — chat_ux_v2 desktop rail (v2)", () => {
   });
 
   it("Files auto-expands (and drops the count) once a file-producing tool call appears", () => {
-    const { rerender } = render(<AgentActivityRail {...baseProps({ v2: true })} />);
+    const { rerender } = render(
+      <AgentActivityRail {...baseProps({ v2: true })} />,
+    );
     expect(screen.getByText("Files · 0")).toBeInTheDocument();
     rerender(
       <AgentActivityRail
         {...baseProps({
           v2: true,
-          toolCalls: { a: tc({ toolCallId: "a", capability: "edit_repo_file" }) },
+          toolCalls: {
+            a: tc({ toolCallId: "a", capability: "edit_repo_file" }),
+          },
         })}
       />,
     );
     expect(screen.getByText("Files")).toBeInTheDocument();
     expect(screen.queryByText("Files · 0")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Files" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Files" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
     expect(screen.getByTestId("ws-tabs")).toBeInTheDocument();
   });
 
@@ -326,10 +365,14 @@ describe("AgentActivityRail — chat_ux_v2 desktop rail (v2)", () => {
   it("never renders the redundant helper captions (ux pass 2026-07-16: card bodies self-explain in both modes)", () => {
     const { rerender } = render(<AgentActivityRail {...baseProps()} />);
     expect(
-      screen.queryByText("Steps appear here as the agent works through a longer task."),
+      screen.queryByText(
+        "Steps appear here as the agent works through a longer task.",
+      ),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText("Files the assistant generates or edits in this conversation show up here."),
+      screen.queryByText(
+        "Files the assistant generates or edits in this conversation show up here.",
+      ),
     ).not.toBeInTheDocument();
 
     rerender(
@@ -338,37 +381,46 @@ describe("AgentActivityRail — chat_ux_v2 desktop rail (v2)", () => {
           v2: true,
           isStreaming: true,
           order: ["tool:a"],
-          toolCalls: { a: tc({ toolCallId: "a", capability: "edit_repo_file" }) },
+          toolCalls: {
+            a: tc({ toolCallId: "a", capability: "edit_repo_file" }),
+          },
         })}
       />,
     );
     expect(
-      screen.queryByText("Steps appear here as the agent works through a longer task."),
+      screen.queryByText(
+        "Steps appear here as the agent works through a longer task.",
+      ),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText("Files the assistant generates or edits in this conversation show up here."),
+      screen.queryByText(
+        "Files the assistant generates or edits in this conversation show up here.",
+      ),
     ).not.toBeInTheDocument();
   });
 
   it("manual toggle wins over auto-expand for the rest of the session", () => {
-    const { rerender } = render(<AgentActivityRail {...baseProps({ v2: true })} />);
+    const { rerender } = render(
+      <AgentActivityRail {...baseProps({ v2: true })} />,
+    );
     // User manually opens the idle Progress card before anything happens.
     fireEvent.click(screen.getByRole("button", { name: "Progress · idle" }));
-    expect(screen.getByRole("button", { name: "Progress · idle" })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
+    expect(
+      screen.getByRole("button", { name: "Progress · idle" }),
+    ).toHaveAttribute("aria-expanded", "true");
     // User then manually collapses it again.
     fireEvent.click(screen.getByRole("button", { name: "Progress · idle" }));
-    expect(screen.getByRole("button", { name: "Progress · idle" })).toHaveAttribute(
+    expect(
+      screen.getByRole("button", { name: "Progress · idle" }),
+    ).toHaveAttribute("aria-expanded", "false");
+    // Streaming starts — auto-expand must NOT override the user's explicit choice.
+    rerender(
+      <AgentActivityRail {...baseProps({ v2: true, isStreaming: true })} />,
+    );
+    expect(screen.getByRole("button", { name: /^Progress/ })).toHaveAttribute(
       "aria-expanded",
       "false",
     );
-    // Streaming starts — auto-expand must NOT override the user's explicit choice.
-    rerender(<AgentActivityRail {...baseProps({ v2: true, isStreaming: true })} />);
-    expect(
-      screen.getByRole("button", { name: /^Progress/ }),
-    ).toHaveAttribute("aria-expanded", "false");
   });
 });
 
@@ -379,7 +431,13 @@ describe("resolveContextRepo", () => {
         binding: BINDING,
         selectedRepoKey: "con_9::acme/webapp",
         availableRepos: [
-          { key: "con_9::acme/webapp", connectionId: "con_9", owner: "acme", name: "webapp", defaultBranch: "trunk" },
+          {
+            key: "con_9::acme/webapp",
+            connectionId: "con_9",
+            owner: "acme",
+            name: "webapp",
+            defaultBranch: "trunk",
+          },
         ],
       }),
     ).toEqual({ owner: "oxagen", name: "platform", branch: "main" });
@@ -391,7 +449,13 @@ describe("resolveContextRepo", () => {
         binding: null,
         selectedRepoKey: "con_9::acme/webapp",
         availableRepos: [
-          { key: "con_9::acme/webapp", connectionId: "con_9", owner: "acme", name: "webapp", defaultBranch: "trunk" },
+          {
+            key: "con_9::acme/webapp",
+            connectionId: "con_9",
+            owner: "acme",
+            name: "webapp",
+            defaultBranch: "trunk",
+          },
         ],
       }),
     ).toEqual({ owner: "acme", name: "webapp", branch: "trunk" });
@@ -399,7 +463,11 @@ describe("resolveContextRepo", () => {
 
   it("returns null when nothing is selected or bound", () => {
     expect(
-      resolveContextRepo({ binding: null, selectedRepoKey: null, availableRepos: [] }),
+      resolveContextRepo({
+        binding: null,
+        selectedRepoKey: null,
+        availableRepos: [],
+      }),
     ).toBeNull();
   });
 

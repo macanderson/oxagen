@@ -29,7 +29,9 @@ export function parsePathEntries(pathEnv: string | undefined): string[] {
 }
 
 /** Resolve, drop empties/nullish, and de-duplicate a list of directories, order-preserving. */
-export function uniqueDirs(dirs: ReadonlyArray<string | null | undefined>): string[] {
+export function uniqueDirs(
+  dirs: ReadonlyArray<string | null | undefined>,
+): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of dirs) {
@@ -69,8 +71,15 @@ exec "$__OXAGEN_TSX" "$__OXAGEN_ENTRY" "$@"
  * `srcEntry` (i.e. this exact monorepo checkout). A launcher referencing a
  * different checkout is treated as foreign so the current repo always wins.
  */
-export function isOurLauncher(content: string | null, srcEntry: string): boolean {
-  return Boolean(content) && content!.includes(LAUNCHER_MARKER) && content!.includes(srcEntry);
+export function isOurLauncher(
+  content: string | null,
+  srcEntry: string,
+): boolean {
+  return (
+    Boolean(content) &&
+    content!.includes(LAUNCHER_MARKER) &&
+    content!.includes(srcEntry)
+  );
 }
 
 /** Classify a discovered `oxagen` executable from its file contents. */
@@ -129,5 +138,8 @@ export function hasGlobalPkg(
   exists: (p: string) => boolean,
 ): boolean {
   if (!rootDir) return false;
-  return exists(join(rootDir, "@oxagen/cli")) || exists(join(rootDir, "node_modules/@oxagen/cli"));
+  return (
+    exists(join(rootDir, "@oxagen/cli")) ||
+    exists(join(rootDir, "node_modules/@oxagen/cli"))
+  );
 }

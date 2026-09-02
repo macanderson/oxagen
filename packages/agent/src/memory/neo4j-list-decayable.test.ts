@@ -38,9 +38,13 @@ describe("listDecayableMemories", () => {
     await withTestScope(() => listDecayableMemories());
     expect(sessionRun).toHaveBeenCalledTimes(1);
     const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
-    expect(cypher).toContain("MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})");
+    expect(cypher).toContain(
+      "MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})",
+    );
     expect(cypher).toContain("coalesce(m.status, 'ACTIVE') = 'ACTIVE'");
-    expect(cypher).toContain("coalesce(m.memory_class, 'OBSERVATION') <> 'FACT'");
+    expect(cypher).toContain(
+      "coalesce(m.memory_class, 'OBSERVATION') <> 'FACT'",
+    );
     expect(cypher).toContain("coalesce(m.decay_floor, 5.0)");
   });
 

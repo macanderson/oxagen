@@ -32,7 +32,9 @@ export function registryDefaults(): RuntimeConfigDefaults {
 
 /** The on-device capability table, sorted by codeScore descending. */
 export function capabilityTable(): CapabilityRow[] {
-  return [...REGISTRY.capabilityTable.rows].sort((a, b) => b.codeScore - a.codeScore);
+  return [...REGISTRY.capabilityTable.rows].sort(
+    (a, b) => b.codeScore - a.codeScore,
+  );
 }
 
 /** Look up one capability row by its modelId. */

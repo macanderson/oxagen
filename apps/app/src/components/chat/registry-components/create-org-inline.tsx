@@ -50,7 +50,9 @@ export default function CreateOrgInline({
 
     startTransition(async () => {
       try {
-        const { createOrgAction } = await import("@/app/(onboarding)/new-organization/actions");
+        const { createOrgAction } = await import(
+          "@/app/(onboarding)/new-organization/actions"
+        );
         const result = await createOrgAction(fd);
         if (result.ok) {
           setFormState("success");
@@ -60,7 +62,9 @@ export default function CreateOrgInline({
           setFormState("error");
         }
       } catch (err) {
-        setErrorMessage(err instanceof Error ? err.message : "Failed to create organization");
+        setErrorMessage(
+          err instanceof Error ? err.message : "Failed to create organization",
+        );
         setFormState("error");
       }
     });
@@ -74,8 +78,13 @@ export default function CreateOrgInline({
         aria-live="polite"
       >
         <div className="flex items-center gap-3">
-          <CheckCircle2 className="h-5 w-5 shrink-0 text-success" aria-hidden="true" />
-          <p className="text-sm font-medium text-foreground">Organization created — redirecting…</p>
+          <CheckCircle2
+            className="h-5 w-5 shrink-0 text-success"
+            aria-hidden="true"
+          />
+          <p className="text-sm font-medium text-foreground">
+            Organization created — redirecting…
+          </p>
         </div>
       </div>
     );
@@ -85,11 +94,18 @@ export default function CreateOrgInline({
     <form
       onSubmit={handleSubmit}
       aria-label="Create organization"
-      className={cn("rounded-2xl border border-border bg-card p-5 space-y-5 w-full max-w-sm")}
+      className={cn(
+        "rounded-2xl border border-border bg-card p-5 space-y-5 w-full max-w-sm",
+      )}
     >
       <div className="flex items-center gap-2.5">
-        <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="text-sm font-semibold text-foreground">Create organization</span>
+        <Building2
+          className="h-4 w-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <span className="text-sm font-semibold text-foreground">
+          Create organization
+        </span>
       </div>
 
       <div className="space-y-1.5">
@@ -131,7 +147,9 @@ export default function CreateOrgInline({
           disabled={isSubmitting}
           autoComplete="off"
         />
-        <p className="text-xs text-muted-foreground">Lowercase, digits, hyphens. 2–40 chars.</p>
+        <p className="text-xs text-muted-foreground">
+          Lowercase, digits, hyphens. 2–40 chars.
+        </p>
       </div>
 
       {/* Hidden inputs the org create action expects */}

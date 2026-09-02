@@ -22,7 +22,10 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { AuthSchemePicker } from "@/components/connectors/auth-scheme-picker";
-import { FieldRenderer, validateField } from "@/components/connectors/field-renderer";
+import {
+  FieldRenderer,
+  validateField,
+} from "@/components/connectors/field-renderer";
 import {
   ConnectorSchemaProvider,
   useConnectorSchema,
@@ -70,18 +73,29 @@ function CredentialsForm({
   submitError,
   onBack,
 }: FormSharedProps) {
-  const { schema, formState, selectedAuthSchemeId, setErrors, clearErrors, touchField } =
-    useConnectorSchema();
+  const {
+    schema,
+    formState,
+    selectedAuthSchemeId,
+    setErrors,
+    clearErrors,
+    touchField,
+  } = useConnectorSchema();
   const [displayName, setDisplayName] = React.useState(connectorDisplayName);
-  const [displayNameError, setDisplayNameError] = React.useState<string | null>(null);
+  const [displayNameError, setDisplayNameError] = React.useState<string | null>(
+    null,
+  );
 
   if (!schema) return null;
 
   const hasAuth = (schema.auth?.schemes ?? []).length > 0;
   const hasConfig = (schema.config?.fields ?? []).length > 0;
-  const scheme = schema.auth?.schemes.find((s) => s.id === selectedAuthSchemeId);
+  const scheme = schema.auth?.schemes.find(
+    (s) => s.id === selectedAuthSchemeId,
+  );
   const isOAuthScheme =
-    scheme?.kind === "oauth2_authorization_code" || scheme?.kind === "oauth2_client_credentials";
+    scheme?.kind === "oauth2_authorization_code" ||
+    scheme?.kind === "oauth2_client_credentials";
 
   const handleNext = async () => {
     clearErrors();
@@ -98,13 +112,19 @@ function CredentialsForm({
     for (const field of schema.config?.fields ?? []) {
       touchField(field.key);
       const err = validateField(field, formState.values[field.key]);
-      if (err) clientErrors.push({ field: field.key, message: err, code: "unknown" });
+      if (err)
+        clientErrors.push({ field: field.key, message: err, code: "unknown" });
     }
     if (!isOAuthScheme) {
       for (const field of scheme?.fields ?? []) {
         touchField(field.key);
         const err = validateField(field, formState.values[field.key]);
-        if (err) clientErrors.push({ field: field.key, message: err, code: "unknown" });
+        if (err)
+          clientErrors.push({
+            field: field.key,
+            message: err,
+            code: "unknown",
+          });
       }
     }
     if (clientErrors.length > 0) {
@@ -128,13 +148,19 @@ function CredentialsForm({
     const configKeys = new Set((schema.config?.fields ?? []).map((f) => f.key));
     const authKeys = new Set((scheme?.fields ?? []).map((f) => f.key));
     const connectionConfig: Record<string, unknown> = {};
-    const authCredential: Record<string, unknown> = { type: scheme?.kind ?? "none" };
+    const authCredential: Record<string, unknown> = {
+      type: scheme?.kind ?? "none",
+    };
     for (const [key, value] of Object.entries(formState.values)) {
       if (authKeys.has(key)) authCredential[key] = value;
       else if (configKeys.has(key)) connectionConfig[key] = value;
     }
 
-    onSubmit({ displayName: displayName.trim(), connectionConfig, authCredential });
+    onSubmit({
+      displayName: displayName.trim(),
+      connectionConfig,
+      authCredential,
+    });
   };
 
   return (
@@ -148,12 +174,17 @@ function CredentialsForm({
           disabled={submitting}
           aria-invalid={Boolean(displayNameError)}
         />
-        {displayNameError && <p className="text-xs text-destructive">{displayNameError}</p>}
+        {displayNameError && (
+          <p className="text-xs text-destructive">{displayNameError}</p>
+        )}
       </div>
 
       {hasAuth && (
         <section aria-labelledby="credentials-auth-heading">
-          <p id="credentials-auth-heading" className="mb-2 text-sm font-semibold text-foreground">
+          <p
+            id="credentials-auth-heading"
+            className="mb-2 text-sm font-semibold text-foreground"
+          >
             Authentication
           </p>
           <AuthSchemePicker />
@@ -162,12 +193,20 @@ function CredentialsForm({
 
       {hasConfig && (
         <section aria-labelledby="credentials-config-heading">
-          <p id="credentials-config-heading" className="mb-2 text-sm font-semibold text-foreground">
+          <p
+            id="credentials-config-heading"
+            className="mb-2 text-sm font-semibold text-foreground"
+          >
             Configuration
           </p>
           <div className="flex flex-col gap-5">
             {schema.config?.fields.map((field) => (
-              <FieldRenderer key={field.key} field={field} namespace="config" disabled={submitting} />
+              <FieldRenderer
+                key={field.key}
+                field={field}
+                namespace="config"
+                disabled={submitting}
+              />
             ))}
           </div>
         </section>
@@ -178,7 +217,10 @@ function CredentialsForm({
           role="alert"
           className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
         >
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <AlertTriangle
+            className="mt-0.5 h-4 w-4 shrink-0"
+            aria-hidden="true"
+          />
           <div className="flex flex-col gap-0.5">
             {formState.errors.slice(0, 3).map((e, i) => (
               <span key={i}>{e.message}</span>
@@ -198,7 +240,13 @@ function CredentialsForm({
       )}
 
       <div className="flex items-center justify-between gap-3 border-t border-border/40 pt-4">
-        <Button type="button" variant="outline" size="sm" onClick={onBack} disabled={submitting}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onBack}
+          disabled={submitting}
+        >
           Back
         </Button>
         <Button
@@ -210,7 +258,10 @@ function CredentialsForm({
         >
           {submitting ? (
             <>
-              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              <Loader2
+                className="mr-2 h-3.5 w-3.5 animate-spin"
+                aria-hidden="true"
+              />
               Connecting…
             </>
           ) : (

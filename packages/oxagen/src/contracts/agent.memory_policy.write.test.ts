@@ -12,12 +12,19 @@ describe("agent.memory.policy.write contract", () => {
 
   it("accepts a partial policy update (all fields optional)", () => {
     expect(agentMemoryPolicyWrite.input.parse({})).toEqual({});
-    expect(agentMemoryPolicyWrite.input.parse({ recallThreshold: 0.5 }).recallThreshold).toBe(0.5);
+    expect(
+      agentMemoryPolicyWrite.input.parse({ recallThreshold: 0.5 })
+        .recallThreshold,
+    ).toBe(0.5);
   });
 
   it("rejects out-of-range or non-positive values", () => {
-    expect(() => agentMemoryPolicyWrite.input.parse({ recallThreshold: 2 })).toThrow();
-    expect(() => agentMemoryPolicyWrite.input.parse({ halfLifeLowDays: 0 })).toThrow();
+    expect(() =>
+      agentMemoryPolicyWrite.input.parse({ recallThreshold: 2 }),
+    ).toThrow();
+    expect(() =>
+      agentMemoryPolicyWrite.input.parse({ halfLifeLowDays: 0 }),
+    ).toThrow();
   });
 
   it("returns the full policy shape with defaults", () => {

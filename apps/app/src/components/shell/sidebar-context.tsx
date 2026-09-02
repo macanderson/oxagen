@@ -52,7 +52,11 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   // useSyncExternalStore hydrates from localStorage without a setState-in-effect
   // and without a hydration mismatch: the server snapshot is always `false`
   // (expanded), and the client snapshot reads the persisted value.
-  const collapsed = React.useSyncExternalStore(subscribeCollapsed, readCollapsed, () => false);
+  const collapsed = React.useSyncExternalStore(
+    subscribeCollapsed,
+    readCollapsed,
+    () => false,
+  );
 
   const setCollapsed = React.useCallback((next: boolean) => {
     try {
@@ -63,14 +67,19 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     window.dispatchEvent(new Event(COLLAPSE_EVENT));
   }, []);
 
-  const toggle = React.useCallback(() => setCollapsed(!collapsed), [collapsed, setCollapsed]);
+  const toggle = React.useCallback(
+    () => setCollapsed(!collapsed),
+    [collapsed, setCollapsed],
+  );
 
   const value = React.useMemo<SidebarContextValue>(
     () => ({ collapsed, setCollapsed, toggle, openMobile, setOpenMobile }),
     [collapsed, setCollapsed, toggle, openMobile],
   );
 
-  return <SidebarContext.Provider value={value}>{children}</SidebarContext.Provider>;
+  return (
+    <SidebarContext.Provider value={value}>{children}</SidebarContext.Provider>
+  );
 }
 
 export function useSidebar(): SidebarContextValue {

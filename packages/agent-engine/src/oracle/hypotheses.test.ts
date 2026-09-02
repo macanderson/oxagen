@@ -211,8 +211,18 @@ HYPOTHESIS: h3 SURVIVED — third
 describe("pairWithProbes", () => {
   it("creates Hypothesis objects from verdicts", () => {
     const verdicts: HypothesisVerdict[] = [
-      { id: "h1", statement: "Cache issue", verdict: "survived", evidence: "key mismatch" },
-      { id: "h2", statement: "Lock issue", verdict: "falsified", evidence: "released" },
+      {
+        id: "h1",
+        statement: "Cache issue",
+        verdict: "survived",
+        evidence: "key mismatch",
+      },
+      {
+        id: "h2",
+        statement: "Lock issue",
+        verdict: "falsified",
+        evidence: "released",
+      },
     ];
     const commands: Array<{ command: string; exitCode: number }> = [];
 
@@ -243,7 +253,9 @@ describe("pairWithProbes", () => {
     ];
 
     const hypotheses = pairWithProbes(verdicts, commands);
-    expect(hypotheses[0]!.evidence).toBe("python -m pytest test_h1_behavior.py");
+    expect(hypotheses[0]!.evidence).toBe(
+      "python -m pytest test_h1_behavior.py",
+    );
   });
 
   it("backfills evidence with case-insensitive id match", () => {
@@ -255,7 +267,9 @@ describe("pairWithProbes", () => {
     ];
 
     const hypotheses = pairWithProbes(verdicts, commands);
-    expect(hypotheses[0]!.evidence).toBe("python -m pytest test_h1_behavior.py");
+    expect(hypotheses[0]!.evidence).toBe(
+      "python -m pytest test_h1_behavior.py",
+    );
   });
 
   it("leaves evidence empty if no matching command found", () => {
@@ -296,7 +310,12 @@ describe("pairWithProbes", () => {
 
   it("preserves non-empty evidence", () => {
     const verdicts: HypothesisVerdict[] = [
-      { id: "h1", statement: "Issue", verdict: "survived", evidence: "explicit evidence" },
+      {
+        id: "h1",
+        statement: "Issue",
+        verdict: "survived",
+        evidence: "explicit evidence",
+      },
     ];
     const commands: Array<{ command: string; exitCode: number }> = [
       { command: "python -m pytest test_h1.py", exitCode: 1 },
@@ -310,9 +329,24 @@ describe("pairWithProbes", () => {
 describe("survivors", () => {
   it("filters to survived hypotheses only", () => {
     const hypotheses = [
-      { id: "h1", statement: "s1", evidence: "e1", probeResult: "survived" as const },
-      { id: "h2", statement: "s2", evidence: "e2", probeResult: "falsified" as const },
-      { id: "h3", statement: "s3", evidence: "e3", probeResult: "survived" as const },
+      {
+        id: "h1",
+        statement: "s1",
+        evidence: "e1",
+        probeResult: "survived" as const,
+      },
+      {
+        id: "h2",
+        statement: "s2",
+        evidence: "e2",
+        probeResult: "falsified" as const,
+      },
+      {
+        id: "h3",
+        statement: "s3",
+        evidence: "e3",
+        probeResult: "survived" as const,
+      },
     ];
 
     const result = survivors(hypotheses);
@@ -323,11 +357,36 @@ describe("survivors", () => {
 
   it("caps at 3 survivors", () => {
     const hypotheses = [
-      { id: "h1", statement: "s1", evidence: "e1", probeResult: "survived" as const },
-      { id: "h2", statement: "s2", evidence: "e2", probeResult: "survived" as const },
-      { id: "h3", statement: "s3", evidence: "e3", probeResult: "survived" as const },
-      { id: "h4", statement: "s4", evidence: "e4", probeResult: "survived" as const },
-      { id: "h5", statement: "s5", evidence: "e5", probeResult: "survived" as const },
+      {
+        id: "h1",
+        statement: "s1",
+        evidence: "e1",
+        probeResult: "survived" as const,
+      },
+      {
+        id: "h2",
+        statement: "s2",
+        evidence: "e2",
+        probeResult: "survived" as const,
+      },
+      {
+        id: "h3",
+        statement: "s3",
+        evidence: "e3",
+        probeResult: "survived" as const,
+      },
+      {
+        id: "h4",
+        statement: "s4",
+        evidence: "e4",
+        probeResult: "survived" as const,
+      },
+      {
+        id: "h5",
+        statement: "s5",
+        evidence: "e5",
+        probeResult: "survived" as const,
+      },
     ];
 
     const result = survivors(hypotheses);
@@ -339,8 +398,18 @@ describe("survivors", () => {
 
   it("returns empty array if no survivors", () => {
     const hypotheses = [
-      { id: "h1", statement: "s1", evidence: "e1", probeResult: "falsified" as const },
-      { id: "h2", statement: "s2", evidence: "e2", probeResult: "falsified" as const },
+      {
+        id: "h1",
+        statement: "s1",
+        evidence: "e1",
+        probeResult: "falsified" as const,
+      },
+      {
+        id: "h2",
+        statement: "s2",
+        evidence: "e2",
+        probeResult: "falsified" as const,
+      },
     ];
 
     const result = survivors(hypotheses);
@@ -349,10 +418,30 @@ describe("survivors", () => {
 
   it("preserves order of survivors", () => {
     const hypotheses = [
-      { id: "h1", statement: "s1", evidence: "e1", probeResult: "falsified" as const },
-      { id: "h2", statement: "s2", evidence: "e2", probeResult: "survived" as const },
-      { id: "h3", statement: "s3", evidence: "e3", probeResult: "falsified" as const },
-      { id: "h4", statement: "s4", evidence: "e4", probeResult: "survived" as const },
+      {
+        id: "h1",
+        statement: "s1",
+        evidence: "e1",
+        probeResult: "falsified" as const,
+      },
+      {
+        id: "h2",
+        statement: "s2",
+        evidence: "e2",
+        probeResult: "survived" as const,
+      },
+      {
+        id: "h3",
+        statement: "s3",
+        evidence: "e3",
+        probeResult: "falsified" as const,
+      },
+      {
+        id: "h4",
+        statement: "s4",
+        evidence: "e4",
+        probeResult: "survived" as const,
+      },
     ];
 
     const result = survivors(hypotheses);
@@ -362,9 +451,19 @@ describe("survivors", () => {
   });
 
   it("handles hypotheses without probeResult field", () => {
-    const hypotheses: Array<{ id: string; statement: string; evidence: string; probeResult?: "survived" | "falsified" }> = [
+    const hypotheses: Array<{
+      id: string;
+      statement: string;
+      evidence: string;
+      probeResult?: "survived" | "falsified";
+    }> = [
       { id: "h1", statement: "s1", evidence: "e1" },
-      { id: "h2", statement: "s2", evidence: "e2", probeResult: "survived" as const },
+      {
+        id: "h2",
+        statement: "s2",
+        evidence: "e2",
+        probeResult: "survived" as const,
+      },
     ];
 
     const result = survivors(hypotheses);
@@ -437,20 +536,33 @@ HYPOTHESIS: h3 SURVIVED — timeout handler callback exists but is never invoked
     `.trim();
 
     const commands = [
-      { command: "python -m pytest test_cache_h1.py::test_concurrent", exitCode: 1 },
-      { command: "python -m pytest test_mutex_h2.py::test_release", exitCode: 0 },
-      { command: "python -m pytest test_timeout_h3.py::test_registration", exitCode: 1 },
+      {
+        command: "python -m pytest test_cache_h1.py::test_concurrent",
+        exitCode: 1,
+      },
+      {
+        command: "python -m pytest test_mutex_h2.py::test_release",
+        exitCode: 0,
+      },
+      {
+        command: "python -m pytest test_timeout_h3.py::test_registration",
+        exitCode: 1,
+      },
     ];
 
     // Parse verdicts
     const verdicts = parseHypothesisMarkers(transcript);
     expect(verdicts).toHaveLength(3);
     expect(verdicts[0]!.id).toBe("h1");
-    expect(verdicts[0]!.statement).toBe("Cache is never invalidated on concurrent updates");
+    expect(verdicts[0]!.statement).toBe(
+      "Cache is never invalidated on concurrent updates",
+    );
     expect(verdicts[0]!.verdict).toBe("survived");
 
     expect(verdicts[1]!.id).toBe("h2");
-    expect(verdicts[1]!.statement).toBe("Mutex is incorrectly held after acquisition");
+    expect(verdicts[1]!.statement).toBe(
+      "Mutex is incorrectly held after acquisition",
+    );
     expect(verdicts[1]!.verdict).toBe("falsified");
 
     expect(verdicts[2]!.id).toBe("h3");

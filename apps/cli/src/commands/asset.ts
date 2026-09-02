@@ -30,14 +30,22 @@ const KINDS: AssetKind[] = ["avatar", "image", "document", "video"];
 
 export async function handleAssetUpload(
   url: string,
-  opts: { kind?: string; filename?: string; conversation?: string; json?: boolean },
+  opts: {
+    kind?: string;
+    filename?: string;
+    conversation?: string;
+    json?: boolean;
+  },
   writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   const out = createOutput({ json: opts.json }, writer);
   const kind = (opts.kind ?? "image") as AssetKind;
   if (!KINDS.includes(kind)) {
     process.exitCode = 2;
-    out.error(`Invalid --kind "${opts.kind}". Use one of: ${KINDS.join(", ")}.`, "usage");
+    out.error(
+      `Invalid --kind "${opts.kind}". Use one of: ${KINDS.join(", ")}.`,
+      "usage",
+    );
     return;
   }
 

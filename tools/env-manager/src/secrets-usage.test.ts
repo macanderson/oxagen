@@ -2,7 +2,13 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { appLabel, buildEnvRefIndex, deriveUsage, listWorkspace, pkgLabel } from "./secrets-usage";
+import {
+  appLabel,
+  buildEnvRefIndex,
+  deriveUsage,
+  listWorkspace,
+  pkgLabel,
+} from "./secrets-usage";
 
 describe("labels", () => {
   it("namespaces apps and packages so they never collide", () => {
@@ -40,7 +46,9 @@ describe("deriveUsage", () => {
   });
 
   it("handles an envKey not in the registry gracefully (only grep refs)", () => {
-    const refIndex = new Map<string, Set<string>>([["MY_CUSTOM_VAR", new Set(["pkg:utils"])]]);
+    const refIndex = new Map<string, Set<string>>([
+      ["MY_CUSTOM_VAR", new Set(["pkg:utils"])],
+    ]);
     const usage = deriveUsage("MY_CUSTOM_VAR", refIndex);
     expect(usage).toContain("pkg:utils");
   });
@@ -53,8 +61,14 @@ describe("listWorkspace + buildEnvRefIndex", () => {
     mkdirSync(join(root, "apps", "web-app", "src"), { recursive: true });
     mkdirSync(join(root, "packages", "core", "src"), { recursive: true });
     mkdirSync(join(root, "tools"), { recursive: true });
-    writeFileSync(join(root, "apps", "web-app", "src", "a.ts"), "const u = process.env.MY_SECRET;\n");
-    writeFileSync(join(root, "packages", "core", "src", "b.ts"), 'const v = process.env["MY_SECRET"];\nconst w = env.OTHER_KEY;\n');
+    writeFileSync(
+      join(root, "apps", "web-app", "src", "a.ts"),
+      "const u = process.env.MY_SECRET;\n",
+    );
+    writeFileSync(
+      join(root, "packages", "core", "src", "b.ts"),
+      'const v = process.env["MY_SECRET"];\nconst w = env.OTHER_KEY;\n',
+    );
   });
   afterAll(() => rmSync(root, { recursive: true, force: true }));
 
@@ -66,7 +80,9 @@ describe("listWorkspace + buildEnvRefIndex", () => {
 
   it("attributes env-var references to the owning app/package", () => {
     const index = buildEnvRefIndex(root);
-    expect(index.get("MY_SECRET")).toEqual(new Set(["app:web-app", "pkg:core"]));
+    expect(index.get("MY_SECRET")).toEqual(
+      new Set(["app:web-app", "pkg:core"]),
+    );
     expect(index.get("OTHER_KEY")).toEqual(new Set(["pkg:core"]));
   });
 

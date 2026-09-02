@@ -16,7 +16,9 @@ export const integrationRoute = new Hono<AppEnv>();
 integrationRoute.post("/", async (c) => {
   const body = integrationInstall.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(integrationInstall.name, body, ctx, { surface: "api" });
+  const out = await invoke(integrationInstall.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out, 202);
 });
 
@@ -44,20 +46,25 @@ integrationRoute.get("/:id", async (c) => {
 
 // PATCH /integrations/:id/configure — update plugin instance config
 integrationRoute.patch("/:id/configure", async (c) => {
+  // Path param LAST: the URL identifies the resource, so an `integrationId` in
+  // the body must never redirect the write to a different integration.
   const body = integrationConfigure.input.parse({
+    ...((await c.req.json()) as Record<string, unknown>),
     integrationId: c.req.param("id"),
-    ...(await c.req.json() as Record<string, unknown>),
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(integrationConfigure.name, body, ctx, { surface: "api" });
+  const out = await invoke(integrationConfigure.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
 // POST /integrations/:id/sync — trigger synchronization
 integrationRoute.post("/:id/sync", async (c) => {
+  // Path param LAST — see the note on /:id/configure above.
   const body = integrationSync.input.parse({
+    ...((await c.req.json()) as Record<string, unknown>),
     integrationId: c.req.param("id"),
-    ...(await c.req.json() as Record<string, unknown>),
   });
   const ctx = capabilityContext(c);
   const out = await invoke(integrationSync.name, body, ctx, { surface: "api" });
@@ -66,9 +73,13 @@ integrationRoute.post("/:id/sync", async (c) => {
 
 // GET /integrations/:id/metrics — sync statistics and metrics
 integrationRoute.get("/:id/metrics", async (c) => {
-  const body = integrationMetrics.input.parse({ integrationId: c.req.param("id") });
+  const body = integrationMetrics.input.parse({
+    integrationId: c.req.param("id"),
+  });
   const ctx = capabilityContext(c);
-  const out = await invoke(integrationMetrics.name, body, ctx, { surface: "api" });
+  const out = await invoke(integrationMetrics.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
 
@@ -80,6 +91,8 @@ integrationRoute.delete("/:id", async (c) => {
     purgeData: query.purgeData === "true",
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(integrationDelete.name, body, ctx, { surface: "api" });
+  const out = await invoke(integrationDelete.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out, 202);
 });

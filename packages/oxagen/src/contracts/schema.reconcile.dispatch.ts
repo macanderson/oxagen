@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const schemaReconcileDispatch = registerCapability({
   name: "dispatch_schema_reconcile",
   domain: "schema",
-  description: "Dispatch an async reconciliation job to re-label existing graph nodes and relationships against the pinned schema version.",
+  description:
+    "Dispatch an async reconciliation job to re-label existing graph nodes and relationships against the pinned schema version.",
   mode: "async",
   surfaces: ["api", "mcp", "cli"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -25,5 +26,9 @@ export const schemaReconcileDispatch = registerCapability({
   }),
 });
 
-export type SchemaReconcileDispatchInput = z.output<typeof schemaReconcileDispatch.input>;
-export type SchemaReconcileDispatchOutput = z.output<typeof schemaReconcileDispatch.output>;
+export type SchemaReconcileDispatchInput = z.output<
+  typeof schemaReconcileDispatch.input
+>;
+export type SchemaReconcileDispatchOutput = z.output<
+  typeof schemaReconcileDispatch.output
+>;

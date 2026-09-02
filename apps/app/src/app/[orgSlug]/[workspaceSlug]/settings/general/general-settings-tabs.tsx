@@ -2,9 +2,7 @@
 
 /**
  * GeneralSettingsTabs — client wrapper providing the in-page "General" /
- * "Members" sub-tabs for Workspace → Settings → General (web-app-2.0 Phase 2
- * consolidation: Members folded into General, see docs/web-app-2.0/workspace/
- * settings/general/spec.md).
+ * "Members" sub-tabs for Workspace → Settings → General.
  *
  * Both panels are rendered server-side up front (the parent Server Component
  * fetches both the general-settings row AND the members list in parallel) and
@@ -17,13 +15,17 @@
  * param (mirrors `workspace.settings.general(ctx)`, which is the bare path).
  *
  * Pattern: Base UI Tabs (`@/components/ui/tabs`) driven as a controlled
- * component, per the client-tabs precedent in
- * apps/app/src/app/[orgSlug]/developer/mcp/mcp-install-tabs.tsx — extended
- * here with URL sync (that precedent is local-state-only).
+ * component, with the active tab synced to the URL.
  */
 import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Tabs, TabsList, TabsTab, TabsPanel, TabsIndicator } from "@/components/ui/tabs";
+import {
+  Tabs,
+  TabsList,
+  TabsTab,
+  TabsPanel,
+  TabsIndicator,
+} from "@/components/ui/tabs";
 
 export type GeneralSettingsTab = "general" | "members";
 

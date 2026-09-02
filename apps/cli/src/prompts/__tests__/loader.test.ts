@@ -58,7 +58,9 @@ describe("loadPrompts", () => {
 
   it("getPrompt returns one prompt or null", () => {
     writePrompt(".oxagen/prompts/solo.md", "solo body");
-    expect(getPrompt("solo", { cwd: dir, userPromptsDir: userDir })?.name).toBe("solo");
+    expect(getPrompt("solo", { cwd: dir, userPromptsDir: userDir })?.name).toBe(
+      "solo",
+    );
     expect(getPrompt("nope", { cwd: dir, userPromptsDir: userDir })).toBeNull();
   });
 });

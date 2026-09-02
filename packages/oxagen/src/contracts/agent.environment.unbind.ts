@@ -8,7 +8,11 @@ export const agentEnvironmentUnbind = registerCapability({
     "Remove an agent's binding to an environment. When the removed binding was primary, resolution falls back to the workspace default environment and its default template.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  agent: { requiresApproval: false, riskLevel: "medium", category: "configuration" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "medium",
+    category: "configuration",
+  },
   layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   sensitivity: "medium",
@@ -21,4 +25,6 @@ export const agentEnvironmentUnbind = registerCapability({
   output: z.object({ ok: z.boolean() }),
 });
 
-export type AgentEnvironmentUnbindInput = z.output<typeof agentEnvironmentUnbind.input>;
+export type AgentEnvironmentUnbindInput = z.output<
+  typeof agentEnvironmentUnbind.input
+>;

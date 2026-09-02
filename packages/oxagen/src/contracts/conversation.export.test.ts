@@ -20,12 +20,17 @@ describe("conversation.export capability", () => {
 
   it("rejects an unknown format", () => {
     expect(() =>
-      conversationExport.input.parse({ conversationId: "cnv_1", format: "docx" }),
+      conversationExport.input.parse({
+        conversationId: "cnv_1",
+        format: "docx",
+      }),
     ).toThrow();
   });
 
   it("requires conversationId", () => {
-    expect(() => conversationExport.input.parse({ format: "markdown" })).toThrow();
+    expect(() =>
+      conversationExport.input.parse({ format: "markdown" }),
+    ).toThrow();
   });
 
   it("exposes exactly the two formats in the enum", () => {

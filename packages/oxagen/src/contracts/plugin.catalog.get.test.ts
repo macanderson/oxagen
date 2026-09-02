@@ -14,8 +14,13 @@ describe("plugin.catalog.get contract", () => {
     expect(() => pluginCatalogGet.input.parse({})).toThrow();
   });
   it("accepts a valid name+version", () => {
-    const parsed = pluginCatalogGet.input.parse({ name: "@anthropic-ai/model-context-protocol-servers-brave-search", version: "1.0.0" });
-    expect(parsed.name).toBe("@anthropic-ai/model-context-protocol-servers-brave-search");
+    const parsed = pluginCatalogGet.input.parse({
+      name: "@anthropic-ai/model-context-protocol-servers-brave-search",
+      version: "1.0.0",
+    });
+    expect(parsed.name).toBe(
+      "@anthropic-ai/model-context-protocol-servers-brave-search",
+    );
     expect(parsed.version).toBe("1.0.0");
   });
   it("defaults version to 'latest' when omitted", () => {

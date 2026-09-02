@@ -265,7 +265,7 @@ export default function WorkspaceContextPanel({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- path/depth/sessionId are read once per scope/refresh, matching workflow-progress's single-fetch-per-scope pattern
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- path/depth/sessionId identify one sandbox listing and never change for a mounted card; the root listing re-runs only when the scope changes or the user refreshes
   }, [scopeBase, refreshKey]);
 
   // ── Lazy directory expansion ──────────────────────────────────────────────

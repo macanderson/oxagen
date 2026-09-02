@@ -302,10 +302,10 @@ export const [ingestionPipeline] = createFunction(
     // separate) invocation, so the tenant scope opened in steps 1–3 does NOT
     // carry into this step — it must open its own. upsertEntityNode →
     // scopedSession() requires an active scope or it throws
-    // TenantScopeError(no_tenant_scope), which broke all ingestion in prod
-    // (OXA-1790). Steps 2 and 3 already wrap; steps 4 and 5 must too.
+    // TenantScopeError(no_tenant_scope). Steps 2 and 3 wrap; steps 4 and 5 must
+    // too.
     //
-    // `runId` (OXA-1932) is threaded through to upsertEntityNode so a retried
+    // `runId` is threaded through to upsertEntityNode so a retried
     // execution of THIS step re-derives the same schema_conformance_events
     // event_id instead of minting a fresh one — see upsert-entity.ts.
     // The upsert returns the node's PREVIOUS property snapshot (the JSON stored

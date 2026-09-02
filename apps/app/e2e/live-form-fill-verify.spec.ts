@@ -8,21 +8,29 @@ import { signUpFreshUser } from "./helpers/signup";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SHOT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "screenshots-live");
+const SHOT_DIR = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "screenshots-live",
+);
 
-test("LIVE: wand agent fills the workspace settings form from a prompt", async ({ page }) => {
+test("LIVE: wand agent fills the workspace settings form from a prompt", async ({
+  page,
+}) => {
   test.setTimeout(240_000);
   const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "live-fill" });
 
   await page.goto(`/${orgSlug}/default/settings/general`);
-  await expect(page.locator("#ws-description")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator("#ws-description")).toBeVisible({
+    timeout: 30_000,
+  });
 
   // Prove pageContext rides the stream request.
   let sawPageContext = false;
   page.on("request", (req) => {
     if (req.url().includes("/api/v1/chat/stream") && req.method() === "POST") {
       const body = req.postData() ?? "";
-      if (body.includes('"fillableForm"') && body.includes("workspace-general")) sawPageContext = true;
+      if (body.includes('"fillableForm"') && body.includes("workspace-general"))
+        sawPageContext = true;
     }
   });
 
@@ -38,15 +46,31 @@ test("LIVE: wand agent fills the workspace settings form from a prompt", async (
   // Real LLM turn -> page_form_fill -> FillOverlay.
   const overlay = page.getByRole("status", { name: "AI fill suggestions" });
   await expect(overlay).toBeVisible({ timeout: 120_000 });
-  await page.screenshot({ path: path.join(SHOT_DIR, "fill-1-overlay.png"), fullPage: true });
+  await page.screenshot({
+    path: path.join(SHOT_DIR, "fill-1-overlay.png"),
+    fullPage: true,
+  });
 
   // Close the wand so its backdrop doesn't cover the overlay, then accept.
-  await page.locator("#wand-panel").getByRole("button", { name: "Close" }).click();
-  await expect(page.getByPlaceholder(/send a message/i)).toBeHidden({ timeout: 10_000 });
-  await page.getByRole("button", { name: "Accept suggestion for description" }).click();
+  await page
+    .locator("#wand-panel")
+    .getByRole("button", { name: "Close" })
+    .click();
+  await expect(page.getByPlaceholder(/send a message/i)).toBeHidden({
+    timeout: 10_000,
+  });
+  await page
+    .getByRole("button", { name: "Accept suggestion for description" })
+    .click();
 
-  await expect(page.locator("#ws-description")).toHaveValue(/production workspace/i, { timeout: 10_000 });
-  await page.screenshot({ path: path.join(SHOT_DIR, "fill-2-applied.png"), fullPage: true });
+  await expect(page.locator("#ws-description")).toHaveValue(
+    /production workspace/i,
+    { timeout: 10_000 },
+  );
+  await page.screenshot({
+    path: path.join(SHOT_DIR, "fill-2-applied.png"),
+    fullPage: true,
+  });
   console.log("[LIVE] pageContext on stream request:", sawPageContext);
   expect(sawPageContext).toBe(true);
 });

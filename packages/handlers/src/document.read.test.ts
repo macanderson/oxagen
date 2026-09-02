@@ -21,17 +21,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: mocks.selectQuery,
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: mocks.selectQuery,
+            }),
           }),
         }),
       }),
-    }),
-
   };
 });
 
@@ -55,19 +54,22 @@ beforeEach(() => {
 
 describe("documentReadHandler — auth guards", () => {
   it("throws when workspaceId is null", async () => {
-    const ctx: CapabilityContext = { ...CTX, workspaceId: null as unknown as string };
-    await expect(documentReadHandler({ document_id: "doc_X" }, ctx)).rejects.toThrow(
-      "document.read requires a workspace scope",
-    );
+    const ctx: CapabilityContext = {
+      ...CTX,
+      workspaceId: null as unknown as string,
+    };
+    await expect(
+      documentReadHandler({ document_id: "doc_X" }, ctx),
+    ).rejects.toThrow("document.read requires a workspace scope");
   });
 });
 
 describe("documentReadHandler — not found", () => {
   it("throws when document is not found", async () => {
     mocks.selectQuery.mockResolvedValueOnce([]);
-    await expect(documentReadHandler({ document_id: "doc_MISSING" }, CTX)).rejects.toThrow(
-      'document.read: document "doc_MISSING" not found',
-    );
+    await expect(
+      documentReadHandler({ document_id: "doc_MISSING" }, CTX),
+    ).rejects.toThrow('document.read: document "doc_MISSING" not found');
   });
 });
 

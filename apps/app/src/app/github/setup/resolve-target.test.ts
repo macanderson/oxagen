@@ -27,7 +27,11 @@ import {
 function makeQueries(overrides: {
   match?: GithubSetupTargetRow[];
   membership?: GithubSetupTargetRow[];
-}): { queries: GithubSetupQueries; matchInstallation: ReturnType<typeof vi.fn>; mostRecentMembership: ReturnType<typeof vi.fn> } {
+}): {
+  queries: GithubSetupQueries;
+  matchInstallation: ReturnType<typeof vi.fn>;
+  mostRecentMembership: ReturnType<typeof vi.fn>;
+} {
   const matchInstallation = vi.fn(async () => overrides.match ?? []);
   const mostRecentMembership = vi.fn(async () => overrides.membership ?? []);
   return {

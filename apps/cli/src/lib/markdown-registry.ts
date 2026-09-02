@@ -1,10 +1,14 @@
 /**
- * markdown-registry.ts — Shared plumbing behind the three markdown-backed
- * registries (agents, rules, slash commands): frontmatter parsing, merging
- * directories of `.md` files into a precedence-ordered Map, and scaffolding a
- * fresh starter file. Each registry supplies its own field mapping and id
- * derivation via a `parseEntry` callback — this module only owns the walk,
- * the merge-by-key, and the file I/O.
+ * markdown-registry.ts — Shared plumbing behind the markdown-backed registries
+ * (`../rules/` and `../prompts/`): frontmatter parsing, merging directories of
+ * `.md` files into a precedence-ordered Map, and scaffolding a fresh starter
+ * file. Each registry supplies its own field mapping and id derivation via a
+ * `parseEntry` callback — this module only owns the walk, the merge-by-key,
+ * and the file I/O.
+ *
+ * Agents and slash commands do NOT use this module: they are canonical TOML
+ * artifacts parsed by `@oxagen/agent-artifacts` (see `../agents/loader.ts` and
+ * `../slash/loader.ts`).
  */
 import {
   readFileSync,

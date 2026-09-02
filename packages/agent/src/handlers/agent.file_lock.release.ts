@@ -18,5 +18,9 @@ export async function agentFileLockReleaseHandler(
   input: AgentFileLockReleaseInput,
   ctx: CapabilityContext,
 ): Promise<AgentFileLockReleaseOutput> {
-  return releaseFileLease({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, lockId: input.lockId });
+  return releaseFileLease({
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+    lockId: input.lockId,
+  });
 }

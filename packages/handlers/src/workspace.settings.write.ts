@@ -1,20 +1,16 @@
 // audit-exempt: workspace-profile field edit (name/slug/description) — no fitting security-event type exists in the taxonomy (no workspace.settings_updated); covered by the kernel capability.invoke_* audit. Do not invent a type.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { mapWorkspaceSettingsRow } from "./workspace.settings.read";
 import { logger } from "./logger";
 
-// Postgres unique_violation — workspaces_org_slug_idx fires when a slug is
-// already taken by another workspace in the same org.
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    (err as { code?: string }).code === "23505"
-  );
-}
+// Postgres unique_violation (SQLSTATE 23505) — workspaces_org_slug_idx fires
+// when a slug is already taken by another workspace in the same org. Use the
+// shared classifier: drizzle wraps the driver error, so the SQLSTATE lives on
+// `.cause` and a top-level-only `err.code` check would miss every real
+// violation and leak the raw `Failed query: update …` SQL to the caller.
 
 // Partial update of workspace.workspaces for the active workspace. name, slug,
 // avatarUrl and description are all real columns, each set independently — so a

@@ -91,11 +91,10 @@ const MENTION_COMPONENTS = { a: MentionAnchor };
 
 /** Keep the custom mention protocol through sanitization; everything else
  * gets the stock transform (http/https/mailto whitelist). */
-const mentionUrlTransform: React.ComponentProps<typeof Streamdown>["urlTransform"] = (
-  url,
-  key,
-  node,
-) => (url.startsWith(MENTION_PROTOCOL) ? url : defaultUrlTransform(url, key, node));
+const mentionUrlTransform: React.ComponentProps<
+  typeof Streamdown
+>["urlTransform"] = (url, key, node) =>
+  url.startsWith(MENTION_PROTOCOL) ? url : defaultUrlTransform(url, key, node);
 
 // ---------------------------------------------------------------------------
 // Props
@@ -118,7 +117,11 @@ export interface MarkdownMessageProps {
 // Component
 // ---------------------------------------------------------------------------
 
-export function MarkdownMessage({ children, streaming = false, className }: MarkdownMessageProps) {
+export function MarkdownMessage({
+  children,
+  streaming = false,
+  className,
+}: MarkdownMessageProps) {
   // Mention handling is opt-in per message: the token → link rewrite, the
   // anchor override, and the protocol-preserving urlTransform are only
   // applied when the text actually contains a mention token, so ordinary
@@ -180,7 +183,12 @@ export function MarkdownMessage({ children, streaming = false, className }: Mark
        */
       controls={{
         code: { copy: true, download: false },
-        mermaid: { copy: true, download: true, fullscreen: true, panZoom: true },
+        mermaid: {
+          copy: true,
+          download: true,
+          fullscreen: true,
+          panZoom: true,
+        },
         table: { copy: true, download: true, fullscreen: false },
       }}
       /**

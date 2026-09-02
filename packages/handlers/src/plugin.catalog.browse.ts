@@ -16,8 +16,14 @@ import { logger } from "./logger";
 // Module-scope; survives across requests in the same Node.js process. Keyed by
 // `${registryId}:${search ?? ""}` so different search queries are cached
 // independently. ~60 s TTL keeps the marketplace snappy without stale data risk.
+//
+// The key embeds a caller-supplied search string, so the key space is unbounded.
+// Expired entries are swept on every miss and the map is hard-capped, otherwise
+// a long-lived process accumulates one dead entry per distinct search term
+// forever.
 
 const CACHE_TTL_MS = 60_000;
+const CACHE_MAX_ENTRIES = 500;
 
 interface CacheEntry {
   servers: ServerResponse[];
@@ -45,9 +51,22 @@ async function fetchRegistryServers(
   // max single-page size. One page is enough for marketplace browsing — search
   // narrows results, and deep paging would use the cursor if ever needed.
   const result = await listServers(baseUrl, { limit: 100, search });
+  const now = Date.now();
+  // Drop everything already past its TTL — those entries can never be served
+  // again, so retaining them is pure leak.
+  for (const [k, v] of registryCache) {
+    if (v.expiresAt <= now) registryCache.delete(k);
+  }
+  // Hard ceiling for the pathological case where live entries alone exceed the
+  // cap: evict oldest-inserted first (Map preserves insertion order).
+  while (registryCache.size >= CACHE_MAX_ENTRIES) {
+    const oldest = registryCache.keys().next();
+    if (oldest.done) break;
+    registryCache.delete(oldest.value);
+  }
   const entry: CacheEntry = {
     servers: result.servers,
-    expiresAt: Date.now() + CACHE_TTL_MS,
+    expiresAt: now + CACHE_TTL_MS,
   };
   registryCache.set(key, entry);
   return result.servers;

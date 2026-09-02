@@ -34,14 +34,21 @@ export interface CatalogViewProps {
   initialFilter?: Partial<CatalogFilterState>;
 }
 
-export function CatalogView({ orgSlug, rows, domains, initialFilter }: CatalogViewProps) {
+export function CatalogView({
+  orgSlug,
+  rows,
+  domains,
+  initialFilter,
+}: CatalogViewProps) {
   const [filter, setFilter] = useState<CatalogFilterState>({
     q: initialFilter?.q ?? "",
     domain: initialFilter?.domain ?? "",
     gapOnly: initialFilter?.gapOnly ?? false,
     missingLayer: initialFilter?.missingLayer ?? "",
   });
-  const [selected, setSelected] = useState<CapabilityRegistrySummary | null>(null);
+  const [selected, setSelected] = useState<CapabilityRegistrySummary | null>(
+    null,
+  );
   const [insights, setInsights] = useState<CapabilityInsights | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [, startTransition] = useTransition();
@@ -153,7 +160,9 @@ export function CatalogView({ orgSlug, rows, domains, initialFilter }: CatalogVi
                         {row.name}
                       </button>
                     </td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">{row.domain}</td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground">
+                      {row.domain}
+                    </td>
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap gap-1">
                         {row.layers.map((l) => (
@@ -173,7 +182,10 @@ export function CatalogView({ orgSlug, rows, domains, initialFilter }: CatalogVi
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap gap-1">
-                        <Badge size="sm" variant={row.noBillingGate ? "muted" : "info-soft"}>
+                        <Badge
+                          size="sm"
+                          variant={row.noBillingGate ? "muted" : "info-soft"}
+                        >
                           {row.noBillingGate ? "exempt" : "metered"}
                         </Badge>
                         {row.plugin ? (

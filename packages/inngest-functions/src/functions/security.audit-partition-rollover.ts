@@ -36,7 +36,10 @@ const RETENTION_MS = 7 * 365.25 * 24 * 60 * 60 * 1000;
  * Return the partition table name and ISO date bounds for a given year + month
  * (1-indexed month). Partition covers [first of month, first of next month).
  */
-function partitionSpec(year: number, month: number): {
+function partitionSpec(
+  year: number,
+  month: number,
+): {
   name: string;
   from: string;
   to: string;
@@ -73,8 +76,15 @@ export const [securityAuditPartitionRollover] = createFunction(
 
       await withSystemDb(async (tx) => {
         for (let offset = 1; offset <= 2; offset++) {
-          const target = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-          const spec = partitionSpec(target.getFullYear(), target.getMonth() + 1);
+          const target = new Date(
+            now.getFullYear(),
+            now.getMonth() + offset,
+            1,
+          );
+          const spec = partitionSpec(
+            target.getFullYear(),
+            target.getMonth() + 1,
+          );
 
           // Check whether the child table already exists in pg_class.
           const existsRows = await tx.execute<{ exists: boolean }>(sql`
@@ -89,7 +99,8 @@ export const [securityAuditPartitionRollover] = createFunction(
           `);
 
           // drizzle-orm execute returns an array of row objects.
-          const exists = (existsRows as { exists: boolean }[])[0]?.exists ?? false;
+          const exists =
+            (existsRows as { exists: boolean }[])[0]?.exists ?? false;
 
           if (exists) {
             skipped.push(spec.name);
@@ -98,11 +109,13 @@ export const [securityAuditPartitionRollover] = createFunction(
 
           // CREATE TABLE ... PARTITION OF. IF NOT EXISTS is a second idempotency
           // guard in case of a concurrent run between the check and the create.
-          await tx.execute(sql.raw(
-            `CREATE TABLE IF NOT EXISTS security.${spec.name}` +
-            ` PARTITION OF security.security_events` +
-            ` FOR VALUES FROM ('${spec.from}') TO ('${spec.to}')`,
-          ));
+          await tx.execute(
+            sql.raw(
+              `CREATE TABLE IF NOT EXISTS security.${spec.name}` +
+                ` PARTITION OF security.security_events` +
+                ` FOR VALUES FROM ('${spec.from}') TO ('${spec.to}')`,
+            ),
+          );
           created.push(spec.name);
         }
       });
@@ -161,9 +174,9 @@ export const [securityAuditPartitionRollover] = createFunction(
           );
 
           if (partitionEnd <= retentionCutoff) {
-            await tx.execute(sql.raw(
-              `DROP TABLE IF EXISTS security.${row.relname}`,
-            ));
+            await tx.execute(
+              sql.raw(`DROP TABLE IF EXISTS security.${row.relname}`),
+            );
             dropped.push(row.relname);
           }
         }

@@ -43,13 +43,9 @@ function findContractPackages() {
  * List all non-test .ts files in a contracts/ directory, excluding index.ts.
  */
 function listContractFiles(contractsDir) {
-  return readdirSync(contractsDir)
-    .filter(
-      (f) =>
-        f.endsWith(".ts") &&
-        !f.endsWith(".test.ts") &&
-        f !== "index.ts",
-    );
+  return readdirSync(contractsDir).filter(
+    (f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && f !== "index.ts",
+  );
 }
 
 /**
@@ -81,9 +77,17 @@ function readIndexImports(indexPath) {
 function main() {
   const packages = findContractPackages();
 
+  // Zero packages is not "nothing to check" — this repo always has at least
+  // packages/oxagen/src/contracts. An empty result means the layout moved (or
+  // this ran from the wrong cwd), and reporting a pass would silently retire
+  // the guard. Fail as a script error so the cause is fixed, not inherited.
   if (packages.length === 0) {
-    console.log("No packages with src/contracts/index.ts found — skipping check.");
-    process.exit(0);
+    console.error(
+      `No packages with src/contracts/index.ts found under ${PACKAGES_DIR}.\n` +
+        "Run this from the monorepo root; if the layout genuinely changed, update\n" +
+        "findContractPackages() — do not let the check pass vacuously.",
+    );
+    process.exit(2);
   }
 
   const gaps = [];
@@ -107,7 +111,9 @@ function main() {
   }
 
   if (gaps.length > 0) {
-    console.error("\nCONTRACTS ARRAY GAPS — contract files not exported in contracts/index.ts:");
+    console.error(
+      "\nCONTRACTS ARRAY GAPS — contract files not exported in contracts/index.ts:",
+    );
     for (const g of gaps) {
       console.error(`  - ${g}`);
     }
@@ -124,4 +130,14 @@ function main() {
   process.exit(0);
 }
 
-main();
+// Any unexpected throw (missing packages/, unreadable file) is a script error,
+// which the header documents as exit 2 — without this it would surface as an
+// uncaught exception and exit 1, indistinguishable from a real gap.
+try {
+  main();
+} catch (error) {
+  console.error(
+    `check-contracts: ${error instanceof Error ? error.message : error}`,
+  );
+  process.exit(2);
+}

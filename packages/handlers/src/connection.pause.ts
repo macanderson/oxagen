@@ -9,15 +9,17 @@ import { logger } from "./logger";
 // between 'connected' and 'paused'. Only valid from those two states — a
 // pending_setup or error connection cannot be paused/resumed (must be set up or
 // repaired first). Tenant-scoped, soft-delete aware.
-export const connectionPauseHandler: CapabilityHandler<typeof connectionPause> = async (
-  input,
-  ctx,
-) => {
+export const connectionPauseHandler: CapabilityHandler<
+  typeof connectionPause
+> = async (input, ctx) => {
   const target = input.paused ? "paused" : "connected";
 
   const row = await withTenantDb(async (tx) => {
     const [existing] = await tx
-      .select({ id: schema.sourceConnections.id, status: schema.sourceConnections.status })
+      .select({
+        id: schema.sourceConnections.id,
+        status: schema.sourceConnections.status,
+      })
       .from(schema.sourceConnections)
       .where(
         and(
@@ -39,19 +41,31 @@ export const connectionPauseHandler: CapabilityHandler<typeof connectionPause> =
 
     await tx
       .update(schema.sourceConnections)
-      .set({ status: target, updatedByUserId: ctx.userId ?? undefined, updatedAt: new Date() })
+      .set({
+        status: target,
+        updatedByUserId: ctx.userId ?? undefined,
+        updatedAt: new Date(),
+      })
       .where(eq(schema.sourceConnections.id, existing.id));
 
     return existing;
   });
 
   if (!row) {
-    logger.warn({ connectionId: input.connectionId, orgId: ctx.orgId }, "connection.pause: not found");
+    logger.warn(
+      { connectionId: input.connectionId, orgId: ctx.orgId },
+      "connection.pause: not found",
+    );
     throw new HTTPException(404, { message: "Connection not found" });
   }
 
   logger.info(
-    { connectionId: input.connectionId, orgId: ctx.orgId, target, surface: ctx.surface },
+    {
+      connectionId: input.connectionId,
+      orgId: ctx.orgId,
+      target,
+      surface: ctx.surface,
+    },
     "connection.pause: status updated",
   );
 

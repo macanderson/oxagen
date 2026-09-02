@@ -19,17 +19,21 @@ import { logger } from "./logger";
  * 'pending_setup'); it's translated to the DB status before the query (e.g.
  * 'active' → 'connected'). `pluginId` filter matches source_connections.connectorId.
  */
-export const integrationListHandler: CapabilityHandler<typeof integrationList> = async (
-  input,
-  ctx,
-) => {
+export const integrationListHandler: CapabilityHandler<
+  typeof integrationList
+> = async (input, ctx) => {
   const conditions = [
     eq(schema.sourceConnections.orgId, ctx.orgId),
     eq(schema.sourceConnections.workspaceId, ctx.workspaceId),
     isNull(schema.sourceConnections.deletedAt),
   ];
   if (input.status) {
-    conditions.push(eq(schema.sourceConnections.status, CONTRACT_STATUS_TO_DB_STATUS[input.status]));
+    conditions.push(
+      eq(
+        schema.sourceConnections.status,
+        CONTRACT_STATUS_TO_DB_STATUS[input.status],
+      ),
+    );
   }
   if (input.pluginId) {
     conditions.push(eq(schema.sourceConnections.connectorId, input.pluginId));
@@ -63,7 +67,12 @@ export const integrationListHandler: CapabilityHandler<typeof integrationList> =
   });
 
   logger.info(
-    { orgId: ctx.orgId, workspaceId: ctx.workspaceId, count: rows.length, total },
+    {
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      count: rows.length,
+      total,
+    },
     "integration.list: fetched",
   );
 

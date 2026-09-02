@@ -34,7 +34,12 @@ export function hexPoints(cx: number, cy: number, r: number): string {
  * … 5 = vertex[5]→[0]). Used for "broken" contours that feel like a fragment
  * of a lattice rather than a stamped cell.
  */
-export function hexEdgesPath(cx: number, cy: number, r: number, edges: number[]): string {
+export function hexEdgesPath(
+  cx: number,
+  cy: number,
+  r: number,
+  edges: number[],
+): string {
   const v = hexVertices(cx, cy, r);
   return edges
     .map((e) => {

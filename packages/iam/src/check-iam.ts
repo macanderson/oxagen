@@ -106,12 +106,14 @@ export interface CheckIAMResult {
  * Returns the resolver result and the resolved principal so the handler
  * can record authoring metadata.
  *
- * ACL plan-tier gate: for capabilities in the `iam.*` namespace, the org's
- * plan tier is checked first. Non-enterprise orgs do not configure explicit
- * ACL policies, so the resolver is bypassed and the request is ALLOWED —
- * role membership is the correct (and only) access control for those orgs.
- * Enterprise orgs run through the full resolver so explicit ACL grants and
- * policies are enforced.
+ * ACL plan-tier gate: for a non-agent principal the org's plan tier is checked
+ * first, for EVERY capability — not just the `iam.*` namespace. Non-enterprise
+ * orgs (free / build / scale — see canAccessACL) do not configure explicit ACL
+ * policies, so the resolver is bypassed and the request is ALLOWED regardless
+ * of the contract's own `defaultEffect`. Any capability that must stay
+ * Owner/Admin-only on those tiers therefore needs its own gate at the call
+ * site; IAM will not supply one. Enterprise orgs run the full resolver, where
+ * role grants and defaultEffect are enforced.
  */
 export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
   const { capability, ctx, defaultEffect, rawInputJson, target } = args;

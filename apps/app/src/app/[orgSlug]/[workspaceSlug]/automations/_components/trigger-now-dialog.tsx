@@ -30,7 +30,9 @@ export interface TriggerNowDialogProps {
   onOpenChange: (open: boolean) => void;
   automationName: string;
   /** Parse + fire. Receives the parsed payload (or undefined) and returns the outcome. */
-  onTrigger: (payload: Record<string, unknown> | undefined) => Promise<TriggerNowResult>;
+  onTrigger: (
+    payload: Record<string, unknown> | undefined,
+  ) => Promise<TriggerNowResult>;
 }
 
 export function TriggerNowDialog({
@@ -57,7 +59,11 @@ export function TriggerNowDialog({
     if (trimmed.length > 0) {
       try {
         const parsed = JSON.parse(trimmed);
-        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        if (
+          typeof parsed !== "object" ||
+          parsed === null ||
+          Array.isArray(parsed)
+        ) {
           setParseError("Payload must be a JSON object.");
           return;
         }
@@ -89,13 +95,16 @@ export function TriggerNowDialog({
         <DialogHeader>
           <DialogTitle>Trigger “{automationName}” now</DialogTitle>
           <DialogDescription>
-            Fire this automation once, immediately. Optionally pass a JSON payload the playbook
-            can read. This runs the playbook whether or not the trigger is enabled.
+            Fire this automation once, immediately. Optionally pass a JSON
+            payload the playbook can read. This runs the playbook whether or not
+            the trigger is enabled.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-1.5">
-          <Label htmlFor="trigger-payload">Payload (optional JSON object)</Label>
+          <Label htmlFor="trigger-payload">
+            Payload (optional JSON object)
+          </Label>
           <Textarea
             id="trigger-payload"
             value={payloadText}
@@ -119,8 +128,9 @@ export function TriggerNowDialog({
           >
             {result.ok ? (
               <span>
-                Execution <span className="font-mono">{result.executionId}</span> started —{" "}
-                {result.status}.
+                Execution{" "}
+                <span className="font-mono">{result.executionId}</span> started
+                — {result.status}.
               </span>
             ) : (
               <span>{result.error}</span>
@@ -129,10 +139,20 @@ export function TriggerNowDialog({
         )}
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending} type="button">
+          <Button
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+            disabled={pending}
+            type="button"
+          >
             Close
           </Button>
-          <Button onClick={handleTrigger} disabled={pending} type="button" data-testid="confirm-trigger">
+          <Button
+            onClick={handleTrigger}
+            disabled={pending}
+            type="button"
+            data-testid="confirm-trigger"
+          >
             {pending ? "Triggering…" : "Trigger now"}
           </Button>
         </DialogFooter>

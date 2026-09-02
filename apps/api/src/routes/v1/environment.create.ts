@@ -9,6 +9,8 @@ export const environmentCreateRoute = new Hono<AppEnv>();
 environmentCreateRoute.post("/", async (c) => {
   const body = environmentCreate.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(environmentCreate.name, body, ctx, { surface: "api" });
+  const out = await invoke(environmentCreate.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

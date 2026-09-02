@@ -10,7 +10,12 @@ interface Captures {
   updates: { set: Record<string, unknown> }[];
   deletes: number;
 }
-const state: Captures = { selectRows: [], updateReturning: [], updates: [], deletes: 0 };
+const state: Captures = {
+  selectRows: [],
+  updateReturning: [],
+  updates: [],
+  deletes: 0,
+};
 
 function makeTx() {
   const selectBuilder = () => {
@@ -33,8 +38,10 @@ function makeTx() {
         return {
           where: () => ({
             returning: async () => state.updateReturning,
-            then: (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
-              Promise.resolve(undefined).then(res, rej),
+            then: (
+              res: (v: unknown) => unknown,
+              rej: (e: unknown) => unknown,
+            ) => Promise.resolve(undefined).then(res, rej),
           }),
         };
       },
@@ -91,7 +98,9 @@ describe("setDefaultEnvironment — atomic swap", () => {
       },
     ];
 
-    const result = await setDefaultEnvironment(actor, { environmentId: "env_pub_1" });
+    const result = await setDefaultEnvironment(actor, {
+      environmentId: "env_pub_1",
+    });
 
     expect(result.id).toBe("env_pub_1");
     expect(result.isDefault).toBe(true);
@@ -175,9 +184,9 @@ describe("default-environment guards", () => {
   it("deleteEnvironment refuses to delete the default (no write issued)", async () => {
     const { deleteEnvironment } = await import("./environment-service");
     state.selectRows = defaultRow;
-    await expect(deleteEnvironment(actor, { environmentId: "env_pub_1" })).rejects.toThrow(
-      /cannot delete the default/,
-    );
+    await expect(
+      deleteEnvironment(actor, { environmentId: "env_pub_1" }),
+    ).rejects.toThrow(/cannot delete the default/);
     expect(state.updates).toHaveLength(0);
     expect(state.deletes).toBe(0);
   });

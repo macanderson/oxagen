@@ -126,7 +126,11 @@ describe("schemaLabelDeleteHandler", () => {
       mocks.selectSchema.mockResolvedValue([SCHEMA_ROW]);
       mocks.selectLabel.mockResolvedValue([LABEL_ROW]);
       await schemaLabelDeleteHandler(BASE_INPUT, CTX);
-      expect(mocks.getOrCreateRegistry).toHaveBeenCalledWith(CTX.orgId, CTX.workspaceId, CTX.userId);
+      expect(mocks.getOrCreateRegistry).toHaveBeenCalledWith(
+        CTX.orgId,
+        CTX.workspaceId,
+        CTX.userId,
+      );
     });
   });
 });

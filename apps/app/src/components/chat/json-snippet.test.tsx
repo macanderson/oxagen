@@ -11,7 +11,13 @@
  */
 import * as React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
 import { JsonSnippet, toPrettyJson } from "./json-snippet";
 
 afterEach(cleanup);
@@ -56,7 +62,9 @@ describe("JsonSnippet", () => {
     // Clipped: the last node is not visible yet.
     expect(pre.textContent).not.toContain("node-11");
     const total = toPrettyJson(nodes).split("\n").length;
-    const toggle = screen.getByRole("button", { name: `Show all ${total} lines` });
+    const toggle = screen.getByRole("button", {
+      name: `Show all ${total} lines`,
+    });
     fireEvent.click(toggle);
     expect(pre.textContent).toContain("node-11");
     fireEvent.click(screen.getByRole("button", { name: /Collapse/ }));
@@ -73,7 +81,9 @@ describe("JsonSnippet", () => {
     Object.assign(navigator, { clipboard: { writeText } });
     render(<JsonSnippet value={nodes} clipLines={4} />);
     fireEvent.click(screen.getByRole("button", { name: "Copy JSON" }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(toPrettyJson(nodes)));
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(toPrettyJson(nodes)),
+    );
   });
 
   it("colours in asynchronously with .diff-token dual-theme spans", async () => {

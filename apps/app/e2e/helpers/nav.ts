@@ -23,7 +23,11 @@
  */
 import type { Page } from "@playwright/test";
 
-export async function gotoStable(page: Page, path: string, attempts = 3): Promise<void> {
+export async function gotoStable(
+  page: Page,
+  path: string,
+  attempts = 3,
+): Promise<void> {
   let lastErr: unknown;
   for (let i = 1; i <= attempts; i++) {
     try {

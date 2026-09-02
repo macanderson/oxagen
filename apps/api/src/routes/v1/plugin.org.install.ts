@@ -9,6 +9,8 @@ export const pluginOrgInstallRoute = new Hono<AppEnv>();
 pluginOrgInstallRoute.post("/", async (c) => {
   const body = pluginOrgInstall.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(pluginOrgInstall.name, body, ctx, { surface: "api" });
+  const out = await invoke(pluginOrgInstall.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

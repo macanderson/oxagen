@@ -20,7 +20,9 @@ describe("graph.node.search capability", () => {
   });
 
   it("rejects a query exceeding 500 characters (max)", () => {
-    expect(() => graphNodeSearch.input.parse({ query: "a".repeat(501) })).toThrow();
+    expect(() =>
+      graphNodeSearch.input.parse({ query: "a".repeat(501) }),
+    ).toThrow();
   });
 
   it("rejects a missing query field", () => {
@@ -49,15 +51,21 @@ describe("graph.node.search capability", () => {
   });
 
   it("rejects limit=0 (below min)", () => {
-    expect(() => graphNodeSearch.input.parse({ query: "test", limit: 0 })).toThrow();
+    expect(() =>
+      graphNodeSearch.input.parse({ query: "test", limit: 0 }),
+    ).toThrow();
   });
 
   it("rejects limit=51 (above max)", () => {
-    expect(() => graphNodeSearch.input.parse({ query: "test", limit: 51 })).toThrow();
+    expect(() =>
+      graphNodeSearch.input.parse({ query: "test", limit: 51 }),
+    ).toThrow();
   });
 
   it("rejects a non-integer limit", () => {
-    expect(() => graphNodeSearch.input.parse({ query: "test", limit: 2.5 })).toThrow();
+    expect(() =>
+      graphNodeSearch.input.parse({ query: "test", limit: 2.5 }),
+    ).toThrow();
   });
 
   // ── input: labels (optional) ──────────────────────────────────────────────
@@ -68,7 +76,10 @@ describe("graph.node.search capability", () => {
   });
 
   it("accepts a labels array of strings", () => {
-    const parsed = graphNodeSearch.input.parse({ query: "test", labels: ["Person", "Company"] });
+    const parsed = graphNodeSearch.input.parse({
+      query: "test",
+      labels: ["Person", "Company"],
+    });
     expect(parsed.labels).toEqual(["Person", "Company"]);
   });
 

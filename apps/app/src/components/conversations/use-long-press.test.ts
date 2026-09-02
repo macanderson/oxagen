@@ -16,7 +16,10 @@ import { useLongPress } from "./use-long-press";
 // Helpers — minimal synthetic events
 // ---------------------------------------------------------------------------
 
-function makePointerEvent(type: string, overrides: Partial<PointerEvent> = {}): React.PointerEvent {
+function makePointerEvent(
+  type: string,
+  overrides: Partial<PointerEvent> = {},
+): React.PointerEvent {
   return {
     pointerType: "touch",
     clientX: 0,
@@ -51,7 +54,9 @@ describe("useLongPress", () => {
     const onLongPress = vi.fn();
     const { result } = renderHook(() => useLongPress(onLongPress));
 
-    act(() => result.current.handlers.onPointerDown(makePointerEvent("pointerdown")));
+    act(() =>
+      result.current.handlers.onPointerDown(makePointerEvent("pointerdown")),
+    );
     expect(onLongPress).not.toHaveBeenCalled();
 
     act(() => vi.advanceTimersByTime(500));
@@ -60,9 +65,13 @@ describe("useLongPress", () => {
 
   it("respects a custom delay", () => {
     const onLongPress = vi.fn();
-    const { result } = renderHook(() => useLongPress(onLongPress, { delay: 800 }));
+    const { result } = renderHook(() =>
+      useLongPress(onLongPress, { delay: 800 }),
+    );
 
-    act(() => result.current.handlers.onPointerDown(makePointerEvent("pointerdown")));
+    act(() =>
+      result.current.handlers.onPointerDown(makePointerEvent("pointerdown")),
+    );
     act(() => vi.advanceTimersByTime(799));
     expect(onLongPress).not.toHaveBeenCalled();
 
@@ -75,7 +84,9 @@ describe("useLongPress", () => {
     const { result } = renderHook(() => useLongPress(onLongPress));
 
     act(() =>
-      result.current.handlers.onPointerDown(makePointerEvent("pointerdown", { pointerType: "mouse" })),
+      result.current.handlers.onPointerDown(
+        makePointerEvent("pointerdown", { pointerType: "mouse" }),
+      ),
     );
     act(() => vi.advanceTimersByTime(1000));
     expect(onLongPress).not.toHaveBeenCalled();
@@ -85,7 +96,9 @@ describe("useLongPress", () => {
     const onLongPress = vi.fn();
     const { result } = renderHook(() => useLongPress(onLongPress));
 
-    act(() => result.current.handlers.onPointerDown(makePointerEvent("pointerdown")));
+    act(() =>
+      result.current.handlers.onPointerDown(makePointerEvent("pointerdown")),
+    );
     act(() => result.current.handlers.onPointerUp());
     act(() => vi.advanceTimersByTime(500));
     expect(onLongPress).not.toHaveBeenCalled();
@@ -95,7 +108,9 @@ describe("useLongPress", () => {
     const onLongPress = vi.fn();
     const { result } = renderHook(() => useLongPress(onLongPress));
 
-    act(() => result.current.handlers.onPointerDown(makePointerEvent("pointerdown")));
+    act(() =>
+      result.current.handlers.onPointerDown(makePointerEvent("pointerdown")),
+    );
     act(() => result.current.handlers.onPointerCancel());
     act(() => vi.advanceTimersByTime(500));
     expect(onLongPress).not.toHaveBeenCalled();
@@ -103,12 +118,20 @@ describe("useLongPress", () => {
 
   it("cancels the timer when the pointer moves past the tolerance", () => {
     const onLongPress = vi.fn();
-    const { result } = renderHook(() => useLongPress(onLongPress, { moveTolerance: 10 }));
+    const { result } = renderHook(() =>
+      useLongPress(onLongPress, { moveTolerance: 10 }),
+    );
 
-    act(() => result.current.handlers.onPointerDown(makePointerEvent("pointerdown", { clientX: 0, clientY: 0 })));
+    act(() =>
+      result.current.handlers.onPointerDown(
+        makePointerEvent("pointerdown", { clientX: 0, clientY: 0 }),
+      ),
+    );
     // Move 11px — exceeds tolerance
     act(() =>
-      result.current.handlers.onPointerMove(makePointerEvent("pointermove", { clientX: 11, clientY: 0 })),
+      result.current.handlers.onPointerMove(
+        makePointerEvent("pointermove", { clientX: 11, clientY: 0 }),
+      ),
     );
     act(() => vi.advanceTimersByTime(500));
     expect(onLongPress).not.toHaveBeenCalled();
@@ -116,12 +139,20 @@ describe("useLongPress", () => {
 
   it("does NOT cancel when the pointer moves within tolerance", () => {
     const onLongPress = vi.fn();
-    const { result } = renderHook(() => useLongPress(onLongPress, { moveTolerance: 10 }));
+    const { result } = renderHook(() =>
+      useLongPress(onLongPress, { moveTolerance: 10 }),
+    );
 
-    act(() => result.current.handlers.onPointerDown(makePointerEvent("pointerdown", { clientX: 0, clientY: 0 })));
+    act(() =>
+      result.current.handlers.onPointerDown(
+        makePointerEvent("pointerdown", { clientX: 0, clientY: 0 }),
+      ),
+    );
     // Move 5px — within tolerance
     act(() =>
-      result.current.handlers.onPointerMove(makePointerEvent("pointermove", { clientX: 5, clientY: 0 })),
+      result.current.handlers.onPointerMove(
+        makePointerEvent("pointermove", { clientX: 5, clientY: 0 }),
+      ),
     );
     act(() => vi.advanceTimersByTime(500));
     expect(onLongPress).toHaveBeenCalledOnce();
@@ -131,7 +162,9 @@ describe("useLongPress", () => {
     const onLongPress = vi.fn();
     const { result } = renderHook(() => useLongPress(onLongPress));
 
-    act(() => result.current.handlers.onPointerDown(makePointerEvent("pointerdown")));
+    act(() =>
+      result.current.handlers.onPointerDown(makePointerEvent("pointerdown")),
+    );
     expect(result.current.firedRef.current).toBe(false);
 
     act(() => vi.advanceTimersByTime(500));
@@ -143,12 +176,16 @@ describe("useLongPress", () => {
     const { result } = renderHook(() => useLongPress(onLongPress));
 
     // First long-press
-    act(() => result.current.handlers.onPointerDown(makePointerEvent("pointerdown")));
+    act(() =>
+      result.current.handlers.onPointerDown(makePointerEvent("pointerdown")),
+    );
     act(() => vi.advanceTimersByTime(500));
     expect(result.current.firedRef.current).toBe(true);
 
     // Second pointerDown resets the ref
-    act(() => result.current.handlers.onPointerDown(makePointerEvent("pointerdown")));
+    act(() =>
+      result.current.handlers.onPointerDown(makePointerEvent("pointerdown")),
+    );
     expect(result.current.firedRef.current).toBe(false);
   });
 
@@ -156,7 +193,9 @@ describe("useLongPress", () => {
     const onLongPress = vi.fn();
     const { result } = renderHook(() => useLongPress(onLongPress));
 
-    act(() => result.current.handlers.onPointerDown(makePointerEvent("pointerdown")));
+    act(() =>
+      result.current.handlers.onPointerDown(makePointerEvent("pointerdown")),
+    );
     act(() => vi.advanceTimersByTime(500));
 
     const e = makeMouseEvent();
@@ -180,7 +219,9 @@ describe("useLongPress", () => {
     // Should not throw
     expect(() =>
       act(() =>
-        result.current.handlers.onPointerMove(makePointerEvent("pointermove", { clientX: 999, clientY: 999 })),
+        result.current.handlers.onPointerMove(
+          makePointerEvent("pointermove", { clientX: 999, clientY: 999 }),
+        ),
       ),
     ).not.toThrow();
     expect(onLongPress).not.toHaveBeenCalled();

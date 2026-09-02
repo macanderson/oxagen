@@ -7,9 +7,9 @@ import {
 
 describe("deriveRunSummary", () => {
   it("prefers a top-level summary field, trimmed", () => {
-    expect(deriveRunSummary({ summary: "  did the thing  ", rest: "x".repeat(500) })).toBe(
-      "did the thing",
-    );
+    expect(
+      deriveRunSummary({ summary: "  did the thing  ", rest: "x".repeat(500) }),
+    ).toBe("did the thing");
   });
 
   it("falls back message → text in precedence order", () => {
@@ -22,12 +22,18 @@ describe("deriveRunSummary", () => {
   });
 
   it("truncates the declared field to the budget", () => {
-    expect(deriveRunSummary({ summary: "s".repeat(1000) })).toHaveLength(RUN_SUMMARY_MAX_CHARS);
+    expect(deriveRunSummary({ summary: "s".repeat(1000) })).toHaveLength(
+      RUN_SUMMARY_MAX_CHARS,
+    );
   });
 
   it("falls back to truncated JSON for outputs with no declared field", () => {
-    expect(deriveRunSummary({ results: [1, 2] })).toBe(JSON.stringify({ results: [1, 2] }));
-    expect(deriveRunSummary({ blob: "x".repeat(1000) })).toHaveLength(RUN_SUMMARY_MAX_CHARS);
+    expect(deriveRunSummary({ results: [1, 2] })).toBe(
+      JSON.stringify({ results: [1, 2] }),
+    );
+    expect(deriveRunSummary({ blob: "x".repeat(1000) })).toHaveLength(
+      RUN_SUMMARY_MAX_CHARS,
+    );
   });
 
   it("handles arrays and scalars via JSON fallback", () => {

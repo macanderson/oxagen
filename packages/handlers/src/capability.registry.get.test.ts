@@ -18,7 +18,10 @@ vi.mock("@oxagen/oxagen", async (importOriginal) => {
 });
 
 import { registerCapability, clearRegistryForTests } from "@oxagen/oxagen";
-import { capabilityRegistryGetHandler, describeSchemaFields } from "./capability.registry.get";
+import {
+  capabilityRegistryGetHandler,
+  describeSchemaFields,
+} from "./capability.registry.get";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 beforeEach(() => {
@@ -29,7 +32,10 @@ beforeEach(() => {
 
 describe("capabilityRegistryGetHandler", () => {
   it("returns null for an unknown capability (clean not-found)", async () => {
-    const out = await capabilityRegistryGetHandler({ name: "no_such_cap" }, CTX);
+    const out = await capabilityRegistryGetHandler(
+      { name: "no_such_cap" },
+      CTX,
+    );
     expect(out.capability).toBeNull();
   });
 
@@ -56,7 +62,9 @@ describe("capabilityRegistryGetHandler", () => {
         deep: z.boolean().nullable(),
       }),
       output: z.object({
-        widgets: z.array(z.object({ id: z.string() })).describe("Matching widgets"),
+        widgets: z
+          .array(z.object({ id: z.string() }))
+          .describe("Matching widgets"),
         cursor: z.string().nullable().optional(),
       }),
     });
@@ -73,14 +81,44 @@ describe("capabilityRegistryGetHandler", () => {
     expect(cap?.workspaceRoles).toEqual({ Viewer: "deny" });
 
     expect(cap?.inputFields).toEqual([
-      { name: "widgetId", type: "string", required: true, description: "The widget to read" },
-      { name: "limit", type: "number", required: false, description: "Page size" },
-      { name: "mode", type: "enum(fast | slow)", required: false, description: null },
-      { name: "deep", type: "boolean | null", required: true, description: null },
+      {
+        name: "widgetId",
+        type: "string",
+        required: true,
+        description: "The widget to read",
+      },
+      {
+        name: "limit",
+        type: "number",
+        required: false,
+        description: "Page size",
+      },
+      {
+        name: "mode",
+        type: "enum(fast | slow)",
+        required: false,
+        description: null,
+      },
+      {
+        name: "deep",
+        type: "boolean | null",
+        required: true,
+        description: null,
+      },
     ]);
     expect(cap?.outputFields).toEqual([
-      { name: "widgets", type: "array<object>", required: true, description: "Matching widgets" },
-      { name: "cursor", type: "string | null", required: false, description: null },
+      {
+        name: "widgets",
+        type: "array<object>",
+        required: true,
+        description: "Matching widgets",
+      },
+      {
+        name: "cursor",
+        type: "string | null",
+        required: false,
+        description: null,
+      },
     ]);
   });
 

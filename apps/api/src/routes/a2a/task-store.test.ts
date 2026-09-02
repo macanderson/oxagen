@@ -132,6 +132,13 @@ describe("toA2ATask", () => {
     const task = toA2ATask(row, -1);
     expect(task.history).toHaveLength(2);
   });
+
+  it("returns no history for historyLength 0 (not the whole array)", () => {
+    // Regression: `slice(-0)` is `slice(0)`, so a naive slice returned every
+    // message for the one value that means "send me none".
+    const task = toA2ATask(row, 0);
+    expect(task.history).toEqual([]);
+  });
 });
 
 describe("task store CRUD", () => {

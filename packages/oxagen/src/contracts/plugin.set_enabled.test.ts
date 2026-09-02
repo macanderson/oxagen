@@ -32,7 +32,11 @@ describe("plugin.set_enabled contract", () => {
 
   it("rejects a scope value outside org|workspace", () => {
     expect(() =>
-      pluginSetEnabled.input.parse({ scope: "global", orgListingId: "x", enabled: true }),
+      pluginSetEnabled.input.parse({
+        scope: "global",
+        orgListingId: "x",
+        enabled: true,
+      }),
     ).toThrow();
   });
 
@@ -63,7 +67,10 @@ describe("plugin.set_enabled contract", () => {
   });
 
   it("output carries ok and nullable workspaceServerId", () => {
-    const parsed = pluginSetEnabled.output.parse({ ok: true, workspaceServerId: null });
+    const parsed = pluginSetEnabled.output.parse({
+      ok: true,
+      workspaceServerId: null,
+    });
     expect(parsed.ok).toBe(true);
     expect(parsed.workspaceServerId).toBeNull();
   });

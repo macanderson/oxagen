@@ -21,7 +21,11 @@ import { gotoStable } from "./helpers/nav";
 import { rm, mkdir } from "node:fs/promises";
 import path from "node:path";
 
-const SCREENSHOTS_DIR = path.resolve(import.meta.dirname, "screenshots", "settings-mobile");
+const SCREENSHOTS_DIR = path.resolve(
+  import.meta.dirname,
+  "screenshots",
+  "settings-mobile",
+);
 
 // web-app-2.0 Phase 2 consolidation: 9 tabs → 4 (Members folded into General;
 // Models·Budget·Prompts·Memory-policy merged into Agent Defaults; ontology
@@ -49,11 +53,15 @@ async function expectNoHorizontalOverflow(page: Page) {
 }
 
 test.describe("settings — mobile one-thumb navigation @ 390px", () => {
-  test("workspace settings: thumb switcher exposes every section", async ({ page }) => {
+  test("workspace settings: thumb switcher exposes every section", async ({
+    page,
+  }) => {
     test.setTimeout(240_000);
     await page.setViewportSize({ width: 390, height: 844 });
 
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "mobile-set" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "mobile-set",
+    });
     const ws = `/${orgSlug}/default`;
 
     await gotoStable(page, `${ws}/settings/general`);
@@ -75,7 +83,9 @@ test.describe("settings — mobile one-thumb navigation @ 390px", () => {
       .boundingBox();
     expect(barBox).not.toBeNull();
     // Switcher bottom edge (incl. its py-2 padding) meets the bar's top edge.
-    expect(Math.abs(box!.y + box!.height + 8 - barBox!.y)).toBeLessThanOrEqual(2);
+    expect(Math.abs(box!.y + box!.height + 8 - barBox!.y)).toBeLessThanOrEqual(
+      2,
+    );
 
     await expectNoHorizontalOverflow(page);
     await page.screenshot({
@@ -92,7 +102,10 @@ test.describe("settings — mobile one-thumb navigation @ 390px", () => {
       await expect(link).toBeVisible();
       const linkBox = await link.boundingBox();
       expect(linkBox, `section "${label}" bounding box`).not.toBeNull();
-      expect(linkBox!.height, `section "${label}" touch target`).toBeGreaterThanOrEqual(44);
+      expect(
+        linkBox!.height,
+        `section "${label}" touch target`,
+      ).toBeGreaterThanOrEqual(44);
     }
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "02-workspace-settings-sheet.png"),
@@ -100,22 +113,31 @@ test.describe("settings — mobile one-thumb navigation @ 390px", () => {
     });
 
     // Selecting a section navigates and closes the sheet.
-    await sheet.getByRole("link", { name: "Agent Defaults", exact: true }).click();
+    await sheet
+      .getByRole("link", { name: "Agent Defaults", exact: true })
+      .click();
     await expect(page).toHaveURL(new RegExp(`${ws}/settings/agent-defaults`));
     await expect(sheet).not.toBeVisible();
     await expect(trigger).toContainText("Agent Defaults");
     await expectNoHorizontalOverflow(page);
     await page.screenshot({
-      path: path.join(SCREENSHOTS_DIR, "03-workspace-settings-agent-defaults.png"),
+      path: path.join(
+        SCREENSHOTS_DIR,
+        "03-workspace-settings-agent-defaults.png",
+      ),
       fullPage: false,
     });
   });
 
-  test("org settings: thumb switcher exposes every section", async ({ page }) => {
+  test("org settings: thumb switcher exposes every section", async ({
+    page,
+  }) => {
     test.setTimeout(240_000);
     await page.setViewportSize({ width: 390, height: 844 });
 
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "mobile-org" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "mobile-org",
+    });
 
     await gotoStable(page, `/${orgSlug}/settings/general`);
     await expect(page).not.toHaveURL(/\/login/);
@@ -132,7 +154,9 @@ test.describe("settings — mobile one-thumb navigation @ 390px", () => {
     const sheet = page.getByTestId("settings-mobile-nav-sheet");
     await expect(sheet).toBeVisible();
     for (const label of ORG_SECTIONS) {
-      await expect(sheet.getByRole("link", { name: label, exact: true })).toBeVisible();
+      await expect(
+        sheet.getByRole("link", { name: label, exact: true }),
+      ).toBeVisible();
     }
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "05-org-settings-sheet.png"),

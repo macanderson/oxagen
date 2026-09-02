@@ -20,7 +20,9 @@ const COLUMNS: CsvColumn[] = [
 
 describe("toCsv", () => {
   it("emits the header row followed by CRLF-terminated data rows", () => {
-    const csv = toCsv(COLUMNS, [{ name: "Ada", email: "ada@example.com", note: "ok" }]);
+    const csv = toCsv(COLUMNS, [
+      { name: "Ada", email: "ada@example.com", note: "ok" },
+    ]);
     expect(csv).toBe("Name,Email,Note\r\nAda,ada@example.com,ok\r\n");
   });
 
@@ -29,22 +31,30 @@ describe("toCsv", () => {
   });
 
   it("quotes fields containing a comma", () => {
-    const csv = toCsv(COLUMNS, [{ name: "Doe, Jane", email: "j@x.com", note: "" }]);
+    const csv = toCsv(COLUMNS, [
+      { name: "Doe, Jane", email: "j@x.com", note: "" },
+    ]);
     expect(csv).toContain('"Doe, Jane"');
   });
 
   it("quotes fields containing a double quote and doubles the embedded quote", () => {
-    const csv = toCsv(COLUMNS, [{ name: 'The "Boss"', email: "b@x.com", note: "" }]);
+    const csv = toCsv(COLUMNS, [
+      { name: 'The "Boss"', email: "b@x.com", note: "" },
+    ]);
     expect(csv).toContain('"The ""Boss"""');
   });
 
   it("quotes fields containing an embedded newline", () => {
-    const csv = toCsv(COLUMNS, [{ name: "Line1\nLine2", email: "a@x.com", note: "" }]);
+    const csv = toCsv(COLUMNS, [
+      { name: "Line1\nLine2", email: "a@x.com", note: "" },
+    ]);
     expect(csv).toContain('"Line1\nLine2"');
   });
 
   it("quotes fields containing an embedded carriage return + newline", () => {
-    const csv = toCsv(COLUMNS, [{ name: "Line1\r\nLine2", email: "a@x.com", note: "" }]);
+    const csv = toCsv(COLUMNS, [
+      { name: "Line1\r\nLine2", email: "a@x.com", note: "" },
+    ]);
     expect(csv).toContain('"Line1\r\nLine2"');
   });
 
@@ -55,7 +65,10 @@ describe("toCsv", () => {
 
   it("stringifies numbers and booleans", () => {
     const csv = toCsv(
-      [{ key: "count", header: "Count" }, { key: "active", header: "Active" }],
+      [
+        { key: "count", header: "Count" },
+        { key: "active", header: "Active" },
+      ],
       [{ count: 42, active: true }],
     );
     expect(csv).toBe("Count,Active\r\n42,true\r\n");
@@ -121,7 +134,9 @@ describe("downloadCsv", () => {
       createObjectURL: vi.fn(() => "blob:mock-url"),
       revokeObjectURL: vi.fn(),
     });
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
 
     downloadCsv("report.csv", "a,b\r\n1,2\r\n");
 

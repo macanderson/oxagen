@@ -18,7 +18,10 @@ describe("notifications.mark contract", () => {
   });
 
   it("parses archived=true alone (read optional)", () => {
-    const parsed = notificationsMark.input.parse({ id: "ntf_abc", archived: true });
+    const parsed = notificationsMark.input.parse({
+      id: "ntf_abc",
+      archived: true,
+    });
     expect(parsed.archived).toBe(true);
     expect(parsed.read).toBeUndefined();
   });

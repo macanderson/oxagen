@@ -10,8 +10,11 @@
  *   - Server cache: Vercel Runtime Cache, TTL 1 hour, keyed by context hash.
  *
  * Spec §7 graceful degradation:
- *   - If the fetch exceeds 800ms or fails, suggestions stay empty — no spinner
- *     is left visible past the timeout. The rest of the menu renders normally.
+ *   - If the fetch exceeds 800ms or fails, the spinner is dropped and the
+ *     section collapses. The rest of the menu renders normally.
+ *   - The 800ms deadline hides the spinner; it does NOT abort the request. A
+ *     response that lands after the deadline still populates the section (and
+ *     the client cache), so a slow first open can pop suggestions in late.
  *
  * The hook accepts a `ScopeContext` (orgSlug + workspaceSlug) and the full
  * PageContext so it can build a SuggestionContext automatically.
@@ -47,7 +50,13 @@ interface UseSuggestionsResult {
   loading: boolean;
 }
 
-/** 5-minute in-memory client cache. Maps a cache key → { items, fetchedAt }. */
+/**
+ * 5-minute in-memory client cache. Maps a cache key → { items, fetchedAt }.
+ *
+ * Module-scoped and never evicted: the TTL only makes an entry stale, it never
+ * removes it, so the map grows by one entry per distinct route+entity the user
+ * opens the menu on and only clears on a full page load.
+ */
 const CLIENT_CACHE = new Map<
   string,
   { items: SuggestionItem[]; fetchedAt: number }
@@ -62,7 +71,7 @@ function clientCacheKey(
   return `${pathname}::${entityId ?? "none"}`;
 }
 
-/** Spec §7: hide the section if the LLM call hasn't returned within 800ms. */
+/** Spec §7: hide the spinner if the LLM call hasn't returned within 800ms. */
 const FETCH_TIMEOUT_MS = 800;
 
 export function useSuggestions({
@@ -96,7 +105,9 @@ export function useSuggestions({
     let cancelled = false;
 
     const timeoutId = setTimeout(() => {
-      // Spec §7: if not returned within 800ms, clear loading so the section hides.
+      // Spec §7: if not returned within 800ms, clear loading so the section
+      // collapses. The in-flight request is deliberately left running — its
+      // result still lands in the cache for the next open.
       if (!cancelled) {
         setLoading(false);
         setSuggestions([]);

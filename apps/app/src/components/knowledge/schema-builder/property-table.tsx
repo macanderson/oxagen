@@ -58,8 +58,12 @@ export function PropertyTable({
         <table className="w-full table-fixed text-sm">
           <thead className="border-b border-border">
             <tr>
-              <th className="px-3 py-2 text-left font-medium text-muted-foreground w-[16%]">Key</th>
-              <th className="px-3 py-2 text-left font-medium text-muted-foreground w-[14%]">Type</th>
+              <th className="px-3 py-2 text-left font-medium text-muted-foreground w-[16%]">
+                Key
+              </th>
+              <th className="px-3 py-2 text-left font-medium text-muted-foreground w-[14%]">
+                Type
+              </th>
               <th className="px-3 py-2 text-center font-medium text-muted-foreground w-[9%]">
                 Required
               </th>
@@ -74,13 +78,20 @@ export function PropertyTable({
               )}
             </tr>
           </thead>
-          <tbody className={cn("divide-y divide-border", properties.length === 0 && "hidden")}>
+          <tbody
+            className={cn(
+              "divide-y divide-border",
+              properties.length === 0 && "hidden",
+            )}
+          >
             {properties.map((prop, idx) => (
               <tr key={idx} className="bg-card">
                 <td className="px-3 py-2">
                   <Input
                     value={prop.key}
-                    onChange={(e) => onUpdate(idx, { ...prop, key: e.target.value })}
+                    onChange={(e) =>
+                      onUpdate(idx, { ...prop, key: e.target.value })
+                    }
                     placeholder="propertyName"
                     disabled={readOnly}
                     className="h-7 text-sm"
@@ -90,7 +101,10 @@ export function PropertyTable({
                   <Select
                     value={prop.dataType}
                     onValueChange={(v) =>
-                      onUpdate(idx, { ...prop, dataType: v as PropertyItem["dataType"] })
+                      onUpdate(idx, {
+                        ...prop,
+                        dataType: v as PropertyItem["dataType"],
+                      })
                     }
                     disabled={readOnly}
                   >
@@ -119,7 +133,9 @@ export function PropertyTable({
                 <td className="px-3 py-2">
                   <Input
                     value={prop.description ?? ""}
-                    onChange={(e) => onUpdate(idx, { ...prop, description: e.target.value })}
+                    onChange={(e) =>
+                      onUpdate(idx, { ...prop, description: e.target.value })
+                    }
                     placeholder="Description"
                     disabled={readOnly}
                     className="h-7 text-sm"
@@ -128,7 +144,9 @@ export function PropertyTable({
                 <td className="px-3 py-2">
                   <Input
                     value={prop.example ?? ""}
-                    onChange={(e) => onUpdate(idx, { ...prop, example: e.target.value })}
+                    onChange={(e) =>
+                      onUpdate(idx, { ...prop, example: e.target.value })
+                    }
                     placeholder="e.g. John"
                     disabled={readOnly}
                     className="h-7 text-sm"
@@ -158,7 +176,12 @@ export function PropertyTable({
         )}
       </div>
       {!readOnly && (
-        <Button variant="outline" size="sm" onClick={handleAddRow} className="gap-1.5">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleAddRow}
+          className="gap-1.5"
+        >
           <Plus className="h-3.5 w-3.5" />
           Add property
         </Button>

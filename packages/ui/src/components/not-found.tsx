@@ -6,7 +6,7 @@
  * exports `/_not-found` at build time, so anything that reads React context
  * here (e.g. a theme provider) crashes the export worker. Keep it inert.
  *
- * Styling uses the shadcn theme tokens (plain CSS variables — no React
+ * Styling uses the @oxagen/ui theme tokens (plain CSS variables — no React
  * context), so it reads correctly in both light and dark.
  *
  * Uses a plain anchor (not `next/link`) to avoid coupling `@oxagen/ui` to a
@@ -16,8 +16,12 @@ export function NotFoundPage({ homeHref = "/" }: { homeHref?: string }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
       <section className="w-full max-w-md rounded-xl border bg-card p-10 text-center text-card-foreground shadow">
-        <p className="text-6xl font-semibold tracking-tight text-muted-foreground">404</p>
-        <h1 className="mt-4 text-xl font-semibold tracking-tight">Page not found</h1>
+        <p className="text-6xl font-semibold tracking-tight text-muted-foreground">
+          404
+        </p>
+        <h1 className="mt-4 text-xl font-semibold tracking-tight">
+          Page not found
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           The page you’re looking for doesn’t exist or has moved.
         </p>

@@ -85,7 +85,11 @@ export function cacheFileName(modelId: string, quant: Quantization): string {
 }
 
 /** Absolute path a model+quant weight file lives at (whether or not present). */
-export function cachedPath(dir: string, modelId: string, quant: Quantization): string {
+export function cachedPath(
+  dir: string,
+  modelId: string,
+  quant: Quantization,
+): string {
   return join(dir, cacheFileName(modelId, quant));
 }
 
@@ -147,10 +151,16 @@ export function isCached(
   const path = cachedPath(dir, modelId, quant);
   const entry = manifestEntry(dir, modelId, quant);
   if (!entry) return { cached: false, path, reason: "no manifest entry" };
-  if (!existsSync(path)) return { cached: false, path, entry, reason: "file missing" };
+  if (!existsSync(path))
+    return { cached: false, path, entry, reason: "file missing" };
   const size = statSync(path).size;
   if (entry.sizeBytes && size !== entry.sizeBytes) {
-    return { cached: false, path, entry, reason: "size mismatch (partial/corrupt)" };
+    return {
+      cached: false,
+      path,
+      entry,
+      reason: "size mismatch (partial/corrupt)",
+    };
   }
   return { cached: true, path, entry };
 }
@@ -162,7 +172,8 @@ export function verifyIntegrity(
   quant: Quantization,
 ): { ok: boolean; reason?: string } {
   const status = isCached(dir, modelId, quant);
-  if (!status.cached || !status.entry) return { ok: false, reason: status.reason };
+  if (!status.cached || !status.entry)
+    return { ok: false, reason: status.reason };
   const actual = sha256File(status.path);
   if (actual !== status.entry.sha256) {
     return { ok: false, reason: "checksum mismatch" };
@@ -267,7 +278,9 @@ export interface EnsureResult {
  * returned untouched — the download path never runs (requirement 1). On a fresh
  * download the computed checksum is pinned to the manifest for future runs.
  */
-export async function ensureModelCached(opts: EnsureOptions): Promise<EnsureResult> {
+export async function ensureModelCached(
+  opts: EnsureOptions,
+): Promise<EnsureResult> {
   const { dir, modelId, quant, source } = opts;
   const dest = cachedPath(dir, modelId, quant);
 

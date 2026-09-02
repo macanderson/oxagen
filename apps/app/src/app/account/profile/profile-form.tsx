@@ -35,7 +35,9 @@ export function ProfileForm({
 }: ProfileFormProps) {
   const [displayName, setDisplayName] = React.useState(initialDisplayName);
   const [avatarUrl, setAvatarUrl] = React.useState(initialAvatarUrl);
-  const [status, setStatus] = React.useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [status, setStatus] = React.useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
   // Ask-to-Fill registration — lets the AI suggest profile values
@@ -66,12 +68,16 @@ export function ProfileForm({
     ...spec,
     apply: (values: Record<string, unknown>, mode, fieldName) => {
       if (mode === "field" && fieldName === "displayName") {
-        if (typeof values.displayName === "string") setDisplayName(values.displayName);
+        if (typeof values.displayName === "string")
+          setDisplayName(values.displayName);
       } else if (mode === "field" && fieldName === "avatarUrl") {
-        if (typeof values.avatarUrl === "string") setAvatarUrl(values.avatarUrl);
+        if (typeof values.avatarUrl === "string")
+          setAvatarUrl(values.avatarUrl);
       } else {
-        if (typeof values.displayName === "string") setDisplayName(values.displayName);
-        if (typeof values.avatarUrl === "string") setAvatarUrl(values.avatarUrl);
+        if (typeof values.displayName === "string")
+          setDisplayName(values.displayName);
+        if (typeof values.avatarUrl === "string")
+          setAvatarUrl(values.avatarUrl);
       }
     },
   });
@@ -121,7 +127,8 @@ export function ProfileForm({
             className="cursor-not-allowed opacity-60"
           />
           <p className="text-xs text-muted-foreground">
-            Email address cannot be changed here. Contact support to update your email.
+            Email address cannot be changed here. Contact support to update your
+            email.
           </p>
         </div>
 
@@ -174,12 +181,17 @@ export function ProfileForm({
             </div>
             <div className="flex items-center justify-between gap-4 px-3 py-2">
               <dt className="text-sm text-muted-foreground">Language</dt>
-              <dd className="text-sm font-medium text-foreground">{language}</dd>
+              <dd className="text-sm font-medium text-foreground">
+                {language}
+              </dd>
             </div>
           </dl>
           <p className="text-xs text-muted-foreground">
             Timezone and language can be changed in{" "}
-            <Link href={account.preferences()} className="underline underline-offset-2">
+            <Link
+              href={account.preferences()}
+              className="underline underline-offset-2"
+            >
               Preferences
             </Link>
             .

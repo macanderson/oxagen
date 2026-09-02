@@ -2,14 +2,19 @@
  * Public types for the durable-run worker harness (agent-engine v2 —
  * docs/specs/agent-engine-v2/plan.md "Phase 2 — Durable runs").
  *
- * This package is deliberately dependency-free beyond dev tooling: `RunStore`
- * is declared here STRUCTURALLY — matching the fixed contract exactly, field
- * for field — rather than imported from `@oxagen/agent-runner`. That is a
- * design decision, not scaffolding: the concrete store
- * (`createPostgresRunStore`) and the real `TurnDriver` (`executeTurn`) are
- * wired in `src/main.ts` without touching this package's internals, because
- * TypeScript's structural typing means any object shaped like `RunStore`
- * satisfies it, real or fake.
+ * This file imports nothing: `RunStore` is declared here STRUCTURALLY —
+ * matching the fixed contract exactly, field for field — rather than imported
+ * from `@oxagen/agent-runner`. That is a design decision, not scaffolding: the
+ * concrete store (`createPostgresRunStore`) and the real `TurnDriver`
+ * (`executeTurn`) are wired in `src/main.ts` without touching this package's
+ * internals, because TypeScript's structural typing means any object shaped
+ * like `RunStore` satisfies it, real or fake.
+ *
+ * The discipline is scoped to the harness core — this file, `./seq.ts`, and
+ * `./terminal.ts` import nothing at all, and `./worker.ts` imports exactly one
+ * leaf module (`@oxagen/agent-runner/run-errors`, which itself has no imports).
+ * The package as a whole is NOT dependency-free: `./main.ts` and
+ * `./bootstrap.ts` pull in the store, the driver, and the whole kernel.
  */
 
 /** A run claimed off the durable-run queue, ready to be driven to completion. */
@@ -83,12 +88,18 @@ export interface RunStore {
 //
 // Declared as a SEPARATE port rather than folded into `RunStore` above. The V1
 // port and the V1 worker loop stay byte-for-byte valid while queued legacy work
-// drains, and `worker.ts` switches to `AttemptRunStore` in the worker-cutover
-// task — a change of one type, not a rewrite of this file's contract.
+// drains, and `worker.ts` can switch wholesale to `AttemptRunStore` once it has
+// — a change of one type, not a rewrite of this file's contract.
 //
 // Same structural-typing discipline as `RunStore`: these shapes mirror
 // @oxagen/agent-runner's exports field for field and are NOT imported, so this
-// package keeps zero runtime dependencies.
+// file stays import-free and the harness stays testable with plain fakes.
+//
+// The mirror is hand-maintained. `./main.ts`'s
+// `const store: RunStore & AttemptRunStore = createPostgresRunStore()` is the
+// ONE line that compares it against the real thing, so a drift in the STORE
+// surface fails typecheck. The `AttemptTurnDriver` half has no such comparison
+// — nothing constructs one yet — so a drift there is caught only by review.
 
 /**
  * The complete fencing reference for one attempt. An `(runId, workerId)` pair
@@ -345,10 +356,11 @@ export interface AttemptTurnDriver {
  * Everything the worker needs to claim and drive fenced V2 attempts.
  *
  * Its absence is the V2 claim gate: `WorkerOptions.attempts` is optional, and a
- * worker configured without it never issues a V2 claim and behaves exactly as
- * the V1 harness always has. PR 1A ships the path disabled on purpose —
- * enabling V2 execution before PR 2B's finalization consumption exists would
- * mint obligations no deployed worker can satisfy.
+ * worker configured without it never issues a V2 claim and drives V1 work only.
+ * The path ships disabled on purpose — enabling V2 execution before
+ * finalization consumption is deployed would mint obligations no running worker
+ * can satisfy. No `AttemptTurnDriver` implementation exists yet either, so this
+ * option cannot currently be constructed outside tests.
  */
 export interface AttemptWorkerOptions {
   store: AttemptRunStore;
@@ -403,7 +415,7 @@ export interface WorkerOptions {
   driveTurn: TurnDriver;
   /**
    * Fenced V2 attempt execution. Omitted ⇒ this worker never issues a V2
-   * claim and drives V1 work only — the shipped PR 1A configuration. Supplied
+   * claim and drives V1 work only — the shipped configuration. Supplied
    * ⇒ each claim loop tries the V2 queue first and falls back to V1, so
    * already-enqueued legacy work keeps draining either way.
    */

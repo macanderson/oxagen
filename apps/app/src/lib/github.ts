@@ -88,8 +88,12 @@ export async function fetchGithubStatus(
     { credentials: "include", signal },
   );
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `Failed to load GitHub status (${res.status})`);
+    const body = (await res.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(
+      body?.error ?? `Failed to load GitHub status (${res.status})`,
+    );
   }
   return (await res.json()) as GithubStatusResponse;
 }

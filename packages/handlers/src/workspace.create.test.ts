@@ -27,17 +27,19 @@ const wsValuesStub = { returning: mocks.txInsertWsReturning };
 mocks.txInsertWs.mockReturnValue({ values: () => wsValuesStub });
 mocks.txInsertWsUsers.mockReturnValue({ values: vi.fn(async () => undefined) });
 
-mocks.txFn.mockImplementation(async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
-  let insertCount = 0;
-  const tx = {
-    insert: (table: unknown): unknown => {
-      insertCount++;
-      if (insertCount === 1) return mocks.txInsertWs(table) as unknown;
-      return mocks.txInsertWsUsers(table) as unknown;
-    },
-  };
-  return cb(tx as unknown as Parameters<typeof cb>[0]);
-});
+mocks.txFn.mockImplementation(
+  async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
+    let insertCount = 0;
+    const tx = {
+      insert: (table: unknown): unknown => {
+        insertCount++;
+        if (insertCount === 1) return mocks.txInsertWs(table) as unknown;
+        return mocks.txInsertWsUsers(table) as unknown;
+      },
+    };
+    return cb(tx as unknown as Parameters<typeof cb>[0]);
+  },
+);
 
 // Stub bootstrapWorkspaceAgents to isolate workspace.create tests from DB
 // agent-seeding behaviour — that is covered by workspace-agents unit tests.
@@ -73,34 +75,33 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => ({
-    query: {
-      organizations: { findFirst: mocks.orgFindFirst },
-      workspaces: { findFirst: mocks.wsFindFirst },
-    },
-    transaction: mocks.txFn,
-  }),
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
-    // Each withTenantDb call gets its own insert counter so the org-query,
-    // ws-query, and transaction calls each see a fresh counter.
-    const insertCountRef = { n: 0 };
-    const tx = {
+    db: () => ({
       query: {
         organizations: { findFirst: mocks.orgFindFirst },
         workspaces: { findFirst: mocks.wsFindFirst },
       },
-      // Namespace derivation reads the org's existing workspace namespaces
-      // before inserting; empty means the slug-derived namespace is used as-is.
-      select: () => ({ from: () => ({ where: async () => [] }) }),
-      insert: (table: unknown): unknown => {
-        insertCountRef.n++;
-        if (insertCountRef.n === 1) return mocks.txInsertWs(table) as unknown;
-        return mocks.txInsertWsUsers(table) as unknown;
-      },
-    };
-    return fn(tx);
-  },
-
+      transaction: mocks.txFn,
+    }),
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
+      // Each withTenantDb call gets its own insert counter so the org-query,
+      // ws-query, and transaction calls each see a fresh counter.
+      const insertCountRef = { n: 0 };
+      const tx = {
+        query: {
+          organizations: { findFirst: mocks.orgFindFirst },
+          workspaces: { findFirst: mocks.wsFindFirst },
+        },
+        // Namespace derivation reads the org's existing workspace namespaces
+        // before inserting; empty means the slug-derived namespace is used as-is.
+        select: () => ({ from: () => ({ where: async () => [] }) }),
+        insert: (table: unknown): unknown => {
+          insertCountRef.n++;
+          if (insertCountRef.n === 1) return mocks.txInsertWs(table) as unknown;
+          return mocks.txInsertWsUsers(table) as unknown;
+        },
+      };
+      return fn(tx);
+    },
   };
 });
 
@@ -194,7 +195,9 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
   });
 
   it("seeds the default workspace skills after workspace creation", async () => {
-    const { seedWorkspaceDefaultSkills } = await import("./skill-workspace-seed");
+    const { seedWorkspaceDefaultSkills } = await import(
+      "./skill-workspace-seed"
+    );
     await workspaceCreateHandler({ name: "Skill Ws", slug: "skill-ws" }, CTX);
     expect(seedWorkspaceDefaultSkills).toHaveBeenCalledWith({
       orgId: CTX.orgId,
@@ -203,7 +206,9 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
   });
 
   it("seeds the default environment after workspace creation", async () => {
-    const { seedWorkspaceDefaultEnvironment } = await import("./workspace-environment-seed");
+    const { seedWorkspaceDefaultEnvironment } = await import(
+      "./workspace-environment-seed"
+    );
     await workspaceCreateHandler({ name: "Env Ws", slug: "env-ws" }, CTX);
     expect(seedWorkspaceDefaultEnvironment).toHaveBeenCalledWith({
       orgId: CTX.orgId,

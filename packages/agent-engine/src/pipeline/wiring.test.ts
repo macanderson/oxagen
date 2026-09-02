@@ -66,7 +66,8 @@ describe("countDiffLines", () => {
   });
 
   it("counts removed lines (starting with -, not ---)", () => {
-    const diff = "--- a/file.ts\n+++ b/file.ts\n-removed line 1\n-removed line 2";
+    const diff =
+      "--- a/file.ts\n+++ b/file.ts\n-removed line 1\n-removed line 2";
     expect(countDiffLines(diff)).toBe(2);
   });
 
@@ -385,12 +386,17 @@ describe("resolveJudgeSkipEnabled (ADR-021 §1 — default ON, opt-out)", () => 
 describe("shouldSkipJudgeReadOnly", () => {
   it("skips a read-only turn with an empty diff", () => {
     expect(shouldSkipJudgeReadOnly({ readOnly: true, diff: "" })).toBe(true);
-    expect(shouldSkipJudgeReadOnly({ readOnly: true, diff: "\n  \n" })).toBe(true);
+    expect(shouldSkipJudgeReadOnly({ readOnly: true, diff: "\n  \n" })).toBe(
+      true,
+    );
   });
 
   it("does NOT skip when the turn changed files, even if read-only-flagged", () => {
     expect(
-      shouldSkipJudgeReadOnly({ readOnly: true, diff: "--- a/x\n+++ b/x\n+new line" }),
+      shouldSkipJudgeReadOnly({
+        readOnly: true,
+        diff: "--- a/x\n+++ b/x\n+new line",
+      }),
     ).toBe(false);
   });
 

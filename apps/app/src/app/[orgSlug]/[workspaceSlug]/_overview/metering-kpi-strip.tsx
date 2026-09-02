@@ -9,9 +9,10 @@
  * true "remaining" number lives, so we never fabricate a quota.
  *
  * Gating mirrors spend-section.tsx / billing/usage: apps/app does not bootstrap
- * kernel IAM, so billing-manager is asserted explicitly. A non-billing member
- * sees a single "requires billing access" card instead of taking down the row
- * (parallel fail-open, same as every other Overview section).
+ * kernel IAM, so billing-manager is asserted explicitly. The gate fails CLOSED
+ * — a non-billing member, and a role lookup that errors, both get one
+ * "requires billing access" card instead of the row. The two DATA reads fail
+ * open (Promise.allSettled), so a dead source dims a card, not the page.
  */
 import "@oxagen/handlers/register";
 import { invoke } from "@oxagen/oxagen";
@@ -60,34 +61,38 @@ export async function MeteringKpiStrip({
 }: Props) {
   const usageHref = org.billing.usage({ orgSlug });
 
-  // Billing-gate the whole strip. Denial → one compact access card, never a throw.
+  // Billing-gate the whole strip. Denial → one compact access card, never a
+  // throw. A NON-denial failure (DB outage, timeout) means the role is unknown,
+  // so it fails CLOSED to the same card: falling through would render org spend
+  // and credit balance to a caller whose billing role was never established —
+  // apps/app does not bootstrap kernel IAM, so this gate is the only check.
   try {
     await assertBillingManager(orgId, userId);
   } catch (err) {
-    if (isAuthDenialError(err)) {
-      return (
-        <Card className="p-4" data-testid="overview-kpi-denied">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-medium text-foreground">
-                Metering hidden
-              </span>
-              <span className="text-xs text-muted-foreground">
-                Spend, tokens, and balance need billing access — ask an owner,
-                admin, or billing manager.
-              </span>
-            </div>
-            <Link
-              href={usageHref}
-              className="text-sm font-medium text-primary hover:underline"
-            >
-              View billing →
-            </Link>
-          </div>
-        </Card>
-      );
+    if (!isAuthDenialError(err)) {
+      console.error("overview kpi: billing-manager check failed:", err);
     }
-    console.error("overview kpi: billing-manager check failed:", err);
+    return (
+      <Card className="p-4" data-testid="overview-kpi-denied">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm font-medium text-foreground">
+              Metering hidden
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Spend, tokens, and balance need billing access — ask an owner,
+              admin, or billing manager.
+            </span>
+          </div>
+          <Link
+            href={usageHref}
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            View billing →
+          </Link>
+        </div>
+      </Card>
+    );
   }
 
   const ctx = invokeCtx(orgId, workspaceId, userId);

@@ -56,6 +56,8 @@ describe("org.settings.read handler", () => {
 
   it("throws when the organization is not found", async () => {
     mocks.findFirst.mockResolvedValue(undefined);
-    await expect(orgSettingsReadHandler({}, CTX)).rejects.toThrow("Organization not found");
+    await expect(orgSettingsReadHandler({}, CTX)).rejects.toThrow(
+      "Organization not found",
+    );
   });
 });

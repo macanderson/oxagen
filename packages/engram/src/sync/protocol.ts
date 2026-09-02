@@ -12,7 +12,12 @@
  *      so the peer converges symmetrically.
  */
 import type { Namespace, MemoryRecord } from "../types";
-import type { MerkleNode, MerkleChildRef, MerkleDiff, RecordVersion } from "./merkle";
+import type {
+  MerkleNode,
+  MerkleChildRef,
+  MerkleDiff,
+  RecordVersion,
+} from "./merkle";
 import { MerkleTree, compareVersions } from "./merkle";
 import { mergeRecordSets } from "./merge";
 
@@ -46,7 +51,10 @@ export interface SyncPeer {
    * if no record shares that prefix. Shallow = children carry hashes only, so
    * the caller descends by requesting child prefixes where hashes differ.
    */
-  getSubtree(namespace: Namespace, prefix: string): Promise<MerkleNode | undefined>;
+  getSubtree(
+    namespace: Namespace,
+    prefix: string,
+  ): Promise<MerkleNode | undefined>;
   /** Pull specific records from the peer by ID. */
   pullRecords(ids: string[]): Promise<MemoryRecord[]>;
   /** Push records to the peer. */
@@ -92,7 +100,9 @@ export async function syncWithPeer(
   // Step 3: pull remote-only + divergent, merge, store.
   const idsToPull = [...diff.remoteOnly, ...diff.divergent];
   const pulled = idsToPull.length ? await peer.pullRecords(idsToPull) : [];
-  const localDivergent = diff.divergent.length ? await loadLocal(diff.divergent) : [];
+  const localDivergent = diff.divergent.length
+    ? await loadLocal(diff.divergent)
+    : [];
   const merged = mergeRecordSets(localDivergent, pulled);
   if (merged.merged.length) await storeRecords(merged.merged);
 
@@ -125,24 +135,35 @@ export async function syncWithPeer(
       return;
     }
     if (!rNode) {
-      for (const v of localTree.versionsUnder(prefix)) diff.localOnly.push(v.id);
+      for (const v of localTree.versionsUnder(prefix))
+        diff.localOnly.push(v.id);
       return;
     }
     // Both present, hashes differ.
     if (lNode.leaf || rNode.leaf) {
-      compareVersions(localTree.versionsUnder(prefix), await collectRemote(rNode), diff);
+      compareVersions(
+        localTree.versionsUnder(prefix),
+        await collectRemote(rNode),
+        diff,
+      );
       return;
     }
     // Both internal: recurse ONLY into children whose hashes differ.
-    const lChildren = new Map<string, MerkleChildRef>((lNode.children ?? []).map((c) => [c.key, c]));
-    const rChildren = new Map<string, MerkleChildRef>((rNode.children ?? []).map((c) => [c.key, c]));
+    const lChildren = new Map<string, MerkleChildRef>(
+      (lNode.children ?? []).map((c) => [c.key, c]),
+    );
+    const rChildren = new Map<string, MerkleChildRef>(
+      (rNode.children ?? []).map((c) => [c.key, c]),
+    );
     const keys = new Set<string>([...lChildren.keys(), ...rChildren.keys()]);
     for (const key of [...keys].sort()) {
       const lc = lChildren.get(key);
       const rc = rChildren.get(key);
       if (lc && rc && lc.hash === rc.hash) continue; // identical child — no fetch
       const childPrefix = prefix + key;
-      const rChild = rc ? await peer.getSubtree(namespace, childPrefix) : undefined;
+      const rChild = rc
+        ? await peer.getSubtree(namespace, childPrefix)
+        : undefined;
       await walk(childPrefix, localTree.node(childPrefix), rChild);
     }
   }

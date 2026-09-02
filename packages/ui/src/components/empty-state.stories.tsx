@@ -14,7 +14,8 @@ export const Default: Story = {
   args: {
     icon: <Database />,
     title: "No connections yet",
-    description: "Connect a data source to start grounding agent answers in your knowledge graph.",
+    description:
+      "Connect a data source to start grounding agent answers in your knowledge graph.",
     action: <Button size="sm">Add connection</Button>,
     variant: "dashed",
   },

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { deriveTransportTypes, deriveAuthKind, mapServerDetailToCatalogRow } from "./map-server";
+import {
+  deriveTransportTypes,
+  deriveAuthKind,
+  mapServerDetailToCatalogRow,
+} from "./map-server";
 import type { ServerDetail, ServerMeta } from "./types";
 
 const REGISTRY_ID = "11111111-1111-1111-1111-111111111111";
@@ -10,13 +14,19 @@ describe("deriveTransportTypes", () => {
       name: "io.x/a",
       description: "d",
       version: "1.0.0",
-      packages: [{ registryType: "npm", identifier: "a", transport: { type: "stdio" } }],
+      packages: [
+        { registryType: "npm", identifier: "a", transport: { type: "stdio" } },
+      ],
       remotes: [
         { type: "streamable-http", url: "https://x" },
         { type: "sse", url: "https://y" },
       ],
     };
-    expect(deriveTransportTypes(sd).sort()).toEqual(["sse", "stdio", "streamable-http"]);
+    expect(deriveTransportTypes(sd).sort()).toEqual([
+      "sse",
+      "stdio",
+      "streamable-http",
+    ]);
   });
 });
 
@@ -35,7 +45,13 @@ describe("deriveAuthKind", () => {
       name: "io.x/a",
       description: "d",
       version: "1.0.0",
-      remotes: [{ type: "streamable-http", url: "https://x", variables: { API_KEY: { isSecret: true } } }],
+      remotes: [
+        {
+          type: "streamable-http",
+          url: "https://x",
+          variables: { API_KEY: { isSecret: true } },
+        },
+      ],
     };
     expect(deriveAuthKind(sd)).toBe("secret");
   });
@@ -66,7 +82,13 @@ describe("mapServerDetailToCatalogRow", () => {
       title: "Weather",
       repository: { url: "https://github.com/x/weather", source: "github" },
       icons: [{ src: "https://x/i.png" }],
-      remotes: [{ type: "streamable-http", url: "https://api/mcp", variables: { K: { isSecret: true } } }],
+      remotes: [
+        {
+          type: "streamable-http",
+          url: "https://api/mcp",
+          variables: { K: { isSecret: true } },
+        },
+      ],
     };
     const meta: ServerMeta = {
       status: "active",
@@ -85,7 +107,11 @@ describe("mapServerDetailToCatalogRow", () => {
     expect(row.upstreamUpdatedAt).toBeInstanceOf(Date);
   });
   it("defaults status to active and isLatest to false when meta is absent", () => {
-    const sd: ServerDetail = { name: "io.x/a", description: "d", version: "1.0.0" };
+    const sd: ServerDetail = {
+      name: "io.x/a",
+      description: "d",
+      version: "1.0.0",
+    };
     const row = mapServerDetailToCatalogRow(sd, undefined, REGISTRY_ID);
     expect(row.status).toBe("active");
     expect(row.isLatest).toBe(false);

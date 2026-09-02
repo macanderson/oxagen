@@ -35,7 +35,11 @@ describe("createFunction adapter", () => {
     capturedHandlers = [];
 
     mocks.inngestCreateFunction.mockImplementation(
-      (config: unknown, trigger: unknown, handler: (ctx: unknown) => Promise<unknown>) => {
+      (
+        config: unknown,
+        trigger: unknown,
+        handler: (ctx: unknown) => Promise<unknown>,
+      ) => {
         capturedConfigs.push(config);
         capturedTriggers.push(trigger);
         capturedHandlers.push(handler);
@@ -88,7 +92,9 @@ describe("createFunction adapter", () => {
         id: "agent.video-render",
         retries: 0,
         concurrency: { limit: 4, key: "event.data.orgId" },
-        cancelOn: [{ event: "agent/cancel", if: "event.data.id == async.data.id" }],
+        cancelOn: [
+          { event: "agent/cancel", if: "event.data.id == async.data.id" },
+        ],
         timeouts: { finish: "16m" },
       };
       const trigger: DurableFunctionTrigger = { event: "agent/video.render" };
@@ -99,7 +105,10 @@ describe("createFunction adapter", () => {
       const inngestConfig = capturedConfigs[0] as Record<string, unknown>;
       expect(inngestConfig.id).toBe("agent.video-render");
       expect(inngestConfig.retries).toBe(0);
-      expect(inngestConfig.concurrency).toEqual({ limit: 4, key: "event.data.orgId" });
+      expect(inngestConfig.concurrency).toEqual({
+        limit: 4,
+        key: "event.data.orgId",
+      });
       expect(inngestConfig.cancelOn).toEqual([
         { event: "agent/cancel", if: "event.data.id == async.data.id" },
       ]);
@@ -138,7 +147,9 @@ describe("createFunction adapter", () => {
       createFunction(config, trigger, handler);
 
       const mockStep = {
-        run: vi.fn().mockImplementation((_name: string, fn: () => unknown) => fn()),
+        run: vi
+          .fn()
+          .mockImplementation((_name: string, fn: () => unknown) => fn()),
         sendEvent: vi.fn(),
         waitForEvent: vi.fn(),
         sleep: vi.fn(),
@@ -149,7 +160,10 @@ describe("createFunction adapter", () => {
         step: mockStep,
       });
 
-      expect(mockStep.run).toHaveBeenCalledWith("my-step", expect.any(Function));
+      expect(mockStep.run).toHaveBeenCalledWith(
+        "my-step",
+        expect.any(Function),
+      );
       expect(result).toBe(42);
     });
 
@@ -157,7 +171,10 @@ describe("createFunction adapter", () => {
       const config: DurableFunctionConfig = { id: "test" };
       const trigger: DurableFunctionTrigger = { event: "test/event" };
       const handler: DurableFunctionHandler = async ({ step }) => {
-        await step.sendEvent("emit", { name: "out/event", data: { key: "val" } });
+        await step.sendEvent("emit", {
+          name: "out/event",
+          data: { key: "val" },
+        });
       };
 
       createFunction(config, trigger, handler);
@@ -399,7 +416,9 @@ describe("createFunction adapter", () => {
         id: "privacy.erasure-execute",
         onFailure: async () => undefined,
       };
-      const trigger: DurableFunctionTrigger = { event: "privacy/erasure.execute" };
+      const trigger: DurableFunctionTrigger = {
+        event: "privacy/erasure.execute",
+      };
       const handler: DurableFunctionHandler = async () => undefined;
 
       const result = createFunction(config, trigger, handler);
@@ -438,7 +457,9 @@ describe("createFunction adapter", () => {
       createFunction(config, trigger, handler);
 
       const mockStep = {
-        run: vi.fn().mockImplementation((_name: string, fn: () => unknown) => fn()),
+        run: vi
+          .fn()
+          .mockImplementation((_name: string, fn: () => unknown) => fn()),
         sendEvent: vi.fn(),
         waitForEvent: vi.fn(),
         sleep: vi.fn(),
@@ -454,7 +475,10 @@ describe("createFunction adapter", () => {
       });
 
       expect(failureHandlerCalled).toBe(true);
-      expect(mockStep.run).toHaveBeenCalledWith("handle-failure", expect.any(Function));
+      expect(mockStep.run).toHaveBeenCalledWith(
+        "handle-failure",
+        expect.any(Function),
+      );
     });
 
     it("does not register companion when onFailure is not set", () => {
@@ -473,7 +497,9 @@ describe("createFunction adapter", () => {
         id: "agent.video-render",
         retries: 0,
         concurrency: { limit: 4, key: "event.data.orgId" },
-        cancelOn: [{ event: "agent/cancel", if: "event.data.id == async.data.id" }],
+        cancelOn: [
+          { event: "agent/cancel", if: "event.data.id == async.data.id" },
+        ],
         timeouts: { finish: "16m" },
         onFailure: async () => undefined,
       };
@@ -498,13 +524,17 @@ describe("createFunction adapter", () => {
         concurrency: { limit: 10 },
         onFailure: async () => undefined,
       };
-      const trigger: DurableFunctionTrigger = { event: "privacy/erasure.execute" };
+      const trigger: DurableFunctionTrigger = {
+        event: "privacy/erasure.execute",
+      };
       const handler: DurableFunctionHandler = async () => undefined;
 
       const result = createFunction(config, trigger, handler);
 
       // The companion's DurableFunction.config should be minimal
-      expect(result[1]!.config).toEqual({ id: "privacy.erasure-execute.on-failure" });
+      expect(result[1]!.config).toEqual({
+        id: "privacy.erasure-execute.on-failure",
+      });
       expect(result[1]!.config).not.toHaveProperty("retries");
       expect(result[1]!.config).not.toHaveProperty("concurrency");
       expect(result[1]!.config).not.toHaveProperty("onFailure");
@@ -550,7 +580,12 @@ describe("createFunction adapter", () => {
       };
       createFunction(config, trigger, handler);
 
-      const mockStep = { run: vi.fn(), sendEvent: vi.fn(), waitForEvent: vi.fn(), sleep: vi.fn() };
+      const mockStep = {
+        run: vi.fn(),
+        sendEvent: vi.fn(),
+        waitForEvent: vi.fn(),
+        sleep: vi.fn(),
+      };
       await capturedHandlers[0]!({
         event: { name: "test/batch", data: { i: 0 } },
         events: [
@@ -575,7 +610,12 @@ describe("createFunction adapter", () => {
       };
       createFunction(config, trigger, handler);
 
-      const mockStep = { run: vi.fn(), sendEvent: vi.fn(), waitForEvent: vi.fn(), sleep: vi.fn() };
+      const mockStep = {
+        run: vi.fn(),
+        sendEvent: vi.fn(),
+        waitForEvent: vi.fn(),
+        sleep: vi.fn(),
+      };
       await capturedHandlers[0]!({
         event: { name: "test/plain", data: { only: true } },
         step: mockStep,

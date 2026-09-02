@@ -121,11 +121,14 @@ export function parseVerdict(text) {
       verdict: parsed.verdict,
       confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0,
       summary: typeof parsed.summary === "string" ? parsed.summary : "",
-      reasons: Array.isArray(parsed.reasons) ? parsed.reasons.filter((r) => typeof r === "string") : [],
+      reasons: Array.isArray(parsed.reasons)
+        ? parsed.reasons.filter((r) => typeof r === "string")
+        : [],
       drift_flags: Array.isArray(parsed.drift_flags)
         ? parsed.drift_flags.filter((r) => typeof r === "string")
         : [],
-      recommendation: typeof parsed.recommendation === "string" ? parsed.recommendation : "",
+      recommendation:
+        typeof parsed.recommendation === "string" ? parsed.recommendation : "",
     };
   } catch {
     return inconclusive;
@@ -151,7 +154,11 @@ export function renderComment(v, model) {
     lines.push("", "**Evidence:**", ...v.reasons.map((r) => `- ${r}`));
   }
   if (v.drift_flags.length) {
-    lines.push("", "**Vision rules touched:**", ...v.drift_flags.map((r) => `- ${r}`));
+    lines.push(
+      "",
+      "**Vision rules touched:**",
+      ...v.drift_flags.map((r) => `- ${r}`),
+    );
   }
   if (v.recommendation) {
     lines.push("", `**Recommendation:** ${v.recommendation}`);
@@ -172,15 +179,26 @@ export function shouldFail(v, strict) {
 function collectDiff(base) {
   const range = `${base}...HEAD`;
   const opts = { encoding: "utf8", maxBuffer: 128 * 1024 * 1024 };
-  const stat = execFileSync("git", ["diff", "--stat", range, "--", ".", ...DIFF_EXCLUDES], opts);
-  const patch = execFileSync("git", ["diff", range, "--", ".", ...DIFF_EXCLUDES], opts);
+  const stat = execFileSync(
+    "git",
+    ["diff", "--stat", range, "--", ".", ...DIFF_EXCLUDES],
+    opts,
+  );
+  const patch = execFileSync(
+    "git",
+    ["diff", range, "--", ".", ...DIFF_EXCLUDES],
+    opts,
+  );
   return { stat, patch };
 }
 
 async function callGateway(apiKey, model, prompt) {
   const res = await fetch(GATEWAY_ENDPOINT, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
     body: JSON.stringify({
       model,
       temperature: 0,
@@ -193,7 +211,9 @@ async function callGateway(apiKey, model, prompt) {
     signal: AbortSignal.timeout(120_000),
   });
   if (!res.ok) {
-    throw new Error(`AI Gateway ${res.status}: ${(await res.text()).slice(0, 500)}`);
+    throw new Error(
+      `AI Gateway ${res.status}: ${(await res.text()).slice(0, 500)}`,
+    );
   }
   const json = await res.json();
   return json?.choices?.[0]?.message?.content ?? "";
@@ -209,17 +229,26 @@ async function upsertComment(repo, prNumber, token, body) {
   const existing = await fetch(`${api}?per_page=100`, { headers });
   if (existing.ok) {
     const comments = await existing.json();
-    const mine = comments.find((c) => typeof c.body === "string" && c.body.includes(COMMENT_MARKER));
+    const mine = comments.find(
+      (c) => typeof c.body === "string" && c.body.includes(COMMENT_MARKER),
+    );
     if (mine) {
-      const patch = await fetch(`https://api.github.com/repos/${repo}/issues/comments/${mine.id}`, {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify({ body }),
-      });
+      const patch = await fetch(
+        `https://api.github.com/repos/${repo}/issues/comments/${mine.id}`,
+        {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ body }),
+        },
+      );
       if (patch.ok) return "updated";
     }
   }
-  const post = await fetch(api, { method: "POST", headers, body: JSON.stringify({ body }) });
+  const post = await fetch(api, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ body }),
+  });
   return post.ok ? "created" : `failed (${post.status})`;
 }
 
@@ -230,7 +259,11 @@ function readPrContext() {
     const event = JSON.parse(readFileSync(eventPath, "utf8"));
     const pr = event.pull_request;
     return pr
-      ? { title: pr.title ?? "", body: pr.body ?? "", number: pr.number ?? null }
+      ? {
+          title: pr.title ?? "",
+          body: pr.body ?? "",
+          number: pr.number ?? null,
+        }
       : { title: "", body: "", number: null };
   } catch {
     return { title: "", body: "", number: null };
@@ -245,7 +278,10 @@ async function main() {
   }
   const model = process.env.VISION_GATE_MODEL || DEFAULT_MODEL;
   const base = process.env.VISION_GATE_BASE || "origin/main";
-  const vision = readFileSync(new URL("../../docs/VISION.md", import.meta.url), "utf8");
+  const vision = readFileSync(
+    new URL("../../docs/VISION.md", import.meta.url),
+    "utf8",
+  );
 
   const { stat, patch } = collectDiff(base);
   if (!patch.trim()) {
@@ -254,15 +290,24 @@ async function main() {
   }
 
   const pr = readPrContext();
-  log(`judging ${stat.trim().split("\n").pop()?.trim() ?? "diff"} against docs/VISION.md via ${model}`);
-  const reply = await callGateway(apiKey, model, buildPrompt(vision, pr, stat, patch));
+  log(
+    `judging ${stat.trim().split("\n").pop()?.trim() ?? "diff"} against docs/VISION.md via ${model}`,
+  );
+  const reply = await callGateway(
+    apiKey,
+    model,
+    buildPrompt(vision, pr, stat, patch),
+  );
   const verdict = parseVerdict(reply);
   const comment = renderComment(verdict, model);
 
-  log(`verdict: ${verdict.verdict} (confidence ${verdict.confidence}) — ${verdict.summary}`);
+  log(
+    `verdict: ${verdict.verdict} (confidence ${verdict.confidence}) — ${verdict.summary}`,
+  );
   for (const r of verdict.reasons) log(`  evidence: ${r}`);
   for (const f of verdict.drift_flags) log(`  drift flag: ${f}`);
-  if (verdict.recommendation) log(`  recommendation: ${verdict.recommendation}`);
+  if (verdict.recommendation)
+    log(`  recommendation: ${verdict.recommendation}`);
 
   if (process.env.GITHUB_STEP_SUMMARY) {
     appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${comment}\n`);
@@ -287,7 +332,10 @@ async function main() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   main().catch((err) => {
     // Advisory gate: an infra failure (gateway down, no credit, API hiccup)
     // must not block merges — but a drift gate that skips silently hides its
@@ -298,7 +346,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     if (process.env.GITHUB_STEP_SUMMARY) {
       appendFileSync(process.env.GITHUB_STEP_SUMMARY, notice);
     }
-    console.log(`::warning title=Vision Gate skipped::${String(err?.message ?? err).slice(0, 300)}`);
+    console.log(
+      `::warning title=Vision Gate skipped::${String(err?.message ?? err).slice(0, 300)}`,
+    );
     if (process.env.VISION_GATE_STRICT === "1") process.exitCode = 1;
   });
 }

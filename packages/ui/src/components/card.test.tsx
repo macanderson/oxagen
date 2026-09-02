@@ -69,7 +69,9 @@ describe("CardTitle — render", () => {
 
 describe("CardDescription — render", () => {
   it("renders as a paragraph with muted text class", () => {
-    const { getByText } = render(<CardDescription>Some description</CardDescription>);
+    const { getByText } = render(
+      <CardDescription>Some description</CardDescription>,
+    );
     const el = getByText("Some description");
     expect(el.tagName.toLowerCase()).toBe("p");
     expect(el.className).toContain("text-muted-foreground");
@@ -103,7 +105,7 @@ describe("Card — composition", () => {
         </CardHeader>
         <CardPanel>Body</CardPanel>
         <CardFooter>Footer</CardFooter>
-      </Card>
+      </Card>,
     );
     expect(getByRole("heading", { name: "Title" })).toBeInTheDocument();
     expect(getByText("Description")).toBeInTheDocument();

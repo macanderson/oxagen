@@ -5,7 +5,7 @@ export const skillEdit = registerCapability({
   name: "edit_skill",
   domain: "skill",
   description:
-    "Save an edited skill body as a new immutable version. Thin wrapper over the shared createNewSkillVersion helper — equivalent to skill.version.upload but accepts a skill_id and body directly from an inline editor.",
+    "Save an edited skill body as a new immutable version. Thin wrapper over the shared createNewSkillVersion helper — equivalent to upload_skill_version but accepts a skill_id and body directly from an inline editor.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "docs", "mcp"],

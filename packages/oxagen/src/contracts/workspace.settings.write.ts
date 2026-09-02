@@ -13,7 +13,11 @@ export const workspaceSettingsWrite = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "medium", category: "workspace" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "medium",
+    category: "workspace",
+  },
   sensitivity: "medium",
   defaultEffect: "deny",
   defaultRoles: {
@@ -45,5 +49,9 @@ export const workspaceSettingsWrite = registerCapability({
   }),
 });
 
-export type WorkspaceSettingsWriteInput = z.output<typeof workspaceSettingsWrite.input>;
-export type WorkspaceSettingsWriteOutput = z.output<typeof workspaceSettingsWrite.output>;
+export type WorkspaceSettingsWriteInput = z.output<
+  typeof workspaceSettingsWrite.input
+>;
+export type WorkspaceSettingsWriteOutput = z.output<
+  typeof workspaceSettingsWrite.output
+>;

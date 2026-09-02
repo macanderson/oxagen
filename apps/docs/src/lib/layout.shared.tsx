@@ -15,7 +15,9 @@ export function baseOptions(): BaseLayoutProps {
         <span className="inline-flex items-center gap-2">
           <OxagenLogomark className="size-5" />
           <span className="ox-wordmark text-lg text-foreground">Oxagen</span>
-          <span className="text-sm font-medium text-muted-foreground">Docs</span>
+          <span className="text-sm font-medium text-muted-foreground">
+            Docs
+          </span>
         </span>
       ),
     },

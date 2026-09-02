@@ -10,6 +10,7 @@ import {
   Download,
 } from "lucide-react";
 import { cn, formatBytes } from "@/lib/utils";
+import { safeHref } from "@/lib/safe-url";
 
 export type FileAttachmentKind =
   | "document"
@@ -45,7 +46,11 @@ function kindMeta(kind: FileAttachmentKind | string): KindMeta {
     case "spreadsheet":
       return { Icon: Sheet, label: "Spreadsheet", iconClass: "text-success" };
     case "presentation":
-      return { Icon: Presentation, label: "Presentation", iconClass: "text-warning" };
+      return {
+        Icon: Presentation,
+        label: "Presentation",
+        iconClass: "text-warning",
+      };
     case "pdf":
       return { Icon: FileText, label: "PDF", iconClass: "text-error" };
     case "archive":
@@ -77,8 +82,14 @@ export default function FileAttachment({
   // route ships them with attachment disposition, so a new-tab "open" would
   // just be a confusing forced download (mobile browsers surface it as
   // "file not supported").
-  const isPdf = kind === "pdf" || Boolean(mimeType?.startsWith("application/pdf"));
+  const isPdf =
+    kind === "pdf" || Boolean(mimeType?.startsWith("application/pdf"));
   const rel = "noopener noreferrer";
+
+  // The serving URL rides in with the handler's props, so the scheme is
+  // allow-listed before it becomes an href — an unsafe value drops the action
+  // buttons rather than arming a `javascript:` navigation on click.
+  const assetHref = safeHref(url);
 
   // ≥44px touch targets on mobile (size-11), compact size-8 from sm up.
   const actionCls = cn(
@@ -119,9 +130,9 @@ export default function FileAttachment({
       {/* Action buttons */}
       <div className="flex shrink-0 items-center gap-1">
         {/* Open / preview — PDFs only (browser-renderable) */}
-        {isPdf ? (
+        {isPdf && assetHref ? (
           <a
-            href={url}
+            href={assetHref}
             target="_blank"
             rel={rel}
             className={actionCls}
@@ -131,15 +142,17 @@ export default function FileAttachment({
           </a>
         ) : null}
         {/* Download */}
-        <a
-          href={url}
-          download={name}
-          rel={rel}
-          className={actionCls}
-          aria-label={`Download ${name}`}
-        >
-          <Download className="size-4" aria-hidden="true" />
-        </a>
+        {assetHref ? (
+          <a
+            href={assetHref}
+            download={name}
+            rel={rel}
+            className={actionCls}
+            aria-label={`Download ${name}`}
+          >
+            <Download className="size-4" aria-hidden="true" />
+          </a>
+        ) : null}
       </div>
     </div>
   );

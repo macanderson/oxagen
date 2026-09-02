@@ -185,11 +185,10 @@ const reasonCodeSchema = z
 const countSchema = z.number().int().min(0).max(1_000_000);
 
 /**
- * Confidence as integer per-mille (0–1000), never a float. `canonicalJson`
- * refuses non-safe-integer numbers on purpose — the ES6 float-serialization
- * half of RFC 8785 lands with the shared `@oxagen/run-evidence` package — so a
- * float in a digest input would throw at append time rather than digest
- * inconsistently.
+ * Confidence as integer per-mille (0–1000), never a float. This package's
+ * `canonicalJson` refuses non-safe-integer numbers on purpose (it implements no
+ * ES6 float-serialization step), so a float in a digest input throws at append
+ * time rather than digesting inconsistently.
  */
 const perMilleSchema = z.number().int().min(0).max(1000);
 
@@ -545,11 +544,18 @@ export function isTerminalEventType(eventType: string): boolean {
  * digest and, when retention authorizes it, a tenant-encrypted blob reference
  * (spec.md §"Security and retention rules").
  *
- * The match rule is exact-root or `_`-suffixed-root, so `uri` and `source_uri`
- * are refused while `uri_digest`, `prompt_content_digest`, and
- * `transmitted_request_body_digest` — which carry no raw bytes — are not. A
- * substring rule would have to special-case every legitimate digest field and
- * would fail open the first time someone added one.
+ * The match rule looks at the WHOLE key and at its LAST `_`-delimited segment,
+ * so `uri` and `source_uri` are refused while `uri_digest`,
+ * `prompt_content_digest`, and `transmitted_request_body_digest` — which carry
+ * no raw bytes — are not. A substring rule would have to special-case every
+ * legitimate digest field and would fail open the first time someone added one.
+ *
+ * The cost of the last-segment rule is that a root buried mid-key is NOT
+ * caught: `prompt_value`, `patch_blob`, and `secret_material` all pass. That is
+ * acceptable only because this scan is the SECOND of three gates and never the
+ * only one — every registry schema is `.strict()`, so a key it does not name is
+ * rejected regardless. If a schema ever grows an open-ended object, this scan
+ * stops being a sufficient backstop and the rule has to widen with it.
  */
 export const FORBIDDEN_INLINE_PAYLOAD_ROOTS = [
   "path",
@@ -583,7 +589,11 @@ const FORBIDDEN_ROOT_SET: ReadonlySet<string> = new Set(
   FORBIDDEN_INLINE_PAYLOAD_ROOTS,
 );
 
-/** Is `key` a raw-content field name (exact root, or `<something>_<root>`)? */
+/**
+ * Is `key` a raw-content field name — the whole key, or its LAST `_`-delimited
+ * segment? Case- and hyphen-insensitive. Mid-key roots are not matched; see
+ * `FORBIDDEN_INLINE_PAYLOAD_ROOTS`.
+ */
 export function isForbiddenPayloadKey(key: string): boolean {
   const normalized = key.toLowerCase().replace(/-/g, "_");
   if (FORBIDDEN_ROOT_SET.has(normalized)) return true;
@@ -595,32 +605,48 @@ export function isForbiddenPayloadKey(key: string): boolean {
 /**
  * Walk an inline payload and refuse any raw-content field, at ANY depth. Runs
  * BEFORE the strict schema so the failure names the smuggled field rather than
- * reporting a generic unrecognized key, and so a schema that ever grows an
- * open-ended object still cannot carry raw bytes past this point.
+ * reporting a generic unrecognized key. It catches the field NAMES in
+ * `FORBIDDEN_INLINE_PAYLOAD_ROOTS`, not raw content generally — see that
+ * constant's doc for what the naming rule does and does not reach.
  */
 export function assertNoForbiddenPayloadFields(
   payload: unknown,
   eventType: string,
 ): void {
   const offenders: string[] = [];
-  walk(payload, "", offenders);
+  walk(payload, "", offenders, new WeakSet<object>());
   if (offenders.length > 0) {
     throw new ForbiddenEventPayloadFieldError(eventType, offenders);
   }
 }
 
-function walk(value: unknown, path: string, offenders: string[]): void {
+/**
+ * `seen` makes the walk terminate on a cyclic payload. A cycle cannot survive
+ * the strict schema that runs next, but it reaches this scan first (the size
+ * guard passes it through unmeasured because `JSON.stringify` throws on it),
+ * and an unguarded recursion would blow the stack instead of producing the
+ * typed rejection the caller is entitled to.
+ */
+function walk(
+  value: unknown,
+  path: string,
+  offenders: string[],
+  seen: WeakSet<object>,
+): void {
+  if (typeof value !== "object" || value === null) return;
+  if (seen.has(value)) return;
+  seen.add(value);
+
   if (Array.isArray(value)) {
     value.forEach((item, index) =>
-      walk(item, path ? `${path}.${index}` : String(index), offenders),
+      walk(item, path ? `${path}.${index}` : String(index), offenders, seen),
     );
     return;
   }
-  if (typeof value !== "object" || value === null) return;
   for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
     const child = path ? `${path}.${key}` : key;
     if (isForbiddenPayloadKey(key)) offenders.push(child);
-    walk(item, child, offenders);
+    walk(item, child, offenders, seen);
   }
 }
 
@@ -629,8 +655,10 @@ function walk(value: unknown, path: string, offenders: string[]): void {
 /**
  * Cheap pre-parse size guard. Measured on `JSON.stringify` (already
  * whitespace-free), which is an upper bound on the canonical bytes of anything
- * a `.strict()` schema will accept. A value that cannot be serialized at all
- * is left to `canonicalJson`, which refuses it with a precise reason.
+ * a `.strict()` schema will accept. A value that cannot be serialized at all —
+ * a cycle, a BigInt — is passed through unmeasured; the strict schema rejects
+ * it a step later, and `canonicalJson` refuses it with a precise reason if it
+ * somehow got that far.
  */
 export function assertInlinePayloadWithinCap(
   eventType: string,

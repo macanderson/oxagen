@@ -4,12 +4,16 @@ import { getCapability } from "../registry";
 
 describe("org.member.invite.decline capability", () => {
   it("parses a valid input", () => {
-    const parsed = orgMemberInviteDecline.input.parse({ invitationPublicId: "inv_abc" });
+    const parsed = orgMemberInviteDecline.input.parse({
+      invitationPublicId: "inv_abc",
+    });
     expect(parsed.invitationPublicId).toBe("inv_abc");
   });
 
   it("rejects an empty invitationPublicId", () => {
-    expect(() => orgMemberInviteDecline.input.parse({ invitationPublicId: "" })).toThrow();
+    expect(() =>
+      orgMemberInviteDecline.input.parse({ invitationPublicId: "" }),
+    ).toThrow();
   });
 
   it("parses a valid output", () => {
@@ -22,7 +26,10 @@ describe("org.member.invite.decline capability", () => {
 
   it("rejects an output whose status is not the 'declined' literal", () => {
     expect(() =>
-      orgMemberInviteDecline.output.parse({ invitationPublicId: "inv_abc", status: "pending" }),
+      orgMemberInviteDecline.output.parse({
+        invitationPublicId: "inv_abc",
+        status: "pending",
+      }),
     ).toThrow();
   });
 

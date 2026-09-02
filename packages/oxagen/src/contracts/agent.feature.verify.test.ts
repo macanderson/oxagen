@@ -8,7 +8,9 @@ describe("agent.feature.verify capability", () => {
     expect(cap).toBeDefined();
     expect(cap?.domain).toBe("agent");
     expect(cap?.scoped).toBe(true);
-    expect(cap?.surfaces).toEqual(expect.arrayContaining(["api", "mcp", "agent"]));
+    expect(cap?.surfaces).toEqual(
+      expect.arrayContaining(["api", "mcp", "agent"]),
+    );
   });
 
   it("requires both requirement and screenshotKeys", () => {

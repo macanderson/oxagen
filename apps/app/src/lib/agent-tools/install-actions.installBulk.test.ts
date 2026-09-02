@@ -34,11 +34,11 @@ const {
   const mockFrom = vi.fn(() => ({ where: mockWhere }));
   const mockSelect = vi.fn(() => ({ from: mockFrom }));
   const mockTx = { select: mockSelect };
-  const mockWithTenantDb = vi.fn(
-    (fn: (tx: typeof mockTx) => unknown) => fn(mockTx),
+  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) =>
+    fn(mockTx),
   );
-  const mockRunInTenantScope = vi.fn(
-    (_scope: unknown, fn: () => unknown) => fn(),
+  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) =>
+    fn(),
   );
 
   return {
@@ -80,8 +80,13 @@ vi.mock("@/lib/routes", () => ({
   workspace: {
     workbench: {
       tools: {
-        capabilities: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-          `/${orgSlug}/${workspaceSlug}/workbench/tools/capabilities`,
+        capabilities: ({
+          orgSlug,
+          workspaceSlug,
+        }: {
+          orgSlug: string;
+          workspaceSlug: string;
+        }) => `/${orgSlug}/${workspaceSlug}/workbench/tools/capabilities`,
       },
     },
   },
@@ -104,7 +109,11 @@ const ITEMS = [
 
 // Helper: build a plugin.org.install_bulk response
 function bulkResult(
-  items: Array<{ pluginId: string | null; orgListingId: string | null; error: string | null }>,
+  items: Array<{
+    pluginId: string | null;
+    orgListingId: string | null;
+    error: string | null;
+  }>,
 ) {
   return { installed: items };
 }
@@ -126,7 +135,11 @@ describe("installBulkPlugin server action", () => {
   // ── input validation ──────────────────────────────────────────────────────
 
   it("returns ok:false for empty orgSlug", async () => {
-    const res = await installBulkPlugin({ orgSlug: "", workspaceSlug: "main", items: ITEMS });
+    const res = await installBulkPlugin({
+      orgSlug: "",
+      workspaceSlug: "main",
+      items: ITEMS,
+    });
     expect(res.ok).toBe(false);
     expect(mockInvoke).not.toHaveBeenCalled();
   });
@@ -142,7 +155,11 @@ describe("installBulkPlugin server action", () => {
 
   it("returns ok:false with NOT_AUTHORIZED for a viewer role", async () => {
     dbState.wsRoleRows = [{ role: "viewer" }];
-    const res = await installBulkPlugin({ orgSlug: "acme", workspaceSlug: "main", items: ITEMS });
+    const res = await installBulkPlugin({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+      items: ITEMS,
+    });
     expect(res.ok).toBe(false);
     expect(res.error).toMatch(/owner|admin/i);
     expect(mockInvoke).not.toHaveBeenCalled();
@@ -158,11 +175,17 @@ describe("installBulkPlugin server action", () => {
       ]),
     );
 
-    const res = await installBulkPlugin({ orgSlug: "acme", workspaceSlug: "main", items: ITEMS });
+    const res = await installBulkPlugin({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+      items: ITEMS,
+    });
 
     expect(res.ok).toBe(true);
     expect(res.failures).toBeUndefined();
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/workbench/tools/capabilities");
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/acme/main/workbench/tools/capabilities",
+    );
   });
 
   it("wraps the invoke call in runInTenantScope with the correct org and workspace ids", async () => {
@@ -177,7 +200,11 @@ describe("installBulkPlugin server action", () => {
       ]),
     );
 
-    await installBulkPlugin({ orgSlug: "acme", workspaceSlug: "main", items: ITEMS });
+    await installBulkPlugin({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+      items: ITEMS,
+    });
 
     // ORG.id === "org-1", WS.id === "ws-1" (set up in beforeEach via mocks).
     expect(mockRunInTenantScope).toHaveBeenCalledWith(
@@ -188,7 +215,9 @@ describe("installBulkPlugin server action", () => {
 
   it("calls invoke with plugin.org.install_bulk and normalises 'capability' → agent_capability", async () => {
     mockInvoke.mockResolvedValue(
-      bulkResult([{ pluginId: "cap-a", orgListingId: "listing-a", error: null }]),
+      bulkResult([
+        { pluginId: "cap-a", orgListingId: "listing-a", error: null },
+      ]),
     );
 
     await installBulkPlugin({
@@ -215,19 +244,30 @@ describe("installBulkPlugin server action", () => {
 
   it("maps an agent_capability marketplace row (catalogServerId) → { pluginId }", async () => {
     mockInvoke.mockResolvedValue(
-      bulkResult([{ pluginId: "oxagen/media-image", orgListingId: "l1", error: null }]),
+      bulkResult([
+        { pluginId: "oxagen/media-image", orgListingId: "l1", error: null },
+      ]),
     );
 
     const res = await installBulkPlugin({
       orgSlug: "acme",
       workspaceSlug: "main",
-      items: [{ pluginType: "agent_capability", catalogServerId: "oxagen/media-image" }],
+      items: [
+        {
+          pluginType: "agent_capability",
+          catalogServerId: "oxagen/media-image",
+        },
+      ],
     });
 
     expect(res.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
       "install_plugins_bulk",
-      { items: [{ pluginType: "agent_capability", pluginId: "oxagen/media-image" }] },
+      {
+        items: [
+          { pluginType: "agent_capability", pluginId: "oxagen/media-image" },
+        ],
+      },
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
       { surface: "agent" },
     );
@@ -241,7 +281,9 @@ describe("installBulkPlugin server action", () => {
     await installBulkPlugin({
       orgSlug: "acme",
       workspaceSlug: "main",
-      items: [{ pluginType: "mcp_server", catalogServerId: "@scope/brave-search" }],
+      items: [
+        { pluginType: "mcp_server", catalogServerId: "@scope/brave-search" },
+      ],
     });
 
     expect(mockInvoke).toHaveBeenCalledWith(
@@ -315,11 +357,19 @@ describe("installBulkPlugin server action", () => {
     mockInvoke.mockResolvedValue(
       bulkResult([
         { pluginId: "cap-a", orgListingId: "listing-a", error: null },
-        { pluginId: "mcp-b", orgListingId: null, error: "plugin not found in catalog" },
+        {
+          pluginId: "mcp-b",
+          orgListingId: null,
+          error: "plugin not found in catalog",
+        },
       ]),
     );
 
-    const res = await installBulkPlugin({ orgSlug: "acme", workspaceSlug: "main", items: ITEMS });
+    const res = await installBulkPlugin({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+      items: ITEMS,
+    });
 
     expect(res.ok).toBe(false);
     expect(res.error).toMatch(/1 of 2/);
@@ -336,7 +386,11 @@ describe("installBulkPlugin server action", () => {
       ]),
     );
 
-    const res = await installBulkPlugin({ orgSlug: "acme", workspaceSlug: "main", items: ITEMS });
+    const res = await installBulkPlugin({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+      items: ITEMS,
+    });
 
     expect(res.ok).toBe(false);
     expect(res.error).toMatch(/2 of 2/);
@@ -349,7 +403,11 @@ describe("installBulkPlugin server action", () => {
   it("returns ok:false when invoke itself throws (e.g. IAM denial)", async () => {
     mockInvoke.mockRejectedValue(new Error("CapabilityError: authz_denied"));
 
-    const res = await installBulkPlugin({ orgSlug: "acme", workspaceSlug: "main", items: ITEMS });
+    const res = await installBulkPlugin({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+      items: ITEMS,
+    });
 
     expect(res.ok).toBe(false);
     expect(res.error).toMatch(/authz_denied|Bulk install failed/i);

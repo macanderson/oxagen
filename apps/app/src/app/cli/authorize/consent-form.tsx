@@ -66,8 +66,7 @@ export function ConsentForm({
     defaultOrg?.slug ?? "",
   );
 
-  const currentOrg =
-    orgs.find((o) => o.slug === selectedOrgSlug) ?? defaultOrg;
+  const currentOrg = orgs.find((o) => o.slug === selectedOrgSlug) ?? defaultOrg;
   const workspaces = currentOrg?.workspaces ?? [];
 
   const [selectedWsSlug, setSelectedWsSlug] = useState<string>(
@@ -175,7 +174,9 @@ export function ConsentForm({
           <Label htmlFor="ws-select">Workspace</Label>
           <Select
             value={selectedWsSlug}
-            onValueChange={(v) => { if (v) setSelectedWsSlug(v); }}
+            onValueChange={(v) => {
+              if (v) setSelectedWsSlug(v);
+            }}
             disabled={isPending || workspaces.length <= 1}
           >
             <SelectTrigger id="ws-select">

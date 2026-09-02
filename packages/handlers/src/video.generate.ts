@@ -25,10 +25,9 @@ import { logger } from "./logger";
 //
 // The handler does NOT await the render — Veo renders take minutes.
 
-export const videoGenerateHandler: CapabilityHandler<typeof videoGenerate> = async (
-  input,
-  ctx,
-) => {
+export const videoGenerateHandler: CapabilityHandler<
+  typeof videoGenerate
+> = async (input, ctx) => {
   // Gate on AI_GATEWAY_API_KEY — mirror image.generate.ts pattern.
   let hasGatewayKey = false;
   try {
@@ -49,7 +48,10 @@ export const videoGenerateHandler: CapabilityHandler<typeof videoGenerate> = asy
   }
 
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "video.generate: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "video.generate: rejected — no authenticated user",
+    );
     throw new Error("video.generate requires an authenticated user");
   }
 
@@ -71,13 +73,14 @@ export const videoGenerateHandler: CapabilityHandler<typeof videoGenerate> = asy
           requestedSeconds: duration.requestedSeconds,
           effectiveSeconds: duration.effectiveSeconds,
           supportedSeconds: [...duration.supportedSeconds],
-          alternatives: videoDurationAlternatives(duration.requestedSeconds, model).map(
-            (alt) => ({
-              model: alt.model,
-              supportedSeconds: [...alt.supportedSeconds],
-              closestSeconds: alt.closestSeconds,
-            }),
-          ),
+          alternatives: videoDurationAlternatives(
+            duration.requestedSeconds,
+            model,
+          ).map((alt) => ({
+            model: alt.model,
+            supportedSeconds: [...alt.supportedSeconds],
+            closestSeconds: alt.closestSeconds,
+          })),
         }
       : undefined;
 
@@ -127,12 +130,19 @@ export const videoGenerateHandler: CapabilityHandler<typeof videoGenerate> = asy
       ...(duration.effectiveSeconds !== undefined && {
         durationSeconds: duration.effectiveSeconds,
       }),
-      ...(input.aspectRatio !== undefined && { aspectRatio: input.aspectRatio }),
+      ...(input.aspectRatio !== undefined && {
+        aspectRatio: input.aspectRatio,
+      }),
     },
   });
 
   logger.info(
-    { orgId: ctx.orgId, workspaceId: ctx.workspaceId, assetId: pending.id, jobId: pending.publicId },
+    {
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      assetId: pending.id,
+      jobId: pending.publicId,
+    },
     "video.generate: render queued",
   );
 

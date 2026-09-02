@@ -21,7 +21,10 @@ export const browserClick = registerCapability({
   },
   input: z.object({
     sessionId: z.string().min(1).describe("Durable-session id (sbx_…)."),
-    selector: z.string().min(1).describe("CSS selector of the element to click."),
+    selector: z
+      .string()
+      .min(1)
+      .describe("CSS selector of the element to click."),
     timeoutMs: z.number().int().min(1_000).max(120_000).default(60_000),
   }),
   output: z.object({

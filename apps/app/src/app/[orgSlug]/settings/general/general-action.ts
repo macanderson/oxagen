@@ -8,6 +8,7 @@ import { schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
+import { isAuthDenialError, isNextRedirectError } from "@/lib/auth-denial";
 
 // Sentinel workspaceId for org-only actions (no workspace context). The RLS
 // policies for org-only tables (organizations, orgUsers) use an org_only
@@ -160,6 +161,13 @@ export async function updateOrgGeneralAction(
       },
     );
   } catch (err) {
+    // `getSessionOrRedirect()` signals "no session" by throwing the NEXT_REDIRECT
+    // sentinel, and `resolveOrg()` / `assertOrgMember()` signal denial by throwing
+    // the notFound() NEXT_HTTP_ERROR_FALLBACK sentinel. Both MUST escape this
+    // handler for Next to turn them into a redirect / 404 — swallowing them
+    // returns the raw digest string ("NEXT_REDIRECT;…") to the browser as if it
+    // were an error message, and the caller never reaches the login page.
+    if (isNextRedirectError(err) || isAuthDenialError(err)) throw err;
     const message =
       err instanceof Error ? err.message : "An unexpected error occurred";
     return { ok: false, error: message };

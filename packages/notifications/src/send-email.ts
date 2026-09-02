@@ -20,7 +20,9 @@ import type { SendEmailInput, SendEmailResult } from "./types";
  * transport failure — the caller decides whether a failed notification is fatal
  * to its flow (e.g. block signup vs. log-and-continue).
  */
-export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
+export async function sendEmail(
+  input: SendEmailInput,
+): Promise<SendEmailResult> {
   const payload = sendEmailInputSchema.parse(input);
   return emailTransport().send(payload);
 }
@@ -35,7 +37,10 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
  *
  * @param purpose short tag for the log line (e.g. "verification", "password-reset")
  */
-export function sendEmailFireAndForget(input: SendEmailInput, purpose: string): void {
+export function sendEmailFireAndForget(
+  input: SendEmailInput,
+  purpose: string,
+): void {
   void sendEmail(input).catch((error: unknown) => {
     logger.error(
       { err: error, purpose, to: input.to },

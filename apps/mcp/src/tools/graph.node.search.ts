@@ -10,7 +10,7 @@ export const schema = {
     "Text to search for in node displayName or description",
   ),
   labels: graphNodeSearch.input.shape.labels.describe(
-    "Optional list of node labels to restrict the search to (e.g. [\"Person\", \"Company\"])",
+    'Optional list of node labels to restrict the search to (e.g. ["Person", "Company"])',
   ),
   limit: graphNodeSearch.input.shape.limit.describe(
     "Maximum number of results to return (1–50, default 10)",
@@ -27,8 +27,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function graphNodeSearchTool(args: InferSchema<typeof schema>) {
+export default async function graphNodeSearchTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(graphNodeSearch.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(graphNodeSearch.name, args, ctx, {
+    surface: "mcp",
+  });
   return graphNodeSearch.output.parse(output);
 }

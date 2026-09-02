@@ -144,7 +144,15 @@ export const skillCreateHandler: CapabilityHandler<typeof skillCreate> = async (
       };
     });
   } catch (err) {
-    // Handle race condition: concurrent create with the same slug
+    // Handle race condition: concurrent create with the same slug.
+    //
+    // Caveat: skills_workspace_slug_idx is a FULL unique index on
+    // (workspace_id, slug) — it does not exclude soft-deleted rows — while the
+    // re-read below filters deleted_at IS NULL. So a 23505 raised by a
+    // soft-deleted row holding the slug finds nothing here and falls through to
+    // `throw err`, surfacing the raw unique violation. Unreachable today (no
+    // capability sets skills.deleted_at); a delete-skill capability must either
+    // revive the tombstoned row or the index must become partial.
     if (isUniqueViolation(err)) {
       const raceExisting = await withTenantDb((tx) =>
         tx

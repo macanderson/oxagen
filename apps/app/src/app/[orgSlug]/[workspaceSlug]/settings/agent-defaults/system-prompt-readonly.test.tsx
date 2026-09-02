@@ -14,13 +14,18 @@ import { SystemPromptReadonly } from "./system-prompt-readonly";
 
 afterEach(() => cleanup());
 
-const SAMPLE = "You are Oxagen, an interactive AI assistant.\n\n## Capabilities, Skills, MCP servers & Plugins";
+const SAMPLE =
+  "You are Oxagen, an interactive AI assistant.\n\n## Capabilities, Skills, MCP servers & Plugins";
 
 describe("SystemPromptReadonly", () => {
   it("renders the supplied effective system prompt verbatim", () => {
     const { container } = render(<SystemPromptReadonly prompt={SAMPLE} />);
-    expect(container.textContent).toContain("You are Oxagen, an interactive AI assistant.");
-    expect(container.textContent).toContain("## Capabilities, Skills, MCP servers & Plugins");
+    expect(container.textContent).toContain(
+      "You are Oxagen, an interactive AI assistant.",
+    );
+    expect(container.textContent).toContain(
+      "## Capabilities, Skills, MCP servers & Plugins",
+    );
   });
 
   it("marks the surface read-only and exposes no editable controls", () => {

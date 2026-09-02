@@ -27,7 +27,9 @@ describe("salesforce connector – normalizeRecord", () => {
     });
 
     it("handles empty opportunity gracefully", () => {
-      const result = salesforce.normalizeRecord("opportunity", { attributes: { type: "Opportunity" } });
+      const result = salesforce.normalizeRecord("opportunity", {
+        attributes: { type: "Opportunity" },
+      });
       expect(result.externalId).toBe("");
     });
   });
@@ -55,7 +57,9 @@ describe("salesforce connector – normalizeRecord", () => {
     });
 
     it("handles empty contact gracefully", () => {
-      const result = salesforce.normalizeRecord("contact", { attributes: { type: "Contact" } });
+      const result = salesforce.normalizeRecord("contact", {
+        attributes: { type: "Contact" },
+      });
       expect(result.externalId).toBe("");
       // No FirstName/LastName/Name → displayName resolves to undefined
       expect(result.displayName).toBeUndefined();

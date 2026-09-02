@@ -39,7 +39,13 @@ function StatusIcon({ status }: { status: BackgroundTaskStatus }) {
   }
 }
 
-export function BackgroundTaskCard({ taskId, kind, label, status, progressPct }: BackgroundTaskCardProps) {
+export function BackgroundTaskCard({
+  taskId,
+  kind,
+  label,
+  status,
+  progressPct,
+}: BackgroundTaskCardProps) {
   const title = label ?? kind;
   const showBar = progressPct !== undefined && status === "running";
   return (
@@ -56,7 +62,9 @@ export function BackgroundTaskCard({ taskId, kind, label, status, progressPct }:
           {STATUS_LABEL[status]}
         </span>
       </div>
-      <div className="mt-1 font-mono text-[10px] text-muted-foreground">{kind}</div>
+      <div className="mt-1 font-mono text-[10px] text-muted-foreground">
+        {kind}
+      </div>
       {showBar ? (
         <div
           className="mt-2 h-1 w-full overflow-hidden rounded-full bg-muted"

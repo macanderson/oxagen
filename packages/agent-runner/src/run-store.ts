@@ -41,6 +41,10 @@
  *     orgId/workspaceId and open their own scope. It can't: the bare-id
  *     methods above have no org/workspace to construct a scope from even if
  *     this module wanted to call `runInTenantScope` itself.)
+ *     `enqueueRunV2` and `readAttemptEventsSince` follow the same rule for the
+ *     same reason: both are request-side, and the V2 read is cursored by a run
+ *     id with no org/workspace argument, so RLS from the caller's scope is the
+ *     only tenant filter there is.
  *   - `claimNextRun`, `renewLease`, `appendEvents`, `saveCheckpoint`,
  *     `completeRun`, `failRun`, `cancelRun` use withSystemDb. These run on the
  *     WORKER, which has no tenant ALS scope at all — it is a small pool
@@ -51,6 +55,11 @@
  *     `claimed_by = $workerId AND status = 'running'`, not a tenant GUC.
  *     This is the audited, explicit RLS-bypass path
  *     (packages/database/src/tenant.ts's withSystemDb doc), not a shortcut.
+ *     Every V2 worker method — `claimNextRunV2`, `claimLegacyV1`,
+ *     `renewAttemptLease`, `isAttemptCancelRequested`, `appendAttemptBatch`,
+ *     `sealAttempt`, `reclaimExpiredAttempts` — is on this side for the same
+ *     reason, and each substitutes the fencing tuple (attempt id + lease token
+ *     + epoch, checked under a row lock) for the tenant GUC as its guard.
  *
  * Every terminal/guarded write (`renewLease`, `saveCheckpoint`, `completeRun`,
  * `failRun`, `cancelRun`) is a single `UPDATE ... WHERE claimed_by = $w AND
@@ -2754,17 +2763,29 @@ export function createPostgresRunStore(
         if (err instanceof RunEventIntegrityError && conflictScope !== null) {
           const scope: { orgId: string; workspaceId: string; runId: string } =
             conflictScope;
-          await securityEvents.recordEventSequenceConflict({
-            type: EVENT_SEQUENCE_CONFLICT_EVENT,
-            orgId: scope.orgId,
-            workspaceId: scope.workspaceId,
-            runId: scope.runId,
-            attemptId: err.attemptId,
-            attemptPublicId: input.lease.attemptPublicId,
-            attemptSeq: err.attemptSeq,
-            storedDigest: err.storedDigest,
-            incomingDigest: err.incomingDigest,
-          });
+          try {
+            await securityEvents.recordEventSequenceConflict({
+              type: EVENT_SEQUENCE_CONFLICT_EVENT,
+              orgId: scope.orgId,
+              workspaceId: scope.workspaceId,
+              runId: scope.runId,
+              attemptId: err.attemptId,
+              attemptPublicId: input.lease.attemptPublicId,
+              attemptSeq: err.attemptSeq,
+              storedDigest: err.storedDigest,
+              incomingDigest: err.incomingDigest,
+            });
+          } catch (sinkErr) {
+            // A sink that throws must not REPLACE the integrity error — the
+            // caller would then see an unrelated failure and could not tell an
+            // audit-transport outage from a benign append error. Log the sink
+            // failure loudly, keep the diagnostic that matters, and rethrow the
+            // original below.
+            console.error(
+              `[run-store] ${EVENT_SEQUENCE_CONFLICT_EVENT} sink failed`,
+              sinkErr,
+            );
+          }
         }
         throw err;
       }

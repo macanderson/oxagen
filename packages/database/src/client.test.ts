@@ -36,7 +36,14 @@ const mocks = vi.hoisted(() => {
 
   const requireEnvFn = vi.fn();
 
-  return { endFn, fakePool, postgresFn, fakeDrizzleDb, drizzleFn, requireEnvFn };
+  return {
+    endFn,
+    fakePool,
+    postgresFn,
+    fakeDrizzleDb,
+    drizzleFn,
+    requireEnvFn,
+  };
 });
 
 vi.mock("postgres", () => ({ default: mocks.postgresFn }));
@@ -47,8 +54,14 @@ vi.mock("@oxagen/config/env", () => ({ requireEnv: mocks.requireEnvFn }));
 // Helpers
 // ---------------------------------------------------------------------------
 
-const DEV_ENV = { DATABASE_URL: "postgres://localhost:5433/test", NODE_ENV: "development" };
-const PROD_ENV = { DATABASE_URL: "postgres://prod.example.com/db", NODE_ENV: "production" };
+const DEV_ENV = {
+  DATABASE_URL: "postgres://localhost:5433/test",
+  NODE_ENV: "development",
+};
+const PROD_ENV = {
+  DATABASE_URL: "postgres://prod.example.com/db",
+  NODE_ENV: "production",
+};
 
 // ---------------------------------------------------------------------------
 // db() — lazy singleton
@@ -116,7 +129,10 @@ describe("db()", () => {
 
     db();
 
-    expect(mocks.requireEnvFn).toHaveBeenCalledWith(["DATABASE_URL", "NODE_ENV"]);
+    expect(mocks.requireEnvFn).toHaveBeenCalledWith([
+      "DATABASE_URL",
+      "NODE_ENV",
+    ]);
   });
 });
 

@@ -3,7 +3,7 @@
  *
  * The single source of truth for framer-motion (the `motion` package) easing
  * curves, durations, and reusable variants across every Oxagen surface. These
- * mirror the CSS motion tokens in `styles/tokens.css` — keep the two in sync so
+ * mirror the CSS motion tokens in `styles/globals.css` — keep the two in sync so
  * the CSS-transition components (Base UI popups, hover-lift) and the
  * framer-motion components animate identically.
  *
@@ -61,8 +61,14 @@ export const fadeInUp = {
 /** Plain fade, no translate — for overlays/backdrops that shouldn't drift. */
 export const fade = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: duration.overlay, ease: easing.entry } },
-  exit: { opacity: 0, transition: { duration: duration.micro, ease: easing.exit } },
+  visible: {
+    opacity: 1,
+    transition: { duration: duration.overlay, ease: easing.entry },
+  },
+  exit: {
+    opacity: 0,
+    transition: { duration: duration.micro, ease: easing.exit },
+  },
 } as const;
 
 /**

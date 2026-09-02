@@ -36,8 +36,8 @@ describe("eval.run.status handler", () => {
       failureReason: null,
       workspaceId: CTX.workspaceId,
     };
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx([ROW])),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) => fn(makeTx([ROW])),
     );
 
     const out = await evalRunStatusHandler({ runPublicId: "evr_ABC" }, CTX);
@@ -63,8 +63,8 @@ describe("eval.run.status handler", () => {
       failureReason: null,
       workspaceId: CTX.workspaceId,
     };
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx([ROW])),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) => fn(makeTx([ROW])),
     );
 
     const out = await evalRunStatusHandler({ runPublicId: "evr_ABC" }, CTX);
@@ -72,8 +72,8 @@ describe("eval.run.status handler", () => {
   });
 
   it("throws a 404 when the run does not exist", async () => {
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx([])),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) => fn(makeTx([])),
     );
 
     await expect(
@@ -92,8 +92,8 @@ describe("eval.run.status handler", () => {
       failureReason: null,
       workspaceId: "ws_other",
     };
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx([ROW])),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) => fn(makeTx([ROW])),
     );
 
     await expect(

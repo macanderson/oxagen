@@ -2,7 +2,11 @@ import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq, sql } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
 import { notifyResolution } from "../runtime/approval";
-import { recordConsent, DEFAULT_CONSENT_TTL_MS, CONSENT_WILDCARD } from "../runtime/consent";
+import {
+  recordConsent,
+  DEFAULT_CONSENT_TTL_MS,
+  CONSENT_WILDCARD,
+} from "../runtime/consent";
 import type {
   AgentMcpConsentResolveInput,
   AgentMcpConsentResolveOutput,
@@ -12,7 +16,9 @@ export type { AgentMcpConsentResolveInput, AgentMcpConsentResolveOutput };
 
 // Parse `mcp.<serverId>.<tool>` (serverId is a dot-free UUID; the tool name may
 // contain dots, so split on the first dot only after the `mcp.` prefix).
-function parseSynthetic(cap: string): { serverId: string; toolName: string } | null {
+function parseSynthetic(
+  cap: string,
+): { serverId: string; toolName: string } | null {
   if (!cap.startsWith("mcp.")) return null;
   const rest = cap.slice("mcp.".length);
   const dot = rest.indexOf(".");
@@ -28,7 +34,8 @@ export async function agentMcpConsentResolveHandler(
     input.decision === "granted" ? "granted" : "denied";
   // The underlying HITL row stores resolution as approved/denied (mirrors the
   // approval surface); map the consent decision onto that vocabulary.
-  const approvalResolution = input.decision === "granted" ? "approved" : "denied";
+  const approvalResolution =
+    input.decision === "granted" ? "approved" : "denied";
 
   // Resolve the underlying approval row atomically; reject expired / already-resolved.
   const updated = await withTenantDb((tx) =>
@@ -73,10 +80,16 @@ export async function agentMcpConsentResolveHandler(
       workspaceId: ctx.workspaceId,
       userId: ctx.userId,
       serverId: parts.serverId,
-      toolName: input.grantAllTools && dbResolution === "granted" ? CONSENT_WILDCARD : parts.toolName,
+      toolName:
+        input.grantAllTools && dbResolution === "granted"
+          ? CONSENT_WILDCARD
+          : parts.toolName,
       status: dbResolution,
       // Wildcard pre-grants never expire; per-tool grants use the default TTL.
-      ttlMs: input.grantAllTools && dbResolution === "granted" ? null : DEFAULT_CONSENT_TTL_MS,
+      ttlMs:
+        input.grantAllTools && dbResolution === "granted"
+          ? null
+          : DEFAULT_CONSENT_TTL_MS,
     });
   }
 

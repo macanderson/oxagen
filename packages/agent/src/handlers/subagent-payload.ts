@@ -23,8 +23,16 @@ export function payloadByteSize(v: unknown): number {
  * deriveRunSummary precedence: declared summary/message/text field → JSON
  * truncation → error reason.
  */
-export function fallbackRunSummary(output: unknown, errorReason: string | null): string {
-  if (output !== null && output !== undefined && typeof output === "object" && !Array.isArray(output)) {
+export function fallbackRunSummary(
+  output: unknown,
+  errorReason: string | null,
+): string {
+  if (
+    output !== null &&
+    output !== undefined &&
+    typeof output === "object" &&
+    !Array.isArray(output)
+  ) {
     const record = output as Record<string, unknown>;
     for (const key of ["summary", "message", "text"] as const) {
       const value = record[key];
@@ -63,7 +71,10 @@ export function capPayload(
   } catch {
     return { value: null, truncated: true };
   }
-  if (serialized === undefined || new TextEncoder().encode(serialized).length <= capBytes) {
+  if (
+    serialized === undefined ||
+    new TextEncoder().encode(serialized).length <= capBytes
+  ) {
     return { value: v, truncated: false };
   }
   return { value: `${serialized.slice(0, capBytes)}…`, truncated: true };

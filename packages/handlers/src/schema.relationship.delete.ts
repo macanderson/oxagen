@@ -8,7 +8,11 @@ import { logger } from "./logger";
 export const schemaRelationshipDeleteHandler: CapabilityHandler<
   typeof schemaRelationshipDelete
 > = async (input, ctx) => {
-  const registry = await getOrCreateRegistry(ctx.orgId, ctx.workspaceId, ctx.userId);
+  const registry = await getOrCreateRegistry(
+    ctx.orgId,
+    ctx.workspaceId,
+    ctx.userId,
+  );
 
   if (!registry.draftVersionId) {
     return { deleted: false, relationshipTypeName: input.name };
@@ -67,7 +71,12 @@ export const schemaRelationshipDeleteHandler: CapabilityHandler<
   });
 
   logger.info(
-    { orgId: ctx.orgId, workspaceId: ctx.workspaceId, name: input.name, deleted },
+    {
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      name: input.name,
+      deleted,
+    },
     "schema.relationship.delete: soft-deleted relationship type",
   );
 

@@ -3,16 +3,21 @@ import { documentCreate } from "@oxagen/oxagen/contracts/document.create";
 import { schema, withTenantDb } from "@oxagen/database";
 import { logger } from "./logger";
 
-export const documentCreateHandler: CapabilityHandler<typeof documentCreate> = async (
-  input,
-  ctx,
-) => {
+export const documentCreateHandler: CapabilityHandler<
+  typeof documentCreate
+> = async (input, ctx) => {
   if (!ctx.workspaceId) {
-    logger.warn({ orgId: ctx.orgId }, "document.create: rejected — no workspace scope");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "document.create: rejected — no workspace scope",
+    );
     throw new Error("document.create requires a workspace scope");
   }
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "document.create: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "document.create: rejected — no authenticated user",
+    );
     throw new Error("document.create requires an authenticated user");
   }
 

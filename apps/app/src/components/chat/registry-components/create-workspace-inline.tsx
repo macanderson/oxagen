@@ -72,9 +72,14 @@ export default function CreateWorkspaceInline({
         aria-live="polite"
       >
         <div className="flex items-center gap-3">
-          <CheckCircle2 className="h-5 w-5 shrink-0 text-success" aria-hidden="true" />
+          <CheckCircle2
+            className="h-5 w-5 shrink-0 text-success"
+            aria-hidden="true"
+          />
           <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground">Workspace created</p>
+            <p className="text-sm font-medium text-foreground">
+              Workspace created
+            </p>
             <p className="truncate text-xs text-muted-foreground">
               {name}
               {createdSlug ? ` · /${orgSlug}/${createdSlug}` : ""}
@@ -89,11 +94,18 @@ export default function CreateWorkspaceInline({
     <form
       onSubmit={handleSubmit}
       aria-label="Create workspace"
-      className={cn("rounded-2xl border border-border bg-card p-5 space-y-5 w-full max-w-sm")}
+      className={cn(
+        "rounded-2xl border border-border bg-card p-5 space-y-5 w-full max-w-sm",
+      )}
     >
       <div className="flex items-center gap-2.5">
-        <FolderPlus className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="text-sm font-semibold text-foreground">Create workspace</span>
+        <FolderPlus
+          className="h-4 w-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <span className="text-sm font-semibold text-foreground">
+          Create workspace
+        </span>
       </div>
 
       <div className="space-y-1.5">
@@ -135,7 +147,9 @@ export default function CreateWorkspaceInline({
           disabled={isSubmitting}
           autoComplete="off"
         />
-        <p className="text-xs text-muted-foreground">Lowercase, digits, hyphens. 2–40 chars.</p>
+        <p className="text-xs text-muted-foreground">
+          Lowercase, digits, hyphens. 2–40 chars.
+        </p>
       </div>
 
       {formState === "error" && errorMessage !== null && (

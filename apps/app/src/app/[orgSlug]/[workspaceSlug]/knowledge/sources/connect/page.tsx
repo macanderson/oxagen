@@ -5,7 +5,11 @@ import type { Metadata } from "next";
 // page.tsx rely on.
 import { listConnectors } from "@oxagen/ingestion/connectors";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 import type { ConnectorCatalogEntry } from "@/components/knowledge/connect/wizard-types";
 import type { ConnectionMappingsGetOutput } from "@oxagen/oxagen/contracts/connection.mappings.get";
 import { ConnectSourceWizard } from "./connect-wizard";
@@ -23,7 +27,10 @@ interface PageProps {
 // oauth-start capability in this wizard's allowed set (see actions.ts header
 // and connector-picker-step.tsx, which routes them to a real redirect-out
 // instead of a dead stub).
-const OAUTH_ONLY_SCHEMES = new Set(["oauth2_authorization_code", "oauth2_client_credentials"]);
+const OAUTH_ONLY_SCHEMES = new Set([
+  "oauth2_authorization_code",
+  "oauth2_client_credentials",
+]);
 
 /**
  * Knowledge → Sources → Connect — the governed multi-step "Connect a source"
@@ -39,7 +46,10 @@ const OAUTH_ONLY_SCHEMES = new Set(["oauth2_authorization_code", "oauth2_client_
  * via get_connection_mappings so the wizard can open straight at Step 4
  * instead of a client-side fetch waterfall.
  */
-export default async function ConnectSourcePage({ params, searchParams }: PageProps) {
+export default async function ConnectSourcePage({
+  params,
+  searchParams,
+}: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
   const sp = await searchParams;
   const session = await getSessionOrRedirect();
@@ -67,7 +77,8 @@ export default async function ConnectSourcePage({ params, searchParams }: PagePr
     }))
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 
-  const initialConnectionId = typeof sp.connectionId === "string" ? sp.connectionId : undefined;
+  const initialConnectionId =
+    typeof sp.connectionId === "string" ? sp.connectionId : undefined;
 
   let initialMappings: ConnectionMappingsGetOutput["mappings"] | undefined;
   if (initialConnectionId) {
@@ -82,10 +93,13 @@ export default async function ConnectSourcePage({ params, searchParams }: PagePr
   return (
     <div className="flex flex-col gap-5 max-w-3xl px-6 py-6">
       <div className="flex flex-col gap-1">
-        <p className="text-sm font-semibold text-foreground">Connect a source</p>
+        <p className="text-sm font-semibold text-foreground">
+          Connect a source
+        </p>
         <p className="text-xs text-muted-foreground">
-          Pick a connector, provide credentials, preview sample records, and confirm entity
-          mappings — agents gain cited, governed access to this data once it&apos;s connected.
+          Pick a connector, provide credentials, preview sample records, and
+          confirm entity mappings — agents gain cited, governed access to this
+          data once it&apos;s connected.
         </p>
       </div>
 

@@ -10,6 +10,8 @@ workspaceMemberListRoute.get("/", async (c) => {
   const workspace_id = c.req.query("workspace_id");
   const input = workspaceMemberList.input.parse({ workspace_id });
   const ctx = capabilityContext(c);
-  const out = await invoke(workspaceMemberList.name, input, ctx, { surface: "api" });
+  const out = await invoke(workspaceMemberList.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

@@ -66,8 +66,9 @@ export function PlaybookSteps({ steps }: PlaybookStepsProps) {
       )}
 
       <p className="mt-3 text-xs text-muted-foreground">
-        Steps are set when the automation is created. Editing them in-app needs a step-editing
-        capability that isn’t built yet — for now, reconfigure steps by recreating the automation.
+        Steps are set when the automation is created. Editing them in-app needs
+        a step-editing capability that isn’t built yet — for now, reconfigure
+        steps by recreating the automation.
       </p>
     </Card>
   );

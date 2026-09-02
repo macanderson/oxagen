@@ -3,17 +3,11 @@ import { createMDX } from "fumadocs-mdx/next";
 const withMDX = createMDX();
 
 /**
- * `standalone` emits `.next/standalone/server.js` together with only the
- * modules that server actually needs, which is what ships to the AWS instance
- * serving docs.oxagen.sh. It is opt-in rather than the default because `next
- * dev` and every other consumer wants the ordinary output; only the deploy
- * wants a server bundle.
- *
- * This existed nowhere on `main` until now, while the running site had been
- * built from it by hand during the migration off Vercel — so `main` could not
- * reproduce what production was serving. `next build` without it writes no
- * `.next/standalone` at all, and the deploy job would have had nothing to
- * package.
+ * `standalone` emits `.next/standalone/server.js` plus only the modules that
+ * server actually needs — the bundle that ships to the AWS instance serving
+ * docs.oxagen.sh. Set `STANDALONE=1` in the deploy job. It is opt-in because
+ * `next dev` and every other consumer wants the ordinary output, and without
+ * it `next build` writes no `.next/standalone` directory at all.
  */
 const isStandalone = process.env.STANDALONE === "1";
 
@@ -57,9 +51,12 @@ const nextConfig = {
     ];
   },
   // Serve the static HTML sales decks under public/decks/* at clean, extensionless
-  // URLs. Vercel resolves a directory's index.html at the clean path in production,
-  // but `next dev`/`next start` do not — these rewrites make the exact URLs
-  // (e.g. /decks/first-call-enterprise) resolve consistently across every runtime.
+  // URLs. Next's static-file handler does not resolve a directory's index.html at
+  // the bare path, so without these rewrites /decks/first-call-enterprise would
+  // 404 under `next dev`, `next start`, and the standalone server alike.
+  //
+  // One entry per deck: adding a deck under public/decks/ means adding its
+  // rewrite here, or the clean URL will not resolve.
   async rewrites() {
     return [
       {

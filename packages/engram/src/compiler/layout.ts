@@ -27,6 +27,12 @@ export interface ContextWindow {
   cachePrefix: {
     stableBytes: number;
     totalBytes: number;
+    /**
+     * `stableBytes / totalBytes` — the share of the window that sits in
+     * prefix-stable sections, i.e. the best cache hit rate this layout could
+     * achieve. It is a property of the layout, not an observed cache result;
+     * nothing here talks to a provider's prompt cache.
+     */
     hitRate: number;
   };
   metadata: CompileMetadata;
@@ -101,13 +107,23 @@ const DEFAULT_MAX_RECORD_TOKENS = 500;
  */
 export function buildLayout(input: LayoutInput): ContextWindow {
   const sections: ContextSection[] = [];
-  const { included, compressed, pinned, systemPrompt, modelId, tokenUsage, metadata } = input;
+  const {
+    included,
+    compressed,
+    pinned,
+    systemPrompt,
+    modelId,
+    tokenUsage,
+    metadata,
+  } = input;
   const maxRecordTokens = input.maxRecordTokens ?? DEFAULT_MAX_RECORD_TOKENS;
   let contentTruncated = 0;
 
   // Section 0: System prompt (always stable)
   if (systemPrompt) {
-    sections.push(makeSection("system", "system-prompt", systemPrompt, modelId));
+    sections.push(
+      makeSection("system", "system-prompt", systemPrompt, modelId),
+    );
   }
 
   // Section 1: Procedural rules (stable — sorted by ID for determinism)
@@ -119,31 +135,48 @@ export function buildLayout(input: LayoutInput): ContextWindow {
         return body.rule ?? JSON.stringify(body);
       })
       .join("\n\n");
-    sections.push(makeSection("procedural", "pinned-rules", String(content), modelId));
+    sections.push(
+      makeSection("procedural", "pinned-rules", String(content), modelId),
+    );
   }
 
   // Section 2: Project facts (stable — semantic records sorted by ID)
   const semanticRecords = included.filter((r) => r.kind === "semantic");
   if (semanticRecords.length > 0) {
-    const sorted = [...semanticRecords].sort((a, b) => a.id.localeCompare(b.id));
+    const sorted = [...semanticRecords].sort((a, b) =>
+      a.id.localeCompare(b.id),
+    );
     const content = sorted
-      .map((r) => (r.body as Record<string, unknown>).fact ?? JSON.stringify(r.body))
+      .map(
+        (r) =>
+          (r.body as Record<string, unknown>).fact ?? JSON.stringify(r.body),
+      )
       .join("\n");
-    sections.push(makeSection("project-facts", "semantic-facts", String(content), modelId));
+    sections.push(
+      makeSection("project-facts", "semantic-facts", String(content), modelId),
+    );
   }
 
   // Section 4: Retrieved content (volatile — order by score, already sorted)
-  const retrievedRecords = included.filter((r) => r.kind !== "semantic" && !pinned.some((p) => p.id === r.id));
+  const retrievedRecords = included.filter(
+    (r) => r.kind !== "semantic" && !pinned.some((p) => p.id === r.id),
+  );
   if (retrievedRecords.length > 0) {
     const content = retrievedRecords
       .map((r) => {
         const rendered = formatRecordForContext(r);
-        const { text, truncated } = truncateToTokens(rendered, maxRecordTokens, modelId);
+        const { text, truncated } = truncateToTokens(
+          rendered,
+          maxRecordTokens,
+          modelId,
+        );
         if (truncated) contentTruncated += 1;
         return text;
       })
       .join("\n\n");
-    sections.push(makeSection("retrieved", "retrieved-memories", content, modelId));
+    sections.push(
+      makeSection("retrieved", "retrieved-memories", content, modelId),
+    );
   }
 
   // Section 5: Compressed items (volatile)
@@ -151,7 +184,9 @@ export function buildLayout(input: LayoutInput): ContextWindow {
     const content = compressed
       .map((c) => `• ${c.summary} [ref:${c.recordId.slice(0, 8)}]`)
       .join("\n");
-    sections.push(makeSection("compressed", "compressed-refs", content, modelId));
+    sections.push(
+      makeSection("compressed", "compressed-refs", content, modelId),
+    );
   }
 
   // Sort sections by position
@@ -166,7 +201,8 @@ export function buildLayout(input: LayoutInput): ContextWindow {
   // Surface truncation counts into metadata so a caller can see when context
   // was degraded (pinned rules dropped by the packer, or record bodies trimmed
   // to their token allowance here).
-  metadata.pinnedTruncated = input.pinnedTruncated ?? metadata.pinnedTruncated ?? 0;
+  metadata.pinnedTruncated =
+    input.pinnedTruncated ?? metadata.pinnedTruncated ?? 0;
   metadata.contentTruncated = contentTruncated;
 
   return {
@@ -193,7 +229,8 @@ function truncateToTokens(
   modelId: string,
 ): { text: string; truncated: boolean } {
   if (maxTokens <= 0) return { text: "", truncated: text.length > 0 };
-  if (countTokens(text, modelId) <= maxTokens) return { text, truncated: false };
+  if (countTokens(text, modelId) <= maxTokens)
+    return { text, truncated: false };
 
   let lo = 0;
   let hi = text.length;
@@ -205,7 +242,12 @@ function truncateToTokens(
   return { text: `${text.slice(0, lo).trimEnd()}…`, truncated: true };
 }
 
-function makeSection(type: SectionType, id: string, content: string, modelId: string): ContextSection {
+function makeSection(
+  type: SectionType,
+  id: string,
+  content: string,
+  modelId: string,
+): ContextSection {
   return {
     id,
     type,
@@ -223,7 +265,8 @@ function formatRecordForContext(record: MemoryRecord): string {
       const event = body.event ?? "event";
       const outcome = body.outcome ? ` [${body.outcome}]` : "";
       const payload = body.payload;
-      const detail = typeof payload === "string" ? payload : JSON.stringify(payload ?? {});
+      const detail =
+        typeof payload === "string" ? payload : JSON.stringify(payload ?? {});
       // Full text — the caller truncates by token allowance, not a hard char slice.
       return `${event}${outcome}: ${detail}`;
     }

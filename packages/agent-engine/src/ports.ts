@@ -9,7 +9,7 @@
  *     (`streamAgentReply` — metered, credits, tenant scope), Neo4j code-graph,
  *     `agent.memory.*` memory, ClickHouse trace.
  *
- * See docs/adr/ADR-017-unified-agent-engine.md.
+ * See docs/adr/ADR-019-unified-agent-engine.md.
  */
 import type { ModelMessage, ToolSet, StreamTextResult, stepCountIs } from "ai";
 import type { ZodType } from "zod";

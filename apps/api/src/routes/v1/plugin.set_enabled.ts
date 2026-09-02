@@ -9,6 +9,8 @@ export const pluginSetEnabledRoute = new Hono<AppEnv>();
 pluginSetEnabledRoute.post("/", async (c) => {
   const body = pluginSetEnabled.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(pluginSetEnabled.name, body, ctx, { surface: "api" });
+  const out = await invoke(pluginSetEnabled.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

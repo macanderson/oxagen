@@ -63,13 +63,25 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     caches.open(CACHE_NAME).then(async (cache) => {
       const cached = await cache.match(event.request);
-      const network = fetch(event.request)
-        .then((response) => {
-          if (response.ok) cache.put(event.request, response.clone());
-          return response;
-        })
-        .catch(() => cached);
-      return cached ?? network;
+      const network = fetch(event.request).then((response) => {
+        if (response.ok) cache.put(event.request, response.clone());
+        return response;
+      });
+
+      if (cached) {
+        // The browser may kill the worker as soon as respondWith settles, so
+        // the revalidation has to be kept alive explicitly — otherwise a cached
+        // asset can be served forever and never refresh. Its rejection is
+        // absorbed here: being offline must not fail a request the cache
+        // already answered.
+        event.waitUntil(network.catch(() => undefined));
+        return cached;
+      }
+
+      // Nothing cached, so the network result is the response. Let a failure
+      // propagate rather than resolving to undefined, which respondWith rejects
+      // with an opaque "network error" instead of the real fetch failure.
+      return network;
     }),
   );
 });

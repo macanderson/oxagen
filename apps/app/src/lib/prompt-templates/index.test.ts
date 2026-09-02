@@ -1,5 +1,5 @@
 /**
- * Unit tests for packages/prompt-templates.
+ * Unit tests for the app-local prompt-template registry.
  *
  * Covers:
  *   - Schema parse: valid and invalid templates

@@ -41,10 +41,13 @@ export interface StellaOperationalEventRow {
  * The explicit projection prevents untyped runtime callers from smuggling
  * compatibility tenant labels or content fields through this storage seam.
  * received_at is server-owned and doubles as the ReplacingMergeTree version.
+ * No-ops on an empty array, so an empty batch costs neither a tenant-scope
+ * assertion nor a round-trip (matches insertEvalItemResults / insertRows).
  */
 export async function insertStellaOperationalEvents(
   rows: readonly StellaOperationalEventRow[],
 ): Promise<void> {
+  if (rows.length === 0) return;
   const receivedAt = new Date().toISOString();
   const values = rows.map((row) => ({
     schema: row.schema,

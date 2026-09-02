@@ -37,7 +37,14 @@ function authorId(ctx: Scope): string {
   return ctx.userId ?? ctx.apiKeyId ?? ctx.orgId;
 }
 
-/** Map a DB row to the A2A wire Task shape, optionally clamping history length. */
+/**
+ * Map a DB row to the A2A wire Task shape, optionally clamping history length.
+ *
+ * `historyLength` follows the A2A `tasks/get` semantics: 0 means "send no
+ * history at all", N > 0 means "the N most recent messages". Note that
+ * `slice(-0)` is `slice(0)` — the WHOLE array — so 0 must be handled before
+ * the slice, or asking for no history returns all of it.
+ */
 export function toA2ATask(row: A2ATaskRow, historyLength?: number): A2ATask {
   const status: A2ATaskStatus = {
     state: row.state,
@@ -45,9 +52,11 @@ export function toA2ATask(row: A2ATaskRow, historyLength?: number): A2ATask {
     timestamp: row.updatedAt.toISOString(),
   };
   const history =
-    historyLength !== undefined && historyLength >= 0
-      ? row.messageHistory.slice(-historyLength)
-      : row.messageHistory;
+    historyLength === undefined || historyLength < 0
+      ? row.messageHistory
+      : historyLength === 0
+        ? []
+        : row.messageHistory.slice(-historyLength);
   return {
     kind: "task",
     id: row.publicId,

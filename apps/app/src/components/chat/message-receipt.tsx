@@ -33,7 +33,9 @@ export function modelLabelOf(modelId: string): string {
 }
 
 /** "$0.31" from credits (1 credit = 1¢), or null when billing wasn't wired. */
-export function formatReceiptCost(creditsCharged: number | undefined): string | null {
+export function formatReceiptCost(
+  creditsCharged: number | undefined,
+): string | null {
   if (creditsCharged === undefined || Number.isNaN(creditsCharged)) return null;
   return `$${(creditsCharged / 100).toFixed(2)}`;
 }

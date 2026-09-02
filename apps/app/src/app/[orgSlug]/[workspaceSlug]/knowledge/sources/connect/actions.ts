@@ -27,7 +27,7 @@
  * `integration.list`/`connection.list`-equivalent in this wizard's allowed capability
  * set to check whether a connector is "already installed" (the condition the spec's
  * Step 1 describes), so the safe choice is to use `create_connection` as the single
- * creation call and leave `install_integration` unwired. Documented in the task report.
+ * creation call and leave `install_integration` unwired.
  */
 
 import { invoke } from "@oxagen/oxagen";

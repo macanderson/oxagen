@@ -2,8 +2,15 @@ import { Inngest, EventSchemas } from "inngest";
 import { requireEnv, normalizeEnv } from "@oxagen/config/env";
 import { z } from "zod";
 
-// Inngest event registry. Adding an event here is the only way it becomes
-// callable from inside the runner — typed at the boundary, never inferred.
+// Inngest event registry: the intended catalogue of every event the runner
+// sends or triggers on.
+//
+// NOTE — this record is documentation, not a gate. `getInngest()` casts the
+// constructed client to `ConcreteInngestClient` (see below), which drops the
+// `EventSchemas` generic, so nothing type-checks a `.send()` against this map
+// and an unlisted event still works at runtime. Keep it complete anyway: it is
+// the only place the full event surface is written down, and restoring real
+// inference is a one-line type change away.
 type Events = {
   "stripe/subscription.updated": { data: { stripeSubscriptionId: string } };
   "stripe/invoice.updated": { data: { stripeInvoiceId: string } };
@@ -232,6 +239,19 @@ type Events = {
     };
   };
 
+  // One due connection to poll, fanned out by ingestion-poll-scheduler and
+  // consumed by ingestion-connection-poll. The scheduler's `next_poll_at` lease
+  // plus the consumer's per-connection concurrency key make a duplicate
+  // delivery a no-op rather than a double poll.
+  "ingestion/connection.poll": {
+    data: {
+      connectionId: string;
+      orgId: string;
+      workspaceId: string;
+      connectorId: string;
+    };
+  };
+
   // Provision (register) the provider webhook subscription for a webhook
   // connection once it is active. Consumed by ingestion-webhook-provision.
   "ingestion/webhook.provision": {
@@ -283,6 +303,24 @@ type Events = {
       prune: boolean;
     };
   };
+
+  // ── Evals ─────────────────────────────────────────────────────────────────
+  // Fired by the eval.run.start handler after the eval_runs row is inserted.
+  // eval.run.execute runs every dataset item through the target + judge.
+  "eval/run.start": {
+    data: {
+      orgId: string;
+      workspaceId: string;
+      /** Internal UUID of the eval.eval_runs row. */
+      runId: string;
+      /** Public ID (evr_…) — the id carried on every ClickHouse item result. */
+      runPublicId: string;
+      /** Internal UUID of the dataset whose items are evaluated. */
+      datasetId: string;
+      /** Caller-supplied cap, further clamped by the run's own itemCount. */
+      maxItems: number | null;
+    };
+  };
 };
 
 // OXA-1349: INNGEST keys are optional in the base schema (not every service
@@ -320,10 +358,16 @@ function resolveInngestEnv() {
   return base;
 }
 
-// Concrete Inngest client type. Using InstanceType<typeof Inngest> avoids a
-// callable helper function while still giving getInngest() and the Proxy a
-// stable type. Event-name inference flows through the `as ConcreteInngestClient`
-// cast in getInngest() and the EventSchemas binding at construction time.
+// Concrete Inngest client type, used to give getInngest() and the Proxy a
+// stable non-generic shape.
+//
+// Trade-off to know about: `InstanceType<typeof Inngest>` instantiates the
+// class's DEFAULT schema generic, so the `EventSchemas().fromRecord<Events>()`
+// binding made at construction is erased by the `as ConcreteInngestClient` cast
+// below. `.send()` and `createFunction()` therefore accept any event name, and
+// call sites that want to keep TypeScript quiet about the resulting `never`
+// parameter write `name: "…" as never`. Narrowing this alias back to the
+// event-typed client would restore inference and delete those casts.
 type ConcreteInngestClient = InstanceType<typeof Inngest>;
 
 let _inngest: ConcreteInngestClient | null = null;
@@ -342,8 +386,8 @@ function getInngest(): ConcreteInngestClient {
 
 // Proxy object: module consumers import `inngest` and call `.send()`,
 // `.createFunction()`, etc. exactly as before — the lazy init is transparent.
-// The Proxy is cast to ConcreteInngestClient so full event-type inference
-// flows into all createFunction() handlers without `any`.
+// It is typed as ConcreteInngestClient, which keeps every call site free of
+// `any` (see that alias for what the cast does to event-name inference).
 export const inngest = new Proxy({} as ConcreteInngestClient, {
   get(_target, prop) {
     const instance = getInngest() as unknown as Record<

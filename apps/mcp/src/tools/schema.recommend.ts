@@ -11,11 +11,19 @@ export const schema = {
 export const metadata: ToolMetadata = {
   name: schemaRecommend.name,
   description: schemaRecommend.description,
-  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false },
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: false,
+  },
 };
 
-export default async function schemaRecommendTool(args: InferSchema<typeof schema>) {
+export default async function schemaRecommendTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(schemaRecommend.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(schemaRecommend.name, args, ctx, {
+    surface: "mcp",
+  });
   return schemaRecommend.output.parse(output);
 }

@@ -32,10 +32,14 @@ export function TuiInteractiveAnswer({ className }: { className?: string }) {
         <tspan fill={tuiColors.violet} fontWeight={700}>
           {"◆ "}
         </tspan>
-        <tspan fill="#e6e6e6">I&apos;ll consolidate date parsing and formatting</tspan>
+        <tspan fill="#e6e6e6">
+          I&apos;ll consolidate date parsing and formatting
+        </tspan>
       </text>
       <text x={32} y={88} fontSize={12.5}>
-        <tspan fill="#e6e6e6">into src/lib/dates.ts, then update call sites</tspan>
+        <tspan fill="#e6e6e6">
+          into src/lib/dates.ts, then update call sites
+        </tspan>
         <tspan className="tui-caret" fill={tuiColors.cyan}>
           {" ▊"}
         </tspan>
@@ -58,7 +62,15 @@ export function TuiInteractiveAnswer({ className }: { className?: string }) {
       </text>
 
       {/* /hud panel */}
-      <rect x={20} y={148} width={520} height={80} rx={8} fill="none" stroke="rgba(255,255,255,0.14)" />
+      <rect
+        x={20}
+        y={148}
+        width={520}
+        height={80}
+        rx={8}
+        fill="none"
+        stroke="rgba(255,255,255,0.14)"
+      />
       <text x={32} y={166} fontSize={12}>
         <tspan className="tui-pulse" fill={tuiColors.cyan} fontWeight={700}>
           {tuiGlyphs.ring}{" "}
@@ -77,7 +89,9 @@ export function TuiInteractiveAnswer({ className }: { className?: string }) {
           {"● "}
         </tspan>
         <tspan fill={tuiColors.dim}>[turn] </tspan>
-        <tspan fill="#e6e6e6">refactor the date helpers into a single module</tspan>
+        <tspan fill="#e6e6e6">
+          refactor the date helpers into a single module
+        </tspan>
       </text>
       <text x={44} y={204} fontSize={11}>
         <tspan fill={tuiColors.dim}>38s · </tspan>
@@ -106,8 +120,23 @@ export function TuiInteractiveAnswer({ className }: { className?: string }) {
           (the in-progress glyph the same REPL uses for Task Progress rows —
           see agent-sidebar.tsx's taskStatusStyle) reads cleanly everywhere
           and carries the same "busy" meaning from the same icon vocabulary. */}
-      <rect x={20} y={260} width={520} height={32} rx={8} fill="none" stroke={tuiColors.amber} strokeWidth={1.5} />
-      <text x={34} y={281} fontSize={13} fill={tuiColors.amber} fontWeight={700}>
+      <rect
+        x={20}
+        y={260}
+        width={520}
+        height={32}
+        rx={8}
+        fill="none"
+        stroke={tuiColors.amber}
+        strokeWidth={1.5}
+      />
+      <text
+        x={34}
+        y={281}
+        fontSize={13}
+        fill={tuiColors.amber}
+        fontWeight={700}
+      >
         {"◐"}
       </text>
     </TuiFrame>

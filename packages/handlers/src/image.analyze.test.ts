@@ -31,9 +31,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withSystemDb: async (fn: (tx: Record<string, unknown>) => Promise<unknown>) =>
-    fn({ select: mocks.dbSelect } as unknown as Record<string, unknown>),
-
+    withSystemDb: async (
+      fn: (tx: Record<string, unknown>) => Promise<unknown>,
+    ) => fn({ select: mocks.dbSelect } as unknown as Record<string, unknown>),
   };
 });
 
@@ -74,7 +74,9 @@ describe("imageAnalyzeHandler", () => {
 
     expect(result.analysis).toBe("The image shows a serene coastal landscape.");
     expect(result.tags).toEqual(["ocean", "sunset", "coastal", "landscape"]);
-    expect(result.description).toBe("A wide-angle photograph of a sunset over the ocean.");
+    expect(result.description).toBe(
+      "A wide-angle photograph of a sunset over the ocean.",
+    );
   });
 
   it("passes the image URL as a multimodal message to generateObjectFor", async () => {
@@ -82,14 +84,22 @@ describe("imageAnalyzeHandler", () => {
 
     expect(mocks.generateObjectFor).toHaveBeenCalledOnce();
     const call = mocks.generateObjectFor.mock.calls[0]![0] as {
-      messages: Array<{ role: string; content: Array<{ type: string; image?: string }> }>;
+      messages: Array<{
+        role: string;
+        content: Array<{ type: string; image?: string }>;
+      }>;
     };
-    const imageContent = call.messages[0]?.content.find((c) => c.type === "image");
+    const imageContent = call.messages[0]?.content.find(
+      (c) => c.type === "image",
+    );
     expect(imageContent?.image).toBe("https://blob.store/gen_abc.png");
   });
 
   it("forwards telemetry context to generateObjectFor", async () => {
-    await imageAnalyzeHandler({ image_id: "gen_abc" }, { ...CTX, messageId: "msg_1" });
+    await imageAnalyzeHandler(
+      { image_id: "gen_abc" },
+      { ...CTX, messageId: "msg_1" },
+    );
 
     const call = mocks.generateObjectFor.mock.calls[0]![0] as {
       telemetry: Record<string, unknown>;
@@ -101,7 +111,10 @@ describe("imageAnalyzeHandler", () => {
   });
 
   it("falls back to requestId for telemetry when messageId is null", async () => {
-    await imageAnalyzeHandler({ image_id: "gen_abc" }, { ...CTX, messageId: null });
+    await imageAnalyzeHandler(
+      { image_id: "gen_abc" },
+      { ...CTX, messageId: null },
+    );
 
     const call = mocks.generateObjectFor.mock.calls[0]![0] as {
       telemetry: Record<string, unknown>;
@@ -112,18 +125,20 @@ describe("imageAnalyzeHandler", () => {
   it("throws when asset is not found", async () => {
     mocks.dbSelect.mockReturnValue(makeSelectBuilder([]));
 
-    await expect(imageAnalyzeHandler({ image_id: "gen_missing" }, CTX)).rejects.toThrow(
-      /not found or not ready/i,
-    );
+    await expect(
+      imageAnalyzeHandler({ image_id: "gen_missing" }, CTX),
+    ).rejects.toThrow(/not found or not ready/i);
     expect(mocks.generateObjectFor).not.toHaveBeenCalled();
   });
 
   it("throws when asset has no storageUrl (pending/failed)", async () => {
-    mocks.dbSelect.mockReturnValue(makeSelectBuilder([{ storageUrl: null, mimeType: "image/png" }]));
-
-    await expect(imageAnalyzeHandler({ image_id: "gen_pending" }, CTX)).rejects.toThrow(
-      /not found or not ready/i,
+    mocks.dbSelect.mockReturnValue(
+      makeSelectBuilder([{ storageUrl: null, mimeType: "image/png" }]),
     );
+
+    await expect(
+      imageAnalyzeHandler({ image_id: "gen_pending" }, CTX),
+    ).rejects.toThrow(/not found or not ready/i);
     expect(mocks.generateObjectFor).not.toHaveBeenCalled();
   });
 });

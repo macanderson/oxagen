@@ -22,7 +22,9 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function apiKeyRevokeTool(args: InferSchema<typeof schema>) {
+export default async function apiKeyRevokeTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   const output = await invoke(apiKeyRevoke.name, args, ctx, { surface: "mcp" });
   return apiKeyRevoke.output.parse(output);

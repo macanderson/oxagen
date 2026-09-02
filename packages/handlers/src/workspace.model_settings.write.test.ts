@@ -23,14 +23,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => ({
-    update: (_table: unknown) => ({ set: mocks.updateSet }),
-  }),
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
+    db: () => ({
       update: (_table: unknown) => ({ set: mocks.updateSet }),
     }),
-
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        update: (_table: unknown) => ({ set: mocks.updateSet }),
+      }),
   };
 });
 
@@ -57,7 +56,9 @@ describe("workspaceModelSettingsWriteHandler (@oxagen/handlers)", () => {
     const noWsCtx: CapabilityContext = { ...CTX, workspaceId: "" };
     await expect(
       workspaceModelSettingsWriteHandler({ defaultTextTier: "fast" }, noWsCtx),
-    ).rejects.toThrow("workspace.model.settings.write requires a workspace context");
+    ).rejects.toThrow(
+      "workspace.model.settings.write requires a workspace context",
+    );
   });
 
   // ── auth guard ────────────────────────────────────────────────────────────
@@ -66,7 +67,9 @@ describe("workspaceModelSettingsWriteHandler (@oxagen/handlers)", () => {
     const anonCtx: CapabilityContext = { ...CTX, userId: null };
     await expect(
       workspaceModelSettingsWriteHandler({ defaultTextTier: "fast" }, anonCtx),
-    ).rejects.toThrow("workspace.model.settings.write requires an authenticated user");
+    ).rejects.toThrow(
+      "workspace.model.settings.write requires an authenticated user",
+    );
   });
 
   // ── workspace not found ───────────────────────────────────────────────────

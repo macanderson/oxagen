@@ -14,6 +14,28 @@
 //   Rule 7: Role-inherited grant      → inherit role grant
 //   Rule 7.5: Org owner super-user    → ALLOW (system org Owner role)
 //   Rule 8: Default effect (contract) → use contract.defaultEffect
+//
+// ── Live coverage: rules 1–6 currently decide nothing ────────────────────────
+//
+// Migration 0027 dropped the direct-grant and policy tables. Every production
+// caller therefore hands this resolver `grants: []` and `policies: []`:
+//
+//   packages/iam/src/fetch-authz.ts              (human / API-key path)
+//   packages/iam/src/live-agent-run-authorization.ts (agent live authority)
+//   pinnedCeilingResolverInputs (agent-run.ts)   (agent pinned ceiling)
+//
+// Rules 1–6 read only those two collections, so in a running system the
+// decision is always made by rule 7 (role grant), rule 7.5 (system org Owner),
+// or rule 8 (contract defaultEffect). `conditionsMet` is likewise reachable
+// only from rules 1–6, which means the whole condition language in
+// conditions.ts (time_window, ip_ranges/ip_allow) is plumbed but never
+// evaluated on a live request — rule 7 decides a role grant on its `effect`
+// alone and never looks at `RoleGrant.conditionsJsonb`.
+//
+// The rules, the `Grant`/`Policy` shapes, and their tests are kept because the
+// grant/policy tier is a planned re-introduction and this file is the pure,
+// exhaustively-tested engine it would come back through. Treat any change to
+// rules 1–6 as changing code that is not currently on any request path.
 
 import type { CapabilityEffect, ResolvedPrincipal } from "../types";
 import {

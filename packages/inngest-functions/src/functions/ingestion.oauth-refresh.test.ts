@@ -45,7 +45,8 @@ vi.mock("@oxagen/database", () => ({
 
 vi.mock("@oxagen/crypto", () => ({
   createIngestionCryptoAdapter: mocks.createIngestionCryptoAdapter,
-  resolveIngestionCryptoAdapterForKeyId: mocks.resolveIngestionCryptoAdapterForKeyId,
+  resolveIngestionCryptoAdapterForKeyId:
+    mocks.resolveIngestionCryptoAdapterForKeyId,
   decrypt: mocks.decrypt,
   encrypt: mocks.encrypt,
 }));
@@ -67,11 +68,13 @@ vi.mock("../create-function", () => ({
 }));
 
 // Capture the Inngest handler
-let capturedHandler: ((ctx: {
-  step: {
-    run: (name: string, fn: () => Promise<unknown>) => Promise<unknown>;
-  };
-}) => Promise<unknown>) | null = null;
+let capturedHandler:
+  | ((ctx: {
+      step: {
+        run: (name: string, fn: () => Promise<unknown>) => Promise<unknown>;
+      };
+    }) => Promise<unknown>)
+  | null = null;
 
 mocks.inngestCreateFunction.mockImplementation(
   (_opts: unknown, _trigger: unknown, handler: typeof capturedHandler) => {
@@ -90,7 +93,10 @@ function makeStep() {
 
 // Helper: create a fake encrypted envelope
 function fakeEnvelope(plain: string) {
-  return { keyId: "test-key-id", ciphertext: Buffer.from(plain).toString("base64") };
+  return {
+    keyId: "test-key-id",
+    ciphertext: Buffer.from(plain).toString("base64"),
+  };
 }
 
 // Helper: set up withSystemDb so call 1 returns a single account and all
@@ -103,9 +109,10 @@ function setupSingleAccountDb(
   mocks.withSystemDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) => {
       callCount++;
-      const execMock = callCount === 1
-        ? vi.fn().mockResolvedValue([account])
-        : (updateExec ?? vi.fn().mockResolvedValue([]));
+      const execMock =
+        callCount === 1
+          ? vi.fn().mockResolvedValue([account])
+          : (updateExec ?? vi.fn().mockResolvedValue([]));
       return fn({ execute: execMock });
     },
   );
@@ -377,7 +384,10 @@ describe("ingestionOauthRefresh — GitHub error handling", () => {
     const updateExec = vi.fn().mockResolvedValue([]);
     setupSingleAccountDb(githubAccount, updateExec);
     mocks.fetchMock.mockResolvedValue({
-      json: vi.fn().mockResolvedValue({ error: "bad_verification_code", error_description: "bad code" }),
+      json: vi.fn().mockResolvedValue({
+        error: "bad_verification_code",
+        error_description: "bad code",
+      }),
     });
 
     const result = await capturedHandler!({ step: makeStep() });
@@ -582,7 +592,9 @@ describe("ingestionOauthRefresh — Slack happy path", () => {
 
   it("re-encrypts both access and refresh tokens on rotation", async () => {
     await capturedHandler!({ step: makeStep() });
-    const encrypted = mocks.encrypt.mock.calls.map((args: unknown[]) => args[0] as string);
+    const encrypted = mocks.encrypt.mock.calls.map(
+      (args: unknown[]) => args[0] as string,
+    );
     expect(encrypted).toContain("new-slack-access");
     expect(encrypted).toContain("new-slack-refresh");
   });
@@ -673,7 +685,9 @@ describe("ingestionOauthRefresh — Zoom happy path", () => {
 
   it("re-encrypts both tokens (Zoom always rotates refresh)", async () => {
     await capturedHandler!({ step: makeStep() });
-    const encrypted = mocks.encrypt.mock.calls.map((args: unknown[]) => args[0] as string);
+    const encrypted = mocks.encrypt.mock.calls.map(
+      (args: unknown[]) => args[0] as string,
+    );
     expect(encrypted).toContain("new-zoom-access");
     expect(encrypted).toContain("new-zoom-refresh");
   });
@@ -750,7 +764,11 @@ describe("ingestionOauthRefresh — Salesforce happy path", () => {
     expect(body.get("client_id")).toBe("sf-client-id");
     // Only one encrypt call — no refresh token rotation
     expect(mocks.encrypt).toHaveBeenCalledTimes(1);
-    expect(mocks.encrypt).toHaveBeenCalledWith("new-sf-access", "test-key-id", expect.anything());
+    expect(mocks.encrypt).toHaveBeenCalledWith(
+      "new-sf-access",
+      "test-key-id",
+      expect.anything(),
+    );
     expect(mocks.loggerInfo).toHaveBeenCalledWith(
       expect.objectContaining({ provider: "salesforce" }),
       expect.stringContaining("refreshed successfully"),
@@ -793,7 +811,9 @@ describe("ingestionOauthRefresh — Microsoft happy path", () => {
     const body = new URLSearchParams(opts.body as string);
     expect(body.get("grant_type")).toBe("refresh_token");
     expect(body.get("scope")).toContain("offline_access");
-    const encrypted = mocks.encrypt.mock.calls.map((args: unknown[]) => args[0] as string);
+    const encrypted = mocks.encrypt.mock.calls.map(
+      (args: unknown[]) => args[0] as string,
+    );
     expect(encrypted).toContain("new-ms-access");
     expect(encrypted).toContain("new-ms-refresh");
     expect(mocks.loggerInfo).toHaveBeenCalledWith(

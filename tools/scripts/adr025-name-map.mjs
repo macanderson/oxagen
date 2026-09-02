@@ -1,12 +1,15 @@
-// adr024-name-map.mjs — the authoritative old-dotted → new-snake capability
+// adr025-name-map.mjs — the authoritative old-dotted → new-snake capability
 // name mapping for the ADR-025 verb-first snake_case rename wave.
 //
 // Shape: verb_noun or verb_noun_qualifier. Imperative verb FIRST. Lowercase
 // [a-z0-9] words joined by "_". 2–3 words (a 4th only where uniqueness demands
-// it — flagged in FOUR_WORD below). GLOBALLY UNIQUE across all 294 capabilities.
+// it — flagged in FOUR_WORD below). Globally unique across the registry.
 //
-// Consumed by adr024-apply.mjs (the codemod) and by the mapping-doc generator.
-// Exported as a plain object so both can import it.
+// The rename itself has landed; nothing in the repo imports these exports any
+// more. The table is retained only as the lookup the reland runbook needs —
+// adr025-reland-custom-role-grant-remap.sql was generated from it, and
+// re-deriving that SQL requires the same old→new pairs. When the reland is
+// complete this file and that SQL go together.
 
 export const MAP = {
   // ── a2a ──────────────────────────────────────────────────────────────────

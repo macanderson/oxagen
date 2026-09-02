@@ -9,7 +9,9 @@ export const skillEnableHandler: CapabilityHandler<typeof skillEnable> = async (
   ctx,
 ) => {
   if (!ctx.workspaceId) {
-    throw new Error("[skill.enable] workspaceId is required (scoped capability)");
+    throw new Error(
+      "[skill.enable] workspaceId is required (scoped capability)",
+    );
   }
 
   const { skill_id, enabled } = input;

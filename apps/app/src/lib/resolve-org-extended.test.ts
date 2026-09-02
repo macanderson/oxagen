@@ -14,7 +14,9 @@ const { notFoundMock, mockRows, mockWithSystemDb } = vi.hoisted(() => {
   const mockFrom = vi.fn(() => ({ where: mockWhere }));
   const mockSelect = vi.fn(() => ({ from: mockFrom }));
   const mockTx = { select: mockSelect };
-  const mockWithSystemDb = vi.fn((fn: (tx: unknown) => Promise<unknown>) => fn(mockTx));
+  const mockWithSystemDb = vi.fn((fn: (tx: unknown) => Promise<unknown>) =>
+    fn(mockTx),
+  );
   const notFoundMock = vi.fn(() => {
     throw new Error("NEXT_NOT_FOUND");
   });
@@ -30,8 +32,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withSystemDb: mockWithSystemDb,
-
+    withSystemDb: mockWithSystemDb,
   };
 });
 
@@ -72,7 +73,9 @@ describe("assertOrgMember", () => {
 
   it("calls notFound() when no row is found (non-member)", async () => {
     setRows([]);
-    await expect(assertOrgMember("org-1", "stranger")).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(assertOrgMember("org-1", "stranger")).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
     expect(notFoundMock).toHaveBeenCalledOnce();
   });
 });
@@ -89,7 +92,9 @@ describe("assertMcpManager", () => {
   for (const role of MCP_ALLOWED_ROLES) {
     it(`role '${role}' → resolves without notFound`, async () => {
       setRows([{ role }]);
-      await expect(assertMcpManager("org-1", "user-1")).resolves.toBeUndefined();
+      await expect(
+        assertMcpManager("org-1", "user-1"),
+      ).resolves.toBeUndefined();
       expect(notFoundMock).not.toHaveBeenCalled();
     });
   }
@@ -97,20 +102,26 @@ describe("assertMcpManager", () => {
   for (const role of MCP_DENIED_ROLES) {
     it(`role '${role}' → notFound()`, async () => {
       setRows([{ role }]);
-      await expect(assertMcpManager("org-1", "user-1")).rejects.toThrow("NEXT_NOT_FOUND");
+      await expect(assertMcpManager("org-1", "user-1")).rejects.toThrow(
+        "NEXT_NOT_FOUND",
+      );
       expect(notFoundMock).toHaveBeenCalledOnce();
     });
   }
 
   it("no row (non-member) → notFound()", async () => {
     setRows([]);
-    await expect(assertMcpManager("org-1", "nobody")).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(assertMcpManager("org-1", "nobody")).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
     expect(notFoundMock).toHaveBeenCalledOnce();
   });
 
   it("null role → notFound()", async () => {
     setRows([{ role: null }]);
-    await expect(assertMcpManager("org-1", "user-1")).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(assertMcpManager("org-1", "user-1")).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
     expect(notFoundMock).toHaveBeenCalledOnce();
   });
 });
@@ -149,7 +160,9 @@ describe("assertSecurityManager", () => {
   for (const role of SECURITY_ALLOWED) {
     it(`role '${role}' → resolves`, async () => {
       setRows([{ role }]);
-      await expect(assertSecurityManager("org-1", "user-1")).resolves.toBeUndefined();
+      await expect(
+        assertSecurityManager("org-1", "user-1"),
+      ).resolves.toBeUndefined();
       expect(notFoundMock).not.toHaveBeenCalled();
     });
   }
@@ -157,12 +170,16 @@ describe("assertSecurityManager", () => {
   for (const role of SECURITY_DENIED) {
     it(`role '${role}' → notFound()`, async () => {
       setRows([{ role }]);
-      await expect(assertSecurityManager("org-1", "user-1")).rejects.toThrow("NEXT_NOT_FOUND");
+      await expect(assertSecurityManager("org-1", "user-1")).rejects.toThrow(
+        "NEXT_NOT_FOUND",
+      );
     });
   }
 
   it("non-member (no row) → notFound()", async () => {
     setRows([]);
-    await expect(assertSecurityManager("org-1", "nobody")).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(assertSecurityManager("org-1", "nobody")).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
   });
 });

@@ -8,12 +8,20 @@ describe("buildPrunedProperties (schema.reconcile pure helper)", () => {
 
     const { pruned, removedKeys } = buildPrunedProperties(existing, schemaKeys);
 
-    expect(pruned).toEqual({ name: "Acme Corp", industry: "SaaS", founded: 2015 });
+    expect(pruned).toEqual({
+      name: "Acme Corp",
+      industry: "SaaS",
+      founded: 2015,
+    });
     expect(removedKeys).toHaveLength(0);
   });
 
   it("removes off-schema properties when schema is a subset of existing keys", () => {
-    const existing = { name: "Acme Corp", extraProp: "should be removed", anotherExtra: 42 };
+    const existing = {
+      name: "Acme Corp",
+      extraProp: "should be removed",
+      anotherExtra: 42,
+    };
     const schemaKeys = ["name"];
 
     const { pruned, removedKeys } = buildPrunedProperties(existing, schemaKeys);
@@ -35,7 +43,10 @@ describe("buildPrunedProperties (schema.reconcile pure helper)", () => {
     // The older schema only defines 'name'.
     const olderSchemaKeys = ["name"];
 
-    const { pruned, removedKeys } = buildPrunedProperties(existingAfterForwardHeal, olderSchemaKeys);
+    const { pruned, removedKeys } = buildPrunedProperties(
+      existingAfterForwardHeal,
+      olderSchemaKeys,
+    );
 
     expect(pruned).toEqual({ name: "foo" });
     expect(removedKeys).toEqual(["extraProp"]);
@@ -85,8 +96,14 @@ describe("buildPrunedProperties (schema.reconcile pure helper)", () => {
 describe("parseNodeProps (schema.reconcile — canonical JSON-string property bag)", () => {
   it("parses the JSON string that graph.node.upsert stores in n.properties", () => {
     // This is the real shape: n.properties is JSON.stringify(bag), not a map.
-    const raw = JSON.stringify({ summary: "a customer", number_of_licenses: 5 });
-    expect(parseNodeProps(raw)).toEqual({ summary: "a customer", number_of_licenses: 5 });
+    const raw = JSON.stringify({
+      summary: "a customer",
+      number_of_licenses: 5,
+    });
+    expect(parseNodeProps(raw)).toEqual({
+      summary: "a customer",
+      number_of_licenses: 5,
+    });
   });
 
   it("returns {} for null/undefined (node never had properties)", () => {
@@ -111,6 +128,9 @@ describe("parseNodeProps (schema.reconcile — canonical JSON-string property ba
     const existing = parseNodeProps(JSON.stringify({ name: "foo" }));
     const healed = { ...existing, summary: "derived" };
     const written = JSON.stringify(healed); // mirrors the SET n.properties = $properties write
-    expect(parseNodeProps(written)).toEqual({ name: "foo", summary: "derived" });
+    expect(parseNodeProps(written)).toEqual({
+      name: "foo",
+      summary: "derived",
+    });
   });
 });

@@ -25,7 +25,10 @@
  */
 import { renderHook, act, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { useSwarmSessionStore, type SwarmSessionRecord } from "./swarm-session-store";
+import {
+  useSwarmSessionStore,
+  type SwarmSessionRecord,
+} from "./swarm-session-store";
 
 function createMemoryStorage(): Storage {
   const map = new Map<string, string>();
@@ -41,7 +44,9 @@ function createMemoryStorage(): Storage {
   } as Storage;
 }
 
-function record(overrides: Partial<SwarmSessionRecord> = {}): SwarmSessionRecord {
+function record(
+  overrides: Partial<SwarmSessionRecord> = {},
+): SwarmSessionRecord {
   return {
     swarmId: "s1",
     dispatchId: "d1",
@@ -84,15 +89,21 @@ describe("useSwarmSessionStore — addSwarm", () => {
     act(() => result.current.addSwarm(record({ swarmId: "s2" })));
 
     expect(result.current.swarms.map((s) => s.swarmId)).toEqual(["s2", "s1"]);
-    expect(sessionStorage.getItem("oxagen:workflows:swarms:acme:main")).toContain("s2");
+    expect(
+      sessionStorage.getItem("oxagen:workflows:swarms:acme:main"),
+    ).toContain("s2");
   });
 
   it("replaces (dedupes) an existing swarmId instead of duplicating", async () => {
     const { result } = renderHook(() => useSwarmSessionStore("acme", "main"));
     await act(async () => {});
 
-    act(() => result.current.addSwarm(record({ swarmId: "s1", status: "running" })));
-    act(() => result.current.addSwarm(record({ swarmId: "s1", status: "complete" })));
+    act(() =>
+      result.current.addSwarm(record({ swarmId: "s1", status: "running" })),
+    );
+    act(() =>
+      result.current.addSwarm(record({ swarmId: "s1", status: "complete" })),
+    );
 
     expect(result.current.swarms).toHaveLength(1);
     expect(result.current.swarms[0]?.status).toBe("complete");
@@ -104,8 +115,15 @@ describe("useSwarmSessionStore — updateSwarm", () => {
     const { result } = renderHook(() => useSwarmSessionStore("acme", "main"));
     await act(async () => {});
 
-    act(() => result.current.addSwarm(record({ swarmId: "s1", completedTasks: 0 })));
-    act(() => result.current.updateSwarm("s1", { completedTasks: 3, status: "complete" }));
+    act(() =>
+      result.current.addSwarm(record({ swarmId: "s1", completedTasks: 0 })),
+    );
+    act(() =>
+      result.current.updateSwarm("s1", {
+        completedTasks: 3,
+        status: "complete",
+      }),
+    );
 
     expect(result.current.swarms[0]).toMatchObject({
       swarmId: "s1",
@@ -122,7 +140,9 @@ describe("useSwarmSessionStore — updateSwarm", () => {
     const { result } = renderHook(() => useSwarmSessionStore("acme", "main"));
     await act(async () => {});
     act(() => result.current.addSwarm(record({ swarmId: "s1" })));
-    act(() => result.current.updateSwarm("does-not-exist", { completedTasks: 99 }));
+    act(() =>
+      result.current.updateSwarm("does-not-exist", { completedTasks: 99 }),
+    );
     expect(result.current.swarms).toHaveLength(1);
     expect(result.current.swarms[0]?.completedTasks).toBe(0);
   });
@@ -142,7 +162,10 @@ describe("useSwarmSessionStore — refresh", () => {
     act(() => writer.result.current.addSwarm(record({ swarmId: "s2" })));
     act(() => reader.result.current.refresh());
 
-    expect(reader.result.current.swarms.map((s) => s.swarmId).sort()).toEqual(["s1", "s2"]);
+    expect(reader.result.current.swarms.map((s) => s.swarmId).sort()).toEqual([
+      "s1",
+      "s2",
+    ]);
   });
 });
 
@@ -168,7 +191,10 @@ describe("useSwarmSessionStore — storage failure resilience", () => {
   });
 
   it("swallows a non-array JSON value in storage and falls back to an empty list", async () => {
-    sessionStorage.setItem("oxagen:workflows:swarms:acme:main", JSON.stringify({ not: "an array" }));
+    sessionStorage.setItem(
+      "oxagen:workflows:swarms:acme:main",
+      JSON.stringify({ not: "an array" }),
+    );
     const { result } = renderHook(() => useSwarmSessionStore("acme", "main"));
     await act(async () => {});
     expect(result.current.swarms).toEqual([]);

@@ -5,7 +5,13 @@ import { render, screen, cleanup } from "@testing-library/react";
 // Stub the Streamdown wrapper; we only need to verify MarkdownContent forwards
 // its children and className through to the shared markdown renderer.
 vi.mock("@/components/chat/markdown-message", () => ({
-  MarkdownMessage: ({ children, className }: { children: string; className?: string }) => (
+  MarkdownMessage: ({
+    children,
+    className,
+  }: {
+    children: string;
+    className?: string;
+  }) => (
     <div data-testid="markdown" className={className}>
       {children}
     </div>
@@ -23,7 +29,9 @@ describe("MarkdownContent", () => {
   });
 
   it("merges an extra className onto the renderer", () => {
-    render(<MarkdownContent className="custom-class">{"body"}</MarkdownContent>);
+    render(
+      <MarkdownContent className="custom-class">{"body"}</MarkdownContent>,
+    );
     expect(screen.getByTestId("markdown").className).toContain("custom-class");
   });
 });

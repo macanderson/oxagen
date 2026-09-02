@@ -21,7 +21,7 @@ export const [billingDunningSweep] = createFunction(
   { id: "billing.dunning-sweep", retries: 3 },
   { cron: "0 2 * * *" },
   async ({ step }) => {
-    const result = await step.run("sweep", async () => {
+    const sweepResult = await step.run("sweep", async () => {
       return await sweepDunning();
     });
 
@@ -34,59 +34,62 @@ export const [billingDunningSweep] = createFunction(
     let page = 0;
     for (;;) {
       const cursorForPage: string | null = cursor;
-      const result = await step.run(
+      const pageResult = await step.run(
         `low-balance-page-${page}`,
         async (): Promise<{ count: number; nextCursor: string | null }> => {
-        const activeOrgs = await withSystemDb((tx) =>
-          tx.query.orgBillingSettings.findMany({
-            where: cursorForPage
-              ? and(
-                  eq(schema.orgBillingSettings.dunningState, "active"),
-                  gt(schema.orgBillingSettings.orgId, cursorForPage),
-                )
-              : eq(schema.orgBillingSettings.dunningState, "active"),
-            columns: { orgId: true },
-            orderBy: [asc(schema.orgBillingSettings.orgId)],
-            limit: LOW_BALANCE_PAGE_SIZE,
-          }),
-        );
+          const activeOrgs = await withSystemDb((tx) =>
+            tx.query.orgBillingSettings.findMany({
+              where: cursorForPage
+                ? and(
+                    eq(schema.orgBillingSettings.dunningState, "active"),
+                    gt(schema.orgBillingSettings.orgId, cursorForPage),
+                  )
+                : eq(schema.orgBillingSettings.dunningState, "active"),
+              columns: { orgId: true },
+              orderBy: [asc(schema.orgBillingSettings.orgId)],
+              limit: LOW_BALANCE_PAGE_SIZE,
+            }),
+          );
 
-        let count = 0;
-        for (const { orgId } of activeOrgs) {
-          try {
-            // system: true — this is a trusted cross-tenant cron sweeping every
-            // org with NO active tenant scope, so the billing reads must run via
-            // withSystemDb (same bypass sweepDunning() uses above). Without it
-            // the withTenantDb inside isLowBalance throws TenantScopeError and
-            // the low-balance check silently fails for every org.
-            const balanceResult = await isLowBalance(orgId, { system: true });
-            if (balanceResult.low) {
-              await notifyLowBalance(orgId, balanceResult);
-              count++;
+          let count = 0;
+          for (const { orgId } of activeOrgs) {
+            try {
+              // system: true — this is a trusted cross-tenant cron sweeping every
+              // org with NO active tenant scope, so the billing reads must run via
+              // withSystemDb (same bypass sweepDunning() uses above). Without it
+              // the withTenantDb inside isLowBalance throws TenantScopeError and
+              // the low-balance check silently fails for every org.
+              const balanceResult = await isLowBalance(orgId, { system: true });
+              if (balanceResult.low) {
+                await notifyLowBalance(orgId, balanceResult);
+                count++;
+              }
+            } catch (err) {
+              logger.warn(
+                { orgId, err },
+                "billing.dunning-sweep: low-balance check failed for org (non-fatal)",
+              );
             }
-          } catch (err) {
-            logger.warn(
-              { orgId, err },
-              "billing.dunning-sweep: low-balance check failed for org (non-fatal)",
-            );
           }
-        }
 
-        const nextCursor =
-          activeOrgs.length === LOW_BALANCE_PAGE_SIZE
-            ? (activeOrgs[activeOrgs.length - 1]?.orgId ?? null)
-            : null;
-        return { count, nextCursor };
-      },
+          const nextCursor =
+            activeOrgs.length === LOW_BALANCE_PAGE_SIZE
+              ? (activeOrgs[activeOrgs.length - 1]?.orgId ?? null)
+              : null;
+          return { count, nextCursor };
+        },
       );
 
-      notified += result.count;
-      if (!result.nextCursor) break;
-      cursor = result.nextCursor;
+      notified += pageResult.count;
+      if (!pageResult.nextCursor) break;
+      cursor = pageResult.nextCursor;
       page++;
     }
 
-    logger.info({ suspended: result.suspended, lowBalanceNotified: notified }, "billing.dunning-sweep complete");
-    return { ...result, lowBalanceNotified: notified };
+    logger.info(
+      { suspended: sweepResult.suspended, lowBalanceNotified: notified },
+      "billing.dunning-sweep complete",
+    );
+    return { ...sweepResult, lowBalanceNotified: notified };
   },
 );

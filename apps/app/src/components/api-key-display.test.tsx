@@ -58,7 +58,9 @@ describe("ApiKeyDisplay — rendering", () => {
   });
 
   it("renders 'Expires' when expiresAt is set", () => {
-    render(<ApiKeyDisplay {...defaultProps} expiresAt="2026-01-15T00:00:00Z" />);
+    render(
+      <ApiKeyDisplay {...defaultProps} expiresAt="2026-01-15T00:00:00Z" />,
+    );
     expect(screen.getByText(/expires/i)).toBeInTheDocument();
   });
 
@@ -69,7 +71,9 @@ describe("ApiKeyDisplay — rendering", () => {
 
   it("renders the Copy button", () => {
     render(<ApiKeyDisplay {...defaultProps} />);
-    expect(screen.getByRole("button", { name: /copy api key/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /copy api key/i }),
+    ).toBeInTheDocument();
   });
 
   it("renders the security notice", () => {
@@ -81,15 +85,22 @@ describe("ApiKeyDisplay — rendering", () => {
 describe("ApiKeyDisplay — copy interaction", () => {
   it("copies the raw key to clipboard when Copy is clicked", async () => {
     render(<ApiKeyDisplay {...defaultProps} />);
-    await userEvent.click(screen.getByRole("button", { name: /copy api key/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /copy api key/i }),
+    );
     expect(writeTextMock).toHaveBeenCalledWith("oxagen_key_abc123xyz");
   });
 
   it("shows 'Copied' aria-label after click", async () => {
     render(<ApiKeyDisplay {...defaultProps} />);
-    await userEvent.click(screen.getByRole("button", { name: /copy api key/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /copy api key/i }),
+    );
     await waitFor(
-      () => expect(screen.getByRole("button", { name: /copied/i })).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByRole("button", { name: /copied/i }),
+        ).toBeInTheDocument(),
       { timeout: 1000 },
     );
   });

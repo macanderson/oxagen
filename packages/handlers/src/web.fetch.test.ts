@@ -54,7 +54,8 @@ const validCtx: CapabilityContext = {
 const sampleFetchResult = {
   url: "https://example.com",
   title: "Example Domain",
-  content: "# Example Domain\n\nThis domain is for use in illustrative examples.",
+  content:
+    "# Example Domain\n\nThis domain is for use in illustrative examples.",
   wordCount: 13,
   fetchedAt: new Date().toISOString(),
   statusCode: 200,
@@ -94,7 +95,9 @@ describe("webFetchHandler — happy path", () => {
       validCtx,
     );
 
-    const callArg = mockWebFetch.mock.calls[0]![0] as { extractMarkdown: boolean };
+    const callArg = mockWebFetch.mock.calls[0]![0] as {
+      extractMarkdown: boolean;
+    };
     expect(callArg.extractMarkdown).toBe(false);
   });
 
@@ -121,7 +124,11 @@ describe("webFetchHandler — error propagation", () => {
 
     await expect(
       webFetchHandler(
-        { url: "ftp://example.com/file.txt", extractMarkdown: true, timeout: 10000 },
+        {
+          url: "ftp://example.com/file.txt",
+          extractMarkdown: true,
+          timeout: 10000,
+        },
         validCtx,
       ),
     ).rejects.toThrow(/scheme.*not allowed/i);
@@ -134,7 +141,11 @@ describe("webFetchHandler — error propagation", () => {
 
     await expect(
       webFetchHandler(
-        { url: "https://slow.example.com", extractMarkdown: true, timeout: 10000 },
+        {
+          url: "https://slow.example.com",
+          extractMarkdown: true,
+          timeout: 10000,
+        },
         validCtx,
       ),
     ).rejects.toThrow(/timed out/i);
@@ -146,7 +157,8 @@ describe("webFetchHandler — error propagation", () => {
 
 describe("extractMarkdownFromHtml — HTML stripping", () => {
   it("extracts <title> tag content", () => {
-    const html = "<html><head><title>My Page Title</title></head><body></body></html>";
+    const html =
+      "<html><head><title>My Page Title</title></head><body></body></html>";
     const { title } = extractMarkdownFromHtml(html);
     expect(title).toBe("My Page Title");
   });
@@ -160,14 +172,16 @@ describe("extractMarkdownFromHtml — HTML stripping", () => {
   });
 
   it("removes <style> blocks entirely", () => {
-    const html = "<body><style>.red { color: red; }</style><p>Visible text</p></body>";
+    const html =
+      "<body><style>.red { color: red; }</style><p>Visible text</p></body>";
     const { content } = extractMarkdownFromHtml(html);
     expect(content).not.toContain("color:");
     expect(content).toContain("Visible text");
   });
 
   it("removes <nav> blocks entirely", () => {
-    const html = "<body><nav><a href='/'>Home</a><a href='/about'>About</a></nav><p>Main content</p></body>";
+    const html =
+      "<body><nav><a href='/'>Home</a><a href='/about'>About</a></nav><p>Main content</p></body>";
     const { content } = extractMarkdownFromHtml(html);
     expect(content).not.toContain("Home");
     expect(content).not.toContain("About");
@@ -233,15 +247,17 @@ describe("extractMarkdownFromHtml — HTML stripping", () => {
   });
 
   it("converts <a> tags to markdown links", () => {
-    const html = '<body><p>Visit <a href="https://example.com">Example</a></p></body>';
+    const html =
+      '<body><p>Visit <a href="https://example.com">Example</a></p></body>';
     const { content } = extractMarkdownFromHtml(html);
     expect(content).toContain("[Example](https://example.com)");
   });
 
   it("decodes common HTML entities", () => {
-    const html = "<body><p>A &amp; B &lt;tag&gt; &quot;quoted&quot; &nbsp;space</p></body>";
+    const html =
+      "<body><p>A &amp; B &lt;tag&gt; &quot;quoted&quot; &nbsp;space</p></body>";
     const { content } = extractMarkdownFromHtml(html);
-    expect(content).toContain("A & B <tag> \"quoted\"");
+    expect(content).toContain('A & B <tag> "quoted"');
   });
 
   it("strips remaining tags leaving only text", () => {

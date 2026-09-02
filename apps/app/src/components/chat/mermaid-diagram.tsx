@@ -131,7 +131,9 @@ export default function MermaidDiagram({
               : "text-muted-foreground hover:bg-muted hover:text-foreground",
           )}
           title={showSource ? "Hide source" : "Show source"}
-          aria-label={showSource ? "Hide Mermaid source" : "Show Mermaid source"}
+          aria-label={
+            showSource ? "Hide Mermaid source" : "Show Mermaid source"
+          }
         >
           <Code2 className="size-3" aria-hidden="true" />
           <span>Source</span>

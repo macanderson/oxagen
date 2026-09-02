@@ -16,7 +16,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mocks.invoke }));
-vi.mock("../../lib/context", () => ({ capabilityContext: mocks.capabilityContext }));
+vi.mock("../../lib/context", () => ({
+  capabilityContext: mocks.capabilityContext,
+}));
 
 import { billingUsageBreakdownRoute } from "./billing.usage.breakdown";
 
@@ -32,7 +34,13 @@ const fakeCtx = {
 
 const OUTPUT = {
   range: { start: "2026-06-01T00:00:00.000Z", end: "2026-07-01T00:00:00.000Z" },
-  totals: { inputTokens: 0, outputTokens: 0, cachedTokens: 0, costMicros: 0, executions: 0 },
+  totals: {
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedTokens: 0,
+    costMicros: 0,
+    executions: 0,
+  },
   series: [],
   byModel: [],
   bySurface: [],
@@ -46,18 +54,26 @@ beforeEach(() => {
 });
 
 async function get(qs: string): Promise<Response> {
-  return billingUsageBreakdownRoute.fetch(new Request(`http://localhost/?${qs}`));
+  return billingUsageBreakdownRoute.fetch(
+    new Request(`http://localhost/?${qs}`),
+  );
 }
 
 describe("GET billing/usage/breakdown", () => {
   it("forwards the parsed window to invoke with surface api and returns the output", async () => {
-    const res = await get("start=2026-06-01T00:00:00.000Z&end=2026-07-01T00:00:00.000Z");
+    const res = await get(
+      "start=2026-06-01T00:00:00.000Z&end=2026-07-01T00:00:00.000Z",
+    );
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(OUTPUT);
     expect(mocks.invoke).toHaveBeenCalledWith(
       "get_usage_breakdown",
-      { start: "2026-06-01T00:00:00.000Z", end: "2026-07-01T00:00:00.000Z", workspaceId: undefined },
+      {
+        start: "2026-06-01T00:00:00.000Z",
+        end: "2026-07-01T00:00:00.000Z",
+        workspaceId: undefined,
+      },
       fakeCtx,
       { surface: "api" },
     );
@@ -72,7 +88,9 @@ describe("GET billing/usage/breakdown", () => {
   });
 
   it("does not invoke when the window is invalid (end before start)", async () => {
-    const res = await get("start=2026-07-01T00:00:00.000Z&end=2026-06-01T00:00:00.000Z");
+    const res = await get(
+      "start=2026-07-01T00:00:00.000Z&end=2026-06-01T00:00:00.000Z",
+    );
     expect(res.status).not.toBe(200);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });

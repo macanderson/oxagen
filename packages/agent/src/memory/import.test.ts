@@ -9,10 +9,7 @@ vi.mock("@oxagen/ai", () => ({
   generateObjectFor: mocks.generateObjectForMock,
 }));
 
-import {
-  extractMemoriesFromDocument,
-  mapWithConcurrency,
-} from "./import";
+import { extractMemoriesFromDocument, mapWithConcurrency } from "./import";
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 // ---------------------------------------------------------------------------
@@ -82,8 +79,17 @@ describe("extractMemoriesFromDocument", () => {
 
   it("returns the model's extracted, two-axis classified memories", async () => {
     const memories = [
-      { lesson: "Never push to main.", memoryClass: "RULE" as const, memoryKind: "constraint", enforcementScore: 95 },
-      { lesson: "Run pnpm i after a dep change.", memoryClass: "OBSERVATION" as const, memoryKind: "routine-change" },
+      {
+        lesson: "Never push to main.",
+        memoryClass: "RULE" as const,
+        memoryKind: "constraint",
+        enforcementScore: 95,
+      },
+      {
+        lesson: "Run pnpm i after a dep change.",
+        memoryClass: "OBSERVATION" as const,
+        memoryKind: "routine-change",
+      },
     ];
     mocks.generateObjectForMock.mockResolvedValue({ object: { memories } });
 

@@ -1,5 +1,11 @@
 import { z } from "zod";
+import { CAPABILITY_SLUG_PATTERN, KEBAB_SLUG_PATTERN } from "./slugs";
 
+/**
+ * The points in a turn where an agent may hand control to a capability, in the
+ * order the runtime reaches them. `before_*` events can still change what
+ * happens next; `after_*` events observe a step that already ran.
+ */
 export const lifecycleEventSchema = z.enum([
   "before_turn",
   "before_intelligence",
@@ -38,16 +44,28 @@ const literalInputSchema = z
   })
   .strict();
 
+/**
+ * How one input field of a lifecycle capability gets its value: either read out
+ * of the event envelope by JSON Pointer (`from`), or baked into the artifact
+ * (`literal`). Both members are `.strict()`, so supplying both is rejected.
+ */
 export const lifecycleInputBindingSchema = z.union([
   pointerInputSchema,
   literalInputSchema,
 ]);
 
+/**
+ * One capability call bound to one lifecycle event. The cross-field rules below
+ * exist so an artifact cannot describe a call the runtime would have to refuse
+ * at dispatch time: a prompt patch after the prompt is already sent, a
+ * `when` filter on an event that has no outcome yet, a retry with no attempt
+ * budget, or a required call that is also allowed to fail silently.
+ */
 export const lifecycleInvocationSchema = z
   .object({
-    id: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+    id: z.string().regex(KEBAB_SLUG_PATTERN),
     event: lifecycleEventSchema,
-    capability: z.string().regex(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/),
+    capability: z.string().regex(CAPABILITY_SLUG_PATTERN),
     required: z.boolean(),
     apply_as: z.enum(["opaque", "prompt_patch", "decision"]).optional(),
     timeout_ms: z.number().int().min(1).max(300_000),
@@ -120,6 +138,11 @@ export const lifecycleInvocationSchema = z
     }
   });
 
+/**
+ * The full set of lifecycle calls an agent declares. `delivery` is `buffered`
+ * only: every invocation runs to completion (or fails) before the turn moves
+ * on, so a caller never sees a half-applied patch.
+ */
 export const agentDriverSchema = z
   .object({
     delivery: z.literal("buffered"),
@@ -184,6 +207,12 @@ const rejectOperationSchema = z
   })
   .strict();
 
+/**
+ * One edit a lifecycle capability may make to a turn before the model sees it.
+ * The set is deliberately closed: text can be added around the prompt, an input
+ * path can be redacted or replaced, metadata can be attached, or the turn can
+ * be rejected outright. Nothing here can rewrite the agent's instructions.
+ */
 export const promptPatchOperationSchema = z.union([
   contentOperationSchema,
   pathOperationSchema,
@@ -191,6 +220,10 @@ export const promptPatchOperationSchema = z.union([
   rejectOperationSchema,
 ]);
 
+/**
+ * A capability's returned patch, capped at 64 operations so one lifecycle call
+ * cannot grow a prompt without bound.
+ */
 export const promptPatchSchema = z
   .object({
     operations: z.array(promptPatchOperationSchema).max(64),
@@ -201,6 +234,15 @@ export type LifecycleInvocation = z.infer<typeof lifecycleInvocationSchema>;
 export type AgentDriver = z.infer<typeof agentDriverSchema>;
 export type PromptPatch = z.infer<typeof promptPatchSchema>;
 
+/**
+ * What a lifecycle capability is handed when it runs. This is also the document
+ * an invocation's `from` pointers read against, so the field names here are a
+ * public contract: renaming one breaks every artifact that points at it.
+ *
+ * The optional blocks are populated per event — `prompt` before intelligence,
+ * `modelCall` around a model call, `toolCall` around a tool call, and
+ * `candidateOutput` / `error` at finalization.
+ */
 export interface LifecycleEventEnvelope {
   schemaVersion: 1;
   event: LifecycleEvent;
@@ -233,6 +275,11 @@ export interface LifecycleEventEnvelope {
   error?: { code: string; message: string };
 }
 
+/**
+ * The audit record one invocation leaves behind. Inputs, outputs, and the
+ * prompt before and after a patch are recorded as hashes rather than values so
+ * a receipt stays durable and citable without carrying tenant content.
+ */
 export interface LifecycleInvocationReceipt {
   schemaVersion: 1;
   turnId: string;

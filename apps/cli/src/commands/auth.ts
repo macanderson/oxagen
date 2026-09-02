@@ -2,7 +2,7 @@
  * Auth commands: `oxagen login` and `oxagen logout`.
  *
  * Login default (interactive TTY, no --token): opens a browser-based PKCE
- * OAuth flow via `browserLogin` in lib/loopback-login.ts. The authorize page
+ * OAuth flow via `browserLogin` in auth/loopback-login.ts. The authorize page
  * lives at ${appUrl}/cli/authorize; the token exchange hits
  * POST ${apiUrl}/v1/auth/cli/token. On success, the returned
  * { token, orgSlug, workspaceSlug } is persisted to ~/.config/oxagen/config.json.
@@ -12,15 +12,11 @@
  * the command exits with an error. Pass --no-browser to force the token-prompt
  * flow even on an interactive TTY.
  *
- * Validation endpoint (token flow): GET /v1/user/preferences/read
+ * Validation endpoint (token flow): GET /v1/auth/whoami
  *   - Requires a valid Bearer API key (auth middleware validates the key).
  *   - Returns 200 for a recognised key; 401 for an invalid or expired key.
  *   - Does not require an org/workspace path parameter — the API key itself
  *     carries the scope, so this works as a pure "is this key valid?" probe.
- *
- * BYOK AI removal (AI_GATEWAY_API_KEY → platform-routed AI) is deferred to
- * ADR-019 task B4. This command establishes the session + account-required
- * gate; the AI transport stays BYOK for now.
  */
 import * as readline from "node:readline/promises";
 import {

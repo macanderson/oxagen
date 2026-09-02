@@ -8,7 +8,11 @@ import {
 } from "@oxagen/crypto";
 import type { AuthCredential } from "@oxagen/ingestion/connectors";
 import { logger } from "../logger";
-import { refreshOAuthToken, isRefreshError, PERMANENT_ERRORS } from "./oauth-strategies";
+import {
+  refreshOAuthToken,
+  isRefreshError,
+  PERMANENT_ERRORS,
+} from "./oauth-strategies";
 
 /**
  * Resolve a source connection's stored credentials into an in-memory
@@ -56,7 +60,9 @@ async function decryptEnvelope(envelope: Envelope): Promise<string> {
 
 async function encryptToEnvelope(plaintext: string): Promise<Envelope> {
   const writeAdapter = createIngestionCryptoAdapter();
-  const cipher = await encrypt(plaintext, writeAdapter.keyId, { adapter: writeAdapter.adapter });
+  const cipher = await encrypt(plaintext, writeAdapter.keyId, {
+    adapter: writeAdapter.adapter,
+  });
   return { keyId: writeAdapter.keyId, ciphertext: cipher.toString("base64") };
 }
 
@@ -79,7 +85,11 @@ interface OAuthRow {
  */
 async function ensureFreshAccessToken(
   row: OAuthRow,
-  persist: (access: Envelope, refresh: Envelope | null, expiresAt: Date | null) => Promise<unknown>,
+  persist: (
+    access: Envelope,
+    refresh: Envelope | null,
+    expiresAt: Date | null,
+  ) => Promise<unknown>,
 ): Promise<string | null> {
   if (!row.access_token_enc) return null;
 
@@ -125,7 +135,9 @@ async function ensureFreshAccessToken(
   }
 
   const newAccessEnc = await encryptToEnvelope(result.accessToken);
-  const newRefreshEnc = result.refreshToken ? await encryptToEnvelope(result.refreshToken) : null;
+  const newRefreshEnc = result.refreshToken
+    ? await encryptToEnvelope(result.refreshToken)
+    : null;
   const newExpiresAt = result.expiresInSec
     ? new Date(Date.now() + result.expiresInSec * 1000)
     : null;
@@ -171,9 +183,11 @@ export async function resolveConnectionAuth(
     });
     const acc = accRows[0];
     if (acc && isEnvelope(acc.access_token_enc)) {
-      const token = await ensureFreshAccessToken(acc, (access, refresh, expiresAt) =>
-        withSystemDb((tx) =>
-          tx.execute(sql`
+      const token = await ensureFreshAccessToken(
+        acc,
+        (access, refresh, expiresAt) =>
+          withSystemDb((tx) =>
+            tx.execute(sql`
             UPDATE ingestion.oauth_accounts
             SET    access_token_enc  = ${JSON.stringify(access)}::jsonb,
                    refresh_token_enc = ${refresh ? JSON.stringify(refresh) : sql`refresh_token_enc`}::jsonb,
@@ -183,7 +197,7 @@ export async function resolveConnectionAuth(
                    updated_at        = NOW()
             WHERE  id = ${conn.oauth_account_id}::uuid
           `),
-        ),
+          ),
       );
       if (!token) return null;
       return { auth: { scheme: "bearer_token", token }, deliveryConfig };
@@ -212,9 +226,11 @@ export async function resolveConnectionAuth(
       return Array.from(rows) as Array<{ connector_id: string }>;
     });
     const provider = provRows[0]?.connector_id ?? "";
-    const token = await ensureFreshAccessToken({ ...tok, provider }, (access, refresh, expiresAt) =>
-      withSystemDb((tx) =>
-        tx.execute(sql`
+    const token = await ensureFreshAccessToken(
+      { ...tok, provider },
+      (access, refresh, expiresAt) =>
+        withSystemDb((tx) =>
+          tx.execute(sql`
           UPDATE ingestion.oauth_tokens
           SET    access_token_enc  = ${JSON.stringify(access)}::jsonb,
                  refresh_token_enc = ${refresh ? JSON.stringify(refresh) : sql`refresh_token_enc`}::jsonb,
@@ -224,7 +240,7 @@ export async function resolveConnectionAuth(
                  updated_at        = NOW()
           WHERE  connection_id = ${connectionId}::uuid
         `),
-      ),
+        ),
     );
     if (!token) return null;
     return { auth: { scheme: "bearer_token", token }, deliveryConfig };

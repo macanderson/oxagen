@@ -56,7 +56,9 @@ export function BuyCredits({ orgSlug }: BuyCreditsProps) {
     timerRef.current = setTimeout(() => {
       startPreviewTransition(async () => {
         try {
-          const { getDiscountPreview } = await import("./buy-credits-preview-action");
+          const { getDiscountPreview } = await import(
+            "./buy-credits-preview-action"
+          );
           const result = await getDiscountPreview(Math.round(amountNum * 100));
           setPreview(result);
         } catch {
@@ -78,68 +80,85 @@ export function BuyCredits({ orgSlug }: BuyCreditsProps) {
       if (res.ok) {
         window.location.href = res.url;
       } else {
-        addToast({ title: "Purchase failed", description: res.error, type: "error" });
+        addToast({
+          title: "Purchase failed",
+          description: res.error,
+          type: "error",
+        });
       }
     });
   }
 
   return (
     <Panel title="Buy usage credits">
-        <p className="mb-4 text-sm text-muted-foreground">
-          1 credit = 1¢. Volume discounts apply for larger purchases.
-        </p>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="credit-amount">Amount (USD)</Label>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">$</span>
-              <Input
-                id="credit-amount"
-                type="number"
-                min={MIN_USD}
-                step={5}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="w-28"
-                disabled={pending}
-              />
-            </div>
-            {!isValid && amount !== "" ? (
-              <p className="text-xs text-destructive">Minimum purchase is ${MIN_USD}.</p>
-            ) : null}
+      <p className="mb-4 text-sm text-muted-foreground">
+        1 credit = 1¢. Volume discounts apply for larger purchases.
+      </p>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="credit-amount">Amount (USD)</Label>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">$</span>
+            <Input
+              id="credit-amount"
+              type="number"
+              min={MIN_USD}
+              step={5}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-28"
+              disabled={pending}
+            />
           </div>
-
-          {/* Live discount preview */}
-          {preview && isValid ? (
-            <div className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-sm">
-              {preview.percent > 0 ? (
-                <p className="font-medium text-success">
-                  {preview.percent}% off — pay{" "}
-                  <span className="font-semibold">{formatCents(preview.priceCents)}</span>{" "}
-                  for{" "}
-                  <span className="font-semibold">{formatCents(preview.grantCents)}</span>{" "}
-                  in credits (save {formatCents(preview.savedCents)})
-                </p>
-              ) : (
-                <p className="text-muted-foreground">
-                  Pay <span className="font-semibold">{formatCents(preview.priceCents)}</span>{" "}
-                  for <span className="font-semibold">{formatCents(preview.grantCents)}</span> in credits
-                </p>
-              )}
-            </div>
-          ) : previewPending ? (
-            <p className="text-xs text-muted-foreground">Calculating…</p>
+          {!isValid && amount !== "" ? (
+            <p className="text-xs text-destructive">
+              Minimum purchase is ${MIN_USD}.
+            </p>
           ) : null}
-
-          <Button
-            onClick={handleBuy}
-            disabled={!isValid || pending}
-            variant="gradient"
-            className="w-full"
-          >
-            {pending ? "Redirecting to Stripe…" : "Buy credits"}
-          </Button>
         </div>
+
+        {/* Live discount preview */}
+        {preview && isValid ? (
+          <div className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-sm">
+            {preview.percent > 0 ? (
+              <p className="font-medium text-success">
+                {preview.percent}% off — pay{" "}
+                <span className="font-semibold">
+                  {formatCents(preview.priceCents)}
+                </span>{" "}
+                for{" "}
+                <span className="font-semibold">
+                  {formatCents(preview.grantCents)}
+                </span>{" "}
+                in credits (save {formatCents(preview.savedCents)})
+              </p>
+            ) : (
+              <p className="text-muted-foreground">
+                Pay{" "}
+                <span className="font-semibold">
+                  {formatCents(preview.priceCents)}
+                </span>{" "}
+                for{" "}
+                <span className="font-semibold">
+                  {formatCents(preview.grantCents)}
+                </span>{" "}
+                in credits
+              </p>
+            )}
+          </div>
+        ) : previewPending ? (
+          <p className="text-xs text-muted-foreground">Calculating…</p>
+        ) : null}
+
+        <Button
+          onClick={handleBuy}
+          disabled={!isValid || pending}
+          variant="gradient"
+          className="w-full"
+        >
+          {pending ? "Redirecting to Stripe…" : "Buy credits"}
+        </Button>
+      </div>
     </Panel>
   );
 }

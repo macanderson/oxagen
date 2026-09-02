@@ -31,6 +31,8 @@ export default async function agentTaskBackgroundStartTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentTaskBackgroundStart.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentTaskBackgroundStart.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentTaskBackgroundStart.output.parse(output);
 }

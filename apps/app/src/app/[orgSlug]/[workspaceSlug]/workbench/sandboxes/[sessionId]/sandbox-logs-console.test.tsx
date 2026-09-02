@@ -106,13 +106,19 @@ describe("SandboxLogsConsole", () => {
     // Toggle Debug ON → the loader is re-called with no level (everything).
     fireEvent.click(screen.getByTestId("sandbox-logs-debug-toggle"));
     await waitFor(() =>
-      expect(loadLogs).toHaveBeenLastCalledWith({ level: undefined, limit: 500 }),
+      expect(loadLogs).toHaveBeenLastCalledWith({
+        level: undefined,
+        limit: 500,
+      }),
     );
 
     // Toggle back OFF → returns to the "normal" view.
     fireEvent.click(screen.getByTestId("sandbox-logs-debug-toggle"));
     await waitFor(() =>
-      expect(loadLogs).toHaveBeenLastCalledWith({ level: "normal", limit: 500 }),
+      expect(loadLogs).toHaveBeenLastCalledWith({
+        level: "normal",
+        limit: 500,
+      }),
     );
   });
 

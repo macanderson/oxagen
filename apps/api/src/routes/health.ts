@@ -25,7 +25,10 @@ export const health = new Hono<AppEnv>();
 
 type CheckResult = "ok" | "fail";
 
-function evaluateChecks(): { allOk: boolean; checks: Record<string, CheckResult> } {
+function evaluateChecks(): {
+  allOk: boolean;
+  checks: Record<string, CheckResult>;
+} {
   const checks: Record<string, CheckResult> = {};
 
   if (isEmailVerificationRequired()) {

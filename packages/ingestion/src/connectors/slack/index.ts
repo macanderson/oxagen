@@ -1,6 +1,12 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { z } from "zod";
-import { registerConnector, type ConnectorDefinition, type NormalizedRecord, type RecordTypeSample } from "../types";
+import {
+  registerConnector,
+  type ConnectorDefinition,
+  type NormalizedRecord,
+  type RecordTypeSample,
+} from "../types";
+import { constantTimeStringEqual } from "../safe-compare";
 
 const connectionConfigSchema = z.object({
   channelIds: z.array(z.string()).optional(),
@@ -11,7 +17,9 @@ const connectionConfigSchema = z.object({
 type Config = typeof connectionConfigSchema;
 
 function asRecord(raw: unknown): Record<string, unknown> {
-  return raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return raw !== null && typeof raw === "object"
+    ? (raw as Record<string, unknown>)
+    : {};
 }
 
 function asString(v: unknown): string | undefined {
@@ -25,7 +33,8 @@ function asArray(v: unknown): unknown[] {
 const slack: ConnectorDefinition<Config> = {
   connectorId: "slack",
   displayName: "Slack",
-  description: "Sync messages, threads, channels, and user activity from Slack.",
+  description:
+    "Sync messages, threads, channels, and user activity from Slack.",
   icon: "slack",
   supportedAuthSchemes: ["oauth2_authorization_code"],
   deliveryMethod: "webhook",
@@ -41,7 +50,9 @@ const slack: ConnectorDefinition<Config> = {
 
     switch (sourceRecordType) {
       case "message": {
-        const reactions = asArray(r["reactions"]).map((rx) => asString(asRecord(rx)["name"])).filter(Boolean);
+        const reactions = asArray(r["reactions"])
+          .map((rx) => asString(asRecord(rx)["name"]))
+          .filter(Boolean);
         return {
           externalId: `${r["channel"]}:${r["ts"]}`,
           externalUrl: asString(r["permalink"]),
@@ -82,7 +93,8 @@ const slack: ConnectorDefinition<Config> = {
         const profile = asRecord(r["profile"]);
         return {
           externalId: asString(r["id"]) ?? "",
-          displayName: asString(profile["real_name"]) ?? asString(profile["display_name"]),
+          displayName:
+            asString(profile["real_name"]) ?? asString(profile["display_name"]),
           properties: {
             realName: asString(profile["real_name"]),
             displayName: asString(profile["display_name"]),
@@ -96,7 +108,9 @@ const slack: ConnectorDefinition<Config> = {
       }
 
       default:
-        throw new Error(`slack.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`);
+        throw new Error(
+          `slack.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`,
+        );
     }
   },
 
@@ -105,15 +119,17 @@ const slack: ConnectorDefinition<Config> = {
     const timestamp = headers["x-slack-request-timestamp"];
     const sig = headers["x-slack-signature"];
     if (!timestamp || !sig) return false;
-    // Reject replays older than 5 minutes
-    if (Math.abs(Math.floor(Date.now() / 1000) - Number(timestamp)) > 300) return false;
-    const baseString = `v0:${timestamp}:${Buffer.from(payload).toString("utf8")}`;
-    const expected = "v0=" + createHmac("sha256", secret).update(baseString).digest("hex");
-    try {
-      return timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
-    } catch {
+    // Reject replays older than 5 minutes. A non-numeric timestamp parses to
+    // NaN, and every NaN comparison is false — so it must be rejected
+    // explicitly or the replay window silently stops applying.
+    const sentAtSeconds = Number(timestamp);
+    if (!Number.isFinite(sentAtSeconds)) return false;
+    if (Math.abs(Math.floor(Date.now() / 1000) - sentAtSeconds) > 300)
       return false;
-    }
+    const baseString = `v0:${timestamp}:${Buffer.from(payload).toString("utf8")}`;
+    const expected =
+      "v0=" + createHmac("sha256", secret).update(baseString).digest("hex");
+    return constantTimeStringEqual(sig, expected);
   },
 };
 

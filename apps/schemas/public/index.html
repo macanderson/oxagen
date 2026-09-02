@@ -6,7 +6,7 @@
     <title>Oxagen Schemas</title>
     <meta
       name="description"
-      content="JSON Schemas for Oxagen configuration files, generated from the canonical Zod source with zero drift."
+      content="JSON Schemas for Oxagen configuration files, generated from the canonical Zod source."
     />
     <link rel="icon" href="data:," />
     <style>
@@ -118,9 +118,9 @@
     <main>
       <h1>Oxagen Schemas</h1>
       <p class="lede">
-        JSON Schemas for Oxagen configuration files, generated directly from the canonical Zod
-        source — reference one from <code>$schema</code> for editor autocompletion, with no drift
-        between the schema and the code that validates it.
+        JSON Schemas for Oxagen configuration files, generated directly from the same Zod
+        source the Oxagen CLI validates with. Point <code>$schema</code> at one to get
+        autocompletion in your editor.
       </p>
       <ul class="schemas">
         <li>
@@ -128,8 +128,9 @@
             >oxagen-cli-settings-schema.json</a
           >
           <p class="schema-desc">
-            Oxagen CLI <code>settings.json</code> — model, apiUrl, env, permissions, hooks,
-            mcpServers, toolVisibility, and inline agents.
+            The full <code>settings.json</code> file the Oxagen CLI reads: model choice, API
+            URL, environment variables, tool permissions, lifecycle hooks, MCP servers, and
+            inline agents.
           </p>
         </li>
       </ul>

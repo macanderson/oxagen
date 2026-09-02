@@ -4,10 +4,9 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { eq, and, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const connectionListHandler: CapabilityHandler<typeof connectionList> = async (
-  input,
-  ctx,
-) => {
+export const connectionListHandler: CapabilityHandler<
+  typeof connectionList
+> = async (input, ctx) => {
   const rows = await withTenantDb((tx) => {
     const conditions = [
       eq(schema.sourceConnections.orgId, ctx.orgId),
@@ -18,7 +17,9 @@ export const connectionListHandler: CapabilityHandler<typeof connectionList> = a
       conditions.push(eq(schema.sourceConnections.status, input.status));
     }
     if (input.connectorId) {
-      conditions.push(eq(schema.sourceConnections.connectorId, input.connectorId));
+      conditions.push(
+        eq(schema.sourceConnections.connectorId, input.connectorId),
+      );
     }
     return tx
       .select({
@@ -50,7 +51,8 @@ export const connectionListHandler: CapabilityHandler<typeof connectionList> = a
     connections: rows.map((r) => ({
       ...r,
       lastSyncAt: r.lastSyncAt?.toISOString() ?? null,
-      healthStatus: (r.healthStatus as "healthy" | "degraded" | "errored") ?? "healthy",
+      healthStatus:
+        (r.healthStatus as "healthy" | "degraded" | "errored") ?? "healthy",
       lastPollAt: r.lastPollAt?.toISOString() ?? null,
       nextPollAt: r.nextPollAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),

@@ -19,10 +19,20 @@ export const connectionList = registerCapability({
   },
   input: z.object({
     status: z
-      .enum(["pending_setup", "connected", "paused", "error", "deleting", "deleted"])
+      .enum([
+        "pending_setup",
+        "connected",
+        "paused",
+        "error",
+        "deleting",
+        "deleted",
+      ])
       .optional()
       .describe("Filter by connection status"),
-    connectorId: z.string().optional().describe("Filter by connector type slug"),
+    connectorId: z
+      .string()
+      .optional()
+      .describe("Filter by connector type slug"),
   }),
   output: z.object({
     connections: z.array(

@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const workspaceModelSettingsRead = registerCapability({
   name: "get_model_settings",
   domain: "workspace",
-  description: "Read the workspace-level model defaults (text tier/model, image model, video model)",
+  description:
+    "Read the workspace-level model defaults (text tier/model, image model, video model)",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "docs", "mcp", "unit", "app"],
@@ -26,5 +27,9 @@ export const workspaceModelSettingsRead = registerCapability({
   }),
 });
 
-export type WorkspaceModelSettingsReadInput = z.output<typeof workspaceModelSettingsRead.input>;
-export type WorkspaceModelSettingsReadOutput = z.output<typeof workspaceModelSettingsRead.output>;
+export type WorkspaceModelSettingsReadInput = z.output<
+  typeof workspaceModelSettingsRead.input
+>;
+export type WorkspaceModelSettingsReadOutput = z.output<
+  typeof workspaceModelSettingsRead.output
+>;

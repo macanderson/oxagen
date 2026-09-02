@@ -50,7 +50,7 @@ function deQuote(raw: string | undefined, fallback: string): string {
 
 const DATABASE_URL = deQuote(
   process.env.DATABASE_URL,
-  "postgres://oxagen:oxagen@localhost:5432/oxagen",
+  "postgres://oxagen:oxagen@localhost:5433/oxagen",
 );
 
 const ORG_A_SLUG = "e2e-iso-org-a";

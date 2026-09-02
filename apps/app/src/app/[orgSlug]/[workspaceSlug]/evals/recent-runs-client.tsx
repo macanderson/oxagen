@@ -3,10 +3,10 @@
 /**
  * recent-runs-client.tsx — the "Recent runs" panel on the evals home.
  *
- * Runs are no longer a separate concept from datasets: the home surface shows
- * datasets AND the latest eval runs (with their results rolled up) together.
- * This panel is a compact table of the most recent runs — each row links to
- * the run detail page, the dataset cell links to the dataset detail page. A
+ * The home surface shows datasets AND the latest eval runs (with their results
+ * rolled up) together. This panel is a compact table of the most recent runs —
+ * each row links to the run detail page, the dataset cell links to the
+ * dataset detail page. A
  * small stat strip in the header gives at-a-glance totals derived from the
  * runs the RSC already fetched (no extra fetch).
  *

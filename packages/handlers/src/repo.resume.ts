@@ -17,7 +17,10 @@ import { logger } from "./logger";
  * — since that is when the Inngest poll cron will next pick the connection up.
  * Webhook / manual connections have no scheduled sync, so nextSyncAt is null.
  */
-export const repoResumeHandler: CapabilityHandler<typeof repoResume> = async (input, ctx) => {
+export const repoResumeHandler: CapabilityHandler<typeof repoResume> = async (
+  input,
+  ctx,
+) => {
   const now = new Date();
 
   const found = await withTenantDb(async (tx) => {
@@ -49,26 +52,44 @@ export const repoResumeHandler: CapabilityHandler<typeof repoResume> = async (in
 
     await tx
       .update(schema.sourceConnections)
-      .set({ status: "connected", updatedByUserId: ctx.userId ?? undefined, updatedAt: now })
+      .set({
+        status: "connected",
+        updatedByUserId: ctx.userId ?? undefined,
+        updatedAt: now,
+      })
       .where(eq(schema.sourceConnections.id, existing.id));
 
     return existing;
   });
 
   if (!found) {
-    logger.warn({ repoId: input.repoId, orgId: ctx.orgId }, "repo.resume: not found");
-    throw new HTTPException(404, { message: "Repository connection not found" });
+    logger.warn(
+      { repoId: input.repoId, orgId: ctx.orgId },
+      "repo.resume: not found",
+    );
+    throw new HTTPException(404, {
+      message: "Repository connection not found",
+    });
   }
 
   const deliveryConfig = (found.deliveryConfig ?? {}) as DeliveryConfig;
-  const syncMethod = deliveryConfig.syncMethod ?? found.deliveryMethod ?? "manual";
+  const syncMethod =
+    deliveryConfig.syncMethod ?? found.deliveryMethod ?? "manual";
   const nextSyncAt =
     syncMethod === "polling"
-      ? new Date(now.getTime() + (deliveryConfig.syncIntervalSeconds ?? 300) * 1000).toISOString()
+      ? new Date(
+          now.getTime() + (deliveryConfig.syncIntervalSeconds ?? 300) * 1000,
+        ).toISOString()
       : null;
 
   logger.info(
-    { repoId: input.repoId, connectionId: found.id, syncMethod, orgId: ctx.orgId, surface: ctx.surface },
+    {
+      repoId: input.repoId,
+      connectionId: found.id,
+      syncMethod,
+      orgId: ctx.orgId,
+      surface: ctx.surface,
+    },
     "repo.resume: resumed",
   );
 

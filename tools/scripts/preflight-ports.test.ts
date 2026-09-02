@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import net from "node:net";
-import { APP_PORTS, classifyStack, isPortInUse, inspectAppPorts, type AppPort } from "./lib/preflight-ports";
+import {
+  APP_PORTS,
+  classifyStack,
+  isPortInUse,
+  inspectAppPorts,
+  type AppPort,
+} from "./lib/preflight-ports";
 
 describe("classifyStack", () => {
   it("returns 'clean' when no app ports are bound", () => {
@@ -11,7 +17,8 @@ describe("classifyStack", () => {
     const bound = [...APP_PORTS];
     const result = classifyStack(bound);
     expect(result.status).toBe("running");
-    if (result.status === "running") expect(result.bound).toHaveLength(APP_PORTS.length);
+    if (result.status === "running")
+      expect(result.bound).toHaveLength(APP_PORTS.length);
   });
 
   it("returns 'partial' when only some app ports are bound, listing the free ones", () => {

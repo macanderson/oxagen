@@ -21,13 +21,20 @@ export interface LaunchWorkflowButtonProps {
   workspaceSlug: string;
 }
 
-export function LaunchWorkflowButton({ orgSlug, workspaceSlug }: LaunchWorkflowButtonProps) {
+export function LaunchWorkflowButton({
+  orgSlug,
+  workspaceSlug,
+}: LaunchWorkflowButtonProps) {
   const [open, setOpen] = useState(false);
   const { addSwarm } = useSwarmSessionStore(orgSlug, workspaceSlug);
 
   return (
     <>
-      <Button size="sm" onClick={() => setOpen(true)} data-testid="launch-workflow">
+      <Button
+        size="sm"
+        onClick={() => setOpen(true)}
+        data-testid="launch-workflow"
+      >
         <Play className="size-4" /> Launch
       </Button>
       <LaunchWorkflowDialog

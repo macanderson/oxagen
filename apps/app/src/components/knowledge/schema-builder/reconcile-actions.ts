@@ -3,7 +3,11 @@
 import { invoke } from "@oxagen/oxagen/kernel";
 import "@oxagen/handlers/register";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertWorkspaceMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertWorkspaceMember,
+} from "@/lib/resolve-org";
 
 /**
  * Server action: dispatch a schema reconciliation job for the given versionId.
@@ -44,10 +48,10 @@ export async function schemaReconcileDispatchAction(opts: {
       surface: "app" as const,
       messageId: null,
     },
-    // schema.reconcile.dispatch exposes surfaces ["api","mcp","cli"] — NOT
+    // dispatch_schema_reconcile exposes surfaces ["api","mcp","cli"] — NOT
     // "agent". The kernel matches the *contract* surface here, so we must pass a
     // surface the contract actually exposes; "api" mirrors the in-app proxy
-    // route (AGENT_SURFACE_CAPABILITIES only contains schema.delete).
+    // route (whose AGENT_SURFACE_CAPABILITIES set holds only delete_schema).
     { surface: "api" },
   );
   return result as { executionId: string };
@@ -89,7 +93,7 @@ export async function schemaReconcileStatusAction(
       surface: "app" as const,
       messageId: null,
     },
-    // schema.reconcile.status exposes surfaces ["api","mcp","cli"] — NOT "agent".
+    // get_reconcile_status exposes surfaces ["api","mcp","cli"] — NOT "agent".
     // Same reasoning as schemaReconcileDispatchAction above.
     { surface: "api" },
   );

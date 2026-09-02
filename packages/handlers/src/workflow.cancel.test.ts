@@ -70,7 +70,10 @@ describe("workflow.cancel handler", () => {
     mocks.runFindFirst.mockResolvedValueOnce(COMPLETED_RUN);
     // Guarded UPDATE flips no row for a terminal status.
     mocks.updateReturning.mockResolvedValueOnce([]);
-    const result = await workflowCancelHandler({ workflowId: "wfr-uuid-2" }, CTX);
+    const result = await workflowCancelHandler(
+      { workflowId: "wfr-uuid-2" },
+      CTX,
+    );
     expect(result.cancelled).toBe(false);
     expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
@@ -78,7 +81,10 @@ describe("workflow.cancel handler", () => {
   it("returns cancelled:false for already cancelled workflows", async () => {
     mocks.runFindFirst.mockResolvedValueOnce(CANCELLED_RUN);
     mocks.updateReturning.mockResolvedValueOnce([]);
-    const result = await workflowCancelHandler({ workflowId: "wfr-uuid-3" }, CTX);
+    const result = await workflowCancelHandler(
+      { workflowId: "wfr-uuid-3" },
+      CTX,
+    );
     expect(result.cancelled).toBe(false);
     expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
@@ -90,13 +96,19 @@ describe("workflow.cancel handler", () => {
     // overwriting the terminal state.
     mocks.runFindFirst.mockResolvedValueOnce(RUNNING_RUN);
     mocks.updateReturning.mockResolvedValueOnce([]);
-    const result = await workflowCancelHandler({ workflowId: "wfr-uuid-1" }, CTX);
+    const result = await workflowCancelHandler(
+      { workflowId: "wfr-uuid-1" },
+      CTX,
+    );
     expect(result.cancelled).toBe(false);
     expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
 
   it("sets status to cancelled and fires inngest event for running workflow", async () => {
-    const result = await workflowCancelHandler({ workflowId: "wfr-uuid-1" }, CTX);
+    const result = await workflowCancelHandler(
+      { workflowId: "wfr-uuid-1" },
+      CTX,
+    );
     expect(result.cancelled).toBe(true);
     expect(mocks.updateSet).toHaveBeenCalledWith(
       expect.objectContaining({ status: "cancelled" }),
@@ -114,7 +126,12 @@ describe("workflow.cancel handler", () => {
 
   it("sends the cancel event with the correct executionId", async () => {
     await workflowCancelHandler({ workflowId: "wfr-uuid-1" }, CTX);
-    const sendArg = mocks.inngestSend.mock.calls[0]![0] as Record<string, unknown>;
-    expect((sendArg.data as Record<string, unknown>).executionId).toBe(RUNNING_RUN.id);
+    const sendArg = mocks.inngestSend.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect((sendArg.data as Record<string, unknown>).executionId).toBe(
+      RUNNING_RUN.id,
+    );
   });
 });

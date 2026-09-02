@@ -22,8 +22,8 @@ import type { ModelMessage } from "@oxagen/ai";
 // to a text placeholder — without this bound, a long conversation with several
 // image turns would re-send every image on every turn, growing vision-token
 // cost (and prompt-hash/latency) unboundedly. Mirrors the stream route's
-// per-turn attachment cap philosophy (BodySchema `.max(8)`), just applied
-// across turns instead of within one.
+// per-turn attachment cap philosophy (BodySchema `attachments.max(16)`), just
+// applied across turns instead of within one.
 const RECENT_IMAGE_TURN_LIMIT = 2;
 
 /** One attachment ref as persisted in a user message's `metadata.attachments`

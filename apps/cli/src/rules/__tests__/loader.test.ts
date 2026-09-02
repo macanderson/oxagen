@@ -32,17 +32,29 @@ describe("loadRules", () => {
     const r = rules[0]!;
     expect(r.id).toBe("no-applied-migration");
     expect(r.description).toBe("Never edit an applied migration");
-    expect(r.guard).toEqual({ tool: "Edit", denyPathGlob: "packages/database/migrations/*-applied/**" });
+    expect(r.guard).toEqual({
+      tool: "Edit",
+      denyPathGlob: "packages/database/migrations/*-applied/**",
+    });
     expect(r.text).toContain("Add a new forward migration");
   });
 
   it("parses a bash command guard", () => {
-    writeRule(".oxagen/rules/no-force-push.md", "---\nguard-tool: Bash\nguard-deny-command: git push --force*\n---\nNever force-push.");
-    expect(load()[0]?.guard).toEqual({ tool: "Bash", denyCommandGlob: "git push --force*" });
+    writeRule(
+      ".oxagen/rules/no-force-push.md",
+      "---\nguard-tool: Bash\nguard-deny-command: git push --force*\n---\nNever force-push.",
+    );
+    expect(load()[0]?.guard).toEqual({
+      tool: "Bash",
+      denyCommandGlob: "git push --force*",
+    });
   });
 
   it("treats a rule with no guard frontmatter as prompt-only", () => {
-    writeRule(".oxagen/rules/style.md", "---\ndescription: d\n---\nMatch the surrounding code style.");
+    writeRule(
+      ".oxagen/rules/style.md",
+      "---\ndescription: d\n---\nMatch the surrounding code style.",
+    );
     expect(load()[0]?.guard).toBeUndefined();
   });
 

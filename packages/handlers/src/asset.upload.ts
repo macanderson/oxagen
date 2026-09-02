@@ -32,6 +32,15 @@ import {
  *  - Bare hostnames "localhost" and "metadata.google.internal"
  *
  * Throws an `Error` if any check fails.
+ *
+ * What this does NOT cover — it inspects the URL string only, so it is a first
+ * filter, not a complete SSRF boundary:
+ *  - A hostname that DNS resolves to a private address (rebinding) passes.
+ *  - A redirect from a public URL to a private one passes, because the caller's
+ *    `fetch` follows redirects and only the original URL is checked here.
+ *  - IPv4-mapped IPv6 literals such as `[::ffff:7f00:1]` are not recognised as
+ *    loopback.
+ * Closing those needs resolve-then-connect pinning at the fetch layer.
  */
 export function assertPublicHttpUrl(raw: string): void {
   let parsed: URL;
@@ -186,7 +195,10 @@ export const assetUploadHandler: CapabilityHandler<typeof assetUpload> = async (
   // Validate content type against the asset kind.
   const ext = assertAllowedAssetType(kind, contentType);
 
-  // Read the body and enforce the size limit.
+  // Buffer the whole body, then enforce the size limit. Note the ordering: the
+  // full response is already resident in memory by the time the limit is
+  // checked, so an oversized source still costs its bytes once. Enforcing
+  // before the allocation needs a streamed read that aborts at the ceiling.
   const limit = ASSET_LIMITS[kind];
   const buffer = await response.arrayBuffer();
   if (buffer.byteLength > limit) {

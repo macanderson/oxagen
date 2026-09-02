@@ -20,8 +20,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx(mocks.selectRows())),
-
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(makeTx(mocks.selectRows())),
   };
 });
 
@@ -108,7 +108,9 @@ describe("imageListHandler", () => {
       throw new Error("DB connection failed");
     });
 
-    await expect(imageListHandler({}, CTX)).rejects.toThrow("DB connection failed");
+    await expect(imageListHandler({}, CTX)).rejects.toThrow(
+      "DB connection failed",
+    );
   });
 
   it("throws when createdAt is null (non-nullable field returned as null)", async () => {

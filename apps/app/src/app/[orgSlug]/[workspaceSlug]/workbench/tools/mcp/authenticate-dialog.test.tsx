@@ -21,7 +21,10 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { AuthenticateDialog, type AuthenticateDialogProps } from "./authenticate-dialog";
+import {
+  AuthenticateDialog,
+  type AuthenticateDialogProps,
+} from "./authenticate-dialog";
 
 afterEach(cleanup);
 
@@ -59,7 +62,9 @@ describe("AuthenticateDialog", () => {
 
   it("renders an enabled 'Authenticate with <title>' button", () => {
     renderDialog();
-    const btn = screen.getByRole("button", { name: "Authenticate with Stripe" });
+    const btn = screen.getByRole("button", {
+      name: "Authenticate with Stripe",
+    });
     expect(btn).toBeInTheDocument();
     expect(btn).toBeEnabled();
     expect(btn).toHaveAttribute("data-testid", "mcp-authenticate-now");
@@ -68,7 +73,9 @@ describe("AuthenticateDialog", () => {
   it("uses the given serverTitle throughout", () => {
     renderDialog({ serverTitle: "E2E OAuth Server" });
     expect(
-      screen.getByRole("button", { name: "Authenticate with E2E OAuth Server" }),
+      screen.getByRole("button", {
+        name: "Authenticate with E2E OAuth Server",
+      }),
     ).toBeInTheDocument();
   });
 
@@ -86,7 +93,11 @@ describe("AuthenticateDialog", () => {
 
   it("renders nothing when open=false", () => {
     renderDialog({ open: false });
-    expect(screen.queryByTestId("mcp-authenticate-dialog")).not.toBeInTheDocument();
-    expect(screen.queryByText("Authentication required")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("mcp-authenticate-dialog"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Authentication required"),
+    ).not.toBeInTheDocument();
   });
 });

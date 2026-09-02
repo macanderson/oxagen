@@ -15,7 +15,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 vi.mock("./schema.versioning", () => ({
-  getOrCreateRegistry: (...args: unknown[]) => mocks.getOrCreateRegistry(...args),
+  getOrCreateRegistry: (...args: unknown[]) =>
+    mocks.getOrCreateRegistry(...args),
 }));
 
 vi.mock("./logger", () => ({
@@ -73,9 +74,11 @@ describe("schemaListHandler (@oxagen/handlers)", () => {
       draftVersionId: null,
     });
 
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => unknown) => {
-      return fn(makeTxWithSelects([], []));
-    });
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => unknown) => {
+        return fn(makeTxWithSelects([], []));
+      },
+    );
 
     const result = await schemaListHandler({}, CTX);
     expect(result).toEqual({ schemas: [] });
@@ -88,14 +91,24 @@ describe("schemaListHandler (@oxagen/handlers)", () => {
       draftVersionId: null,
     });
 
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => unknown) => {
-      return fn(
-        makeTxWithSelects(
-          [{ id: "schema_1", name: "Person", displayName: "Person", source: "user", connectorId: null }],
-          [], // no activation rows → default enabled=true
-        ),
-      );
-    });
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => unknown) => {
+        return fn(
+          makeTxWithSelects(
+            [
+              {
+                id: "schema_1",
+                name: "Person",
+                displayName: "Person",
+                source: "user",
+                connectorId: null,
+              },
+            ],
+            [], // no activation rows → default enabled=true
+          ),
+        );
+      },
+    );
 
     const result = await schemaListHandler({}, CTX);
     expect(result.schemas).toHaveLength(1);
@@ -116,14 +129,24 @@ describe("schemaListHandler (@oxagen/handlers)", () => {
       draftVersionId: null,
     });
 
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => unknown) => {
-      return fn(
-        makeTxWithSelects(
-          [{ id: "schema_1", name: "Company", displayName: "Company", source: "recommended", connectorId: null }],
-          [{ schemaName: "Company", enabled: false }],
-        ),
-      );
-    });
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => unknown) => {
+        return fn(
+          makeTxWithSelects(
+            [
+              {
+                id: "schema_1",
+                name: "Company",
+                displayName: "Company",
+                source: "recommended",
+                connectorId: null,
+              },
+            ],
+            [{ schemaName: "Company", enabled: false }],
+          ),
+        );
+      },
+    );
 
     const result = await schemaListHandler({}, CTX);
     expect(result.schemas).toHaveLength(1);
@@ -138,14 +161,24 @@ describe("schemaListHandler (@oxagen/handlers)", () => {
       draftVersionId: "draft_internal_1",
     });
 
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => unknown) => {
-      return fn(
-        makeTxWithSelects(
-          [{ id: "schema_1", name: "Repo", displayName: "Repository", source: "connector", connectorId: "conn_1" }],
-          [{ schemaName: "Repo", enabled: true }],
-        ),
-      );
-    });
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => unknown) => {
+        return fn(
+          makeTxWithSelects(
+            [
+              {
+                id: "schema_1",
+                name: "Repo",
+                displayName: "Repository",
+                source: "connector",
+                connectorId: "conn_1",
+              },
+            ],
+            [{ schemaName: "Repo", enabled: true }],
+          ),
+        );
+      },
+    );
 
     const result = await schemaListHandler({}, CTX);
     expect(result.schemas).toHaveLength(1);
@@ -162,25 +195,47 @@ describe("schemaListHandler (@oxagen/handlers)", () => {
       draftVersionId: null,
     });
 
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => unknown) => {
-      return fn(
-        makeTxWithSelects(
-          [
-            { id: "s1", name: "Person", displayName: "Person", source: "user", connectorId: null },
-            { id: "s2", name: "Company", displayName: "Company", source: "recommended", connectorId: null },
-            { id: "s3", name: "Repo", displayName: "Repository", source: "connector", connectorId: "conn_1" },
-          ],
-          // Only Person has an explicit disabled activation; Company and Repo default to enabled
-          [{ schemaName: "Person", enabled: false }],
-        ),
-      );
-    });
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => unknown) => {
+        return fn(
+          makeTxWithSelects(
+            [
+              {
+                id: "s1",
+                name: "Person",
+                displayName: "Person",
+                source: "user",
+                connectorId: null,
+              },
+              {
+                id: "s2",
+                name: "Company",
+                displayName: "Company",
+                source: "recommended",
+                connectorId: null,
+              },
+              {
+                id: "s3",
+                name: "Repo",
+                displayName: "Repository",
+                source: "connector",
+                connectorId: "conn_1",
+              },
+            ],
+            // Only Person has an explicit disabled activation; Company and Repo default to enabled
+            [{ schemaName: "Person", enabled: false }],
+          ),
+        );
+      },
+    );
 
     const result = await schemaListHandler({}, CTX);
     expect(result.schemas).toHaveLength(3);
 
     const personSchema = result.schemas.find((s) => s.schemaName === "Person");
-    const companySchema = result.schemas.find((s) => s.schemaName === "Company");
+    const companySchema = result.schemas.find(
+      (s) => s.schemaName === "Company",
+    );
     const repoSchema = result.schemas.find((s) => s.schemaName === "Repo");
 
     expect(personSchema?.enabled).toBe(false);
@@ -196,9 +251,11 @@ describe("schemaListHandler (@oxagen/handlers)", () => {
       draftVersionId: "draft_internal_1",
     });
 
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => unknown) => {
-      return fn(makeTxWithSelects([], []));
-    });
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => unknown) => {
+        return fn(makeTxWithSelects([], []));
+      },
+    );
 
     const result = await schemaListHandler({}, CTX);
     expect(result).toEqual({ schemas: [] });
@@ -213,14 +270,24 @@ describe("schemaListHandler (@oxagen/handlers)", () => {
       draftVersionId: "draft_internal_1",
     });
 
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => unknown) => {
-      return fn(
-        makeTxWithSelects(
-          [{ id: "schema_1", name: "DraftSchema", displayName: "Draft Schema", source: "user", connectorId: null }],
-          [],
-        ),
-      );
-    });
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => unknown) => {
+        return fn(
+          makeTxWithSelects(
+            [
+              {
+                id: "schema_1",
+                name: "DraftSchema",
+                displayName: "Draft Schema",
+                source: "user",
+                connectorId: null,
+              },
+            ],
+            [],
+          ),
+        );
+      },
+    );
 
     const result = await schemaListHandler({}, CTX);
     expect(result.schemas).toHaveLength(1);
@@ -235,15 +302,17 @@ describe("schemaListHandler (@oxagen/handlers)", () => {
       draftVersionId: null,
     });
 
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => unknown) => {
-      return fn(
-        makeTxWithSelects(
-          // connectorId field is undefined (no field) — should be coerced to null
-          [{ id: "s1", name: "Thing", displayName: "Thing", source: "user" }],
-          [],
-        ),
-      );
-    });
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => unknown) => {
+        return fn(
+          makeTxWithSelects(
+            // connectorId field is undefined (no field) — should be coerced to null
+            [{ id: "s1", name: "Thing", displayName: "Thing", source: "user" }],
+            [],
+          ),
+        );
+      },
+    );
 
     const result = await schemaListHandler({}, CTX);
     expect(result.schemas).toHaveLength(1);

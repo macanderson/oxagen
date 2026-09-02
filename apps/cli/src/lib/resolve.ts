@@ -16,7 +16,10 @@ interface KeySummary {
 
 export async function resolveEnvironmentId(slugOrId: string): Promise<string> {
   if (slugOrId.startsWith("env_")) return slugOrId;
-  const { environments } = await apiPost<{ environments: EnvSummary[] }>("environment/list", {});
+  const { environments } = await apiPost<{ environments: EnvSummary[] }>(
+    "environment/list",
+    {},
+  );
   const match = environments.find((e) => e.slug === slugOrId.toLowerCase());
   if (!match) {
     process.stderr.write(`No environment with slug '${slugOrId}'.\n`);

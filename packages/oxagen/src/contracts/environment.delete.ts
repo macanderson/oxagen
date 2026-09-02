@@ -4,10 +4,15 @@ import { registerCapability } from "../registry";
 export const environmentDelete = registerCapability({
   name: "delete_environment",
   domain: "environment",
-  description: "Soft-delete a workspace environment. The default environment cannot be deleted — promote another first.",
+  description:
+    "Soft-delete a workspace environment. The default environment cannot be deleted — promote another first.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  agent: { requiresApproval: false, riskLevel: "medium", category: "configuration" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "medium",
+    category: "configuration",
+  },
   layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   sensitivity: "medium",

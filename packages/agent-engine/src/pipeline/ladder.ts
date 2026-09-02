@@ -71,7 +71,9 @@ export interface LadderConfig {
  *
  * Never throws; invalid inputs silently use defaults.
  */
-export function resolveLadderConfig(env: Record<string, string | undefined>): LadderConfig {
+export function resolveLadderConfig(
+  env: Record<string, string | undefined>,
+): LadderConfig {
   let diffBudget = 120;
   let maxRung: LadderRung = 3;
 

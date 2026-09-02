@@ -208,7 +208,7 @@ export async function createAgentAction(
   } catch (err) {
     logger.error(
       { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, slug },
-      "studio.agents: createAgentAction failed",
+      "workbench.agents: createAgentAction failed",
     );
     return {
       ok: false,
@@ -262,7 +262,7 @@ export async function updateAgentAction(
   } catch (err) {
     logger.error(
       { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, agentId },
-      "studio.agents: updateAgentAction failed",
+      "workbench.agents: updateAgentAction failed",
     );
     return {
       ok: false,
@@ -298,7 +298,7 @@ export async function publishAgentAction(
   } catch (err) {
     logger.error(
       { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, agentId },
-      "studio.agents: publishAgentAction failed",
+      "workbench.agents: publishAgentAction failed",
     );
     return {
       ok: false,
@@ -341,7 +341,7 @@ export async function deployAgentAction(
         agentId,
         deploymentStatus,
       },
-      "studio.agents: deployAgentAction failed",
+      "workbench.agents: deployAgentAction failed",
     );
     return {
       ok: false,
@@ -400,7 +400,7 @@ export async function suggestAgentAction(
   } catch (err) {
     logger.error(
       { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-      "studio.agents: suggestAgentAction failed",
+      "workbench.agents: suggestAgentAction failed",
     );
     return {
       ok: false,
@@ -467,7 +467,7 @@ export async function assignAgentRoleAction(
         agentId,
         roleName,
       },
-      "studio.agents: assignAgentRoleAction failed",
+      "workbench.agents: assignAgentRoleAction failed",
     );
     if (isCeilingError(err)) {
       return {

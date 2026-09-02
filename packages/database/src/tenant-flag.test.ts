@@ -14,11 +14,13 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // ---------------------------------------------------------------------------
 
 const requireEnvMock = vi.hoisted(() =>
-  vi.fn((
-    _keys: readonly string[],
-  ): { TENANT_RLS_ENFORCEMENT_ENABLED: boolean } => ({
-    TENANT_RLS_ENFORCEMENT_ENABLED: false,
-  })),
+  vi.fn(
+    (
+      _keys: readonly string[],
+    ): { TENANT_RLS_ENFORCEMENT_ENABLED: boolean } => ({
+      TENANT_RLS_ENFORCEMENT_ENABLED: false,
+    }),
+  ),
 );
 
 vi.mock("@oxagen/config/env", async (importOriginal) => {
@@ -38,12 +40,16 @@ beforeEach(() => {
 
 describe("rlsEnforced", () => {
   it("returns true when requireEnv returns true (mirrors 'true' string transform)", () => {
-    requireEnvMock.mockReturnValueOnce({ TENANT_RLS_ENFORCEMENT_ENABLED: true });
+    requireEnvMock.mockReturnValueOnce({
+      TENANT_RLS_ENFORCEMENT_ENABLED: true,
+    });
     expect(rlsEnforced()).toBe(true);
   });
 
   it("returns false when requireEnv returns false (mirrors undefined/missing transform)", () => {
-    requireEnvMock.mockReturnValueOnce({ TENANT_RLS_ENFORCEMENT_ENABLED: false });
+    requireEnvMock.mockReturnValueOnce({
+      TENANT_RLS_ENFORCEMENT_ENABLED: false,
+    });
     expect(rlsEnforced()).toBe(false);
   });
 
@@ -61,10 +67,14 @@ describe("rlsEnforced", () => {
   });
 
   it("returns a boolean (not a string, not undefined)", () => {
-    requireEnvMock.mockReturnValueOnce({ TENANT_RLS_ENFORCEMENT_ENABLED: true });
+    requireEnvMock.mockReturnValueOnce({
+      TENANT_RLS_ENFORCEMENT_ENABLED: true,
+    });
     expect(rlsEnforced()).toBeTypeOf("boolean");
 
-    requireEnvMock.mockReturnValueOnce({ TENANT_RLS_ENFORCEMENT_ENABLED: false });
+    requireEnvMock.mockReturnValueOnce({
+      TENANT_RLS_ENFORCEMENT_ENABLED: false,
+    });
     expect(rlsEnforced()).toBeTypeOf("boolean");
   });
 });

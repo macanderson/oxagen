@@ -26,7 +26,12 @@ export const resellerPricePlanCreateFields = {
   currency: z.string().length(3).toLowerCase().default("usd"),
 };
 
-/** Enforce that the chosen mode carries its required rate and not the other's. */
+/**
+ * Enforce that the chosen mode carries its own required rate: `markup` needs
+ * `markupBps`, `per_unit` needs `unitPriceCents`. Supplying the *other* mode's
+ * rate as well is not rejected here — the handler ignores it and stores null
+ * for the unused column.
+ */
 function refinePricingMode<
   T extends {
     pricingMode: z.output<typeof resellerPricingModeSchema>;

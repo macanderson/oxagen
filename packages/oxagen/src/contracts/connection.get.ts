@@ -18,7 +18,10 @@ export const connectionGet = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    connectionId: z.string().min(1).describe("Public ID or internal UUID of the connection"),
+    connectionId: z
+      .string()
+      .min(1)
+      .describe("Public ID or internal UUID of the connection"),
   }),
   output: z.object({
     id: z.string(),

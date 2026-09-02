@@ -7,7 +7,10 @@
  * parsing contract the shim depends on.
  */
 import { describe, it, expect } from "vitest";
-import type { LanguageModelV3CallOptions, LanguageModelV3StreamPart } from "@ai-sdk/provider";
+import type {
+  LanguageModelV3CallOptions,
+  LanguageModelV3StreamPart,
+} from "@ai-sdk/provider";
 import {
   createOnDeviceLanguageModel,
   flattenPrompt,
@@ -66,7 +69,8 @@ describe("parseModelText", () => {
   });
 
   it("parses a fenced ```json tool_call block", () => {
-    const raw = '```json\n{ "tool_call": { "name": "read_file", "arguments": { "path": "a.ts" } } }\n```';
+    const raw =
+      '```json\n{ "tool_call": { "name": "read_file", "arguments": { "path": "a.ts" } } }\n```';
     const r = parseModelText(raw);
     expect(r.toolCalls).toHaveLength(1);
     expect(r.toolCalls[0]?.name).toBe("read_file");
@@ -75,7 +79,9 @@ describe("parseModelText", () => {
   });
 
   it("parses a bare top-level JSON object with name+arguments", () => {
-    const r = parseModelText('{ "name": "read_file", "arguments": { "path": "b.ts" } }');
+    const r = parseModelText(
+      '{ "name": "read_file", "arguments": { "path": "b.ts" } }',
+    );
     expect(r.toolCalls).toHaveLength(1);
     expect(r.toolCalls[0]?.name).toBe("read_file");
   });
@@ -98,7 +104,12 @@ describe("flattenPrompt", () => {
         role: "assistant",
         content: [
           { type: "text", text: "calling a tool" },
-          { type: "tool-call", toolCallId: "1", toolName: "read_file", input: { path: "a" } },
+          {
+            type: "tool-call",
+            toolCallId: "1",
+            toolName: "read_file",
+            input: { path: "a" },
+          },
         ],
       },
       {
@@ -155,7 +166,12 @@ describe("createOnDeviceLanguageModel — doGenerate", () => {
     const res = await model.doGenerate(baseOptions({ tools: TOOLS }));
     expect(res.finishReason.unified).toBe("tool-calls");
     expect(res.content).toEqual([
-      { type: "tool-call", toolCallId: "call-1", toolName: "read_file", input: '{"path":"a.ts"}' },
+      {
+        type: "tool-call",
+        toolCallId: "call-1",
+        toolName: "read_file",
+        input: '{"path":"a.ts"}',
+      },
     ]);
   });
 
@@ -192,7 +208,9 @@ describe("createOnDeviceLanguageModel — doStream", () => {
     expect(types).toContain("text-end");
     expect(types.at(-1)).toBe("finish");
     const delta = parts.find((p) => p.type === "text-delta");
-    expect(delta && "delta" in delta ? delta.delta : "").toBe("streamed answer");
+    expect(delta && "delta" in delta ? delta.delta : "").toBe(
+      "streamed answer",
+    );
   });
 
   it("replays a tool call as tool-input + tool-call parts", async () => {
@@ -214,8 +232,8 @@ describe("createOnDeviceLanguageModel — doStream", () => {
     expect(types).toContain("tool-call");
     const finish = parts.at(-1);
     expect(finish?.type).toBe("finish");
-    expect(finish && "finishReason" in finish ? finish.finishReason.unified : "").toBe(
-      "tool-calls",
-    );
+    expect(
+      finish && "finishReason" in finish ? finish.finishReason.unified : "",
+    ).toBe("tool-calls");
   });
 });

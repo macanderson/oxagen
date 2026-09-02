@@ -1,7 +1,10 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import type { CapabilityContext } from "../types";
 import { getInngestClient } from "../dispatch/inngest-client";
-import type { AgentTaskBackgroundStartInput, AgentTaskBackgroundStartOutput } from "@oxagen/oxagen/contracts/agent.background_task.start";
+import type {
+  AgentTaskBackgroundStartInput,
+  AgentTaskBackgroundStartOutput,
+} from "@oxagen/oxagen/contracts/agent.background_task.start";
 
 export type { AgentTaskBackgroundStartInput, AgentTaskBackgroundStartOutput };
 

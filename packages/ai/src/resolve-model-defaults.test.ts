@@ -28,7 +28,10 @@ describe("resolveModelDefaults", () => {
   });
 
   it("returns all null when both user and workspace have null prefs (but exist)", () => {
-    const result = resolveModelDefaults({ user: nullPrefs, workspace: nullPrefs });
+    const result = resolveModelDefaults({
+      user: nullPrefs,
+      workspace: nullPrefs,
+    });
     expect(result.text.tier).toBeNull();
     expect(result.text.model).toBeNull();
     expect(result.image.model).toBeNull();

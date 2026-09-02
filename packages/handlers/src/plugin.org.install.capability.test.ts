@@ -68,16 +68,17 @@ const hiddenManifest = {
 /** Mock the single withTenantDb upsert call for capability installs. */
 function mockCapabilityUpsert(returnId?: string) {
   const id = returnId ?? "porg-new-listing";
-  mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      insert: () => ({
-        values: () => ({
-          onConflictDoUpdate: () => ({
-            returning: () => Promise.resolve([{ id }]),
+  mocks.withTenantDb.mockImplementationOnce(
+    async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        insert: () => ({
+          values: () => ({
+            onConflictDoUpdate: () => ({
+              returning: () => Promise.resolve([{ id }]),
+            }),
           }),
         }),
       }),
-    }),
   );
 }
 
@@ -102,19 +103,21 @@ function mockCustomUpsert(returnId?: string) {
   // First: icon lookup (non-fatal, returns null → no catalog entry).
   mockIconLookup();
   // Second: the actual upsert.
-  mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      insert: () => ({
-        values: (vals: Record<string, unknown>) => {
-          captured.values = vals;
-          return {
-            onConflictDoUpdate: () => ({
-              returning: () => Promise.resolve([{ id, authKind: vals.authKind }]),
-            }),
-          };
-        },
+  mocks.withTenantDb.mockImplementationOnce(
+    async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        insert: () => ({
+          values: (vals: Record<string, unknown>) => {
+            captured.values = vals;
+            return {
+              onConflictDoUpdate: () => ({
+                returning: () =>
+                  Promise.resolve([{ id, authKind: vals.authKind }]),
+              }),
+            };
+          },
+        }),
       }),
-    }),
   );
   return captured;
 }
@@ -131,7 +134,10 @@ describe("installOne — agent_capability path", () => {
 
   it("happy path: inserts correct row and returns orgListingId + authKind", async () => {
     mockCapabilityUpsert("porg-abc123");
-    const res = await installOne(ctx, { pluginType: "agent_capability", pluginId: "oxagen/media-video" });
+    const res = await installOne(ctx, {
+      pluginType: "agent_capability",
+      pluginId: "oxagen/media-video",
+    });
     expect(res).toEqual({ id: "porg-abc123", authKind: "none" });
     expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
   });
@@ -168,28 +174,40 @@ describe("installOne — agent_capability path", () => {
   it("throws when pluginId is not in the registry", async () => {
     mocks.getOxagenPlugin.mockReturnValue(undefined);
     await expect(
-      installOne(ctx, { pluginType: "agent_capability", pluginId: "oxagen/nonexistent" }),
+      installOne(ctx, {
+        pluginType: "agent_capability",
+        pluginId: "oxagen/nonexistent",
+      }),
     ).rejects.toThrow("Unknown capability plugin");
   });
 
   it("throws when plugin visibility is hidden", async () => {
     mocks.getOxagenPlugin.mockReturnValue(hiddenManifest);
     await expect(
-      installOne(ctx, { pluginType: "agent_capability", pluginId: "oxagen/hidden-plugin" }),
+      installOne(ctx, {
+        pluginType: "agent_capability",
+        pluginId: "oxagen/hidden-plugin",
+      }),
     ).rejects.toThrow("not publicly installable");
   });
 
   it("is idempotent — re-install returns the same listing id", async () => {
     // onConflictDoUpdate returns the existing row's id
     mockCapabilityUpsert("porg-existing-id");
-    const res = await installOne(ctx, { pluginType: "agent_capability", pluginId: "oxagen/media-video" });
+    const res = await installOne(ctx, {
+      pluginType: "agent_capability",
+      pluginId: "oxagen/media-video",
+    });
     expect(res.id).toBe("porg-existing-id");
   });
 
   it("does NOT hit the denylist — no denylist lookup is performed", async () => {
     // Only one withTenantDb call (the upsert) — no denylist query.
     mockCapabilityUpsert("porg-no-denylist");
-    await installOne(ctx, { pluginType: "agent_capability", pluginId: "oxagen/media-video" });
+    await installOne(ctx, {
+      pluginType: "agent_capability",
+      pluginId: "oxagen/media-video",
+    });
     expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
   });
 
@@ -210,7 +228,10 @@ describe("installOne — agent_capability path", () => {
   it("throws when workspaceId is missing from ctx", async () => {
     const ctxNoWs = { ...ctx, workspaceId: null } as unknown as typeof ctx;
     await expect(
-      installOne(ctxNoWs, { pluginType: "agent_capability", pluginId: "oxagen/media-video" }),
+      installOne(ctxNoWs, {
+        pluginType: "agent_capability",
+        pluginId: "oxagen/media-video",
+      }),
     ).rejects.toThrow("workspaceId is required");
   });
 });
@@ -222,9 +243,9 @@ describe("installOne — custom mcp_server path", () => {
   });
 
   it("throws when custom is missing for non-capability types", async () => {
-    await expect(
-      installOne(ctx, { pluginType: "mcp_server" }),
-    ).rejects.toThrow("custom is required");
+    await expect(installOne(ctx, { pluginType: "mcp_server" })).rejects.toThrow(
+      "custom is required",
+    );
   });
 
   it("happy path: inserts correct row and returns orgListingId + authKind", async () => {
@@ -263,10 +284,15 @@ describe("installOne — OAuth detection probe", () => {
     mocks.detectOAuthProtected.mockResolvedValue(true);
     const captured = mockCustomUpsert("porg-oauth-upgraded");
 
-    const res = await installOne(ctx, { pluginType: "mcp_server", custom: customNone });
+    const res = await installOne(ctx, {
+      pluginType: "mcp_server",
+      custom: customNone,
+    });
 
     expect(mocks.detectOAuthProtected).toHaveBeenCalledTimes(1);
-    expect(mocks.detectOAuthProtected).toHaveBeenCalledWith("https://mcp.stripe.com");
+    expect(mocks.detectOAuthProtected).toHaveBeenCalledWith(
+      "https://mcp.stripe.com",
+    );
     // The inserted row carries the upgraded kind…
     expect(captured.values).not.toBeNull();
     expect(captured.values!.authKind).toBe("oauth");
@@ -278,7 +304,10 @@ describe("installOne — OAuth detection probe", () => {
     mocks.detectOAuthProtected.mockResolvedValue(true);
     const captured = mockCustomUpsert("porg-integration-oauth");
 
-    const res = await installOne(ctx, { pluginType: "integration", custom: customNone });
+    const res = await installOne(ctx, {
+      pluginType: "integration",
+      custom: customNone,
+    });
 
     expect(mocks.detectOAuthProtected).toHaveBeenCalledTimes(1);
     expect(captured.values!.authKind).toBe("oauth");
@@ -318,7 +347,10 @@ describe("installOne — OAuth detection probe", () => {
     mocks.detectOAuthProtected.mockResolvedValue(false);
     const captured = mockCustomUpsert("porg-still-none");
 
-    const res = await installOne(ctx, { pluginType: "mcp_server", custom: customNone });
+    const res = await installOne(ctx, {
+      pluginType: "mcp_server",
+      custom: customNone,
+    });
 
     expect(mocks.detectOAuthProtected).toHaveBeenCalledTimes(1);
     expect(captured.values!.authKind).toBe("none");
@@ -352,19 +384,24 @@ describe("installOne — OAuth detection probe", () => {
     // must report what the DB returned, not what this call computed.
     mocks.detectOAuthProtected.mockResolvedValue(false);
     mockIconLookup();
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({
-        insert: () => ({
-          values: () => ({
-            onConflictDoUpdate: () => ({
-              returning: () => Promise.resolve([{ id: "porg-existing", authKind: "oauth" }]),
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          insert: () => ({
+            values: () => ({
+              onConflictDoUpdate: () => ({
+                returning: () =>
+                  Promise.resolve([{ id: "porg-existing", authKind: "oauth" }]),
+              }),
             }),
           }),
         }),
-      }),
     );
 
-    const res = await installOne(ctx, { pluginType: "mcp_server", custom: customNone });
+    const res = await installOne(ctx, {
+      pluginType: "mcp_server",
+      custom: customNone,
+    });
     expect(res).toEqual({ id: "porg-existing", authKind: "oauth" });
   });
 });
@@ -393,7 +430,10 @@ describe("plugin.org.install handler — audit event", () => {
     );
     // The handler exposes the effective auth kind so the app can immediately
     // prompt the user to authenticate an OAuth-protected install.
-    expect(out).toEqual({ orgListingId: "porg-handler-shape", authKind: "oauth" });
+    expect(out).toEqual({
+      orgListingId: "porg-handler-shape",
+      authKind: "oauth",
+    });
   });
 
   it("emits plugin.installed on success with workspace scope (SOC2 audit trail)", async () => {
@@ -421,7 +461,10 @@ describe("plugin.org.install handler — audit event", () => {
   it("does NOT emit an audit event when install fails", async () => {
     mocks.getOxagenPlugin.mockReturnValue(undefined);
     await expect(
-      handler({ pluginType: "agent_capability", pluginId: "oxagen/nonexistent" }, ctx),
+      handler(
+        { pluginType: "agent_capability", pluginId: "oxagen/nonexistent" },
+        ctx,
+      ),
     ).rejects.toThrow("Unknown capability plugin");
     expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
   });

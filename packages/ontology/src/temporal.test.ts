@@ -15,7 +15,9 @@ import {
 describe("edgeValidityOnCreateSet", () => {
   it("stamps validFrom (with now fallback), open bounds, and recordedAt=now", () => {
     const frag = edgeValidityOnCreateSet("r");
-    expect(frag).toContain("r.validFrom = coalesce(datetime($validFrom), datetime())");
+    expect(frag).toContain(
+      "r.validFrom = coalesce(datetime($validFrom), datetime())",
+    );
     expect(frag).toContain("r.validTo = null");
     expect(frag).toContain("r.recordedAt = datetime()");
     expect(frag).toContain("r.invalidatedAt = null");
@@ -29,14 +31,18 @@ describe("edgeValidityOnCreateSet", () => {
   });
 
   it("rejects an unsafe variable name", () => {
-    expect(() => edgeValidityOnCreateSet("r; DROP")).toThrow(/unsafe Cypher variable/);
+    expect(() => edgeValidityOnCreateSet("r; DROP")).toThrow(
+      /unsafe Cypher variable/,
+    );
   });
 });
 
 describe("edgeValidityOnMatchSet", () => {
   it("preserves lower bounds and reopens upper bounds on re-assertion", () => {
     const frag = edgeValidityOnMatchSet("r");
-    expect(frag).toContain("r.validFrom = coalesce(r.validFrom, datetime($validFrom), datetime())");
+    expect(frag).toContain(
+      "r.validFrom = coalesce(r.validFrom, datetime($validFrom), datetime())",
+    );
     expect(frag).toContain("r.recordedAt = coalesce(r.recordedAt, datetime())");
     expect(frag).toContain("r.validTo = null");
     expect(frag).toContain("r.invalidatedAt = null");
@@ -46,12 +52,18 @@ describe("edgeValidityOnMatchSet", () => {
 describe("edgeCloseOnSupersedeSet / edgeOpenPredicate", () => {
   it("closes both axes idempotently via coalesce", () => {
     const frag = edgeCloseOnSupersedeSet("old");
-    expect(frag).toContain("old.validTo = coalesce(old.validTo, datetime($closedAt))");
-    expect(frag).toContain("old.invalidatedAt = coalesce(old.invalidatedAt, datetime($closedAt))");
+    expect(frag).toContain(
+      "old.validTo = coalesce(old.validTo, datetime($closedAt))",
+    );
+    expect(frag).toContain(
+      "old.invalidatedAt = coalesce(old.invalidatedAt, datetime($closedAt))",
+    );
   });
 
   it("open predicate selects only unclosed edges", () => {
-    expect(edgeOpenPredicate("old")).toBe("old.validTo IS NULL AND old.invalidatedAt IS NULL");
+    expect(edgeOpenPredicate("old")).toBe(
+      "old.validTo IS NULL AND old.invalidatedAt IS NULL",
+    );
   });
 });
 
@@ -64,7 +76,9 @@ describe("edgeValidityParams", () => {
 
   it("normalises a Date", () => {
     const d = new Date("2024-06-15T12:00:00.000Z");
-    expect(edgeValidityParams(d)).toEqual({ validFrom: "2024-06-15T12:00:00.000Z" });
+    expect(edgeValidityParams(d)).toEqual({
+      validFrom: "2024-06-15T12:00:00.000Z",
+    });
   });
 
   it("returns null when observed time is unknown (Cypher falls back to now)", () => {
@@ -94,13 +108,25 @@ describe("buildValidityFilter", () => {
     const before = Date.now();
     const { clause, params } = buildValidityFilter("r");
     // Valid-time bounds.
-    expect(clause).toContain("(r.validFrom IS NULL OR r.validFrom <= datetime($asOf))");
-    expect(clause).toContain("(r.validTo IS NULL OR r.validTo > datetime($asOf))");
+    expect(clause).toContain(
+      "(r.validFrom IS NULL OR r.validFrom <= datetime($asOf))",
+    );
+    expect(clause).toContain(
+      "(r.validTo IS NULL OR r.validTo > datetime($asOf))",
+    );
     // Transaction-time bounds.
-    expect(clause).toContain("(r.recordedAt IS NULL OR r.recordedAt <= datetime($asKnownAt))");
-    expect(clause).toContain("(r.invalidatedAt IS NULL OR r.invalidatedAt > datetime($asKnownAt))");
-    expect(new Date(params.asOf).getTime()).toBeGreaterThanOrEqual(before - 1000);
-    expect(new Date(params.asKnownAt).getTime()).toBeGreaterThanOrEqual(before - 1000);
+    expect(clause).toContain(
+      "(r.recordedAt IS NULL OR r.recordedAt <= datetime($asKnownAt))",
+    );
+    expect(clause).toContain(
+      "(r.invalidatedAt IS NULL OR r.invalidatedAt > datetime($asKnownAt))",
+    );
+    expect(new Date(params.asOf).getTime()).toBeGreaterThanOrEqual(
+      before - 1000,
+    );
+    expect(new Date(params.asKnownAt).getTime()).toBeGreaterThanOrEqual(
+      before - 1000,
+    );
   });
 
   it("threads explicit asOf / asKnownAt through as params", () => {
@@ -122,7 +148,9 @@ describe("buildValidityFilter", () => {
   });
 
   it("rejects an unsafe variable name", () => {
-    expect(() => buildValidityFilter("rel)--")).toThrow(/unsafe Cypher variable/);
+    expect(() => buildValidityFilter("rel)--")).toThrow(
+      /unsafe Cypher variable/,
+    );
   });
 });
 
@@ -130,7 +158,9 @@ describe("edgeValidityReturn / readEdgeValidity", () => {
   it("projects prefixed ISO columns and reads them back", () => {
     const projection = edgeValidityReturn("r", "edge");
     expect(projection).toContain("toString(r.validFrom) AS edgevalidFrom");
-    expect(projection).toContain("toString(r.invalidatedAt) AS edgeinvalidatedAt");
+    expect(projection).toContain(
+      "toString(r.invalidatedAt) AS edgeinvalidatedAt",
+    );
 
     const row: Record<string, unknown> = {
       edgevalidFrom: "2024-01-01T00:00:00.000Z",
@@ -147,8 +177,16 @@ describe("edgeValidityReturn / readEdgeValidity", () => {
     });
   });
 
+  it("rejects an unsafe column-alias prefix", () => {
+    expect(() => edgeValidityReturn("r", "x, n.secret AS leak, y")).toThrow(
+      /unsafe Cypher column-alias prefix/,
+    );
+  });
+
   it("treats empty strings and missing columns as null", () => {
-    const validity = readEdgeValidity((k) => (k === "validFrom" ? "" : undefined));
+    const validity = readEdgeValidity((k) =>
+      k === "validFrom" ? "" : undefined,
+    );
     expect(validity).toEqual({
       validFrom: null,
       validTo: null,

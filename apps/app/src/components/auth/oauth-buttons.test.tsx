@@ -35,29 +35,48 @@ beforeEach(() => {
 describe("OAuthButtons", () => {
   it("renders 'Continue with Google' button", () => {
     render(<OAuthButtons />);
-    expect(screen.getByRole("button", { name: /continue with google/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /continue with google/i }),
+    ).toBeInTheDocument();
   });
 
   it("renders 'Continue with GitHub' button", () => {
     render(<OAuthButtons />);
-    expect(screen.getByRole("button", { name: /continue with github/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /continue with github/i }),
+    ).toBeInTheDocument();
   });
 
   it("clicking Google calls signIn.social with provider='google' and default callbackURL='/'", async () => {
     render(<OAuthButtons />);
-    await userEvent.click(screen.getByRole("button", { name: /continue with google/i }));
-    expect(signInSocialMock).toHaveBeenCalledWith({ provider: "google", callbackURL: "/" });
+    await userEvent.click(
+      screen.getByRole("button", { name: /continue with google/i }),
+    );
+    expect(signInSocialMock).toHaveBeenCalledWith({
+      provider: "google",
+      callbackURL: "/",
+    });
   });
 
   it("clicking GitHub calls signIn.social with provider='github' and default callbackURL='/'", async () => {
     render(<OAuthButtons />);
-    await userEvent.click(screen.getByRole("button", { name: /continue with github/i }));
-    expect(signInSocialMock).toHaveBeenCalledWith({ provider: "github", callbackURL: "/" });
+    await userEvent.click(
+      screen.getByRole("button", { name: /continue with github/i }),
+    );
+    expect(signInSocialMock).toHaveBeenCalledWith({
+      provider: "github",
+      callbackURL: "/",
+    });
   });
 
   it("forwards a custom callbackURL", async () => {
     render(<OAuthButtons callbackURL="/dashboard" />);
-    await userEvent.click(screen.getByRole("button", { name: /continue with google/i }));
-    expect(signInSocialMock).toHaveBeenCalledWith({ provider: "google", callbackURL: "/dashboard" });
+    await userEvent.click(
+      screen.getByRole("button", { name: /continue with google/i }),
+    );
+    expect(signInSocialMock).toHaveBeenCalledWith({
+      provider: "google",
+      callbackURL: "/dashboard",
+    });
   });
 });

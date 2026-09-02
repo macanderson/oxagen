@@ -15,11 +15,12 @@ export const schema = {
   mode: workspaceBudgetPolicyWrite.input.shape.mode.describe(
     "Enforcement at the ceiling: grace = allow overage within a grace window then stop; prompt = pause and ask to continue; enforce = hard stop the instant the limit is crossed",
   ),
-  graceOveragePct: workspaceBudgetPolicyWrite.input.shape.graceOveragePct.describe(
-    "grace mode only: fraction ABOVE the limit allowed before a hard stop (0.25 = allow 25% overage)",
-  ),
+  graceOveragePct:
+    workspaceBudgetPolicyWrite.input.shape.graceOveragePct.describe(
+      "grace mode only: fraction ABOVE the limit allowed before a hard stop (0.25 = allow 25% overage)",
+    ),
   enforcement: workspaceBudgetPolicyWrite.input.shape.enforcement.describe(
-    'Hard enforcement policy: ceiling = members cannot exceed the limit, the workspace mode can only get stricter; default = seeds members who haven\'t set their own budget, they can override',
+    "Hard enforcement policy: ceiling = members cannot exceed the limit, the workspace mode can only get stricter; default = seeds members who haven't set their own budget, they can override",
   ),
 };
 
@@ -37,6 +38,8 @@ export default async function workspaceBudgetPolicyWriteTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(workspaceBudgetPolicyWrite.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(workspaceBudgetPolicyWrite.name, args, ctx, {
+    surface: "mcp",
+  });
   return workspaceBudgetPolicyWrite.output.parse(output);
 }

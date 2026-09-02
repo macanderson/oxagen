@@ -14,8 +14,8 @@
  * `run_sandbox_command` server action, while Storybook and tests pass a mock.
  *
  * It behaves like a real terminal, not a form:
- * - the input is NEVER disabled while a command runs (a disabled input drops
- *   keyboard focus, which was the "I hit Enter and lose the cursor" bug); it is
+ * - the input is NEVER disabled while a command runs — a disabled input drops
+ *   keyboard focus, so the cursor vanishes the moment you press Enter; it is
  *   disabled only when the whole session is unrunnable (`disabled` prop);
  * - Enter while a command is in flight QUEUES the next command (FIFO) — it is
  *   rendered immediately as a `queued` line and runs when the current one ends;

@@ -160,7 +160,12 @@ export default async function CliAuthorizePage({
   // Group rows into org → workspaces structure.
   const orgMap = new Map<
     string,
-    { id: string; slug: string; name: string; workspaces: { id: string; slug: string; name: string }[] }
+    {
+      id: string;
+      slug: string;
+      name: string;
+      workspaces: { id: string; slug: string; name: string }[];
+    }
   >();
   for (const row of rows) {
     if (!orgMap.has(row.orgId)) {

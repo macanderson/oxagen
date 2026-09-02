@@ -14,6 +14,8 @@ agentExecutionListRoute.get("/", async (c) => {
     status: c.req.query("status") ?? undefined,
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(agentExecutionList.name, input, ctx, { surface: "api" });
+  const out = await invoke(agentExecutionList.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

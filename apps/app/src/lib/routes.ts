@@ -87,11 +87,10 @@ export const org = {
     tokens: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/tokens`,
   },
 
-  // Org-level settings — editable by owners and admins only. No `plugins`
-  // builder here: that route has no page behind it at org scope (plugins
-  // management lives at workspace scope, Workbench → Agent Tools) — removed
-  // after it was found dead (only consumer was the sidebar Marketplace
-  // fallback, itself fixed to fall back to the org root instead).
+  // Org-level settings — editable by owners and admins only. There is
+  // deliberately no `plugins` builder here: that route has no page behind it at
+  // org scope; plugin management lives at workspace scope, under
+  // Workbench → Agent Tools.
   settings: {
     root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/general`,
     general: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/general`,

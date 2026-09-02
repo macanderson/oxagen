@@ -40,7 +40,9 @@ export default async function OrgGeneralSettingsPage({
   );
   const avatarUrl = orgRows[0]?.avatarUrl ?? "";
 
-  const viewerRole = viewerUserId ? await getOrgRole(org.id, viewerUserId) : null;
+  const viewerRole = viewerUserId
+    ? await getOrgRole(org.id, viewerUserId)
+    : null;
   const canEdit = ["owner", "admin"].includes(viewerRole ?? "");
 
   // Bind the orgSlug into the action so the client only receives FormData.

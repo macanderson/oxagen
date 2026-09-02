@@ -9,7 +9,9 @@ describe("workflow.run capability", () => {
 
   it("parses a valid minimal input", () => {
     expect(() =>
-      workflowRun.input.parse({ goal: "Research competitors and summarise findings" }),
+      workflowRun.input.parse({
+        goal: "Research competitors and summarise findings",
+      }),
     ).not.toThrow();
   });
 
@@ -35,15 +37,11 @@ describe("workflow.run capability", () => {
   });
 
   it("rejects an empty goal", () => {
-    expect(() =>
-      workflowRun.input.parse({ goal: "" }),
-    ).toThrow();
+    expect(() => workflowRun.input.parse({ goal: "" })).toThrow();
   });
 
   it("rejects goal exceeding 2000 characters", () => {
-    expect(() =>
-      workflowRun.input.parse({ goal: "x".repeat(2001) }),
-    ).toThrow();
+    expect(() => workflowRun.input.parse({ goal: "x".repeat(2001) })).toThrow();
   });
 
   it("rejects maxParallelism above 100", () => {
@@ -70,7 +68,10 @@ describe("workflow.run capability", () => {
         workflowId: "018fae12-0000-7000-8000-000000000001",
         publicId: "wfr_abc123",
         status: "planning",
-        render: { componentId: "workflow-progress", props: { workflowId: "018fae12-0000-7000-8000-000000000001" } },
+        render: {
+          componentId: "workflow-progress",
+          props: { workflowId: "018fae12-0000-7000-8000-000000000001" },
+        },
       }),
     ).not.toThrow();
   });
@@ -81,7 +82,10 @@ describe("workflow.run capability", () => {
         workflowId: "018fae12-0000-7000-8000-000000000001",
         publicId: "wfr_abc123",
         status: "running",
-        render: { componentId: "workflow-progress", props: { workflowId: "018fae12-0000-7000-8000-000000000001" } },
+        render: {
+          componentId: "workflow-progress",
+          props: { workflowId: "018fae12-0000-7000-8000-000000000001" },
+        },
       }),
     ).toThrow();
   });

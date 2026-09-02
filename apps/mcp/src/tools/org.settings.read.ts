@@ -16,8 +16,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function orgSettingsReadTool(_args: InferSchema<typeof schema>) {
+export default async function orgSettingsReadTool(
+  _args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(orgSettingsRead.name, {}, ctx, { surface: "mcp" });
+  const output = await invoke(orgSettingsRead.name, {}, ctx, {
+    surface: "mcp",
+  });
   return orgSettingsRead.output.parse(output);
 }

@@ -60,7 +60,8 @@ export function GithubConnectionSettings({
         if (signal?.aborted) return;
         setState({
           phase: "error",
-          message: e instanceof Error ? e.message : "Failed to load GitHub status",
+          message:
+            e instanceof Error ? e.message : "Failed to load GitHub status",
         });
       } finally {
         setRefreshing(false);
@@ -104,7 +105,10 @@ export function GithubConnectionSettings({
   const sourcesHref = workspace.knowledge.sources({ orgSlug, workspaceSlug });
 
   return (
-    <div className="flex max-w-2xl flex-col gap-5" data-testid="github-settings">
+    <div
+      className="flex max-w-2xl flex-col gap-5"
+      data-testid="github-settings"
+    >
       {/* Header */}
       <div className="flex items-start gap-3">
         <GithubIcon
@@ -114,9 +118,10 @@ export function GithubConnectionSettings({
         <div className="flex flex-col gap-1">
           <p className="text-sm font-semibold text-foreground">GitHub</p>
           <p className="text-xs text-muted-foreground">
-            Connect this workspace to GitHub with the Oxagen GitHub App. One install
-            per workspace gives every agent here access to the repositories you
-            choose to ingest. After connecting, pick repositories from{" "}
+            Connect this workspace to GitHub with the Oxagen GitHub App. One
+            install per workspace gives every agent here access to the
+            repositories you choose to ingest. After connecting, pick
+            repositories from{" "}
             <a href={sourcesHref} className="text-primary hover:underline">
               Knowledge → Sources
             </a>
@@ -140,7 +145,10 @@ export function GithubConnectionSettings({
           className="flex h-32 items-center justify-center rounded-lg border border-border/60 bg-card/50"
           data-testid="github-settings-loading"
         >
-          <RefreshCwIcon className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
+          <RefreshCwIcon
+            className="h-4 w-4 animate-spin text-muted-foreground"
+            aria-hidden="true"
+          />
         </div>
       ) : state.phase === "error" ? (
         <div
@@ -192,10 +200,13 @@ function DisconnectedView({
         <GithubIcon className="h-6 w-6 text-foreground" aria-hidden="true" />
       </div>
       <div className="flex flex-col gap-1">
-        <p className="text-sm font-semibold text-foreground">GitHub is not connected</p>
+        <p className="text-sm font-semibold text-foreground">
+          GitHub is not connected
+        </p>
         <p className="max-w-sm text-xs text-muted-foreground">
           Install the Oxagen GitHub App to grant this workspace access to your
-          repositories. You choose exactly which orgs and repos the App can read.
+          repositories. You choose exactly which orgs and repos the App can
+          read.
         </p>
       </div>
       {canManage ? (
@@ -261,8 +272,8 @@ function ConnectedView({
         </p>
         {status.installations.length === 0 ? (
           <p className="rounded-md border border-border/60 px-3 py-2 text-xs text-muted-foreground">
-            The App is connected but not installed on any organization yet. Add it to
-            an organization below.
+            The App is connected but not installed on any organization yet. Add
+            it to an organization below.
           </p>
         ) : (
           <ul
@@ -270,7 +281,11 @@ function ConnectedView({
             data-testid="github-installations"
           >
             {status.installations.map((inst) => (
-              <InstallationRow key={inst.id} installation={inst} canManage={canManage} />
+              <InstallationRow
+                key={inst.id}
+                installation={inst}
+                canManage={canManage}
+              />
             ))}
           </ul>
         )}

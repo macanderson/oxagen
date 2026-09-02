@@ -15,7 +15,9 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   const { orgListingId } = input as { orgListingId: string };
 
   if (!ctx.workspaceId) {
-    throw new Error("[plugin.credential.reauth] workspaceId is required (scoped capability)");
+    throw new Error(
+      "[plugin.credential.reauth] workspaceId is required (scoped capability)",
+    );
   }
 
   // Resolve org slug + workspace slug from the context ids.
@@ -43,17 +45,25 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       };
     });
   } catch (err) {
-    logger.error({ err, orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId }, "plugin.credential.reauth: slug lookup failed");
+    logger.error(
+      { err, orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "plugin.credential.reauth: slug lookup failed",
+    );
     throw err;
   }
 
   if (!slugs.orgSlug || !slugs.workspaceSlug) {
-    throw new Error("[plugin.credential.reauth] could not resolve org or workspace slug");
+    throw new Error(
+      "[plugin.credential.reauth] could not resolve org or workspace slug",
+    );
   }
 
-  const appUrl = process.env["APP_URL"] ?? process.env["NEXT_PUBLIC_APP_URL"] ?? "";
+  const appUrl =
+    process.env["APP_URL"] ?? process.env["NEXT_PUBLIC_APP_URL"] ?? "";
   if (!appUrl) {
-    throw new Error("[plugin.credential.reauth] APP_URL environment variable is not set");
+    throw new Error(
+      "[plugin.credential.reauth] APP_URL environment variable is not set",
+    );
   }
 
   const params = new URLSearchParams({

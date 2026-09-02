@@ -54,12 +54,16 @@ describe("corsMiddleware marketing-origin twinning", () => {
   it("allows the www twin when MARKETING_URL is the apex", async () => {
     process.env.MARKETING_URL = "https://oxagen.sh";
     expect(await preflight("https://oxagen.sh")).toBe("https://oxagen.sh");
-    expect(await preflight("https://www.oxagen.sh")).toBe("https://www.oxagen.sh");
+    expect(await preflight("https://www.oxagen.sh")).toBe(
+      "https://www.oxagen.sh",
+    );
   });
 
   it("allows the apex twin when MARKETING_URL is the www host", async () => {
     process.env.MARKETING_URL = "https://www.oxagen.sh";
-    expect(await preflight("https://www.oxagen.sh")).toBe("https://www.oxagen.sh");
+    expect(await preflight("https://www.oxagen.sh")).toBe(
+      "https://www.oxagen.sh",
+    );
     expect(await preflight("https://oxagen.sh")).toBe("https://oxagen.sh");
   });
 
@@ -75,13 +79,17 @@ describe("corsMiddleware marketing-origin twinning", () => {
 
   it("does NOT twin the app origin", async () => {
     process.env.APP_URL = "https://app.oxagen.sh";
-    expect(await preflight("https://app.oxagen.sh")).toBe("https://app.oxagen.sh");
+    expect(await preflight("https://app.oxagen.sh")).toBe(
+      "https://app.oxagen.sh",
+    );
     expect(await preflight("https://www.app.oxagen.sh")).toBeNull();
   });
 
   it("rejects localhost in production but allows it outside production", async () => {
     expect(await preflight("http://localhost:8080")).toBeNull();
     runtime.production = false;
-    expect(await preflight("http://localhost:8080")).toBe("http://localhost:8080");
+    expect(await preflight("http://localhost:8080")).toBe(
+      "http://localhost:8080",
+    );
   });
 });

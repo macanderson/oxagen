@@ -12,7 +12,9 @@ export const schema = {
   lesson: agentMemoryUpdate.input.shape.lesson.describe(
     "Replacement lesson text; triggers a re-embed",
   ),
-  memoryKind: agentMemoryUpdate.input.shape.memoryKind.describe("New content-domain kind"),
+  memoryKind: agentMemoryUpdate.input.shape.memoryKind.describe(
+    "New content-domain kind",
+  ),
   source: agentMemoryUpdate.input.shape.source.describe("New provenance label"),
   confidenceScore: agentMemoryUpdate.input.shape.confidenceScore.describe(
     "New confidence (0-100); the decay pass evolves it over time",
@@ -39,6 +41,8 @@ export default async function agentMemoryUpdateTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentMemoryUpdate.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentMemoryUpdate.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentMemoryUpdate.output.parse(output);
 }

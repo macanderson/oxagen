@@ -23,7 +23,7 @@ All model calls are metered in credits at the per-token rate defined in the bill
 
 ## Workspace model defaults
 
-Workspace administrators can configure default model selection for their workspace via `workspace.model.settings.write`. This sets the default text model (and tier), image model, and video model applied to all agents running in that workspace, overriding individual user preferences.
+Workspace administrators can configure default model selection for their workspace via `update_model_settings`. This sets the default text model (and tier), image model, and video model applied to all agents running in that workspace, overriding individual user preferences.
 
 **To configure workspace model defaults:**
 
@@ -47,7 +47,7 @@ Model restrictions are configured at **Workspace settings → Models → Allowed
 
 ## Model governance and org-enforced policies
 
-Org administrators can set enforced policies on model access at **Organization → Access → Policies**. An enforced policy cannot be overridden at the workspace level. For example, an org can enforce that `agent.code.execute` only runs on Haiku (lower cost, lower capability) — workspaces cannot upgrade the model used for code execution without an org Admin changing the policy.
+Org administrators can set enforced policies on model access at **Organization → Access → Policies**. An enforced policy cannot be overridden at the workspace level. For example, an org can enforce that `execute_code` only runs on Haiku (lower cost, lower capability) — workspaces cannot upgrade the model used for code execution without an org Admin changing the policy.
 
 ## Model handle stability
 

@@ -7,11 +7,12 @@ import { Spinner } from "./spinner";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./tooltip";
 
 /*
- * Button — token-driven cva variants. The ONLY decorative motion kept anywhere
- * in the system is the button hover-grow: a small, transform-only scale on
- * hover that returns to rest on leave/press. No color flourish, no shadow, no
- * lift. Every color/border/ring/disabled state resolves through a --button-*
- * token (see THEME.md §5) — never a raw palette color, and never the core
+ * Button — token-driven cva variants. Hover feedback is the --button-*-hover-bg
+ * colour shift, not a grow: the transform-only scale below reads
+ * --button-hover-scale, which the current skin pins at 1 (see THEME.md §7), so
+ * a skin can re-enable a grow without touching this file. No shadow, no lift.
+ * Every color/border/ring/disabled state resolves through a --button-* token
+ * (see THEME.md §5) — never a raw palette color, and never the core
  * --primary/--accent directly, so a reskin can retune buttons in isolation.
  *
  * Variant map (public API preserved): `default`/`primary`/`gradient` are the

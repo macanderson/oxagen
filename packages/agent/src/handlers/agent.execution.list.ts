@@ -29,31 +29,35 @@ export async function agentExecutionListHandler(
       isNull(schema.agentExecutions.parentExecutionId),
     ];
     if (input.before) {
-      filters.push(lt(schema.agentExecutions.createdAt, new Date(input.before)));
+      filters.push(
+        lt(schema.agentExecutions.createdAt, new Date(input.before)),
+      );
     }
     if (input.status) {
       filters.push(eq(schema.agentExecutions.status, input.status));
     }
-    return tx
-      .select({
-        publicId: schema.agentExecutions.publicId,
-        agentId: schema.agentExecutions.agentId,
-        originType: schema.agentExecutions.originType,
-        originId: schema.agentExecutions.originId,
-        status: schema.agentExecutions.status,
-        startedAt: schema.agentExecutions.startedAt,
-        completedAt: schema.agentExecutions.completedAt,
-        latencyMs: schema.agentExecutions.latencyMs,
-        inputTokens: schema.agentExecutions.inputTokens,
-        outputTokens: schema.agentExecutions.outputTokens,
-        estimatedCostUsd: schema.agentExecutions.estimatedCostUsd,
-        createdAt: schema.agentExecutions.createdAt,
-      })
-      .from(schema.agentExecutions)
-      .where(and(...filters))
-      .orderBy(desc(schema.agentExecutions.createdAt))
-      // Over-fetch by one to detect whether another page exists.
-      .limit(limit + 1);
+    return (
+      tx
+        .select({
+          publicId: schema.agentExecutions.publicId,
+          agentId: schema.agentExecutions.agentId,
+          originType: schema.agentExecutions.originType,
+          originId: schema.agentExecutions.originId,
+          status: schema.agentExecutions.status,
+          startedAt: schema.agentExecutions.startedAt,
+          completedAt: schema.agentExecutions.completedAt,
+          latencyMs: schema.agentExecutions.latencyMs,
+          inputTokens: schema.agentExecutions.inputTokens,
+          outputTokens: schema.agentExecutions.outputTokens,
+          estimatedCostUsd: schema.agentExecutions.estimatedCostUsd,
+          createdAt: schema.agentExecutions.createdAt,
+        })
+        .from(schema.agentExecutions)
+        .where(and(...filters))
+        .orderBy(desc(schema.agentExecutions.createdAt))
+        // Over-fetch by one to detect whether another page exists.
+        .limit(limit + 1)
+    );
   });
 
   const hasMore = rows.length > limit;
@@ -64,7 +68,8 @@ export async function agentExecutionListHandler(
   return {
     executions: page.map((r) => ({
       executionId: r.publicId,
-      status: r.status as AgentExecutionListOutput["executions"][number]["status"],
+      status:
+        r.status as AgentExecutionListOutput["executions"][number]["status"],
       originType: r.originType,
       originId: r.originId,
       agentId: r.agentId,

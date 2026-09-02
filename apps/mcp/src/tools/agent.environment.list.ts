@@ -22,6 +22,8 @@ export default async function agentEnvironmentListTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentEnvironmentList.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentEnvironmentList.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentEnvironmentList.output.parse(output);
 }

@@ -4,7 +4,7 @@
  * A dynamic import is required to avoid a static package cycle:
  * @oxagen/oxagen handlers depend on @oxagen/agent; if either imported the
  * other at the top-level the build would deadlock. We load the module once
- * and cache the two entry-point functions.
+ * and cache its entry-point functions.
  *
  * This module is the single source of truth for the load path and the
  * shared type, so materialize-tools.ts and agent.tool.list.ts don't each
@@ -58,8 +58,9 @@ let _registryPromise: Promise<OxagenRegistry> | null = null;
 
 /**
  * Lazily loads and caches the @oxagen/oxagen module, returning the typed
- * { listCapabilities, getSurfaces } pair. Safe to call from multiple
- * modules — only one dynamic import fires per process, even with concurrent calls.
+ * { listCapabilities, getSurfaces, getCapability } triple. Safe to call from
+ * multiple modules — only one dynamic import fires per process, even with
+ * concurrent calls.
  */
 export async function getOxagenRegistry(): Promise<OxagenRegistry> {
   if (_registryPromise) return _registryPromise;

@@ -15,14 +15,20 @@ describe("workspace.settings.write capability", () => {
   });
 
   it("rejects an invalid (uppercase) slug", () => {
-    expect(() => workspaceSettingsWrite.input.parse({ slug: "Research_Lab" })).toThrow();
+    expect(() =>
+      workspaceSettingsWrite.input.parse({ slug: "Research_Lab" }),
+    ).toThrow();
   });
 
   it("rejects an over-long description", () => {
-    expect(() => workspaceSettingsWrite.input.parse({ description: "x".repeat(2001) })).toThrow();
+    expect(() =>
+      workspaceSettingsWrite.input.parse({ description: "x".repeat(2001) }),
+    ).toThrow();
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("update_workspace_settings")).toBe(workspaceSettingsWrite);
+    expect(getCapability("update_workspace_settings")).toBe(
+      workspaceSettingsWrite,
+    );
   });
 });

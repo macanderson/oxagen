@@ -7,18 +7,27 @@
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
-const { apiPost, printTable, resolveEnvironmentId, resolveSecretKeyId, readFileSync, writeFileSync } =
-  vi.hoisted(() => ({
-    apiPost: vi.fn<(path: string, body: unknown) => Promise<unknown>>(),
-    printTable: vi.fn(),
-    resolveEnvironmentId: vi.fn<(slugOrId: string) => Promise<string>>(),
-    resolveSecretKeyId: vi.fn<(nameOrId: string) => Promise<string>>(),
-    readFileSync: vi.fn(),
-    writeFileSync: vi.fn(),
-  }));
+const {
+  apiPost,
+  printTable,
+  resolveEnvironmentId,
+  resolveSecretKeyId,
+  readFileSync,
+  writeFileSync,
+} = vi.hoisted(() => ({
+  apiPost: vi.fn<(path: string, body: unknown) => Promise<unknown>>(),
+  printTable: vi.fn(),
+  resolveEnvironmentId: vi.fn<(slugOrId: string) => Promise<string>>(),
+  resolveSecretKeyId: vi.fn<(nameOrId: string) => Promise<string>>(),
+  readFileSync: vi.fn(),
+  writeFileSync: vi.fn(),
+}));
 
 vi.mock("../lib/api.js", () => ({ apiPost, printTable }));
-vi.mock("../lib/resolve.js", () => ({ resolveEnvironmentId, resolveSecretKeyId }));
+vi.mock("../lib/resolve.js", () => ({
+  resolveEnvironmentId,
+  resolveSecretKeyId,
+}));
 vi.mock("fs", () => ({ readFileSync, writeFileSync }));
 
 import {
@@ -102,7 +111,9 @@ describe("secret set", () => {
       defaultValue: "v1",
     });
     expect(resolveSecretKeyId).not.toHaveBeenCalled();
-    expect(out.join("")).toBe("✓ key API_KEY (sensitive) · default value set\n");
+    expect(out.join("")).toBe(
+      "✓ key API_KEY (sensitive) · default value set\n",
+    );
   });
 
   it("with --env upserts the key without a default, then sets an override on the resolved ids", async () => {
@@ -123,7 +134,9 @@ describe("secret set", () => {
       environmentId: "env_7",
       value: "v2",
     });
-    expect(out.join("")).toBe("✓ key API_KEY (plain) · override set for prod\n");
+    expect(out.join("")).toBe(
+      "✓ key API_KEY (plain) · override set for prod\n",
+    );
   });
 });
 
@@ -132,7 +145,9 @@ describe("secret remove", () => {
     apiPost.mockResolvedValue({ ok: true });
     resolveSecretKeyId.mockResolvedValue("sk_3");
     await handleSecretRemove("OLD_KEY", {});
-    expect(apiPost).toHaveBeenCalledWith("secret/key/delete", { keyId: "sk_3" });
+    expect(apiPost).toHaveBeenCalledWith("secret/key/delete", {
+      keyId: "sk_3",
+    });
     expect(out.join("")).toBe("✓ removed key OLD_KEY\n");
   });
 
@@ -151,10 +166,17 @@ describe("secret remove", () => {
 
 describe("secret reveal", () => {
   it("prints the value on stdout and the access-recorded warning on stderr", async () => {
-    apiPost.mockResolvedValue({ key: "API_KEY", value: "s3cret", source: "default" });
+    apiPost.mockResolvedValue({
+      key: "API_KEY",
+      value: "s3cret",
+      source: "default",
+    });
     resolveSecretKeyId.mockResolvedValue("sk_1");
     await handleSecretReveal("API_KEY", {});
-    expect(apiPost).toHaveBeenCalledWith("secret/reveal", { keyId: "sk_1", environmentId: null });
+    expect(apiPost).toHaveBeenCalledWith("secret/reveal", {
+      keyId: "sk_1",
+      environmentId: null,
+    });
     expect(out.join("")).toBe("s3cret\n");
     expect(errOut.join("")).toBe("⚠ access recorded (actor, time)\n");
   });
@@ -164,17 +186,40 @@ describe("secret reveal", () => {
     resolveSecretKeyId.mockResolvedValue("sk_1");
     resolveEnvironmentId.mockResolvedValue("env_2");
     await handleSecretReveal("API_KEY", { env: "prod" });
-    expect(apiPost).toHaveBeenCalledWith("secret/reveal", { keyId: "sk_1", environmentId: "env_2" });
+    expect(apiPost).toHaveBeenCalledWith("secret/reveal", {
+      keyId: "sk_1",
+      environmentId: "env_2",
+    });
     expect(out.join("")).toBe("‹unset›\n");
-    expect(errOut.join("")).toBe("⚠ access recorded (actor, time)\n(no override and no default)\n");
+    expect(errOut.join("")).toBe(
+      "⚠ access recorded (actor, time)\n(no override and no default)\n",
+    );
   });
 });
 
 describe("secret import", () => {
   const rows = [
-    { key: "NEW_KEY", isNewKey: true, sensitive: true, target: "default", willOverride: false },
-    { key: "OVERRIDDEN", isNewKey: false, sensitive: false, target: "override", willOverride: true },
-    { key: "PLAIN_SET", isNewKey: false, sensitive: true, target: "default", willOverride: false },
+    {
+      key: "NEW_KEY",
+      isNewKey: true,
+      sensitive: true,
+      target: "default",
+      willOverride: false,
+    },
+    {
+      key: "OVERRIDDEN",
+      isNewKey: false,
+      sensitive: false,
+      target: "override",
+      willOverride: true,
+    },
+    {
+      key: "PLAIN_SET",
+      isNewKey: false,
+      sensitive: true,
+      target: "default",
+      willOverride: false,
+    },
   ];
 
   it("--file previews without commit, counts new vs existing, and points at --yes", async () => {
@@ -204,7 +249,9 @@ describe("secret import", () => {
       yield Buffer.from("NEW_");
       yield Buffer.from("KEY=1\n");
     }
-    vi.spyOn(process, "stdin", "get").mockReturnValue(stdin() as unknown as typeof process.stdin);
+    vi.spyOn(process, "stdin", "get").mockReturnValue(
+      stdin() as unknown as typeof process.stdin,
+    );
     resolveEnvironmentId.mockResolvedValue("env_4");
     apiPost.mockResolvedValue({ rows: [rows[0]], committed: true });
     await handleSecretImport({ env: "prod", yes: true });
@@ -225,7 +272,9 @@ describe("secret export", () => {
   it("streams the dotenv text to stdout and warns on stderr", async () => {
     apiPost.mockResolvedValue(payload);
     await handleSecretExport({});
-    expect(apiPost).toHaveBeenCalledWith("secret/export", { environmentId: null });
+    expect(apiPost).toHaveBeenCalledWith("secret/export", {
+      environmentId: null,
+    });
     expect(out.join("")).toBe("A=1\nB=2\n");
     expect(errOut.join("")).toBe("⚠ access recorded (actor, time)\n");
   });
@@ -234,8 +283,14 @@ describe("secret export", () => {
     apiPost.mockResolvedValue(payload);
     resolveEnvironmentId.mockResolvedValue("env_9");
     await handleSecretExport({ env: "prod", out: ".env.prod" });
-    expect(apiPost).toHaveBeenCalledWith("secret/export", { environmentId: "env_9" });
-    expect(writeFileSync).toHaveBeenCalledWith(".env.prod", "A=1\nB=2\n", "utf8");
+    expect(apiPost).toHaveBeenCalledWith("secret/export", {
+      environmentId: "env_9",
+    });
+    expect(writeFileSync).toHaveBeenCalledWith(
+      ".env.prod",
+      "A=1\nB=2\n",
+      "utf8",
+    );
     expect(out.join("")).toBe("✓ wrote 2 key(s) to .env.prod\n");
   });
 });

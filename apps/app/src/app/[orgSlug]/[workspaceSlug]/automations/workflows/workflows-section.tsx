@@ -10,8 +10,12 @@
  * would bubble to the route error boundary and blank the whole section).
  */
 import { AlertCircle } from "lucide-react";
+import { logger } from "@oxagen/handlers/logger";
 import type { AutomationsCtx } from "@/lib/automations/scope";
-import { listWorkflowRuns, type WorkflowRunRow } from "@/lib/automations/workflows";
+import {
+  listWorkflowRuns,
+  type WorkflowRunRow,
+} from "@/lib/automations/workflows";
 import { WorkflowsTable } from "./_components/workflows-table";
 
 export interface WorkflowsSectionProps {
@@ -33,7 +37,10 @@ export async function WorkflowsSection({
     workflows = await listWorkflowRuns(ctx);
   } catch (err) {
     failed = true;
-    console.error("workflow list (agent.execution.list) failed:", err);
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "workflows: agent.execution.list failed",
+    );
   }
 
   if (failed) {

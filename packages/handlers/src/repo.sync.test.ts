@@ -10,7 +10,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...real, withTenantDb: mocks.withTenantDb };
 });
 vi.mock("./event-client", () => ({ eventClient: { send: mocks.inngestSend } }));
-vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("./logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 import { repoSyncHandler } from "./repo.sync";
 
@@ -25,12 +27,15 @@ type Row = {
 } | null;
 
 function setup(row: Row) {
-  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      select: () => ({
-        from: () => ({ where: () => ({ limit: () => Promise.resolve(row ? [row] : []) }) }),
+  mocks.withTenantDb.mockImplementation(
+    (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => ({ limit: () => Promise.resolve(row ? [row] : []) }),
+          }),
+        }),
       }),
-    }),
   );
 }
 
@@ -53,29 +58,38 @@ describe("repo.sync handler", () => {
 
   it("throws 404 when the repository connection does not exist", async () => {
     setup(null);
-    await expect(repoSyncHandler({ repoId: "con_missing", mode: "incremental" }, CTX)).rejects.toThrow(
-      "Repository connection not found",
-    );
+    await expect(
+      repoSyncHandler({ repoId: "con_missing", mode: "incremental" }, CTX),
+    ).rejects.toThrow("Repository connection not found");
     expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
 
   it("rejects syncing a connection that is being deleted (409)", async () => {
     setup(makeRow({ status: "deleting" }));
-    await expect(repoSyncHandler({ repoId: "con_1", mode: "full" }, CTX)).rejects.toThrow(
-      /cannot sync a connection being deleted/,
-    );
+    await expect(
+      repoSyncHandler({ repoId: "con_1", mode: "full" }, CTX),
+    ).rejects.toThrow(/cannot sync a connection being deleted/);
     expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
 
   it("queues an ingestion/sync.requested event with the real connection UUID", async () => {
-    setup(makeRow({ deliveryConfig: { syncMethod: "polling", syncIntervalSeconds: 600 } }));
-    const out = await repoSyncHandler({ repoId: "con_1", mode: "incremental" }, CTX);
+    setup(
+      makeRow({
+        deliveryConfig: { syncMethod: "polling", syncIntervalSeconds: 600 },
+      }),
+    );
+    const out = await repoSyncHandler(
+      { repoId: "con_1", mode: "incremental" },
+      CTX,
+    );
 
     expect(out.status).toBe("queued");
     expect(out.mode).toBe("incremental");
     expect(typeof out.jobId).toBe("string");
     expect(mocks.inngestSend).toHaveBeenCalledOnce();
-    const [event] = mocks.inngestSend.mock.calls[0] as [Record<string, unknown>];
+    const [event] = mocks.inngestSend.mock.calls[0] as [
+      Record<string, unknown>,
+    ];
     expect(event["name"]).toBe("ingestion/sync.requested");
     const data = event["data"] as Record<string, unknown>;
     expect(data["connectionId"]).toBe("uuid-repo-1");
@@ -90,14 +104,21 @@ describe("repo.sync handler", () => {
     expect(full.estimatedRecords).toBe(250);
 
     setup(makeRow({ entityCount: 250 }));
-    const incremental = await repoSyncHandler({ repoId: "con_1", mode: "incremental" }, CTX);
+    const incremental = await repoSyncHandler(
+      { repoId: "con_1", mode: "incremental" },
+      CTX,
+    );
     expect(incremental.estimatedRecords).toBe(0);
   });
 
   it("falls back to the connection deliveryMethod when deliveryConfig has no syncMethod", async () => {
     setup(makeRow({ deliveryConfig: null, deliveryMethod: "rest_polling" }));
     await repoSyncHandler({ repoId: "con_1", mode: "incremental" }, CTX);
-    const [event] = mocks.inngestSend.mock.calls[0] as [Record<string, unknown>];
-    expect((event["data"] as Record<string, unknown>)["syncMethod"]).toBe("rest_polling");
+    const [event] = mocks.inngestSend.mock.calls[0] as [
+      Record<string, unknown>,
+    ];
+    expect((event["data"] as Record<string, unknown>)["syncMethod"]).toBe(
+      "rest_polling",
+    );
   });
 });

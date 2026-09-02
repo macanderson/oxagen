@@ -19,7 +19,11 @@ export const orgListItemSchema = z.object({
   // Distinct from slug, which is renameable.
   namespace: z.string(),
   name: z.string(),
-  role: z.string().describe("The caller's role in this org (lowercase, e.g. owner/admin/member)"),
+  role: z
+    .string()
+    .describe(
+      "The caller's role in this org (lowercase, e.g. owner/admin/member)",
+    ),
   avatarUrl: z.string().nullable(),
 });
 
@@ -32,7 +36,11 @@ export const orgList = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: false,
-  agent: { requiresApproval: false, riskLevel: "low", category: "organization" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "organization",
+  },
   sensitivity: "low",
   mutates: false,
   // allow by default: "list my own orgs" is a user-intrinsic right. Any
@@ -46,7 +54,14 @@ export const orgList = registerCapability({
   // matching role-grant row exists. (OXA fix — CLI workspace picker 403.)
   defaultEffect: "allow",
   defaultRoles: {
-    org: { Owner: "allow", Admin: "allow", Member: "allow", Billing: "allow", Compliance: "allow", Viewer: "allow" },
+    org: {
+      Owner: "allow",
+      Admin: "allow",
+      Member: "allow",
+      Billing: "allow",
+      Compliance: "allow",
+      Viewer: "allow",
+    },
     workspace: {},
   },
   input: z.object({}),

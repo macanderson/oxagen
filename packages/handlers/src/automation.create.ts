@@ -14,12 +14,14 @@ function toStepKey(name: string): string {
   );
 }
 
-export const automationCreateHandler: CapabilityHandler<typeof automationCreate> = async (
-  input,
-  ctx,
-) => {
+export const automationCreateHandler: CapabilityHandler<
+  typeof automationCreate
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "automation.create: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "automation.create: rejected — no authenticated user",
+    );
     throw new Error("automation.create requires an authenticated user");
   }
 
@@ -59,7 +61,13 @@ export const automationCreateHandler: CapabilityHandler<typeof automationCreate>
   const stepsToInsert =
     input.steps.length > 0
       ? input.steps
-      : [{ name: "Run Agent", stepType: "agent" as const, config: { agentSlug: "qa-chat" } }];
+      : [
+          {
+            name: "Run Agent",
+            stepType: "agent" as const,
+            config: { agentSlug: "qa-chat" },
+          },
+        ];
 
   const result = await withTenantDb(async (tx) => {
     // 1. Insert the playbook shell. Status is "active" if trigger starts enabled.
@@ -81,7 +89,8 @@ export const automationCreateHandler: CapabilityHandler<typeof automationCreate>
         publicId: schema.playbooks.publicId,
       });
 
-    if (!playbook) throw new Error("automation.create: playbook insert returned no row");
+    if (!playbook)
+      throw new Error("automation.create: playbook insert returned no row");
 
     // 2. Insert the initial playbook version (v1, published).
     const [version] = await tx
@@ -95,7 +104,8 @@ export const automationCreateHandler: CapabilityHandler<typeof automationCreate>
       })
       .returning({ id: schema.playbookVersions.id });
 
-    if (!version) throw new Error("automation.create: version insert returned no row");
+    if (!version)
+      throw new Error("automation.create: version insert returned no row");
 
     // 3. Insert steps for this version.
     for (const step of stepsToInsert) {
@@ -135,7 +145,8 @@ export const automationCreateHandler: CapabilityHandler<typeof automationCreate>
         isEnabled: schema.playbookTriggers.isEnabled,
       });
 
-    if (!trigger) throw new Error("automation.create: trigger insert returned no row");
+    if (!trigger)
+      throw new Error("automation.create: trigger insert returned no row");
 
     return { playbook, trigger };
   });

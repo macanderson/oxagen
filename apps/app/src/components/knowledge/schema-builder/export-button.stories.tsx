@@ -12,9 +12,7 @@ type Story = StoryObj<typeof ExportButton>;
 
 export const Default: Story = {
   render: () => (
-    <ExportButton
-      slugs={{ orgSlug: "acme", workspaceSlug: "main" }}
-    />
+    <ExportButton slugs={{ orgSlug: "acme", workspaceSlug: "main" }} />
   ),
 };
 

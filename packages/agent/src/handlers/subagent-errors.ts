@@ -61,7 +61,9 @@ export class ExecutionNotFoundError extends Error {
 }
 
 /** Structural type guard — matches across a package boundary via `code`. */
-export function isExecutionNotFoundError(err: unknown): err is ExecutionNotFoundError {
+export function isExecutionNotFoundError(
+  err: unknown,
+): err is ExecutionNotFoundError {
   return (
     err instanceof ExecutionNotFoundError ||
     (err instanceof Error &&
@@ -71,7 +73,9 @@ export function isExecutionNotFoundError(err: unknown): err is ExecutionNotFound
 }
 
 /** Structural type guard — see isFanoutNotFoundError for the rationale. */
-export function isSubagentRunNotFoundError(err: unknown): err is SubagentRunNotFoundError {
+export function isSubagentRunNotFoundError(
+  err: unknown,
+): err is SubagentRunNotFoundError {
   return (
     err instanceof SubagentRunNotFoundError ||
     (err instanceof Error &&
@@ -82,7 +86,9 @@ export function isSubagentRunNotFoundError(err: unknown): err is SubagentRunNotF
 
 /** Structural type guard — matches across a package boundary via the `code`
  * discriminant even when `instanceof` would fail on a duplicated class identity. */
-export function isFanoutNotFoundError(err: unknown): err is FanoutNotFoundError {
+export function isFanoutNotFoundError(
+  err: unknown,
+): err is FanoutNotFoundError {
   return (
     err instanceof FanoutNotFoundError ||
     (err instanceof Error &&

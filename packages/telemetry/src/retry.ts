@@ -29,7 +29,10 @@ export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   options: RetryOptions = {},
 ): Promise<T> {
-  const attempts = options.attempts ?? 3;
+  // Floor at one attempt: a caller passing 0/negative would otherwise skip the
+  // loop entirely and reject with `undefined` — a rejection carrying no error,
+  // which every catch site here would log as "undefined".
+  const attempts = Math.max(1, Math.floor(options.attempts ?? 3));
   const baseDelayMs = options.baseDelayMs ?? 25;
   let lastErr: unknown;
 

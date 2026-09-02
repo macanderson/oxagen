@@ -32,7 +32,10 @@ export async function agentMemoryImportParseHandler(
   const defaultNodeRef = input.defaultNodeRef?.trim() || USER_MEMORY_NODE_REF;
 
   type DocumentResult =
-    | { filename: string; extracted: Awaited<ReturnType<typeof extractMemoriesFromDocument>> }
+    | {
+        filename: string;
+        extracted: Awaited<ReturnType<typeof extractMemoriesFromDocument>>;
+      }
     | { filename: string; error: string };
 
   const perDocument = await mapWithConcurrency(

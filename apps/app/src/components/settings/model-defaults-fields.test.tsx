@@ -11,7 +11,10 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
-import { ModelDefaultsFields, type ModelDefaultsValue } from "./model-defaults-fields";
+import {
+  ModelDefaultsFields,
+  type ModelDefaultsValue,
+} from "./model-defaults-fields";
 
 afterEach(cleanup);
 
@@ -25,42 +28,71 @@ const defaultValue: ModelDefaultsValue = {
 describe("ModelDefaultsFields — rendering", () => {
   it("renders 'Default agent model' select", () => {
     render(
-      <ModelDefaultsFields value={defaultValue} onChange={vi.fn()} scope="user" />,
+      <ModelDefaultsFields
+        value={defaultValue}
+        onChange={vi.fn()}
+        scope="user"
+      />,
     );
     expect(screen.getByLabelText(/default agent model/i)).toBeInTheDocument();
   });
 
   it("renders 'Default image model' select", () => {
     render(
-      <ModelDefaultsFields value={defaultValue} onChange={vi.fn()} scope="user" />,
+      <ModelDefaultsFields
+        value={defaultValue}
+        onChange={vi.fn()}
+        scope="user"
+      />,
     );
     expect(screen.getByLabelText(/default image model/i)).toBeInTheDocument();
   });
 
   it("renders 'Default video model' select", () => {
     render(
-      <ModelDefaultsFields value={defaultValue} onChange={vi.fn()} scope="user" />,
+      <ModelDefaultsFields
+        value={defaultValue}
+        onChange={vi.fn()}
+        scope="user"
+      />,
     );
     expect(screen.getByLabelText(/default video model/i)).toBeInTheDocument();
   });
 
   it("shows user scope note when scope='user'", () => {
     render(
-      <ModelDefaultsFields value={defaultValue} onChange={vi.fn()} scope="user" />,
+      <ModelDefaultsFields
+        value={defaultValue}
+        onChange={vi.fn()}
+        scope="user"
+      />,
     );
-    expect(screen.getByText(/workspace can override these defaults/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/workspace can override these defaults/i),
+    ).toBeInTheDocument();
   });
 
   it("shows workspace scope note when scope='workspace'", () => {
     render(
-      <ModelDefaultsFields value={defaultValue} onChange={vi.fn()} scope="workspace" />,
+      <ModelDefaultsFields
+        value={defaultValue}
+        onChange={vi.fn()}
+        scope="workspace"
+      />,
     );
-    expect(screen.getByText(/these defaults apply to all members/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/these defaults apply to all members/i),
+    ).toBeInTheDocument();
   });
 
   it("selects are disabled when disabled=true", () => {
     render(
-      <ModelDefaultsFields value={defaultValue} onChange={vi.fn()} scope="user" disabled />,
+      <ModelDefaultsFields
+        value={defaultValue}
+        onChange={vi.fn()}
+        scope="user"
+        disabled
+      />,
     );
     const selects = screen.getAllByRole("combobox");
     for (const sel of selects) {

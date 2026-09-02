@@ -56,8 +56,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn({ select: mocks.dbSelect }),
-
+    withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ select: mocks.dbSelect }),
   };
 });
 
@@ -98,7 +98,10 @@ describe("archiveCreateHandler — text entries", () => {
     );
 
     expect(mocks.zipSync).toHaveBeenCalledTimes(1);
-    const zipArg = mocks.zipSync.mock.calls[0]?.[0] as Record<string, Uint8Array>;
+    const zipArg = mocks.zipSync.mock.calls[0]?.[0] as Record<
+      string,
+      Uint8Array
+    >;
     expect("readme.txt" in zipArg).toBe(true);
     const encoded = zipArg["readme.txt"] as Uint8Array;
     expect(new TextDecoder().decode(encoded)).toBe("Hello, world!");
@@ -117,7 +120,10 @@ describe("archiveCreateHandler — text entries", () => {
       CTX,
     );
 
-    const zipArg = mocks.zipSync.mock.calls[0]?.[0] as Record<string, Uint8Array>;
+    const zipArg = mocks.zipSync.mock.calls[0]?.[0] as Record<
+      string,
+      Uint8Array
+    >;
     expect(Object.keys(zipArg)).toHaveLength(3);
     expect(new TextDecoder().decode(zipArg["a.txt"])).toBe("Alpha");
     expect(new TextDecoder().decode(zipArg["b.txt"])).toBe("Beta");
@@ -138,7 +144,10 @@ describe("archiveCreateHandler — base64 entries", () => {
       CTX,
     );
 
-    const zipArg = mocks.zipSync.mock.calls[0]?.[0] as Record<string, Uint8Array>;
+    const zipArg = mocks.zipSync.mock.calls[0]?.[0] as Record<
+      string,
+      Uint8Array
+    >;
     expect("data.bin" in zipArg).toBe(true);
     const decoded = zipArg["data.bin"] as Uint8Array;
     expect(Array.from(decoded)).toEqual([0x01, 0x02, 0x03, 0x04]);
@@ -175,11 +184,18 @@ describe("archiveCreateHandler — assetId entries", () => {
       CTX,
     );
 
-    expect(mocks.storageGet).toHaveBeenCalledWith("generated/documents/org_1/abc.docx");
+    expect(mocks.storageGet).toHaveBeenCalledWith(
+      "generated/documents/org_1/abc.docx",
+    );
 
-    const zipArg = mocks.zipSync.mock.calls[0]?.[0] as Record<string, Uint8Array>;
+    const zipArg = mocks.zipSync.mock.calls[0]?.[0] as Record<
+      string,
+      Uint8Array
+    >;
     expect("doc.docx" in zipArg).toBe(true);
-    expect(Array.from(zipArg["doc.docx"] as Uint8Array)).toEqual([0xde, 0xad, 0xbe, 0xef]);
+    expect(Array.from(zipArg["doc.docx"] as Uint8Array)).toEqual([
+      0xde, 0xad, 0xbe, 0xef,
+    ]);
   });
 
   it("throws when assetId not found in DB", async () => {
@@ -227,9 +243,27 @@ describe("archiveCreateHandler — assetId entries", () => {
     // (was one SELECT per entry — the N+1 this change removes). Blob bytes are
     // still fetched per entry, in parallel.
     const rows = [
-      { publicId: "gen_A", storageKey: "k/a", orgId: "org_1", status: "ready", deletedAt: null },
-      { publicId: "gen_B", storageKey: "k/b", orgId: "org_1", status: "ready", deletedAt: null },
-      { publicId: "gen_C", storageKey: "k/c", orgId: "org_1", status: "ready", deletedAt: null },
+      {
+        publicId: "gen_A",
+        storageKey: "k/a",
+        orgId: "org_1",
+        status: "ready",
+        deletedAt: null,
+      },
+      {
+        publicId: "gen_B",
+        storageKey: "k/b",
+        orgId: "org_1",
+        status: "ready",
+        deletedAt: null,
+      },
+      {
+        publicId: "gen_C",
+        storageKey: "k/c",
+        orgId: "org_1",
+        status: "ready",
+        deletedAt: null,
+      },
     ];
     const where = vi.fn().mockResolvedValue(rows);
     const from = vi.fn().mockReturnValue({ where });
@@ -239,7 +273,9 @@ describe("archiveCreateHandler — assetId entries", () => {
     // (a ReadableStream can only be consumed once).
     mocks.storageGet.mockImplementation((key: string) =>
       Promise.resolve({
-        body: makeReadableStream(new Uint8Array([key.charCodeAt(key.length - 1)])),
+        body: makeReadableStream(
+          new Uint8Array([key.charCodeAt(key.length - 1)]),
+        ),
       }),
     );
 
@@ -259,7 +295,10 @@ describe("archiveCreateHandler — assetId entries", () => {
     expect(mocks.dbSelect).toHaveBeenCalledTimes(1);
     // All three blobs were still fetched.
     expect(mocks.storageGet).toHaveBeenCalledTimes(3);
-    const zipArg = mocks.zipSync.mock.calls[0]?.[0] as Record<string, Uint8Array>;
+    const zipArg = mocks.zipSync.mock.calls[0]?.[0] as Record<
+      string,
+      Uint8Array
+    >;
     expect(Object.keys(zipArg).sort()).toEqual(["a.docx", "b.docx", "c.docx"]);
   });
 });
@@ -274,7 +313,10 @@ describe("archiveCreateHandler — output", () => {
       CTX,
     );
 
-    const persistArg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    const persistArg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(persistArg.kind).toBe("archive");
     expect(persistArg.mimeType).toBe("application/zip");
   });
@@ -288,7 +330,10 @@ describe("archiveCreateHandler — output", () => {
       CTX,
     );
 
-    const persistArg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    const persistArg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     const bytes = persistArg.bytes as Uint8Array;
     expect(bytes[0]).toBe(0x50); // P
     expect(bytes[1]).toBe(0x4b); // K
@@ -331,7 +376,9 @@ describe("archiveCreateHandler — output", () => {
   });
 
   it("throws when persistGeneratedAsset rejects", async () => {
-    mocks.persistGeneratedAsset.mockRejectedValueOnce(new Error("storage down"));
+    mocks.persistGeneratedAsset.mockRejectedValueOnce(
+      new Error("storage down"),
+    );
     await expect(
       archiveCreateHandler(
         {

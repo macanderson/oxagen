@@ -85,16 +85,25 @@ describe("agent.memory.update handler", () => {
         executionStepId: "req_1",
       },
     });
-    const updateArg = mocks.updateMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    const updateArg = mocks.updateMemoryMock.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(Array.isArray(updateArg.embedding)).toBe(true);
     expect((updateArg.embedding as number[]).length).toBe(1536);
     expect(res.id).toBe("m_1");
   });
 
   it("does NOT embed when lesson is absent — embedding is undefined in updateMemory call", async () => {
-    await agentMemoryUpdateHandler({ memoryId: "m_1", enforcementScore: 90 }, CTX);
+    await agentMemoryUpdateHandler(
+      { memoryId: "m_1", enforcementScore: 90 },
+      CTX,
+    );
     expect(mocks.embedTextMock).not.toHaveBeenCalled();
-    const updateArg = mocks.updateMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    const updateArg = mocks.updateMemoryMock.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(updateArg.embedding).toBeUndefined();
   });
 
@@ -110,7 +119,10 @@ describe("agent.memory.update handler", () => {
       },
       CTX,
     );
-    const updateArg = mocks.updateMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    const updateArg = mocks.updateMemoryMock.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(updateArg.memoryId).toBe("m_2");
     expect(updateArg.memoryKind).toBe("gotcha");
     expect(updateArg.source).toBe("fix");
@@ -120,7 +132,10 @@ describe("agent.memory.update handler", () => {
   });
 
   it("returns the updated record produced by updateMemory", async () => {
-    const res = await agentMemoryUpdateHandler({ memoryId: "m_1", memoryKind: "convention-deviation" }, CTX);
+    const res = await agentMemoryUpdateHandler(
+      { memoryId: "m_1", memoryKind: "convention-deviation" },
+      CTX,
+    );
     expect(res.memoryClass).toBe("RULE");
     expect(res.memoryKind).toBe("constraint");
     expect(res.confidenceScore).toBe(90);
@@ -130,7 +145,10 @@ describe("agent.memory.update handler", () => {
   it("throws (not found) when updateMemory returns null", async () => {
     mocks.updateMemoryMock.mockResolvedValueOnce(null);
     await expect(
-      agentMemoryUpdateHandler({ memoryId: "missing_id", confidenceScore: 50 }, CTX),
+      agentMemoryUpdateHandler(
+        { memoryId: "missing_id", confidenceScore: 50 },
+        CTX,
+      ),
     ).rejects.toThrow("missing_id");
   });
 });

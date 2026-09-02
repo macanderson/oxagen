@@ -11,7 +11,9 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Playground: Story = { render: (args) => <Textarea {...args} className="max-w-sm" /> };
+export const Playground: Story = {
+  render: (args) => <Textarea {...args} className="max-w-sm" />,
+};
 
 export const WithLabel: Story = {
   render: () => (

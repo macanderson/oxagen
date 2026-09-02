@@ -8,7 +8,9 @@ describe("agent.sandbox.start capability", () => {
     expect(cap).toBeDefined();
     expect(cap?.domain).toBe("agent");
     expect(cap?.scoped).toBe(true);
-    expect(cap?.surfaces).toEqual(expect.arrayContaining(["api", "mcp", "agent"]));
+    expect(cap?.surfaces).toEqual(
+      expect.arrayContaining(["api", "mcp", "agent"]),
+    );
   });
 
   it("applies durable defaults when only nothing is supplied", () => {
@@ -31,13 +33,19 @@ describe("agent.sandbox.start capability", () => {
   });
 
   it("caps ttlSeconds at 24h", () => {
-    expect(() => agentSandboxStart.input.parse({ ttlSeconds: 90_000 })).toThrow();
-    expect(agentSandboxStart.input.parse({ ttlSeconds: 86_400 }).ttlSeconds).toBe(86_400);
+    expect(() =>
+      agentSandboxStart.input.parse({ ttlSeconds: 90_000 }),
+    ).toThrow();
+    expect(
+      agentSandboxStart.input.parse({ ttlSeconds: 86_400 }).ttlSeconds,
+    ).toBe(86_400);
   });
 
   it("rejects an empty sessionKey but accepts a real one", () => {
     expect(() => agentSandboxStart.input.parse({ sessionKey: "" })).toThrow();
-    expect(agentSandboxStart.input.parse({ sessionKey: "conv_42" }).sessionKey).toBe("conv_42");
+    expect(
+      agentSandboxStart.input.parse({ sessionKey: "conv_42" }).sessionKey,
+    ).toBe("conv_42");
   });
 
   it("validates the output shape", () => {
@@ -116,7 +124,9 @@ describe("start_sandbox capability — repos[] validation", () => {
     });
     it(`rejects an unsafe repo ${JSON.stringify(bad)}`, () => {
       expect(() =>
-        agentSandboxStart.input.parse({ repos: [{ owner: "acme", repo: bad }] }),
+        agentSandboxStart.input.parse({
+          repos: [{ owner: "acme", repo: bad }],
+        }),
       ).toThrow();
     });
   }

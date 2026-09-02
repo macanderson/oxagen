@@ -28,6 +28,14 @@ import { invoke } from "@oxagen/oxagen";
 // org.member.remove and org.member.role.change at runtime.
 import "@oxagen/handlers/register";
 
+// Sentinel workspaceId for org-only actions (no workspace context). Both
+// capabilities below are `scoped: true`, so the kernel enters
+// runInTenantScope() with this context — and runInTenantScope fail-closes on
+// any non-uuid, so an empty string here throws TenantScopeError before the
+// handler ever runs. Matches the sentinel used by actions.ts / page.tsx /
+// layout.tsx in this directory.
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
+
 // ── Input schemas ─────────────────────────────────────────────────────────────
 
 const RemoveMemberSchema = z.object({
@@ -43,16 +51,14 @@ const ChangeRoleSchema = z.object({
 
 // ── Result types ──────────────────────────────────────────────────────────────
 
-export type MemberActionResult =
-  | { ok: true }
-  | { ok: false; error: string };
+export type MemberActionResult = { ok: true } | { ok: false; error: string };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function buildCtx(opts: { orgId: string; userId: string }) {
   return {
     orgId: opts.orgId,
-    workspaceId: "",         // org-level action, no workspace scope needed
+    workspaceId: ORG_ONLY_WS, // org-level action — sentinel workspace scope
     userId: opts.userId,
     apiKeyId: null as string | null,
     requestId: crypto.randomUUID(),
@@ -83,9 +89,12 @@ export async function removeMemberAction(
   const ctx = buildCtx({ orgId: org.id, userId: session.user.id });
 
   try {
-    await invoke("remove_org_member", { targetUserId }, ctx, { surface: "agent" });
+    await invoke("remove_org_member", { targetUserId }, ctx, {
+      surface: "agent",
+    });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to remove member";
+    const message =
+      err instanceof Error ? err.message : "Failed to remove member";
     return { ok: false, error: message };
   }
 
@@ -113,9 +122,12 @@ export async function changeMemberRoleAction(
   const ctx = buildCtx({ orgId: org.id, userId: session.user.id });
 
   try {
-    await invoke("change_member_role", { targetUserId, newRole }, ctx, { surface: "agent" });
+    await invoke("change_member_role", { targetUserId, newRole }, ctx, {
+      surface: "agent",
+    });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to change role";
+    const message =
+      err instanceof Error ? err.message : "Failed to change role";
     return { ok: false, error: message };
   }
 

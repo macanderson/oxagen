@@ -31,5 +31,9 @@ export const agentMcpConsentResolve = registerCapability({
   }),
 });
 
-export type AgentMcpConsentResolveInput = z.output<typeof agentMcpConsentResolve.input>;
-export type AgentMcpConsentResolveOutput = z.output<typeof agentMcpConsentResolve.output>;
+export type AgentMcpConsentResolveInput = z.output<
+  typeof agentMcpConsentResolve.input
+>;
+export type AgentMcpConsentResolveOutput = z.output<
+  typeof agentMcpConsentResolve.output
+>;

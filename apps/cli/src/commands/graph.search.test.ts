@@ -16,7 +16,11 @@ vi.mock("../lib/api.js", () => ({ apiPost }));
 
 import { handleGraphSearch } from "./graph.search.js";
 
-function splitWriter(): { writer: CommandWriter; out: string[]; err: string[] } {
+function splitWriter(): {
+  writer: CommandWriter;
+  out: string[];
+  err: string[];
+} {
   const out: string[] = [];
   const err: string[] = [];
   return {
@@ -42,7 +46,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  if (originalIsTTY) Object.defineProperty(process.stdout, "isTTY", originalIsTTY);
+  if (originalIsTTY)
+    Object.defineProperty(process.stdout, "isTTY", originalIsTTY);
   else delete (process.stdout as { isTTY?: boolean }).isTTY;
   vi.restoreAllMocks();
 });

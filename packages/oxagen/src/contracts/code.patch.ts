@@ -15,7 +15,9 @@ export const codePatchFileSchema = z.object({
     .describe("How the patch changed this file"),
   content: z
     .string()
-    .describe("New file contents after the patch (empty string for a deletion)"),
+    .describe(
+      "New file contents after the patch (empty string for a deletion)",
+    ),
 });
 
 export const codePatch = registerCapability({
@@ -51,7 +53,9 @@ export const codePatch = registerCapability({
     applied: z.boolean().describe("True when every hunk applied cleanly"),
     files: z
       .array(codePatchFileSchema)
-      .describe("Only the files the diff changed (added, modified, or deleted)"),
+      .describe(
+        "Only the files the diff changed (added, modified, or deleted)",
+      ),
     changedCount: z.number().int().describe("Number of changed files"),
   }),
 });

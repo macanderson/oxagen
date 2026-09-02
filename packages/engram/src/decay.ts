@@ -53,7 +53,10 @@ export function effectiveSalience(
   // bad backfill) would otherwise get timeDecay > 1 and inflate salience.
   const age = Math.max(0, now - createdAt);
   const timeDecay = Math.pow(0.5, age / config.halfLife);
-  const freqBoost = Math.pow(config.frequencyBoost, Math.min(retrievalCount, 10));
+  const freqBoost = Math.pow(
+    config.frequencyBoost,
+    Math.min(retrievalCount, 10),
+  );
   const outBoost = Math.pow(config.outcomeBoost, Math.min(successCount, 5));
 
   const effective = record.salience * timeDecay * freqBoost * outBoost;
@@ -72,7 +75,10 @@ export function identifyEvictionCandidates(
 ): MemoryRecord[] {
   return records.filter((r) => {
     const s = stats.get(r.id) ?? { retrievals: 0, successes: 0 };
-    return effectiveSalience(r, now, s.retrievals, s.successes, config) < config.minSalience;
+    return (
+      effectiveSalience(r, now, s.retrievals, s.successes, config) <
+      config.minSalience
+    );
   });
 }
 
@@ -89,7 +95,10 @@ export function computeDecayedSaliences(
   const result = new Map<string, number>();
   for (const r of records) {
     const s = stats.get(r.id) ?? { retrievals: 0, successes: 0 };
-    result.set(r.id, effectiveSalience(r, now, s.retrievals, s.successes, config));
+    result.set(
+      r.id,
+      effectiveSalience(r, now, s.retrievals, s.successes, config),
+    );
   }
   return result;
 }

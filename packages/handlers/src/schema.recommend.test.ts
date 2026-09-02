@@ -9,7 +9,12 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 const invokeCalls: Array<{ name: string; surface: unknown }> = [];
 let graphStatsImpl: () => Promise<unknown> = async () => ({});
 vi.mock("@oxagen/oxagen/kernel", () => ({
-  invoke: async (name: string, _input: unknown, _ctx: unknown, opts?: { surface?: unknown }) => {
+  invoke: async (
+    name: string,
+    _input: unknown,
+    _ctx: unknown,
+    opts?: { surface?: unknown },
+  ) => {
     invokeCalls.push({ name, surface: opts?.surface });
     if (name === "get_graph_stats") return graphStatsImpl();
     return {};
@@ -23,17 +28,25 @@ const mockGenerateObjectFor = vi.fn(async (args: { prompt: string }) => {
   return {
     object: {
       schemas: [
-        { name: "code", displayName: "Code", labels: [], relationshipTypes: [] },
+        {
+          name: "code",
+          displayName: "Code",
+          labels: [],
+          relationshipTypes: [],
+        },
       ],
     },
   };
 });
 vi.mock("@oxagen/ai", () => ({
-  generateObjectFor: (...args: unknown[]) => mockGenerateObjectFor(args[0] as { prompt: string }),
+  generateObjectFor: (...args: unknown[]) =>
+    mockGenerateObjectFor(args[0] as { prompt: string }),
   selectModel: () => "mock-model",
 }));
 
-vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("./logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 import { schemaRecommendHandler } from "./schema.recommend";
 
@@ -53,7 +66,13 @@ const SOURCE_CODE_STATS = {
     Author: 3,
     Repository: 1,
   },
-  edgesByType: { CONTAINS: 19, DEFINES: 38, CALLS: 25, HAS_METHOD: 10, AUTHORED: 24 },
+  edgesByType: {
+    CONTAINS: 19,
+    DEFINES: 38,
+    CALLS: 25,
+    HAS_METHOD: 10,
+    AUTHORED: 24,
+  },
 };
 
 const ctx = (surface: CapabilityContext["surface"]): CapabilityContext => ({
@@ -88,7 +107,9 @@ describe("schema.recommend — graph.stats signal mapping", () => {
     // "runner" is a valid ctx surface but NOT a graph.stats contract surface;
     // the internal read must still resolve over "api".
     await schemaRecommendHandler({ sampleLimit: 200 }, ctx("runner"));
-    expect(invokeCalls.find((c) => c.name === "get_graph_stats")?.surface).toBe("api");
+    expect(invokeCalls.find((c) => c.name === "get_graph_stats")?.surface).toBe(
+      "api",
+    );
   });
 
   it("feeds the real node count + observed labels into the LLM prompt", async () => {
@@ -107,8 +128,13 @@ describe("schema.recommend — graph.stats signal mapping", () => {
   });
 
   it("reports the analyzed graph in the rationale + sampledCount", async () => {
-    const result = await schemaRecommendHandler({ sampleLimit: 200 }, ctx("app"));
-    expect(result.rationale).toContain("Analyzed 85 nodes and 71 relationships");
+    const result = await schemaRecommendHandler(
+      { sampleLimit: 200 },
+      ctx("app"),
+    );
+    expect(result.rationale).toContain(
+      "Analyzed 85 nodes and 71 relationships",
+    );
     expect(result.rationale).toContain("Function: 28");
     expect(result.sampledCount).toBe(85);
     expect(result.proposal.schemas).toHaveLength(1);
@@ -118,7 +144,10 @@ describe("schema.recommend — graph.stats signal mapping", () => {
     graphStatsImpl = async () => {
       throw new Error("graph.stats exploded");
     };
-    const result = await schemaRecommendHandler({ sampleLimit: 200 }, ctx("app"));
+    const result = await schemaRecommendHandler(
+      { sampleLimit: 200 },
+      ctx("app"),
+    );
     // Still produces a proposal — just with no graph signal.
     expect(capturedPrompt).toContain("Total nodes: 0");
     expect(capturedPrompt).toContain("no type data available");
@@ -127,7 +156,11 @@ describe("schema.recommend — graph.stats signal mapping", () => {
   });
 
   it("treats an empty nodesByLabel as no type data (no false label list)", async () => {
-    graphStatsImpl = async () => ({ nodeCount: 0, edgeCount: 0, nodesByLabel: {} });
+    graphStatsImpl = async () => ({
+      nodeCount: 0,
+      edgeCount: 0,
+      nodesByLabel: {},
+    });
     await schemaRecommendHandler({ sampleLimit: 200 }, ctx("app"));
     expect(capturedPrompt).toContain("no type data available");
   });

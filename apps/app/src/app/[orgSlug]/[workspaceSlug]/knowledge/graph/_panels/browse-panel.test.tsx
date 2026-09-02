@@ -33,6 +33,14 @@ vi.mock("@/components/knowledge/graph/node-ref", () => ({
   NodeRef: ({ node }: { node: { displayName: string } }) => (
     <span data-testid="node-ref">{node.displayName}</span>
   ),
+  nodeCitationLabel: (node: {
+    displayName: string;
+    label: string;
+    id: string | null;
+  }) =>
+    node.displayName && node.displayName !== node.id
+      ? node.displayName
+      : node.label || "Unknown node",
 }));
 
 vi.mock("next/link", () => ({

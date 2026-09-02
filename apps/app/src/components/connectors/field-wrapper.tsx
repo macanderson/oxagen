@@ -32,14 +32,29 @@ export function FieldWrapper({
           {children}
           <Label htmlFor={id} className="cursor-pointer select-none">
             {label}
-            {required && <span className="ml-0.5 text-destructive" aria-hidden="true">*</span>}
+            {required && (
+              <span className="ml-0.5 text-destructive" aria-hidden="true">
+                *
+              </span>
+            )}
           </Label>
         </div>
         {description && !error && (
-          <p id={`${id}-description`} className="text-xs text-muted-foreground pl-[52px]">{description}</p>
+          <p
+            id={`${id}-description`}
+            className="text-xs text-muted-foreground pl-[52px]"
+          >
+            {description}
+          </p>
         )}
         {error && (
-          <p id={`${id}-error`} role="alert" className="text-xs text-destructive pl-[52px]">{error}</p>
+          <p
+            id={`${id}-error`}
+            role="alert"
+            className="text-xs text-destructive pl-[52px]"
+          >
+            {error}
+          </p>
         )}
       </div>
     );
@@ -49,14 +64,22 @@ export function FieldWrapper({
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={id}>
         {label}
-        {required && <span className="ml-0.5 text-destructive" aria-hidden="true">*</span>}
+        {required && (
+          <span className="ml-0.5 text-destructive" aria-hidden="true">
+            *
+          </span>
+        )}
       </Label>
       {children}
       {description && !error && (
-        <p id={`${id}-description`} className="text-xs text-muted-foreground">{description}</p>
+        <p id={`${id}-description`} className="text-xs text-muted-foreground">
+          {description}
+        </p>
       )}
       {error && (
-        <p id={`${id}-error`} role="alert" className="text-xs text-destructive">{error}</p>
+        <p id={`${id}-error`} role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
       )}
     </div>
   );

@@ -99,11 +99,11 @@ describe("formFillHandler", () => {
   it("sets changed=true only when proposed !== current (strict equality)", async () => {
     mocks.generateObjectFor.mockResolvedValueOnce({
       object: {
-        title: "Old title",   // same as current — no change
+        title: "Old title", // same as current — no change
         title__reason: null,
-        status: "draft",      // same as current — no change
+        status: "draft", // same as current — no change
         status__reason: null,
-        count: 42,            // different — changed
+        count: 42, // different — changed
         count__reason: "Updated count",
       },
       usage: { promptTokens: 8, completionTokens: 4, totalTokens: 12 },
@@ -142,7 +142,9 @@ describe("formFillHandler", () => {
   // ── model error → all unchanged, no throw ────────────────────────────────
 
   it("returns all fields unchanged and does not throw when the model errors", async () => {
-    mocks.generateObjectFor.mockRejectedValueOnce(new Error("Model unavailable"));
+    mocks.generateObjectFor.mockRejectedValueOnce(
+      new Error("Model unavailable"),
+    );
 
     const result = await formFillHandler(BASE_INPUT, CTX);
 

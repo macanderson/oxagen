@@ -20,7 +20,11 @@ export const agentFeatureVerify = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "verification" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "verification",
+  },
   sensitivity: "low",
   mutates: false,
   defaultEffect: "deny",
@@ -33,12 +37,16 @@ export const agentFeatureVerify = registerCapability({
       .string()
       .min(1)
       .max(8000)
-      .describe("What the feature is supposed to do / show — the spec the judge holds the screenshots against."),
+      .describe(
+        "What the feature is supposed to do / show — the spec the judge holds the screenshots against.",
+      ),
     screenshotKeys: z
       .array(z.string().min(1))
       .min(1)
       .max(8)
-      .describe("Private asset keys from browser.screenshot — the images the judge reads."),
+      .describe(
+        "Private asset keys from browser.screenshot — the images the judge reads.",
+      ),
     builderModel: z
       .string()
       .optional()
@@ -50,20 +58,37 @@ export const agentFeatureVerify = registerCapability({
       .array(z.string().min(1))
       .max(20)
       .optional()
-      .describe("Optional explicit things the judge must confirm are visible/working in the screenshots."),
+      .describe(
+        "Optional explicit things the judge must confirm are visible/working in the screenshots.",
+      ),
   }),
   output: z.object({
     verdict: z
       .enum(["pass", "fail", "inconclusive"])
-      .describe("'pass' only when the screenshots clearly satisfy the requirement."),
+      .describe(
+        "'pass' only when the screenshots clearly satisfy the requirement.",
+      ),
     confidence: z.number().min(0).max(1),
-    judgeModel: z.string().describe("The independent model that rendered the verdict."),
-    builderModel: z.string().nullable().describe("The builder model excluded from judging, if provided."),
-    observations: z.array(z.string()).describe("What the judge actually saw in the screenshots."),
-    issues: z.array(z.string()).describe("Missing/broken elements blocking a pass."),
-    reasoning: z.string().describe("The judge's justification for the verdict."),
+    judgeModel: z
+      .string()
+      .describe("The independent model that rendered the verdict."),
+    builderModel: z
+      .string()
+      .nullable()
+      .describe("The builder model excluded from judging, if provided."),
+    observations: z
+      .array(z.string())
+      .describe("What the judge actually saw in the screenshots."),
+    issues: z
+      .array(z.string())
+      .describe("Missing/broken elements blocking a pass."),
+    reasoning: z
+      .string()
+      .describe("The judge's justification for the verdict."),
   }),
 });
 
 export type AgentFeatureVerifyInput = z.output<typeof agentFeatureVerify.input>;
-export type AgentFeatureVerifyOutput = z.output<typeof agentFeatureVerify.output>;
+export type AgentFeatureVerifyOutput = z.output<
+  typeof agentFeatureVerify.output
+>;

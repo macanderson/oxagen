@@ -33,9 +33,9 @@ function wrapper({ children }: { children: React.ReactNode }) {
 describe("usePageContext", () => {
   it("throws when used outside PageContextProvider", () => {
     // renderHook without a wrapper → no provider
-    expect(() =>
-      renderHook(() => usePageContext()),
-    ).toThrow("usePageContext must be used inside PageContextProvider");
+    expect(() => renderHook(() => usePageContext())).toThrow(
+      "usePageContext must be used inside PageContextProvider",
+    );
   });
 
   it("provides default null values inside the provider", () => {
@@ -97,7 +97,8 @@ describe("useRegisterPageEntity", () => {
   it("sets the entity on mount", () => {
     const ctx = renderHook(() => usePageContext(), { wrapper });
     renderHook(
-      () => useRegisterPageEntity({ kind: "workspace", id: "ws-1", label: "Prod" }),
+      () =>
+        useRegisterPageEntity({ kind: "workspace", id: "ws-1", label: "Prod" }),
       { wrapper },
     );
     // Independent renderHook instances share no state — test the setter in one hook.

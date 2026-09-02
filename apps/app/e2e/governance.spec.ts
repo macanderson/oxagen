@@ -19,14 +19,19 @@ import { fileURLToPath } from "node:url";
 import { signUpFreshUser } from "./helpers/signup";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SCREENSHOT_DIR = resolve(__dirname, "screenshots");
+// Per-spec subdirectory, NOT the shared `e2e/screenshots` root: the beforeAll
+// below wipes this directory, and pointing several specs at the same root made
+// each one delete the artifacts the previously-run specs had just captured.
+const SCREENSHOT_DIR = resolve(__dirname, "screenshots", "governance");
 
 test.beforeAll(() => {
   rmSync(SCREENSHOT_DIR, { recursive: true, force: true });
   mkdirSync(SCREENSHOT_DIR, { recursive: true });
 });
 
-test("governance: capability catalog renders + row drawer opens", async ({ page }) => {
+test("governance: capability catalog renders + row drawer opens", async ({
+  page,
+}) => {
   test.setTimeout(60_000);
 
   const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "gov" });
@@ -36,7 +41,9 @@ test("governance: capability catalog renders + row drawer opens", async ({ page 
   await page.waitForLoadState("domcontentloaded");
 
   // The registry read succeeded (not the full-page error state) and rendered rows.
-  await expect(page.getByTestId("capability-catalog")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("capability-catalog")).toBeVisible({
+    timeout: 20_000,
+  });
   const firstRow = page.locator('[data-testid^="capability-row-"]').first();
   await expect(firstRow).toBeVisible({ timeout: 15_000 });
 
@@ -64,8 +71,12 @@ test("governance: policies page renders roles + auth alerts for a fresh org", as
   // Page container + the always-present MCP auth-alerts panel render, proving
   // the server read chain (list_iam_roles, get_auth_alerts, query_audit_log)
   // resolved without throwing into the route error boundary.
-  await expect(page.getByTestId("governance-policies")).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByTestId("auth-alerts-panel")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("governance-policies")).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(page.getByTestId("auth-alerts-panel")).toBeVisible({
+    timeout: 15_000,
+  });
 
   await page.screenshot({
     path: `${SCREENSHOT_DIR}/governance-policies.png`,

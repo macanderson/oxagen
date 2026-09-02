@@ -23,7 +23,11 @@ import {
 const mockRead = vi.mocked(readConfig);
 const mockWrite = vi.mocked(writeConfig);
 
-const ENV_KEYS = ["OXAGEN_COORDINATOR", "OXAGEN_ONDEVICE_MODEL", "OXAGEN_MODELS_CACHE_DIR"];
+const ENV_KEYS = [
+  "OXAGEN_COORDINATOR",
+  "OXAGEN_ONDEVICE_MODEL",
+  "OXAGEN_MODELS_CACHE_DIR",
+];
 
 function stub(cfg: CliConfig): void {
   mockRead.mockReturnValue(cfg);
@@ -73,7 +77,12 @@ describe("user config overrides defaults", () => {
 
 describe("env overrides beat config", () => {
   it("prefers env for coordinator, model id, and cache dir", () => {
-    stub({ runtime: { coordinator: "haiku", onDevice: { modelId: "auto", cacheDir: "/data" } } });
+    stub({
+      runtime: {
+        coordinator: "haiku",
+        onDevice: { modelId: "auto", cacheDir: "/data" },
+      },
+    });
     process.env["OXAGEN_COORDINATOR"] = "on-device";
     process.env["OXAGEN_ONDEVICE_MODEL"] = "big-32b";
     process.env["OXAGEN_MODELS_CACHE_DIR"] = "/env/models";
@@ -93,10 +102,15 @@ describe("setters", () => {
   });
 
   it("setOnDeviceConfig merges into the onDevice block", () => {
-    stub({ runtime: { coordinator: "on-device", onDevice: { modelId: "auto" } } });
+    stub({
+      runtime: { coordinator: "on-device", onDevice: { modelId: "auto" } },
+    });
     setOnDeviceConfig({ autoDownload: false });
     expect(mockWrite).toHaveBeenCalledWith({
-      runtime: { coordinator: "on-device", onDevice: { modelId: "auto", autoDownload: false } },
+      runtime: {
+        coordinator: "on-device",
+        onDevice: { modelId: "auto", autoDownload: false },
+      },
     });
   });
 });

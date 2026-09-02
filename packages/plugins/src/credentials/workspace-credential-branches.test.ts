@@ -49,7 +49,9 @@ beforeEach(() => {
   rows.length = 0;
   conflictSets.length = 0;
   vi.resetModules();
-  process.env.AUTH_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 3).toString("base64");
+  process.env.AUTH_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 3).toString(
+    "base64",
+  );
 });
 
 describe("setWorkspaceSecret — oauthClientSecret branch", () => {

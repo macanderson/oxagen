@@ -35,7 +35,9 @@ vi.mock("lucide-react", async (importOriginal) => {
   const real = await importOriginal<typeof import("lucide-react")>();
   return {
     ...real,
-    CircleSlash: vi.fn(() => <span data-testid="circle-slash-icon" aria-hidden="true" />),
+    CircleSlash: vi.fn(() => (
+      <span data-testid="circle-slash-icon" aria-hidden="true" />
+    )),
   };
 });
 
@@ -59,7 +61,12 @@ vi.mock("@/components/ui/button", () => ({
     className?: string;
     title?: string;
   }) => (
-    <button type={(type as "button" | "submit" | "reset") ?? "button"} onClick={onClick} disabled={disabled} title={title}>
+    <button
+      type={(type as "button" | "submit" | "reset") ?? "button"}
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+    >
       {children}
     </button>
   ),
@@ -99,7 +106,9 @@ describe("RevokeOwnSessionButton", () => {
 
     await user.click(screen.getByRole("button", { name: /revoke/i }));
 
-    expect(screen.getByRole("button", { name: /confirm/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /confirm/i }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument();
     // Original revoke button should be gone
     expect(screen.queryByTitle(/revoke this session/i)).not.toBeInTheDocument();
@@ -128,7 +137,9 @@ describe("RevokeOwnSessionButton", () => {
     await waitFor(() => {
       expect(screen.getByTitle(/revoke this session/i)).toBeInTheDocument();
     });
-    expect(screen.queryByRole("button", { name: /confirm/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /confirm/i }),
+    ).not.toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------
@@ -148,7 +159,9 @@ describe("RevokeOwnSessionButton", () => {
       expect(mockRevokeOwnSessionAction).toHaveBeenCalledOnce();
     });
 
-    expect(mockRevokeOwnSessionAction).toHaveBeenCalledWith({ sessionId: "sess-abc" });
+    expect(mockRevokeOwnSessionAction).toHaveBeenCalledWith({
+      sessionId: "sess-abc",
+    });
   });
 
   it("does not call revokeOwnSessionAction on the first Revoke click (guard)", async () => {
@@ -177,7 +190,9 @@ describe("RevokeOwnSessionButton", () => {
     await user.click(screen.getByRole("button", { name: /confirm/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /dismiss/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /dismiss/i }),
+      ).toBeInTheDocument();
     });
 
     expect(screen.getByText(/failed to revoke session/i)).toBeInTheDocument();
@@ -200,7 +215,9 @@ describe("RevokeOwnSessionButton", () => {
     await user.click(screen.getByRole("button", { name: /confirm/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /dismiss/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /dismiss/i }),
+      ).toBeInTheDocument();
     });
 
     await user.click(screen.getByRole("button", { name: /dismiss/i }));

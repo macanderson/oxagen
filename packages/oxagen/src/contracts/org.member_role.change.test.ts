@@ -4,12 +4,17 @@ import { getCapability } from "../registry";
 
 describe("org.member.role.change capability", () => {
   it("parses a valid input", () => {
-    const parsed = orgMemberRoleChange.input.parse({ targetUserId: "usr_abc", newRole: "Admin" });
+    const parsed = orgMemberRoleChange.input.parse({
+      targetUserId: "usr_abc",
+      newRole: "Admin",
+    });
     expect(parsed).toEqual({ targetUserId: "usr_abc", newRole: "Admin" });
   });
 
   it("rejects an empty targetUserId", () => {
-    expect(() => orgMemberRoleChange.input.parse({ targetUserId: "", newRole: "Admin" })).toThrow();
+    expect(() =>
+      orgMemberRoleChange.input.parse({ targetUserId: "", newRole: "Admin" }),
+    ).toThrow();
   });
 
   it("rejects an empty newRole", () => {

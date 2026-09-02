@@ -219,6 +219,15 @@ export interface StreamAgentReplyArgs {
     orgId: string;
     workspaceId: string;
     surface: Surface;
+    /**
+     * UUID of the user message that initiated the turn. Flows verbatim into
+     * `token_usage.execution_step_id` (a UUID column) and
+     * `credit_ledger.reference_id` (a Postgres `uuid` column), so it MUST be a
+     * valid UUID. A free-form string like "unknown" breaks BOTH writes — the
+     * ClickHouse row is dropped and the credit charge throws and is swallowed,
+     * leaving the turn unbilled. Unlike the generateObject/embed paths this
+     * field is not nullable, so there is no "no step" escape hatch: mint a UUID.
+     */
     messageId: string;
   };
   onFinish?: (event: {
@@ -247,6 +256,16 @@ export function streamAgentReply(
   // inherits the parent context.  Ended asynchronously in onFinish once we
   // know token counts.  No-op when OTEL SDK is not initialised (NoopTracer).
   // Attributes are PII-safe: model/provider/surface only — never prompt text.
+  //
+  // KNOWN GAP — onFinish is the ONLY terminal path wired here. The SDK fires it
+  // on a clean finish, and routes an abort to `onAbort` and a failure to
+  // `onError`, neither of which this function supplies (`args.onError` is the
+  // caller's own handler and is forwarded verbatim, not chained). So a turn the
+  // client cancels mid-stream — the agent-engine step loop passes a real
+  // AbortSignal — leaves this span open forever and charges the org nothing for
+  // the tokens the provider already produced. Wiring `onEnd` (fires on every
+  // terminal outcome) is the fix; it is a behavior change and deliberately not
+  // made here.
   const _otelSpan = trace.getTracer("oxagen.ai.stream").startSpan("ai.stream", {
     kind: SpanKind.CLIENT,
     attributes: {

@@ -270,7 +270,9 @@ describe("workspaceBudgetPolicyWriteHandler", () => {
         { enabled: true, limitUsd: 10.0 },
         noWsCtx,
       ),
-    ).rejects.toThrow("workspace.budget.policy.write requires a workspace context");
+    ).rejects.toThrow(
+      "workspace.budget.policy.write requires a workspace context",
+    );
 
     // withTenantDb must NOT be called — the guard fires before any DB access.
     expect(mocks.withTenantDb).not.toHaveBeenCalled();

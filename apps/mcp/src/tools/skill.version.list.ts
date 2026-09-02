@@ -27,8 +27,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function skillVersionListTool(args: InferSchema<typeof schema>) {
+export default async function skillVersionListTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(skillVersionList.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(skillVersionList.name, args, ctx, {
+    surface: "mcp",
+  });
   return skillVersionList.output.parse(output);
 }

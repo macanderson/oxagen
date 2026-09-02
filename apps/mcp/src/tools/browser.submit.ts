@@ -22,6 +22,8 @@ export default async function browserSubmitTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(browserSubmit.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(browserSubmit.name, args, ctx, {
+    surface: "mcp",
+  });
   return browserSubmit.output.parse(output);
 }

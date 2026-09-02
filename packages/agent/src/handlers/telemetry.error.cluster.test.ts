@@ -52,7 +52,11 @@ describe("telemetryErrorClusterHandler", () => {
   it("returns typed clusters, totals, and the effective window", async () => {
     const out = await telemetryErrorClusterHandler({ sinceHours: 12 }, CTX);
     expect(out.clusters).toHaveLength(1);
-    expect(out.clusters[0]).toMatchObject({ fingerprint: "fp1", errorClass: "TypeError", count: 42 });
+    expect(out.clusters[0]).toMatchObject({
+      fingerprint: "fp1",
+      errorClass: "TypeError",
+      count: 42,
+    });
     expect(out.totalErrors).toBe(42);
     expect(out.distinctClusters).toBe(1);
     expect(out.window).toEqual({ sinceHours: 12 });

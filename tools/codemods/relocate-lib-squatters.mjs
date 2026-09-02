@@ -5,7 +5,7 @@
  *
  * Locality-of-behavior codemod for the module-boundary restructuring: a module
  * whose only consumer is one page/component/command is not "shared" — it lives
- * with its caller. This script performs the move atomically:
+ * with its caller. What it does:
  *
  *   1. Auto-detects each module's test files (co-located `<stem>.test.*` and
  *      `__tests__/<stem>.test.*`) and moves them along with it.
@@ -15,6 +15,19 @@
  *      either it pointed at a moved file, or it is a relative specifier inside
  *      a moved file.
  *   3. Uses `git mv` so history follows the file.
+ *
+ * NOT ATOMIC. All inputs are validated up front (missing source / occupied
+ * destination throw before anything is touched), but the execute phase writes
+ * N files and then shells out to N `git mv` calls with no rollback: a failure
+ * partway through leaves a half-migrated tree. Run `--dry` first, run it on a
+ * clean tree, and recover with `git checkout`/`git reset` if it aborts.
+ *
+ * Rewrites are scoped to <srcRootRel>. Files OUTSIDE that tree that import a
+ * moved module — e2e specs, next.config.ts, vitest.config.ts, another package —
+ * are not rewritten and will break silently. Grep for the old paths afterwards.
+ *
+ * Specifiers are matched by regex, not parsed, so a specifier-shaped string
+ * inside a comment or template literal can be rewritten too. Review the diff.
  *
  * Usage:
  *   node tools/codemods/relocate-lib-squatters.mjs <repoRoot> <srcRootRel> <alias|-> <moves.json> [--dry]
@@ -29,14 +42,24 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
-const [, , repoRoot, srcRootRel, aliasArg, movesFile, dryFlag] = process.argv;
+const USAGE =
+  "usage: relocate-lib-squatters.mjs <repoRoot> <srcRootRel> <alias|-> <moves.json> [--dry]";
+const [, , repoRoot, srcRootRel, aliasArg, movesFile, ...restArgs] =
+  process.argv;
 if (!repoRoot || !srcRootRel || !aliasArg || !movesFile) {
-  console.error(
-    "usage: relocate-lib-squatters.mjs <repoRoot> <srcRootRel> <alias|-> <moves.json> [--dry]",
-  );
+  console.error(USAGE);
   process.exit(1);
 }
-const DRY = dryFlag === "--dry";
+// Anything after moves.json must be exactly `--dry` and nothing else. A typo
+// (`--dry-run`, `-n`) must NOT silently fall through to a destructive run that
+// rewrites files and shells out to `git mv`.
+const unknownArgs = restArgs.filter((a) => a !== "--dry");
+if (unknownArgs.length > 0 || restArgs.length > 1) {
+  console.error(`unrecognized argument(s): ${restArgs.join(" ")}`);
+  console.error(USAGE);
+  process.exit(1);
+}
+const DRY = restArgs[0] === "--dry";
 const alias = aliasArg === "-" ? null : aliasArg;
 const srcRoot = path.join(repoRoot, srcRootRel);
 const EXTS = [".ts", ".tsx"];
@@ -47,23 +70,34 @@ const rel = (a) => path.relative(repoRoot, a);
 // ── build the full move map (main files + their tests) ──────────────────────
 const mainMoves = JSON.parse(fs.readFileSync(movesFile, "utf8"));
 const moveMap = new Map(); // abs old → abs new
+const claimedDests = new Set(); // abs new — catches two sources aimed at one path
+
+// Every destination goes through here, so the "validated up front" guarantee in
+// the header covers auto-detected test moves too. `git mv` refuses to clobber an
+// existing path, so an unchecked collision would abort mid-run and leave the
+// tree half-migrated — exactly the non-atomic failure this phase exists to avoid.
+function planMove(fromRel, toRel) {
+  if (fs.existsSync(abs(toRel)))
+    throw new Error(`destination exists: ${toRel}`);
+  if (claimedDests.has(abs(toRel)))
+    throw new Error(`two sources target the same destination: ${toRel}`);
+  claimedDests.add(abs(toRel));
+  moveMap.set(abs(fromRel), abs(toRel));
+}
+
 for (const { from, to } of mainMoves) {
   if (!fs.existsSync(abs(from))) throw new Error(`missing source: ${from}`);
-  if (fs.existsSync(abs(to))) throw new Error(`destination exists: ${to}`);
-  moveMap.set(abs(from), abs(to));
+  planMove(from, to);
   const stem = path.basename(from).replace(/\.(ts|tsx)$/, "");
   const fromDir = path.dirname(from);
   const toDir = path.dirname(to);
   for (const ext of EXTS) {
     const co = path.join(fromDir, `${stem}.test${ext}`);
     if (fs.existsSync(abs(co)))
-      moveMap.set(abs(co), abs(path.join(toDir, `${stem}.test${ext}`)));
+      planMove(co, path.join(toDir, `${stem}.test${ext}`));
     const under = path.join(fromDir, "__tests__", `${stem}.test${ext}`);
     if (fs.existsSync(abs(under)))
-      moveMap.set(
-        abs(under),
-        abs(path.join(toDir, "__tests__", `${stem}.test${ext}`)),
-      );
+      planMove(under, path.join(toDir, "__tests__", `${stem}.test${ext}`));
   }
 }
 
@@ -165,9 +199,24 @@ for (const r of rewrites) console.log(`  ${rel(r.file)}`);
 
 if (!DRY) {
   for (const r of rewrites) fs.writeFileSync(r.file, r.content);
+  const done = [];
   for (const [from, to] of moveMap.entries()) {
-    fs.mkdirSync(path.dirname(to), { recursive: true });
-    execFileSync("git", ["mv", rel(from), rel(to)], { cwd: repoRoot });
+    try {
+      fs.mkdirSync(path.dirname(to), { recursive: true });
+      execFileSync("git", ["mv", rel(from), rel(to)], { cwd: repoRoot });
+      done.push(rel(to));
+    } catch (err) {
+      // There is no rollback: the specifier rewrites and every earlier `git mv`
+      // are already on disk. Name exactly what landed so the tree can be reset.
+      console.error(
+        `── FAILED at ${rel(from)} → ${rel(to)}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      console.error(
+        `── partial state: ${rewrites.length} file(s) rewritten, ${done.length} move(s) applied.`,
+      );
+      console.error("── recover with: git reset && git checkout -- .");
+      process.exit(1);
+    }
   }
   console.log(
     "── done. Verify with the package's typecheck + the moved test files only.",

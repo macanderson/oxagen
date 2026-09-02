@@ -78,7 +78,9 @@ test.describe("sandbox templates — create, set-default, export/import, bind ag
     await page.getByTestId("sandbox-template-new-btn-production").click();
     await page.getByTestId("sandbox-template-name-input").fill("Base Runner");
     await page.getByTestId("sandbox-template-save-btn").click();
-    await expect(page.getByTestId("sandbox-template-row-base-runner")).toBeVisible({
+    await expect(
+      page.getByTestId("sandbox-template-row-base-runner"),
+    ).toBeVisible({
       timeout: 20_000,
     });
 
@@ -91,12 +93,16 @@ test.describe("sandbox templates — create, set-default, export/import, bind ag
     await page.getByTestId("sandbox-template-new-btn-production").click();
     await page.getByTestId("sandbox-template-name-input").fill("SWE Runner");
     await page.getByTestId("sandbox-template-save-btn").click();
-    await expect(page.getByTestId("sandbox-template-row-swe-runner")).toBeVisible({
+    await expect(
+      page.getByTestId("sandbox-template-row-swe-runner"),
+    ).toBeVisible({
       timeout: 20_000,
     });
 
     // Promote SWE Runner to the environment default (set_default_sandbox_template).
-    const setDefaultBtn = page.getByTestId("sandbox-template-setdefault-swe-runner");
+    const setDefaultBtn = page.getByTestId(
+      "sandbox-template-setdefault-swe-runner",
+    );
     if (await setDefaultBtn.count()) {
       await setDefaultBtn.click();
     }
@@ -148,7 +154,9 @@ test.describe("sandbox templates — create, set-default, export/import, bind ag
 
     // ── 7. Create a draft agent + bind it to the environment ────────────────
     await page.goto(`/${orgSlug}/default/workbench/agents/new`);
-    await expect(page.getByTestId("step-describe")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("step-describe")).toBeVisible({
+      timeout: 20_000,
+    });
     await page.getByTestId("agent-describe-skip").click();
     await expect(page.getByTestId("step-identity")).toBeVisible();
     const agentSlug = `sbx-agent-${Date.now().toString(36)}`;
@@ -156,7 +164,9 @@ test.describe("sandbox templates — create, set-default, export/import, bind ag
     await page.getByTestId("agent-slug-input").fill(agentSlug);
     await page.getByTestId("builder-step-review").click();
     await page.getByTestId("agent-save-draft").click();
-    await expect(page.getByText(/draft saved/i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/draft saved/i)).toBeVisible({
+      timeout: 20_000,
+    });
 
     // Open the agent's detail page (where the Environments card renders).
     await page.goto(`/${orgSlug}/default/workbench/agents`);
@@ -189,14 +199,16 @@ test.describe("sandbox templates — create, set-default, export/import, bind ag
     // label is "<name> (<slug>)" (+" ★" when default) — never the bare env
     // name — so resolve the option's value instead of matching an exact label.
     const bindSelect = page.getByTestId("agent-bind-env-select");
-    const productionOption = bindSelect.locator("option", { hasText: "Production" }).first();
+    const productionOption = bindSelect
+      .locator("option", { hasText: "Production" })
+      .first();
     await expect(productionOption).toBeAttached({ timeout: 20_000 });
     const productionValue = await productionOption.getAttribute("value");
     await bindSelect.selectOption(productionValue!);
     await page.getByTestId("agent-bind-submit").click();
-    await expect(
-      page.getByTestId("agent-binding-row-production"),
-    ).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("agent-binding-row-production")).toBeVisible({
+      timeout: 20_000,
+    });
 
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "04-agent-bound.png"),
@@ -206,9 +218,10 @@ test.describe("sandbox templates — create, set-default, export/import, bind ag
     // ── 8. Unbind the environment (unbind_agent_environment) ─────────────────
     await page.getByTestId("agent-binding-unbind-production").click();
     // The binding row disappears; the card falls back to the empty state.
-    await expect(
-      page.getByTestId("agent-binding-row-production"),
-    ).toHaveCount(0, { timeout: 20_000 });
+    await expect(page.getByTestId("agent-binding-row-production")).toHaveCount(
+      0,
+      { timeout: 20_000 },
+    );
 
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "05-agent-unbound.png"),

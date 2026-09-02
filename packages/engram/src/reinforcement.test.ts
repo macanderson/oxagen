@@ -8,7 +8,11 @@ import { createRecord } from "./record";
 import type { Namespace, Provenance } from "./types";
 
 const NS: Namespace = { org: "test-org", workspace: "test-ws" };
-const PROV: Provenance = { author: "test", derivedFrom: [], timestamp: Date.now() };
+const PROV: Provenance = {
+  author: "test",
+  derivedFrom: [],
+  timestamp: Date.now(),
+};
 
 function makeRecord(event: string, salience = 0.5) {
   return createRecord({
@@ -153,11 +157,16 @@ describe("ReinforcementTracker", () => {
       tracker.reinforceTurn([record.id], "success");
 
       const boosted: string[] = [];
-      const updateSalience = vi.fn(async (id: string, _salience: number): Promise<void> => {
-        boosted.push(id);
-      });
+      const updateSalience = vi.fn(
+        async (id: string, _salience: number): Promise<void> => {
+          boosted.push(id);
+        },
+      );
 
-      const { boosted: boostCount, penalized } = await tracker.applyToStore(store, updateSalience);
+      const { boosted: boostCount, penalized } = await tracker.applyToStore(
+        store,
+        updateSalience,
+      );
 
       expect(boostCount).toBe(1);
       expect(penalized).toBe(0);
@@ -177,11 +186,16 @@ describe("ReinforcementTracker", () => {
       tracker.reinforceTurn([record.id], "failure");
 
       const penalizedIds: string[] = [];
-      const updateSalience = vi.fn(async (id: string, _salience: number): Promise<void> => {
-        penalizedIds.push(id);
-      });
+      const updateSalience = vi.fn(
+        async (id: string, _salience: number): Promise<void> => {
+          penalizedIds.push(id);
+        },
+      );
 
-      const { boosted, penalized } = await tracker.applyToStore(store, updateSalience);
+      const { boosted, penalized } = await tracker.applyToStore(
+        store,
+        updateSalience,
+      );
 
       expect(penalized).toBe(1);
       expect(boosted).toBe(0);
@@ -195,7 +209,10 @@ describe("ReinforcementTracker", () => {
       tracker.reinforceTurn(["ghost-record"], "success");
 
       const updateSalience = vi.fn(async (): Promise<void> => undefined);
-      const { boosted, penalized } = await tracker.applyToStore(store, updateSalience);
+      const { boosted, penalized } = await tracker.applyToStore(
+        store,
+        updateSalience,
+      );
 
       expect(boosted).toBe(0);
       expect(penalized).toBe(0);
@@ -207,7 +224,10 @@ describe("ReinforcementTracker", () => {
       await store.append(record);
       // No recordRetrieval → nothing to reconcile.
       const updateSalience = vi.fn(async (): Promise<void> => undefined);
-      const { boosted, penalized } = await tracker.applyToStore(store, updateSalience);
+      const { boosted, penalized } = await tracker.applyToStore(
+        store,
+        updateSalience,
+      );
       expect(boosted).toBe(0);
       expect(penalized).toBe(0);
       expect(updateSalience).not.toHaveBeenCalled();
@@ -224,10 +244,12 @@ describe("ReinforcementTracker", () => {
       tracker.reinforceTurn([record.id], "success");
 
       const salienceByCall: number[] = [];
-      const updateSalience = vi.fn(async (_id: string, s: number): Promise<void> => {
-        salienceByCall.push(s);
-        await store.updateSalience(_id, s);
-      });
+      const updateSalience = vi.fn(
+        async (_id: string, s: number): Promise<void> => {
+          salienceByCall.push(s);
+          await store.updateSalience(_id, s);
+        },
+      );
 
       const first = await tracker.applyToStore(store, updateSalience);
       expect(first.boosted).toBe(1);
@@ -248,10 +270,12 @@ describe("ReinforcementTracker", () => {
       tracker.reinforceTurn([record.id], "success");
 
       let last = 0;
-      const updateSalience = vi.fn(async (id: string, s: number): Promise<void> => {
-        last = s;
-        await store.updateSalience(id, s);
-      });
+      const updateSalience = vi.fn(
+        async (id: string, s: number): Promise<void> => {
+          last = s;
+          await store.updateSalience(id, s);
+        },
+      );
       await tracker.applyToStore(store, updateSalience);
       const afterOne = last;
 
@@ -276,9 +300,11 @@ describe("ReinforcementTracker", () => {
       tracker.reinforceTurn([record.id], "success");
 
       let newSalience = 0;
-      const updateSalience = vi.fn(async (_id: string, sal: number): Promise<void> => {
-        newSalience = sal;
-      });
+      const updateSalience = vi.fn(
+        async (_id: string, sal: number): Promise<void> => {
+          newSalience = sal;
+        },
+      );
 
       await tracker.applyToStore(store, updateSalience);
 

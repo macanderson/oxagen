@@ -1,5 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type { PinnedSchema, SchemaFieldError } from "@oxagen/ingestion/validate";
+import type {
+  PinnedSchema,
+  SchemaFieldError,
+} from "@oxagen/ingestion/validate";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
@@ -20,7 +23,11 @@ import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
-const prop = (over: Partial<PinnedSchema["labels"][number]["properties"][number]> & { key: string }) => ({
+const prop = (
+  over: Partial<PinnedSchema["labels"][number]["properties"][number]> & {
+    key: string;
+  },
+) => ({
   key: over.key,
   dataType: over.dataType ?? "string",
   required: over.required ?? false,
@@ -47,7 +54,11 @@ const PINNED: PinnedSchema = {
       properties: [
         prop({ key: "customer_id", required: true }),
         prop({ key: "name", required: true }),
-        prop({ key: "status", dataType: "enum", enumValues: ["active", "churned"] }),
+        prop({
+          key: "status",
+          dataType: "enum",
+          enumValues: ["active", "churned"],
+        }),
       ],
     },
   ],
@@ -94,7 +105,10 @@ describe("toContractFieldErrors", () => {
 describe("schemaValidateNodeHandler", () => {
   it("returns valid + score 1 + accepted for a fully conformant node", async () => {
     const res = await schemaValidateNodeHandler(
-      { label: "Customer", properties: { customer_id: "C-1", name: "Acme Corp", status: "active" } },
+      {
+        label: "Customer",
+        properties: { customer_id: "C-1", name: "Acme Corp", status: "active" },
+      },
       CTX,
     );
     expect(res.valid).toBe(true);
@@ -110,14 +124,19 @@ describe("schemaValidateNodeHandler", () => {
       CTX,
     );
     expect(res.valid).toBe(false);
-    expect(res.missingRequired).toEqual(expect.arrayContaining(["customer_id", "name"]));
+    expect(res.missingRequired).toEqual(
+      expect.arrayContaining(["customer_id", "name"]),
+    );
     expect(res.errors.every((e) => e.code === "required")).toBe(true);
     // Lenient enforcement + invalid → classified as written_below_floor (never rejected).
     expect(res.outcome).toBe("written_below_floor");
   });
 
   it("rejects an invalid node under strict enforcement", async () => {
-    mocks.getPinnedSchema.mockResolvedValue({ ...PINNED, enforcementMode: "strict" });
+    mocks.getPinnedSchema.mockResolvedValue({
+      ...PINNED,
+      enforcementMode: "strict",
+    });
     const res = await schemaValidateNodeHandler(
       { label: "Customer", properties: {} },
       CTX,
@@ -128,11 +147,16 @@ describe("schemaValidateNodeHandler", () => {
 
   it("flags an out-of-range enum value with a oneOf error", async () => {
     const res = await schemaValidateNodeHandler(
-      { label: "Customer", properties: { customer_id: "C-1", name: "Acme", status: "frozen" } },
+      {
+        label: "Customer",
+        properties: { customer_id: "C-1", name: "Acme", status: "frozen" },
+      },
       CTX,
     );
     expect(res.valid).toBe(false);
-    expect(res.errors.some((e) => e.field === "status" && e.code === "oneOf")).toBe(true);
+    expect(
+      res.errors.some((e) => e.field === "status" && e.code === "oneOf"),
+    ).toBe(true);
   });
 
   it("passes through an unknown label as fully conformant", async () => {
@@ -164,7 +188,12 @@ describe("schemaValidateNodeHandler", () => {
 describe("schemaValidateRelationshipHandler", () => {
   it("validates a conformant relationship with matching endpoints", async () => {
     const res = await schemaValidateRelationshipHandler(
-      { type: "BELONGS_TO", startLabel: "Customer", endLabel: "Organization", properties: {} },
+      {
+        type: "BELONGS_TO",
+        startLabel: "Customer",
+        endLabel: "Organization",
+        properties: {},
+      },
       CTX,
     );
     expect(res.valid).toBe(true);
@@ -173,17 +202,29 @@ describe("schemaValidateRelationshipHandler", () => {
 
   it("flags an endpoint-constraint violation as a type error", async () => {
     const res = await schemaValidateRelationshipHandler(
-      { type: "BELONGS_TO", startLabel: "Customer", endLabel: "WrongLabel", properties: {} },
+      {
+        type: "BELONGS_TO",
+        startLabel: "Customer",
+        endLabel: "WrongLabel",
+        properties: {},
+      },
       CTX,
     );
     expect(res.valid).toBe(false);
-    expect(res.errors.some((e) => e.field === "endLabel" && e.code === "type")).toBe(true);
+    expect(
+      res.errors.some((e) => e.field === "endLabel" && e.code === "type"),
+    ).toBe(true);
   });
 
   it("passes through when no version is pinned", async () => {
     mocks.getPinnedSchema.mockResolvedValue(null);
     const res = await schemaValidateRelationshipHandler(
-      { type: "BELONGS_TO", startLabel: "Customer", endLabel: "Organization", properties: {} },
+      {
+        type: "BELONGS_TO",
+        startLabel: "Customer",
+        endLabel: "Organization",
+        properties: {},
+      },
       CTX,
     );
     expect(res.valid).toBe(true);

@@ -21,7 +21,7 @@ import {
   mkdirSync,
   rmSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { apiPostOrThrow } from "../lib/api.js";
 import { createOutput } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
@@ -189,20 +189,30 @@ function inferLanguage(file: string): "json" | "python" | undefined {
 /**
  * Discover the existing workspace files a diff touches by scanning its ---/+++
  * file headers, then read them from `dir`. This only ASSEMBLES the workspace to
- * send; the authoritative apply (and path-traversal confinement) happens
- * server-side in code.patch, so this is a best-effort input gather, not a parser.
+ * send; the authoritative apply happens server-side in code.patch, so this is a
+ * best-effort input gather, not a parser.
+ *
+ * Confinement is enforced HERE, not only server-side. The diff is untrusted
+ * input, and this function reads from the local disk before any server call —
+ * so a header naming `../../.ssh/id_rsa` (or an absolute path) would otherwise
+ * read that file and ship it to the API in `files`. The server's
+ * `assertSafeWorkspacePath` only guards the apply target, and only after the
+ * payload has already left this machine. Escaping paths are skipped silently:
+ * the server rejects such a diff anyway, and this loop is a gather, not a gate.
  */
 function readWorkspaceForDiff(
   diff: string,
   dir: string,
 ): Record<string, string> {
   const files: Record<string, string> = {};
+  const root = resolve(dir);
   for (const line of diff.split("\n")) {
     const m = /^(?:---|\+\+\+) (?:[ab]\/)?(.+?)(?:\t.*)?$/.exec(line);
     if (!m) continue;
     const p = m[1];
     if (!p || p === "/dev/null" || files[p]) continue;
-    const abs = join(dir, p);
+    const abs = resolve(root, p);
+    if (abs !== root && !abs.startsWith(root + sep)) continue; // escapes `dir`
     if (existsSync(abs)) files[p] = readFileSync(abs, "utf8");
   }
   return files;

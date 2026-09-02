@@ -68,7 +68,10 @@ describe("removeMemberAction", () => {
   });
 
   it("returns {ok:false} when orgSlug is empty (validation)", async () => {
-    const res = await removeMemberAction({ orgSlug: "", targetUserId: "user-2" });
+    const res = await removeMemberAction({
+      orgSlug: "",
+      targetUserId: "user-2",
+    });
     expect(res.ok).toBe(false);
   });
 
@@ -89,15 +92,24 @@ describe("removeMemberAction", () => {
   });
 
   it("returns {ok:true} and revalidates on success", async () => {
-    const res = await removeMemberAction({ orgSlug: "acme", targetUserId: "user-2" });
+    const res = await removeMemberAction({
+      orgSlug: "acme",
+      targetUserId: "user-2",
+    });
     expect(res).toEqual({ ok: true });
     expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/members");
   });
 
   it("returns {ok:false, error} when invoke throws", async () => {
     mockInvoke.mockRejectedValue(new Error("Forbidden: insufficient role"));
-    const res = await removeMemberAction({ orgSlug: "acme", targetUserId: "user-2" });
-    expect(res).toMatchObject({ ok: false, error: "Forbidden: insufficient role" });
+    const res = await removeMemberAction({
+      orgSlug: "acme",
+      targetUserId: "user-2",
+    });
+    expect(res).toMatchObject({
+      ok: false,
+      error: "Forbidden: insufficient role",
+    });
   });
 });
 
@@ -142,6 +154,9 @@ describe("changeMemberRoleAction", () => {
       targetUserId: "user-2",
       newRole: "member",
     });
-    expect(res).toMatchObject({ ok: false, error: "Cannot demote the last owner" });
+    expect(res).toMatchObject({
+      ok: false,
+      error: "Cannot demote the last owner",
+    });
   });
 });

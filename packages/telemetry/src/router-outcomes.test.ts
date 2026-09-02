@@ -87,7 +87,11 @@ describe("readRoutingStats", () => {
 
   it("adds the task-class filter and param when a task class is supplied", async () => {
     chSelect.mockResolvedValueOnce({ data: [] });
-    await readRoutingStats({ taskClass: "auth/single", windowDays: 7, minSamples: 5 });
+    await readRoutingStats({
+      taskClass: "auth/single",
+      windowDays: 7,
+      minSamples: 5,
+    });
     const call = chSelect.mock.calls[0]![0] as {
       query: string;
       params?: Record<string, unknown>;

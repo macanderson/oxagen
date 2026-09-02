@@ -11,12 +11,13 @@ type Listener = (event: A2AStreamEvent) => void;
  * status-update/artifact-update it emits, in addition to (unchanged) writing
  * straight to its own SSE connection when one is open.
  *
- * Same-instance only (spec docs/specs/a2a-agent-identity/spec.md §3.4) —
- * Vercel Fluid Compute reuses instances across concurrent requests, so this
- * covers the common case (a client resubscribing shortly after message/send
- * on a still-warm instance). Cross-instance durable resubscribe needs a
- * shared pub-sub (Postgres LISTEN/NOTIFY or a queue) — tracked as an explicit
- * follow-up (spec §7), not silently degraded here.
+ * KNOWN LIMIT — same-instance only. Vercel Fluid Compute reuses instances
+ * across concurrent requests, so this covers the common case (a client
+ * resubscribing shortly after message/send on a still-warm instance). A
+ * resubscribe that lands on a DIFFERENT instance than the one running the task
+ * gets the initial status snapshot and then nothing, until the client polls
+ * tasks/get. Making resubscribe durable across instances needs shared pub-sub
+ * (Postgres LISTEN/NOTIFY or a queue) and is not built.
  */
 const registry = new Map<string, Set<Listener>>();
 

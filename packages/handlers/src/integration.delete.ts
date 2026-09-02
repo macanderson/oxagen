@@ -17,19 +17,23 @@ import { logger } from "./logger";
  * purgeData → delete mode: true purges entities/edges from Neo4j ("full"),
  * false removes only the connection record ("connection_only").
  */
-export const integrationDeleteHandler: CapabilityHandler<typeof integrationDelete> = async (
-  input,
-  ctx,
-) => {
+export const integrationDeleteHandler: CapabilityHandler<
+  typeof integrationDelete
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    throw new HTTPException(401, { message: "integration.delete requires an authenticated user" });
+    throw new HTTPException(401, {
+      message: "integration.delete requires an authenticated user",
+    });
   }
 
   const mode = input.purgeData ? "full" : "connection_only";
 
   const [conn] = await withTenantDb((tx) =>
     tx
-      .select({ id: schema.sourceConnections.id, status: schema.sourceConnections.status })
+      .select({
+        id: schema.sourceConnections.id,
+        status: schema.sourceConnections.status,
+      })
       .from(schema.sourceConnections)
       .where(
         and(
@@ -54,7 +58,11 @@ export const integrationDeleteHandler: CapabilityHandler<typeof integrationDelet
   await withTenantDb((tx) =>
     tx
       .update(schema.sourceConnections)
-      .set({ status: "deleting", updatedByUserId: ctx.userId ?? undefined, updatedAt: new Date() })
+      .set({
+        status: "deleting",
+        updatedByUserId: ctx.userId ?? undefined,
+        updatedAt: new Date(),
+      })
       .where(eq(schema.sourceConnections.id, conn.id)),
   );
 
@@ -73,10 +81,14 @@ export const integrationDeleteHandler: CapabilityHandler<typeof integrationDelet
         status: "running",
         startedAt: now,
       })
-      .returning({ id: schema.deletionJobs.id, publicId: schema.deletionJobs.publicId }),
+      .returning({
+        id: schema.deletionJobs.id,
+        publicId: schema.deletionJobs.publicId,
+      }),
   );
 
-  if (!job) throw new Error("integration.delete: failed to create deletion job");
+  if (!job)
+    throw new Error("integration.delete: failed to create deletion job");
 
   await eventClient.send({
     name: "ingestion/connection.delete",

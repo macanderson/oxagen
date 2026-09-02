@@ -75,8 +75,12 @@ const multimodalTextModels: GatewayModel[] = gatewayModels.filter(
     !m.capabilities.includes("video"),
 );
 
-const imageModels: GatewayModel[] = gatewayModels.filter((m) => supportsImage(m));
-const videoModels: GatewayModel[] = gatewayModels.filter((m) => supportsVideo(m));
+const imageModels: GatewayModel[] = gatewayModels.filter((m) =>
+  supportsImage(m),
+);
+const videoModels: GatewayModel[] = gatewayModels.filter((m) =>
+  supportsVideo(m),
+);
 
 /** Group a list of models by vendor, return ordered vendor→model map. */
 function groupByVendor(models: GatewayModel[]): Map<Vendor, GatewayModel[]> {
@@ -142,11 +146,17 @@ export function ModelDefaultsFields({
   }
 
   function handleImageChange(encoded: string | null): void {
-    onChange({ ...value, imageModel: !encoded || encoded === SYSTEM_VALUE ? null : encoded });
+    onChange({
+      ...value,
+      imageModel: !encoded || encoded === SYSTEM_VALUE ? null : encoded,
+    });
   }
 
   function handleVideoChange(encoded: string | null): void {
-    onChange({ ...value, videoModel: !encoded || encoded === SYSTEM_VALUE ? null : encoded });
+    onChange({
+      ...value,
+      videoModel: !encoded || encoded === SYSTEM_VALUE ? null : encoded,
+    });
   }
 
   return (
@@ -159,14 +169,20 @@ export function ModelDefaultsFields({
           onValueChange={handleTextChange}
           disabled={disabled}
         >
-          <SelectTrigger size="default" className="w-full max-w-sm" aria-label="Default agent model">
+          <SelectTrigger
+            size="default"
+            className="w-full max-w-sm"
+            aria-label="Default agent model"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectPopup className="w-[var(--available-width)]">
             {/* System default */}
             <SelectItem value={SYSTEM_VALUE}>
               <span className="font-medium">System default</span>
-              <span className="ml-2 text-xs text-muted-foreground">Oxagen selects automatically</span>
+              <span className="ml-2 text-xs text-muted-foreground">
+                Oxagen selects automatically
+              </span>
             </SelectItem>
 
             {/* Oxagen tiers */}
@@ -175,7 +191,9 @@ export function ModelDefaultsFields({
               {TEXT_TIERS.map((tier) => (
                 <SelectItem key={tier.id} value={`tier:${tier.id}`}>
                   <span className="font-medium">{tier.name}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">{tier.blurb}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {tier.blurb}
+                  </span>
                 </SelectItem>
               ))}
             </SelectGroup>
@@ -184,19 +202,21 @@ export function ModelDefaultsFields({
             {multimodalTextModels.length > 0 && (
               <SelectGroup>
                 <SelectLabel>Other models</SelectLabel>
-                {Array.from(multimodalByVendor.entries()).map(([vendor, models]) => (
-                  <React.Fragment key={vendor}>
-                    {models.map((m) => (
-                      <SelectItem key={m.id} value={`model:${m.id}`}>
-                        <span className="font-medium">{m.name}</span>
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          {vendorLabels[vendor]}
-                          {m.context ? ` · ${m.context}` : ""}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </React.Fragment>
-                ))}
+                {Array.from(multimodalByVendor.entries()).map(
+                  ([vendor, models]) => (
+                    <React.Fragment key={vendor}>
+                      {models.map((m) => (
+                        <SelectItem key={m.id} value={`model:${m.id}`}>
+                          <span className="font-medium">{m.name}</span>
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {vendorLabels[vendor]}
+                            {m.context ? ` · ${m.context}` : ""}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </React.Fragment>
+                  ),
+                )}
               </SelectGroup>
             )}
           </SelectPopup>
@@ -211,13 +231,19 @@ export function ModelDefaultsFields({
           onValueChange={handleImageChange}
           disabled={disabled}
         >
-          <SelectTrigger size="default" className="w-full max-w-sm" aria-label="Default image model">
+          <SelectTrigger
+            size="default"
+            className="w-full max-w-sm"
+            aria-label="Default image model"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectPopup className="w-[var(--available-width)]">
             <SelectItem value={SYSTEM_VALUE}>
               <span className="font-medium">System default</span>
-              <span className="ml-2 text-xs text-muted-foreground">Oxagen selects automatically</span>
+              <span className="ml-2 text-xs text-muted-foreground">
+                Oxagen selects automatically
+              </span>
             </SelectItem>
             {imageModels.length > 0 && (
               <SelectGroup>
@@ -248,13 +274,19 @@ export function ModelDefaultsFields({
           onValueChange={handleVideoChange}
           disabled={disabled}
         >
-          <SelectTrigger size="default" className="w-full max-w-sm" aria-label="Default video model">
+          <SelectTrigger
+            size="default"
+            className="w-full max-w-sm"
+            aria-label="Default video model"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectPopup className="w-[var(--available-width)]">
             <SelectItem value={SYSTEM_VALUE}>
               <span className="font-medium">System default</span>
-              <span className="ml-2 text-xs text-muted-foreground">Oxagen selects automatically</span>
+              <span className="ml-2 text-xs text-muted-foreground">
+                Oxagen selects automatically
+              </span>
             </SelectItem>
             {videoModels.length > 0 && (
               <SelectGroup>

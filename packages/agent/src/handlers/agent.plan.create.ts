@@ -1,6 +1,9 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import type { CapabilityContext } from "../types";
-import type { AgentPlanCreateInput, AgentPlanCreateOutput } from "@oxagen/oxagen/contracts/agent.plan.create";
+import type {
+  AgentPlanCreateInput,
+  AgentPlanCreateOutput,
+} from "@oxagen/oxagen/contracts/agent.plan.create";
 
 export type { AgentPlanCreateInput, AgentPlanCreateOutput };
 
@@ -20,7 +23,9 @@ export async function agentPlanCreateHandler(
       }
     }
     if (task.parentTaskId != null && !taskIds.has(task.parentTaskId)) {
-      throw new Error(`Task "${task.id}" references unknown parent "${task.parentTaskId}"`);
+      throw new Error(
+        `Task "${task.id}" references unknown parent "${task.parentTaskId}"`,
+      );
     }
   }
 
