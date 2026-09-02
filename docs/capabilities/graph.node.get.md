@@ -60,3 +60,4 @@ GET /v1/graph/nodes/node_abc
 - `graph.node.list` — paginated browse of nodes
 - `graph.node.search` — text search over nodes
 - `ontology.neighbors` — retrieve the node's governed one-hop neighborhood
+- [The ontology read set](_ontology-read-set.md) — the graph reads an agent is granted together, and the `toolPolicy.ontology` opt-in
