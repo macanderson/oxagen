@@ -10,7 +10,14 @@ locals {
   ssm_arn_prefix = "arn:aws:ssm:${var.region}:${var.account_id}"
 
   cgp_protocol_prefixes = ["schema", "spec"]
-  platform_services     = ["docs", "app", "api", "mcp"]
+
+  # Every service the platform repo ships to the node. The deploy action builds
+  # the S3 key from the service name alone, so a service missing here is denied
+  # `PutObject` on its own artifact and nothing else — which means the failure
+  # lands as a red `main` after the merge, on a step no pre-merge check runs.
+  # `worker` cost exactly that: oxagen#2567 added the durable-run worker as a
+  # deploy target, and oxagen#2619 is the red it produced until this line grew.
+  platform_services = ["docs", "app", "api", "mcp", "worker"]
 }
 
 # --------------------------------------------------------------------------
