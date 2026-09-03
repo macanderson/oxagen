@@ -38,6 +38,42 @@ import { pathToFileURL } from "node:url";
  */
 export const ESCAPE_HATCH_LABEL = "no-issue";
 
+/**
+ * The `state_reason` values that close an issue without claiming its DoD was
+ * met, so the close guard must not reopen them.
+ *
+ * Only a close marked `completed` asserts the work was done; those are the
+ * closes SCR-003 verifies. The other two decide the work should not happen at
+ * all — an obsolete idea or a wrong premise (`not_planned`), or the same work
+ * tracked somewhere else (`duplicate`). Demanding a ticked checklist there
+ * forces a fake tick for work nobody intends to do, which corrupts the one
+ * signal the whole check reads.
+ *
+ * `duplicate` is here because GitHub added it as a first-class close reason
+ * after this guard shipped, and the guard kept exempting `not_planned` alone.
+ * So the semantically correct close reopened itself: oxagen#2582 was closed as
+ * a duplicate at 10:23:11 on 2026-09-03 and reopened by the guard twelve
+ * seconds later, leaving a maintainer the choice of fake-ticking a checklist
+ * or mislabelling the reason. The guard's own comment already named a
+ * duplicate as a case that should be exempt; only the code disagreed.
+ */
+export const CLOSE_REASONS_EXEMPT_FROM_DOD = ["not_planned", "duplicate"];
+
+/**
+ * Whether a close with this `state_reason` is exempt from DoD verification.
+ *
+ * Lives here rather than inline in `dod-close-guard.yml` so it can be tested.
+ * The `not_planned` check sat in that workflow's `script:` block, where no test
+ * reaches it, which is how the `duplicate` gap above survived unnoticed.
+ *
+ * A missing reason is not exempt: GitHub omits `state_reason` on some older
+ * closes, and reading absence as permission would waive the check on exactly
+ * the closes nobody described.
+ */
+export function closeExemptFromDod(stateReason) {
+  return CLOSE_REASONS_EXEMPT_FROM_DOD.includes(stateReason);
+}
+
 // GitHub's own closing keywords. Matching this exact set — rather than any
 // `#123` mention — matters: a PR that merely *references* a related issue is
 // not claiming to close it, and must not be judged against its DoD.
