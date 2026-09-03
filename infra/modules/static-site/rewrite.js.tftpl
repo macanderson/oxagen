@@ -1,0 +1,99 @@
+// Maps the clean URL a visitor asks for onto the object key that actually
+// exists in the bucket, and serves the redirects a static export cannot.
+//
+// The rewrite has to happen at the edge because an S3 REST origin resolves no
+// directory index except the bucket root. `/docs/concepts` is simply a key
+// that does not exist, and the request 403s before any of the distribution's
+// error handling can make sense of it.
+//
+// The two layouts below are genuinely different on disk, and no single rule
+// serves both — a CloudFront Function cannot retry the origin, so it must
+// commit to one key per request. The caller picks the layout that matches how
+// its site is built:
+//
+//   html_suffix     A Next.js static export with `trailingSlash: false`.
+//                   `app/docs/concepts/page.tsx` is written as
+//                   `docs/concepts.html`, so an extensionless path takes a
+//                   `.html` suffix.
+//
+//   directory_index Hand-authored HTML, where `/read` means `read/index.html`.
+//
+// Injected by Terraform rather than branched on at runtime, so each
+// distribution ships only the rule it needs.
+var MODE = "${mode}";
+
+// Redirects declared in a framework's config never reach a static export —
+// `next.config` `redirects()` is implemented by the Next server, which an
+// exported site does not have. Reproducing them here is what keeps an already
+// published URL from turning into a 404 at cutover.
+//
+// Two shapes, matched in this order: an exact path, and a prefix ending in
+// `/*` which sends every path beneath it to one destination.
+var EXACT = ${exact_redirects};
+var PREFIX = ${prefix_redirects};
+
+// Explicit path -> object-key rewrites, applied before the layout heuristic
+// below and invisible to the visitor.
+//
+// These exist because one site can legitimately mix both layouts. The Oxagen
+// docs site is a Next.js export — `.html`-suffixed — that also serves a set of
+// hand-built decks out of `public/`, where `/decks/investor` means
+// `index.html` but `/decks/first-call-enterprise/script` means `script.html`.
+// No heuristic separates those two, so the framework config lists them one by
+// one and this map is that list, carried over verbatim.
+var REWRITES = ${exact_rewrites};
+
+function redirect(location) {
+  return {
+    statusCode: 308,
+    statusDescription: "Permanent Redirect",
+    headers: {
+      location: { value: location },
+      "cache-control": { value: "public, max-age=3600" },
+    },
+  };
+}
+
+function handler(event) {
+  var request = event.request;
+  var uri = request.uri;
+
+  if (Object.prototype.hasOwnProperty.call(EXACT, uri)) {
+    return redirect(EXACT[uri]);
+  }
+
+  for (var prefix in PREFIX) {
+    if (uri === prefix || uri.startsWith(prefix + "/")) {
+      return redirect(PREFIX[prefix]);
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(REWRITES, uri)) {
+    request.uri = REWRITES[uri];
+    return request;
+  }
+
+  // The bucket root is the one path an S3 REST origin does resolve on its
+  // own, via the distribution's `default_root_object`. Leave it alone.
+  if (uri === "/") {
+    return request;
+  }
+
+  // A trailing slash always means the directory's index document, under
+  // either layout.
+  if (uri.endsWith("/")) {
+    request.uri = uri + "index.html";
+    return request;
+  }
+
+  // Anything carrying an extension is a real file — an asset, a sourcemap, a
+  // `sitemap.xml`. Only the last segment is checked, because a dot is legal
+  // in a directory name and `/v1.2/guide` is a page, not a file.
+  var lastSegment = uri.slice(uri.lastIndexOf("/") + 1);
+  if (lastSegment.indexOf(".") !== -1) {
+    return request;
+  }
+
+  request.uri = MODE === "directory_index" ? uri + "/index.html" : uri + ".html";
+  return request;
+}

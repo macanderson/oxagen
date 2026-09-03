@@ -1,0 +1,4 @@
+# Generated client configs hold real database passwords, read fresh from
+# Parameter Store. Parameter Store is the source of truth; these are a local
+# convenience and must never reach the remote.
+generated/
