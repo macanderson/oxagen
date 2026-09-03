@@ -28,3 +28,18 @@ variable "sites" {
     distribution_id = string
   }))
 }
+
+variable "infra_repo_id" {
+  description = <<-DESC
+    GitHub's numeric id for macanderson/oxagen-aws-infra, used to pin the
+    OpenTofu roles' trust to an identity that survives a rename and cannot be
+    squatted after a transfer.
+
+    Null until the repository exists, which is the ordering this stack has to
+    live with: the roles are created by the first apply, and that apply happens
+    before anyone can read the id of a repository the apply is what enables.
+    With it null the roles still work, trusting only the name form.
+  DESC
+  type        = number
+  default     = null
+}
