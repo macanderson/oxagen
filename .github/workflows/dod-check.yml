@@ -39,6 +39,21 @@ permissions:
   pull-requests: write
   issues: read
 
+# One verdict per pull request at a time. Several of this workflow's triggers
+# fire within seconds of each other — automation that opens a PR and labels it,
+# or a push landing on top of an edit — and two runs then race to publish a
+# status under one check name, where the loser is whichever finishes first
+# rather than whichever read the newer state.
+#
+# Cancelling the older run is the cheap half. The live PR read in the job below
+# is what makes the outcome correct, because a cancellation can arrive too late
+# to stop a run that has already reported. Keyed by repository as well as PR
+# number: this workflow is called by four other repos through `workflow_call`,
+# and their PR numbers collide with each other's and with oxagen's.
+concurrency:
+  group: dod-check-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   dod:
     runs-on: ubuntu-latest
@@ -77,8 +92,39 @@ jobs:
             const { linkedIssues, verdict, formatVerdict } = await import(
               `${process.env.GITHUB_WORKSPACE}/.scr-tools/tools/scripts/scr-dod-check.mjs`)
 
-            const pr = context.payload.pull_request
-            const labels = pr.labels.map(l => (typeof l === 'string' ? l : l.name))
+            // Read the pull request live rather than from the event payload.
+            //
+            // A payload is a snapshot taken when the event fired, and two
+            // events on one head routinely disagree about the PR. Release
+            // automation opens a PR and labels it moments later, so the
+            // `opened` payload carries no labels at all: stella#5792 was opened
+            // at 18:29:40, labelled `no-issue` at 18:29:43, and its two runs
+            // reached opposite verdicts on the same commit. The stale one
+            // queued longer and finished last, so `dod / dod` read red on a PR
+            // that plainly carried the waiver, over a sticky comment asking for
+            // the label it already had.
+            //
+            // The issue half below has always read live (`issues.get`), which
+            // is why ticking a DoD box takes effect with no new event. This
+            // makes both halves agree on where truth lives. Ordering then stops
+            // mattering: whichever run publishes last read the same PR.
+            //
+            // The payload is the fallback, not the source: if this read fails
+            // the check still runs on what the event carried rather than
+            // erroring out, since a transient API failure must not be able to
+            // block a merge.
+            const payloadPr = context.payload.pull_request
+            let pr = payloadPr
+            try {
+              const { data } = await github.rest.pulls.get({
+                ...context.repo, pull_number: payloadPr.number })
+              pr = data
+            } catch (error) {
+              core.warning(
+                `Could not re-read the pull request, falling back to the event ` +
+                `payload: ${error.message}`)
+            }
+            const labels = (pr.labels ?? []).map(l => (typeof l === 'string' ? l : l.name))
 
             // Resolve each linked issue's body. A reference to an issue that
             // does not exist, or that lives somewhere unreadable, is reported
