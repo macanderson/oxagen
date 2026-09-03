@@ -4,9 +4,10 @@ description: >-
   bucket, and send the one SSM document that restarts that service on the
   shared instance. Assumes AWS credentials are already configured in the job.
 
-  Four services do exactly this and only the inputs differ, which is what a
-  composite action is for. The alternative — four copies of a forty-line
-  publish-and-poll block — drifts the moment one of them is fixed.
+  Every service in the deploy matrix does exactly this and only the inputs
+  differ, which is what a composite action is for. The alternative — one copy
+  of a forty-line publish-and-poll block per service — drifts the moment one
+  of them is fixed.
 
 inputs:
   service:
