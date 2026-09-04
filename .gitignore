@@ -107,6 +107,8 @@ tools/env-manager/secrets.db*
 **/*.tfstate.backup
 **/crash.log
 **/crash.*.log
+# Plan files resolve variables, so they can carry secrets.
+**/*.tfplan
 
 # Test results folder
 .test-results/
