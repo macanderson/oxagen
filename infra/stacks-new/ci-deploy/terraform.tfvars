@@ -20,7 +20,3 @@ sites = {
   }
 }
 
-# GitHub numeric id for this repository, so the OpenTofu roles trust an
-# identity that survives a rename. Read with:
-#   gh api repos/macanderson/oxagen-aws-infra -q .id
-infra_repo_id = 1355538788

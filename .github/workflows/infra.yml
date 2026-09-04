@@ -9,7 +9,7 @@
 # repository settings, rather than here — that gate is the control on the only
 # role in this account that can write.
 #
-# Both roles are defined in stacks-new/ci-deploy/infra-apply.tf, so this
+# Both roles are defined in infra/stacks-new/ci-deploy/infra-apply.tf, so this
 # workflow's own permissions are reviewable in the same pull request as the
 # infrastructure it changes.
 
@@ -17,10 +17,10 @@ name: infra
 
 on:
   pull_request:
-    paths: ["stacks-new/**", "modules/**", ".github/workflows/infra.yml"]
+    paths: ["infra/stacks-new/**", "infra/modules/**", ".github/workflows/infra.yml"]
   push:
     branches: [main]
-    paths: ["stacks-new/**", "modules/**", ".github/workflows/infra.yml"]
+    paths: ["infra/stacks-new/**", "infra/modules/**", ".github/workflows/infra.yml"]
   workflow_dispatch:
 
 permissions:
@@ -61,10 +61,10 @@ jobs:
           changed=$(git diff --name-only "$base" HEAD || true)
 
           # A module edit can change any stack that uses it, so widen to all.
-          if echo "$changed" | grep -q '^modules/'; then
-            stacks=$(find stacks-new -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+          if echo "$changed" | grep -q '^infra/modules/'; then
+            stacks=$(find infra/stacks-new -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
           else
-            stacks=$(echo "$changed" | sed -n 's#^stacks-new/\([^/]*\)/.*#\1#p' | sort -u)
+            stacks=$(echo "$changed" | sed -n 's#^infra/stacks-new/\([^/]*\)/.*#\1#p' | sort -u)
           fi
 
           if [ -z "$stacks" ]; then
@@ -95,20 +95,20 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: fmt
-        working-directory: stacks-new/${{ matrix.stack }}
+        working-directory: infra/stacks-new/${{ matrix.stack }}
         run: tofu fmt -check -diff .
 
       - name: init
-        working-directory: stacks-new/${{ matrix.stack }}
+        working-directory: infra/stacks-new/${{ matrix.stack }}
         run: tofu init -input=false -no-color
 
       - name: validate
-        working-directory: stacks-new/${{ matrix.stack }}
+        working-directory: infra/stacks-new/${{ matrix.stack }}
         run: tofu validate -no-color
 
       - name: plan
         id: plan
-        working-directory: stacks-new/${{ matrix.stack }}
+        working-directory: infra/stacks-new/${{ matrix.stack }}
         # -detailed-exitcode: 0 no changes, 2 changes, 1 error. Without it a
         # failed plan and an empty one both exit 0 and read the same.
         run: |
@@ -130,7 +130,7 @@ jobs:
         with:
           script: |
             const fs = require('fs')
-            const raw = fs.readFileSync(`stacks-new/${process.env.STACK}/plan.txt`, 'utf8')
+            const raw = fs.readFileSync(`infra/stacks-new/${process.env.STACK}/plan.txt`, 'utf8')
             const body = raw.length > 60000 ? raw.slice(-60000) : raw
             const verdict = process.env.CODE === '2' ? 'changes' : 'no changes'
             await github.rest.issues.createComment({
@@ -166,11 +166,11 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: init
-        working-directory: stacks-new/${{ matrix.stack }}
+        working-directory: infra/stacks-new/${{ matrix.stack }}
         run: tofu init -input=false -no-color
 
       - name: apply
-        working-directory: stacks-new/${{ matrix.stack }}
+        working-directory: infra/stacks-new/${{ matrix.stack }}
         # Re-plans rather than reusing the pull request's plan file: that plan
         # was computed against a different base and the state may have moved.
         run: tofu apply -input=false -no-color -auto-approve -lock-timeout=5m

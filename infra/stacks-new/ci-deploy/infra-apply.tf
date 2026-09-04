@@ -22,8 +22,14 @@
  */
 
 locals {
-  infra_repository = "macanderson/oxagen-aws-infra"
-  infra_owner_id   = 542881
+  # The platform repository, because this configuration lives in it at `infra/`
+  # rather than in a repository of its own. `local.deployers["oxagen-platform"]`
+  # already names the same repository for its deploy role, and both are pinned
+  # to the same numeric identity — the two grants are deliberately separate
+  # roles, because publishing an artifact and administering the account are not
+  # the same permission and should not be the same trust.
+  infra_repository = local.deployers["oxagen-platform"].repository
+  infra_owner_id   = local.deployers["oxagen-platform"].owner_id
 
   # Spelled out rather than read from the backend block: OpenTofu does not
   # expose backend settings as values, so these would have to be duplicated
@@ -31,20 +37,20 @@ locals {
   tfstate_bucket_arn = "arn:aws:s3:::oxagen-tfstate-${var.account_id}"
   tflock_table_arn   = "arn:aws:dynamodb:${var.region}:${var.account_id}:table/oxagen-tflock"
 
-  # `terraform.tfvars` carries this rather than the code, because it is an
-  # identifier of a specific repository rather than a fact about the design.
-  infra_subjects = { for mode in ["plan", "apply"] : mode => concat(
-    [
-      mode == "apply"
-      ? "repo:${local.infra_repository}:environment:${local.deploy_environment}"
-      : "repo:${local.infra_repository}:*"
-    ],
-    var.infra_repo_id == null ? [] : [
-      mode == "apply"
-      ? "repo:${split("/", local.infra_repository)[0]}@${local.infra_owner_id}/${split("/", local.infra_repository)[1]}@${var.infra_repo_id}:environment:${local.deploy_environment}"
-      : "repo:${split("/", local.infra_repository)[0]}@${local.infra_owner_id}/${split("/", local.infra_repository)[1]}@${var.infra_repo_id}:*"
-    ],
-  ) }
+  infra_repo_id = local.deployers["oxagen-platform"].repo_id
+
+  # Both the readable form and the immutable owner@id/repo@id form, matching
+  # `local.deploy_subjects`. Apply names one exact environment subject; plan
+  # ends in a wildcard so it works from any branch, which is safe because that
+  # role cannot write.
+  infra_subjects = { for mode in ["plan", "apply"] : mode => [
+    for shape in [
+      local.infra_repository,
+      "${split("/", local.infra_repository)[0]}@${local.infra_owner_id}/${split("/", local.infra_repository)[1]}@${local.infra_repo_id}",
+    ] : mode == "apply"
+    ? "repo:${shape}:environment:${local.deploy_environment}"
+    : "repo:${shape}:*"
+  ] }
 }
 
 data "aws_iam_policy_document" "infra_assume" {
