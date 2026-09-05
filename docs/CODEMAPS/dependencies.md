@@ -1,4 +1,9 @@
-<!-- Generated: 2026-07-06, corrections applied 2026-07-10 | Files scanned: all package.json | Token estimate: ~700 -->
+<!-- Maintained by the `/update-codemaps` command (.claude/commands/update-codemaps.md),
+     NOT by a script in `pnpm run`. Nothing regenerates this on a package being
+     added or deleted, so it goes stale silently -- two deleted packages and six
+     missing ones were found here at once (#2631). If you add or remove a package,
+     either re-run that command or edit this table by hand.
+     Last reconciled against `packages/` on 2026-09-04. -->
 
 # Dependencies & Integrations
 
