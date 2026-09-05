@@ -1,0 +1,551 @@
+/**
+ * Docs site styles.
+ *
+ * @oxagen/ui provides the Tailwind v4 base and shadcn neutral design tokens.
+ * fumadocs-ui layers its own docs theme on top.
+ */
+@import "@oxagen/ui/styles/globals.css";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+@source "../../../../node_modules/fumadocs-ui/dist/**/*.js";
+
+/*
+ * Brand the Fumadocs accent: map its primary/ring tokens to the Oxagen ember
+ * (theme-mapped in @oxagen/ui tokens.css, so it adapts light/dark). Links,
+ * active nav, focus rings and the TOC marker pick this up; the neutral base
+ * surfaces stay on Fumadocs' own tokens.
+ */
+:root {
+  --color-fd-primary: var(--primary);
+  --color-fd-ring: var(--ring);
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * Marketing landing page (the (home) route only).
+ *
+ * Pure-CSS animation layer for the docs landing page. Everything is namespaced
+ * `lp-*` so it never leaks into the Fumadocs /docs theme. Colours are pulled
+ * from the @oxagen/ui brand tokens (ember gradient + neutral near-blacks) so the
+ * page re-skins with the rest of the system. The concept is "context windows,
+ * more free than full": hex-cell fields (abstracted from the Oxagen logomark),
+ * an animated install terminal, and a context-window meter that drains.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* The canonical ember sweep, reused for clipped headline text + accents. */
+.lp-grad-text {
+  background-image: linear-gradient(
+    100deg,
+    var(--_ember-a) 0%,
+    var(--_ember-b) 46%,
+    var(--_ember-c) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.lp-grad-surface {
+  /* Literal ember stops (not var(--brand-gradient)) so the fill is guaranteed
+     to render regardless of which token scope is active. */
+  background-image: linear-gradient(
+    100deg,
+    var(--_ember-a, #725a00) 0%,
+    var(--_ember-b, #efc53f) 46%,
+    var(--_ember-c, #f7d96b) 100%
+  );
+}
+
+/* Faint ember edge used on section dividers + card borders on hover. */
+.lp-hairline {
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklch, var(--_ember-b) 55%, transparent),
+    transparent
+  );
+}
+
+/* Ambient grid the hero sits on — a dot/line lattice that fades to the page. */
+.lp-grid {
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in oklch, var(--foreground) 7%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in oklch, var(--foreground) 7%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 46px 46px;
+  mask-image: radial-gradient(
+    ellipse 80% 60% at 50% 38%,
+    #000 0%,
+    transparent 78%
+  );
+  -webkit-mask-image: radial-gradient(
+    ellipse 80% 60% at 50% 38%,
+    #000 0%,
+    transparent 78%
+  );
+}
+
+/* A soft ember light source bleeding from behind the hero. */
+.lp-orb {
+  background: radial-gradient(
+    circle at center,
+    color-mix(in oklch, var(--_ember-b) 38%, transparent) 0%,
+    color-mix(in oklch, var(--_ember-c) 16%, transparent) 40%,
+    transparent 70%
+  );
+  filter: blur(36px);
+  animation: lp-glow 9s ease-in-out infinite;
+}
+
+/* Terminal window chrome. Intentionally always-dark (like a real terminal) in
+   both light and dark mode — fixed literal colours so the panel never washes
+   out on the light page. */
+.lp-term {
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(15 15 18 / 0.94);
+  box-shadow:
+    0 1px 0 0 rgb(255 255 255 / 0.06) inset,
+    0 30px 80px -28px
+    color-mix(in oklch, var(--_ember-c, #f7d96b) 42%, transparent),
+    0 18px 50px -30px rgb(0 0 0 / 0.7);
+  backdrop-filter: blur(8px);
+}
+
+.lp-caret {
+  display: inline-block;
+  width: 0.6ch;
+  height: 1.05em;
+  translate: 0 0.16em;
+  background: var(--_ember-b);
+  box-shadow: 0 0 8px color-mix(in oklch, var(--_ember-b) 80%, transparent);
+  animation: lp-blink 1.05s steps(1) infinite;
+}
+
+.lp-line {
+  opacity: 0;
+  animation: lp-rise 0.42s ease-out forwards;
+}
+
+/* Lit hexagons in the section backgrounds — breathe slowly, out of phase. */
+.lp-hex-lit {
+  animation: lp-hexpulse 6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.lp-float {
+  animation: lp-float 14s ease-in-out infinite;
+}
+
+@keyframes lp-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes lp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes lp-glow {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.08);
+  }
+}
+@keyframes lp-hexpulse {
+  0%,
+  100% {
+    opacity: 0.22;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.03);
+  }
+}
+@keyframes lp-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-12px) rotate(1.5deg);
+  }
+}
+
+/* TUI screenshot components (apps/docs/src/components/tui/*) — a blinking
+   block caret and a subtle looping status-dot/pointer pulse, reused across
+   every screen instead of each one rolling its own animation. */
+.tui-caret {
+  animation: tui-blink 1s steps(1) infinite;
+}
+.tui-pulse {
+  animation: tui-pulse 2.2s ease-in-out infinite;
+}
+@keyframes tui-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes tui-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-orb,
+  .lp-caret,
+  .lp-line,
+  .lp-hex-lit,
+  .lp-float,
+  .tui-caret,
+  .tui-pulse {
+    animation: none !important;
+  }
+  .lp-line {
+    opacity: 1;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * Print / "Export PDF".
+ *
+ * The per-page actions menu (PageActions) exports a page by triggering
+ * `window.print()`. These rules strip everything that isn't the article — the
+ * Fumadocs sidebar (#nd-sidebar), top subnav (#nd-subnav), TOC rail (#nd-toc),
+ * the floating Install-CLI pill, and the actions menu itself — then let the
+ * article (#nd-page) fill the printable width so the prose, headings, and code
+ * blocks print cleanly.
+ * ─────────────────────────────────────────────────────────────────────────── */
+@media print {
+  #nd-sidebar,
+  #nd-subnav,
+  #nd-toc,
+  [data-docs-page-actions],
+  button[aria-label^="Install the Oxagen CLI"] {
+    display: none !important;
+  }
+
+  /* Collapse the layout grid so the article isn't offset by the (now hidden)
+   * sidebar/TOC columns. */
+  #nd-docs-layout {
+    display: block !important;
+  }
+
+  #nd-page {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  /* Printers drop background fills, so give code blocks a visible border and
+   * force legible foreground/edges. */
+  #nd-page pre,
+  #nd-page :not(pre) > code {
+    border: 1px solid #cbd5e1 !important;
+    background: transparent !important;
+    color: #111 !important;
+  }
+
+  #nd-page pre {
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+  }
+
+  /* Avoid awkward page breaks mid-heading or inside a code block. */
+  #nd-page h1,
+  #nd-page h2,
+  #nd-page h3 {
+    break-after: avoid-page;
+  }
+  #nd-page pre,
+  #nd-page table,
+  #nd-page figure {
+    break-inside: avoid;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Stella docs content — ported components, restyled to this app's tokens
+ *
+ * `src/components/stella/*` mirrors stella/website's `cards.tsx`,
+ * `deck-shot.tsx` and `command-deck-explorer.tsx` structurally, but the CSS
+ * below is new: the source site's own rules (`sc-*`, `deck-shot-*`, `dke-*`
+ * in stella's global.css) key off its own black-and-gold token system
+ * (`--stella-rhythm`, `--stella-signal`, …), which this app does not import.
+ * Reusing the components against Fumadocs' own `--color-fd-*` tokens keeps
+ * one visual system instead of two competing brand layers. See
+ * docs-migration-notes.md for the full migration notes.
+ * ═════════════════════════════════════════════════════════════════════════ */
+
+.sc-grid {
+  display: grid;
+  gap: 0;
+  margin: 2rem 0;
+  border-top: 1px solid var(--color-fd-border);
+}
+.sc-grid-sm {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+}
+.sc-grid-md {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+}
+.sc-grid-lg {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 24rem), 1fr));
+}
+
+.sc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1rem 1rem 1.25rem 0;
+  border-bottom: 1px solid var(--color-fd-border);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  container-type: inline-size;
+}
+.sc-card-link {
+  text-decoration: none;
+  color: inherit;
+  transition: background-color 150ms ease;
+  padding-inline-start: 0.75rem;
+  margin-inline-start: -0.75rem;
+}
+.sc-card-link:hover {
+  background: var(--color-fd-accent);
+}
+.sc-card-link:focus-visible {
+  outline: 2px solid var(--color-fd-ring);
+  outline-offset: -2px;
+}
+.sc-card-logo {
+  display: flex;
+  align-items: center;
+  min-height: 1.75rem;
+  color: var(--color-fd-foreground);
+}
+.sc-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.sc-card-title {
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  color: var(--color-fd-foreground);
+  min-width: 0;
+}
+.sc-card-body {
+  color: var(--color-fd-muted-foreground);
+  margin: 0;
+  max-width: 56ch;
+}
+.sc-card-body > :first-child {
+  margin-top: 0;
+}
+.sc-card-body > :last-child {
+  margin-bottom: 0;
+}
+
+.sc-meta {
+  display: grid;
+  gap: 0.3rem 0.75rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+}
+.sc-meta-row {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, auto) 1fr;
+  gap: 0.1rem 0.75rem;
+  align-items: baseline;
+}
+@container (max-width: 20rem) {
+  .sc-meta-row {
+    grid-template-columns: 1fr;
+  }
+}
+.sc-meta-label {
+  color: var(--color-fd-muted-foreground);
+}
+.sc-meta-value {
+  margin: 0;
+  color: var(--color-fd-foreground);
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.sc-meta-value[data-prose="true"] {
+  font-family: inherit;
+}
+.sc-mono {
+  font-family: var(--font-mono);
+}
+
+.sc-badge {
+  flex: none;
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--color-fd-muted-foreground);
+}
+.sc-badge[data-tone="mutating"],
+.sc-badge[data-tone="caution"] {
+  color: #a16207;
+}
+.dark .sc-badge[data-tone="mutating"],
+.dark .sc-badge[data-tone="caution"] {
+  color: #fbbf24;
+}
+
+.sc-tool {
+  border-inline-start: 2px solid transparent;
+  padding-inline-start: 0.75rem;
+}
+.sc-tool[data-access="mutating"] {
+  border-inline-start-color: #a16207;
+}
+.dark .sc-tool[data-access="mutating"] {
+  border-inline-start-color: #fbbf24;
+}
+.sc-tool-name {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-fd-foreground);
+  overflow-wrap: anywhere;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.sc-tool-when {
+  margin: 0;
+  color: var(--color-fd-muted-foreground);
+  font-size: 0.75rem;
+}
+.sc-tool-when-label {
+  color: var(--color-fd-foreground);
+  font-weight: 500;
+}
+
+/* ── Command Deck shots (public/tui/*.svg, mirrored from stella/website) ── */
+.deck-shot {
+  margin: 1.5rem 0;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: var(--color-fd-card);
+}
+.deck-shot-img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.deck-shot-cap {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.6rem 0.9rem;
+  border-top: 1px solid var(--color-fd-border);
+  font-size: 0.8rem;
+  color: var(--color-fd-muted-foreground);
+}
+.deck-shot-tag {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-fd-primary);
+}
+
+/* ── Command Deck tab explorer (nine live panes, mirrored from stella/website) ── */
+.dke {
+  margin: 1.5rem 0;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+.dke-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  background: var(--color-fd-card);
+  border-bottom: 1px solid var(--color-fd-border);
+}
+.dke-tab {
+  font-size: 0.75rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.35rem;
+  color: var(--color-fd-muted-foreground);
+  background: transparent;
+  border: 1px solid transparent;
+}
+.dke-tab[data-active="true"] {
+  color: var(--color-fd-primary-foreground);
+  background: var(--color-fd-primary);
+}
+.dke-tab:focus-visible {
+  outline: 2px solid var(--color-fd-ring);
+  outline-offset: 1px;
+}
+.dke-pane {
+  padding: 1rem;
+}
+.dke-blurb {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-fd-muted-foreground);
+}
+.dke-lines {
+  margin: 0;
+  padding: 0.75rem;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  background: var(--color-fd-secondary);
+  border-radius: 0.35rem;
+  white-space: pre;
+}

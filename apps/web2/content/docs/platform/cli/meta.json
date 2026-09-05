@@ -1,0 +1,23 @@
+{
+  "title": "CLI",
+  "pages": [
+    "index",
+    "installation",
+    "account-setup",
+    "quickstart",
+    "---",
+    "commands",
+    "repl-commands",
+    "agent-engine",
+    "custom-commands",
+    "import-artifacts",
+    "fleet",
+    "scripting",
+    "configuration",
+    "models",
+    "budget",
+    "memory",
+    "knowledge-graph",
+    "sandbox-templates"
+  ]
+}

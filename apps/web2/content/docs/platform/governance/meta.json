@@ -1,0 +1,10 @@
+{
+  "title": "Governance",
+  "pages": [
+    "overview",
+    "rbac",
+    "agent-roles",
+    "byok-and-models",
+    "plugins-governance"
+  ]
+}

@@ -1,0 +1,32 @@
+---
+title: Configuration
+description: Environment configuration for running and deploying Oxagen — transactional email (SMTP) and local-development behavior.
+---
+
+<IllustrationConfiguration />
+
+## Overview
+
+This section covers the environment configuration that controls how Oxagen behaves
+across deployed and local environments. Most configuration is supplied through
+environment variables that are validated at startup against the central env schema —
+an unregistered or malformed variable fails fast rather than silently degrading a
+feature.
+
+## In this section
+
+| Page | What it covers |
+| --- | --- |
+| [Email &amp; SMTP](/docs/platform/configuration/email) | The `SMTP_*` variables that power verification and password-reset email, TLS behavior, and how a misconfigured transport now fails loudly instead of silently. |
+| [Local development](/docs/platform/configuration/local-development) | The `OXAGEN_LOCAL_DEV` flag and how Oxagen relaxes deployed-only controls (email verification, token encryption, cookie/rate-limit hardening) on a developer machine — without ever weakening a real deployment. |
+| [Storage driver](/docs/platform/configuration/storage) | `STORAGE_DRIVER` and the filesystem driver (`STORAGE_FS_ROOT`) — running blob storage locally or in CI without a Vercel Blob token. |
+
+## How environment values are loaded
+
+- Deployed environments (Vercel) read their variables from the project's environment
+  settings. Local development reads `.env.local`.
+- Values are normalized at load time (for example, surrounding quotes are stripped) so
+  an over-quoted value such as `"https://example.com"` is parsed correctly.
+- Security-relevant predicates are resolved deterministically and are **fail-safe**:
+  a control that protects production can never be relaxed by a value that leaks into a
+  deployed environment.

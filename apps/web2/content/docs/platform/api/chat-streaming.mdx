@@ -1,0 +1,125 @@
+---
+title: Chat streaming
+description: How to consume the chat SSE stream — event types, request fields, and connection management.
+---
+
+The chat capability (`send_message`) streams its response as Server-Sent Events (SSE). This is the same stream the in-app agent uses — there is no separate "streaming API vs. web API."
+
+## Endpoint
+
+```
+POST https://api.oxagen.sh/v1/{orgSlug}/{workspaceSlug}/chat/stream
+```
+
+The org and workspace slugs are derived from the API key scope. You still include them in the URL path.
+
+## Request
+
+```http
+POST /v1/acme-corp/engineering/chat/stream
+Authorization: Bearer ox_…
+Content-Type: application/json
+
+{
+  "content": "Summarize the last 10 agent runs and identify any failures.",
+  "conversationId": "uuid"
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `content` | string | Yes | The user's message text. |
+| `conversationId` | string | No | Existing conversation to continue. Omit to start a new conversation. |
+| `activeServerIds` | string[] | No | MCP server IDs to enable for this turn. Omit or pass `[]` to load all workspace servers. |
+| `tier` | string | No | Model tier override: `"fast"`, `"balanced"`, or `"precise"`. Omit to use workspace defaults. |
+| `model` | string | No | Explicit model ID override. Omit to use workspace defaults. |
+| `effort` | string | No | Reasoning effort override: `"low"`, `"medium"`, or `"high"`. Omit to use workspace defaults. |
+
+## Response
+
+The response has `Content-Type: text/event-stream`. Each event is a JSON object preceded by `data: ` and terminated by a blank line.
+
+```
+data: {"type":"text","text":"Here are the last 10 agent runs:"}
+
+data: {"type":"tool-call-start","toolCallId":"uuid","capability":"agent.tool.list","inputPreview":{},"riskLevel":"low"}
+
+data: {"type":"tool-call-end","toolCallId":"uuid","status":"completed","output":{"tools":[...]},"durationMs":142}
+
+data: {"type":"usage","usage":{"promptTokens":1240,"completionTokens":312,"totalTokens":1552}}
+
+event: done
+data: [DONE]
+```
+
+## Event types
+
+| Type | Fields | Description |
+|---|---|---|
+| `text` | `text` | A chunk of streamed assistant text. Concatenate in order. |
+| `reasoning-start` | `reasoningId` | Beginning of a reasoning block (emitted for models with extended thinking). |
+| `reasoning-delta` | `reasoningId`, `text` | Incremental reasoning text chunk. |
+| `reasoning-end` | `reasoningId`, `durationMs` | Reasoning block complete. |
+| `step-start` | `stepIndex` | The agent is beginning a new reasoning or tool step. |
+| `step-finish` | `stepIndex` | A step has completed. |
+| `tool-input-start` | `toolCallId`, `capability` | The model is streaming tool input (before execution). |
+| `tool-input-delta` | `toolCallId`, `delta` | Incremental tool-input text chunk. |
+| `tool-call-start` | `toolCallId`, `capability`, `inputPreview`, `riskLevel` | The tool is about to execute. |
+| `tool-call-end` | `toolCallId`, `status`, `durationMs`, `output?`, `errorReason?` | Tool execution finished. `status` is `"completed"` or `"failed"`. |
+| `approval-required` | `approvalId`, `capability`, `inputPreview`, `riskLevel`, `expiresAt` | The agent has paused for user approval. Resolve with `resolve_approval`. |
+| `usage` | `usage.promptTokens`, `usage.completionTokens`, `usage.totalTokens` | Token usage totals for the turn, emitted after the model call finishes. |
+| `error` | `message` | An error occurred. The stream closes after this event. |
+
+The stream terminates with a named SSE event rather than a JSON object:
+
+```
+event: done
+data: [DONE]
+```
+
+## Handling approval events
+
+When `approval-required` is emitted, the stream pauses. The event contains `approvalId`, `capability`, `inputPreview`, `riskLevel`, and `expiresAt`. Resolve the approval with a separate API call:
+
+```http
+POST /v1/{orgSlug}/{workspaceSlug}/agent/approvals/resolve
+Authorization: Bearer ox_…
+Content-Type: application/json
+
+{
+  "approvalId": "uuid",
+  "decision": "approved"
+}
+```
+
+The stream resumes automatically after resolution. `decision` is `"approved"` or `"denied"`; an optional `note` string may also be sent.
+
+## Message threading
+
+Pass `conversationId` to continue an existing thread. The route loads the last 50 messages from the conversation automatically — no message ID is needed to maintain history.
+
+Omit `conversationId` to start a new conversation. Persist the conversation ID returned in the first response for subsequent messages in the same thread.
+
+## Token usage
+
+The `usage` event is emitted after the model call completes. It contains the token counts for the turn under a `usage` object:
+
+| Field | Description |
+|---|---|
+| `promptTokens` | Input tokens sent to the model |
+| `completionTokens` | Output tokens generated |
+| `totalTokens` | Sum of prompt and completion tokens |
+
+## Error handling
+
+Stream errors arrive as `error` events:
+
+```
+data: {"type":"error","code":"capability_denied","message":"agent.code.execute requires approval","requestId":"req_…"}
+```
+
+After an `error` event, the stream closes. Reconnect with the same `conversationId` to continue the conversation.
+
+## Connection management
+
+SSE connections are long-lived. If your HTTP client enforces a short timeout, set it to at least 120 seconds to accommodate multi-step agent runs. The `connection: keep-alive` HTTP header is set on the response; no periodic SSE heartbeat comment is sent.

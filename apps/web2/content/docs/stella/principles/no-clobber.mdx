@@ -1,0 +1,106 @@
+---
+title: No silent overwrites
+description: stella refuses to write over a change it never saw, with no lock, no background service, and no need to know who else is working on the file. How this works, what it doesn't promise, and what happens after a crash.
+---
+
+Point two agents at one project, and the failure you get is not a corrupted
+file. It's a *quiet* one. Agent A reads `handler.rs`, spends a few minutes
+planning a change based on what it read, then writes the result. In
+between, agent B, or a person in an editor, changes the same file. A's
+write goes through. Nothing errors. B's work is gone, and the only trace it
+ever existed is a diff nobody will read.
+
+stella refuses that write.
+
+## The guarantee
+
+**stella refuses a write when the file changed since this session last read
+it.** It doesn't defer the write, merge it, or warn you after the fact.
+It's blocked before anything is written, with a message that names the
+file and tells you what to do:
+
+```
+refusing to write: src/handler.rs changed since you last read it. Another
+agent (or a person) edited it after you looked, and this call would
+overwrite their work with a plan formed against content that no longer
+exists.
+
+Re-read the file and redo the change against what is there now. Your edit
+is not lost — nothing was written.
+```
+
+This comes back as a tool error, not as a failed turn, and that difference
+matters. The model can act on it: re-read the file, then redo the edit.
+That's one cheap extra step, instead of losing the whole turn.
+
+## Why not a lock
+
+A lock is the obvious answer and it is strictly weaker.
+
+A lock only serializes *writers*. It does nothing about *stale
+information*. Agent B waits, gets the lock, and then overwrites the file A
+just changed, using a plan based on content that's no longer there. B did
+everything right and still destroyed the work. Serializing the writes never
+fixes this, because the real problem was never two writes happening at
+once. It was acting on a belief that had already gone stale.
+
+Waiting is also the wrong tradeoff for an agent. Being told "that changed,
+read it again" is a cheap retry. Blocking and waiting burns a whole turn.
+
+## How it works
+
+Each session keeps one simple record: **which paths it touched, and a
+fingerprint of what it saw there.** Before any update or delete, stella
+re-checks the bytes on disk and compares them against what this session
+remembers.
+
+There's no registry, no background service, no lease, and no channel
+between agents. That's not a shortcut. It's the whole point. *Agent B's
+write is what makes agent A's memory stale*, so A detects that on its own,
+with no idea that B even exists. Two separate processes, two containers, a
+CI job, and a person typing in Vim are all the same case to stella, and
+none of them even needs to be running stella.
+
+Reads count too. A read is how an agent forms the belief that a later
+write acts on, so it's recorded the same way a write is. A delete removes
+the record entirely. Once a file is deleted, there's nothing left to
+overwrite, so the next agent to create it is starting fresh, not
+overwriting anything.
+
+## What it does not claim
+
+The guard makes one precise claim: *you're about to overwrite a change you
+never saw*. It can only make that claim about a file this session actually
+looked at. That means:
+
+- **A path this session never touched isn't flagged.** Writing blindly to
+  a file the session never read is a separate question, and this guard
+  doesn't try to answer it. The upshot: this guard has no false positives.
+  Every refusal points at a real conflict.
+- **Creating a new file isn't checked by this guard.** The filesystem
+  itself already answers "does this exist".
+- **A file stella can't read isn't treated as a conflict.** The tool's own
+  error message explains that far better than a staleness warning would.
+
+A guard that cried wolf would just get turned off, and then it would
+protect nothing at all.
+
+## After a crash
+
+This record lives in memory, so a session that crashes loses it. The guard
+is built to fail **closed** when that happens. A
+[resumed](/docs/stella/commands/resume) session starts with an empty record, even
+though its restored transcript still says the agent read the file. So the
+model may believe it already knows the content. The guard doesn't take the
+transcript's word for it. With no recorded read, it refuses every
+overwrite of an existing file until the resumed session reads the whole
+file again. The cost of a crash is re-reading a file, never a silent
+overwrite.
+
+## Where this sits
+
+This guard is enforced in one place, above every tool that touches files at
+once: built-in tools, MCP server tools, and custom tools alike. No tool
+opts into it, and no model can decide to skip it. That's the same idea as
+[determinism over intelligence](/docs/stella/principles/determinism): where a
+mechanism can decide something, the mechanism decides it.

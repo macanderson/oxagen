@@ -1,0 +1,104 @@
+---
+title: GDPR rights
+description: How Oxagen supports GDPR Article 17 (right to erasure) and Article 20 (right to data portability).
+---
+
+<IllustrationPrivacySpot />
+
+## Overview
+
+Oxagen provides self-service controls for the two most operationally significant GDPR rights:
+
+| Right | Article | Scope | Surface |
+|---|---|---|---|
+| Data portability | Art. 20 | User-level | Account → Privacy, API, MCP |
+| Right to erasure | Art. 17 | User-level and Org-level | Account → Privacy, Org Settings → Privacy, API, MCP |
+
+Both rights can be exercised without contacting support. They are also available via API and MCP for operators who need to fulfill requests programmatically.
+
+## Data export (Article 20)
+
+A user-scope export produces a ZIP archive containing:
+
+| File | Contents |
+|---|---|
+| `user-profile.json` | Name, email, created_at, org memberships |
+| `conversations/` | Conversation metadata and message history |
+| `api-keys.json` | Key metadata only — never key values |
+| `audit-log.json` | Security events where the user is the subject |
+| `generated-assets/` | List of asset URLs and metadata |
+
+Exports are assembled asynchronously. The request returns immediately with `status: "queued"` and a polling endpoint (`GET /v1/:org_slug/:workspace_slug/privacy/export/:exportId`) updates status as the job progresses. When ready, `status` transitions to `"ready"` and a signed `downloadUrl` is provided.
+
+### API
+
+```
+POST /v1/:org_slug/:workspace_slug/privacy/export
+{ "scope": "user" }
+
+→ 202 { "exportId": "...", "status": "queued" }
+```
+
+### MCP
+
+Capability: `privacy.data.export`
+
+### CLI
+
+CLI support for privacy commands is not yet implemented.
+
+## Account and org erasure (Article 17)
+
+Erasure is available at two scopes:
+
+### User-scope erasure
+Any authenticated user may request deletion of their own account. The request:
+1. Revokes the requesting user's active sessions immediately.
+2. Schedules a soft-delete of the user account (executed asynchronously by the grace-period job, not immediately at request time).
+3. Schedules a hard-delete of all personal data within 30 days (configurable via `PRIVACY_ERASURE_GRACE_DAYS`).
+4. Emits a `privacy.erasure_requested` security event and dispatches a `privacy/erasure.execute` Inngest job.
+
+### Org-scope erasure
+An org Owner may request deletion of the entire organization. The request:
+1. Revokes the requesting owner's active sessions immediately. Downstream member session revocation is scheduled asynchronously via the Inngest job.
+2. Offboards all members.
+3. Schedules deletion of all org data (workspaces, conversations, assets, billing records).
+4. Emits `privacy.org_erasure_requested` security event and webhook.
+
+### Grace period
+The default grace period is 30 days (`PRIVACY_ERASURE_GRACE_DAYS=30`). Set to `0` for immediate erasure in test environments. The grace period exists to allow cancellation in case of an accidental request — contact `privacy@oxagen.ai` within the grace period to cancel.
+
+### API
+
+```
+POST /v1/:org_slug/:workspace_slug/privacy/erase
+{ "scope": "user", "confirm": true }
+
+→ 202 { "requestId": "...", "status": "queued", "effectiveAt": "2026-07-09T..." }
+```
+
+### Webhook event
+
+When erasure is requested, Oxagen emits a `privacy/erasure.execute` event through Inngest. You can subscribe to this event via the webhook channel to trigger downstream cleanup (CRM, analytics, internal systems):
+
+```json
+{
+  "requestId": "<uuid>",
+  "userId": "<userId>",
+  "orgId": "<orgId>",
+  "scope": "user",
+  "scheduledAt": "2026-07-09T..."
+}
+```
+
+## Security events
+
+All privacy actions are recorded as immutable security events in the `security.security_events` table:
+
+| Action | Event type |
+|---|---|
+| Export requested | `privacy.export_requested` |
+| User erasure requested | `privacy.erasure_requested` |
+| Org erasure requested | `privacy.org_erasure_requested` |
+
+These events appear in the audit log and can be used as evidence in GDPR audit responses.

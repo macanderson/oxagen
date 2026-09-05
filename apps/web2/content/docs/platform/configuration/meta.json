@@ -1,0 +1,10 @@
+{
+  "title": "Configuration",
+  "pages": [
+    "index",
+    "environments-and-secrets",
+    "email",
+    "local-development",
+    "storage"
+  ]
+}

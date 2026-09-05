@@ -1,0 +1,75 @@
+---
+title: Oxagen Plugins
+description: First-party agent capability packs that extend what Oxagen agents can do in your workspace.
+---
+
+## Overview
+
+**Oxagen Plugins** are first-party capability packs built and maintained by Oxagen. Each pack is of type `agent_capability` and bundles a set of related AI capabilities — image generation, video creation, SVG drawing, document assembly — that agents can invoke without any external MCP server.
+
+Unlike MCP server or integration plugins, Oxagen capability packs are invoked internally through the capability kernel. There is no external endpoint and no Connect step: install the plugin and the capabilities are immediately available to agents in that workspace.
+
+## Available plugins
+
+Oxagen ships four capability packs, all available on the **Agent Capabilities** tab of the marketplace. All are free-tier and generally available.
+
+| Plugin | Plugin ID | What it enables |
+|---|---|---|
+| **Image Generation** | `oxagen/media-image` | Generate, create, and analyze AI images; list workspace images. |
+| **SVG Generation** | `oxagen/media-svg` | Generate scalable vector graphics from natural language. |
+| **Video Generation** | `oxagen/media-video` | Generate videos from text prompts and images. |
+| **Document Generation** | `oxagen/documents` | Generate rich documents and export them as PDF. |
+
+## Capabilities unlocked per plugin
+
+Each plugin unlocks a specific set of named capabilities across the API, MCP, and in-app agent surfaces:
+
+| Plugin | Capabilities |
+|---|---|
+| Image Generation | `image.generate` · `image.create` · `image.analyze` · `image.list` |
+| SVG Generation | `svg.generate` |
+| Video Generation | `video.generate` |
+| Document Generation | `documents.generate` · `documents.pdf.create` · `markdown.generate` · `mermaid.generate` |
+
+## Installing an Oxagen Plugin
+
+1. Go to **Workspace settings → Plugins → Browse marketplace**.
+2. Select the **Agent Capabilities** tab.
+3. Click the plugin card you want.
+4. Click **Install to workspace**.
+
+The plugin is enabled immediately. No Connect step is required.
+
+## Disabling a plugin
+
+Go to **Workspace settings → Plugins → Installed**, find the plugin, and toggle it off. Agents in this workspace will no longer have access to the plugin's capabilities.
+
+To re-enable, toggle it back on. No reinstall is needed.
+
+## Uninstalling a plugin
+
+Click **Uninstall** from the installed plugins list. Uninstalling blocks all invocations of the plugin's capabilities immediately. Content that was previously generated (images, videos, documents) is your data — it is not deleted and remains accessible from your workspace.
+
+To reinstall later, follow the install steps above.
+
+## What happens when a capability is not installed
+
+If an agent or direct API/MCP call targets a capability that belongs to a plugin not installed (or disabled) in the current workspace, the platform returns a `capability_not_installed` error with an install hint:
+
+```json
+{
+  "capability": "video.generate",
+  "code": "capability_not_installed",
+  "message": "Capability \"video.generate\" requires the \"Video Generation\" plugin (oxagen/media-video). Install and enable it from the marketplace."
+}
+```
+
+This response is identical across the in-app agent, the REST API, and the MCP surface.
+
+## Role requirements
+
+| Action | Required role |
+|---|---|
+| Browse Agent Capabilities | Any workspace member |
+| Install / uninstall | Workspace Owner or Org Owner/Admin |
+| Enable / disable | Workspace Owner or Org Owner/Admin |

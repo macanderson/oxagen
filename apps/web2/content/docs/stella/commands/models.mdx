@@ -1,0 +1,164 @@
+---
+title: stella models
+description: List configured providers and available models, and manage the live model catalog.
+---
+
+See which providers you've set up, what models are available, and manage the **live model catalog**. For each provider, stella shows whether you have a key, its default model, and its base URL.
+
+## Synopsis
+
+```bash
+stella models [global flags]
+stella models refresh [--force]
+stella models list [--provider <id>] [--all]
+```
+
+## What it does
+
+`stella models` lists every built-in provider, showing its display name, whether you have a key for it, its default model, and its base URL. Below that, it shows a status line for the local model catalog. Any custom providers you added in `settings.json` show up too, under a separate **Config-defined providers** heading, along with the API style they use. This is the fastest way to check which providers are ready before you pick one with `--model`.
+
+stella checks **key status** using the same steps `stella run` uses to find a key, run in a mode that never stops to ask you a question, since this is just a listing command. It checks every source: an environment variable (or its alias), a project `.env` file, a value written in `settings.json`, and `~/.stella/credentials.toml`. Each configured row names the source that actually supplied the key. That means `stella models`, [`stella config`](/docs/stella/commands/config), and [`stella auth list`](/docs/stella/commands/auth) will always agree with each other, and with what happens on a real run.
+
+You can see the same list inside an interactive session with the [`/models`](/docs/stella/commands/chat) slash command.
+
+## Live model catalog
+
+The catalog stella uses to check models and show pricing syncs from [models.dev](https://models.dev) into a local SQLite database. Pricing is versioned, and model names are checked strictly: if you mistype one, stella suggests the closest match instead of silently sending a bad request. See [Models &amp; the live catalog](/docs/stella/api-providers/models) for more detail.
+
+### `stella models refresh [--force]`
+
+Sync the catalog right now. By default, this only downloads what changed (it checks the ETag). Use `--force` to re-download everything.
+
+```bash
+stella models refresh
+stella models refresh --force
+```
+
+#### What syncs automatically
+
+There are two sources for the catalog, and they follow different rules. Both use the same 24-hour window before they're considered stale. Setting `STELLA_CATALOG_AUTO_REFRESH=0` turns off all automatic fetching.
+
+<CardGrid size="md">
+  <OptionCard name="Native provider listings">
+    Each configured provider's own `/models` endpoint. stella syncs it automatically whenever it's
+    stale, **including the very first time** — this is how new model releases show up. It only
+    calls a provider you've already given stella a key for, the same server your next request
+    would go to anyway. If you haven't given a provider a key, stella doesn't fetch anything from
+    it.
+  </OptionCard>
+  <OptionCard name="The models.dev master list">
+    A third-party source, so stella never contacts it automatically the first time. It can only
+    auto-*re*fresh after you've run `stella models refresh` yourself at least once. A fresh
+    install never reaches out to models.dev on its own, and the catalog line reads `seed only`
+    until you run that first refresh.
+  </OptionCard>
+</CardGrid>
+
+### `stella models list [--provider <id>] [--all]`
+
+List the models in the local catalog, optionally filtered to one provider. Each row shows `provider/slug`, then the price per million tokens for input, output, and cached input, then the context window size, then the model's **maker**, a `thinks` marker if the model supports reasoning, and the pricing card's version.
+
+```bash
+stella models list
+stella models list --provider anthropic
+stella models list --all
+```
+
+```text
+Stella — Model Catalog
+
+  provider/slug  ·  $in / $out / $cached-in per Mtok  ·  context  ·  maker  [pricing v]
+  anthropic/claude-fable-5  $10.00 / $50.00 / $1.00  ctx 1000k  anthropic  thinks  [v3]
+  zai/glm-5.2  $0.60 / $2.20 / $0.11  ctx 200k  z-ai  thinks  [v1]
+
+  2 models. Pricing shown is each card's latest version.
+  master list last refreshed 2026-07-18 09:14:03 UTC — `stella models refresh` to update
+```
+
+If you don't pass `--provider`, the list only shows providers you currently have a working credential for. That's the same set the deck's model picker offers, since a plain `list` is meant to answer "what can I actually pick right now." A footer line tells you how many models were hidden this way.
+
+<CardGrid size="md">
+  <OptionCard name="--provider <id>">
+    Filter to a single provider. This ignores the credential filter: you see every model the
+    catalog has for that provider, whether or not you have a working key for it.
+  </OptionCard>
+  <OptionCard name="--all">
+    Show the whole catalog, ignoring the credential filter. This only matters **without**
+    `--provider`. If you pass both flags, `--all` has nothing left to do, since a `--provider`
+    listing already shows everything for that provider.
+  </OptionCard>
+</CardGrid>
+
+<Callout type="info">
+stella looks for provider credentials in this order: the `--api-key` flag, then the provider's
+environment variable (or its aliases), then `settings.json`, then `~/.stella/credentials.toml`,
+and finally an interactive prompt if you're at a terminal.
+</Callout>
+
+## Flags
+
+`stella models` accepts the [global flags](/docs/stella/commands), but the list itself only depends on what the credential chain finds on disk and in your environment: `settings.json`, your environment variables and dotenv files, and `credentials.toml`. The `--model`, `--base-url`, and `--api-key` flags don't change what it shows.
+
+## Examples
+
+Confirm which providers are ready before pinning one:
+
+```bash
+stella models
+```
+
+Example output (one line per provider, shown in the order stella tries them):
+
+```text
+Stella — Available Providers & Models
+
+  ✓ configured zai/glm-5.2  Z.ai (GLM 5.2)  [https://api.z.ai/api/paas/v4] (env:ZAI_API_KEY)
+  ✓ configured anthropic/claude-fable-5  Anthropic (Claude)  [https://api.anthropic.com] (credentials.toml)
+  ✗ no key openai/gpt-5.5  OpenAI (GPT)  [https://api.openai.com/v1]
+  ✗ no key xai/grok-4.3  xAI (Grok)  [https://api.x.ai/v1]
+  ✗ no key deepseek/deepseek-chat  DeepSeek  [https://api.deepseek.com/v1]
+  ✗ no key gemini/gemini-3-pro  Google Gemini  [https://generativelanguage.googleapis.com/v1beta]
+  ✗ no key openrouter/openrouter/auto  OpenRouter  [https://openrouter.ai/api/v1]
+  ✗ no key vertex/gemini-3-pro  Google Vertex AI  [https://aiplatform.googleapis.com]
+  ✗ no key bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0  Amazon Bedrock  [https://bedrock-runtime.<AWS_REGION>.amazonaws.com]
+
+  Config-defined providers (settings.json):
+  ✓ configured myproxy/<model>  My proxy  [https://llm.internal.example/v1] (OpenAI-compatible) (.env.local)
+
+  Use --model provider/model_id to pin a specific model.
+  Example: stella --model zai/glm-5.2 run 'fix the failing test'
+  Local endpoints (Ollama, vLLM, LM Studio): stella --model local/<model> --base-url http://localhost:11434/v1
+
+  Model catalog: 1204 models / 118 aliases — master list refreshed 2026-07-18 09:14:03 UTC (`stella models list` to browse, `stella models refresh` to update).
+```
+
+Each row follows this pattern: `{key status} {id}/{default model}  {display name}  [{base url}] ({source})`. The source at the end only appears on a configured row, and it names where the key came from: `env:VAR_NAME`, the project dotenv file it loaded from (like `.env.local`), `credentials.toml`, or `settings.json`. That's why the second row above shows `✓ configured` even with no environment variable set: a key stored only in `~/.stella/credentials.toml` still counts, and the listing tells you so.
+
+The `vertex` and `bedrock` base URLs shown here are just for display. stella builds the real endpoint for each request from your project and location (`VERTEX_PROJECT_ID`, `VERTEX_LOCATION`) or from `AWS_REGION`. Providers you defined in `settings.json` show up under their own heading, with their API style listed before the source. That section only shows up if `settings.json` actually defines a custom provider. Until you run `stella models refresh` for the first time, the last line of the catalog reads `seed only`.
+
+`local` isn't a provider row. It only shows up as a footer hint reminding you to point at your own local endpoint, for example: `stella --model local/<model> --base-url http://localhost:11434/v1`.
+
+<Callout type="warn">
+The values above are just examples. Your actual key status depends on which credentials resolve
+in your environment. Default models and base URLs can also be overridden per provider in
+`settings.json`.
+</Callout>
+
+Browse the catalog for a provider you haven't set up yet. `--provider` lists it whether or not you have a working key:
+
+```bash
+stella models list --provider openai
+```
+
+See everything the catalog holds, credentialed or not:
+
+```bash
+stella models list --all
+```
+
+Pull the models.dev master list for the first time, then check the catalog status line:
+
+```bash
+stella models refresh
+stella models
+```

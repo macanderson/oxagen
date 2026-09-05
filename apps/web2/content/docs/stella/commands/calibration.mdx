@@ -1,0 +1,67 @@
+---
+title: stella calibration
+description: The measured false-positive rate of a pass verdict, checked against CI results and reverts seen afterward.
+---
+
+Answer "how often was a pass wrong?" using what the workspace has already recorded. Every verification result is saved in the local event log along with the checklist it was decided from, every PR or CI result lands in the same stream, and every revert is already in the git log. So calibration reads existing data; it doesn't add a new tracking system. It runs entirely on your machine: no API key, no network, and it never writes anything.
+
+## Synopsis
+
+```bash
+stella calibration                # human-readable report
+stella calibration --format json  # machine-readable tallies
+```
+
+<Callout type="warn">
+**Verdicts come from an installed verification plugin.** A plain
+`stella run` is the raw step loop with nothing verifying it, so it produces no
+`Verdict` events. Verdicts come from an **installed verification plugin**
+(`stella plugin install`, then `stella run --pipeline <plugin-id>`). A
+workspace with none has nothing to calibrate, and the
+command says exactly that, instead of printing a page of zeros that looks
+like a flawless verifier.
+</Callout>
+
+## What it reports
+
+Two groups, side by side. A false-positive rate means nothing without the group it's compared against.
+
+- **unproven** — `Verdict` events marked `passed: true` and `deterministic: false`: a pass the checklist could not fully confirm. Three different outcomes land here: *unverified* (the checks looked and couldn't settle it), *unverifiable* (no check could look), and a pass a person waived during triage. No model judged any of them.
+- **deterministic** — passes the checklist confirmed on its own (a fail-to-pass flip, green tests, staying in budget, and every pre-submit check).
+
+For each group: how many passes were recorded, how many were **checked against outside evidence**, and how many of those turned out to be wrong. The rate is only calculated over checked passes. With no outside evidence yet, it is reported as **unmeasured**, never as zero.
+
+Three more numbers ride along:
+
+- **the unconfirmed rate** — of the verdicts that had a checklist behind them, how often *nothing* mechanical backed up the result: no fail-to-pass flip, no touched-test run seen passing, no worker confirmation of the finished work. Look at this number when deciding whether to ask the worker for one more piece of proof before accepting a result: a low number means that's rarely needed.
+- **reverted, counted separately** — how many checked passes were undone by a human revert rather than caught by CI. A group whose false positives are mostly reverts is failing in a different way than one whose false positives are mostly failed CI runs, and a single number would hide the difference.
+- **reviewer independence** — the unproven group split by whether the worker's own model reviewed the verdict or a different one did. Verdicts with no record of who reviewed them are kept separate and left out of both rates instead of assumed into either.
+
+## Ground truth: two sources, one asymmetry
+
+A pass is checked against either:
+
+1. a **final CI result** (`Passing`/`Failing`) for a pull request the pass covers, read from **every** recorded session, so a result that arrives after a session ended still applies to it; or
+2. a **revert** of a commit the pass covers, read from `git log`, using git's own generated `This reverts commit <sha>.` message.
+
+The asymmetry here is deliberate: **a revert marks a pass as a false positive, but the lack of a revert confirms nothing.** Most correct work is never reverted, for the same reason most correct work is never mentioned again, so a commit that was never reverted stays unchecked and is left out of every count. Counting un-reverted commits as confirmed successes would make every measured rate look better automatically. That is the one direction a fair measurement can never drift toward.
+
+A revert also outranks a green CI run for the same pass, since it's the later and better-informed signal.
+
+## Limits
+
+- `Pending`/`Running` CI states confirm nothing. No result yet is not the same as a result.
+- A session's records don't say which verdict a given commit belongs to, so a commit is credited to every unsettled pass before it. A session that produced two passes and one commit counts a revert twice. This makes the tool look worse than it is, which is the safer direction to err in.
+- Reading the git log is a best-effort, limited process: a workspace that isn't a git repository just contributes one fewer source.
+- Older recorded sessions can mix two different things under the `unproven` label: a pass a model judged from weak evidence, and a pass the checklist itself couldn't resolve. Nothing in an old record tells the two apart, so a report spanning both kinds of session can't separate them.
+
+## `--format json`
+
+The output follows the same versioned JSON structure used across stella's other `--format json` commands. Every rate is `null` when unmeasured, never `0`. Keys: `sessions`, `verdicts_observed`, the `unproven_*` and `deterministic_*` groups with their `*_false_positive_rate`, `snapshotted_verdicts` / `uncorroborated_verdicts` / `uncorroborated_rate` / `unproven_passes_standing_alone`, `settled_by_late_evidence` / `unreconciled_passes`, `unproven_reverted` / `deterministic_reverted`, and `by_grader` (`self_graded`, `independent`, `unknown`).
+
+`verdicts_observed` tells apart "no verdict was ever recorded" from "no verdict passed." They look the same in every other tally, and with no verification plugin installed, the first case is the normal state.
+
+## See also
+
+- [`stella inspect`](/docs/stella/commands/inspect) — the exact context any past call was sent
+- [`stella stats`](/docs/stella/commands/stats) — cost and resolve-rate per provider/model

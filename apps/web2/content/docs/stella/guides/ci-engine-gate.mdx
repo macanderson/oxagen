@@ -1,0 +1,442 @@
+---
+title: Gate on engine quality in CI
+description: Run stella and Claude Code side by side on one task set on every pull request. Block the merge on loop correctness. Report the quality difference, but never block on it.
+---
+
+Once an agent engine is part of your product, it can break like any other
+dependency. But it breaks quietly — there's no stack trace. A prompt change,
+a model swap, a settings edit, a new release from your provider: the turn
+still exits with no error, still prints something that sounds right, and
+quietly does less work than it did last week.
+
+This guide sets up a CI job that catches that. It runs stella and Claude Code
+on the same set of committed tasks on every pull request. The important part:
+it treats their two results as answers to two different questions.
+
+## Two kinds of check
+
+Most attempts at this fail the same way. Someone builds a test harness,
+scores both engines, gets a number, and sets a threshold on that number.
+Within a month, the check gets turned off because it fails on days when
+nothing actually changed.
+
+"Did the engine work" and "was the answer good" are two different questions.
+Only one of them gives a steady enough answer to block a merge on.
+
+<EngineGateDiagram />
+
+<CardGrid size="md">
+  <SpecCard title="Loop correctness blocks the merge">
+    Did the turn actually do work? Did it stop and say why? Did it call a
+    tool at all? These are facts about the run. You can read them straight
+    from the receipt, and they don't change just because the model had an
+    off day. A regression here is a real bug — exit with a non-zero code.
+  </SpecCard>
+  <SpecCard title="Quality tells you, it doesn't block">
+    Did it solve the task, and at what cost? This is real signal, but it
+    shifts with random sampling, which provider handled the request, and
+    factors outside your control. Post it as a comment and let a person read
+    the trend over time. Setting a hard threshold here only gets you a gate
+    that fails at random.
+  </SpecCard>
+</CardGrid>
+
+Everything below is built on that split between the two questions. If you
+remember one thing from this page, remember that.
+
+## Before you start
+
+<CardGrid size="md">
+  <OptionCard name="Both engines on PATH in CI">
+    `stella` and `claude`. Pin both versions exactly. If the versions can
+    change on their own, you're measuring the version change, not the
+    engines.
+  </OptionCard>
+  <OptionCard name="A key per engine, as repository secrets">
+    These runs spend real money on every pull request. Keep costs down in
+    step 1 by keeping the task set small, and set a hard cap in step 2 with
+    `--spend-limit`.
+  </OptionCard>
+  <OptionCard name="Tasks with deterministic verifiers">
+    If nobody can grade a task automatically, this job can't gate on it. If
+    a test command can't say pass or fail, leave that task out.
+  </OptionCard>
+</CardGrid>
+
+<Callout type="warn">
+This job runs a coding agent with real tool access on every pull request.
+Run it on a runner you can throw away. Give it credentials for nothing you'd
+mind losing. Never run it on `pull_request_target` — that trigger lets code
+from a forked repo access your secrets.
+</Callout>
+
+## Step 1: Commit the task set
+
+Keep the list small, fixed, and checked into the repository. Five to ten
+tasks is plenty. This gate is only looking for a loop that stopped working,
+and a broken loop shows up on the very first task.
+
+```
+ci/engine-tasks/
+  001-add-pagination/
+    TASK.md              # the prompt, verbatim
+    verify.sh            # exit 0 if the change is correct
+  002-fix-null-deref/
+  003-rename-across-files/
+```
+
+### What makes a good task
+
+<CardGrid size="sm">
+  <SpecCard title="It requires editing a file">
+    The most useful loop-correctness signal is simple: did anything get
+    written? A task you can answer in words alone can't produce that signal.
+  </SpecCard>
+  <SpecCard title="Use a real test, not a judgment call">
+    `verify.sh` should run a real test and exit with a code. The moment a
+    model grades the result instead, the deterministic half of your gate
+    stops being deterministic.
+  </SpecCard>
+  <SpecCard title="It fails before the change">
+    If the verifier was already passing, it proves nothing about the work.
+    This is the same fail-then-pass rule a
+    [verification plugin](/docs/stella/plugins) uses on its own. It applies to your
+    test harness too.
+  </SpecCard>
+</CardGrid>
+
+## Step 2: Run both engines headless
+
+Both engines take a prompt and print JSON you can parse. The JSON has a
+different shape for each one, and that difference trips people up — so read
+this part carefully.
+
+Give each engine its own copy of the code, so their edits can't see each
+other, and each copy can be graded on its own:
+
+```bash
+task=ci/engine-tasks/001-add-pagination
+for e in stella claude; do rm -rf "work/$e"; git worktree add -f "work/$e" HEAD; done
+```
+
+```bash
+# Stella — one JSON object on stdout.
+( cd work/stella && stella --spend-limit 1.00 \
+  run --output-format json "$(cat "../../$task/TASK.md")" ) > work/stella/stella.json
+
+# Claude Code — a JSON *array*; the result is the last element.
+( cd work/claude && claude -p --output-format json --permission-mode acceptEdits \
+  "$(cat "../../$task/TASK.md")" ) > work/claude/claude.json
+```
+
+Both engines need to be able to edit files without a person approving each
+change. `--permission-mode acceptEdits` does that for Claude Code. Check
+`claude --help` on the exact version you pinned, rather than copying a flag
+list from somewhere else — these flags change between releases.
+
+<Callout type="warn">
+`claude --output-format json` does not print one JSON object. It prints an
+array with every message from the session. The summary is the last item in
+that array, marked `"type": "result"`. Read it with
+`jq '.[] | select(.type == "result")'`. Do not use `jq '.result'` — that
+returns `null` and will quietly mark every run as a failure.
+</Callout>
+
+Here's what each one gives you, cut down to the keys your gate actually
+reads:
+
+```jsonc
+// stella.json — see /docs/scripting for the full envelope contract
+{
+  "schema_version": 1,
+  "status": "completed",        // or verification_failed | aborted | error
+  "text": "…",
+  "reason": null,               // non-null whenever status is not completed
+  "cost_usd": 0.184,
+  "model": "anthropic/claude-fable-5",   // what actually ran, not what you asked for
+  "events": [ { "type": "tool_start", "call": { "name": "task_create" } }, … ]
+}
+```
+
+```jsonc
+// claude.json — the last array element
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 14,
+  "result": "…",
+  "total_cost_usd": 0.211,
+  "duration_ms": 48213,
+  "permission_denials": [],     // a non-empty array here is a loop-health signal
+  "terminal_reason": "completed"
+}
+```
+
+**Read the `model` field, not the flag you passed.** stella reports the
+model that actually ran the worker turns. A
+[worker-model route](/docs/stella/configuration/agent-engine-config) can swap out
+the model you asked for with `--model`. Always attribute spend to what the
+receipt says, not to your own flag.
+
+**`files_touched` isn't in the same place on every run.** A plain (default)
+run puts it at the top level, as `files_touched`. A `--pipeline <variant>`
+run also adds `task_class`, `verdict`, `revisions`, and `candidates_run` —
+but its file list sits one level deeper, at `.files_touched.files_touched`.
+Counting `tool_start` events works the same way on both, which is why the
+checks below use events instead.
+
+## Step 3: Loop correctness
+
+This is the same gate stella runs on itself. The vocabulary is worth
+reusing, since it comes from watching real failures happen. `loop-bench`
+sorts every run into one of four results, checked in this order:
+
+<LoopVerdictDiagram />
+
+The order matters. **A solved task always outranks everything else** — if
+the task got solved, work happened, by definition, no matter what the event
+log is missing. The two results that fail the gate are the two where
+*nothing happened at all*: `loop_broken` means `zero_work && reward != 1.0`.
+
+Applied to the receipts from step 2, that becomes four checks:
+
+<CardGrid size="md">
+  <OptionCard name="1. A receipt exists at all">
+    No JSON printed at all is the worst outcome — treat it as a real
+    failure, not something to skip over. Mark it failed with a `no receipt`
+    reason. Skipping this check once let a launch failure look like a clean
+    run with fewer rows, and the gate stayed green anyway.
+  </OptionCard>
+  <OptionCard name="2. Work happened">
+    Check for at least one `tool_start` event from stella, or
+    `num_turns > 1` plus a non-empty diff from Claude Code. Zero tool calls
+    on a task that needs an edit is exactly the failure this whole job is
+    built to catch.
+  </OptionCard>
+  <OptionCard name="3. It terminated, and said why">
+    For stella, check that `status` is `completed` or `reason` is filled in.
+    For Claude Code, check that `terminal_reason` is present. A run that
+    ends with neither one just vanished — call that `SILENT-DEATH`.
+  </OptionCard>
+  <OptionCard name="4. Nothing was silently blocked">
+    If `permission_denials` isn't empty, or a stella run stopped at a scope
+    gate with nobody around to approve it, the agent was blocked, not
+    finished. Fail loudly here. Otherwise this looks like low quality, and
+    you'll waste a week tuning prompts to fix a problem that isn't there.
+  </OptionCard>
+</CardGrid>
+
+```bash
+#!/usr/bin/env bash
+# ci/assert-loop-health.sh — the deterministic half. No model judges anything.
+set -euo pipefail
+
+fail() { echo "loop-broken: $1" >&2; exit 1; }
+
+s=work/stella/stella.json
+c=work/claude/claude.json
+[ -s "$s" ] || fail "stella emitted no receipt"
+[ -s "$c" ] || fail "claude code emitted no receipt"
+
+jq -e 'if .schema_version == 1 then . else error("unsupported schema_version") end' \
+  "$s" > /dev/null || fail "stella envelope version changed under us"
+
+tools=$(jq '[.events[] | select(.type == "tool_start")] | length' "$s")
+[ "$tools" -gt 0 ] || fail "stella made zero tool calls on an editing task"
+
+jq -e '.status == "completed" or (.reason != null)' "$s" > /dev/null \
+  || fail "stella neither completed nor said why"
+
+result=$(jq '[.[] | select(.type == "result")] | .[0]' "$c")
+[ "$result" != "null" ] || fail "claude code produced no result element"
+
+denials=$(jq '.permission_denials | length' <<<"$result")
+[ "$denials" -eq 0 ] || fail "claude code was blocked by $denials permission denial(s)"
+
+jq -e '.terminal_reason != null' <<<"$result" > /dev/null \
+  || fail "claude code ended without a terminal reason"
+
+echo "loop healthy: $tools tool calls, clean termination"
+```
+
+Notice what's missing from that script: any check on whether the task got
+solved. A task nobody solves can still pass this gate, as long as the loop
+actually ran. That's the point. You're gating on the machine, not on the
+model.
+
+## Step 4: The quality delta
+
+This part gets reported, not enforced. Same two receipts as before, but now
+read for the outcome instead of the health check.
+
+Each engine ran in its own copy of the code. That's what makes them
+comparable at all, and each one has its own workspace to grade.
+
+```bash
+#!/usr/bin/env bash
+# ci/quality-delta.sh — writes a summary, never exits non-zero.
+set -uo pipefail
+task=001-add-pagination
+
+graded() {  # $1 = the workspace that engine worked in
+  ( cd "$1" && "./ci/engine-tasks/$task/verify.sh" >/dev/null 2>&1 ) && echo yes || echo no
+}
+
+stella_cost=$(jq -r '.cost_usd' work/stella/stella.json)
+claude_cost=$(jq -r '[.[] | select(.type == "result")] | .[0].total_cost_usd' \
+                 work/claude/claude.json)
+
+{
+  echo "| engine | solved | cost | model |"
+  echo "|---|---|---|---|"
+  echo "| stella | $(graded work/stella) | \$$stella_cost | $(jq -r '.model' work/stella/stella.json) |"
+  echo "| claude code | $(graded work/claude) | \$$claude_cost | $CLAUDE_MODEL |"
+} >> "$GITHUB_STEP_SUMMARY"
+```
+
+Don't set a hard threshold based on that table. With only five tasks, one
+task flipping changes the score by twenty points, and that much random
+swing is completely normal. The table's job is to show a *trend* across many
+pull requests. When it moves the same direction again and again, let a
+person decide what that means.
+
+## The workflow
+
+```yaml
+name: engine-gate
+on: pull_request          # never pull_request_target — that hands forks your secrets
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Does this PR touch anything the engine depends on?
+        id: scope
+        run: |
+          if git diff --name-only "${{ github.event.pull_request.base.sha }}"...HEAD \
+             | grep -Eq '^(prompts/|src/agent/|ci/engine-tasks/)'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No engine-affecting changes — suites skipped." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Loop health — the blocking half
+        if: steps.scope.outputs.changed == 'true'
+        run: ./ci/run-both.sh && ./ci/assert-loop-health.sh
+
+      - name: Quality delta — advisory
+        if: steps.scope.outputs.changed == 'true'
+        continue-on-error: true
+        run: ./ci/quality-delta.sh
+```
+
+**Mark it as a required status check.** A check that isn't required can't
+block a merge, and a check that can't block a merge doesn't do anything.
+This was learned the hard way: a dependency update once broke the benchmark
+workflow, the workflow reported failure, and the pull request merged twelve
+minutes later anyway. It stayed broken for five days.
+
+**Filter the scope inside a step, not in the trigger.** If you filter with
+`on.pull_request.paths`, the workflow doesn't run at all when nothing
+matches — so it never reports a result, and a required check that never
+reports blocks the pull request forever. The job above always runs and
+always reports something. Only the expensive part is conditional. An
+unrelated pull request just pays for one runner starting up, not for two
+full agent runs.
+
+## Changing stella itself
+
+The harness above works for any product using stella. But if you're
+changing the engine itself, stella has its own version built in, and it's
+cheaper and more precise:
+
+```bash
+cargo run -p loop-bench -- --n 4                     # four tasks, the default pool
+cargo run -p loop-bench -- --json-out report.json    # table on stdout, report on disk
+cargo run -p loop-bench -- --analyze-only --jobs-dir <dir> --job-name <name>   # free
+```
+
+It reads `stella-events.jsonl` for each trial, sorts each one into the same
+four results as above, and exits with code `1` if any trial comes back
+`loop_broken` — even if other trials passed. Exit code `2` means the task
+list came up empty, or the report couldn't be written. Exit code `3` means
+no trial results were found at all. That's an infrastructure problem, not a
+loop problem. Exit code `4` means the loop worked fine, but fewer trials
+passed than `--min-pass` required.
+
+stella runs this nightly, not on every pull request, since it needs Docker,
+a task runner, a provider key, and real money. Two details of that setup are
+worth copying. First, the task list is pinned **by name**, not just "the
+first four in the list" — since the list order can change and would
+silently change what gets measured. Second, the pass-rate floor ships
+**turned off** at first. It only gets turned on once the job's own reports
+show what normal looks like. A floor picked by guesswork on a cheap model
+fails every single night, and a gate that always fails is a gate nobody
+reads.
+
+<Callout type="info">
+The whole idea here is worth copying. An expensive benchmark measures *pass
+rate*, which mostly reflects model quality — so testing with a cheap model
+tells you almost nothing. Loop health is the opposite. A cheap model can
+catch a broken loop just as well as an expensive one, for a fraction of the
+cost.
+</Callout>
+
+## What this cannot tell you
+
+A comparison harness that oversells itself is
+worse than no harness at all.
+
+<CardGrid size="md">
+  <OptionCard name="Five tasks is not a benchmark">
+    It's a smoke test, nothing more. It catches a loop that stopped working.
+    It does not rank engines against each other, and you should never
+    publish a table from it as if it does.
+  </OptionCard>
+  <OptionCard name="Self-reported cost is not comparable">
+    Each engine reports its own cost, its own way. In one real test, a
+    one-word reply through Claude Code cost $0.034 — almost all of it
+    cache-creation tokens for the system prompt. Startup cost dominates on
+    small tasks, so comparing cost on a trivial task really just compares
+    system prompts, not the engines themselves.
+  </OptionCard>
+  <OptionCard name="Routing is a confound">
+    Two runs using the same model name can still land on different
+    providers with different reasoning settings, especially if you go
+    through an aggregator. Pin down the provider and the effort level, or
+    you end up measuring the router instead of the engines.
+  </OptionCard>
+  <OptionCard name="Tool counts are a fingerprint, not a score">
+    The number of tool calls just reflects design choices — how much work
+    each tool does per call — not how efficient the engine is. Report wins,
+    dollars, tokens, and minutes instead. Fewer tool calls is a different
+    shape, not a better one.
+  </OptionCard>
+</CardGrid>
+
+## See also
+
+<CardGrid size="sm">
+  <SpecCard title="Drop stella in as your agent engine" href="/docs/stella/guides/embed-the-engine">
+    The guide that pairs with this one. Get the engine running inside your
+    app and under test first — this page assumes your loop can already run
+    in CI.
+  </SpecCard>
+  <SpecCard title="Scripting stella" href="/docs/stella/scripting">
+    The full JSON output format, the `schema_version` rule, and the jq
+    patterns the scripts above are built on.
+  </SpecCard>
+  <SpecCard title="Fix a failing CI run" href="/docs/stella/guides/fix-failing-ci">
+    The flip side of this guide: what to do when the gate you just built
+    turns red.
+  </SpecCard>
+  <SpecCard title="Plugins" href="/docs/stella/plugins">
+    The verification steps and the fail-then-pass check — the same
+    evidence-based approach this page borrows for its own harness.
+  </SpecCard>
+</CardGrid>

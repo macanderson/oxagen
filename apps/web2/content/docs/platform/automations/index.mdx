@@ -1,0 +1,91 @@
+---
+title: Automations
+description: Event, schedule, and API-triggered playbooks that run agents and tools automatically — with a human enable gate on everything an AI creates.
+---
+
+An **automation** is a playbook bound to a trigger. When the trigger fires — a graph node changes, a cron schedule elapses, or an API call arrives — the playbook's steps run in order, each one passing through the same `invoke()` kernel boundary as every other action in Oxagen: IAM-checked, metered, and audit-logged.
+
+Manage automations in **Workspace → Automations**. Triggers and workflow runs each have their own tab.
+
+## Trigger types
+
+| Type | Fires when | Configuration |
+|---|---|---|
+| `event` | A knowledge-graph node is created, updated, or deleted | Watched entity type (e.g. `PullRequest`, `Contact`), event type (`node.created` / `node.updated` / `node.deleted`), and an optional condition tree |
+| `schedule` | A cron expression elapses | POSIX cron expression plus an IANA timezone (default UTC) |
+| `api` | You trigger it explicitly | Called manually from the UI, REST API, MCP, or CLI, with an optional payload |
+
+### Event conditions
+
+Event triggers can filter on the watched entity's properties with a nested AND/OR condition tree. Operators are typed by each property's data type in the [schema registry](/docs/platform/knowledge/schema-registry) — for example `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `contains`, `in`, `not_in`, `before`, `after`, `changed`, `exists`, `not_exists`. A trigger like "when a Deal's `status` changes to `closed_won`" is one condition; "…and `value` > 50000" is a group:
+
+```json
+{
+  "kind": "group",
+  "id": "root",
+  "combinator": "and",
+  "children": [
+    { "kind": "condition", "id": "c1", "property": "status", "operator": "eq", "value": "won" },
+    { "kind": "condition", "id": "c2", "property": "value", "operator": "gte", "value": 10000 }
+  ]
+}
+```
+
+## Steps
+
+A playbook is an ordered list of steps. Each step has a `name`, a `stepType`, and a type-specific `config`:
+
+| Step type | What it does |
+|---|---|
+| `agent` | Runs a workspace agent (by slug) with the trigger payload as context, e.g. `{ "agentSlug": "qa-chat" }` |
+| `tool` | Invokes a single capability |
+| `condition` | Branches on a runtime condition |
+| `webhook` | Calls an external HTTP endpoint |
+| `prompt` | Runs a one-shot model prompt |
+| `human_input` | Pauses until a person responds |
+
+You can create a blank playbook (no steps) and add steps later in the designer.
+
+## The human enable gate
+
+Automations created by an AI agent — from chat, MCP, or the API acting as an agent — **always start disabled**, regardless of what the creator requested. Only a direct human-origin call (the app UI, or an API key without an in-chat message context) can create an automation that starts enabled — and even then, `enabled` must be set explicitly. MCP and in-chat agent calls are always treated as AI-origin. This is deliberate: an agent can draft and configure an automation for you, but a person makes the go-live decision.
+
+To go live, a human enables the automation via `automation.enable` (or the toggle in the app). Disabling via `automation.disable` is always allowed and takes effect immediately; the trigger goes dormant and no runs start.
+
+## Capabilities
+
+| Capability | What it does |
+|---|---|
+| `automation.create` | Create the playbook + trigger (AI-origin creations start disabled) |
+| `automation.list` | List a workspace's automations |
+| `automation.get` | One automation's trigger config, steps, and recent run history |
+| `automation.update` | Rename, re-describe, or replace the trigger configuration |
+| `automation.enable` / `automation.disable` | Flip the trigger live / dormant |
+| `automation.trigger` | Fire an `api`-type automation with an optional payload |
+
+All are available on the API (`POST /v1/:org_slug/:workspace_slug/automation/...`), MCP, and in-app agent surfaces, and produce identical audit records on each.
+
+## Run history and audit
+
+Every run is recorded as a sequence of playbook events, visible on the automation's detail page and in the org audit log (`source: playbook`). Runs triggered by an event carry the originating node; scheduled runs carry the schedule tick. Each step's capability invocations produce the same security events and metering records as interactive usage, so an auditor can trace an automated action exactly like a human-initiated one.
+
+## Examples
+
+**Notify on a merged PR** — event trigger on `PullRequest`, `node.updated`, condition `state eq merged`, one `webhook` step.
+
+**Weekly digest** — schedule trigger `0 9 * * 1` in `America/New_York`, one `agent` step that runs a summarization agent.
+
+**Manually-triggered runbook** — `api` trigger, a chain of `tool` and `human_input` steps, fired from CI or a script via `automation.trigger`.
+
+## Where automations meet agents
+
+An `agent` step and an [agent trigger](/docs/platform/agent/custom-agents#triggers) solve overlapping problems. Prefer:
+
+- **An automation** when the logic is a pipeline — conditions, webhooks, multiple steps, or several agents in sequence.
+- **An agent trigger** when one agent should simply run on a schedule or event with its own instructions.
+
+## Related
+
+- [Knowledge graph](/docs/platform/knowledge) — the node/edge events that event triggers watch.
+- [Custom agents](/docs/platform/agent/custom-agents) — agents you can run as automation steps.
+- [Audit logging](/docs/platform/security/audit-logging) — where automation run events land.

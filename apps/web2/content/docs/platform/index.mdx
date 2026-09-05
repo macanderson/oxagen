@@ -1,0 +1,63 @@
+---
+title: Oxagen for the enterprise
+description: Governed, auditable, tenant-isolated AI — every model call through one metered, IAM-gated, audit-logged chokepoint.
+---
+
+<IllustrationOverview />
+
+## The problem your organization already has
+
+AI adoption is accelerating faster than governance can follow. Engineers connect directly to OpenAI. Sales teams paste customer data into ChatGPT. Finance analysts build automations in LLM notebooks no one approved. Every one of those interactions is invisible to your security team, unaudited, and unaccountable.
+
+This is shadow AI — and the exposure it creates is real: data sent to unknown models, no audit trail for your next SOC 2 review, no way to enforce which teams can do what, no metering to understand what you are actually spending.
+
+## The governed-AI answer
+
+Oxagen gives enterprises a single platform where every AI action is authorized before it runs, metered as it runs, and logged after it runs — across the in-app agent, the REST API, and the MCP server simultaneously.
+
+Your teams get capable AI. Your security and compliance teams get the controls they require. Neither group has to compromise.
+
+## Four pillars
+
+### One audited chokepoint
+
+Every capability — model call, tool invocation, code execution, memory write — passes through a single `invoke()` kernel boundary. That boundary enforces IAM, meters credits, instruments latency, and writes an immutable audit record. There is no alternate path. A developer writing a new integration cannot accidentally bypass it; the enforcement is structural.
+
+<Mermaid
+  chart="
+flowchart LR
+  I[Identity] --> C[Capability contract]
+  C --> K[invoke]
+  K --> IAM[IAM check]
+  IAM --> B[Meter and bill]
+  B --> H[Handler runs]
+  H --> A[Audit record]"
+/>
+
+*Every action carries identity through one contract-bound chokepoint — no capability reaches a handler without IAM, metering, and an audit record.*
+
+### Tenant isolation with row-level security
+
+Every row in every tenant-scoped table carries `org_id` and `workspace_id` columns, and Postgres row-level security (RLS) is enforced by the database itself — not by application-layer predicates a developer might forget. The non-superuser `oxagen_app` role has no `BYPASSRLS` privilege. A query without an active tenant scope returns zero rows, not another tenant's rows.
+
+The same principle extends to Neo4j (scoped session guard), ClickHouse (org-scoped inserts and selects), and blob storage (access-controlled asset routes). A cross-tenant data exposure is structurally impossible at every layer.
+
+### SOC 2-aligned controls
+
+Oxagen is designed SOC 2-first, not SOC 2-retrofitted. The Trust Service Criteria are architectural requirements:
+
+- **CC6 (access control):** role-based IAM — org roles (Owner, Admin, Compliance, Billing) and workspace roles (Owner, Member, Viewer) — with default-deny, org-enforced policies that workspaces can tighten but never expand, just-in-time access requests, and force-revoke on any session.
+- **CC7 (monitoring):** two independent audit stores — a Postgres `security.security_events` table with 7-year retention and a ClickHouse `audit_events` table with chain-hash tamper evidence — covering 40 typed event kinds from every auth, billing, and capability invocation.
+- **CC8 (change management):** versioned migrations, expand-then-contract schema changes, CI-gated deploys.
+- **CC9 (risk mitigation):** sandboxed code execution (Firecracker microVMs in production, Docker locally), network-denied by default, capabilities with high blast radius require explicit user approval before they run.
+
+### Parity across API, MCP, and in-app agent
+
+Every capability is declared once in the contract registry and exposed identically across three programmable surfaces: the REST API (`/v1/…`), the MCP server (streamable HTTP at `/mcp`), and the in-app agent. Running a compliance check, firing an automation, or writing agent memory produces the same audit record regardless of which surface the action came from. Your governance model does not have gaps.
+
+## Where to start
+
+- [Getting started](/docs/platform/getting-started) — sign up, create your organization and workspace, send your first message.
+- [Security overview](/docs/platform/security/overview) — the full controls picture for your security team.
+- [SOC 2 controls mapping](/docs/platform/security/soc2) — how Oxagen controls map to Trust Service Criteria.
+- [Enterprise use cases](/docs/platform/enterprise/use-cases) — concrete scenarios for CIOs: stopping shadow AI, passing your next audit, isolating business units, bringing your own models.

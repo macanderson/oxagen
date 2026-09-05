@@ -1,0 +1,512 @@
+---
+title: Examples & recipes
+description: Copy a settings file that matches your keys and budget, paste it in, and verify with stella config.
+---
+
+Pick the profile that matches the keys you hold, paste its file whole, and verify with
+`stella config`. Every snippet below is a complete `~/.stella/settings.json`, not a
+fragment.
+
+<Callout type="info">
+This page answers *how do I set stella up*. For *how do I get this done* (fixing a red
+CI run, working in an unfamiliar repo, holding to a budget), see the
+**[Guides](/docs/stella/guides)**.
+</Callout>
+
+## Pick a profile
+
+| Profile | Keys needed | Worker | Verifier | Triage | Medium task |
+| --- | --- | --- | --- | --- | --- |
+| [Single key](#single-key) | 1 | your model | same model | same model | varies |
+| [Dirt cheap](#dirt-cheap) | 2 | `deepseek-chat` | `glm-5.2` | `deepseek-chat` | $0.01 – $0.10 |
+| [Balanced](#balanced) | 3 | `glm-5.2` | `claude-fable-5` | `deepseek-chat` | $0.10 – $0.80 |
+| [Maximum quality](#maximum-quality) | 3 | `claude-fable-5` | `gpt-5.5` | `deepseek-chat` | $1.30 – $8.00 |
+| [One gateway key](#one-gateway-key-openrouter) | 1 | any vendor | any vendor | any vendor | as routed |
+| [Local / air-gapped](#local-and-air-gapped) | 0 | your server | your server | your server | $0 |
+| [Enterprise cloud](#enterprise-cloud-vertex-and-bedrock) | cloud creds | Vertex or Bedrock | same | same | contract rates |
+
+These estimates are for a medium task: a focused, multi-file change with one revision,
+priced at catalog list prices with prompt caching working normally. They're rough
+guides based on list price and a typical mix of tokens, not measured data from real
+runs. For your actual numbers, check [`stella stats`](/docs/stella/commands/stats) and the
+[Observatory](/docs/stella/telemetry/dashboard).
+
+The two rows using `claude-fable-5` cost more because Fable lists at $10/$50 per Mtok.
+If a task doesn't need that much, `claude-opus-5` (half Fable's price) and
+`claude-sonnet-5` (about a third) are drop-in swaps on the same 1M window. See
+[the catalog](/docs/stella/api-providers/models#the-catalog).
+
+## Where the money goes
+
+A plain `stella run` spends almost everything in the worker's own step loop. Wrapping a
+run with a [verification plugin](/docs/stella/plugins) adds extra roles around it. The table
+below shows a typical shape, though the exact roles depend on the plugin's own setup.
+
+| Role | Model calls | Rough size | Cost share |
+| --- | --- | --- | --- |
+| Triage | 1 | ~1–2k in, ~1 token out | negligible |
+| Plan | 1 (+1 repair, rarely) | ~5–15k in, ~1k out | small |
+| Witness | ~1 engine turn | ~10–30k in, ~1–2k out | only without `--test-command` |
+| **Worker steps** | **5–40+ steps** | **~100–500k in (mostly cached), ~5–30k out** | **most of the bill** |
+| Verify | 0 | — | free (deterministic ladder) |
+| Verifier | 0–1 per verification | ~3–10k in, ~0.5–1k out | cents |
+| Revise | 0–2 extra worker rounds | like the worker, smaller | proportional |
+
+## What this means
+
+1. **The worker's output price dominates.** Moving the worker from $15/Mtok output to
+   $2.20 (Fable 5 → GLM-5.2) changes the bill roughly 5–7×. Moving the verifier barely
+   changes it at all.
+2. **A flagship verifier is cheap insurance.** One verifier call uses a few thousand
+   input tokens and under a thousand output tokens: 1–2¢ on `gpt-5.5`, 2–3¢ on
+   `claude-fable-5`. Use a *different model family* than the worker. Set up the plugin's
+   oracle with `--test-command`, and many runs skip the verifier call entirely.
+3. **Prompt caching does most of the work.** stella keeps the system prefix identical
+   between calls, so most of the worker's input tokens bill at the cached rate, which is
+   4–10× cheaper. See the [context engine](/docs/stella/context-engine).
+
+Two settings multiply this cost. [Goal mode](/docs/stella/agent-modes#outcome-driven-goal-mode)
+repeats rounds until the verifier signs off, up to 8 times. [Fleets](/docs/stella/agent-fleets)
+run one worker per task, and `--spend-limit` applies across the whole fleet at once. Use
+`--spend-limit <usd>` to set a hard limit that's checked between every step.
+
+## Single key
+
+Everything here works with one key. This is the setup most people should run first.
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."   # or OPENAI_API_KEY, ZAI_API_KEY, DEEPSEEK_API_KEY
+
+stella config                            # confirm provider, model, redacted key preview
+stella run "fix the flaky retry test"
+```
+
+This is already a working setup. Auto-detection handles the rest, every role uses the
+same model, and the deterministic half of the [verification ladder](/docs/stella/plugins) still
+checks the result.
+
+Two habits make single-key runs noticeably better:
+
+```bash
+# Arm an installed plugin's flip oracle — deterministic evidence, verifier often skipped
+stella run --pipeline my-verifier --test-command "cargo test -p api" \
+  "add cursor pagination to /orders"
+
+# Cap the spend — enforced between steps, aborts cleanly
+stella --spend-limit 2.00 goal "the linter passes and the snapshot tests are green"
+```
+
+With one key, you have one model, so the whole config is just picking the model and how
+hard it should think:
+
+```json title="~/.stella/settings.json"
+{
+  "agent_engine_config": {
+    "default_model": "anthropic/claude-fable-5",
+
+    "allowed_models": ["anthropic/claude-fable-5"],
+
+    "effort_auto": "off",
+    "reasoning_auto": "on",
+
+    "agents": {
+      "default": { "effort": "high" }
+    }
+  }
+}
+```
+
+`reasoning_auto: "on"` picks thinking mode for you, so `reasoning` is left out on
+purpose (the auto setting would override it anyway). `effort_auto` is off, which is what
+allows the `effort` value above to take effect.
+
+To use another provider, swap the model string and `allowed_models`:
+
+| Key you hold | Model string | Window | $/Mtok in/out | Effort honoured? |
+| --- | --- | --- | --- | --- |
+| Anthropic | `anthropic/claude-fable-5` | 1M | 10.00 / 50.00 | yes, all five tiers |
+| OpenAI | `openai/gpt-5.5` | 400k | 1.25 / 10.00 | yes; `xhigh`/`max` → `high` |
+| Z.ai | `zai/glm-5.2` | 200k | 0.60 / 2.20 | **no — dropped on the wire** |
+| DeepSeek | `deepseek/deepseek-chat` | 128k | 0.27 / 1.10 | **no — dropped on the wire** |
+
+Where effort isn't supported, shape the run with `prompt` and `params.max_tokens`
+instead. Only OpenAI actually uses `service_tier`, so
+`"params": { "service_tier": "priority" }` only does something there. Everywhere else,
+it's ignored.
+
+<Callout type="warn">
+  A model reviewing its own work shares its own blind spots. That's real review, but it
+  isn't independent review. Add a deterministic check instead: connect a verification
+  plugin and set its oracle with `--test-command` wherever a test can define "done" (the
+  raw loop has no oracle, so this flag isn't available there). A real independent second
+  opinion comes from an installed verification plugin with its own
+  [seat](/docs/stella/configuration/agent-engine-config#seats), running a model from a different
+  family.
+</Callout>
+
+## Dirt cheap
+
+Point the session at the cheapest capable model, turn thinking off, cap the output, and
+set a hard `--spend-limit`. Good for lint cleanup, docstrings, and mechanical
+migrations.
+
+```json title="~/.stella/settings.json"
+{
+  "agent_engine_config": {
+    "default_model": "deepseek/deepseek-chat",
+
+    "allowed_models": ["deepseek/deepseek-chat", "zai/glm-5.2"],
+
+    "effort_auto": "off",
+    "reasoning_auto": "off",
+
+    "agents": {
+      "default": {
+        "effort": "low",
+        "reasoning": "off",
+        "params": { "max_tokens": 8192 }
+      }
+    }
+  }
+}
+```
+
+```bash
+export DEEPSEEK_API_KEY="sk-..."
+
+stella --spend-limit 0.25 run "add docstrings to every public function in src/api/"
+stella stats --format text
+```
+
+DeepSeek ignores `effort`, so that line above only records intent. `reasoning: "off"`
+and `params.max_tokens` are what actually control behavior.
+
+<Callout type="warn">
+  Cheap models revise more and succeed less on hard tasks, and a run that fails three
+  times isn't actually cheap. Watch **$/resolved** in the
+  [Observatory](/docs/stella/telemetry/dashboard). When one type of task keeps failing here,
+  move it to [balanced](#balanced).
+</Callout>
+
+## Balanced
+
+The daily driver: a capable mid-tier model, the autos left on, and a deterministic test
+as the gate.
+
+```json title="~/.stella/settings.json"
+{
+  "agent_engine_config": {
+    "default_model": "zai/glm-5.2",
+
+    "allowed_models": [
+      "zai/glm-5.2",
+      "anthropic/claude-fable-5",
+      "openai/gpt-5.5",
+      "deepseek/deepseek-chat"
+    ],
+
+    "effort_auto": "on",
+    "reasoning_auto": "on"
+  }
+}
+```
+
+```bash
+export ZAI_API_KEY="..."
+
+stella run --pipeline my-verifier \
+  "add pagination to the /orders endpoint and update its tests" \
+  --test-command "pnpm test orders"
+```
+
+The auto settings choose effort and thinking for you, and *override* any `effort` or
+`reasoning` value you set — that's why this profile has no `agents` block at all. It
+costs roughly 5–7× less than [maximum quality](#maximum-quality).
+
+Switch to `gemini/gemini-3-pro` when a task needs the 1M window. At $1.25/$10.00, it's
+priced exactly like `gpt-5.5`. For one hard task, `--model` overrides the settings just
+for that run and leaves the auto settings in place:
+
+```bash
+stella --model anthropic/claude-fable-5 run "the hard one"
+```
+
+## Maximum quality
+
+The strongest model, with effort and thinking set high, plus a second opinion from a
+*different model family* if you have a verification plugin installed with its own seat.
+Good for tricky multi-file changes and unfamiliar codebases.
+
+```json title="~/.stella/settings.json"
+{
+  "agent_engine_config": {
+    "default_model": "anthropic/claude-fable-5",
+
+    "seat_models": {
+      "vera/verifier": "openai/gpt-5.5"
+    },
+
+    "allowed_models": [
+      "anthropic/claude-fable-5",
+      "openai/gpt-5.5",
+      "gemini/gemini-3-pro",
+      "deepseek/deepseek-chat"
+    ],
+
+    "effort_auto": "off",
+    "reasoning_auto": "off",
+
+    "agents": {
+      "default": {
+        "effort": "xhigh",
+        "reasoning": "on",
+        "params": { "service_tier": "priority" }
+      }
+    }
+  }
+}
+```
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."   # the session
+export OPENAI_API_KEY="sk-..."          # the verifier seat
+
+stella --spend-limit 8.00 run --pipeline vera \
+  "port the auth middleware to the new session store; all tests must pass" \
+  --test-command "cargo test -p auth"
+```
+
+The seat uses GPT-5.5 instead of another Claude model because judging across model
+families is the whole point. A reviewer that shares the author's blind spots will miss
+the same mistakes twice. `service_tier: "priority"` only matters here, since OpenAI is
+the only provider that actually uses it. The auto settings are off, so the values above
+take effect exactly as written.
+
+The seat line is what buys you a second model. Remove it, and the plugin's verifier runs
+on the session's own model instead, in the same process on one bill.
+
+<Callout type="info">
+  If Fable 5 solves in one try what a cheaper model needs three attempts for, this
+  profile can end up being the *cheapest* one per finished task. Check **$/resolved**
+  after a week before deciding either way.
+</Callout>
+
+## One gateway key (OpenRouter)
+
+Cross-family judging with one billing relationship instead of two.
+
+```json title="~/.stella/settings.json"
+{
+  "agent_engine_config": {
+    "default_model": "openrouter/anthropic/claude-fable-5",
+
+    "seat_models": {
+      "vera/verifier": "openrouter/openai/gpt-5.5"
+    },
+
+    "effort_auto": "on",
+    "reasoning_auto": "on"
+  }
+}
+```
+
+```bash
+export OPENROUTER_API_KEY="sk-or-..."
+stella run --pipeline vera "add cursor pagination to /orders" --test-command "pnpm test orders"
+```
+
+Model family is read from the prefix after `openrouter/`, so
+`openrouter/openai/gpt-5.5` counts as OpenAI. This makes the seat genuinely
+cross-family, even though both calls bill to the same key. The
+[OpenRouter section](/docs/stella/api-providers#openrouter) explains how the prefix works and
+the `openrouter/openrouter/auto` option.
+
+## Local and air-gapped
+
+Point stella at any OpenAI-compatible local server. No key, no metering, no cloud.
+
+```bash
+# Ollama
+stella --model local/llama3.3 --base-url http://localhost:11434/v1 chat
+
+# vLLM / LM Studio / llama.cpp — same shape, different port
+stella --model local/qwen2.5-coder --base-url http://localhost:8000/v1 run "…"
+```
+
+For everyday use, define the endpoint once as a custom provider in **user scope**, and
+it works like a built-in provider:
+
+```json title="~/.stella/settings.json"
+{
+  "providers": {
+    "ollama": {
+      "base_url": "http://localhost:11434/v1",
+      "default_model": "qwen2.5-coder:32b",
+      "api_key": "local"
+    }
+  },
+  "agent_engine_config": {
+    "default_model": "ollama/qwen2.5-coder:32b",
+    "seat_models": {
+      "vera/verifier": "ollama/llama3.3"
+    }
+  }
+}
+```
+
+Local endpoints ignore `effort`, so shape the run with `prompt` and
+`params.max_tokens` instead. The seat line puts a verification plugin's reviewer on a
+second local model. Remove it, and the reviewer shares the session's model instead. The
+[local-server section](/docs/stella/api-providers#local-servers) covers the exact format and
+credential rules.
+
+For a strict air gap, turn off the one remaining automatic network call: the
+model-catalog refresh from `models.dev`, which happens at most once every 24 hours.
+
+```bash
+export STELLA_CATALOG_AUTO_REFRESH=0
+
+stella config    # every resolved value, computed from local files alone
+stella doctor    # checks the local session store's integrity; reads local state only
+```
+
+Community telemetry stays in `.stella/private/store.db`. The
+[Observatory](/docs/stella/telemetry/dashboard) only listens on `127.0.0.1`. Memories and the
+code graph are files in your workspace. `stella init` works offline with a fallback. To
+keep it fully offline, leave both telemetry paths turned off: don't enroll in
+[Oxagen Enterprise telemetry](/docs/stella/telemetry#oxagen-enterprise-managed-export), and
+don't add a `drain` block to `~/.stella/cloud.json` (without one, `stella cloud sync`
+makes no network calls at all). Then point every model endpoint at a local address.
+
+<Callout type="info">
+  Local models have no listed prices, so `stella stats` shows zero in the dollar
+  columns, and `--spend-limit` has nothing to measure against. Use a verification
+  plugin's `--test-command` oracle and goal-mode round limits to bound runs instead.
+</Callout>
+
+## Enterprise cloud (Vertex and Bedrock)
+
+Use this when models need to run through your existing cloud agreement. Both providers
+come **last** in auto-detection, so you need to set them explicitly. Setup and
+credential rules live in [API providers](/docs/stella/api-providers#google-vertex-ai) — this
+page covers the org-wide setup.
+
+The **org-managed scope** is where enterprise settings live: a `settings.json` outside
+any repo, delivered by MDM, that every stella install on the machine picks up.
+
+```json title="/Library/Application Support/stella/settings.json (macOS) · /etc/stella/settings.json (Linux)"
+{
+  "providers": {
+    "vertex": { "name": "Acme Vertex (approved)" },
+    "openai": { "base_url": "https://llm-gateway.acme.internal/v1" }
+  },
+  "agent_engine_config": {
+    "default_model": "vertex/gemini-3-pro",
+    "allowed_models": [
+      "vertex/gemini-3-pro",
+      "bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+    ]
+  },
+  "tools": { "mcp": "off" },
+  "authority": {
+    "project_prompts": "off",
+    "project_custom_tools": "off"
+  },
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "mcp__github__push_files",
+        "hooks": [ { "command": "/usr/local/bin/acme-push-policy", "timeoutMs": 10000 } ] }
+    ]
+  }
+}
+```
+
+| Key | Effect |
+| --- | --- |
+| `STELLA_MANAGED_SETTINGS` | Overrides the platform path with an explicit file — the CI and container route |
+| `allowed_models` | Constrains model pickers and `auto_mode`. **Replaces wholesale** across scopes |
+| `hooks` | Always load from this scope, no trust flag needed. Concatenate across scopes; no scope can remove another's |
+| `tools` | A managed `off` is a **ceiling** — no lower scope can grant it back, even a trusted project |
+| `authority.project_prompts` | `off` keeps a repo from replacing an agent's system prompt. Honoured only from this file |
+| `authority.project_custom_tools` | `off` keeps `.stella/tools/` manifests from loading even on a trusted repo |
+
+## Team-shared settings
+
+A team setup splits configuration across three
+[settings scopes](/docs/stella/configuration/settings#the-scope-hierarchy). The repo holds
+what's true for everyone. Each user holds their own keys and preferences. The org holds
+policy.
+
+Commit `domains.toml`, `memories/`, `rules/`, `skills/`, `commands/`, `tools/`,
+`mcp.toml`, and `settings.json` (as long as it holds no inline `api_key`). Ignore the
+local state:
+
+```text title=".gitignore"
+.stella/private/
+.stella/worktrees/
+.stella/exports/
+```
+
+```json title=".stella/settings.json (committed)"
+{
+  "providers": {
+    "zai": { "api_key_env": "ACME_ZAI_KEY" }
+  },
+  "tools": { "task_assign": "off" },
+  "agent_engine_config": {
+    "default_model": "zai/glm-5.2",
+    "seat_models": { "vera/verifier": "anthropic/claude-fable-5" }
+  },
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "mcp__github__push_files",
+        "hooks": [ { "command": "./scripts/guard.sh", "timeoutMs": 5000 } ] }
+    ]
+  }
+}
+```
+
+`api_key_env` points every teammate at one variable name, while each person supplies
+their own value. That way, rotating a key is a change in your vault, not a settings
+edit.
+
+<Callout type="warn">
+  When you clone a repo for the first time, stella holds back some settings until you
+  opt in: `hooks`, `providers.*.base_url`, `api_key`, `api_key_env`, `mcp.registry_url`,
+  `context_providers`, per-agent `prompt`s, and everything in `.stella/mcp.toml`.
+  Without this, any repo you clone could run commands on your machine or send your keys
+  through its own server.
+
+  ```bash
+  export STELLA_TRUST_PROJECT=1   # scope it per-repo with direnv or a shell guard
+  ```
+
+  stella prints a notice on stderr naming anything it skipped.
+  `STELLA_PROJECT_HOOKS=1` is a narrower option: it trusts hooks, MCP, and context
+  providers, but still blocks credential routes. See
+  [the project trust boundary](/docs/stella/configuration/settings#the-project-trust-boundary).
+</Callout>
+
+Merge semantics you will rely on:
+
+| Setting | Rule |
+| --- | --- |
+| `providers`, `agent_engine_config` | Merge per field — even `agents.<role>.params` composes per knob |
+| `hooks` | Concatenate. Org, repo, and personal hooks all fire; none replaces another |
+| `tools`, `mcp` | Last scope wins per key. Untrusted, a repo may narrow the tool surface, never widen it |
+| `allowed_models` | Replaces wholesale — whichever scope sets it owns the entire list |
+
+For settings that merge, the order is **user → org-managed → project**, with later
+scopes winning. The one exception runs backward: an org-managed `tools` denial always
+applies last, as a ceiling nothing can raise.
+
+## Verify any of these
+
+```bash
+stella models    # every provider with its key status and credential source
+stella config    # the resolved provider, model, and a redacted key preview
+stella stats     # after a run: cost and resolve rate per provider and model
+```
+
+Let the actual **$/resolved** number pick your lineup, not the sticker price. See the
+[model guide](/docs/stella/api-providers/models).

@@ -1,0 +1,14 @@
+{
+  "title": "Agent",
+  "pages": [
+    "overview",
+    "custom-agents",
+    "tools-and-capabilities",
+    "chat-interface",
+    "code-execution",
+    "plan-mode-and-approvals",
+    "memory",
+    "generated-files",
+    "research-swarm"
+  ]
+}

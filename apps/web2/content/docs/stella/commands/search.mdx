@@ -1,0 +1,87 @@
+---
+title: stella search
+description: Find code by meaning or by name, the same way the agent's search tool works, from your own shell.
+---
+
+Find the files that answer a question, even one you can only describe in words. This is the same `search` tool the agent uses during a conversation, but you run it yourself from your shell. It ranks results by meaning when you have an embedder set up. If not, it falls back to matching symbol names, and then to a plain file scan.
+
+## Synopsis
+
+```bash
+stella search "<query>" [--format text|json]
+```
+
+## What it does
+
+`stella search` runs the exact same steps the agent's `search` tool runs during a turn:
+
+<CardGrid size="md">
+  <OptionCard name="semantic">
+    Ranks results by MEANING against your query, using the code-graph's vector index —
+    only when an embedder is configured (`VOYAGE_API_KEY`, `OPENAI_API_KEY`, or
+    `STELLA_EMBED_URL` plus `STELLA_EMBED_MODEL`).
+  </OptionCard>
+  <OptionCard name="names">
+    Falls back to matching your query's words against symbol and path names in the
+    code-graph index — no embedder needed.
+  </OptionCard>
+  <OptionCard name="scan">
+    Falls back further to a plain file scan when no index exists at all — the normal
+    case for a workspace whose language has no tree-sitter grammar.
+  </OptionCard>
+</CardGrid>
+
+The answer always states which of these ran (look for `via: …`), so you always know how sharp a result is.
+
+`query` can be a full sentence, a description of behavior, or a plain symbol or file name. It works exactly like the agent's own search tool.
+
+## Examples
+
+Ask a question in plain English:
+
+```bash
+stella search "where are request headers sanitized before logging"
+```
+
+A symbol name works just as well as a sentence:
+
+```bash
+stella search "what calls resolve_provider"
+```
+
+## `--format json`
+
+Use this for scripted tests: feed real queries through the same ranking the agent uses, and read the answer back as data:
+
+```bash
+stella search "the retry/backoff policy for failed HTTP requests" --format json
+```
+
+```json
+{
+  "schema_version": 1,
+  "query": "the retry/backoff policy for failed HTTP requests",
+  "ok": true,
+  "strategies": ["semantic (embedding rank over the code-graph index)"],
+  "note": null,
+  "hits": [
+    {
+      "path": "crates/stella-core/src/retry.rs",
+      "why": "ranked by MEANING against your query — best match is `RetryPolicy` (struct) at line 12 (cosine 0.612)"
+    }
+  ],
+  "content": "search `...` — N result(s) at depth 10\nvia: semantic\n..."
+}
+```
+
+### Fields to rely on
+
+- `hits` — the ranked results, in order. Each one includes the `why` text the agent reads.
+- `strategies` — which methods actually ran. More than one entry means an earlier method came back empty.
+- `note` — the reason the semantic method was skipped or failed, when that happened.
+- `content` — the exact text the agent would receive.
+- `error` — `null` on success.
+
+The command exits with a non-zero code on failure, even with `--format json`, so a script can check the exit code without parsing the output. The JSON on stdout is always valid, with `ok: false` and `error` set when something goes wrong.
+
+Two environment variables control how much detail you get — the same ones the agent's own search tool reads: `STELLA_SEARCH_DEPTH` (how much detail is shown for the top result) and `STELLA_SEARCH_BUDGET` (a character limit for the answer). These only affect `content` — they don't change which results show up in `hits`.

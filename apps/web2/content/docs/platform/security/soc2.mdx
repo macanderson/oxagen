@@ -1,0 +1,132 @@
+---
+title: SOC 2 controls mapping
+description: How Oxagen's architecture maps to SOC 2 Trust Service Criteria — CC6, CC7, CC8, CC9, and availability.
+---
+
+Oxagen is designed SOC 2-first. The controls described here are architectural properties of the platform, not compliance checkboxes bolted on after the fact. This page maps Oxagen capabilities to the SOC 2 Trust Service Criteria (TSC) so your security team, auditors, and procurement reviewers have a concrete starting point.
+
+## CC6 — Logical and physical access controls
+
+### CC6.1 — Access control policies and procedures
+
+Oxagen enforces role-based access control through a single IAM resolver that runs at the `invoke()` boundary. Every capability invocation is evaluated against:
+
+1. Workspace-level explicit grants (deny first, then allow).
+2. Org-enforced grants (policy-locked; workspace cannot override).
+3. Role-inherited grants.
+4. Default-deny (no grant = denied).
+
+Access policies are configured under **Organization → Access → Policies**. Policies carry an `enforced` flag — enforced policies cannot be overridden by workspace administrators.
+
+**Auditor evidence:** `capability.invoke_denied` and `capability.invoke_allowed` events in both audit stores for every IAM decision. The resolution trace (which rule caused the decision) is stored alongside each event.
+
+### CC6.2 — New user provisioning
+
+Users are provisioned through the invite flow (**Organization → Members → Invite member**). Invites require explicit role assignment before they are issued. There is no self-service role escalation path.
+
+**Auditor evidence:** `org.member_invited` and `org.role_changed` events in both audit stores.
+
+### CC6.3 — Role assignment and modification
+
+Role changes require Owner or Admin permissions (`assertOrgMember` gate). Role assignments are immutable audit records; changes create new records rather than mutating existing ones.
+
+**Auditor evidence:** `org.role_changed` security events.
+
+### CC6.5 — Access revocation
+
+Force-revoke is available for any session at **Organization → Access → Sessions**. API keys can be revoked at **Organization → Developer → Tokens** (`api_key.revoke` capability). Revocation is immediate — the next request with a revoked token returns 401.
+
+**Auditor evidence:** `auth.sign_out`, `api_key.revoked` events. Session revocation records carry IP, user-agent, and timestamp.
+
+### CC6.6 — Authentication mechanisms
+
+Supported authentication factors:
+
+- Email and password (bcrypt hashed, never logged).
+- Google OAuth and GitHub OAuth (social sign-in).
+
+MFA enforcement, passkeys (WebAuthn), SSO via SAML 2.0/OIDC, and SCIM directory sync are not yet wired. The `org_security_policy` table has an `mfa_required` column, but no middleware enforces it yet and Better Auth's `twoFactor` plugin is not registered.
+
+**Auditor evidence:** `auth.sign_in`, `auth.sign_in_failed`, `auth.token_refreshed`, `auth.password_changed` events for every authentication action.
+
+### CC6.7 — Data transmission protection
+
+All data is transmitted over TLS 1.2 or higher. The API and MCP server enforce HTTPS. There is no unencrypted path to customer data.
+
+### CC6.8 — Malicious software and unauthorized code prevention
+
+Code execution runs in isolated Firecracker microVMs (production) or Docker containers (local development) with: read-only rootfs, all Linux capabilities dropped (`--cap-drop=ALL`), no-new-privileges, network denied by default, memory and CPU hard limits, and a 30-second wallclock timeout. User code cannot access host resources or other tenants' data. See [Code execution security](/docs/platform/security/code-execution).
+
+---
+
+## CC7 — System operations and monitoring
+
+### CC7.1 — Detection of anomalies and security events
+
+Oxagen maintains two independent audit stores optimized for different query patterns:
+
+- **Postgres `security.security_events`** — relational, queryable, indexed by org and event kind. 7-year retention via monthly RANGE partitions. Used for compliance dashboards and point lookups.
+- **ClickHouse `audit_events`** — `ReplacingMergeTree`, append-only, chain-hash tamper evidence (each row includes a hash of the previous row's hash, forming a verifiable chain). 7-year TTL. Used for high-volume analytics, SIEM export, and tamper verification.
+
+40 typed security event kinds are defined in a single source of truth (`packages/compliance/src/security-event-types.ts`). Adding an event type is a one-file edit; a CI test verifies the database schema matches the source file. The taxonomy covers:
+
+- Auth lifecycle: `auth.sign_in`, `auth.sign_in_failed`, `auth.sign_out`, `auth.token_refreshed`, `auth.password_changed`, `auth.email_verified`
+- API key lifecycle: `api_key.created`, `api_key.revoked`, `api_key.used`
+- Billing mutations: `billing.access_denied`, `billing.checkout_initiated`, `billing.credits_purchased`, `billing.plan_changed`, `billing.subscription_canceled`, and six additional billing events
+- Capability authz: `capability.invoke_allowed`, `capability.invoke_denied`, `capability.invoke_error`
+- Org management: `org.member_invited`, `org.member_removed`, `org.role_changed`
+- Org lifecycle: `organization.created`, `workspace.created`
+- Plugin governance: `plugin.installed`, `plugin.uninstalled`, `plugin.enabled_changed`, `plugin.denylist_added`, `plugin.denylist_removed`
+- Security policy: `security.mfa_policy_updated`, `security.session_revoked`
+- Access review: `access.review_completed`, `access.member_access_confirmed`
+- Privacy / GDPR: `privacy.export_requested`, `privacy.erasure_requested`, `privacy.org_erasure_requested`
+
+**Auditor evidence:** Query `security.security_events` or the ClickHouse `audit_events` table directly. Both stores are queryable from **Organization → Security → Audit**.
+
+### CC7.2 — Security incident monitoring and response
+
+Real-time audit logs are available at **Organization → Security → Audit** filtered by event kind, principal, or time range. Incidents are documented at **Organization → Security → Incidents**. Alert subscriptions are configurable per event kind.
+
+SIEM export (Splunk, Datadog, S3, JSONL webhook) is not yet available. Audit events can be queried via `POST /v1/audit/log/query` and pulled into an external SIEM on a schedule.
+
+### CC7.3 — Security event analysis
+
+Every `capability.invoke_denied` event carries a resolution trace identifying which grant rule caused the denial. This makes access-control investigations deterministic — an auditor can replay any IAM decision from the stored trace.
+
+---
+
+## CC8 — Change management
+
+### CC8.1 — Authorized changes to infrastructure and software
+
+Schema changes are applied via versioned migrations. Migrations follow the expand-then-contract pattern: additive changes first, then removal in a subsequent migration once all callers are updated. No migration is edited after it has been applied; CI verifies checksums.
+
+Code changes to the audit, IAM, and billing paths require explicit review. The SOC 2 controls path (the `invoke()` boundary, the RLS migration, the security event emitter) is identified in the codebase as security-critical.
+
+---
+
+## CC9 — Risk mitigation
+
+### CC9.1 — Risk assessment
+
+High-risk capabilities (code execution, subagent dispatch, memory write) are tagged `riskLevel: high` in the contract registry. At the workspace level, high-risk tools require explicit user approval before they run — the agent pauses the stream, renders an approval card, and waits for the user to confirm or deny. Default-deny applies to high-risk tools in workspace tool policies.
+
+### CC9.2 — Vendor and third-party risk
+
+Sub-processors are listed in [Data handling](/docs/platform/security/data-handling). Oxagen uses vendor-neutral adapters for all storage and compute dependencies, enabling migration away from any sub-processor without application code changes.
+
+---
+
+## Availability
+
+Oxagen targets 99.9% uptime on the Scale tier with a documented SLA. The platform is stateless at the compute layer (Vercel Functions); state is durably held in Postgres, ClickHouse, and Neo4j — all of which run on managed services with their own availability guarantees.
+
+Audit and security event writes are non-blocking relative to the primary capability handler: a telemetry write failure does not cause a capability call to fail. The audit write path has independent retry logic.
+
+---
+
+## Getting your SOC 2 report
+
+Oxagen's SOC 2 Type II report is available under NDA for enterprise customers and prospects. Contact sales@oxagen.ai to request a copy.
+
+The compliance dashboard at **Organization → Security → Compliance** provides a real-time view of control coverage and can be exported as a PDF for your own auditors.

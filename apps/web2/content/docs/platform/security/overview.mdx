@@ -1,0 +1,96 @@
+---
+title: Security overview
+description: How Oxagen protects your data and enforces your governance policies across every layer of the platform.
+---
+
+Oxagen is designed for organizations where AI governance is not optional. Every architectural decision — from the single capability chokepoint to the database-enforced row-level security — is made with an enterprise security review in mind.
+
+<IllustrationSecurity />
+
+## Defense in depth
+
+Security at Oxagen is not a layer added on top of a product built for convenience. It is built into the architecture at four layers, each independently enforced:
+
+| Layer | Control | Enforcement point |
+|---|---|---|
+| Network | API key authentication; TLS in transit everywhere | Edge / Vercel Functions |
+| IAM | Role-based access control; default-deny; org-enforced policies | `invoke()` kernel boundary |
+| Data | Row-level security; tenant-scoped seams for Neo4j and ClickHouse | Postgres RLS; session guards |
+| Audit | Two independent append-only stores; chain-hash tamper evidence | Every `invoke()` allow/deny |
+
+These layers are independent. A misconfigured application-layer predicate does not create a data leak because the database enforces isolation by itself. A compromised session does not escalate beyond the roles assigned to that principal because the IAM resolver runs inside the same `invoke()` boundary that cannot be bypassed.
+
+## The single capability chokepoint
+
+Every user action, agent action, API call, and MCP tool invocation passes through one function: `invoke()`. This is not convention — it is structural. The capability handler is captured inside `defineContract()` and is unreachable except via `invoke()`. There is no alternate call path.
+
+At the `invoke()` boundary:
+
+1. The calling principal is identified (session, API key, or service token).
+2. The IAM resolver evaluates the grant matrix (workspace grants → org enforced grants → role-inherited grants → default-deny). The resolution chain is logged as a structured trace.
+3. If denied, a `capability.invoke_denied` security event is written to both audit stores and a structured 403 is returned.
+4. If allowed, the handler runs inside a tenant scope (`runInTenantScope`) that feeds the database seams.
+5. On completion, credits are metered, latency is recorded, and a `capability.invoke_allowed` event is written.
+
+This is the SOC 2 "completeness" argument: there is no action the system can take that does not produce an audit record.
+
+## Encryption at rest
+
+All persisted data is encrypted at rest:
+
+- **Postgres (Neon/AlloyDB):** managed encryption at rest, AES-256.
+- **Neo4j:** encryption at rest enabled on the managed cluster.
+- **ClickHouse:** managed encryption at rest.
+- **Blob storage (Vercel Blob):** server-side encryption.
+
+Plugin OAuth tokens and API key secrets are additionally encrypted at the application layer with AES-256-GCM before being written to Postgres, using a KMS-managed key.
+
+## Encryption in transit
+
+All connections use TLS 1.2 or higher. Internal service-to-service calls within the Vercel platform are encrypted. Database connections to Neon/AlloyDB and ClickHouse Cloud use TLS.
+
+## Data residency
+
+Oxagen services are deployed to `us-central` / `iad1` (US-East). Postgres, ClickHouse, and blob storage all run in US regions. Customer data does not leave the United States in normal operation.
+
+## Roles and access control
+
+Five built-in roles govern what principals can do:
+
+- **Owner** — full control, including billing and org deletion.
+- **Admin** — all operations except destructive org-level actions.
+- **Billing** — billing and subscription management only; no access to operational surfaces.
+- **Member** — run agents, approve tasks, edit playbooks and memories.
+- **Viewer** — read-only across the workspace.
+
+Org-level policies can lock capabilities so that workspace-level grants cannot override them. The resolution order is documented in [RBAC and roles](/docs/platform/governance/rbac).
+
+## Code execution isolation
+
+When the agent runs code, it executes inside a hardened sandbox:
+
+- **Production:** Vercel Sandbox (Firecracker microVMs) — hardware virtualization boundary per invocation.
+- **Local development:** Docker containers with a strict host config policy.
+
+Both environments enforce: read-only rootfs, `--cap-drop=ALL`, `--no-new-privileges`, network denied by default, memory and CPU caps, and a 30-second wallclock timeout. See [Code execution security](/docs/platform/security/code-execution).
+
+## Sub-processors
+
+Oxagen relies on the following third-party processors for data handling:
+
+| Sub-processor | Purpose | Data involved |
+|---|---|---|
+| Vercel | Compute, edge functions, blob storage | All application data in transit and at rest |
+| Neon / AlloyDB | Postgres database | Transactional application state |
+| ClickHouse Cloud | Analytics and audit telemetry | Execution events, audit logs, token usage |
+| Neo4j AuraDB | Graph database | Ontology, agent memory, workflow lineage |
+| Stripe | Billing | Subscription and payment data |
+| Inngest | Background job orchestration | Job payloads referencing org and workspace IDs |
+
+Full sub-processor details including DPA availability are in [Data handling](/docs/platform/security/data-handling).
+
+## Security incident response
+
+Oxagen maintains a break-glass log at **Organization → Security → Incidents**. Any privileged access outside normal operational boundaries is recorded there. Security alerts are routed through the notifications system and surfaced under **Account → Cases** for the affected user.
+
+For vulnerability disclosures, contact security@oxagen.ai.

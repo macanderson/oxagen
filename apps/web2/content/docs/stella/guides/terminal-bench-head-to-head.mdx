@@ -1,0 +1,424 @@
+---
+title: Benchmark stella against Claude Code
+description: Run Terminal-Bench 2.1 with stella in one arm and Claude Code in the other — the setup, and the checks that make the comparison mean anything.
+---
+
+You want a number: on the same tasks, with the same model, does stella solve
+more than Claude Code, and at what cost? Terminal-Bench 2.1 is 89
+containerized terminal tasks with an automatic grader, which makes it a
+solid tool for this. Running it *twice*, once per agent, gives you the
+head-to-head.
+
+The hard part isn't running the benchmark. It's making the two runs
+**comparable**, and most of this page is about that, because a comparison
+where a second variable also changes tells you nothing, and costs the same
+money either way.
+
+## The shape of it
+
+Two Harbor jobs over one frozen set of tasks. Arm A is stella, arm B is
+Claude Code:
+
+```
+<tag>-armA-stella        harbor run --agent-import-path stella_harbor:StellaAgent
+<tag>-armB-claudecode    harbor run --agent claude-code
+```
+
+Same task set, same model, same concurrency, same task list, one attempt
+each. Then both sets of results get loaded into SQLite and joined by
+`task_name`.
+
+<Callout type="warn">
+This is the **internal-baseline** path — a number you can trust for your own
+use and publish alongside its method. It is deliberately *not* the path used
+for an audited public claim, which adds a preregistration log, host checks,
+and a spend-capped key on a dedicated Linux machine. That process is
+[`bench/RUNBOOK.md`](https://github.com/macanderson/stella/blob/main/bench/RUNBOOK.md);
+read [`bench/README.md`](https://github.com/macanderson/stella/blob/main/bench/README.md)
+to understand the line between the two before you publish anything from
+here.
+</Callout>
+
+## Before you start
+
+<CardGrid size="md">
+  <OptionCard name="A Docker host that runs linux/amd64">
+    Native x86_64 is simplest. Apple Silicon works through Rosetta — tests
+    show roughly native speed on a fixed CPU workload, with no slowdown at
+    three containers running at once, so no extra timeout is needed.
+  </OptionCard>
+  <OptionCard name="Memory for the largest task">
+    Eight tasks need 8 GiB, and three need 4 CPUs. A host smaller than the
+    largest task has to split the run by resource size instead of shrinking
+    the tasks.
+  </OptionCard>
+  <OptionCard name="About 20 GiB of disk and some patience">
+    The 89 task images add up to about 18.5 GiB. On a slow connection, the
+    download is the slowest part.
+  </OptionCard>
+  <OptionCard name="uv, zig, cargo-zigbuild, rustup">
+    `uv` sets up the adapter's environment. The zig toolchain cross-compiles
+    the stella binary that runs *inside* the task containers.
+  </OptionCard>
+  <OptionCard name="Two API keys, one per arm">
+    Not one key shared between both. See [keys](#give-each-arm-its-own-key)
+    — this is about getting an accurate measurement, not just bookkeeping.
+  </OptionCard>
+</CardGrid>
+
+## 1. Install the harness
+
+```bash
+export TB_REPO="$(git rev-parse --show-toplevel)"
+export TB_ROOT=/absolute/path/for/run/scratch     # dataset, jobs, logs
+
+uv sync --project "$TB_REPO/bench/harbor_adapter" --locked --extra dev
+```
+
+That installs **Harbor 0.6.1**, and this exact version is required, not
+optional. It's a fixed, checked constant, not something to casually upgrade:
+the adapter refuses to start unless `harbor.__version__` matches exactly,
+five other places name this version directly, and `.github/dependabot.yml`
+ignores this package because an automatic update to 0.20.0 once broke the
+whole run path for five days.
+
+The version also decides how you type the command. In 0.6.1, you select the
+stella arm with `--agent-import-path`. In 0.20.0, that became `--agent`. If
+you ever move off this pinned version, check the help text before spending
+any money — `harbor run --help` is the source of truth, and since Harbor
+renders that help text with color codes, strip those out before searching
+it:
+
+```bash
+harbor run --help 2>&1 | LC_ALL=C sed $'s/\033\[[0-9;?]*[a-zA-Z]//g' \
+  | rg -- '--agent|--ak'
+```
+
+Check `--ak` (the flag used below to set Claude Code's effort level) at the
+same time — it's the other flag name that has changed between versions.
+Checking that both flags still appear in the help text costs one command
+and turns a mid-run "no such option" error into a warning before you've
+spent anything.
+
+## 2. Build a binary that can actually run in the containers
+
+This is the single most expensive mistake in the whole process, so it gets
+its own step.
+
+```bash
+bench/evidence/run/build_sut.sh
+```
+
+This cross-compiles stella for `x86_64-unknown-linux-gnu.2.17` using
+`cargo-zigbuild`. That minimum glibc version is what lets **one** binary run
+in every task image, including the two built on `debian:bullseye-slim`,
+which has the oldest glibc (2.31) in the whole set.
+
+<Callout type="warn">
+Do **not** swap in a binary from a plain `cargo build --release` for the
+path the scripts export as `STELLA_BINARY`. On 2026-07-31, a run set up
+that way lost five trials before the agent even started. Every integrity
+check still passed, because those checks only answer *did the file arrive
+intact* — and it had. Nothing answered *can this file actually run here*.
+Harbor logged `NonZeroAgentExitCodeError` and scored each trial 0.0, which
+under a fixed denominator looks exactly the same as stella actually failing
+those tasks.
+</Callout>
+
+A check on the host machine now refuses to start a run if the binary needs a
+glibc feature above that minimum. To check one directly:
+
+```bash
+python3 bench/harbor_adapter/stella_harbor/portability.py "$STELLA_BINARY" --json
+```
+
+No musl build is needed, and that's a checked fact about this specific task
+set, not an assumption: all 89 task images are built on glibc. If you ever
+swap in a different task set, this needs to be checked again.
+
+## 3. Fetch and pre-download the dataset
+
+```bash
+bench/evidence/run/fetch_dataset.sh    # the pinned 89-task set, by digest
+bench/evidence/run/prepull.sh          # ~18.5 GiB, with retries
+```
+
+The pre-download step is not optional. The first attempt at a real
+measured run lost four trials in its opening minutes to a
+`TLS handshake timeout` while Docker Hub was serving image data. The
+container never started, and it recorded spend of `$0.0000` — but with
+`--max-retries 0`, each one of those becomes a permanent zero-score row,
+indistinguishable from a real failure. **A flaky registry connection must
+never be able to affect the score.**
+
+The task set is pinned by digest, not by name. An unversioned name is not a
+real freeze, and the plain-name path (`harbor datasets download`) doesn't
+even work — use `harbor download <org/name@sha256:…>` and pass that exact
+string to `harbor run --dataset`.
+
+## 4. Make the two arms comparable
+
+Everything up to here works for a solo stella run. This step is what turns
+it into a real head-to-head, and it's the step people skip.
+
+### Pick one API surface for both arms
+
+Send both arms **directly to the provider**, using the same model. Routing
+one arm through an aggregator introduces two problems at once: the same
+model name can be served by different backend providers depending on the
+app's identity — a price difference of more than 3x has been seen — and
+Claude Code routed that way runs with reasoning turned **off**, which isn't
+the tool anyone actually means to compare.
+
+Hitting `api.anthropic.com` directly, on one model, gives you one backend
+and no routing lottery — Claude Code running on its home API, with
+reasoning working the normal way.
+
+### Pin the upstream when either arm goes through a gateway
+
+Sometimes you can't route directly to the provider — a gateway may be the
+only way to reach the model or credential you need. If either arm goes
+through OpenRouter (or any other gateway), the routing lottery from the
+section above isn't just something to avoid by routing around it. It's a
+variable you can pin instead: **`--upstream-pin <vendor>`** locks stella's
+arm to a named backend, in order, and refuses to silently fall back to a
+different one the way a gateway might on its own.
+
+```bash
+stella run "…" --model openrouter/anthropic/claude-fable-5 \
+  --upstream-pin anthropic
+```
+
+This is the actual reason this flag exists: a run's `--model` names a model
+family, not a specific vendor, and two arms that both say "Claude" through
+a gateway haven't proven they were served by the same hardware unless the
+pin, or a direct connection, confirms it. Pass `--upstream-pin` directly on
+the launch command, never through `settings.json`. The Harbor trial starts
+stella with **`STELLA_NO_SETTINGS=1`** — meaning it can't read local
+settings files, so a task's own repository can't quietly plant
+configuration a trial would trust. A pin set in `settings.json` would
+never reach the process being measured. A command-line flag is the only
+setting that survives that isolation, which is also why `--base-url` is
+passed as a flag here instead of being set in configuration.
+
+See [API providers → pinning the upstream](/docs/stella/api-providers#pinning-the-upstream)
+for why this exists and what it changes on the wire.
+
+### Give each arm its own key
+
+Use two keys on the same account, one per arm:
+
+```bash
+# ~/.env.harbor-anthropic.local — loaded, never echoed, never passed in argv
+STELLA_ANTHROPIC_API_KEY=...
+CLAUDE_CODE_ANTHROPIC_API_KEY=...
+```
+
+This gets you two things. You can tell how much each arm spent without
+digging through logs, and neither arm's rate limits can slow down the
+other — which would otherwise look like the slower arm timing out and
+losing tasks it could have solved.
+
+### Pin reasoning effort on both, then prove it worked
+
+Both arms should use the same effort level, by whatever setting each one
+actually respects:
+
+- **stella** — the frozen benchmark setting (`agents.<role>.effort`), which
+  gets checked against a stored digest instead of just reading the setting
+  value, so what actually gets used and what you think you set can't drift
+  apart without you noticing.
+- **Claude Code** — `harbor --ak reasoning_effort=<tier>`, which Harbor's
+  `ClaudeCode` agent turns into the CLI's real `--effort` flag. Set it
+  explicitly rather than trusting the documented default, so the value is
+  captured in the recorded command.
+
+Then check it actually landed, before you spend anything:
+
+```bash
+bench/evidence/run/preflight_effort.sh claude-sonnet-5 xhigh
+```
+
+<Callout type="info">
+Why a separate check is needed: an earlier version of this check confirmed
+both keys reached the same model with reasoning **on**, but said nothing
+about the **effort level** — the actual setting this whole comparison
+depends on. A flag that gets passed, assumed to work, and never verified on
+the wire is what invalidated three earlier comparisons. This check actually
+tests behavior — the same prompt at `low` versus the target level, checking
+that the result is clearly different — because *the flag was accepted* and
+*the flag changed anything* are different claims, and only one of them
+matters.
+</Callout>
+
+That check ran into two problems of its own, both fixed in how it works
+now. A test that maxes out `max_tokens` just compares the limit to itself,
+and "passes" without proving anything. And a request without streaming and
+a high `max_tokens` can time out before it ever returns.
+
+### Decide the per-trial spend cap on purpose
+
+stella can be given a spending limit per trial. Claude Code, as Harbor runs
+it, has no spending limit at all. Leaving stella's default cap in place
+gives the other agent an advantage that won't show up anywhere in the
+results — stella's capped trials just stop and score 0.
+
+Setting `STELLA_SPEND_LIMIT` to an empty value means *no per-trial cap*,
+and that's a real, intentional choice you can make. Pick it on purpose, and
+write down which one you picked.
+
+```bash
+export STELLA_SPEND_LIMIT=          # empty: no per-trial cap, matching the comparator
+```
+
+## 5. Run both arms
+
+Run a check first: one paid test trial that must score 1.0 before 89 real
+trials depend on the same setup:
+
+```bash
+bench/evidence/run/sentinel.sh
+```
+
+Then the arms. The scripts already in the repository run **arm A**:
+
+```bash
+bench/evidence/run/primary.sh ALL "<tag>-armA-stella"
+```
+
+Arm B is the same `harbor run` command with the agent swapped and the
+comparator's effort level passed through — same task set, same task list,
+same concurrency, same `--n-attempts 1 --max-retries 0`:
+
+```bash
+source bench/evidence/run/env.sh     # exports TB_DATASET and JOBS
+
+harbor run \
+  --env docker \
+  --dataset "$TB_DATASET" \
+  --agent claude-code \
+  --ak reasoning_effort=xhigh \
+  --model claude-sonnet-5 \
+  --job-name "<tag>-armB-claudecode" \
+  --jobs-dir "$JOBS" \
+  --n-attempts 1 --n-concurrent 3 --max-retries 0
+```
+
+Set `--n-concurrent` to whatever arm A actually ran at, and pass the same
+`--include-task-name` list if you limited arm A to a subset of tasks.
+Concurrency isn't a free choice in a head-to-head — it changes how much CPU
+and memory each trial gets, so running the comparator at a different width
+is really running a different benchmark.
+
+The `armA` and `armB` labels in the job names aren't just cosmetic — the
+tool that loads the results matches on that part of the name specifically,
+so an archived or renamed run can still be found.
+
+<Callout type="info">
+**Splitting by resource size.** On a host that can't fit the largest task
+alongside its neighbors, run in two phases: phase A is tasks needing ≤4 GiB
+and 1 CPU, at `n_concurrent=3`; phase B is everything else, at
+`n_concurrent=1` (`primary.sh A` / `primary.sh B`). Together they still
+cover every task, one attempt each, over one total count. Run phase B first
+if images are still downloading. This split is a limit of your host, not
+part of the actual measurement.
+</Callout>
+
+### Rules the run has to follow to mean anything
+
+- **Fixed total count.** Every task counts. Errors, timeouts, budget-cap
+  hits, and missing rows all score 0 and stay in the total.
+- **No stopping or restarting based on the outcome.** A discouraging early
+  score is not a reason to stop, change a setting, or start over. You can
+  cancel a run for operational reasons — a registry outage, a VM problem, a
+  billing issue, bad credentials — but you must say so, and restart under a
+  **new job name**. A run meant to support a public claim never resumes.
+- **Publish the failures too.** The per-task table should list every task,
+  including the ones that failed for infrastructure reasons.
+
+## 6. Score it, and recompute the cost
+
+```bash
+python3 bench/telemetry_store/ingest.py \
+  --db ~/.stella/bench.db --jobs "$JOBS" --run "<tag>" --kind scored
+```
+
+Loading results is safe to redo — running it again replaces a run instead
+of duplicating it. The basic unit is the **trial**. A run is just a
+collection of trials, and the comparison joins the two arms together by
+`task_name`. No pass/fail verdict is stored on its own — it's `reward >= 1`
+from the benchmark's own grader, kept as raw data so anyone reading it
+later can recompute it instead of just trusting a stored value.
+
+<Callout type="warn">
+**Numbers reported by the agents themselves can flip the ranking.** On one
+small test set, the agents' own self-reported costs said Claude Code $2.65
+and stella $3.27, while applying one shared price table to both said Claude
+Code $3.00 and stella $1.93 — the opposite order. Always publish a
+recomputed, standardized cost. The price table in
+`bench/terminal_bench_analysis/normalized_cost.py` strips the routing
+prefix stella includes that the comparator doesn't, so
+`anthropic/claude-sonnet-5` and `claude-sonnet-5` match up as the same
+model — but it still needs an entry for that model, and for whatever day
+the run happened, in case the price changed since.
+</Callout>
+
+Loading results computes the standardized cost itself instead of leaving it
+for a later step, since it already has everything it needs: the token
+counts, the model the trial actually ran on
+(`config.agent.model_name`, which is used over the `--model` label whenever
+they disagree), and the date it ran. It also records `wall_seconds`,
+`started_at`, and `finished_at` at the same time.
+
+When it *can't* price a trial, it writes an empty value and records why in
+`cost_norm_status`, so a missing number can never be mistaken for a real
+zero:
+
+| `cost_norm_status` | Meaning |
+| --- | --- |
+| `priced` | The only state where `cost_usd_norm` means anything. A real $0.00 here is a genuine result. |
+| `no_model` | Neither the trial nor `--model` named a model. |
+| `unpriced_model` | No price in the table applies to that model on that day. |
+| `no_tokens` | The trial crashed before reporting any usage. Charging it zero would make a crash look free. |
+| `no_run_date` | The model's price changed and the trial has no readable start time, so no price could be chosen. |
+| `unmigrated` | Written before this column existed. |
+
+**Any query that adds up `cost_usd_norm` must filter for
+`cost_norm_status = 'priced'`.** Loading results also prints how many
+trials per run couldn't be priced, so a comparable-cost column that's empty
+for a whole arm shows up right away instead of as a silent gap in a
+published table.
+
+## The two things you cannot pin down
+
+Worth knowing before you write up a result.
+
+**Claude Code's version isn't pinned.** Harbor installs it fresh for each
+trial from `claude.ai/install.sh`, so the version you compared against can
+be different from someone else's run. Read the actual version out of each
+trial's log and report it. Never assume it stayed the same.
+
+**The grader belongs to the benchmark, not to you.** That's actually a good
+thing — it's what makes the number worth anything — but it means a task the
+grader scores 0 for a reason you disagree with is still a 0. Argue with the
+grader in your write-up, not by changing the count.
+
+## Next
+
+<CardGrid size="sm">
+  <SpecCard title="Agent modes" href="/docs/stella/agent-modes">
+    What the benchmarked setup actually is — which mode a headless run uses,
+    and what it does per task.
+  </SpecCard>
+  <SpecCard title="Plugins" href="/docs/stella/plugins">
+    Triage, plan, witness, execute, verify — the staged loop each trial runs
+    through.
+  </SpecCard>
+  <SpecCard title="Telemetry" href="/docs/stella/telemetry">
+    The local records a run writes, and how to query them.
+  </SpecCard>
+  <SpecCard title="Scripting" href="/docs/stella/scripting">
+    Running stella headlessly with JSON output — the same interface the
+    adapter uses.
+  </SpecCard>
+</CardGrid>

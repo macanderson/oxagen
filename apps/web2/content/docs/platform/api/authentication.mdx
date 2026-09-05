@@ -1,0 +1,101 @@
+---
+title: Authentication
+description: How to create, scope, and use API keys to authenticate with the Oxagen REST API and MCP server.
+---
+
+## API keys
+
+API keys are the authentication mechanism for the REST API and MCP server. Each key is tied to a specific organization and workspace at creation time — there is no concept of an "org-only" key that applies across workspaces.
+
+Keys use the format `ox_…` (the prefix `ox_` followed by a base64url-encoded 32-byte random value). There is no test-mode key variant.
+
+## Creating an API key
+
+1. Go to **Organization → Developer → Tokens**.
+2. Click **Create API key**.
+3. Enter a descriptive name (e.g., "CI integration", "Slack bot").
+4. Select the workspace the key will operate within.
+5. Assign scopes (capability domains the key is permitted to invoke).
+6. Click **Create**. Copy the key — it is shown only once.
+
+API keys are service-account credentials. They appear in **Organization → Access → Identities → Service** as service principal records and are subject to the same IAM resolution as human users.
+
+## Using the key
+
+Include the key in every request as a Bearer token. Every capability route also carries your org and workspace slug in the path:
+
+```http
+POST /v1/{orgSlug}/{workspaceSlug}/agent/tools
+Host: api.oxagen.sh
+Authorization: Bearer ox_…
+Content-Type: application/json
+
+{}
+```
+
+For the MCP server:
+
+```http
+POST /mcp
+Host: mcp.oxagen.sh
+Authorization: Bearer ox_…
+```
+
+## Scope and org/workspace resolution
+
+The key carries org and workspace scope. You do not pass `orgId` or `workspaceId` in request bodies or query strings — the API resolves them from the key automatically.
+
+When a key is used:
+
+1. The key is validated (signature, expiry).
+2. The org and workspace associated with the key are resolved.
+3. The principal's grants (including role-inherited grants) are evaluated for the capability being invoked.
+
+## Revoking a key
+
+Go to **Organization → Developer → Tokens** and click **Revoke** next to the key. Revocation is immediate — the next request with the revoked key returns `401 Unauthorized`. An `api_key.revoked` security event is written.
+
+Alternatively, use the `revoke_api_key` capability:
+
+```http
+POST /v1/{orgSlug}/{workspaceSlug}/api-keys/revoke
+Authorization: Bearer ox_…
+Content-Type: application/json
+
+{
+  "keyId": "uuid"
+}
+```
+
+## Scopes
+
+When creating a key, you assign it capability domain scopes. A key can only invoke capabilities within its assigned scopes, regardless of what the service principal's role would otherwise allow.
+
+| Scope | Capabilities included |
+|---|---|
+| `agent` | Agent capabilities — `list_agent_tools`, `execute_code`, `dispatch_subagent`, `create_plan`, and the rest |
+| `chat` | Chat and conversation capabilities — `send_message`, `list_conversations`, `archive_conversation`, … |
+| `knowledge` | Memory and asset capabilities — `recall_memory`, `write_memory`, `upload_asset` |
+| `billing` | Billing capabilities — `get_subscription`, `purchase_credits`, `start_subscription_upgrade` |
+| `org` | Org and workspace capabilities — `create_org`, `add_org_member`, `create_workspace`, … |
+| `plugins` | Plugin capabilities — `install_plugin`, `set_plugin_enabled`, `browse_plugin_catalog`, … |
+
+The [Capabilities](/docs/platform/api/capabilities) page lists the capability names in each domain.
+
+Assign only the scopes a key needs — principle of least privilege.
+
+## Key rotation
+
+Keys do not expire automatically. To rotate a key:
+
+1. Create a new key with the same scopes.
+2. Update your integration to use the new key.
+3. Revoke the old key.
+
+There is no graceful rotation period — the old key stops working immediately on revocation.
+
+## Security notes
+
+- Never commit an API key to source control. Use environment variables.
+- Keys should not be used in client-side browser code — they carry org and workspace scope and must be kept server-side.
+- If you suspect a key has been compromised, revoke it immediately and create a new one.

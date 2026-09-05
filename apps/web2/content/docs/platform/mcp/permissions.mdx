@@ -1,0 +1,152 @@
+---
+title: Permissions
+description: Control which external MCP tools are allowed, denied, or require confirmation before execution.
+---
+
+The permission system lets you control what external MCP tools can do — without modifying the MCP server itself. Permissions are defined in the same settings files as server definitions and use glob patterns for flexible matching.
+
+## Permission policies
+
+Every tool invocation is evaluated against one of three policies:
+
+| Policy | Behavior |
+|--------|----------|
+| `allow` | Tool executes immediately without prompting |
+| `deny` | Tool is blocked — never shown to the model or executed |
+| `ask` | User is prompted for confirmation before execution (default) |
+
+## Configuration
+
+```json
+{
+  "permissions": {
+    "defaultMcpPolicy": "ask",
+    "mcpServers": {
+      "github": {
+        "defaultPolicy": "allow",
+        "deny": ["delete_repository", "delete_branch"]
+      },
+      "internal-api": {
+        "allow": ["query_*", "get_*", "list_*"],
+        "deny": ["delete_*", "drop_*", "truncate_*"]
+      },
+      "filesystem": {
+        "defaultPolicy": "allow"
+      }
+    }
+  }
+}
+```
+
+## Evaluation order
+
+Rules are evaluated in this order (first match wins):
+
+1. **Per-server deny rules** — if the tool matches any deny pattern, it's blocked
+2. **Per-server allow rules** — if the tool matches any allow pattern, it's permitted
+3. **Per-server `defaultPolicy`** — applies when no specific rule matches
+4. **Global `defaultMcpPolicy`** — fallback when no server-level config exists
+
+Deny always takes priority over allow at the same scope level. This means you can safely write:
+
+```json
+{
+  "defaultPolicy": "allow",
+  "deny": ["delete_*"]
+}
+```
+
+This allows all tools except those starting with `delete_`.
+
+## Glob patterns
+
+Patterns support wildcards:
+
+| Pattern | Matches |
+|---------|---------|
+| `*` | Everything (any tool) |
+| `delete_*` | Any tool starting with `delete_` |
+| `*_dangerous` | Any tool ending with `_dangerous` |
+| `get_user` | Exactly `get_user` |
+| `admin_*_force` | Tools like `admin_delete_force`, `admin_reset_force` |
+
+## How denied tools work
+
+Denied tools are **never advertised to the model**. They are filtered out during tool materialization, before the model sees the tool list. This means:
+
+- The model cannot attempt to call a denied tool
+- No consent card is shown for denied tools
+- Denied tools do not consume context window space
+- The user never sees the tool in the chat interface
+
+## Scope precedence for permissions
+
+When the same server has permission rules in multiple scopes:
+
+- `deny` and `allow` lists **append** across scopes (all rules apply)
+- `defaultPolicy` follows the standard override order: local > project > user
+
+Example with two scopes:
+
+```json
+// .oxagen/settings.json (project)
+{
+  "permissions": {
+    "mcpServers": {
+      "github": {
+        "defaultPolicy": "allow",
+        "deny": ["delete_repository"]
+      }
+    }
+  }
+}
+```
+
+```json
+// .oxagen/settings.local.json (local)
+{
+  "permissions": {
+    "mcpServers": {
+      "github": {
+        "deny": ["force_push"]
+      }
+    }
+  }
+}
+```
+
+Effective result: `defaultPolicy: "allow"`, deny: `["delete_repository", "force_push"]`.
+
+## Tool visibility
+
+Separate from permissions, **tool visibility** controls which tools are shown to the model at all — even if they would be allowed by permissions:
+
+```json
+{
+  "toolVisibility": {
+    "github": {
+      "include": ["create_pull_request", "list_issues", "get_file_contents"]
+    },
+    "noisy-server": {
+      "exclude": ["internal_*", "debug_*"]
+    }
+  }
+}
+```
+
+| Field | Behavior |
+|-------|----------|
+| `include` | Only these tools are shown (whitelist). Glob patterns. |
+| `exclude` | These tools are hidden (blacklist). Applied after include. Glob patterns. |
+
+If a server exposes 40 tools but you only need 3, use `include` to keep the model's context focused.
+
+## Interaction with platform IAM
+
+When both file-based permissions and platform IAM policies apply (e.g. when using the platform runtime), the most restrictive policy wins:
+
+- If file-based config says `allow` but platform IAM says `deny` → denied
+- If file-based config says `deny` → denied (regardless of platform IAM)
+- If file-based config says `ask` and platform IAM says `allow` → ask
+
+The file-based permission system is designed to be the **developer-side** control. Platform IAM is the **org-admin-side** control. Both are enforced independently.

@@ -1,0 +1,23 @@
+{
+  "title": "Platform",
+  "pages": [
+    "index",
+    "getting-started",
+    "cli",
+    "configuration",
+    "connections",
+    "knowledge",
+    "automations",
+    "billing",
+    "security",
+    "privacy",
+    "governance",
+    "enterprise",
+    "api",
+    "mcp",
+    "a2a",
+    "capabilities",
+    "agent",
+    "plugins"
+  ]
+}

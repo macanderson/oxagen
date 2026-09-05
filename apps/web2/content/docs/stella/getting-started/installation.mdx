@@ -1,0 +1,131 @@
+---
+title: Installation
+description: Install the stella CLI via the install script, Homebrew, cargo, or from source.
+---
+
+stella is one self-contained program called `stella`. There's no separate
+runtime to install. This is the first of four steps:
+
+<QuickstartDiagram />
+
+## Prerequisites
+
+- **macOS or Linux**, `x86_64` or `arm64`.
+- For the prebuilt binary or Homebrew: just `curl`.
+- For `cargo install` or building from source: **Rust 1.90 or later** (via [rustup](https://rustup.rs)) and `git`.
+- **An API key** for any one supported provider. Or, skip the key and use a
+  local OpenAI-compatible model server instead (Ollama, vLLM, LM Studio,
+  llama.cpp). See [Providers &amp; models](/docs/stella/getting-started/providers).
+- Optional: `gh` on your `PATH`, for the GitHub-backed workflows.
+
+## Install
+
+### Prebuilt binary (`curl | sh`)
+
+This installs the newest release for your platform, checks its SHA-256, and
+falls back to `cargo install` when there's no prebuilt binary for your
+platform. That covers unsupported targets, and musl-based Linux even on a
+supported architecture:
+
+```bash
+curl -fsSL https://stella.oxagen.sh/install.sh | sh
+stella --version
+```
+
+By default, the binary lands in `~/.local/bin`. If `stella` isn't found
+afterward, the script tells you and prints the `export` line to add. Two
+environment variables control this:
+
+<CardGrid size="md">
+  <OptionCard name="STELLA_INSTALL_DIR" defaultValue="$HOME/.local/bin">
+    Where the binary goes. On the `cargo install` fallback, a value ending
+    in `/bin` is treated as the cargo root's `bin` directory, so the same
+    variable works for both paths.
+  </OptionCard>
+  <OptionCard name="STELLA_VERSION" defaultValue="the latest release">
+    Pin a specific release tag. Works with or without a leading `v`; both
+    point to the same tag.
+  </OptionCard>
+</CardGrid>
+
+```bash
+STELLA_INSTALL_DIR=/usr/local/bin STELLA_VERSION=v0.9.0 \
+  sh -c "$(curl -fsSL https://stella.oxagen.sh/install.sh)"
+```
+
+`v0.9.0` here is just an example. Every merge to `main` cuts a new patch
+release, so pick the tag you actually want from the
+[releases page](https://github.com/macanderson/stella/releases). This page
+can't keep up with a version that changes daily.
+
+### Homebrew
+
+This installs the prebuilt binary from the tap. No Rust toolchain needed.
+The formula stays up to date automatically with every release tag:
+
+```bash
+brew install macanderson/tap/stella
+# equivalently:
+brew tap macanderson/tap && brew install stella
+```
+
+### From cargo
+
+Requires Rust 1.90 or later, and git:
+
+```bash
+cargo install --locked --git https://github.com/macanderson/stella stella-cli
+stella --version
+```
+
+### From source
+
+```bash
+git clone https://github.com/macanderson/stella.git
+cd stella
+cargo build --release
+./target/release/stella --version
+```
+
+<Callout type="info">
+  The `curl | sh` script and Homebrew both fetch binaries built by the release
+  workflow, which runs on every `v*` tag. They cover macOS and glibc Linux on
+  `x86_64` and `arm64`. Anything else, including musl Linux, falls back to
+  `cargo install`, which needs the Rust toolchain.
+</Callout>
+
+## Verify
+
+These three commands work before you've set up anything. They don't need a
+provider or an API key:
+
+```bash
+stella version                  # the build you just installed
+stella models list --all        # every provider, its slugs, pricing, and key status
+stella doctor                   # the integrity of this workspace's local state
+```
+
+On its own, `stella models` only shows providers with a working credential,
+so it's the fastest way to check "did my key work?" Add `--all` to see the
+whole catalog before you've set anything up.
+
+Once a key is in place, `stella config` shows exactly what it resolved to.
+This is the one verification command that does need a credential:
+
+```bash
+stella config
+```
+
+Then try it. With one key exported, here's the whole path from install to
+your first change:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+cd your-project
+stella init                                     # index the repo, infer the domain taxonomy
+stella --spend-limit 1 run "explain what this repo builds and how it is laid out"
+```
+
+Next: the [Quickstart](/docs/stella/getting-started), or
+[repo initialization](/docs/stella/getting-started/initialization) to see what
+`stella init` creates.

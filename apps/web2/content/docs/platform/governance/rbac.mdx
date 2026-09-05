@@ -1,0 +1,122 @@
+---
+title: RBAC and roles
+description: Oxagen's role-based access control model — built-in roles, the IAM resolution chain, and how org policies interact with workspace grants.
+---
+
+<IllustrationRbacSpot />
+
+## Built-in roles
+
+### Org-scoped roles
+
+| Role | Capabilities |
+|---|---|
+| **Owner** | Everything — including billing, org deletion, and ownership transfer. |
+| **Admin** | All operations except destructive org-level actions (delete org, transfer ownership). |
+| **Compliance** | Security and privacy policy management; no access to operational surfaces or billing. |
+| **Billing** | Billing and subscription management only. No access to operational surfaces or IAM. |
+
+Org roles govern the organization-level surfaces: members, access (IAM), security, billing, and developer settings.
+
+### Workspace-scoped roles
+
+| Role | Capabilities |
+|---|---|
+| **Owner** | Manage grants within this workspace; workspace settings; full operational access. |
+| **Member** | Run agents, approve tasks, edit playbooks, edit memories, configure triggers. |
+| **Viewer** | Read-only across the workspace. |
+
+Workspace roles are assigned per workspace. A user can be a **Member** in one workspace and a **Viewer** in another within the same organization.
+
+## IAM resolution order
+
+When a principal invokes a capability, the IAM resolver evaluates the following chain in order:
+
+```
+1. Workspace deny (explicit, in this workspace)          → DENY
+2. Org enforced deny (locked; workspace cannot override) → DENY
+3. Workspace allow (explicit, in this workspace)         → ALLOW
+4. Org enforced allow (locked)                           → ALLOW
+5. Workspace require-approval                            → PENDING
+6. Org default grant + workspace silence                 → inherit org
+7. Role-inherited grant                                  → inherit role
+7.5. Org owner super-user — if the principal holds the
+     system-provisioned org Owner role (isSystemDefault=true),
+     ALLOW unconditionally. Explicit deny (rules 1, 2, 6, 7)
+     still takes precedence. User-created roles named "Owner"
+     do not inherit this.                                → ALLOW
+8. No grant found → contract defaultEffect
+   (allow / deny / pending_approval depending on the capability).
+   Most capabilities are default-deny; some are default-allow.
+```
+
+Two properties are non-negotiable:
+
+- **Workspaces can never expand what org has locked.** An org `enforced` policy is the locking primitive. A workspace admin cannot grant capabilities beyond what the org allows.
+- **Workspaces can tighten.** If the org allows a workspace graph-search capability, a workspace handling sensitive data can still override that capability to `deny` or `require-approval`.
+
+The resolver returns a structured trace alongside the decision. The trace is stored in the audit record and is viewable in **Organization → Security → Audit** for every `capability.invoke_denied` event.
+
+## Capability domains
+
+Capabilities are organized into domains. The grants matrix at **Organization → Access → Grants** groups rows by domain:
+
+| Domain | Example capabilities |
+|---|---|
+| `agent.*` | Run agents, dispatch subagents, execute code, manage plans |
+| `chat.*` | Send messages, manage conversations |
+| `knowledge.*` | Manage graph, sources, memories |
+| `automation.*` | Create playbooks, configure triggers |
+| `billing.*` | Purchase credits, change subscription |
+| `org.*` | Manage members, roles, and org settings |
+| `workspace.*` | Create workspaces, manage workspace settings |
+| `plugin.*` | Install, enable, and govern plugins |
+
+## Agents as principals
+
+Every agent configuration is also a principal with its own grant matrix. When an agent runs a triggered or scheduled job, it uses its own grants — it cannot access capabilities its principal has not been granted, regardless of which human defined the playbook.
+
+When a human is actively in chat, the agent runs in delegated context: it borrows the human's effective grants for the session. Both the human and agent principals are recorded in the audit event.
+
+Agents get their own roles, separate from the human ones above — three built-in postures, intersected with the agent's own configuration, and bounded by a delegation ceiling so an agent can never outgrow the person it acts for. See [Agent roles](/docs/platform/governance/agent-roles).
+
+This is what makes AI automation auditable: every action is attributable to either a human chain of custody or a configured service identity.
+
+## Configuring grants
+
+### Grants matrix
+
+**Organization → Access → Grants** presents a capability × principal matrix. Toggle the scope (Org-wide or Per workspace) to manage different layers.
+
+Cell states:
+- **Granted** — explicit allow at this scope.
+- **Inherited** — no override at this scope; inheriting from org or role.
+- **Denied** — explicit deny at this scope.
+- **Require approval** — action will pause for human approval.
+- **Locked** — org-enforced policy; workspace cannot change.
+
+### Custom roles
+
+**Organization → Access → Roles** allows you to define custom roles with specific capability grants. Custom roles can be used as the starting point for any principal (human, agent, or service account).
+
+### Policies
+
+**Organization → Access → Policies** allows you to define conditional grants with time windows, IP allowlists, and attribute predicates. Set the `enforced` flag to lock a policy so workspaces cannot override it.
+
+### Just-in-time access
+
+Principals can request access to capabilities they do not currently have via **Organization → Access → Requests**. Requests are routed to approvers defined in the policy configuration. Approved requests are time-limited (TTL configurable per policy) and auto-expire.
+
+## Gate functions
+
+`apps/app` exposes five app-layer guard functions for sensitive server paths. These are **not** part of the `@oxagen/iam` kernel — they query `org_users.role` directly and bypass the full IAM resolver chain. Each takes `(orgId: string, userId: string)` and calls `notFound()` on failure (404, not 403 — to avoid existence leaks).
+
+- `assertOrgMember(orgId, userId)` — confirms the principal is a member of the org.
+- `assertBillingManager(orgId, userId)` — confirms the principal holds Owner, Admin, or Billing role.
+- `assertMcpManager(orgId, userId)` — confirms the principal holds Owner or Admin role for plugin governance.
+- `assertWorkspaceMember(workspaceId, userId)` — confirms the principal is a member of the given workspace.
+- `assertSecurityManager(orgId, userId)` — confirms the principal holds Owner or Admin role for audit evidence export.
+
+## SSO and directory sync
+
+SSO (SAML 2.0 or OIDC) and SCIM 2.0 directory sync are planned **Enterprise-tier** features and are not yet implemented. Contact support@oxagen.ai if your organization requires SSO or automated provisioning.

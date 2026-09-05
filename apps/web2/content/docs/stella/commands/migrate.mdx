@@ -1,0 +1,60 @@
+---
+title: stella migrate
+description: Convert settings.json into stella.toml, using the values stella actually loaded. Your old file stays until you delete it.
+---
+
+`stella migrate config` converts your `settings.json` file into `stella.toml`. It's the same settings, just in a format that can hold comments explaining each one. It writes `<repo>/stella.toml` for project settings, and `~/.stella/stella.toml` for your user settings.
+
+It only reads local files. It doesn't need a provider, an API key, or the internet.
+
+## Synopsis
+
+```bash
+stella migrate config                # write the TOML for every scope that has JSON
+stella migrate config --dry-run      # report what it would write, change nothing
+```
+
+## Keeping settings.json
+
+Your original `settings.json` stays exactly where it is. Check the new TOML file, make sure it says what you meant, then delete the JSON yourself when you're ready.
+
+Until you delete the JSON, stella reads the **TOML** file and prints a line naming both files, so you always know a migration is in progress. stella never merges the two files together. For each scope, exactly one file is in charge, and stella always tells you which one.
+
+## Accurate values
+
+Every value comes from settings stella actually read, not retyped from the JSON by hand. Nothing in the new file can disagree with what stella loaded.
+
+stella also reads back and checks the new file *before* saving it. Without this check, a bad migration could write a file stella can't read, and you wouldn't find out until your next launch, by which point your working config would already be replaced by the broken one.
+
+## Broken configs
+
+`migrate` runs **before** stella tries to resolve a provider, for the same reason `stella doctor` does. One common reason to use this command is a `settings.json` that names a model whose provider isn't set up anymore. If `migrate` required a working provider, it wouldn't be usable in exactly the situation where you need it most.
+
+## What moves where
+
+Most key names stay the same. Four keys change, each for a reason:
+
+| settings.json | stella.toml | Why |
+| --- | --- | --- |
+| `enable_recap` | `[run].recap` | A bare key at the top of the file attaches to whatever table came right before it. Moving one line could silently change which table it belongs to. Giving every value its own table avoids that. |
+| `agent_engine_config` | `[agents]` | Shorter, and describes what it actually is instead of an internal detail. |
+| `agent_engine_config.agents.<name>` | `[agents.<name>]` | One level of nesting removed. This works because `default` is the only agent role stella uses today. If your `settings.json` still names `worker`, `verifier`, `triage`, `research`, or `plan`, those aren't carried over. stella ignores them and tells you so, instead of migrating them. |
+| `agent_engine_config.allowed_models` | `[models].allowed` | It's a setting about models, not about any single agent. |
+
+`[mcp].registry_url` carries over as-is. **`[mcp.servers]` doesn't work yet.** MCP servers still load from `.stella/mcp.toml`. If you move them into `stella.toml` anyway, stella tells you at startup instead of silently failing to start them.
+
+## Where each scope's file lives
+
+| Scope | File |
+| --- | --- |
+| project | `<repo>/stella.toml` — commit it; it is reviewed like source |
+| user | `~/.stella/stella.toml` |
+| managed | put in place by an administrator; **not** migrated by this command |
+
+The project file sits at the root of your repository, not inside `.stella/`, because you're meant to commit it and review it like any other file in a pull request. Because of that, stella refuses a literal `api_key` value at project scope. Use `api_key_env` to name an environment variable instead, or run `stella auth set <provider>` to store the key in `~/.stella/credentials.toml`. That file is owner-only and never gets committed.
+
+## After migrating
+
+Your comments survive every future save. `/theme`, the tool-switch editor, and the engine editor all edit `stella.toml` in place. Each one changes only the key it owns, and leaves the rest of the file, including everything you wrote in it, exactly as it was.
+
+For what each section means, see [the `stella.toml` reference](/docs/stella/configuration/stella-toml). For every key, see [the annotated reference config](https://github.com/macanderson/stella/blob/main/docs/spec/config-system/stella.today.toml). For where stella keeps everything else, see [the filesystem map](https://github.com/macanderson/stella/blob/main/docs/spec/filesystem-layout.md).
