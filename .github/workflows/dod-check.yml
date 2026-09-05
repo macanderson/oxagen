@@ -5,9 +5,13 @@
 # binding. Two halves:
 #
 #   1. A pull request must link the issue it closes (escape hatch: the
-#      `no-issue` label, for genuinely trivial changes).
-#   2. Every linked issue's DoD checklist must be fully ticked before the PR
-#      can merge — which is what stops the close from happening early.
+#      `no-issue` label, for genuinely trivial changes) — or advance one with
+#      `Refs #N` without claiming to close it (oxagen#2640); a `Refs`-only PR
+#      is not gated on that issue's DoD, because it is not closing it.
+#   2. Every issue a PR *claims to close* must have its DoD checklist fully
+#      ticked before the PR can merge — which is what stops the close from
+#      happening early. `scr-dod-check.mjs`'s `linkedIssues`/`referencedIssues`
+#      hold the full state machine (closing / refs-only / neither).
 #
 # ## Why this is a reusable workflow rather than five copies
 #
@@ -32,7 +36,12 @@ on:
   # oxagen runs the check on its own PRs through the same file it exports, so
   # this implementation can never be stale relative to the callers'.
   pull_request:
-    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+    # oxagen#2638: `ready_for_review` was missing here, so a PR opened as a
+    # draft and later marked ready produced no `dod` run on that transition —
+    # observed live on oxagen#2633/#2634, where marking ready produced a
+    # `vision-gate` run and no `dod` run at all.
+    types:
+      [opened, edited, reopened, ready_for_review, synchronize, labeled, unlabeled]
 
 permissions:
   contents: read

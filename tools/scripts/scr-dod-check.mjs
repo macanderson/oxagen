@@ -3,11 +3,18 @@
 //
 // SCR-003 says an issue closes only when every definition-of-done item is
 // satisfied and verified. The task issue template (SCR-003 at L2) makes the
-// DoD exist; nothing yet made it *checked*. This module supplies the two pure
+// DoD exist; nothing yet made it *checked*. This module supplies the pure
 // judgements the workflow needs:
 //
-//   1. Does this PR link an issue at all?
-//   2. Does each linked issue's DoD checklist have any unchecked item left?
+//   1. Does this PR claim to close an issue, only advance one (`Refs #N`,
+//      oxagen#2640), or link nothing at all?
+//   2. Does the DoD checklist of each issue the PR *claims to close* have
+//      any unchecked item left?
+//
+// A `Refs #N` reference is recorded as "this PR is not orphaned" and never
+// gated on `#N`'s DoD, because it does not claim to close it — the org's own
+// convention (stella/AGENTS.md, "Closing the issue on merge") is exactly
+// that `Refs` "deliberately does not close".
 //
 // ## Why the check runs on the pull request, not on the close
 //
@@ -96,6 +103,86 @@ const CLOSING_PATTERN = new RegExp(
   "gi",
 );
 
+// The org's own convention (stella's AGENTS.md, "Closing the issue on
+// merge"): `Refs #N` when a PR advances an issue without finishing it. Unlike
+// the closing keywords, this is not one GitHub itself recognises — it never
+// closes anything — so there is nothing to disambiguate from a real close;
+// its only job here is to make "this PR is not orphaned" representable
+// without lying about a close (oxagen#2640).
+const REFS_KEYWORDS = ["ref", "refs"];
+
+const REFS_PATTERN = new RegExp(
+  String.raw`\b(?:${REFS_KEYWORDS.join("|")})\b\s*:?\s+` +
+    String.raw`(?:([\w.-]+)/([\w.-]+))?#(\d+)`,
+  "gi",
+);
+
+// Negation words that flip a closing keyword from a claim into a disclaimer:
+// "this PR does not close #412" is not a claim to close #412, the same
+// principle `linkedIssues` already applies to a bare "Related to #99"
+// mention (oxagen#2636). Only checked in the few words immediately before the
+// keyword, and never across a clause boundary (`.`, `,`, `;`, a dash, or a
+// newline) — otherwise an unrelated "not" earlier in a sentence with two
+// references ("closes #1, but not #2, closes #3") would swallow the second,
+// real close along with the first.
+//
+// This is a judgement about what *this checker* should read as a claim, not
+// a claim about GitHub's own keyword parser — GitHub's has no notion of
+// negation either, so the exact phrasing this excludes really can still
+// close the issue on merge. That is a real hazard, but it is GitHub's
+// parser's blind spot to fix, not something this gate can veto from the PR
+// side; forcing the PR to satisfy a DoD for an issue it explicitly disclaims
+// closing is the bug this excludes.
+const NEGATION_WORDS = new Set([
+  "not",
+  "never",
+  "cannot",
+  "can't",
+  "cant",
+  "won't",
+  "wont",
+  "doesn't",
+  "doesnt",
+  "didn't",
+  "didnt",
+  "isn't",
+  "isnt",
+  "wasn't",
+  "wasnt",
+  "hasn't",
+  "hasnt",
+  "haven't",
+  "havent",
+  "shouldn't",
+  "shouldnt",
+  "wouldn't",
+  "wouldnt",
+]);
+
+const NEGATION_WINDOW_WORDS = 4;
+
+/** Whether the text immediately before `matchIndex`, within the current clause, carries a negation. */
+function isNegated(text, matchIndex) {
+  const before = text.slice(0, matchIndex);
+  const clauseStart = Math.max(
+    before.lastIndexOf("."),
+    before.lastIndexOf(","),
+    before.lastIndexOf(";"),
+    before.lastIndexOf("\n"),
+    before.lastIndexOf("—"),
+    before.lastIndexOf("-"),
+  );
+  const clause = before.slice(clauseStart + 1);
+  const words = clause
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(-NEGATION_WINDOW_WORDS);
+  return words.some((word) =>
+    NEGATION_WORDS.has(word.toLowerCase().replace(/[^\w']/g, "")),
+  );
+}
+
 /** Strip fenced code blocks and HTML comments before scanning prose. */
 function withoutNonProse(markdown) {
   return markdown
@@ -103,17 +190,13 @@ function withoutNonProse(markdown) {
     .replace(/<!--[\s\S]*?-->/g, "");
 }
 
-/**
- * Extract the issues a PR body claims to close.
- *
- * Returns `{ owner, repo, number }` records, with owner/repo `null` for
- * same-repo references so the caller can fill in the PR's own repository.
- * Deduplicated, because `Closes #12` twice is one issue, not two.
- */
-export function linkedIssues(prBody) {
+/** Run a keyword pattern over cleaned prose, dropping negated closing matches. */
+function matchesOf(prBody, pattern, { skipNegated }) {
   if (!prBody) return [];
+  const clean = withoutNonProse(prBody);
   const seen = new Map();
-  for (const match of withoutNonProse(prBody).matchAll(CLOSING_PATTERN)) {
+  for (const match of clean.matchAll(pattern)) {
+    if (skipNegated && isNegated(clean, match.index)) continue;
     const [, owner = null, repo = null, number] = match;
     const key = `${owner ?? ""}/${repo ?? ""}#${number}`;
     if (!seen.has(key)) {
@@ -121,6 +204,29 @@ export function linkedIssues(prBody) {
     }
   }
   return [...seen.values()];
+}
+
+/**
+ * Extract the issues a PR body claims to close.
+ *
+ * Returns `{ owner, repo, number }` records, with owner/repo `null` for
+ * same-repo references so the caller can fill in the PR's own repository.
+ * Deduplicated, because `Closes #12` twice is one issue, not two. A closing
+ * keyword that the surrounding prose negates ("does not close #12") is not a
+ * claim to close and is excluded — see `isNegated` above.
+ */
+export function linkedIssues(prBody) {
+  return matchesOf(prBody, CLOSING_PATTERN, { skipNegated: true });
+}
+
+/**
+ * Extract the issues a PR body advances with `Refs #N` without claiming to
+ * close them (oxagen#2640). `Refs` never closes anything on GitHub's side, so
+ * unlike `linkedIssues` this does not filter negation — there is no claim
+ * here to disclaim.
+ */
+export function referencedIssues(prBody) {
+  return matchesOf(prBody, REFS_PATTERN, { skipNegated: false });
 }
 
 /**
@@ -159,27 +265,46 @@ export function dodStatus(issueBody) {
 /**
  * Decide whether a PR satisfies SCR-003.
  *
+ * Three states, not two (oxagen#2640): a PR either claims to close an issue
+ * (`Closes #N`, gated on that issue's DoD), only advances one (`Refs #N`,
+ * recorded but never gated — it is not closing it), or links nothing at all
+ * (fails, unless waived). A PR may carry both kinds at once — `Closes #A` and
+ * `Refs #B` — in which case only `#A` is checked against its DoD; `#B` is
+ * referenced, not enforced.
+ *
  * @param pr      `{ body, labels: string[] }`
- * @param issues  Resolved linked issues as `{ ref, body }`, in link order.
- * @returns `{ ok, reasons: string[], waived }`
+ * @param issues  Resolved *closing* issues as `{ ref, body }`, in link order
+ *                — the caller resolves exactly `linkedIssues(pr.body)`, never
+ *                the `Refs`-only set, since those are not judged against a
+ *                DoD.
+ * @returns `{ ok, reasons: string[], waived, refsOnly }`
  */
 export function verdict(pr, issues) {
   const labels = pr.labels ?? [];
   if (labels.includes(ESCAPE_HATCH_LABEL)) {
-    return { ok: true, waived: true, reasons: [] };
+    return { ok: true, waived: true, refsOnly: false, reasons: [] };
   }
 
   const links = linkedIssues(pr.body);
-  if (links.length === 0) {
+  const refs = referencedIssues(pr.body);
+  if (links.length === 0 && refs.length === 0) {
     return {
       ok: false,
       waived: false,
+      refsOnly: false,
       reasons: [
-        "This PR links no issue. Add a closing reference (`Closes #123`) to the " +
-          `description, or apply the \`${ESCAPE_HATCH_LABEL}\` label if the change is ` +
-          "genuinely trivial (SCR-003).",
+        "This PR links no issue. Add a closing reference (`Closes #123`) if it " +
+          "finishes one, `Refs #123` if it only advances one, or apply the " +
+          `\`${ESCAPE_HATCH_LABEL}\` label if the change is genuinely trivial (SCR-003).`,
       ],
     };
+  }
+
+  if (links.length === 0) {
+    // Refs-only: the PR advances an issue without claiming to close it, so
+    // there is no DoD here for SCR-003 to verify — `Refs` deliberately does
+    // not close (stella/AGENTS.md, "Closing the issue on merge").
+    return { ok: true, waived: false, refsOnly: true, reasons: [] };
   }
 
   const reasons = [];
@@ -202,7 +327,7 @@ export function verdict(pr, issues) {
     }
   }
 
-  return { ok: reasons.length === 0, waived: false, reasons };
+  return { ok: reasons.length === 0, waived: false, refsOnly: false, reasons };
 }
 
 /**
@@ -212,6 +337,12 @@ export function verdict(pr, issues) {
 export function formatVerdict(result) {
   if (result.waived) {
     return `SCR-003 DoD check waived by the \`${ESCAPE_HATCH_LABEL}\` label.`;
+  }
+  if (result.refsOnly) {
+    return (
+      "SCR-003 DoD check passed — this PR only references its issue with `Refs`, " +
+      "so it is not gated on that issue's definition of done."
+    );
   }
   if (result.ok) {
     return "SCR-003 DoD check passed — every linked issue's definition of done is fully checked.";
@@ -224,6 +355,14 @@ export function formatVerdict(result) {
     "An issue closes only when every DoD item is satisfied *and verified*. Tick the",
     "boxes once each item is genuinely done, or split the remainder into a new issue",
     "(`triage` label only, SCR-004).",
+    "",
+    // oxagen#2638: ticking a box on the linked issue fires no pull-request
+    // event, so nothing here re-runs on its own — this check only reacts to
+    // the PR. Said plainly so the prescribed remedy above is actually
+    // complete, rather than leaving a genuinely-done PR stuck on a stale run.
+    "Ticking those boxes does not by itself re-run this check — it only reacts to",
+    "the pull request. Push any change to the PR afterward (even an empty commit,",
+    "`git commit --allow-empty -m 'chore: re-run dod-check'`) to get a fresh run.",
   ].join("\n");
 }
 
