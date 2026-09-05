@@ -50,7 +50,6 @@ function turn(over: Partial<TurnTrace> = {}): TurnTrace {
       complexity: 50,
       recommendedTier: "balanced",
       missing: [],
-      contextQueries: [],
       refinedPrompt: "x",
       removed: [],
       reasoning: "",

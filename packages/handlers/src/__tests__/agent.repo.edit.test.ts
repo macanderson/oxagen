@@ -56,7 +56,6 @@ const mocks = vi.hoisted(() => {
       complexity: 50,
       recommendedTier: "balanced" as const,
       missing: [],
-      contextQueries: [],
       refinedPrompt: "",
       removed: [],
       reasoning: "",

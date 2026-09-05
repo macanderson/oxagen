@@ -6,7 +6,6 @@
  *   - completeness: is this actionable on its own, or is it missing what/where/done?
  *   - complexity:   how much work / risk / blast-radius does it imply?
  *   - a recommended tier for the executor,
- *   - the symbols / files / topics worth pulling from the code graph,
  *   - a refined prompt with filler removed and intent sharpened (meaning intact),
  *   - and its chain of thought.
  *
@@ -39,7 +38,12 @@ function evaluatorModel(override?: string): string {
   return override ?? process.env["OXAGEN_LLM_EVALUATOR"] ?? LOCAL_EVALUATOR;
 }
 
-const evalSchema = z.object({
+/**
+ * The evaluator LLM's output shape — exported so a test can assert directly
+ * on the schema (e.g. that a retired field has actually left it) rather than
+ * inferring its shape from behavior.
+ */
+export const evalSchema = z.object({
   completeness: z
     .number()
     .min(0)
@@ -69,12 +73,6 @@ const evalSchema = z.object({
     .describe(
       "Specific information the prompt lacks to be fully actionable. Empty if none.",
     ),
-  contextQueries: z
-    .array(z.string())
-    .describe(
-      "Symbol names, file paths, or short topics worth retrieving from the repo's code " +
-        "graph to ground the work (e.g. 'loginUser', 'src/auth/session.ts'). Empty if none.",
-    ),
   refinedPrompt: z
     .string()
     .describe(
@@ -101,7 +99,9 @@ export interface EvaluatePromptOptions {
   signal?: AbortSignal;
 }
 
-const EVALUATOR_SYSTEM = [
+// Exported for tests to assert directly on the prompt text (e.g. that a
+// retired field's clause has actually left it).
+export const EVALUATOR_SYSTEM = [
   "You are the evaluation stage of an agentic coding system. A coding agent is about",
   "to act on the user's prompt against a real repository. Your job is to triage it.",
   "",
@@ -115,8 +115,6 @@ const EVALUATOR_SYSTEM = [
   "  money. Pick the CHEAPEST tier that still produces a correct, high-quality result —",
   "  lean cheap and escalate only when the task truly needs it. Reserve 'precise' for",
   "  auth, billing, security, migrations, schema, or architecture.",
-  "- contextQueries: name the exact symbols/files/topics the agent should pull from the",
-  "  code graph so it skips blind exploration. Prefer real identifiers and paths.",
   "- refinedPrompt: rewrite for the agent. Strip filler and contradiction; keep 100% of the",
   "  actual intent and every constraint. Do NOT add requirements the user did not state.",
 ].join("\n");
@@ -143,7 +141,6 @@ function heuristicEvaluation(
     complexity,
     recommendedTier: route.tier,
     missing: [],
-    contextQueries: [],
     refinedPrompt: prompt,
     removed: [],
     reasoning: fallback
@@ -195,7 +192,6 @@ export async function evaluatePrompt(
       complexity: clamp(object.complexity),
       recommendedTier: object.recommendedTier,
       missing: object.missing,
-      contextQueries: object.contextQueries,
       refinedPrompt,
       removed: object.removed,
       reasoning: object.reasoning,

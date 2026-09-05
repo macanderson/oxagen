@@ -5,7 +5,12 @@
  * enhancePrompt via mocked AgentAi ports — never hits the gateway.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { evaluatePrompt, LOCAL_EVALUATOR } from "./evaluator";
+import {
+  evaluatePrompt,
+  LOCAL_EVALUATOR,
+  evalSchema,
+  EVALUATOR_SYSTEM,
+} from "./evaluator";
 import {
   judgeCompleteness,
   judgePanel,
@@ -67,7 +72,6 @@ describe("evaluatePrompt", () => {
           complexity: 40,
           recommendedTier: "balanced",
           missing: [],
-          contextQueries: ["loginUser"],
           refinedPrompt: "Fix the login timeout bug in src/auth/session.ts",
           removed: ["please"],
           reasoning: "Well-scoped task.",
@@ -87,10 +91,46 @@ describe("evaluatePrompt", () => {
     expect(result.completeness).toBe(80);
     expect(result.complexity).toBe(40);
     expect(result.recommendedTier).toBe("balanced");
-    expect(result.contextQueries).toContain("loginUser");
     expect(result.refinedPrompt).toContain("Fix the login timeout");
     expect(result.fallback).toBe(false);
     expect(result.usage.inputTokens).toBe(100);
+  });
+
+  // Witness for #2594: contextQueries named symbols/files "worth pulling from
+  // the code graph" — a subsystem the platform doesn't have (the enhancer's
+  // graph lookups are gone). The field is retired: the schema no longer
+  // declares it, the prompt no longer asks for it, and a model that still
+  // volunteers it must not have that value survive into the evaluation or
+  // the trace it feeds.
+  it("no longer declares or forwards contextQueries (#2594)", async () => {
+    expect("contextQueries" in evalSchema.shape).toBe(false);
+    expect(EVALUATOR_SYSTEM).not.toContain("contextQueries");
+    expect(EVALUATOR_SYSTEM).not.toContain("code graph");
+
+    const ai = makeAi({
+      generateObject: vi.fn().mockResolvedValue({
+        object: {
+          completeness: 80,
+          complexity: 40,
+          recommendedTier: "balanced",
+          missing: [],
+          // A model that ignores the (now-absent) instruction and volunteers
+          // the field anyway must not have it survive into the result.
+          contextQueries: ["loginUser"],
+          refinedPrompt: "Fix the login timeout bug in src/auth/session.ts",
+          removed: [],
+          reasoning: "Well-scoped task.",
+        },
+        usage: { inputTokens: 100, outputTokens: 50 },
+      }),
+    });
+
+    const result = await evaluatePrompt(
+      { prompt: "fix the login timeout bug", model: LLM_EVALUATOR },
+      ai,
+    );
+
+    expect("contextQueries" in result).toBe(false);
   });
 
   it("falls back to heuristic when ai.generateObject throws", async () => {
@@ -133,7 +173,6 @@ describe("evaluatePrompt", () => {
           complexity: 30,
           recommendedTier: "fast",
           missing: [],
-          contextQueries: [],
           refinedPrompt: "  ", // empty after trim
           removed: [],
           reasoning: "short prompt",
@@ -157,7 +196,6 @@ describe("evaluatePrompt", () => {
           complexity: -10, // under 0
           recommendedTier: "fast",
           missing: [],
-          contextQueries: [],
           refinedPrompt: "do it",
           removed: [],
           reasoning: "test",

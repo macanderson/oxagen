@@ -1830,7 +1830,6 @@ async function runBare(
     complexity: 0,
     recommendedTier: tierForSlug(model),
     missing: [],
-    contextQueries: [],
     refinedPrompt: opts.prompt,
     removed: [],
     reasoning: "Pipeline disabled (bare mode).",

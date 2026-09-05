@@ -34,7 +34,6 @@ const DEFAULT_EVAL = {
   complexity: 40,
   recommendedTier: "balanced" as const,
   missing: [] as string[],
-  contextQueries: [] as string[],
   refinedPrompt: "refined prompt",
   removed: [] as string[],
   reasoning: "well scoped",

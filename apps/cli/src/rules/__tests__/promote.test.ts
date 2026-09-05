@@ -47,7 +47,6 @@ function trace(
       complexity: 40,
       recommendedTier: "balanced",
       missing: [],
-      contextQueries: [],
       refinedPrompt: "do work",
       removed: [],
       reasoning: "",
