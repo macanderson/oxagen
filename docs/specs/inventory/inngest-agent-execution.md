@@ -79,7 +79,7 @@ After a fanout's children are all terminal, the system SHALL write one event to 
 <!-- entities: tool_invocations, subagentRuns -->
 <!-- enforced: agent.execute-subagent.ts:child-N step -->
 
-For each child in a fanout, after invoke() completes (success or failure), the system SHALL write a tool_invocations row with invocation_id, org_id, workspace_id, capability_name, message_id, parent_message_id=fanoutId, status, latency_ms, error_class (on failure), and surface="runner". Telemetry write failure is logged but does not fail the run.
+For each child in a fanout, after invoke() completes (success or failure), the system SHALL write a tool_invocations row with invocation_id, org_id, workspace_id, capability_name, message_id, parent_message_id=fanoutId, execution_step_id=childMessageId, status, latency_ms, error_class (on failure), and surface="runner". Telemetry write failure is logged but does not fail the run.
 
 #### Scenario: successful child invocation metering
 - **WHEN** a child's invoke() call succeeds
@@ -295,6 +295,44 @@ The status column of subagentFanouts SHALL only transition from pending → runn
 Every invocation of a capability (subagent child, background task, workflow step) MUST write a tool_invocations row for metering. Telemetry write failure SHALL NOT fail the primary operation; failures are logged as "insertToolInvocation failed — telemetry loss" and the function continues.
 
 > Last verified: 2026-06-20 (commit 2f628504)
+
+---
+
+### Invariant: Tool invocations name the run that produced them
+<!-- entities: tool_invocations, token_usage -->
+<!-- enforced: materialize-tools.ts, graph.telemetry.ts, agent.execute-subagent.ts, agent.background-task.execute.ts, agent.workflow.task.execute.ts, playbook.run.execute.ts -->
+
+Every producer of a `tool_invocations` row SHALL write `execution_step_id`
+from the run identity it already uses as that row's message key, so the row
+joins to the `token_usage` the same run incurred. Each producer's key:
+
+| Producer | `execution_step_id` |
+|---|---|
+| `materialize-tools.ts` (capability + external MCP calls) | `CapabilityContext.executionStepId` |
+| `agent.execute-subagent.ts` | `childMessageId` |
+| `agent.workflow.task.execute.ts` | `stepId` (`agent_execution_steps.id`) |
+| `playbook.run.execute.ts` | `runId` |
+| `agent.background-task.execute.ts` | `taskId` |
+| `graph.telemetry.ts` | `GraphTelemetryContext.executionStepId` |
+
+A call with no run behind it — from the API, an external tool, or a person —
+SHALL record absence rather than a substitute. Writing `messageId`, a fresh
+UUID, or any other stand-in makes every later join quietly wrong, which is
+worse than the blank it replaces. Absence is therefore conditional (`?? null`)
+and never a hardcoded `null`, which would claim "no run" for rows that had one.
+
+Enforced across packages by
+`tools/scripts/tool-invocation-execution-identity.test.ts`, which fails if any
+call site of `insertToolInvocation` hardcodes the identity to null.
+
+**Known gap.** `agent.background-task.execute.ts`'s `taskId` is
+`backgroundTasks.publicId`, not a UUID, and both ClickHouse columns it lands in
+are UUID-typed — so those rows have been rejected at insert since the file was
+written, caught and logged rather than surfaced. The identity passed is the one
+the file already uses for `message_id`; making the row land needs the real row
+UUID plumbed through the Inngest event, tracked as #2656.
+
+> Last verified: 2026-09-05 (#2615)
 
 ---
 
