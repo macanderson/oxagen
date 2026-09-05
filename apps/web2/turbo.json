@@ -1,0 +1,30 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    // fumadocs-mdx generates `.source/` (gitignored) from `content/` +
+    // `source.config.ts`. `src/lib/source.ts` imports `@/.source/server`, so
+    // anything that reads types (typecheck, build) must run after this task —
+    // otherwise a clean checkout cannot typecheck.
+    "gen:source": {
+      "inputs": ["content/**", "source.config.ts", "package.json"],
+      "outputs": [".source/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["gen:source"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "src/**",
+        "tsconfig.json",
+        "package.json",
+        ".source/**"
+      ],
+      "outputs": []
+    },
+    "build": {
+      "dependsOn": ["^build", "gen:source"],
+      "outputs": [".next/**", "!.next/cache/**"],
+      "env": ["NEXT_PUBLIC_APP_URL"],
+      "passThroughEnv": ["VERCEL", "VERCEL_URL"]
+    }
+  }
+}

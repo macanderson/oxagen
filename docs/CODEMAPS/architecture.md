@@ -3,7 +3,7 @@
 # Architecture — Oxagen v2
 
 ## Project Type
-**Monorepo** (pnpm workspaces + Turborepo) — 7 apps, 31 packages (incl. `@oxagen/bench`), `bench/web` dashboard, 2 tooling packages. See `docs/VISION.md` for product north star: the metered, governed, graph-grounded control plane ("Stripe for agents").
+**Monorepo** (pnpm workspaces + Turborepo) — 7 apps, 34 packages, 2 tooling packages. See `docs/VISION.md` for product north star: the metered, governed, graph-grounded control plane ("Stripe for agents").
 
 ## System Diagram
 
@@ -57,7 +57,6 @@
 | `apps/docs` | docs.oxagen.sh | Fumadocs (Next.js) | Documentation site |
 | `apps/web` | oxagen.sh | Static | Public site / investor deck (interim) |
 | `apps/schemas` | schemas.oxagen.sh | Static host | Generated JSON Schemas (editor autocompletion) |
-| `bench/web` | — | Next.js | `@oxagen/bench-web` eval/replay dashboard |
 
 ## Data Flow — Chat / Agent Execution
 

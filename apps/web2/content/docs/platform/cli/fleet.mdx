@@ -1,0 +1,276 @@
+---
+title: Fleet
+description: Run many agents at once as one view. A session is an append-only event log on disk; Mission Control, JSON pipes, and a second terminal are all renderers of the same stream.
+---
+
+One agent in your terminal is useful. A dozen, each on its own task, is a different problem: you need to start work without waiting for the last task to finish, watch every agent in one place, follow up with any of them mid-run, and pipe the whole thing into another process. That is what `oxagen fleet` is.
+
+## The mental model
+
+Every unit of agent work is a **session**. A session does exactly one thing: it appends a totally ordered stream of typed **events** to a file on disk. The prompt, every stage, every tool call, every file edit, every token of the answer, and the final cost all land in that log, in order.
+
+Every way you look at a fleet is a **renderer** of those logs:
+
+- **Mission Control** (the `oxagen fleet` TUI) renders the live event bus.
+- **`oxagen fleet watch --json`** serializes the same events as NDJSON for another process.
+- **A second terminal** tails the same files on disk.
+
+There is one wire format underneath all of them (the [session event envelope](/docs/platform/cli/scripting#the-event-envelope)), so the interactive view and the piped view can never drift apart. Parity is a property of the design, not a feature anyone maintains.
+
+<Callout type="info">
+The transcript *is* the log. There is no separate history file and no database. The append-only `events.ndjson` you can `jq` is the exact same stream Mission Control draws.
+</Callout>
+
+## Where sessions live
+
+The fleet is **project-scoped**. Every process working the same checkout resolves the same root, which is what makes cross-terminal aggregation work:
+
+```text
+~/.oxagen/fleet/<project-hash>/sessions/<sid>/
+  meta.json       roster snapshot (state, owner pid, usage, title, timestamps)
+  events.ndjson   the append-only event log — the transcript
+  inbox.ndjson    control channel: anyone appends, only the owner consumes
+```
+
+- **`<project-hash>`** is derived from the nearest `.git` directory, so each checkout (and each linked worktree) gets its own fleet. Sessions never mix across trees.
+- **Ownership** is a single `pid` recorded in `meta.json`. That one process runs the engine loop and appends events; every other process is a reader or a controller. If an owner dies with the session still non-terminal, the roster shows it as `orphaned` — the store never trusts a dead process's last word.
+- Set **`OXAGEN_FLEET_DIR`** to relocate the root (useful in CI or sandboxes).
+
+Session ids are short and time-sortable: `s-<base36-time>-<4-random>`, for example `s-mcqk3x9a-7f2q`. You can refer to a session by its full id, its short tail (`7f2q`), or any unique prefix of either.
+
+## Mission Control
+
+Running `oxagen fleet` in a terminal opens **Mission Control**, a full-screen view of every session in the project:
+
+```text
+┌ vitals: ● 3 running · 1 waiting · 2 done · $0.84 · 412k tok ─ project ┐
+│ rail (left, 24-30 cols)      │ main pane                              │
+│  ● s-k3x auth-fix     2:41   │  [A]ggregate | [F]ocus | [R]oster      │
+│  ◐ s-k41 tests…       0:12   │  (mode-dependent content)              │
+│  ✓ s-k2f readme       done   │                                        │
+├──────────────────────────────┴────────────────────────────────────────┤
+│ composer: always focused, never blocked                               │
+│ keys: enter dispatch · @sid msg → send · tab cycle · a/f/r views · …  │
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+The left rail lists every session with its state, title, and elapsed time. The main pane has three views of the same sessions:
+
+- **Aggregate** (default with more than one session) — every agent's *salient* lines merged into one timeline, colored per session: what each was asked, the stages it hit, tools it ran (with duration), files it changed, its conclusions, and how it ended. Raw token streams are left out on purpose, because N agents typing at once is noise; a one-line live tail per running session sits pinned under the timeline. Press `v` to fold the token deltas back in.
+- **Focus** — one session's full transcript, rendered as Markdown and streaming live. Enter in the composer sends a follow-up *into* the focused session. `esc` returns to Aggregate.
+- **Roster** — a dense table of every session, its state, turns, cost, and last activity.
+
+### The composer is never blocked
+
+The composer stays focused and accepts input even while every session runs. What you type decides what happens:
+
+- **Plain text + Enter** starts a brand-new session immediately. The composer clears the instant you submit; you never wait for a running session to free it up.
+- **`@s-k3x fix the failing test` + Enter** sends a follow-up turn to session `s-k3x`.
+- In **Focus** mode, a plain Enter is a follow-up to the focused session.
+
+### Keybindings
+
+| Key | Action |
+|---|---|
+| `enter` | Dispatch the composer (new session, or a follow-up when it starts with `@sid` or you are in Focus) |
+| `tab` / `shift-tab` | Cycle the selected session |
+| `1`–`9` | Jump to a session by position |
+| `a` / `f` / `r` | Switch to Aggregate / Focus / Roster |
+| `v` | Toggle verbose (include token deltas in Aggregate) |
+| `c` | Cancel the selected session (asks to confirm) |
+| `n` | New session (clears an `@sid` target) |
+| `ctrl-c` | Quit |
+
+On quit, sessions Mission Control runs in-process drain the way the agents screen does. Sessions dispatched from other terminals, or already detached, keep running untouched.
+
+## The `oxagen fleet` commands
+
+Every subcommand is also a headless entry point. In a terminal you get pretty output; piped, the streaming commands emit the NDJSON envelope. See [Scripting the CLI](/docs/platform/cli/scripting) for the dual-mode contract and a jq cookbook.
+
+| Command | What it does |
+|---|---|
+| `oxagen fleet` | Mission Control (TTY). Piped, it aliases `fleet watch --json`. |
+| `oxagen fleet dispatch [prompt…]` | Start a detached session, print its `sid`, exit. |
+| `oxagen fleet ls` | List sessions from their `meta.json` snapshots. |
+| `oxagen fleet watch [sid…]` | Merged live stream; no sids means all non-terminal sessions. |
+| `oxagen fleet attach <sid>` | Mission Control focused on one session (TTY), or its NDJSON from the start plus live follow. |
+| `oxagen fleet send <sid> <msg…>` | Append a follow-up message to a session's inbox. |
+| `oxagen fleet cancel <sid>` \| `--all` | Cancel a session, or all of them. |
+| `oxagen fleet logs <sid>` | Dump a session's raw `events.ndjson`. |
+| `oxagen fleet clean` | Prune terminal sessions. |
+| `oxagen fleet replay <sid>` | Time-travel view of a recorded session; `--turn N` shows full tool I/O, `--verify` checks integrity. |
+| `oxagen fleet bisect <sid> --cmd <shell>` | Binary-search the first bad turn by restoring the tree and probing it. |
+| `oxagen fleet resume <sid> --turn N` | Fork a new session from the state after turn N. |
+| `oxagen fleet feedback <sid> up\|down` | Record a human verdict on a finished session. |
+| `oxagen fleet distill <sid>` | Turn a recorded run into an eval dataset item; `--push` sends it to the platform. |
+
+### dispatch
+
+`dispatch` returns a session id synchronously and exits, leaving a detached worker running the session. This is how you start work from a script, or fire off several tasks back to back:
+
+```bash
+# Start a session; the sid is printed to stdout
+oxagen fleet dispatch "add rate limiting to the login route"
+# → s-mcqk3x9a-7f2q
+
+# Read the prompt from stdin
+echo "upgrade eslint and fix the new violations" | oxagen fleet dispatch -
+
+# One-shot (no conversation loop): end after the first turn
+oxagen fleet dispatch --once "regenerate the API client from the OpenAPI spec"
+
+# Follow the run to completion; the exit code is the session's fate
+oxagen fleet dispatch --once --follow "run the migration"
+```
+
+| Flag | Description |
+|---|---|
+| `--follow` | Stream the session's events until it ends (NDJSON when piped or `--json`). Exit code is the session's fate: `0` done, `1` failed or cancelled. |
+| `--once` | End after the first turn. The default is a conversation session that stays open for follow-ups. |
+| `-m, --model <slug>` | Model slug for the session. |
+| `--agent <name>` | Run as a named [agent definition](/docs/platform/cli/configuration#custom-agents). |
+
+<Callout type="info">
+`dispatch` warns when more than eight sessions are already alive. Detached workers are capped by your machine, not by the fleet's concurrency setting. That setting (`fleet.concurrency`, default `4`) governs how many sessions Mission Control runs in-process at once; the rest queue and start FIFO.
+</Callout>
+
+### ls
+
+```bash
+oxagen fleet ls              # human-readable roster
+oxagen fleet ls --json       # one JSON array of session snapshots
+```
+
+Each snapshot carries the session's `sid`, `title`, `state` (and `derivedState`, which reads `orphaned` when the owner has died), `turns`, cumulative `usage`, and last activity. See the [cookbook](/docs/platform/cli/scripting#jq-cookbook) for turning that into a cost table.
+
+### watch
+
+`watch` merges the live event streams of many sessions into one:
+
+```bash
+oxagen fleet watch                       # all non-terminal sessions
+oxagen fleet watch s-k3x s-k41           # just these two
+oxagen fleet watch --json | jq -c '{sid, type}'
+```
+
+In a terminal you get pretty, per-session-colored aggregate lines. Piped, you get the raw envelope, one event per line, verbatim.
+
+### attach
+
+`attach` focuses a single session. In a terminal it opens Mission Control on that session; piped, it replays the session's events from the beginning and then follows live, so a consumer that starts late still sees the whole history:
+
+```bash
+oxagen fleet attach s-k3x                       # focused TUI
+oxagen fleet attach s-k3x --json | jq -r 'select(.type=="message.end").text'
+```
+
+Like `dispatch --follow`, `attach --json` exits with the session's fate.
+
+### send — follow up with a running agent
+
+A session dispatched as a conversation stays open between turns (its state is `waiting`). Send it another turn from anywhere:
+
+```bash
+oxagen fleet send s-k3x "now add a test for the 429 path"
+cat instructions.md | oxagen fleet send s-k3x -
+```
+
+`send` appends a `message` to the session's `inbox.ndjson`; the owning process picks it up and runs the next turn with the full prior history threaded in. Any terminal can send to any session in the project.
+
+### cancel
+
+```bash
+oxagen fleet cancel s-k3x        # cancel one
+oxagen fleet cancel --all        # cancel every non-terminal session
+```
+
+Cancel appends a `cancel` to the inbox and also signals the owning process if it is still alive.
+
+### logs and clean
+
+```bash
+oxagen fleet logs s-k3x                  # dump the raw event log
+oxagen fleet logs s-k3x --from-seq 200   # resume from a sequence number
+oxagen fleet logs s-k3x --follow         # tail live
+
+oxagen fleet clean                       # prune terminal sessions older than 7 days
+oxagen fleet clean --older-than 1d
+oxagen fleet clean --all                 # prune all terminal sessions
+```
+
+`clean` only removes sessions that have ended; running and waiting sessions are never touched.
+
+<Callout type="info">
+`oxagen fleet worker <sid>` is an internal command — the detached worker that `dispatch` spawns to run a session out of process. You never run it directly, but you may see it in a process list.
+</Callout>
+
+### Time travel — replay, bisect, resume, feedback, distill
+
+Every fleet session also writes a deterministic sidecar record (`record/record.ndjson` plus a content-addressed blob store) with what the bounded event log cannot hold: **full** tool inputs and outputs, the full model history after each turn, and filesystem snapshots of every changed file. Recording is on by default; set `OXAGEN_FLEET_RECORD=0` to disable it. The record never leaves your machine except the distilled eval item, and only when you `--push` it.
+
+```bash
+oxagen fleet replay s-k3x                    # per-turn prompts, tool calls, diffs, usage
+oxagen fleet replay s-k3x --turn 3           # turn 3's FULL tool inputs/outputs
+oxagen fleet replay s-k3x --verify           # integrity check; exit 1 on corruption
+
+# "which turn doomed this run?" — restores the recorded tree at each probed
+# turn into a scratch worktree and runs your predicate there (exit 0 = good).
+# Assumes monotonic badness, exactly like git bisect.
+oxagen fleet bisect s-k3x --cmd "pnpm -s typecheck"
+
+# Fork a session from the state after turn 2 — restored tree + reconstructed
+# history — optionally on a different model or with a different prompt.
+oxagen fleet resume s-k3x --turn 2 --model anthropic/claude-sonnet-4-5
+
+# Human verdicts land on the record; a thumbs-down auto-distills the run.
+oxagen fleet feedback s-k3x down -m "wrong file, wrong fix"
+
+# Failed (or thumbs-downed) runs become eval dataset items. Local always
+# (record/distilled.json); --push adds it to the platform dataset.
+oxagen fleet distill s-k3x --push
+```
+
+A session that ends `failed` distills itself automatically, so every production failure is already an eval case by the time you look at it.
+
+## The cross-terminal story
+
+Because sessions live on disk and any process can read them, a fleet spans as many terminals as you like. A concrete three-terminal setup:
+
+**Terminal A** — Mission Control, watching everything:
+
+```bash
+oxagen fleet
+```
+
+**Terminal B** — dispatch more work. It shows up in Terminal A's rail within about a second, read-only there but fully controllable (A can send to it and cancel it):
+
+```bash
+oxagen fleet dispatch "port the settings page to the new form primitives"
+oxagen fleet dispatch --once "bump the Node engines field to 22 across all packages"
+```
+
+**Terminal C** — a headless observer piping the whole fleet into a script:
+
+```bash
+oxagen fleet watch --json \
+  | jq -c 'select(.type=="session.end") | {sid, state, cost: .usage.costUsd}'
+```
+
+Foreign sessions (dispatched from B or C) appear in A's Mission Control automatically through a filesystem watch, and A can `send` and `cancel` them exactly like its own. Nothing coordinates these three processes except the files on disk.
+
+## From the REPL
+
+Inside the interactive REPL, end any prompt with a trailing ` &` to dispatch it to the fleet instead of running it inline:
+
+```text
+› refactor the date helpers into one module &
+◇ dispatched s-mcqk3x9a-7f2q — oxagen fleet to watch
+```
+
+The REPL keeps going; watch the dispatched session with `oxagen fleet` or `oxagen fleet attach s-mcqk3x9a-7f2q`.
+
+## Related
+
+- [Scripting the CLI](/docs/platform/cli/scripting) — the NDJSON envelope, exit codes, and a jq cookbook for the fleet.
+- [Command reference](/docs/platform/cli/commands#oxagen-agents-dispatch-a-fleet) — the `agents` screen (planned task DAGs) and the rest of the command surface.
+- [Per-turn budget](/docs/platform/cli/budget) — cap what each session's turns can spend.

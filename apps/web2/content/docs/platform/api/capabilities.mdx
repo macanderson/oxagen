@@ -1,0 +1,185 @@
+---
+title: Capabilities
+description: The full list of Oxagen capabilities available via the REST API, their surfaces, and the contract model that guarantees parity.
+---
+
+## The contract model
+
+Every capability is declared once, in the platform contract registry. A declaration says:
+
+- The capability's `name` (for example, `execute_code`)
+- Its input and output schemas (Zod)
+- Which surfaces it is exposed on: `api`, `mcp`, and/or `agent`
+- Its risk level, and whether it needs approval before it runs
+- Its default IAM roles and effects
+
+The registry is the single source of truth. Every API route and every MCP tool reads from it, so a capability behaves the same way on every surface it declares. Parity is structural — nobody keeps the surfaces in sync by hand.
+
+`pnpm check:manifest` compares the registry against the routes and tools that exist and reports any gap as a warning.
+
+## Capability naming
+
+A capability name is **verb first, snake_case**: an imperative verb, then the
+thing it acts on, joined by underscores. Two or three words is the norm; a
+fourth appears only when it is the only way to keep the name unique.
+
+| Shape | Examples |
+|---|---|
+| `verb_noun` | `list_conversations`, `execute_code`, `upload_asset` |
+| `verb_noun_qualifier` | `list_agent_tools`, `cancel_background_task`, `set_plugin_secret` |
+
+Names are globally unique across the registry, and a capability's name is the
+same string everywhere — REST route dispatch, MCP tool name, model-facing tool
+name, IAM grants, audit records, and metering. There is no separate
+model-facing spelling. The agent engine's primitive tools (`read_file`,
+`bash`, `code_graph`, …) already read as verb-first names and keep them.
+
+**Names are stable, and there is no alias layer.** If a capability is ever
+renamed, the old name stops resolving — the registry does not carry a
+compatibility alias, so a rename is a breaking change and ships in a new API
+version. Pin your integration to the names in the table below, and read the
+release notes before upgrading across a version boundary.
+
+## Capability list
+
+A selection of the capabilities available in the current release, grouped by domain. This page is written by hand and covers the common surface; the governance catalog in the app (**Organization → Governance → Capabilities**) is generated from the live registry and is the complete, always-current list.
+
+### Agent
+
+| Capability               | Surfaces        | Risk   |
+| ------------------------ | --------------- | ------ |
+| `list_agent_tools`       | API, MCP, agent | Low    |
+| `list_agent_skills`      | API, MCP, agent | Low    |
+| `load_skill`             | API, MCP, agent | Low    |
+| `list_mcp_servers`       | API, MCP, agent | Low    |
+| `register_mcp_server`    | API, MCP        | Medium |
+| `create_plan`            | API, MCP, agent | Low    |
+| `approve_plan`           | API, agent      | Low    |
+| `resolve_approval`       | API, agent      | Low    |
+| `dispatch_subagent`      | API, MCP, agent | Medium |
+| `aggregate_subagents`    | API, MCP, agent | Low    |
+| `execute_code`           | API, MCP, agent | High   |
+| `recall_memory`          | API, MCP, agent | Low    |
+| `write_memory`           | API, MCP, agent | Low    |
+| `start_background_task`  | API, MCP, agent | Medium |
+| `get_background_task`    | API, MCP, agent | Low    |
+| `cancel_background_task` | API, MCP, agent | Medium |
+
+### Chat and conversations
+
+| Capability             | Surfaces        | Risk   |
+| ---------------------- | --------------- | ------ |
+| `send_message`         | API, MCP, agent | Low    |
+| `list_conversations`   | API, MCP, agent | Low    |
+| `archive_conversation` | API, MCP, agent | Low    |
+| `rename_conversation`  | API, MCP, agent | Low    |
+| `delete_conversation`  | API, MCP, agent | Medium |
+| `purge_conversations`  | API, MCP, agent | High   |
+
+### Knowledge and assets
+
+| Capability     | Surfaces        | Risk |
+| -------------- | --------------- | ---- |
+| `upload_asset` | API, MCP, agent | Low  |
+
+### Content generation
+
+| Capability          | Surfaces        | Risk   |
+| ------------------- | --------------- | ------ |
+| `generate_document` | API, MCP, agent | Low    |
+| `create_pdf`        | API, MCP, agent | Low    |
+| `generate_image`    | API, MCP, agent | Low    |
+| `generate_svg`      | API, MCP, agent | Low    |
+| `generate_video`    | API, MCP, agent | Medium |
+| `fill_form`         | API, MCP, agent | Low    |
+
+### Organization and workspace
+
+| Capability              | Surfaces        | Risk   |
+| ----------------------- | --------------- | ------ |
+| `create_org`            | API, MCP, agent | Medium |
+| `add_org_member`        | API, MCP        | Medium |
+| `remove_org_member`     | API, MCP        | High   |
+| `change_member_role`    | API, MCP        | High   |
+| `accept_member_invite`  | API, MCP        | Low    |
+| `decline_member_invite` | API, MCP        | Low    |
+| `create_workspace`      | API, MCP, agent | Medium |
+| `get_model_settings`    | API, MCP, agent | Low    |
+| `update_model_settings` | API, MCP        | Medium |
+
+### Billing
+
+| Capability                 | Surfaces        | Risk |
+| -------------------------- | --------------- | ---- |
+| `get_subscription`         | API, MCP, agent | Low  |
+| `start_subscription_upgrade` | API           | High |
+| `purchase_credits`         | API             | High |
+
+### Notifications
+
+| Capability          | Surfaces        | Risk |
+| ------------------- | --------------- | ---- |
+| `list_notifications`| API, MCP, agent | Low  |
+| `mark_notification` | API, MCP, agent | Low  |
+
+### User preferences
+
+| Capability                 | Surfaces        | Risk |
+| -------------------------- | --------------- | ---- |
+| `get_user_preferences`     | API, MCP, agent | Low  |
+| `update_user_preferences`  | API, MCP, agent | Low  |
+
+### API keys
+
+| Capability       | Surfaces | Risk |
+| ---------------- | -------- | ---- |
+| `create_api_key` | API, MCP | High |
+| `revoke_api_key` | API, MCP | High |
+
+### Plugins
+
+| Capability                 | Surfaces        | Risk   |
+| -------------------------- | --------------- | ------ |
+| `browse_plugin_catalog`    | API, MCP, agent | Low    |
+| `get_catalog_plugin`       | API, MCP, agent | Low    |
+| `install_plugin`           | API, MCP        | High   |
+| `install_plugins_bulk`     | API, MCP        | High   |
+| `uninstall_plugin`         | API, MCP        | High   |
+| `list_plugins`             | API, MCP, agent | Low    |
+| `set_plugin_enabled`       | API, MCP        | Medium |
+| `add_plugin_registry`      | API, MCP        | High   |
+| `remove_plugin_registry`   | API, MCP        | High   |
+| `list_plugin_registries`   | API, MCP, agent | Low    |
+| `sync_plugin_catalog`      | API, MCP        | Medium |
+| `reauth_plugin_credential` | API, MCP        | Medium |
+| `set_plugin_secret`        | API, MCP        | High   |
+| `set_auth_alerts`          | API, MCP        | Low    |
+
+`set_plugin_enabled` is one capability, not two — the same call toggles a plugin at org scope or at workspace scope, depending on the scope you pass.
+
+### System
+
+| Capability                 | Surfaces        | Risk |
+| -------------------------- | --------------- | ---- |
+| `get_install_instructions` | API, MCP, agent | Low  |
+
+## REST route convention
+
+Capability routes live under `/v1/{orgSlug}/{workspaceSlug}/`, and the path is chosen per capability rather than derived from the name. For example, `list_agent_tools` is mounted at `/v1/{orgSlug}/{workspaceSlug}/agent/tools` and `revoke_api_key` at `/v1/{orgSlug}/{workspaceSlug}/api-keys/revoke`.
+
+Two rules hold everywhere:
+
+- **The org and workspace slug segments are required on every capability route.** Use the slugs that your API key is scoped to.
+- **Most capability routes are `POST`,** including ones that only read. The request body is the capability's input, so even a list call sends a JSON body (`{}` when there is nothing to pass).
+
+Run `pnpm check:manifest --json` in the monorepo to print the full route/tool parity table. There is no runtime `/v1/capabilities` endpoint.
+
+## Parity caveat
+
+These flows only exist in the app UI. They have no contract, so you cannot reach them from the API or MCP:
+
+- In-stream plan approval. It needs the chat UI's live stream — call `approve_plan` afterwards instead.
+- The Stripe Customer Portal redirect. For programmatic upgrades, use `start_subscription_upgrade`.
+- OAuth plugin credential flows, which require a browser redirect.
+
+This list is maintained by hand. When a contract lands for one of these flows, it moves into the capability list above.

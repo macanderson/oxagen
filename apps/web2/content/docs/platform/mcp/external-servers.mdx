@@ -1,0 +1,78 @@
+---
+title: External MCP servers
+description: Connect your Oxagen workspace to external MCP servers — GitHub, Linear, custom internal tools, and any MCP-compatible service.
+---
+
+Oxagen can connect **outbound** to external MCP servers, making their tools available to the agent alongside built-in capabilities. This is the inverse of the [connecting](/docs/platform/mcp/connecting) page (which covers inbound connections to the Oxagen MCP server).
+
+## How it works
+
+External MCP servers are registered per-workspace. Once connected and authenticated, the agent can invoke their tools during a chat session — subject to IAM policies, consent rules, and permission configuration.
+
+There are two ways to configure external MCP servers:
+
+| Method | Best for | Requires API? |
+|--------|----------|---------------|
+| [File-based configuration](/docs/platform/mcp/file-config) | CLI users, CI/CD, offline development, version-controlled configs | No |
+| Platform registration (web app / API) | Teams using the marketplace, OAuth flows, enterprise governance | Yes |
+
+Both methods feed tools into the same runtime pipeline — permissions, telemetry, and audit logging apply uniformly regardless of how the server was registered.
+
+## Supported transports
+
+| Transport | Status | Notes |
+|-----------|--------|-------|
+| Streamable HTTP | Fully supported | The current MCP standard. Used by GitHub MCP, Linear, and most hosted servers. |
+| SSE (Server-Sent Events) | Supported | Older MCP servers still use this transport. |
+| WebSocket | Supported | For servers that require persistent bidirectional connections. |
+| stdio | CLI-only (local) | Spawns a local process. Not available in the cloud runtime. |
+
+## Authentication strategies
+
+| Strategy | Use case |
+|----------|----------|
+| `none` | Public or locally-running MCP servers |
+| `bearer` | Static API keys or tokens |
+| `header` | Arbitrary header-based auth (e.g. `X-API-Key`) |
+| `oauth` | OAuth 2.1 with PKCE (GitHub MCP, enterprise SSO) |
+
+See [Credentials](/docs/platform/mcp/credentials) for how tokens are stored and refreshed.
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Agent Runtime (materializeTools)                     │
+├──────────────┬───────────────────────────────────────┤
+│  DB-backed   │  File-based (@oxagen/mcp-config)      │
+│  servers     │  servers                              │
+│  (mcp.mcp_   │  (.oxagen/settings.json +             │
+│   servers)   │   ~/.config/oxagen/settings.json)     │
+├──────────────┴───────────────────────────────────────┤
+│  Uniform wrapping: IAM gate, telemetry, consent      │
+├──────────────────────────────────────────────────────┤
+│  Model receives merged tool set                      │
+└──────────────────────────────────────────────────────┘
+```
+
+Both contributor types produce `ContributedRawTool` entries that pass through the same IAM gate, ClickHouse telemetry, and consent/approval flow before reaching the model.
+
+## Quick start
+
+The fastest way to connect an external MCP server:
+
+```bash
+# Add GitHub MCP with a static auth header
+oxagen mcp add github --url https://api.githubcopilot.com/mcp/ --auth header --header "Authorization=Bearer ${GITHUB_TOKEN}"
+
+# Add a bearer-token server
+oxagen mcp add linear --url https://mcp.linear.app/sse --transport sse --auth bearer --env-token LINEAR_MCP_TOKEN
+
+# Add a local stdio server
+oxagen mcp add filesystem --transport stdio --command npx --arg -y --arg @modelcontextprotocol/server-filesystem --arg ./src
+
+# Check connectivity
+oxagen mcp check
+```
+
+See [CLI reference](/docs/platform/mcp/cli-reference) for the full command set.

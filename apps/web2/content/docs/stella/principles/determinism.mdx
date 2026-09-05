@@ -1,0 +1,152 @@
+---
+title: Determinism over intelligence
+description: Why stella runs one deterministic thread instead of a swarm of agents, what research on multi-agent failures found, and what that means for how it works.
+---
+
+Most agent tools use a swarm: a navigator agent, a coder agent, a reviewer
+agent, a tester agent, and a coordinator managing all of them. stella does
+the opposite. It runs **one deterministic, single-threaded loop**.
+The research behind it is in
+[this note](https://github.com/macanderson/stella/blob/main/docs/papers/deterministic-engine.md).
+
+## What the research found
+
+The first large study of multi-agent LLM failures, the **MAST** taxonomy
+(Cemri et al., UC Berkeley, NeurIPS 2025), found three common ways swarms of
+agents fail across tools like AutoGen, MetaGPT, and ChatDev:
+
+1. **Agents disagree.** They lose track of the task state and what other
+   agents already did. This leads to actions that contradict each other,
+   work that gets redone, and errors that spread through the coordinator.
+2. **No one can check the work.** There's no single thread of execution to
+   replay or check. Finding out which agent went wrong means digging
+   through message logs one by one.
+3. **Information gets lost.** Every time one agent hands off to another, it
+   has to summarize, and every summary drops something. The first agent's
+   full understanding reaches the last agent as a vague instruction.
+
+Cost matters too. Kapoor et al. (Princeton, TMLR 2025) show agent systems
+need to be judged on cost, not just accuracy. Swarms tend to cost more per
+task, usually without much to show for it.
+
+Meanwhile, two of the strongest systems on the SWE-bench benchmark,
+**Agentless** (Xia et al., FSE 2025) and **SWE-agent**, use a single agent
+on purpose. A well-designed find → fix → check pipeline beats a
+complicated multi-agent setup.
+
+<SingleThreadDiagram />
+
+## How stella avoids this
+
+- **One loop.** Plan, run tool calls in parallel, look at the results, trim
+  down anything noisy, repeat. There's no coordinator to fall out of sync,
+  no peer to disagree with, and no handoff to lose information in. The
+  swarm failure modes above aren't reduced here. They simply can't happen.
+- **One transcript.** Every decision is a step in one ordered event stream.
+  You can replay it and check it, and it feeds the local
+  [telemetry](/docs/stella/telemetry) records step by step.
+- **A pure decision core.** The engine does no reading or writing on its
+  own. Its logic is plain, synchronous functions over data it owns. That's
+  what makes it testable, and what makes its behavior *reproducible* at
+  all.
+
+When parallel work pays off, stella still avoids a shared coordinator or
+shared state. [Fleets](/docs/stella/agent-fleets) run several independent
+single-thread engines over one shared project, and the only coordination
+between them is a shared list of file claims (with a dedicated git worktree
+per task if you turn that on). You get parallel work with no swarm
+coordination and no messages between agents to lose information.
+
+The coordination is a lock table, not a conversation. If two workers claim
+overlapping files, they don't negotiate. The second one fails immediately,
+by name, before it even starts:
+
+```toml title="parallel.toml"
+[[tasks]]
+id = "a"
+title = "Rename the error type"
+prompt = "Rename StoreError to StoreFailure across the crate"
+claims = ["src/store/error.rs"]
+
+[[tasks]]
+id = "b"
+title = "Add a variant"
+prompt = "Add a StoreError::Corrupt variant carrying the failing pragma"
+claims = ["src/store/error.rs"]   # same path — one of these two will not run
+```
+
+```bash
+stella fleet --plan parallel.toml --max-concurrency 2
+```
+
+That's the whole coordination protocol. There's no message for two agents
+to misread, and no summary between them to lose information. The third MAST
+failure class, information loss, has nowhere to happen.
+
+## The bigger idea
+
+Preferring determinism over intelligence doesn't mean stella avoids using
+models. The whole point of stella is to put strong models to work. It's a
+statement about **where to spend them**:
+
+- Verification comes from a [wrapper plugin](/docs/stella/plugins) you turn on
+  with `--pipeline <variant>`. It works with a **flip**: a test that fails
+  before your change and passes after it. The plugin runs that check and
+  reports what it found. stella checks that report against the rule the
+  plugin set up when it was installed, and never re-runs the check itself.
+  No model is ever asked to judge unclear evidence. If a report doesn't
+  meet the rule, the result is "not proven".
+- The one model call a plugin like this spends on evidence writes the
+  failing test. It never judges the result. The test's own fail-then-pass
+  flip does that, just by running.
+- Goal mode works differently, with its own verifier. After every round,
+  without exception, a separate model checks the transcript against the
+  goal. This isn't a fallback for unclear evidence. It runs every round no
+  matter what, and if the check itself fails to run, it says so
+  instead of making up a verdict.
+- Routing, budgets, trimming context, retries, and pulling in memory are
+  all handled by plain, boring, checkable code. The model's attention goes
+  to the two things only a model can do: **writing the change**, and
+  **judging what a mechanism can't measure**.
+
+This adds up. Deterministic mechanisms cost nothing to run, never hit a
+rate limit, never make things up, and give you the *same answer twice*.
+That's exactly what you want from the part of an agent that decides whether
+to trust it.
+
+Interactive mode shows this split instead of just describing it. Open a
+task and you see its contract: what "done" means, which checks are
+computed and which need a model, and what the work actually cost. Below
+that, the plan it was given sits next to what actually happened. If they
+differ, that's recorded, not glossed over.
+
+<DeckShot id="task" />
+
+Because this split is built into the system, not just a way of talking
+about it, it's also machine-readable. A raw run reports what it did, and
+nothing about proof: its `status`, what it spent, and the files it touched:
+
+```bash
+stella run --output-format json \
+  "make the loop detector count identical no-op calls as progress-free" \
+  | jq '{status, cost_usd, files_touched}'
+```
+
+Turn on a verification plugin, and the same output now carries its verdict,
+so a CI gate can require evidence instead of a claim:
+
+```bash
+stella run --output-format json --pipeline my-verifier --test-command "make test" "$TASK" \
+  | jq -e '.status == "completed"' >/dev/null \
+  || { echo "nothing proved this run — holding it for review" >&2; exit 1; }
+```
+
+The raw loop has no check to arm, so `--test-command` is refused there. See
+[`stella run`](/docs/stella/commands/run).
+
+<Callout type="info">
+  Read the full papers:
+  [the deterministic engine](https://github.com/macanderson/stella/blob/main/docs/papers/deterministic-engine.md)
+  and
+  [the seven defensible properties](https://github.com/macanderson/stella/blob/main/docs/papers/stella-defensible-position.md).
+</Callout>

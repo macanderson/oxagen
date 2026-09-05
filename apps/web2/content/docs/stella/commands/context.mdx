@@ -1,0 +1,275 @@
+---
+title: stella context
+description: Review, publish, and explain context records — the reviewable steering stella ingest extracts from documents you already wrote. Offline, local files only.
+---
+
+`stella ingest` writes proposals. `stella context` is what acts on them.
+
+Extraction turns markdown you already wrote into small, checked claims sitting in
+`.stella/proposals/*.toml`. Until you decide on one, it changes nothing. This
+command is the deciding surface: read what was proposed and what its truth check
+found, publish the claims that are actually true, decline the ones that are not,
+and later ask any live record why it applied.
+
+Every subcommand reads and writes local files only. No API key, no network.
+
+## Synopsis
+
+```bash
+stella context review [--all]
+stella context keep <candidate> [--enforce]
+stella context edit <candidate> --statement <text> [--enforce]
+stella context amend <rule> [--precedence <N>] [--paths <glob>…] [--tasks <task>…] [--keywords <word>…]
+stella context ignore <candidate> [--reason <why>] [--cooldown <ISO-8601>]
+stella context list [--format <text|json>]
+stella context validate [--format <text|json>]
+stella context explain <rule>
+stella context propose <rule> [--commit]
+```
+
+`<candidate>` is a proposal's candidate id, or any unique prefix of it.
+`<rule>` is a published record's `^handle` (the caret is optional) or its
+lineage id.
+
+## The usual pass
+
+```bash
+stella ingest AGENTS.md      # extract claims from a document you already wrote
+stella context review        # read them, with each claim's probe verdict
+stella context keep a1b2c3   # publish the ones that are true
+stella context list          # confirm what now steers this workspace
+```
+
+## Subcommands
+
+### `stella context review [--all]`
+
+Shows what ingest proposed, with the evidence behind each claim and the result of its
+truth check. Nothing takes effect until you keep it, so this command only reads and
+never changes anything.
+
+`--all` also shows the dismissed proposals: compound claims that extraction
+refused to split, and executable content it set aside. These are worth a look when a
+document you expected to produce ten records produced six.
+
+### `stella context keep <candidate> [--enforce]`
+
+Publishes a proposal as a record the engine loads. It writes
+`.stella/rules/<lineage>.toml` (or `~/.stella/rules/` for a personal record)
+and never overwrites an existing file.
+
+<Callout type="info">
+`--enforce` is a separate choice on purpose. Keeping a record means the engine
+loads it as guidance. Allowing it to block a matching tool call is a
+different decision with bigger consequences, so it's a separate flag
+rather than something `keep` does automatically.
+</Callout>
+
+### `stella context edit <candidate> --statement <text> [--enforce]`
+
+Publishes your own wording instead of the extractor's. The claim keeps its lineage and
+its evidence; only the wording changes. Use this when the claim is right
+but the phrasing came from prose that said it badly.
+
+### `stella context amend <rule> [--precedence <N>] [--paths <glob>…] [--tasks <task>…] [--keywords <word>…]`
+
+Changes a published record's scope or precedence, and gives it a new identity stamp.
+`edit` rewrites a proposal's wording; `amend` is for a record that is
+already active.
+
+Scope is the field most likely to need changing after publishing, because a
+scope mistake is invisible until the record runs into others nearby. For example, a rule
+named `read-crate-readme-first` was published with `paths = ["crates"]` at
+default precedence, and it ended up blocking eight other rules across
+the whole codebase. `validate` pointed to the fixes (an explicit exclusion, a
+different precedence, a link marking it as a replacement) but none of them could be
+applied from the command line before `amend` existed.
+
+A list you pass here replaces the existing one instead of adding to it, because the usual fix
+is narrowing scope: `--paths crates/stella-core` after `paths = ["crates"]` matched
+everything. Empty values are dropped, so `--paths ''` removes the scope entirely.
+
+**With no flags, `amend` re-stamps the record and changes nothing else.** This is the fix
+for a file someone has already edited by hand. `record_hash` is a checksum over the
+record's contents, so a hand-edit leaves the file describing bytes that
+no longer match, and every load reports a `record_hash mismatch … loaded as a new
+revision` message. No other command re-stamps this way. Every other way of publishing
+creates a brand new record.
+
+`record_id` changes too, because it's built from the content. That's a new revision
+of the same lineage, which is what a content-based id is for. The statement,
+the lineage, the evidence, and the origin are untouched.
+
+**You can't change enforcement here.** `enforcement.mode` is controlled by
+[`promote`](#stella-context-promote-rule---to-level---reason-why), which requires
+an approver, a reason, and a permanent log entry. Adding that ability to this command
+would create a second way to grant the same power with none of those checks.
+
+### `stella context ignore <candidate> [--reason <why>] [--cooldown <ISO-8601>]`
+
+Declines a proposal. This records the decision and sets a
+cooldown before it can be proposed again — 90 days by default — so the next time you
+ingest the same document, it doesn't ask again.
+
+Always give a `--reason`. A decline with no reason is a decision nobody, including you,
+can understand or act on later.
+
+### `stella context list [--format <text|json>]`
+
+Shows what currently steers this workspace: every loaded record, its handle, its
+force level, and whether it actually blocks anything.
+
+**Force** decides how a record is delivered to the model, which also affects its cost:
+
+<CardGrid size="md">
+  <OptionCard name="must">
+    Required. Always included in the cached system prompt.
+  </OptionCard>
+  <OptionCard name="should">
+    Strongly recommended. Always included in the cached system prompt.
+  </OptionCard>
+  <OptionCard name="may">
+    Included only when relevant. Sent in the part of the prompt that changes each time.
+  </OptionCard>
+  <OptionCard name="info">
+    For reference only. Sent in the part of the prompt that changes each time.
+  </OptionCard>
+</CardGrid>
+
+`must` and `should` records are always present, which is what makes them binding, and
+also why you should use them sparingly. `may` and `info` records are chosen
+based on relevance.
+
+**Enforcement** is a separate setting from force:
+
+<CardGrid size="sm">
+  <OptionCard name="hard">
+    Blocked automatically when a tool call would break the rule.
+  </OptionCard>
+  <OptionCard name="soft">
+    A warning is shown, but nothing is blocked.
+  </OptionCard>
+  <OptionCard name="none">
+    For reference only.
+  </OptionCard>
+</CardGrid>
+
+### `stella context validate [--format <text|json>]`
+
+Re-runs every claim's truth check right now and reports the result, along with every
+validation finding and every conflict between records with the same precedence. It
+exits with a non-zero code when something should not be steering the agent, which makes
+it usable as a gate:
+
+```bash
+stella context validate || echo "steering needs review before this merges"
+```
+
+A record you retired is the one thing that doesn't cause a failure. Retiring
+archives the record in place. The file stays in `.stella/rules/` for the record,
+and the loader stops using it, so `validate` lists it under "Retired" and moves
+on. A claim that fails its truth check still fails validation, and so does an archived
+record that still carries a blocking issue.
+
+This solves a common problem with inherited documentation: a record
+pulled from a README that was true two years ago is a confident, wrong instruction
+today. The check runs directly against the current codebase, so it catches
+outdated claims instead of assuming they're still true.
+
+### `stella context explain <rule>`
+
+Why did that rule apply? Shows the origin, evidence, enforcement setting, and effectiveness
+for one record.
+
+```bash
+stella context explain ^pnpm-only
+stella context explain ctx.acme.web.pkg-manager
+```
+
+Part of that answer is how the claim was judged true, and the four possible values mean
+different things:
+
+<CardGrid size="sm">
+  <OptionCard name="decree">
+    True because an owner said so. Cannot be disputed by design.
+  </OptionCard>
+  <OptionCard name="measured">
+    True because it was checked against the codebase and confirmed.
+  </OptionCard>
+  <OptionCard name="derived">
+    True because it follows from other records.
+  </OptionCard>
+  <OptionCard name="asserted">
+    Stated as true with no automatic way to check it.
+  </OptionCard>
+</CardGrid>
+
+### `stella context propose <rule> [--commit]`
+
+Turns a record into a reviewable change: a branch, a focused diff, and a
+pull request description. Without `--commit` it just prints the plan; with it, the branch
+and commit are created locally.
+
+This exists because steering that changes how an agent behaves for a whole team
+deserves the same review as code does, and a focused diff is what
+makes that review possible.
+
+### `stella context promote <rule> --to <level> --reason <why>`
+
+Changes a record's enforcement level with accountability. Every change, from `advisory`
+to `blocking` and back, is added as a permanent, tamper-evident entry to a
+log visible in the repository (`.stella/rules/promotions.jsonl`), naming the
+approver (defaults to `git config user.email`, override with `--approver`),
+the record's author when known, the stated reason, and the policy version the
+change creates. This log, not a private approval on one machine, is what activates
+a repository record's enforcement, so the permission travels with the repository and is
+reviewed through the same pull requests as the rule it controls.
+
+Promoting a record to `blocking` requires the record to name specific, checkable
+conditions. A plain-language statement can never silently become blocking behavior. An
+edited, deleted, or reordered log entry breaks the chain, `stella context
+validate` fails on it, and a broken log grants no permissions at all.
+
+### `stella context govern [solo|team|regulated] [--separation] [--yes]`
+
+Shows or changes the governance mode. With no argument, it prints the current mode, the
+current policy version, and every enforcement permission in the log with its approver
+and reason. Changing the mode always asks for confirmation first (`--yes` skips the
+prompt); personal records stay private through the change. In
+regulated mode with `--separation`, the person who wrote a record
+cannot approve its own enforcement permission, and if the author can't be
+identified, the request is denied.
+
+## Two separate systems
+
+<Callout type="warn">
+`stella context` and [`stella proposals`](/docs/stella/commands/proposals) review
+different things and do not share storage.
+
+- **`stella context`** reviews proposals extracted from documents and stored as files,
+  in `.stella/proposals/*.toml`.
+- **`stella proposals`** reviews proposals based on what the
+  agent actually did, stored in `.stella/private/context.db`.
+
+The two are split because they need different levels of trust. An explicit instruction in a
+tracked file can be reviewed right away. A pattern noticed across sessions must first
+clear a threshold showing it happened across distinct tasks. One review tool for
+both would apply the wrong check to one or the other.
+</Callout>
+
+## Related
+
+<CardGrid size="sm">
+  <SpecCard title="stella ingest" href="/docs/stella/commands/ingest">
+    The extraction step — what produces the proposals this command reviews.
+  </SpecCard>
+  <SpecCard title="stella proposals" href="/docs/stella/commands/proposals">
+    The adaptive-context log: proposals based on behavior, a separate system.
+  </SpecCard>
+  <SpecCard title="Context engine" href="/docs/stella/context-engine">
+    How records get used, and the two ways they're delivered to the model.
+  </SpecCard>
+  <SpecCard title="Unfamiliar codebase" href="/docs/stella/guides/unfamiliar-codebase">
+    Where ingest and context fit when you inherit a repository.
+  </SpecCard>
+</CardGrid>

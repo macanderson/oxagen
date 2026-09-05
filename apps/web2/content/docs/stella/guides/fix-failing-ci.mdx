@@ -1,0 +1,219 @@
+---
+title: Fix a failing CI run
+description: A branch is red. Walk it to green with stella monitor — what it does each round, what happens when a fix doesn't hold, and what "green" means here.
+---
+
+You pushed a branch and CI went red. You want it green, you'd rather not read
+four thousand lines of logs to find out why, and you want a real fix, not
+just a deleted test.
+
+This is the task [`stella monitor`](/docs/stella/commands/monitor) is built for.
+
+## The whole thing, first
+
+```bash
+# From the repository, with `gh` authenticated.
+stella --spend-limit 5.00 monitor feature/payments-refactor
+```
+
+<Callout type="warn">
+The `target` argument defaults to **`main`**. `monitor` commits and pushes
+its fixes to whatever branch it's watching, so running a bare
+`stella monitor` pushes commits straight to `main`. Always name your branch
+or pull request — `feature/…`, or `"#128"` for a pull request.
+</Callout>
+
+## Before you start
+
+<CardGrid size="md">
+  <OptionCard name="gh, installed and authenticated">
+    `monitor` reads CI status through GitHub's `gh` command-line tool.
+    `gh auth status` should come back clean. Without it, the run fails at
+    the first status check instead of silently doing nothing.
+  </OptionCard>
+  <OptionCard name="A branch you are willing to have pushed to">
+    Fixes get committed and pushed between checks — that's how the next CI
+    run gets triggered at all. There's no dry-run mode. The feedback loop
+    *is* the remote branch.
+  </OptionCard>
+  <OptionCard name="A spend limit, realistically">
+    Reading failure logs uses a lot of input tokens. `--spend-limit` is a
+    [global flag](/docs/stella/commands#global-flags), so it goes before the
+    subcommand.
+  </OptionCard>
+</CardGrid>
+
+## What each round actually does
+
+`monitor` isn't a special-purpose CI robot. It's
+[goal mode](/docs/stella/agent-modes#outcome-driven-goal-mode) with one fixed
+objective built in:
+
+> Drive CI for `<target>` to fully green. Watch the latest runs, read the
+> failure logs, fix each root cause in the code, commit and push the fix,
+> then re-check. The goal is met only when the latest CI run has completed
+> with every check successful.
+
+That means it uses all of goal mode's machinery, and that machinery is the
+interesting part:
+
+1. **Watch.** The engine waits for the latest run on the target to finish,
+   then reads its result and the logs from any jobs that failed.
+2. **Diagnose and fix.** A round of work steps through the failing jobs'
+   logs. `monitor` doesn't add any flag of its own here — it's
+   [goal mode](/docs/stella/agent-modes#outcome-driven-goal-mode) with the goal set
+   to "CI is green," and the outer verifier is what judges whether that's
+   true.
+3. **Commit and push.** The remote branch is the only thing that can
+   produce evidence for the next round.
+4. **Verify.** A separate verifier model — ideally from a
+   [different family](/docs/stella/api-providers/models) than the model doing the
+   work — checks whether the goal is met. It reads the CI status itself,
+   so it's checking the actual run, not trusting the worker's account of it.
+5. **Repeat**, up to a hard limit of **8** checked rounds.
+
+## What "fixed" means here
+
+This is where `monitor` is different from a script that just retries until
+the exit code is zero, and it's worth understanding, because it's the whole
+reason to use this tool instead.
+
+**Inside each round**, an installed [verification plugin](/docs/stella/plugins) can
+run a set of deterministic checks before any model gives an opinion. The
+required check is the **flip test**: the relevant test must have *failed
+before* the change and *passed after* it. A test suite that was already
+green proves nothing about the fix, so it can't be used as proof of one.
+That rules out the exact failure you're worried about — a change that makes
+the red go away without actually fixing the bug.
+
+**Across rounds**, the outer verifier only ends the loop when the *latest CI
+run for the target has finished with every check passing*. Not "the tests I
+ran locally passed." Not "I believe this is fixed." An actual run on the
+remote, green, that you can open in a browser.
+
+<Callout type="info">
+Rounds wrapped by a verification plugin get checked **twice**: the plugin's
+own evidence covers each round's work, and the outer verifier checks the
+overall goal. A fix that passes locally but doesn't turn CI green gets
+caught by the second check.
+</Callout>
+
+## When the fix doesn't hold
+
+The interesting cases are the ones where it doesn't just work.
+
+### The next run is red for a different reason
+
+This is normal, and needs nothing from you. The round ends "not met," the
+new failure logs come back with the next status check, and the next round
+works on the new root cause. That's exactly what the round loop is for.
+
+### The same failure comes back
+
+Once a fix has deterministically failed the **same** check a **second**
+time (the two failures don't need to be back to back), the next attempt
+gets the full, unedited record of what failed, and nothing else. The worker
+is told what failed, not what to do about it.
+
+There's no model **guidance step** here — no verifier reading the diff and
+adding a note about how to fix it. A model reading a limited diff is making
+a guess, and a guess attached to a measurement can look like it carries the
+same authority as that measurement, even though a worker can't tell the two
+apart. The failing test already proves the point. There's nothing a
+reviewer could add to it except a way to get it wrong.
+
+### It hits the round limit
+
+At 8 checked rounds, `monitor` **stops and reports the goal as not met**,
+even if CI is still red. It isn't a background daemon and won't sit on your
+branch overnight. Run it again to keep going — the branch state carries
+over, so a second run picks up from where the first one left off.
+
+That limit exists because the failure it protects against is expensive: an
+agent stuck looping on an infrastructure problem it has no way to fix from
+the code. If two `monitor` runs in a row both hit the limit, the problem is
+usually not in the code — see the next section.
+
+### It cannot be fixed from the code
+
+Some red CI isn't a code problem: an expired token, a billing limit, a
+runner that no longer exists, a required check whose workflow file never
+even starts. stella will keep proposing code changes, because code changes
+are what it knows how to make. The tell is a CI result that never reaches
+the test step at all — a job that fails during setup, or a run whose result
+is `startup_failure`.
+
+Check the raw job yourself at that point:
+
+```bash
+gh run list --branch feature/payments-refactor --limit 5
+gh run view <run-id> --log-failed
+```
+
+### The spend limit stops it
+
+`--spend-limit` is a hard cap, checked **between** steps and stages, never
+in the middle of a tool call — so you never end up with a half-finished
+edit. A stopped run leaves its already-pushed commits in place. Nothing is
+rolled back. Raise the limit and run it again, or see
+[Work within a spend limit](/docs/stella/guides/spend-limit).
+
+## Confirming it, afterward
+
+`monitor` prints plain text for people to read and does **not** support
+`--output-format` (it's meant to be watched live; passing that flag is an
+error). So confirm it the same way anyone else on your team would:
+
+```bash
+gh pr checks 128
+```
+
+Then check what it cost you:
+
+```bash
+stella stats --format text
+```
+
+<Callout type="info">
+Want a machine-readable result instead? Run the same goal through
+[`stella run`](/docs/stella/commands/run) with `--output-format json` and your own
+test command, and check `verdict.deterministic` in the result. The
+[scripting guide](/docs/stella/scripting) has the full pattern for automating this
+from CI.
+</Callout>
+
+## Running it *from* CI instead of *at* CI
+
+`monitor` watches a remote CI run from your own machine. Running stella
+headlessly *inside* a CI job is a different setup, with different
+requirements (no interactive terminal, JSON output, and skipping the scope
+review manually):
+
+```bash
+stella --spend-limit 2.00 \
+  run --output-format json --pipeline my-verifier \
+  --test-command "cargo test --workspace" "fix the failing tests" \
+  | jq -e '.status == "completed"'
+```
+
+There's no scope-review step to skip here, and the
+`agent_engine_config.headless_scope_bypass` setting does nothing — turning
+it on changes nothing. See [Scripting](/docs/stella/scripting).
+
+## Next
+
+<CardGrid size="sm">
+  <SpecCard title="stella monitor" href="/docs/stella/commands/monitor">
+    The reference: syntax, flags, and exit behavior.
+  </SpecCard>
+  <SpecCard title="Goal mode" href="/docs/stella/agent-modes#outcome-driven-goal-mode">
+    The round loop `monitor` is built on, and how the verifier is chosen.
+  </SpecCard>
+  <SpecCard title="Work within a spend limit" href="/docs/stella/guides/spend-limit">
+    Where a stopped run leaves off, and how to make the money go further.
+  </SpecCard>
+  <SpecCard title="stella fleet" href="/docs/stella/commands/fleet">
+    Several red branches at once — `--watch` keeps each one's CI and pull
+    request status in sync.
+  </SpecCard>
+</CardGrid>

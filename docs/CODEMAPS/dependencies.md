@@ -1,4 +1,9 @@
-<!-- Generated: 2026-07-06, corrections applied 2026-07-10 | Files scanned: all package.json | Token estimate: ~700 -->
+<!-- Maintained by the `/update-codemaps` command (.claude/commands/update-codemaps.md),
+     NOT by a script in `pnpm run`. Nothing regenerates this on a package being
+     added or deleted, so it goes stale silently -- two deleted packages and six
+     missing ones were found here at once (#2631). If you add or remove a package,
+     either re-run that command or edit this table by hand.
+     Last reconciled against `packages/` on 2026-09-04. -->
 
 # Dependencies & Integrations
 
@@ -77,17 +82,22 @@ xmcp                    MCP server framework (streamable HTTP)
 | `@oxagen/database` | api, app, handlers, agent, billing, ... | Drizzle schema + client |
 | `@oxagen/auth` | api, app, mcp | Better Auth, session/API-key resolution |
 | `@oxagen/agent` | api, app | Agent runtime, memory, dispatch |
+| `@oxagen/agent-artifacts` | cli, app, handlers, skills, oxagen | Agent/skill/command artifact format + serialization |
 | `@oxagen/agent-engine` | agent, api | Pipeline, planner, fleet, evaluator |
+| `@oxagen/agent-runner` | api, handlers, inngest-functions, agent, agent-worker | Agent run context, orchestration, Stella client |
+| `@oxagen/agent-worker` | agent-runner | Long-running worker for agent dispatch |
 | `@oxagen/engram` | cli, agent | Local DuckDB memory, context compilation, replay |
 | `@oxagen/ai` | api, app, cli, mcp | AI SDK wrappers, prompt registry |
 | `@oxagen/billing` | api, app | Stripe, credits, usage |
 | `@oxagen/iam` | api, handlers | AuthZ, audit emission |
 | `@oxagen/ingestion` | api, handlers | Connectors, parsers, pipeline |
 | `@oxagen/plugins` | api, app | Plugin catalog, credentials, entitlements |
+| `@oxagen/run-evidence` | iam | Evidence canonicalization (CGP frames, JSON digests) |
 | `@oxagen/inngest-functions` | api, app | All Inngest function definitions |
 | `@oxagen/tenancy` | api, mcp, handlers | Org/workspace boundary enforcement |
 | `@oxagen/sandbox` | api, agent | Code execution sandbox (Vercel) |
 | `@oxagen/storage` | api, app, handlers | Vercel Blob abstraction |
+| `@oxagen/stella-engine-client` | agent-runner | Stella agent engine client (run submission, polling) |
 | `@oxagen/crypto` | api, plugins, ingestion | AES-256-GCM / KMS encryption |
 | `@oxagen/github` | api, ingestion | GitHub App client, OAuth |
 | `@oxagen/notifications` | api, app | Notification delivery |
@@ -95,13 +105,12 @@ xmcp                    MCP server framework (streamable HTTP)
 | `@oxagen/telemetry` | api, app, cli | OpenTelemetry tracing |
 | `@oxagen/config` | api, app, cli, mcp | Shared runtime config |
 | `@oxagen/ontology` | api, handlers | Ontology query/management |
+| `@oxagen/rules` | api, app, mcp, agent-worker | Workspace rules engine (access control, guardrails) |
 | `@oxagen/skills` | api, cli | Skill filesystem scanner |
 | `@oxagen/ui` | app | coss ui component system (Base UI–based; migrated off shadcn/Radix) |
 | `@oxagen/web` | app | Shared web utilities |
-| `@oxagen/code-graph` | cli, api | Code graph indexing |
 | `@oxagen/functions` | api, app | Shared function utilities |
 | `@oxagen/mcp-config` | cli, mcp | MCP server config schema |
-| `@oxagen/bench` | bench/web | Deterministic eval/replay benchmark engine (`runBenchmark()`) |
 
 ## Tooling Packages
 

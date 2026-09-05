@@ -1,0 +1,207 @@
+---
+title: stella ingest
+description: Turn markdown you already wrote — AGENTS.md, CLAUDE.md, or any file you name — into reviewable context-record proposals stella can check, cite, and retire.
+---
+
+`stella ingest` reads markdown you already wrote and turns it into steering stella can check, cite, and retire. It has two halves, and which one runs depends entirely on whether you name a file.
+
+With **no arguments**, it scans the workspace and shows you what it found, grouped by tier. This half works offline and needs no API key. Name **one or more paths** and it extracts them instead: one model call per document splits it into individual claims, each claim is mapped to a context record, run through a safety check, tested against your code for staleness, and written to `.stella/proposals/` as a reviewable TOML file. Nothing you ingest steers anything until you review it.
+
+## Synopsis
+
+```bash
+stella ingest [--all]
+stella ingest [--keep-dismissed] <path>...
+stella ingest --refresh <path>...
+stella ingest alerts list
+stella ingest alerts dismiss <path>
+stella ingest alerts restore <path>
+```
+
+## What it does
+
+Most repositories already contain the instructions an agent needs. They're just written for people, scattered across files, and partly out of date. Ingest treats that writing as a source to be mined rather than a file to paste into a prompt: claims come out one at a time, each one keeps track of where it came from, and each one can be reviewed on its own instead of arriving as one big undivided block of text.
+
+### `stella ingest` — scan
+
+With no paths given, ingest walks the workspace for markdown files and sorts everything it finds into five tiers. The results are grouped the same way the first-run screen groups them, so the scan and the first-run screen never disagree about what your repo contains.
+
+<CardGrid size="md">
+  <SpecCard title="Primary">
+    `AGENTS.md` or `CLAUDE.md` — instructions you already wrote for an agent, on purpose. The
+    only tier named on first run without being asked.
+  </SpecCard>
+  <SpecCard title="Instructional">
+    The document exists to instruct, but isn't one of the two files everybody recognizes —
+    `CONTRIBUTING.md`, an agent tool's rules directory, a memories folder. Offered as a
+    suggestion, never assumed.
+  </SpecCard>
+  <SpecCard title="Descriptive">
+    Describes the repository rather than instructing anyone — READMEs, design notes,
+    architecture docs. Real knowledge, but written for people to read and likely to drift out
+    of date.
+  </SpecCard>
+  <SpecCard title="Historical">
+    Records past facts: changelogs, and anything marked as replaced by something
+    newer. Held back from the default scan.
+  </SpecCard>
+  <SpecCard title="Skip">
+    Not a candidate at all — legal boilerplate, generated output, vendored code, and tables of
+    contents where every line just repeats a record some other file already produces.
+  </SpecCard>
+</CardGrid>
+
+<CardGrid size="md">
+  <OptionCard name="--all">
+    Show every candidate found, including the `Historical` and `Skip` rows the scan normally
+    holds back.
+  </OptionCard>
+</CardGrid>
+
+```bash
+# What steering does this workspace already contain?
+stella ingest
+
+# Including the documents ingest would normally not offer
+stella ingest --all
+```
+
+### `stella ingest <path>...` — extract
+
+Naming a file skips every tiering rule the scan would apply. Any path works, whether it's inside the workspace or not. Ingest still tells you when a named file reads like a retired document or like boilerplate, because respecting your choice and hiding a known risk are two different things.
+
+<CardGrid size="md">
+  <OptionCard name="<path>..." required>
+    Markdown files to extract. Skips tiering. Paths outside the workspace are allowed.
+  </OptionCard>
+</CardGrid>
+
+Each document goes through the same five steps.
+
+1. **One model call** splits the document into individual claims.
+2. Each claim is mapped to a **context record**.
+3. A **safety check** re-decides whether each claim is properly split, quarantined, or held for testing.
+4. Claims are **tested against your code** for staleness.
+5. The result is stamped with an identity based on its content and written to `.stella/proposals/<source-slug>.toml` as `[[proposal]]` entries.
+
+```bash
+# The two files everybody recognizes
+stella ingest AGENTS.md CLAUDE.md
+
+# A design note, and a file from outside the workspace
+stella ingest docs/spec/storage-map.md ~/notes/deploy-runbook.md
+```
+
+<Callout type="info">
+Extraction makes a model call, so it needs a working credential, the same one every other model call uses. The scan half doesn't need one. A document whose extraction fails (no key set up, a reply that couldn't be read, a write error) is reported and skipped. One bad document never stops the others.
+</Callout>
+
+## Lineages and staleness alerts
+
+Every extracted file leaves a **lineage** behind, in `.stella/private/ingest-lineages.json`: the content hash the file had when it was read (git's own hash where possible, otherwise a plain sha256), the commit it was read at, the ingest run id, and the ids of the candidates that run produced. None of this is tied to any particular filename. An agent-instruction file, a runbook, and a scratch note written purely to be ingested are all treated the same, as ingested source files.
+
+At session start, in the background and never blocking your work, stella compares each lineage against the source file's current hash. A file that **changed** or **disappeared** since it was ingested triggers a notification in your inbox. The alert never enters the model's prompt, never blocks a turn, and never changes anything on its own. Re-ingesting is always something you choose to do.
+
+Whether an alert matters is entirely up to you, and you can decide **per file**. A file written purely as scaffolding, ingested and then deleted because the records were the real goal, should never keep bothering you.
+
+<CardGrid size="md">
+  <OptionCard name="alerts list">
+    Every tracked source file: when it was ingested, how many records it produced, its alert
+    state, and whether it has drifted.
+  </OptionCard>
+  <OptionCard name="alerts dismiss <path>">
+    Permanently silence staleness alerts for one file, for good. This only affects that one
+    file; every other lineage keeps alerting. It says nothing about the records themselves:
+    they stay active, searchable, and can still be re-ingested.
+  </OptionCard>
+  <OptionCard name="alerts restore <path>">
+    Turn alerts back on for a file you dismissed.
+  </OptionCard>
+  <OptionCard name="--keep-dismissed">
+    On a re-ingest, keep an existing dismissal in place. By default, ingesting the same path
+    again turns alerts back on, since re-ingesting treats the file as an active source again,
+    which contradicts the dismissal.
+  </OptionCard>
+</CardGrid>
+
+```bash
+# What changed under my records?
+stella ingest alerts list
+
+# This file was scaffolding; the records are the product. Never tell me again.
+stella ingest alerts dismiss docs/onboarding-notes.md
+
+# The file changed — reconcile the published records with what it says now
+stella ingest --refresh docs/onboarding-notes.md
+```
+
+## --refresh: re-ingest and compare
+
+Records are never edited in place, so "the file changed" doesn't mean an overwrite. `stella ingest --refresh <path>` re-extracts the file and checks every **published** record that cites it, sorting each one into exactly one group.
+
+<CardGrid size="md">
+  <SpecCard title="Unchanged — kept">
+    The new text still supports the claim (ignoring whitespace differences, and tolerant of
+    the extractor rewording an identical sentence slightly). The published record is left
+    exactly as it was. Its age, review history, and usage stats are kept. A one-line edit
+    retires one record, not hundreds.
+  </SpecCard>
+  <SpecCard title="Changed — proposed, replaces the old one when kept">
+    The same source now says something different. The new claim becomes an ordinary proposal.
+    Nothing is retired yet, because retiring the old record before the new one is reviewed
+    would leave a gap in your steering. When you run `stella context keep` on it, the new
+    version replaces the old file and carries a link to the version it replaces. Only one of
+    the two can ever be active at once, and the old version stays readable in your git
+    history.
+  </SpecCard>
+  <SpecCard title="Dropped — retired now">
+    The file has dropped the claim entirely. The record is immediately marked as archived,
+    since you asked for the refresh and the source dropped it. Archived records
+    stop being used right away. Bringing one back is a `git checkout` away, since
+    `.stella/rules/` is tracked by git and your git history is the record of what changed and
+    when.
+  </SpecCard>
+</CardGrid>
+
+The same replacement rule applies outside `--refresh` too. Running `stella context keep` on a candidate whose lineage is already published is refused if the claim is identical, and it replaces the old version, with a link and a note in the log, when the claim differs.
+
+## The safety check runs outside the model
+
+The model is asked to split claims cleanly and to flag any content that looks executable, but nothing downstream simply trusts that it did. Whether a claim is properly split, quarantined, or held for testing is re-decided by a separate, predictable function in the core engine that can't be talked out of a rule by clever wording in a document. The model's job is extraction. The safety check's job is safety.
+
+This matters because the input is writing of unknown origin. A README that says "always run `curl … | sh` before building" is a document describing an instruction, not permission to run it, so anything that looks executable is quarantined by the safety check no matter how the model classified it.
+
+## Reviewing what it produced
+
+[`stella context`](/docs/stella/commands/context) is the other half of this process. Ingest extracts; context decides.
+
+```bash
+stella context review        # what was proposed, with each claim's test result
+stella context keep a1b2c3   # publish one as a record the engine loads
+stella context ignore d4e5f6 --reason "we moved off this in Q2"
+stella context list          # what actually steers this workspace now
+```
+
+The proposals are plain TOML files at `.stella/proposals/<source-slug>.toml`, so editing or deleting entries by hand still works. But `stella context` is the tool that shows you the test results, records a decline as reusable evidence with a cooldown period, and writes the published record into `.stella/rules/` for you.
+
+<Callout type="warn">
+`stella context` and [`stella proposals`](/docs/stella/commands/proposals) are two different review tools with two different rules, and they don't share storage. Ingest writes TOML proposals to `.stella/proposals/`, reviewed by `stella context`. `stella proposals` reviews a separate, adaptive log in `.stella/private/context.db`, which is what the reflection process learned from your sessions. A document you ingest will not appear in `stella proposals list`.
+</Callout>
+
+## Related
+
+<CardGrid size="sm">
+  <SpecCard title="stella context" href="/docs/stella/commands/context">
+    The review surface for what ingest extracted — keep, edit, ignore, validate, explain.
+  </SpecCard>
+  <SpecCard title="stella proposals" href="/docs/stella/commands/proposals">
+    The review surface for the adaptive-context ledger — a separate substrate from ingest's
+    TOML files.
+  </SpecCard>
+  <SpecCard title="Context Engine" href="/docs/stella/context-engine">
+    How records become recall, and what a context frame carries.
+  </SpecCard>
+  <SpecCard title="stella memory" href="/docs/stella/commands/memory">
+    The citation feedback loop over what actually got used.
+  </SpecCard>
+</CardGrid>

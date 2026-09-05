@@ -1,0 +1,64 @@
+---
+title: Governance overview
+description: How Oxagen gives your organization centralized control over AI usage, model access, and plugin governance.
+---
+
+<IllustrationGovernance />
+
+## The shadow-AI governance problem
+
+When employees use AI without organizational oversight, you lose visibility into what data is being shared, what models are being used, and what actions are being taken on behalf of your organization. Procurement, legal, and security teams are left trying to write policies for tools they cannot see.
+
+Oxagen solves this by providing a single governed platform. Every AI action — whether taken by a human in the app, an automated agent triggered by a schedule, or an MCP client in a developer's IDE — passes through the same control plane. If an action is not authorized by policy, it does not run.
+
+## The governance model
+
+Governance at Oxagen is structured around three scopes:
+
+```
+Organization → governance rails, billing, global policies
+   └── Workspace → operational units where agents work
+          └── Principal → human, agent, or service account
+```
+
+**The organization** is the customer entity. It owns billing, sets the outer bounds of every policy, and manages the member roster. Org-level policies can be marked `enforced`, meaning workspaces cannot override them.
+
+**Workspaces** are operational units — one per team, project, or environment. Each workspace has its own member roster, model key configuration, and plugin enablement. Workspace administrators can tighten but never expand what the organization has set.
+
+**Principals** are humans, agents, and service accounts (API keys). All three are governed by the same role and grant model. An automated agent's capability grants are as visible and auditable as a human user's.
+
+## Key governance controls
+
+### Role-based access control
+
+Seven built-in roles — four org-scoped (Owner, Admin, Compliance, Billing) and three workspace-scoped (Owner, Member, Viewer) — cover the majority of enterprise access patterns. Custom roles are available via the role builder for finer-grained divisions. See [RBAC and roles](/docs/platform/governance/rbac).
+
+### Org-enforced policies
+
+Any grant can be marked `enforced` at the org level. Enforced policies cannot be overridden by workspace administrators. This is the primary mechanism for "central IT sets the floor, business units tighten within it."
+
+### Plugin allow and deny lists
+
+Every third-party plugin (MCP server, integration, content tool) must be installed at the org level before any workspace can enable it. Org admins maintain a denylist of servers that may never be installed or enabled regardless of workspace preference. See [Plugin governance](/docs/platform/governance/plugins-governance).
+
+### Model governance
+
+Model access is tiered by subscription plan. Workspace administrators can configure default model selection (text, image, and video) for their workspace. Model access can be restricted per workspace — a workspace handling sensitive data can be configured to use only approved models. See [Model governance](/docs/platform/governance/byok-and-models).
+
+### Just-in-time access requests
+
+When a user or agent needs a capability they do not have, they can submit a JIT access request (**Organization → Access → Requests**). The request is routed to an approver based on the policy configuration, granted with a TTL, and auto-expired. Every request, grant, and expiry is recorded in the audit log.
+
+### Quarterly access reviews
+
+The grants matrix (**Organization → Access → Grants**) provides a capability × principal view of all current access. It can be filtered by scope (org-wide or per workspace), principal kind (human, agent, service), and capability domain. Export it as CSV for your quarterly access review.
+
+## What you cannot do from the app
+
+Some governance controls require your IT administrator:
+
+- Changing the `TENANT_RLS_ENFORCEMENT_ENABLED` environment variable (controls database-layer RLS enforcement — currently `true` in production).
+- Provisioning the non-superuser database role.
+- Configuring SIEM export destinations at the infrastructure level (webhook destinations are configured in-app).
+
+Contact support@oxagen.ai for infrastructure-level governance changes.

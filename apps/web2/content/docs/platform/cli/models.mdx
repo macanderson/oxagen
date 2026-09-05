@@ -1,0 +1,135 @@
+---
+title: On-device models
+description: Run the Oxagen agent's coordinator on a local open-source code model — auto-provisioned, quantization-fit to your machine, and fully offline — or route to cloud models per task.
+---
+
+The CLI runs on a **coordinator + workers** model. The coordinator gathers context, plans, dispatches work, and judges results; workers do the heavy code generation. The coordinator can run entirely **on your device** — no API key, no network — while workers route to the cheapest capable cloud model for each task.
+
+On-device is the default coordinator. The first time you use it, the CLI resolves the best open-source code model that fits your hardware, downloads and checksum-caches the weights, and runs them locally through an optional native runtime.
+
+<Callout type="info">
+The on-device runtime is an **optional dependency** (`node-llama-cpp`). The CLI installs and runs without it — but to actually execute on-device weights you install it once (see [Install the runtime](#install-the-runtime)). Cloud coordination (`oxagen models use haiku`) needs no extra install.
+</Callout>
+
+## How model selection works
+
+- **Coordinator** — defaults to `on-device`. On-device is *always* an allowed coordinator; the CLI never silently swaps it for a cloud model. If nothing fits your device, it tells you and points you at a cloud coordinator.
+- **Workers** — code work defaults to **Sonnet 5**; trivial/basic work uses a cheaper model. Routing picks the cheapest capable model per task, accounting for switch cost and prompt length.
+- **Judge** — completeness review runs on a *different* model than the worker (default: the most capable OpenAI coding model), so a model never grades its own output.
+
+The on-device capability table is **data, not code** — a curated list of permissively-licensed code models ranked by a code benchmark score, each with quantizations and RAM requirements. The resolver picks the highest-scoring model whose best-fitting quantization fits your usable memory budget. As the table is updated, the default model moves with it — no CLI upgrade required.
+
+Top on-device picks today (Apache-2.0, resolved by device fit):
+
+| Model | Code score | Params | Context |
+|---|---|---|---|
+| `qwen3-coder-30b-a3b-instruct` | 0.93 | 30B-A3B (MoE) | 262k |
+| `qwen2.5-coder-32b-instruct` | 0.92 | 32B | 131k |
+| `qwen2.5-coder-7b-instruct` | lower | 7B | 131k |
+
+Run `oxagen models list` to see the full table, each model's best-fitting quantization, and which one resolves for *your* machine.
+
+## Per-role models: worker, judge, triage
+
+The [agent engine](/docs/platform/cli/agent-engine) uses three distinct models, one per role. You can leave them at their engine defaults or set each independently — in the REPL, as a flag, or as a persistent `settings.json` key. Setting one via a slash command saves it to `.oxagen/settings.local.json` so it sticks across sessions.
+
+| Role | What it does | Slash command | `settings.json` key | Env var |
+|---|---|---|---|---|
+| **worker** | The executor — runs the tool loop and edits code. | `/worker-model` (alias `/model`) | `workerModel` (falls back to `model`) | `OXAGEN_MODEL` |
+| **judge** | The completeness advisor — grades the worker's output. Defaults to a model *distinct* from the worker. | `/judge-model` | `judgeModel` | `OXAGEN_LLM_ADVISOR` |
+| **triage** | The coordinator — drives planning and the evaluate stage. | `/triage-model` | `triageModel` | `OXAGEN_LLM_EVALUATOR` |
+
+Three ways to set the worker, for example:
+
+```text
+› /worker-model anthropic/claude-opus-4-8      # in the REPL, persisted to local settings
+```
+
+```bash
+oxagen -m anthropic/claude-opus-4-8 "…"         # one-shot flag (--worker-model is an alias)
+export OXAGEN_MODEL="anthropic/claude-opus-4-8" # this shell / CI
+oxagen settings set model anthropic/claude-opus-4-8 --scope project   # persistent default
+```
+
+The judge and triage roles follow the same pattern with `--judge-model` / `--triage-model` flags and their env vars. Models are plain Vercel AI Gateway slugs (`vendor/model`); there's no allowlist, so a drifted slug surfaces as an error on the next turn.
+
+<Callout type="info">
+The **judge defaults to a different model than the worker** so a model never grades its own output. Set `OXAGEN_JUDGE_PANEL` to grade with a cross-vendor panel instead of a single advisor. Leave `judgeModel`/`triageModel` unset to accept the engine's derived defaults — run `/judge-model` or `/triage-model` with no argument to see what will run.
+</Callout>
+
+Precedence for any role is: an explicit flag or slash command › the env var › the `settings.json` key › the engine default. Env projection only fills *unset* variables, so a shell export always wins.
+
+## Install the runtime
+
+The native runtime is an optional dependency, so it never blocks `oxagen` install or CI. Add it when you want on-device execution:
+
+```bash
+npm install node-llama-cpp
+```
+
+Without it, `oxagen models pull` still downloads and caches weights, but running them prints a clear "optional runtime not installed" message. On Apple Silicon the runtime uses the GPU via unified memory automatically.
+
+## First run
+
+```bash
+oxagen models status     # what fits this device, and what's cached
+oxagen models pull       # download + checksum-cache the resolved model
+oxagen                   # run the agent — coordinator is on-device
+```
+
+With `onDevice.autoDownload` on (the default), the very first on-device turn will provision the model for you; `oxagen models pull` just does it ahead of time with a progress bar.
+
+## Choosing the coordinator
+
+```bash
+oxagen models active            # current coordinator + readiness
+oxagen models use on-device     # local model (default)
+oxagen models use haiku         # cloud coordinator — no download, needs a gateway key
+```
+
+`models use` accepts `on-device`, `haiku`, `sonnet-5`, `opus`, or `openai-most-capable-coding-model`. Cloud coordinators route through the Vercel AI Gateway and need `AI_GATEWAY_API_KEY` set (see [Account setup](/docs/platform/cli/account-setup)). With only an `ANTHROPIC_API_KEY`, the Claude coordinators still work (direct against the Anthropic API); non-Anthropic models report unavailable.
+
+## Offline use
+
+Once the weights are cached and `node-llama-cpp` is installed, an on-device coordinator runs with **no network**. Cloud *workers* still need connectivity — network errors surface as a clear "offline" message rather than a silent hang. For a fully offline loop, set both the coordinator and the workers to on-device via config.
+
+## Where weights live
+
+Models are cached under `~/.oxagen/models` (override with `onDevice.cacheDir` or `OXAGEN_MODELS_CACHE_DIR`). Downloads are integrity-checked: a model's SHA-256 is pinned to the cache manifest on first download (trust-on-first-use) and enforced on every load. `oxagen models status` shows cache location, per-model size, and checksum state.
+
+## Configuration
+
+On-device behavior is configured under the `runtime` block of `~/.config/oxagen/config.json`, with environment-variable overrides. See [CLI configuration](/docs/platform/cli/configuration#model-runtime) for the full key list.
+
+```jsonc
+{
+  "runtime": {
+    "coordinator": "on-device",          // or a cloud id like "haiku"
+    "onDevice": {
+      "autoDownload": true,               // provision on first use
+      "modelId": "auto",                  // "auto" resolves best-fit; or pin a modelId
+      "cacheDir": "~/.oxagen/models",
+      "verifyChecksum": true,
+      "quantizationPreference": ["q8", "q6", "q5", "q4"]  // best quality first
+    }
+  }
+}
+```
+
+| Env var | Overrides |
+|---|---|
+| `OXAGEN_COORDINATOR` | `runtime.coordinator` |
+| `OXAGEN_ONDEVICE_MODEL` | `runtime.onDevice.modelId` |
+| `OXAGEN_MODELS_CACHE_DIR` | `runtime.onDevice.cacheDir` |
+
+## Command summary
+
+| Command | Purpose |
+|---|---|
+| `oxagen models list` | Registry, capability scores, and what fits this device. |
+| `oxagen models active` | Current coordinator, resolved model, and readiness. |
+| `oxagen models pull` | Download and checksum-cache the resolved on-device weights. |
+| `oxagen models status` | Cache location, size, checksum state, and device fit. |
+| `oxagen models use <id>` | Choose the coordinator (`on-device` is always allowed). |
+
+Add `--json` to `list`, `active`, and `status` for machine-readable output.

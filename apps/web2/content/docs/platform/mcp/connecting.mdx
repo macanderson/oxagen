@@ -1,0 +1,151 @@
+---
+title: Connecting to the MCP server
+description: How to connect Claude Code, Cursor, Claude Desktop, and other MCP clients to the Oxagen MCP server.
+---
+
+## Prerequisites
+
+You need an API key with the scopes matching the tools you want to use. Create one at **Organization → Developer → Tokens**.
+
+The MCP server endpoint is:
+
+```
+https://mcp.oxagen.sh/mcp
+```
+
+Transport: **streamable HTTP** (the current MCP protocol standard).
+
+## Unified install page
+
+The fastest path for any client is the unified install page at **Organization → Developer → MCP**. It generates ready-to-copy configuration snippets pre-filled with your API key for every supported client.
+
+## Manual configuration by client
+
+### Claude Code
+
+Add to your `~/.claude/mcp.json` (or the project-level `.claude/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "oxagen": {
+      "url": "https://mcp.oxagen.sh/mcp",
+      "headers": {
+        "Authorization": "Bearer ox_…"
+      }
+    }
+  }
+}
+```
+
+### Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or the equivalent on Windows:
+
+```json
+{
+  "mcpServers": {
+    "oxagen": {
+      "url": "https://mcp.oxagen.sh/mcp",
+      "headers": {
+        "Authorization": "Bearer ox_…"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Desktop after saving.
+
+### Cursor
+
+Add to Cursor settings → MCP servers:
+
+```json
+{
+  "oxagen": {
+    "url": "https://mcp.oxagen.sh/mcp",
+    "headers": {
+      "Authorization": "Bearer ox_…"
+    }
+  }
+}
+```
+
+### VS Code (with MCP extension)
+
+Add to your VS Code `settings.json`:
+
+```json
+{
+  "mcp.servers": {
+    "oxagen": {
+      "url": "https://mcp.oxagen.sh/mcp",
+      "headers": {
+        "Authorization": "Bearer ox_…"
+      }
+    }
+  }
+}
+```
+
+### Programmatic (Node.js / TypeScript)
+
+```typescript
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+
+const transport = new StreamableHTTPClientTransport(
+  new URL("https://mcp.oxagen.sh/mcp"),
+  {
+    headers: {
+      Authorization: `Bearer ${process.env.OXAGEN_API_KEY}`,
+    },
+  }
+);
+
+const client = new Client(
+  { name: "my-app", version: "1.0.0" },
+  { capabilities: {} }
+);
+
+await client.connect(transport);
+
+// List available tools
+const tools = await client.listTools();
+
+// Call a tool
+const result = await client.callTool({
+  name: "recall_memory",
+  arguments: { query: "quarterly review meeting notes" }
+});
+```
+
+A tool is named after the capability behind it, with no translation step — verb-first snake_case, such as `recall_memory` or `list_agent_tools`. See [MCP tools](/docs/platform/mcp/tools) for the list.
+
+## Scope and isolation
+
+Every MCP session is scoped to the org and workspace associated with the API key. The server automatically routes all tool calls to the correct tenant context. You cannot access another org's data from the same session, even if you know the resource IDs.
+
+## Verifying the connection
+
+After connecting, call the `get_install_instructions` tool to retrieve client-specific installation instructions for your workspace. The `client` field is required:
+
+```json
+{
+  "name": "get_install_instructions",
+  "arguments": { "client": "claude-code" }
+}
+```
+
+Supported `client` values: `claude-code`, `cursor`, `claude-desktop`, `codex`, `vscode`. The tool returns ready-to-copy configuration steps tailored to the specified client and the connected workspace.
+
+## Troubleshooting
+
+**401 Unauthorized:** The API key is missing, invalid, or has been revoked. Check the key at **Organization → Developer → Tokens**.
+
+**403 Forbidden with `capability_denied`:** The API key does not have the scope for the tool being called. Either add the scope to the key or create a new key with the required scopes.
+
+**Tool not in list:** The tool may be disabled at the workspace level, blocked by an org policy, or not yet contracted. Check **Workspace settings → Integrations** and **Organization → Access → Grants**.
+
+**Connection drops after 25 seconds:** Your client may be on a platform with a short serverless function timeout. The MCP server is deployed on Vercel Functions. Long-running tool calls (background task start, video generation) are designed to return immediately with a task ID — the actual work runs asynchronously via Inngest.

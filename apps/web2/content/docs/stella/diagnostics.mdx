@@ -1,0 +1,181 @@
+---
+title: Diagnostics
+description: How to turn on logging, read the crash file, and safely share a log with -v, --log-level, and --log-file.
+---
+
+Diagnostics tell you why stella behaved the way it did during a run. They are
+different from the event stream, which shows what the agent did, and
+telemetry, which shows what a run cost.
+
+## Three planes
+
+| Plane | Question it answers | Where it lives |
+| --- | --- | --- |
+| **Event stream** | What did the agent do? | [`--output-format stream-json`](/docs/stella/scripting), the session journal |
+| **Telemetry** | What did it cost, and can I prove it? | [receipts and the local store](/docs/stella/telemetry) |
+| **Diagnostics** | Why did it behave this way? | `-v`, `--log-level`, `--log-file`, this page |
+
+A diagnostic record points to an event by its sequence number instead of
+repeating it. To see what the agent did, read the event stream. To see why,
+find the diagnostic record at the same point in the timeline.
+
+## Turn it on
+
+```bash
+stella run "…" -vv                                    # debug everywhere
+stella run "…" --log-level 'warn,stella_model=trace'   # quiet except where you're looking
+stella run "…" --log-file ./run.jsonl                  # JSONL to a file, created 0600
+```
+
+<CardGrid size="md">
+  <OptionCard name="-v / -vv / -vvv" defaultValue="warn">
+    Global flag. One `v` is `info`, two is `debug`, three is `trace`. Applies to
+    stderr only. A `--log-file` always writes at `info` or above, no matter this
+    setting.
+  </OptionCard>
+  <OptionCard name="--log-level <spec>" defaultValue="none">
+    The full filter grammar — see below. Wins over both `-v` and `STELLA_LOG`. A
+    flag you just typed always beats a variable you set earlier.
+  </OptionCard>
+  <OptionCard name="--log-file <path>" defaultValue="none">
+    Write diagnostics as JSONL to a file, created `0600`. Always writes at
+    `info` level or above, even when stderr is set to `warn`. If the path can't
+    be opened, stella prints a warning on stderr and the run continues.
+  </OptionCard>
+  <OptionCard name="STELLA_LOG" defaultValue="warn">
+    Environment form of `--log-level`, same grammar. If `STELLA_LOG` is unset,
+    stella checks `STELLA_SERVE_LOG` instead.
+  </OptionCard>
+</CardGrid>
+
+Resolution order, most specific first: **`--log-level`**, then
+**`-v`/`-vv`/`-vvv`**, then **`STELLA_LOG`** (or `STELLA_SERVE_LOG`), then the
+default, `warn`. `--log-level` never reads from the environment. If it did,
+`STELLA_LOG=warn stella -vv run "…"` would silently ignore the `-vv` you just
+typed.
+
+### Filter grammar
+
+```text
+warn                                    # global default
+warn,stella_store=debug                 # quiet, except one crate at debug
+off,stella=trace,stella_model=trace     # silent except two targets
+```
+
+A comma-separated spec. A bare level sets the default. `target=level`
+overrides it for one part of the code, and the longest match wins. So
+`warn,stella_store=debug,stella_model=trace` stays quiet everywhere except the
+two places you're looking. Levels are `off`, `error`, `warn`, `info`, `debug`,
+`trace`.
+
+A target is a Rust module path. Library crates are named `stella_store`,
+`stella_model`, `stella_diag`, and so on. The binary's own records are under
+`stella`, not `stella_cli` (that's just the package name). Hyphens work too
+(`stella-store=debug`).
+
+An unrecognized clause is skipped and reported, never fatal. A typo in a log
+setting should never stop a run. The report itself becomes a `warn` record
+(`diag.filter.bad_clause`) once logging is set up.
+
+## The privacy contract
+
+Diagnostic records carry a stable `code` and typed fields. They never carry
+prompts, paths, model output, or full identifiers. That means you can safely
+hand a log to a stranger.
+
+**The type system enforces this, not a review process.** A diagnostic field
+can't be a plain string or path. It can only be one of a small set of safe
+types: integers, `bool`, `Duration`, a fixed set of known strings
+(`&'static str`), a closed vocabulary (`log_enum!`), an 8-character `ShortId`
+(never a full identifier), and `PathClass` (a path's shape, like "inside the
+workspace, four levels deep, a `.rs` file" — never its actual text). Code
+like this will not compile:
+
+```rust
+diag!(warn, "tools.write.denied", path = user_path);   // ← String; will not build
+```
+
+A typical logging library would print that value without complaint. Here it's
+a compile error, checked once instead of on every call site forever. There is
+one deliberate escape hatch (`Redacted`, which requires a written
+justification in the code change) and one way around the type system
+entirely, which is blocked by the project's lint rules. Nothing here is
+impossible by accident — if a rule is bypassed, it's on purpose and it shows
+up loudly. See [`crates/stella-diag`](https://github.com/macanderson/stella/tree/main/crates/stella-diag)
+for the full mechanism.
+
+## The crash file
+
+Every record, at every level, also lands in a bounded in-memory buffer (2,000
+records or 1 MiB, whichever fills first). If the process panics or exits with
+a non-zero code, that buffer is written to disk:
+
+```text
+.stella/private/crash-<timestamp>.jsonl
+```
+
+Same permissions as the receipts plane: `0700` on the directory, `0600` on
+the file. Print the newest one:
+
+```bash
+stella doctor --last-failure
+```
+
+Because no record can hold real content, this file is safe to share as-is.
+That's what turns "attach your log" into something a stranger can act on
+right away, with no privacy review needed. You don't need to turn on any flag
+ahead of time — the buffer captures every level by default, even at the
+default `warn` setting.
+
+<Callout type="info">
+The filter controls what you **see**, not what gets **recorded**. Turning on
+`-vv` changes what appears on stderr or in `--log-file`. It does not change
+what the crash buffer holds, so a crash dump is complete no matter how quiet
+the run looked.
+</Callout>
+
+## Reading the codes
+
+A record's `code` is stable and public, the same idea as `rustc`'s `E0308`.
+You can alert on it, link to it in a runbook, and count on it to outlive
+whatever the message text says this release. Some codes worth knowing when
+you're chasing a specific problem:
+
+| Code | Level | What it means |
+| --- | --- | --- |
+| `cli.boot` | info | The process started with diagnostics on. This is the first record of every run — a log missing this record was produced some other way. |
+| `agent.loop.detected` | warn | The loop detector found a repeating pattern. If `aborted` is true, this is why the run ended. |
+| `agent.budget.denied` | error | A step was refused because it hit the configured spend cap. That means the limit worked as set, not that something broke. |
+| `agent.model.retry` | warn | A model call failed and is being retried. Many of these in a row against one provider usually means rate limiting or an outage. |
+| `agent.model.retries_exhausted` | error | Every retry failed and the turn could not continue. Usually a sign of upstream downtime or an auth problem. |
+| `agent.provider.fallback` | warn | The configured provider failed, and stella switched to another one. Tells you which model actually served the turn. |
+| `agent.tool.result` | debug / warn | A tool finished. Only shows at `warn` level when it fails, so a default filter shows failures and nothing else. |
+| `agent.turn.parked` / `agent.turn.woken` | info | The turn paused to wait on something outside stella. If a run looks stuck right after `parked`, that's expected. |
+| `agent.unknown` | warn | An event type this build doesn't recognize showed up in the stream. Usually means the producer and consumer are different versions. |
+| `diag.log_file.unavailable` | warn | `--log-file` was requested but couldn't be opened. The run continues without it, and this record on stderr explains why. |
+| `diag.panic` | error | The process panicked. Carries the file, line, and column in stella's own source, never the panic message itself, since that can contain runtime content. |
+
+This is a hand-picked subset for the problems covered in
+[When something isn't working](/docs/stella/guides/troubleshooting). The full list of
+every code, its level, where it's emitted, and its complete set of fields
+lives at
+[`docs/reference/diagnostics.md`](https://github.com/macanderson/stella/blob/main/docs/reference/diagnostics.md),
+generated straight from the code.
+
+## Next
+
+<CardGrid size="sm">
+  <SpecCard title="When something isn't working" href="/docs/stella/guides/troubleshooting">
+    Checks organized by symptom — config, keys, hooks, cost. Most need no
+    diagnostic flag at all.
+  </SpecCard>
+  <SpecCard title="stella doctor" href="/docs/stella/commands/doctor">
+    Local-state checks, and what `--last-failure` prints.
+  </SpecCard>
+  <SpecCard title="Telemetry" href="/docs/stella/telemetry">
+    What a run cost, and the receipts that prove it.
+  </SpecCard>
+  <SpecCard title="Event stream compatibility" href="/docs/stella/event-stream-compatibility">
+    What the agent did — the plane diagnostics points to but never repeats.
+  </SpecCard>
+</CardGrid>

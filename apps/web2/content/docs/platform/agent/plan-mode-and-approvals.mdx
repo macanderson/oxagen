@@ -1,0 +1,93 @@
+---
+title: Plan mode and approvals
+description: How the agent proposes structured plans before executing side-effectful operations, and how the approval flow works.
+---
+
+## Plan mode
+
+Plan mode is a distinct operating mode where the agent produces a structured plan before invoking any side-effectful tool. Use it when you want to review what the agent is about to do before it does it — and to catch unintended consequences of ambiguous instructions.
+
+### Entering plan mode
+
+The agent can enter plan mode autonomously on complex requests, or you can ask for it explicitly:
+
+- "Before you do anything, show me the plan."
+- "Plan out how you'd approach this, then wait for my approval."
+
+The agent responds with a structured plan card in the chat, showing:
+
+- The sequence of steps
+- Which capabilities will be invoked at each step
+- Estimated credit cost
+- Which steps require user approval during execution
+
+### Approving a plan
+
+Click **Approve** in the plan card. The agent proceeds to execute the steps in order. You can deny individual high-risk tool calls during execution even after approving the overall plan.
+
+Click **Amend** to submit specific changes to plan steps directly, or **Deny** to reject the plan entirely. Amending allows you to modify individual step inputs before execution begins, without requiring the agent to regenerate the full plan.
+
+### Plan storage
+
+Plans are stored in `agent.agent_plans` in Postgres (created by `agent.plan.create`, identified by a `planId`). Execution progress after approval is recorded in `agent.agent_execution_steps`, scoped via `execution_id`. Both tables are part of the audit trail — an auditor can see what plan was proposed, whether it was approved, and the outcome of each execution step.
+
+## Per-tool approval flow
+
+Tools tagged `riskLevel: high` or flagged `requiresApproval: true` in the workspace tool policy pause the stream before execution and render an approval card. This applies even outside of formal plan mode.
+
+The approval card shows:
+
+- The tool name and capability ID
+- The input the tool will receive (summarized)
+- The risk level
+- An optional human-readable description from the capability declaration
+
+### Approving
+
+Click **Approve** in the approval card. The tool executes and the stream resumes. The approval is recorded.
+
+### Denying
+
+Click **Deny**. The tool does not execute. The agent receives a denial notification and may propose an alternative approach.
+
+### Timeout
+
+Approval requests expire after 30 minutes of inactivity. Expired approvals are marked `expired` in the approval record.
+
+## Approval records
+
+Every approval request produces an `agent.approval_requests` row in Postgres:
+
+```
+id, execution_step_id, tool_call_id,
+message_id, capability_name, input_preview,
+risk_level, note, expires_at,
+created_at, resolved_at,
+resolution: 'approved' | 'denied' | 'expired',
+resolved_by_user_id
+```
+
+These records are part of the audit trail and visible in **Workspace → Activity → Approvals**.
+
+## Programmatic approval resolution
+
+Approval requests can be resolved programmatically via the API or MCP (useful for automated workflows with a human-in-the-loop step handled outside the chat UI):
+
+```http
+POST /v1/{org}/{workspace}/agent/approvals/resolve
+Authorization: Bearer oxk_live_…
+Content-Type: application/json
+
+{
+  "approvalId": "uuid",
+  "decision": "approved"
+}
+```
+
+The corresponding MCP tool is `agent.approval.resolve`.
+
+## Per-workspace tool policy
+
+Workspace administrators can configure which tools require approval and which are allowed at all. High-risk tools are default-deny — a workspace must explicitly enable them.
+
+Configure at **Workspace → Settings → General → Tool policy**.

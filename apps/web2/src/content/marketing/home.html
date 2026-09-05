@@ -1,0 +1,591 @@
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav" id="nav">
+  <div class="nav-in">
+    <a class="brand" href="#top" aria-label="Oxagen home">
+      <svg viewBox="7.775 4.325 36.343 37.216" aria-hidden="true"><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z" fill="none" stroke="currentColor" stroke-width="1"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z" fill="none" stroke="currentColor" stroke-width="1"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z" fill="none" stroke="currentColor" stroke-width="1"/><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="#EFC53F"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="#EFC53F" opacity="0.45"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+      oxagen
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <div class="drop" data-open="false">
+        <button class="drop-btn" id="productsBtn" type="button" aria-expanded="false" aria-haspopup="true">Products <i class="chev"></i></button>
+        <div class="drop-menu" role="menu" aria-labelledby="productsBtn">
+          <a href="/product/stella" role="menuitem"><span class="dm-mark">✦</span><b>Stella</b><span>The open-source terminal agent. Rust, BYOK, every turn on the record.</span></a>
+          <a href="/product/oxagen" role="menuitem"><span class="dm-mark">⬡</span><b>Oxagen</b><span>The control plane. One context map — approved, metered, logged.</span></a>
+          <a href="/product/private-llms" role="menuitem"><span class="dm-mark">▣</span><b>Private LLMs</b><span>Models on hardware you control — laptop, your VPC, or air-gapped.</span></a>
+          <div class="drop-sep"></div>
+          <div class="drop-foot">one loop · three deployments</div>
+        </div>
+      </div>
+      <a href="#field-manual">Field manual</a>
+      <a class="ext" href="/docs" target="_blank" rel="noopener">Docs</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="login ext" href="https://app.oxagen.sh" target="_blank" rel="noopener">Log in</a>
+      <a class="btn btn-primary btn-sm" href="#demo">Get a demo</a>
+      <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="drawer" aria-label="Menu"><i></i></button>
+    </div>
+  </div>
+</header>
+
+<div class="drawer" id="drawer" data-open="false">
+  <div class="wrap">
+    <h5>Products</h5>
+    <a href="/product/stella">Stella — the terminal agent</a>
+    <a href="/product/oxagen">Oxagen — the control plane</a>
+    <a href="/product/private-llms">Private LLMs</a>
+    <h5>More</h5>
+    <a href="#agent">The agent</a>
+    <a href="#platform">The platform</a>
+    <a href="#field-manual">Field manual</a>
+    <a href="/docs">Docs</a>
+    <a class="btn btn-primary" href="#demo">Get a demo</a>
+  </div>
+</div>
+
+<main id="main">
+
+  <!-- ================= HERO ================= -->
+  <section class="hero tex tex-hex" id="top">
+    <div class="wrap hero-in">
+      <div class="hero-copy">
+        <p class="eyebrow">AI coding agents · grounded in your context</p>
+        <h1>Everyone has the same models.<br><span class="gold">Your edge is context.</span></h1>
+        <p class="hero-sub">
+          Oxagen is an <strong>AI coding agent for your terminal</strong> and a
+          <strong>control plane for your whole fleet</strong>. It turns your code and business
+          data into one connected map, so agents get the right answer the first time —
+          and every action they take is approved, measured, and on the record.
+        </p>
+        <div class="hero-ctas">
+          <a class="btn btn-primary" href="#demo">Get a demo <span class="arr">→</span></a>
+          <a class="btn btn-ghost" href="#field-manual">Read the field manual</a>
+        </div>
+        <p class="hero-note">Free 14-part ebook by our founder · <a class="ext" href="/docs" target="_blank" rel="noopener">or dive straight into the docs</a></p>
+      </div>
+
+      <!-- role="img": without a role the aria-label on a plain div is dropped,
+           and the typed-out lines below are decoration, not readable content. -->
+      <div class="term" role="img" aria-label="A simulated Oxagen CLI session: the agent reads the workspace map, plans a fix, edits two files, and reports passing tests.">
+        <div class="app-bar" aria-hidden="true">
+          <span class="tl"></span><span class="tl"></span><span class="tl live"></span>
+          <span class="app-title">oxagen — zsh</span>
+          <span class="app-meta">live</span>
+        </div>
+        <div class="term-body" data-term="#heroScript"></div>
+      </div>
+      <script type="application/json" id="heroScript">
+      [
+        [
+          {"cls":"cmd","text":"oxagen \"fix the failing auth test\""},
+          {"cls":"t-dim","text":"◆ reading your workspace map · 34 files · 12 services linked"},
+          {"cls":"t-note","text":"◆ plan: patch token refresh in auth/session.ts, update the test"},
+          {"cls":"t-diff","text":"✎ src/auth/session.ts        +9 −3"},
+          {"cls":"t-diff","text":"✎ src/auth/session.test.ts   +4 −1"},
+          {"cls":"t-ok","text":"▶ tests: 8 passed · 0 failed"},
+          {"cls":"t-ok","text":"✔ done in 41s — every step logged"}
+        ],
+        [
+          {"cls":"cmd","text":"oxagen agents \"migrate billing to the new schema\""},
+          {"cls":"t-note","text":"◆ plan: 4 tasks · 4 workers · isolated copies of the repo"},
+          {"cls":"t-dim","text":"worker/1  schema + migration          ▮▮▮▮▮▮▮▮ done"},
+          {"cls":"t-dim","text":"worker/2  api routes                  ▮▮▮▮▮▮▮▮ done"},
+          {"cls":"t-dim","text":"worker/3  webhooks                    ▮▮▮▮▮▮▯▯ running"},
+          {"cls":"t-dim","text":"worker/4  tests + docs                ▮▮▮▮▮▮▮▯ running"},
+          {"cls":"t-ok","text":"✔ 2 pull requests open · 2 on the way"}
+        ],
+        [
+          {"cls":"cmd","text":"oxagen graph search -q \"who owns the billing policy?\""},
+          {"cls":"t-dim","text":"◆ live workspace query · RBAC scoped · bounded results"},
+          {"cls":"t-diff","text":"1. Billing Platform team        owner · directory source"},
+          {"cls":"t-diff","text":"2. Subscription Policy          document · Drive source"},
+          {"cls":"t-diff","text":"3. PR #842                      provider metadata · GitHub"},
+          {"cls":"t-ok","text":"✔ 3 results · each answer cites its source"}
+        ]
+      ]
+      </script>
+    </div>
+  </section>
+
+  <!-- ================= TICKER ================= -->
+  <div class="ticker" aria-hidden="true">
+    <div class="ticker-track">
+      <span class="tick-item">
+        <span><b>oxagen</b> solve</span><span class="sep">·</span>
+        <span><b>oxagen</b> agents</span><span class="sep">·</span>
+        <span><b>oxagen</b> view</span><span class="sep">·</span>
+        <span><b>oxagen</b> graph search</span><span class="sep">·</span>
+        <span><b>oxagen</b> pr</span><span class="sep">·</span>
+        <span><b>oxagen</b> sandbox</span><span class="sep">·</span>
+        <span><b>oxagen</b> memory</span><span class="sep">·</span>
+        <span><b>oxagen</b> trace</span><span class="sep">·</span>
+        <span><b>oxagen</b> replay</span><span class="sep">·</span>
+        <span><b>oxagen</b> eval</span><span class="sep">·</span>
+        <span><b>oxagen</b> cost</span><span class="sep">·</span>
+        <span><b>oxagen</b> models</span><span class="sep">·</span>
+        <span><b>oxagen</b> mcp</span><span class="sep">·</span>
+        <span><b>oxagen</b> env</span><span class="sep">·</span>
+        <span><b>oxagen</b> secret</span><span class="sep">·</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- ================= PRODUCTS ================= -->
+  <section class="sec" id="products">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="eyebrow">Products</p>
+        <h2>One loop. Three ways to run it.</h2>
+        <p>The agent is open source and free. The control plane is what turns it into something a
+        company can run. And when the code cannot leave the building, the whole thing runs on
+        hardware you own.</p>
+      </div>
+
+      <div class="prod-grid">
+        <a class="prod reveal" href="/product/stella">
+          <div class="shot">
+            <img src="/assets/tui/10-start-work.svg" width="680" height="520" loading="lazy" alt="The Stella deck picking an issue off the backlog and drafting a plan from it.">
+          </div>
+          <div class="meta">
+            <span class="kicker">Open source</span>
+            <h3>Stella</h3>
+            <p>The terminal agent. Rust, one binary, your own model keys — and a deck that shows
+            every turn, tool call, gate and cent while it runs.</p>
+            <span class="go">Meet the agent <span class="arr">→</span></span>
+          </div>
+        </a>
+
+        <a class="prod reveal reveal-d1" href="/product/oxagen">
+          <div class="shot">
+            <img src="/assets/tui/04-graph.svg" width="680" height="468" loading="lazy" alt="A graph query returning a source file's symbols in twelve milliseconds.">
+          </div>
+          <div class="meta">
+            <span class="kicker">Platform</span>
+            <h3>Oxagen</h3>
+            <p>The control plane. One shared context map, rules enforced before an action runs,
+            every model call metered, and a record your security review will accept.</p>
+            <span class="go">See mission control <span class="arr">→</span></span>
+          </div>
+        </a>
+
+        <a class="prod reveal reveal-d2" href="/product/private-llms">
+          <div class="shot">
+            <img src="/assets/tui/06-mcp.svg" width="680" height="420" loading="lazy" alt="Tool servers listed with their transport, tool count, latency and authentication state.">
+          </div>
+          <div class="meta">
+            <span class="kicker">Private</span>
+            <h3>Private LLMs</h3>
+            <p>Models on your own hardware — the laptop, your VPC, or a box with no route out.
+            Same agent, same deck, nothing leaving the building.</p>
+            <span class="go">Run it on your metal <span class="arr">→</span></span>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= THE AGENT ================= -->
+  <section class="sec sec-alt" id="agent">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="eyebrow">The agent — in your terminal</p>
+        <h2>An agent that already knows your codebase</h2>
+        <p>Type what you want done. The agent reads your code, makes the edits, runs the
+        checks, and shows its work — grounded in your team's shared map, not just the files in front of it.</p>
+      </div>
+
+      <div class="grid-2">
+        <article class="card reveal">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 17l6-5-6-5"/><path d="M12 19h8"/></svg>
+          </div>
+          <h3>One command, done</h3>
+          <p>Ask in plain English. It plans, edits, verifies, and hands you the diff —
+          in an interactive session or a single shot.</p>
+          <div class="card-viz snippet" aria-hidden="true">
+            <div><span class="p">$</span> <span class="c">oxagen "make the export async"</span></div>
+            <div><span class="g">✎</span> src/export/index.ts <span class="g">+12</span> <span class="r">−4</span></div>
+            <div><span class="g">✔</span> checks passed — diff ready for review</div>
+          </div>
+        </article>
+
+        <article class="card reveal reveal-d1">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 4v5"/><path d="M12 9l-6 4"/><path d="M12 9l6 4"/><path d="M12 9v4"/><circle cx="12" cy="4" r="1.6"/><circle cx="6" cy="15" r="1.6"/><circle cx="12" cy="15" r="1.6"/><circle cx="18" cy="15" r="1.6"/><path d="M6 17v2M12 17v2M18 17v2"/></svg>
+          </div>
+          <h3>Dispatch a fleet</h3>
+          <p>One goal becomes many tasks. Several agents work in parallel, each safely in
+          its own copy of the repo, and report back as one.</p>
+          <div class="card-viz snippet" aria-hidden="true">
+            <div><span class="p">◆</span> <span class="c">4 tasks · 4 workers · isolated worktrees</span></div>
+            <div>worker/1 schema <span class="g">done</span> · worker/2 routes <span class="g">done</span></div>
+            <div>worker/3 webhooks <span class="i">running</span> · worker/4 tests <span class="i">running</span></div>
+          </div>
+        </article>
+
+        <article class="card reveal reveal-d1">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/><circle cx="12" cy="12" r="2.2"/></svg>
+          </div>
+          <h3>Private by default</h3>
+          <p>Run the agent on a model that lives on your own machine. Works offline,
+          no key required, nothing leaves the laptop.</p>
+          <div class="card-viz snippet" aria-hidden="true">
+            <div><span class="p">$</span> <span class="c">oxagen models</span></div>
+            <div><span class="i">◆</span> on-device coordinator: <span class="g">ready</span> · fitted to your hardware</div>
+            <div><span class="i">◆</span> network: <span class="c">not required</span></div>
+          </div>
+        </article>
+
+        <article class="card reveal reveal-d2">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 3l4 2.3v4.6L12 12.2 8 9.9V5.3L12 3z"/><path d="M17.5 10.5l4 2.3v4.6l-4 2.3-4-2.3v-4.6"/><path d="M6.5 10.5l4 2.3v4.6l-4 2.3-4-2.3v-4.6"/></svg>
+          </div>
+          <h3>Grounded in your map</h3>
+          <p>Query your workspace's governed context through its live authorization boundary.
+          Exact checkout detail stays local; shared answers remain scoped and citable.</p>
+          <div class="card-viz snippet" aria-hidden="true">
+            <div><span class="p">$</span> <span class="c">oxagen graph search -q "billing policy"</span></div>
+            <div><span class="i">◆</span> live query · workspace scoped · RBAC enforced</div>
+            <div><span class="g">✔</span> bounded results cite their sources</div>
+          </div>
+        </article>
+      </div>
+
+      <div class="install reveal" id="install">
+        <code><span class="p">$</span> npm install -g @oxagen/cli</code>
+        <button class="copy-btn" type="button" data-copy="npm install -g @oxagen/cli">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="12" rx="1"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>
+          <span>Copy</span>
+        </button>
+        <span class="note">Bring your own model keys — or run fully on-device. Your account plugs in when you want the shared map.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= THE PLATFORM ================= -->
+  <section class="sec" id="platform">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="eyebrow">The platform — mission control</p>
+        <h2>Mission control for every agent you run</h2>
+        <p>The same map and rules power the web app, the API, and your editor's tools —
+        so the whole team and every agent work from one governed place.</p>
+      </div>
+
+      <div class="split split-wide">
+        <div class="pillars reveal">
+          <div class="pillar">
+            <div class="pillar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.4-2.9 8.2-7 9.5C7.9 19.2 5 15.4 5 11V6l7-3z"/><path d="M9.2 12l2 2 3.6-3.8"/></svg>
+            </div>
+            <div>
+              <h3>Approved before it runs</h3>
+              <p>Decide who and what can take each action. Anything outside the rules
+              simply doesn't run — no exceptions to chase later.</p>
+            </div>
+          </div>
+          <div class="pillar">
+            <div class="pillar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 19V10M10 19V5M16 19v-7M22 19H2"/></svg>
+            </div>
+            <div>
+              <h3>Measured as it runs</h3>
+              <p>Every model call and tool action is counted, so you always know what your
+              agents cost — down to the team, the task, and the customer you bill.</p>
+            </div>
+          </div>
+          <div class="pillar">
+            <div class="pillar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 12h6M9 16h6"/></svg>
+            </div>
+            <div>
+              <h3>On the record after it runs</h3>
+              <p>A tamper-evident log of every action, ready for your next security
+              review — instead of a scramble before it.</p>
+            </div>
+          </div>
+          <div class="pillar">
+            <div class="pillar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.4 6h7.2M6 8.4v7.2M18 8.4v7.2M8.4 18h7.2M8 8l8 8"/></svg>
+            </div>
+            <div>
+              <h3>One shared map</h3>
+              <p>Connect your sources once. Answers come back grounded in your own data,
+              with citations you can open — in the app, over the API, or in your tools.</p>
+            </div>
+          </div>
+          <p style="margin-top:16px;padding-left:18px">
+            <a class="btn btn-ghost btn-sm" href="/product/oxagen">Everything the control plane does <span class="arr">→</span></a>
+          </p>
+        </div>
+
+        <div class="panel reveal reveal-d1" aria-label="Control plane preview (illustrative)">
+          <div class="panel-bar">
+            <span class="live-dot" aria-hidden="true"></span>
+            <span>control plane — live</span>
+            <span style="margin-left:auto">policy: enforced</span>
+          </div>
+          <div class="panel-body">
+            <div class="meters" aria-hidden="true">
+              <div class="meter">
+                <label><span>model usage — metered</span><b>ready to bill</b></label>
+                <div class="track"><div class="fill" style="--w:.72"></div></div>
+              </div>
+              <div class="meter">
+                <label><span>map coverage — sources connected</span><b>growing</b></label>
+                <div class="track"><div class="fill alt" style="--w:.58"></div></div>
+              </div>
+              <div class="meter">
+                <label><span>agent runs — this week</span><b>all logged</b></label>
+                <div class="track"><div class="fill pass" style="--w:.84"></div></div>
+              </div>
+            </div>
+            <div class="audit" aria-hidden="true">
+              <div class="audit-line"><span class="tag">✓ approved</span><span class="who">agent/ci-fixer</span><span class="what">opened a pull request</span></div>
+              <div class="audit-line"><span class="tag">✓ metered</span><span class="who">team/payments</span><span class="what">2 models · 14 tool calls</span></div>
+              <div class="audit-line"><span class="tag">✓ logged</span><span class="who">agent/researcher</span><span class="what">answered with 6 citations</span></div>
+              <div class="audit-line"><span class="tag deny">■ blocked</span><span class="who">agent/intern</span><span class="what">delete outside policy — never ran</span></div>
+              <div class="audit-line"><span class="tag">✓ approved</span><span class="who">you</span><span class="what">exported the audit trail</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= HOW IT WORKS ================= -->
+  <section class="sec sec-alt tex tex-hatch" id="how">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="eyebrow">How it works</p>
+        <h2>Three moves. No rewiring.</h2>
+      </div>
+      <div class="steps">
+        <div class="step reveal">
+          <span class="step-num mono">STEP 01</span>
+          <h3>Connect</h3>
+          <p>Point Oxagen at your code and the tools your team already uses.
+          It builds one connected, living map of how everything relates.</p>
+        </div>
+        <div class="step reveal reveal-d1">
+          <span class="step-num mono">STEP 02</span>
+          <h3>Ask</h3>
+          <p>Work with the agent in your terminal or in the app. It answers from your
+          map — right the first time, with sources you can check.</p>
+        </div>
+        <div class="step reveal reveal-d2">
+          <span class="step-num mono">STEP 03</span>
+          <h3>Govern</h3>
+          <p>Set the rules once. Every action any agent takes is approved up front,
+          measured as it happens, and kept on the record.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FIELD MANUAL (GATED) ================= -->
+  <section class="sec" id="field-manual">
+    <div class="wrap manual-grid">
+      <div class="book-scene reveal" aria-hidden="true">
+        <div class="book">
+          <span class="book-kicker">A field manual in 14 parts</span>
+          <span class="book-title">Engineering <span class="gold">Deterministic</span> AI&nbsp;Coding&nbsp;Agents</span>
+          <span class="book-sub">Systems that ask the model to think the least — and get the most from every model that exists.</span>
+          <svg class="book-hex" viewBox="0 0 260 120">
+            <defs><polygon id="hxb" points="22,13 0,26 -22,13 -22,-13 0,-26 22,-13"/></defs>
+            <use class="hx" href="#hxb" x="36" y="86"/>
+            <use class="hx" href="#hxb" x="86" y="60"/>
+            <use class="hx" href="#hxb" x="136" y="86"/>
+            <use class="hx" href="#hxb" x="186" y="60"/>
+            <use class="lit" href="#hxb" x="228" y="34"/>
+            <path class="pth" d="M36 86 L86 60 L136 86 L186 60 L228 34"/>
+            <circle class="nd" cx="36" cy="86" r="3.4"/>
+            <circle class="nd" cx="86" cy="60" r="3.4"/>
+            <circle class="nd" cx="136" cy="86" r="3.4"/>
+            <circle class="nd" cx="186" cy="60" r="3.4"/>
+            <circle class="nd" cx="228" cy="34" r="3.4"/>
+          </svg>
+          <span class="book-author"><b>Mac Anderson</b><span>Founder &amp; CEO, Oxagen Inc.</span></span>
+        </div>
+      </div>
+
+      <div class="manual-copy">
+        <span class="free-tag reveal">Free ebook · read online or download</span>
+        <h2 class="reveal">The field manual behind the product</h2>
+        <p class="reveal reveal-d1">
+          Why is the same model brilliant in one team's hands and useless in another's?
+          Our founder's answer, in 14 parts: the next leap in AI coding isn't a bigger
+          model — it's a better system around the model. This is the playbook we build
+          Oxagen by.
+        </p>
+        <ul class="manual-points reveal reveal-d1">
+          <li>Why agents that search and guess burn time, money, and trust</li>
+          <li>How to hand a model exactly the context it needs — every time</li>
+          <li>What to measure so results are repeatable, not lucky</li>
+        </ul>
+
+        <p class="manual-cta reveal reveal-d1">
+          <a class="btn btn-ghost btn-sm" href="/read">Prefer the full reader? Open the book <span class="arr">→</span></a>
+        </p>
+
+        <form class="lead-form reveal reveal-d2" id="manualForm" data-source="field-manual" novalidate>
+          <div class="f-row">
+            <div class="field">
+              <label for="mf-name">Name</label>
+              <input id="mf-name" name="name" type="text" autocomplete="name" required maxlength="200" placeholder="Ada Lovelace">
+            </div>
+            <div class="field">
+              <label for="mf-email">Work email</label>
+              <input id="mf-email" name="email" type="email" autocomplete="email" required maxlength="320" placeholder="ada@company.com">
+            </div>
+          </div>
+          <div class="f-row">
+            <div class="field">
+              <label for="mf-company">Company <span class="opt">(optional)</span></label>
+              <input id="mf-company" name="company" type="text" autocomplete="organization" maxlength="200" placeholder="Analytical Engines Ltd">
+            </div>
+            <div class="field">
+              <label for="mf-role">Role <span class="opt">(optional)</span></label>
+              <input id="mf-role" name="role" type="text" autocomplete="organization-title" maxlength="120" placeholder="Engineering lead">
+            </div>
+          </div>
+          <div class="hp-wrap" aria-hidden="true">
+            <label for="mf-website">Website</label>
+            <input id="mf-website" name="website" type="text" tabindex="-1" autocomplete="off">
+          </div>
+          <div class="form-foot">
+            <button class="btn btn-primary" type="submit">Get the manual <span class="arr">→</span></button>
+            <p class="form-status" role="status" aria-live="polite"></p>
+          </div>
+        </form>
+
+        <div class="unlocked reveal" id="manualSuccess" hidden tabindex="-1">
+          <div class="ok-line"><span class="ok-dot" aria-hidden="true">✓</span> <span id="manualSuccessMsg">The link to the book has been sent to your email.</span></div>
+          <p>Check your inbox (and spam, just in case). We'll only use your email to follow
+          up about Oxagen — no spam, ever.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= DEMO CTA ================= -->
+  <section class="sec" id="demo">
+    <div class="wrap">
+      <div class="demo-box reveal">
+        <div>
+          <p class="eyebrow">Get a demo</p>
+          <h2>See your edge in 30 minutes</h2>
+          <p class="demo-sub">Bring a repo and a question. We'll show you what your agents
+          can do when they stop guessing — and what it looks like to have every run
+          approved, measured, and on the record.</p>
+          <ul class="demo-hints">
+            <li>Live walkthrough on your use case, not a canned deck</li>
+            <li>Straight answers on rollout, pricing, and security review</li>
+            <li>You keep the map you build in the session</li>
+          </ul>
+        </div>
+
+        <form class="lead-form" id="demoForm" data-source="demo" novalidate>
+          <div class="f-row">
+            <div class="field">
+              <label for="df-name">Name</label>
+              <input id="df-name" name="name" type="text" autocomplete="name" required maxlength="200" placeholder="Grace Hopper">
+            </div>
+            <div class="field">
+              <label for="df-email">Work email</label>
+              <input id="df-email" name="email" type="email" autocomplete="email" required maxlength="320" placeholder="grace@company.com">
+            </div>
+          </div>
+          <div class="f-row">
+            <div class="field">
+              <label for="df-company">Company <span class="opt">(optional)</span></label>
+              <input id="df-company" name="company" type="text" autocomplete="organization" maxlength="200" placeholder="Compilers Inc">
+            </div>
+            <div class="field">
+              <label for="df-role">Role <span class="opt">(optional)</span></label>
+              <input id="df-role" name="role" type="text" autocomplete="organization-title" maxlength="120" placeholder="CTO">
+            </div>
+          </div>
+          <div class="field">
+            <label for="df-message">What are you building? <span class="opt">(optional)</span></label>
+            <textarea id="df-message" name="message" maxlength="2000" placeholder="Tell us about your team, your stack, and what you want agents to do."></textarea>
+          </div>
+          <div class="hp-wrap" aria-hidden="true">
+            <label for="df-website">Website</label>
+            <input id="df-website" name="website" type="text" tabindex="-1" autocomplete="off">
+          </div>
+          <div class="form-foot">
+            <button class="btn btn-primary" type="submit">Get a demo <span class="arr">→</span></button>
+            <p class="form-status" role="status" aria-live="polite"></p>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ================= FOOTER ================= -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="#top" aria-label="Oxagen home">
+          <svg viewBox="7.775 4.325 36.343 37.216" aria-hidden="true"><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z" fill="none" stroke="currentColor" stroke-width="1"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z" fill="none" stroke="currentColor" stroke-width="1"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z" fill="none" stroke="currentColor" stroke-width="1"/><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="#EFC53F"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="#EFC53F" opacity="0.45"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+          oxagen
+        </a>
+        <p>Everyone has the same models.<br>Your edge is context.</p>
+        <div class="socials">
+          <a href="https://x.com/oxagenai" target="_blank" rel="noopener" aria-label="Oxagen on X">
+            <svg viewBox="0 0 24 24"><path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3l-4.9-6.4L6.4 22H3.3l7.3-8.3L1.6 2H8l4.4 5.9L18.9 2zm-1.1 18.2h1.7L7.1 3.7H5.3l12.5 16.5z"/></svg>
+          </a>
+          <a href="https://www.linkedin.com/company/oxagenai" target="_blank" rel="noopener" aria-label="Oxagen on LinkedIn">
+            <svg viewBox="0 0 24 24"><path d="M20.4 20.4h-3.6v-5.6c0-1.3 0-3-1.9-3-1.9 0-2.1 1.4-2.1 2.9v5.7H9.2V9h3.4v1.6h.1c.5-.9 1.6-1.9 3.4-1.9 3.6 0 4.3 2.4 4.3 5.5v6.2zM5.2 7.4a2.1 2.1 0 1 1 0-4.2 2.1 2.1 0 0 1 0 4.2zM7 20.4H3.4V9H7v11.4z"/></svg>
+          </a>
+          <a href="https://github.com/oxagenai" target="_blank" rel="noopener" aria-label="Oxagen on GitHub">
+            <svg viewBox="0 0 24 24"><path d="M12 1.8A10.2 10.2 0 0 0 1.8 12c0 4.5 2.9 8.3 7 9.7.5.1.7-.2.7-.5v-1.9c-2.9.6-3.5-1.2-3.5-1.2-.4-1.2-1.1-1.5-1.1-1.5-1-.6.1-.6.1-.6 1 .1 1.6 1.1 1.6 1.1.9 1.6 2.4 1.1 3 .9.1-.7.4-1.1.7-1.4-2.3-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.8-.1-.2-.4-1.3.1-2.7 0 0 .9-.3 2.8 1a9.8 9.8 0 0 1 5.2 0c1.9-1.3 2.8-1 2.8-1 .5 1.4.2 2.5.1 2.7.7.7 1 1.7 1 2.8 0 3.9-2.4 4.8-4.6 5 .4.3.7 1 .7 1.9v2.8c0 .3.2.6.7.5a10.2 10.2 0 0 0 7-9.7A10.2 10.2 0 0 0 12 1.8z"/></svg>
+          </a>
+          <a href="https://huggingface.co/oxagenai" target="_blank" rel="noopener" aria-label="Oxagen on Hugging Face">
+            <svg viewBox="0 0 24 24"><path d="M12 2.5a9 9 0 0 0-9 9c0 1.4.3 2.7.9 3.9-.6.3-1 .9-1 1.7 0 .6.3 1.2.7 1.5-.1.2-.1.5-.1.7 0 1.2 1 2.2 2.2 2.2.4 0 .8-.1 1.1-.3a9 9 0 0 0 10.4 0c.3.2.7.3 1.1.3 1.2 0 2.2-1 2.2-2.2 0-.2 0-.5-.1-.7.4-.4.7-.9.7-1.5 0-.8-.4-1.4-1-1.7.6-1.2.9-2.5.9-3.9a9 9 0 0 0-9-9zM8.2 8.4c.6 0 1.1.5 1.1 1.1s-.5 1.1-1.1 1.1S7.1 10.1 7.1 9.5s.5-1.1 1.1-1.1zm7.6 0c.6 0 1.1.5 1.1 1.1s-.5 1.1-1.1 1.1-1.1-.5-1.1-1.1.5-1.1 1.1-1.1zM8 13.1c.9 1.3 2.3 2.1 4 2.1s3.1-.8 4-2.1c.2-.3 0-.7-.4-.6-1.1.4-2.3.6-3.6.6s-2.5-.2-3.6-.6c-.4-.1-.6.3-.4.6z"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <nav class="foot-col" aria-label="Products">
+        <h4>Products</h4>
+        <ul>
+          <li><a href="/product/stella">Stella — the agent</a></li>
+          <li><a href="/product/oxagen">Oxagen — the platform</a></li>
+          <li><a href="/product/private-llms">Private LLMs</a></li>
+          <li><a href="#demo">Get a demo</a></li>
+        </ul>
+      </nav>
+
+      <nav class="foot-col" aria-label="Resources">
+        <h4>Resources</h4>
+        <ul>
+          <li><a class="ext" href="/docs" target="_blank" rel="noopener">Documentation</a></li>
+          <li><a class="ext" href="https://app.oxagen.sh" target="_blank" rel="noopener">Customer login</a></li>
+          <li><a href="#field-manual">Field manual</a></li>
+          <li><a class="ext" href="https://github.com/oxagenai" target="_blank" rel="noopener">GitHub</a></li>
+        </ul>
+      </nav>
+
+      <div class="foot-col">
+        <h4>Contact</h4>
+        <address>
+          Oxagen, Inc.<br>
+          2261 Market Street STE 87168<br>
+          San Francisco, CA 94114<br>
+          <a href="mailto:success@oxagen.ai">success@oxagen.ai</a>
+        </address>
+      </div>
+    </div>
+
+    <div class="foot-base">
+      <span>© 2026 Oxagen, Inc. All rights reserved.</span>
+      <span class="mono">ship deterministic · <a href="#field-manual">read the manual</a></span>
+    </div>
+  </div>
+</footer>
+

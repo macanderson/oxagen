@@ -1,0 +1,75 @@
+---
+title: Code execution
+description: How the agent runs sandboxed code — languages, limits, approval flow, and audit trail.
+---
+
+The `agent.code.execute` capability runs user-supplied Node, Python, or shell code inside a hardened, **ephemeral** sandbox — provisioned per invocation and torn down immediately after, with no repository context. It never runs in the same process as the platform.
+
+For the full security analysis of the sandbox — isolation guarantees, hardware boundaries, and what code cannot do — see [Code execution security](/docs/platform/security/code-execution).
+
+This is a different mechanism from **Code mode** — the chat composer's toggle that binds a whole turn's filesystem/exec tools to a real, checked-out repository in a durable, session-reusable sandbox. See [Chat interface → Code mode](/docs/platform/agent/chat-interface#code-mode) for that flow.
+
+## Using code execution
+
+Ask the agent to run code naturally:
+
+- "Write and run a Python script that reads our conversation history and counts the unique topics."
+- "Run this SQL query against the test data and show me the output."
+- "Execute the following shell commands and return the results."
+
+The agent writes the code, proposes it in an approval card, waits for your confirmation, then executes it in the sandbox.
+
+## Languages
+
+| Language | Available runtime |
+|---|---|
+| Node 20 | `node:20-alpine` (local Docker) / `node24` (Vercel Sandbox) |
+| Python 3.12 | `python:3.12-slim` (local Docker) / `python3.13` (Vercel Sandbox) |
+| Shell | `alpine:3.20` (local Docker) / `/bin/sh` on `node24` (Vercel Sandbox) |
+
+**Preinstalled packages (Python):** `numpy`, `pandas`, `requests`.
+
+**Runtime installs are disabled.** `pip install` and `npm install` are not available at runtime. The sandbox image determines what is available. If you need a specific library, contact support to request it be added to the image.
+
+## Limits per invocation
+
+| Resource | Limit |
+|---|---|
+| Wallclock time | 30 seconds (default); workspace policy may lower |
+| Memory | default 256 MiB; configurable per-invocation up to 2048 MiB |
+| CPU | 0.5 vCPU |
+| PIDs | 128 max processes |
+| Network | Denied by default |
+| Filesystem writes | `/tmp` only (tmpfs, size-capped) |
+
+Output (stdout + stderr) is captured and streamed back to the chat in real time.
+
+## Approval flow
+
+Code execution is tagged `riskLevel: high`. The agent pauses the stream before running any code and renders an approval card showing:
+
+- The code to be executed
+- The language and runtime
+- The risk classification
+- An optional description of what the code does
+
+You must click **Approve** before the code runs. You can also click **Deny** to skip execution and ask the agent to take a different approach.
+
+The approval decision is recorded in `agent.approval_requests` in Postgres and produces an audit event.
+
+## Billing
+
+Each invocation is charged 2 credits regardless of execution time. The charge is deducted atomically at the time the sandbox is provisioned — a 30-second timeout counts as a completed invocation.
+
+Invocations that fail to provision (infrastructure error, not timeout) are not charged.
+
+## Audit trail
+
+Every invocation produces:
+
+- A `capability.invoke_allowed` or `capability.invoke_denied` event (IAM decision).
+- An `agent.approval_requests` row (who approved, when, what they approved).
+- An `agent.agent_tool_calls` row with the invocation ID, input hash, exit code, and output preview.
+- A ClickHouse `tool_invocations` row (analytics: duration, exit code, language).
+
+All of these are scoped to the calling org and workspace. A separate tenant cannot see your code execution records.

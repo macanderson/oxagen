@@ -1,0 +1,31 @@
+---
+title: Capability registry
+description: Every action in Oxagen is a typed capability contract — declared once, enforced everywhere, and browsable in the governance catalog.
+---
+
+A **capability** is the unit of action in Oxagen. Each one is a typed contract declared once in the in-process registry and exposed identically across every surface it opts into — the REST API, the MCP server, the in-app agent, and the CLI. There is no side door: if an action exists, it exists as a capability, and it runs through the `invoke()` kernel with IAM, metering, and audit applied.
+
+## What a contract declares
+
+| Field | Meaning |
+|---|---|
+| Name | Verb-first snake_case identifier, e.g. `query_audit_log` — see [Capability naming](/docs/platform/api/capabilities#capability-naming) |
+| Domain | Functional grouping (billing, graph, agent, …) |
+| Surfaces | Where it is mounted: `api`, `mcp`, `agent`, `cli` |
+| Sensitivity | `low`, `medium`, `high`, or `destructive` — destructive capabilities require explicit approval before running |
+| IAM grants | Default role grants (allow / deny / require_approval) |
+| Entitlement gate | Which plan or entitlement pack unlocks it |
+| Input/output specs | Typed field schemas validated on every call |
+| Layers | Declared coverage: schema, api, mcp, unit, e2e, docs, app |
+
+## Browsing the catalog
+
+Org admins can browse the full registry in **Organization → Governance → Capabilities** — filter by domain, surface, sensitivity, or coverage gaps (capabilities missing a declared layer). The same catalog is queryable via the API and MCP, which is how agents discover what they are allowed to call.
+
+## Per-capability reference
+
+Selected capabilities have dedicated reference pages documenting their surfaces, inputs, and outputs:
+
+- [author_skill](/docs/platform/capabilities/skill.author) — author a workspace skill from a natural-language prompt.
+
+For everything else, the governance catalog is the authoritative, always-current reference — it is generated from the live registry, not maintained by hand.

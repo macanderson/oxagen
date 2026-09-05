@@ -1,0 +1,175 @@
+---
+title: stella doctor
+description: Check the local state stella owns, get a pass or fail for each check, and repair a corrupt session store without deleting it.
+---
+
+Use `stella doctor` to check whether your local state is sound before you go looking for a bug that isn't yours. It runs each check it knows about, prints a result for each one, and exits with a non-zero code if any check failed, so you can use it to gate a script. It reads local state only. No provider, no API key, no network.
+
+## Synopsis
+
+```bash
+stella doctor                                    # diagnose, change nothing
+stella doctor --repair                           # also quarantine a corrupt store
+stella doctor --last-failure                     # print the newest crash dump
+```
+
+## What it does
+
+Five checks run today:
+
+- **`store integrity`** — checks the soundness of this workspace's session store at `<workspace>/.stella/private/store.db`, using SQLite's own `quick_check` and `integrity_check` checks.
+- **`fleet ledger`** — finds rows in `.stella/private/fleet.db` that name a run no longer recorded. This check only reports; it never deletes, because removing these rows would delete fleet history.
+- **`session sidecars`** — finds sidecar directories whose session record is gone. `--repair` removes them. A damaged record is never treated as an orphan.
+- **`model config`** — checks the model your next run would actually use, and the address it would send it to. See below.
+- **`managed settings`** — checks the spelling of your org-managed settings file, if one is configured. This is where you catch a typo in a root key (like `toosl` for `tools`) before it reaches a whole fleet of machines. Always a pass: a typo in an org file is not your workspace's fault, just news you need.
+
+Every check is a pass or a fail. There is no "warning" state: if a check can't say a thing is fine, it counts as failed.
+
+## The model config check
+
+A default model your provider can't serve doesn't just break one command. It breaks every one. This check catches that early. When it fails, the message names the setting, the value, what's wrong, and three ways to fix it.
+
+```text
+  ✗ model config — 1 model setting(s) name something the provider will reject
+      default_model: `openrouter/auto` — missing the vendor namespace — `openrouter`
+      model ids carry a `vendor/` prefix, so the wire slug should be e.g.
+      `openrouter/auto`, not the bare `auto`
+      → `stella models list --provider openrouter` prints every slug that will be accepted
+      → `stella models refresh` re-syncs the catalog — try this first if the model shipped recently
+      → set the default with `/model <provider>/<slug>` in the deck, or on its SETTINGS tab
+```
+
+It checks the default model using the same order of precedence a run uses: `--model` (or its `STELLA_MODEL` environment variable) beats `agents.default.model`, which beats `default_model`, which beats auto-detection. So `stella --model <x> doctor` checks exactly what `stella --model <x> run` would send. It also flags a `--base-url` pointed at a different known provider's address, since that setup causes a rejection that looks like the wrong error.
+
+This check never uses the network. It checks against the built-in list plus whatever `stella models refresh` has already saved, and nothing is downloaded. When a provider has no saved model list (OpenRouter, or a custom gateway), the check can only confirm the shape of the model slug is correct, and it says so in the result.
+
+A passing check also names the model and where it came from:
+
+```text
+  ✓ model config — zai/glm-5.2 — from default_model
+```
+
+<CardGrid size="md">
+  <OptionCard name="✓ pass">
+    The store passed, or there is no store yet. `store.db` is created by your first
+    session, so its absence is not a problem.
+  </OptionCard>
+  <OptionCard name="✗ fail">
+    SQLite reported damage, or the check could not run at all — a locked
+    file, or a permissions problem.
+  </OptionCard>
+</CardGrid>
+
+Checking never writes anything. The check opens the database in a read-only mode with no locks and writes zero bytes, and only switches to a read-write mode when an early result already looks bad and a `-wal` file exists. Asking a question is never a reason to create a `.stella/` folder that wasn't already there.
+
+`stella doctor` runs before stella loads your configuration, on purpose: a workspace with a corrupt store needs to stay checkable even without a working model config. Because of this, there is no JSON output for this command. `--output-format` is a flag for `run` and `fleet` only, and `doctor` doesn't accept it.
+
+## Flags
+
+<CardGrid size="md">
+  <OptionCard name="--repair">
+    Act on a store SQLite judged corrupt: move it aside to a name with a timestamp —
+    renamed, **never** deleted — and copy out whatever is still readable. A healthy store
+    and a check that couldn't finish are both left untouched.
+  </OptionCard>
+  <OptionCard name="--last-failure">
+    Print the newest [crash dump](/docs/stella/diagnostics#the-crash-file) —
+    `.stella/private/crash-*.jsonl` — and nothing else. No checks run. It contains no
+    sensitive content, so it's safe to attach to a bug report as printed. Fails if none exists.
+  </OptionCard>
+</CardGrid>
+
+## Exit codes
+
+`0` when every check passed, including a `--repair` that fixed something. `1` when any check failed, with `stella: 1 of 5 doctor checks failed` printed to stderr. That's the whole rule, which is what makes the command work as a gate:
+
+```bash
+stella doctor || echo "local state needs attention"
+```
+
+## What --repair does to the file on disk
+
+This is the one part of `stella doctor` that touches your disk, so here's exactly what happens.
+
+It only acts when the check finds real corruption: a database SQLite could read but found structurally damaged, or one it couldn't read as a database at all. A check that simply couldn't finish is inconclusive, and an inconclusive result leaves the store exactly where it is. Moving a database on a guess is how a repair tool loses someone's data. On a healthy store, `--repair` reports that it had nothing to do.
+
+When it does act, it happens in this order.
+
+**1. The database is renamed**, along with both companion files if present, all sharing one timestamp (seconds since the Unix epoch):
+
+```text
+.stella/private/store.db      → .stella/private/store.db.corrupt-1769472000
+.stella/private/store.db-wal  → .stella/private/store.db-wal.corrupt-1769472000
+.stella/private/store.db-shm  → .stella/private/store.db-shm.corrupt-1769472000
+```
+
+The companion files must move with the database. A stale WAL file left beside the fresh store your next session creates would turn a successful repair into new corruption. The rename happens first, because once it's done the workspace is usable again even if the next steps fail.
+
+**2. A copy of whatever SQLite can still read** is written to a separate database beside the original — `store.db.salvaged-1769472000` — readable only by you. If nothing can be saved, the tool reports that and the quarantine still stands. A failed save attempt is never treated as an error.
+
+<Callout type="warn">
+Expect this step to save nothing, and use the "by hand" line instead. This step copies data using a method that stops entirely at the first unreadable page. On a store with six damaged pages in an otherwise healthy 1 GB file, this step returned zero rows, while the `sqlite3 .recover` command shown in the "by hand" line returned 376,129 of 376,140 events and every row of `executions`, `telemetry`, and `tool_calls`. The `.recover` command rebuilds from surviving records instead of stopping at the first bad page, which is why it recovers more.
+</Callout>
+
+**3. Your next session starts a fresh store.** Nothing was deleted.
+
+<Callout type="warn">
+Unsaved pages in the quarantined `-wal` file don't reach the salvaged copy. SQLite only replays a WAL file that sits next to a database with the exact matching name. If you need those pages, rename the quarantined pair back to `store.db` and `store.db-wal` and let SQLite's own recovery run.
+</Callout>
+
+Every quarantine can be undone with `mv`, and running repair twice within the same second adds a `.2`, `.3`, and so on, rather than overwriting an earlier quarantine.
+
+The store holds local telemetry and session replay data only. It never holds your source code.
+
+## Examples
+
+A healthy workspace:
+
+```text
+─── Doctor — local state checks
+  ✓ store integrity — .stella/private/store.db: ok (quick_check)
+
+  1 check: 1 ok, 0 failed
+```
+
+`quick_check` is the fast check; `integrity_check` runs only when `quick_check` flags a problem, and the result names whichever one produced it.
+
+A corrupt store, diagnosed but untouched (exit `1`):
+
+```text
+─── Doctor — local state checks
+  ✗ store integrity — .stella/private/store.db: not readable as a SQLite database
+      file is not a database
+      → `stella doctor --repair` moves it aside (renamed, never deleted) and copies out whatever is still readable
+      → by hand: sqlite3 .stella/private/store.db ".recover" | sqlite3 .stella/private/store.db.recovered
+      → the store holds local telemetry and session replay only — never your source
+
+  1 check: 0 ok, 1 failed
+```
+
+At most five problem rows are printed, followed by `… and N more`. The store itself keeps up to twenty, and the full count is always shown.
+
+The same workspace after `stella doctor --repair` (exit `0`):
+
+```text
+─── Doctor — local state checks
+  ✓ store integrity — .stella/private/store.db: quarantined
+      was: not readable as a SQLite database
+      moved .stella/private/store.db → .stella/private/store.db.corrupt-1769472000
+      moved .stella/private/store.db-wal → .stella/private/store.db-wal.corrupt-1769472000
+      salvaged what was readable → .stella/private/store.db.salvaged-1769472000
+      nothing was deleted; the next session starts a fresh store
+
+  1 check: 1 ok, 0 failed
+```
+
+A check that couldn't run at all — reported, and the store is not moved even with `--repair`:
+
+```text
+  ✗ store integrity — could not be checked: <error>
+      → the store was NOT touched — resolve the error above and re-run `stella doctor`
+```
+
+<Callout type="info">
+You'll often land on this command from an error message: when a session can't open `store.db`, the error points you here directly. Running it without `--repair` is always safe. It only reads, never writes.
+</Callout>

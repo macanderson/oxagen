@@ -281,6 +281,11 @@ body.notes-on #hint { display: none; }
   <p class="lede" style="max-width:70ch">Three brands, one account, one small instance holding every database. What is
   running, why it is shaped this way, and what it costs to run it this way.</p>
   <div class="title-meta">
+    <b>Pre-migration snapshot — superseded 2026-08-27.</b> Describes the account this deck
+    was built for (<span class="ink">578673726240</span>), before the cutover to
+    <span class="ink">916294258235</span> moved Postgres to Aurora and ClickHouse's role to
+    Redshift. See <span class="ink">infra/docs/new-account-migration-plan.md</span> for the
+    current architecture.<br><br>
     Account <span class="ink">578673726240</span> &nbsp;·&nbsp; region <span class="ink">us-east-1</span><br>
     OpenTofu &nbsp;·&nbsp; <span class="ink">oxagen-aws-infra</span> &nbsp;·&nbsp; state in
     <span class="ink">s3://oxagen-tfstate-578673726240</span>, locking in <span class="ink">oxagen-tflock</span>
@@ -288,6 +293,10 @@ body.notes-on #hint { display: none; }
   <div class="slide-foot"><span class="id">Oxagen infrastructure</span><span class="no"><b>01</b> / 13</span></div>
   <aside class="notes">
     <h4>Speaker notes</h4>
+    <p><b>This deck predates the 2026-08-27 account migration and is kept as a historical
+    record of the pre-migration design tradeoffs, not as current documentation.</b> The
+    account, instance, and bucket named throughout are the old ones; the live platform runs
+    in 916294258235 today. Don't present this as the current state without saying so.</p>
     <p>Frame the constraint before any of the design makes sense: this account was migrated off Vercel under a stated
     budget of "as little as possible", and there are no live customers yet. Almost every decision in this deck is that
     constraint meeting a correctness requirement, and the interesting ones are where the cheap answer was rejected.</p>

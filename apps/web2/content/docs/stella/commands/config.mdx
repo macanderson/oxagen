@@ -1,0 +1,66 @@
+---
+title: stella config
+description: Show the fully resolved configuration for the current session.
+---
+
+Show the full, resolved configuration for the current session: the provider, model, a hidden key preview and where it came from, base URL, workspace, wire format, and the model each engine role will actually run on.
+
+## Synopsis
+
+```bash
+stella config [global flags]
+```
+
+## What it does
+
+`stella config` checks every configuration source — global flags, environment variables, the config file across all three scopes, and `credentials.toml` — and prints the result that actually applies. It's the fastest way to confirm exactly which provider, model, and base URL a run will use, and to confirm your key was found without showing it (the key appears only as a hidden preview, along with the source that provided it).
+
+You can see the same output from the plain line REPL (`stella chat --plain`) with the `/config` command. The default Command Deck TUI doesn't have a `/config` command. Run `stella config` in a separate shell instead.
+
+<Callout type="info">
+The config file is merged field by field across three scopes: project, org-managed, and user, with project taking the highest priority. `stella config` shows the merged result that actually applies. The current file format is [`stella.toml`](/docs/stella/configuration/stella-toml) (`<workspace>/stella.toml`, `~/.stella/stella.toml`). The older [`settings.json`](/docs/stella/configuration/settings) format (`<workspace>/.stella/settings.json`, `~/.stella/settings.json`) still works too. **When both exist, the TOML file wins, and stella says so on startup.** The JSON file is ignored rather than merged in that case. Run [`stella migrate config`](/docs/stella/commands/migrate) to write a TOML file from your current settings — it keeps the old JSON file in place so you can review and delete it yourself.
+</Callout>
+
+## Flags
+
+`stella config` takes the [global flags](/docs/stella/commands). Passing `--model` or `--base-url` lets you preview how a specific override resolves before committing to a run. `--api-key` can't be previewed alone. It must be combined with `--model provider/model_id`, since a key by itself doesn't say which provider it belongs to.
+
+## Example
+
+```bash
+stella config
+```
+
+Sample output (for illustration only):
+
+```text
+Stella — Current Configuration
+
+  Provider:   Z.ai
+  Model:      zai/glm-5.2
+  API Key:    sk-abc…a1b2 (env:ZAI_API_KEY)
+  Base URL:   https://api.z.ai/api/paas/v4
+  Workspace:  /Users/you/projects/acme
+  Dialect:    OpenAI-compatible
+
+  Engine roles
+    default   zai/glm-5.2                  xhigh             thinking on   default_model
+```
+
+The `Provider` line shows the provider's display name. `Model` is printed as `<provider-id>/<model-id>`. The key is a hidden preview (first six characters, then an ellipsis, then the last four) followed by which source provided it: an environment variable, the credentials file, or a value written directly in the config. That last part answers "I set the key, why is it still using a different one?", so it's worth reading even when the preview looks right.
+
+### Engine roles
+
+The second block shows what actually controls a run's cost and behavior: each role, the model it resolves to, its reasoning effort, whether extended thinking is on, and the setting that decided it. "Rides the worker" in the last column means no model is set for that role specifically, so it uses the worker's model instead. That's the default for `research` and `plan`, though you can [set them independently](/docs/stella/agent-tools/custom-agents) since they cost differently — research makes many short read-only calls, while planning makes one call that writes the work order.
+
+The `verifier` role's only job is writing the check that confirms the work is done.
+
+Preview how an explicit override resolves without starting a run (global flags go before `config`):
+
+```bash
+stella --model anthropic/claude-fable-5 config
+```
+
+<Callout type="warn">
+The values above are only examples. Your actual output reflects the credentials and settings in your own environment.
+</Callout>

@@ -1,0 +1,382 @@
+---
+title: Commands
+description: Every stella subcommand, the default chat behavior, global flags, and exit codes.
+---
+
+The `stella` binary is a fast, BYOK (bring-your-own-key), model-agnostic terminal coding agent. Every feature is available through a subcommand.
+
+Running `stella` with no subcommand opens the [Command Deck](/docs/stella/commands/chat), a tabbed terminal UI. This is the same as running `stella chat`. Pass `--accessible` (or set `STELLA_ACCESSIBLE=1`) to run that same deck so a screen reader can read it. Pass `--plain` (or set `STELLA_PLAIN=1`) for a plain line-based REPL instead. The deck also steps aside automatically when stdin or stdout is not a terminal.
+
+```bash
+# These two invocations are identical
+stella
+stella chat
+```
+
+## Subcommands
+
+### Run the agent
+
+<CardGrid size="sm">
+  <SpecCard title="stella run" href="/docs/stella/commands/run">
+    Send a one-shot prompt (non-interactive)
+  </SpecCard>
+  <SpecCard title="stella chat" href="/docs/stella/commands/chat">
+    Start an interactive session (the Command Deck)
+  </SpecCard>
+  <SpecCard title="stella goal" href="/docs/stella/commands/goal">
+    Work in judged rounds until a verifier says the goal is met
+  </SpecCard>
+  <SpecCard title="stella resume" href="/docs/stella/commands/resume">
+    Reopen a previous session exactly where it stood
+  </SpecCard>
+  <SpecCard title="stella daemon" href="/docs/stella/commands/daemon">
+    Find, watch, and stop runs that outlived their terminal
+  </SpecCard>
+  <SpecCard title="stella whistle" href="/docs/stella/commands/whistle">
+    Steer every live non-interactive session on this machine at once
+  </SpecCard>
+  <SpecCard title="stella init" href="/docs/stella/commands/init">
+    Analyze this workspace: domain taxonomy and code graph
+  </SpecCard>
+</CardGrid>
+
+### Run many at once
+
+<CardGrid size="sm">
+  <SpecCard title="stella fleet" href="/docs/stella/commands/fleet">
+    Fan tasks out to a fleet of worker agents in one tree
+  </SpecCard>
+  <SpecCard title="stella monitor" href="/docs/stella/commands/monitor">
+    Watch CI for a branch or PR and fix it until green
+  </SpecCard>
+  <SpecCard title="stella self-driving" href="/docs/stella/commands/self-driving">
+    Drive the perpetual delivery loop: plan, cycle, audit, watch
+  </SpecCard>
+  <SpecCard title="stella arena" href="/docs/stella/commands/arena">
+    arena-bench adapter, invoked by the benchmark runner
+  </SpecCard>
+</CardGrid>
+
+### Ask about this workspace
+
+<CardGrid size="sm">
+  <SpecCard title="stella search" href="/docs/stella/commands/search">
+    Find code — semantic and structural search over the workspace
+  </SpecCard>
+  <SpecCard title="stella storage" href="/docs/stella/commands/storage">
+    Inspect the storage map — layers, namespaces, relations
+  </SpecCard>
+  <SpecCard title="stella tools" href="/docs/stella/commands/tools">
+    List every tool available to the agent this session
+  </SpecCard>
+  <SpecCard title="stella commands" href="/docs/stella/commands/commands">
+    List or convert this workspace's custom slash commands
+  </SpecCard>
+</CardGrid>
+
+### Steer what the agent knows
+
+<CardGrid size="sm">
+  <SpecCard title="stella ingest" href="/docs/stella/commands/ingest">
+    Turn markdown you already wrote into checkable steering
+  </SpecCard>
+  <SpecCard title="stella context" href="/docs/stella/commands/context">
+    Review, publish, and explain context records
+  </SpecCard>
+  <SpecCard title="stella proposals" href="/docs/stella/commands/proposals">
+    Review what the adaptive-context loop wants to keep
+  </SpecCard>
+  <SpecCard title="stella memory" href="/docs/stella/commands/memory">
+    Inspect and promote the project's memories
+  </SpecCard>
+  <SpecCard title="stella skill" href="/docs/stella/commands/skill">
+    Run a skill as a scoped one-shot (`stella skill run <slug>`)
+  </SpecCard>
+</CardGrid>
+
+### What it cost, what happened
+
+<CardGrid size="sm">
+  <SpecCard title="stella stats" href="/docs/stella/commands/stats">
+    Cost, tokens, and resolve rate per provider and model
+  </SpecCard>
+  <SpecCard title="stella scoreboard" href="/docs/stella/commands/scoreboard">
+    What the work cost, and whether anyone called it good
+  </SpecCard>
+  <SpecCard title="stella observe" href="/docs/stella/commands/observe">
+    Open the Observatory, a local telemetry dashboard
+  </SpecCard>
+  <SpecCard title="stella inspect" href="/docs/stella/commands/inspect">
+    Show the exact context a past model call was sent
+  </SpecCard>
+  <SpecCard title="stella calibration" href="/docs/stella/commands/calibration">
+    Pass calibration: false-positive rate vs CI and reverts
+  </SpecCard>
+  <SpecCard title="stella usage" href="/docs/stella/commands/usage">
+    Cross-project telemetry hub (~/.stella/usage.db)
+  </SpecCard>
+  <SpecCard title="stella tune" href="/docs/stella/commands/tune">
+    A/B one policy knob over two loop-bench result files
+  </SpecCard>
+  <SpecCard title="stella dataset" href="/docs/stella/commands/dataset">
+    Curate a redacted training dataset from workspace receipts
+  </SpecCard>
+</CardGrid>
+
+### Set up
+
+<CardGrid size="sm">
+  <SpecCard title="stella auth" href="/docs/stella/commands/auth">
+    Manage BYOK provider keys in ~/.stella/credentials.toml
+  </SpecCard>
+  <SpecCard title="stella models" href="/docs/stella/commands/models">
+    List configured providers and available models
+  </SpecCard>
+  <SpecCard title="stella mcp" href="/docs/stella/commands/mcp">
+    Manage MCP servers: search, install, list, telemetry
+  </SpecCard>
+  <SpecCard title="stella plugin" href="/docs/stella/commands/plugin">
+    Install, list, and remove plugins
+  </SpecCard>
+  <SpecCard title="stella config" href="/docs/stella/commands/config">
+    Show current configuration
+  </SpecCard>
+  <SpecCard title="stella migrate" href="/docs/stella/commands/migrate">
+    Move settings.json to stella.toml
+  </SpecCard>
+  <SpecCard title="stella doctor" href="/docs/stella/commands/doctor">
+    Check the local state stella owns, and report each verdict
+  </SpecCard>
+  <SpecCard title="stella completions" href="/docs/stella/commands/completions">
+    Print a shell completion script for stella to stdout
+  </SpecCard>
+  <SpecCard title="stella cloud" href="/docs/stella/commands/cloud">
+    Cloud account registration (stub)
+  </SpecCard>
+  <SpecCard title="stella telemetry" href="/docs/stella/commands/telemetry">
+    Inspect or flush the managed enterprise telemetry spool
+  </SpecCard>
+  <SpecCard title="stella version" href="/docs/stella/commands/version">
+    Print the version and exit
+  </SpecCard>
+</CardGrid>
+
+`stella arena` is a benchmark-harness adapter for measuring stella, not for doing work with it. `stella telemetry` operates the managed enterprise spool and is disabled without a signed org-managed enrollment.
+
+## Global flags
+
+The following flags apply to every command. Most have a matching environment variable, so you can set one once for a shell session or in your CI configuration. The exception is `--api-key`, which has no environment variable on purpose. Use `credentials.toml` or a provider key environment variable such as `ANTHROPIC_API_KEY` instead.
+
+Every flag below works in either position: `stella --spend-limit 5 run "…"` and `stella run "…" --spend-limit 5` do the same thing. No subcommand reuses these flag names for something else.
+
+<CardGrid size="md">
+  <OptionCard name="--model <provider/model_id>" defaultValue="auto-detected">
+    Pin the worker model — `zai/glm-5.2`, `anthropic/claude-fable-5`, `openai/gpt-5.5`,
+    `local/llama3.3`. Env `STELLA_MODEL`.
+  </OptionCard>
+  <OptionCard name="--api-key <key>">
+    The highest-priority credential. Requires an explicit
+    `--model provider/…`, since a bare key doesn't say which provider it's for. No env var.
+  </OptionCard>
+  <OptionCard name="--base-url <url>" defaultValue="provider default">
+    Required with `--model local/<model>` to point at a local OpenAI-compatible server; an
+    optional proxy override for any other provider. Env `STELLA_BASE_URL`.
+  </OptionCard>
+  <OptionCard name="--upstream-pin <vendor>" defaultValue="gateway's own choice">
+    Pin a gateway to these upstreams, in order, and refuse any fallback. Repeatable or
+    comma-separated. Does nothing on a direct endpoint. Env `STELLA_UPSTREAM_PIN`. See
+    [below](#--upstream-pin-holding-the-vendor-fixed).
+  </OptionCard>
+  <OptionCard name="--allow-dir <path>" defaultValue="the workspace root only">
+    An extra directory a write tool may touch, outside the workspace root. Repeatable or
+    comma-separated. A relative path resolves against the workspace root, so it means the
+    same directory no matter where the run was launched from. It adds to `stella.toml`'s
+    `[workspace] allowed_dirs` list for one run rather than replacing it, so adding one
+    directory never removes the rest. Env `STELLA_ALLOW_DIR`.
+  </OptionCard>
+  <OptionCard name="--spend-limit <usd>" defaultValue="none (observed)">
+    A hard USD spend cap for the whole run or session. Must be a positive, finite number. Env
+    `STELLA_SPEND_LIMIT`.
+  </OptionCard>
+  <OptionCard name="--turn-timeout <secs>" defaultValue="unbounded">
+    Wall-clock seconds one turn may spend before it wraps up. This is the time version of
+    `--spend-limit`, for callers working under a deadline. Advisory in interactive
+    sessions. Env `STELLA_TURN_TIMEOUT`.
+  </OptionCard>
+  <OptionCard name="--max-output-tokens <n>" defaultValue="the model's own ceiling">
+    Cap output tokens per step below what the model can write, to spend less. This is
+    clamped to the real ceiling rather than sent as written, and wins over
+    `[models.output_caps]` and per-agent `params.max_tokens`. Env `STELLA_MAX_OUTPUT_TOKENS`.
+  </OptionCard>
+  <OptionCard name="--plain" defaultValue="off">
+    Use the plain line-based REPL for chat instead of the Command Deck. Also
+    auto-selected on a non-TTY. Env `STELLA_PLAIN=1`.
+  </OptionCard>
+  <OptionCard name="--accessible" defaultValue="off">
+    Run the Command Deck so a screen reader can read it: inline on your own screen,
+    completed messages sent to scrollback, single-column panels, labelled rows instead of
+    tables. Env `STELLA_ACCESSIBLE=1`.
+  </OptionCard>
+  <OptionCard name="--no-anim" defaultValue="off">
+    Freeze all deck animation to a static frame, for CI and screen recordings.
+    Env `STELLA_NO_ANIM` / `NO_COLOR`.
+  </OptionCard>
+  <OptionCard name="--mouse" defaultValue="off">
+    Capture the mouse in interactive mode: click a tab to switch to it, wheel-scroll the
+    transcript. This costs the terminal's own text selection (shift+drag still selects), which
+    is why it is off by default. Env `STELLA_MOUSE=1`.
+  </OptionCard>
+  <OptionCard name="-v / --verbose" defaultValue="warn">
+    Diagnostics: `-v` info, `-vv` debug, `-vvv` trace. See
+    [below](#diagnostics--v---log-level---log-file).
+  </OptionCard>
+  <OptionCard name="--log-level <spec>" defaultValue="warn">
+    A per-module diagnostic filter — `warn,stella_store=debug`. Env `STELLA_LOG`; the flag
+    wins over both it and `-v`.
+  </OptionCard>
+  <OptionCard name="--plan-mode" defaultValue="off">
+    Show the plan and wait for approval before anything runs, whatever its size. Needs an
+    interactive terminal, since there is nobody to ask in a headless run. Scope review already
+    interrupts on its own for a large plan.
+  </OptionCard>
+  <OptionCard name="--minimal" defaultValue="off">
+    Run this session on the minimal base system prompt: a bare tool list in
+    place of the built-in persona, so the instructions the model follows come from your
+    own prompt settings — `agents.default.prompt` (which appends after the minimal base),
+    workspace memories, rules, and SessionStart hook context. Durable spelling:
+    `[agents] minimal_prompt = "on"` in `stella.toml`. Env `STELLA_MINIMAL`. The flag
+    forces the mode on for one run only; it can never turn a configured mode off.
+  </OptionCard>
+  <OptionCard name="--tools <spec>" defaultValue="settings">
+    Turn tools off for this run only: `--tools '*:off,task_list:on,get_state:on'` is a
+    read-only run. Uses the same format as the settings `tools` table. It can only narrow
+    what is allowed — it never switches on what a policy turned off. See
+    [below](#--tools-narrowing-for-one-run).
+  </OptionCard>
+  <OptionCard name="--log-file <path>" defaultValue="none">
+    Write diagnostics as JSONL to a file, created with permissions `0600`, at `info` level by
+    default. An unwritable path is reported and the run continues.
+  </OptionCard>
+  <OptionCard name="--foreground" defaultValue="supervised">
+    Own this terminal instead of surviving it. Env `STELLA_FOREGROUND`. See
+    [`stella daemon`](/docs/stella/commands/daemon).
+  </OptionCard>
+  <OptionCard name="--detach" defaultValue="off">
+    Start the run in the background and return to the shell right away. `--foreground`
+    wins if both are given. Env `STELLA_DETACH`. See
+    [`stella daemon`](/docs/stella/commands/daemon).
+  </OptionCard>
+</CardGrid>
+
+<Callout type="warn">
+Prefer an environment variable or `credentials.toml` for anything long-lived. A key passed with `--api-key` shows up in your shell history and in `ps` output.
+</Callout>
+
+### `--upstream-pin`: holding the vendor fixed
+
+Only a gateway routes to another vendor's hardware, so this applies to OpenRouter, where it sets `provider.order` and `allow_fallbacks: false`. It does nothing on a direct endpoint.
+
+```bash
+stella run "…" --model openrouter/anthropic/claude-fable-5 \
+  --upstream-pin z-ai --upstream-pin anthropic
+```
+
+Use it when two runs must be comparable. A gateway otherwise picks per app identity and may serve the same model from a different vendor between runs, which quietly changes the one thing a head-to-head comparison is supposed to hold fixed. It's a flag rather than a settings-only option because a measured trial runs with settings isolation (`STELLA_NO_SETTINGS`), where a flag is the only way to reach it. That's also why `--base-url` is a flag.
+
+### `--tools`: narrowing for one run
+
+The value is a comma-separated list of `name:on` / `name:off`, where a name is a tool, a [group](/docs/stella/agent-tools/permissions), or `*`. It uses the same format as the settings `tools` table, so you can try a policy before writing it to a file.
+
+```bash
+stella run "triage the board" --tools '*:off,task_list:on,get_state:on,list_state:on'
+stella run "ship the fix"     --tools 'task_assign:off'
+```
+
+This flag can only take capability away, never add it: turning something off is always allowed, and turning something on never overrides a deny from an org or project policy.
+
+### Diagnostics: `-v`, `--log-level`, `--log-file`
+
+The diagnostic output explains why stella behaved the way it did. This is different from what the agent did (the [event stream](/docs/stella/event-stream-compatibility)) and what it cost (the [receipts](/docs/stella/telemetry)). Diagnostic records carry a stable code and typed fields, and never include prompts, paths, or model output.
+
+```bash
+stella run "…" -vv                                   # debug everywhere
+stella run "…" --log-level 'warn,stella_model=trace' # quiet except where you are looking
+stella run "…" --log-file ./run.jsonl                # JSONL to a file, created 0600
+```
+
+A target is a Rust module path, so library modules are `stella_store`, `stella_model`, and so on, and the binary's own records are under `stella` (hyphens work too). The longest match wins. An unrecognized clause is reported and skipped rather than treated as fatal. Levels are `off`, `error`, `warn`, `info`, `debug`, `trace`.
+
+You don't need a flag to catch an unplanned crash: stella writes `.stella/private/crash-*.jsonl` on a panic or a failed run, and [`stella doctor --last-failure`](/docs/stella/commands/doctor) prints the newest one.
+
+### `--output-format` (a flag of `run` and `fleet`, not a global)
+
+`--output-format <text|json|stream-json>` (env `STELLA_OUTPUT_FORMAT`) is not in the table above on purpose. It's a promise about what reaches stdout, and only the commands that keep that promise offer it: [`stella run`](/docs/stella/commands/run) and [`stella fleet`](/docs/stella/commands/fleet). As a subcommand flag, it goes after the subcommand — `stella run "…" --output-format json` — and using it anywhere else is a parse error, not a flag that's silently ignored. [`stella arena`](/docs/stella/commands/arena) always emits stream-json, since the benchmark runner is its only reader. The interactive `chat`, `goal`, and `monitor` modes always render text, and query commands with a machine-readable shape declare their own flag (`stella stats --format json`, `stella inspect --format json`, `stella memory list --format json`).
+
+<CardGrid size="sm">
+  <OptionCard name="text">
+    Interactive, human-readable render. The default.
+  </OptionCard>
+  <OptionCard name="json">
+    One final JSON object emitted at the end of the run. Headless.
+  </OptionCard>
+  <OptionCard name="stream-json">
+    One JSON line per `AgentEvent` as it happens. Headless streaming.
+  </OptionCard>
+</CardGrid>
+
+### `--spend-limit` modes
+
+<CardGrid size="md">
+  <SpecCard title="Observed">
+    Omit `--spend-limit`. Spend is tracked for the cost summary but never blocks anything.
+  </SpecCard>
+  <SpecCard title="Enforced">
+    Pass `--spend-limit <usd>`. This is a hard cap: work stops cleanly, never mid-tool, once spend
+    exceeds it.
+  </SpecCard>
+</CardGrid>
+
+Token usage, cost, and per-step metering are recorded in a local SQLite store on your disk (`<workspace>/.stella/private/store.db`). Nothing is sent anywhere. See [`stella stats`](/docs/stella/commands/stats).
+
+## Model selection
+
+If you do not pass `--model`, stella auto-detects a provider by picking the first one with a usable credential, in this order:
+
+```text
+zai, anthropic, openai, xai, deepseek, gemini, openrouter, then vertex, and bedrock LAST
+```
+
+`vertex` and `bedrock` are checked last so that generic AWS or Google credentials present for other reasons never get picked by accident. To be explicit, pin a model with `--model provider/model_id`.
+
+## Exit codes
+
+Every command follows standard shell conventions:
+
+<CardGrid size="md">
+  <OptionCard name="0">
+    Success.
+  </OptionCard>
+  <OptionCard name="1">
+    An error occurred — a missing credential, a run stopped by a budget cap, a failed goal,
+    a doctor check that did not pass.
+  </OptionCard>
+  <OptionCard name="128 + signal">
+    The run was interrupted by a signal rather than failing on its own. `SIGINT`
+    (Ctrl-C) exits `130`, `SIGTERM` exits `143`.
+  </OptionCard>
+</CardGrid>
+
+The signal range exists so a script wrapping `stella run` can tell "the user stopped this"
+from "this failed" — different outcomes that usually need different handling:
+
+```bash
+stella run "Fix the failing tests"
+case $? in
+  0)   echo "done" ;;
+  130) echo "interrupted — nothing to report" ;;
+  *)   echo "run failed" ;;
+esac
+```
+
+This makes stella safe to use in scripts and CI pipelines. Check `$?` (or rely on `set -e`) to react to failures.
