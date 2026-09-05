@@ -1,6 +1,6 @@
 /**
  * permissions-gate.ts — Evaluates `settings.permissions` for the agent's local
- * tools (read_file/write_file/edit_file/bash/…).
+ * tools (read_file/write_file/edit_file/delete_file/list_dir/search/bash/ask_user).
  *
  * Rules use Claude Code's syntax: a canonical tool name, optionally narrowed by
  * a glob over the call's "subject" (the command for Bash, the path for a write,
@@ -46,25 +46,57 @@ export interface LocalPermissionResult {
   rule?: string;
 }
 
-/** Local tool id → canonical permission name used in rule strings. */
-const CANONICAL: Record<string, string> = {
+/**
+ * Local tool id → canonical permission name used in rule strings. EVERY tool
+ * `buildWorkspaceTools` (`@oxagen/agent-engine`) can register gets a row here —
+ * `permissions-gate-registry.test.ts` derives the real tool set from that
+ * factory and fails if one is missing or if a retired one is left behind. A
+ * tool with no row falls through to its own raw name (see
+ * {@link canonicalToolName}), which is correct for MCP tools (`mcp__server__x`
+ * rules match their own literal name) but was the bug for a local tool: a
+ * "deny Edit" rule silently never reached `delete_file` because it had no row
+ * and so never became `"Edit"`.
+ *
+ * `delete_file` is deliberately mapped to `"Edit"`, not a separate `"Delete"`
+ * word: deleting a file is a change to it, and a rule written to stop the
+ * agent from changing files is expected to stop it from removing them too.
+ * `search` replaced the retired `glob`/`grep` tools and inherits their
+ * mapping (read-only). `ask_user` has no filesystem/command subject to
+ * narrow, but still gets an explicit row — `"AskUser"` — so it is a decision,
+ * not a silent gap.
+ *
+ * The five deterministic structured tools (`test_unit_run`, `test_trace_run`,
+ * `build_package_run`, `git_diff_summarize`, `workspace_health_check` —
+ * `tools-shared.ts`'s `CANONICAL_TOOL_NAMES`, always merged into the tool set
+ * by `buildWorkspaceTools`) keep the dotted canonical name that naming
+ * standard already gave them (`test.unit.run`, …), so a rule can also target
+ * a whole domain with a glob (`"test.*"`, `"git.*"`) the same way an MCP rule
+ * targets a whole server (`"mcp__github__*"`).
+ */
+export const CANONICAL: Readonly<Record<string, string>> = {
   read_file: "Read",
   list_dir: "Read",
-  glob: "Read",
-  grep: "Read",
+  search: "Read",
   write_file: "Write",
   edit_file: "Edit",
+  delete_file: "Edit",
   bash: "Bash",
+  ask_user: "AskUser",
+  test_unit_run: "test.unit.run",
+  test_trace_run: "test.trace.run",
+  build_package_run: "build.package.run",
+  git_diff_summarize: "git.diff.summarize",
+  workspace_health_check: "workspace.health.check",
 };
 
 /** Local tool id → the input field used as the rule "subject". */
 const SUBJECT_FIELD: Record<string, string> = {
   read_file: "path",
   list_dir: "path",
-  glob: "pattern",
-  grep: "pattern",
+  search: "query",
   write_file: "path",
   edit_file: "path",
+  delete_file: "path",
   bash: "command",
 };
 
