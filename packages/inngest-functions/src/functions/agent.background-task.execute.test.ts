@@ -1,11 +1,21 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+// A well-formed uuid standing in for backgroundTasks.id (the uuid primary
+// key) — deliberately shaped nothing like the "bgt_..." public id, so a test
+// asserting against this value cannot pass by accident if the code under
+// test regresses to writing the public id again (#2656).
+const TASK_UUID = "c9b1b1a4-6b1a-4c1e-9c1a-4b1a6b1a4c1e";
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 // The background-task executor imports are heavy (inngest, database, agent).
 // We mock all external seams so the test runs without real infrastructure.
 const mocks = vi.hoisted(() => ({
   dbUpdateSet: vi.fn(),
   dbUpdateWhere: vi.fn(),
+  /** Mock for the `.returning()` leg of the mark-running UPDATE chain. */
+  dbUpdateReturning: vi.fn(),
   dbUpdate: vi.fn(),
   dbInsert: vi.fn(),
   /** Mock for kernel.invoke — replaces the old @oxagen/agent invokeCapability mock. */
@@ -15,8 +25,12 @@ const mocks = vi.hoisted(() => ({
   inngestClient: {} as Record<string, unknown>,
 }));
 
-// DB UPDATE chain: .update().set().where()
-mocks.dbUpdateWhere.mockResolvedValue(undefined);
+// DB UPDATE chain: .update().set().where() — the object .where() returns is
+// awaited directly by mark-completed/mark-failed (a plain, non-thenable
+// object resolves to itself) and additionally chained with .returning() by
+// mark-running to recover the row's real uuid `id` (#2656).
+mocks.dbUpdateWhere.mockReturnValue({ returning: mocks.dbUpdateReturning });
+mocks.dbUpdateReturning.mockResolvedValue([{ id: TASK_UUID }]);
 mocks.dbUpdateSet.mockReturnValue({ where: mocks.dbUpdateWhere });
 mocks.dbUpdate.mockReturnValue({ set: mocks.dbUpdateSet });
 
@@ -136,10 +150,12 @@ describe("agentBackgroundTaskExecute Inngest handler", () => {
     mocks.dbUpdate.mockClear();
     mocks.dbUpdateSet.mockClear();
     mocks.dbUpdateWhere.mockClear();
+    mocks.dbUpdateReturning.mockClear();
     mocks.kernelInvoke.mockClear();
     mocks.insertToolInvocation.mockClear();
     // Restore DB chain defaults
-    mocks.dbUpdateWhere.mockResolvedValue(undefined);
+    mocks.dbUpdateWhere.mockReturnValue({ returning: mocks.dbUpdateReturning });
+    mocks.dbUpdateReturning.mockResolvedValue([{ id: TASK_UUID }]);
     mocks.dbUpdateSet.mockReturnValue({ where: mocks.dbUpdateWhere });
     mocks.dbUpdate.mockReturnValue({ set: mocks.dbUpdateSet });
     mocks.insertToolInvocation.mockResolvedValue(undefined);
@@ -229,10 +245,11 @@ describe("agentBackgroundTaskExecute Inngest handler", () => {
 
   // Witness for #2615: this producer used to hardcode `execution_step_id:
   // null` on every tool_invocations row, so a row from this executor could
-  // never be joined back to the task that produced it. taskId is this run's
-  // own identity — the same value CapabilityContext.executionStepId now
-  // carries (#2597) — so both the completed and failed telemetry rows must
-  // carry it, not null.
+  // never be joined back to the task that produced it. The run's real uuid
+  // (backgroundTasks.id, recovered via the mark-running UPDATE's
+  // .returning() — #2656) is this run's own identity — the same value
+  // CapabilityContext.executionStepId now carries (#2597) — so both the
+  // completed and failed telemetry rows must carry it, not null.
   it("gives the capability context the run's executionStepId and writes it through", async () => {
     mocks.kernelInvoke.mockResolvedValueOnce({ ok: true });
 
@@ -243,7 +260,7 @@ describe("agentBackgroundTaskExecute Inngest handler", () => {
       unknown,
       Record<string, unknown>,
     ];
-    expect(capCtx.executionStepId).toBe("task_pub_1");
+    expect(capCtx.executionStepId).toBe(TASK_UUID);
 
     expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
     const telArgs = mocks.insertToolInvocation.mock.calls[0]![0] as Record<
@@ -251,7 +268,7 @@ describe("agentBackgroundTaskExecute Inngest handler", () => {
       unknown
     >;
     expect(telArgs.status).toBe("completed");
-    expect(telArgs.execution_step_id).toBe("task_pub_1");
+    expect(telArgs.execution_step_id).toBe(TASK_UUID);
   });
 
   it("records the run's executionStepId on the failed tool_invocations row too", async () => {
@@ -267,7 +284,57 @@ describe("agentBackgroundTaskExecute Inngest handler", () => {
       unknown
     >;
     expect(telArgs.status).toBe("failed");
-    expect(telArgs.execution_step_id).toBe("task_pub_1");
+    expect(telArgs.execution_step_id).toBe(TASK_UUID);
+  });
+
+  // Witness for #2656: message_id/execution_step_id are UUID-typed ClickHouse
+  // columns (packages/telemetry/src/schema.sql) and backgroundTasks.publicId
+  // ("bgt_...") is a citext string, not a uuid — so this producer's telemetry
+  // insert failed on every single background-task run before this fix,
+  // silently, because the failure was caught and only logger.warn'd. This
+  // asserts the actual shape of the value written, not merely that the row
+  // was constructed: a value that happens to equal the taskId string, or any
+  // other non-UUID placeholder, must fail this test just as surely as the
+  // pre-fix code did.
+  it("writes a real UUID — not the bgt_ public id — into message_id and execution_step_id", async () => {
+    mocks.kernelInvoke.mockResolvedValueOnce({ ok: true });
+
+    await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
+
+    expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
+    const telArgs = mocks.insertToolInvocation.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(telArgs.message_id).toMatch(UUID_RE);
+    expect(telArgs.execution_step_id).toMatch(UUID_RE);
+    expect(telArgs.message_id).not.toBe(BASE_EVENT.data.taskId);
+    expect(telArgs.execution_step_id).not.toBe(BASE_EVENT.data.taskId);
+    expect(telArgs.message_id).toBe(TASK_UUID);
+    expect(telArgs.execution_step_id).toBe(TASK_UUID);
+  });
+
+  // The mark-running UPDATE's WHERE clause targets this exact taskId, so it
+  // never matching a row is not this test's normal path — but it is real
+  // (e.g. a concurrent hard-delete of the row between start and execute) and
+  // there is genuinely no uuid to attribute telemetry to when it happens.
+  // Absence must stay absence: the fix must skip the tool_invocations insert
+  // rather than substitute a fabricated id (a row keyed by a made-up uuid
+  // joins to nothing, or worse, collides with something real).
+  it("skips the tool_invocations insert when the background_tasks row has no uuid to give", async () => {
+    mocks.dbUpdateReturning.mockResolvedValueOnce([]); // mark-running finds no row
+    mocks.kernelInvoke.mockResolvedValueOnce({ ok: true });
+
+    const result = (await capturedHandler!({
+      event: BASE_EVENT,
+      step: makeStep(),
+    })) as Record<string, unknown>;
+
+    // The capability still runs and the task still completes — a telemetry
+    // gap must never break the user's task.
+    expect(result.status).toBe("completed");
+    expect(mocks.kernelInvoke).toHaveBeenCalledTimes(1);
+    expect(mocks.insertToolInvocation).not.toHaveBeenCalled();
   });
 
   it("captures non-Error thrown values as string failureReason", async () => {
