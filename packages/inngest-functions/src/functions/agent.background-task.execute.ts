@@ -44,7 +44,17 @@ export const [agentBackgroundTaskExecute] = createFunction(
     };
     const p = (payload ?? {}) as BgPayload;
 
-    await step.run("mark-running", () =>
+    // The mark-running UPDATE already targets this exact row by publicId, so
+    // asking it to RETURNING the row's real uuid `id` gets us the one piece
+    // of run identity this function is missing — no Inngest event/wire
+    // change needed (#2656). `taskId` (backgroundTasks.publicId, "bgt_...")
+    // is a citext string and stays the correlation key for every update
+    // against this row below; `taskUuid` is the row's actual UUID primary
+    // key and is the only thing safe to hand to a UUID-typed telemetry
+    // column. `taskUuid` is `null` rather than a guess when the row can't be
+    // found — see the emit-tool-invocation-* steps below for why that
+    // absence must stay absence instead of being papered over.
+    const [markRunningRow] = await step.run("mark-running", () =>
       runInTenantScope({ orgId, workspaceId }, () =>
         withTenantDb((tx) =>
           tx
@@ -55,10 +65,22 @@ export const [agentBackgroundTaskExecute] = createFunction(
                 eq(schema.backgroundTasks.publicId, taskId),
                 eq(schema.backgroundTasks.orgId, orgId),
               ),
-            ),
+            )
+            .returning({ id: schema.backgroundTasks.id }),
         ),
       ),
     );
+    const taskUuid = markRunningRow?.id ?? null;
+    if (!taskUuid) {
+      // The row this function was dispatched for doesn't exist (or isn't in
+      // this org) — surprising, since agent.background_task.start just
+      // inserted it, but not impossible (e.g. a concurrent hard-delete).
+      // Nothing downstream has a real uuid to attribute telemetry to.
+      logger.warn(
+        { taskId, orgId, workspaceId },
+        "background_tasks row not found on mark-running — tool_invocations telemetry cannot be attributed to this run",
+      );
+    }
 
     // Deterministic — not crypto.randomUUID() — so a replayed/retried
     // invocation of this function derives the same tool_invocations row id
@@ -78,16 +100,17 @@ export const [agentBackgroundTaskExecute] = createFunction(
         if (!capabilityName)
           throw new Error("background task payload missing 'capability'");
         // executionStepId names this background task's own run as the
-        // correlation key (#2597/#2615) — the same taskId already used below
-        // as this invocation's message_id, so a tool_invocations row and any
-        // token_usage the capability incurs join on the same value.
-        //
-        // taskId is backgroundTasks.publicId ("bgt_..."), not a UUID, while
-        // ClickHouse's message_id/execution_step_id columns are UUID-typed —
-        // a pre-existing defect (#2656) that predates this fix and already
-        // made every insertToolInvocation call below fail silently. The real
-        // fix is plumbing the row's actual uuid id through the Inngest event;
-        // this file has no other run identity to give until that lands.
+        // correlation key (#2597/#2615) — the same taskUuid used below as
+        // this invocation's message_id, so a tool_invocations row and any
+        // token_usage the capability incurs join on the same value. Both
+        // must be the row's real uuid: CapabilityContext.executionStepId's
+        // own contract is "the correlation key every telemetry table means
+        // by execution_step_id" (packages/oxagen/src/types.ts), and every
+        // execution_step_id column that key reaches is UUID-typed (#2656).
+        // requestId keeps taskId (the public id) — it is a free-form
+        // correlation string everywhere else in the platform (see
+        // agent.sandbox-reaper.ts's "sandbox-reaper:<id>"), not a UUID
+        // column value, so the public id is the more useful one for logs.
         const ctx = {
           orgId,
           workspaceId,
@@ -96,7 +119,7 @@ export const [agentBackgroundTaskExecute] = createFunction(
           requestId: taskId,
           surface: "runner" as const,
           messageId: null,
-          executionStepId: taskId,
+          executionStepId: taskUuid,
         };
         // Route through kernel.invoke() for IAM enforcement, audit, and
         // uniform metering.
@@ -126,15 +149,26 @@ export const [agentBackgroundTaskExecute] = createFunction(
       // point never re-inserts the row (tool_invocations is a plain
       // append-only MergeTree — no dedup on re-insert).
       await step.run("emit-tool-invocation-completed", async () => {
+        // message_id is a non-nullable UUID column (#2656) — with no real
+        // uuid for this run, absence must stay absence: skip the row rather
+        // than write a fabricated id that would join to nothing (or worse,
+        // to the wrong thing).
+        if (!taskUuid) {
+          logger.warn(
+            { taskId, orgId, workspaceId },
+            "no background_tasks row uuid — skipping tool_invocations insert",
+          );
+          return;
+        }
         try {
           await insertToolInvocation({
             invocation_id: invocationId,
             org_id: orgId,
             workspace_id: workspaceId,
             capability_name: capabilityName ?? "unknown",
-            message_id: taskId,
+            message_id: taskUuid,
             parent_message_id: null,
-            execution_step_id: taskId,
+            execution_step_id: taskUuid,
             status: "completed",
             input_size_bytes: 0,
             output_size_bytes: 0,
@@ -183,15 +217,23 @@ export const [agentBackgroundTaskExecute] = createFunction(
       // Write failed metering row. Wrapped in its own memoized step — see
       // the completed-path comment above for why.
       await step.run("emit-tool-invocation-failed", async () => {
+        // Same absence-stays-absence guard as the completed path above.
+        if (!taskUuid) {
+          logger.warn(
+            { taskId, orgId, workspaceId },
+            "no background_tasks row uuid — skipping tool_invocations insert",
+          );
+          return;
+        }
         try {
           await insertToolInvocation({
             invocation_id: invocationId,
             org_id: orgId,
             workspace_id: workspaceId,
             capability_name: capabilityName ?? "unknown",
-            message_id: taskId,
+            message_id: taskUuid,
             parent_message_id: null,
-            execution_step_id: taskId,
+            execution_step_id: taskUuid,
             status: "failed",
             input_size_bytes: 0,
             output_size_bytes: 0,
