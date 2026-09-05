@@ -106,41 +106,37 @@ jobs:
               q: `repo:${context.repo.owner}/${context.repo.repo} is:issue is:open "${MARKER}" in:body`,
             })
 
-            // GitHub's code search is a PHRASE search, not a literal one: the
-            // quoted marker is tokenised, so `"<!-- scr-corpus-drift -->"`
-            // matches issues that merely contain those words in that order.
-            // It once matched an unrelated issue and this job replaced that
-            // issue's entire body with a drift report (#2666).
-            //
-            // So the search is treated as a candidate list, never as an
-            // answer: every hit is re-fetched and kept only if its body
-            // actually contains the marker.
-            const candidates = existing.data.items ?? []
-            const confirmed = []
-            for (const item of candidates) {
-              const { data: full } = await github.rest.issues.get({
-                ...context.repo,
-                issue_number: item.number,
-              })
-              if ((full.body ?? '').includes(MARKER)) confirmed.push(item.number)
-            }
+            // The lookup lives in a tested module because it could not be
+            // tested inline, and inline it destroyed an unrelated issue's body
+            // (#2666). Search is a candidate list, never an answer.
+            const { confirmMarkedIssues, decideDriftAction } = await import(
+              `${process.env.GITHUB_WORKSPACE}/tools/scripts/scr-drift-issue.mjs`
+            )
 
-            if (confirmed.length > 1) {
-              // Two issues carrying the marker is a state this job cannot
-              // resolve safely, and picking one would silently orphan the
-              // other. Say so and file nothing.
-              core.setFailed(
-                `Several issues carry the drift marker (${confirmed.join(', ')}). ` +
-                  'Close all but one, then re-run.',
-              )
+            const confirmed = await confirmMarkedIssues(
+              existing.data.items,
+              async (n) => {
+                const { data } = await github.rest.issues.get({
+                  ...context.repo,
+                  issue_number: n,
+                })
+                return data.body
+              },
+              MARKER,
+            )
+
+            const decision = decideDriftAction(confirmed)
+
+            if (decision.action === 'abort') {
+              core.setFailed(decision.reason)
               return
             }
 
-            if (confirmed.length === 1) {
+            if (decision.action === 'update') {
               // Update in place rather than commenting daily: the issue should
               // always show the *current* divergence, and an unresolved drift
               // must not grow a 30-comment tail before someone reads it.
-              const number = confirmed[0]
+              const number = decision.number
               await github.rest.issues.update({ ...context.repo, issue_number: number, body })
               core.notice(`Updated existing drift issue #${number}`)
             } else {
