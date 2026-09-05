@@ -106,11 +106,37 @@ jobs:
               q: `repo:${context.repo.owner}/${context.repo.repo} is:issue is:open "${MARKER}" in:body`,
             })
 
-            if (existing.data.total_count > 0) {
+            // The lookup lives in a tested module because it could not be
+            // tested inline, and inline it destroyed an unrelated issue's body
+            // (#2666). Search is a candidate list, never an answer.
+            const { confirmMarkedIssues, decideDriftAction } = await import(
+              `${process.env.GITHUB_WORKSPACE}/tools/scripts/scr-drift-issue.mjs`
+            )
+
+            const confirmed = await confirmMarkedIssues(
+              existing.data.items,
+              async (n) => {
+                const { data } = await github.rest.issues.get({
+                  ...context.repo,
+                  issue_number: n,
+                })
+                return data.body
+              },
+              MARKER,
+            )
+
+            const decision = decideDriftAction(confirmed)
+
+            if (decision.action === 'abort') {
+              core.setFailed(decision.reason)
+              return
+            }
+
+            if (decision.action === 'update') {
               // Update in place rather than commenting daily: the issue should
               // always show the *current* divergence, and an unresolved drift
               // must not grow a 30-comment tail before someone reads it.
-              const number = existing.data.items[0].number
+              const number = decision.number
               await github.rest.issues.update({ ...context.repo, issue_number: number, body })
               core.notice(`Updated existing drift issue #${number}`)
             } else {
