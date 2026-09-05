@@ -1,0 +1,253 @@
+---
+title: Event stream compatibility
+description: What stays the same, what can change, and what your client needs to do to keep working after a stella upgrade.
+---
+
+Every machine-readable output stella produces uses the same event objects:
+
+- [`--output-format stream-json`](/docs/stella/scripting) — one event per line on stdout
+- `--output-format json` — the same objects, batched under an `events` key
+- the session journal stella writes to `.stella/private/` and replays on `stella resume`
+
+Learn this contract once, and it works for every one of these surfaces,
+whether your client is written in Rust or anything else.
+
+## The guarantee
+
+**A client built against one version of stella keeps working with later
+versions, unchanged.** Upgrading stella will not break a parser that already
+works.
+
+That holds in both directions:
+
+<CardGrid size="md">
+  <SpecCard
+    title="A new field on an existing event"
+    meta={[
+      { label: "Older client", value: "ignores it", mono: false },
+      { label: "Newer client", value: "filled with its default", mono: false },
+    ]}
+  >
+    Adding a field is always safe in both directions.
+  </SpecCard>
+  <SpecCard
+    title="A brand-new event type"
+    meta={[
+      { label: "Older client", value: "preserved, reported as unrecognized", mono: false },
+      { label: "Newer client", value: "never appears", mono: false },
+    ]}
+  >
+    An event your client doesn't recognize must pass through safely, not
+    break the parser.
+  </SpecCard>
+  <SpecCard
+    title="A renamed event type"
+    meta={[
+      { label: "Older client", value: "stops seeing it", mono: false },
+      { label: "Newer client", value: "never sees the old name", mono: false },
+    ]}
+  >
+    Rare. A rename is a breaking change, and stella always announces it as
+    one — never as a routine update.
+  </SpecCard>
+</CardGrid>
+
+A field's name is never reused for something else once it ships. If a field
+is renamed, the old name still works as an alias, so a recorded stream keeps
+parsing. That's why `text` accepts `#[serde(alias = "delta")]`, and
+`text_delta` accepts the reverse.
+
+**Event type names are a weaker promise than field names.** They can be
+renamed, though rarely. Two separate events mark completion today:
+
+| Event | Means | Fires |
+| --- | --- | --- |
+| `turn_complete` | One turn finished | Once per turn — several times in a wrapped run |
+| `run_complete` | The run finished — the stream's terminator | Exactly once, last, on success |
+
+Match on `run_complete` to know that nothing more is coming. Match on
+`turn_complete` if you want per-turn boundaries. There is no event called
+`complete` — build your client around the two names above, not the single
+word you might expect from other tools.
+
+## The two rules
+
+Everything above comes down to one distinction. stella's own reader enforces
+it exactly, and your client should too:
+
+<EventContractDiagram />
+
+**1. An event `type` you do not recognize is normal. Skip it and keep going.**
+
+It means the stream came from a newer version of stella than your client
+knows about. This is not an error, and it's not a reason to stop reading.
+stella's own decoder keeps these events whole instead of failing on that
+line.
+
+**2. A `type` you *do* recognize, carrying a body that does not fit, is a
+real error. Fail loudly.**
+
+That's not a version mismatch. It's corruption, or a bug in whatever
+produced the stream. Treating it as "probably just something new" turns a
+loud failure into silent data loss — a bad record ends up in your database
+instead of in your error log.
+
+<Callout type="warn">
+  It's tempting to wrap each line in a single `try { parse } catch { skip }`.
+  Don't. That treats every failure like rule 1 and quietly swallows
+  malformed events you needed to know about. Check whether the `type` is one
+  you recognize first, *then* parse.
+</Callout>
+
+## What a client must do
+
+A conforming client:
+
+1. Reads the stream **line by line** and parses each line as an independent
+   JSON object. Never buffer the whole stream and parse it as one document.
+2. Dispatches on the `"type"` string.
+3. On an unrecognized `"type"`, doesn't fail, doesn't warn loudly, and
+   doesn't guess what it means from its name. Counts it, logs it at debug
+   level, or passes it through — nothing more.
+4. On a recognized `"type"` whose body doesn't parse, raises a real error.
+5. Ignores unknown *fields* on events it does recognize.
+6. Tolerates a cut-off final line. A process killed mid-write can leave a
+   partial JSON object at the end — everything before it is still valid.
+
+Point 6 matters more than it looks. A crashed or cancelled run is normal, not
+an edge case.
+
+```ts
+// TypeScript: the shape the contract asks for.
+const KNOWN = new Set([
+  "stage", "text", "text_delta", "tool_start", "tool_result",
+  "turn_complete", "run_complete", /* … */
+]);
+
+for (const line of stream) {
+  if (!line.trim()) continue;
+
+  let event: { type?: string };
+  try {
+    event = JSON.parse(line);
+  } catch {
+    // Not JSON. Only forgivable as the final line of a killed run.
+    if (isFinalLine) break;
+    throw new Error(`corrupt event line: ${line}`);
+  }
+
+  if (typeof event.type !== "string" || !KNOWN.has(event.type)) {
+    // Rule 1: from a newer Stella. Inert, not fatal.
+    onUnrecognized?.(event);
+    continue;
+  }
+
+  // Rule 2: a type we know — a body that does not fit is a real error.
+  handle(parseKnownEvent(event));
+}
+```
+
+## Unrecognized events in practice
+
+Suppose a future stella adds a `quantum_reticulation` event. A client built
+before it existed sees:
+
+```json
+{"type":"stage","name":"execute","scope":"run"}
+{"type":"quantum_reticulation","call_id":"q_1","splines":["alpha","beta"]}
+{"type":"text","text":"Done."}
+{"type":"run_complete","model":"m","cost_usd":0.002}
+```
+
+It processes `stage`, `text`, and `run_complete` exactly as before, and
+treats line 2 as inert. The run is fully usable. Nothing is lost that the
+client could have understood anyway.
+
+This isn't just a made-up example. `quantum_reticulation` is one of two
+invented event types in the conformance fixture below, so this snippet comes
+straight from a file you can run your own client against.
+
+If your client re-emits or stores events, keep unrecognized ones **whole**.
+A proxy or recorder that drops them quietly weakens the stream for whatever
+reads it next — which might be a newer client that would have understood
+them fine.
+
+<Callout type="info">
+  Object key order isn't part of the contract and can change, since JSON
+  keys are unordered by definition. Compare parsed values, never raw lines.
+</Callout>
+
+## The `ts` stamp
+
+Every line carries an optional `ts`: the wall-clock instant the sink wrote
+it, in milliseconds since the Unix epoch (UTC).
+
+```json
+{"ts":1754582400123,"type":"tool_result","call_id":"c1","duration_ms":4200}
+```
+
+It's stamped by the *sink*, not by the event itself.
+
+### What that means for a client
+
+- **It is optional forever.** Lines recorded before this field existed have
+  none of it — that includes every archived `stella-events.jsonl` file — so
+  read it as `ts ?? null`, never as a required field.
+- **It isn't guaranteed to increase.** It comes from the system clock, so a
+  clock correction can put a later line before an earlier one. Clamp a
+  negative time difference to zero instead of displaying it.
+- **It measures when the line was written, not when the event happened.**
+  The same event sent to two different sinks gets each sink's own
+  timestamp. Use it to compare timing within one stream, not to line up two
+  different streams to the millisecond.
+
+For measuring how long something took, use durations instead. `tool_result`
+and `step_usage` carry a `duration_ms` measured directly by the engine,
+which is exact where `ts` is only a rough anchor.
+
+## What isn't guaranteed
+
+- **Ordering between event types** beyond what this page documents.
+  `text_delta` lines interleave with other events.
+- **That `stage` events form one single sequence.** Two separate sources
+  emit them, and the `scope` field tells you which. The engine emits its
+  own set once per turn with `"scope":"turn"`. A wrapper — a plugin or a
+  goal loop — emits its own set once per run with `"scope":"run"`. If your
+  client tracks stage transitions, check `scope` first. Otherwise you'll
+  read two separate sequences as one, and mistake a wrapper's boundary for
+  an engine problem.
+- **A `ts` that always increases.** As covered above, it's a wall clock, and
+  it can repeat or move backward.
+- **That every event always means the same thing to you.** `text_delta` is
+  a best-effort preview only. The `text` event that follows it carries the
+  final, correct text for that step, and you must *replace* your
+  accumulated deltas with it rather than appending to them (a retried model
+  call re-streams its deltas from the start). See
+  [Scripting & automation](/docs/stella/scripting).
+- **Internal lifecycle events.** stella's context-management system emits
+  its own separate, versioned events that never appear on this stream.
+  Don't build against them.
+- **Byte-level stability.** Whitespace and key order may vary.
+
+## Conformance
+
+stella ships a `from_a_newer_stella.jsonl` fixture whose only job is to
+break clients that get rule 1 wrong.
+
+It's a well-formed turn that contains two event types that don't exist. A
+client that parses it from end to end, reports two unrecognized events, and
+reconstructs the run from everything else is forward compatible. A client
+that throws an error is not, no matter how well it handles today's event
+types.
+
+If you maintain a stella client, run it against that fixture in CI. It's the
+cheapest possible guard against the exact failure this contract is meant to
+prevent, and it only costs one test.
+
+## Detecting a version gap
+
+You don't need to know stella's version to read the stream correctly —
+that's the whole point of rule 1. But if you want to *report* a gap
+(something like "this run used features your dashboard can't display"),
+count the unrecognized event types and show that count. stella's own Rust
+decoder tracks the same list, called `KNOWN_TYPE_TAGS`, in `stella-protocol`.

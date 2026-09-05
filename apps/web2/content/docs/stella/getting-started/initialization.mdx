@@ -1,0 +1,186 @@
+---
+title: Repo initialization
+description: What `stella init` builds — the domain taxonomy, the code graph, semantic search, extension adoption, and everything that lands under .stella/.
+---
+
+stella works in any directory with no setup. One command gives it a head
+start by mapping out your codebase:
+
+```bash
+cd your-project
+stella init
+```
+
+## What `stella init` does
+
+1. **Guesses the domains in your code** → `.stella/domains.toml`. This is a
+   short list of tags (auth, storage, api, and so on) that labels memories,
+   reflections, and every node in the code graph. It lets the
+   [context engine](/docs/stella/context-engine) connect a memory, a reflection, and
+   a file that all belong to the same part of your project. It's also saved
+   to `.stella/private/context.db`.
+2. **Builds the code graph** → `.stella/private/codegraph.db`. This is an
+   index of your code's symbols and imports. Query it from your shell with
+   [`stella search`](/docs/stella/commands/search) instead of guessing with grep.
+3. **Embeds your files for search by meaning**, if you've set up an
+   embedding backend (`VOYAGE_API_KEY`, `OPENAI_API_KEY`, or
+   `STELLA_EMBED_URL` plus `STELLA_EMBED_MODEL`). This is what lets
+   `stella search` answer a question like "which file strips secrets before
+   logging" instead of only matching exact text. Without a backend, init
+   says so in one line and skips this step. With one, it tells you how many
+   files it embedded, and how many a large repo left for later, embedding
+   them the first time a search reaches them.
+4. **Reuses your existing setup.** Commands, skills, and agents already
+   defined for other tools — in `.claude/` and `.agents/` directories, at
+   both workspace and user scope — are linked into `.stella/`. You keep what
+   you already built instead of starting over.
+
+`stella init` works **offline**. With no provider key, it falls back to a
+simpler guess instead of failing, so you can run it before setting up any key.
+
+<Callout type="info">
+  In interactive sessions, the code graph also builds itself in the
+  background and updates as files change. `stella init` does this once,
+  right away, and also builds the domain list. Run it again after a big
+  refactor to refresh both.
+</Callout>
+
+## What lands where
+
+Everything stella knows about your workspace lives under `.stella/`. It's
+all plain files and SQLite databases. Inspect them, put them in version
+control, or delete them — your choice.
+
+### Files to commit
+
+<CardGrid size="md">
+  <OptionCard name=".stella/domains.toml">
+    The domain tags `stella init` guesses.
+  </OptionCard>
+  <OptionCard name=".stella/memories/*.md">
+    Workspace [memories](/docs/stella/context-engine), as plain Markdown.
+  </OptionCard>
+  <OptionCard name=".stella/rules/*.md">
+    Workspace rules: memories that got promoted, plus guard rules.
+  </OptionCard>
+  <OptionCard name=".stella/skills/">
+    Project-scope [skills](/docs/stella/agent-tools/skills).
+  </OptionCard>
+  <OptionCard name=".stella/settings.json">
+    Project-scope [settings](/docs/stella/configuration/settings).
+  </OptionCard>
+  <OptionCard name=".stella/mcp.toml">
+    [MCP servers](/docs/stella/agent-tools/mcp) to connect at session start.
+  </OptionCard>
+  <OptionCard name=".stella/tools/*.toml">
+    [Custom script tools](/docs/stella/agent-tools/custom-tools).
+  </OptionCard>
+  <OptionCard name=".stella/commands/ · .stella/agents/">
+    [Custom commands](/docs/stella/agent-tools/commands) and
+    [custom agents](/docs/stella/agent-tools/custom-agents).
+  </OptionCard>
+</CardGrid>
+
+### Local state
+
+Never commit these:
+
+<CardGrid size="md">
+  <OptionCard name=".stella/private/codegraph.db">
+    The code graph index.
+  </OptionCard>
+  <OptionCard name=".stella/private/context.db">
+    The context store: memory nodes, reflections, episodes, and facts that
+    keep track of when they were true and when stella learned them.
+  </OptionCard>
+  <OptionCard name=".stella/private/store.db">
+    Executions, events, token and cost data, the list of files touched, and
+    the `file_locks` table fleets use to coordinate.
+  </OptionCard>
+  <OptionCard name=".stella/private/fleet.db">
+    The [fleet](/docs/stella/agent-fleets) log: runs, tasks, attempts, commits.
+  </OptionCard>
+  <OptionCard name=".stella/private/reflections.jsonl">
+    The reflection log written after each turn — lessons the
+    [context engine](/docs/stella/context-engine) pulls out.
+  </OptionCard>
+  <OptionCard name=".stella/private/mcp_oauth.json">
+    **OAuth tokens** for MCP servers you've logged into. This is a secret.
+    Never commit it.
+  </OptionCard>
+  <OptionCard name=".stella/worktrees/">
+    Dedicated worktrees for fleet tasks marked `isolation = "isolated"`.
+  </OptionCard>
+  <OptionCard name=".stella/exports/">
+    Session telemetry [exports](/docs/stella/telemetry/dashboard): ZIP and HTML
+    files.
+  </OptionCard>
+</CardGrid>
+
+If you're upgrading from an older version that wrote files directly under
+`.stella/`, stella moves the safe ones into `.stella/private/` automatically
+the first time you run it. If a file has unsafe permissions, or is an active
+SQLite WAL or SHM file, stella leaves it alone and shows a clear error
+instead of touching it.
+
+The same kinds of files exist at user scope under `~/.stella/`: settings,
+skills, agents, and credentials.
+
+### What to commit
+
+The files listed above under "files to commit" are safe to share with your
+team and put in version control, with one exception. If
+`.stella/settings.json` has an inline `api_key`, keep that file out of
+version control. Use
+[`api_key_env` or `credentials.toml`](/docs/stella/configuration/credentials)
+instead.
+
+Everything under `.stella/private/` is local only, including MCP OAuth
+tokens. stella writes a `.stella/.gitignore` for you that covers the private
+directory, plus any stray database or reflection log left by an older
+layout:
+
+```text title=".stella/.gitignore"
+*.db
+*.db-wal
+*.db-shm
+reflections.jsonl
+private/
+```
+
+If your project uses one root `.gitignore` file instead, add the private
+directory plus the two extra directories that sit outside it:
+
+```text title=".gitignore"
+.stella/private/
+.stella/worktrees/
+.stella/exports/
+```
+
+## Verify the result
+
+```bash
+# The index answers structural questions — offline, no API key.
+stella search "where is Config defined"
+stella search "what imports src/main.rs"
+
+# The taxonomy it inferred.
+cat .stella/domains.toml
+
+# The store it will write telemetry into.
+stella doctor
+```
+
+```bash
+# And the resolved provider, model, credential source, and workspace root.
+stella config
+```
+
+Run `stella init` again after a big refactor to rebuild the index and
+refresh the domain list. It's safe to run more than once, and it works
+offline: the code graph builds with no provider at all, the domain list
+falls back to a simple guess based on your folders, and the semantic
+embedding step just says it was skipped.
+
+Next: [set up your provider keys](/docs/stella/getting-started/providers), then
+run your first task from the [quickstart](/docs/stella/getting-started).

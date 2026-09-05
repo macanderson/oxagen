@@ -1,0 +1,107 @@
+---
+title: Agent memory
+description: How the agent reads and writes persistent memories from the workspace knowledge graph.
+---
+
+## What agent memory is
+
+Agent memory — powered by Oxagen's memory engine, **Engram** — is persistent, queryable knowledge scoped to a workspace. Unlike conversation history (which is a linear sequence of messages), memories are discrete facts, rules, and observations stored as nodes in the workspace knowledge graph (Neo4j). They survive across sessions, across conversations, and across every agent working in the same workspace — including the [CLI](/docs/platform/cli/memory).
+
+Each memory has two independent axes:
+
+- **Class** — the epistemic ladder from tentative to settled: **OBSERVATION → RULE → FACT**. A confidence score (0–100) tracks how sure it is *true* and decays over time; a RULE also carries an enforcement score (1–100) for how strongly it should be followed. Promotion up the ladder records an auditable event; promotion to FACT requires human confirmation.
+- **Kind** — the content domain, an open label. Common kinds:
+
+| Kind | Description |
+|---|---|
+| `routine-change` | A process or convention change the agent should carry forward |
+| `constraint` | A hard boundary the agent must respect |
+| `bug-root-cause` | Root cause of a known bug or failure pattern |
+| `convention-deviation` | A departure from a project convention that has been intentionally accepted |
+| `gotcha` | A known trap or non-obvious behavior to watch out for |
+
+## Recalling memories
+
+The agent uses `agent.memory.recall` to query the knowledge graph at the start of or during a turn. The query is semantic — it finds memories by meaning, not keyword match.
+
+```
+agent.memory.recall({ query: "brand guidelines for external communications" })
+```
+
+The result is a list of scored memory nodes ranked by relevance. The agent incorporates them into its response context.
+
+You can ask the agent to recall memories explicitly:
+
+- "What do you know about our pricing structure?"
+- "Recall anything relevant about the Spencer account before we start."
+
+## Writing memories
+
+The agent uses `agent.memory.write` to persist a new memory. It can propose this autonomously during a conversation ("I'll remember that for next time"), or you can ask it to:
+
+- "Remember that we use Stripe for billing and Inngest for background jobs."
+- "Add a rule: all agent-generated documents must be reviewed by a human before sending."
+
+Each written memory includes:
+
+- The memory content (text)
+- The kind (`routine-change`, `constraint`, `bug-root-cause`, `convention-deviation`, or `gotcha`)
+- A weight bucket (`low`, `high`, or `critical`) representing the salience of the memory. The `agent.memory.remember` capability can infer this automatically from free text.
+- Graph node attachments (e.g., linked to a specific entity in the ontology)
+
+## Viewing and managing memories
+
+All workspace memories are visible in **Workspace → Knowledge → Memory**. You have the full lifecycle from that page:
+
+- Browse and filter memories by class, kind, confidence, and text
+- Create, edit, and delete individual memories
+- Promote a memory up the ladder, demote it back down, or change its lifecycle status (`ACTIVE` / `SUPERSEDED` / `RETRACTED` / `ARCHIVED`)
+- Dismiss promotion suggestions you don't want to see again
+- See which agent or user created each memory and when
+- Attach evidence and review agent-proposed memories before accepting them
+
+Memories are scoped to the workspace. They are not shared across workspaces, and they are not visible to other organizations.
+
+## The promotion lifecycle
+
+<Mermaid
+  chart="
+stateDiagram-v2
+  [*] --> OBSERVATION
+  OBSERVATION --> RULE: promote
+  RULE --> FACT: promote (human confirms)
+  RULE --> OBSERVATION: demote
+  FACT --> RULE: demote
+  OBSERVATION --> [*]: dismiss (leaves queue)"
+/>
+
+*Promotion moves a memory up the ladder and requires a human-confirmed gate at FACT; demotion is the audited inverse; dismissal removes a candidate from the queue without changing its class.*
+
+Observations that keep proving useful surface as **promotion candidates** — a ranked queue (by citation pressure) on the Memory page. For each candidate you can:
+
+- **Promote** it to RULE or FACT. A written rationale is *optional* — the human gate for FACT is the confirmation checkbox, which locks enforcement at 100 and records you as the confirmer. When you do want a rationale on record, the promote dialog offers a short list of AI-drafted, context-grounded reasons (built from the memory's lesson and its citation history by a low-cost model) — pick one, or choose "Write my own…".
+- **Dismiss** the suggestion. Dismissal is durable: the memory stays active and recallable, but it leaves the candidate queue permanently and the next-highest-signal observation takes its slot. An Undo toast lets you restore it immediately, and `restore: true` on the capability reverses it later.
+- **Demote** a RULE or FACT that no longer deserves its standing (from its detail sheet). Demotion is the audited inverse of promotion: direction is strictly downward, demoting to OBSERVATION clears enforcement, and leaving FACT clears the human confirmation. The same optional-rationale picker applies.
+
+Every promotion and demotion is recorded as an auditable event node in the graph, so a memory's class history is always reconstructable.
+
+## Citation analytics
+
+**Workspace → Knowledge → Citations** shows how memories (and graph nodes) actually get used: every time an agent's answer is grounded by a recall or an `@`-mention, a citation is recorded with an *influence* level (`DECISIVE` / `CONTRIBUTING` / `CONSIDERED` / `IGNORED`) and, for rules, a *compliance* outcome (`COMPLIED` / `DISCRETION` / `VIOLATION`). The dashboard aggregates these over a 7/30/90-day window:
+
+- **Most cited** — the memories carrying the most weight.
+- **Least useful** — recalled repeatedly but never influential; prime candidates to demote or retire.
+- **Most violated rules** — where agents break promoted rules; tighten enforcement or demote the rule.
+- **Top cited nodes** — the graph entities agents lean on most.
+
+## Memory in the knowledge graph
+
+Memories are stored as `AgentMemory` nodes in Neo4j with a vector index for semantic retrieval. They can be connected to other ontology nodes (people, companies, projects, documents) via graph edges, giving them relational context that goes beyond text similarity.
+
+This is the "portable knowledge graph" property of Oxagen: a workspace's memories travel with the workspace. If your organization moves to a different infrastructure, the graph moves with you — it is not locked to Oxagen's internal storage format.
+
+## Governance
+
+Memory write is governed by the same IAM model as every other capability. The `agent.memory.write` capability requires at least a `Member` role in the workspace. Viewers cannot write memories.
+
+Every memory write produces an audit record. Memory writes by the agent acting in delegated context record both the human principal and the agent.

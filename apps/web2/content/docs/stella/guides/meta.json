@@ -1,0 +1,14 @@
+{
+  "title": "Guides",
+  "pages": [
+    "fix-failing-ci",
+    "parallel-fixes",
+    "unfamiliar-codebase",
+    "spend-limit",
+    "what-a-run-cost",
+    "embed-the-engine",
+    "ci-engine-gate",
+    "terminal-bench-head-to-head",
+    "troubleshooting"
+  ]
+}

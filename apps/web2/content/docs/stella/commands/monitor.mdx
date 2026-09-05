@@ -1,0 +1,70 @@
+---
+title: stella monitor
+description: Watch CI for a branch or PR and fix failures until it is fully green.
+---
+
+Watch CI for a branch or pull request and fix failures until the latest run is fully green.
+
+## Synopsis
+
+```bash
+stella monitor [target] [global flags]
+```
+
+The optional `target` is a branch or PR to watch. When omitted, it defaults to `main`.
+
+## What it does
+
+`stella monitor` watches CI runs for the `target` you give it. It uses whatever CI tool your session has available: a workspace [custom tool](/docs/stella/agent-tools/custom-tools) or an [MCP server](/docs/stella/agent-tools/mcp). It works step by step: it looks at each failure, fixes the root cause, then **commits and pushes the fix** before checking again. It only considers the job done **when the latest CI run is fully green**.
+
+Behind the scenes, `monitor` runs on [goal mode](/docs/stella/agent-modes#outcome-driven-goal-mode) with a fixed goal: get CI green. That means it uses goal mode's safety limits too. A separate verifier checks the evidence that CI is actually green. There's a hard cap of **8** rounds by default: if CI is still red after 8 rounds, stella stops and reports the goal as not met. The `--spend-limit` cap and a worker-turn abort also apply. `monitor` does not run forever. If it stops before CI is green, run it again to keep going.
+
+<Callout type="warn">
+`monitor` commits and pushes its fixes straight to the target branch between CI runs. Since the
+default target is `main`, running `stella monitor` with no arguments pushes commits directly to
+`main`. If that's not what you want, pass a feature branch or PR as the `target`.
+</Callout>
+
+<Callout type="info">
+`stella monitor` needs some way to read CI state. This is usually a GitHub [MCP server](/docs/stella/agent-tools/mcp),
+or a [custom tool](/docs/stella/agent-tools/custom-tools) that wraps the `gh` CLI. Without one of these,
+the agent can't see the runs it's supposed to fix.
+</Callout>
+
+## Flags
+
+`stella monitor` takes the [global flags](/docs/stella/commands). The most relevant ones:
+
+<CardGrid size="md">
+  <OptionCard name="--model <provider/model_id>">
+    Pin the worker model used to diagnose and fix failures.
+  </OptionCard>
+  <OptionCard name="--spend-limit <usd>">
+    Cap total spend while it works across CI runs.
+  </OptionCard>
+</CardGrid>
+
+<Callout type="info">
+`monitor` is an interactive mode. It always shows plain, human-readable text, and it does **not**
+accept `--output-format`. Passing that flag causes a parse error.
+</Callout>
+
+## Examples
+
+Watch the default `main` branch and fix failures until green:
+
+```bash
+stella monitor
+```
+
+Watch a specific branch:
+
+```bash
+stella monitor feature/payments-refactor
+```
+
+Watch a pull request and cap total spend:
+
+```bash
+stella --spend-limit 5.00 monitor "#128"
+```

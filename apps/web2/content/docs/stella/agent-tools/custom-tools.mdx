@@ -1,0 +1,157 @@
+---
+title: Custom Tools
+description: Give the stella agent your own script tools. Drop a TOML manifest into your workspace or user config directory.
+---
+
+Beyond the [built-in tools](/docs/stella/agent-tools), you can give the agent your own developer-defined script tools. A custom tool is described by a small TOML manifest. Once stella finds it, the tool appears alongside the built-ins, and the agent can call it like any other tool.
+
+## Where manifests live
+
+Drop a `<name>.toml` manifest file into one of these directories:
+
+- **Workspace** — `.stella/tools/` (checked in with the project, shared with your team).
+- **User global** — `~/.stella/tools/` (personal, available across all your workspaces).
+
+If the same tool name is defined in both places, the workspace manifest wins. This lets a project override a personal default while keeping your other global tools available everywhere else.
+
+A third source is read after both: `tools/*.toml` inside an installed [plugin](/docs/stella/plugins). Plugin manifests are scanned last. If either of your own directories already defines a name, that definition wins, and the plugin's copy is dropped with a diagnostic naming both files. This means installing a plugin can never silently redirect a tool you already call. A plugin's tool also gets `${plugin_dir}` filled in wherever its package directory belongs, in every `command` element and every `[env]` value. That placeholder is not expanded in your own manifests, since no plugin package is in scope there.
+
+Run `stella tools` at any time to see which custom tools were found, alongside the built-ins.
+
+<Callout type="warn">
+  Workspace manifests sit behind the
+  [project trust boundary](/docs/stella/configuration/settings#the-project-trust-boundary). A
+  manifest is a command a cloned repo gets to run on your machine, so `.stella/tools/`
+  is **not scanned at all** until you trust the repo. Its manifests are neither loaded
+  nor reported as diagnostics until then. The user-global directory always loads. Opt in per repo:
+
+  ```bash
+  export STELLA_TRUST_PROJECT=1
+  ```
+
+  An org-managed `authority.project_custom_tools: "off"` keeps workspace manifests off
+  even in a trusted repo. That ceiling can't be overridden from below.
+</Callout>
+
+## Manifest shape
+
+A manifest declares the tool's `name`, `description`, the `command` to run, and an `input_schema`:
+
+```toml title=".stella/tools/wordcount.toml"
+name = "wordcount"
+description = "Count the words in a file and print the total."
+
+# The command Stella runs when the agent calls this tool. It is an argv array,
+# spawned directly with no shell; command[0] resolves against the workspace root.
+command = ["scripts/wordcount.sh"]
+
+# Optional. Default 30000 (30 seconds), hard-capped at 600000 (10 minutes) —
+# a manifest asking for more is clamped. Past the timeout, the script's whole
+# process group is killed and the tool returns a named error.
+timeout_ms = 60000
+
+# Optional extra environment variables for the child process, applied on top
+# of the inherited environment.
+[env]
+WORDCOUNT_LOCALE = "en_US"
+
+# Tool inputs are a JSON Schema, written as TOML under [input_schema].
+[input_schema]
+type = "object"
+required = ["path"]
+
+[input_schema.properties.path]
+type = "string"
+description = "Path to the file whose words should be counted."
+```
+
+### Fields
+
+<CardGrid size="md">
+  <OptionCard name="name" required>
+    The name the model sees. It must match `^[a-z][a-z0-9_]{1,63}$`: a lowercase letter, followed by 1 to 63 more lowercase letters, digits, or underscores. A name that matches a built-in tool is skipped, with a diagnostic, instead of quietly taking it over. The same goes for names stella has used and retired in the past, such as `run_tests`, `graph_query`, `web_fetch`, `grep`, and `screenshot`. The model still remembers these names from training, and an old setting like `"tools": {"run_tests": "off"}` would otherwise start pointing at your manifest instead of nothing. If your tool's name is refused, pick a different one.
+  </OptionCard>
+  <OptionCard name="description" required>
+    What the tool does, shown to the model. An empty description is an error, not a warning, because it's the only thing the model has to decide with.
+  </OptionCard>
+  <OptionCard name="command" required>
+    An **argv array**, spawned directly with no shell. `command[0]` resolves against the workspace root, which is also the child process's working directory.
+  </OptionCard>
+  <OptionCard name="timeout_ms" defaultValue="30000">
+    The wall-clock budget for one call. Hard-capped at `600000` (10 minutes). A manifest asking for more is clamped, with a warning. Past the timeout, the script's whole process group is killed and the tool returns a named error.
+  </OptionCard>
+  <OptionCard name="[env]">
+    Extra environment variables for the child process, applied on top of the inherited environment. Credential variables are stripped from the result either way. See below.
+  </OptionCard>
+  <OptionCard name="[input_schema]">
+    The tool's inputs as a JSON Schema, written in TOML and converted as-is. A non-table value is an error. Leave it out and the tool gets an empty schema.
+  </OptionCard>
+</CardGrid>
+
+<Callout type="warn">
+`command` must be an **argv array** (`["scripts/wordcount.sh"]`), not a bare string. A string fails to parse and the tool never loads. Inputs go under `[input_schema]`, a JSON Schema, not `[parameters]`. An unknown table like `[parameters]` is silently ignored, leaving the tool with an empty schema.
+</Callout>
+
+<Callout type="info">
+The `timeout_ms` default is **30 seconds**, half of the 60-second default [hooks](/docs/stella/agent-tools/hooks) get. Both share the same 10-minute hard cap.
+</Callout>
+
+## Script input
+
+When the agent calls a custom tool, stella spawns `command` directly from the argv array. It never goes through a shell, so there's no injection surface in the tool's input. The working directory is set to the workspace root. The model's input JSON reaches your script two ways, so a simple script needs no JSON parser at all:
+
+1. The whole input object is written to the script's **stdin** as one JSON document, then stdin is closed. Your script sees EOF.
+2. Each top-level **scalar** property (string, number, bool) is exported as `STELLA_INPUT_<UPPER_SNAKE_KEY>`. `path` becomes `STELLA_INPUT_PATH`, and `dry_run` becomes `STELLA_INPUT_DRY_RUN`. Nested objects and arrays only arrive on stdin.
+
+The manifest's `[env]` table is applied on top of the inherited environment, before the `STELLA_INPUT_*` exports. Input keys come from the model, but they're namespaced under `STELLA_INPUT_`, so they can never overwrite `PATH` or your `[env]` values.
+
+<Callout type="warn">
+The child process's environment is credential-scrubbed last, after both the inherited environment and the manifest's `[env]`. A custom tool never sees stella's provider keys (`ANTHROPIC_API_KEY`, `ZAI_API_KEY`, and so on) or repository and AWS tokens. A manifest can't bring one back by naming it in `[env]` either — that entry is removed too. Ordinary settings in `[env]` survive untouched. If your script genuinely needs a credential, pass it as a tool input, or have the script fetch it from your own secret store.
+</Callout>
+
+A script that reads both channels:
+
+```bash title="scripts/wordcount.sh"
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Scalar inputs arrive as environment variables…
+path="$STELLA_INPUT_PATH"
+
+# …and the full input object arrives as one JSON document on stdin —
+# read it (e.g. with jq) when you need nested objects or arrays.
+input="$(cat)"    # {"path": "src/lib.rs"}
+
+wc -w < "$path"
+```
+
+Exit **0** and the captured stdout becomes the tool's result. A non-zero exit returns an error carrying the exit code and the last part of stderr. Both streams are trimmed from the middle if they get too long.
+
+## Validating manifests
+
+Before a run, check every manifest with the strict pre-flight validator:
+
+```bash
+stella tools --validate            # scans .stella/tools/ and ~/.stella/tools/
+stella tools --validate ./mytools  # or an explicit directory
+```
+
+stella is lenient at discovery time. A broken manifest just becomes a diagnostic, and the session keeps running. So this validator is your chance to catch problems before a run has already spent your budget. It parses each `<name>.toml` file and sorts problems into severities:
+
+<CardGrid size="md">
+  <OptionCard name="Error">
+    The manifest won't load: an unreadable file, invalid TOML, a missing field, an invalid or **reserved** name (one a built-in claims, or once claimed and retired), an empty description, an empty `command`, or a non-table `input_schema`.
+  </OptionCard>
+  <OptionCard name="Warning">
+    It loads, but won't behave as written: a `timeout_ms` over the 10-minute cap (clamped at runtime), a name already claimed by an earlier manifest (that one wins, this one is ignored), or a `command[0]` that doesn't exist or isn't executable. This is a warning, not an error, because the script might legitimately get built or checked out later.
+  </OptionCard>
+  <OptionCard name="Info">
+    `timeout_ms` left out or set to `0`, which quietly becomes the 30-second default.
+  </OptionCard>
+</CardGrid>
+
+It exits non-zero if any manifest has errors, which is handy in CI.
+
+## How custom tools appear
+
+Once stella finds a manifest, it registers the tool into the session, and it shows up next to the built-ins, including in the output of `stella tools`. The agent can then call it as part of its normal step loop. Like every other tool, a custom tool follows the [per-tool permission model](/docs/stella/agent-tools/permissions), and its calls can be gated or blocked with a [`PreToolUse` hook](/docs/stella/agent-tools/hooks).

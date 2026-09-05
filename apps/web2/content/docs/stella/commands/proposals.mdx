@@ -1,0 +1,152 @@
+---
+title: stella proposals
+description: Review what stella wants to remember long-term, see the evidence behind each idea, and keep, edit, ignore, or retract it.
+---
+
+`stella proposals` is where you review ideas from stella's adaptive-context loop, the part of stella that reflects on your work and suggests things worth remembering long-term. As you work, it looks back on your turns and creates proposals: things it thinks are worth keeping. This command shows you each pending proposal and the evidence behind it. You can accept it, change its wording, or turn it down, all **before** it affects how stella behaves.
+
+Every decision you make is saved as a permanent record. This means the full review history can always be replayed exactly, and choosing "ignore" can be undone later; it isn't final. This command works offline. It only reads and writes to `.stella/private/context.db`, and it doesn't need an API key.
+
+## Synopsis
+
+```bash
+stella proposals list [--all] [--limit <n>]
+stella proposals keep <id> [--reason <text>]
+stella proposals edit <id> <body> [--reason <text>]
+stella proposals ignore <id> [--reason <text>]
+stella proposals retract <id> [--reason <text>]
+stella proposals refresh
+```
+
+## What it does
+
+stella never changes its own behavior silently. It can only *propose* changes. A person decides whether to adopt them, and that decision is recorded. That's why every command here asks for a reason, and why nothing is ever deleted. A decision with no reason can't be checked later, and a decision you can't revisit isn't really a review.
+
+For stella to create a proposal, the same idea must show up across **different tasks**, not just many times in one task. If one task mentions something twenty times, that counts as one piece of evidence, not twenty.
+
+### `stella proposals list`
+
+Show pending proposals with the evidence behind each.
+
+<CardGrid size="md">
+  <OptionCard name="--all">
+    Include proposals that have already been decided on, not just the pending ones.
+  </OptionCard>
+  <OptionCard name="--limit <n>" defaultValue="20">
+    Maximum proposals to show.
+  </OptionCard>
+</CardGrid>
+
+```bash
+stella proposals list
+stella proposals list --all --limit 100
+```
+
+### `stella proposals keep`
+
+Accept a proposal exactly as written. It then becomes active guidance for stella, at "advisory" strength, meaning stella treats it as a suggestion rather than a strict rule.
+
+<CardGrid size="md">
+  <OptionCard name="<id>" required>
+    The proposal's candidate id, as shown by `list`.
+  </OptionCard>
+  <OptionCard name="--reason <text>" defaultValue="kept from the review surface">
+    The reason you're keeping it. This is saved with the record.
+  </OptionCard>
+</CardGrid>
+
+```bash
+stella proposals keep cand-3f21 --reason "matches how we actually release"
+```
+
+### `stella proposals edit`
+
+Accept a proposal but change its wording. Your replacement text is what stella keeps long-term. The original wording stays in the record too.
+
+<CardGrid size="md">
+  <OptionCard name="<id>" required>
+    The proposal's candidate id.
+  </OptionCard>
+  <OptionCard name="<body>" required>
+    The replacement text.
+  </OptionCard>
+  <OptionCard name="--reason <text>" defaultValue="edited from the review surface">
+    The reason for the edit.
+  </OptionCard>
+</CardGrid>
+
+```bash
+stella proposals edit cand-3f21 "Run \`make gate\` before pushing — not \`cargo test\` alone."
+```
+
+### `stella proposals ignore`
+
+Decline a proposal. stella will not suggest it again while your decision stands. Because this is recorded as an event, not a deletion, you can change your mind later.
+
+<CardGrid size="md">
+  <OptionCard name="<id>" required>
+    The proposal's candidate id.
+  </OptionCard>
+  <OptionCard name="--reason <text>" defaultValue="declined from the review surface">
+    The reason for declining it.
+  </OptionCard>
+</CardGrid>
+
+```bash
+stella proposals ignore cand-7ab0 --reason "true last quarter, not now"
+```
+
+### `stella proposals retract`
+
+Take back a rule you already accepted, so it stops guiding stella.
+
+`ignore` stops a proposal from being written in the first place. `retract` undoes one that was already written. When you keep a proposal, it's saved as a file under `.stella/rules/`, and stella loads those files as part of its instructions.
+
+Retracting a rule doesn't delete it. The rule's file stays on disk, but its status changes to `retracted`. The retraction itself is added to `.stella/rules/promotions.jsonl`, a tamper-evident log, along with who did it and why. After this, stella stops using the rule the next time it loads its instructions. Running `stella context validate` shows the rule as *Retired* instead of failing.
+
+<CardGrid size="md">
+  <OptionCard name="<id>" required>
+    The rule's id, as shown by [`stella context list`](/docs/stella/commands/context). If the short id matches more than one rule, use the full `ctx.<set>.<id>` form instead.
+  </OptionCard>
+  <OptionCard name="--reason <text>" defaultValue="retracted from the review surface">
+    The reason for retracting it. This is required; an empty reason is not allowed.
+  </OptionCard>
+</CardGrid>
+
+```bash
+stella proposals retract migration-order-3f21 --reason "the migration order changed in 0.9"
+```
+
+### `stella proposals refresh`
+
+Look through stella's reflection log and create proposals from it right away, without waiting for a new turn to trigger reflection.
+
+stella already does this automatically after every reflection. This command exists so you can check for proposals on demand, without needing to run a new turn first. Running it more than once is safe: running it twice in a row makes no extra changes.
+
+```bash
+stella proposals refresh && stella proposals list
+```
+
+<Callout type="info">
+Setting `context.lifecycle.enabled: false` in [`settings.json`](/docs/stella/configuration/settings) turns off this whole adaptive-context feature, including proposal creation.
+</Callout>
+
+## Proposals vs. ingest
+
+<Callout type="warn">
+[`stella ingest`](/docs/stella/commands/ingest) and `stella proposals` are two separate systems with separate storage. `stella proposals` shows ideas stella noticed from your *sessions*, stored in `.stella/private/context.db`. `stella ingest` creates proposal files from *documents* you feed it, stored in `.stella/proposals/`, and you review those by editing the files directly. A document you ingest will not show up in `stella proposals`.
+</Callout>
+
+## Related
+
+<CardGrid size="sm">
+  <SpecCard title="Context Engine" href="/docs/stella/context-engine">
+    How proposals become memories stella recalls later, and what's inside a context frame.
+  </SpecCard>
+  <SpecCard title="stella memory" href="/docs/stella/commands/memory">
+    How stella tracks memory citations, checks their health, and can retire them (and undo that).
+  </SpecCard>
+  <SpecCard title="stella ingest" href="/docs/stella/commands/ingest">
+    Turns documents into proposals you can review.
+  </SpecCard>
+</CardGrid>

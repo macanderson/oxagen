@@ -1,0 +1,69 @@
+---
+title: Knowledge graph
+description: The governed workspace context graph — secured source facts, relationships, memories, provider metadata, and agent evidence.
+---
+
+Every workspace has a **governed context graph**: a tenant-isolated Neo4j graph holding approved entities and relationships from connected sources, agent memories, and stable provider metadata. Access is evaluated in workspace scope so agents can ground answers in shared context without turning Oxagen into a remote copy of a developer's checkout.
+
+Explore it in **Workspace → Knowledge**.
+
+## What lives in the graph
+
+| Node kind | Examples | Origin |
+|---|---|---|
+| Entities | `Person`, `Company`, `Deal`, `Topic` | Connected sources, document ingestion, agent extraction |
+| Provider metadata | Repository, configured refs, commits, pull requests, workflow runs, changed-file paths | [GitHub connections](/docs/platform/connections/github) and verified provider events |
+| Memories | Observations, rules, facts | [Agent memory](/docs/platform/agent/memory) |
+| Execution metadata | Agent runs, steps, approvals, tool calls, and metering facts | Durable run traces and audit events |
+| Documents & assets | Ingested documents, generated files | Uploads and agent output |
+
+Product-owned nodes (executions, memories, generated assets) are flagged `is_system` so the graph explorer can show your business ontology on its own.
+
+## Code and evidence boundary
+
+The **exact live code graph stays local** to the checkout or worktree that the agent can actually see. Source text, symbols, chunks, code embeddings, imports, and uncommitted branch state are not uploaded into the workspace graph.
+
+Oxagen retains stable Git-provider metadata for governance and replay: provider and repository identity, refs and commits, pull requests, workflow runs, and changed-file paths. Two richer projections are explicit follow-ups, not launch claims:
+
+- **Canonical repository topology** derived only from a configured protected or default ref after the provider confirms that ref advanced.
+- **A typed evidence ledger** that can bind an execution to a commit, artifact, test result, or file claim with provenance and verification before any graph projection.
+
+Until the evidence ledger exists, Oxagen does not infer or automatically promote execution-to-file lineage.
+
+## Sources
+
+**Knowledge → Sources** lists the governed data source connections feeding the graph. Each connection maps its source record types to your entity types (a mapping step you confirm at setup), then syncs on a cadence — webhook, polling, or manual. You can pause a connection, re-sync it incrementally or in full, or delete it in three modes: connection only (keep data), data only (keep config), or full.
+
+<Mermaid
+  chart="
+flowchart LR
+  S[Connected sources] --> P[(Postgres: operational record)]
+  S --> N[(Neo4j: graph index)]
+  N --> Q[Scoped retrieval]
+  Q --> AG[Agents cite in answers]"
+/>
+
+*Sources dual-write an operational record to Postgres and an approved graph projection to Neo4j; agents retrieve within scope and cite what they used.*
+
+## Searching the graph
+
+Two complementary searches:
+
+- **Semantic search** — embeds a natural-language query and ranks eligible shared knowledge (entities, memories, documents, messages, and provider metadata) by vector similarity. Repository source text, symbols, chunks, and code embeddings are excluded.
+- **Lexical search** — substring match on node names and descriptions, useful when you know what something is called.
+
+From any node you can walk its neighbors one hop at a time, or traverse multiple hops along named relationship types. Reads support bitemporal queries: "as of" a valid time (what was true in the world) and "as known at" a transaction time (what we had recorded).
+
+## Semantic relationship inference
+
+Semantic relationship inference is not a launch surface. No model-generated relationship is materialized through a confidence threshold, and the retired infer/list/suggest/approve capability family is not available.
+
+A future candidate system must be built around attributable producer provenance, explicit authorized approval, durable audit history, and revocation before a proposed relationship can become shared context.
+
+## Citation analytics
+
+Every grounded answer records which memories and graph nodes it cited, and how much they mattered. **Knowledge → Citations** rolls those citations up into a workspace dashboard — most-cited and least-useful memories, violated rules, top cited entities — so you can promote what works and demote what doesn't. See [Citations](/docs/platform/knowledge/citations).
+
+## Governing the graph's shape
+
+The graph's vocabulary — which entity types, properties, and relationship types are allowed — is governed by the workspace [schema registry](/docs/platform/knowledge/schema-registry).

@@ -1,0 +1,100 @@
+---
+title: Getting started
+description: Sign up, create your organization and workspace, have your first agent conversation, and connect via API or MCP.
+---
+
+<IllustrationGettingStarted />
+
+## Sign up
+
+Go to [app.oxagen.sh](https://app.oxagen.sh) and click **Sign up**. Enter your name, email address, and a password.
+
+Oxagen then emails you a verification link. **You have to click it before you can sign in** — an unverified account cannot get past the login screen. If the email does not arrive, check your spam folder before requesting another one.
+
+Social sign-in (Google, GitHub) is also available on the signup screen.
+
+Email verification is turned off when you run Oxagen on your own machine, so local development does not need a working mail server. See [Local development](/docs/platform/configuration/local-development) and [Email & SMTP](/docs/platform/configuration/email).
+
+## Create your organization
+
+After signup you land on the **New organization** screen. Every user must belong to at least one organization before they can do anything. Your organization is the top-level governance boundary: it owns billing, IAM policies, and audit logs.
+
+1. Enter an organization name. A URL-safe slug is generated automatically; you can edit it.
+2. Click **Create organization**.
+
+Creating an organization also creates a default workspace within it. You are automatically assigned the **Owner** role in both.
+
+## Explore the app shell
+
+After creating your organization you land at `/{orgSlug}/{workspaceSlug}/ask` — the Ask surface. The shell has three key elements:
+
+- **Org and workspace switchers** in the top bar (right of the Oxagen mark). If you belong to multiple organizations or workspaces, switch between them here.
+- **Sidebar** with four workspace zones: Ask, Knowledge, Automation, and Activity. The Organization section below handles members, access (IAM), security, billing, and developer settings.
+- **Ask bar** — the persistent AI entry point. Available on every screen; the agent has context about the page you are on.
+
+## Have your first agent conversation
+
+1. Click **Ask** in the sidebar, or use the Ask bar at the top of any page.
+2. Type a message and press Enter or click Send.
+3. The agent responds using the model tier available on your plan.
+
+Every message is recorded as a conversation in the `/{orgSlug}/{workspaceSlug}/ask` route. Conversations persist across sessions. You can archive or delete conversations from the conversation list.
+
+## Invite a teammate
+
+1. Go to **Organization → Members**.
+2. Click **Invite member**.
+3. Enter their email address and assign a role (Owner, Admin, Billing, Compliance, or a workspace role).
+4. They receive an invite email with a one-click acceptance link.
+
+Workspace access is granted separately under **Workspace settings → Members**.
+
+## Connect via the REST API
+
+Every capability available in the app is also reachable via the versioned REST API at `https://api.oxagen.sh/v1/`.
+
+**Create an API key:**
+
+1. Go to **Organization → Developer → Tokens**.
+2. Click **Create API key**. Give it a name and select the scopes it needs.
+3. Copy the key — it is shown only once.
+
+API keys carry org and workspace scope. Pass the key as a Bearer token:
+
+```http
+Authorization: Bearer ox_…
+```
+
+See [API authentication](/docs/platform/api/authentication) for the full reference.
+
+## Connect via MCP
+
+Oxagen exposes all capabilities as an MCP server at `https://mcp.oxagen.sh/mcp` over streamable HTTP. Org and workspace scope are determined by the API key — no path segment is required.
+
+**Connect from Claude Desktop:**
+
+```json
+{
+  "mcpServers": {
+    "oxagen": {
+      "url": "https://mcp.oxagen.sh/mcp",
+      "headers": {
+        "Authorization": "Bearer ox_…"
+      }
+    }
+  }
+}
+```
+
+**Connect from the unified install page:**
+
+Go to **Organization → Developer → MCP** for one-click install instructions tailored to Claude Code, Cursor, Claude Desktop, Codex, VS Code, ChatGPT, and Windsurf.
+
+See [MCP overview](/docs/platform/mcp/overview) and [Connecting to the MCP server](/docs/platform/mcp/connecting) for details.
+
+## Next steps
+
+- [Security overview](/docs/platform/security/overview) — understand the controls your security team will ask about.
+- [RBAC and roles](/docs/platform/governance/rbac) — set up roles and grant policies for your team.
+- [Agent capabilities](/docs/platform/agent/overview) — what the agent can do and how to configure it.
+- [Enterprise use cases](/docs/platform/enterprise/use-cases) — how Oxagen solves the shadow-AI problem at org scale.

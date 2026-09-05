@@ -1,0 +1,105 @@
+---
+title: stella init
+description: Analyze the workspace, infer its domain taxonomy, and build the code-graph index.
+---
+
+Analyze the current workspace, infer its domain taxonomy, and build the code-graph index that powers memories, reflections, and structured exploration.
+
+## Synopsis
+
+```bash
+stella init [global flags]
+```
+
+## What it does
+
+`stella init` does three things.
+
+1. **Infers the domain taxonomy** and writes it to `<workspace>/.stella/domains.toml`. This taxonomy is the shared vocabulary for tagging memories, reflections, and every code-graph node and edge. It's also saved into the context store at `<workspace>/.stella/private/context.db`.
+2. **Builds the code-graph index** at `<workspace>/.stella/private/codegraph.db`, the database [`stella search`](/docs/stella/commands/search) queries.
+3. **Syncs extensions** — adopts commands, skills, and agents from other agent tools' `.claude/` and `.agents/` directories (workspace and user scope) as links under `.stella/`.
+
+It works offline using a fallback method, so it never fails outright due to configuration. You can initialize a workspace even without a working provider credential.
+
+While it runs, `init` prints real progress: live file counts from inside the index pass (`· 1500 files walked — 620 parsed, 871 unchanged, 9840 symbols…`), embedding counts as they save, and a line naming any model call it makes or skips. This way, a long pass reads as active work, not a stall.
+
+<Callout type="info">
+Run `stella init` once per workspace to prime stella's understanding of your codebase. The files it creates live under `<workspace>/.stella/`.
+</Callout>
+
+## What updates on its own
+
+The code-graph index stays current on its own, in four ways.
+
+1. **Running `stella init` again is fast.** A file whose content hasn't changed is never re-parsed, so running it again on a mostly unchanged tree only costs a walk through the files, not a full rebuild.
+2. **Every session start catches the index up automatically**, in the background, without delaying your first prompt.
+3. **A live file watcher follows edits** — both the agent's own and any made outside it — updating the index for the rest of the session.
+4. **Graph-based tools refresh when used.** Opening the index for a search runs the same catch-up check, so a search sees files written moments earlier.
+
+Because of this, you rarely need to run `stella init` again just to keep the index current.
+
+The domain taxonomy is the one part that only `stella init` refreshes, and it only makes a new model call when the shape of the repository has changed since the taxonomy was last inferred. `.stella/domains.toml` stores a fingerprint of exactly what the inference read: the directory structure, the set of manifest files, and the top of the README. When that fingerprint still matches, the existing taxonomy is reused at no cost, and the output tells you so. Delete `.stella/domains.toml` to force a fresh inference, for example after switching to a stronger model.
+
+## Flags
+
+`stella init` takes the [global flags](/docs/stella/commands). Since it can run offline, choosing a model is optional.
+
+<CardGrid size="md">
+  <OptionCard name="--model <provider/model_id>" defaultValue="auto-detected">
+    Pin the model used for taxonomy inference. Leave it out to rely on
+    auto-detection, or on the offline fallback when nothing else is available.
+  </OptionCard>
+  <OptionCard name="--prune-vectors" defaultValue="off">
+    Delete stored vectors that don't belong to the embedding model in use. Vectors are
+    tied to a fingerprint of the embedding model, so two models never share the same vector
+    space. This means switching models hides the old vectors rather than removing them, and
+    switching back reuses them at no extra cost. Clearing them on every run would charge a
+    full re-embed to anyone comparing two models, so it stays a flag. Without it, `stella init`
+    only reports what's unused.
+  </OptionCard>
+</CardGrid>
+
+The global `--spend-limit` flag is accepted but has no effect on `init`. The analysis makes at most a couple of small, capped model calls and doesn't track spend against a limit.
+
+## Files it creates
+
+<CardGrid size="md">
+  <OptionCard name="<workspace>/.stella/domains.toml">
+    The inferred domain taxonomy — the shared tagging vocabulary.
+  </OptionCard>
+  <OptionCard name="<workspace>/.stella/private/codegraph.db">
+    The code-graph index, queried by [`stella search`](/docs/stella/commands/search) and
+    [`stella storage`](/docs/stella/commands/storage).
+  </OptionCard>
+  <OptionCard name="<workspace>/.stella/private/context.db">
+    The context store — the domain taxonomy and context facts.
+  </OptionCard>
+</CardGrid>
+
+## Examples
+
+Initialize the current workspace:
+
+```bash
+stella init
+```
+
+Initialize using a specific model for taxonomy inference:
+
+```bash
+stella --model openai/gpt-5.5 init
+```
+
+Re-index after a large refactor, then confirm the graph followed the move:
+
+```bash
+stella init
+stella search "where is resolve_provider_key defined"
+```
+
+Initialize with no credential set up at all. The offline fallback still produces a
+usable taxonomy and graph:
+
+```bash
+env -u ANTHROPIC_API_KEY -u OPENAI_API_KEY stella init
+```

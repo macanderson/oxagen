@@ -1,0 +1,106 @@
+---
+title: Connect GitHub
+description: Authorize Oxagen to ingest governed repository and delivery metadata without uploading your source-code graph.
+---
+
+<IllustrationConnectionSpot />
+
+## Overview
+
+The **GitHub connection** lets Oxagen ingest stable provider metadata — repositories,
+configured refs, commits, pull requests, issues, releases, and workflow activity — into your
+workspace context graph. Agents can use that shared metadata with RBAC-scoped context while
+the exact live code graph stays local to their checkout or worktree.
+
+Oxagen connects through a **GitHub App** using read-only access. It never writes to your
+repositories, and you choose exactly which repositories it can see.
+
+## What Oxagen reads
+
+| Data | GitHub permission | Access |
+| --- | --- | --- |
+| Repository, ref, commit, and changed-file metadata | Contents + Metadata | Read-only |
+| Pull requests | Pull requests | Read-only |
+| Issues and comments | Issues | Read-only |
+| Workflow and check metadata | Actions + Checks | Read-only |
+
+Oxagen requests **read-only** access only. It cannot push code, open pull requests, change
+settings, or delete anything. It does not upload source text, symbols, chunks, code embeddings,
+imports, or uncommitted state into the workspace graph.
+
+## Before you start
+
+- You need a workspace in Oxagen and permission to add connections to it.
+- You need to be able to **install a GitHub App** on the GitHub account or organization that
+  owns the repositories — that usually means you are an owner or admin of that GitHub org, or
+  it is your personal account.
+
+## Connect a repository
+
+1. In Oxagen, open your workspace and go to **Knowledge → Sources**.
+2. Click **Add source** and choose **GitHub**.
+3. Click **Authorize GitHub**. You'll be sent to GitHub to sign in and approve access.
+4. On GitHub, choose where to install the Oxagen app:
+   - Pick the **account or organization** that owns the repositories.
+   - Choose **All repositories** or **Only select repositories** — selecting only the repos
+     you want to ingest is recommended.
+   - Review the read-only permissions and click **Install & Authorize**.
+5. GitHub returns you to Oxagen. You'll see the **installations** available to you.
+6. Pick an installation, then **select the repository** you want to ingest.
+7. Click **Connect**. Oxagen activates the connection and starts the initial sync.
+
+## What happens during the initial sync
+
+When you connect a repository, Oxagen performs a first pass over provider records:
+
+- It resolves the repository's actual default branch and records repository, ref, commit,
+  pull-request, issue, and release metadata.
+- Provider records are projected into the workspace graph through the governed ingestion path.
+- Larger repositories are processed in batches. The sync runs in the background — you can
+  leave the page and come back.
+
+The connection's status moves to **Connected** once the sync has started. You can re-run a sync
+at any time from the source's settings.
+
+### Staying up to date automatically
+
+After the initial sync, Oxagen keeps provider metadata current as the repository changes — new
+commits, pull requests, issues, comments, releases, and workflow events are ingested as they
+happen. Records are added for the activity types your workspace has chosen to ingest; you can
+also trigger a manual **Re-sync** at any time.
+
+<Callout type="info">
+  Canonical repository topology derived from a configured protected/default ref is a follow-up.
+  So is the typed evidence ledger that will verify execution-to-commit, artifact, test, or file
+  claims before projecting them into shared context. Provider metadata alone is not proof that
+  a particular agent changed a file.
+</Callout>
+
+## Managing the connection
+
+- **Add or remove repositories:** change which repositories the Oxagen app can access from
+  **GitHub → Settings → Applications → Installed GitHub Apps → Oxagen → Configure**. Then
+  reconnect or re-sync in Oxagen to pick up the change.
+- **Re-sync:** open the source in **Knowledge → Sources** and choose **Re-sync** to refresh
+  the ingested content.
+- **Disconnect:** remove the source in Oxagen, and optionally uninstall the Oxagen app from
+  your GitHub account to revoke access entirely.
+
+## Security
+
+- Access is granted through a GitHub App with **read-only** permissions you can review before
+  installing.
+- Your authorization tokens are **encrypted at rest** and scoped to your organization and
+  workspace.
+- Oxagen only ever sees the repositories you explicitly grant it.
+- Revoke access at any time by uninstalling the Oxagen app from GitHub, or by removing the
+  source in Oxagen.
+
+## Troubleshooting
+
+| Problem | What to do |
+| --- | --- |
+| "GitHub App is not configured" (HTTP 503) / authorization won't start | `GITHUB_APP_SLUG` or `GITHUB_APP_INSTALL_STATE_SECRET` is absent from the deployment environment — contact your Oxagen admin. |
+| No installations appear after authorizing | Make sure you completed the **Install & Authorize** step on GitHub for the account that owns your repos. |
+| A repository is missing from the list | The Oxagen app may not have access to it. On GitHub, open the Oxagen app's configuration and add the repository, then return to Oxagen. |
+| Sync seems stuck | Large repositories take longer. If it doesn't progress, re-run the sync from the source settings or contact support. |

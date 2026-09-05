@@ -1,0 +1,128 @@
+---
+title: A2A JSON-RPC reference
+description: The A2A JSON-RPC 2.0 methods Oxagen implements, with example request/response exchanges.
+---
+
+All A2A methods are JSON-RPC 2.0 calls to a single endpoint:
+
+```
+POST https://api.oxagen.sh/a2a
+Content-Type: application/json
+Authorization: Bearer ox_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+## Methods
+
+| Method | Purpose | Response |
+|---|---|---|
+| `message/send` | Send a message, run the task to completion | `Task` |
+| `message/stream` | Send a message, stream progress | SSE of `Task` / status-update / artifact-update |
+| `tasks/get` | Fetch a task's current state | `Task` |
+| `tasks/cancel` | Cancel a non-terminal task | `Task` |
+| `tasks/resubscribe` | Re-attach an SSE stream to a task | SSE status-update |
+| `agent/getAuthenticatedExtendedCard` | Fetch the authenticated Agent Card | `AgentCard` |
+
+Push-notification config methods (`tasks/pushNotificationConfig/*`) are advertised as unsupported (`capabilities.pushNotifications: false`) and return error `-32003`.
+
+## message/send
+
+**Request**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "message/send",
+  "params": {
+    "message": {
+      "role": "user",
+      "parts": [{ "kind": "text", "text": "Summarize the Acme account." }],
+      "messageId": "c1a4d2e0-0000-4000-8000-000000000001"
+    }
+  }
+}
+```
+
+**Response**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "kind": "task",
+    "id": "a2a_7h3k9m2p5q8r1t4v6x9z2b",
+    "contextId": "ctx_9f8e7d6c5b4a39281706f5e4d3c2b1a0",
+    "status": {
+      "state": "completed",
+      "timestamp": "2026-07-04T12:00:03.412Z"
+    },
+    "artifacts": [
+      {
+        "artifactId": "b7c1…",
+        "name": "response",
+        "parts": [{ "kind": "text", "text": "Acme is a mid-market…" }]
+      }
+    ],
+    "history": [
+      { "kind": "message", "role": "user", "parts": [{ "kind": "text", "text": "Summarize the Acme account." }], "messageId": "c1a4…" },
+      { "kind": "message", "role": "agent", "parts": [{ "kind": "text", "text": "Acme is a mid-market…" }], "messageId": "…" }
+    ]
+  }
+}
+```
+
+The returned `id` is the durable task id (poll it with `tasks/get`). Pass the returned `contextId` back in a later `message/send` to continue the same conversation.
+
+## message/stream
+
+Same params as `message/send`. The response is `text/event-stream`; each SSE `data:` line is a JSON-RPC response envelope wrapping one event. The first event is the initial `Task` (state `submitted`), followed by status updates, incremental artifact chunks, and a final status update with `final: true`.
+
+```
+data: {"jsonrpc":"2.0","id":1,"result":{"kind":"task","id":"a2a_…","contextId":"ctx_…","status":{"state":"submitted"}}}
+
+data: {"jsonrpc":"2.0","id":1,"result":{"kind":"status-update","taskId":"a2a_…","contextId":"ctx_…","status":{"state":"working"},"final":false}}
+
+data: {"jsonrpc":"2.0","id":1,"result":{"kind":"artifact-update","taskId":"a2a_…","contextId":"ctx_…","artifact":{"artifactId":"b7c1…","name":"response","parts":[{"kind":"text","text":"Acme is"}]},"append":true,"lastChunk":false}}
+
+data: {"jsonrpc":"2.0","id":1,"result":{"kind":"status-update","taskId":"a2a_…","contextId":"ctx_…","status":{"state":"completed"},"final":true}}
+```
+
+The stream closes when a `status-update` with `final: true` is sent (the task reached a terminal state).
+
+## tasks/get
+
+```json
+{ "jsonrpc": "2.0", "id": 2, "method": "tasks/get",
+  "params": { "id": "a2a_7h3k9m2p5q8r1t4v6x9z2b", "historyLength": 10 } }
+```
+
+Returns the `Task`. `historyLength` optionally clamps the returned message history. Unknown ids return error `-32001` (Task not found).
+
+## tasks/cancel
+
+```json
+{ "jsonrpc": "2.0", "id": 3, "method": "tasks/cancel",
+  "params": { "id": "a2a_7h3k9m2p5q8r1t4v6x9z2b" } }
+```
+
+Cancels a non-terminal task and returns the updated `Task` (state `canceled`). A task that already reached a terminal state returns error `-32002` (Task not cancelable).
+
+## Task states
+
+`submitted` · `working` · `input-required` · `auth-required` · `completed` · `canceled` · `failed` · `rejected` · `unknown`
+
+Terminal states (`completed`, `canceled`, `failed`, `rejected`) are immutable.
+
+## Error codes
+
+| Code | Meaning |
+|---|---|
+| `-32700` | Parse error (invalid JSON) |
+| `-32600` | Invalid request |
+| `-32601` | Method not found |
+| `-32602` | Invalid params |
+| `-32603` | Internal error |
+| `-32001` | Task not found |
+| `-32002` | Task not cancelable |
+| `-32003` | Push notifications not supported |

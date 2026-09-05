@@ -1,0 +1,146 @@
+---
+title: CLI reference
+description: Complete reference for the oxagen mcp CLI commands — add, remove, list, enable, disable, and check.
+---
+
+The `oxagen mcp` command group manages file-based MCP server configuration. These commands work offline and read/write settings files directly — no platform API calls required.
+
+## oxagen mcp add
+
+Add an MCP server to the file-based configuration.
+
+```bash
+oxagen mcp add <name> [options]
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `name` | Name for this server (used as the key in settings.json) |
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--url <url>` | (required for HTTP) | Server endpoint URL |
+| `--transport <type>` | `streamable-http` | Transport: `streamable-http`, `sse`, `stdio`, `websocket` |
+| `--auth <strategy>` | `none` | Auth strategy: `none`, `bearer`, `header` |
+| `--env-token <varName>` | | Env var name holding the bearer token |
+| `--command <cmd>` | | Command to spawn (required for stdio) |
+| `--arg <arg>` | | Argument for stdio command (repeatable) |
+| `--header <KEY=VALUE>` | | Static header for header auth (repeatable) |
+| `--scope <scope>` | `project` | Config scope: `user`, `project`, `local` |
+
+### Examples
+
+```bash
+# HTTP server with bearer auth
+oxagen mcp add linear --url https://mcp.linear.app/sse --transport sse --auth bearer --env-token LINEAR_TOKEN
+
+# HTTP server with a static header
+oxagen mcp add github --url https://api.githubcopilot.com/mcp/ --auth header --header "Authorization=Bearer ${GITHUB_TOKEN}"
+
+# Local stdio server
+oxagen mcp add fs --transport stdio --command npx --arg -y --arg @modelcontextprotocol/server-filesystem --arg .
+
+# Add to user scope (global, all projects)
+oxagen mcp add memory --scope user --transport stdio --command npx --arg -y --arg @anthropic/mcp-memory
+```
+
+---
+
+## oxagen mcp remove
+
+Remove an MCP server from file-based configuration.
+
+```bash
+oxagen mcp remove <name> [options]
+```
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--scope <scope>` | `project` | Scope to remove from: `user`, `project`, `local` |
+
+### Examples
+
+```bash
+# Remove from project scope (default)
+oxagen mcp remove linear
+
+# Remove from user scope
+oxagen mcp remove memory --scope user
+```
+
+Managed servers (provisioned by the org) cannot be removed.
+
+---
+
+## oxagen mcp list
+
+List effective MCP servers (merged across all scopes).
+
+```bash
+oxagen mcp list [options]
+```
+
+### Example output
+
+```
+MCP Servers:
+
+  NAME        TRANSPORT         SCOPE       AUTH
+  ────        ─────────         ─────       ────
+  github      streamable-http   project     authenticated
+  linear      sse               project     expired
+  filesystem  stdio             local       none
+  memory      stdio             user        none
+  company-jira streamable-http  managed     org-managed
+```
+
+---
+
+## oxagen mcp check
+
+Connect to a server (or all enabled servers) and preview the tools it exposes.
+
+```bash
+oxagen mcp check [name]
+```
+
+Pass a server name to check only that server; omit to check all enabled servers.
+
+### Example output
+
+```
+MCP Server Health:
+
+  ● github: healthy (89ms)
+  ● filesystem: healthy
+  ◐ linear: auth_required — token expired
+  ✕ internal: unreachable — ECONNREFUSED (2104ms)
+  ○ expensive: disabled
+
+  3/4 servers healthy
+```
+
+### Status icons
+
+| Icon | Status | Meaning |
+|------|--------|---------|
+| `●` | healthy | Server responded successfully |
+| `◐` | auth_required | Server reachable but credentials missing or expired |
+| `✕` | unreachable | Connection failed (network error, DNS, timeout) |
+| `○` | disabled | Server is in config but disabled |
+
+---
+
+## Scope summary
+
+| Scope | File | Use case |
+|-------|------|----------|
+| `user` | `~/.config/oxagen/settings.json` | Servers available in all projects (personal tools) |
+| `project` | `.oxagen/settings.json` | Team-shared servers (committed to VCS) |
+| `local` | `.oxagen/settings.local.json` | Personal overrides, dev servers (gitignored) |

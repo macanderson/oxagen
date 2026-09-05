@@ -1,0 +1,83 @@
+---
+title: Generated files
+description: Documents, spreadsheets, presentations, PDFs, images, SVGs, and videos the agent can produce.
+---
+
+The agent can generate a range of file types on demand. Generated files are stored in blob storage (Vercel Blob), referenced by a Postgres metadata row, and served via the access-controlled `/api/v1/assets/[id]` route. Files belong to the org by default — they are not publicly accessible without an explicit access policy change.
+
+## Documents and text formats
+
+### `documents.generate`
+
+Generates a document in one of three formats:
+
+- **DOCX** — Word-compatible document with sections and headings.
+- **XLSX** — spreadsheet with column headers and rows.
+- **PPTX** — presentation with slides and bullet points.
+
+Usage: "Write a project brief for the Atlas initiative and save it as a Word document."
+
+### `documents.pdf.create`
+
+Generates a PDF from a title and structured content using pdf-lib (pure JS, no Chromium). Supported options: title, structured content sections (heading + paragraphs), and brand colors (primary/secondary).
+
+Usage: "Create a PDF version of our Q2 executive summary with the company header."
+
+## Images and graphics
+
+### `image.generate`
+
+Generates a raster image (JPEG/PNG) from a text prompt via `openai/gpt-image-1` through the Vercel AI Gateway. When `AI_GATEWAY_API_KEY` is not configured, the capability returns a typed placeholder rather than throwing.
+
+Usage: "Generate a hero image for the product announcement blog post."
+
+### `svg.generate`
+
+Generates a scalable vector graphic from a description. Suitable for icons, diagrams, and simple illustrations.
+
+Usage: "Create an SVG icon representing a secure data pipeline."
+
+## Video
+
+### `video.generate`
+
+Generates a short video clip from a text prompt via a Veo render job. The capability returns immediately with `status: 'queued'` and a `jobId`; the underlying render is asynchronous. The serve URL returns 404 until the asset row flips to `ready`.
+
+Usage: "Create a 10-second explainer video for our data isolation architecture."
+
+Generated videos appear in **Workspace → Activity → Runs** when the task completes. You receive an in-app notification.
+
+## Form filling
+
+### `form.fill`
+
+Fills form fields on a page programmatically, field-by-field or all at once, using structured data. Supports highlight transition UX showing which fields were filled.
+
+Usage: "Fill in the intake form with the client details from our last conversation."
+
+## Access and storage
+
+Every generated file:
+
+- Is stored in Vercel Blob (encrypted at rest).
+- Has a reference row in `content.generated_assets` in Postgres (scoped to the creating org and workspace by RLS).
+- Is served via `/api/v1/assets/[id]` with access-policy enforcement (`user`, `org`, or `public`).
+- The default access policy for agent-generated files is `org` — any member of the org can access the file, but it is not publicly accessible.
+
+Files can be downloaded directly from the chat interface or via the assets API:
+
+```http
+GET https://api.oxagen.sh/v1/assets/{assetId}
+Authorization: Bearer oxk_live_…
+```
+
+## Billing
+
+| Generation type                       | Credit charge                                                 |
+| ------------------------------------- | ------------------------------------------------------------- |
+| Documents (DOCX, XLSX, PPTX, PDF) | Metered at the LLM token rate of the underlying model call    |
+| Image generation                      | Per-image flat fee (rate depends on model; see pricing table) |
+| SVG generation                        | Metered at LLM token rate                                     |
+| Video generation                      | Per-second video rate (model-dependent)                       |
+
+Generated files do not incur ongoing storage charges — blob storage is included in the subscription.

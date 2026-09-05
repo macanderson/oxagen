@@ -1,0 +1,74 @@
+---
+title: API overview
+description: The Oxagen REST API — versioned, authenticated, capability-parity with the MCP server and in-app agent.
+---
+
+The Oxagen REST API exposes every platform capability as versioned HTTP endpoints. It is the programmatic surface for server-to-server integrations, custom tooling, and automation pipelines that do not use MCP.
+
+<IllustrationApi />
+
+**Base URL:** `https://api.oxagen.sh`
+
+**Current version:** `v1`
+
+All endpoints are under `/v1/`. The version prefix is required.
+
+## Design principles
+
+**Capability parity.** Every capability available via the REST API is also available via the MCP server and the in-app agent. The underlying contract registry is the single source of truth for all three surfaces. If you build an automation with the API, it works identically if you switch to MCP.
+
+**Thin shell, shared logic.** The API server is a thin routing layer over the shared platform library. Business logic lives in the shared layer, not in route handlers. This means API behavior is consistent with app behavior — no divergence.
+
+**Versioned.** All endpoints carry the `/v1/` prefix. Breaking changes will be introduced in a new version with a parallel migration window.
+
+**Scoped.** API keys carry org and workspace scope. You do not pass `orgId` or `workspaceId` in request bodies — they are inferred from the key. Each key is scoped to exactly one org and one workspace at creation time.
+
+## Authentication
+
+See [Authentication](/docs/platform/api/authentication) for the full reference. In short:
+
+```http
+Authorization: Bearer ox_…
+```
+
+Every request must include an `Authorization` header with a Bearer token. Requests without a valid token return `401 Unauthorized`. Requests where the token does not have the required capability for the endpoint return `403 Forbidden` with a `capability_denied` error body.
+
+## Error format
+
+All errors follow a consistent JSON structure:
+
+```json
+{
+  "error": {
+    "code": "capability_denied",
+    "message": "Principal does not have permission to invoke execute_code",
+    "request_id": "req_01abc…"
+  }
+}
+```
+
+Common error codes:
+
+| Code | HTTP status | Meaning |
+|---|---|---|
+| `unauthorized` | 401 | Missing or invalid token |
+| `capability_denied` | 403 | IAM: the principal lacks the required capability |
+| `insufficient_credits` | 402 | Org has zero credit balance |
+| `not_found` | 404 | Resource does not exist or is not in the token's scope |
+| `validation_error` | 422 | Request body failed schema validation |
+| `rate_limited` | 429 | Too many requests |
+| `internal_error` | 500 | Unexpected server error; include `request_id` in support tickets |
+
+## Capabilities and parity
+
+See [Capabilities](/docs/platform/api/capabilities) for the full list of available capabilities and their REST routes.
+
+Note: some UI-only actions (plan approval flows, billing page interactions) are not available via the API because they do not have corresponding contract declarations. See [Capabilities](/docs/platform/api/capabilities) for the current parity gap list.
+
+## Rate limits
+
+The API enforces rate limits per key. When a limit is exceeded, the response is `429 Too Many Requests`. Specific per-plan limits are not yet published — contact support if you encounter sustained rate-limiting.
+
+## Streaming
+
+The chat endpoint (`/v1/{orgSlug}/{workspaceSlug}/chat/stream`) returns a `text/event-stream` (SSE) response rather than a JSON body. See [Chat streaming](/docs/platform/api/chat-streaming) for the event format.
