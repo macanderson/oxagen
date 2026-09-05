@@ -173,6 +173,28 @@ argument is a service name constrained by `allowedPattern` at the API. That
 instance also runs Postgres, Neo4j and ClickHouse; `AWS-RunShellScript` on it is
 root, and no deploy needs root.
 
+## Applying from CI
+
+`.github/workflows/infra.yml` plans every pull request that touches
+`stacks-new/` or `modules/` and applies on merge to `main`. A pull request
+assumes `gha-infra-plan`, which can only read; a merge assumes
+`gha-infra-apply`, pinned to the `production` environment. Both roles are
+declared in `stacks-new/ci-deploy/infra-apply.tf`.
+
+**Both roles are created by the stack they apply, so the first apply is by
+hand.** Until it has happened, pull requests run `fmt` and `validate` only and
+the plan step is skipped with a warning naming this section; the apply job on
+`main` fails outright, which is the right signal for a write that cannot run.
+With credentials for account `916294258235`:
+
+```bash
+cd stacks-new/ci-deploy && tofu init && tofu plan   # read it: two roles, three attachments
+tofu apply
+```
+
+After that single apply the workflow is self-hosting: the next pull request
+plans, and the next merge applies. Nothing in the workflow needs to change.
+
 ## Serving from the node
 
 `stella.oxagen.sh`, `docs.oxagen.sh` and the platform's `app`, `api` and `mcp`

@@ -12,6 +12,13 @@
 # Both roles are defined in infra/stacks-new/ci-deploy/infra-apply.tf, so this
 # workflow's own permissions are reviewable in the same pull request as the
 # infrastructure it changes.
+#
+# That also means neither role exists until the ci-deploy stack has been
+# applied once, and the job that would apply it is the one that needs the
+# role: the first apply is done by hand (infra/README.md, "Applying from CI").
+# Until then a pull request still gets `fmt` and `validate`, which need no
+# credentials, and the plan itself is skipped with a warning rather than
+# failing every infrastructure change on a role no pull request can create.
 
 name: infra
 
@@ -89,24 +96,43 @@ jobs:
         with:
           tofu_version: 1.8.5
 
-      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
-        with:
-          role-to-assume: arn:aws:iam::916294258235:role/gha-infra-plan
-          aws-region: ${{ env.AWS_REGION }}
-
+      # The static checks come first and need no credentials, so a stack that
+      # does not parse fails here whether or not the account is reachable.
+      # `-backend=false` is what lets `init` run without the state bucket; the
+      # plan below re-runs `init` with the backend once it has a role.
       - name: fmt
         working-directory: infra/stacks-new/${{ matrix.stack }}
         run: tofu fmt -check -diff .
 
+      - name: validate
+        working-directory: infra/stacks-new/${{ matrix.stack }}
+        run: |
+          tofu init -backend=false -input=false -no-color
+          tofu validate -no-color
+
+      # `continue-on-error` is deliberate and narrow: this is the only step
+      # that can fail for the bootstrap reason in the header, and everything
+      # that needs the role is gated on its outcome below. Once the role
+      # exists nothing here changes — the next run plans.
+      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        id: credentials
+        continue-on-error: true
+        with:
+          role-to-assume: arn:aws:iam::916294258235:role/gha-infra-plan
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: plan skipped
+        if: steps.credentials.outcome != 'success'
+        run: |
+          echo "::warning title=plan skipped (${{ matrix.stack }})::Could not assume gha-infra-plan in 916294258235. Until infra/stacks-new/ci-deploy has been applied once by hand this job runs fmt and validate only. See infra/README.md, 'Applying from CI'."
+
       - name: init
+        if: steps.credentials.outcome == 'success'
         working-directory: infra/stacks-new/${{ matrix.stack }}
         run: tofu init -input=false -no-color
 
-      - name: validate
-        working-directory: infra/stacks-new/${{ matrix.stack }}
-        run: tofu validate -no-color
-
       - name: plan
+        if: steps.credentials.outcome == 'success'
         id: plan
         working-directory: infra/stacks-new/${{ matrix.stack }}
         # -detailed-exitcode: 0 no changes, 2 changes, 1 error. Without it a
@@ -122,7 +148,7 @@ jobs:
           exit 0
 
       - name: comment
-        if: github.event_name == 'pull_request'
+        if: steps.credentials.outcome == 'success' && github.event_name == 'pull_request'
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
           STACK: ${{ matrix.stack }}
