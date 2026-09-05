@@ -46,9 +46,35 @@ const requireEnvMock = vi.hoisted(() =>
 const chCommandMock = vi.hoisted(() =>
   vi.fn<(opts: { query: string }) => Promise<void>>(),
 );
+/**
+ * clickhouse() singleton client's query — used by the ledger to (a) count
+ * pre-existing tables (the fresh-install / existing-deployment fork) and
+ * (b) read which migrations/*.sql filenames are already recorded.
+ * Distinguishes the two by sniffing the query text, same as a real
+ * ClickHouse response shape (`{ json: () => Promise<T[]> }`).
+ */
+const chQueryMock = vi.hoisted(() =>
+  vi.fn<
+    (opts: { query: string }) => Promise<{ json: <T>() => Promise<T[]> }>
+  >(),
+);
+/** clickhouse() singleton client's insert — used to record applied migrations. */
+const chInsertMock = vi.hoisted(() =>
+  vi.fn<
+    (opts: {
+      table: string;
+      values: readonly unknown[];
+      format: string;
+    }) => Promise<void>
+  >(),
+);
 /** clickhouse() singleton factory */
 const clickhouseSingletonMock = vi.hoisted(() =>
-  vi.fn(() => ({ command: chCommandMock })),
+  vi.fn(() => ({
+    command: chCommandMock,
+    query: chQueryMock,
+    insert: chInsertMock,
+  })),
 );
 /** closeClickhouse — called after migration in the direct-run success path */
 const closeClickhouseMock = vi.hoisted(() => vi.fn<() => Promise<void>>());
@@ -90,6 +116,11 @@ const SCHEMA_SQL =
   "CREATE TABLE IF NOT EXISTS t (id UInt32) ENGINE=MergeTree() ORDER BY id;";
 const MIGRATION_SQL = "ALTER TABLE t ADD COLUMN x String;";
 
+/** Wraps a plain array the way the real `@clickhouse/client` result does. */
+function jsonResult<T>(rows: T[]): { json: <U>() => Promise<U[]> } {
+  return { json: async <U>() => rows as unknown as U[] };
+}
+
 function defaultMocks(): void {
   commandMock.mockResolvedValue(undefined);
   bootstrapCloseMock.mockResolvedValue(undefined);
@@ -98,6 +129,15 @@ function defaultMocks(): void {
   readFileSyncMock.mockReturnValue(SCHEMA_SQL);
   readdirSyncMock.mockReturnValue(["0001_init.sql"]);
   existsSyncMock.mockReturnValue(true);
+  // Default: a fresh database (no pre-existing tables) with nothing yet
+  // recorded in the ledger — every test that doesn't override this exercises
+  // the "run everything, then record it" path, matching the pre-ledger
+  // behaviour these tests were written against.
+  chQueryMock.mockImplementation(async (opts: { query: string }) => {
+    if (opts.query.includes("system.tables")) return jsonResult([{ c: "0" }]);
+    return jsonResult([]); // ledger SELECT DISTINCT filename
+  });
+  chInsertMock.mockResolvedValue(undefined);
 }
 
 beforeEach(() => {
@@ -440,6 +480,160 @@ describe("ensureDatabase() — retry behaviour", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Applied-migrations ledger (#2632)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("migrate() — applied-migrations ledger (#2632)", () => {
+  it("creates the _migrations ledger table on every call", async () => {
+    await migrate();
+
+    const queries = chCommandMock.mock.calls.map(
+      (c) => (c[0] as { query: string }).query,
+    );
+    expect(
+      queries.some((q) => q.includes("CREATE TABLE IF NOT EXISTS _migrations")),
+    ).toBe(true);
+  });
+
+  it("fresh database (no pre-existing tables): runs every migration file and records each one", async () => {
+    readdirSyncMock.mockReturnValue(["0001_a.sql", "0002_b.sql"]);
+    readFileSyncMock.mockImplementation((p: unknown) => {
+      const path = String(p);
+      if (path.endsWith("0001_a.sql"))
+        return "ALTER TABLE t ADD COLUMN a String;";
+      if (path.endsWith("0002_b.sql"))
+        return "ALTER TABLE t ADD COLUMN b String;";
+      return SCHEMA_SQL;
+    });
+    // chQueryMock's default (system.tables → 0, ledger → []) already models
+    // a genuinely fresh database.
+
+    await migrate();
+
+    const queries = chCommandMock.mock.calls.map(
+      (c) => (c[0] as { query: string }).query,
+    );
+    expect(queries.some((q) => q.includes("ADD COLUMN a"))).toBe(true);
+    expect(queries.some((q) => q.includes("ADD COLUMN b"))).toBe(true);
+
+    const recorded = chInsertMock.mock.calls
+      .filter((c) => (c[0] as { table: string }).table === "_migrations")
+      .flatMap(
+        (c) => (c[0] as { values: readonly { filename: string }[] }).values,
+      )
+      .map((v) => v.filename);
+    expect(recorded).toEqual(["0001_a.sql", "0002_b.sql"]);
+  });
+
+  it("existing deployment (pre-existing tables, empty ledger): bootstraps pre-cutover files WITHOUT executing them", async () => {
+    readdirSyncMock.mockReturnValue(["0001_a.sql", "0002_b.sql"]);
+    readFileSyncMock.mockImplementation((p: unknown) => {
+      const path = String(p);
+      if (path.endsWith("0001_a.sql"))
+        return "DROP TABLE IF EXISTS doomed; ALTER TABLE t ADD COLUMN a String;";
+      if (path.endsWith("0002_b.sql"))
+        return "ALTER TABLE t ADD COLUMN b String;";
+      return SCHEMA_SQL;
+    });
+    chQueryMock.mockImplementation(async (opts: { query: string }) => {
+      if (opts.query.includes("system.tables")) return jsonResult([{ c: "5" }]); // pre-existing tables
+      return jsonResult([]); // empty ledger — first time this database sees it
+    });
+
+    await migrate();
+
+    // Neither pre-cutover file's SQL was ever sent — the bootstrap recorded
+    // them as already-applied instead of replaying them (this is what stops
+    // the DROP from replaying on the deploy that ships the ledger).
+    const queries = chCommandMock.mock.calls.map(
+      (c) => (c[0] as { query: string }).query,
+    );
+    expect(queries.some((q) => q.includes("doomed"))).toBe(false);
+    expect(queries.some((q) => q.includes("ADD COLUMN a"))).toBe(false);
+    expect(queries.some((q) => q.includes("ADD COLUMN b"))).toBe(false);
+
+    const recorded = chInsertMock.mock.calls
+      .filter((c) => (c[0] as { table: string }).table === "_migrations")
+      .flatMap(
+        (c) => (c[0] as { values: readonly { filename: string }[] }).values,
+      )
+      .map((v) => v.filename);
+    expect(recorded).toEqual(["0001_a.sql", "0002_b.sql"]);
+  });
+
+  it("a filename sorting AFTER the pre-ledger cutover still executes for real on an existing deployment's bootstrap run", async () => {
+    // 0027 sorts after PRE_LEDGER_BASELINE_CUTOVER
+    // ("0026_stella_operational_events.sql") — a migration that did not
+    // exist when the cutover was pinned must never be swept into the
+    // baseline, even on the very deploy that introduces the ledger.
+    readdirSyncMock.mockReturnValue(["0001_a.sql", "0027_new_thing.sql"]);
+    readFileSyncMock.mockImplementation((p: unknown) => {
+      const path = String(p);
+      if (path.endsWith("0027_new_thing.sql"))
+        return "ALTER TABLE t ADD COLUMN brand_new String;";
+      return SCHEMA_SQL;
+    });
+    chQueryMock.mockImplementation(async (opts: { query: string }) => {
+      if (opts.query.includes("system.tables")) return jsonResult([{ c: "5" }]);
+      return jsonResult([]);
+    });
+
+    await migrate();
+
+    const queries = chCommandMock.mock.calls.map(
+      (c) => (c[0] as { query: string }).query,
+    );
+    expect(queries.some((q) => q.includes("ADD COLUMN brand_new"))).toBe(true);
+
+    const recorded = chInsertMock.mock.calls
+      .filter((c) => (c[0] as { table: string }).table === "_migrations")
+      .flatMap(
+        (c) => (c[0] as { values: readonly { filename: string }[] }).values,
+      )
+      .map((v) => v.filename);
+    // 0001_a.sql was bootstrapped (recorded without executing); 0027 was
+    // recorded only after its statement actually ran.
+    expect(recorded).toContain("0001_a.sql");
+    expect(recorded).toContain("0027_new_thing.sql");
+  });
+
+  it("skips a file already recorded in the ledger and only executes the unrecorded one", async () => {
+    readdirSyncMock.mockReturnValue(["0001_a.sql", "0002_b.sql"]);
+    readFileSyncMock.mockImplementation((p: unknown) => {
+      const path = String(p);
+      if (path.endsWith("0001_a.sql"))
+        return "DROP TABLE IF EXISTS already_done; ALTER TABLE t ADD COLUMN a String;";
+      if (path.endsWith("0002_b.sql"))
+        return "ALTER TABLE t ADD COLUMN b String;";
+      return SCHEMA_SQL;
+    });
+    chQueryMock.mockImplementation(async (opts: { query: string }) => {
+      if (opts.query.includes("system.tables")) return jsonResult([{ c: "5" }]);
+      return jsonResult([{ filename: "0001_a.sql" }]); // already applied
+    });
+
+    await migrate();
+
+    const queries = chCommandMock.mock.calls.map(
+      (c) => (c[0] as { query: string }).query,
+    );
+    // 0001_a's DROP never replayed — this is the bug, fixed: a file already
+    // in the ledger is never re-sent to the server.
+    expect(queries.some((q) => q.includes("already_done"))).toBe(false);
+    expect(queries.some((q) => q.includes("ADD COLUMN a"))).toBe(false);
+    expect(queries.some((q) => q.includes("ADD COLUMN b"))).toBe(true);
+
+    const recorded = chInsertMock.mock.calls
+      .filter((c) => (c[0] as { table: string }).table === "_migrations")
+      .flatMap(
+        (c) => (c[0] as { values: readonly { filename: string }[] }).values,
+      )
+      .map((v) => v.filename);
+    expect(recorded).toEqual(["0002_b.sql"]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // isDirectRun top-level block
 //
 // The block `if (isDirectRun) { migrate().then(...) }` runs synchronously at
@@ -473,13 +667,12 @@ describe("isDirectRun block", () => {
       process.argv[1] = migrateFilePath;
       await import("./migrate");
 
-      // Flush microtask queue so the .then() chains resolve
-      await new Promise<void>((resolve) => {
-        // Two awaits: one for each .then() in the chain
-        Promise.resolve()
-          .then(() => Promise.resolve())
-          .then(() => Promise.resolve())
-          .then(resolve);
+      // Wait for the `.then()` chain to settle. migrate() now awaits several
+      // ledger round-trips (table-count check, ledger select, per-file
+      // insert) before resolving, so a fixed microtask-flush count is no
+      // longer reliable — poll instead.
+      await vi.waitFor(() => {
+        expect(exitSpy).toHaveBeenCalled();
       });
 
       expect(closeClickhouseMock).toHaveBeenCalledTimes(1);
@@ -524,11 +717,8 @@ describe("isDirectRun block", () => {
       process.argv[1] = migrateFilePath;
       await import("./migrate");
 
-      await new Promise<void>((resolve) => {
-        Promise.resolve()
-          .then(() => Promise.resolve())
-          .then(() => Promise.resolve())
-          .then(resolve);
+      await vi.waitFor(() => {
+        expect(exitSpy).toHaveBeenCalled();
       });
 
       const errorCall = stderrSpy.mock.calls.find((c) =>
