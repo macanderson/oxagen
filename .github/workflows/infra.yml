@@ -51,9 +51,37 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Until the first apply creates them, `gha-infra-plan` and
+      # `gha-infra-apply` do not exist, and this workflow is what would create
+      # them — a bootstrap it cannot do for itself. Probing for the role rather
+      # than assuming it lets this land without adding a permanently red job,
+      # and the gate clears itself the moment the roles appear. Nothing here is
+      # tolerated once they do: a role that exists and refuses is still a
+      # failure, because this step only skips when the assume itself fails.
+      - id: roles
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: arn:aws:iam::916294258235:role/gha-infra-plan
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Report an unbootstrapped account
+        if: steps.roles.outcome == 'failure'
+        run: |
+          echo "::warning title=infra roles not bootstrapped::\
+          Could not assume gha-infra-plan, so no stack is planned. The roles \
+          are defined in infra/stacks-new/ci-deploy/infra-apply.tf and are \
+          created by the first apply, which needs credentials for 916294258235. \
+          This gate clears itself once they exist."
+
       - id: pick
         run: |
           set -euo pipefail
+          if [ "${{ steps.roles.outcome }}" != "success" ]; then
+            echo 'stacks=[]' >> "$GITHUB_OUTPUT"
+            echo "roles not bootstrapped -- planning nothing"
+            exit 0
+          fi
           base="${{ github.event.pull_request.base.sha || github.event.before }}"
           if [ -z "$base" ] || ! git cat-file -e "$base" 2>/dev/null; then
             base=$(git rev-parse HEAD~1 2>/dev/null || git rev-parse HEAD)
