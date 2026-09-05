@@ -11,13 +11,21 @@
 # why. That is weaker than the merge gate, which is exactly why the merge gate
 # carries the load and this is a net rather than a wall.
 #
-# ## Why `not_planned` is exempt
+# ## Why `not_planned` and `duplicate` are exempt
 #
-# Closing as "not planned" is a decision that the work should not happen at
-# all — a duplicate, an obsolete idea, a wrong premise. Demanding a ticked DoD
-# there would force people to fake-tick a checklist for work nobody intends to
-# do, which corrupts the one signal this whole check depends on. Only closes
-# marked "completed" claim the DoD was met, so only those are verified.
+# Closing as "not planned" or "duplicate" is a decision that the work should
+# not happen here — an obsolete idea, a wrong premise, or the same work tracked
+# somewhere else. Demanding a ticked DoD there would force people to fake-tick
+# a checklist for work nobody intends to do, which corrupts the one signal this
+# whole check depends on. Only closes marked "completed" claim the DoD was met,
+# so only those are verified.
+#
+# The exemption list lives in `scr-dod-check.mjs` as `closeExemptFromDod`, not
+# inline here, because a `script:` block is reachable by no test. It was inline,
+# and it named `not_planned` alone: GitHub made `duplicate` a first-class close
+# reason after this shipped, so #2582 was closed as a duplicate and reopened by
+# this guard twelve seconds later. The paragraph above had named a duplicate as
+# exempt since the day it was written; only the code disagreed.
 name: dod-close-guard
 
 on:
@@ -56,13 +64,14 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const { dodStatus } = await import(
+            const { closeExemptFromDod, dodStatus } = await import(
               `${process.env.GITHUB_WORKSPACE}/.scr-tools/tools/scripts/scr-dod-check.mjs`)
 
             const issue = context.payload.issue
 
-            if (issue.state_reason === 'not_planned') {
-              core.notice('Closed as not planned — DoD not required (SCR-003).')
+            if (closeExemptFromDod(issue.state_reason)) {
+              core.notice(
+                `Closed as ${issue.state_reason} — DoD not required (SCR-003).`)
               return
             }
 

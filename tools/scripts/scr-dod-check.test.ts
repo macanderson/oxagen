@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  closeExemptFromDod,
   dodStatus,
   ESCAPE_HATCH_LABEL,
   formatVerdict,
@@ -193,5 +194,30 @@ describe("formatVerdict", () => {
     expect(text).toContain("SCR-003");
     expect(text).toContain("SCR-004");
     expect(text).toContain("#1321");
+  });
+});
+
+describe("closeExemptFromDod", () => {
+  // The witness. Closing as a duplicate is the semantically correct close for
+  // work tracked elsewhere, and the guard reopened it: oxagen#2582 was closed
+  // `duplicate` and reopened twelve seconds later, because the exemption named
+  // `not_planned` alone. Against that code this expectation is false.
+  it("exempts a close marked duplicate", () => {
+    expect(closeExemptFromDod("duplicate")).toBe(true);
+  });
+
+  it("exempts a close marked not planned", () => {
+    expect(closeExemptFromDod("not_planned")).toBe(true);
+  });
+
+  // The half that must not move: `completed` is the only reason that claims
+  // the work was done, so it is the only one SCR-003 has anything to verify.
+  it("verifies a close marked completed", () => {
+    expect(closeExemptFromDod("completed")).toBe(false);
+  });
+
+  it("verifies a close that names no reason at all", () => {
+    expect(closeExemptFromDod(undefined)).toBe(false);
+    expect(closeExemptFromDod(null)).toBe(false);
   });
 });
