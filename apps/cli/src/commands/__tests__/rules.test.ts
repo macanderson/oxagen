@@ -172,7 +172,6 @@ describe("rules candidates + promote (mined from local logs, never auto-written)
         complexity: 40,
         recommendedTier: "balanced",
         missing: [],
-        contextQueries: [],
         refinedPrompt: "x",
         removed: [],
         reasoning: "",

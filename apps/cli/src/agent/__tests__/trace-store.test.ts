@@ -41,7 +41,6 @@ function trace(id: string, prompt = "do a thing"): TurnTrace {
       complexity: 50,
       recommendedTier: "fast",
       missing: [],
-      contextQueries: [],
       refinedPrompt: prompt,
       removed: [],
       reasoning: "",

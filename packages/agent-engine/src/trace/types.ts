@@ -74,7 +74,7 @@ export type ScopeReviewDecision =
 
 /**
  * The cheap model's read of the user's prompt: how complete and how complex it
- * is, what context to pull, and a noise-removed rewrite.
+ * is, and a noise-removed rewrite.
  */
 export interface PromptEvaluation {
   /** 0–100: how complete/actionable the prompt is on its own. */
@@ -85,8 +85,6 @@ export interface PromptEvaluation {
   recommendedTier: ModelTier;
   /** Information the prompt is missing (empty when it is self-contained). */
   missing: string[];
-  /** Symbols / file paths / topics the evaluator flagged as worth retrieving. */
-  contextQueries: string[];
   /** The prompt rewritten: filler removed, intent sharpened, meaning preserved. */
   refinedPrompt: string;
   /** What was pruned from the original prompt, and (briefly) why. */

@@ -124,7 +124,6 @@ describe("executePipelineTurn — judged pipeline (the repo-edit path)", () => {
               complexity: 40,
               recommendedTier: "balanced",
               missing: [],
-              contextQueries: [],
               refinedPrompt: "refined prompt",
               removed: [],
               reasoning: "well scoped",

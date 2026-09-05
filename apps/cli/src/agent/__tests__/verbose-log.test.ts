@@ -34,7 +34,6 @@ function trace(id: string): TurnTrace {
       complexity: 50,
       recommendedTier: "balanced",
       missing: [],
-      contextQueries: [],
       refinedPrompt: "do a thing",
       removed: [],
       reasoning: "",
