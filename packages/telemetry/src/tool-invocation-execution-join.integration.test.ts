@@ -50,6 +50,14 @@ beforeAll(async () => {
  * shipped production query — written here, at the read boundary the DoD asks
  * for, so the test proves the DATA is joinable rather than that some
  * particular query string works.
+ *
+ * The `GROUP BY` is required, not stylistic: a bare `sum()` with no GROUP BY
+ * is an aggregate over the whole result set, and ClickHouse answers one for
+ * an empty set too — with `0`, not NULL. Unattributable would then be
+ * indistinguishable from a run that genuinely cost nothing, which is the
+ * exact distinction the control case below exists to make. Grouping by the
+ * join key returns zero rows when nothing matches, so `null` means "no run
+ * to attribute this to" and a `0` would mean "attributed, and it cost 0".
  */
 async function toolInvocationRunCost(args: {
   orgId: string;
@@ -74,6 +82,7 @@ async function toolInvocationRunCost(args: {
           AND workspace_id = {workspaceId:UUID}
         GROUP BY execution_step_id
       ) AS tu ON tu.execution_step_id = ti.execution_step_id
+      GROUP BY ti.execution_step_id
     `,
     query_params: {
       orgId: args.orgId,
