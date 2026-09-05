@@ -28,9 +28,11 @@ NAME=$2
 HOSTNAME_=$3
 PORT=$4
 
+# New account's node — the 2026-08-27 cutover is complete and this is the
+# live target (both accounts' compute runs in us-east-1).
 REGION=us-east-1
-INSTANCE=i-023d002d6e44f8f84
-BUCKET=oxagen-deploy-578673726240
+INSTANCE=i-094fcb34c7e715cf8
+BUCKET=oxagen-deploy-916294258235
 STANDALONE="$APP_DIR/.next/standalone"
 
 # Where `server.js` lands depends on the workspace. A standalone app sits at

@@ -1,11 +1,18 @@
 # oxagen-aws-infra
 
 Infrastructure for three brands — **Oxagen**, **Stella**, and the **Context
-Graph Protocol** — in one AWS account (`578673726240`), kept separate by
-tagging, Resource Groups, and per-brand Terraform state rather than by separate
-accounts.
+Graph Protocol** — kept separate by tagging, Resource Groups, and per-brand
+Terraform state rather than by separate AWS accounts.
 
-Managed with [OpenTofu](https://opentofu.org). State lives in
+**This directory holds two generations of that infrastructure.** `stacks/`
+is the original layout, still Terraform for the old account (`578673726240`)
+and left as-is — the rest of this README describes it. `stacks-new/` is the
+live platform today, in the new account (`916294258235`), the target of the
+2026-08-27 cutover; see `docs/new-account-migration-plan.md` for how it
+differs and what has and hasn't been decommissioned in the old account.
+Everything under **"Applying from CI"** below is about `stacks-new/`.
+
+Managed with [OpenTofu](https://opentofu.org). `stacks/`'s state lives in
 `s3://oxagen-tfstate-578673726240` with locking in the `oxagen-tflock`
 DynamoDB table, both of which predate this repository.
 
@@ -162,16 +169,17 @@ change, and a fork's pull request cannot mint an accepted token.
 | `macanderson/context-graph-protocol` | that site's `/schema` and `/spec` prefixes |
 | `oxageninc/oxagen-platform` | `oxagen.sh` (S3 + CloudFront); `docs`, `app`, `api`, `mcp` (node) |
 
-`stacks/ci-deploy` holds the provider, the four roles and their policies. The
-roles are named in the workflows in plain text, which is fine — a role ARN is an
-identifier, and it is useless without a token whose subject the trust policy
-accepts.
+`stacks-new/ci-deploy` holds the provider, the four roles and their policies —
+this is the live account's deploy path (`stacks/ci-deploy` is the equivalent
+for the old, retired path). The roles are named in the workflows in plain
+text, which is fine — a role ARN is an identifier, and it is useless without a
+token whose subject the trust policy accepts.
 
 **No CI role has a shell on the node.** Each may write one S3 object per service
 it owns and send exactly one SSM document, `oxagen-deploy-service`, whose only
 argument is a service name constrained by `allowedPattern` at the API. That
-instance also runs Postgres, Neo4j and ClickHouse; `AWS-RunShellScript` on it is
-root, and no deploy needs root.
+instance also runs Neo4j and ClickHouse (Postgres moved to Aurora Serverless
+v2); `AWS-RunShellScript` on it is root, and no deploy needs root.
 
 ## Applying from CI
 
@@ -247,6 +255,12 @@ bundled package that holds nothing but a manifest — on the Stella site that wa
 five packages, not the one that surfaced in the error.
 
 ## Reaching the databases
+
+**This section is `stacks/oxagen-data` — the old account's self-hosted
+Postgres, Neo4j and ClickHouse.** The new account's Aurora and Redshift
+(`stacks-new/oxagen`'s `data-services.tf`) are reached over the VPC from the
+app node instead; their passwords live at `/oxagen-app/postgres/password` and
+`/oxagen-app/redshift/password` rather than under `/oxagen-data/`.
 
 Nothing is exposed. The security group opens no inbound port and there is no
 SSH key; every port is additionally bound to loopback on the instance, so a

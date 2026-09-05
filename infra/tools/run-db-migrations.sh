@@ -12,6 +12,21 @@
 # Uses the repository's `ci` Atlas environment, which takes DATABASE_URL and
 # the migration directory and nothing else — no dev database, no drizzle
 # export, so nothing here needs Node or the workspace installed remotely.
+#
+# BROKEN for the new account (916294258235) as written, and left pointed at
+# the old one (578673726240) deliberately rather than half-fixed: the whole
+# mechanism below assumes Postgres runs as a Docker container on the target
+# instance (`docker exec oxagen-data-postgres-1`, password at
+# /oxagen-data/postgres/password). The new account moved Postgres to Aurora
+# PostgreSQL Serverless v2 (stacks-new/oxagen/data-services.tf) — there is no
+# local Postgres container to exec into on the new node, and the password
+# lives at /oxagen-app/postgres/password instead. Swapping just INSTANCE and
+# BUCKET here would point a real migration run at the new node and then fail
+# inside the SSM command (or worse, on an account where some other container
+# happens to share that name) rather than doing anything useful. This needs a
+# rewrite — apply Atlas directly against the Aurora endpoint over the VPC,
+# from the node, with no docker exec — before it can run against the new
+# account. Tracked as #2652.
 
 set -euo pipefail
 
