@@ -227,6 +227,49 @@ describe("agentBackgroundTaskExecute Inngest handler", () => {
     expect(capCtx.requestId).toBe("task_pub_1");
   });
 
+  // Witness for #2615: this producer used to hardcode `execution_step_id:
+  // null` on every tool_invocations row, so a row from this executor could
+  // never be joined back to the task that produced it. taskId is this run's
+  // own identity — the same value CapabilityContext.executionStepId now
+  // carries (#2597) — so both the completed and failed telemetry rows must
+  // carry it, not null.
+  it("gives the capability context the run's executionStepId and writes it through", async () => {
+    mocks.kernelInvoke.mockResolvedValueOnce({ ok: true });
+
+    await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
+
+    const [, , capCtx] = mocks.kernelInvoke.mock.calls[0] as [
+      string,
+      unknown,
+      Record<string, unknown>,
+    ];
+    expect(capCtx.executionStepId).toBe("task_pub_1");
+
+    expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
+    const telArgs = mocks.insertToolInvocation.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(telArgs.status).toBe("completed");
+    expect(telArgs.execution_step_id).toBe("task_pub_1");
+  });
+
+  it("records the run's executionStepId on the failed tool_invocations row too", async () => {
+    mocks.kernelInvoke.mockRejectedValueOnce(new Error("capability error"));
+
+    await expect(
+      capturedHandler!({ event: BASE_EVENT, step: makeStep() }),
+    ).rejects.toThrow("capability error");
+
+    expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
+    const telArgs = mocks.insertToolInvocation.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(telArgs.status).toBe("failed");
+    expect(telArgs.execution_step_id).toBe("task_pub_1");
+  });
+
   it("captures non-Error thrown values as string failureReason", async () => {
     // Some code throws strings or numbers; the handler must handle those
     mocks.kernelInvoke.mockRejectedValueOnce("plain string error");

@@ -268,6 +268,11 @@ describe("agentWorkflowTaskExecute Inngest handler", () => {
     expect(telArgs.capability_name).toBe("workflow.task.execute");
     expect(telArgs.status).toBe("completed");
     expect(telArgs.org_id).toBe("org-1");
+    // Witness for #2615: this producer used to hardcode
+    // `execution_step_id: null`. stepId is agent_execution_steps.id — the
+    // same value handed to generateObjectFor's telemetry.messageId above,
+    // which fills token_usage.execution_step_id for this same step.
+    expect(telArgs.execution_step_id).toBe("step-uuid-1");
   });
 
   it("writes a failed tool invocation row when the step fails", async () => {
@@ -280,6 +285,7 @@ describe("agentWorkflowTaskExecute Inngest handler", () => {
       unknown
     >;
     expect(telArgs.status).toBe("failed");
+    expect(telArgs.execution_step_id).toBe("step-uuid-1");
   });
 
   it("does not double-insert the tool_invocations telemetry row when the run is replayed with memoized steps (Inngest retry simulation)", async () => {

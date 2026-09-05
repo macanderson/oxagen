@@ -77,6 +77,17 @@ export const [agentBackgroundTaskExecute] = createFunction(
       const output = await step.run("invoke", async () => {
         if (!capabilityName)
           throw new Error("background task payload missing 'capability'");
+        // executionStepId names this background task's own run as the
+        // correlation key (#2597/#2615) — the same taskId already used below
+        // as this invocation's message_id, so a tool_invocations row and any
+        // token_usage the capability incurs join on the same value.
+        //
+        // taskId is backgroundTasks.publicId ("bgt_..."), not a UUID, while
+        // ClickHouse's message_id/execution_step_id columns are UUID-typed —
+        // a pre-existing defect (#2656) that predates this fix and already
+        // made every insertToolInvocation call below fail silently. The real
+        // fix is plumbing the row's actual uuid id through the Inngest event;
+        // this file has no other run identity to give until that lands.
         const ctx = {
           orgId,
           workspaceId,
@@ -85,6 +96,7 @@ export const [agentBackgroundTaskExecute] = createFunction(
           requestId: taskId,
           surface: "runner" as const,
           messageId: null,
+          executionStepId: taskId,
         };
         // Route through kernel.invoke() for IAM enforcement, audit, and
         // uniform metering.
@@ -122,7 +134,7 @@ export const [agentBackgroundTaskExecute] = createFunction(
             capability_name: capabilityName ?? "unknown",
             message_id: taskId,
             parent_message_id: null,
-            execution_step_id: null,
+            execution_step_id: taskId,
             status: "completed",
             input_size_bytes: 0,
             output_size_bytes: 0,
@@ -179,7 +191,7 @@ export const [agentBackgroundTaskExecute] = createFunction(
             capability_name: capabilityName ?? "unknown",
             message_id: taskId,
             parent_message_id: null,
-            execution_step_id: null,
+            execution_step_id: taskId,
             status: "failed",
             input_size_bytes: 0,
             output_size_bytes: 0,

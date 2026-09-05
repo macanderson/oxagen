@@ -1173,6 +1173,57 @@ describe("playbook-run-execute Inngest function", () => {
     );
   });
 
+  // Witness for #2615: this producer used to hardcode
+  // `execution_step_id: null` on the per-step tool_invocations row, and the
+  // CapabilityContext built for the tool-invoking step carried no
+  // executionStepId at all. runId is this playbook run's own identity — the
+  // same value already carried as the context's messageId — so both the
+  // context handed to the capability and the telemetry row emitted for its
+  // step must carry it, not null.
+  it("gives the step's CapabilityContext an executionStepId and writes it through to the tool_invocations row", async () => {
+    const toolStep = {
+      id: "st",
+      stepKey: "run_tool",
+      name: "RunTool",
+      stepType: "tool",
+      isAsync: false,
+      exitOnError: true,
+      config: {
+        capability: "fetch_web_page",
+        input: { url: "https://example.com" },
+      },
+    };
+
+    mocks.getCapability.mockReturnValue({ agent: { requiresApproval: false } });
+    buildSystemDbForExecution({
+      run: PENDING_RUN,
+      steps: [toolStep],
+      edges: [],
+    });
+    buildTenantDb();
+    mocks.kernelInvoke.mockResolvedValue({ status: 200, body: "page content" });
+
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT },
+      step: makeStep(),
+    });
+    expect(result).toMatchObject({ status: "completed", stepsExecuted: 1 });
+
+    const [, , capCtx] = mocks.kernelInvoke.mock.calls[0] as [
+      string,
+      unknown,
+      Record<string, unknown>,
+    ];
+    expect(capCtx.executionStepId).toBe(BASE_RUN_ID);
+
+    expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
+    const telRow = mocks.insertToolInvocation.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(telRow.execution_step_id).toBe(BASE_RUN_ID);
+  });
+
   // ── step_run insert failure propagates (bad-fallback fix) ────────────────────
 
   it("throws from step when playbookStepRuns insert returns no row (DB error)", async () => {

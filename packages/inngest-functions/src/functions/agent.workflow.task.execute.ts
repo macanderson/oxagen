@@ -157,7 +157,12 @@ Provide a summary, any relevant structured data, and source references if applic
             capability_name: "workflow.task.execute",
             message_id: stepId,
             parent_message_id: executionId,
-            execution_step_id: null,
+            // stepId is agent_execution_steps.id — the same value the
+            // generateObjectFor() call above hands the AI port as
+            // telemetry.messageId, which is what fills
+            // token_usage.execution_step_id for this step. Using it here
+            // too keeps both tables joinable on the same key (#2597/#2615).
+            execution_step_id: stepId,
             status: "failed",
             input_size_bytes: 0,
             output_size_bytes: 0,
@@ -273,7 +278,8 @@ Provide a summary, any relevant structured data, and source references if applic
           capability_name: "workflow.task.execute",
           message_id: stepId,
           parent_message_id: executionId,
-          execution_step_id: null,
+          // See the failure-path comment above for why stepId is correct here.
+          execution_step_id: stepId,
           status: "completed",
           input_size_bytes: 0,
           output_size_bytes: 0,
