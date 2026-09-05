@@ -691,10 +691,10 @@ jobs:
       contents: read
       id-token: write
     strategy:
-      # One at a time. All four land on the same 4 GB instance, which also runs
-      # Neo4j and ClickHouse (Postgres moved to Aurora Serverless v2); four
-      # concurrent container starts is the one moment this node is most likely
-      # to run out of memory.
+      # One at a time. Every service in the matrix below lands on the same 4 GB
+      # instance, which also runs Neo4j and ClickHouse (Postgres moved to Aurora
+      # Serverless v2); concurrent container starts are the one moment this node
+      # is most likely to run out of memory.
       max-parallel: 1
       # A failure in one service must not cancel the others' deploys. They are
       # independent processes and a broken `mcp` is no reason to leave `api` on
