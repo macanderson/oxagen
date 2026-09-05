@@ -17,20 +17,21 @@
 
 set -euo pipefail
 
-# Old account's node by default, unchanged behaviour for anyone who runs this
-# with no environment set. Point it at the new account with:
-#   REGION=us-east-1 INSTANCE=<new-instance-id> BUCKET=oxagen-deploy-916294258235 \
-#   CADDYFILE=Caddyfile.alb LOG_DRIVER=awslogs tools/install-node-scripts.sh
+# New account's node by default (the 2026-08-27 cutover is complete and this
+# is the live node; both accounts' compute runs in us-east-1). Point it at
+# the old, not-yet-decommissioned account with:
+#   INSTANCE=i-023d002d6e44f8f84 BUCKET=oxagen-deploy-578673726240 \
+#   CADDYFILE=Caddyfile LOG_DRIVER=json-file tools/install-node-scripts.sh
 REGION="${REGION:-us-east-1}"
-INSTANCE="${INSTANCE:-i-023d002d6e44f8f84}"
-BUCKET="${BUCKET:-oxagen-deploy-578673726240}"
+INSTANCE="${INSTANCE:-i-094fcb34c7e715cf8}"
+BUCKET="${BUCKET:-oxagen-deploy-916294258235}"
 # Which file under tools/caddy/ this node runs. The new account's node
 # terminates no TLS of its own — see Caddyfile.alb's header — so it takes a
 # different file from the old account's `Caddyfile`.
-CADDYFILE="${CADDYFILE:-Caddyfile}"
-# json-file on the old node (unchanged); the new node's IAM role is granted
-# CloudWatch Logs write access and should use it — see deploy-service.sh.
-LOG_DRIVER="${LOG_DRIVER:-json-file}"
+CADDYFILE="${CADDYFILE:-Caddyfile.alb}"
+# awslogs on the new node — its IAM role is granted CloudWatch Logs write
+# access and should use it; json-file was the old node's default.
+LOG_DRIVER="${LOG_DRIVER:-awslogs}"
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 

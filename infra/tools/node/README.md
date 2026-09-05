@@ -1,20 +1,21 @@
 # Node-side deploy scripts
 
-These run on the shared application node (`i-023d002d6e44f8f84`), not on a
-developer's machine and not on a CI runner. `tools/install-node-scripts.sh`
-copies this directory to `/opt/oxagen/bin`.
+These run on the shared application node (`i-094fcb34c7e715cf8`, account
+`916294258235` — the account the 2026-08-27 cutover moved the live platform
+to), not on a developer's machine and not on a CI runner.
+`tools/install-node-scripts.sh` copies this directory to `/opt/oxagen/bin`.
 
 They exist so that CI does not have to. A GitHub Actions role that could send
-`AWS-RunShellScript` to this instance would have root on the box that runs
-Postgres, Neo4j and ClickHouse; instead each CI role may send exactly one SSM
-document, `oxagen-deploy-service`, whose only argument is a service name
-constrained by `allowedPattern`. The privilege lives here, in version control,
-where it can be read and reviewed.
+`AWS-RunShellScript` to this instance would have root on the box that also
+runs Neo4j and ClickHouse (Postgres moved to Aurora Serverless v2); instead
+each CI role may send exactly one SSM document, `oxagen-deploy-service`,
+whose only argument is a service name constrained by `allowedPattern`. The
+privilege lives here, in version control, where it can be read and reviewed.
 
 ## The contract: `oxagen-run.json`
 
 A deployable artifact is a gzipped tarball named `<service>-standalone.tgz`,
-uploaded to `s3://oxagen-deploy-578673726240/_deploy/`, whose root holds a
+uploaded to `s3://oxagen-deploy-916294258235/_deploy/`, whose root holds a
 manifest describing how it runs:
 
 ```json
@@ -85,7 +86,7 @@ quietly serving old code while the merge looks shipped.
 Roll back by hand with the release id:
 
 ```bash
-aws ssm start-session --target i-023d002d6e44f8f84
+aws ssm start-session --target i-094fcb34c7e715cf8
 ls /opt/oxagen/services/<service>/releases
 ```
 
