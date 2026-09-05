@@ -406,12 +406,18 @@ describe("agentExecuteSubagent Inngest handler (claim-loop)", () => {
       step: makeStep(),
     });
 
+    // Witness for #2615: this producer used to hardcode
+    // `execution_step_id: null`. childMessageId is this child run's own
+    // identity — the same value passed to invoke() as the
+    // CapabilityContext's executionStepId (and messageId), so this row
+    // joins to that run's token_usage on the same key.
     expect(mocks.insertToolInvocation).toHaveBeenCalledWith(
       expect.objectContaining({
         status: "failed",
         capability_name: "cap-a",
         org_id: "org-1",
         workspace_id: "ws-1",
+        execution_step_id: "msg-r-1",
       }),
     );
   });
@@ -479,7 +485,26 @@ describe("agentExecuteSubagent Inngest handler (claim-loop)", () => {
       expect.objectContaining({
         status: "completed",
         capability_name: "cap-ok",
+        execution_step_id: "msg-r-1",
       }),
     );
+  });
+
+  it("gives the child's CapabilityContext an executionStepId matching its own childMessageId", async () => {
+    mocks.claimQueue.push(makeClaim("r-2", 1, "cap-ctx"));
+    mocks.invoke.mockResolvedValue({ ok: true });
+    scenario.counts = { total: 1, completed: 1, failed: 0 };
+
+    await capturedHandler!({
+      event: { data: BASE_EVENT_DATA },
+      step: makeStep(),
+    });
+
+    const [, , ctx] = mocks.invoke.mock.calls[0] as [
+      string,
+      unknown,
+      Record<string, unknown>,
+    ];
+    expect(ctx.executionStepId).toBe("msg-r-2");
   });
 });

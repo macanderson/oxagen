@@ -22,13 +22,20 @@ const logger = pino({
 // WHY POSTGRES FOR BOTH IDENTITY AND USAGE. The four-store boundary puts
 // identity in Postgres and usage counters in ClickHouse, and for tools both
 // halves are Postgres today — not by preference but because ClickHouse's
-// tool-usage record could not be joined to an execution. `tool_invocations`
-// declares an `execution_step_id` column, and all seven of its producers used
-// to write NULL into it. #2597 gave CapabilityContext an `executionStepId` and
-// filled it in materialize-tools.ts's buildInvocationPayload — the factory
-// behind five of the seven, covering every capability and external MCP call.
-// graph.telemetry.ts and the five inngest-functions emitters still write NULL,
-// so this projection keeps reading Postgres until they are threaded too.
+// tool-usage record could not be joined to an execution until recently.
+// `tool_invocations` declares an `execution_step_id` column, and all seven of
+// its producers used to write NULL into it. #2597 gave CapabilityContext an
+// `executionStepId` and filled it in materialize-tools.ts's
+// buildInvocationPayload — the factory behind five of the seven, covering
+// every capability and external MCP call. #2615 threaded it through the
+// remaining five: graph.telemetry.ts and the four inngest-functions emitters
+// that still hardcoded null (agent.background-task.execute.ts,
+// agent.workflow.task.execute.ts, agent.execute-subagent.ts,
+// playbook.run.execute.ts — #2615 counted these as "five emitters"; a
+// re-check at fix time found four files, seven call sites). This projection
+// still reads Postgres rather than the now-joinable ClickHouse table, because
+// nothing has rebuilt it against the new column yet — a separate piece of
+// work from wiring the identity itself.
 // agent.agent_tool_calls.execution_step_id, by contrast, is a NOT
 // NULL foreign key to agent.agent_execution_steps, whose execution_id is the
 // join this projection exists to make queryable. So agent_tool_calls is the

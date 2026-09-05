@@ -588,7 +588,11 @@ export const [playbookRunExecute] = createFunction(
               break;
             }
 
-            // Build a runner-surface CapabilityContext
+            // Build a runner-surface CapabilityContext. executionStepId names
+            // this playbook run as the correlation key (#2597/#2615) — the
+            // same runId already carried as messageId, so the per-step
+            // tool_invocations row emitted below and any token_usage this
+            // capability incurs join on one value.
             const ctx = {
               orgId,
               workspaceId,
@@ -597,6 +601,7 @@ export const [playbookRunExecute] = createFunction(
               requestId: stepInvocationId,
               surface: "runner" as const,
               messageId: runId,
+              executionStepId: runId,
             };
 
             const toolCallEventType = "tool_called" as const;
@@ -1188,7 +1193,11 @@ export const [playbookRunExecute] = createFunction(
             capability_name: `playbook.step.${stepDef.stepType}`,
             message_id: stepRunId,
             parent_message_id: runId,
-            execution_step_id: null,
+            // runId is this playbook run's own id — the same value the
+            // capability-invoking branch above hands the CapabilityContext as
+            // both messageId and executionStepId, so this row joins to that
+            // run's token_usage on the same key (#2597/#2615).
+            execution_step_id: runId,
             status: stepStatus === "completed" ? "completed" : "failed",
             input_size_bytes: 0,
             output_size_bytes: 0,

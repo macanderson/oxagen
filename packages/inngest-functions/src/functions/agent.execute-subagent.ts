@@ -163,6 +163,10 @@ export const [agentExecuteSubagent] = createFunction(
         async () => {
           const invocationId = crypto.randomUUID();
           const startedAt = Date.now();
+          // executionStepId names this child run as the correlation key
+          // (#2597/#2615) — the same childMessageId already used as this
+          // invocation's message_id, so the tool_invocations row below and
+          // any token_usage the child's capability incurs join on one value.
           const ctx = {
             orgId,
             workspaceId,
@@ -171,6 +175,7 @@ export const [agentExecuteSubagent] = createFunction(
             requestId: claimed.childMessageId,
             surface: "runner" as const,
             messageId: claimed.childMessageId,
+            executionStepId: claimed.childMessageId,
           };
           // Keep the lease alive across a long LLM call — a 10-min lease can
           // otherwise expire inside one invoke and trigger a false reclaim
@@ -228,7 +233,7 @@ export const [agentExecuteSubagent] = createFunction(
                 capability_name: claimed.capabilityName,
                 message_id: claimed.childMessageId,
                 parent_message_id: fanoutId, // fanoutId is the closest parent we have here
-                execution_step_id: null,
+                execution_step_id: claimed.childMessageId,
                 status: "completed",
                 input_size_bytes: 0,
                 output_size_bytes: 0,
@@ -278,7 +283,7 @@ export const [agentExecuteSubagent] = createFunction(
                 capability_name: claimed.capabilityName,
                 message_id: claimed.childMessageId,
                 parent_message_id: fanoutId,
-                execution_step_id: null,
+                execution_step_id: claimed.childMessageId,
                 status: "failed",
                 input_size_bytes: 0,
                 output_size_bytes: 0,
