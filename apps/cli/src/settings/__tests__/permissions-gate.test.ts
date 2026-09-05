@@ -104,6 +104,44 @@ describe("evaluateLocalPermission", () => {
     ).toBe("allow");
   });
 
+  it("a rule denying Edit also blocks delete_file (deletion is a change)", () => {
+    const perms: Permissions = { deny: ["Edit"] };
+    expect(
+      evaluateLocalPermission("edit_file", { path: "src/app.ts" }, perms)
+        .decision,
+    ).toBe("deny");
+    expect(
+      evaluateLocalPermission("delete_file", { path: "src/app.ts" }, perms)
+        .decision,
+    ).toBe("deny");
+  });
+
+  it("a path-scoped Edit rule also narrows delete_file by the same pattern", () => {
+    const perms: Permissions = { deny: ["Edit(secrets/**)"] };
+    expect(
+      evaluateLocalPermission(
+        "delete_file",
+        { path: "secrets/api-key.txt" },
+        perms,
+      ).decision,
+    ).toBe("deny");
+    expect(
+      evaluateLocalPermission("delete_file", { path: "src/app.ts" }, perms)
+        .decision,
+    ).toBe("allow");
+  });
+
+  it("maps search to Read and matches on the query subject", () => {
+    const perms: Permissions = { deny: ["Read(*.env*)"] };
+    expect(
+      evaluateLocalPermission("search", { query: "*.env.local" }, perms)
+        .decision,
+    ).toBe("deny");
+    expect(
+      evaluateLocalPermission("search", { query: "TODO" }, perms).decision,
+    ).toBe("allow");
+  });
+
   it("handles unknown tools and malformed input safely", () => {
     expect(
       evaluateLocalPermission("mystery", null, { deny: ["mystery"] }).decision,
