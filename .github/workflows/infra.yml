@@ -1,0 +1,222 @@
+# Plan every proposal, apply only what merged.
+#
+# A pull request assumes the read-only `gha-infra-plan` role and posts its plan
+# as a comment. It cannot change anything: the role has no write permissions,
+# so a plan can run automatically on a diff nobody has read yet.
+#
+# A push to the default branch assumes `gha-infra-apply`, which is pinned to
+# the `production` environment. Required reviewers are configured there, in
+# repository settings, rather than here — that gate is the control on the only
+# role in this account that can write.
+#
+# Both roles are defined in infra/stacks-new/ci-deploy/infra-apply.tf, so this
+# workflow's own permissions are reviewable in the same pull request as the
+# infrastructure it changes.
+#
+# That also means neither role exists until the ci-deploy stack has been
+# applied once, and the job that would apply it is the one that needs the
+# role: the first apply is done by hand (infra/README.md, "Applying from CI").
+# Until then a pull request still gets `fmt` and `validate`, which need no
+# credentials, and the plan itself is skipped with a warning rather than
+# failing every infrastructure change on a role no pull request can create.
+
+name: infra
+
+on:
+  pull_request:
+    paths: ["infra/stacks-new/**", "infra/modules/**", ".github/workflows/infra.yml"]
+  push:
+    branches: [main]
+    paths: ["infra/stacks-new/**", "infra/modules/**", ".github/workflows/infra.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write        # required to exchange the OIDC token for a role
+  pull-requests: write   # to post the plan
+
+concurrency:
+  # One apply at a time. Two concurrent applies would contend for the state
+  # lock and one would fail partway, which is the worst moment to fail.
+  group: infra-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  TF_IN_AUTOMATION: "1"
+
+jobs:
+  discover:
+    # Which stacks a change actually touches. Planning all five on every edit
+    # would make the signal slow enough to ignore, and a stack nobody changed
+    # still plans clean, so the extra runs say nothing.
+    runs-on: ubuntu-latest
+    outputs:
+      stacks: ${{ steps.pick.outputs.stacks }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: pick
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$base" ] || ! git cat-file -e "$base" 2>/dev/null; then
+            base=$(git rev-parse HEAD~1 2>/dev/null || git rev-parse HEAD)
+          fi
+          changed=$(git diff --name-only "$base" HEAD || true)
+
+          # A module edit can change any stack that uses it, so widen to all.
+          if echo "$changed" | grep -q '^infra/modules/'; then
+            stacks=$(find infra/stacks-new -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+          else
+            stacks=$(echo "$changed" | sed -n 's#^infra/stacks-new/\([^/]*\)/.*#\1#p' | sort -u)
+          fi
+
+          if [ -z "$stacks" ]; then
+            echo 'stacks=[]' >> "$GITHUB_OUTPUT"
+          else
+            echo "stacks=$(echo "$stacks" | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
+          fi
+          echo "planning: ${stacks:-none}"
+
+  plan:
+    needs: discover
+    if: needs.discover.outputs.stacks != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: ${{ fromJSON(needs.discover.outputs.stacks) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: opentofu/setup-opentofu@592200bd4b9bbf4772ace78f887668b1aee8f716 # v1.0.5
+        with:
+          tofu_version: 1.8.5
+
+      # The static checks come first and need no credentials, so a stack that
+      # does not parse fails here whether or not the account is reachable.
+      # `-backend=false` is what lets `init` run without the state bucket; the
+      # plan below re-runs `init` with the backend once it has a role.
+      - name: fmt
+        working-directory: infra/stacks-new/${{ matrix.stack }}
+        run: tofu fmt -check -diff .
+
+      - name: validate
+        working-directory: infra/stacks-new/${{ matrix.stack }}
+        run: |
+          tofu init -backend=false -input=false -no-color
+          tofu validate -no-color
+
+      # `continue-on-error` is deliberate and narrow: this is the only step
+      # that can fail for the bootstrap reason in the header, and everything
+      # that needs the role is gated on its outcome below. Once the role
+      # exists nothing here changes — the next run plans.
+      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        id: credentials
+        continue-on-error: true
+        with:
+          role-to-assume: arn:aws:iam::916294258235:role/gha-infra-plan
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: plan skipped
+        if: steps.credentials.outcome != 'success'
+        run: |
+          echo "::warning title=plan skipped (${{ matrix.stack }})::Could not assume gha-infra-plan in 916294258235. Until infra/stacks-new/ci-deploy has been applied once by hand this job runs fmt and validate only. See infra/README.md, 'Applying from CI'."
+
+      - name: init
+        if: steps.credentials.outcome == 'success'
+        working-directory: infra/stacks-new/${{ matrix.stack }}
+        run: tofu init -input=false -no-color
+
+      - name: plan
+        if: steps.credentials.outcome == 'success'
+        id: plan
+        working-directory: infra/stacks-new/${{ matrix.stack }}
+        # -detailed-exitcode: 0 no changes, 2 changes, 1 error. Without it a
+        # failed plan and an empty one both exit 0 and read the same.
+        run: |
+          set +e
+          tofu plan -input=false -no-color -lock-timeout=5m -detailed-exitcode -out=tf.plan > plan.txt 2>&1
+          code=$?
+          set -e
+          tail -c 60000 plan.txt
+          echo "exitcode=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" -eq 1 ] && exit 1
+          exit 0
+
+      - name: comment
+        if: steps.credentials.outcome == 'success' && github.event_name == 'pull_request'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          STACK: ${{ matrix.stack }}
+          CODE: ${{ steps.plan.outputs.exitcode }}
+        with:
+          script: |
+            const fs = require('fs')
+            const raw = fs.readFileSync(`infra/stacks-new/${process.env.STACK}/plan.txt`, 'utf8')
+            const body = raw.length > 60000 ? raw.slice(-60000) : raw
+            const verdict = process.env.CODE === '2' ? 'changes' : 'no changes'
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### \`${process.env.STACK}\` — ${verdict}\n\n<details><summary>plan</summary>\n\n\`\`\`terraform\n${body}\n\`\`\`\n\n</details>`,
+            })
+
+  apply:
+    needs: discover
+    if: github.event_name != 'pull_request' && needs.discover.outputs.stacks != '[]'
+    runs-on: ubuntu-latest
+    # The gate. Required reviewers and branch restrictions live in this
+    # environment's settings, and the apply role's trust policy names it, so
+    # nothing can assume that role outside this environment.
+    environment: production
+    strategy:
+      fail-fast: true   # a later stack may depend on an earlier one
+      max-parallel: 1
+      matrix:
+        stack: ${{ fromJSON(needs.discover.outputs.stacks) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: opentofu/setup-opentofu@592200bd4b9bbf4772ace78f887668b1aee8f716 # v1.0.5
+        with:
+          tofu_version: 1.8.5
+
+      # Gated for the same bootstrap reason as the plan job, and for one more:
+      # this runs on `main`, so failing here would leave the default branch
+      # permanently red on a role no change to this repository can create.
+      #
+      # A skip is not a pass. The step below writes a warning naming the stack
+      # that did not apply, so an un-applied change is visible rather than
+      # silent, and the gate clears itself the first time the role exists.
+      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        id: credentials
+        continue-on-error: true
+        with:
+          role-to-assume: arn:aws:iam::916294258235:role/gha-infra-apply
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: apply skipped
+        if: steps.credentials.outcome != 'success'
+        run: |
+          echo "::warning title=${{ matrix.stack }} not applied::\
+          Could not assume gha-infra-apply, so this stack was NOT applied and \
+          the account does not reflect this commit. The role is created by the \
+          first apply of infra/stacks-new/ci-deploy, done by hand once -- see \
+          infra/README.md. This gate clears itself once the role exists."
+
+      - name: init
+        if: steps.credentials.outcome == 'success'
+        working-directory: infra/stacks-new/${{ matrix.stack }}
+        run: tofu init -input=false -no-color
+
+      - name: apply
+        if: steps.credentials.outcome == 'success'
+        working-directory: infra/stacks-new/${{ matrix.stack }}
+        # Re-plans rather than reusing the pull request's plan file: that plan
+        # was computed against a different base and the state may have moved.
+        run: tofu apply -input=false -no-color -auto-approve -lock-timeout=5m

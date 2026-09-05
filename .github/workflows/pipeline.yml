@@ -802,8 +802,32 @@ jobs:
           set +a
           tools/scripts/package-for-node.sh ${{ matrix.service }}
 
+      # TEMPORARY, and it deletes itself the moment the permission exists.
+      #
+      # The deploy role's policy enumerates each artifact key, and `worker` was
+      # never added to it (#2619). So this step fails with AccessDenied for
+      # `worker` alone, on every push, and no code change can fix it — the
+      # remedy is an OpenTofu apply this PR also carries.
+      #
+      # Tolerating it for `worker` only, rather than removing the target from
+      # the matrix: removing it would mean the worker silently stops deploying
+      # after the permission lands, and someone has to remember to put it back.
+      # This way the step starts passing on its own, and the next step below
+      # goes quiet, at which point both can be deleted.
       - uses: ./.github/actions/ship-to-node
+        id: ship
+        continue-on-error: ${{ matrix.service == 'worker' }}
         with:
           service: ${{ matrix.service }}
           directory: dist-deploy/${{ matrix.service }}
           hostname: ${{ matrix.hostname }}
+
+      - name: Report an unprovisioned worker deploy
+        if: steps.ship.outcome == 'failure'
+        run: |
+          echo "::warning title=worker deploy not provisioned::\
+          Shipping the worker artifact failed. Until #2619's OpenTofu apply \
+          runs, the deploy role cannot write _deploy/worker-standalone.tgz. \
+          Every other service ships through the identical step. Delete this \
+          step and the continue-on-error above once the apply has happened."
+          exit 0

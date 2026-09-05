@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oxagen AWS infrastructure</title>
+<style>
+/* ---------------------------------------------------------------------------
+   Brand tokens. Copied from docs/brand/tokens/oxagen-colors.css in
+   oxagen-platform, including its dark block. The cursor vermilion is the only
+   accent in this deck; ink, sub and chevron carry everything else.
+   --------------------------------------------------------------------------- */
+:root {
+  --ink:      #0B0B0C;
+  --sub:      #9AA0A6;
+  --chevron:  #C9CDD2;
+  --cursor:   #FF3D1F;
+  --paper:    #FFFFFF;
+  --surface:  #F6F7F8;
+  --hairline: #E6E8EA;
+
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink:      #F5F6F7;
+    --sub:      #7D838A;
+    --chevron:  #45494F;
+    --cursor:   #FF4B2A;
+    --paper:    #0B0B0C;
+    --surface:  #141416;
+    --hairline: #232326;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- the stage: a fixed 1600x900 canvas scaled to the viewport ------------ */
+#viewport {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+#stage {
+  width: 1600px; height: 900px;
+  position: relative;
+  transform: scale(var(--s, 1));
+  transform-origin: 50% 50%;
+  background: var(--paper);
+}
+
+.slide {
+  position: absolute; inset: 0;
+  display: none;
+  padding: 58px 88px 74px;
+  flex-direction: column;
+}
+.slide.active { display: flex; }
+
+/* --- slide furniture ------------------------------------------------------ */
+.kicker {
+  font-family: var(--mono);
+  font-size: 19px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--sub);
+  display: flex; align-items: center; gap: 14px;
+}
+.kicker::before {
+  content: ""; width: 12px; height: 22px; border-radius: 2px;
+  background: var(--cursor); flex: none;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: 92px; line-height: 1.02; letter-spacing: -.035em;
+  font-weight: 700; margin: 0;
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 50px; line-height: 1.08; letter-spacing: -.03em;
+  font-weight: 700; margin: 16px 0 0;
+  max-width: 25ch;
+}
+.lede {
+  font-size: 25px; line-height: 1.42; color: var(--sub);
+  margin: 16px 0 0; max-width: 92ch;
+}
+.lede strong { color: var(--ink); font-weight: 600; }
+.body { margin-top: 30px; flex: 1; min-height: 0; }
+
+p, li { font-size: 23px; line-height: 1.45; }
+ul { margin: 0; padding-left: 24px; }
+li { margin: 0 0 13px; }
+li::marker { color: var(--chevron); }
+b, strong { font-weight: 650; }
+code, .m { font-family: var(--mono); font-size: .92em; }
+code { color: var(--ink); background: var(--surface); padding: 1px 6px; border-radius: 4px; }
+.acc { color: var(--cursor); }
+.dim { color: var(--sub); }
+
+/* --- layout helpers ------------------------------------------------------- */
+.cols   { display: grid; grid-template-columns: 1fr 1fr; gap: 52px; }
+.cols3  { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+.cols4  { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; }
+.split  { display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: start; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  padding: 20px 22px;
+}
+.card h3 {
+  font-family: var(--mono); font-size: 20px; letter-spacing: -.01em;
+  margin: 0 0 10px; font-weight: 700;
+}
+.card p, .card li { font-size: 19px; line-height: 1.4; margin: 0 0 9px; }
+.card ul { padding-left: 20px; }
+.card :last-child { margin-bottom: 0; }
+.card.accent { border-left: 3px solid var(--cursor); }
+
+.tag {
+  display: inline-block; font-family: var(--mono); font-size: 16px;
+  letter-spacing: .08em; text-transform: uppercase;
+  color: var(--sub); border: 1px solid var(--hairline);
+  border-radius: 999px; padding: 3px 11px; margin: 0 6px 6px 0;
+}
+
+table { border-collapse: collapse; width: 100%; }
+th, td {
+  text-align: left; padding: 11px 14px 11px 0;
+  border-bottom: 1px solid var(--hairline); font-size: 21px; vertical-align: top;
+}
+th {
+  font-family: var(--mono); font-size: 17px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--sub); font-weight: 400;
+  border-bottom-color: var(--chevron);
+}
+td.m, th.m { font-family: var(--mono); font-size: 20px; }
+
+.stat { display: flex; gap: 56px; margin-top: 8px; }
+.stat div { min-width: 0; }
+.stat .n {
+  font-family: var(--mono); font-size: 46px; font-weight: 700;
+  letter-spacing: -.03em; display: block; line-height: 1.1;
+}
+.stat .l { font-size: 19px; color: var(--sub); display: block; margin-top: 6px; }
+
+.rule { height: 1px; background: var(--hairline); margin: 30px 0; border: 0; }
+
+/* --- title slide ---------------------------------------------------------- */
+.title-slide { justify-content: center; }
+/* `fill` is inherited, which is how it reaches the cloned content inside a
+   <use> shadow tree — a descendant selector would not. */
+.oxlogo { display: block; height: 78px; width: 332px; }
+.oxlogo .w { fill: var(--ink); }
+.oxlogo .c { fill: var(--cursor); }
+.title-meta {
+  font-family: var(--mono); font-size: 23px; color: var(--sub);
+  margin-top: 40px; line-height: 1.9;
+}
+.title-meta span.ink { color: var(--ink); }
+
+/* --- diagram -------------------------------------------------------------- */
+.diagram { width: 100%; height: auto; display: block; }
+.diagram .box { fill: var(--surface); stroke: var(--chevron); stroke-width: 1.5; }
+.diagram .box-accent { fill: none; stroke: var(--cursor); stroke-width: 2; }
+.diagram .line { stroke: var(--chevron); stroke-width: 2; fill: none; }
+.diagram .line-accent { stroke: var(--cursor); stroke-width: 2.5; fill: none; }
+.diagram .t { font-family: var(--mono); font-size: 19px; fill: var(--ink); }
+.diagram .t-sub { font-family: var(--mono); font-size: 16px; fill: var(--sub); }
+.diagram .t-acc { font-family: var(--mono); font-size: 16px; fill: var(--cursor); }
+.diagram .pill { fill: var(--paper); stroke: var(--chevron); stroke-width: 1.2; }
+
+/* --- chrome (footer, counter, help) -------------------------------------- */
+.slide-foot {
+  position: absolute; left: 88px; right: 88px; bottom: 28px;
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--mono); font-size: 17px; color: var(--sub);
+  border-top: 1px solid var(--hairline); padding-top: 14px;
+}
+.slide-foot .id { letter-spacing: .1em; text-transform: uppercase; }
+.slide-foot .no { letter-spacing: .06em; }
+.slide-foot .no b { color: var(--ink); font-weight: 700; }
+
+#hint {
+  position: fixed; left: 18px; bottom: 14px; z-index: 40;
+  font-family: var(--mono); font-size: 12px; color: var(--sub);
+  opacity: .7; pointer-events: none;
+}
+
+/* --- speaker notes -------------------------------------------------------- */
+.notes { display: none; }
+#notesbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  height: 244px; overflow-y: auto;
+  background: var(--surface);
+  border-top: 2px solid var(--cursor);
+  padding: 20px 30px 24px;
+  display: none;
+}
+body.notes-on #notesbar { display: block; }
+body.notes-on #hint { display: none; }
+#notesbar h4 {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--sub); margin: 0 0 10px; font-weight: 400;
+}
+#notesbar p { font-size: 16px; line-height: 1.55; margin: 0 0 10px; max-width: 130ch; }
+#notesbar p:last-child { margin-bottom: 0; }
+#notesbar code { font-size: 15px; }
+
+/* ---------------------------------------------------------------------------
+   Print. One slide per page at the authored 1600x900; @page size is written by
+   script so the notes-armed variant can grow the sheet instead of clipping.
+   --------------------------------------------------------------------------- */
+@media print {
+  body { overflow: visible; background: #fff; }
+  #viewport { position: static; display: block; }
+  #stage {
+    width: auto; height: auto; transform: none;
+  }
+  #notesbar, #hint { display: none !important; }
+  .slide {
+    position: relative; inset: auto;
+    display: flex !important;
+    width: 1600px; height: 900px;
+    break-after: page; page-break-after: always;
+    background: #fff;
+  }
+  .slide:last-of-type { break-after: auto; page-break-after: auto; }
+  /* Notes print as a strip directly under their own slide, inside a taller
+     sheet — absolutely placed so the slide keeps its authored 1600x900. */
+  body.print-notes .slide { overflow: visible; }
+  body.print-notes .notes {
+    display: block;
+    position: absolute; top: 900px; left: 0;
+    width: 1600px; height: 268px;
+    padding: 26px 96px 0;
+    border-top: 2px solid var(--cursor);
+  }
+  body.print-notes .notes h4 {
+    font-family: var(--mono); font-size: 13px; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--sub); margin: 0 0 10px; font-weight: 400;
+  }
+  body.print-notes .notes p { font-size: 17px; line-height: 1.5; margin: 0 0 9px; }
+}
+</style>
+</head>
+<body>
+
+<!-- The compact lockup, inlined from docs/brand/logos/svg/oxagen-compact-*.svg.
+     The wordmark takes ink and the block cursor takes the vermilion, so the mark
+     follows this deck's own light/dark tokens instead of carrying its own. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="ox-word" viewBox="-4.40 -80.00 447.40 105.20">
+    <path d="M30.0 1.2000000000000002Q22.400000000000002 1.2000000000000002 16.700000000000003 -2.25Q11.0 -5.7 7.800000000000001 -12.0Q4.6000000000000005 -18.3 4.6000000000000005 -26.8Q4.6000000000000005 -35.4 7.800000000000001 -41.650000000000006Q11.0 -47.900000000000006 16.700000000000003 -51.35000000000001Q22.400000000000002 -54.800000000000004 30.0 -54.800000000000004Q37.6 -54.800000000000004 43.3 -51.35000000000001Q49.0 -47.900000000000006 52.2 -41.650000000000006Q55.400000000000006 -35.4 55.400000000000006 -26.8Q55.400000000000006 -18.3 52.2 -12.0Q49.0 -5.7 43.3 -2.25Q37.6 1.2000000000000002 30.0 1.2000000000000002ZM30.0 -10.8Q35.4 -10.8 38.35 -14.950000000000001Q41.300000000000004 -19.1 41.300000000000004 -26.8Q41.300000000000004 -34.6 38.35 -38.7Q35.4 -42.800000000000004 30.0 -42.800000000000004Q24.6 -42.800000000000004 21.65 -38.7Q18.7 -34.6 18.7 -26.8Q18.7 -19.1 21.65 -14.950000000000001Q24.6 -10.8 30.0 -10.8Z M63.4 0.0 82.4 -27.400000000000002 64.2 -53.6H79.0L90.0 -36.7L100.9 -53.6H115.7L97.80000000000001 -27.400000000000002L116.6 0.0H101.9L90.0 -18.3L78.2 0.0Z M142.4 1.2000000000000002Q137.5 1.2000000000000002 133.4 -0.6000000000000001Q129.3 -2.4000000000000004 126.95 -5.800000000000001Q124.6 -9.200000000000001 124.6 -13.9Q124.6 -20.700000000000003 128.95 -24.5Q133.3 -28.3 140.9 -29.900000000000002L157.0 -33.4Q157.0 -38.5 154.95 -41.2Q152.9 -43.900000000000006 148.3 -43.900000000000006Q144.3 -43.900000000000006 142.10000000000002 -41.900000000000006Q139.9 -39.900000000000006 139.2 -36.6L125.2 -37.4Q126.7 -45.300000000000004 132.75 -50.050000000000004Q138.8 -54.800000000000004 148.1 -54.800000000000004Q159.7 -54.800000000000004 165.14999999999998 -48.95Q170.6 -43.1 170.6 -32.6V-13.700000000000001Q170.6 -11.700000000000001 171.3 -10.950000000000001Q172.0 -10.200000000000001 173.4 -10.200000000000001H175.6V0.0Q175.0 0.1 173.6 0.25Q172.2 0.4 170.7 0.4Q166.7 0.4 163.89999999999998 -1.0000000000000002Q161.1 -2.4000000000000004 159.64999999999998 -5.1000000000000005Q158.2 -7.800000000000001 158.0 -11.600000000000001H159.5Q159.0 -8.0 156.8 -5.05Q154.6 -2.1 150.89999999999998 -0.44999999999999996Q147.2 1.2000000000000002 142.4 1.2000000000000002ZM145.2 -9.0Q149.0 -9.0 151.6 -10.350000000000001Q154.2 -11.700000000000001 155.6 -14.350000000000001Q157.0 -17.0 157.0 -20.6V-23.8L145.1 -21.200000000000003Q141.5 -20.400000000000002 140.0 -18.900000000000002Q138.5 -17.400000000000002 138.5 -14.600000000000001Q138.5 -12.0 140.2 -10.5Q141.9 -9.0 145.2 -9.0Z M209.6 16.2Q203.1 16.2 198.25 14.3Q193.4 12.4 190.35000000000002 8.95Q187.3 5.5 186.1 0.8L200.3 0.0Q201.2 2.4000000000000004 203.39999999999998 3.8000000000000003Q205.6 5.2 209.6 5.2Q215.3 5.2 218.25 2.65Q221.2 0.1 221.2 -4.800000000000001V-11.0Q219.4 -7.300000000000001 215.7 -5.050000000000001Q212.0 -2.8000000000000003 206.4 -2.8000000000000003Q200.0 -2.8000000000000003 194.95 -6.050000000000001Q189.9 -9.3 187.05 -15.05Q184.2 -20.8 184.2 -28.3Q184.2 -36.4 187.0 -42.35Q189.8 -48.300000000000004 194.75 -51.550000000000004Q199.7 -54.800000000000004 206.1 -54.800000000000004Q211.5 -54.800000000000004 215.45 -52.35000000000001Q219.4 -49.900000000000006 221.4 -45.400000000000006L221.6 -53.6H234.8V-6.5Q234.8 1.0 231.7 6.050000000000001Q228.6 11.100000000000001 222.95 13.65Q217.3 16.2 209.6 16.2ZM209.8 -13.700000000000001Q214.9 -13.700000000000001 218.05 -17.450000000000003Q221.2 -21.200000000000003 221.2 -28.6Q221.3 -33.6 219.85000000000002 -36.95Q218.4 -40.300000000000004 215.8 -42.050000000000004Q213.2 -43.800000000000004 209.8 -43.800000000000004Q204.3 -43.800000000000004 201.3 -39.900000000000006Q198.3 -36.0 198.3 -28.6Q198.3 -21.200000000000003 201.35000000000002 -17.450000000000003Q204.4 -13.700000000000001 209.8 -13.700000000000001Z M270.4 1.2000000000000002Q262.9 1.2000000000000002 257.15 -2.25Q251.4 -5.7 248.15 -12.0Q244.9 -18.3 244.9 -26.8Q244.9 -35.1 248.10000000000002 -41.400000000000006Q251.3 -47.7 257.0 -51.25Q262.7 -54.800000000000004 270.2 -54.800000000000004Q277.6 -54.800000000000004 283.25 -51.300000000000004Q288.9 -47.800000000000004 292.1 -41.45Q295.3 -35.1 295.3 -26.5V-23.1H258.9Q259.4 -17.1 262.54999999999995 -13.950000000000001Q265.7 -10.8 270.7 -10.8Q274.4 -10.8 277.0 -12.55Q279.6 -14.3 280.6 -17.3L294.2 -16.400000000000002Q291.5 -8.0 285.45 -3.4Q279.4 1.2000000000000002 270.4 1.2000000000000002ZM259.1 -32.4H280.8Q280.3 -37.6 277.4 -40.2Q274.5 -42.800000000000004 270.1 -42.800000000000004Q265.5 -42.800000000000004 262.65 -40.150000000000006Q259.8 -37.5 259.1 -32.4Z M307.2 0.0V-53.6H319.6L320.0 -39.0L318.6 -39.6Q319.6 -44.800000000000004 322.05 -48.2Q324.5 -51.6 328.1 -53.2Q331.7 -54.800000000000004 336.1 -54.800000000000004Q341.9 -54.800000000000004 345.54999999999995 -52.2Q349.2 -49.6 351.0 -45.1Q352.8 -40.6 352.8 -34.7V0.0H339.2V-31.6Q339.2 -37.7 337.15 -40.5Q335.1 -43.300000000000004 331.0 -43.300000000000004Q328.2 -43.300000000000004 325.9 -41.900000000000006Q323.6 -40.5 322.20000000000005 -37.8Q320.8 -35.1 320.8 -31.0V0.0Z"/>
+  </symbol>
+  <symbol id="ox-cursor" viewBox="-4.40 -80.00 447.40 105.20">
+    <rect x="378.00" y="-71.00" width="56.00" height="71.00" rx="3.40"/>
+  </symbol>
+</svg>
+
+<div id="viewport">
+<div id="stage">
+
+<!-- 1 ---------------------------------------------------------------------- -->
+<section class="slide title-slide" data-id="title">
+  <svg class="oxlogo" viewBox="0 0 447.40 105.20" preserveAspectRatio="xMinYMid meet" role="img" aria-label="oxagen">
+    <use class="w" href="#ox-word"/><use class="c" href="#ox-cursor"/>
+  </svg>
+  <h1 style="margin-top:44px">AWS infrastructure</h1>
+  <p class="lede" style="max-width:70ch">Three brands, one account, one small instance holding every database. What is
+  running, why it is shaped this way, and what it costs to run it this way.</p>
+  <div class="title-meta">
+    Account <span class="ink">578673726240</span> &nbsp;·&nbsp; region <span class="ink">us-east-1</span><br>
+    OpenTofu &nbsp;·&nbsp; <span class="ink">oxagen-aws-infra</span> &nbsp;·&nbsp; state in
+    <span class="ink">s3://oxagen-tfstate-578673726240</span>, locking in <span class="ink">oxagen-tflock</span>
+  </div>
+  <div class="slide-foot"><span class="id">Oxagen infrastructure</span><span class="no"><b>01</b> / 13</span></div>
+  <aside class="notes">
+    <h4>Speaker notes</h4>
+    <p>Frame the constraint before any of the design makes sense: this account was migrated off Vercel under a stated
+    budget of "as little as possible", and there are no live customers yet. Almost every decision in this deck is that
+    constraint meeting a correctness requirement, and the interesting ones are where the cheap answer was rejected.</p>
+    <p>Two things to say up front so nobody has to ask. The state bucket and the lock table predate this repository — they
+    were not created by it and are not managed by it. And OpenTofu, not Terraform: the code is written to
+    <code>required_version &gt;= 1.6</code> and the commands in the README are <code>tofu</code>.</p>
+    <p>If the room is mixed, tell them slide 4 through 6 are the core. The rest is context and honest accounting.</p>
+  </aside>
+</section>
+
+<!-- 2 ---------------------------------------------------------------------- -->
+<section class="slide" data-id="one-account">
+  <div class="kicker">One account, three brands</div>
+  <h2>Separation without an Organization</h2>
+  <p class="lede">Oxagen, Stella and the Context Graph Protocol bill to one account. Separate accounts isolate harder and
+  cost a payer account, cross-account roles and per-account bootstrapping. The separation here is carried by three
+  mechanisms that cost nothing.</p>
+  <div class="body cols3">
+    <div class="card">
+      <h3>1. A <span class="acc">Brand</span> tag</h3>
+      <p>Applied through each stack's provider <code>default_tags</code>, so a newly added resource cannot miss it.</p>
+    </div>
+    <div class="card">
+      <h3>2. A Resource Group</h3>
+      <p>One per brand, querying that tag. It turns the tag into a browsable collection in the console and a target for
+      Systems Manager.</p>
+    </div>
+    <div class="card">
+      <h3>3. A state key</h3>
+      <p>One per brand. Applying one brand's stack can neither read nor write another's resources.</p>
+    </div>
+  </div>
+  <p class="lede" style="margin-top:34px"><strong>The fourth mechanism is not in the code.</strong> <code>Brand</code> has to
+  be activated as a cost allocation tag in the Billing console before Cost Explorer will group by it. That API is not
+  exposed to Terraform. Until <code>make activate-cost-tags</code> runs, per-brand spend is invisible even though every
+  tag is correct.</p>
+  <div class="slide-foot"><span class="id">Estate</span><span class="no"><b>02</b> / 13</span></div>
+  <aside class="notes">
+    <h4>Speaker notes</h4>
+    <p>The point to land is that these are three <em>different</em> separations doing three different jobs, and people
+    routinely collapse them. The tag is for the bill. The Resource Group is for a human looking for something. The state
+    key is for blast radius. Only the last one is a safety control, and it is the one an Organization would also give you.</p>
+    <p>Expect the question "why not AWS Organizations". The honest answer is that it is the better long-term shape and it
+    was declined on cost and setup weight, not on merit. If someone pushes, agree with them — the mitigation is that
+    everything here is per-brand state already, so lifting a brand into its own account later is a migration, not a rewrite.</p>
+    <p>The cost-allocation gap is the one to flag to whoever owns the bill. It fails silently: the console shows correct
+    tags and Cost Explorer shows nothing, and it reads like a bug in the tagging rather than an unactivated setting.</p>
+  </aside>
+</section>
+
+<!-- 3 ---------------------------------------------------------------------- -->
+<section class="slide" data-id="layout">
+  <div class="kicker">The shape of the estate</div>
+  <h2>Five modules, five stacks</h2>
+  <div class="body cols">
+    <div>
+      <table>
+        <tr><th class="m">modules/</th><th>What it provisions</th></tr>
+        <tr><td class="m">brand-group</td><td>Resource Group + brand identity</td></tr>
+        <tr><td class="m">static-site</td><td>S3 + CloudFront for a site that is entirely files</td></tr>
+        <tr><td class="m">nextjs-site</td><td>S3 + Lambda + CloudFront for a site that runs code</td></tr>
+        <tr><td class="m">redirect-site</td><td>A CloudFront Function that sends a retired domain elsewhere</td></tr>
+        <tr><td class="m">data-node</td><td>Postgres + Neo4j + ClickHouse on one instance</td></tr>
+      </table>
+    </div>
+    <div>
+      <table>
+        <tr><th class="m">stacks/</th><th>What it owns</th></tr>
+        <tr><td class="m">oxagen</td><td>the <code>oxagen.sh</code> zone, marketing site, docs site, the <code>oxagen.ai</code> redirect</td></tr>
+        <tr><td class="m">oxagen-data</td><td>the data plane — separate state</td></tr>
+        <tr><td class="m">stella</td><td><code>stella.oxagen.sh</code></td></tr>
+        <tr><td class="m">cgp</td><td><code>contextgraphprotocol.org</code></td></tr>
+        <tr><td class="m">ci-deploy</td><td>who may deploy, and to what</td></tr>
+      </table>
+    </div>
+  </div>
+  <p class="lede" style="margin-top:30px"><strong>The brand is the unit of grouping; the state file is the unit of blast
+  radius.</strong> That is why <code>oxagen-data</code> is split out of <code>oxagen</code> despite carrying the same brand
+  tag. A website deploy runs often; a database apply can destroy data. Shared state means every routine site deploy
+  computes a plan containing the databases.</p>
+  <div class="slide-foot"><span class="id">Estate</span><span class="no"><b>03</b> / 13</span></div>
+  <aside class="notes">
+    <h4>Speaker notes</h4>
+    <p>Apply order matters and is not encoded anywhere a tool enforces: <code>oxagen</code> first, because it creates the
+    <code>oxagen.sh</code> zone whose id the <code>stella</code> stack takes as <code>parent_zone_id</code>. Everything
+    after that is independent. That is the only coupling between the stacks and it runs one way.</p>
+    <p>There is a live trap here worth saying out loud: a plain untargeted <code>tofu apply</code> in
+    <code>stacks/oxagen</code> takes <code>docs.oxagen.sh</code> down, and the same trap is set in <code>stacks/stella</code>.
+    Both sites are served from the node today while Terraform still holds a CloudFront alias record in state and still
+    wants it back. Apply those two with <code>-target</code> until the module stops creating records for a node-served
+    site. Slide 12 counts this as acknowledged drift rather than pretending it is not there.</p>
+    <p>Note that <code>ci-deploy</code> is a stack, not a module. Permissions were deliberately not folded into the
+    resource they protect.</p>
+  </aside>
+</section>
+
+<!-- 4 ---------------------------------------------------------------------- -->
+<section class="slide" data-id="data-node">
+  <div class="kicker">The data node</div>
+  <h2>Three engines, one box</h2>
+  <p class="lede">One instance — <code>i-023d002d6e44f8f84</code>, a <code>t4g.medium</code> on arm64 in
+  <code>us-east-1a</code> — runs all three databases as Docker containers, sized explicitly so none of them can starve
+  the other two.</p>
+  <div class="body cols3">
+    <div class="card accent">
+      <h3>PostgreSQL</h3>
+      <p><code>pgvector/pgvector:pg16</code></p>
+      <p class="dim">user <span class="m">oxagen</span> · db <span class="m">oxagen</span> · port 5432</p>
+      <p><code>mem_limit 768m</code>. The extension ships in the image; the bootstrap still runs
+      <code>CREATE EXTENSION IF NOT EXISTS vector</code>, retried until Postgres is accepting connections.</p>
+    </div>
+    <div class="card accent">
+      <h3>Neo4j</h3>
+      <p><code>neo4j:5-community</code></p>
+      <p class="dim">user <span class="m">neo4j</span> · bolt 7687 · browser 7474</p>
+      <p><code>mem_limit 1536m</code>, heap and page cache pinned at 512m each. Community 5.11+ for native vector
+      indexes, so an embedding is a property queried by the same language as the graph around it.</p>
+    </div>
+    <div class="card accent">
+      <h3>ClickHouse</h3>
+      <p><code>clickhouse/clickhouse-server:24.8</code></p>
+      <p class="dim">user <span class="m">oxagen</span> · db <span class="m">oxagen</span> · HTTP 8123 · native 9000</p>
+      <p><code>mem_limit 1280m</code>. Left uncapped it sizes its caches from total host RAM and takes the memory the
+      other two need.</p>
+    </div>
+  </div>
+  <p class="lede" style="margin-top:32px">Every default in these images assumes it owns the machine. On a shared box that
+  assumption is the outage, so each limit is set rather than inherited — and a 2 GB swapfile turns a transient spike from
+  an OOM kill into a slowdown.</p>
+  <div class="slide-foot"><span class="id">Data plane</span><span class="no"><b>04</b> / 13</span></div>
+  <aside class="notes">
+    <h4>Speaker notes</h4>
+    <p>The memory limits are the part to dwell on if the audience is operational. The Linux OOM killer resolves a spike by
+    killing the largest process, which on this box is always a database. The swapfile exists to convert that crash into a
+    slowdown — and the code says outright that it is not a substitute for memory: if this instance is regularly swapping,
+    it is too small.</p>
+    <p><code>t4g.small</code> is offered as a variable and halves the cost. It boots. It also OOM-kills ClickHouse under
+    any real query load, and the module's own words are that a database that dies is not cheaper than one that runs. Do
+    not let anyone take that trade without also dropping an engine.</p>
+    <p>arm64 is not incidental. An artifact built on an x86 runner installs green, tests green, and then fails to load a
+    native module on the first request. Build jobs that target this node run on <code>ubuntu-24.04-arm</code>.</p>
+  </aside>
+</section>
+
+<!-- 5 ---------------------------------------------------------------------- -->
+<section class="slide" data-id="why-one-box">
+  <div class="kicker">Why one box</div>
+  <h2>The price floor was the whole bill</h2>
+  <p class="lede">The managed equivalents have a floor that does not move with usage. With no live customers, that floor
+  <em>is</em> the bill. These are the figures the module records for the comparison it made.</p>
+  <div class="body split">
+    <div>
+      <table>
+        <tr><th>Managed equivalent</th><th class="m">Monthly floor</th></tr>
+        <tr><td>Aurora Serverless v2</td><td class="m">~$0 idle at 0 ACU<br><span class="dim">storage and I/O still bill</span></td></tr>
+        <tr><td>Neptune Serverless</td><td class="m">~$117<br><span class="dim">1 NCU is the floor; it does not scale to zero</span></td></tr>
+        <tr><td>ClickHouse Cloud</td><td class="m">~$25</td></tr>
+        <tr><td><b>Total, before a query</b></td><td class="m"><b>~$150</b></td></tr>
+      </table>
+      <hr class="rule">
+      <div class="stat">
+        <div><span class="n">~$29</span><span class="l">One t4g.medium and a 50&nbsp;GB gp3 volume, all three engines</span></div>
+        <div><span class="n">4&nbsp;×</span><span class="l">Neptune's floor alone, against the whole node</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="card accent">
+        <h3>The trade, stated in the code</h3>
+        <p>A single instance in a single AZ with no automatic failover. It trades availability for an order of magnitude
+        in cost.</p>
+        <p>That is the correct trade for a pre-customer platform and the wrong one the day real traffic depends on it —
+        at which point Postgres moves to Aurora, and this module's job is to have kept the schema portable until then.</p>
+      </div>
+      <p style="margin-top:26px">The same arithmetic decides the network. A private subnet would need a NAT gateway at
+      roughly <b>$32/month</b>, more than the instance it serves. A public IPv4 address costs about <b>$3.60</b>. Nothing
+      can connect inbound either way — which is the next slide.</p>
+    </div>
+  </div>
+  <div class="slide-foot"><span class="id">Data plane</span><span class="no"><b>05</b> / 13</span></div>
+  <aside class="notes">
+    <h4>Speaker notes</h4>
+    <p>These numbers are the ones written into <code>modules/data-node/main.tf</code> as the basis for the decision. They
+    are the module author's figures at the time of writing, not a live quote — say so if anyone is going to act on them.
+    The shape of the argument survives repricing; the exact dollars may not.</p>
+    <p>Neptune is the line that carries the decision. Aurora genuinely does approach zero when idle, and ClickHouse Cloud's
+    floor is small. Neptune's 1 NCU minimum means an idle graph costs the same as a busy one, and that single floor is
+    four times the entire node.</p>
+    <p>The exit condition is the part worth being explicit about, because it is the promise that makes the trade
+    defensible: keep the schema portable. If someone asks what "portable" means concretely, the honest answer is that it
+    is a discipline in the application repositories, not something this infrastructure enforces. That is a real gap.</p>
+  </aside>
+</section>
+
+<!-- 6 ---------------------------------------------------------------------- -->
+<section class="slide" data-id="access">
+  <div class="kicker">The access model</div>
+  <h2>No open ports. None.</h2>
+  <p class="lede">The security group has <strong>no inbound rules at all</strong>, and there is no SSH key. Every database
+  port is additionally bound to <code>127.0.0.1</code> on the instance. Access is by SSM — a session, or a port-forward
+  through one.</p>
+  <div class="body">
+    <svg class="diagram" viewBox="0 0 1400 300" role="img" aria-label="A laptop port-forwards through AWS Systems Manager to loopback ports on the instance; the instance opens the channel outbound and the security group admits nothing.">
+      <rect class="box" x="4" y="60" width="300" height="170" rx="10"/>
+      <text class="t" x="28" y="96">your laptop</text>
+      <text class="t-sub" x="28" y="132">localhost:15432 → postgres</text>
+      <text class="t-sub" x="28" y="160">localhost:18123 → clickhouse</text>
+      <text class="t-sub" x="28" y="188">localhost:17687 → neo4j bolt</text>
+
+      <rect class="box" x="500" y="60" width="290" height="170" rx="10"/>
+      <text class="t" x="524" y="96">AWS Systems Manager</text>
+      <text class="t-sub" x="524" y="132">Session Manager</text>
+      <text class="t-sub" x="524" y="160">start-session</text>
+      <text class="t-sub" x="524" y="188">send-command</text>
+
+      <rect class="box" x="986" y="30" width="410" height="240" rx="10"/>
+      <text class="t" x="1010" y="66">i-023d002d6e44f8f84</text>
+      <text class="t-sub" x="1010" y="92">Amazon Linux 2023 · arm64</text>
+      <rect class="pill" x="1010" y="112" width="176" height="38" rx="19"/>
+      <text class="t-sub" x="1030" y="137">127.0.0.1:5432</text>
+      <rect class="pill" x="1010" y="160" width="176" height="38" rx="19"/>
+      <text class="t-sub" x="1030" y="185">127.0.0.1:8123</text>
+      <rect class="pill" x="1010" y="208" width="176" height="38" rx="19"/>
+      <text class="t-sub" x="1030" y="233">127.0.0.1:7687</text>
+      <rect class="box-accent" x="1206" y="112" width="166" height="134" rx="8"/>
+      <text class="t-acc" x="1224" y="150">security group</text>
+      <text class="t-acc" x="1224" y="176">inbound:</text>
+      <text class="t-acc" x="1224" y="202">no rules</text>
+      <text class="t-acc" x="1224" y="228">egress only</text>
+
+      <path class="line" d="M304 120 H 500"/>
+      <path class="line" d="M478 112 L 500 120 L 478 128 Z" fill="var(--chevron)" stroke="none"/>
+      <path class="line-accent" d="M986 150 H 790" stroke-dasharray="7 6"/>
+      <path class="line-accent" d="M812 142 L 790 150 L 812 158 Z" fill="var(--cursor)" stroke="none"/>
+      <text class="t-acc" x="812" y="102">agent dials out,</text>
+      <text class="t-acc" x="812" y="126">never in</text>
+      <text class="t-sub" x="330" y="108">SSM API</text>
+    </svg>
+  </div>
+  <p class="lede" style="margin-top:8px"><strong>Two independent controls, not one.</strong> The empty ingress block is the
+  security control, not an oversight — and because the ports are also bound to loopback, a future rule opening one by
+  mistake still does not expose a database. <code>tofu -chdir=stacks/oxagen-data output connection_help</code> prints the
+  exact commands.</p>
+  <div class="slide-foot"><span class="id">Access</span><span class="no"><b>06</b> / 13</span></div>
+  <aside class="notes">
+    <h4>Speaker notes</h4>
+    <p>The direction of the arrow is the whole idea, and it is what people miss when they hear "SSM". The instance opens
+    the channel outbound through the agent; nothing dials in. That is why there is no bastion, no VPN, no SSH key to
+    rotate and no port to leave open on a Friday. It also removes the entire class of "exposed database" incident rather
+    than mitigating it, and it costs nothing.</p>
+    <p>Amazon Linux 2023 is chosen for exactly this: the SSM agent is preinstalled, so the no-inbound design needs no
+    bootstrap of its own. If the AMI ever changes to something without the agent, the box becomes unreachable and the only
+    way back is to replace it.</p>
+    <p>Authorization is IAM, so access is CloudTrail-auditable per principal, and revoking someone is removing a policy
+    rather than rotating a shared key. Worth saying if anyone asks how you take access away from a departing engineer.</p>
+    <p>The honest caveat: this makes the SSM control plane and the instance role the thing that matters. If you can assume
+    a role with <code>ssm:StartSession</code> on that instance, you are on the box. Slide 9 is why CI does not have it.</p>
+  </aside>
+</section>
+
+<!-- 7 ---------------------------------------------------------------------- -->
+<section class="slide" data-id="secrets">
+  <div class="kicker">Secrets</div>
+  <h2>Generated, stored, never output</h2>
+  <div class="body split">
+    <div>
+      <p>Terraform generates each engine's password and writes it to SSM Parameter Store as a <code>SecureString</code>:</p>
+      <p class="m" style="font-size:21px;line-height:1.75;margin-top:14px">
+        /oxagen-data/postgres/password<br>
+        /oxagen-data/neo4j/password<br>
+        /oxagen-data/clickhouse/password
+      </p>
+      <hr class="rule" style="margin:22px 0">
+      <p><b>Parameter Store rather than Secrets Manager</b> because standard parameters are free where Secrets Manager
+      bills $0.40 per secret per month. Application secrets live under <code>/oxagen/production/</code>, a different
+      subtree from the database passwords — so a service compromised through its own configuration does not enumerate
+      the database credentials.</p>
+    </div>
+    <div>
+      <div class="card accent">
+        <h3>The module does not output the values</h3>
+        <p>It outputs the <em>paths</em>. Reading a value is an explicit
+        <code>aws ssm get-parameter --with-decryption</code>, which is auditable in CloudTrail.</p>
+        <p>A Terraform output writes the secret into the state file in plaintext, for anyone who can read the bucket.</p>
+      </div>
+      <p style="margin-top:22px">The same reasoning runs through the bootstrap. Passwords are read from Parameter Store
+      at boot rather than baked into user data, which anything on the box can read out of the metadata service. The
+      instance's IAM policy is scoped to its own parameter prefix, and its <code>kms:Decrypt</code> grant is conditioned
+      on <code>kms:ViaService = ssm</code> — so it cannot decrypt anything it could not already read as a parameter.</p>
+    </div>
+  </div>
+  <p class="lede" style="margin-top:18px"><code>tools/migrate-secrets.py --plan</code> sorts a <code>.env</code> file into four
+  buckets and writes nothing until <code>--apply</code> — and even then writes only the first.
+  <span class="tag">migrate</span><span class="tag">superseded</span><span class="tag">rotate</span><span class="tag">config</span></p>
+  <div class="slide-foot"><span class="id">Secrets</span><span class="no"><b>07</b> / 13</span></div>
+  <aside class="notes">
+    <h4>Speaker notes</h4>
+    <p>If you take one thing from this slide it is the asymmetry: an output is convenient once and readable forever by
+    everyone with access to the state bucket, while <code>get-parameter --with-decryption</code> is slightly less
+    convenient every time and leaves a record of who read it. Convenience was the wrong side to optimise.</p>
+    <p>The four buckets in the migration tool are worth naming individually, because ROTATE is the one people argue with.
+    It never writes, deliberately — copying a known-exposed credential into a system of record makes it look clean
+    without making it secret. SUPERSEDED is the quieter hazard: carrying across a credential for infrastructure this
+    migration replaced installs a second, wrong answer that works often enough to be confusing.</p>
+    <p>If asked about rotation: nothing here rotates automatically. Changing a password is a Terraform-side change plus a
+    container restart, and that is unbuilt as a routine. Say so rather than implying it is handled.</p>
+  </aside>
+</section>
+
+<!-- 8 ---------------------------------------------------------------------- -->
+<section class="slide" data-id="durability">
+  <div class="kicker">Durability</div>
+  <h2>The instance is disposable; the volume is not</h2>
+  <div class="body cols">
+    <div>
+      <div class="card">
+        <h3>A separate volume</h3>
+        <p>50&nbsp;GB gp3, encrypted, <code>prevent_destroy</code>, in the same AZ as the instance that mounts it. The AMI
+        can be replaced, the instance type changed, the box rebuilt — the databases are not in that blast radius.</p>
+        <p>The bootstrap is keyed on <code>user_data</code>, so editing it replaces the instance. That is only safe
+        <em>because</em> the data is elsewhere.</p>
+        <p>Detachment stops the instance first, because forcibly detaching a mounted filesystem is how a volume comes back
+        needing repair.</p>
+      </div>
+      <div class="card" style="margin-top:24px">
+        <h3>Daily snapshots, off the machine</h3>
+        <p>Data Lifecycle Manager at 07:00 UTC, 7 kept, targeted <b>by tag</b> so a restored volume of the same name is
+        picked up without editing the policy.</p>
+        <p>DLM rather than a cron job on the instance: a backup that runs on the machine it is backing up stops running at
+        exactly the moment it is needed.</p>
+      </div>
+    </div>
+    <div>
+      <div class="card accent">
+        <h3>The refuse-to-start guard</h3>
+        <p>The volume attaches asynchronously and races the bootstrap on a cold boot, and NVMe renames
+        <code>/dev/sdf</code>. So the script waits — up to five minutes, finding the device by listing candidates rather
+        than trusting a name — and if it never appears:</p>
+        <p class="m" style="color:var(--cursor);font-size:19px;line-height:1.5">FATAL: data volume never appeared;<br>refusing to start databases on the root disk</p>
+        <p>An empty database that starts is worse than one that does not, because the application will happily write into
+        it.</p>
+      </div>
+      <p style="margin-top:24px"><b>Re-runnable rather than assumed-once.</b> The volume is formatted only when
+      <code>blkid</code> finds no filesystem; Compose converges containers rather than recreating them;
+      <code>fstab</code> carries <code>nofail</code> so a missing volume degrades to an unbooted database rather than an
+      instance wedged in emergency mode with no agent to log in through.</p>
+    </div>
+  </div>
+  <div class="slide-foot"><span class="id">Durability</span><span class="no"><b>08</b> / 13</span></div>
+  <aside class="notes">
+    <h4>Speaker notes</h4>
+    <p>Name what this does not give you before someone else does: there is no point-in-time recovery. A snapshot is a
+    crash-consistent image, so a restore loses up to a day and the engines replay their write-ahead logs on start. That is
+    precisely the property a managed database would sell you, at the price floor on slide 5.</p>
+    <p>The <code>nofail</code> choice is a nice one to explain if there is an operator in the room. Without it a missing
+    volume drops the instance into emergency mode — and on a box whose only door is the SSM agent, that means no door.
+    Failing into "databases down, box reachable" is strictly better than "everything down, box unreachable".</p>
+    <p>One number to remember from elsewhere in the module: provisioned IOPS above the gp3 baseline bill separately, and
+    this account was already spending around $91 a month on volumes attached to stopped instances. Check before raising
+    either the IOPS or the throughput here.</p>
+  </aside>
+</section>
+
+<!-- 9 ---------------------------------------------------------------------- -->
+<section class="slide" data-id="oidc">
+  <div class="kicker">CI and deploys</div>
+  <h2>Four repositories deploy. None holds an AWS key.</h2>
+  <p class="lede">Each assumes a role over GitHub's OIDC provider. A key is a bearer credential that lives until someone
+  rotates it, and it carries no context — a policy written against one cannot tell the deploy job from anything else
+  holding it. A token carries the repository, the ref and the environment as claims.</p>
+  <div class="body cols" style="margin-top:16px">
+    <div>
+      <table>
+        <tr><th>Repository</th><th>Publishes</th></tr>
+        <tr><td class="m">macanderson/stella</td><td>stella.oxagen.sh (node)</td></tr>
+        <tr><td class="m">macanderson/cgp-website</td><td>contextgraphprotocol.org</td></tr>
+        <tr><td class="m">macanderson/context-graph-protocol</td><td>that site's <code>/schema</code> and <code>/spec</code></td></tr>
+        <tr><td class="m">macanderson/oxagen</td><td>oxagen.sh; docs, app, api, mcp on the node</td></tr>
+      </table>
+    </div>
+    <div>
+      <div class="card accent">
+        <h3>The subject is exact, and it names an environment</h3>
+        <p><code>StringEquals</code>, not the <code>StringLike</code> most examples use. A wildcard subject accepts a
+        token from a pull request opened by anyone, on a fork, running their own workflow file. These repositories are
+        public.</p>
+        <p>And <code>environment:production</code>, not <code>ref:refs/heads/main</code>. A branch subject would let any
+        workflow on main assume the role; entry to an environment is a repository setting, revocable without a code
+        change.</p>
+      </div>
+      <p style="margin-top:12px"><b>No CI role has a shell on the node.</b> Each may write one S3 object per service it
+      owns and send one document, <code>oxagen-deploy-service</code>, whose single argument is constrained at the API by
+      <code>allowedPattern ^[a-z][a-z0-9-]{0,30}$</code> — which cannot express a shell metacharacter.
+      <code>AWS-RunShellScript</code> here is root, and this box holds every database.</p>
+    </div>
+  </div>
+  <div class="slide-foot"><span class="id">CI</span><span class="no"><b>09</b> / 13</span></div>
+  <aside class="notes">
+    <h4>Speaker notes</h4>
+    <p>The detail that earns its place in a review: each role trusts <em>two</em> subject spellings, the documented
+    <code>repo:owner/name:environment:production</code> and the immutable-id form where owner and repository each carry
+    their numeric database id. That is not defensive guessing. The first real deploy failed with "Not authorized to
+    perform sts:AssumeRoleWithWebIdentity", and CloudTrail's <code>principalId</code> for the denied call carried the
+    id form verbatim. Both are literal strings — listing two is still exact matching, not a wildcard.</p>
+    <p>Same record settled a second thing: the environment name in the claim is lowercase <code>production</code>, even
+    though these repositories carry a capitalised <code>Production</code> environment left over from Vercel.</p>
+    <p>The IAM thumbprint field is legacy. IAM stopped verifying it against GitHub's leaf certificate in 2023 and
+    validates against its own CA bundle, but the API still requires the field — so both published intermediates are
+    listed, because that is the failure this field can still cause.</p>
+    <p>Worth pausing on the deny in the CGP policy: the website syncs with <code>--delete</code>, so the protocol
+    repository's prefixes are protected in IAM rather than by <code>--exclude</code> flags in a workflow. Those flags are
+    one edit from being dropped and the failure is silent — a green deploy and every schema URL 404ing.</p>
+  </aside>
+</section>
+
+<!-- 10 --------------------------------------------------------------------- -->
+<section class="slide" data-id="sites">
+  <div class="kicker">Sites and DNS</div>
+  <h2>Three ways to answer a request</h2>
+  <div class="body cols3">
+    <div class="card">
+      <h3>static-site</h3>
+      <p>Private S3 origin, CloudFront, ACM certificate, Route 53 records. Every cost knob at its cheapest useful value:
+      <code>PriceClass_100</code>, no access logging, no WAF, no bucket versioning.</p>
+      <p class="dim">oxagen.sh · contextgraphprotocol.org</p>
+    </div>
+    <div class="card">
+      <h3>nextjs-site</h3>
+      <p>An OpenNext build: Lambda on arm64 behind a Function URL, assets in S3, CloudFront deciding which answers. Used
+      where routes genuinely execute rather than rewriting the product to fit the hosting.</p>
+      <p class="dim">stella.oxagen.sh · docs.oxagen.sh</p>
+    </div>
+    <div class="card">
+      <h3>redirect-site</h3>
+      <p>A CloudFront Function on viewer-request, returning a 301 with no origin at all. The distribution's origin
+      deliberately does not exist.</p>
+      <p class="dim">oxagen.ai → oxagen.sh</p>
+    </div>
+  </div>
+  <div class="cols" style="margin-top:24px">
+    <div>
+      <p><b><code>oxagen.ai</code> is retired as a website and still carries live mail.</b> Apex and www answer every route
+      with a 301 to the <code>oxagen.sh</code> homepage, path discarded — the domains never shared a URL structure, so a
+      path-preserving redirect would 404 most old links. The zone also holds inbound mail routing, outbound DKIM for five
+      senders, SPF and DMARC, six names served from a Google Cloud load balancer this migration never touched, and six
+      domain-ownership proofs.</p>
+    </div>
+    <div>
+      <p><b>Some hostnames skip CloudFront entirely.</b> <code>app</code>, <code>api</code> and <code>mcp</code> are plain
+      A records at the node, with Caddy routing by hostname and taking its own certificates from Let's Encrypt. They hold
+      sessions and read all three databases over loopback, which is the only way to reach them. A VPC-attached Lambda in
+      front would need a NAT gateway costing more than everything else in the account combined.</p>
+    </div>
+  </div>
+  <div class="slide-foot"><span class="id">Sites</span><span class="no"><b>10</b> / 13</span></div>
+  <aside class="notes">
+    <h4>Speaker notes</h4>
+    <p>The failure mode across that <code>oxagen.ai</code> zone is quiet, which is why the README spends so long on it. A
+    zone missing an MX record does not error, it bounces mail. A missing DKIM key bounces nothing and starts landing mail
+    in spam folders days later, with nothing pointing back at the change that caused it. The import tool drops every A
+    record on the reasoning that an A record is the old website — true for <code>oxagen.sh</code>, false here, which is
+    why those six names are declared explicitly.</p>
+    <p>Stella's site is on Lambda in the module because three of its routes genuinely execute — the install counter, the
+    install-script proxy and the docs search index. It is served from the node today; see the next slide.</p>
+    <p>If asked why the redirect is 301 rather than 302: 301 consolidates the retired domain's search reputation onto the
+    surviving one, and it is expensive to reverse, because clients may cache it indefinitely regardless of
+    <code>Cache-Control</code>. The module defaults to 301 and documents 302 for a provisional move.</p>
+  </aside>
+</section>
+
+<!-- 11 --------------------------------------------------------------------- -->
+<section class="slide" data-id="traps">
+  <div class="kicker">Paid for once already</div>
+  <h2>The traps, written down</h2>
+  <div class="body cols">
+    <div>
+      <div class="card">
+        <h3>CAA silently blocks ACM</h3>
+        <p>The migrated zones authorised <code>pki.goog</code>, <code>sectigo.com</code> and <code>letsencrypt.org</code>,
+        and not <code>amazon.com</code>. There is no error. The request stays <code>PENDING_VALIDATION</code> forever.</p>
+      </div>
+      <div class="card" style="margin-top:22px">
+        <h3>Certificate ordering</h3>
+        <p>ACM validates by DNS, so it cannot issue until Route 53 is authoritative. Apply the zone and certificates with
+        <code>-target</code>, repoint the nameservers, then apply the rest — or watch validation block for its full
+        75-minute timeout and fail.</p>
+      </div>
+      <div class="card" style="margin-top:22px">
+        <h3>CloudFront in front of a Lambda Function URL returns 403</h3>
+        <p>Every request, in this account. Ruled out: the resource policy, <code>RESPONSE_STREAM</code> invoke mode, a
+        stale URL, org SCPs — the account is in no Organization. A brand-new Function URL with authorization disabled
+        entirely still returned 403. Both functions render correctly under direct <code>lambda invoke</code>.</p>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h3>arm64 all the way down</h3>
+        <p>An artifact built on an x86 runner installs and tests green, then fails to load a native module at first
+        request. Build jobs targeting the node run on <code>ubuntu-24.04-arm</code>.</p>
+      </div>
+      <div class="card" style="margin-top:22px">
+        <h3>pnpm's default layout breaks the bundle</h3>
+        <p><code>--node-linker=hoisted</code> is not cosmetic. A bundler following the symlink for <code>next</code>
+        reaches the package and stops, leaving its transitive dependencies behind — the bundle imports fine locally and
+        dies on first cold start.</p>
+      </div>
+      <div class="card" style="margin-top:22px">
+        <h3>Never apply oxagen or stella untargeted</h3>
+        <p>Both hold a CloudFront alias record for a site now served from the node. Applying reverts a working site to the
+        403 above.</p>
+      </div>
+    </div>
+  </div>
+  <div class="slide-foot"><span class="id">Operations</span><span class="no"><b>11</b> / 13</span></div>
+  <aside class="notes">
+    <h4>Speaker notes</h4>
+    <p>This slide exists because all five cost real hours and every one of them is invisible at the point of failure. If
+    the room is short on time, cut to the 403: the reason it is written down in the repository is a direct instruction not
+    to spend hours on that path again, and it is the reason five hostnames are served from a single EC2 instance instead
+    of from Lambda.</p>
+    <p>The 403 is genuinely unexplained, not merely unfixed. Everything the team could rule out is listed; the cause is
+    still unknown. Do not narrate it as solved.</p>
+    <p>If someone asks what "green then dead" costs: both the arm64 and the pnpm failures pass CI. The build is fine, the
+    tests are fine, and the first real request fails. That is the class of bug worth spending pinning on.</p>
+  </aside>
+</section>
+
+<!-- 12 --------------------------------------------------------------------- -->
+<section class="slide" data-id="tradeoffs">
+  <div class="kicker">Honest accounting</div>
+  <h2>What this design gives up</h2>
+  <div class="body cols">
+    <div>
+      <div class="card accent">
+        <h3>One instance, one AZ, no failover</h3>
+        <p>Every database is on one box. If it fails, all three are down, and recovery is manual: restore the volume from
+        a snapshot and bring an instance up in the same AZ.</p>
+        <p><b>Mitigated by:</b> nothing, structurally. The mitigation is the exit — Postgres to Aurora when traffic
+        justifies the floor.</p>
+      </div>
+      <div class="card" style="margin-top:22px">
+        <h3>No point-in-time recovery</h3>
+        <p>Snapshots are crash-consistent and daily. A restore loses up to 24 hours.</p>
+      </div>
+      <div class="card" style="margin-top:22px">
+        <h3>The default VPC, and a public subnet</h3>
+        <p>No purpose-built network. The instance needs outbound reach for images and updates, and a private subnet would
+        need a NAT gateway costing more per month than the instance.</p>
+        <p><b>Mitigated by:</b> no inbound rule exists, and every port is bound to loopback as well. The exposure a public
+        subnet normally implies is not present.</p>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h3>Deliberate DNS drift</h3>
+        <p><code>stella.oxagen.sh</code> and <code>docs.oxagen.sh</code> are alias records Terraform owns and wants back,
+        repointed by hand at the node. Terraform's plan is wrong about production and known to be. It is not repaired
+        because rewriting a live record for a serving site is a bigger change than it looks.</p>
+      </div>
+      <div class="card" style="margin-top:22px">
+        <h3>One account is one blast radius</h3>
+        <p>Tags, Resource Groups and separate state keys separate three brands for grouping and for apply scope. They are
+        not an account boundary, and IAM in this account is not partitioned by brand.</p>
+      </div>
+      <div class="card" style="margin-top:22px">
+        <h3>Thin memory margin</h3>
+        <p>Three engines on 4&nbsp;GiB with explicit limits and a swapfile. It works. It has no headroom, and the swapfile
+        is a shock absorber, not capacity.</p>
+      </div>
+    </div>
+  </div>
+  <div class="slide-foot"><span class="id">Trade-offs</span><span class="no"><b>12</b> / 13</span></div>
+  <aside class="notes">
+    <h4>Speaker notes</h4>
+    <p>Say plainly that these are the authors' own acknowledged trade-offs, quoted from the module comments rather than
+    found by review. That matters: a design that writes down what it gave up is reviewable, and this one does. The right
+    argument to have is not "were these known" but "is the balance still correct today".</p>
+    <p>The public subnet is the one that draws reflex objections. Meet it directly — the usual argument against a public
+    subnet is exposure, and there is no inbound rule and no listening socket on a routable address. What a private subnet
+    would additionally buy is defence against a misconfiguration that opens one, and the answer to that is the loopback
+    binding, which is a second independent control.</p>
+    <p>The DNS drift is the item most likely to bite a new engineer, because Terraform will confidently propose the wrong
+    thing and the plan looks routine. It belongs on a runbook, not in someone's memory.</p>
+    <p>If pressed on when the single instance stops being acceptable: the trigger is the first customer whose traffic
+    depends on it, not a date and not a load number.</p>
+  </aside>
+</section>
+
+<!-- 13 --------------------------------------------------------------------- -->
+<section class="slide" data-id="next">
+  <div class="kicker">Next</div>
+  <h2>What is open</h2>
+  <div class="body cols">
+    <div>
+      <h3 style="font-family:var(--mono);font-size:23px;margin:0 0 18px">Decided, not yet done</h3>
+      <ul>
+        <li>Activate <code>Brand</code> as a cost allocation tag, so per-brand spend becomes visible at all.</li>
+        <li>Stop the <code>nextjs-site</code> module creating alias records for a site served from the node, which is what
+        makes those two stacks unsafe to apply untargeted.</li>
+        <li>Decide the 403 or design around it permanently. Today five hostnames are on one instance because of a bug
+        nobody has explained.</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="font-family:var(--mono);font-size:23px;margin:0 0 18px">Open questions</h3>
+      <ul>
+        <li>What triggers the move of Postgres to Aurora, and who is holding the schema portable until then?</li>
+        <li>How is a database password rotated? Nothing automates it today.</li>
+        <li>Is a daily snapshot the right recovery point, or does one of the three engines need better?</li>
+        <li>Does the node need a second instance before it needs a managed database — or is a rebuild-from-snapshot
+        runbook enough?</li>
+      </ul>
+    </div>
+  </div>
+  <hr class="rule">
+  <p class="lede"><strong>The estate today:</strong> one account, three brands, five stacks, five modules. One
+  <code>t4g.medium</code> holding Postgres, Neo4j and ClickHouse behind zero open ports. Four repositories deploying with
+  no AWS key between them.</p>
+  <div class="slide-foot"><span class="id">Next</span><span class="no"><b>13</b> / 13</span></div>
+  <aside class="notes">
+    <h4>Speaker notes</h4>
+    <p>Close on the ask, not the summary. The three items on the left need an owner and a date; the four on the right need
+    a decision from whoever is accountable for the platform, and two of them (rotation, recovery point) are things you
+    would rather answer before an incident than during one.</p>
+    <p>Be careful not to overclaim on the left column: "decided, not yet done" means these are named in the repository as
+    intended work. None of them is scheduled, and nothing here is a commitment made on someone else's behalf.</p>
+    <p>If there is time for one question, make it the rotation one. It is the smallest piece of work on the list and the
+    one whose absence is least visible until it matters.</p>
+  </aside>
+</section>
+
+</div><!-- /#stage -->
+</div><!-- /#viewport -->
+
+<div id="notesbar" aria-live="polite"></div>
+<div id="hint">← → space · S notes · F full screen · P print with notes</div>
+<style id="print-page">@page { size: 1600px 900px; margin: 0; }</style>
+
+<script>
+(function () {
+  "use strict";
+
+  var STAGE_W = 1600, STAGE_H = 900, NOTES_H = 244;
+  var stage    = document.getElementById("stage");
+  var notesbar = document.getElementById("notesbar");
+  var printPage= document.getElementById("print-page");
+  var slides   = Array.prototype.slice.call(document.querySelectorAll(".slide"));
+  var index    = 0;
+  var notesOn  = false;
+  var printNotes = false;
+
+  /* Scale the fixed 1600x900 canvas to whatever the projector gives us,
+     leaving room for the notes drawer when it is open. */
+  function fit() {
+    var availH = window.innerHeight - (notesOn ? NOTES_H : 0);
+    var s = Math.min(window.innerWidth / STAGE_W, availH / STAGE_H);
+    stage.style.setProperty("--s", s);
+    // Centre the slide in the space above the drawer rather than in the window.
+    // The shift is the full drawer height because a negative margin also
+    // shrinks the outer box the flex container is centring.
+    stage.style.marginTop = (notesOn ? -NOTES_H : 0) + "px";
+  }
+
+  function renderNotes() {
+    var src = slides[index].querySelector(".notes");
+    notesbar.innerHTML = src ? src.innerHTML : "<h4>Speaker notes</h4><p>None.</p>";
+    notesbar.scrollTop = 0;
+  }
+
+  function show(i, push) {
+    index = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach(function (s, n) { s.classList.toggle("active", n === index); });
+    renderNotes();
+    if (push !== false) {
+      var id = "#" + (index + 1);
+      if (location.hash !== id) history.replaceState(null, "", id);
+    }
+  }
+
+  function next() { show(index + 1); }
+  function prev() { show(index - 1); }
+
+  function toggleNotes() {
+    notesOn = !notesOn;
+    document.body.classList.toggle("notes-on", notesOn);
+    fit();
+  }
+
+  function togglePrintNotes() {
+    printNotes = !printNotes;
+    document.body.classList.toggle("print-notes", printNotes);
+    // A taller sheet when notes print beneath the slide, so nothing is clipped.
+    printPage.textContent = printNotes
+      ? "@page { size: 1600px 1180px; margin: 0; }"
+      : "@page { size: 1600px 900px; margin: 0; }";
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    switch (e.key) {
+      case "ArrowRight": case " ": case "PageDown": case "j": case "l":
+        e.preventDefault(); next(); break;
+      case "ArrowLeft": case "PageUp": case "k": case "h":
+        e.preventDefault(); prev(); break;
+      case "Home": e.preventDefault(); show(0); break;
+      case "End":  e.preventDefault(); show(slides.length - 1); break;
+      case "s": case "S": case "n": case "N":
+        e.preventDefault(); toggleNotes(); break;
+      case "p": case "P":
+        e.preventDefault(); togglePrintNotes(); break;
+      case "f": case "F":
+        e.preventDefault();
+        if (document.fullscreenElement) { document.exitFullscreen(); }
+        else if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen();
+        }
+        break;
+      default: break;
+    }
+  });
+
+  // Click the right half to advance, the left half to go back.
+  document.getElementById("viewport").addEventListener("click", function (e) {
+    if (e.target.closest("a")) return;
+    (e.clientX > window.innerWidth / 2 ? next : prev)();
+  });
+
+  window.addEventListener("resize", fit);
+  window.addEventListener("hashchange", function () {
+    var n = parseInt(location.hash.slice(1), 10);
+    if (n >= 1 && n <= slides.length) show(n - 1, false);
+  });
+
+  var start = parseInt(location.hash.slice(1), 10);
+  show(start >= 1 && start <= slides.length ? start - 1 : 0, false);
+  fit();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+#
+# Bootstrap for the Oxagen data node.
+#
+# Runs once on first boot, and again whenever this file changes — the instance
+# is replaced on edit, which is safe because everything durable lives on a
+# separate EBS volume that survives the replacement.
+#
+# Written to be re-runnable rather than assumed-once: it formats the data
+# volume only if it has no filesystem, and Compose converges the containers
+# rather than recreating them. A bootstrap that destroys data when it runs
+# twice is a bootstrap that destroys data.
+
+set -euxo pipefail
+
+exec > >(tee /var/log/oxagen-bootstrap.log) 2>&1
+
+NAME="${name}"
+REGION="${region}"
+
+# ---------------------------------------------------------------------------
+# Packages
+# ---------------------------------------------------------------------------
+
+dnf -y update
+dnf -y install docker
+
+# The Compose plugin is not in the AL2023 repositories; install it where Docker
+# looks for CLI plugins.
+COMPOSE_VERSION=v2.32.4
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -fsSL \
+  "https://github.com/docker/compose/releases/download/$COMPOSE_VERSION/docker-compose-linux-aarch64" \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+systemctl enable --now docker
+
+# ---------------------------------------------------------------------------
+# Data volume
+# ---------------------------------------------------------------------------
+
+# The attachment is asynchronous and races this script on a cold boot, so wait
+# for the device rather than assuming it. NVMe renames /dev/sdf, which is why
+# the device is found by listing unmounted disks rather than by name.
+DATA_DEV=""
+for _ in $(seq 1 60); do
+  for candidate in /dev/nvme1n1 /dev/sdf /dev/xvdf; do
+    if [[ -b $candidate ]]; then
+      DATA_DEV=$candidate
+      break 2
+    fi
+  done
+  sleep 5
+done
+
+if [[ -z $DATA_DEV ]]; then
+  echo "FATAL: data volume never appeared; refusing to start databases on the root disk" >&2
+  exit 1
+fi
+
+# Format only when there is no filesystem. `blkid` failing is the signal for a
+# blank volume; on every subsequent boot it succeeds and this is skipped, which
+# is what keeps a re-run from erasing the databases.
+if ! blkid "$DATA_DEV"; then
+  mkfs.xfs "$DATA_DEV"
+fi
+
+mkdir -p /data
+DATA_UUID=$(blkid -s UUID -o value "$DATA_DEV")
+if ! grep -q "$DATA_UUID" /etc/fstab; then
+  # `nofail` so a missing volume degrades to an unbooted database rather than
+  # an instance stuck in emergency mode with no SSM agent to log in through.
+  echo "UUID=$DATA_UUID /data xfs defaults,nofail 0 2" >> /etc/fstab
+fi
+mount -a
+
+mkdir -p /data/{postgres,neo4j/data,neo4j/logs,clickhouse}
+
+# ---------------------------------------------------------------------------
+# Swap
+# ---------------------------------------------------------------------------
+
+# Three engines on 4 GiB have no headroom for a transient spike, and the Linux
+# OOM killer resolves that by killing the largest process — which is always a
+# database. Swap converts a crash into a slowdown. It is not a substitute for
+# memory, and if this file is regularly swapping, the instance is too small.
+if [[ ! -f /swapfile ]]; then
+  dd if=/dev/zero of=/swapfile bs=1M count=2048
+  chmod 600 /swapfile
+  mkswap /swapfile
+  echo "/swapfile none swap sw 0 0" >> /etc/fstab
+fi
+swapon -a || true
+
+# ---------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------
+
+# Read at boot from Parameter Store rather than baked into this file: user data
+# is readable from the instance metadata service by anything running on the
+# box, so a password written here would be readable by every process on it.
+get_secret() {
+  aws ssm get-parameter \
+    --region "$REGION" \
+    --name "/$NAME/$1/password" \
+    --with-decryption \
+    --query 'Parameter.Value' \
+    --output text
+}
+
+POSTGRES_PASSWORD=$(get_secret postgres)
+NEO4J_PASSWORD=$(get_secret neo4j)
+CLICKHOUSE_PASSWORD=$(get_secret clickhouse)
+
+mkdir -p /opt/oxagen
+umask 077
+
+cat > /opt/oxagen/.env <<ENVEOF
+POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+NEO4J_PASSWORD=$NEO4J_PASSWORD
+CLICKHOUSE_PASSWORD=$CLICKHOUSE_PASSWORD
+ENVEOF
+chmod 600 /opt/oxagen/.env
+
+# ---------------------------------------------------------------------------
+# Services
+# ---------------------------------------------------------------------------
+
+# Every port is bound to 127.0.0.1, never 0.0.0.0. The security group already
+# admits nothing, but binding to loopback means that a future rule opening a
+# port by mistake still does not expose a database — two independent controls
+# rather than one. Access is by SSM port-forward, which terminates on the
+# instance and therefore reaches loopback.
+cat > /opt/oxagen/docker-compose.yml <<'COMPOSEEOF'
+name: oxagen-data
+
+services:
+  postgres:
+    # pgvector's own image, which is upstream Postgres with the extension
+    # already built — the alternative is compiling it on every rebuild.
+    image: pgvector/pgvector:pg${postgres_version}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_USER: oxagen
+      POSTGRES_DB: oxagen
+      POSTGRES_PASSWORD: $${POSTGRES_PASSWORD}
+    volumes:
+      - /data/postgres:/var/lib/postgresql/data
+    mem_limit: 768m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oxagen -d oxagen"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  neo4j:
+    # Community 5 speaks Cypher and, since 5.11, carries native vector indexes
+    # — so an embedding is a property on a node and is queried by the same
+    # language as the graph around it, which is what this workload needs.
+    image: neo4j:${neo4j_version}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
+    environment:
+      NEO4J_AUTH: neo4j/$${NEO4J_PASSWORD}
+      # Sized explicitly: Neo4j's defaults assume it owns the machine and will
+      # claim a share of RAM that leaves nothing for the other two engines.
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 512m
+      NEO4J_server_memory_pagecache_size: 512m
+    volumes:
+      - /data/neo4j/data:/data
+      - /data/neo4j/logs:/logs
+    mem_limit: 1536m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  clickhouse:
+    image: ${clickhouse_image}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8123:8123"
+      - "127.0.0.1:9000:9000"
+    environment:
+      CLICKHOUSE_USER: oxagen
+      CLICKHOUSE_PASSWORD: $${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DB: oxagen
+      # ClickHouse assumes it is alone on the host and sizes its caches from
+      # total RAM. Uncapped here it takes the memory the other two need.
+      CLICKHOUSE_SKIP_USER_SETUP: "0"
+    volumes:
+      - /data/clickhouse:/var/lib/clickhouse
+    mem_limit: 1280m
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+COMPOSEEOF
+
+cd /opt/oxagen
+docker compose up -d
+
+# pgvector ships in the image but is not enabled in a database until asked.
+# Retried rather than assumed ready: Postgres accepts connections a moment
+# after the container starts, and this runs immediately after.
+for _ in $(seq 1 30); do
+  if docker compose exec -T postgres psql -U oxagen -d oxagen -c "CREATE EXTENSION IF NOT EXISTS vector;"; then
+    break
+  fi
+  sleep 5
+done
+
+echo "oxagen data node bootstrap complete"

@@ -1,0 +1,100 @@
+{
+  "@|MX": {
+    "name": "",
+    "records": [
+      "1 smtp.google.com."
+    ],
+    "ttl": 3600,
+    "type": "MX"
+  },
+  "@|TXT": {
+    "name": "",
+    "records": [
+      "atlassian-domain-verification=cibfdwow67w9DLtwWgkgHQTyr9nfQzRFOLa16q1VQXn0tXVnyFVanmKYZupOIP8d",
+      "atlassian-sending-domain-verification=c18c67d6-a768-482c-86a6-47776bc14822",
+      "google-site-verification=00q2H97gtbGmcj9VzQo2A2swfb3okrYB44e_WyUGRwE"
+    ],
+    "ttl": 60,
+    "type": "TXT"
+  },
+  "_gh-oxageninc-o|TXT": {
+    "name": "_gh-oxageninc-o",
+    "records": [
+      "21218a9e51"
+    ],
+    "ttl": 60,
+    "type": "TXT"
+  },
+  "atlassian-af7782._domainkey|CNAME": {
+    "name": "atlassian-af7782._domainkey",
+    "records": [
+      "atlassian-af7782.dkim.atlassian.net."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "atlassian-bounces|CNAME": {
+    "name": "atlassian-bounces",
+    "records": [
+      "bounces.mail-us.atlassian.net."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "atlassian-ef1ae5._domainkey|CNAME": {
+    "name": "atlassian-ef1ae5._domainkey",
+    "records": [
+      "atlassian-ef1ae5.dkim.atlassian.net."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "calendar|CNAME": {
+    "name": "calendar",
+    "records": [
+      "ghs.googlehosted.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "drive|CNAME": {
+    "name": "drive",
+    "records": [
+      "ghs.googlehosted.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "gmail|CNAME": {
+    "name": "gmail",
+    "records": [
+      "ghs.googlehosted.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "google._domainkey|TXT": {
+    "name": "google._domainkey",
+    "records": [
+      "v=DKIM1;k=rsa;p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsWFoH7O2EHyJKraeg+P2AHpkQFz0c1Qkh///LRLSPNNQbl9Hbj1udAppAFrNg/Qarf8Qimo3WzvF73k4u0X7H/V97Zt5inpmRAVjHmTHAk4A8t4jhA6X9G3KDE+qcxZuU0/fNMzuY29SNZMhpxYrrZz+diITmGOfRDtGo8gf6gwsguF8JIn5sbXl0iyvFg6DsYg\" \"LoQ7cqGx+gHp+TDTfGjzVzTIELX4lw5tjna9m23IGOsxaF863bjTN08tmSgWbGZbDBhQ+C7xYmdMkqcxXGx7BEgvoc3ha4kuo+Wet7Q+GQkGv21DRFHq/vi3mtJkoergqsebviOQtspho+210rwIDAQAB"
+    ],
+    "ttl": 60,
+    "type": "TXT"
+  },
+  "groups|CNAME": {
+    "name": "groups",
+    "records": [
+      "ghs.googlehosted.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "kq7zwinwiboc|CNAME": {
+    "name": "kq7zwinwiboc",
+    "records": [
+      "gv-xibs7web5auwmj.dv.googlehosted.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  }
+}

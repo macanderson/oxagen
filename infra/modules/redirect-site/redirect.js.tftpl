@@ -1,0 +1,30 @@
+/**
+ * Answer every request with a redirect to one fixed URL.
+ *
+ * Generated from redirect.js.tftpl — edit the template, not the deployed
+ * function.
+ *
+ * Returning a response from a viewer-request function short-circuits the
+ * request: CloudFront never opens a connection to the origin, never consults
+ * the cache, and never runs a cache-behaviour lookup. That is what lets the
+ * distribution in front of this function have no working origin at all.
+ *
+ * The request URI is read and discarded on purpose. A path-preserving
+ * redirect would send `/pricing` to a page that does not exist on the target
+ * and produce a 404 where the caller asked for a homepage, so every route
+ * lands on the same place.
+ */
+function handler(event) {
+  return {
+    statusCode: ${status_code},
+    statusDescription: '${status_description}',
+    headers: {
+      location: { value: '${target}' },
+      // A redirect this absolute is still worth letting clients hold, but not
+      // forever: an hour is long enough to spare the edge the repeat traffic
+      // and short enough that undoing this does not require every previous
+      // visitor to clear their cache.
+      'cache-control': { value: 'max-age=3600' },
+    },
+  };
+}
