@@ -5,6 +5,7 @@ import {
   ESCAPE_HATCH_LABEL,
   formatVerdict,
   linkedIssues,
+  referencedIssues,
   verdict,
 } from "./scr-dod-check.mjs";
 
@@ -66,6 +67,77 @@ describe("linkedIssues", () => {
     expect(linkedIssues("")).toEqual([]);
     expect(linkedIssues(null)).toEqual([]);
   });
+
+  // oxagen#2636: a PR that explicitly *disclaims* closing an issue is not
+  // claiming to close it, the same principle already applied above to a bare
+  // "Related to #99" mention.
+  it("ignores a closing keyword the sentence explicitly negates (the oxagen#2636 repro)", () => {
+    // The exact repro from the issue body. Fails on the old parser (returns
+    // a match for #2412); must return [] once negation is honoured.
+    expect(linkedIssues("(this PR does not close #2412 — see below)")).toEqual(
+      [],
+    );
+  });
+
+  it("ignores several other negated phrasings", () => {
+    for (const body of [
+      "This never closes #5.",
+      "Won't fix #5 in this PR.",
+      "doesn't resolve #5 yet.",
+      "cannot close #5 without a follow-up.",
+      "This PR doesn't fix #5.",
+    ]) {
+      expect(linkedIssues(body)).toEqual([]);
+    }
+  });
+
+  it("still finds a real close in the same sentence as an unrelated negation", () => {
+    // The negation window is clause-scoped so an earlier "not" cannot
+    // swallow a later, real closing reference.
+    expect(linkedIssues("This PR does not close #1, but closes #2.")).toEqual([
+      { owner: null, repo: null, number: 2 },
+    ]);
+  });
+
+  it("does not treat a negation from an unrelated leading clause as applying to the close", () => {
+    expect(linkedIssues("Not now, but this closes #100.")).toEqual([
+      { owner: null, repo: null, number: 100 },
+    ]);
+  });
+});
+
+describe("referencedIssues", () => {
+  it("finds a same-repo Refs reference", () => {
+    expect(referencedIssues("Refs #4151")).toEqual([
+      { owner: null, repo: null, number: 4151 },
+    ]);
+  });
+
+  it("accepts the singular Ref spelling, case-insensitively", () => {
+    expect(referencedIssues("ref #7")).toHaveLength(1);
+    expect(referencedIssues("REF #7")).toHaveLength(1);
+  });
+
+  it("finds a cross-repo Refs reference with its owner and repo", () => {
+    expect(referencedIssues("Refs macanderson/stella#4151")).toEqual([
+      { owner: "macanderson", repo: "stella", number: 4151 },
+    ]);
+  });
+
+  it("does not match a closing keyword", () => {
+    expect(referencedIssues("Closes #1321")).toEqual([]);
+  });
+
+  it("does not match the word 'references' as a bare mention", () => {
+    // "references" is a different word than "ref"/"refs"; a word-boundary
+    // match must not fire inside it.
+    expect(referencedIssues("See the references section for #99.")).toEqual([]);
+  });
+
+  it("returns nothing for an empty or missing body", () => {
+    expect(referencedIssues("")).toEqual([]);
+    expect(referencedIssues(null)).toEqual([]);
+  });
 });
 
 describe("dodStatus", () => {
@@ -122,10 +194,12 @@ describe("dodStatus", () => {
 describe("verdict", () => {
   const issue = (body: string) => [{ ref: "#1321", body }];
 
-  it("fails a PR that links no issue and explains both remedies", () => {
+  it("fails a PR that links no issue and explains all three remedies", () => {
     const result = verdict({ body: "Small tidy-up.", labels: [] }, []);
     expect(result.ok).toBe(false);
     expect(result.reasons[0]).toContain("links no issue");
+    expect(result.reasons[0]).toContain("Closes");
+    expect(result.reasons[0]).toContain("Refs");
     expect(result.reasons[0]).toContain(ESCAPE_HATCH_LABEL);
   });
 
@@ -136,6 +210,57 @@ describe("verdict", () => {
     );
     expect(result.ok).toBe(true);
     expect(result.waived).toBe(true);
+  });
+
+  // oxagen#2640: a PR that correctly advances an issue without finishing it
+  // (`Refs #N`) must have a real passing state, not just the two escape
+  // hatches (a real close, or the trivial-change label).
+  it("passes a Refs-only PR without requiring the referenced issue's DoD", () => {
+    const result = verdict(
+      { body: "Refs #4151", labels: [] },
+      // No issues resolved for verdict() to check — a Refs-only PR is never
+      // gated on a DoD, so the caller (dod-check.yml) never even fetches one.
+      [],
+    );
+    expect(result.ok).toBe(true);
+    expect(result.waived).toBe(false);
+    expect(result.refsOnly).toBe(true);
+    expect(result.reasons).toEqual([]);
+  });
+
+  it("gates only the closed issue when a PR both closes one and references another", () => {
+    // `#1321` closes and must be fully checked; `#4151` is only referenced
+    // and is never even looked up by dod-check.yml's caller, so it is not
+    // part of the `issues` argument here either.
+    const result = verdict(
+      { body: "Closes #1321\nRefs #4151", labels: [] },
+      issue(allChecked),
+    );
+    expect(result.ok).toBe(true);
+    expect(result.refsOnly).toBe(false);
+  });
+
+  it("still fails a Closes-plus-Refs PR when the closed issue's DoD is unchecked", () => {
+    const result = verdict(
+      { body: "Closes #1321\nRefs #4151", labels: [] },
+      issue(TASK_TEMPLATE_BODY),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.refsOnly).toBe(false);
+  });
+
+  it("does not treat a negated close as Refs-only when nothing else links the PR", () => {
+    // oxagen#2636's fix must not silently create an oxagen#2640 pass: a PR
+    // whose only issue mention is a negated close links nothing at all and
+    // must still fail with the "links no issue" remedy, not slip through as
+    // a Refs-only pass.
+    const result = verdict(
+      { body: "(this PR does not close #2412 — see below)", labels: [] },
+      [],
+    );
+    expect(result.ok).toBe(false);
+    expect(result.refsOnly).toBe(false);
+    expect(result.reasons[0]).toContain("links no issue");
   });
 
   it("fails when the linked issue still has unchecked DoD items", () => {
@@ -189,11 +314,38 @@ describe("formatVerdict", () => {
     const text = formatVerdict({
       ok: false,
       waived: false,
+      refsOnly: false,
       reasons: ["#1321 has 1 unchecked DoD item(s)"],
     });
     expect(text).toContain("SCR-003");
     expect(text).toContain("SCR-004");
     expect(text).toContain("#1321");
+  });
+
+  // oxagen#2638: the prescribed remedy ("tick the boxes") does nothing on its
+  // own, because ticking a box on the linked issue fires no pull-request
+  // event and this check only reacts to the PR. The message must say so.
+  it("tells a failing PR that ticking the issue alone will not re-run this check", () => {
+    const text = formatVerdict({
+      ok: false,
+      waived: false,
+      refsOnly: false,
+      reasons: ["#1321 has 1 unchecked DoD item(s)"],
+    });
+    expect(text).toContain("does not by itself re-run this check");
+  });
+
+  // oxagen#2640: a Refs-only pass is a distinct state from an ordinary pass
+  // and from the label waiver, and must read as neither.
+  it("names the Refs-only state distinctly from a waiver or an ordinary pass", () => {
+    const text = formatVerdict({
+      ok: true,
+      waived: false,
+      refsOnly: true,
+      reasons: [],
+    });
+    expect(text).toContain("passed");
+    expect(text).not.toContain(ESCAPE_HATCH_LABEL);
   });
 });
 
