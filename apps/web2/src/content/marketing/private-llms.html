@@ -1,0 +1,404 @@
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav" id="nav">
+  <div class="nav-in">
+    <a class="brand" href="/" aria-label="Oxagen home">
+      <svg viewBox="7.775 4.325 36.343 37.216" aria-hidden="true"><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z" fill="none" stroke="currentColor" stroke-width="1"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z" fill="none" stroke="currentColor" stroke-width="1"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z" fill="none" stroke="currentColor" stroke-width="1"/><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="#EFC53F"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="#EFC53F" opacity="0.45"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+      oxagen
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <div class="drop" data-open="false">
+        <button class="drop-btn" id="productsBtn" type="button" aria-expanded="false" aria-haspopup="true">Products <i class="chev"></i></button>
+        <div class="drop-menu" role="menu" aria-labelledby="productsBtn">
+          <a href="/product/stella" role="menuitem"><span class="dm-mark">✦</span><b>Stella</b><span>The open-source terminal agent. Rust, BYOK, every turn on the record.</span></a>
+          <a href="/product/oxagen" role="menuitem"><span class="dm-mark">⬡</span><b>Oxagen</b><span>The control plane. One context map — approved, metered, logged.</span></a>
+          <a href="/product/private-llms" role="menuitem"><span class="dm-mark">▣</span><b>Private LLMs</b><span>Models on hardware you control — laptop, your VPC, or air-gapped.</span></a>
+          <div class="drop-sep"></div>
+          <div class="drop-foot">one loop · three deployments</div>
+        </div>
+      </div>
+      <a href="/#field-manual">Field manual</a>
+      <a class="ext" href="/docs" target="_blank" rel="noopener">Docs</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="login ext" href="https://app.oxagen.sh" target="_blank" rel="noopener">Log in</a>
+      <a class="btn btn-primary btn-sm" href="#talk">Talk to us</a>
+      <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="drawer" aria-label="Menu"><i></i></button>
+    </div>
+  </div>
+</header>
+
+<div class="drawer" id="drawer" data-open="false">
+  <div class="wrap">
+    <h5>Products</h5>
+    <a href="/product/stella">Stella — the terminal agent</a>
+    <a href="/product/oxagen">Oxagen — the control plane</a>
+    <a href="/product/private-llms">Private LLMs</a>
+    <h5>More</h5>
+    <a href="/#field-manual">Field manual</a>
+    <a href="/docs">Docs</a>
+    <a href="https://app.oxagen.sh">Log in</a>
+    <a class="btn btn-primary" href="#talk">Talk to us</a>
+  </div>
+</div>
+
+<main id="main">
+
+  <!-- ================= HERO ================= -->
+  <section class="hero tex" id="top">
+    <div class="wrap hero-in">
+      <div>
+        <p class="eyebrow">Products · Private LLMs</p>
+        <h1>Your model. <span class="gold">Your metal.</span></h1>
+        <p class="hero-sub">
+          Some code cannot leave the building — and no amount of contract language changes that.
+          Run the same agent on models <strong>you host</strong>: on the laptop, inside your VPC, or
+          on a machine with no route to the internet at all.
+        </p>
+        <div class="hero-ctas">
+          <a class="btn btn-primary" href="#talk">Talk to us <span class="arr">→</span></a>
+          <a class="btn btn-ghost" href="#modes">See the three modes</a>
+        </div>
+        <p class="hero-note">Same agent · same deck · no key, no account, no call home</p>
+      </div>
+
+      <figure class="app reveal">
+        <div class="app-bar">
+          <span class="tl"></span><span class="tl"></span><span class="tl live"></span>
+          <span class="app-title">stella models — local</span>
+          <span class="app-meta">network: not required</span>
+        </div>
+        <div class="app-view" style="line-height:1.6">
+          <div class="bench" aria-label="Local model bench (illustrative)">
+            <div class="bench-head">
+              <span>model</span><span class="q">quant</span><span class="ctx">context</span><span class="mem">memory</span><span style="text-align:right">role</span>
+            </div>
+            <div class="bench-row">
+              <span class="nm"><i class="dot hot"></i>coder-30b</span>
+              <span class="q">q4_k_m</span><span class="ctx">128k</span>
+              <span class="mem bar"><i style="--w:.78"></i></span>
+              <span class="st">worker</span>
+            </div>
+            <div class="bench-row">
+              <span class="nm"><i class="dot"></i>coder-7b</span>
+              <span class="q">q5_k_m</span><span class="ctx">64k</span>
+              <span class="mem bar"><i style="--w:.34;animation-delay:.15s"></i></span>
+              <span class="st">summariser</span>
+            </div>
+            <div class="bench-row">
+              <span class="nm"><i class="dot"></i>embed-small</span>
+              <span class="q">f16</span><span class="ctx">8k</span>
+              <span class="mem bar"><i style="--w:.12;animation-delay:.3s"></i></span>
+              <span class="st">retrieval</span>
+            </div>
+            <div class="bench-row">
+              <span class="nm"><i class="dot idle"></i>frontier-api</span>
+              <span class="q">—</span><span class="ctx">—</span>
+              <span class="mem bar"><i class="dim" style="--w:0"></i></span>
+              <span class="st off">disabled</span>
+            </div>
+          </div>
+          <span class="app-sweep" aria-hidden="true"></span>
+        </div>
+        <div class="app-foot" aria-hidden="true">
+          <span class="pr">$</span>
+          <span class="typed" data-typewriter="stella models|coder-30b · loaded · fitted to your hardware|egress: none · no key required"></span><span class="caret"></span>
+          <span class="tail ok">offline ok</span>
+        </div>
+        <figcaption>Small models take the cheap steps, a bigger one takes the hard ones, and the
+        outside world is <b>a row you can switch off</b>.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ================= TICKER ================= -->
+  <div class="ticker" aria-hidden="true">
+    <div class="ticker-track">
+      <span class="tick-item">
+        <span><b>on</b> your laptop</span><span class="sep">·</span>
+        <span><b>in</b> your VPC</span><span class="sep">·</span>
+        <span><b>behind</b> your firewall</span><span class="sep">·</span>
+        <span><b>on</b> an air-gapped box</span><span class="sep">·</span>
+        <span><b>under</b> your GPU quota</span><span class="sep">·</span>
+        <span><b>with</b> your own weights</span><span class="sep">·</span>
+        <span><b>no</b> key</span><span class="sep">·</span>
+        <span><b>no</b> account</span><span class="sep">·</span>
+        <span><b>no</b> call home</span><span class="sep">·</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- ================= THREE MODES ================= -->
+  <section class="sec" id="modes">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="eyebrow">Three modes</p>
+        <h2>Pick how far the data is allowed to travel.</h2>
+        <p>The agent does not change between these. What changes is where the weights live and who
+        can reach them — which is the only part your security team actually cares about.</p>
+      </div>
+      <div class="three reveal">
+        <div>
+          <span class="when">On device</span>
+          <h3>The laptop</h3>
+          <p>A model sized to the machine in front of you. Works on a plane, in a SCIF, and on the
+          day your provider has an outage.</p>
+          <ul>
+            <li>No key, no account</li>
+            <li>Nothing to bill</li>
+            <li>Your code never leaves the disk</li>
+          </ul>
+        </div>
+        <div>
+          <span class="when">Private cloud</span>
+          <h3>Your VPC</h3>
+          <p>Weights on your own GPUs, inside your own network boundary, under the identity and
+          logging you already run everything else through.</p>
+          <ul>
+            <li>Your cloud account, your quota</li>
+            <li>Shared by the whole team</li>
+            <li>Metered like every other agent</li>
+          </ul>
+        </div>
+        <div>
+          <span class="when">Air-gapped</span>
+          <h3>No route out</h3>
+          <p>For the environments where "we use a vendor with a good DPA" is not an answer that
+          anybody is allowed to accept.</p>
+          <ul>
+            <li>Install from media</li>
+            <li>No update check, ever</li>
+            <li>Audit stays on your side</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= EGRESS ================= -->
+  <section class="sec sec-alt tex tex-hatch">
+    <div class="wrap split split-wide">
+      <div class="reveal">
+        <p class="eyebrow">What leaves</p>
+        <h2>The honest network diagram.</h2>
+        <p style="color:var(--ink-3);font-size:17px;margin-top:16px">
+          Most "private" AI tools mean the model is private and the telemetry is not. Ours is the
+          boring version: with a local model configured, the agent makes no outbound request at all.
+          Not for a licence check, not for an update, not for anonymous usage stats.
+        </p>
+        <p style="color:var(--ink-3);font-size:17px;margin-top:14px">
+          This is enforced in the code, not promised in a policy page — and you can read the code.
+        </p>
+        <p style="margin-top:22px">
+          <a class="btn btn-ghost ext" href="https://github.com/macanderson/stella" target="_blank" rel="noopener">Check it yourself <span class="arr">→</span></a>
+        </p>
+      </div>
+      <div class="reveal reveal-d1">
+        <div class="egress">
+          <div><span class="x">✗</span><span class="lbl">Your prompts and your code</span><span class="val">never sent</span></div>
+          <div><span class="x">✗</span><span class="lbl">File paths, diffs, tool output</span><span class="val">never sent</span></div>
+          <div><span class="x">✗</span><span class="lbl">Update checks</span><span class="val">not performed</span></div>
+          <div><span class="x">✗</span><span class="lbl">Anonymous usage analytics</span><span class="val">not collected</span></div>
+          <div><span class="y">✓</span><span class="lbl">Model calls</span><span class="val">to the model you chose</span></div>
+          <div><span class="y">✓</span><span class="lbl">Run history, cost, events</span><span class="val">local SQLite, yours</span></div>
+        </div>
+        <p class="mono" style="margin-top:14px;font-size:12.5px;color:var(--ink-3)">
+          with a local model selected, that first row is a loopback address
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SAME AGENT ================= -->
+  <section class="sec">
+    <div class="wrap split split-flip">
+      <figure class="app reveal">
+        <div class="app-bar"><span class="tl"></span><span class="tl"></span><span class="tl live"></span>
+          <span class="app-title">stella — write</span><span class="app-meta">local · coder-30b</span></div>
+        <div class="app-view">
+          <img src="/assets/tui/02-event-vocabulary.svg" width="680" height="508" loading="lazy" alt="A file-write event expanded: a new Rust source file shown inline with its full contents, syntax highlighted, alongside the line count and the time the write took.">
+          <span class="app-sweep" aria-hidden="true"></span>
+        </div>
+        <div class="app-foot" aria-hidden="true"><span class="pr">＋</span>
+          <span class="typed" data-typewriter="write crates/stella-cli/src/dedup.rs|new file · 34 lines · 1ms|no network call was made"></span><span class="caret"></span>
+          <span class="tail ok">local</span></div>
+        <figcaption>The same deck, the same events, the same evidence — just a model that never
+        left the room.</figcaption>
+      </figure>
+      <div class="reveal reveal-d1">
+        <p class="eyebrow">Nothing else changes</p>
+        <h2>Private does not mean crippled.</h2>
+        <p style="color:var(--ink-3);font-size:17px;margin-top:16px">
+          It is the same agent, with the same tools, the same gates, the same task board and the
+          same record. Switching to a local model is a line of configuration — not a lesser mode
+          with half the features and a warning banner.
+        </p>
+        <p style="color:var(--ink-3);font-size:17px;margin-top:14px">
+          And because the checks that decide "is this done" are deterministic, they cost the same
+          whichever model you point at them: nothing.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ROUTING ================= -->
+  <section class="sec sec-alt">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="eyebrow">Mix, don't choose</p>
+        <h2>Local for the volume. Frontier for the hard part.</h2>
+        <p>Most of an agent's calls are not the interesting ones — summarising, classifying,
+        deciding what to read next. Those can run on your own hardware all day. Route the handful
+        that genuinely need a frontier model, and keep the rest at home.</p>
+      </div>
+      <div class="route reveal">
+        <div class="side">
+          <b>Stays local</b>
+          <p>Summarising a long file. Ranking search results. Naming a change. Deciding what to
+          read next. The cheap, constant, high-volume work.</p>
+        </div>
+        <div class="mid">→<br>routed<br>by rule</div>
+        <div class="side">
+          <b>Goes out — only if you allow it</b>
+          <p>The genuinely hard reasoning step, on the provider you chose, with the key you own, on
+          a call you can see in the deck as it happens.</p>
+        </div>
+      </div>
+      <p class="mono reveal" style="margin-top:16px;font-size:13px;color:var(--ink-3)">
+        or set the second column to none, and the whole thing runs on your metal
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= SPEC ================= -->
+  <section class="sec">
+    <div class="wrap split">
+      <div class="reveal">
+        <p class="eyebrow">The short version</p>
+        <h2>What running it privately involves</h2>
+        <p style="color:var(--ink-3);font-size:17px;margin-top:16px">
+          The agent is a single binary and the model is whatever you already serve. There is no
+          appliance to buy and no runtime of ours sitting in the middle of your traffic.
+        </p>
+      </div>
+      <dl class="spec reveal reveal-d1">
+        <div><dt>Weights</dt><dd>Yours. Open-weight models you already run, or ones we help you fit.</dd></div>
+        <div><dt>Serving</dt><dd>An OpenAI-compatible endpoint on your own host is enough.</dd></div>
+        <div><dt>Hardware</dt><dd>A laptop for the small models; your existing GPUs for the shared ones.</dd></div>
+        <div><dt>Agent</dt><dd>The same Stella binary. Configuration, not a separate build.</dd></div>
+        <div><dt>Network</dt><dd>None required. Air-gapped installs are a supported case, not a workaround.</dd></div>
+        <div><dt>Records</dt><dd>Run history, cost and events stay in local SQLite you can delete.</dd></div>
+        <div><dt>Governance</dt><dd>Add the control plane when you want it — it runs in your network too.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ================= TALK ================= -->
+  <section class="sec sec-alt tex" id="talk">
+    <div class="wrap split">
+      <div class="reveal">
+        <p class="eyebrow">Talk to us</p>
+        <h2>Tell us what cannot leave.</h2>
+        <p style="color:var(--ink-3);font-size:17.5px;margin-top:14px;max-width:48ch">
+          Bring the constraint — the regulator, the customer contract, the network with no egress —
+          and we will tell you honestly what runs well on your hardware and what does not.
+        </p>
+        <ul style="list-style:none;padding:0;margin:24px 0 0;display:grid;gap:9px">
+          <li style="display:flex;gap:10px;font-size:14.8px;color:var(--ink-2)"><span class="gold mono">→</span>Which model sizes your hardware can actually serve</li>
+          <li style="display:flex;gap:10px;font-size:14.8px;color:var(--ink-2)"><span class="gold mono">→</span>What gets worse without a frontier model, stated plainly</li>
+          <li style="display:flex;gap:10px;font-size:14.8px;color:var(--ink-2)"><span class="gold mono">→</span>How the air-gapped install and its audit trail work</li>
+        </ul>
+      </div>
+
+      <form class="lead-form reveal reveal-d1" id="privateForm" data-source="product-private-llms" novalidate>
+        <div class="f-row">
+          <div class="field">
+            <label for="lf-name">Name</label>
+            <input id="lf-name" name="name" type="text" autocomplete="name" required maxlength="200" placeholder="Grace Hopper">
+          </div>
+          <div class="field">
+            <label for="lf-email">Work email</label>
+            <input id="lf-email" name="email" type="email" autocomplete="email" required maxlength="320" placeholder="grace@company.com">
+          </div>
+        </div>
+        <div class="f-row">
+          <div class="field">
+            <label for="lf-company">Company <span class="opt">(optional)</span></label>
+            <input id="lf-company" name="company" type="text" autocomplete="organization" maxlength="200" placeholder="Compilers Inc">
+          </div>
+          <div class="field">
+            <label for="lf-role">Role <span class="opt">(optional)</span></label>
+            <input id="lf-role" name="role" type="text" autocomplete="organization-title" maxlength="120" placeholder="Head of platform">
+          </div>
+        </div>
+        <div class="field">
+          <label for="lf-message">What is the constraint? <span class="opt">(optional)</span></label>
+          <textarea id="lf-message" name="message" maxlength="2000" placeholder="The regulation, the contract, the network — and the hardware you already have."></textarea>
+        </div>
+        <div class="hp-wrap" aria-hidden="true">
+          <label for="lf-website">Website</label>
+          <input id="lf-website" name="website" type="text" tabindex="-1" autocomplete="off">
+        </div>
+        <div class="form-foot">
+          <button class="btn btn-primary" type="submit">Send it <span class="arr">→</span></button>
+          <p class="form-status" role="status" aria-live="polite"></p>
+        </div>
+      </form>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="/" aria-label="Oxagen home">
+          <svg viewBox="7.775 4.325 36.343 37.216" aria-hidden="true"><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z" fill="none" stroke="currentColor" stroke-width="1"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z" fill="none" stroke="currentColor" stroke-width="1"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z" fill="none" stroke="currentColor" stroke-width="1"/><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="#EFC53F"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="#EFC53F" opacity="0.45"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+          oxagen
+        </a>
+        <p>Everyone has the same models.<br>Your edge is context.</p>
+        <div class="socials">
+          <a href="https://x.com/oxagenai" target="_blank" rel="noopener" aria-label="Oxagen on X"><svg viewBox="0 0 24 24"><path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3l-4.9-6.4L6.4 22H3.3l7.3-8.3L1.6 2H8l4.4 5.9L18.9 2zm-1.1 18.2h1.7L7.1 3.7H5.3l12.5 16.5z"/></svg></a>
+          <a href="https://www.linkedin.com/company/oxagenai" target="_blank" rel="noopener" aria-label="Oxagen on LinkedIn"><svg viewBox="0 0 24 24"><path d="M20.4 20.4h-3.6v-5.6c0-1.3 0-3-1.9-3-1.9 0-2.1 1.4-2.1 2.9v5.7H9.2V9h3.4v1.6h.1c.5-.9 1.6-1.9 3.4-1.9 3.6 0 4.3 2.4 4.3 5.5v6.2zM5.2 7.4a2.1 2.1 0 1 1 0-4.2 2.1 2.1 0 0 1 0 4.2zM7 20.4H3.4V9H7v11.4z"/></svg></a>
+          <a href="https://github.com/oxagenai" target="_blank" rel="noopener" aria-label="Oxagen on GitHub"><svg viewBox="0 0 24 24"><path d="M12 1.8A10.2 10.2 0 0 0 1.8 12c0 4.5 2.9 8.3 7 9.7.5.1.7-.2.7-.5v-1.9c-2.9.6-3.5-1.2-3.5-1.2-.4-1.2-1.1-1.5-1.1-1.5-1-.6.1-.6.1-.6 1 .1 1.6 1.1 1.6 1.1.9 1.6 2.4 1.1 3 .9.1-.7.4-1.1.7-1.4-2.3-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.8-.1-.2-.4-1.3.1-2.7 0 0 .9-.3 2.8 1a9.8 9.8 0 0 1 5.2 0c1.9-1.3 2.8-1 2.8-1 .5 1.4.2 2.5.1 2.7.7.7 1 1.7 1 2.8 0 3.9-2.4 4.8-4.6 5 .4.3.7 1 .7 1.9v2.8c0 .3.2.6.7.5a10.2 10.2 0 0 0 7-9.7A10.2 10.2 0 0 0 12 1.8z"/></svg></a>
+        </div>
+      </div>
+
+      <nav class="foot-col" aria-label="Products">
+        <h4>Products</h4>
+        <ul>
+          <li><a href="/product/stella">Stella</a></li>
+          <li><a href="/product/oxagen">Oxagen</a></li>
+          <li><a href="/product/private-llms">Private LLMs</a></li>
+          <li><a href="/#demo">Get a demo</a></li>
+        </ul>
+      </nav>
+
+      <nav class="foot-col" aria-label="Resources">
+        <h4>Resources</h4>
+        <ul>
+          <li><a class="ext" href="/docs" target="_blank" rel="noopener">Documentation</a></li>
+          <li><a class="ext" href="/docs/stella" target="_blank" rel="noopener">Stella docs</a></li>
+          <li><a href="/#field-manual">Field manual</a></li>
+          <li><a class="ext" href="https://github.com/macanderson/stella" target="_blank" rel="noopener">Source</a></li>
+        </ul>
+      </nav>
+
+      <div class="foot-col">
+        <h4>Contact</h4>
+        <address>
+          Oxagen, Inc.<br>
+          2261 Market Street STE 87168<br>
+          San Francisco, CA 94114<br>
+          <a href="mailto:success@oxagen.ai">success@oxagen.ai</a>
+        </address>
+      </div>
+    </div>
+
+    <div class="foot-base">
+      <span>© 2026 Oxagen, Inc. All rights reserved.</span>
+      <span class="mono">ship deterministic · <a href="/#field-manual">read the manual</a></span>
+    </div>
+  </div>
+</footer>
+

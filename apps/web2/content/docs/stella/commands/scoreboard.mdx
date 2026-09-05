@@ -1,0 +1,81 @@
+---
+title: stella scoreboard
+description: See what a piece of work cost and whether people liked it, using model calls, typing, follow-ups, and pull request outcomes.
+---
+
+`stella scoreboard` shows four numbers for each piece of work: how many times a model was called, how much you had to type, how many times you had to follow up, and what people thought of the result. The first three numbers come from your local store. The fourth comes from a pull request that someone merged or closed.
+
+This command only reads data on your machine. It needs no API key, and **no model judges the work here.** That is on purpose.
+
+## Synopsis
+
+```bash
+stella scoreboard
+```
+
+## What it does
+
+Most tools that measure agent quality just ask the model how it did. stella's store keeps a self-rating field (`execution_reflection.self_rating`), but the scoreboard never reads it. Letting a model grade its own work isn't a fair test. Every number here either comes from something that actually happened, or from a judgment a person made.
+
+<CardGrid size="md">
+  <SpecCard title="Model calls">
+    How many times a model was called for this piece of work. Counted from the execution
+    records.
+  </SpecCard>
+  <SpecCard title="Characters typed">
+    How much you had to write to get the result — prompt text, added up. This is the cost
+    of the work that wasn't automated.
+  </SpecCard>
+  <SpecCard title="Follow-ups">
+    How many times you had to come back. Every task starts with something you type, so N
+    executions means N things you typed — which makes follow-ups `N - 1`.
+  </SpecCard>
+  <SpecCard title="Verdict">
+    What a person actually thought, read from the pull request they merged or closed.
+  </SpecCard>
+</CardGrid>
+
+## Where verdicts come from
+
+A pull request's status becomes a verdict, with one gap on purpose:
+
+<CardGrid size="md">
+  <OptionCard name="merged">
+    Someone accepted the work.
+  </OptionCard>
+  <OptionCard name="closed">
+    Someone rejected it.
+  </OptionCard>
+  <OptionCard name="draft / open">
+    **Not a verdict.** Work still in progress hasn't been judged yet.
+  </OptionCard>
+</CardGrid>
+
+Counting an open pull request as a verdict would mean guessing at an opinion nobody gave. The scoreboard leaves it out instead.
+
+```bash
+# What did the work cost, and did anyone say it was good?
+stella scoreboard
+```
+
+<Callout type="info">
+The math behind these numbers is tested once, in one place. The CLI just reads the results and displays them — it never recalculates anything. Totals are rebuilt from the actual event history, so they can never drift from what really happened.
+</Callout>
+
+<Callout type="warn">
+stella never reports `interrupted` as a verdict. The store can't tell the difference between you canceling a task and a provider error, so the scoreboard leaves it out rather than guessing wrong.
+</Callout>
+
+## Related
+
+<CardGrid size="sm">
+  <SpecCard title="stella stats" href="/docs/stella/commands/stats">
+    Cost, tokens, and how often work finished, by provider and model — the spending view of the same store.
+  </SpecCard>
+  <SpecCard title="stella usage" href="/docs/stella/commands/usage">
+    The same numbers across every project on this machine.
+  </SpecCard>
+  <SpecCard title="The Observatory" href="/docs/stella/telemetry/dashboard">
+    A browser dashboard for this workspace's data. It only works from your own machine.
+  </SpecCard>
+</CardGrid>

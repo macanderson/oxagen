@@ -1,0 +1,69 @@
+---
+title: A2A overview
+description: The Oxagen Agent2Agent (A2A) protocol surface — expose workspace agents to any A2A client, governed and metered like every other capability.
+---
+
+Oxagen speaks the **Agent2Agent (A2A) protocol** alongside [MCP](/docs/platform/mcp/overview). Where MCP exposes the platform's capabilities as *tools* for a client's own agent, A2A exposes an Oxagen workspace as an *agent* that other agents can delegate tasks to. Multi-agent buyers increasingly expect both: MCP to pull tools in, A2A to hand work out.
+
+**A2A endpoint:** `https://api.oxagen.sh/a2a` (JSON-RPC 2.0 over HTTP)
+
+**Discovery:** `https://api.oxagen.sh/.well-known/agent-card.json`
+
+**Protocol version:** A2A `1.0` (JSON-RPC binding)
+
+## The Agent Card
+
+Every A2A agent publishes an **Agent Card** — a discovery document describing its identity, transport endpoint, authentication scheme, and the skills it offers. Oxagen serves it at the standard well-known path:
+
+```
+GET /.well-known/agent-card.json
+```
+
+- **Anonymous** requests get a base card: the endpoint, the Bearer security scheme, and a single generic skill. It never leaks any workspace's agent inventory.
+- **Authenticated** requests (a workspace API key as a Bearer token) get the full workspace card, where each active agent definition becomes an A2A **skill**, plus a baseline `chat` skill for the general-purpose workspace agent.
+
+The same card is available through the governed capability `a2a.card.get` (API / MCP / CLI):
+
+```bash
+oxagen a2a card          # human-readable
+oxagen a2a card --json   # raw Agent Card JSON
+```
+
+## Authentication and scope
+
+A2A reuses the **exact same auth as MCP**: a workspace API key (`ox_...`) presented as an HTTP Bearer token. The key carries org + workspace scope, so — like the MCP endpoint — there are no org/workspace path segments in the URL. An invalid or missing key fails closed.
+
+```
+Authorization: Bearer ox_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+## Governance and metering
+
+A2A is a transport, not a bypass. Every A2A task runs through the **same agent execution path** the in-app chat surface uses — there is no second agent runtime. That means every task is:
+
+- **Metered** — token usage is emitted to ClickHouse and deducted from the org's credit balance, exactly like an in-app turn. This is the wedge: every agent action, from any surface, is billed the same way.
+- **Traced** — task lifecycle events (`a2a.task.started`, `a2a.task.completed`, `a2a.task.failed`) are recorded, and the underlying tool calls pass through the `invoke()` kernel boundary with their own audit events.
+- **Governed** — the `a2a.card.get` management capability is IAM-gated and metered like any other capability; task execution inherits the workspace's tool policy and tenant isolation.
+
+## Task lifecycle
+
+An A2A task is durable state in Postgres (`agent.a2a_tasks`), scoped by org + workspace under row-level security. Tasks move through the A2A lifecycle states:
+
+`submitted` → `working` → `completed` (or `failed` / `canceled` / `rejected`)
+
+The task's opaque `id` is stable and can be polled with `tasks/get` or canceled with `tasks/cancel` at any time before it reaches a terminal state. A `contextId` groups multiple tasks into one continuing conversation, giving the agent multi-turn memory across calls.
+
+## Relationship to MCP
+
+| | MCP | A2A |
+|---|---|---|
+| Exposes | Platform capabilities as **tools** | The workspace as an **agent** |
+| Client role | The client's agent calls Oxagen tools | Another agent delegates a task to Oxagen |
+| Endpoint | `mcp.oxagen.sh/mcp` | `api.oxagen.sh/a2a` |
+| Transport | Streamable HTTP | JSON-RPC 2.0 (+ SSE for streaming) |
+| Auth | Workspace API key (Bearer) | Workspace API key (Bearer) |
+| Metering & audit | `invoke()` kernel | Shared execution path + `invoke()` |
+
+Both are first-class. Use MCP to give your development environment Oxagen's governed toolchain; use A2A to let other agents put Oxagen to work.
+
+See the [JSON-RPC reference](/docs/platform/a2a/reference) for the full method list and example exchanges.

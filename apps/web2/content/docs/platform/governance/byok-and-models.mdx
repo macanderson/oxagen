@@ -1,0 +1,56 @@
+---
+title: Model governance
+description: Which models are available on each plan, how workspace model defaults work, and how to restrict model access per workspace.
+---
+
+<IllustrationByokSpot />
+
+## Model access by plan
+
+Oxagen routes all AI inference through the Vercel AI Gateway. No provider API keys are held in the Oxagen codebase or deployment — the gateway handles provider authentication.
+
+Available models depend on your subscription tier:
+
+| Model | Free | Build | Scale | Enterprise |
+|---|---|---|---|---|
+| Claude Haiku 4.5 | Yes | Yes | Yes | Yes |
+| Claude Sonnet 4.6 | Yes | Yes | Yes | Yes |
+| Claude Opus 4.8 | — | Yes | Yes | Yes |
+| Image generation (gpt-image-1, flux-2-max) | — | Yes | Yes | Yes |
+| Video generation (veo-3.0) | — | — | Yes | Yes |
+
+All model calls are metered in credits at the per-token rate defined in the billing pricing table. See the [full cost table](/docs/platform/enterprise/use-cases#metered-spend) for per-model credit rates.
+
+## Workspace model defaults
+
+Workspace administrators can configure default model selection for their workspace via `update_model_settings`. This sets the default text model (and tier), image model, and video model applied to all agents running in that workspace, overriding individual user preferences.
+
+**To configure workspace model defaults:**
+
+1. Go to **Workspace settings → Models**.
+2. Set the default text model tier and model name, image model, and video model as appropriate.
+3. Save. Agents in this workspace will use these defaults unless a playbook explicitly overrides them.
+
+Different workspaces can use different model defaults — for example, a cost-sensitive workspace can be pinned to Haiku while a high-capability workspace uses Sonnet.
+
+> **BYOK (bring your own model API keys)** is a planned feature and is not yet implemented. All inference currently routes through the Vercel AI Gateway using Oxagen-managed provider credentials.
+
+## Restricting model access per workspace
+
+Workspace administrators can restrict which models are available to agents in their workspace, regardless of what the org subscription tier allows. This is useful for:
+
+- Preventing high-cost models from being used in cost-sensitive workspaces.
+- Restricting model access in workspaces that handle sensitive data to only pre-approved models.
+- Enforcing consistent model behavior across a team.
+
+Model restrictions are configured at **Workspace settings → Models → Allowed models**. Agents attempting to use a disallowed model receive a capability denied response, which is recorded in the audit log.
+
+## Model governance and org-enforced policies
+
+Org administrators can set enforced policies on model access at **Organization → Access → Policies**. An enforced policy cannot be overridden at the workspace level. For example, an org can enforce that `execute_code` only runs on Haiku (lower cost, lower capability) — workspaces cannot upgrade the model used for code execution without an org Admin changing the policy.
+
+## Model handle stability
+
+Oxagen uses model handles (e.g., `claude-sonnet-5`) rather than hard-coded model slugs. Handles are resolved to the current gateway slug at request time via `modelIdOf()`. This insulates your agents from model naming changes in the underlying provider APIs.
+
+If a gateway model slug is updated or renamed, handle resolution is updated centrally — your agents and playbooks continue to work without changes.

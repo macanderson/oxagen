@@ -1,0 +1,11 @@
+{
+  "title": "Security",
+  "pages": [
+    "overview",
+    "soc2",
+    "tenant-isolation-rls",
+    "data-handling",
+    "audit-logging",
+    "code-execution"
+  ]
+}

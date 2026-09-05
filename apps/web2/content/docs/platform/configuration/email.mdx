@@ -1,0 +1,60 @@
+---
+title: Email & SMTP
+description: Configure the SMTP transport that delivers verification and password-reset email. In deployed environments the verification email gates sign-in, so a misconfigured transport blocks all new sign-ups — Oxagen now surfaces that failure loudly.
+---
+
+## Why this matters
+
+In deployed environments, **email verification is required**: every new user must click
+an emailed verification link before they can sign in. That link is delivered over SMTP. If
+the SMTP transport is missing or misconfigured in production, the verification email is
+never sent and affected users can never complete sign-in.
+
+Transactional email is also used for **password resets**.
+
+## Required environment variables
+
+Set all of the following to enable transactional email. They are optional in the schema
+(not every service needs to send mail), but if any are missing the transport refuses to
+build and logs a clear error rather than failing silently.
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `SMTP_HOST` | Yes | SMTP server hostname (e.g. `smtp.postmarkapp.com`). |
+| `SMTP_PORT` | Yes | SMTP server port. `465` uses implicit TLS; other ports (e.g. `587`) use STARTTLS. |
+| `SMTP_USERNAME` | Yes | SMTP auth username. |
+| `SMTP_PASSWORD` | Yes | SMTP auth password / API token. |
+| `SMTP_FROM_EMAIL` | Yes | The `From:` address on outgoing mail (must be a verified sender on your provider). |
+| `SMTP_FROM_NAME` | No | Optional display name shown alongside the from address. |
+
+### TLS behavior
+
+- **Port `465`** → an implicit TLS connection is opened immediately.
+- **Any other port** (commonly `587`) → the connection is upgraded with STARTTLS and TLS
+  is required. Plaintext delivery is never used.
+
+## Fail-loud behavior
+
+The auth layer has to answer right away, so verification and password-reset emails are sent
+in the background rather than awaited. A send that fails in the background is still recorded:
+
+- Background dispatch goes through a helper that **logs every send failure**, along with the
+  `purpose` (`verification` or `password-reset`) and the recipient. Search your logs for
+  `sendEmail failed (fire-and-forget)` to find delivery failures.
+- A startup or health probe can call `isEmailTransportConfigured()` to catch a deployed
+  environment that would drop every transactional email, so you find the misconfiguration
+  before your users do.
+
+## Local development
+
+Email verification is **disabled** locally (see [Local development](/docs/platform/configuration/local-development)),
+so you do **not** need to set the `SMTP_*` variables to sign up and sign in on your machine.
+Set them locally only if you want to exercise the real email-delivery path.
+
+## Verifying your configuration
+
+After setting the variables in a deployed environment:
+
+1. Trigger a sign-up (or password reset) for a test address.
+2. Confirm the email arrives, or check logs for `sendEmail failed (fire-and-forget)`.
+3. If the transport is unconfigured, the error names the missing `SMTP_*` keys.

@@ -1,0 +1,120 @@
+---
+title: stella commands
+description: List the custom slash commands this workspace offers, or convert markdown command definitions to TOML.
+---
+
+`stella commands` is the command-line half of [custom slash commands](/docs/stella/agent-tools/commands). It lists what this workspace actually offers, checked against the same permission rules the slash menu uses, and it converts markdown definitions to TOML.
+
+It works offline: it reads and writes local definition files only, and needs no API key.
+
+## Synopsis
+
+```bash
+stella commands list
+stella commands convert [<dir>] [--dry-run] [--force]
+```
+
+## What it does
+
+### `stella commands list`
+
+List the custom slash commands this workspace offers, with the file each one came from and its argument hint.
+
+The listing checks the **same permission rules the chat surfaces use**, against your actual current settings. This is deliberate: a command hidden from the chat menu must not show up here, and one the chat menu offers must not be missing here. So if a command you wrote isn't showing up, the usual cause is the project's [permission settings](/docs/stella/agent-tools/permissions), not a broken file.
+
+```bash
+stella commands list
+```
+
+Project-level commands are held back from an **untrusted** project, so a freshly cloned repo's commands don't appear, and don't run, until you mark the repo as trusted:
+
+```bash
+# A cloned repo, not yet trusted: project commands are withheld
+stella commands list
+# → no custom commands — add one under .stella/commands/
+
+# Trusted: the same workspace lists them, with the file each came from
+STELLA_TRUST_PROJECT=1 stella commands list
+# → /review          Review the working diff like our team d… <focus-areas>
+#     .stella/commands/review.toml
+#   /vercel:deploy    Ship it to production.
+#     .stella/commands/vercel/deploy.toml
+```
+
+<Callout type="info">
+Because the listing checks your real settings rather than a permissive default, seeing fewer commands than you wrote is a **correct** answer about what will actually run. If a command you wrote is missing, check the repo's trust setting before you check the file. See [Permissions](/docs/stella/agent-tools/permissions).
+</Callout>
+
+<Callout type="warn">
+`STELLA_TRUST_PROJECT=1` is a statement about the whole repository, not about one command. It also turns on project-level lifecycle hooks and the MCP servers listed in `.stella/mcp.toml`, both of which start their own processes. Don't set it for a repo you haven't read.
+</Callout>
+
+### `stella commands convert`
+
+Convert markdown command definitions to TOML. Reads `<dir>`, writes a `<slug>.toml` next to each `<slug>.md`, and **leaves the markdown file in place**.
+
+<CardGrid size="md">
+  <OptionCard name="<dir>" defaultValue=".stella/commands/">
+    Directory to convert.
+  </OptionCard>
+  <OptionCard name="--dry-run">
+    Show what would be written without writing anything.
+  </OptionCard>
+  <OptionCard name="--force">
+    Overwrite a `<slug>.toml` that already exists.
+  </OptionCard>
+</CardGrid>
+
+```bash
+# Look before you write
+stella commands convert --dry-run
+
+# Convert the default directory
+stella commands convert
+
+# A different directory, replacing existing TOML
+stella commands convert .claude/commands --force
+```
+
+## Why conversion is a separate step
+
+[`stella init`](/docs/stella/commands/init) **links** `.claude/commands/` instead of copying it. That link matters: commands you maintain for another agent tool stay live, and editing them there updates what stella offers with no extra step.
+
+Converting a file to TOML trades that live link for two things TOML does better: a typed `allowed-tools` list, and a `prompt` field with no markdown fence to escape inside a prompt that itself contains markdown. Both are real benefits, but neither is worth taking your live link away without you asking for it. That's why conversion is a command you run yourself, not something `init` does automatically.
+
+<Callout type="warn">
+Converting a linked `.claude/commands/` directory writes TOML into the tool that owns those files, and the resulting `.toml` file stops tracking edits made to the `.md` file. Prefer converting definitions that live in `.stella/commands/` instead.
+</Callout>
+
+## TOML and markdown are the same command
+
+TOML is a different spelling, not a different feature level. Both formats carry exactly the same fields and produce the same command definition, so nothing is gained or lost by converting, and a workspace can hold both formats at once.
+
+```toml
+# .stella/commands/review.toml
+name = "review"
+description = "Review the working diff like our team does."
+argument-hint = "<pr-number>"
+allowed-tools = ["task_list", "get_state"]
+disable-model-invocation = true
+prompt = """
+Review the working diff for $ARGUMENTS the way our team does:
+correctness first, then the gate, then naming.
+"""
+```
+
+A definition placed one level down is grouped by its directory: `commands/vercel/deploy.toml` becomes `/vercel:deploy`.
+
+## Related
+
+<CardGrid size="sm">
+  <SpecCard title="Custom Commands" href="/docs/stella/agent-tools/commands">
+    Writing the definitions: both formats, argument expansion, and where they live.
+  </SpecCard>
+  <SpecCard title="Permissions" href="/docs/stella/agent-tools/permissions">
+    The permission settings that decide which definitions are available at all.
+  </SpecCard>
+  <SpecCard title="stella init" href="/docs/stella/commands/init">
+    What `init` links, and why it doesn't convert.
+  </SpecCard>
+</CardGrid>

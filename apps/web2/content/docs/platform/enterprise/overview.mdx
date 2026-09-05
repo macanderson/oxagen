@@ -1,0 +1,70 @@
+---
+title: Enterprise overview
+description: The org and workspace model, how governance scales across business units, and what enterprise tier includes.
+---
+
+<IllustrationEnterprise />
+
+## The organization and workspace model
+
+Oxagen structures every customer account as an **organization** with one or more **workspaces**.
+
+```
+Organization (Acme Corp)
+├── Workspace: Marketing
+├── Workspace: Engineering
+├── Workspace: Finance
+└── Workspace: Legal
+```
+
+This structure maps directly to how most enterprises manage AI governance:
+
+- The **organization** is the governance entity: it owns billing, sets the outer bounds of every policy, manages the member roster, and holds the audit log for the entire company.
+- **Workspaces** are the operational units: each team, department, or project has its own isolated workspace with its own agents, knowledge, and automation. Teams work independently without seeing each other's data.
+
+Workspace isolation is enforced at the database layer (see [Tenant isolation and RLS](/docs/platform/security/tenant-isolation-rls)), not by application-layer conventions. A bug in the Marketing workspace's agent cannot expose Finance workspace data.
+
+## Scale tier for enterprise
+
+Scale tier organizations get:
+
+- **Unlimited workspaces** — scale across any number of departments or projects without restructuring.
+- **25 seats included** (add more at the per-seat rate).
+- **All models** including Claude Opus 4.8.
+- **Advanced usage analytics** — cost attribution by workspace, agent, and capability domain.
+- **Dedicated Slack support** channel.
+- **99.9% uptime SLA.**
+- **SOC 2 Type II report** available under NDA.
+- **DPA available** for GDPR, HIPAA, and similar requirements.
+
+## Identity federation
+
+Enterprise organizations can configure SAML 2.0 or OIDC at **Organization → Security → SSO**. After SSO is configured:
+
+- Users sign in via your IdP (Okta, Entra ID, Ping, etc.).
+- IdP group claims are mapped to Oxagen org roles.
+- Deprovisioned users are automatically suspended.
+
+SCIM 2.0 directory sync (**Organization → Security → SCIM**) keeps the roster in sync automatically — no manual invite management at scale.
+
+## Governance at scale
+
+### Central IT sets the rails
+
+Org-level enforced policies cannot be overridden by workspace administrators. If your security team decides that `agent.code.execute` requires approval in all workspaces, set an enforced policy once at the org level and it applies everywhere — including workspaces created in the future.
+
+### Business units tighten within the rails
+
+Workspace administrators can restrict access further than the org baseline. A workspace handling sensitive financial data can deny capabilities that the org allows — but it cannot grant capabilities the org has denied.
+
+### Agents as accountable principals
+
+Every agent configuration is a principal with its own grants. A department can give their agents exactly the capabilities needed for their use case, nothing more. Triggered and scheduled agents use their configured grants — they never inherit a user's session grants.
+
+### Just-in-time access
+
+When an employee or agent needs a capability they do not currently have, they submit a JIT access request. The request is routed to an approver, granted with a TTL, and auto-expired. The entire flow is recorded in the audit log. There is no "ask on Slack and someone will remember to update the permissions" path.
+
+## Contact
+
+For enterprise pricing, SOC 2 reports, DPAs, or reference calls with existing customers, contact sales@oxagen.ai.

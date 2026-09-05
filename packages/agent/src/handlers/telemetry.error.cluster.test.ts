@@ -30,12 +30,21 @@ beforeEach(() => {
 
 describe("telemetryErrorClusterHandler", () => {
   it("defaults to a 24h window and passes it through to clusterErrorEvents", async () => {
+    // The handler reads its own Date.now() somewhere inside this await, so the
+    // only bound that holds on every machine is the interval the call spans:
+    // sinceMs is exactly (that instant - 24h), which lies in
+    // [before - 24h, after - 24h]. Bracketing the call states that directly.
+    // A fixed +5ms slack instead of `after` is what failed CI at 7ms
+    // (run 33947330290: expected 1788501621005 <= 1788501621003) — a tolerance
+    // is a guess about scheduler latency, and a loaded runner beats any guess.
+    const DAY_MS = 24 * 60 * 60 * 1000;
     const before = Date.now();
     await telemetryErrorClusterHandler({}, CTX);
+    const after = Date.now();
     const call = clusterMock.mock.calls[0]?.[0];
     expect(call?.orgId).toBe(CTX.orgId);
-    expect(call?.sinceMs).toBeLessThanOrEqual(before - 24 * 60 * 60 * 1000 + 5);
-    expect(call?.sinceMs).toBeGreaterThan(before - 24 * 60 * 60 * 1000 - 5000);
+    expect(call?.sinceMs).toBeGreaterThanOrEqual(before - DAY_MS);
+    expect(call?.sinceMs).toBeLessThanOrEqual(after - DAY_MS);
   });
 
   it("passes severity/source/limit through unmodified", async () => {

@@ -1,0 +1,80 @@
+---
+title: stella resume
+description: Reopen a past interactive session right where you left off, with its transcript, conversation, and pending prompts.
+---
+
+Reopen a past [Command Deck](/docs/stella/commands/chat) session right where it stood: the transcript, the conversation with the model, and any prompts still waiting to run. Sessions survive quitting, pressing Ctrl-C, closing the terminal, or even a power loss. stella saves a record of everything that happens as it happens, and resuming replays that record.
+
+## Synopsis
+
+```bash
+stella resume [id] [--list] [global flags]
+```
+
+## What it does
+
+Every interactive session saves itself in a list stored on your machine. Each session gets its own JSON file under `~/.stella/sessions/` on every platform, unless you set `STELLA_DATA_DIR` to a different location. The session's saved state is stored next to that file. `stella resume` picks a session from this list and reopens it in the deck:
+
+- **`stella resume`** with no id reopens the most recently active session **that can be resumed in your current workspace**. If there isn't one, it tells you and points you to `--list`.
+- **`stella resume <id>`** reopens one specific session by its id. Ids are created when a session starts, in the form `ses-<ms>-<pid>`, and `--list` shows them.
+
+When you resume, stella rebuilds the transcript from its saved record and restores the conversation with the model from its last completed turn. Any prompts still waiting to run come back exactly as you left them. If a prompt was interrupted partway through, it goes back to the **front** of the queue, in its original order; at most, the last part of that in-progress turn gets re-run. stella also restores how much you've spent in this session, so a `--spend-limit` cap still applies to "this session," not just "since you restarted."
+
+A session can only be reopened if it meets three conditions:
+
+- It isn't already running in another stella process. You can't attach to a live session; stop it first.
+- It belongs to your current workspace, since the deck's tools, memory, and code graph are tied to one workspace.
+- It has saved state on disk. Some very old sessions don't have this, so they appear in the list but can't be resumed.
+
+<Callout type="info">
+`stella resume` opens the Command Deck, so it needs a real terminal window. It doesn't work with `--plain`, `STELLA_PLAIN`, or a piped stream. `stella resume --list` works anywhere, though.
+</Callout>
+
+## `--list`
+
+`stella resume --list` shows every session saved on this machine, with the newest activity first. It only reads local files and doesn't need an API key. Each row shows the session's id, its status, and its title. The status can be In Progress, Needs Input, Paused, Cancelled, Complete, Archived, or Error. A session shows as Error if its process died while it was still marked as live. A `↩` marker means you can resume it from your current folder. A `·` marker means you can resume it, but only from its own workspace.
+
+```text
+   ID                       STATUS       SESSION
+↩  ses-1752940000123-8812   Paused       stella: migrate the config loader to serde…
+·  ses-1752861200456-3301   Complete     webapp: fix the flaky auth test…
+
+↩ resumable here (`stella resume [ID]`) · resumable from its own workspace
+inside the deck: `Ctrl-E` opens SESSIONS, `⏎` reopens a session
+```
+
+Inside a session, the **SESSIONS** overlay, opened with `Ctrl-E` or `/sessions`, shows the same list. Press `⏎` on a row to reopen that session.
+
+## Flags
+
+<CardGrid size="md">
+  <OptionCard name="[id]">
+    The id (`ses-…`) of the session to reopen. If you leave this out, stella reopens the
+    most recently active session that can be resumed in this workspace.
+  </OptionCard>
+  <OptionCard name="--list">
+    List every session on this machine, with resumable ones marked, then exit.
+  </OptionCard>
+</CardGrid>
+
+The [global flags](/docs/stella/commands) still work here. `--spend-limit` picks up from the session's previous spend, and `--no-anim` turns off deck animation as usual.
+
+## Examples
+
+Reopen where you left off in this workspace:
+
+```bash
+stella resume
+```
+
+Reopen one specific session by id:
+
+```bash
+stella resume ses-1752940000123-8812
+```
+
+See every session on this machine first:
+
+```bash
+stella resume --list
+```

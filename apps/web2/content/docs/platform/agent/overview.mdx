@@ -1,0 +1,78 @@
+---
+title: Agent overview
+description: How the Oxagen agent works — tools, memory, plan mode, subagents, and the audit trail behind every action.
+---
+
+The Oxagen agent is the interactive AI available in every workspace. It is not a thin wrapper around a model API. It has access to a typed tool surface, a persistent knowledge graph for memory, sandboxed code execution, the ability to spawn parallel subagents, and a plan-then-execute mode for high-consequence operations.
+
+Every action the agent takes passes through the same `invoke()` boundary as API and MCP calls. This means every tool invocation is IAM-checked, metered, and audit-logged — whether the action is triggered by a user in chat, a scheduled automation, or an external MCP client.
+
+<IllustrationAgent />
+
+## Architecture
+
+```
+User message
+    │
+    ▼
+chat/stream route
+    │  streamText (Vercel AI SDK)
+    ▼
+Agent runtime
+    │  filters tool list by workspace policy and principal grants
+    │
+    ├─ Text response → streamed to client
+    │
+    ├─ Tool call → kernel.invoke(capability, input, ctx)
+    │     │  IAM check
+    │     │  Credit debit
+    │     │  Audit record
+    │     │  Handler runs in tenant scope
+    │     └─ Tool output → streamed to client
+    │
+    └─ Approval required → stream paused
+                         → approval card rendered
+                         → user approves/denies
+                         → stream resumes
+```
+
+## What the agent can do
+
+The agent tool surface is derived from the contract registry. Any capability declared with `surfaces: ['agent']` is available as a tool in a chat session, filtered by:
+
+1. Whether the capability is enabled in the workspace tool policy.
+2. Whether the current principal (user or delegated agent) has the required grant.
+
+The agent selects tools autonomously based on the user's request. It cannot call a capability it does not have access to — the IAM check happens before the handler runs, not inside it.
+
+## Delegated context
+
+When a user is in chat, the agent operates in delegated context. The agent borrows the user's effective grants for the session. The audit record captures both: the human principal and the agent acting on their behalf.
+
+This is the "chain of custody" model: an auditor reviewing an audit log can always trace any agent action back to the human who authorized it, or to the service identity configured for an automated trigger.
+
+## Tool categories
+
+| Category | Examples |
+|---|---|
+| Memory | Recall and write memories from the knowledge graph |
+| Subagents | Dispatch parallel subagents for independent work |
+| Code execution | Run Node, Python, or shell code in a hardened sandbox |
+| Content generation | Generate documents, PDFs, images, SVGs, and videos |
+| Knowledge | Access sources, graph relationships, and workspace memories |
+| Automation | Create plans, manage background tasks |
+| Plugins | Use tools from installed MCP servers |
+
+See [Tools and capabilities](/docs/platform/agent/tools-and-capabilities) for the full list.
+
+## Observability
+
+Every agent turn produces:
+
+- Streamed `text_delta` events (the response) and `tool_call_*` events (tool invocations) via SSE.
+- One `agent.agent_tool_calls` row in Postgres per tool invocation (durable record).
+- One ClickHouse `tool_invocations` row per tool invocation (analytics).
+- A `capability.invoke_allowed` or `capability.invoke_denied` security event per IAM decision.
+- A credit delta event at turn end (credits charged for the turn).
+
+Token usage, tool call latency, and error rates are available in **Workspace → Activity → Runs**.

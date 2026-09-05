@@ -1,0 +1,43 @@
+---
+title: CLI overview
+description: The oxagen CLI — an agentic coding tool for your terminal, powered by Oxagen's knowledge-graph context engine.
+---
+
+`oxagen` is an agentic coding tool that runs in your terminal. You give it a task in natural language and it reads your code, edits files, runs commands, and iterates until the task is done. Its exact code graph stays local to the checkout; authenticated platform commands can query governed workspace context explicitly when you need it.
+
+It also doubles as a thin client for the Oxagen platform: query the knowledge graph, manage workspace environments, and read or write the credential vault — all from the command line.
+
+<TuiReplBanner />
+
+## Who this is for
+
+These docs are written for **developers**. You should be comfortable with a terminal, a package manager (`npm`/`pnpm`), and environment variables. No Oxagen-specific knowledge is assumed.
+
+## What you can do
+
+- **Code with the agent.** Run `oxagen` for an interactive REPL, or `oxagen "fix the failing auth test"` for a one-shot run. The agent plans, edits, runs commands, and verifies.
+- **Dispatch a fleet.** `oxagen agents "migrate the billing module to the new schema"` plans a goal into tasks and runs several agents in parallel, optionally each in its own git worktree.
+- **Run models on-device.** The agent's coordinator can run entirely on a local open-source code model — auto-provisioned and fit to your hardware — for a private, offline loop with no API key. `oxagen models` manages it; see [On-device models](/docs/platform/cli/models).
+- **Query governed workspace context.** `oxagen graph search` performs a bounded online search under your current organization, workspace, and capability grants. It does not download a workspace replica.
+- **Let it learn.** The agent recalls [workspace memory](/docs/platform/cli/memory) — lessons, conventions, and gotchas — before it acts, and records new ones as it works, so it gets better in your codebase over time.
+- **Manage your workspace.** Inspect environments (`oxagen env`) and the encrypted credential vault (`oxagen secret`) without leaving the shell.
+- **Extend it.** Define [custom agents, slash commands, and hard-enforced rules](/docs/platform/cli/custom-commands) as Markdown files in your repo, and connect external MCP servers to the loop.
+
+## Two credentials, two jobs
+
+The CLI uses **two independent credentials**. Knowing which is which saves a lot of confusion:
+
+| Credential | What it powers | How the CLI finds it |
+|---|---|---|
+| **`AI_GATEWAY_API_KEY`** | The agentic coding loop — every model call the agent makes. This is **your own** [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) key (bring your own key). Fallback: with only an `ANTHROPIC_API_KEY`, Claude models run directly against the Anthropic API ([details](/docs/platform/cli/account-setup#anthropic-only-fallback-anthropic_api_key)). | Shell env → `~/.oxagen/settings.json` (`env.AI_GATEWAY_API_KEY`) → `gatewayKey` in `~/.config/oxagen/config.json` → nearest `.env.local`. |
+| **Oxagen platform token** (+ org + workspace) | Platform commands that call `api.oxagen.sh`: `graph`, `env`, `secret`. This is an Oxagen **API key** (`oxk_live_…`) minted in the web app. | `oxagen config token` / `OXAGEN_API_TOKEN`, plus `org` and `workspace`. |
+
+You can use the coding agent with **just** a gateway key — no Oxagen account required for the local loop. The platform token only matters once you want to query governed workspace context or touch workspace environments and secrets. And with an [on-device coordinator](/docs/platform/cli/models) you can go further still — running the agent with **no gateway key at all**, though cloud workers (for heavier code generation) will still need one.
+
+## Next steps
+
+- [Installing the CLI](/docs/platform/cli/installation) — get the `oxagen` binary onto your machine.
+- [Account setup](/docs/platform/cli/account-setup) — create an Oxagen account and authenticate the CLI.
+- [CLI quickstart](/docs/platform/cli/quickstart) — your first agentic coding session.
+- [The agent engine](/docs/platform/cli/agent-engine) — how a turn is planned, executed, and verified.
+- [Command reference](/docs/platform/cli/commands) and [in-REPL slash commands](/docs/platform/cli/repl-commands) — every command, both surfaces.

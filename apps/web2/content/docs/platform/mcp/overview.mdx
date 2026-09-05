@@ -1,0 +1,59 @@
+---
+title: MCP overview
+description: The Oxagen MCP server — capabilities as tools, API-key authentication, org and workspace scope.
+---
+
+The Oxagen MCP server exposes the full platform capability set as tools for any MCP-compatible client: Claude Code, Cursor, Claude Desktop, Codex, VS Code, ChatGPT, and Windsurf. Connecting an Oxagen workspace to your AI development environment gives it a governed, auditable, tenant-isolated toolchain — the same one the in-app agent uses.
+
+<IllustrationMcp />
+
+**MCP server URL:** `https://mcp.oxagen.sh/mcp`
+
+**Transport:** Streamable HTTP (the current MCP standard). SSE is not used.
+
+## What the MCP server provides
+
+Every capability declared with `surfaces: ['mcp']` in the contract registry is available as an MCP tool. This includes agent memory recall and write, conversation management, asset upload, document and image generation, plugin management, and background task management.
+
+The tool list is dynamically filtered by the API key's scope and the workspace's tool policy. A tool that the connecting principal is not authorized to use does not appear in the tool list for that session.
+
+## Authentication and scoping
+
+Authentication is API-key based. The key determines:
+
+- Which organization the session belongs to
+- Which workspace the session operates within
+- Which capabilities are accessible (key scopes + IAM grants)
+
+There are no path-level org or workspace segments in the URL. Scope is carried entirely by the key.
+
+<Mermaid
+  chart="
+flowchart LR
+  C[MCP client] -->|API key| M[MCP server /mcp]
+  M --> S[Org + workspace scope]
+  S --> K[invoke kernel]
+  K --> T[Capabilities as tools]"
+/>
+
+*The API key alone carries org and workspace scope — no URL path segments — before the same `invoke()` kernel every other surface uses.*
+
+## Audit trail
+
+Every tool call via the MCP server passes through the same `invoke()` kernel boundary as API and in-app calls. This means:
+
+- Every tool invocation produces a `capability.invoke_allowed` or `capability.invoke_denied` security event in both audit stores.
+- Token usage is metered and deducted from the org's credit balance.
+- Every tool call is recorded in `agent.agent_tool_calls` in Postgres.
+
+An MCP client connected to Oxagen is fully auditable. You know who called what, when, from which surface, and whether it was authorized.
+
+## Parity with the REST API
+
+The MCP tool list mirrors the REST API capability list. Every capability exposed via the API is also available as an MCP tool (for capabilities that declare `surfaces: ['api', 'mcp']`).
+
+See [Tools](/docs/platform/mcp/tools) for the current tool list and any known parity gaps.
+
+## Unified install
+
+The easiest way to configure the MCP server for your client is through the unified install page at **Organization → Developer → MCP**. It generates ready-to-copy configuration snippets for every supported MCP client, pre-filled with your API key.

@@ -1,0 +1,126 @@
+---
+title: Agent roles
+description: How agents get permissions — the three system agent roles, the ceiling-vs-request model, and the delegation ceiling that stops an agent outgrowing the human it acts for.
+---
+
+<IllustrationRbacSpot />
+
+People get roles. So do agents.
+
+An agent in Oxagen is a **principal** in its own right, with its own identity and its own role — not a shortcut that borrows yours. Every capability it invokes is resolved against that role, audited under `principal_kind='agent'`, and metered to your org. This page covers the three built-in agent roles, how a role combines with the agent's own configuration, and the one rule that governs the whole model.
+
+For human roles and the IAM resolution order they share, see [RBAC and roles](/docs/platform/governance/rbac).
+
+## The three system agent roles
+
+Every organization is seeded with three agent roles. They differ along one axis — **what the agent may change** — and you pick the smallest one that still lets the agent do its job.
+
+| Role | Reads | Mutations | Graph | MCP tools |
+|---|---|---|---|---|
+| **Agent Observer** | Allowed | **Denied** | Read only | **All denied** |
+| **Agent Contributor** | Allowed | Low/medium-risk allowed; high-risk needs approval | The agent's own setting | First-use consent (ask) |
+| **Agent Operator** | Allowed | High-risk allowed too — except `vcs`, `billing`, and `secret`, which still need approval | May extend | Allowed |
+
+### Agent Observer — read and answer only
+
+The agent can search the graph, recall memories, and answer questions. It cannot write anything, anywhere. Every mutation is denied outright rather than queued for approval, graph access is capped at read mode, and MCP tool calls are refused.
+
+**Pick it for** question-answering assistants, reporting and summarization agents, research agents, and anything customer-facing you want structurally incapable of changing state. If you are unsure, start here — widening later is one click, and an agent that quietly acquired write access is a much worse discovery.
+
+### Agent Contributor — the standard worker
+
+The default. The agent reads freely and makes ordinary changes — drafting documents, updating records, running workflows — while anything high-risk stops and asks a human first. MCP tools require first-use consent.
+
+**Pick it for** almost everything a person triggers and watches: drafting agents, triage agents, agents you run from chat. Every new agent is created as a Contributor, so this is what you get unless you choose otherwise.
+
+### Agent Operator — trusted automation
+
+The agent may take high-risk actions without stopping for a human, because there is no human there to ask. Version control, billing, and secret capabilities are the exception — those keep requiring approval **even for an Operator**, on the grounds that an unattended agent should never be able to push code, move money, or read credentials on its own.
+
+**Pick it for** scheduled and event-driven agents that must complete unattended runs: nightly reconciliation, an agent that reacts to inbound webhooks, a cleanup job on a cron.
+
+<Callout type="warn">
+Operator is the only role that lets an agent take a high-risk action with nobody watching. Give it a narrow tool list and a scoped ontology, and prefer Contributor whenever a person actually starts the run.
+</Callout>
+
+## Ceiling vs. request
+
+A role does not describe what the agent *does*. It describes the **most** the agent is ever allowed to do.
+
+```
+role            = the CEILING   (what this agent may ever do)
+agent config    = the REQUEST   (what this agent asks to do — its tools,
+                                 graph access, budgets, skills, subagents)
+effective scope = ceiling ∩ request
+```
+
+The two are intersected on every dimension, and the narrower side always wins:
+
+| Dimension | How they combine |
+|---|---|
+| Capabilities | The role's grant decides `allow` / `require approval` / `deny` for each capability the agent equips. |
+| Graph mode | The stricter of the two. Observer's `read` ceiling narrows a config asking for `extend` back down to `read`. |
+| Graph budget | Element-wise minimum — hops, nodes, traversal time. |
+| Node & relationship types | Set intersection of the role's scope and the agent's `scopeToTypes`. |
+| MCP servers | The role's rules are evaluated first-match-wins against each server the agent equips. |
+| Skills & subagents | Set intersection of what the role permits and what the agent equips. |
+
+Two consequences follow, and both are deliberate:
+
+- **Equipping a tool is not the same as being allowed to use it.** An Observer agent configured with a write capability simply never gets to call it. The configuration is not an error — the ceiling just holds.
+- **Narrowing the config narrows the agent; widening it does not widen the agent.** To give an agent more reach you have to raise its role, which is an audited, permission-checked act.
+
+The builder shows you the intersection before you save. On the **Review** step, the effective-scope panel renders all four dimensions for the role you picked — the same computation the runtime enforces with, so what you approve is what runs.
+
+## The delegation ceiling
+
+One rule sits above everything else:
+
+> **An agent never exceeds the human it acts for.**
+
+You cannot attach a role to an agent that grants capabilities you do not hold yourself. Every capability the role confers is resolved against your own effective grants, and if any of them comes back more permissive than what you have, the assignment is rejected with `agent_role_ceiling_exceeded` — naming the specific capabilities that overreached.
+
+This closes the obvious escalation route. Without it, any member could mint an agent, hand it an Operator role, and use it as a privilege-laundering proxy. With it, delegation can only ever move sideways or down.
+
+In the builder, roles above your own access render disabled with an explanation rather than failing at save time. That is a convenience, not the enforcement — the check runs again on the server for every assignment.
+
+### Subagents only narrow
+
+The same rule extends down the dispatch chain. When an agent dispatches a subagent, the subagent runs at **the intersection of its own scope and its parent's** — never wider. A chain of delegations can only ever get more restrictive, no matter how long it is, so an agent cannot escape its ceiling by dispatching its way around it.
+
+### Inbound agent-to-agent calls
+
+An agent reached over A2A resolves as its own principal intersected with the calling agent's scope. A caller cannot lend a target agent permissions the caller does not have.
+
+## Choosing a role
+
+Work from the narrowest role outward:
+
+1. **Does it change anything at all?** No → **Agent Observer**.
+2. **Does it run unattended** — a schedule or an inbound event starts it, with nobody present to answer an approval prompt — **and** does it need a high-risk action to finish the job? Yes → **Agent Operator**.
+3. Otherwise → **Agent Contributor**.
+
+Note what step 2 hinges on. A high-risk agent someone runs by hand does **not** need Operator: Contributor holds the action for approval, and the person who started the run is right there to give it. Operator exists for the case where waiting for approval means the run never completes.
+
+## AI-assisted setup
+
+When you describe an agent in plain language and let Oxagen draft the configuration, it pre-selects a role for you using exactly the walkthrough above, applied to the definition it just drafted. The suggestion is computed from the drafted agent's capabilities, MCP servers, graph mode, and triggers — it is not a guess from the model.
+
+It is still only a pre-selection:
+
+- The role lands in the normal picker, editable like every other field.
+- A one-line explanation says why that role and not a narrower one.
+- A suggested role above your own delegation ceiling is refused before it is ever selected, and falls back to Agent Contributor.
+- Nothing is attached until you save, and the save goes through the same permission-checked assignment as a hand-picked role.
+
+## Custom agent roles
+
+Enterprise organizations can attach their own IAM roles to agents instead of the three built-ins — useful when an agent needs a precise, hand-built capability set. Custom roles are subject to every rule on this page, including the delegation ceiling.
+
+The three system agent roles are available on every plan.
+
+## Changing an agent's role
+
+Open the agent in the **Workbench → Agents** builder and change the selection on the **Access** step. Saving assigns the new role and detaches the old one, in that order — a rejected assignment leaves the previous role in place rather than stranding the agent without one.
+
+Every assignment and revocation is written to the audit log with the agent as the target and the acting user recorded, viewable in **Organization → Security → Audit**.

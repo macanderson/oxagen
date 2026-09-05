@@ -1,0 +1,99 @@
+---
+title: Tenant isolation and row-level security
+description: How Oxagen enforces complete tenant isolation at the database layer across Postgres, Neo4j, and ClickHouse.
+---
+
+Tenant isolation at Oxagen is a database-enforced property, not an application-layer convention. A developer writing a new handler does not need to remember to add `WHERE org_id = $orgId` — the database returns zero rows if the tenant scope is missing or wrong. This is the core SOC 2 argument: isolation is proven once, at the infrastructure layer, and does not depend on every future developer doing the right thing.
+
+## The design: one seam, three enforcers
+
+All three data stores share a single identity seam (`@oxagen/tenancy`). The seam is entered exactly once — inside `kernel.invoke()` — and propagates automatically via `AsyncLocalStorage` to every data accessor downstream. No tenant IDs are threaded by hand through function signatures.
+
+<Mermaid
+  chart="
+flowchart TD
+  R[Request] --> CC[CapabilityContext: orgId, workspaceId]
+  CC --> K[kernel.invoke]
+  K --> ALS[AsyncLocalStorage TenantScope]
+  ALS --> PG[withTenantDb - Postgres]
+  ALS --> N4[scopedSession - Neo4j]
+  ALS --> CH[chInsert / chSelect - ClickHouse]"
+/>
+
+*One seam, entered once inside `kernel.invoke()`, propagates tenant scope to all three stores — no tenant ID is ever threaded by hand.*
+
+`runInTenantScope` validates that both `orgId` and `workspaceId` are valid UUIDs before entering scope. An empty or missing ID throws a `TenantScopeError` immediately — **fail closed, not fail open**.
+
+## Postgres — the hard wall
+
+Every tenant-scoped table uses `ENABLE ROW LEVEL SECURITY` plus `FORCE ROW LEVEL SECURITY`. `FORCE` subjects the table owner to the policy as well, eliminating the superuser bypass that makes standard RLS insufficient for multi-tenant guarantees.
+
+The platform connects as a non-superuser role (`oxagen_app`) with `NOSUPERUSER` and `NOBYPASSRLS` attributes. The application verifies at startup that the connected role cannot bypass RLS — if it can, the service refuses to start when `TENANT_RLS_ENFORCEMENT_ENABLED=true`.
+
+The policy template for every standard tenant-scoped table:
+
+```sql
+CREATE POLICY tenant_isolation ON agent.agents
+  USING (
+    current_setting('app.rls_bypass', true) = 'on'
+    OR (
+      org_id       = nullif(current_setting('app.current_org_id',       true), '')::uuid
+      AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid
+    )
+  )
+  WITH CHECK ( … same … );
+```
+
+The `nullif(current_setting(…, true), '')::uuid` expression is deliberately fail-closed: if the session GUC is not set or is empty, the expression evaluates to `NULL`, and `col = NULL` is `NULL` — the row is excluded. An unscoped query returns no rows, not all rows.
+
+`withTenantDb` sets the two GUCs inside a transaction before running the caller's queries:
+
+```ts
+await tx.execute(
+  sql`select set_config('app.current_org_id', ${orgId}, true),
+             set_config('app.current_workspace_id', ${workspaceId}, true)`
+);
+```
+
+`SET LOCAL` scopes the GUC to the transaction, making it safe with connection poolers in transaction mode.
+
+### Policy classes
+
+| Table class | Policy predicate | Examples |
+|---|---|---|
+| Standard owned | `org_id = GUC.org AND workspace_id = GUC.ws` | `agent.agents`, `chat.conversations`, `mcp.mcp_servers` |
+| Workspace-nullable | `org_id = GUC.org AND (workspace_id IS NULL OR workspace_id = GUC.ws)` | `iam.principals`, `security.security_events` |
+| Org-only | `org_id = GUC.org` | `billing.*`, `org.org_users`, `workspace.workspaces` |
+| Workspace-only | `workspace_id = GUC.ws` (no `org_id` column) | `workspace.workspace_users` |
+| Standard-or-builtin | `org_id = GUC.org AND workspace_id = GUC.ws`, or nil-UUID sentinel rows (platform builtins readable by all tenants) | `agent.skills`, `agent.skill_versions` |
+| Global identity | No policy (Better Auth managed) | `auth.users`, `auth.sessions` |
+
+77 tables are covered by the RLS manifest (`packages/database/src/tenant-policy.manifest.ts`). The count grows as new tables are added; the manifest file is the authoritative reference. A CI test asserts that every `orgScopeMixin` table has a manifest entry — new tables that omit it fail CI before they can ship without a policy.
+
+### Enforcement flag
+
+RLS ships with a server-side bypass GUC (`app.rls_bypass`) controlled by the `TENANT_RLS_ENFORCEMENT_ENABLED` environment variable. When the flag is `false`, `withTenantDb` sets the bypass GUC and RLS policies allow all rows — manual `WHERE` predicates remain active as the enforcement layer. When the flag is `true`, the bypass is not set and policies enforce at the database layer. The flag was set to `true` in production on 2026-06-06.
+
+The cutover is reversible: flip the env var without any schema migration.
+
+## Neo4j — seam wall
+
+Neo4j has no native row-level security. Isolation is enforced at the single session seam. `scopedSession()` wraps the underlying session and:
+
+1. Auto-injects `$orgId` and `$workspaceId` parameters into every Cypher query.
+2. Guards that every query run over the seam contains a reference to `$orgId` — queries that do not reference org scope are rejected at the call site with a `TenantScopeError`, not at Neo4j.
+
+Raw `session()` calls are banned outside the seam package by an ESLint `no-restricted-imports` rule and a grep guard test in CI.
+
+## ClickHouse — seam wall
+
+ClickHouse is append-only telemetry (never a source of truth per the four-store data model). `chInsert` and `chSelect` enforce scope at the seam:
+
+- **Inserts** automatically stamp `org_id` and `workspace_id` from the active scope before writing.
+- **Selects** require the query string to reference `org_id = {orgId:UUID}` — a guard rejects any select that does not bind the org scope parameter.
+
+## What this means for a SOC 2 audit
+
+The isolation guarantee is provable with a single integration test suite. The test seeds two organizations (A and B) with data, then runs deliberately unfiltered `SELECT * FROM <table>` queries under each org's session scope and asserts the other org's rows are never returned. The test covers every table policy class and the fail-closed case (no scope set = zero rows).
+
+This is the SOC 2 "point to the proof" artifact: one integration test suite, one migration file defining all policies, one enforcement flag. Your auditor can review the migration, run the test, and be satisfied.

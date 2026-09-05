@@ -1,0 +1,211 @@
+---
+title: stella plugin
+description: Install, list, remove, and run plugins. See exactly what a plugin can do before you allow it.
+---
+
+`stella plugin` installs and manages plugins. A plugin is a small add-on that can join stella's turn loop, which is the back-and-forth stella does while working on a task. Each plugin has one file, `plugin.toml`, that states exactly what it wants to do: how much control it asks for, which points in the loop it can act at, what program it runs as, and which environment variables that program can see. `stella plugin` shows you this file before you install anything. Nothing is installed until you say yes.
+
+This command works offline. It only reads and writes local files, and it does not need an API key.
+
+## Synopsis
+
+```bash
+stella plugin install <dir> [--scope project|user] [--yes]
+stella plugin list
+stella plugin panel <name> [--allow|--deny]
+stella plugin remove <name>
+stella plugin drive <name>
+```
+
+## What a plugin declares
+
+A plugin is a folder that contains a `plugin.toml` file. Here are the parts of that file this command cares about:
+
+```toml
+name = "vera"
+description = "Holds a turn open until the tests pass."
+
+[loop]
+participation = "arbiter"          # none < observer < steering < arbiter
+hooks = ["PreToolUse", "Stop"]     # exhaustive — an undeclared hook is never invoked
+max_holds = 3
+
+[requirements]
+tests_pass = "the workspace test command exits zero"
+
+[runtime]
+argv = ["python3", "${plugin_dir}/main.py"]
+timeout_secs = 30
+env = ["PATH"]                     # default-deny: exactly these, nothing else
+```
+
+### Hooks are exhaustive
+
+stella only calls a plugin at the hook points named in `[loop] hooks`. If a plugin's process listens for `Stop` but the manifest doesn't list it, stella never calls it there. stella checks this when it decides where to route a call, not by asking the plugin.
+
+### Environment variables are an allowlist
+
+`[runtime] env` lists the only environment variables the plugin's process gets. The process starts with an empty environment, then receives just the variables named here. Anything else your shell has, such as an API key, a token, or a socket path, is not passed to the plugin unless the manifest lists it and you approved the install.
+
+There's no separate `language` setting. The `argv` line already shows what runs the plugin, for example `python3`, `node`, or a compiled program. A plugin can be written in any language.
+
+## `stella plugin install`
+
+```bash
+stella plugin install ./my-plugin
+stella plugin install ./my-plugin --scope user
+```
+
+Shows you everything the plugin is asking for, then asks if you want to continue. Nothing is copied to your machine until you answer yes.
+
+```text
+Install `vera`?
+Holds a turn open until the tests pass.
+
+Say in your turn loop: arbiter, the strongest grant — everything steering may
+do, and it also decides whether your turn is finished
+  - runs at these hook points: PreToolUse, Stop
+  - may refuse to let a finished turn end, up to 3 times per turn
+  - holds a turn open until it can say each of these is met:
+      tests_pass: the workspace test command exits zero
+  - runs as a process on your machine: `python3 ${plugin_dir}/main.py` (killed after 30s)
+      it inherits these environment variables and no others: PATH
+
+It asks for no tool capabilities.
+
+Every tool call `vera` makes is attributed to it, not to you: the authorization
+gate sees it as a caller of its own, and may refuse it regardless of what you
+are allowed to do yourself.
+Nothing above is granted until you accept.
+
+Install it? [y/N]
+```
+
+<CardGrid size="md">
+  <OptionCard name="<dir>">
+    The folder that contains the plugin's `plugin.toml` file.
+  </OptionCard>
+  <OptionCard name="--scope" defaultValue="project">
+    Use `project` to install into `.stella/plugins/` for this workspace only. Use `user` to install into `~/.stella/plugins/` so it's available in every workspace.
+  </OptionCard>
+  <OptionCard name="--yes">
+    Accepts the plugin's request without asking you first. Use this when no person is available to answer, such as in an automated script.
+  </OptionCard>
+</CardGrid>
+
+<Callout type="warn">
+If there's no terminal attached, for example a pipe or a CI job, install **refuses to run** instead of assuming yes. Use `--yes` on purpose, only after you've read what the plugin is asking for.
+</Callout>
+
+A plugin package can only contain real files. If it contains a symlink (a shortcut pointing to another file), stella refuses to install it. This stops a plugin from secretly pointing at files it doesn't actually include.
+
+## `stella plugin list`
+
+Shows every installed plugin: where it came from (project or user), how much control it has, what program it runs as, and, separately, which hooks stella would actually call it at.
+
+```bash
+stella plugin list
+```
+
+```text
+vera                     project  arbiter
+  Holds a turn open until the tests pass.
+  /ws/.stella/plugins/vera
+  runs: python3 ${plugin_dir}/main.py (30s, env: PATH)
+  panel: ! `vera` declares a panel and is not drawing one — nobody has been asked yet. Run `stella plugin panel vera` to read the handshake and decide.
+
+hook dispatches:
+  vera                     PreToolUse -> python3 /ws/.stella/plugins/vera/main.py
+  vera                     Stop -> python3 /ws/.stella/plugins/vera/main.py
+```
+
+The output has two parts, and they answer different questions. The first part shows what each plugin asked for. The second part, "hook dispatches," shows what stella will actually run. If a plugin lists a hook but has no `[runtime]` block, it shows up in the first part but not the second. That's why a plugin can declare `Stop` and still never run anything.
+
+If a plugin asks for an environment variable that stella recognizes as a model API key, stella blocks it and tells you here, in the list output. You won't have to discover a missing variable later when the plugin runs. A plugin never gets the API key that pays for model usage directly. Instead, a plugin that needs model access should use a `[roles]` block, so stella makes the model call itself and tracks the cost properly.
+
+## `stella plugin panel`
+
+Decide whether a plugin can draw on your screen.
+
+```bash
+stella plugin panel hello           # print the handshake and ask
+stella plugin panel hello --allow
+stella plugin panel hello --deny
+```
+
+A plugin with a `[panel]` block gets its own space in your terminal and redraws it regularly. This is a separate permission from installing the plugin, so stella asks about it separately. Before you decide, stella shows you: the plugin's manifest signature, what capabilities it's asking for, the limits on its panel, which of the three screen areas it uses, the slash command name it responds to, and the program that draws it. You then choose `[a]llow` or `[d]eny`.
+
+Until you answer, **the panel does not draw, and its program never starts**. `stella plugin install` already asks this question for any new package it copies onto your machine (and `--yes` answers it too, along with the install question). Use `stella plugin panel` on its own for these other cases:
+
+- A plugin that was added by running `git clone` straight into `.stella/plugins`, instead of using `stella plugin install`.
+- A plugin whose `plugin.toml` file changed since you last approved it. stella checks the exact file contents, so if the panel asks for more screen space or a different program, it asks again.
+- Turning off a panel you allowed before.
+
+Denying the panel does not uninstall the plugin. It keeps its tools, skills, and hooks. It just loses its space on the screen. Use `stella plugin remove` to remove everything.
+
+## `stella plugin remove`
+
+```bash
+stella plugin remove vera
+```
+
+Deletes the plugin's folder from **every** place it's installed: project scope first, then user scope. It lists each copy it removed. If it only removed the first copy it found, the other copy would keep running on every tool call, so it always checks both. It matches the plugin by the name inside its manifest, not by the folder's name. So even if a plugin's folder was renamed, you can still remove it using the name shown by `stella plugin list`.
+
+Its hooks stop working right away. stella reads the full list of plugins from disk every time, so there's no leftover permission hiding anywhere else.
+
+## `stella plugin drive`
+
+```bash
+stella plugin drive selfdriving
+```
+
+Opens **one driver session** with an installed plugin that has a `[driver]` block. It prints what the plugin says to do next: either `sleep <n>s` or `halt — <reason>`.
+
+A driver works differently from every other plugin type on this page. A `[loop]` plugin is asked for input during a turn that's already running. A driver has no turn to join, because its job is to start turns. Because of this, a driver has no participation grade; `participation = "none"` is the only value allowed. Its own permissions live in a separate block:
+
+```toml
+[driver]
+calls = ["backlog_next", "backlog_file"]   # exhaustive, like [loop] hooks
+max_calls = 4                              # an ask; the host clamps it
+
+[driver.process]
+argv = ["python3", "${plugin_dir}/drive.py"]
+timeout_secs = 600
+env = ["PATH"]                             # default-deny, exactly as [runtime]
+```
+
+Drivers use `[driver.process]` instead of `[runtime]`, because these are two different kinds of permission. `[runtime]` is the program a plugin runs *during* a turn, and stella won't allow one unless the plugin's participation is at least `observer`. A driver is never called during a turn at all, but that's normal for a driver, not a problem. It's just what a driver is.
+
+**A `[driver]` block with no `[driver.process]` is just a description, not a working program.** It shows what a driver like this would ask for, but stella doesn't start anything. The plugin `plugins/stella-selfdriving` works this way, and the install prompt tells you so directly.
+
+Every action a driver asks for is done **by stella itself**, not by the plugin. The plugin never holds its own API keys or tokens. Right now, every action returns `unsupported`, so any driver session that asks for something is told no, and it explains why. More actions will work over time. Also note: running `stella plugin drive` only opens one session. Something else, the loop itself, is what reopens a session after it goes to sleep.
+
+## Scopes
+
+stella reads both tiers together as one list of plugins.
+
+| Tier | Directory | Visible in |
+| --- | --- | --- |
+| user | `~/.stella/plugins/` | every workspace |
+| project | `<workspace>/.stella/plugins/` | this repository only |
+
+If a project installs a plugin with the same name as one installed for your user, the project version **takes over completely**. Only one plugin with that name runs at a time. `stella plugin install` tells you when this is about to happen.
+
+### Turning off a plugin
+
+To turn off a plugin without deleting it, including one installed in the other tier, turn it off in your settings:
+
+```json
+{ "plugins": { "vera": "off" } }
+```
+
+Turning a plugin `off` sticks across scopes. One scope can turn a plugin off, but no scope can turn it back on if another scope turned it off. This makes the setting safe to trust even in a repository you haven't reviewed: the only thing a cloned repo's settings can do with this key is stop a plugin from running on your machine, never start one.
+
+<Callout type="info">
+This works differently from [lifecycle hooks](/docs/stella/agent-tools/hooks). Hooks *combine* across scopes, so a lower-priority file can never remove a rule set by an operator. A plugin is different: it's a separate program made by someone else, and "uninstalled" needs to mean fully uninstalled.
+</Callout>
+
+## See also
+
+- [Permissions](/docs/stella/agent-tools/permissions) — the authorization gate that sees a plugin as a caller of its own
+- [Hooks](/docs/stella/agent-tools/hooks) — the operator-owned lifecycle hooks a plugin's grants are not merged into

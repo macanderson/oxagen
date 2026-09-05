@@ -1,0 +1,201 @@
+---
+title: Make a change in an unfamiliar codebase
+description: A repository you have never read, and a change that has to land in it. Orient with the code graph, find the blast radius, and ship the change verified.
+---
+
+You've been handed a codebase you didn't write. The change itself is
+probably small. The hard part is finding out *where* it goes and *what else*
+it breaks, and that's exactly the part an agent does badly if `grep` is the
+only tool it has.
+
+The code map fixes that.
+
+## The whole thing, first
+
+```bash
+cd the-repo
+stella init                                         # index the codebase
+stella search "what imports src/db/schema.ts"       # what am I about to break?
+stella run --pipeline my-verifier --test-command "pnpm test orders" \
+  "add a nullable `archived_at` column to orders and thread it through the API"
+```
+
+## 1. Index the repository
+
+```bash
+stella init
+```
+
+`stella init` does three things worth knowing about. It builds a **domain
+map** at `.stella/domains.toml` (the labels memories and code-map nodes
+use), builds the **code map** at `.stella/private/codegraph.db`, and picks
+up any commands, skills, and agents already sitting in `.claude/` or
+`.agents/` folders as symlinks.
+
+It works **offline**, using a fallback method, so it succeeds even with no
+provider key set up — useful on a machine where you haven't set up your
+keys yet.
+
+<Callout type="info">
+`init` gives you a head start — it isn't required first. `stella search`
+**builds the index itself on first use** if it isn't there yet, and every
+query runs a quick update pass over changed files. Running `init` up front
+just means your first query doesn't have to pay for building the full
+index — and it also gives you the domain map, which just searching doesn't
+produce.
+</Callout>
+
+## 2. Ask the questions you'd otherwise guess at
+
+This is the step people skip, and it's the one that pays off. Before
+deciding *how* to make a change, find out what depends on the thing you're
+about to touch.
+
+```bash
+# Where is this defined — and is it defined exactly once?
+stella search "where is resolveOrderTotal defined"
+
+# Who calls it? This is the review surface for a signature change.
+stella search "what calls resolveOrderTotal"
+
+# Blast radius: who imports the file I am about to edit?
+stella search "what imports src/db/schema.ts"
+
+# What does this file depend on — what do I need to understand first?
+stella search "what does src/api/orders.ts import"
+
+# The neighborhood, both directions at once.
+stella search "the graph neighborhood of src/api/orders.ts"
+```
+
+Every one of these reads the local index, and with no embedding model
+configured, makes no model calls and needs no API key. So it costs nothing,
+and you can afford to be thorough. Ask five questions before you write a
+prompt.
+
+Two of these are worth turning into habits:
+
+<CardGrid size="md">
+  <SpecCard title="Check definitions before a rename">
+    A symbol with two definitions is a rename that will silently half-land.
+    Search shows every location instead of picking one for you, so you find
+    this out before the edit, not during review.
+  </SpecCard>
+  <SpecCard title="Check importers before an edit">
+    This answers "is this change actually small?" Twelve files importing a
+    schema file means the change is really a migration, whatever the diff
+    size suggests.
+  </SpecCard>
+</CardGrid>
+
+## 3. Make the change, with a real check
+
+Now the actual work. In an unfamiliar codebase, the single most valuable
+thing you can supply is a **test command**, and what turns it into real
+proof is an installed [verification plugin](/docs/stella/plugins), attached to the
+run with `--pipeline <variant>`:
+
+```bash
+stella run --pipeline my-verifier --test-command "pnpm test orders" \
+  "add a nullable archived_at column to orders and thread it through the API"
+```
+
+`--test-command` arms that plugin's **fail-then-pass check**: the command
+has to *fail before* the change and *pass after* it. A suite that was
+already passing can't be used as proof, which is what makes this check
+meaningful instead of just for show. stella grades what the plugin reports
+against the rule the plugin set up when it was installed. It doesn't
+re-run the check itself. Without `--pipeline`, this flag is rejected — a
+plain `stella run` has no way to check the result and makes no claim of
+proof.
+
+Don't know the test command in a repo you've never read? Ask the repo
+itself:
+
+```bash
+stella scripts list          # canonical verbs — install/build/check/test/lint/format
+```
+
+`stella scripts` finds them by reading the project files (cargo, npm, uv,
+go, make, just, and so on). It's offline and needs no API key.
+
+### If you can't turn "done" into a test
+
+Then the check has to come from the plugin instead. A verification plugin
+may spend one model call on a **witness step** — a separate model, never
+the one doing the work — that writes a small, *failing* test describing the
+intended behavior, and checks the fail-then-pass rule against that instead.
+Whether it does this, and whether it watches those test files for tampering,
+is up to that plugin. stella grades the evidence it reports against its own
+declared rule and doesn't re-run anything itself.
+`stella plugin list` shows what you have installed.
+
+`--keep-witness` and `--require-verified` were flags for the built-in
+staged pipeline. That pipeline is gone, and both flags are now rejected on
+every path. A plugin that turns a witness into a real committed test does
+so on its own terms.
+
+## 4. Review what actually changed
+
+```bash
+stella search "what imports src/db/schema.ts"   # re-ask: did the blast radius move?
+git diff
+```
+
+In the [Command Deck](/docs/stella/commands/chat), `/diff` and `/files` give you
+the same review from inside the session.
+
+<Callout type="warn">
+Cloning an unfamiliar repository means running unfamiliar configuration. A
+fresh clone's `hooks`, `providers.*.base_url` / `api_key` / `api_key_env`,
+`mcp.registry_url`, `context_providers`, per-agent `prompt` settings, and
+the whole `.stella/mcp.toml` file are **held back until you opt in**.
+Otherwise, any repo you cloned could run commands on your machine or route
+your keys through its own server. A message on stderr names anything that
+got skipped.
+
+```bash
+export STELLA_TRUST_PROJECT=1   # scope it per-repo with direnv or a shell guard
+```
+
+See [the project trust boundary](/docs/stella/configuration/settings#the-project-trust-boundary).
+</Callout>
+
+## When the repository already documents itself
+
+Most codebases you inherit already contain the instructions an agent
+needs — `AGENTS.md`, `CLAUDE.md`, a `CONTRIBUTING.md`, architecture notes.
+They're just written for people, scattered around, and partly out of date.
+
+```bash
+stella ingest                    # what steering does this repo already contain?
+stella ingest AGENTS.md          # extract it into reviewable claims
+stella context review            # read what was proposed, and its probe verdict
+stella context keep a1b2c3       # publish the ones that are actually true
+```
+
+[`stella ingest`](/docs/stella/commands/ingest) pulls that writing into individual
+claims, each one tracking where it came from and each one **checked
+against the actual code for staleness**. That check matters most in an
+inherited repo, where the README confidently describes a build system that
+was swapped out two years ago. Nothing changes stella's behavior until you
+keep a claim. [`stella context`](/docs/stella/commands/context) is where you
+review them.
+
+## Next
+
+<CardGrid size="sm">
+  <SpecCard title="stella search" href="/docs/stella/commands/search">
+    The ranking order, and how `--format json` reads for scripting.
+  </SpecCard>
+  <SpecCard title="Context engine" href="/docs/stella/context-engine">
+    How the graph, memories, and rules turn into recall, and why it stays
+    cheap.
+  </SpecCard>
+  <SpecCard title="stella init" href="/docs/stella/commands/init">
+    Exactly which files initialization generates.
+  </SpecCard>
+  <SpecCard title="Agent tools" href="/docs/stella/agent-tools">
+    The full toolset, the read-only tools, and the permission model.
+  </SpecCard>
+</CardGrid>

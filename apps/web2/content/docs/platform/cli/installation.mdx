@@ -1,0 +1,110 @@
+---
+title: Installing the CLI
+description: Install the oxagen CLI with the install script, from the monorepo, as a portable single-file bundle, or from npm.
+---
+
+<IllustrationCli />
+
+The `oxagen` CLI requires **Node.js 20 or newer**. Check your version with `node --version`.
+
+There are four ways to get it. Pick the install script unless you have a reason not to.
+
+## Install script (recommended)
+
+```bash
+curl -fsSL https://cli.oxagen.sh/install.sh | sh
+```
+
+The script works out your platform (macOS or Linux, arm64 or x64), downloads the matching prebuilt binary, checks it against its published SHA-256, and puts it in `~/.local/bin`. It never asks for `sudo`, and it refuses to install a binary whose checksum file is missing or does not match.
+
+Two environment variables change where it looks and where it writes:
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `OXAGEN_INSTALL_DIR` | `~/.local/bin` | Where the binary is written |
+| `OXAGEN_INSTALL_BASE` | `https://cli.oxagen.sh/releases/latest` | Where releases are fetched from |
+
+If `~/.local/bin` is not on your `PATH`, the script tells you the line to add to your shell profile. Read the script before you run it — it is 79 lines and does nothing else.
+
+## From the monorepo
+
+Clone the repo, install dependencies, and run the CLI directly from source:
+
+```bash
+git clone https://github.com/oxagen/oxagen-monorepo.git
+cd oxagen-monorepo
+pnpm install
+
+# Run straight from source (TypeScript via tsx):
+pnpm --filter @oxagen/cli start -- --version
+
+# …or compile once and run the built output:
+pnpm --filter @oxagen/cli build
+node apps/cli/dist/index.js --version
+```
+
+To get a short `oxagen` command, alias it in your shell profile (`~/.zshrc`, `~/.bashrc`):
+
+```bash
+alias oxagen='pnpm --filter @oxagen/cli start --'
+# then:  oxagen "explain the auth flow in this repo"
+```
+
+## Standalone bundle (portable, no install)
+
+For CI runners, ephemeral containers, or putting `oxagen` on your `PATH` without a global npm install, build a self-contained single-file bundle. It runs under plain `node` with no workspace resolution and no `npm install` step:
+
+```bash
+pnpm --filter @oxagen/cli bundle
+# → apps/cli/dist-standalone/oxagen.mjs  (executable, Node 20+)
+
+node apps/cli/dist-standalone/oxagen.mjs --version
+```
+
+The bundle is one `.mjs` file. Copy it anywhere and run it, or symlink it onto your `PATH`:
+
+```bash
+ln -s "$(pwd)/apps/cli/dist-standalone/oxagen.mjs" /usr/local/bin/oxagen
+oxagen --version
+```
+
+<Callout type="info">
+The bundle leaves two **optional** native dependencies (`duckdb`, `blake3`) external. If they are not present in the runtime environment the CLI still runs the full agent loop — it just skips persistent on-disk memory and any checkout-local cache that requires them. DuckDB is not used for a downloaded workspace-graph replica.
+</Callout>
+
+## From npm
+
+<Callout type="warn">
+**A global npm install can fail today.** The published `@oxagen/cli` package still
+carries internal workspace dependencies, and its launcher expects `tsx` on your
+`PATH` — so `npm i -g @oxagen/cli` may not produce a working `oxagen` outside the
+monorepo. Use the **install script** above instead. A self-contained npm package
+is in progress; this section will lose its warning when it lands.
+</Callout>
+
+`@oxagen/cli` is published to npm:
+
+```bash
+npm install -g @oxagen/cli
+# or
+pnpm add -g @oxagen/cli
+
+oxagen --version
+```
+
+## Verify the install
+
+<IllustrationCliInstallSpot />
+
+Whichever method you used, confirm the binary works and see the top-level help:
+
+```bash
+oxagen --version
+oxagen --help
+```
+
+`oxagen --help` lists every command group. You can append `--help` to any command (e.g. `oxagen graph search --help`) for its flags.
+
+## Next step
+
+With the binary in place, [set up your Oxagen account and authenticate the CLI](/docs/platform/cli/account-setup).

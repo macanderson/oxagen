@@ -1,0 +1,985 @@
+---
+title: settings.json
+description: Configure providers, agents, tools, context, and managed authority across project, org-managed, and user scopes.
+---
+
+`settings.json` is stella's configuration file. Each top-level section has its own
+merge rule across the [scope hierarchy](#the-scope-hierarchy):
+
+<Callout type="info">
+  The same settings are also available as
+  **[`stella.toml`](/docs/stella/configuration/stella-toml)** — a format that keeps your comments
+  and adds a `[meta]` block for tracking schema versions, converted from an existing
+  `settings.json` with `stella migrate config`. Every merge rule, trust boundary, and
+  section below works the same in both formats — only the file shape is different.
+</Callout>
+
+<CardGrid size="md">
+  <SpecCard
+    title={<code>providers</code>}
+    href="#the-providers-map"
+    meta={[{ label: "Merges", value: "per field", mono: false }]}
+  >
+    Override any built-in provider, or define a new one.
+  </SpecCard>
+  <SpecCard
+    title={<code>agent_engine_config</code>}
+    href="/docs/stella/configuration/agent-engine-config"
+    meta={[{ label: "Merges", value: "per field, per agent", mono: false }]}
+  >
+    Per-agent models, gateways, prompts, effort, and sampling params.
+  </SpecCard>
+  <SpecCard
+    title={<code>hooks</code>}
+    href="#lifecycle-hooks"
+    meta={[{ label: "Merges", value: "concatenate", mono: false }]}
+  >
+    Shell commands that run on lifecycle events. Every scope can add matchers, and none
+    replaces another's.
+  </SpecCard>
+  <SpecCard
+    title={<code>tools</code>}
+    href="#the-tools-section"
+    meta={[{ label: "Merges", value: "last scope wins, per key", mono: false }]}
+  >
+    Switches for individual tools — by tool name, by group, or with `"*"`.
+  </SpecCard>
+  <SpecCard
+    title={<code>mcp</code>}
+    href="#the-mcp-section"
+    meta={[{ label: "Merges", value: "last scope wins, per field", mono: false }]}
+  >
+    MCP registry override.
+  </SpecCard>
+  <SpecCard
+    title={<code>ignore_gitignore</code>}
+    href="#the-probes-gitignore-filter"
+    meta={[{ label: "Values", value: '"on" | "off"' }]}
+  >
+    The workspace probe skips gitignored paths. **On unless set off.**
+  </SpecCard>
+  <SpecCard
+    title={<code>context</code>}
+    href="#the-context-block"
+    meta={[{ label: "Merges", value: "whole block, last scope wins", mono: false }]}
+  >
+    The adaptive-context lifecycle: learning, governance, promotion, efficacy, retention.
+  </SpecCard>
+  <SpecCard
+    title={<code>context_providers</code>}
+    href="#external-context-providers"
+    meta={[{ label: "Merges", value: "per entry, last scope wins", mono: false }]}
+  >
+    Third-party Context Graph Protocol sources reached over stdio or HTTP.
+  </SpecCard>
+  <SpecCard
+    title={<code>authority</code>}
+    href="#managed-authority-ceilings"
+    meta={[{ label: "Scope", value: "org-managed only", mono: false }]}
+  >
+    Managed limits for project prompts, custom tools, bash, web, and media approval. A
+    denial can never be overridden.
+  </SpecCard>
+  <SpecCard
+    title={<code>enterprise_telemetry</code>}
+    href="#enterprise-telemetry-enrollment"
+    meta={[{ label: "Scope", value: "org-managed only", mono: false }]}
+  >
+    The signed managed-enrollment document that authorizes operational export.
+  </SpecCard>
+</CardGrid>
+
+<Callout type="info">
+  `authority_policy` is not a file key. It's the effective authority stella computes
+  while loading the scope chain. Parsing skips it on purpose, so repository text can
+  never supply it.
+</Callout>
+
+The `providers` map lets you override the built-in defaults for any provider, without
+needing a provider-specific environment variable. In **user scope**
+(`~/.stella/settings.json`), it's the recommended way to route a Z.ai coding-plan
+subscription through its dedicated endpoint, for example — see the
+[coding-plan recipe](/docs/stella/api-providers#zai).
+
+## The `providers` map
+
+Keyed by provider id. Every field is optional. Supply only what's different from the
+built-in default:
+
+```json title="~/.stella/settings.json"
+{
+  "providers": {
+    "zai": {
+      "id": "zai",
+      "name": "ZAI Provider",
+      "base_url": "https://api.z.ai/api/coding/paas/v4",
+      "api_key": "your_api_key"
+    }
+  }
+}
+```
+
+<CardGrid size="md">
+  <OptionCard name="id">
+    An optional restatement of the map key. If present it **must equal the key** — a
+    mismatch is a hard, named load error, which guards against copy-pasting the wrong
+    provider.
+  </OptionCard>
+  <OptionCard name="name">
+    Display name shown by `stella config` / `stella models`.
+  </OptionCard>
+  <OptionCard name="base_url">
+    The base URL requests go to: a coding-plan endpoint, a proxy, or a gateway.
+  </OptionCard>
+  <OptionCard name="api_key">
+    API key for this provider. It slots into the
+    [credential chain](/docs/stella/getting-started/providers#credential-chain).
+  </OptionCard>
+  <OptionCard name="api_key_env">
+    The name of an environment variable to read the key from — safer than an inline
+    `api_key` in a committed project file.
+  </OptionCard>
+  <OptionCard name="default_model">
+    Model used when none is pinned with `--model`.
+  </OptionCard>
+  <OptionCard name="dialect" defaultValue="openai-compatible">
+    The wire adapter for a new provider: `openai-compatible`, `openai-responses`,
+    `anthropic`, or `gemini`. `vertex` and `bedrock` are reserved for built-in providers.
+  </OptionCard>
+  <OptionCard name="cache_ttl">
+    The prompt-cache window: `"5m"` or `"1h"`. Leave it out and the **surface** decides —
+    `stella chat` / `stella resume` ask for the 1-hour window, every headless run keeps
+    the 5-minute provider default. Only the `anthropic` provider honors this today.
+  </OptionCard>
+</CardGrid>
+
+<Callout type="info">
+  **Why `cache_ttl` defaults by surface.** A 1-hour cache write bills at 2x the input
+  rate, against the 5-minute window's 1.25x. That premium only pays off when turns are
+  far enough apart to lose the cached prefix. If the cache expires, stella re-bills the
+  whole prefix at the write rate, and also loses the roughly 0.9x read discount on it.
+  Interactive turns usually sit minutes apart, so the wider window is nearly free
+  insurance. A headless run's calls happen seconds apart, so it would pay the premium for
+  a prefix that was never going to expire anyway. Set the field yourself to override
+  either default.
+</Callout>
+
+The map key is the provider id (`zai` above). Leave a field out entirely to inherit the
+built-in default. An empty string for `base_url`, `name`, or `default_model` overwrites
+the built-in with an empty value, which breaks the provider or its model selection.
+**Only `api_key` treats an empty string as unset.**
+
+<Callout type="info">
+  `providers` does two things: it overrides built-ins, and it **defines brand-new
+  providers**. To define one, use an id that isn't built-in, set the required `base_url`,
+  and optionally a `dialect` (defaults to `openai-compatible`). This is how you point
+  stella at any OpenAI-compatible gateway from config alone.
+</Callout>
+
+## The scope hierarchy
+
+stella reads `settings.json` from three scopes and merges them, applying the lowest
+scope first so the more specific scope wins. The merge is **field by field** for
+`providers` and `agent_engine_config` (though `agent_engine_config`'s `allowed_models`
+list replaces wholesale instead of merging), **last-scope-wins** for `mcp` and `tools`,
+and `hooks` is the exception — scopes **concatenate** instead (see
+[Lifecycle hooks](#lifecycle-hooks)).
+
+<SettingsCascadeDiagram />
+
+<CardGrid size="sm">
+  <SpecCard
+    title="project"
+    meta={[
+      { label: "Preference", value: "highest", mono: false },
+      { label: "Path", value: <code>{"<workspace>/.stella/settings.json"}</code> },
+    ]}
+  >
+    The repository's own file. Also a
+    [trust boundary](#the-project-trust-boundary).
+  </SpecCard>
+  <SpecCard
+    title="org-managed"
+    meta={[
+      { label: "Preference", value: "middle", mono: false },
+      { label: "Path", value: <code>STELLA_MANAGED_SETTINGS</code> },
+    ]}
+  >
+    Or the platform default, resolved below. The only scope that can carry `authority` or
+    `enterprise_telemetry`.
+  </SpecCard>
+  <SpecCard
+    title="user"
+    meta={[
+      { label: "Preference", value: "lowest", mono: false },
+      { label: "Path", value: <code>~/.stella/settings.json</code> },
+    ]}
+  >
+    Your personal defaults. The right home for a subscription endpoint or a personal key.
+  </SpecCard>
+</CardGrid>
+
+stella resolves the org-managed path this way:
+
+1. The `STELLA_MANAGED_SETTINGS` environment variable, an explicit path for MDM or CI, if
+   set, else
+2. `/Library/Application Support/stella/settings.json` on macOS, or
+3. `/etc/stella/settings.json` on other Unix systems
+
+Ordinary fields merge project over org-managed over user. Fields tied to authority are
+stricter: a project can narrow a grant with `"off"`, but it can't enable tools, replace
+an agent prompt, redirect credentials, register a context provider, or load executable
+custom tools, until you set `STELLA_TRUST_PROJECT=1`. An org-managed denial stays a limit
+even after that trust is granted. The `STELLA_PROJECT_HOOKS=1` flag grants hooks only.
+
+<Callout type="info">
+  A missing file at any scope is fine — stella just skips it. A file that exists but is
+  malformed shows a clear error instead of silently dropping your configuration.
+</Callout>
+
+### Worked example
+
+Suppose three files are present:
+
+```json title="~/.stella/settings.json (user)"
+{
+  "providers": {
+    "zai": {
+      "api_key": "sk-personal",
+      "name": "User Name",
+      "base_url": "https://api.z.ai/api/paas/v4"
+    }
+  }
+}
+```
+
+```json title="org-managed (STELLA_MANAGED_SETTINGS)"
+{
+  "providers": {
+    "zai": {
+      "name": "Org Gateway",
+      "base_url": "https://org-gateway.example/v4"
+    }
+  }
+}
+```
+
+```json title="<workspace>/.stella/settings.json (project)"
+{
+  "providers": {
+    "zai": {
+      "base_url": "https://api.z.ai/api/coding/paas/v4"
+    }
+  }
+}
+```
+
+Here's the merged result for `zai`, **with the project trusted**
+(`STELLA_TRUST_PROJECT=1`):
+
+- `base_url` → `https://api.z.ai/api/coding/paas/v4` (**project wins**)
+- `name` → `Org Gateway` (**org-managed wins** over user, since project didn't set it)
+- `api_key` → `sk-personal` (from user; only the user scope set it)
+
+<Callout type="warn">
+  Without `STELLA_TRUST_PROJECT=1` (the default for any repo you haven't explicitly
+  trusted), the project's `base_url` is a **credential-routing field**, and the
+  [trust boundary](#the-project-trust-boundary) drops it. The merged `base_url` above
+  would then be the org gateway's, with a stderr notice naming the skipped field.
+  Project-scope `base_url`/`api_key`/`api_key_env` examples in these docs assume a
+  trusted project; personal routing in user scope needs no flag.
+</Callout>
+
+## Precedence within a field
+
+`settings.json` values are one link in a larger chain. Command-line flags still win:
+
+**Base URL.** `--base-url` flag &gt; the `ZAI_GLM_CODING_PLAN=1` toggle (Z.ai only) &gt;
+`settings.json` `base_url` &gt; the built-in default. So if both the env toggle and a
+`settings.json` `base_url` are set for Z.ai, the env toggle wins.
+
+**API key.** `--api-key` flag &gt; the provider's env var &gt; `settings.json`
+`api_key` &gt; `~/.stella/credentials.toml` &gt; interactive prompt. See the
+[credential chain](/docs/stella/getting-started/providers#credential-chain).
+
+An API key configured only in `settings.json` is enough for stella to auto-detect and
+run that provider — you don't need a provider-specific environment variable.
+
+## Z.ai coding-plan example
+
+If you subscribe to a Z.ai coding plan, point `providers.zai.base_url` at the coding
+endpoint, instead of setting the `ZAI_GLM_CODING_PLAN=1` variable. A subscription is
+personal, so this belongs in **user scope** — project scope would silently drop the
+`base_url` unless the repo is trusted with `STELLA_TRUST_PROJECT=1`:
+
+```json title="~/.stella/settings.json"
+{
+  "providers": {
+    "zai": {
+      "base_url": "https://api.z.ai/api/coding/paas/v4"
+    }
+  }
+}
+```
+
+For the full walkthrough on plan tiers, verification, and routing every seat at the
+subscription, see the [coding-plan recipe](/docs/stella/api-providers#zai).
+
+Your `ZAI_API_KEY` env var (or a `settings.json` `api_key`) supplies the key. The base
+URL now comes from the file. Verify:
+
+```bash
+stella config    # Base URL should read https://api.z.ai/api/coding/paas/v4
+```
+
+<Callout type="warn">
+  The `ZAI_GLM_CODING_PLAN=1` environment toggle still works, and it takes precedence
+  over a `settings.json` `base_url` for Z.ai. If you switch to the settings-based
+  approach, unset the env toggle too, or it will override your setting without warning.
+</Callout>
+
+## The `mcp` section
+
+`settings.json` also has a top-level `mcp` section. Its `registry_url` field sets the
+base URL of the MCP Server Registry that `stella mcp search` and the deck's MCP tab
+query. When unset, it falls back to the official registry. Like `providers`, it merges
+last-scope-wins per field, so a project can point at a different registry than the user
+default.
+
+```json title="~/.stella/settings.json"
+{
+  "mcp": {
+    "registry_url": "https://registry.example.internal/mcp"
+  }
+}
+```
+
+## The `tools` section
+
+stella ships with every tool on. The top-level `tools` section is the one way to turn
+something off, and it works the same way for built-in tools, MCP-server tools, and tools
+you registered yourself:
+
+```json title="settings.json"
+{
+  "tools": {
+    "task_assign": "off",
+    "mcp__github__create_issue": "off"
+  }
+}
+```
+
+A key can be one of these, and the most specific one wins:
+
+1. an exact **tool name**, like `task_assign`, `delegate`, `mcp__github__create_issue`,
+   or your own `deploy_to_staging`;
+2. a **group**, one of the families in [Built-in tools](/docs/stella/agent-tools): `shell`,
+   `file`, `search`, `task`, `scratch`, `environment`, plus
+   `mcp` and `custom` for anything the built-in catalog doesn't recognize;
+3. `"*"`, meaning every tool.
+
+Anything unmentioned is on. So `{"*": "off", "task_list": "on"}` is an agent that can
+read the board and nothing else, and `{"task": "off", "task_list": "on"}` keeps exactly
+the read-only member of the task family.
+
+No group shares a name with a tool, so a key is never ambiguous: `task` is the family
+name (the six board tools plus `delegate`), and `delegate` alone is the sub-agent spawn
+tool. That is why `{"delegate": "off"}` stops sub-agents without touching the board.
+
+A switched-off tool is left out of the schema list, and refused if it is called
+anyway — the refusal looks just like the unknown-tool error, so a disabled tool is
+indistinguishable from one that was never built. This check happens at the tool
+boundary, not in the prompt.
+
+The values are always the strings `"on"`/`"off"` — a bare boolean or a typo is a clear
+parse error, not a silent ignore. Keys merge independently across scopes, with the later
+scope winning. A project `"off"` always narrows an earlier grant; project `"on"`
+requires `STELLA_TRUST_PROJECT=1`. A managed `"off"` stays a limit even for a trusted
+project, at any level of detail: a managed `{"task": "off"}` can't be beaten by a
+project setting `{"task_assign": "on"}`.
+
+## The end-of-run recap
+
+`enable_recap` (bare root key) and its TOML home `run.recap` do nothing. Setting the key
+is not a typo and is not reported as one — the config loader recognizes the key and
+tells you it's inactive. There is no replacement key; a run's outcome is still visible
+from the files and cost panels a text-mode run already prints.
+
+## Trajectory trace capture
+
+`trace_capture` (bare root key) and its TOML home `run.trace_capture` do nothing, for the
+same reason as `enable_recap` above. Setting the key is not a typo and is not reported as
+one — the config loader recognizes the key and tells you it's inactive. There is no
+replacement key today.
+
+## The probe's gitignore filter
+
+`ignore_gitignore` uses the same strict `"on"`/`"off"` values — and it is the one
+toggle in this family that **defaults on**: an absent key means the filter runs, and
+only an explicit `"off"` restores the unfiltered walk.
+
+```json title="~/.stella/settings.json"
+{
+  "ignore_gitignore": "off"
+}
+```
+
+With it on (the default), the workspace probe — the walk that figures out what an
+opaque shell command changed — skips every path the repository's own `.gitignore`
+excludes. Build output like `target/`, `node_modules/`, or an object tree is never
+walked, never recorded as a file touch, and never fed to the Files tab or the
+verification ladder, because the repository has already marked it as unimportant. Source
+edits in the same change are attributed exactly as before.
+
+Two limits keep the filter narrow. It only checks the repository rooted **at the
+workspace itself** — a workspace that just sits under someone else's repository (say, a
+scratch directory beneath a `$HOME` dotfiles repo whose `.gitignore` says `*`) inherits
+nothing, so a parent repository's rules can never blind the probe. Outside a git
+repository the switch does nothing: nothing is ignored, and the probe sees everything —
+producing build output there is often the whole point.
+
+## The `ui` section
+
+Appearance preferences for the Command Deck. Every field is optional, so an absent
+section behaves exactly as the defaults.
+
+<CardGrid size="md">
+  <OptionCard name="theme" defaultValue="stella-dark">
+    The deck's color theme: `stella-dark` (electric blue on deep space, the
+    default) or `stella-light` (the same blue, darkened onto paper). The short forms
+    `dark` and `light` also work. An unrecognized value falls back to the default
+    instead of failing the file.
+  </OptionCard>
+  <OptionCard name="mid_turn_prompt" defaultValue="queue">
+    What happens when you type a plain prompt while an agent is **running**. `queue`
+    waits as the next turn, so `Esc` can steer the whole backlog into the turn in
+    progress. `ask` raises a routing card per prompt (`s` steer / `n` next turn / `p`
+    sidecar). `spawn` forks every plain prompt to a sidecar sub-session. `steer` sends
+    it straight into the running turn at its next step boundary — the composer's
+    chevron turns teal while the turn runs, so the line reads as a correction rather
+    than a queued prompt. An unrecognized value keeps the default.
+    See [Typing while a turn is running](/docs/stella/commands/chat#typing-while-a-turn-is-running).
+  </OptionCard>
+</CardGrid>
+
+```json title="<workspace>/.stella/settings.json"
+{
+  "ui": { "theme": "stella-light", "mid_turn_prompt": "ask" }
+}
+```
+
+<Callout type="info">
+This is the **deck's** theme, and it is a different setting from `/color`, which sets a
+session accent in the plain line-based REPL (`--plain`) from a fixed list — `sky`,
+`cyan`, `azure`, `violet`, `magenta`, `mint`. The two surfaces have separate color
+models; setting one does not change the other.
+</Callout>
+
+Writing this section reads the file, changes only this part, and writes it back,
+keeping every other key exactly as it was. Changing a theme from the deck's SETTINGS tab
+never drops `providers`, `hooks`, or a key it doesn't recognize yet. Clearing the theme
+removes the `ui` key rather than leaving an empty `{}` behind.
+
+## The `voice` section
+
+Dictation from the composer: speak, and the transcript lands at the cursor. Off by
+default — recording sends microphone audio to the provider named below, an off-machine
+transfer you opt into by name. The provider id resolves through `providers` (or the
+built-in table) for its endpoint and API key, so this section holds no credential of its
+own; any provider with an OpenAI-compatible `audio/transcriptions` endpoint works, a
+local Whisper server included.
+
+`/voice tap`, `/voice hold` and `/voice off` write both fields below and take effect in
+the session that runs them, so nothing here has to be edited by hand.
+
+<CardGrid size="md">
+  <OptionCard name="enabled" defaultValue="false">
+    Whether Space records at all. Until this is `true`, the spacebar just types spaces.
+  </OptionCard>
+  <OptionCard name="mode" defaultValue="hold">
+    Which gesture starts dictation. `hold` holds Space through a short warmup and stops
+    on release; `tap` taps Space on an empty prompt to start and taps again to stop.
+
+    Pick `tap` if holding Space never starts a recording: hold mode needs either a
+    terminal that reports key releases or OS key repeat, and without either one stella
+    can't tell a hold from a tap. Tap mode needs neither.
+  </OptionCard>
+  <OptionCard name="provider" defaultValue="openai">
+    The provider id whose `audio/transcriptions` endpoint transcribes. Any `providers`
+    entry with a compatible `base_url` works the same way.
+  </OptionCard>
+  <OptionCard name="model" defaultValue="whisper-1">
+    The transcription model slug.
+  </OptionCard>
+  <OptionCard name="language">
+    BCP 47 language hint (for example `en`). Omit it and the model auto-detects.
+  </OptionCard>
+</CardGrid>
+
+```json title="<workspace>/.stella/settings.json"
+{
+  "voice": { "enabled": true, "mode": "tap", "provider": "openai", "model": "whisper-1" }
+}
+```
+
+## The `plan_review` section
+
+The deck's plan gate. Before the first step of a plan runs, the task board goes to
+whoever is driving as a card they can approve or send back, and both parts of this gate
+are settings you can change.
+
+<CardGrid size="md">
+  <OptionCard name="enabled" defaultValue="on">
+    `off` removes the gate entirely, so no card is ever raised. This is for when the
+    person driving doesn't want to be asked; a run with nobody at the keyboard already
+    skips the gate, because nobody is there to answer one.
+  </OptionCard>
+  <OptionCard name="min_steps" defaultValue="3">
+    How many **open** board rows a plan needs before the card goes up. Finished and
+    canceled rows don't count, so a board that's mostly done doesn't raise a card over
+    its last remaining step. `1` asks about every plan. `0` is refused at launch with a
+    clear error: an empty board has no open rows, and `enabled` is how you turn the gate
+    off.
+  </OptionCard>
+</CardGrid>
+
+```json title="<workspace>/.stella/settings.json"
+{
+  "plan_review": { "min_steps": 5 }
+}
+```
+
+This whole block is last-wins across scopes, like `ui` and `reward` — the switch and the
+threshold are one policy, so a project that sets either one sets both, rather than
+inheriting half of a user-scope answer. `stella run --plan-mode` overrides both for one
+invocation: the gate goes up and every plan is put to the driver, whatever the file says.
+
+## The `context` block
+
+The `context` block configures the **adaptive-context lifecycle**: gathering
+observations from your sessions, drafting directive proposals from them, deciding which
+of those get promoted, and measuring whether the context it picked actually helped.
+
+<Callout type="info">
+  The lifecycle ships **on** — `context.lifecycle.enabled` defaults to `true`, and
+  setting it `false` is the opt-out that restores the pre-adaptive-context behavior:
+  the lexical learning loop, no frame identity, no lifecycle ledger. The vocabulary
+  below is pinned by round-trip tests.
+</Callout>
+
+**Learning mode** (how much of the loop runs) and **governance mode** (who
+signs off on a promotion) are separate settings. Every mode value is
+strict — an unrecognized value such as `"advisary"` is a hard parse error, never a
+silent fallback. Omitted fields fall back to the defaults below, so `"context": {}` and
+an absent block do the same thing.
+
+Unlike `providers`, the block merges **whole**: a higher-precedence scope that declares
+`context` replaces the lower scope's block completely, instead of merging field by
+field.
+
+### Lifecycle and modes
+
+<CardGrid size="md">
+  <OptionCard name="context.lifecycle.enabled" defaultValue="true">
+    The master switch for the whole lifecycle. While it is off, every other field in the
+    `context` block is ignored.
+  </OptionCard>
+  <OptionCard name="context.learning.mode" defaultValue="off">
+    How much of the learning loop runs. `off` turns off observation gathering, proposal
+    drafting, and efficacy learning. `record_only` captures observations, proposals,
+    uses, and outcomes without selecting or promoting any of them. `advisory` turns on
+    governed, advisory use of what's inferred.
+  </OptionCard>
+  <OptionCard name="context.governance.mode" defaultValue="solo">
+    Who governs promotions: `solo`, `team`, or `regulated`. Separate from the learning
+    mode — the two settings don't affect each other.
+  </OptionCard>
+</CardGrid>
+
+### Promotion
+
+These settings control when a set of observations can become an inferred directive, and
+what confirmation a blocking directive needs. Confidence values are on a `0`–`100` scale.
+
+<CardGrid size="sm">
+  <OptionCard name="context.promotion.inferred_directive.min_observations" defaultValue="3">
+    The minimum observation count. A whole number.
+  </OptionCard>
+  <OptionCard name="context.promotion.inferred_directive.min_distinct_tasks" defaultValue="3">
+    The minimum number of *distinct* tasks those observations must span. This guards
+    against one repeated task promoting itself into a directive.
+  </OptionCard>
+  <OptionCard name="context.promotion.inferred_directive.auto_activate_at_confidence" defaultValue="85">
+    The confidence, `0`–`100`, at which an inferred directive activates without being asked.
+  </OptionCard>
+  <OptionCard name="context.promotion.inferred_directive.initial_enforcement" defaultValue="advisory">
+    The enforcement level a newly inferred directive starts with. Only two states exist —
+    `advisory` and `blocking` — and a new inferred directive can only ever start as
+    `advisory`.
+  </OptionCard>
+  <OptionCard
+    name="context.promotion.blocking_directive.requires_explicit_confirmation"
+    defaultValue="true"
+  >
+    A blocking directive always requires an explicit human confirmation. Not a field to
+    turn off lightly.
+  </OptionCard>
+  <OptionCard name="context.promotion.skill.require_measured_lift" defaultValue="true">
+    Whether a mined skill candidate must carry a measured lift — an appraisal that found
+    injecting it improved outcomes — before it is written as a `SKILL.md`. Set `false` for
+    bootstrap: a fresh workspace with no appraisal history mints on raw mining eligibility
+    until its first skills accrue trials.
+
+    The measurement compares turns the skill's trigger matched *and* it was injected against
+    turns the trigger matched and it was not. The second arm comes from the A/B recall control,
+    so setting `context.retrieval.ab_recall_rate` to `0` leaves no baseline to measure against:
+    appraisals stay `Insufficient`, and nothing is promoted or retired on measurement.
+  </OptionCard>
+  <OptionCard
+    name="context.promotion.skill.demote_after_consecutive_negatives"
+    defaultValue="3"
+  >
+    How many consecutive demotable appraisals (harmful or inert) an auto-created skill
+    must accrue before it is demoted out of selection. Its file is never deleted; the
+    demotion is an append-only ledger event.
+  </OptionCard>
+</CardGrid>
+
+### Efficacy
+
+These settings control how confident stella must be before crediting or blaming a piece
+of context for a result. Confidence values are on a `0`–`100` scale;
+`not_helpful_ratio_threshold` is a `0.0`–`1.0` ratio.
+
+<CardGrid size="sm">
+  <OptionCard name="context.efficacy.min_attributable_uses" defaultValue="5">
+    The minimum number of attributable uses. A whole number.
+  </OptionCard>
+  <OptionCard name="context.efficacy.not_helpful_ratio_threshold" defaultValue="0.8">
+    The not-helpful ratio threshold, between `0.0` and `1.0`.
+  </OptionCard>
+  <OptionCard name="context.efficacy.min_attribution_confidence" defaultValue="80">
+    The minimum attribution confidence, `0`–`100`.
+  </OptionCard>
+  <OptionCard
+    name="context.efficacy.receipt_display_min_attribution_confidence"
+    defaultValue="80"
+  >
+    The minimum attribution confidence a use needs before it's shown on a receipt — a
+    setting of its own, separate from the attribution threshold above.
+  </OptionCard>
+</CardGrid>
+
+### Retention
+
+How long raw observations, proposals, and inferred directives are kept before review or
+expiry, in days.
+
+<CardGrid size="sm">
+  <OptionCard name="context.retention.raw_observation_days" defaultValue="30">
+    Retention for raw observations.
+  </OptionCard>
+  <OptionCard name="context.retention.proposal_days" defaultValue="30">
+    Retention for proposals.
+  </OptionCard>
+  <OptionCard name="context.retention.inferred_directive_review_days" defaultValue="180">
+    How long an inferred directive runs before it comes back up for review.
+  </OptionCard>
+</CardGrid>
+
+### A complete context block
+
+Every value below is the shipped default, so this file changes nothing on its own — it
+is the copy-paste starting point you edit down to the two or three keys you actually
+want:
+
+```json title="~/.stella/settings.json"
+{
+  "context": {
+    "lifecycle": { "enabled": true },
+    "learning": { "mode": "off" },
+    "governance": { "mode": "solo" },
+    "promotion": {
+      "inferred_directive": {
+        "min_observations": 3,
+        "min_distinct_tasks": 3,
+        "auto_activate_at_confidence": 85,
+        "initial_enforcement": "advisory"
+      },
+      "blocking_directive": { "requires_explicit_confirmation": true },
+      "skill": {
+        "require_measured_lift": true,
+        "demote_after_consecutive_negatives": 3
+      }
+    },
+    "efficacy": {
+      "min_attributable_uses": 5,
+      "not_helpful_ratio_threshold": 0.8,
+      "min_attribution_confidence": 80,
+      "receipt_display_min_attribution_confidence": 80
+    },
+    "retention": {
+      "raw_observation_days": 30,
+      "proposal_days": 30,
+      "inferred_directive_review_days": 180
+    }
+  }
+}
+```
+
+## External context providers
+
+`context_providers.<id>` registers a third-party
+[Context Graph Protocol](/docs/stella/context-engine#the-context-graph-protocol) source, such as
+a company wiki, an issue tracker, or a vector store, so it can feed the recall block
+alongside the built-in workspace-memory and code-graph providers. Without this section,
+every provider runs in-process; with it, a third-party source is just a config entry.
+
+This block is empty by default, which registers nothing and leaves recall exactly as it
+is today.
+
+```json title="~/.stella/settings.json"
+{
+  "context_providers": {
+    "acme-wiki": {
+      "transport": "http",
+      "url": "https://ctx.acme.example/cgp",
+      "enabled": true,
+      "egress_consent": ["org_tenant"],
+      "consent_grantor": "policy:security-review"
+    },
+    "local-notes": {
+      "transport": "stdio",
+      "command": "acme-cgp",
+      "args": ["--serve"],
+      "enabled": true
+    }
+  }
+}
+```
+
+<CardGrid size="md">
+  <OptionCard name="transport" defaultValue="stdio">
+    How the host reaches the provider: `stdio` (a child process speaking the protocol) or
+    `http` (a remote endpoint). An unrecognized transport is a hard parse error.
+  </OptionCard>
+  <OptionCard name="command">
+    The program to spawn. Required, and can't be empty, when `transport` is `stdio` — a
+    missing value shows a configuration error naming the field, instead of a process
+    that fails to start.
+  </OptionCard>
+  <OptionCard name="args">
+    Arguments for `command`.
+  </OptionCard>
+  <OptionCard name="url">
+    The endpoint to connect to. Required, and can't be empty, when `transport` is `http`.
+  </OptionCard>
+  <OptionCard name="enabled" defaultValue="false">
+    Whether the entry is live. Declaring a provider doesn't turn it on — that is a
+    separate, deliberate step, so an org-managed entry merged in from a lower scope never
+    starts serving a turn just because someone defined it.
+  </OptionCard>
+  <OptionCard name="egress_consent">
+    The off-machine scopes you have consented to for this provider, as CGP scope
+    strings — `org_tenant`, `third_party_index`, `third_party_model`, or a namespaced one
+    like `acme:vector-store`.
+  </OptionCard>
+  <OptionCard name="consent_grantor">
+    Who granted that consent, for the audit log. Free text — a user id, an email, a
+    policy name. Absent means the local operator.
+  </OptionCard>
+</CardGrid>
+
+**Conformance is checked before a provider ever runs.** A provider goes through the
+protocol's own conformance suite before it's registered on the session host, so a
+source that lies about token cost, serves frames with no citation label, or cannot shut
+down cleanly never serves a turn. Checking after registration would mean the first sign
+of trouble is a corrupted prompt.
+
+**Consent is required, never assumed.** Every built-in provider stays on your machine,
+so the consent step has never had to prompt before. An external provider is the first
+thing that can send workspace content off the machine, and it stays blocked until the
+config records consent for every off-machine scope it declares. Until then, the host
+refuses to send anything, and the query payload (which carries workspace content)
+never leaves.
+
+Entries merge **per entry** across scopes, so a project can enable a provider the user
+scope declared without restating its transport. A higher scope's entry replaces the lower
+one's *whole entry*: merging field by field would let a project file inherit a user's
+`egress_consent` while swapping the `url`, silently reusing consent granted for a
+different endpoint.
+
+The map key is both the routing key and the consent key, so renaming an entry creates a
+new provider whose consent must be granted again. That is the intended behavior, not an
+inconvenience.
+
+<Callout type="warn">
+  `context_providers` sits on the same code-execution boundary as `hooks` and
+  `.stella/mcp.toml`. An untrusted project scope's entries are dropped in favour of the
+  user and org-managed scopes', with a stderr notice — see
+  [the project trust boundary](#the-project-trust-boundary).
+</Callout>
+
+## Managed authority ceilings
+
+Only the org-managed settings file can define the top-level `authority` section. User
+and project copies do not contribute any runtime authority. Every value uses the same
+strict `"on"`/`"off"` values, and an unknown key is a hard load error, so a misspelled
+policy can never silently become permissive.
+
+```json title="org-managed (STELLA_MANAGED_SETTINGS)"
+{
+  "authority": {
+    "project_prompts": "off",
+    "project_custom_tools": "off",
+    "media_requires_host_approval": "on"
+  }
+}
+```
+
+Those three fields are the whole section — it takes no others, and because the block is
+`deny_unknown_fields`, adding one causes the hard load error described above rather than
+being quietly ignored. This is deliberately **not** a second tool table: to turn off a
+tool or a group from the managed scope, use the managed `"tools"` table instead, which
+addresses any tool, group, or `*`.
+
+An `"off"` value is a limit that can't be overridden. `"on"` only allows a later explicit
+grant; it never turns on a capability by itself. For example, `project_custom_tools: "on"`
+still requires `STELLA_TRUST_PROJECT=1`, while `project_custom_tools: "off"` keeps
+workspace manifests off even when that trust flag is present. Media host approval
+defaults to required when the field is absent.
+
+## Enterprise telemetry enrollment
+
+`enterprise_telemetry` is the other org-managed-only section: the signed enrollment
+document that authorizes Oxagen Enterprise operational export. It comes from the
+managed snapshot alone. A project or user file carrying the key contributes nothing.
+It's checked by its own adapter, so an invalid, missing, expired, or unsupported
+enrollment just leaves export off rather than failing the run.
+
+Community and default mode build no spool and no HTTP client at all. The full schema,
+the sink-authorization rules, and the closed event format are documented on
+[Telemetry &amp; budget](/docs/stella/telemetry#oxagen-enterprise-managed-export).
+
+## The project trust boundary
+
+A repository you just cloned can carry a `<workspace>/.stella/settings.json` — and an
+untrusted repo must not be able to run commands on your machine or route your API keys to
+a server it controls. stella therefore holds back the dangerous parts of a project-scope
+file until you opt in with **`STELLA_TRUST_PROJECT=1`** — or, to avoid typing that on
+every launch, `run.auto_trust_project = true` in **your own** `~/.stella/stella.toml` (or
+the org-managed file). That key does nothing in a project's own `stella.toml`: a
+project can't vote itself trusted, since that's exactly the hole this boundary exists to
+close, so a project-scope `auto_trust_project` still parses and is then discarded, with a
+stderr notice saying so. An explicit `STELLA_TRUST_PROJECT` env var always overrides the
+config default, either direction, for that one launch — so `STELLA_TRUST_PROJECT=0` still
+closes trust for a repository you have set `auto_trust_project` on generally, and
+`STELLA_TRUST_PROJECT=1` still opens it for one you have not.
+
+- **Hooks.** Project-scope `hooks` load only when the project is trusted. (The
+  `STELLA_PROJECT_HOOKS=1` flag also unlocks hooks — and only hooks.)
+- **Context providers.** Project-scope `context_providers` entries are dropped in favour
+  of whatever the user and org-managed scopes declared. An enabled `stdio` entry spawns
+  its `command` at admission time — the same `git clone && stella` risk that gates
+  `.stella/mcp.toml` — and an `http` entry is no safer, because the same untrusted file
+  would be supplying the `egress_consent` that lets workspace content leave the machine.
+- **Credential routing.** Project-scope values for `providers.<id>.base_url`,
+  `providers.<id>.api_key`, `providers.<id>.api_key_env`, and `mcp.registry_url` are
+  **silently dropped** (the trusted-scope values win) — otherwise a malicious repo could
+  point a provider at its own base URL and steal the key you attach.
+- **Tool switches.** A project-scope `"on"` for any key does not grant that capability
+  until full project trust is present — it reverts to whatever the user/org-managed
+  scopes said, or to the shipped default. Project `"off"` remains effective as a
+  restriction: a repo may narrow the tool surface, never widen it.
+- **Replacement prompts.** Project `agent_engine_config.agents.<role>.prompt` values are
+  restored from user/org-managed scopes unless full project trust is present and the
+  managed authority ceiling permits project prompts.
+- **Workspace custom tools.** Executable manifests under `.stella/tools/` are excluded
+  unless full project trust is present and managed policy permits them. User-global
+  manifests under `~/.stella/tools/` remain available.
+
+A stderr notice names skipped hooks, skipped context providers, credential-routing
+fields, and an ignored project-scope `auto_trust_project`, so a trusted-but-forgotten flag
+is diagnosable. Cosmetic project fields (`name`, `default_model`, `dialect`) apply
+regardless of trust. Managed denials from the captured org settings snapshot always win;
+changing the file takes effect on the next settings load.
+
+## Lifecycle hooks
+
+`settings.json` also carries `hooks` — shell commands that fire on agent lifecycle
+events. That schema is documented on the [Hooks](/docs/stella/agent-tools/hooks) page. Most of
+the events name a point inside a turn; the rest fire around a
+[self-driving](/docs/stella/self-improvement) run, cycle, issue, pull request or set of checks.
+`PreIssueWork` can hold the loop off an issue entirely; every other loop event reports
+and cannot block anything.
+
+Unlike `providers`, hooks **concatenate** across scopes — every scope can add matchers
+and none replaces another's. Hooks from the user and org-managed scopes always load, but
+hooks declared in a repository's project-scope file load **only** behind the
+[project trust boundary](#the-project-trust-boundary) (`STELLA_TRUST_PROJECT=1`, or the
+hooks-only `STELLA_PROJECT_HOOKS=1`); a stderr notice names any skipped project hooks.
+
+## A complete example file
+
+Everything above, in one user-scope file — a routed provider, a narrowed tool surface, a
+guard hook, and a `context` block with only the keys that differ from the defaults. Copy
+it, and delete what you don't want:
+
+```json title="~/.stella/settings.json"
+{
+  "providers": {
+    "zai": {
+      "base_url": "https://api.z.ai/api/coding/paas/v4",
+      "api_key_env": "ZAI_API_KEY",
+      "default_model": "n-5.2"
+    }
+  },
+  "tools": {
+    "task": "off",
+    "task_list": "on"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__github__push_files",
+        "hooks": [
+          { "type": "command", "command": "./scripts/guard.sh", "timeoutMs": 5000 }
+        ]
+      }
+    ]
+  },
+  "mcp": {
+    "registry_url": "https://registry.example.internal/mcp"
+  },
+  "context": {
+    "lifecycle": { "enabled": false },
+    "learning": { "mode": "record_only" },
+    "governance": { "mode": "team" },
+    "retention": { "raw_observation_days": 14 }
+  },
+  "context_providers": {
+    "acme-wiki": {
+      "transport": "http",
+      "url": "https://ctx.acme.example/cgp",
+      "enabled": true,
+      "egress_consent": ["org_tenant"],
+      "consent_grantor": "policy:security-review"
+    }
+  }
+}
+```
+
+Check what actually resolved:
+
+```bash
+stella config    # provider, model, key preview, base URL
+stella models    # every provider with its effective base URL and key status
+```
+
+## Security
+
+`settings.json` may contain an API key in plaintext. If you store keys there, treat the
+file like any other secret — restrict its permissions and keep the project-scope file
+out of version control (add `.stella/settings.json` to `.gitignore` if it holds
+credentials). For keys specifically, [`credentials.toml`](/docs/stella/configuration/credentials)
+is written with owner-only permissions and is the safer home.

@@ -1,0 +1,66 @@
+---
+title: Research swarms
+description: Fan out parallel web searches for a topic as a swarm of subagents, then poll for aggregated results. Covers research.swarm.start and research.swarm.status.
+---
+
+## Overview
+
+A **research swarm** fans out a topic into multiple diverse web-search queries, dispatches
+them as concurrent subagent tasks, and aggregates the results. It is a two-capability flow:
+
+1. **`research.swarm.start`** (async) — kicks off the swarm and returns a `swarmId`.
+2. **`research.swarm.status`** (sync) — polls a swarm by `swarmId` for progress and results.
+
+Both capabilities are available on the **API, MCP, and in-app agent** surfaces.
+
+## Start a swarm
+
+When called from the in-app agent, dispatching a swarm requires user approval (`riskLevel: medium`). The approval card shows the topic and estimated task count before the fanout is created.
+
+`POST /v1/{org}/{workspace}/research/swarm/start`
+
+| Input | Description |
+| --- | --- |
+| `topic` | The research topic (1–500 characters). |
+| `depth` | `shallow` (3 searches), `medium` (8), or `deep` (15). Controls how many query variations are dispatched. |
+
+Response:
+
+```json
+{
+  "swarmId": "fan_…",
+  "dispatchId": "fan_…",
+  "status": "running",
+  "estimatedTasks": 8
+}
+```
+
+Keep the `swarmId` — you pass it to `research.swarm.status`.
+
+## Poll for status and results
+
+`POST /v1/{org}/{workspace}/research/swarm/status`
+
+| Input | Description |
+| --- | --- |
+| `swarmId` | The ID returned by `research.swarm.start`. |
+
+Response includes `status` (`running` \| `complete` \| `failed`), `completedTasks` /
+`totalTasks`, and a per-query `results` array with the actual web-search hits (title, url,
+snippet, and an optional relevance score).
+
+## The swarmId is durable and cross-process
+
+The `swarmId` is the subagent fanout's durable, tenant-scoped identifier — it is **not** an
+in-memory handle. That means you can start a swarm on one surface (for example, the in-app
+agent) and poll its status from another (the REST API), even though they run in different
+processes. Polling an unknown or cross-tenant id returns a clean "not found" rather than a
+server error.
+
+## Typical flow
+
+1. `research.swarm.start` with your `topic` and a `depth`.
+2. Poll `research.swarm.status` with the returned `swarmId` until `status` is `complete`
+   (or `failed`).
+3. Read the aggregated `results` to ground a follow-up agent turn or write findings into the
+   knowledge graph.

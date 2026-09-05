@@ -1,0 +1,10 @@
+{
+  "title": "Plugins",
+  "pages": [
+    "overview",
+    "marketplace",
+    "registries",
+    "workspace-plugins",
+    "oxagen-plugins"
+  ]
+}

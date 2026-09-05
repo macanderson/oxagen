@@ -1,0 +1,123 @@
+---
+title: Custom Agents
+description: Define reusable personas in AGENT.md files. Covers the frontmatter fields, where definitions live, versioned editing, and how stella init imports existing ones.
+---
+
+A **custom agent** is a named persona the session can adopt. It's a system-prompt-shaped Markdown file with a frontmatter header, invoked as `/agent-name <task>`. An agent is different from a [skill](/docs/stella/agent-tools/skills), which is know-how brought in automatically, and from a [custom command](/docs/stella/agent-tools/commands), which is a prompt template. An agent changes who is doing the work, optionally with a restricted toolbelt.
+
+## The AGENT.md schema
+
+An agent is one Markdown file with YAML frontmatter, in the nested layout (`<slug>/AGENT.md`) or the flat layout (`<slug>.md`):
+
+```md title=".stella/agents/docs-writer.md"
+---
+name: docs-writer
+description: Writes end-user documentation in our house style.
+tools: [task_list, get_state, list_state, mcp__github__get_file_contents]
+---
+
+You are a technical writer. Prefer working examples over abstractions.
+Never document a flag you haven't verified against --help output.
+```
+
+### Fields
+
+<CardGrid size="md">
+  <OptionCard name="name" defaultValue="the filename stem, or the directory name">
+    The agent's slug. This is what `/name` invokes. Falls back to the filename stem in the flat layout, or the directory name in the nested layout.
+  </OptionCard>
+  <OptionCard name="description" defaultValue="the body's first non-empty line">
+    A one-line summary for the `/agents` listing. If you skip it, stella strips leading markdown heading marks from the first line and cuts it to 72 characters with an ellipsis.
+  </OptionCard>
+  <OptionCard name="tools" defaultValue="all tools">
+    The agent's toolbelt: the tool names granted to this persona. Leave it out and the agent gets every tool. When you assume this agent for a session (`/agent`, or `a` on the AGENTS tab), the grant is enforced. The session's tools narrow to whatever is in both this list and whatever the operator already allows.
+  </OptionCard>
+  <OptionCard name="model" defaultValue="the session's model">
+    The model this agent runs on, written as `provider/slug` (`zai/glm-5.2`) or a bare catalog slug. This is a session-only switch applied when you assume the agent. Your settings default stays untouched. If the model's provider has no credential, stella reports it and skips the switch rather than failing the assume.
+  </OptionCard>
+  <OptionCard name="body" required>
+    The persona's instructions: everything after the frontmatter. A file with an empty body is skipped, with a diagnostic rather than a fatal error.
+  </OptionCard>
+</CardGrid>
+
+The `tools:` field reads several formats, so most spellings you'd try will work. A comma list (`Read, Grep`), a JSON or YAML flow array (`["Read", "Grep"]`, `[Read, Grep]`), a block sequence, quoted items, and trailing commas all turn into the same clean list, with duplicates removed. An empty list, or one of the wildcard forms (`*`, `all`, `all tools`), means the same as leaving the field out: no restriction.
+
+## Where agents live
+
+<CardGrid size="md">
+  <SpecCard
+    title="Project"
+    meta={[
+      { label: "Path", value: "<workspace>/.stella/agents/" },
+      { label: "Travels with", value: "the repo", mono: false },
+    ]}
+  >
+    Commit it, and the whole team gets the persona on their next session.
+  </SpecCard>
+  <SpecCard
+    title="User"
+    meta={[
+      { label: "Path", value: "~/.stella/agents/" },
+      { label: "Travels with", value: "you, across every workspace", mono: false },
+    ]}
+  >
+    Your own personas, available in every repo you open.
+  </SpecCard>
+</CardGrid>
+
+stella loads user-scope agents first, then project-scope agents. If both define the same name, the project version wins.
+
+## Invoking an agent
+
+Type `/docs-writer polish the CLI reference` and stella wraps the agent's body as a persona-adoption instruction above your task, then runs it as the prompt. Built-in commands can never be overridden in the slash menu. When a custom name collides across kinds, commands win over skills, and skills win over agents.
+
+## Versioned editing
+
+`/agents` opens the AGENTS tab, which lists installed agents in both scopes with versioned editing and pinning. Like skills, every save creates a new version you can roll back to:
+
+```text
+<agents-dir>/<slug>.md                  ← the loaded definition
+<agents-dir>/.versions/<slug>/vNNNN.md  ← immutable version snapshots
+<agents-dir>/.versions/<slug>/PINNED    ← one line: the pinned version
+```
+
+No `.versions/` entry is created until your first edit, so a hand-authored agent stays exactly as you wrote it. If you edit an agent that was imported as a symlink (see below), stella replaces the symlink with a real file in the agents directory. The original file stays untouched, and your edit lives on the stella side from then on.
+
+## Import from Claude and Agents
+
+Other agent tools already maintain `.claude/{commands,skills,agents}` and `.agents/{commands,skills,agents}`. When you run `stella init` (or `/init`), stella finds definitions there and **symlinks** them into the matching stella directory. They're imported, not copied, so edits stay in one place and your existing setup carries over instead of getting rewritten:
+
+<CardGrid size="md">
+  <SpecCard
+    title="Workspace scope"
+    meta={[
+      { label: "Sources", value: "<workspace>/.claude/agents/ · <workspace>/.agents/agents/" },
+      { label: "Destination", value: "<workspace>/.stella/agents/" },
+    ]}
+  >
+    Imported when you run `stella init` inside the repo.
+  </SpecCard>
+  <SpecCard
+    title="User scope"
+    meta={[
+      { label: "Sources", value: "~/.claude/agents/ · ~/.agents/agents/" },
+      { label: "Destination", value: "~/.stella/agents/" },
+    ]}
+  >
+    Imported by the same run. Your global personas carry over once.
+  </SpecCard>
+</CardGrid>
+
+The same sync imports `commands/` and `skills/` into their matching directories.
+
+### Import rules
+
+- **`.claude` wins over `.agents`.** stella scans sources in that order, so the first occurrence of a name is the one it imports.
+- **Never overwrite, never re-import.** A name already present in the destination, whether you wrote it by hand or a previous init linked it, is skipped. The sync is safe to run again, and your own definitions always win.
+- **Never follow a symlink.** Other tools link between these directories too, for example `.claude/agents/x → ../../.agents/agents/x`. stella links each definition from its real home exactly once. A folder with no `AGENT.md` inside it is skipped too, and reported, so nothing disappears silently.
+
+After init, the `/agents` tab lists the imported definitions alongside your own, and init itself prints a per-scope summary of what it linked and skipped.
+
+<Callout type="info">
+  An agent's `tools:` restriction is enforced when you **assume** the agent for a session, through the deck's `/agent` picker or the AGENTS tab's `a` key. The session's tools narrow to the grant. On a plain `/agent-name task` call, it's just a prompt-level note. For hard boundaries that don't depend on any agent, like gated actions or blocked paths, use [permissions](/docs/stella/agent-tools/permissions) and [hooks](/docs/stella/agent-tools/hooks). To give the agent a genuinely new action, define a [custom tool](/docs/stella/agent-tools/custom-tools).
+</Callout>

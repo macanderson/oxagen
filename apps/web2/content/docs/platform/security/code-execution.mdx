@@ -1,0 +1,84 @@
+---
+title: Code execution security
+description: How Oxagen sandboxes agent-generated code using Firecracker microVMs in production and Docker containers locally.
+---
+
+When the agent runs code via `agent.code.execute`, the code never runs in the same process as the platform. It runs inside a hardened sandbox with a hardware-enforced boundary, a strict capability profile, and a network deny-by-default policy.
+
+## Sandbox drivers
+
+Oxagen uses different sandbox drivers depending on the deployment environment:
+
+| Environment | Driver | Isolation |
+|---|---|---|
+| Production (Vercel) | Vercel Sandbox (`@vercel/sandbox`) — Firecracker microVMs | Hardware virtualization boundary per invocation |
+| Local development | Docker — short-lived containers per invocation | Kernel namespace and cgroup isolation |
+
+The `SANDBOX_DRIVER` environment variable controls which driver is selected at runtime (`vercel`, `docker`, or `modal`). All three implement the same `SandboxDriver` interface — the capability layer has no driver-specific code.
+
+## Security profile applied to every invocation
+
+Both drivers share the following controls:
+
+| Control | Value |
+|---|---|
+| Rootfs | Read-only; `/tmp` is a `tmpfs` with a size cap |
+| Linux capabilities | All dropped (`--cap-drop=ALL`) — Docker only; Vercel Sandbox uses microVM isolation |
+| Privilege escalation | `--security-opt=no-new-privileges` — Docker only |
+| Seccomp | Docker built-in hardened seccomp profile (`seccomp=builtin`) — Docker only |
+| Network | Denied by default; `network: 'allow'` is an opt-in capability field subject to workspace policy |
+| Memory | Hard cap at 512 MiB; OOM-killed processes are captured and reported |
+| PID limit | 128 (`--pids-limit=128`) — Docker only |
+| Wallclock timeout | 30 seconds (default); workspace policy may lower the ceiling |
+| Code delivery | Single file via `tmpfs`; no host filesystem bind mounts |
+
+### Driver-specific limits
+
+| Control | Docker | Vercel Sandbox |
+|---|---|---|
+| CPU | 0.5 vCPU (`NanoCpus: 500_000_000`) | 1 vCPU (`resources: { vcpus: 1 }`) |
+| User | `nobody:nogroup` (UID/GID 65534) | Controlled by the Firecracker microVM runtime; not configurable via the SDK |
+
+In production (Vercel Sandbox / Firecracker), each invocation runs in a fresh microVM with hardware-level memory isolation between tenants. A compromised sandbox cannot access the host kernel or any other tenant's data.
+
+## Supported runtimes
+
+| Language | Runtime / Image |
+|---|---|
+| Node 20 | `node:20-alpine` — stdlib only; `npm install` disabled at runtime |
+| Python 3.12 | `python:3.12-slim` — `numpy`, `pandas`, `requests` preinstalled; `pip` disabled |
+| Shell | `alpine:3.20` — busybox only |
+
+In production (Vercel Sandbox), the available runtimes are `node24` and `python3.13`. Shell scripts are mapped to the `node24` runtime with `/bin/sh` as the entrypoint.
+
+## Approval gate
+
+`agent.code.execute` is tagged `riskLevel: high` in the contract registry. At the workspace level, high-risk tools require explicit user approval before they execute. The agent pauses the stream, renders an approval card with the code to be executed and the risk classification, and waits for the user to approve or deny.
+
+Workspace policies can configure:
+- Whether code execution is allowed at all.
+- Whether approval is required (default: yes).
+- Maximum allowed wallclock timeout.
+- Whether network access is permissible.
+
+## Billing
+
+Each `agent.code.execute` invocation is charged 2 credits (flat fee), regardless of execution time. The charge is deducted atomically with the invocation — a failed sandbox launch does not deduct credits.
+
+## What code execution cannot do
+
+- Access the host filesystem or other tenants' data (hardware/kernel boundary).
+- Make outbound network requests unless the workspace has `network: 'allow'` configured and the user has approved the specific invocation.
+- Install packages at runtime (pip and npm are disabled).
+- Spawn processes with elevated privileges (no-new-privileges, all caps dropped).
+- Run for longer than 30 seconds (wallclock timeout; process is killed and output is flushed).
+- Access environment variables from the host process (the sandbox has no parent environment).
+
+## Audit trail
+
+Every `agent.code.execute` invocation produces:
+
+- A `capability.invoke_allowed` or `capability.invoke_denied` security event (IAM decision).
+- An `execution.tool_calls` row in Postgres (durable record of the invocation, input hash, exit code, output preview).
+- A ClickHouse `tool_invocations` row (analytics).
+- If approval was required: an `agent.approval_requests` row recording who approved or denied and when.

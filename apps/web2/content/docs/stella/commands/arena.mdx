@@ -1,0 +1,139 @@
+---
+title: stella arena
+description: The arena-bench harness adapter — run one benchmark episode from a task directory, recording the trace journal that gets judged against replay checks.
+---
+
+`stella arena` is stella's side of the [arena-bench](https://github.com/macanderson/arena-bench) adapter contract. It runs **one benchmark episode** and records a [`contextgraph-trace`](https://github.com/macanderson/context-graph-protocol) journal that the arena runner scores using the Context Graph Protocol's replay checks.
+
+<Callout type="info">
+This command exists for **benchmarking stella, not for using it**. If you want to get work done, reach for [`stella run`](/docs/stella/commands/run), [`stella goal`](/docs/stella/commands/goal), or [`stella chat`](/docs/stella/commands/chat) instead. Nothing here changes how stella behaves on a real task: the adapter runs the ordinary one-shot path and only adds a journal alongside it. Stdout is always **stream-json**: the runner is the only intended reader, so there is no `--output-format` flag to change that.
+</Callout>
+
+## Synopsis
+
+```bash
+stella arena --task-dir <DIR> --journal <FILE> --state-dir <DIR> [--resume]
+             [--pipeline <VARIANT>] [--test-command <CMD>]
+```
+
+## What it does
+
+arena-bench starts an agent with `--task-dir`, `--journal`, `--state-dir`, and optionally `--resume`, **kills it on purpose partway through the episode**, starts it again, and then judges the journal it recorded. Surviving that kill is the whole point of the benchmark, so the adapter follows one rule above all: the journal must never claim more happened than actually did.
+
+<CardGrid size="md">
+  <SpecCard title="Workspace is the task dir">
+    `--task-dir` *is* the workspace for the episode, and the prompt is read from the `TASK.md`
+    file inside it.
+  </SpecCard>
+  <SpecCard title="Journal is written first">
+    Each event is written to the journal **before** it is shown in the terminal, one
+    saved line per event.
+  </SpecCard>
+  <SpecCard title="Memory lives in the state dir">
+    `--state-dir` carries over between episodes, giving the benchmark's memory test
+    somewhere lasting to store its state.
+  </SpecCard>
+  <SpecCard title="Resume states what it recovered">
+    `--resume` cuts off an incomplete final line, recovers the journal, and states exactly what came back
+    before picking the same session back up.
+  </SpecCard>
+</CardGrid>
+
+## Flags
+
+<CardGrid size="md">
+  <OptionCard name="--task-dir <DIR>">
+    The episode workspace. The prompt is read from `TASK.md` inside it. Required.
+  </OptionCard>
+  <OptionCard name="--journal <FILE>">
+    The `contextgraph-trace` journal to add to. Safe against a crash, one saved line per event.
+    Required.
+  </OptionCard>
+  <OptionCard name="--state-dir <DIR>">
+    Agent state that carries over between episodes: the benchmark's memory test. Required.
+  </OptionCard>
+  <OptionCard name="--resume">
+    Set when arena-bench restarts the adapter after killing it on purpose. Recovers the journal,
+    states what was recovered, and continues the same session.
+  </OptionCard>
+  <OptionCard name="--pipeline <VARIANT>">
+    Run every episode under an installed wrapper plugin, named by the `[wrapper]
+    id` from its manifest (`stella plugin list`). If left out, the plain
+    step loop runs with nothing on top of it. This is the same flag
+    [`stella run`](/docs/stella/commands/run) takes, worked out the same way, so a
+    panel can measure either one.
+  </OptionCard>
+  <OptionCard name="--test-command <CMD>">
+    Test command for an installed verification plugin's own check, for example
+    `--test-command "cargo test -p my-crate"`. If passed without
+    `--pipeline`, the run is **refused before the episode starts**, naming an
+    installed verification plugin as the fix, rather than silently running with
+    no check at all.
+  </OptionCard>
+</CardGrid>
+
+<Callout type="warn">
+**An arena episode measures the plain step loop unless you say otherwise.**
+Pass `--pipeline <variant>` to measure an installed wrapper plugin instead.
+A panel that mixes wrapped and unwrapped episodes is comparing two different
+setups, not two versions of the same thing, so name that comparison directly
+rather than reporting it as a plain result change.
+</Callout>
+
+## Why the journal is written before the event shows up
+
+An event the journal didn't accept must not be shown as part of the run. This order isn't about speed. It's what makes the recording truthful even if the process is killed mid-event:
+
+- The recorder saves the event to the journal, **then** sends the same event to the display. This is the same save-first order used by the reliable stream-json output.
+- Killing the process at any point therefore always leaves a **truthful record**: the journal may be missing its final entries, but it never contains work the run hadn't actually completed.
+- On `--resume`, an incomplete final line is cut off rather than read, and the adapter states what it recovered instead of continuing silently.
+
+Writing events in the other order would produce exactly the failure this benchmark is designed to catch: a journal claiming an effect the agent never actually completed.
+
+## What the journal records
+
+The adapter maps the live agent event stream onto the trace vocabulary:
+
+<CardGrid size="sm">
+  <SpecCard title="prompt_assembled">
+    From the step manifest. Block identities, digests, and token costs already contain no prompt text,
+    so none of it reaches the journal.
+  </SpecCard>
+  <SpecCard title="The tool loop">
+    Tool start and tool result become the matched pair of tool-loop events.
+  </SpecCard>
+  <SpecCard title="Once-only effects">
+    File changes and commits become side effects, each carrying an id meant to happen only **once**.
+  </SpecCard>
+</CardGrid>
+
+That last one carries the weight of the crash test. The id comes from the path, the kind of change, and the diff, so the *same* logical edit replayed after a resume **collides** with itself, which is exactly the bug the once-only check exists to catch, while a genuinely new edit to the same file has a new diff and so gets a new id.
+
+## Example
+
+```bash
+# One episode, recording the journal arena-bench will verify.
+stella arena \
+  --task-dir ./episodes/0042 \
+  --journal  ./journals/0042.jsonl \
+  --state-dir ./state/memory-arm
+
+# What arena-bench itself runs after killing the process on purpose.
+stella arena \
+  --task-dir ./episodes/0042 \
+  --journal  ./journals/0042.jsonl \
+  --state-dir ./state/memory-arm \
+  --resume
+```
+
+<Callout type="info">
+Memory that carries over works by linking the workspace's `.stella` store into `--state-dir`, which the
+runner keeps between episodes (and clears for the `amnesic` test arm). A fixture that ships its own
+`.stella` folder wins; the link is only created when the workspace has none.
+</Callout>
+
+## See also
+
+- [Plugins](/docs/stella/plugins) — the wrapper system an episode can opt into with `--pipeline <variant>`.
+- [`stella run`](/docs/stella/commands/run) — the ordinary one-shot path this adapter runs underneath.
+- [arena-bench](https://github.com/macanderson/arena-bench) — the benchmark harness that runs this command.

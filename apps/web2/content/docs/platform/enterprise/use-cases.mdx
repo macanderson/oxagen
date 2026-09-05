@@ -1,0 +1,128 @@
+---
+title: Enterprise use cases
+description: Six concrete scenarios where Oxagen solves the most common enterprise AI governance challenges — for CIOs and security leaders.
+---
+
+## Stop shadow AI without banning it
+
+**The problem.** Your security team knows employees are using ChatGPT, Claude.ai, and a dozen other AI tools for work. Some are pasting customer data into public models. Some are building automations with no oversight. You can block these sites — but that just drives the behavior underground and makes your company less competitive. Banning AI is not the answer. Governing it is.
+
+**How Oxagen solves it.** Oxagen gives your employees a capable AI that works within your governance boundaries. One organization. One audit log. One IAM model. Every action — model call, tool invocation, automation — passes through the same `invoke()` boundary, gets IAM-checked against the grant matrix, and produces an immutable audit record in two independent stores.
+
+When an employee uses the Oxagen agent instead of an unsanctioned tool, your security team goes from blind to fully sighted: who asked what, which model answered, what data was involved, and whether the action was authorized. They can answer "what AI actions happened this week?" with a query, not a survey.
+
+**Controls backing this:**
+- Single capability chokepoint: `invoke()` for every action, no alternate path.
+- 40 typed security event kinds in two independent audit stores.
+- Model access restricted to approved models and tiers.
+- Plugin governance: external MCP servers must be installed at org level before any workspace can use them.
+
+---
+
+## Prove every AI action in your next SOC 2 audit
+
+**The problem.** Your SOC 2 auditors are asking about AI system controls. You have months of ChatGPT history you can't reconstruct, agent automations with no audit trail, and model calls you can't attribute to a user or a purpose. Your compliance team is writing policies for systems they cannot inspect.
+
+**How Oxagen solves it.** Oxagen is designed SOC 2-first, not SOC 2-retrofitted. The controls your auditors need are built into the architecture:
+
+- **CC6 (access control):** Role-based IAM with default-deny, org-enforced policies, JIT access requests, and force-revoke. Every IAM decision produces a structured audit record with a resolution trace — your auditor can see exactly which rule caused a denial.
+- **CC7 (monitoring):** Two independent audit stores. Postgres `security.security_events` (7-year retention, queryable for compliance dashboards). ClickHouse `audit_events` (chain-hash tamper evidence — any deletion or mutation in the chain is detectable). 40 typed event kinds covering auth, billing, IAM, and every capability invocation.
+- **CC9 (risk mitigation):** High-risk capabilities (code execution) require explicit user approval before running. Approval requests are recorded. Sandboxed execution in Firecracker microVMs prevents code from escaping its tenant boundary.
+
+The compliance dashboard at **Organization → Security → Compliance** exports a control coverage report. Your auditor gets artifacts, not assurances.
+
+**Controls backing this:**
+- `capability.invoke_allowed` / `capability.invoke_denied` on every action.
+- Chain-hash tamper evidence in ClickHouse — verifiable programmatically.
+- SOC 2 compliance dashboard with export.
+- An automated integration test suite proving tenant isolation at the database layer.
+
+---
+
+## Give each business unit an isolated workspace
+
+**The problem.** You need to roll out AI to multiple teams — Marketing, Engineering, Finance, Legal — but each team has different data sensitivities, different approved tools, and different governance requirements. You cannot give Finance access to Engineering's agent memory. You cannot let Marketing's automations trigger Legal's document workflows by accident.
+
+**How Oxagen solves it.** Workspaces are the unit of isolation. Each team gets its own workspace with its own member roster, knowledge graph, agent configurations, and tool policy. Workspace data is isolated at the Postgres RLS layer — a query against Finance's data will never return Marketing's rows, regardless of what code is written.
+
+The org sets the outer governance rails. Each workspace tightens within them. A workspace handling regulated data (HIPAA, PCI) can deny capabilities the org otherwise allows. It cannot expand beyond what the org permits.
+
+**Setting up for multiple business units:**
+1. Create a workspace per team (**Organization → Developer → Workspaces** or the `workspace.create` API).
+2. Set org-level enforced policies that apply everywhere (high-risk tool approval, model tier restrictions, plugin denylist).
+3. Assign workspace owners for each team — they manage their workspace's grants within the org's bounds.
+4. Configure SSO and SCIM so that IdP group membership automatically populates the right workspaces.
+
+**Controls backing this:**
+- Postgres RLS with `FORCE ROW LEVEL SECURITY` — database-enforced, not application-enforced.
+- Neo4j and ClickHouse scoped at the session seam — fail-closed, not fail-open.
+- Org-enforced policies with workspace-level tighten-but-not-expand model.
+- An automated integration test suite proves cross-tenant queries return zero rows.
+
+---
+
+## Bring your own models and keys under central policy
+
+**The problem.** Different teams have signed up for different AI providers. Engineering uses Anthropic. Data science uses Azure OpenAI. Finance insists on a private endpoint. You have three separate billing relationships, three separate usage logs, and three separate governance policies. When your CISO asks "which models have access to customer data?", there is no single answer.
+
+**How Oxagen solves it.** Oxagen routes all inference through one gateway with one governance model. The Vercel AI Gateway sits between Oxagen and the model providers — your company holds no provider API keys in application code or environment variables. You can bring your own keys at the workspace level (BYOK on Scale tier) for custom endpoints or private Azure/Bedrock deployments, and they still flow through the same IAM, audit, and metering layer.
+
+**What BYOK enables:**
+- Workspace-level API keys for Anthropic, OpenAI, Azure OpenAI, AWS Bedrock, or custom inference endpoints.
+- Keys are encrypted at rest with AES-256-GCM.
+- Model access is restricted to the key's approved models — a workspace configured for only Haiku cannot accidentally use Opus.
+- All inference, regardless of the provider key used, produces the same audit record.
+
+**What you cannot do with BYOK:** bypass the IAM check or the audit log. The `invoke()` boundary fires regardless of which key handles the inference.
+
+**Controls backing this:**
+- `workspace.model.settings.write` capability (Admin or Owner required).
+- AES-256-GCM encryption of stored keys.
+- Model handle resolution via `modelIdOf()` — symbolic handles, not hard-coded provider slugs.
+- Every inference call produces a ClickHouse `tool_invocations` row regardless of provider.
+
+---
+
+## Metered AI spend with hard guardrails
+
+**The problem.** You approved a pilot budget for AI tools. Two months in, one team has burned through 80% of it. You have no visibility into which models are being called, which automations are the biggest spenders, or how to stop a runaway agent before it blows the budget. Finance is asking for a detailed breakdown you cannot produce.
+
+**How Oxagen solves it.** The credit ledger is the single source of truth for AI spend. 1 credit = $0.01. Every model call, tool invocation, and image generation debits credits from the org's balance atomically — no double-spend, no free rides past zero balance. The credit balance enforces a hard stop: when an org's credits reach zero, subsequent agent calls return 402 before touching any model.
+
+**Usage analytics** in **Organization → Billing → Usage** breaks down credit consumption by workspace, by agent, and by capability domain (LLM input, LLM output, image generation, tool calls) over rolling 30-day windows.
+
+The credit ledger (`billing.credit_ledger`) is the immutable, append-only audit trail for all balance mutations (SOC 2 requirement). `billing.credit_balances` is a real-time cached mirror enforced with a non-negative `CHECK (balance_cents >= 0)` constraint. Finance can export usage data from **Organization → Billing → Usage** for cost attribution.
+
+**Controls backing this:**
+- `billing.credit_ledger` — immutable append-only audit trail for all balance mutations.
+- `billing.credit_balances` with `CHECK (balance_cents >= 0)` at the database layer (cached mirror).
+- Pre-turn admission gate: 402 before any model call when balance is zero.
+- `SELECT ... FOR UPDATE` serialization prevents double-spend races.
+- ClickHouse usage analytics with org/workspace/agent attribution.
+
+---
+
+## Quarterly access reviews with one click
+
+**The problem.** Your access review process is a quarterly nightmare: export the user list, cross-reference it with HR, identify people who changed roles or left, update permissions manually across every tool. The process is slow, error-prone, and always at least 90 days behind reality.
+
+**How Oxagen solves it.** The grants matrix at **Organization → Access → Grants** is a live capability × principal view of all current access. Toggle between org-wide and per-workspace scope. Filter by principal kind (human, agent, service), domain, and outcome. Export it as CSV.
+
+With SCIM configured, deprovisioning a user in your IdP automatically suspends them in Oxagen — the access review becomes a spot-check, not a manual reconciliation.
+
+**Conducting a quarterly review:**
+
+1. Export the grants matrix for the quarter's review period.
+2. Cross-reference with your HR system (or query `org.member_removed` events in the audit log for the period).
+3. For any stale access: revoke grants directly in the matrix or use `org.member.remove` via the API for bulk operations.
+4. Review JIT access grants issued in the period (**Organization → Access → Requests** → filter by date range). Confirm they have all expired.
+5. Run a compliance dashboard export (**Organization → Security → Compliance**) as the artifact for your auditor.
+
+**For automated reviews:** the grants matrix is queryable via the API. Build a script that exports grants, cross-references your HR system, and flags stale access for human review — then uses `org.member.role.change` to clean up.
+
+**Controls backing this:**
+- `org.member_removed`, `org.role_changed` events in both audit stores.
+- JIT access with TTL and auto-expiry.
+- SCIM provisioning — deprovisioning is automatic if configured.
+- Grants matrix: queryable and exportable via **Organization → Access → Grants** in the app.
+- Compliance dashboard at **Organization → Security → Compliance**.

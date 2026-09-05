@@ -1,0 +1,130 @@
+---
+title: Chat interface
+description: The chat surface beyond the message stream — pinned repo/environment context, Code mode's durable sandbox, slash commands, generative UI cards, and graph-grounded citations.
+---
+
+The in-app chat composer is more than a text box. This page covers the
+surface features that shape how a turn is scoped and how its results are
+shown: pinning a repository/environment to the conversation, Code mode's
+durable sandbox, slash commands, the generative UI card registry, and the
+citation strip that grounds an answer in the knowledge graph.
+
+## Pinning repo + environment context
+
+A persistent context bar sits directly above the composer, letting you choose
+a connected GitHub repository and a workspace environment and **pin** them to
+the conversation. Once pinned, the assistant knows which repo/environment you
+mean on every future turn in that conversation — you don't have to repeat
+"in the billing repo" on every message.
+
+- The repo and environment selections are independent; pin one, both, or
+  neither.
+- Pinning is optional. It only matters for repo-scoped tools (`repo.pr.get`,
+  `repo.ci.status`, `repo.pr.diff`, …) and the `/pr`, `/diff`, `/ci` slash
+  commands below — if nothing is pinned and a command needs a repo, the
+  assistant asks you to pin one rather than guessing.
+- The context bar and [Code mode](#code-mode) are mutually exclusive in the
+  composer: the lightweight pin bar shows when Code mode is off, the fuller
+  Code mode toolbar shows when it's on. They share the same underlying
+  repo/environment selection state.
+
+## Code mode
+
+Turning on the composer's **Code** toggle switches the turn from a chat
+question into a real repository edit, backed by a **durable sandbox**
+(`ModalSandboxWorkspace`) rather than the ephemeral, ad-hoc sandbox used by
+[`agent.code.execute`](/docs/platform/agent/code-execution).
+
+- Turning Code mode on renders the agent toolbar (repo + environment pickers)
+  above the composer. The environment auto-defaults to the workspace's default
+  environment; the repository does not.
+- **Both a repository and an environment must be selected before you can
+  send.** Until then, send is disabled and the composer shows "Select a
+  repository and environment to start coding." The toggle itself is disabled
+  when the workspace has no connected repositories.
+- Once both are chosen, the sandbox clones the selected repo (idempotently —
+  reusing a warm sandbox keyed by workspace + conversation + connection when
+  one already exists) and injects the selected environment's vault secrets for
+  builds/tests. Secrets are never printed, echoed into files, or committed by
+  the agent.
+- With a bound repository, the agent gets a different system prompt layered
+  over the standard chat baseline: it is told to locate before touching code
+  (`code_graph`, `grep`/`glob` before guessing paths), read a file before
+  editing it, make the smallest correct change, verify with the project's own
+  build/test/lint commands via `bash`, and cite `path:line` locations rather
+  than dumping raw tool output into the reply.
+- The [deterministic structured tools](/docs/platform/agent/tools-and-capabilities#deterministic-coding-tools)
+  (`test_unit_run`, `build_package_run`, `git_diff_summarize`,
+  `workspace_health_check`) are available in Code mode alongside the
+  filesystem/exec primitives, so the agent verifies its own edits with typed,
+  bounded tool output instead of parsing raw command scrollback.
+
+Code mode is a different mechanism from the ad-hoc
+[`agent.code.execute`](/docs/platform/agent/code-execution) sandbox: `agent.code.execute`
+runs a single snippet in an ephemeral, torn-down-after-use sandbox with no
+repository context; Code mode binds a whole turn's filesystem/exec tools to a
+real, checked-out repository in a session-reusable sandbox.
+
+## Slash commands
+
+Typing `/` in the composer opens an autocomplete menu of slash commands. A
+slash command is not a hard client-side router — the composer sends the
+literal text (e.g. `/ci main`) and the agent, told about each command in its
+system prompt, maps it to the right capability. The one exception is `/pin`,
+which the composer intercepts and handles locally.
+
+| Command | Arguments | What it does |
+|---|---|---|
+| `/pr` | `<pr-number>` | Shows pull-request stats — comments, checks, and files changed (renders the PR-stats card). |
+| `/diff` | `<pr-number>` | Shows the git diff (file patches) for a pull request (renders the code-diff card). |
+| `/ci` | `[ref]` | Shows CI/check status for a branch, commit, or PR head; defaults to the pinned repo's default branch. |
+| `/repos` | — | Lists the GitHub repositories connected to the workspace, so you can pick one to pin. |
+| `/pin` | — | Pins the currently selected org/repo + environment to this chat (handled locally by the composer, not sent as a message). |
+
+The `/pr`, `/diff`, and `/ci` commands act on whichever repository is
+[pinned](#pinning-repo--environment-context) to the conversation — if nothing
+is pinned, the assistant asks you to pin one instead of guessing.
+
+## Generative UI cards
+
+Tool results that benefit from a purpose-built view render as cards instead of
+plain text — the model returns structured output (`generateObject`) and the
+client maps the component type to a React renderer from a shared card
+registry, never a server-rendered tree. Cards relevant to the chat surfaces
+above include:
+
+| Card | Shown for |
+|---|---|
+| Code diff card | `/diff`, `repo.pr.diff`, or any tool returning a unified diff — per-file patches with add/remove counts. |
+| PR stats card | `/pr`, `repo.pr.get` — comments, review status, checks, and files-changed summary. |
+| CI status card | `/ci`, `repo.ci.status` — check-run and commit-status results for a ref. |
+| Terminal trace card | Sandboxed command output (Code mode, durable sandbox sessions) — command, exit code, and captured output. |
+| File tree card | A sandbox or repo's file listing for orientation before an edit. |
+
+These sit alongside the approval, plan, memory-recall, and background-task
+cards already covered elsewhere — see
+[Tools and capabilities](/docs/platform/agent/tools-and-capabilities) for the tool
+surface that produces them.
+
+## Graph-grounded citations
+
+When a turn recalls workspace memories to ground its answer, the chat surfaces
+a **"Grounded in"** citation strip beneath the assistant's response — concrete
+proof of which knowledge-graph facts backed the answer, not just an
+unverifiable claim.
+
+- Each recalled memory is cited by the knowledge-graph node it is **about**,
+  using the shared `NodeRef` chip: a colour-coded label, a hover/click property
+  popover, and a copyable id — never a bare UUID, matching the same citation
+  convention used everywhere else a node or edge is referenced in the UI.
+- Each citation includes a **"View in graph"** deep link that opens the graph
+  explorer focused on that exact node (`?focus=<publicId>`), so a cited fact
+  is one click from its live graph context.
+- Recall runs concurrently with the model's turn, best-effort — resolving
+  citations never delays the first streamed token, and the strip persists
+  across a page refresh (it's stored as a message content block, not
+  recomputed each render).
+
+This is the concrete, inspectable half of Oxagen's graph-grounding story: an
+answer that cites a fact links you to the exact node and edge that produced
+it, not just a paragraph of prose.

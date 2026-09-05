@@ -1,0 +1,69 @@
+---
+title: Knowledge graph from the CLI
+description: Query your governed workspace graph on demand without downloading it into the checkout.
+---
+
+Your Oxagen workspace maintains a governed graph of entities, documents, memories, runs, and stable provider metadata. The CLI can query that shared context through an authenticated, workspace-scoped search. It does not download the workspace graph or silently inject a bulk copy into an agent run.
+
+These commands call the platform, so you need an [authenticated CLI](/docs/platform/cli/account-setup) (platform token + org + workspace).
+
+<Callout type="info">
+**Two graph planes.** `oxagen init` builds an exact **local code graph** for the current checkout — files, symbols, imports, and calls — which stays local and follows branch, worktree, and uncommitted state. The governed **workspace graph** remains on the platform and is read only through scoped online capabilities. There is no bulk graph export, pull cursor, status command, or local workspace-graph replica.
+</Callout>
+
+## Search the graph
+
+`oxagen graph search` sends a natural-language query to the platform and returns only the results the current organization, workspace, and capability grants allow:
+
+```bash
+oxagen graph search -q "where do we enforce tenant isolation?"
+```
+
+| Flag | Description |
+|---|---|
+| `-q, --query <text>` | Natural-language query (required). |
+| `-k, --kinds <csv>` | Restrict to node kinds: `entity, memory, execution, document, message, asset`. |
+| `-l, --labels <csv>` | Restrict to domain labels, e.g. `Person,Repository,PullRequest`. |
+| `-n, --limit <n>` | Max results, 1–50 (default 10). |
+| `--system` | Only product-owned (system) nodes. |
+| `--no-system` | Only your workspace's nodes (exclude system nodes). |
+
+```bash
+# Top 5 shared pull-request/commit matches for an authentication question
+oxagen graph search -q "rate limiting per org" -l PullRequest,Commit -n 5
+
+# Search only your workspace's people and documents
+oxagen graph search -q "who owns the billing service?" -l Person --no-system
+```
+
+Each result is tagged with its node kind and a similarity score:
+
+<TuiGraphSearch />
+
+Every search is online. The server applies tenant scope and RBAC before returning a bounded result set; the CLI does not cache a full workspace graph. Deletion, revocation, or permission changes therefore take effect at the authoritative read boundary instead of depending on a client replica to converge.
+
+## What stays local
+
+The exact code graph follows the checkout the agent can actually see, including its branch, worktree, and uncommitted state. Oxagen does not upload that graph through a generic CLI mutation endpoint. Shared repository topology must be derived separately from a verified commit on the configured canonical ref and kept at stable domain/code-scope resolution. Run trace and future governed evidence are separate from workspace-graph mutation.
+
+## A typical workflow
+
+```bash
+# 1. Authenticate once (see Account setup)
+oxagen login --org acme --workspace eng
+
+# 2. Query shared context explicitly
+oxagen graph search -q "how does ingestion dual-write to Postgres and Neo4j?"
+
+# 3. Run the local agent against the checkout
+oxagen "refactor the ingestion cursor handling; keep the dual-write invariant"
+```
+
+The search and agent commands are separate operations: searching does not imply that those results are automatically inserted into a later agent turn. The local code graph is refreshed by the local indexer as the checkout changes.
+
+## Related
+
+- [Memory from the CLI](/docs/platform/cli/memory) — the experiential context that sits alongside the graph.
+- [The agent engine](/docs/platform/cli/agent-engine) — how the local turn pipeline frames context.
+- [CLI quickstart](/docs/platform/cli/quickstart#query-shared-workspace-context) — query shared context explicitly.
+- [Command reference](/docs/platform/cli/commands#oxagen-graph-knowledge-graph) — the `graph` command group.

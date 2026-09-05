@@ -1,0 +1,96 @@
+---
+title: Introduction
+description: stella is a fast, bring-your-own-key, model-agnostic terminal coding agent. Point it at any provider, give it a goal, and let a verifier decide when done.
+---
+
+stella is a coding agent that runs in your terminal and works with any model
+provider. It's bring-your-own-key: there's no account or sign-up for
+Community use, it runs on credentials you already have, it records
+everything locally, and it sends telemetry nowhere unless you
+[turn that on yourself](/docs/stella/telemetry).
+
+```bash
+export ANTHROPIC_API_KEY=your_key_here
+stella run "add a --json flag to the export command and update the tests"
+```
+
+## What it does differently
+
+| | |
+| --- | --- |
+| **BYOK, no lock-in** | Finds your provider automatically from whatever keys you have set: Anthropic, OpenAI, Gemini, Vertex, Bedrock, xAI, DeepSeek, Z.ai, OpenRouter, or any OpenAI-compatible local server. |
+| **Verified outcomes** | [Goal mode](/docs/stella/agent-modes#outcome-driven-goal-mode) doesn't stop on a guess. A separate verifier model checks the evidence against the definition of done before the loop ends. |
+| **Tools behind a permission model** | A small built-in toolset — the shell, file editing, code search, sub-agents, the task board, scratch state, and an environment check — plus MCP servers and your own script tools, each one gated with optional [lifecycle hooks](/docs/stella/agent-tools/hooks). |
+| **Config that scales to a team** | Set a different base URL, key, or model per provider in [`settings.json`](/docs/stella/configuration/settings), merged across a user, org, and project hierarchy. |
+| **Local-first telemetry** | Usage, cost, and per-step metering land in `.stella/private/store.db` on your disk. |
+
+## Bring your own provider
+
+stella speaks each provider's own protocol instead of forcing every call
+through one OpenAI-shaped adapter. That means provider features like
+Anthropic's thinking blocks, Gemini's thinking levels, and Bedrock's
+Converse format work natively, not as an imitation.
+
+<ProviderGrid />
+
+## How it fits together
+
+<HeroFlowDiagram />
+
+stella sends your prompt to the model you picked. The model calls tools to
+read and change your workspace, stella feeds the results back, and this
+repeats until the task is done. Behind the scenes: the tool registry, MCP
+servers from `.stella/mcp.toml`, and the memory and code-graph context
+engine. In [goal mode](/docs/stella/agent-modes#outcome-driven-goal-mode), a second
+model checks the evidence, so the loop ends on a verified result instead of
+the worker's own claim that it's done.
+
+## Common tasks
+
+Each of these walks through one real task to a finished, verified result.
+They link down to the full reference instead of repeating it, so you only
+read the complete flag list when you actually need it.
+
+<CardGrid size="md">
+  <SpecCard title="Fix a failing CI run" href="/docs/stella/guides/fix-failing-ci">
+    Watch a red branch, fix the root cause, push, and check again. Stop only
+    when the run is green for everyone, not just you.
+  </SpecCard>
+  <SpecCard title="Change an unfamiliar codebase" href="/docs/stella/guides/unfamiliar-codebase">
+    Use the code graph to see what a change would affect before you commit
+    to an approach. Then ship it verified.
+  </SpecCard>
+  <SpecCard title="Find out what a run cost" href="/docs/stella/guides/what-a-run-cost">
+    From the total dollar cost down to the exact bytes sent in one model
+    call, all stored on your own machine.
+  </SpecCard>
+  <SpecCard title="Work within a spend limit" href="/docs/stella/guides/spend-limit">
+    Set a hard spending ceiling, see where a run stops if it hits that
+    ceiling, and understand what happens when the transcript outgrows the
+    model's context window.
+  </SpecCard>
+</CardGrid>
+
+New to stella? **[Get started](/docs/stella/getting-started)** takes about thirty
+seconds: install, set one key, run `stella init`, and make your first
+verified change. Something not working?
+**[Troubleshooting](/docs/stella/guides/troubleshooting)** is organized by symptom.
+
+## Where to go
+
+| Section | Read it for |
+| --- | --- |
+| **[Start](/docs/stella/getting-started)** | Installing stella, setting up a provider key, starting a project, and making your first verified change. |
+| **[Do](/docs/stella/guides)** | Step-by-step guides for real tasks: fixing red CI, working in an unfamiliar repo, tracking costs, setting budgets, [fleets](/docs/stella/agent-fleets), [headless scripting](/docs/stella/scripting), and [embedding the engine in your app](/docs/stella/agent-engine-in-your-app). |
+| **Understand** | How [plugins](/docs/stella/plugins) prove work is done, how the [engine's loop](/docs/stella/agent-engine-paths) works, how the [context engine](/docs/stella/context-engine) keeps recall cheap, the [modes](/docs/stella/agent-modes) you can run stella in, and [where telemetry goes](/docs/stella/telemetry). |
+| **Configure** | [`settings.json`](/docs/stella/configuration), [providers](/docs/stella/api-providers), [tools and permissions](/docs/stella/agent-tools), and ready-made [recipes](/docs/stella/examples). |
+| **Reference** | Every [command and flag](/docs/stella/commands), the [event bus](/docs/stella/extensions), and [release notes](/docs/stella/release-notes). |
+| **Project** | The [showcase](/docs/stella/showcase), and [supporting stella](/docs/stella/donate). |
+
+<Callout type="info">
+  stella never routes model traffic through a hosted service of its own.
+  Your keys call your provider directly. Community telemetry stays on your
+  machine. Only an Oxagen Enterprise seat you've explicitly enrolled can
+  send a small, content-free operational summary to one approved address.
+  See [Telemetry](/docs/stella/telemetry).
+</Callout>

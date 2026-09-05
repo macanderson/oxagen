@@ -10,6 +10,14 @@
 #   ./tunnels.sh down     stop them
 #   ./tunnels.sh status   what is listening, and whether the far end answers
 #
+# Deliberately the OLD account (578673726240), not a stale reference: this
+# targets the combined data node `modules/data-node` builds — Postgres,
+# ClickHouse and Neo4j together on one instance tagged Name=oxagen-data — and
+# that shape has no equivalent in the new account. There, Postgres is Aurora
+# Serverless v2 and ClickHouse's role is Redshift Serverless (both managed,
+# neither reachable this way), and Neo4j runs on the shared app node instead
+# of a dedicated data node. See docs/new-account-migration-plan.md.
+#
 # Requires the AWS CLI, the Session Manager plugin, and credentials for account
 # 578673726240. Install the plugin with:
 #   brew install --cask session-manager-plugin

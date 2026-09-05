@@ -1,0 +1,478 @@
+---
+title: Scripting & automation
+description: Run stella headlessly in CI with JSON and streaming-JSON output, environment-variable configuration, and enforced budgets.
+---
+
+stella can run unattended. The `--output-format` flag switches from the
+human-friendly terminal display to output a script can read, and every
+important flag also has an environment variable for use in CI.
+
+## Output formats
+
+`--output-format` (or the `STELLA_OUTPUT_FORMAT` environment variable) only
+works on two commands: [`stella run`](/docs/stella/commands/run) and
+[`stella fleet`](/docs/stella/commands/fleet). It goes after the subcommand, not
+before it. It's not a global flag — using it on any other command is a
+parse error, so you'll never wonder whether the output silently changed
+format. It takes one of three values:
+
+<CardGrid size="md">
+  <OptionCard name="text">
+    The default. Interactive, human-friendly display, for local use. It's
+    also the only format that keeps stdout clean on failure — the error
+    message goes to stderr instead.
+  </OptionCard>
+  <OptionCard name="json">
+    One JSON object, printed once the turn ends, formatted for readability.
+    Use it to capture a result in a script.
+  </OptionCard>
+  <OptionCard name="stream-json">
+    One compact JSON line per event, printed as it happens. Use it for live
+    progress in a pipeline.
+  </OptionCard>
+</CardGrid>
+
+`stream-json` prints one line per stella event, a stable interface you can
+parse as it arrives. Each line is one event object with a `"type"` field in
+snake_case (`stage`, `text`, `reasoning`, `tool_start`, `tool_result`, and
+others). New types can be added later, but existing ones never go away, so
+skip any line with a `type` you don't recognize and your client keeps
+working across stella upgrades. The opposite case is different: if you do
+recognize the `type` but the body doesn't match what you expect, that's a
+real error, not something to skip. See
+[Event stream compatibility](/docs/stella/event-stream-compatibility) for the full
+contract and a test fixture to check your client against.
+
+`text_delta` lines stream the answer token by token, as a live preview. The
+`text` event that follows it carries the full, final text for that step —
+replace any deltas you've accumulated with it. If a model call is retried,
+its deltas stream again. The delta text is in `text_delta`'s `delta` field,
+and the full text is in `text`'s `text` field. If you're reading older
+recorded streams too, accept either field name on either event, since some
+older ones have the two swapped.
+
+```bash
+# One final JSON object
+stella run --output-format json "list the public API of the auth module"
+
+# Newline-delimited event stream, parsed as it arrives
+stella run --output-format stream-json "fix the failing test" | while IFS= read -r line; do
+  echo "$line" | jq -r '.type // "event"'
+done
+```
+
+`json` puts those same event objects under an `events` key inside one
+summary object — the same events `stream-json` would print line by line.
+Every summary object has a `schema_version` field (see
+[The envelope contract](#the-envelope-contract) below). The rest of the
+keys depend on how the run happened. A default run uses the raw step loop
+and reports `status`, `text`, `cost_usd`, `reason`, `model`, and `events`,
+plus a top-level `files_touched` key holding the
+[file-touch telemetry](/docs/stella/telemetry) payload, and a top-level `withheld`
+key holding whatever this checkout's trust gate held back. `--pipeline
+<variant>` runs the turn through an installed
+[wrapper plugin](/docs/stella/plugins) instead, and reports `status`, `text`,
+`cost_usd`, `reason`, `task_class`, `verdict`, `revisions`,
+`candidates_run`, `model`, `events`, and `reflection` — this shape does not
+include `files_touched`. The `files_touched` payload is the full telemetry
+object, so the actual list of records is one level in, at
+`.files_touched.files_touched`.
+
+`model` is `provider/model_id` for the model that actually ran. On the
+wrapped path, that's the model serving the worker turns — the one
+`cost_usd` was spent on. It doesn't just echo back what you requested: if a
+[`default_model`](/docs/stella/configuration/agent-engine-config) setting routes
+the worker to a different model than your session default, this key shows
+that. When attributing spend, read this key, not your own `--model`
+argument.
+
+`status` is usually the first thing a script checks. A raw run, which
+nothing verified, reports one of three values. A `--pipeline <variant>` run
+reports one of four:
+
+<CardGrid size="sm">
+  <OptionCard name="completed">
+    The turn finished. On the wrapped path, this also means verification
+    passed. Check `verdict.deterministic` to see whether a verifier was
+    used.
+  </OptionCard>
+  <OptionCard name="verification_failed">
+    Wrapped runs only. The work happened, but didn't pass verification;
+    `reason` carries the verdict summary. Exits non-zero.
+  </OptionCard>
+  <OptionCard name="aborted">
+    A safety limit ended the run: the budget cap, a loop escalation, a scope
+    gate with nobody to ask, or a signal. `reason` says which. Exits
+    non-zero — `3` when stella stopped itself on purpose, `1` when the run
+    failed underneath it.
+  </OptionCard>
+  <OptionCard name="error">
+    The run failed outright, including every failure before the run even
+    started. Exits non-zero.
+  </OptionCard>
+</CardGrid>
+
+**A failure still has the same set of keys.** A `--pipeline <variant>` run
+that errors out still emits every key listed above, with `text` and the
+wrapper-only keys (`task_class`, `verdict`, `revisions`, `candidates_run`)
+set to `null` instead of left out — so a strict parser written for the
+success shape still works. A failure that happens before stella even
+builds the agent (no API key, an unknown provider or model, a broken
+`settings.json`) has no model or event log to report. It prints a minimal
+envelope on stdout, alongside a `stella: …` line on stderr:
+
+```json
+{ "schema_version": 1, "status": "error", "text": null, "reason": "no API key found. …" }
+```
+
+Under `--output-format text`, stdout stays clean in both cases — the error
+message is the stderr line.
+
+## The envelope contract
+
+Every summary object above (the raw-loop summary, the `--pipeline
+<variant>` summary, and the pre-flight error envelope) carries a
+`schema_version` number. It's `1` today. All three shapes use the same
+value, because this number versions the envelope contract itself, not the
+kind of run you got — so you never have to write a special case for which
+one you're reading.
+
+`schema_version` only goes up when a change could break a script written
+against the version before it:
+
+- a key is removed or renamed,
+- a key's value type changes (`string` to `object`, a single value to an array),
+- a key's meaning changes while its name and type stay the same.
+
+Adding a key never bumps the version. New keys can show up in any release,
+so your parser has to ignore keys it doesn't recognize — the same rule the
+[event stream](/docs/stella/event-stream-compatibility) asks of its clients. If
+adding a key bumped the version, the number would change so often it
+wouldn't tell you anything.
+
+The `events` array sits outside this contract. Event types have their
+[own forward-compatibility guarantee](/docs/stella/event-stream-compatibility),
+and a new event type never bumps `schema_version`. Everything else the
+envelope owns, including the nested `verdict`, `reflection`, and
+`files_touched` payloads, is covered by this contract.
+
+- **Check only the keys you use, not the whole set.** Don't assert on every key you'd expect, and don't reject an object just because it has keys you've never seen.
+- **Treat an unexpected `schema_version` as your signal to stop.** A number higher than the one your script was written for means the shape may have changed. Fail loudly there, instead of silently misreading a renamed key.
+
+```bash
+# Refuse to parse a shape this script was not written for
+stella run --output-format json "…" | jq -e '
+  if .schema_version == 1 then .status else error("unsupported schema_version") end'
+```
+
+Key order isn't part of the contract. Always read by key, never by
+position.
+
+### Query command JSON
+
+The read-only query commands — `stats`, `usage report`, `inspect`,
+`calibration`, `memory list`, and `context list|validate` — take `--format
+json` (their default, human-readable output is `--format text`). Their
+JSON uses its own query envelope: `schema_version` first, then the payload.
+A report that returns a list puts its rows under a `rows` key; a report
+that returns a single object keeps its own keys after the version. This
+version number is `1` today, is tracked separately from the turn envelope
+above, and follows the same bump rules — it never changes just because a
+key was added.
+
+```bash
+# Rows ride under `rows`
+stella stats --format json | jq '.rows[] | {model, total_cost_usd}'
+
+# Object reports keep their keys — the version is just the first one
+stella inspect 42 --step 3 --format json | jq '{schema_version, verified}'
+```
+
+## Configure via environment
+
+Every core global flag has a matching environment variable, so you can
+configure a CI job without editing the command line:
+
+<CardGrid size="md">
+  <OptionCard name="STELLA_MODEL">
+    Same as `--model`. Sets the worker model for this run, as
+    `provider/model_id` — for example, `anthropic/claude-fable-5`.
+  </OptionCard>
+  <OptionCard name="STELLA_BASE_URL">
+    Same as `--base-url`. Required together with `--model local/<model>` to
+    point at a local OpenAI-compatible server. Optional otherwise, to route
+    requests through a proxy.
+  </OptionCard>
+  <OptionCard name="STELLA_OUTPUT_FORMAT" defaultValue="text">
+    Same as `--output-format`: `text`, `json`, or `stream-json`. Only read
+    where the flag itself exists — `run` and `fleet` — so exporting it for a
+    whole terminal session never changes another command's output.
+  </OptionCard>
+  <OptionCard name="STELLA_SPEND_LIMIT">
+    Same as `--spend-limit`. A hard dollar limit for the whole run. If
+    unset, spend is tracked but never blocked.
+  </OptionCard>
+  <OptionCard name="STELLA_TURN_TIMEOUT">
+    Same as `--turn-timeout`. The maximum real time, in seconds, one turn
+    may take. Set this when your CI runner will kill the job after a time
+    limit. Set it slightly below that limit, and stella stops at a safe
+    point on its own, so the work already done gets reported instead of
+    being lost when the process is killed.
+  </OptionCard>
+  <OptionCard name="STELLA_MAX_OUTPUT_TOKENS">
+    Same as `--max-output-tokens`. Limits output per step below the model's
+    own maximum, to control cost or speed on a long unattended run.
+  </OptionCard>
+  <OptionCard name="STELLA_UPSTREAM_PIN">
+    Same as `--upstream-pin`. Locks a gateway to the upstreams you name and
+    refuses to fall back to another. Set this when two CI runs need to be
+    directly comparable.
+  </OptionCard>
+  <OptionCard name="STELLA_DETACH">
+    Same as `--detach`. Starts the run and returns right away. The exit
+    code is only for the launch itself — the run's actual result comes from
+    [`stella daemon list`](/docs/stella/commands/daemon). Works with no terminal
+    at all, so it runs fine from a pipe or a container.
+  </OptionCard>
+  <OptionCard name="STELLA_LOG" defaultValue="warn">
+    Same as `--log-level`. A diagnostic filter per module, for example
+    `warn,stella_model=trace`. stella checks the most specific setting
+    first: `--log-level`, then `-v`/`-vv`/`-vvv`, then this variable, then
+    `warn` as the fallback — so typing `-vv` is never silently overridden by
+    an exported value.
+  </OptionCard>
+  <OptionCard name="STELLA_PLAIN">
+    Set to `1` to use the plain, line-based REPL instead of the Command
+    Deck. Rarely needed in CI, since the deck already steps aside on its
+    own when stdout isn't a terminal.
+  </OptionCard>
+  <OptionCard name="STELLA_NO_ANIM">
+    Freezes all deck animation to a single static frame, useful for CI logs
+    and screen recordings. `NO_COLOR` has the same effect.
+  </OptionCard>
+</CardGrid>
+
+<Callout type="warn">
+  `--api-key` has **no** `STELLA_*` equivalent. Supply your key through the
+  provider's own variable instead (`ANTHROPIC_API_KEY`, `ZAI_API_KEY`, and
+  so on) — this is step 2 of the
+  [credential chain](/docs/stella/configuration/credentials), and it never ends up
+  in a process argument list.
+</Callout>
+
+```bash
+export STELLA_MODEL=anthropic/claude-fable-5
+export STELLA_OUTPUT_FORMAT=stream-json
+export STELLA_SPEND_LIMIT=5
+stella run "update the changelog for the pending release"
+```
+
+stella also loads project dotenv files into the environment before any of
+this is resolved: `.env.<mode>.local`, then `.env.local`, then `.env`, most
+specific first, and only within the enclosing git repository. A value
+already exported in your shell always wins over a file value.
+`.env.example` and any committed `.env.<mode>` files are never read.
+`STELLA_NO_ENV_FILE=1` turns this off entirely. In CI, prefer your runner's
+secret store over a checked-in file.
+
+## Headless credentials
+
+In CI, supply your provider key through the environment, or a mounted
+[`settings.json`](/docs/stella/configuration/settings) — never the interactive
+prompt, which is skipped whenever there's no terminal to show it in:
+
+```bash
+export ANTHROPIC_API_KEY="$SECRET_ANTHROPIC_KEY"
+stella run --output-format json "generate release notes from the diff since the last tag"
+```
+
+<Callout type="warn">
+  With no usable key and no terminal, stella fails fast with a clear error
+  instead of hanging on a prompt nobody can answer. Make sure a key is set
+  in the environment before the run starts.
+</Callout>
+
+## Enforced budgets in CI
+
+Pair a headless run with an
+[enforced budget](/docs/stella/telemetry#budget-observed-vs-enforced) so an
+automated job can never spend more than you allow:
+
+```bash
+stella --spend-limit 3 run --output-format json "port the utils module to the new client"
+```
+
+Work stops cleanly once the cap is reached, never in the middle of a tool
+call, so your workspace is left in a consistent state. The summary comes
+back with `"status": "aborted"`, and `reason` names the cap that stopped
+it. A fleet splits the same cap across its concurrency width, so the
+number you set is the number you actually spend:
+
+```bash
+stella --spend-limit 10 fleet --plan cleanup.toml --max-concurrency 4
+```
+
+## Exit codes
+
+<CardGrid size="sm">
+  <OptionCard name="0">
+    Success. On the wrapped path, this means verification passed, not just
+    that the model stopped talking.
+  </OptionCard>
+  <OptionCard name="1">
+    Failure: a credential that couldn't be resolved, an invalid flag, a
+    failed verification, or a run that failed partway through a turn (a
+    model call that wouldn't complete).
+  </OptionCard>
+  <OptionCard name="3">
+    A deliberate stop. stella chose to end the run: a stuck loop that
+    passed its warning threshold, an enforced budget or deadline, the step
+    limit, or a scope review the operator ended. The work didn't finish,
+    but nothing crashed. A wrapper can retry with a different approach, and
+    a benchmark should score this as "gave up," not "died".
+  </OptionCard>
+  <OptionCard name="128 + signal">
+    The run was interrupted: `130` for `SIGINT` (Ctrl-C), `143` for
+    `SIGTERM` (a CI job cancellation or timeout kill). This follows the
+    normal shell convention, so a wrapper script can tell "someone stopped
+    this" apart from "this failed on its own".
+  </OptionCard>
+</CardGrid>
+
+```bash
+stella --spend-limit 3 run --output-format json \
+  --pipeline my-verifier --test-command "cargo test -p stella-store" \
+  "make the store migration idempotent on an already-v2 file" > result.json
+case $? in
+  0)   echo "verified" ;;
+  3)   echo "stella stopped on purpose — read the reason before retrying"; exit 1 ;;
+  130) echo "cancelled by the operator"; exit 0 ;;
+  143) echo "the runner killed us — probably a job timeout"; exit 0 ;;
+  *)   echo "failed"; exit 1 ;;
+esac
+```
+
+## A complete CI job
+
+Here's the whole contract in one GitHub Actions job: a budget cap that
+can't be exceeded, a deterministic check that settles the run without
+asking a model, JSON on stdout, and the summary parsed into the job log.
+
+```yaml title=".github/workflows/autofix.yml"
+name: autofix
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: What Stella should do
+        required: true
+
+jobs:
+  autofix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Stella
+        run: |
+          curl -fsSL https://stella.oxagen.sh/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run the task
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          STELLA_MODEL: anthropic/claude-fable-5
+          STELLA_OUTPUT_FORMAT: json
+          STELLA_SPEND_LIMIT: "3"
+        # `--test-command` arms an installed verification plugin's own oracle,
+        # so it needs the `--pipeline <variant>` that names one. On the raw
+        # loop it is refused rather than silently ignored: drop both flags for
+        # an unverified run.
+        run: stella run --pipeline my-verifier --test-command "cargo test --workspace" "${{ inputs.task }}" > result.json
+
+      - name: Summarize
+        if: always()
+        run: |
+          jq -r '
+            "status:        \(.status)",
+            "cost:          $\(.cost_usd)",
+            "task class:    \(.task_class // "n/a")",
+            "revisions:     \(.revisions // 0)",
+            "deterministic: \(.verdict.deterministic // false)",
+            "evidence:      \(.verdict.summary // .reason // "—")"
+          ' result.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open a PR with the result
+        if: success()
+        run: |
+          git switch -c "stella/${{ github.run_id }}"
+          git commit -am "${{ inputs.task }}"
+          git push -u origin HEAD
+          gh pr create --fill
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+<Callout type="warn">
+  There's no separate headless-only setting to configure here.
+  `agent_engine_config.headless_scope_bypass` has no effect — setting it
+  neither loosens nor tightens anything. A run under a verification plugin
+  can still be refused by the plugin's own rule. Read that plugin's
+  manifest to see what it refuses, and when.
+</Callout>
+
+## Parsing the output with jq
+
+The summary object and the event stream answer different questions. Here
+are a few pipelines worth keeping:
+
+```bash
+# Gate a script on deterministic evidence only — refuse a verifier-only pass.
+stella run --output-format json --pipeline my-verifier --test-command "make test" "$TASK" \
+  | jq -e '.status == "completed" and .verdict.deterministic == true' >/dev/null \
+  || { echo "no deterministic proof — not merging" >&2; exit 1; }
+```
+
+```bash
+# Every file the raw step loop touched, with its line delta — the raw loop is
+# the default, so no flag is needed. Note the nesting: the summary's
+# `files_touched` key holds the telemetry payload object, whose own
+# `files_touched` key holds the array.
+stella run --output-format json "tidy up the error types in stella-store" \
+  | jq -r '.files_touched.files_touched[] | "\(.path)\t+\(.lines_added)/-\(.lines_removed)"'
+```
+
+```bash
+# Refuse to act on a run whose project steering was never loaded. `withheld` is
+# null when the checkout got its steering (or had none to lose); otherwise it
+# carries `withheld_by` plus per-category counts, never a path or a filename.
+stella run --output-format json "$TASK" \
+  | jq -e '.withheld == null' >/dev/null \
+  || { echo "this checkout's memories and rules did not steer the run" >&2; exit 1; }
+```
+
+```bash
+# Watch the stages go by, live, without parsing anything else. Stage names are
+# snake_case, and arrive in this order: triage, context_recall, research, plan,
+# scope_review, execute, witness, verify, verdict, reflect, context_write,
+# complete. Several are conditional — research only when triage named questions,
+# witness only when a warrant found something to prove — so a turn emits a
+# subsequence, never the whole list. The revise loop is the one backward move:
+# it re-enters execute, and never re-runs witness.
+stella run --output-format stream-json "$TASK" \
+  | jq -r --unbuffered 'select(.type == "stage") | "→ \(.name)"'
+```
+
+```bash
+# Which tools the run actually reached for, most-used first. A tool_start event
+# carries its call under `call`, so the name is `.call.name`.
+stella run --output-format json "$TASK" \
+  | jq -r '.events[] | select(.type == "tool_start") | .call.name' \
+  | sort | uniq -c | sort -rn
+```
+
+<Callout type="info">
+  Skip lines and keys you don't recognize — that's what lets these
+  pipelines survive a stella upgrade. See
+  [Event stream compatibility](/docs/stella/event-stream-compatibility) for the
+  event vocabulary's own guarantee.
+</Callout>
