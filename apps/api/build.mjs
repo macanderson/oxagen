@@ -50,12 +50,10 @@ await build({
     "duckdb",
   ],
   logLevel: "info",
-  // createDockerSandbox (packages/sandbox) uses createRequire(import.meta.url)
-  // to lazily load the externalized `dockerode`. esbuild warns that import.meta
-  // is empty in CJS output — true, but that code path only runs under the docker
-  // sandbox driver (local dev / self-hosted), never in this serverless function,
-  // so the shimmed value is never read here. Silence the false-positive.
-  logOverride: { "empty-import-meta": "silent" },
+  // Left at esbuild's default (a warning) rather than silenced: this closure has
+  // guarded uses of import.meta that are correct, and an unguarded one at module
+  // scope is caught by booting the bundle — see packages/agent-worker's
+  // src/cjs-bundle.test.ts. Silencing hid exactly that defect in #2567.
 });
 
 // Built-in connector schema YAMLs: packages/ingestion's loadBuiltInSchema reads

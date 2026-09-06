@@ -18,14 +18,18 @@
  * `resolveStellaBinary`'s doc comment and stella-serve.smoke.test.ts.
  */
 import { execFile } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 import { promisify } from "node:util";
 
-const execFileAsync = promisify(execFile);
+// Imported rather than read from disk at runtime. The worker ships as a single
+// esbuild CJS bundle (packages/agent-worker/build-node.mjs), where two things
+// are true at once: `import.meta.url` is undefined, so resolving a path from it
+// throws at module-init; and sidecar.config.json is not in the bundle's
+// directory anyway, so the read would fail even with a correct path. An import
+// is inlined by the bundler and needs neither.
+import sidecarConfig from "../sidecar.config.json";
 
-const here = dirname(fileURLToPath(import.meta.url));
+const execFileAsync = promisify(execFile);
 
 export interface SidecarConfig {
   /** The release whose wire contract wire-types.ts has been verified against. */
@@ -40,8 +44,11 @@ export interface SidecarConfig {
 }
 
 export function readSidecarConfig(): SidecarConfig {
-  const raw = readFileSync(join(here, "..", "sidecar.config.json"), "utf8");
-  return JSON.parse(raw) as SidecarConfig;
+  // A fresh object per call: the previous implementation re-parsed the file
+  // every time, so callers could mutate what they got without affecting the
+  // next caller. Returning the inlined module object directly would quietly
+  // make that shared mutable state.
+  return { ...(sidecarConfig as SidecarConfig) };
 }
 
 export interface StellaBinaryResolution {

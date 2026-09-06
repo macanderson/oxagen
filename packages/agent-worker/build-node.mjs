@@ -37,7 +37,16 @@ await build({
     "duckdb",
   ],
   logLevel: "info",
-  logOverride: { "empty-import-meta": "silent" },
+  // Left at esbuild's default (a warning) rather than silenced. `import.meta`
+  // has legitimate guarded uses in this closure — connector-schema-loader.ts
+  // falls back to __dirname, is-direct-run.ts tolerates undefined — so failing
+  // the build on the syntax would reject correct code. What esbuild cannot see
+  // is whether a use is guarded, and an *unguarded* one at module scope throws
+  // at init and takes the process down before anything runs. That is what
+  // src/cjs-bundle.test.ts gates, by building this bundle's dependency closure
+  // and booting it in a cold Node process. Silencing was how #2567's worker
+  // shipped broken: it read import.meta.url at module scope, threw
+  // ERR_INVALID_ARG_TYPE on the node every time, and never completed a deploy.
 });
 
 // The handler registry the worker bootstraps reads the same connector schema

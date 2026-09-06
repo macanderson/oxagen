@@ -802,18 +802,26 @@ jobs:
           set +a
           tools/scripts/package-for-node.sh ${{ matrix.service }}
 
-      # TEMPORARY, and it deletes itself the moment the permission exists.
+      # TEMPORARY, and it deletes itself the moment the deploy goes green.
       #
-      # The deploy role's policy enumerates each artifact key, and `worker` was
-      # never added to it (#2619). So this step fails with AccessDenied for
-      # `worker` alone, on every push, and no code change can fix it — the
-      # remedy is an OpenTofu apply this PR also carries.
+      # This has now masked two different failures in a row, which is the cost
+      # of a mask outliving its cause. It was added for #2619, a real
+      # AccessDenied: the deploy role's policy enumerates each artifact key and
+      # `worker` was missing from it. That is fixed — the key is in
+      # infra/stacks-new/ci-deploy/roles.tf's `platform_services` and the stack
+      # is applied, so the tarball reaches the node.
+      #
+      # It then hid #2676, which is what the node was actually failing on: the
+      # worker bundle threw ERR_INVALID_ARG_TYPE at module init, so every
+      # deploy failed its health check with no previous release to roll back
+      # to. Fixed in the same PR as this comment.
       #
       # Tolerating it for `worker` only, rather than removing the target from
-      # the matrix: removing it would mean the worker silently stops deploying
-      # after the permission lands, and someone has to remember to put it back.
-      # This way the step starts passing on its own, and the next step below
-      # goes quiet, at which point both can be deleted.
+      # the matrix: removing it would mean the worker silently stops deploying,
+      # and someone has to remember to put it back. This way the step starts
+      # passing on its own and the next step below goes quiet — at which point
+      # both are deleted. Do not renew this mask for a third cause; a failure
+      # that survives the fix above is a red deploy that should be read.
       - uses: ./.github/actions/ship-to-node
         id: ship
         continue-on-error: ${{ matrix.service == 'worker' }}
