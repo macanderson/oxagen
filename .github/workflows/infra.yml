@@ -174,11 +174,26 @@ jobs:
 
   apply:
     needs: discover
-    if: github.event_name != 'pull_request' && needs.discover.outputs.stacks != '[]'
+    # `github.ref` is part of the guard, not decoration. `workflow_dispatch`
+    # accepts any ref and is not a `pull_request`, so without this a dispatch
+    # against any branch reached this job — and this job assumes a role with
+    # AdministratorAccess and applies the Terraform from that branch.
+    #
+    # The `production` environment was supposed to be what stopped that. As of
+    # 2026-09-06 it has no protection rules and no deployment branch policy
+    # (`gh api repos/macanderson/oxagen/environments/production`), so it gates
+    # nothing: any branch may deploy to it. The comment here used to say
+    # otherwise. Configuring it is #2679; this line closes the path in
+    # the meantime and stays correct afterwards.
+    if: >-
+      github.event_name != 'pull_request'
+      && github.ref == 'refs/heads/main'
+      && needs.discover.outputs.stacks != '[]'
     runs-on: ubuntu-latest
-    # The gate. Required reviewers and branch restrictions live in this
-    # environment's settings, and the apply role's trust policy names it, so
-    # nothing can assume that role outside this environment.
+    # The apply role's trust policy names this environment, so the role cannot
+    # be assumed by a job that does not declare it. That half is real and is
+    # what makes the `if:` above the second line of defence rather than the
+    # only one.
     environment: production
     strategy:
       fail-fast: true   # a later stack may depend on an earlier one
