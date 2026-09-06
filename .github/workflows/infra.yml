@@ -13,12 +13,13 @@
 # workflow's own permissions are reviewable in the same pull request as the
 # infrastructure it changes.
 #
-# That also means neither role exists until the ci-deploy stack has been
+# That also meant neither role existed until the ci-deploy stack had been
 # applied once, and the job that would apply it is the one that needs the
-# role: the first apply is done by hand (infra/README.md, "Applying from CI").
-# Until then a pull request still gets `fmt` and `validate`, which need no
-# credentials, and the plan itself is skipped with a warning rather than
-# failing every infrastructure change on a role no pull request can create.
+# role — so the first apply was done by hand (infra/README.md, "Applying from
+# CI"). That has happened: both roles exist in 916294258235, and the plan job
+# no longer tolerates a failure to assume `gha-infra-plan`. The apply job
+# still does, until one apply has been observed on `main` — see the note on
+# that step.
 
 name: infra
 
@@ -110,29 +111,23 @@ jobs:
           tofu init -backend=false -input=false -no-color
           tofu validate -no-color
 
-      # `continue-on-error` is deliberate and narrow: this is the only step
-      # that can fail for the bootstrap reason in the header, and everything
-      # that needs the role is gated on its outcome below. Once the role
-      # exists nothing here changes — the next run plans.
+      # No `continue-on-error`. It was here for the bootstrap in the header —
+      # the role did not exist and no pull request could create it — and
+      # `gha-infra-plan` now exists in 916294258235, so the reason is spent.
+      # Kept, it would mean the opposite of what it meant then: a revoked role
+      # or an edited trust policy would skip the plan and report green, and a
+      # plan that did not run must never read like a plan that found nothing.
       - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
         id: credentials
-        continue-on-error: true
         with:
           role-to-assume: arn:aws:iam::916294258235:role/gha-infra-plan
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: plan skipped
-        if: steps.credentials.outcome != 'success'
-        run: |
-          echo "::warning title=plan skipped (${{ matrix.stack }})::Could not assume gha-infra-plan in 916294258235. Until infra/stacks-new/ci-deploy has been applied once by hand this job runs fmt and validate only. See infra/README.md, 'Applying from CI'."
-
       - name: init
-        if: steps.credentials.outcome == 'success'
         working-directory: infra/stacks-new/${{ matrix.stack }}
         run: tofu init -input=false -no-color
 
       - name: plan
-        if: steps.credentials.outcome == 'success'
         id: plan
         working-directory: infra/stacks-new/${{ matrix.stack }}
         # -detailed-exitcode: 0 no changes, 2 changes, 1 error. Without it a
@@ -148,7 +143,7 @@ jobs:
           exit 0
 
       - name: comment
-        if: steps.credentials.outcome == 'success' && github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request'
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
           STACK: ${{ matrix.stack }}
@@ -186,13 +181,18 @@ jobs:
         with:
           tofu_version: 1.8.5
 
-      # Gated for the same bootstrap reason as the plan job, and for one more:
-      # this runs on `main`, so failing here would leave the default branch
-      # permanently red on a role no change to this repository can create.
+      # Still gated, unlike the plan job above, and for a reason that outlived
+      # the bootstrap: this runs on `main`, so a failure here leaves the
+      # default branch red, which blocks every open pull request through the
+      # red-main hold. The plan job proves the OIDC provider and this
+      # repository's federation work, but not this role — `gha-infra-apply`
+      # is assumed under a different subject (`environment:production`), and
+      # nothing has exercised it yet.
       #
-      # A skip is not a pass. The step below writes a warning naming the stack
-      # that did not apply, so an un-applied change is visible rather than
-      # silent, and the gate clears itself the first time the role exists.
+      # Remove `continue-on-error` and the skip step below once one apply has
+      # actually run on `main`. Until then a skip is not a pass: the step
+      # writes a warning naming the stack that did not apply, so an un-applied
+      # change is visible rather than silent.
       - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
         id: credentials
         continue-on-error: true
