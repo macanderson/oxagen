@@ -69,7 +69,18 @@ jobs:
           changed=$(git diff --name-only "$base" HEAD || true)
 
           # A module edit can change any stack that uses it, so widen to all.
-          if echo "$changed" | grep -q '^infra/modules/'; then
+          #
+          # An edit to this workflow does the same, and used to widen to
+          # nothing: `.github/workflows/infra.yml` is in the `paths` trigger
+          # above, so a workflow-only change starts a run, but no path under
+          # `infra/stacks-new/` changed, so `stacks` came out empty, the plan
+          # matrix was empty, and `plan` was skipped. A skipped job reports
+          # success, so a change to how planning works could only ever be
+          # green here — including a change that broke planning outright.
+          # A manual dispatch had the same hole from the other end: it carries
+          # no base ref, so the fallback diffs one arbitrary commit.
+          if echo "$changed" | grep -qE '^infra/modules/|^\.github/workflows/infra\.yml$' \
+            || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             stacks=$(find infra/stacks-new -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
           else
             stacks=$(echo "$changed" | sed -n 's#^infra/stacks-new/\([^/]*\)/.*#\1#p' | sort -u)
