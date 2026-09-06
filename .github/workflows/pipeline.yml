@@ -802,40 +802,10 @@ jobs:
           set +a
           tools/scripts/package-for-node.sh ${{ matrix.service }}
 
-      # TEMPORARY, and it deletes itself the moment the deploy goes green.
-      #
-      # This has now masked two different failures in a row, which is the cost
-      # of a mask outliving its cause. It was added for #2619, a real
-      # AccessDenied: the deploy role's policy enumerates each artifact key and
-      # `worker` was missing from it. That is fixed — the key is in
-      # infra/stacks-new/ci-deploy/roles.tf's `platform_services` and the stack
-      # is applied, so the tarball reaches the node.
-      #
-      # It then hid #2676, which is what the node was actually failing on: the
-      # worker bundle threw ERR_INVALID_ARG_TYPE at module init, so every
-      # deploy failed its health check with no previous release to roll back
-      # to. Fixed in the same PR as this comment.
-      #
-      # Tolerating it for `worker` only, rather than removing the target from
-      # the matrix: removing it would mean the worker silently stops deploying,
-      # and someone has to remember to put it back. This way the step starts
-      # passing on its own and the next step below goes quiet — at which point
-      # both are deleted. Do not renew this mask for a third cause; a failure
-      # that survives the fix above is a red deploy that should be read.
       - uses: ./.github/actions/ship-to-node
         id: ship
-        continue-on-error: ${{ matrix.service == 'worker' }}
         with:
           service: ${{ matrix.service }}
           directory: dist-deploy/${{ matrix.service }}
           hostname: ${{ matrix.hostname }}
 
-      - name: Report an unprovisioned worker deploy
-        if: steps.ship.outcome == 'failure'
-        run: |
-          echo "::warning title=worker deploy not provisioned::\
-          Shipping the worker artifact failed. Until #2619's OpenTofu apply \
-          runs, the deploy role cannot write _deploy/worker-standalone.tgz. \
-          Every other service ships through the identical step. Delete this \
-          step and the continue-on-error above once the apply has happened."
-          exit 0
