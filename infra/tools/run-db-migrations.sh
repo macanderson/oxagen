@@ -30,6 +30,33 @@
 
 set -euo pipefail
 
+# The header above explains why this cannot work against the current account.
+# It used to explain it and then run anyway, which is a comment doing a guard's
+# job: someone reading the usage line and not the thirty above it would fire an
+# SSM command at a decommissioned instance — or, as the header warns, at
+# whatever else in some account answers to that container name.
+#
+# Refusing is the conservative direction. The script does not become correct by
+# being attempted, and the working route already exists.
+if [[ "${RUN_DB_MIGRATIONS_I_KNOW_THIS_IS_BROKEN:-}" != "1" ]]; then
+  cat >&2 <<'REFUSED'
+run-db-migrations.sh does not work against the current AWS account.
+
+It targets the pre-cutover account (578673726240) and assumes Postgres runs as
+a Docker container on the instance. The current account (916294258235) runs
+Aurora PostgreSQL Serverless v2, so there is no container to exec into and the
+password lives at a different SSM path. See the header, and #2652.
+
+To apply production migrations, dispatch .github/workflows/db-migrate.yml with
+target: production. It applies the same committed Atlas migrations and its
+`environment: production` puts required reviewers in front of the apply.
+
+If you are working ON this script, set
+RUN_DB_MIGRATIONS_I_KNOW_THIS_IS_BROKEN=1.
+REFUSED
+  exit 1
+fi
+
 if [[ $# -ne 1 ]]; then
   echo "usage: $0 <packages/database dir>" >&2
   exit 2
@@ -74,7 +101,7 @@ atlas version
 
 mkdir -p /opt/oxagen/db
 cd /opt/oxagen/db
-aws s3 cp s3://oxagen-deploy-578673726240/_deploy/atlas-migrations.tgz /tmp/atlas.tgz --region us-east-1
+aws s3 cp "s3://__BUCKET__/_deploy/atlas-migrations.tgz" /tmp/atlas.tgz --region us-east-1
 rm -rf atlas atlas.hcl
 tar -xzf /tmp/atlas.tgz -C /opt/oxagen/db
 
@@ -99,6 +126,20 @@ docker exec -e PGPASSWORD="$PGPW" oxagen-data-postgres-1 \
   "select count(*) from information_schema.tables where table_schema='public'"
 set -x
 REMOTE
+
+# The heredoc above is quoted, which is what stops $PGPW being interpolated
+# here — the whole point of the tracing dance inside it. That also means $BUCKET
+# cannot expand, which is why the download used to carry a literal bucket name
+# that drifted from the variable the upload uses: changing BUCKET moved the
+# upload and left the download fetching from the old one. Substituting the one
+# placeholder keeps both halves on the same variable without unquoting anything
+# that matters (#2652).
+sed -i.bak "s|__BUCKET__|${BUCKET}|g" "$REMOTE_FILE"
+rm -f "$REMOTE_FILE.bak"
+if grep -q '__BUCKET__' "$REMOTE_FILE"; then
+  echo "error: bucket placeholder not substituted" >&2
+  exit 1
+fi
 
 python3 - "$REMOTE_FILE" "$PARAMS_FILE" <<'PY'
 import json, sys

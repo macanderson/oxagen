@@ -1,0 +1,135 @@
+# DoD recheck (oxagen #2638) — the event dod-check.yml cannot hear.
+#
+# `dod-check.yml` fires on pull-request events. Its failure message tells the
+# author to tick the remaining boxes, and ticking a box edits the *issue*, which
+# fires `issues: edited` — a trigger that workflow does not subscribe to and
+# cannot: a `workflow_call` file is invoked by its caller's events, and the
+# object being judged (the issue) is not the object the events are about (the
+# PR).
+#
+# So the remedy the failure message prescribes fired nothing. The required check
+# stayed red at its stale conclusion, and the PR stayed unmergeable until
+# somebody happened to touch the PR itself. Nothing on the PR said the check was
+# merely stale rather than failing — the sticky comment showed the old verdict
+# too.
+#
+# ## Why it re-runs the old run rather than reporting a new check
+#
+# A new check run reported from here would have to name a head SHA that this
+# event does not own, and would appear beside the original rather than replacing
+# it. Re-running the failed run lands the new conclusion under the same name on
+# the same commit, which is what branch protection reads. Same mechanism as the
+# `main-red` hold refresh in the sibling repo.
+#
+# ## Scope, and why it does not fan out
+#
+# Only open PRs whose body references the edited issue, and only those whose
+# `dod` run actually failed. A PR already passing is left alone — that is what
+# stops one body edit re-running the gate across every PR that ever named the
+# issue, and what keeps this from becoming a rate-limit problem across the five
+# repos that share the checker.
+#
+# ## How the callers get this
+#
+# An `issues: edited` event fires in the repository the issue lives in, so
+# oxagen hearing its own edits does nothing for a caller's. Each of the four
+# repos carries a stub subscribing to its own issue edits and calling this file
+# — the same shape as their dod-check stubs, and the reason this workflow takes
+# `workflow_call` and fetches the checker rather than assuming it is local.
+name: dod-recheck
+
+on:
+  # Reusable, for the same reason dod-check.yml is (ADR-039): the four caller
+  # repos need this behaviour too, and an `issues: edited` event fires in the
+  # repository the issue lives in — so oxagen hearing its own edits does
+  # nothing for theirs. Each caller carries a stub that calls this.
+  workflow_call: {}
+  issues:
+    types: [edited]
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  recheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The checker lives in oxagen, and a caller repo does not have it. Same
+      # sparse checkout dod-check.yml uses, for the same reason — one
+      # implementation of the reference-parsing rule rather than five copies of
+      # it drifting apart.
+      - name: Fetch the SCR checker
+        uses: actions/checkout@v5
+        with:
+          repository: macanderson/oxagen
+          ref: ${{ github.repository == 'macanderson/oxagen' && github.sha || 'main' }}
+          path: .scr-tools
+          sparse-checkout: tools/scripts
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { referencesIssue } = await import(
+              `${process.env.GITHUB_WORKSPACE}/.scr-tools/tools/scripts/scr-dod-check.mjs`)
+
+            const issueNumber = context.payload.issue.number
+            const { owner, repo } = context.repo
+
+            // Every open PR. The repo's open-PR count is small enough that
+            // listing beats a search query, and a list cannot silently miss a
+            // PR the way an eventually-consistent search index can.
+            const prs = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: "open", per_page: 100,
+            })
+
+            // The predicate lives in the checker, where a test can reach it.
+            const claims = prs.filter((pr) =>
+              referencesIssue(pr.body ?? "", { owner, repo, number: issueNumber }),
+            )
+            if (claims.length === 0) {
+              core.notice(`No open PR references #${issueNumber}.`)
+              return
+            }
+
+            for (const pr of claims) {
+              // Fail open, per PR: one unreadable run must not stop the rest.
+              try {
+                // Scoped to the one workflow rather than every run for this
+                // SHA. Listing the repo's runs and filtering client-side reads
+                // only the first page, so on a commit with more than 100 runs
+                // the dod run can sit on a later page and be reported absent —
+                // the stale red check would then never be re-run, which is the
+                // bug this file exists to fix.
+                const runs = await github.rest.actions.listWorkflowRuns({
+                  owner,
+                  repo,
+                  workflow_id: "dod-check.yml",
+                  head_sha: pr.head.sha,
+                  per_page: 100,
+                })
+                const dod = runs.data.workflow_runs.sort(
+                  (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
+                )[0]
+
+                if (!dod) {
+                  core.notice(`#${pr.number}: no dod run on ${pr.head.sha.slice(0, 8)}.`)
+                  continue
+                }
+                if (dod.conclusion !== "failure") {
+                  // The scope rule: a passing (or still-running) check is not
+                  // stale and must not be disturbed.
+                  core.notice(`#${pr.number}: dod is ${dod.conclusion ?? dod.status}; leaving it.`)
+                  continue
+                }
+                await github.rest.actions.reRunWorkflowFailedJobs({
+                  owner, repo, run_id: dod.id,
+                })
+                core.notice(`#${pr.number}: re-ran the failed dod run ${dod.id}.`)
+              } catch (err) {
+                core.notice(`#${pr.number}: could not re-run dod — ${err.message}`)
+              }
+            }
