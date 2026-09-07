@@ -42,3 +42,4 @@ with a new ADR if the call changes.
 - [ADR-042](./ADR-042-tenant-data-planes.md) — Organisation-scoped data planes: every store switches at the tenant
 - [ADR-043](./ADR-043-runtime-excision.md) — Excise the agent runtime: Oxagen governs agents, it does not run them
 - [ADR-044](./ADR-044-memory-record-merge-is-total.md) — Memory-record merge is total: every field carries a merge rule
+- [ADR-045](./ADR-045-pin-cross-repo-reusable-workflows.md) — Pin cross-repo reusable workflows to a commit
