@@ -350,7 +350,13 @@ describe("StellaSidecarClient error paths", () => {
    * missing — the existing failure test answers `turn_complete` on the next
    * frame regardless, so it could never observe the engine being left waiting.
    */
-  function parkedEngine() {
+  /**
+   * `failResultPosts` makes the two result routes answer 500 so the REPORT
+   * itself fails — the one way the report arm can still run out of answers.
+   * The stream is released by any POST either way, so a regression shows up as
+   * a missing `cancel` rather than as a hung test.
+   */
+  function parkedEngine({ failResultPosts = false } = {}) {
     const posts: Array<{ url: string; body: string }> = [];
     let release!: () => void;
     const answered = new Promise<void>((r) => (release = r));
@@ -394,6 +400,11 @@ describe("StellaSidecarClient error paths", () => {
       }
       posts.push({ url, body: String(init?.body ?? "") });
       release();
+      if (failResultPosts && url.endsWith("-result")) {
+        return new Response("the engine could not take the report", {
+          status: 500,
+        });
+      }
       return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
     }) as typeof fetch;
 
@@ -424,6 +435,29 @@ describe("StellaSidecarClient error paths", () => {
     expect(body.status).toBe("error");
     expect(body.error?.kind).toBeTruthy();
     expect(result.outcome.status).toBe("aborted");
+  });
+
+  test("a failed report cancels the parked turn too, not just the throw arm", async () => {
+    const { client, posts } = parkedEngine({ failResultPosts: true });
+    await expect(
+      client.runTurn(
+        { provider_id: "x", messages: [] },
+        {
+          onFailure: "report",
+          onProviderRequest: async () => {
+            throw new Error("the host's model adapter blew up");
+          },
+          onToolRequest: async () => ({ ok: { content: "" } }),
+        },
+      ),
+    ).rejects.toThrow(SidecarHttpError);
+
+    // The handler rejected AND the error arm POST failed, so this host can
+    // neither answer nor report — the engine is parked on an answer that is
+    // never coming. Reporting the failure without cancelling left it there
+    // until reverse_request_timeout_ms, which is the same wait the throw arm
+    // was fixed to stop paying.
+    expect(posts.map((x) => x.url.split("/").pop())).toContain("cancel");
   });
 
   test("a rejecting handler cancels the parked turn instead of waiting it out (#1279)", async () => {

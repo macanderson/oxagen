@@ -70,7 +70,8 @@ export type ToolHandler = (
  * What {@link StellaSidecarClient.runTurn} does when a reverse-request handler
  * rejects.
  *
- * - `"throw"` (default) — collect the rejection and rethrow it once the stream
+ * - `"throw"` (default) — collect the rejection, cancel the turn so the engine
+ *   stops waiting for an answer that is not coming, and rethrow once the stream
  *   ends. Right for a test or a script driving a scripted turn, where a handler
  *   rejection is a bug in the harness and should surface as itself.
  * - `"report"` — tell the engine. A provider rejection is classified into a
@@ -79,8 +80,10 @@ export type ToolHandler = (
  *   host, because both failures are ones the engine is built to handle: a
  *   `transport`/`rate_limited` provider error is retried with backoff, and a
  *   failed tool is surfaced to the model as text it can react to. Under
- *   `"throw"` the engine learns nothing and the turn stalls until its
- *   reverse-request deadline, converting a retryable blip into a dead turn.
+ *   `"throw"` the engine learns nothing it can act on, so the turn dies instead
+ *   of retrying — promptly, now that the cancel spares both sides the
+ *   `reverse_request_timeout_ms` wait, but a retryable blip is still a dead
+ *   turn.
  */
 export type ReverseRequestFailureMode = "throw" | "report";
 
@@ -344,9 +347,10 @@ export class StellaSidecarClient {
    * `onFailure: "report"` it is POSTed back to the engine instead, which is
    * what a production host wants.
    *
-   * The default arm also cancels the turn as soon as a handler rejects. Without
-   * that the engine stays parked on a reverse request the client has already
-   * given up answering, and both sides wait out
+   * Either arm cancels the turn as soon as the client runs out of ways to
+   * answer — a rejecting handler under `throw`, a failed report under
+   * `report`. Without that the engine stays parked on a reverse request whose
+   * answer is never coming, and both sides wait out
    * `reverse_request_timeout_ms` — the client because the rethrow cannot
    * happen until the stream ends, and the stream cannot end until the engine
    * unwinds (#1279).
@@ -376,9 +380,9 @@ export class StellaSidecarClient {
     let toolCalls = 0;
     let outcome: TurnOutcome | undefined;
 
-    // Under the default `throw` arm the client gives up on the turn, but the
-    // engine does not know that: it is parked on a reverse request whose answer
-    // is never coming, and only `reverse_request_timeout_ms` ends it. The
+    // When the client gives up on the turn the engine does not know that: it
+    // is parked on a reverse request whose answer is never coming, and only
+    // `reverse_request_timeout_ms` ends it. The
     // client cannot even report the rejection until the stream ends, which is
     // the same deadline — so a handler bug cost the full timeout on both sides.
     // Signalling cancel unwinds the turn, which ends the stream, which is what
@@ -395,11 +399,22 @@ export class StellaSidecarClient {
       void this.cancelTurn(turnId).catch(() => {});
     };
 
+    // Both arms give up, because reaching here means both arms have run out of
+    // ways to answer. Under `throw` that is the handler rejecting. Under
+    // `report` the handler's rejection was already caught and POSTed, so the
+    // only thing left to fail is the report itself — and a host that can
+    // neither answer nor report has lost the turn exactly as surely. Leaving
+    // the report arm parked was the whole defect this cancel exists to remove,
+    // one step along.
+    //
+    // A late result POST that 404s or 409s also lands here, and cancelling on
+    // it is harmless: the turn has already terminated, so the cancel answers
+    // 404 and `cancelTurn` tolerates that.
     const track = (work: Promise<void>): void => {
       inFlight.push(
         work.catch((err: unknown) => {
           failures.push(err);
-          if (!reportFailures) giveUpOnTurn();
+          giveUpOnTurn();
         }),
       );
     };
