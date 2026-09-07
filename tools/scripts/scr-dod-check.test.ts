@@ -258,6 +258,69 @@ describe("dodStatus", () => {
       expect(dodStatus("### Context\n\nJust prose.").heading).toBeNull();
     });
   });
+
+  // Widening the heading set lets one issue carry two of them, and a hand
+  // migration is what produces that (stella#5193 moved 60 issues onto the
+  // canonical heading). Reading only the first match fails the migrated issue
+  // on its leftover prose section while its ticked checklist sits below.
+  describe("an issue carrying more than one recognised section", () => {
+    const migrated = [
+      "## Done when",
+      "",
+      "- the parser is fixed",
+      "- a test covers it",
+      "",
+      "## Definition of done",
+      "",
+      "- [x] the parser is fixed",
+      "- [x] a test covers it",
+    ].join("\n");
+
+    it("reads the checklist below a leftover prose section", () => {
+      const status = dodStatus(migrated);
+      expect(status.present).toBe(true);
+      expect(status.checked).toBe(2);
+      expect(status.unchecked).toEqual([]);
+      expect(status.heading).toBe("Definition of done");
+    });
+
+    it("does not block a PR closing a half-migrated issue", () => {
+      const result = verdict({ body: "Closes #1321", labels: [] }, [
+        { ref: "#1321", body: migrated },
+      ]);
+      expect(result.ok).toBe(true);
+      expect(result.reasons).toEqual([]);
+    });
+
+    it("holds every recognised checklist against the close", () => {
+      // The conservative direction: a ticked canonical section cannot excuse
+      // an unticked legacy one, so aggregating never passes what a
+      // single-section read would have failed.
+      const status = dodStatus(
+        "## Done when\n\n- [ ] the legacy item\n\n" +
+          "## Definition of done\n\n- [x] the new item",
+      );
+      expect(status.present).toBe(true);
+      expect(status.unchecked).toEqual(["the legacy item"]);
+    });
+
+    it("counts a checkbox once when a bold label sits inside a section", () => {
+      // A bold label does not close the `##` section holding it, so the same
+      // physical line is inside two matched sections.
+      const status = dodStatus(
+        "## Definition of done\n\n**Done when**\n\n- [ ] the only item",
+      );
+      expect(status.unchecked).toEqual(["the only item"]);
+    });
+
+    it("still reports the first heading when no section holds a box", () => {
+      const status = dodStatus(
+        "## Done when\n\n- prose\n\n## Done means\n\n- more prose",
+      );
+      expect(status.present).toBe(false);
+      expect(status.heading).toBe("Done when");
+    });
+  });
 });
 
 describe("verdict", () => {

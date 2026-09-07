@@ -255,8 +255,11 @@ export function referencedIssues(prBody) {
 const DOD_HEADING = new RegExp(
   String.raw`^\s*(?:#{1,6}\s*|\*\*)\s*` +
     String.raw`(?:definition of done|done means|done when|what ["']?done["']? looks like)\b`,
-  "im",
+  "gim",
 );
+
+/** The `##`/`**` run in front of a heading, stripped to get its text. */
+const HEADING_PREFIX = /^\s*(?:#{1,6}\s*|\*\*)\s*/;
 
 /**
  * Read the DoD checklist state out of an issue body.
@@ -277,35 +280,63 @@ const DOD_HEADING = new RegExp(
  * `heading` reports the matched heading text, or `null` when no recognised
  * heading was found at all. The two absences need different remedies, so the
  * caller must be able to tell "no section" from "a section with no boxes".
+ *
+ * **Every** recognised section is read, not just the first. Widening the
+ * heading set means one issue can now carry two of them, and a hand migration
+ * is what produces that: stella#5193 moved 60 issues onto the canonical
+ * heading, and leaving the old prose section above the new checklist is the
+ * ordinary result. Stopping at the first heading would fail such an issue —
+ * the legacy section holds no boxes — even though its ticked checklist sits
+ * directly below, which is the "red for a reason unrelated to the diff"
+ * failure this whole change exists to remove.
+ *
+ * Aggregating is also the conservative direction. Reading every checklist can
+ * only add unchecked items, never hide one, so no arrangement of sections can
+ * make the gate pass an issue that a single-section read would have failed. A
+ * checkbox is counted once even when sections overlap, because a bold label
+ * does not close the `##` section containing it.
  */
 export function dodStatus(issueBody) {
   const absent = { present: false, heading: null, checked: 0, unchecked: [] };
   if (!issueBody) return absent;
 
   const body = withoutNonProse(issueBody);
-  const heading = body.match(DOD_HEADING);
-  if (!heading) return absent;
 
-  const after = body.slice(heading.index + heading[0].length);
-  // The DoD section ends at the next heading of any level, so a later
-  // "### Notes" section's task list is not counted against the DoD.
-  const endMatch = after.match(/^\s*#{1,6}\s+\S/m);
-  const section = endMatch ? after.slice(0, endMatch.index) : after;
-
+  let firstHeading = null;
+  let checklistHeading = null;
   let checked = 0;
   const unchecked = [];
-  for (const line of section.split("\n")) {
-    const item = line.match(/^\s*[-*]\s*\[( |x|X)\]\s*(.*)$/);
-    if (!item) continue;
-    if (item[1] === " ") unchecked.push(item[2].trim());
-    else checked += 1;
+  const counted = new Set();
+
+  for (const heading of body.matchAll(DOD_HEADING)) {
+    const label = heading[0].replace(HEADING_PREFIX, "").trim();
+    if (firstHeading === null) firstHeading = label;
+
+    const start = heading.index + heading[0].length;
+    const after = body.slice(start);
+    // The DoD section ends at the next heading of any level, so a later
+    // "### Notes" section's task list is not counted against the DoD.
+    const endMatch = after.match(/^\s*#{1,6}\s+\S/m);
+    const section = endMatch ? after.slice(0, endMatch.index) : after;
+
+    let offset = start;
+    for (const line of section.split("\n")) {
+      const at = offset;
+      offset += line.length + 1;
+      const item = line.match(/^\s*[-*]\s*\[( |x|X)\]\s*(.*)$/);
+      if (!item || counted.has(at)) continue;
+      counted.add(at);
+      if (checklistHeading === null) checklistHeading = label;
+      if (item[1] === " ") unchecked.push(item[2].trim());
+      else checked += 1;
+    }
   }
 
-  const label = heading[0].replace(/^\s*(?:#{1,6}\s*|\*\*)\s*/, "").trim();
+  if (firstHeading === null) return absent;
   if (checked === 0 && unchecked.length === 0) {
-    return { present: false, heading: label, checked: 0, unchecked: [] };
+    return { present: false, heading: firstHeading, checked: 0, unchecked: [] };
   }
-  return { present: true, heading: label, checked, unchecked };
+  return { present: true, heading: checklistHeading, checked, unchecked };
 }
 
 /**
