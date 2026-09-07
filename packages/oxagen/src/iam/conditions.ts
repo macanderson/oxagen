@@ -18,7 +18,7 @@ import { z } from "zod";
 //   time_window   — allow only within a recurring time band (HH:MM–HH:MM in tz)
 //   ip_ranges     — allow only when clientIp falls inside one of the listed CIDRs
 //   resourceScope — agent RBAC resource-scope ceiling (graph labels/rel-types,
-//                   MCP server:tool rules, skill slugs, subagent refs). See
+//                   MCP server:tool rules, agent refs). See
 //                   docs/specs/agent-rbac/spec.md §3.3. Structural validation
 //                   only here — the resolver (resolve.ts) is what intersects
 //                   and enforces the scope; this evaluator only rejects a
@@ -59,7 +59,7 @@ export type IpRangesCondition = string[];
 //
 // A resourceScope condition is a typed ceiling on what an agent principal
 // (or the human it delegates to) may touch across four dimensions: graph
-// labels/relationship-types, MCP server:tool rules, loadable skills, and
+// labels/relationship-types, MCP server:tool rules, and
 // dispatchable subagents. See docs/specs/agent-rbac/spec.md §3.3.
 //
 // This module owns structural (zod) validation only. Resolution semantics —
@@ -112,13 +112,6 @@ export const mcpScopeSchema = z
   .strict();
 export type McpScope = z.infer<typeof mcpScopeSchema>;
 
-export const skillsScopeSchema = z
-  .object({
-    slugs: z.array(z.string()).optional(),
-  })
-  .strict();
-export type SkillsScope = z.infer<typeof skillsScopeSchema>;
-
 export const agentsScopeSchema = z
   .object({
     refs: z.array(z.string()).optional(),
@@ -130,7 +123,6 @@ export const resourceScopeSchema = z
   .object({
     graph: graphScopeSchema.optional(),
     mcp: mcpScopeSchema.optional(),
-    skills: skillsScopeSchema.optional(),
     agents: agentsScopeSchema.optional(),
   })
   .strict();

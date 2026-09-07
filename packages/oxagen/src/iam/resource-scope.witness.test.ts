@@ -13,7 +13,6 @@ describe("resourceScope conditions", () => {
         budget: { maxHops: 2, maxNodes: 50, maxTraversalMs: 1_000 },
       },
       mcp: { rules: [{ pattern: "github:*", effect: "ask" }] },
-      skills: { slugs: ["research"] },
       agents: { refs: ["reviewer"] },
     };
 

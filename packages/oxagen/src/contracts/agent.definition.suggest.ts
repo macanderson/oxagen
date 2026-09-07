@@ -100,14 +100,14 @@ export const agentDefinitionSuggest = registerCapability({
       .array(
         z.object({
           kind: z
-            .enum(["mcp_server", "skill"])
+            .enum(["mcp_server"])
             .describe(
-              "What kind of thing to connect: an MCP server from the synced registry catalog, or a workspace skill that exists but is disabled.",
+              "What kind of thing to connect: an MCP server from the synced registry catalog.",
             ),
           ref: z
             .string()
             .describe(
-              "Catalog identity for an mcp_server (registry server name, e.g. 'github/github-mcp-server') or the skill slug for a skill.",
+              "Catalog identity for an mcp_server (registry server name, e.g. 'github/github-mcp-server').",
             ),
           name: z.string().describe("Human-readable display name."),
           reason: z

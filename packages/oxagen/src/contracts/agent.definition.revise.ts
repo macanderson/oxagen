@@ -3,17 +3,17 @@ import { registerCapability } from "../registry";
 
 // The connect-first recommendation shape — identical to agent.definition.suggest.
 // Tools the revised agent SHOULD have but that are not available in the
-// workspace yet (a catalog MCP server to connect, a disabled skill to enable).
+// workspace yet (a catalog MCP server to connect).
 const recommendationSchema = z.object({
   kind: z
-    .enum(["mcp_server", "skill"])
+    .enum(["mcp_server"])
     .describe(
-      "What to connect: an MCP server from the synced registry catalog, or a workspace skill that exists but is disabled.",
+      "What to connect: an MCP server from the synced registry catalog.",
     ),
   ref: z
     .string()
     .describe(
-      "Catalog identity for an mcp_server (registry server name, e.g. 'github/github-mcp-server') or the skill slug for a skill.",
+      "Catalog identity for an mcp_server (registry server name, e.g. 'github/github-mcp-server').",
     ),
   name: z.string().describe("Human-readable display name."),
   reason: z
