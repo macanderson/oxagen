@@ -30,6 +30,7 @@ mocks.chargeVideoCredits.mockResolvedValue({
   creditsMetered: 1n,
   creditsCharged: 1n,
   shortfallCredits: 0n,
+  rateCardMiss: false,
 });
 mocks.gatewayVideo.mockReturnValue({
   modelId: "google/veo-3.0-fast-generate-001",
@@ -104,6 +105,7 @@ beforeEach(() => {
     creditsMetered: 1n,
     creditsCharged: 1n,
     shortfallCredits: 0n,
+    rateCardMiss: false,
   });
 });
 
@@ -258,6 +260,7 @@ describe("generateVideoFor (@oxagen/ai)", () => {
         creditsMetered: 1n,
         creditsCharged: 1n,
         shortfallCredits: 0n,
+        rateCardMiss: false,
       };
     });
 
@@ -282,6 +285,7 @@ describe("generateVideoFor (@oxagen/ai)", () => {
         creditsMetered: 1n,
         creditsCharged: 1n,
         shortfallCredits: 0n,
+        rateCardMiss: false,
       };
     });
 

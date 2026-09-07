@@ -29,6 +29,7 @@ mocks.chargeUsageCredits.mockResolvedValue({
   creditsMetered: 1n,
   creditsCharged: 1n,
   shortfallCredits: 0n,
+  rateCardMiss: false,
 });
 
 vi.mock("ai", () => ({ streamText: mocks.streamText }));
@@ -107,6 +108,7 @@ beforeEach(() => {
     creditsMetered: 1n,
     creditsCharged: 1n,
     shortfallCredits: 0n,
+    rateCardMiss: false,
   });
 });
 

@@ -1,5 +1,5 @@
 import pino from "pino";
-import { embed } from "ai";
+import { embed, embedMany as embedManyThroughGateway } from "ai";
 import { gateway } from "@ai-sdk/gateway";
 import {
   insertTokenUsage,
@@ -49,42 +49,30 @@ export interface EmbedTextOpts {
 }
 
 /**
- * Embed `text` using the pinned embedding model through the Vercel AI Gateway
- * and write one `token_usage` row to ClickHouse via @oxagen/telemetry
- * (best-effort, never throws). Surface origin and execution step flow through
- * `opts.telemetry` so every embedding call is metered alongside language-model
- * calls. The gateway client reads `AI_GATEWAY_API_KEY`
- * from the environment — there is no direct-provider fallback.
+ * Write the telemetry row and debit the credits for one embedding call.
+ *
+ * Shared by {@link embedText} and {@link embedMany} so a batch is metered as
+ * ONE call — one `token_usage` row, one charge — rather than once per item.
+ * Both halves are best-effort: an embedding must not fail because a metering
+ * write did.
  */
-export async function embedText(
-  text: string,
-  opts: EmbedTextOpts,
-): Promise<number[]> {
-  const model = gateway.embeddingModel(GATEWAY_MODEL);
-  const startedAt = Date.now();
-
-  const { embedding, usage } = await embed({ model, value: text });
-
-  const { orgId, workspaceId, surface, executionStepId } = opts.telemetry;
-  const durationMs = Date.now() - startedAt;
-  // Warn when the AI SDK embedding response omits usage (gateway outage, partial
-  // response, or SDK version skew) so the billing gap is visible in logs rather
-  // than silently recorded as zero tokens / zero cost.
-  if (!usage) {
-    logger.warn(
-      { model: MODEL, executionStepId },
-      "embedText: usage field absent from embed() response — token count and charge will be zero",
-    );
-  }
-  const inputTokens = usage?.tokens ?? 0;
+async function meterEmbeddingCall(params: {
+  /** Every text in the call, for the prompt hash. */
+  texts: string[];
+  inputTokens: number;
+  durationMs: number;
+  telemetry: EmbedTextOpts["telemetry"];
+}): Promise<void> {
+  const { orgId, workspaceId, surface, executionStepId } = params.telemetry;
   // Embeddings are input-only; the rate card prices them per the same meter.
   const costUsdMicros = providerCostUsdMicros({
     model: MODEL,
-    inputTokens,
+    inputTokens: params.inputTokens,
     outputTokens: 0,
   });
+
   try {
-    const promptHash = await hashPrompt(text);
+    const promptHash = await hashPrompt(params.texts.join("\n"));
     await insertTokenUsage([
       {
         execution_step_id: executionStepId,
@@ -92,11 +80,11 @@ export async function embedText(
         workspace_id: workspaceId,
         model: MODEL,
         provider: providerFromModelId(`openai:${MODEL}`),
-        input_tokens: inputTokens,
+        input_tokens: params.inputTokens,
         output_tokens: 0,
         cached_tokens: 0,
         cost_usd_micros: costUsdMicros,
-        duration_ms: durationMs,
+        duration_ms: params.durationMs,
         surface,
         prompt_hash: promptHash,
         created_at: new Date().toISOString(),
@@ -104,7 +92,7 @@ export async function embedText(
     ]);
   } catch (err) {
     // Telemetry is best-effort; never fail the caller.
-    logger.error({ err }, "embedText telemetry write failed");
+    logger.error({ err }, "embed telemetry write failed");
   }
 
   // Debit the org's credits for what this embedding call cost. Best-effort and
@@ -128,15 +116,101 @@ export async function embedText(
         // non-UUID string, which would throw and silently leave the call unbilled.
         referenceId: executionStepId ?? undefined,
         model: MODEL,
-        inputTokens,
+        inputTokens: params.inputTokens,
         outputTokens: 0,
         cachedTokens: 0,
       });
     });
   } catch (err) {
     // Swallow — credit metering must never fail a capability call.
-    logger.error({ err }, "embedText credit charge failed");
+    logger.error({ err }, "embed credit charge failed");
+  }
+}
+
+/**
+ * Embed `text` using the pinned embedding model through the Vercel AI Gateway
+ * and write one `token_usage` row to ClickHouse via @oxagen/telemetry
+ * (best-effort, never throws). Surface origin and execution step flow through
+ * `opts.telemetry` so every embedding call is metered alongside language-model
+ * calls. The gateway client reads `AI_GATEWAY_API_KEY`
+ * from the environment — there is no direct-provider fallback.
+ *
+ * Embedding several texts at once? Use {@link embedMany}: it is one round trip
+ * and one metered call instead of N of each.
+ */
+export async function embedText(
+  text: string,
+  opts: EmbedTextOpts,
+): Promise<number[]> {
+  const model = gateway.embeddingModel(GATEWAY_MODEL);
+  const startedAt = Date.now();
+
+  const { embedding, usage } = await embed({ model, value: text });
+
+  // Warn when the AI SDK embedding response omits usage (gateway outage, partial
+  // response, or SDK version skew) so the billing gap is visible in logs rather
+  // than silently recorded as zero tokens / zero cost.
+  if (!usage) {
+    logger.warn(
+      { model: MODEL, executionStepId: opts.telemetry.executionStepId },
+      "embedText: usage field absent from embed() response — token count and charge will be zero",
+    );
   }
 
+  await meterEmbeddingCall({
+    texts: [text],
+    inputTokens: usage?.tokens ?? 0,
+    durationMs: Date.now() - startedAt,
+    telemetry: opts.telemetry,
+  });
+
   return embedding;
+}
+
+/**
+ * Embed several texts in ONE gateway call, metered ONE time.
+ *
+ * The per-item alternative is `texts.map(embedText)`, and it is wrong twice
+ * over: N HTTP round trips, and N charges. The second used to be the expensive
+ * half — every call was rounded up to a whole credit, so a batch of small texts
+ * cost one credit each however little they were worth (#1413). The meter now
+ * carries the sub-credit remainder, so per-item charging is at least exact; this
+ * is the round trips, and it keeps one batch as one line in the usage ledger.
+ *
+ * Returns one vector per input, in order. An empty input does no work and is
+ * not metered.
+ */
+export async function embedMany(
+  texts: string[],
+  opts: EmbedTextOpts,
+): Promise<number[][]> {
+  if (texts.length === 0) return [];
+
+  const model = gateway.embeddingModel(GATEWAY_MODEL);
+  const startedAt = Date.now();
+
+  const { embeddings, usage } = await embedManyThroughGateway({
+    model,
+    values: texts,
+  });
+
+  if (!usage) {
+    logger.warn(
+      {
+        model: MODEL,
+        count: texts.length,
+        executionStepId: opts.telemetry.executionStepId,
+      },
+      "embedMany: usage field absent from embedMany() response — token count and charge will be zero",
+    );
+  }
+
+  await meterEmbeddingCall({
+    texts,
+    inputTokens: usage?.tokens ?? 0,
+    durationMs: Date.now() - startedAt,
+    telemetry: opts.telemetry,
+  });
+
+  return embeddings;
 }

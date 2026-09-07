@@ -75,7 +75,7 @@ export type {
 
 export { streamAgentReply } from "./stream";
 export type { StreamAgentReplyArgs } from "./stream";
-export { embedText } from "./embed";
+export { embedText, embedMany } from "./embed";
 export type { EmbedTextOpts } from "./embed";
 
 // Response cache — opt-in layered (exact + semantic) cache for deterministic

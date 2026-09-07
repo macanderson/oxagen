@@ -4,7 +4,9 @@ import {
   imageProviderCostUsd,
   videoProviderCostUsd,
   resolveMeterMarkup,
+  resolveRateEntry,
   CREDIT_VALUE_USD,
+  MICRO_CREDITS_PER_CREDIT,
   type RateCard,
   type TokenUsageInput,
 } from "./pricing";
@@ -84,7 +86,35 @@ export async function assertCanStartTurn(orgId: string): Promise<void> {
  * once. Only the per-modality cost derivation differs.
  */
 
-/** Credits to debit for a known provider cost: ceil(costUsd × markup ÷ creditValue). */
+/**
+ * What one call is worth, in MICRO-credits — the meter's exact answer, with no
+ * rounding to the ledger's unit.
+ *
+ * The ledger holds whole credits and one credit is a cent, so a call worth a
+ * fraction of a cent cannot be debited as itself. Rounding that fraction up per
+ * call charged a 200-token embedding 739x its cost (#1413), and the platform
+ * makes one embedding call per ingested entity. So the rounding decision is not
+ * made here: {@link chargeUsageCredits} hands this number to `consumeCredits`,
+ * which banks the sub-credit remainder against the org and debits a whole
+ * credit once the fractions add up to one. Exact over a sequence of calls.
+ */
+export function microCreditsForCostUsd(
+  costUsd: number,
+  markup: number = resolveMeterMarkup(),
+): bigint {
+  const micros =
+    ((costUsd * markup) / CREDIT_VALUE_USD) * Number(MICRO_CREDITS_PER_CREDIT);
+  return micros <= 0 ? 0n : BigInt(Math.round(micros));
+}
+
+/**
+ * Credits one call is worth on its own: ceil(costUsd × markup ÷ creditValue).
+ *
+ * An UPPER BOUND for display — a quote, a per-turn credit readout — not the
+ * amount debited. The debit is {@link microCreditsForCostUsd} carried across
+ * calls, so for a small call this reads 1 where the charge is a fraction of
+ * that. The two agree whenever a call is worth a whole credit or more.
+ */
 export function creditsForCostUsd(
   costUsd: number,
   markup: number = resolveMeterMarkup(),
@@ -94,7 +124,8 @@ export function creditsForCostUsd(
 }
 
 /**
- * Credits to debit for a token call: ceil(providerCostUsd × markup ÷ creditValue).
+ * Credits a token call is worth on its own, rounded up — the display figure.
+ * {@link creditsForCostUsd} explains why the debit can be smaller.
  *
  * Pass the SAME `usage` shape the real charge uses. `cachedTokens` and
  * `cacheWriteTokens` are subsets of `inputTokens` billed at their own rates, so
@@ -115,12 +146,24 @@ export function meterCreditsForUsage(
 export interface ChargeUsageResult {
   /** Provider cost in micro-USD — write straight to token_usage.cost_usd_micros. */
   costUsdMicros: number;
-  /** Credits the meter says this call is worth. */
+  /**
+   * Whole credits this call came to owe — the debit plus anything the balance
+   * could not cover. Zero when the call was worth less than a credit and its
+   * value went to the org's carry instead; {@link creditsForCostUsd} is the
+   * per-call figure to show a user.
+   */
   creditsMetered: bigint;
   /** Credits actually debited (clamped to the available balance). */
   creditsCharged: bigint;
   /** Metered − charged. Non-zero only when the balance was exhausted. */
   shortfallCredits: bigint;
+  /**
+   * True when no rate-card row priced this model, so the charge came from
+   * {@link FALLBACK_RATE_MODEL} rather than from the model's own rate. The
+   * amount is a guess in an unknown direction — consumers that treat
+   * `costUsdMicros` as fact must not, for this call.
+   */
+  rateCardMiss: boolean;
 }
 
 /**
@@ -143,15 +186,37 @@ async function chargeCostUsd(params: {
   costUsd: number;
   referenceId?: string;
   markup?: number;
+  /** True when the rate came from the fallback because no card row matched. */
+  rateCardMiss?: boolean;
   logFields?: Record<string, unknown>;
 }): Promise<ChargeUsageResult> {
   const start = Date.now();
   const costUsdMicros = Math.round(params.costUsd * 1_000_000);
-  const creditsMetered = creditsForCostUsd(
+  const rateCardMiss = params.rateCardMiss ?? false;
+
+  // A miss debits real credits at another model's rate, in an unknown
+  // direction — cheap models are over-charged, expensive ones are sold below
+  // cost. Nothing downstream can tell a guessed rate from a measured one, so
+  // this is the only place it is visible. Alert rather than refuse: refusing
+  // would bill the call at zero, which is the worse of the two errors.
+  if (rateCardMiss) {
+    logger.error(
+      {
+        orgId: params.orgId,
+        model: params.model,
+        costUsdMicros,
+        alert: "billing_rate_card_miss",
+      },
+      "billing: meter — no rate-card row for this model; charged at the fallback rate, amount is a guess",
+    );
+  }
+  // Meter in micro-credits and let consumeCredits carry the fraction, so a call
+  // worth less than a credit is not rounded up to one (#1413).
+  const microCredits = microCreditsForCostUsd(
     params.costUsd,
     params.markup ?? resolveMeterMarkup(),
   );
-  if (creditsMetered <= 0n) {
+  if (microCredits <= 0n) {
     logger.debug(
       {
         orgId: params.orgId,
@@ -167,16 +232,21 @@ async function chargeCostUsd(params: {
       creditsMetered: 0n,
       creditsCharged: 0n,
       shortfallCredits: 0n,
+      rateCardMiss,
     };
   }
 
-  const { chargedCents, shortfallCents } = await consumeCredits({
-    orgId: params.orgId,
-    requestedCents: creditsMetered,
-    reason: "consume_token_overage",
-    referenceType: "token_usage",
-    referenceId: params.referenceId,
-  });
+  const { chargedCents, shortfallCents, carryMicroCents } =
+    await consumeCredits({
+      orgId: params.orgId,
+      requestedMicroCents: microCredits,
+      reason: "consume_token_overage",
+      referenceType: "token_usage",
+      referenceId: params.referenceId,
+    });
+  // What this call actually owed in whole credits, after the carry: the debit
+  // plus anything the balance could not cover.
+  const creditsMetered = chargedCents + shortfallCents;
 
   logger.info(
     {
@@ -187,7 +257,10 @@ async function chargeCostUsd(params: {
       creditsMetered: Number(creditsMetered),
       creditsCharged: Number(chargedCents),
       shortfallCredits: Number(shortfallCents),
+      microCredits: Number(microCredits),
+      carryMicroCents: Number(carryMicroCents),
       referenceId: params.referenceId ?? null,
+      rateCardMiss,
       durationMs: Date.now() - start,
     },
     "billing: meter — usage charged",
@@ -198,6 +271,7 @@ async function chargeCostUsd(params: {
     creditsMetered,
     creditsCharged: chargedCents,
     shortfallCredits: shortfallCents,
+    rateCardMiss,
   };
 }
 
@@ -220,6 +294,8 @@ export async function chargeUsageCredits(
     costUsd: providerCostUsd(args, args.rateCard),
     referenceId: args.referenceId,
     markup: args.markup,
+    rateCardMiss:
+      resolveRateEntry(args.model, args.rateCard).matchedKey === null,
     logFields: {
       inputTokens: args.inputTokens,
       outputTokens: args.outputTokens,

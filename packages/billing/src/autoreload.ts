@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   notifyOrgManagers,
   lowBalanceAlertTemplate,
@@ -60,15 +61,100 @@ export interface AutoReloadResult {
 }
 
 /**
+ * How long an unfinished reload may keep retrying against its original Stripe
+ * idempotency key. Stripe forgets a key 24 hours after it is first seen, so a
+ * retry past that point is a fresh charge to Stripe no matter what we send —
+ * the one thing this whole mechanism exists to prevent. Just inside that
+ * window, so an episode is abandoned before it can charge again.
+ */
+const EPISODE_MAX_AGE_MS = 23 * 60 * 60 * 1000;
+
+/** One org's in-flight reload: the key it charges under, and when it opened. */
+interface ReloadEpisode {
+  idempotencyKey: string;
+  startedAt: Date;
+}
+
+/**
+ * Claim the idempotency key for this org's current low-balance episode, or read
+ * back the one already claimed.
+ *
+ * The key must outlive the charge it protects. When a charge succeeds and the
+ * credit grant then fails, the documented self-heal is to retry the whole
+ * reload: the retry has to reach Stripe with the *same* key or Stripe treats it
+ * as a new charge. Deriving the key from the wall clock could not give it that
+ * — a key bucketed by calendar hour changed 40 seconds after a 10:59:30 charge,
+ * and the retry charged the card a second time while the customer was still
+ * uncredited (#1420).
+ *
+ * So the key is a fact the row carries, written before the card is charged and
+ * cleared only by {@link closeReloadEpisode} once the credits are granted.
+ * `COALESCE` makes the claim atomic: two turns that race both run this UPDATE,
+ * the second blocks on the row lock and then sees the winner's key, so both
+ * charge under one key exactly as Stripe's de-duplication expects.
+ */
+async function claimReloadEpisode(
+  orgId: string,
+  now: Date,
+): Promise<ReloadEpisode | null> {
+  const candidate = `auto_reload:${orgId}:${randomUUID()}`;
+  const rows = await withTenantDb((tx) =>
+    tx
+      .update(schema.orgBillingSettings)
+      .set({
+        autoReloadEpisodeKey: sql`COALESCE(${schema.orgBillingSettings.autoReloadEpisodeKey}, ${candidate})`,
+        autoReloadEpisodeStartedAt: sql`COALESCE(${schema.orgBillingSettings.autoReloadEpisodeStartedAt}, ${now})`,
+        updatedAt: now,
+      })
+      .where(eq(schema.orgBillingSettings.orgId, orgId))
+      .returning({
+        idempotencyKey: schema.orgBillingSettings.autoReloadEpisodeKey,
+        startedAt: schema.orgBillingSettings.autoReloadEpisodeStartedAt,
+      }),
+  );
+
+  const row = rows[0];
+  if (!row?.idempotencyKey) return null;
+  return {
+    idempotencyKey: row.idempotencyKey,
+    startedAt: row.startedAt ?? now,
+  };
+}
+
+/** Close the episode: the credits are granted, so the next low balance is new. */
+async function closeReloadEpisode(orgId: string, now: Date): Promise<void> {
+  await withTenantDb((tx) =>
+    tx
+      .update(schema.orgBillingSettings)
+      .set({
+        lastAutoReloadAt: now,
+        autoReloadEpisodeKey: null,
+        autoReloadEpisodeStartedAt: null,
+        updatedAt: now,
+      })
+      .where(eq(schema.orgBillingSettings.orgId, orgId)),
+  );
+}
+
+/**
  * Attempt an auto-reload for the org if:
  *  1. Auto-reload is enabled in org settings.
  *  2. Effective balance < autoReloadThresholdCents.
- *  3. No reload has occurred in the last hour (idempotency window).
+ *  3. No reload has *completed* in the last hour.
  *
  * On success: charges autoReloadAmountCents off-session, grants a 1-year
- * purchase credit lot (reason GRANT_AUTO_RELOAD), and sets lastAutoReloadAt.
+ * purchase credit lot (reason GRANT_AUTO_RELOAD), then stamps lastAutoReloadAt
+ * and releases the episode key in one write.
  *
  * On charge failure: logs the error and returns { reloaded: false, reason }.
+ *
+ * Two guards, one meaning. The hourly guard above stops a *new* reload starting
+ * too soon after one finished; the episode key ({@link claimReloadEpisode})
+ * makes every attempt at an *unfinished* reload land on one Stripe charge. Both
+ * read the same row and both are settled by the same write, so there is no
+ * state in which one thinks a reload is outstanding and the other does not —
+ * the gap between a rolling guard and a calendar-hour key is what charged a
+ * card twice (#1420).
  */
 export async function maybeAutoReload(
   orgId: string,
@@ -134,10 +220,37 @@ export async function maybeAutoReload(
     paymentMethodId = defaultPm ?? undefined;
   }
 
-  // Idempotency key bucketed by hour so the same reload doesn't double-fire
-  // on a retry within the same hour window.
-  const hourBucket = `${now.getUTCFullYear()}-${now.getUTCMonth()}-${now.getUTCDate()}-${now.getUTCHours()}`;
-  const idempotencyKey = `auto_reload:${orgId}:${hourBucket}`;
+  // Claim the key this episode charges under, BEFORE touching the card. A
+  // retry of a charged-but-ungranted reload reads the same key back and Stripe
+  // de-duplicates it, however long the retry takes.
+  const episode = await claimReloadEpisode(orgId, now);
+  if (!episode) {
+    logger.error(
+      { orgId },
+      "billing: auto-reload — could not claim an idempotency key; refusing to charge",
+    );
+    return { reloaded: false, reason: "episode_key_unavailable" };
+  }
+
+  // Past Stripe's 24-hour idempotency window the same key no longer
+  // de-duplicates, so retrying would charge the card again — the exact failure
+  // this key exists to prevent. Stop and alert instead: an episode this old
+  // means the grant has been failing for a day, which needs a human either way.
+  const episodeAgeMs = now.getTime() - episode.startedAt.getTime();
+  if (episodeAgeMs > EPISODE_MAX_AGE_MS) {
+    logger.error(
+      {
+        orgId,
+        episodeStartedAt: episode.startedAt,
+        episodeAgeMs,
+        alert: "auto_reload_episode_stale",
+      },
+      "billing: auto-reload — episode older than Stripe's idempotency window; refusing to charge again. Reconcile the original payment intent, then clear org_billing_settings.auto_reload_episode_key for this org to re-enable auto-reload",
+    );
+    return { reloaded: false, reason: "episode_stale" };
+  }
+
+  const idempotencyKey = episode.idempotencyKey;
 
   let chargeResult: Awaited<
     ReturnType<ReturnType<typeof billingProvider>["chargeOffSession"]>
@@ -187,10 +300,11 @@ export async function maybeAutoReload(
   // CRITICAL ordering note: the card has ALREADY been charged at this point.
   // If the grant write fails we must NOT throw (that would both crash the
   // caller's turn AND leave the customer charged-but-uncredited). Instead we
-  // log a critical alert with the paymentIntentId and DON'T stamp
-  // lastAutoReloadAt — so the next turn (within the same hour idempotency
-  // window) retries the grant against the same, de-duplicated charge and
-  // self-heals, while ops has the paymentIntentId to compensate if it doesn't.
+  // log a critical alert with the paymentIntentId and DON'T close the episode
+  // — so the next turn retries against the same idempotency key, which Stripe
+  // de-duplicates onto the original charge, and self-heals; ops has the
+  // paymentIntentId to compensate if it doesn't. The retry is bounded by
+  // EPISODE_MAX_AGE_MS, past which it refuses rather than charging again.
   //
   // One failure below is BENIGN, and the alert cannot tell it apart: two
   // concurrent turns can both pass the lastAutoReloadAt check, both send the
@@ -214,13 +328,10 @@ export async function maybeAutoReload(
       referenceId: chargeResult.paymentIntentId,
     });
 
-    // Record the reload timestamp to enforce the 1-hour idempotency window.
-    await withTenantDb((tx) =>
-      tx
-        .update(schema.orgBillingSettings)
-        .set({ lastAutoReloadAt: now, updatedAt: now })
-        .where(eq(schema.orgBillingSettings.orgId, orgId)),
-    );
+    // The credits exist, so the episode is over: stamp the reload and release
+    // the key together. One write, so the rolling guard and the idempotency key
+    // can never disagree about whether a reload is still outstanding.
+    await closeReloadEpisode(orgId, now);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error(

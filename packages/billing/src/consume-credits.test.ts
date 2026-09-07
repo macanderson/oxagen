@@ -31,11 +31,14 @@ const state: {
   // IDs of credit_lots rows that were updated (excluding credit_balances updates)
   lotUpdateIds: string[];
   balanceUpdateCount: number;
+  /** org_billing_settings.meter_carry_micro_credits — the sub-credit carry. */
+  carryMicroCredits: bigint;
 } = {
   lots: [],
   ledgerInserts: [],
   lotUpdateIds: [],
   balanceUpdateCount: 0,
+  carryMicroCredits: 0n,
 };
 
 // ---------------------------------------------------------------------------
@@ -52,6 +55,10 @@ const SCHEMA = {
   },
   creditLedger: { orgId: "led.orgId" },
   creditBalances: { orgId: "cb.orgId", balanceCents: "cb.balanceCents" },
+  orgBillingSettings: {
+    orgId: "obs.orgId",
+    meterCarryMicroCredits: "obs.meterCarryMicroCredits",
+  },
 } as const;
 
 function makeTx() {
@@ -78,13 +85,19 @@ function makeTx() {
     // credit_balances has .orgId field but no .id field.
     update: vi.fn((table: unknown) => {
       const isCreditLots = table === SCHEMA.creditLots;
+      const isSettings = table === SCHEMA.orgBillingSettings;
       return {
-        set: vi.fn((_fields: Record<string, unknown>) => ({
+        set: vi.fn((fields: Record<string, unknown>) => ({
           where: vi.fn((cond: { _eq?: unknown[] }) => {
             if (isCreditLots) {
               // cond._eq[1] is the lot id value from eq(schema.creditLots.id, lot.id)
               const lotId = (cond?._eq?.[1] as string) ?? "unknown";
               state.lotUpdateIds.push(lotId);
+            } else if (isSettings) {
+              // The carry write-back: only the remainder stays banked.
+              state.carryMicroCredits = fields[
+                "meterCarryMicroCredits"
+              ] as bigint;
             } else {
               state.balanceUpdateCount++;
             }
@@ -94,12 +107,30 @@ function makeTx() {
       };
     }),
 
-    // INSERT — either credit_ledger (no returning) or credit_balances (balance upsert).
-    insert: vi.fn(() => ({
-      values: vi.fn(async (v: Record<string, unknown>) => {
-        state.ledgerInserts.push(v);
-      }),
-    })),
+    // INSERT — credit_ledger, or the org_billing_settings carry upsert, which
+    // accumulates and hands back the running total the way ON CONFLICT DO
+    // UPDATE … RETURNING does.
+    insert: vi.fn((table: unknown) => {
+      if (table === SCHEMA.orgBillingSettings) {
+        return {
+          values: vi.fn((v: Record<string, unknown>) => ({
+            onConflictDoUpdate: vi.fn(() => ({
+              returning: vi.fn(async () => {
+                state.carryMicroCredits += v[
+                  "meterCarryMicroCredits"
+                ] as bigint;
+                return [{ total: state.carryMicroCredits }];
+              }),
+            })),
+          })),
+        };
+      }
+      return {
+        values: vi.fn(async (v: Record<string, unknown>) => {
+          state.ledgerInserts.push(v);
+        }),
+      };
+    }),
   };
 }
 
@@ -128,6 +159,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 const { consumeCredits } = await import("./credits");
+const { microCreditsForCostUsd } = await import("./metering");
+const { providerCostUsd } = await import("./pricing");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -154,6 +187,7 @@ describe("consumeCredits — lots model", () => {
     state.ledgerInserts = [];
     state.lotUpdateIds = [];
     state.balanceUpdateCount = 0;
+    state.carryMicroCredits = 0n;
   });
 
   // ── basic debit ──────────────────────────────────────────────────────────
@@ -330,5 +364,103 @@ describe("consumeCredits — lots model", () => {
       }),
     ).rejects.toThrow("invalid credit reason");
     expect(state.ledgerInserts).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The sub-credit carry (#1413)
+// ---------------------------------------------------------------------------
+
+describe("consumeCredits — sub-credit carry", () => {
+  // The live markup, so these numbers are the ones a customer would be charged.
+  const MARKUP = 3.381;
+
+  /** One 200-token embedding, in micro-credits — the call from the issue. */
+  const EMBEDDING_MICRO = microCreditsForCostUsd(
+    providerCostUsd({
+      model: "text-embedding-3-small",
+      inputTokens: 200,
+      outputTokens: 0,
+    }),
+    MARKUP,
+  );
+
+  beforeEach(() => {
+    state.lots = [];
+    state.ledgerInserts = [];
+    state.lotUpdateIds = [];
+    state.balanceUpdateCount = 0;
+    state.carryMicroCredits = 0n;
+  });
+
+  it("charges nothing for a call worth a fraction of a credit, and banks the fraction", async () => {
+    state.lots = [makeLot("lot-1", 1000n)];
+
+    const r = await consumeCredits({
+      orgId: "org-1",
+      requestedMicroCents: EMBEDDING_MICRO,
+      reason: "consume_token_overage",
+    });
+
+    // 0.0014 of a credit. Rounding it up charged 739x the call's cost.
+    expect(EMBEDDING_MICRO).toBeLessThan(1_000_000n);
+    expect(r.chargedCents).toBe(0n);
+    expect(r.carryMicroCents).toBe(EMBEDDING_MICRO);
+    // Nothing was debited, so no ledger row and no lot touched.
+    expect(state.ledgerInserts).toHaveLength(0);
+    expect(state.lotUpdateIds).toHaveLength(0);
+  });
+
+  it("debits a whole credit once the fractions add up, and keeps the remainder", async () => {
+    state.lots = [makeLot("lot-1", 1000n)];
+
+    // 740 embeddings is just over one credit's worth at this markup.
+    let charged = 0n;
+    for (let i = 0; i < 740; i++) {
+      const r = await consumeCredits({
+        orgId: "org-1",
+        requestedMicroCents: EMBEDDING_MICRO,
+        reason: "consume_token_overage",
+      });
+      charged += r.chargedCents;
+    }
+
+    const owedMicro = EMBEDDING_MICRO * 740n;
+    expect(charged).toBe(owedMicro / 1_000_000n);
+    expect(state.carryMicroCredits).toBe(owedMicro % 1_000_000n);
+    // The carry never holds a whole credit — that is what makes it exact.
+    expect(state.carryMicroCredits).toBeLessThan(1_000_000n);
+  });
+
+  it("prices an ingestion pass at its cost, not at one credit per chunk", async () => {
+    // The issue's table: 1,000 embedded chunks are worth about a cent in total,
+    // and used to be charged 1,000 credits — $10.00 for $0.01 of work.
+    state.lots = [makeLot("lot-1", 100_000n)];
+
+    let charged = 0n;
+    for (let i = 0; i < 1_000; i++) {
+      const r = await consumeCredits({
+        orgId: "org-1",
+        requestedMicroCents: EMBEDDING_MICRO,
+        reason: "consume_token_overage",
+      });
+      charged += r.chargedCents;
+    }
+
+    expect(charged).toBe((EMBEDDING_MICRO * 1_000n) / 1_000_000n);
+    expect(charged).toBeLessThanOrEqual(2n);
+  });
+
+  it("still debits whole credits directly for a requestedCents caller", async () => {
+    state.lots = [makeLot("lot-1", 1000n)];
+    const r = await consumeCredits({
+      orgId: "org-1",
+      requestedCents: 20n,
+      reason: "consume_token_overage",
+    });
+    expect(r.chargedCents).toBe(20n);
+    // A whole-credit caller does not carry.
+    expect(r.carryMicroCents).toBe(0n);
+    expect(state.carryMicroCredits).toBe(0n);
   });
 });
