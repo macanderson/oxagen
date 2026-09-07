@@ -32,6 +32,10 @@ import { test, expect } from "@playwright/test";
 import { signUpFreshUser } from "./helpers/signup";
 import { rm, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import {
+  installNavInstrumentation,
+  attachNavLogs,
+} from "./helpers/nav-instrumentation";
 
 const SCREENSHOTS_DIR = path.resolve(
   import.meta.dirname,
@@ -47,8 +51,11 @@ test.beforeAll(async () => {
 test.describe("sandbox templates — create, set-default, export/import, bind agent", () => {
   test("full round-trip through workbench environments + sandboxes + agent bindings", async ({
     page,
-  }) => {
+  }, testInfo) => {
     test.setTimeout(180_000);
+
+    // #2559 diagnostic capture — see helpers/nav-instrumentation.ts.
+    const nav = installNavInstrumentation(page);
 
     // ── 1. Fresh owner + org ────────────────────────────────────────────────
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "sbx-tpl" });
@@ -190,6 +197,7 @@ test.describe("sandbox templates — create, set-default, export/import, bind ag
       page.waitForURL(`**${detailHref}`, { timeout: 20_000 }),
       detailLink.click(),
     ]);
+    await attachNavLogs(testInfo, nav, "agent-detail-nav");
 
     await expect(page.getByTestId("agent-environments-card")).toBeVisible({
       timeout: 20_000,
