@@ -27,7 +27,7 @@ export const agentDefinitionRevise = registerCapability({
   name: "revise_agent_def",
   domain: "agent",
   description:
-    "AI-driven edit of an existing agent definition: take a plain-language description of the change you want and the agent's current config, have the model design the revised configuration (identity, instructions, graph access, tools, triggers) grounded in the workspace's real skills, ontologies, MCP servers, and capabilities, then persist it as a NEW unpublished version — the version number is bumped. The agent's immutable slug never changes, and publishing stays a separate explicit step, so a revision never silently changes what is live. Returns the new version, a rationale, a human-readable change summary, any validation warnings, and connect-first recommendations.",
+    "AI-driven edit of an existing agent definition: take a plain-language description of the change you want and the agent's current config, have the model design the revised configuration (identity, instructions, graph access, tools) grounded in the workspace's real ontologies, MCP servers, and governed capabilities, then persist it as a NEW unpublished version — the version number is bumped. The agent's immutable slug never changes, and publishing stays a separate explicit step, so a revision never silently changes what is live. Returns the new version, a rationale, a human-readable change summary, any validation warnings, and connect-first recommendations.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
@@ -87,7 +87,7 @@ export const agentDefinitionRevise = registerCapability({
       .array(recommendationSchema)
       .default([])
       .describe(
-        "Tools the revised agent SHOULD have that are not yet available in the workspace — catalog MCP servers to connect, or disabled skills to enable. Never equipped automatically; the caller connects/enables them first, then revises again to equip them.",
+        "Tools the revised agent SHOULD have that are not yet available in the workspace — catalog MCP servers to connect. Never equipped automatically; the caller connects/enables them first, then revises again to equip them.",
       ),
   }),
 });

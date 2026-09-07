@@ -127,36 +127,6 @@ describe("commandMenuSearchHandler", () => {
     expect(row?.scope).toBe("Workspace: prod");
   });
 
-  it("returns no Postgres rows for the retired playbook kind (ADR-041)", async () => {
-    // Automations left with the runtime: `playbook` is still in the contract's
-    // SEARCHABLE_KINDS, but it has no Postgres arm any more, so the only rows
-    // that can come back are ontology hits.
-    mockWithTenantDb.mockImplementation(
-      async (fn: (tx: unknown) => Promise<unknown>) => {
-        const tx = {
-          select: () => tx,
-          from: () => tx,
-          where: () => tx,
-          orderBy: () => tx,
-          limit: () => Promise.resolve([{ publicId: "should_not_be_queried" }]),
-        };
-        return fn(tx);
-      },
-    );
-
-    const result = await commandMenuSearchHandler(
-      {
-        kind: "playbook",
-        query: "churn",
-        orgSlug: "acme",
-        workspaceSlug: "prod",
-      },
-      ctx,
-    );
-
-    expect(result.rows).toEqual([]);
-    expect(mockWithTenantDb).not.toHaveBeenCalled();
-  });
 
   it("merges graph + Postgres results, deduplicates by href", async () => {
     // Graph returns a node for the same entity, under a different route.

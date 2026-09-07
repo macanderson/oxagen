@@ -5,7 +5,7 @@ import { registerCapability } from "../registry";
  * command.menu.search — entity search for the Command Menu's Search section.
  *
  * Invoked when the user's Command Menu input matches an entity-prefix pattern
- * (run #, playbook, @email, etc.). Composes results from the ontology graph
+ * (run #, @email, etc.). Composes results from the ontology graph
  * and operational Postgres tables, each filtered by the caller's tenant grants.
  *
  * Returns up to 8 typed result rows, each with a ready-to-navigate href so the
@@ -16,8 +16,6 @@ import { registerCapability } from "../registry";
 export const SEARCHABLE_KINDS = [
   "run",
   "principal",
-  "playbook",
-  "trigger",
   "event",
   "agent",
 ] as const;

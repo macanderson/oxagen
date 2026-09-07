@@ -60,8 +60,6 @@ describe("command.menu.search contract", () => {
     const expected = [
       "run",
       "principal",
-      "playbook",
-      "trigger",
       "event",
       "agent",
     ] as const;

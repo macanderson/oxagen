@@ -1,5 +1,5 @@
 {
-  "generatedCount": 229,
+  "generatedCount": 228,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1820,18 +1820,6 @@
     {
       "name": "query_audit_log",
       "domain": "audit",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent",
-        "cli"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "domain": "lineage",
       "surfaces": [
         "api",
         "mcp",

@@ -30,7 +30,7 @@ export const agentDefinitionSuggest = registerCapability({
   name: "suggest_agent_def",
   domain: "agent",
   description:
-    "AI-assisted agent setup: turn a plain-language description of what an agent should do into a complete draft agent configuration (identity, instructions, graph access, tools), grounded in the workspace's real skills, ontologies, MCP servers, and capabilities via the create-agent skill. Returns a suggestion shaped exactly like agent.definition.create input, plus a rationale and any warnings — nothing is persisted; the caller reviews, edits, and saves the draft explicitly.",
+    "AI-assisted agent setup: turn a plain-language description of what an agent should do into a complete draft agent configuration (identity, instructions, graph access, tools), grounded in the workspace's real ontologies, MCP servers, and governed capabilities. Returns a suggestion shaped exactly like agent.definition.create input, plus a rationale and any warnings — nothing is persisted; the caller reviews, edits, and saves the draft explicitly.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -56,12 +56,6 @@ export const agentDefinitionSuggest = registerCapability({
       .optional()
       .describe(
         "Optional preferred slug (kebab-case). The model derives one from the description if omitted.",
-      ),
-    agentTypeHint: z
-      .string()
-      .optional()
-      .describe(
-        'Optional agentType to steer toward (e.g. "code" for a repo-capable agent). The model infers it from the description if omitted.',
       ),
   }),
   output: z.object({
@@ -119,7 +113,7 @@ export const agentDefinitionSuggest = registerCapability({
       )
       .default([])
       .describe(
-        "Tools the agent SHOULD have that are not yet available in the workspace — MCP servers from the catalog that are not registered, or disabled skills. Never included in suggestion.config.agentTools (which only carries refs that exist right now); the caller connects/enables these first, then equips them. The suggested IAM role for the same draft is returned separately as `suggestedRole` (docs/specs/agent-rbac).",
+        "Tools the agent SHOULD have that are not yet available in the workspace — MCP servers from the catalog that are not registered. Never included in suggestion.config.agentTools (which only carries refs that exist right now); the caller connects/enables these first, then equips them. The suggested IAM role for the same draft is returned separately as `suggestedRole` (docs/specs/agent-rbac).",
       ),
     // ADDITIVE (Agent RBAC Phase 5b). Optional so every existing consumer of
     // this contract is unaffected: a caller that ignores the field behaves

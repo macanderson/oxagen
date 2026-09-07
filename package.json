@@ -61,7 +61,6 @@
     "billing:stripe-sync": "tsx --env-file-if-exists=.env.local tools/scripts/stripe-sync.ts",
     "db:seed-interactive-agent": "tsx --env-file-if-exists=.env.local tools/scripts/seed-interactive-agent.ts",
     "db:backfill-iam": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-org-iam.ts",
-    "db:backfill-capabilities": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-workspace-capabilities.ts",
     "db:backfill-mcp-server-auth-config": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-mcp-server-auth-config.ts",
     "check:mcp-externals": "tsx tools/scripts/check-mcp-externals.ts"
   },

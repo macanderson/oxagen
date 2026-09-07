@@ -16,13 +16,6 @@ import { logger } from "./logger";
  * query filters by ctx.orgId. Never relax this — a missing org filter would leak
  * another tenant's audit trail (SOC 2 §0).
  *
- * ADR-041 note: this used to merge a SECOND spine, `playbook_events` — the
- * hash-chained automation trail. Automations/playbooks left with the runtime and
- * that table is dropped, so `source: "playbook"` now matches nothing and the
- * playbook-only fields (playbookRunId / sequence / eventData) are always null.
- * The contract still declares the value; narrowing its enum is a follow-up in
- * packages/oxagen.
- *
  * Workspace narrowing comes ONLY from `input.workspaceId`; ctx.workspaceId is
  * deliberately not applied, so the default result is the whole org's feed. That
  * is what the org Governance hub wants, but it also means a caller allowed at
@@ -86,9 +79,6 @@ export const auditLogQueryHandler: CapabilityHandler<
           capability: r.capability,
           outcome: r.outcome,
           requestId: r.requestId,
-          playbookRunId: null,
-          sequence: null,
-          eventData: null,
         });
       }
     }

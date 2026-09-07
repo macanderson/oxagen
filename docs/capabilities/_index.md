@@ -9,7 +9,7 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**247 capabilities across 36 domains.**
+**246 capabilities across 35 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
@@ -197,10 +197,6 @@ Capabilities granted to an agent as a set have a page of their own:
 - [integration.list](integration.list.md) — Browse installed plugin instances with status and sync metrics
 - [integration.metrics](integration.metrics.md) — Get sync statistics and metrics for a plugin instance
 - [integration.sync](integration.sync.md) — Trigger synchronization of a plugin instance (async)
-
-## Lineage (1)
-
-- [lineage.query](lineage.query.md) — Return the dispatch tree for one fan-out/run id — every subagent run reachable from a root dispatch, each carrying its principal (and Agent-RBAC delegation ceiling), observed ClickHouse spend, model/provider, and a derived outcome
 
 ## Model (1)
 

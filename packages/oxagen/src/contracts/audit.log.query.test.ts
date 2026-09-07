@@ -40,7 +40,7 @@ describe("audit.log.query capability", () => {
   });
 
   it("accepts each valid source", () => {
-    for (const source of ["all", "security", "playbook"] as const) {
+    for (const source of ["all", "security"] as const) {
       expect(auditLogQuery.input.parse({ source }).source).toBe(source);
     }
   });
@@ -73,7 +73,7 @@ describe("audit.log.query capability", () => {
 
   // ── output shape ──────────────────────────────────────────────────────────
 
-  it("parses a valid output with a mixed event feed", () => {
+  it("parses a valid output with a security event feed", () => {
     const parsed = auditLogQuery.output.parse({
       events: [
         {
@@ -85,30 +85,14 @@ describe("audit.log.query capability", () => {
           capability: "start_subscription_upgrade",
           outcome: "success",
           requestId: "req_1",
-          playbookRunId: null,
-          sequence: null,
-          eventData: null,
-        },
-        {
-          source: "playbook",
-          eventType: "run_completed",
-          occurredAt: "2024-01-05T00:00:00.000Z",
-          actorUserId: null,
-          workspaceId: "ws_1",
-          capability: null,
-          outcome: null,
-          requestId: null,
-          playbookRunId: "run_1",
-          sequence: 7,
-          eventData: { ok: true },
         },
       ],
-      total: 2,
+      total: 1,
       hasMore: false,
       limit: 50,
       offset: 0,
     });
-    expect(parsed.events).toHaveLength(2);
+    expect(parsed.events).toHaveLength(1);
     expect(parsed.events[1]?.sequence).toBe(7);
   });
 

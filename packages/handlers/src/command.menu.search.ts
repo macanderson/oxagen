@@ -7,11 +7,6 @@
  *   2. Operational Postgres tables — runs, agents, principals — each filtered
  *      by the caller's tenant via withTenantDb.
  *
- * ADR-041 note: `playbook` and `trigger` remain in the contract's
- * SEARCHABLE_KINDS, but automations left with the runtime and their tables are
- * dropped, so neither kind has a Postgres arm any more. Narrowing the enum is a
- * follow-up in packages/oxagen.
- *
  * Results are merged and sliced to 8 rows as per the spec (§10) performance
  * target. The dedupe is by href, so it only collapses repeats WITHIN a source —
  * the same entity found in Postgres and in the graph carries two different

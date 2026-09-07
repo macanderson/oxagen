@@ -91,38 +91,11 @@ describe("auditLogQueryHandler", () => {
     // Newest first: Jan 5 before Jan 3.
     expect(result.events[0]?.eventType).toBe("auth.sign_in");
     expect(result.events[1]?.capability).toBe("start_subscription_upgrade");
-    // The playbook-only fields are always null now that the spine is gone.
     expect(result.events.every((e) => e.source === "security")).toBe(true);
-    expect(result.events.every((e) => e.playbookRunId === null)).toBe(true);
-    expect(result.events.every((e) => e.sequence === null)).toBe(true);
-    expect(result.events.every((e) => e.eventData === null)).toBe(true);
     expect(result.hasMore).toBe(false);
     expect(result.total).toBe(2);
   });
 
-  it("returns nothing for source=playbook — the spine is gone (ADR-041)", async () => {
-    mocks.securityRows = [
-      {
-        eventType: "auth.sign_in",
-        occurredAt: new Date("2024-01-01T00:00:00Z"),
-        actorUserId: "u1",
-        workspaceId: null,
-        capability: null,
-        outcome: "success",
-        requestId: null,
-      },
-    ];
-
-    const result = await auditLogQueryHandler(
-      { source: "playbook", limit: 50, offset: 0 },
-      CTX,
-    );
-
-    expect(result.events).toEqual([]);
-    expect(result.hasMore).toBe(false);
-    // No table was queried at all.
-    expect(mocks.whereArgs).toHaveLength(0);
-  });
 
   it("only queries the security spine when source=security", async () => {
     mocks.securityRows = [

@@ -58,26 +58,6 @@
             "environmentSlug": {
               "type": "string"
             },
-            "sandboxTemplateId": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "sandboxTemplateName": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
             "isPrimary": {
               "type": "boolean"
             }
@@ -88,8 +68,6 @@
             "environmentId",
             "environmentName",
             "environmentSlug",
-            "sandboxTemplateId",
-            "sandboxTemplateName",
             "isPrimary"
           ],
           "additionalProperties": false
