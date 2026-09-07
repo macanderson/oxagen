@@ -3,8 +3,8 @@
  * session-store.tsx — the React face of the unified chat session (chat_ux_v2).
  *
  * ONE provider owns the whole run context; `updateSession` is the ONLY write
- * path (it funnels through `applySessionPatch`, so the org→repo→branch
- * cascades can never be skipped). Everything on screen — header subtitle,
+ * path (it funnels through `applySessionPatch`). Everything on screen — header
+ * subtitle,
  * SessionSettings drawer/slide-over/rail, the composer's submit payload — is a
  * projection of `state`, which is what makes a header-vs-panel mismatch
  * structurally impossible.
@@ -17,17 +17,10 @@
  * first send.
  */
 import * as React from "react";
-import type { StoredCodeBinding } from "@/app/api/v1/chat/stream/code-binding";
 import {
-  applyCodeBinding,
-  applyCodeMemory,
   applySessionPatch,
-  agentMemoryKey,
-  codeMemoryOf,
   computeSessionLocks,
-  decodeCodeMemory,
   decodeSessionState,
-  encodeCodeMemory,
   encodeSessionState,
   seedSessionState,
   sessionDiffersFromDefaults,
@@ -77,9 +70,8 @@ export interface ChatSessionStore {
   updateSession: (patch: ChatSessionPatch) => void;
   resetToDefaults: () => void;
   /**
-   * Mark that a message was sent in this view: locks the agent, persists the
-   * agent's code-context memory, and (for a new chat) migrates the draft
-   * session onto the real conversation key.
+   * Mark that a message was sent in this view: locks the agent and (for a new
+   * chat) migrates the draft session onto the real conversation key.
    */
   noteMessageSent: (conversationId: string | null) => void;
 }
@@ -116,8 +108,6 @@ export interface ChatSessionProviderProps {
   hasMessages: boolean;
   /** Workspace defaults resolved server-side. */
   seed: SessionSeed;
-  /** The conversation's durable code binding — authoritative when present. */
-  codeBinding?: StoredCodeBinding | null;
   children: React.ReactNode;
 }
 
@@ -128,7 +118,6 @@ export function ChatSessionProvider({
   isNewConversation,
   hasMessages,
   seed,
-  codeBinding = null,
   children,
 }: ChatSessionProviderProps) {
   // The defaults snapshot is fixed for the mount — it is both the reset
@@ -137,38 +126,22 @@ export function ChatSessionProvider({
   const defaults = React.useMemo(
     () => seedSessionState(seed),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed is a fresh object each RSC render; its fields are stable for the mount
-    [
-      seed.defaultAgentId,
-      seed.defaultRepoKey,
-      seed.defaultEnvId,
-      seed.textModel,
-      seed.textTier,
-      seed.budgetUsd,
-    ],
+    [seed.defaultAgentId, seed.textModel, seed.textTier, seed.budgetUsd],
   );
 
   // SSR-safe initial state (no localStorage on the server): defaults, then
-  // the URL agent binding, then the binding force. The persisted session is
-  // layered on after mount by the hydration effect below.
-  const [state, setState] = React.useState<ChatSessionState>(() => {
-    let initial = defaults;
-    if (boundAgentId && isNewConversation) {
-      initial = applySessionPatch(initial, { agentId: boundAgentId });
-    }
-    return applyCodeBinding(initial, codeBinding);
-  });
+  // the URL agent binding. The persisted session is layered on after mount by
+  // the hydration effect below.
+  const [state, setState] = React.useState<ChatSessionState>(() =>
+    boundAgentId && isNewConversation
+      ? applySessionPatch(defaults, { agentId: boundAgentId })
+      : defaults,
+  );
 
   const [clientLocked, setClientLocked] = React.useState(false);
-  const isBound = codeBinding !== null;
   const locks = React.useMemo(
-    () =>
-      computeSessionLocks({
-        hasMessages,
-        codeBinding: isBound ? codeBinding : null,
-        clientLocked,
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on isBound: the binding object's identity churns each RSC render, its presence doesn't
-    [hasMessages, isBound, clientLocked],
+    () => computeSessionLocks({ hasMessages, clientLocked }),
+    [hasMessages, clientLocked],
   );
   const locksRef = React.useRef(locks);
   React.useEffect(() => {
@@ -179,63 +152,27 @@ export function ChatSessionProvider({
   const storageKeyRef = React.useRef(storageKey);
 
   // ── The single write path ────────────────────────────────────────────────
-  const updateSession = React.useCallback(
-    (patch: ChatSessionPatch) => {
-      setState((prev) => {
-        const l = locksRef.current;
-        const rejected: ChatSessionPatch = { ...patch };
-        if (l.agent) delete rejected.agentId;
-        if (l.code) {
-          delete rejected.org;
-          delete rejected.repoKey;
-          delete rejected.envId;
-          // Branch stays editable — the binding pins repo+env, not branch.
-        }
-        const next = applySessionPatch(prev, rejected);
-        writeStorage(storageKeyRef.current, encodeSessionState(next));
-        // Agent switch before the first message: overlay that agent's
-        // remembered code context (last org/repo/branch/env in this
-        // workspace) so the Code section opens where the user left it.
-        if (
-          rejected.agentId !== undefined &&
-          rejected.agentId !== prev.agentId &&
-          rejected.agentId !== null
-        ) {
-          const memory = decodeCodeMemory(
-            readStorage(agentMemoryKey(workspaceSlug, rejected.agentId)),
-          );
-          if (memory) {
-            const withMemory = applyCodeMemory(next, memory);
-            writeStorage(storageKeyRef.current, encodeSessionState(withMemory));
-            return withMemory;
-          }
-        }
-        return next;
-      });
-    },
-    [workspaceSlug],
-  );
-
-  const resetToDefaults = React.useCallback(() => {
-    setState(() => {
-      const next = applyCodeBinding(defaults, codeBinding);
+  const updateSession = React.useCallback((patch: ChatSessionPatch) => {
+    setState((prev) => {
+      const accepted: ChatSessionPatch = { ...patch };
+      if (locksRef.current.agent) delete accepted.agentId;
+      const next = applySessionPatch(prev, accepted);
       writeStorage(storageKeyRef.current, encodeSessionState(next));
       return next;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- codeBinding identity churns each render; reset reads the latest via closure per call
-  }, [defaults, codeBinding?.agentId, codeBinding?.environmentId]);
+  }, []);
+
+  const resetToDefaults = React.useCallback(() => {
+    setState(() => {
+      writeStorage(storageKeyRef.current, encodeSessionState(defaults));
+      return defaults;
+    });
+  }, [defaults]);
 
   const noteMessageSent = React.useCallback(
     (newConversationId: string | null) => {
       setClientLocked(true);
       setState((prev) => {
-        // Persist this agent's code context for next time.
-        if (prev.agentId) {
-          writeStorage(
-            agentMemoryKey(workspaceSlug, prev.agentId),
-            encodeCodeMemory(codeMemoryOf(prev)),
-          );
-        }
         // Draft → conversation key migration on first send.
         const prevKey = storageKeyRef.current;
         if (newConversationId && prevKey.startsWith(SESSION_DRAFT_PREFIX)) {
@@ -277,25 +214,10 @@ export function ChatSessionProvider({
       if (!persisted && boundAgentId && isNewConversation) {
         next = applySessionPatch(next, { agentId: boundAgentId });
       }
-      // The durable binding always wins last.
-      return applyCodeBinding(next, codeBinding);
+      return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-hydrate only on conversation switch; the rest are stable server props for this mount
   }, [conversationId]);
-
-  // Keep the state pinned to the binding if it appears mid-session (first
-  // code turn claims it server-side and the page revalidates).
-  React.useEffect(() => {
-    if (!codeBinding) return;
-    setState((prev) => applyCodeBinding(prev, codeBinding));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- force to primitive binding values; the object identity churns each render
-  }, [
-    codeBinding?.agentId,
-    codeBinding?.connectionId,
-    codeBinding?.owner,
-    codeBinding?.name,
-    codeBinding?.environmentId,
-  ]);
 
   const isDirty = sessionDiffersFromDefaults(state, defaults);
 

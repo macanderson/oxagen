@@ -1,6 +1,14 @@
-import { requireScope, TenantScopeError } from "@oxagen/tenancy";
+import {
+  assertDataPlaneUsable,
+  requireScope,
+  resolveDataPlane,
+  TenantScopeError,
+  type Neo4jPlaneConfig,
+} from "@oxagen/tenancy";
+import type { Session } from "neo4j-driver";
 import { neo4jBreaker } from "@oxagen/telemetry";
 import { session } from "./client";
+import { dedicatedSession } from "./data-plane-driver";
 import { applyGraphScope, GraphScopeError } from "./graph-scope";
 import type { GraphScope } from "./graph-scope";
 
@@ -45,7 +53,32 @@ export function scopedSession(scope?: GraphScope): {
   close: () => Promise<void>;
 } {
   const { orgId, workspaceId } = requireScope();
-  const s = session();
+
+  // ADR-042: which physical Neo4j this organisation's graph lives on is
+  // resolved LAZILY, on the first run(). Two reasons the resolution cannot
+  // happen here: scopedSession() is synchronous (every caller depends on that,
+  // and the no-scope guard above must stay a synchronous throw), and the
+  // resolver is async because it reads org.data_planes. Deferring also means a
+  // session that is created and never used opens no connection at all.
+  let s: Session | null = null;
+  async function ensureSession(): Promise<Session> {
+    if (s) return s;
+    const plane = await resolveDataPlane(orgId, "neo4j");
+    // Fail closed: a degraded or disabled graph plane throws rather than
+    // quietly answering from the platform's own graph, which would leak one
+    // tenant's ontology into a store the customer moved its data out of.
+    assertDataPlaneUsable(plane);
+    s =
+      plane.mode === "shared"
+        ? session()
+        : dedicatedSession({
+            orgId,
+            config: plane.config as Neo4jPlaneConfig,
+            configDigest: plane.configDigest,
+          });
+    return s;
+  }
+
   return {
     async run(cypher: string, params: Record<string, unknown> = {}) {
       if (!SCOPE_GUARD.test(cypher)) {
@@ -53,6 +86,7 @@ export function scopedSession(scope?: GraphScope): {
           `Cypher over a scoped session must filter by $orgId: ${cypher.slice(0, 80)}`,
         );
       }
+      const sess = await ensureSession();
 
       // No agent scope → behaviorally unchanged pass-through (humans and
       // scope-less sessions). Guard the shared Neo4j driver with the circuit
@@ -62,7 +96,7 @@ export function scopedSession(scope?: GraphScope): {
       // programming error must never count toward tripping it.
       if (scope === undefined) {
         return neo4jBreaker().exec(() =>
-          s.run(cypher, { ...params, orgId, workspaceId }),
+          sess.run(cypher, { ...params, orgId, workspaceId }),
         );
       }
 
@@ -74,10 +108,14 @@ export function scopedSession(scope?: GraphScope): {
       const finalParams = { ...applied.params, orgId, workspaceId };
       return neo4jBreaker().exec(() =>
         applied.txConfig
-          ? s.run(applied.cypher, finalParams, applied.txConfig)
-          : s.run(applied.cypher, finalParams),
+          ? sess.run(applied.cypher, finalParams, applied.txConfig)
+          : sess.run(applied.cypher, finalParams),
       );
     },
-    close: () => s.close(),
+    // A session that never ran opened no connection, so there is nothing to
+    // close — resolve rather than force every caller to branch.
+    close: async () => {
+      if (s) await s.close();
+    },
   };
 }

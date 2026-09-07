@@ -50,6 +50,7 @@ import { resolveOptimisticDefaultAgent } from "./agent-picker/default-agent-opti
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
 import type { ConversationMessageSummary } from "@/lib/page-context/suggested-prompts";
 import { ConversationExportMenu } from "./conversation-export-menu";
+import { AgentActivityRail } from "./agent-activity-rail";
 import { useLatestRef } from "@/lib/use-latest-ref";
 import { ThinkingBubble } from "./thinking-bubble";
 import { MessageFooter } from "./message-footer";
@@ -498,10 +499,8 @@ export function ChatShellClient({
   const orgSlugRef = useLatestRef(orgSlug);
   const workspaceSlugRef = useLatestRef(workspaceSlug);
   const setIsStreamingRef = useLatestRef(setIsStreaming);
-  // Page-form-fill callback refs — stable so wrappedSendAction deps don't change.
+  // Page-context ref — stable so wrappedSendAction deps don't change.
   const pageContextRef = useLatestRef(pageContext ?? null);
-  const onFormFillStartRef = useLatestRef(onFormFillStart ?? null);
-  const onFormFillEndRef = useLatestRef(onFormFillEnd ?? null);
   // Embedded-mode callback refs (floating in-app panel). When set, they replace
   // the router-based URL pin + refresh reconciliation that the /ask page uses.
   const onConversationCreatedRef = useLatestRef(onConversationCreated ?? null);
@@ -1174,49 +1173,8 @@ export function ChatShellClient({
     i++;
   }
 
-  // The open PR for this conversation, derived from the latest completed
-  // `edit_repo_file` / `open_pr` tool call. Feeds the composer's compact
-  // "PR #123 ●" status chip (live CI on hover). Recomputed only when the tool
-  // calls change — the walk is cheap, but memoising keeps the chip's prop
-  // identity stable so its CI fetch effect doesn't re-run every render.
-  const codeSessionPr = React.useMemo(
-    () =>
-      deriveComposerPr(
-        order
-          .filter((k) => k.startsWith("tool:"))
-          .map((k) => toolCalls[k.slice("tool:".length)])
-          .filter((tc): tc is NonNullable<typeof tc> => Boolean(tc))
-          .map((tc) => ({
-            capability: tc.capability,
-            status: tc.status,
-            inputPreview:
-              (tc.inputPreview as Record<string, unknown> | null) ?? null,
-            output: (tc.output as Record<string, unknown> | undefined) ?? null,
-          })),
-      ),
-    [order, toolCalls],
-  );
-
-  // Agent-picker config: resolve the workspace user's saved coding defaults to
-  // live selector values, and track the default agent optimistically so the
+  // Agent-picker config: track the default agent optimistically so the
   // picker's star reflects a toggle instantly (reverting if the write fails).
-  const defaultRepoKey = React.useMemo(
-    () =>
-      resolveDefaultRepoKey(
-        availableRepos ?? [],
-        defaultRepoConnectionId ?? null,
-        defaultRepoSlug ?? null,
-      ),
-    [availableRepos, defaultRepoConnectionId, defaultRepoSlug],
-  );
-  const defaultEnvId = React.useMemo(
-    () =>
-      resolveDefaultEnvId(
-        availableEnvironments ?? [],
-        defaultEnvironmentId ?? null,
-      ),
-    [availableEnvironments, defaultEnvironmentId],
-  );
   const [currentDefaultAgentId, setCurrentDefaultAgentId] = React.useState<
     string | null
   >(defaultAgentId ?? null);
@@ -1240,8 +1198,6 @@ export function ChatShellClient({
   const sessionSeed = React.useMemo<SessionSeed>(
     () => ({
       defaultAgentId: currentDefaultAgentId,
-      defaultRepoKey,
-      defaultEnvId,
       textModel: initialModelState?.model ?? null,
       textTier: initialModelState?.tier ?? null,
       budgetUsd:
@@ -1249,7 +1205,7 @@ export function ChatShellClient({
           ? initialModelState.budgetUsd
           : null,
     }),
-    [currentDefaultAgentId, defaultRepoKey, defaultEnvId, initialModelState],
+    [currentDefaultAgentId, initialModelState],
   );
 
   const shell = (
@@ -1257,12 +1213,9 @@ export function ChatShellClient({
       agents={availableAgents ?? []}
       boundAgentId={agentId ?? null}
       workspaceDefaultAgentId={currentDefaultAgentId}
-      defaultRepoKey={defaultRepoKey}
-      defaultEnvId={defaultEnvId}
       conversationId={conversationId}
       workspaceSlug={workspaceSlug}
       isNewConversation={!conversationId}
-      codeBinding={conversationCodeBinding ?? null}
     >
       <div className="flex h-full w-full gap-4">
         {/* Conversation column — uncapped. The conversation is the page's
@@ -1278,8 +1231,6 @@ export function ChatShellClient({
           {v2MobileChrome ? (
             <MobileSessionChrome
               agents={availableAgents ?? []}
-              repos={availableRepos ?? []}
-              environments={availableEnvironments ?? []}
               modelConfig={modelConfig}
               orgSlug={orgSlug}
               workspaceSlug={workspaceSlug}
@@ -1299,8 +1250,6 @@ export function ChatShellClient({
           {v2DesktopChrome ? (
             <ChatHeaderDesktop
               agents={availableAgents ?? []}
-              repos={availableRepos ?? []}
-              environments={availableEnvironments ?? []}
               isStreaming={isStreaming}
               onFocusSessionPanel={handleFocusSessionPanel}
             />
@@ -1516,11 +1465,7 @@ export function ChatShellClient({
               onInterrupt={handleInterrupt}
               initialModelState={initialModelState}
               availableMcpServers={availableMcpServers}
-              availableRepos={availableRepos}
-              availableEnvironments={availableEnvironments}
               availableAgents={availableAgents}
-              defaultRepoKey={defaultRepoKey}
-              defaultEnvId={defaultEnvId}
               defaultAgentId={currentDefaultAgentId}
               onSetDefaultAgent={
                 setDefaultAgentAction ? handleSetDefaultAgent : undefined
@@ -1531,7 +1476,6 @@ export function ChatShellClient({
               }
               orgSlug={orgSlug}
               workspaceSlug={workspaceSlug}
-              codeSessionPr={codeSessionPr}
               onOpenSessionSettings={
                 v2MobileChrome || v2MidWidth
                   ? () => setSessionSettingsOpen(true)
@@ -1541,9 +1485,9 @@ export function ChatShellClient({
             />
           </div>
         </div>
-        {/* Right rail: legacy three-card activity rail (Progress / Context /
-          Outputs); chat_ux_v2 desktop swaps Context for the writable Session
-          panel (`sessionPanelSlot`). Hidden in the floating in-app panel
+        {/* Right rail: Progress / Files; chat_ux_v2 desktop additionally
+          renders the writable Session panel (`sessionPanelSlot`) above them.
+          Hidden in the floating in-app panel
           (showFiles=false, same gate the toolbar's export trigger uses) and on
           narrow viewports — the rail needs real width to be legible; below
           the breakpoint it reflows into the bottom sheet below. */}
@@ -1557,18 +1501,10 @@ export function ChatShellClient({
           >
             <AgentActivityRail
               order={order}
-              plans={plans}
               toolCalls={toolCalls}
-              activeFanouts={activeFanouts}
               turnUsage={turnUsage}
               isStreaming={isStreaming}
               conversationPublicId={conversationPublicId}
-              orgSlug={orgSlug}
-              workspaceSlug={workspaceSlug}
-              codeSessionPr={codeSessionPr}
-              availableRepos={availableRepos}
-              availableEnvironments={availableEnvironments}
-              conversationCodeBinding={conversationCodeBinding ?? null}
               v2={chatUxV2}
               sessionPanelSlot={
                 // Only mount the (real, non-trivial) Session panel once the
@@ -1582,8 +1518,6 @@ export function ChatShellClient({
                   <div ref={sessionPanelRef}>
                     <DesktopSessionPanel
                       agents={availableAgents ?? []}
-                      repos={availableRepos ?? []}
-                      environments={availableEnvironments ?? []}
                       modelConfig={modelConfig}
                       orgSlug={orgSlug}
                       workspaceSlug={workspaceSlug}
@@ -1621,18 +1555,10 @@ export function ChatShellClient({
                 >
                   <AgentActivityRail
                     order={order}
-                    plans={plans}
                     toolCalls={toolCalls}
-                    activeFanouts={activeFanouts}
                     turnUsage={turnUsage}
                     isStreaming={isStreaming}
                     conversationPublicId={conversationPublicId}
-                    orgSlug={orgSlug}
-                    workspaceSlug={workspaceSlug}
-                    codeSessionPr={codeSessionPr}
-                    availableRepos={availableRepos}
-                    availableEnvironments={availableEnvironments}
-                    conversationCodeBinding={conversationCodeBinding ?? null}
                     v2={chatUxV2}
                   />
                 </div>
@@ -1649,8 +1575,6 @@ export function ChatShellClient({
           open={sessionSettingsOpen}
           onOpenChange={setSessionSettingsOpen}
           agents={availableAgents ?? []}
-          repos={availableRepos ?? []}
-          environments={availableEnvironments ?? []}
           modelConfig={modelConfig}
           orgSlug={orgSlug}
           workspaceSlug={workspaceSlug}
@@ -1673,7 +1597,6 @@ export function ChatShellClient({
       isNewConversation={!conversationId}
       hasMessages={messages.length > 0 || isStreaming}
       seed={sessionSeed}
-      codeBinding={conversationCodeBinding ?? null}
     >
       {shell}
     </ChatSessionProvider>

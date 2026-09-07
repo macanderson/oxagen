@@ -120,8 +120,8 @@ apps/app/src/components/
   chat/
     chat-shell-client.tsx                → main chat UI, StepMarker, streaming
     registry-components/                 → rendered structured tool-output cards
-      automation-create-inline-steps.tsx → StepsEditor
-      capability-chain-card.tsx          → StepStatus
+      capability-result.tsx              → generic capability tool-result card
+      agent-definition-list-card.tsx     → agent registry list card
     structured-value.tsx                 → StructuredValueProps renderer
   agent-panel/                          → agent sidebar panel
   activity/
