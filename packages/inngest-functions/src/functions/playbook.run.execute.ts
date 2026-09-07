@@ -438,14 +438,18 @@ export const [playbookRunExecute] = createFunction(
 
     // ── Step 5: Traverse and execute steps ───────────────────────────────────
     let stepsExecuted = 0;
-    const MAX_STEPS = 200; // guard against infinite loops via loop_back edges
+    // A cycle in the graph, not a `loop_back` edge: the adjacency map below is
+    // built from `default` edges (plus `conditional` for a false branch), so a
+    // `loop_back` row is never followed and cannot loop anything. Two default
+    // edges pointing back at each other can, and that is what this bounds.
+    const MAX_STEPS = 200;
 
     // On duplicate Inngest step ids, confirmed against the installed SDK rather
     // than assumed: inngest 3.54.2 AUTO-INDEXES them. `execution/v1.js` sees
     // that a hashed id is already in `state.steps` and rewrites it to
     // `originalId + STEP_INDEXING_SUFFIX + i` — the suffix is ":" — so a
     // repeated `step.run("x")` becomes "x:1", "x:2", … It does not memoize the
-    // second call and silently skip it, so a loop-back has never LOST step
+    // second call and silently skip it, so a revisit has never LOST step
     // rows. That is why the step ids below are left alone: the SDK already
     // separates them, and rewriting them would change memoization keys for
     // in-flight runs to no benefit. What the SDK cannot fix is the two things
@@ -455,8 +459,9 @@ export const [playbookRunExecute] = createFunction(
     /**
      * How many times each step has been entered in THIS run.
      *
-     * A playbook may revisit a step — that is what a `loop_back` edge is for,
-     * and MAX_STEPS above exists precisely because it can. Nothing in this loop
+     * A playbook may revisit a step, by way of a cycle in its `default` edges.
+     * (A `loop_back` edge does not do this today — the database accepts the
+     * value and the traversal never reads it. #2722.) Nothing in this loop
      * distinguished one visit from another: the step-run row was written with
      * `attempt: 1` every time, and the telemetry ids derived from
      * (runId, stepDef.id) were identical on every visit. A step that executed
@@ -467,7 +472,7 @@ export const [playbookRunExecute] = createFunction(
      * replays the function from the top and the counter is rebuilt identically
      * — while a genuine revisit gets its own identity. That is exactly the
      * distinction `deterministicEventId`'s design note asks for and the one
-     * case `runId` alone cannot express, since a loop-back shares a runId with
+     * case `runId` alone cannot express, since a revisit shares a runId with
      * the visit before it.
      */
     const visitsByStep = new Map<string, number>();
@@ -1198,7 +1203,7 @@ export const [playbookRunExecute] = createFunction(
       // is reproducible rather than re-randomized per replay.
       //
       // `visit` is in the derivation because (runId, stepDef.id) alone is
-      // identical on every loop-back visit, and the destination tables dedup on
+      // identical on every revisit, and the destination tables dedup on
       // it — so a step executed five times contributed one row. It is appended
       // only from the second visit on, which leaves every id a single-visit
       // step has ever produced byte-identical while giving revisits their own
