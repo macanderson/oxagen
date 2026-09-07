@@ -1,17 +1,17 @@
 /**
- * commands/meta.ts — Commander-tree introspection shared by the REPL and the
- * slash-command catalog.
+ * commands/meta.ts — Commander-tree introspection.
  *
- * Extracted from program.ts so leaf modules (slash/catalog.ts,
- * repl/interactive.tsx) can type/inspect CLI commands WITHOUT importing the
- * whole composition root: program.ts holds the full 2k-line command tree, so
- * importing it from the REPL/slash layer put every command edit in their
+ * Extracted from program.ts so a caller can enumerate the CLI's commands
+ * WITHOUT importing the whole composition root: program.ts holds the entire
+ * command tree, so importing it would put every command edit in that caller's
  * type-check and test closure. This module is a leaf — it depends only on
- * commander's types and knows nothing about the actual command set.
+ * commander's types and knows nothing about the actual command set, which is
+ * what lets it stay in lockstep with `--help` rather than drifting from a
+ * second hand-maintained list.
  */
 import type { Command } from "commander";
 
-/** Metadata for one CLI command, surfaced in the REPL slash-command menu. */
+/** Metadata for one CLI command, as `--help` would render it. */
 export interface CliCommandMeta {
   /** Command name as typed (e.g. "graph", "cost"). */
   name: string;
@@ -21,8 +21,8 @@ export interface CliCommandMeta {
   argumentHint?: string;
 }
 
-/** Join a command path the same way everywhere — the REPL dispatcher (see
- * repl/cli-bridge.ts) splits back on ":" to recover the path segments. */
+/** Join a command path the same way everywhere — a consumer splits back on
+ * ":" to recover the path segments. */
 export function joinCliCommandPath(pathParts: readonly string[]): string {
   return pathParts.join(":");
 }

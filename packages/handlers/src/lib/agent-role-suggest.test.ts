@@ -166,13 +166,15 @@ describe("suggestNarrowestAgentRole — resource-scope dimensions", () => {
     expect(out.reason).toMatch(/graph/i);
   });
 
-  it("ignores skill and subagent tools — no system role constrains those dimensions", () => {
+  it("ignores tool kinds no system role constrains (e.g. a legacy `skill` entry on an old version)", () => {
+    // ADR-041 narrowed agentToolTypeSchema to function | mcp_server, but a
+    // stored agent_versions.config from before the cut can still carry other
+    // kinds. They must be inert here, not silently escalate the ceiling.
     expect(
       suggest(
         draft({
           agentTools: [
             { type: "skill", ref: "summarization" },
-            { type: "agent", ref: "existing-agent" },
             ...fn("query_graph"),
           ],
         }),

@@ -26,14 +26,12 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
           ),
         );
 
-      // NOTE (Spec §6): sandbox templates seeded by a capability pack install
-      // are deliberately NOT removed here. A template may already back a live
-      // agent-environment binding or be in use by an in-flight run, so its
-      // removal is an explicit, user-driven action (delete_sandbox_template),
-      // never a silent uninstall side effect. Uninstall only drops the plugin
-      // listing and its MCP server rows.
+      // Uninstall drops the plugin listing and its MCP server rows, and
+      // nothing else. Anything else a pack touched (environments, credentials)
+      // is removed by an explicit, user-driven action, never as a silent
+      // uninstall side effect.
 
-      // Hard-delete dependent MCP server rows so the runtime drops them.
+      // Hard-delete dependent MCP server rows so the gateway drops them.
       // Scope by org + workspace (not orgListingId alone) so a guessed/leaked
       // listing id from another tenant can never delete that tenant's rows.
       await tx

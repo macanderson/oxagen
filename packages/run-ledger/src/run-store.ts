@@ -1,90 +1,67 @@
 /**
- * RunStore — durable-run persistence for agent-engine v2 Phase 2b
- * (docs/specs/agent-engine-v2/plan.md, Phase 2: "Durable runs").
+ * The run evidence ledger — the ONLY writer of `agent.agent_runs`,
+ * `agent.agent_run_events`, `agent.agent_run_attempts`,
+ * `agent.agent_run_attempt_seals`, `agent.agent_run_finalization_grants` and
+ * `agent.agent_run_finalization_obligations`
+ * (docs/specs/run-evidence-ingress/spec.md; ADR-041).
  *
- * `executeTurn`/`executePipelineTurn` (execute-turn.ts) are in-process today —
- * a turn lives and dies with the request. Phase 2 makes a turn a durable row:
- * `agent.agent_runs` (one row per run, claim/lease/attempts for a worker pool)
- * and the append-only `agent.agent_run_events` log (`UNIQUE(run_id, seq)`,
- * the source for resumable SSE, ClickHouse tailing, and replay). This module
- * is the ONLY thing that writes those two tables — schema in the sibling
- * Phase 2a PR, the worker/wiring in a later PR; this module depends on
- * neither, only on the fixed table contract both sides were handed.
+ * Nothing here executes an agent. ADR-041 removed the durable worker that used
+ * to claim runs, lease them, checkpoint engine state and reclaim expired
+ * attempts, along with the two tables that existed only to support it
+ * (`agent_run_checkpoints`, `agent_run_attempt_leases`). What remains is the
+ * evidence chain an external engine's drain submits and Oxagen stamps:
  *
- * Claiming mirrors packages/inngest-functions/src/lease.ts exactly: a single
- * atomic `UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED)` — no
- * separate SELECT, so there is no TOCTOU window and N concurrent workers
- * cooperatively drain the queue instead of double-claiming a run. A claim
- * takes a lease (RUN_LEASE_SECONDS); the worker renews it on a timer around
- * the turn (see lease.ts's startLeaseRenewal for the pattern — reused
- * verbatim by the Phase 2c wiring, not duplicated here). MAX_RUN_ATTEMPTS
- * bounds retries so a run that can never complete eventually fails instead of
- * being reclaimed forever; a lease-sweep cron (mirroring
- * agent.lease-sweep.ts) is the sibling wiring PR's job, not this module's.
+ *   run (trusted RunSpecV2 identity)
+ *     └─ attempt (immutable, `arat_…`, pinned engine name/version/build digest)
+ *          └─ events (append-only, dual `run_seq`/`attempt_seq`, digest-chained)
+ *               └─ seal (one per attempt, every terminal outcome)
+ *                    └─ finalization grant + durable obligation (one shot each)
  *
- * withTenantDb vs withSystemDb — which methods use which, and why:
+ * ## Why there is no mutable progress pointer any more
  *
- *   - `enqueueRun`, `requestCancel`, `isCancelRequested`, `readEventsSince`,
- *     `getRunByPublicId` use withTenantDb. Their signatures carry NO
- *     org/workspace args beyond what `enqueueRun`'s input already needs for
- *     the row itself (`requestCancel(runId)`, `isCancelRequested(runId)`, and
- *     `getRunByPublicId(publicId)` take a bare id) — there is no scope for
- *     this module to construct even if it wanted to. These are called from a
- *     request-handling surface that already runs inside a tenant ALS scope
- *     (the platform's CapabilityHandler middleware, same precondition every
- *     `withTenantDb` caller in packages/handlers relies on); this module
- *     never calls `runInTenantScope` itself, it just assumes the caller
- *     holds scope, exactly like packages/handlers/src/connection.delete.ts.
- *     (This module does NOT depend on `@oxagen/tenancy` — `withTenantDb`
- *     only requires an active ALS scope from *somewhere*, established by the
- *     caller, unlike lease.ts's tenant-scoped functions, which take
- *     orgId/workspaceId and open their own scope. It can't: the bare-id
- *     methods above have no org/workspace to construct a scope from even if
- *     this module wanted to call `runInTenantScope` itself.)
- *     `enqueueRunV2` and `readAttemptEventsSince` follow the same rule for the
- *     same reason: both are request-side, and the V2 read is cursored by a run
- *     id with no org/workspace argument, so RLS from the caller's scope is the
- *     only tenant filter there is.
- *   - `claimNextRun`, `renewLease`, `appendEvents`, `saveCheckpoint`,
- *     `completeRun`, `failRun`, `cancelRun` use withSystemDb. These run on the
- *     WORKER, which has no tenant ALS scope at all — it is a small pool
- *     claiming runs across every org (deliberately cross-tenant, the same
- *     shape as agent.lease-sweep.ts's sweep queries). Once a run is claimed,
- *     the worker knows its org/workspace from the claimed row and passes them
- *     explicitly into `appendEvents` — the guard on every subsequent write is
- *     `claimed_by = $workerId AND status = 'running'`, not a tenant GUC.
- *     This is the audited, explicit RLS-bypass path
- *     (packages/database/src/tenant.ts's withSystemDb doc), not a shortcut.
- *     Every V2 worker method — `claimNextRunV2`, `claimLegacyV1`,
- *     `renewAttemptLease`, `isAttemptCancelRequested`, `appendAttemptBatch`,
- *     `sealAttempt`, `reclaimExpiredAttempts` — is on this side for the same
- *     reason, and each substitutes the fencing tuple (attempt id + lease token
- *     + epoch, checked under a row lock) for the tenant GUC as its guard.
+ * The lease row used to carry `last_attempt_seq`, `event_count`,
+ * `final_event_digest` and the running `event_stream_digest`. It is gone, and
+ * it is deliberately NOT replaced by an equivalent column elsewhere: the
+ * append-only event log is now the single authority for an attempt's position
+ * in its own stream. `readAttemptState()` reads the attempt's durable rows and
+ * folds them (`foldAttemptEventState`), so a pointer can never disagree with
+ * the log it claims to summarize — the exact failure the old
+ * "lease reports seq N committed but no event row exists" branch guarded
+ * against. Serialization comes from the run row's `FOR UPDATE` lock, which the
+ * `next_run_seq` allocator needs anyway.
  *
- * Every terminal/guarded write (`renewLease`, `saveCheckpoint`, `completeRun`,
- * `failRun`, `cancelRun`) is a single `UPDATE ... WHERE claimed_by = $w AND
- * status = 'running' RETURNING id` — the guard IS the WHERE clause, and
- * "did it actually update" is read off `rows.length > 0`, never a driver
- * rowCount (unreliable across the drizzle/postgres.js boundary — same reason
- * lease.ts's claim query uses RETURNING). A worker whose lease was reclaimed
- * after expiry can never resurrect its writes.
+ * ## Fencing, without a lease
  *
- * `appendEvents` is `INSERT ... ON CONFLICT (run_id, seq) DO NOTHING` — a
- * crash between the DB write and the caller's ack means the retry re-sends
- * the same (seq, payload) pairs, and the conflict silently no-ops them
- * instead of duplicating the log.
+ * A seal is the fence. `assertAttemptWritable` refuses an append or a second
+ * seal on a sealed attempt (`AttemptNotWritableError`), and the append itself
+ * carries the integrity invariants that make the stream provable:
  *
- * Every SQL-building and row-mapping decision below is a pure, exported
- * function — unit-testable without a database. The RunStore methods
- * themselves are exercised in run-store.test.ts with a fake `tx.execute`
- * (via @oxagen/database's `makeWithTenantDbMock`/`makeWithSystemDbMock` test
- * doubles) that captures the SQL/params and scripts row returns; no live DB
- * is required. A DB-backed integration test lands with the worker wiring PR
- * once the Phase 2a schema is merged (same split lease.test.ts /
- * lease.integration.test.ts already uses).
+ *  - `attempt_seq` is producer-assigned and DENSE from 1. A gap — inside the
+ *    batch, or between the batch and the durable log — is refused
+ *    (`RunEventSequenceGapError`) rather than repaired; accepting it would
+ *    ratify a loss that already happened.
+ *  - A re-sent prefix is idempotent ONLY when every digest matches. The same
+ *    `(attempt_id, attempt_seq)` with a DIFFERENT digest is a hard integrity
+ *    failure (`RunEventIntegrityError`) plus a security event emitted AFTER the
+ *    transaction rolls back — never an `ON CONFLICT DO NOTHING`, which is
+ *    precisely how such a conflict would disappear.
+ *  - The insert has no conflict clause at all: a unique violation there means
+ *    two writers raced past the run lock, and that must surface.
+ *
+ * ## Tenancy
+ *
+ * Every method runs under `withTenantDb`, so RLS from the caller's ambient
+ * tenant scope is the tenant filter. That is now the whole story: the
+ * cross-tenant `withSystemDb` paths in this module existed for the worker pool
+ * and the lease sweeper, and both left with ADR-041. Evidence ingress reaches
+ * this store through `kernel.invoke()`, which always establishes scope.
+ *
+ * Every SQL-building and row-mapping decision is a pure, exported function —
+ * unit-testable without a database (run-store.test.ts drives the store methods
+ * through `makeWithTenantDbMock`).
  */
 import { sql, type SQL } from "drizzle-orm";
-import { withSystemDb, withTenantDb, type Tx } from "@oxagen/database";
+import { withTenantDb, type Tx } from "@oxagen/database";
 import type { PlatformSurface } from "./surface";
 import {
   assertRunRowMatchesSpec,
@@ -112,97 +89,48 @@ import {
   type SealedAttemptHandle,
 } from "./finalization-grant";
 import {
+  AttemptNotWritableError,
   RunEventIntegrityError,
   RunEventSequenceGapError,
-  RunLeaseFencedError,
   RunStoreStateError,
-  type LeaseRejectionReason,
+  type AttemptRejectionReason,
 } from "./run-errors";
 
-/** A row is failed (not requeued/reclaimed) once claimed this many times. */
-export const MAX_RUN_ATTEMPTS = 3;
-
-/** Lease window per claim — long enough for a slow multi-step agent turn. */
-export const RUN_LEASE_SECONDS = 600;
-
-/** Default page size for readEventsSince when the caller doesn't cap it. */
+/** Default page size for the resumable event read when the caller omits one. */
 export const DEFAULT_READ_EVENTS_LIMIT = 500;
 
-/** Default batch size for one lease-reclaim sweep. */
-export const DEFAULT_RECLAIM_LIMIT = 25;
-
 /**
- * The security-event type appended when the same `(attempt_id, attempt_seq)`
- * arrives twice with different digests. Task 5 adds it to
- * `SECURITY_EVENT_TYPES` in @oxagen/compliance; this constant is the single
- * spelling both sides use.
+ * The security-event type emitted when the same `(attempt_id, attempt_seq)`
+ * arrives twice with different digests. Mirrors the spelling registered in
+ * `SECURITY_EVENT_TYPES` (@oxagen/compliance); this constant is the single
+ * source both sides read.
  */
 export const EVENT_SEQUENCE_CONFLICT_EVENT =
   "agent_run.event_sequence_conflict";
 
-export interface EnqueueRunInput {
+// ── Inputs ───────────────────────────────────────────────────────────────────
+
+/**
+ * Trusted run admission. `spec` is ALREADY parsed — the ledger never accepts an
+ * unvalidated body — and the two `*RowId` fields are the INTERNAL uuids
+ * admission resolved for the public ids the spec pins. Both kinds are required
+ * because the run row stores those bindings as uuid foreign keys while the spec
+ * (a wire contract) carries their public ids; `createRun` proves the pair
+ * actually agree by joining the inserted row back to the binding/policy rows
+ * and comparing what Postgres stored against the spec.
+ */
+export interface CreateRunInput {
   orgId: string;
   workspaceId: string;
   surface: PlatformSurface;
-  spec: unknown;
+  spec: RunSpecV2;
+  /** Internal uuid of `context_policy.retention_policy_id`'s version row. */
+  retentionPolicyRowId: string;
+  /** Internal uuid of the pinned repository binding; null for a general run. */
+  repositoryBindingRowId: string | null;
 }
 
-/**
- * A claimed run, in the shape every existing caller already consumes.
- *
- * The three V2 fields are ADDITIVE on purpose. `apps/api`'s run routes,
- * `packages/agent-worker`'s structural port, and `packages/agent`'s turn driver
- * all type against this shape and are owned by other tasks in this PR; turning
- * the return into a `V1 | V2` union would break every one of them at once.
- * Extra fields stay assignable, so the compatibility dispatcher can hand back a
- * fully-typed V2 claim through the same channel that keeps already-enqueued V1
- * work claimable.
- */
-export interface ClaimedRun {
-  runId: string;
-  publicId: string;
-  orgId: string;
-  workspaceId: string;
-  surface: string;
-  spec: unknown;
-  attempts: number;
-  checkpoint: unknown | null;
-  checkpointSeq: number;
-  /** 1 = legacy run-global claim, 2 = fenced immutable attempt. */
-  specVersion: 1 | 2;
-  /** The fencing token set. Non-null exactly when `specVersion === 2`. */
-  lease: RunLeaseRef | null;
-  /** Trusted identity + attempt detail. Non-null exactly when V2. */
-  v2: ClaimedRunV2Detail | null;
-}
-
-/**
- * A V2 claim, narrowed. Structurally a `ClaimedRun`, so it flows through every
- * existing caller unchanged while the V2 worker path gets non-null `lease`/`v2`
- * without a cast.
- */
-export interface ClaimedRunV2 extends ClaimedRun {
-  specVersion: 2;
-  lease: RunLeaseRef;
-  v2: ClaimedRunV2Detail;
-}
-
-/**
- * The complete fencing reference for one attempt. A bare `(runId, workerId)`
- * pair cannot distinguish two executions of the same run, which is how a
- * reclaimed run's events could interleave. Every fenced operation (renew,
- * append, checkpoint, cancel check, seal) echoes this whole tuple and is
- * refused unless all of it matches an unfenced, unexpired, unsealed lease.
- */
-export interface RunLeaseRef {
-  runId: string;
-  attemptId: string;
-  attemptPublicId: string;
-  leaseToken: string;
-  leaseEpoch: number;
-}
-
-/** The engine binary that actually executed — pinned at claim time. */
+/** The engine binary that actually executed — pinned on the attempt row. */
 export interface ResolvedEngineIdentity {
   name: string;
   version: string;
@@ -211,68 +139,53 @@ export interface ResolvedEngineIdentity {
 }
 
 /**
- * Provenance of a checkpoint a successor restored. The successor keeps its OWN
- * attempt identity and records where the state came from; attempt ids are never
- * reused (spec.md §"Attempt identity").
+ * Provenance of a successor attempt: which earlier attempt of the same run it
+ * resumed. The successor keeps its OWN attempt identity — attempt ids are never
+ * reused (spec.md §"Attempt identity"). The checkpoint half of this tuple went
+ * with `agent.agent_run_checkpoints` in ADR-041: Oxagen restores no engine
+ * state, so only the provenance chain remains as evidence.
  */
-export interface RestoredCheckpointRef {
+export interface AttemptProvenance {
   attemptId: string;
   attemptPublicId: string;
-  checkpointId: string;
-  checkpointDigest: string;
-  /** The prior attempt's stream digest as of that checkpoint. */
-  streamDigest: string;
-  engineStateSchema: string;
-  /** `evb_` reference to the tenant-encrypted engine state. */
-  encryptedStateRef: string;
-  attemptSeq: number;
-  runSeq: number;
-}
-
-/** Trusted V2 identity columns plus this attempt's own resolved facts. */
-export interface ClaimedRunV2Detail {
-  runKind: string;
-  specDigest: string;
-  initiatingPrincipalId: string;
-  agentPrincipalId: string;
-  agentId: string;
-  agentVersionId: string;
-  agentVersionChecksum: string;
-  authorizationSnapshotId: string;
-  parentRunId: string | null;
-  repositoryBindingId: string | null;
-  repositoryBindingPublicId: string | null;
-  repositoryProvider: string | null;
-  providerRepositoryId: string | null;
-  repositoryConnectionId: string | null;
-  configuredDefaultRef: string | null;
-  baseCommitSha: string | null;
-  baseTreeSha: string | null;
-  retentionPolicyId: string;
-  retentionPolicyPublicId: string;
-  retentionPolicyDigest: string;
-  maxAttempts: number;
-  attemptNumber: number;
-  engine: ResolvedEngineIdentity;
-  restore: RestoredCheckpointRef | null;
-}
-
-export interface RunEventRecord {
-  seq: number;
-  type: string;
-  payload: unknown;
 }
 
 /**
- * One V2 event as a producer emits it. Exactly one of `payload` (inline,
- * allow-listed receipt metadata) or `encryptedPayloadRef` + `payloadDigest`
- * (a tenant-encrypted blob) — mirroring the database's own
+ * Create one immutable attempt on an existing run.
+ *
+ * `producerId` is the identity of the process that produced this attempt's
+ * evidence (an external engine's drain, a wrapper SDK submission). It is stored
+ * in the legacy-named `worker_id` column, which predates ADR-041.
+ */
+export interface CreateAttemptInput {
+  runId: string;
+  producerId: string;
+  engine: ResolvedEngineIdentity;
+  resumedFrom?: AttemptProvenance;
+}
+
+/** A newly created attempt, as `createAttempt` returns it. */
+export interface CreatedAttempt {
+  attemptId: string;
+  attemptPublicId: string;
+  runId: string;
+  orgId: string;
+  workspaceId: string;
+  attemptNumber: number;
+  maxAttempts: number;
+  engine: ResolvedEngineIdentity;
+  resumedFrom: AttemptProvenance | null;
+}
+
+/**
+ * One event as a producer emits it. Exactly one of `payload` (inline,
+ * allow-listed receipt metadata) or `encryptedPayloadRef` + `payloadDigest` (a
+ * tenant-encrypted blob) — mirroring the table's own
  * `(payload_inline IS NULL) <> (encrypted_payload_ref IS NULL)` CHECK.
  *
  * `observedAt` is the PRODUCER's observation time and is inside `event_digest`.
  * A replayed batch MUST resend the original value: re-stamping the clock
- * changes the digest and converts a benign retry into a hard integrity
- * conflict.
+ * changes the digest and turns a benign retry into a hard integrity conflict.
  */
 export interface AttemptEventInput {
   /** Producer-assigned, dense from 1, reset for each new attempt. */
@@ -286,23 +199,9 @@ export interface AttemptEventInput {
   payloadDigest?: string;
 }
 
-/**
- * A checkpoint committed by the SAME transaction as the append it terminates,
- * bound to that batch's final event. The stream digest is not an input — the
- * store owns it, because a producer-supplied one could claim a position in the
- * stream the log does not support.
- */
-export interface AttemptCheckpointInput {
-  engineStateSchema: string;
-  checkpointDigest: string;
-  /** `evb_` reference to the tenant-encrypted engine state. */
-  encryptedStateRef: string;
-}
-
 export interface AppendAttemptBatchInput {
-  lease: RunLeaseRef;
+  attemptId: string;
   events: readonly AttemptEventInput[];
-  checkpoint?: AttemptCheckpointInput;
 }
 
 export interface AppendedAttemptEvent {
@@ -322,17 +221,16 @@ export interface AppendAttemptBatchResult {
   eventCount: number;
   eventStreamDigest: string;
   finalEventDigest: string | null;
-  checkpointId: string | null;
 }
 
-/** One V2 event as a reader (resumable SSE, replay) projects it. */
+/** One event as a reader (resumable subscription, replay) projects it. */
 export interface AttemptEventReadRecord {
   eventId: string;
   attemptId: string;
   attemptPublicId: string;
   /**
    * Run-global sequence as an exact DECIMAL STRING. `run_seq` is a Postgres
-   * bigint and an SSE `id:` field is text — carrying it as a JS number would
+   * bigint and a subscription cursor is text — carrying it as a JS number would
    * silently lose precision past 2^53 and hand a subscriber a cursor that
    * resumes at the wrong event.
    */
@@ -360,44 +258,23 @@ export const ATTEMPT_TERMINAL_STATUSES = [
 export type AttemptTerminalStatus = (typeof ATTEMPT_TERMINAL_STATUSES)[number];
 
 export interface SealAttemptInput {
-  lease: RunLeaseRef;
+  attemptId: string;
   terminalStatus: AttemptTerminalStatus;
   reasonCode?: string;
   /**
    * The terminal event, appended and validated in the SAME transaction as the
-   * seal. Omitted only when the attempt has already appended its terminal
-   * event; never omitted to make a zero-event seal look complete — that is the
-   * reclaimer's separate path.
+   * seal. Omitted when the attempt already appended its terminal event, and for
+   * a zero-event abandoned attempt — which seals with a null final-event digest
+   * and the canonical empty-stream digest rather than inventing an observation
+   * no producer ever made.
    */
   terminalEvent?: AttemptEventInput;
-  sealerWorkerId: string;
+  /** Identity of the process recording the seal (legacy `sealer_worker_id`). */
+  sealerId: string;
   /** Recorded on `agent_runs.error` for a failed run. */
   error?: string;
-  /** Result recorded on `agent_runs.result` for a completed run. */
+  /** Recorded on `agent_runs.result` for a completed run. */
   result?: unknown;
-}
-
-export interface ReclaimExpiredAttemptsOptions {
-  reclaimerWorkerId: string;
-  limit?: number;
-  reasonCode?: string;
-}
-
-export interface ReclaimedAttempt {
-  handle: SealedAttemptHandle;
-  runId: string;
-  attemptNumber: number;
-  maxAttempts: number;
-  /**
-   * True ⇒ the run was requeued to `pending` and the NEXT `claimNextRunV2`
-   * creates the successor attempt. False ⇒ the pinned `max_attempts` is
-   * exhausted and the run was marked failed after its final attempt sealed.
-   *
-   * The reclaimer deliberately does not create the successor itself: an attempt
-   * row requires a resolved engine name/version/build digest, which only a
-   * claiming worker knows.
-   */
-  successorPermitted: boolean;
 }
 
 /**
@@ -407,8 +284,8 @@ export interface ReclaimedAttempt {
  *
  * It is called OUTSIDE the append transaction, after the rollback: a sink that
  * wrote inside that transaction would have its audit row rolled back together
- * with the conflicting append, erasing the exact record this requirement
- * exists to create.
+ * with the conflicting append, erasing the exact record this requirement exists
+ * to create.
  */
 export interface RunSecurityEventSink {
   recordEventSequenceConflict(event: {
@@ -429,538 +306,152 @@ export interface RunStoreOptions {
    * Default sink: writes the conflict to `console.error`. Deliberately loud
    * rather than a silent no-op — a dropped integrity conflict is the failure
    * this whole append path exists to prevent, so the fallback must still leave
-   * a trace in the worker's logs until the real sink is wired.
+   * a trace until the real sink is wired.
    */
   securityEvents?: RunSecurityEventSink;
 }
 
+// ── Read projections ─────────────────────────────────────────────────────────
+
 /**
- * Public, tenant-facing run status — the shape the durable-run API surface
- * (apps/api's `/v1/.../runs` routes, Phase 2 integration) hands back for
- * GET /runs/:publicId and the SSE `done` terminal event. Deliberately NOT
- * `ClaimedRun` (which is a worker-internal shape carrying `spec`/checkpoint
- * state a caller never needs and org/workspace ids that RLS already scopes
- * away): this is the read-side projection callers poll/subscribe against.
+ * Public, tenant-facing run status. Deliberately carries no execution state:
+ * the ledger's read side answers "what is on the record for this run", not
+ * "where is the worker up to".
  */
 export interface RunSummary {
   runId: string;
   publicId: string;
   surface: string;
   /**
-   * Which event-record contract this run's log obeys: `1` = legacy run-global
-   * `seq`, `2` = fenced attempts cursored on the decimal `run_seq`.
-   *
+   * Which event-record contract this run's log obeys: `1` = preserved legacy
+   * run-global `seq`, `2` = fenced attempts cursored on the decimal `run_seq`.
    * Part of the PUBLIC projection, not an internal detail: a resumable
    * subscriber cannot pick a cursor without it, and the two cursors are not
-   * interchangeable (`seq` is a 32-bit-ish counter, `run_seq` is a bigint
-   * carried as an exact decimal string).
+   * interchangeable.
    */
   specVersion: 1 | 2;
   status: "pending" | "running" | "completed" | "failed" | "cancelled";
   result: unknown | null;
   error: string | null;
-  checkpointSeq: number;
-  attempts: number;
+  /** Attempts ever created for this run. Null on a preserved legacy row. */
+  attemptCount: number;
+  /** The pinned attempt ceiling. Null on a preserved legacy row. */
+  maxAttempts: number | null;
   createdAt: Date;
   startedAt: Date | null;
   completedAt: Date | null;
 }
 
+/** One immutable attempt, as the read side projects it. */
+export interface AttemptRecord {
+  attemptId: string;
+  attemptPublicId: string;
+  runId: string;
+  attemptNumber: number;
+  producerId: string;
+  engine: ResolvedEngineIdentity;
+  resumedFrom: AttemptProvenance | null;
+  claimedAt: Date;
+  /** Present once the attempt is sealed; null while it is still open. */
+  seal: AttemptSealRecord | null;
+}
+
+/** The immutable terminal record of one attempt. */
+export interface AttemptSealRecord {
+  sealId: string;
+  terminalStatus: string;
+  reasonCode: string | null;
+  eventCount: number;
+  finalRunSeq: string | null;
+  finalAttemptSeq: number | null;
+  finalEventDigest: string | null;
+  eventStreamDigest: string;
+  sealedAt: Date;
+}
+
+// ── The store surface ────────────────────────────────────────────────────────
+
 export interface RunStore {
-  enqueueRun(
-    input: EnqueueRunInput,
-  ): Promise<{ runId: string; publicId: string }>;
   /**
-   * The compatibility claim dispatcher. Pass `options` (a resolved engine
-   * identity) to claim fenced V2 work first, falling back to V1; omit it to
-   * claim V1 only. The parameter is optional so every existing caller — and
-   * `packages/agent-worker`'s structural port — keeps compiling unchanged.
+   * Admit a run from a trusted `RunSpecV2` and verify every typed column
+   * against the spec before the transaction commits.
    */
-  claimNextRun(
-    workerId: string,
-    options?: ClaimNextRunV2Options,
-  ): Promise<ClaimedRun | null>;
-  renewLease(runId: string, workerId: string): Promise<boolean>;
-  appendEvents(
-    runId: string,
-    orgId: string,
-    workspaceId: string,
-    events: RunEventRecord[],
-  ): Promise<void>;
-  readEventsSince(
-    runId: string,
-    afterSeq: number,
-    limit?: number,
-  ): Promise<Array<RunEventRecord & { createdAt: Date }>>;
-  saveCheckpoint(
-    runId: string,
-    workerId: string,
-    checkpointSeq: number,
-    checkpoint: unknown,
-  ): Promise<boolean>;
-  completeRun(
-    runId: string,
-    workerId: string,
-    result: unknown,
-  ): Promise<boolean>;
-  failRun(runId: string, workerId: string, error: string): Promise<boolean>;
-  cancelRun(runId: string, workerId: string): Promise<boolean>;
-  requestCancel(runId: string): Promise<void>;
-  isCancelRequested(runId: string): Promise<boolean>;
-  /**
-   * Look up a run's public status by its externally-addressable `public_id`
-   * (the `arun_…` id `enqueueRun` mints). Tenant-scoped via `withTenantDb`
-   * exactly like `readEventsSince`/`requestCancel` above — no explicit
-   * org/workspace filter in the SQL, RLS does that from the caller's ALS
-   * scope, so a cross-tenant publicId resolves to `null`, never another
-   * org's row. Returns `null` for an unknown or cross-tenant publicId — the
-   * durable-run API route maps that to a clean 404.
-   */
-  getRunByPublicId(publicId: string): Promise<RunSummary | null>;
-}
-
-/**
- * Trusted V2 admission input. `spec` is already parsed — this store never
- * accepts an unvalidated body — and the two `*RowId` fields are the INTERNAL
- * uuids admission resolved for the public ids the spec pins. Both kinds are
- * required because the run row stores those two bindings as uuid foreign keys
- * while the spec (a wire contract) carries their public ids; `enqueueRunV2`
- * proves the pair actually agree by joining the inserted row back to the
- * binding/policy rows and comparing what Postgres stored against the spec.
- *
- * There is deliberately no `status` or scheduling input. The pending
- * `agent_runs` row IS the durable queue; this task does not invent a second
- * scheduling outbox for a worker that does not exist yet.
- */
-export interface EnqueueRunV2Input {
-  orgId: string;
-  workspaceId: string;
-  surface: PlatformSurface;
-  spec: RunSpecV2;
-  /** Internal uuid of `context_policy.retention_policy_id`'s version row. */
-  retentionPolicyRowId: string;
-  /** Internal uuid of the pinned repository binding; null for a general run. */
-  repositoryBindingRowId: string | null;
-}
-
-/**
- * The V2 fenced-attempt surface, kept SEPARATE from `RunStore` rather than
- * bolted onto it. `apps/api` and `packages/agent-worker` both type against
- * `RunStore` and are owned by other tasks in this PR, so a new required method
- * there would break them in CI rather than here.
- * `createPostgresRunStore()` returns `RunStore & AttemptRunStore`, so a caller
- * that wants the V2 surface keeps the inferred type.
- */
-export interface AttemptRunStore {
-  /** Trusted V2 admission. Verifies every typed column against the spec. */
-  enqueueRunV2(
-    input: EnqueueRunV2Input,
+  createRun(
+    input: CreateRunInput,
   ): Promise<{ runId: string; publicId: string; specDigest: string }>;
 
   /**
-   * Claim one pending V2 run: pin the engine identity, create a distinct
-   * immutable attempt, take the next lease epoch, optionally restore a valid
-   * prior checkpoint, and return the complete restore reference.
+   * Create one immutable attempt, bounded by the run's pinned `max_attempts`.
+   * The engine identity is pinned here, before any evidence may be appended.
    */
-  claimNextRunV2(
-    workerId: string,
-    options: ClaimNextRunV2Options,
-  ): Promise<ClaimedRunV2 | null>;
+  createAttempt(input: CreateAttemptInput): Promise<CreatedAttempt>;
 
   /**
-   * The retained V1 claim path. Kept so already-enqueued and explicitly
-   * non-evidence legacy work stays claimable until its later retirement.
-   */
-  claimLegacyV1(workerId: string): Promise<ClaimedRun | null>;
-
-  /** Renew a fenced lease. Throws `RunLeaseFencedError` if the claim is lost. */
-  renewAttemptLease(
-    lease: RunLeaseRef,
-    leaseSeconds?: number,
-  ): Promise<{ expiresAt: Date }>;
-
-  /** Live cancellation check, gated on the same fencing tuple as a write. */
-  isAttemptCancelRequested(lease: RunLeaseRef): Promise<boolean>;
-
-  /**
-   * Append a contiguous batch and its optional checkpoint in ONE transaction,
-   * advancing the lease pointers and the run's sequence allocator with it.
+   * Append a contiguous batch of events to an open attempt in one transaction,
+   * allocating run-global sequences from the run row's `next_run_seq`.
    */
   appendAttemptBatch(
     input: AppendAttemptBatchInput,
   ): Promise<AppendAttemptBatchResult>;
 
   /**
-   * Seal a worker-observed terminal attempt: append/validate the terminal
-   * event, fence the lease, and insert the seal, the non-expiring one-shot
-   * finalization grant, and the durable obligation — atomically.
+   * Seal a terminal attempt: optionally append and validate its terminal event,
+   * insert the immutable seal, mint the non-expiring one-shot finalization
+   * grant and its durable obligation, and drive the run to its terminal
+   * status — all atomically. Sealing an already-sealed attempt is idempotent
+   * and returns the SAME handle, above all the same `submission_id`.
    */
   sealAttempt(input: SealAttemptInput): Promise<SealedAttemptHandle>;
 
   /**
-   * Reclaim expired attempts. Seals each as `abandoned` (zero-event attempts
-   * use the empty-stream sentinel and synthesize NOTHING), mints its grant and
-   * obligation in the same transaction, then requeues the run for a successor
-   * while the pinned `max_attempts` permits, or fails it.
+   * Look up a run's public projection by its `arun_…` public id. Tenant-scoped
+   * through RLS, so a cross-tenant public id resolves to `null`, never another
+   * org's row.
    */
-  reclaimExpiredAttempts(
-    options: ReclaimExpiredAttemptsOptions,
-  ): Promise<ReclaimedAttempt[]>;
+  getRunByPublicId(publicId: string): Promise<RunSummary | null>;
 
-  /** Resumable V2 subscription read, cursored on the decimal `run_seq`. */
+  /** Every attempt of a run, oldest first, each with its seal when sealed. */
+  listRunAttempts(runId: string): Promise<AttemptRecord[]>;
+
+  /** The attempt's folded position in its own stream, read from the log. */
+  readAttemptState(attemptId: string): Promise<AttemptEventState>;
+
+  /** Resumable event read, cursored on the decimal `run_seq`. */
   readAttemptEventsSince(
     runId: string,
     afterRunSeq: string,
     limit?: number,
   ): Promise<AttemptEventReadRecord[]>;
-}
 
-export interface ClaimNextRunV2Options {
-  /** The engine binary this worker will actually run. Pinned on the attempt. */
-  engine: ResolvedEngineIdentity;
   /**
-   * Engine-state schema versions this worker can restore. A checkpoint written
-   * by an incompatible engine build is not restored — the successor starts
-   * clean rather than mis-parsing state. Omit or pass `[]` to never restore.
+   * The finalization handle for a sealed attempt — the grant and obligation the
+   * finalizer presents to `ingest_run_evidence`. Null while the attempt is open.
    */
-  restorableEngineStateSchemas?: readonly string[];
-  leaseSeconds?: number;
+  getFinalizationHandle(attemptId: string): Promise<SealedAttemptHandle | null>;
 }
 
-// ── Pure helpers — id generation + row mapping ──────────────────────────────
+// ── Pure helpers — id generation + row mapping ───────────────────────────────
 
 /**
- * Mint a public id for a new run. Same shape as provision-webhook.ts's
- * `whs_` ids: a fixed prefix + 22 hex chars sliced from a UUIDv4 with its
- * dashes stripped — collision-safe without a DB round-trip.
+ * Mint a public id for a new run: a fixed prefix plus 22 hex chars sliced from
+ * a UUIDv4 with its dashes stripped — collision-safe without a DB round-trip.
  */
 export function generateRunPublicId(): string {
   return `arun_${crypto.randomUUID().replace(/-/g, "").slice(0, 22)}`;
 }
 
-type ClaimedRunRow = {
-  id: string;
-  public_id: string;
-  org_id: string;
-  workspace_id: string;
-  surface: string;
-  spec: unknown;
-  attempts: number | string;
-  checkpoint: unknown | null;
-  checkpoint_seq: number | string;
-};
+export { generateAttemptPublicId };
 
-/**
- * Map a claimed legacy agent_runs row to ClaimedRun. `specVersion`/`lease`/`v2`
- * are pinned to the V1 values: a legacy claim has no attempt identity and no
- * fencing token, and saying so explicitly is what lets a consumer branch on
- * `specVersion` instead of sniffing for undefined fields.
- */
-export function mapClaimedRunRow(row: ClaimedRunRow): ClaimedRun {
-  return {
-    runId: row.id,
-    publicId: row.public_id,
-    orgId: row.org_id,
-    workspaceId: row.workspace_id,
-    surface: row.surface,
-    spec: row.spec,
-    attempts: Number(row.attempts),
-    checkpoint: row.checkpoint ?? null,
-    checkpointSeq: Number(row.checkpoint_seq),
-    specVersion: 1,
-    lease: null,
-    v2: null,
-  };
-}
-
-type RunEventRow = {
-  seq: number | string;
-  type: string;
-  payload: unknown;
-  created_at: string | Date;
-};
-
-/** Map an agent_run_events row to the public RunEventRecord shape. */
-export function mapRunEventRow(
-  row: RunEventRow,
-): RunEventRecord & { createdAt: Date } {
-  return {
-    seq: Number(row.seq),
-    type: row.type,
-    payload: row.payload,
-    createdAt:
-      row.created_at instanceof Date
-        ? row.created_at
-        : new Date(row.created_at),
-  };
-}
-
-type RunSummaryRow = {
-  id: string;
-  public_id: string;
-  surface: string;
-  status: string;
-  /** Absent only on a row read by a build predating the expand migration. */
-  spec_version?: number | string | null;
-  result: unknown | null;
-  error: string | null;
-  checkpoint_seq: number | string;
-  attempts: number | string;
-  created_at: string | Date;
-  started_at: string | Date | null;
-  completed_at: string | Date | null;
-};
-
-function toDateOrNull(value: string | Date | null): Date | null {
-  if (value === null) return null;
+function toDate(value: string | Date): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
-/** Map an agent_runs row (snake_case, driver-typed) to the public RunSummary. */
-export function mapRunSummaryRow(row: RunSummaryRow): RunSummary {
-  return {
-    runId: row.id,
-    publicId: row.public_id,
-    surface: row.surface,
-    // Anything that is not EXACTLY 2 reads as legacy v1. That is the
-    // fail-closed direction: a subscriber that mistakes a v2 run for v1
-    // cursors on `seq`, which is NULL on every v2 event row and therefore
-    // yields nothing — whereas mistaking v1 for v2 would hand a caller a
-    // `run_seq` cursor no v1 row can satisfy.
-    specVersion: Number(row.spec_version) === 2 ? 2 : 1,
-    status: row.status as RunSummary["status"],
-    result: row.result ?? null,
-    error: row.error ?? null,
-    checkpointSeq: Number(row.checkpoint_seq),
-    attempts: Number(row.attempts),
-    createdAt: toDateOrNull(row.created_at) as Date,
-    startedAt: toDateOrNull(row.started_at),
-    completedAt: toDateOrNull(row.completed_at),
-  };
-}
-
-// ── Pure SQL builders — exported so query shape is unit-testable ───────────
-
-export function buildEnqueueRunSql(
-  publicId: string,
-  input: EnqueueRunInput,
-): SQL {
-  return sql`
-    INSERT INTO agent.agent_runs (public_id, org_id, workspace_id, surface, status, spec)
-    VALUES (
-      ${publicId},
-      ${input.orgId}::uuid,
-      ${input.workspaceId}::uuid,
-      ${input.surface},
-      'pending',
-      ${JSON.stringify(input.spec)}::jsonb
-    )
-    RETURNING id, public_id
-  `;
-}
-
-export function buildClaimNextRunSql(
-  workerId: string,
-  maxAttempts: number = MAX_RUN_ATTEMPTS,
-  leaseSeconds: number = RUN_LEASE_SECONDS,
-): SQL {
-  return sql`
-    UPDATE agent.agent_runs SET
-      status = 'running',
-      claimed_by = ${workerId},
-      attempts = attempts + 1,
-      lease_expires_at = now() + make_interval(secs => ${leaseSeconds}),
-      started_at = coalesce(started_at, now()),
-      updated_at = now()
-    WHERE id = (
-      SELECT id FROM agent.agent_runs
-      WHERE attempts < ${maxAttempts}
-        AND (status = 'pending' OR (status = 'running' AND lease_expires_at < now()))
-      ORDER BY created_at
-      LIMIT 1
-      FOR UPDATE SKIP LOCKED
-    )
-    RETURNING id, public_id, org_id, workspace_id, surface, spec, attempts, checkpoint, checkpoint_seq
-  `;
-}
-
-export function buildRenewLeaseSql(
-  runId: string,
-  workerId: string,
-  leaseSeconds: number = RUN_LEASE_SECONDS,
-): SQL {
-  return sql`
-    UPDATE agent.agent_runs SET
-      lease_expires_at = now() + make_interval(secs => ${leaseSeconds}),
-      updated_at = now()
-    WHERE id = ${runId}::uuid
-      AND claimed_by = ${workerId}
-      AND status = 'running'
-    RETURNING id
-  `;
+function toDateOrNull(value: string | Date | null): Date | null {
+  return value === null ? null : toDate(value);
 }
 
 /**
- * Multi-row `INSERT ... VALUES (...), (...) ON CONFLICT DO NOTHING`. Returns
- * null for an empty batch — callers must skip the round-trip entirely rather
- * than execute a query with no VALUES rows.
- */
-export function buildAppendEventsSql(
-  runId: string,
-  orgId: string,
-  workspaceId: string,
-  events: RunEventRecord[],
-): SQL | null {
-  if (events.length === 0) return null;
-  const rows = events.map(
-    (e) =>
-      sql`(${runId}::uuid, ${orgId}::uuid, ${workspaceId}::uuid, ${e.seq}, ${e.type}, ${JSON.stringify(e.payload)}::jsonb)`,
-  );
-  return sql`
-    INSERT INTO agent.agent_run_events (run_id, org_id, workspace_id, seq, type, payload)
-    VALUES ${sql.join(rows, sql`, `)}
-    ON CONFLICT (run_id, seq) DO NOTHING
-  `;
-}
-
-export function buildReadEventsSinceSql(
-  runId: string,
-  afterSeq: number,
-  limit: number = DEFAULT_READ_EVENTS_LIMIT,
-): SQL {
-  return sql`
-    SELECT seq, type, payload, created_at
-    FROM agent.agent_run_events
-    WHERE run_id = ${runId}::uuid
-      AND seq > ${afterSeq}
-    ORDER BY seq ASC
-    LIMIT ${limit}
-  `;
-}
-
-export function buildSaveCheckpointSql(
-  runId: string,
-  workerId: string,
-  checkpointSeq: number,
-  checkpoint: unknown,
-): SQL {
-  return sql`
-    UPDATE agent.agent_runs SET
-      checkpoint = ${JSON.stringify(checkpoint)}::jsonb,
-      checkpoint_seq = ${checkpointSeq},
-      updated_at = now()
-    WHERE id = ${runId}::uuid
-      AND claimed_by = ${workerId}
-      AND status = 'running'
-    RETURNING id
-  `;
-}
-
-export function buildCompleteRunSql(
-  runId: string,
-  workerId: string,
-  result: unknown,
-): SQL {
-  return sql`
-    UPDATE agent.agent_runs SET
-      status = 'completed',
-      result = ${JSON.stringify(result)}::jsonb,
-      completed_at = now(),
-      lease_expires_at = NULL,
-      updated_at = now()
-    WHERE id = ${runId}::uuid
-      AND claimed_by = ${workerId}
-      AND status = 'running'
-    RETURNING id
-  `;
-}
-
-export function buildFailRunSql(
-  runId: string,
-  workerId: string,
-  error: string,
-): SQL {
-  return sql`
-    UPDATE agent.agent_runs SET
-      status = 'failed',
-      error = ${error},
-      completed_at = now(),
-      lease_expires_at = NULL,
-      updated_at = now()
-    WHERE id = ${runId}::uuid
-      AND claimed_by = ${workerId}
-      AND status = 'running'
-    RETURNING id
-  `;
-}
-
-export function buildCancelRunSql(runId: string, workerId: string): SQL {
-  return sql`
-    UPDATE agent.agent_runs SET
-      status = 'cancelled',
-      completed_at = now(),
-      lease_expires_at = NULL,
-      updated_at = now()
-    WHERE id = ${runId}::uuid
-      AND claimed_by = ${workerId}
-      AND status = 'running'
-    RETURNING id
-  `;
-}
-
-export function buildRequestCancelSql(runId: string): SQL {
-  return sql`
-    UPDATE agent.agent_runs SET
-      cancel_requested = true,
-      updated_at = now()
-    WHERE id = ${runId}::uuid
-  `;
-}
-
-export function buildIsCancelRequestedSql(runId: string): SQL {
-  return sql`
-    SELECT cancel_requested
-    FROM agent.agent_runs
-    WHERE id = ${runId}::uuid
-  `;
-}
-
-/**
- * Look up the public status projection by `public_id`. No org/workspace
- * filter — RLS scopes the read from the caller's tenant ALS session, exactly
- * like `buildReadEventsSinceSql`/`buildIsCancelRequestedSql` above.
- */
-export function buildGetRunByPublicIdSql(publicId: string): SQL {
-  return sql`
-    SELECT id, public_id, surface, spec_version, status, result, error, checkpoint_seq, attempts, created_at, started_at, completed_at
-    FROM agent.agent_runs
-    WHERE public_id = ${publicId}
-  `;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// V2 — fenced immutable attempts
-// ═══════════════════════════════════════════════════════════════════════════
-//
-// Every decision below is a pure exported function and every query a pure
-// exported builder; the store methods are thin transaction orchestration over
-// them. That split is not stylistic: the replay/idempotency classification and
-// the digest fold are the branchiest logic in this package, and they have to be
-// provable without a database.
-
-/**
- * Mint an opaque lease bearer token. A full UUID (not a slice) because this is
- * the only secret in the fencing tuple — the attempt id is not secret, and a
- * token derived from it would make a leaked id sufficient to write.
- */
-export function generateLeaseToken(): string {
-  return crypto.randomUUID();
-}
-
-export { generateAttemptPublicId };
-
-/**
- * The exact typed identity a V2 admission must write, derived from the parsed
+ * The exact typed identity a run admission must write, derived from the parsed
  * spec. Exported so admission, the post-insert verification, and the tests all
  * read the same projection instead of three hand-copied field lists.
  */
@@ -992,7 +483,7 @@ export function buildRunRowIdentityFromSpec(spec: RunSpecV2): RunRowIdentity {
   };
 }
 
-/** Typed columns a V2 run row returns, joined to the two bindings' public ids. */
+/** Typed columns a run row returns, joined to the two bindings' public ids. */
 export interface RunV2IdentityRow {
   spec_version: number | string;
   run_kind: string;
@@ -1050,7 +541,113 @@ export function mapRunV2IdentityRow(row: RunV2IdentityRow): RunRowIdentity {
   };
 }
 
-// ── Batch planning: replays vs appends ──────────────────────────────────────
+/** Driver-typed `agent_runs` row behind the public `RunSummary`. */
+export interface RunSummaryRow {
+  id: string;
+  public_id: string;
+  surface: string;
+  spec_version?: number | string | null;
+  status: string;
+  result: unknown | null;
+  error: string | null;
+  attempt_count: number | string;
+  max_attempts: number | string | null;
+  created_at: string | Date;
+  started_at: string | Date | null;
+  completed_at: string | Date | null;
+}
+
+/** Map an `agent_runs` row (snake_case, driver-typed) to the public summary. */
+export function mapRunSummaryRow(row: RunSummaryRow): RunSummary {
+  return {
+    runId: row.id,
+    publicId: row.public_id,
+    surface: row.surface,
+    // Anything that is not EXACTLY 2 reads as legacy v1 — the fail-closed
+    // direction. A subscriber that mistakes a v2 run for v1 cursors on `seq`,
+    // which is NULL on every v2 event row and therefore yields nothing;
+    // mistaking v1 for v2 would hand a caller a `run_seq` cursor no v1 row can
+    // satisfy.
+    specVersion: Number(row.spec_version) === 2 ? 2 : 1,
+    status: row.status as RunSummary["status"],
+    result: row.result ?? null,
+    error: row.error ?? null,
+    attemptCount: Number(row.attempt_count),
+    maxAttempts: row.max_attempts === null ? null : Number(row.max_attempts),
+    createdAt: toDate(row.created_at),
+    startedAt: toDateOrNull(row.started_at),
+    completedAt: toDateOrNull(row.completed_at),
+  };
+}
+
+/** Driver-typed attempt row, left-joined to its seal. */
+export interface AttemptRow {
+  id: string;
+  public_id: string;
+  run_id: string;
+  attempt_number: number | string;
+  worker_id: string;
+  engine_name: string;
+  engine_version: string;
+  engine_build_digest: string;
+  resumed_from_attempt_id: string | null;
+  resumed_from_attempt_public_id: string | null;
+  claimed_at: string | Date;
+  seal_id: string | null;
+  terminal_status: string | null;
+  reason_code: string | null;
+  event_count: number | string | null;
+  final_run_seq: string | null;
+  final_attempt_seq: number | string | null;
+  final_event_digest: string | null;
+  event_stream_digest: string | null;
+  sealed_at: string | Date | null;
+}
+
+/** Map one attempt row (with its optional seal) to the public projection. */
+export function mapAttemptRow(row: AttemptRow): AttemptRecord {
+  return {
+    attemptId: row.id,
+    attemptPublicId: row.public_id,
+    runId: row.run_id,
+    attemptNumber: Number(row.attempt_number),
+    producerId: row.worker_id,
+    engine: {
+      name: row.engine_name,
+      version: row.engine_version,
+      buildDigest: row.engine_build_digest,
+    },
+    resumedFrom:
+      row.resumed_from_attempt_id !== null &&
+      row.resumed_from_attempt_public_id !== null
+        ? {
+            attemptId: row.resumed_from_attempt_id,
+            attemptPublicId: row.resumed_from_attempt_public_id,
+          }
+        : null,
+    claimedAt: toDate(row.claimed_at),
+    seal:
+      row.seal_id !== null && row.event_stream_digest !== null
+        ? {
+            sealId: row.seal_id,
+            terminalStatus: row.terminal_status ?? "",
+            reasonCode: row.reason_code ?? null,
+            eventCount: Number(row.event_count ?? 0),
+            finalRunSeq:
+              row.final_run_seq === null ? null : String(row.final_run_seq),
+            finalAttemptSeq:
+              row.final_attempt_seq === null
+                ? null
+                : Number(row.final_attempt_seq),
+            finalEventDigest: row.final_event_digest ?? null,
+            eventStreamDigest: row.event_stream_digest,
+            sealedAt: toDate(row.sealed_at ?? row.claimed_at),
+          }
+        : null,
+  };
+}
+
+// ── Event preparation, batch planning, and the folded stream state ───────────
 
 /** One event, resolved to everything the row and the digests need. */
 export interface PreparedAttemptEvent {
@@ -1066,9 +663,9 @@ export interface PreparedAttemptEvent {
 }
 
 /**
- * Validate one event against the registry and compute its digests. Throws for
- * an unknown type, a forbidden inline field, an oversized payload, or a
- * malformed encrypted reference — all BEFORE any SQL exists.
+ * Validate one event against the closed registry and compute its digests.
+ * Throws for an unknown type, a forbidden inline field, an oversized payload,
+ * or a malformed encrypted reference — all BEFORE any SQL exists.
  */
 export function prepareAttemptEvent(
   event: AttemptEventInput,
@@ -1129,9 +726,9 @@ export function prepareAttemptEvent(
 }
 
 export interface AttemptBatchPlan {
-  /** Sequences at or below the lease pointer — candidates for idempotent reuse. */
+  /** Sequences already durable — candidates for idempotent reuse. */
   replays: PreparedAttemptEvent[];
-  /** Sequences past the lease pointer — genuinely new rows. */
+  /** Sequences past the durable tail — genuinely new rows. */
   appends: PreparedAttemptEvent[];
 }
 
@@ -1148,8 +745,9 @@ export interface AttemptBatchPlan {
  *    batches;
  *  - a non-positive sequence.
  *
- * A batch that starts at or below the pointer is a crash retry: those events
- * are looked up and digest-compared by the caller, never blindly re-inserted.
+ * A batch that starts at or below the durable tail is a crash retry: those
+ * events are digest-compared by `reconcileReplayedEvents`, never blindly
+ * re-inserted.
  */
 export function planAttemptBatch(
   attemptId: string,
@@ -1183,7 +781,7 @@ export function planAttemptBatch(
   return plan;
 }
 
-/** An already-durable event, as the replay lookup returns it. */
+/** The minimum an already-durable event row must carry to be reconciled. */
 export interface ExistingAttemptEventRow {
   id: string;
   attempt_seq: number | string;
@@ -1192,16 +790,27 @@ export interface ExistingAttemptEventRow {
 }
 
 /**
+ * A durable event row as the attempt-state read returns it: everything
+ * `reconcileReplayedEvents` needs, plus the three fields the stream digest
+ * commits to.
+ */
+export interface AttemptEventStateRow extends ExistingAttemptEventRow {
+  event_schema_version: string;
+  event_type: string;
+  payload_digest: string;
+}
+
+/**
  * Reconcile a replayed prefix against what is already durable.
  *
  * Identical digest ⇒ the prior row and its run sequence are returned unchanged
  * (the crash-retry case). A DIFFERENT digest for the same sequence is never
- * dropped: it means two writers observed different executions of the same
+ * dropped: it means two producers observed different executions of the same
  * position, so the ordered stream is no longer one provable history. That
  * throws `RunEventIntegrityError`, which the caller reports through the
  * security-event sink AFTER the transaction rolls back. `ON CONFLICT DO
- * NOTHING` would hide exactly this, which is why the V2 insert has no
- * conflict clause at all.
+ * NOTHING` would hide exactly this, which is why the insert has no conflict
+ * clause at all.
  */
 export function reconcileReplayedEvents(
   attemptId: string,
@@ -1214,11 +823,8 @@ export function reconcileReplayedEvents(
   return replays.map((event) => {
     const row = bySeq.get(event.attemptSeq);
     if (!row) {
-      // The lease pointer says this sequence is committed but no row exists —
-      // the pointer and the log disagree, so neither is trustworthy.
       throw new RunStoreStateError(
-        `attempt ${attemptId} lease reports seq ${event.attemptSeq} committed ` +
-          `but no event row exists`,
+        `attempt ${attemptId} has no durable event row for seq ${event.attemptSeq}`,
       );
     }
     if (row.event_digest !== event.eventDigest) {
@@ -1241,8 +847,8 @@ export function reconcileReplayedEvents(
 
 /**
  * Fold the running stream digest over the NEW events only. Replayed events are
- * already inside `previousDigest` — folding them twice would move the digest
- * on every retry and make a sealed attempt un-verifiable.
+ * already inside `previousDigest` — folding them twice would move the digest on
+ * every retry and make a sealed attempt un-verifiable.
  */
 export function foldAttemptStreamDigest(
   previousDigest: string,
@@ -1260,78 +866,128 @@ export function foldAttemptStreamDigest(
   );
 }
 
-// ── Lease validation ────────────────────────────────────────────────────────
+/**
+ * An attempt's position in its own stream, derived from the durable log rather
+ * than read off a mutable pointer. `eventStreamDigest` is the canonical
+ * empty-stream sentinel for a zero-event attempt — "no events" is itself a
+ * provable claim about the stream, not an absence of one.
+ */
+export interface AttemptEventState {
+  eventCount: number;
+  lastAttemptSeq: number;
+  /** `"0"` for a zero-event attempt. */
+  lastRunSeq: string;
+  finalEventDigest: string | null;
+  eventStreamDigest: string;
+}
 
-/** The locked lease row, joined to its attempt's public id and seal state. */
-export interface LockedLeaseRow {
-  id: string;
+/**
+ * Fold an attempt's durable event rows into its stream state, asserting the
+ * log's own invariant on the way through: `attempt_seq` is dense from 1. A hole
+ * in what is already committed is unrecoverable state, not something to
+ * summarize — `RunStoreStateError` rather than a plausible-looking digest.
+ *
+ * Rows must arrive ordered by `attempt_seq`; the query orders them.
+ */
+export function foldAttemptEventState(
+  attemptId: string,
+  rows: readonly AttemptEventStateRow[],
+): AttemptEventState {
+  let digest = EMPTY_EVENT_STREAM_DIGEST;
+  let lastAttemptSeq = 0;
+  let lastRunSeq = "0";
+  let finalEventDigest: string | null = null;
+
+  for (const row of rows) {
+    const attemptSeq = Number(row.attempt_seq);
+    if (attemptSeq !== lastAttemptSeq + 1) {
+      throw new RunStoreStateError(
+        `attempt ${attemptId} has a hole in its durable event log: expected ` +
+          `seq ${lastAttemptSeq + 1}, found ${attemptSeq}`,
+      );
+    }
+    digest = advanceEventStreamDigest(digest, {
+      attemptSeq,
+      eventSchemaVersion: row.event_schema_version,
+      eventType: row.event_type,
+      payloadDigest: row.payload_digest,
+    });
+    lastAttemptSeq = attemptSeq;
+    lastRunSeq = String(row.run_seq);
+    finalEventDigest = row.event_digest;
+  }
+
+  return {
+    eventCount: rows.length,
+    lastAttemptSeq,
+    lastRunSeq,
+    finalEventDigest,
+    eventStreamDigest: digest,
+  };
+}
+
+// ── Attempt writability ──────────────────────────────────────────────────────
+
+/** The locked attempt row plus everything a write gate must check. */
+export interface LockedAttemptRow {
   attempt_id: string;
   attempt_public_id: string;
   run_id: string;
   org_id: string;
   workspace_id: string;
-  lease_token: string;
-  lease_epoch: number | string;
-  worker_id: string;
-  expired: boolean;
-  fenced_at: string | Date | null;
-  last_run_seq: number | string | null;
-  last_attempt_seq: number | string | null;
-  event_count: number | string;
-  final_event_digest: string | null;
-  event_stream_digest: string | null;
+  attempt_number: number | string;
   seal_id: string | null;
 }
 
 /**
- * Why a fenced operation must be refused, or `null` when it may proceed.
- * Returned rather than thrown so the reclaimer — which legitimately operates on
- * an EXPIRED lease, that being the entire point of a reclaim — can accept that
- * one reason while still refusing a fenced or already-sealed attempt.
+ * Why a write against an attempt must be refused, or `null` when it may
+ * proceed. Returned rather than thrown so `sealAttempt` can recognize its own
+ * idempotent duplicate (`"sealed"`) instead of failing on it.
  */
-export function leaseRejectionReason(
-  row: LockedLeaseRow | undefined,
-  lease: RunLeaseRef,
-  options: { allowExpired?: boolean } = {},
-): LeaseRejectionReason | null {
-  if (!row) return "unknown_lease";
-  if (row.lease_token !== lease.leaseToken) return "token_mismatch";
-  if (Number(row.lease_epoch) !== lease.leaseEpoch) return "epoch_mismatch";
-  // `sealed` is checked BEFORE `fenced` on purpose: a seal always fences its
-  // own lease, so testing the fence first would report every duplicate seal as
-  // a generic fence and the idempotent duplicate-sweep path could never
-  // recognize itself. A fence WITHOUT a seal is the genuine "another attempt
-  // took this run" case and still reports `fenced`.
+export function attemptRejectionReason(
+  row: LockedAttemptRow | undefined,
+): AttemptRejectionReason | null {
+  if (!row) return "unknown_attempt";
+  // A seal is the fence: once it exists the attempt's stream is committed to,
+  // and any later write would be appending to evidence that is already sealed.
   if (row.seal_id !== null) return "sealed";
-  if (row.fenced_at !== null) return "fenced";
-  if (row.expired && !options.allowExpired) return "expired";
   return null;
 }
 
-/** Throwing form of `leaseRejectionReason`, used by every fenced write. */
-export function assertLeaseUsable(
-  row: LockedLeaseRow | undefined,
-  lease: RunLeaseRef,
-  options: { allowExpired?: boolean } = {},
-): LockedLeaseRow {
-  const reason = leaseRejectionReason(row, lease, options);
-  if (reason !== null) throw new RunLeaseFencedError(lease.attemptId, reason);
-  return row as LockedLeaseRow;
+/** Throwing form of `attemptRejectionReason`, used by every append. */
+export function assertAttemptWritable(
+  attemptId: string,
+  row: LockedAttemptRow | undefined,
+): LockedAttemptRow {
+  const reason = attemptRejectionReason(row);
+  if (reason !== null) throw new AttemptNotWritableError(attemptId, reason);
+  return row as LockedAttemptRow;
 }
 
-// ── V2 SQL builders ─────────────────────────────────────────────────────────
+/** Run status a terminal attempt drives its run to. */
+export function runStatusForTerminal(
+  terminalStatus: AttemptTerminalStatus,
+): "completed" | "failed" | "cancelled" {
+  if (terminalStatus === "completed") return "completed";
+  if (terminalStatus === "cancelled") return "cancelled";
+  // `denied` is a failure of the run, not a separate run status — the DENIAL
+  // itself is evidence on the sealed attempt. `abandoned` likewise.
+  return "failed";
+}
+
+// ── SQL builders — pure, exported, unit-testable without a database ─────────
 
 /**
- * Insert the trusted V2 run row and read back what Postgres stored, joined to
- * the repository-binding and retention-policy rows the internal uuids address.
- * The join is the verification: it turns "the caller says this uuid is that
- * public id" into "the database agrees", which is what
- * `assertRunRowMatchesSpec` then checks against the spec.
+ * Insert the trusted run row and read back what Postgres stored, joined to the
+ * repository-binding and retention-policy rows the internal uuids address. The
+ * join IS the verification: it turns "the caller says this uuid is that public
+ * id" into "the database agrees", which `assertRunRowMatchesSpec` then checks
+ * against the spec.
  */
-export function buildEnqueueRunV2Sql(
+export function buildCreateRunSql(
   publicId: string,
   specDigest: string,
-  input: EnqueueRunV2Input,
+  input: CreateRunInput,
 ): SQL {
   const spec = input.spec;
   const repository =
@@ -1397,74 +1053,17 @@ export function buildEnqueueRunV2Sql(
 }
 
 /**
- * Lock exactly one claimable V2 run.
- *
- * Eligibility is `pending` ONLY. A running V2 run is never stolen by a claim,
- * however stale its lease looks: fencing an expired attempt means sealing it,
- * minting its finalization grant, and enqueuing its obligation, and that is
- * `reclaimExpiredAttempts`' transaction. A claim that quietly took the row
- * would strand exactly the evidence the reclaim exists to preserve.
+ * Lock the run row a new attempt will be created against and project what the
+ * attempt row needs. `FOR UPDATE` serializes concurrent attempt creation on one
+ * run, so `attempt_count + 1` cannot be computed twice — and if it somehow
+ * were, `agent_run_attempts_run_attempt_uq` rejects the second.
  */
-export function buildLockClaimableRunV2Sql(): SQL {
-  // The lock is taken in its own CTE over the bare table, then the identity
-  // projection joins to it. Same shape as V1's `WHERE id = (SELECT … FOR UPDATE
-  // SKIP LOCKED)`: a locking clause alongside outer joins has awkward
-  // restrictions, and the row is already pinned by the time the joins run.
+export function buildLockRunForAttemptSql(runId: string): SQL {
   return sql`
-    WITH locked AS (
-      SELECT id FROM agent.agent_runs
-      WHERE spec_version = 2
-        AND status = 'pending'
-        AND attempt_count < max_attempts
-      ORDER BY created_at
-      LIMIT 1
-      FOR UPDATE SKIP LOCKED
-    )
-    SELECT
-      r.id, r.public_id, r.org_id, r.workspace_id, r.surface, r.spec,
-      r.run_kind, r.spec_digest, r.initiating_principal_id,
-      r.agent_principal_id, r.agent_id, r.agent_version_id,
-      r.agent_version_checksum, r.authorization_snapshot_id, r.parent_run_id,
-      r.repository_binding_id, r.repository_provider, r.provider_repository_id,
-      r.repository_connection_id, r.configured_default_ref,
-      r.base_commit_sha, r.base_tree_sha,
-      r.retention_policy_id, r.retention_policy_digest,
-      r.max_attempts, r.attempt_count, r.next_run_seq, r.latest_checkpoint_id,
-      rb.public_id AS repository_binding_public_id,
-      rpv.public_id AS retention_policy_public_id
-    FROM locked lk
-    JOIN agent.agent_runs r ON r.id = lk.id
-    LEFT JOIN ingestion.repository_bindings rb ON rb.id = r.repository_binding_id
-    LEFT JOIN evidence.retention_policy_versions rpv ON rpv.id = r.retention_policy_id
-  `;
-}
-
-/**
- * The newest checkpoint this worker may legitimately restore.
- *
- * Two filters carry weight. The seal join means only a SEALED prior attempt's
- * checkpoint is eligible — an unsealed attempt is still live or mid-reclaim,
- * and its checkpoint is not a settled position in the stream. The schema filter
- * means a checkpoint written by an engine build this worker cannot parse is
- * skipped rather than mis-read; the successor starts clean.
- */
-export function buildSelectRestorableCheckpointSql(
-  runId: string,
-  engineStateSchemas: readonly string[],
-): SQL {
-  return sql`
-    SELECT
-      c.id, c.attempt_id, c.attempt_seq, c.run_seq,
-      c.checkpoint_digest, c.stream_digest,
-      c.engine_state_schema, c.encrypted_state_ref,
-      a.public_id AS attempt_public_id
-    FROM agent.agent_run_checkpoints c
-    JOIN agent.agent_run_attempts a ON a.id = c.attempt_id
-    JOIN agent.agent_run_attempt_seals s ON s.attempt_id = c.attempt_id
-    WHERE c.run_id = ${runId}::uuid
-      AND c.engine_state_schema = ANY(${engineStateSchemas as string[]}::text[])
-    ORDER BY c.run_seq DESC
-    LIMIT 1
+    SELECT id, org_id, workspace_id, spec_version, status, attempt_count, max_attempts
+    FROM agent.agent_runs
+    WHERE id = ${runId}::uuid
+    FOR UPDATE
   `;
 }
 
@@ -1474,20 +1073,24 @@ export interface InsertAttemptInput {
   workspaceId: string;
   runId: string;
   attemptNumber: number;
-  workerId: string;
+  producerId: string;
   engine: ResolvedEngineIdentity;
-  restore: RestoredCheckpointRef | null;
+  resumedFrom: AttemptProvenance | null;
 }
 
-/** Create the immutable attempt — before any model or tool work can run. */
+/**
+ * Create the immutable attempt. The restore tuple is the attempt-provenance
+ * PAIR only — the checkpoint half of it went with `agent_run_checkpoints` in
+ * ADR-041, and `agent_run_attempts_restore_tuple_check` now enforces the
+ * narrowed all-or-nothing pair.
+ */
 export function buildInsertAttemptSql(input: InsertAttemptInput): SQL {
-  const restore = input.restore;
+  const resumedFrom = input.resumedFrom;
   return sql`
     INSERT INTO agent.agent_run_attempts (
       public_id, org_id, workspace_id, run_id, attempt_number, worker_id,
       engine_name, engine_version, engine_build_digest,
-      resumed_from_attempt_id, resumed_from_attempt_public_id,
-      restored_checkpoint_id, restored_checkpoint_digest
+      resumed_from_attempt_id, resumed_from_attempt_public_id
     )
     VALUES (
       ${input.publicId},
@@ -1495,84 +1098,28 @@ export function buildInsertAttemptSql(input: InsertAttemptInput): SQL {
       ${input.workspaceId}::uuid,
       ${input.runId}::uuid,
       ${input.attemptNumber},
-      ${input.workerId},
+      ${input.producerId},
       ${input.engine.name},
       ${input.engine.version},
       ${input.engine.buildDigest},
-      ${restore?.attemptId ?? null}::uuid,
-      ${restore?.attemptPublicId ?? null},
-      ${restore?.checkpointId ?? null}::uuid,
-      ${restore?.checkpointDigest ?? null}
+      ${resumedFrom?.attemptId ?? null}::uuid,
+      ${resumedFrom?.attemptPublicId ?? null}
     )
     RETURNING id, public_id, attempt_number
   `;
 }
 
 /**
- * The next fencing epoch for a run. Read under the run's row lock, so two
- * concurrent claims cannot compute the same value — and if one somehow did,
- * `agent_run_attempt_leases_run_epoch_uq` rejects the second at write time.
- */
-export function buildSelectNextLeaseEpochSql(runId: string): SQL {
-  return sql`
-    SELECT COALESCE(MAX(lease_epoch), 0) + 1 AS next_epoch
-    FROM agent.agent_run_attempt_leases
-    WHERE run_id = ${runId}::uuid
-  `;
-}
-
-export interface InsertLeaseInput {
-  orgId: string;
-  workspaceId: string;
-  runId: string;
-  attemptId: string;
-  leaseToken: string;
-  leaseEpoch: number;
-  workerId: string;
-  leaseSeconds: number;
-}
-
-export function buildInsertAttemptLeaseSql(input: InsertLeaseInput): SQL {
-  return sql`
-    INSERT INTO agent.agent_run_attempt_leases (
-      org_id, workspace_id, attempt_id, run_id, lease_token, lease_epoch,
-      worker_id, expires_at, event_stream_digest
-    )
-    VALUES (
-      ${input.orgId}::uuid,
-      ${input.workspaceId}::uuid,
-      ${input.attemptId}::uuid,
-      ${input.runId}::uuid,
-      ${input.leaseToken},
-      ${input.leaseEpoch},
-      ${input.workerId},
-      now() + make_interval(secs => ${input.leaseSeconds}),
-      ${EMPTY_EVENT_STREAM_DIGEST}
-    )
-    RETURNING id, expires_at
-  `;
-}
-
-/**
- * Mark the run running and point it at the new attempt. Only operational
+ * Mark the run in flight and point it at the new attempt. Only operational
  * columns move — the `agent_runs_v2_immutability` trigger rejects any change to
- * the trusted bindings, so this statement cannot rewrite identity even by
- * accident.
+ * the trusted bindings, so this statement cannot rewrite identity by accident.
  */
-export function buildMarkRunClaimedV2Sql(
-  runId: string,
-  workerId: string,
-  attemptId: string,
-  leaseSeconds: number,
-): SQL {
+export function buildMarkRunAttemptedSql(runId: string, attemptId: string): SQL {
   return sql`
     UPDATE agent.agent_runs SET
       status = 'running',
-      claimed_by = ${workerId},
-      attempts = attempts + 1,
       attempt_count = attempt_count + 1,
       active_attempt_id = ${attemptId}::uuid,
-      lease_expires_at = now() + make_interval(secs => ${leaseSeconds}),
       started_at = coalesce(started_at, now()),
       updated_at = now()
     WHERE id = ${runId}::uuid
@@ -1581,79 +1128,52 @@ export function buildMarkRunClaimedV2Sql(
 }
 
 /**
- * Lock one attempt's lease and everything a fenced operation must check:
- * expiry (as a server-computed boolean, never a client clock), the fence
- * tombstone, and whether a seal already exists.
+ * Lock an attempt for writing and project its write gate.
+ *
+ * The lock is taken on the RUN row, not the attempt row: the attempt table is
+ * append-only (the migration revokes UPDATE/DELETE, so `FOR UPDATE` on it has
+ * no privilege to take), and the run row is what the `next_run_seq` allocator
+ * updates anyway. Locking it serializes every append and seal on the run.
  */
-export function buildLockAttemptLeaseSql(attemptId: string): SQL {
-  // Lock in its own CTE, project afterwards — see buildLockClaimableRunV2Sql.
-  // `expired` is computed by the SERVER: a worker's own clock is exactly the
-  // thing a fencing check must not depend on.
+export function buildLockAttemptForWriteSql(attemptId: string): SQL {
   return sql`
     WITH locked AS (
-      SELECT id FROM agent.agent_run_attempt_leases
-      WHERE attempt_id = ${attemptId}::uuid
+      SELECT r.id
+      FROM agent.agent_runs r
+      WHERE r.id = (
+        SELECT run_id FROM agent.agent_run_attempts WHERE id = ${attemptId}::uuid
+      )
       FOR UPDATE
     )
     SELECT
-      l.id, l.attempt_id, l.run_id, l.org_id, l.workspace_id,
-      l.lease_token, l.lease_epoch, l.worker_id,
-      (l.expires_at <= now()) AS expired,
-      l.fenced_at, l.last_run_seq, l.last_attempt_seq,
-      l.event_count, l.final_event_digest, l.event_stream_digest,
-      a.public_id AS attempt_public_id,
-      s.id AS seal_id
-    FROM locked lk
-    JOIN agent.agent_run_attempt_leases l ON l.id = lk.id
-    JOIN agent.agent_run_attempts a ON a.id = l.attempt_id
-    LEFT JOIN agent.agent_run_attempt_seals s ON s.attempt_id = l.attempt_id
+      a.id            AS attempt_id,
+      a.public_id     AS attempt_public_id,
+      a.run_id,
+      a.org_id,
+      a.workspace_id,
+      a.attempt_number,
+      s.id            AS seal_id
+    FROM agent.agent_run_attempts a
+    JOIN locked lk ON lk.id = a.run_id
+    LEFT JOIN agent.agent_run_attempt_seals s ON s.attempt_id = a.id
+    WHERE a.id = ${attemptId}::uuid
   `;
 }
 
 /**
- * Renew a lease. The guard IS the WHERE clause — token, epoch, no fence — so a
- * worker whose attempt was reclaimed cannot extend a claim it no longer holds,
- * exactly like the V1 `claimed_by` guard.
+ * Every durable event of one attempt, ordered — the input to
+ * `foldAttemptEventState`. Reading the whole stream is the point: the fold both
+ * derives the attempt's position and proves the log has no hole, which a stored
+ * pointer could only assert.
  */
-export function buildRenewAttemptLeaseSql(
-  lease: RunLeaseRef,
-  leaseSeconds: number = RUN_LEASE_SECONDS,
-): SQL {
+export function buildSelectAttemptEventStateSql(attemptId: string): SQL {
   return sql`
-    UPDATE agent.agent_run_attempt_leases SET
-      expires_at = now() + make_interval(secs => ${leaseSeconds}),
-      renewed_at = now(),
-      updated_at = now()
-    WHERE attempt_id = ${lease.attemptId}::uuid
-      AND lease_token = ${lease.leaseToken}
-      AND lease_epoch = ${lease.leaseEpoch}
-      AND fenced_at IS NULL
-    RETURNING expires_at
-  `;
-}
-
-/** Read the run's cancel flag through the lease, so the fence still gates it. */
-export function buildIsAttemptCancelRequestedSql(attemptId: string): SQL {
-  return sql`
-    SELECT r.cancel_requested
-    FROM agent.agent_run_attempt_leases l
-    JOIN agent.agent_runs r ON r.id = l.run_id
-    WHERE l.attempt_id = ${attemptId}::uuid
-  `;
-}
-
-export function buildSelectExistingAttemptEventsSql(
-  attemptId: string,
-  fromSeq: number,
-  toSeq: number,
-): SQL {
-  return sql`
-    SELECT id, attempt_seq, run_seq, event_digest
+    SELECT
+      id, attempt_seq, run_seq::text AS run_seq,
+      event_schema_version, event_type, payload_digest, event_digest
     FROM agent.agent_run_events
     WHERE event_record_version = 2
       AND attempt_id = ${attemptId}::uuid
-      AND attempt_seq >= ${fromSeq}
-      AND attempt_seq <= ${toSeq}
     ORDER BY attempt_seq ASC
   `;
 }
@@ -1680,12 +1200,9 @@ export interface AttemptEventInsertRow extends PreparedAttemptEvent {
 }
 
 /**
- * Multi-row V2 insert with NO conflict clause. Deliberate: a unique violation
- * on `(attempt_id, attempt_seq)` or `(run_id, run_seq)` here means two writers
- * raced past every fence check, and that must surface as an error rather than
- * vanish. (The legacy `appendEvents` above keeps `ON CONFLICT DO NOTHING` — V1
- * rows carry no digest, so the drop hides no integrity failure, and the V1
- * worker's crash-replay safety depends on it.)
+ * Multi-row insert with NO conflict clause. Deliberate: a unique violation on
+ * `(attempt_id, attempt_seq)` or `(run_id, run_seq)` here means two writers
+ * raced past the run lock, and that must surface as an error rather than vanish.
  */
 export function buildInsertAttemptEventsSql(
   runId: string,
@@ -1719,117 +1236,6 @@ export function buildInsertAttemptEventsSql(
   `;
 }
 
-export interface InsertCheckpointInput {
-  orgId: string;
-  workspaceId: string;
-  runId: string;
-  attemptId: string;
-  eventId: string;
-  attemptSeq: number;
-  runSeq: string;
-  engineStateSchema: string;
-  checkpointDigest: string;
-  streamDigest: string;
-  encryptedStateRef: string;
-}
-
-export function buildInsertCheckpointSql(input: InsertCheckpointInput): SQL {
-  return sql`
-    INSERT INTO agent.agent_run_checkpoints (
-      org_id, workspace_id, run_id, attempt_id, event_id,
-      attempt_seq, run_seq, engine_state_schema,
-      checkpoint_digest, stream_digest, encrypted_state_ref
-    )
-    VALUES (
-      ${input.orgId}::uuid,
-      ${input.workspaceId}::uuid,
-      ${input.runId}::uuid,
-      ${input.attemptId}::uuid,
-      ${input.eventId}::uuid,
-      ${input.attemptSeq},
-      ${input.runSeq}::bigint,
-      ${input.engineStateSchema},
-      ${input.checkpointDigest},
-      ${input.streamDigest},
-      ${input.encryptedStateRef}
-    )
-    RETURNING id
-  `;
-}
-
-/** The existing checkpoint on a replayed final event, for idempotent retries. */
-export function buildSelectCheckpointByEventSql(eventId: string): SQL {
-  return sql`
-    SELECT id, checkpoint_digest, stream_digest
-    FROM agent.agent_run_checkpoints
-    WHERE event_id = ${eventId}::uuid
-  `;
-}
-
-export interface AdvanceLeaseInput {
-  lease: RunLeaseRef;
-  lastRunSeq: string;
-  lastAttemptSeq: number;
-  eventCount: number;
-  finalEventDigest: string | null;
-  eventStreamDigest: string;
-}
-
-/**
- * Advance the lease pointers in the same transaction as the append. Re-states
- * the fencing guard in its WHERE clause: even though the row is already locked,
- * an update that could not name the token and epoch has no business moving the
- * pointer a successor and the finalizer both read.
- */
-export function buildAdvanceLeasePointersSql(input: AdvanceLeaseInput): SQL {
-  return sql`
-    UPDATE agent.agent_run_attempt_leases SET
-      last_run_seq = ${input.lastRunSeq}::bigint,
-      last_attempt_seq = ${input.lastAttemptSeq},
-      event_count = ${input.eventCount},
-      final_event_digest = ${input.finalEventDigest},
-      event_stream_digest = ${input.eventStreamDigest},
-      updated_at = now()
-    WHERE attempt_id = ${input.lease.attemptId}::uuid
-      AND lease_token = ${input.lease.leaseToken}
-      AND lease_epoch = ${input.lease.leaseEpoch}
-      AND fenced_at IS NULL
-    RETURNING id
-  `;
-}
-
-export function buildSetLatestCheckpointSql(
-  runId: string,
-  checkpointId: string,
-): SQL {
-  return sql`
-    UPDATE agent.agent_runs SET
-      latest_checkpoint_id = ${checkpointId}::uuid,
-      updated_at = now()
-    WHERE id = ${runId}::uuid
-    RETURNING id
-  `;
-}
-
-/**
- * Fence a lease. After this commits the attempt may perform NO further
- * mutation; the tombstone is what a stale worker observes before it shuts down.
- */
-export function buildFenceAttemptLeaseSql(
-  attemptId: string,
-  reason: string,
-): SQL {
-  return sql`
-    UPDATE agent.agent_run_attempt_leases SET
-      fenced_at = now(),
-      fenced_reason = ${reason},
-      updated_at = now()
-    WHERE attempt_id = ${attemptId}::uuid
-      AND fenced_at IS NULL
-    RETURNING id
-  `;
-}
-
 export interface InsertSealInput {
   orgId: string;
   workspaceId: string;
@@ -1842,10 +1248,14 @@ export interface InsertSealInput {
   finalAttemptSeq: number | null;
   finalEventDigest: string | null;
   eventStreamDigest: string;
-  sealerKind: "worker" | "reclaimer";
-  sealerWorkerId: string;
+  sealerId: string;
 }
 
+/**
+ * Insert the immutable seal. `sealer_kind` is pinned to `'worker'`: the column's
+ * CHECK still spells the pre-ADR-041 vocabulary (`'worker' | 'reclaimer'`), and
+ * narrowing it is a schema change, not a ledger change.
+ */
 export function buildInsertAttemptSealSql(input: InsertSealInput): SQL {
   return sql`
     INSERT INTO agent.agent_run_attempt_seals (
@@ -1865,15 +1275,15 @@ export function buildInsertAttemptSealSql(input: InsertSealInput): SQL {
       ${input.finalAttemptSeq},
       ${input.finalEventDigest},
       ${input.eventStreamDigest},
-      ${input.sealerKind},
-      ${input.sealerWorkerId}
+      'worker',
+      ${input.sealerId}
     )
     RETURNING id
   `;
 }
 
-/** Terminal run status for a worker-observed seal. Clears the attempt pointer. */
-export function buildFinishRunV2Sql(
+/** Drive the run to its terminal status and clear the active-attempt pointer. */
+export function buildFinishRunSql(
   runId: string,
   status: "completed" | "failed" | "cancelled",
   result: unknown | null,
@@ -1885,8 +1295,6 @@ export function buildFinishRunV2Sql(
       result = ${result === null ? null : JSON.stringify(result)}::jsonb,
       error = ${error},
       active_attempt_id = NULL,
-      claimed_by = NULL,
-      lease_expires_at = NULL,
       completed_at = now(),
       updated_at = now()
     WHERE id = ${runId}::uuid
@@ -1895,49 +1303,37 @@ export function buildFinishRunV2Sql(
 }
 
 /**
- * Return a reclaimed run to the queue so the NEXT claim creates its successor
- * attempt. The reclaimer cannot create that attempt itself: an attempt row
- * pins a resolved engine name, version, and build digest, and only a claiming
- * worker knows which binary it is about to run.
+ * Look up the public status projection by `public_id`. No org/workspace filter —
+ * RLS scopes the read from the caller's tenant session.
  */
-export function buildRequeueRunForSuccessorSql(runId: string): SQL {
-  return sql`
-    UPDATE agent.agent_runs SET
-      status = 'pending',
-      claimed_by = NULL,
-      active_attempt_id = NULL,
-      lease_expires_at = NULL,
-      updated_at = now()
-    WHERE id = ${runId}::uuid
-    RETURNING id
-  `;
-}
-
-/**
- * Expired, unfenced, unsealed leases — the reclaim sweep's work list. Ordered
- * by expiry so the longest-abandoned attempt is finalized first.
- */
-export function buildSelectExpiredAttemptLeasesSql(
-  limit: number = DEFAULT_RECLAIM_LIMIT,
-): SQL {
+export function buildGetRunByPublicIdSql(publicId: string): SQL {
   return sql`
     SELECT
-      l.attempt_id, l.run_id, l.lease_token, l.lease_epoch,
-      a.public_id AS attempt_public_id, a.attempt_number,
-      r.max_attempts, r.attempt_count
-    FROM agent.agent_run_attempt_leases l
-    JOIN agent.agent_run_attempts a ON a.id = l.attempt_id
-    JOIN agent.agent_runs r ON r.id = l.run_id
-    LEFT JOIN agent.agent_run_attempt_seals s ON s.attempt_id = l.attempt_id
-    WHERE l.fenced_at IS NULL
-      AND l.expires_at <= now()
-      AND s.id IS NULL
-    ORDER BY l.expires_at ASC
-    LIMIT ${limit}
+      id, public_id, surface, spec_version, status, result, error,
+      attempt_count, max_attempts, created_at, started_at, completed_at
+    FROM agent.agent_runs
+    WHERE public_id = ${publicId}
   `;
 }
 
-/** Resumable V2 subscription read. `run_seq` is text — see the record doc. */
+/** Every attempt of a run, oldest first, each left-joined to its seal. */
+export function buildListRunAttemptsSql(runId: string): SQL {
+  return sql`
+    SELECT
+      a.id, a.public_id, a.run_id, a.attempt_number, a.worker_id,
+      a.engine_name, a.engine_version, a.engine_build_digest,
+      a.resumed_from_attempt_id, a.resumed_from_attempt_public_id, a.claimed_at,
+      s.id AS seal_id, s.terminal_status, s.reason_code, s.event_count,
+      s.final_run_seq::text AS final_run_seq, s.final_attempt_seq,
+      s.final_event_digest, s.event_stream_digest, s.sealed_at
+    FROM agent.agent_run_attempts a
+    LEFT JOIN agent.agent_run_attempt_seals s ON s.attempt_id = a.id
+    WHERE a.run_id = ${runId}::uuid
+    ORDER BY a.attempt_number ASC
+  `;
+}
+
+/** Resumable event read. `run_seq` is projected as text — see the record doc. */
 export function buildReadAttemptEventsSinceSql(
   runId: string,
   afterRunSeq: string,
@@ -1960,7 +1356,8 @@ export function buildReadAttemptEventsSinceSql(
   `;
 }
 
-interface AttemptEventReadRow {
+/** Driver-typed row behind `AttemptEventReadRecord`. */
+export interface AttemptEventReadRow {
   id: string;
   attempt_id: string;
   attempt_public_id: string;
@@ -1998,158 +1395,52 @@ export function mapAttemptEventReadRow(
   };
 }
 
-function toDate(value: string | Date): Date {
-  return value instanceof Date ? value : new Date(value);
-}
+// ── In-transaction cores ─────────────────────────────────────────────────────
 
-// ── In-transaction append core ───────────────────────────────────────────────
-
-/** Driver-typed row of a lockable, claimable V2 run. */
-interface ClaimableRunV2Row extends RunV2IdentityRow {
-  id: string;
-  public_id: string;
-  org_id: string;
-  workspace_id: string;
-  surface: string;
-  spec: unknown;
-  attempt_count: number | string;
-  next_run_seq: number | string;
-  latest_checkpoint_id: string | null;
-}
-
-interface RestorableCheckpointRow {
-  id: string;
-  attempt_id: string;
-  attempt_public_id: string;
-  attempt_seq: number | string;
-  run_seq: number | string;
-  checkpoint_digest: string;
-  stream_digest: string;
-  engine_state_schema: string;
-  encrypted_state_ref: string;
+/** Read and fold an attempt's durable stream state inside the caller's tx. */
+async function readAttemptStateInTx(
+  tx: Tx,
+  attemptId: string,
+): Promise<{ state: AttemptEventState; rows: AttemptEventStateRow[] }> {
+  const rows = (await tx.execute(
+    buildSelectAttemptEventStateSql(attemptId),
+  )) as unknown as AttemptEventStateRow[];
+  return { state: foldAttemptEventState(attemptId, rows), rows };
 }
 
 /**
- * Project a locked run row plus its freshly-created attempt into the claim
- * result. `checkpoint`/`checkpointSeq` are pinned to the V1-shaped null/0: a V2
- * attempt's engine state is a tenant-encrypted blob named by `v2.restore`, not
- * an inline JSON column, and `attempt_seq` always restarts at 1 for a new
- * attempt however much history the run has.
- */
-export function mapClaimedRunV2(
-  run: ClaimableRunV2Row,
-  attempt: { id: string; public_id: string; attempt_number: number | string },
-  lease: { leaseToken: string; leaseEpoch: number },
-  engine: ResolvedEngineIdentity,
-  restore: RestoredCheckpointRef | null,
-): ClaimedRunV2 {
-  return {
-    runId: run.id,
-    publicId: run.public_id,
-    orgId: run.org_id,
-    workspaceId: run.workspace_id,
-    surface: run.surface,
-    spec: run.spec,
-    attempts: Number(attempt.attempt_number),
-    checkpoint: null,
-    checkpointSeq: 0,
-    specVersion: 2,
-    lease: {
-      runId: run.id,
-      attemptId: attempt.id,
-      attemptPublicId: attempt.public_id,
-      leaseToken: lease.leaseToken,
-      leaseEpoch: lease.leaseEpoch,
-    },
-    v2: {
-      runKind: run.run_kind,
-      specDigest: run.spec_digest,
-      initiatingPrincipalId: run.initiating_principal_id,
-      agentPrincipalId: run.agent_principal_id,
-      agentId: run.agent_id,
-      agentVersionId: run.agent_version_id,
-      agentVersionChecksum: run.agent_version_checksum,
-      authorizationSnapshotId: run.authorization_snapshot_id,
-      parentRunId: run.parent_run_id ?? null,
-      repositoryBindingId: run.repository_binding_id ?? null,
-      repositoryBindingPublicId: run.repository_binding_public_id ?? null,
-      repositoryProvider: run.repository_provider ?? null,
-      providerRepositoryId: run.provider_repository_id ?? null,
-      repositoryConnectionId: run.repository_connection_id ?? null,
-      configuredDefaultRef: run.configured_default_ref ?? null,
-      baseCommitSha: run.base_commit_sha ?? null,
-      baseTreeSha: run.base_tree_sha ?? null,
-      retentionPolicyId: run.retention_policy_id,
-      retentionPolicyPublicId: run.retention_policy_public_id ?? "",
-      retentionPolicyDigest: run.retention_policy_digest,
-      maxAttempts: Number(run.max_attempts),
-      attemptNumber: Number(attempt.attempt_number),
-      engine,
-      restore,
-    },
-  };
-}
-
-function mapRestorableCheckpointRow(
-  row: RestorableCheckpointRow,
-): RestoredCheckpointRef {
-  return {
-    attemptId: row.attempt_id,
-    attemptPublicId: row.attempt_public_id,
-    checkpointId: row.id,
-    checkpointDigest: row.checkpoint_digest,
-    streamDigest: row.stream_digest,
-    engineStateSchema: row.engine_state_schema,
-    encryptedStateRef: row.encrypted_state_ref,
-    attemptSeq: Number(row.attempt_seq),
-    runSeq: Number(row.run_seq),
-  };
-}
-
-/**
- * Append a prepared batch and its optional checkpoint against an ALREADY
- * LOCKED, already-validated lease, inside the caller's transaction.
+ * Append a prepared batch against an ALREADY LOCKED, already-validated attempt,
+ * inside the caller's transaction.
  *
- * Shared by `appendAttemptBatch` and by `sealAttempt`'s terminal-event append
- * so a terminal event goes through the exact same contiguity, idempotency, and
+ * Shared by `appendAttemptBatch` and by `sealAttempt`'s terminal-event append,
+ * so a terminal event goes through the exact same contiguity, idempotency and
  * digest rules as any other event — a seal cannot smuggle in an event the
  * normal path would have refused.
  */
 async function appendPreparedBatchInTx(
   tx: Tx,
-  lease: RunLeaseRef,
-  leaseRow: LockedLeaseRow,
+  attempt: LockedAttemptRow,
+  state: AttemptEventState,
+  durable: readonly AttemptEventStateRow[],
   prepared: readonly PreparedAttemptEvent[],
-  checkpoint: AttemptCheckpointInput | undefined,
 ): Promise<AppendAttemptBatchResult> {
-  const lastAttemptSeq = Number(leaseRow.last_attempt_seq ?? 0);
-  const plan = planAttemptBatch(lease.attemptId, lastAttemptSeq, prepared);
+  const attemptId = attempt.attempt_id;
+  const plan = planAttemptBatch(attemptId, state.lastAttemptSeq, prepared);
 
-  let replayed: AppendedAttemptEvent[] = [];
-  if (plan.replays.length > 0) {
-    const firstReplay = plan.replays[0] as PreparedAttemptEvent;
-    const lastReplay = plan.replays[
-      plan.replays.length - 1
-    ] as PreparedAttemptEvent;
-    const existing = (await tx.execute(
-      buildSelectExistingAttemptEventsSql(
-        lease.attemptId,
-        firstReplay.attemptSeq,
-        lastReplay.attemptSeq,
-      ),
-    )) as unknown as ExistingAttemptEventRow[];
-    replayed = reconcileReplayedEvents(lease.attemptId, plan.replays, existing);
-  }
+  const replayed =
+    plan.replays.length > 0
+      ? reconcileReplayedEvents(attemptId, plan.replays, durable)
+      : [];
 
   let appended: AppendedAttemptEvent[] = [];
   if (plan.appends.length > 0) {
     const allocated = (await tx.execute(
-      buildAllocateRunSeqSql(leaseRow.run_id, plan.appends.length),
+      buildAllocateRunSeqSql(attempt.run_id, plan.appends.length),
     )) as unknown as Array<{ first_run_seq: string }>;
     const firstRunSeq = allocated[0]?.first_run_seq;
     if (firstRunSeq === undefined) {
       throw new RunStoreStateError(
-        `run ${leaseRow.run_id} did not allocate run sequences`,
+        `run ${attempt.run_id} did not allocate run sequences`,
       );
     }
     const base = BigInt(firstRunSeq);
@@ -2158,10 +1449,10 @@ async function appendPreparedBatchInTx(
       runSeq: (base + BigInt(index)).toString(),
     }));
     const insert = buildInsertAttemptEventsSql(
-      leaseRow.run_id,
-      leaseRow.org_id,
-      leaseRow.workspace_id,
-      lease.attemptId,
+      attempt.run_id,
+      attempt.org_id,
+      attempt.workspace_id,
+      attemptId,
       rows,
     );
     const returned = (await tx.execute(insert as SQL)) as unknown as Array<{
@@ -2170,13 +1461,13 @@ async function appendPreparedBatchInTx(
       run_seq: string;
     }>;
     // Multi-row RETURNING order is not guaranteed, so match on attempt_seq
-    // rather than position.
+    // rather than on position.
     const bySeq = new Map(returned.map((r) => [Number(r.attempt_seq), r]));
     appended = rows.map((row) => {
       const got = bySeq.get(row.attemptSeq);
       if (!got) {
         throw new RunStoreStateError(
-          `attempt ${lease.attemptId} seq ${row.attemptSeq} was not returned by the insert`,
+          `attempt ${attemptId} seq ${row.attemptSeq} was not returned by the insert`,
         );
       }
       return {
@@ -2189,130 +1480,32 @@ async function appendPreparedBatchInTx(
     });
   }
 
-  const events = [...replayed, ...appended];
-  const advanced = appended.length > 0;
-  const lastAppended = advanced
-    ? (appended[appended.length - 1] as AppendedAttemptEvent)
-    : null;
+  const lastAppended =
+    appended.length > 0
+      ? (appended[appended.length - 1] as AppendedAttemptEvent)
+      : null;
 
-  // Pointers never rewind: a batch that only replays an OLDER prefix leaves the
-  // lease exactly where it was. Moving it backwards would let the next append
-  // re-issue sequences the log already holds.
-  const eventCount = Number(leaseRow.event_count) + appended.length;
-  const eventStreamDigest = foldAttemptStreamDigest(
-    leaseRow.event_stream_digest ?? EMPTY_EVENT_STREAM_DIGEST,
-    plan.appends,
-  );
-  const outLastAttemptSeq = lastAppended
-    ? lastAppended.attemptSeq
-    : lastAttemptSeq;
-  const outLastRunSeq = lastAppended
-    ? lastAppended.runSeq
-    : String(leaseRow.last_run_seq ?? 0);
-  const outFinalEventDigest = lastAppended
-    ? lastAppended.eventDigest
-    : (leaseRow.final_event_digest ?? null);
-
-  let checkpointId: string | null = null;
-  if (checkpoint) {
-    const finalEvent = events[events.length - 1];
-    if (!finalEvent) {
-      throw new RunStoreStateError(
-        `attempt ${lease.attemptId} checkpoint requires at least one event in the batch`,
-      );
-    }
-    if (advanced) {
-      const rows = (await tx.execute(
-        buildInsertCheckpointSql({
-          orgId: leaseRow.org_id,
-          workspaceId: leaseRow.workspace_id,
-          runId: leaseRow.run_id,
-          attemptId: lease.attemptId,
-          eventId: finalEvent.eventId,
-          attemptSeq: finalEvent.attemptSeq,
-          runSeq: finalEvent.runSeq,
-          engineStateSchema: checkpoint.engineStateSchema,
-          checkpointDigest: checkpoint.checkpointDigest,
-          streamDigest: eventStreamDigest,
-          encryptedStateRef: checkpoint.encryptedStateRef,
-        }),
-      )) as unknown as Array<{ id: string }>;
-      const inserted = rows[0];
-      if (!inserted) {
-        throw new RunStoreStateError(
-          `attempt ${lease.attemptId} checkpoint insert returned no row`,
-        );
-      }
-      checkpointId = inserted.id;
-      await tx.execute(
-        buildSetLatestCheckpointSql(leaseRow.run_id, checkpointId),
-      );
-    } else {
-      // A fully-replayed batch may legitimately re-request its checkpoint. The
-      // existing one must AGREE — a different digest for the same event is the
-      // same class of integrity failure as a conflicting event.
-      const rows = (await tx.execute(
-        buildSelectCheckpointByEventSql(finalEvent.eventId),
-      )) as unknown as Array<{ id: string; checkpoint_digest: string }>;
-      const existing = rows[0];
-      if (!existing) {
-        throw new RunStoreStateError(
-          `attempt ${lease.attemptId} replayed checkpoint has no stored row for event ${finalEvent.eventId}`,
-        );
-      }
-      if (existing.checkpoint_digest !== checkpoint.checkpointDigest) {
-        throw new RunEventIntegrityError(
-          lease.attemptId,
-          finalEvent.attemptSeq,
-          existing.checkpoint_digest,
-          checkpoint.checkpointDigest,
-        );
-      }
-      checkpointId = existing.id;
-    }
-  }
-
-  if (advanced) {
-    const updated = (await tx.execute(
-      buildAdvanceLeasePointersSql({
-        lease,
-        lastRunSeq: outLastRunSeq,
-        lastAttemptSeq: outLastAttemptSeq,
-        eventCount,
-        finalEventDigest: outFinalEventDigest,
-        eventStreamDigest,
-      }),
-    )) as unknown as Array<{ id: string }>;
-    if (updated.length === 0) {
-      throw new RunLeaseFencedError(lease.attemptId, "fenced");
-    }
-  }
-
+  // A batch that only replays an older prefix leaves the stream exactly where
+  // it was: the durable log, not this batch, is what the state describes.
   return {
-    events,
-    lastAttemptSeq: outLastAttemptSeq,
-    lastRunSeq: outLastRunSeq,
-    eventCount,
-    eventStreamDigest,
-    finalEventDigest: outFinalEventDigest,
-    checkpointId,
+    events: [...replayed, ...appended],
+    lastAttemptSeq: lastAppended
+      ? lastAppended.attemptSeq
+      : state.lastAttemptSeq,
+    lastRunSeq: lastAppended ? lastAppended.runSeq : state.lastRunSeq,
+    eventCount: state.eventCount + appended.length,
+    eventStreamDigest: foldAttemptStreamDigest(
+      state.eventStreamDigest,
+      plan.appends,
+    ),
+    finalEventDigest: lastAppended
+      ? lastAppended.eventDigest
+      : state.finalEventDigest,
   };
 }
 
-/** Run status a worker-observed terminal attempt drives its run to. */
-export function runStatusForTerminal(
-  terminalStatus: AttemptTerminalStatus,
-): "completed" | "failed" | "cancelled" {
-  if (terminalStatus === "completed") return "completed";
-  if (terminalStatus === "cancelled") return "cancelled";
-  // `denied` is a failure of the run, not a separate run status — the DENIAL
-  // itself is evidence on the sealed attempt.
-  return "failed";
-}
-
 interface SealTransactionInput {
-  lease: RunLeaseRef;
-  leaseRow: LockedLeaseRow;
+  attempt: LockedAttemptRow;
   terminalStatus: AttemptTerminalStatus;
   reasonCode: string | null;
   eventCount: number;
@@ -2320,36 +1513,27 @@ interface SealTransactionInput {
   finalAttemptSeq: number | null;
   finalEventDigest: string | null;
   eventStreamDigest: string;
-  sealerKind: "worker" | "reclaimer";
-  sealerWorkerId: string;
+  sealerId: string;
 }
 
 /**
- * Fence, seal, mint the grant, and enqueue the obligation — the four writes
- * that MUST share one transaction. If any of them fails, none of them
- * happened: a seal without its grant would be evidence nobody is authorized to
- * finalize, and a grant without its obligation would be authority nobody is
- * scheduled to use.
+ * Seal, mint the grant, and enqueue the obligation — the three writes that MUST
+ * share one transaction. If any fails, none of them happened: a seal without
+ * its grant would be evidence nobody is authorized to finalize, and a grant
+ * without its obligation would be authority nobody is scheduled to use.
  */
 async function sealAttemptInTx(
   tx: Tx,
   input: SealTransactionInput,
 ): Promise<SealedAttemptHandle> {
-  const { lease, leaseRow } = input;
-
-  await tx.execute(
-    buildFenceAttemptLeaseSql(
-      lease.attemptId,
-      `sealed:${input.terminalStatus}`,
-    ),
-  );
+  const { attempt } = input;
 
   const sealRows = (await tx.execute(
     buildInsertAttemptSealSql({
-      orgId: leaseRow.org_id,
-      workspaceId: leaseRow.workspace_id,
-      runId: leaseRow.run_id,
-      attemptId: lease.attemptId,
+      orgId: attempt.org_id,
+      workspaceId: attempt.workspace_id,
+      runId: attempt.run_id,
+      attemptId: attempt.attempt_id,
       terminalStatus: input.terminalStatus,
       reasonCode: input.reasonCode,
       eventCount: input.eventCount,
@@ -2357,26 +1541,24 @@ async function sealAttemptInTx(
       finalAttemptSeq: input.finalAttemptSeq,
       finalEventDigest: input.finalEventDigest,
       eventStreamDigest: input.eventStreamDigest,
-      sealerKind: input.sealerKind,
-      sealerWorkerId: input.sealerWorkerId,
+      sealerId: input.sealerId,
     }),
   )) as unknown as Array<{ id: string }>;
   const seal = sealRows[0];
   if (!seal) {
     throw new RunStoreStateError(
-      `attempt ${lease.attemptId} seal insert returned no row`,
+      `attempt ${attempt.attempt_id} seal insert returned no row`,
     );
   }
 
-  const grantPublicId = generateFinalizationGrantPublicId();
   const grantRows = (await tx.execute(
     buildInsertFinalizationGrantSql({
-      publicId: grantPublicId,
-      orgId: leaseRow.org_id,
-      workspaceId: leaseRow.workspace_id,
-      runId: leaseRow.run_id,
-      attemptId: lease.attemptId,
-      attemptPublicId: lease.attemptPublicId,
+      publicId: generateFinalizationGrantPublicId(),
+      orgId: attempt.org_id,
+      workspaceId: attempt.workspace_id,
+      runId: attempt.run_id,
+      attemptId: attempt.attempt_id,
+      attemptPublicId: attempt.attempt_public_id,
       sealId: seal.id,
       eventCount: input.eventCount,
       finalEventDigest: input.finalEventDigest,
@@ -2386,33 +1568,33 @@ async function sealAttemptInTx(
   const grant = grantRows[0];
   if (!grant) {
     throw new RunStoreStateError(
-      `attempt ${lease.attemptId} finalization grant insert returned no row`,
+      `attempt ${attempt.attempt_id} finalization grant insert returned no row`,
     );
   }
 
   const obligationRows = (await tx.execute(
     buildInsertFinalizationObligationSql({
-      orgId: leaseRow.org_id,
-      workspaceId: leaseRow.workspace_id,
+      orgId: attempt.org_id,
+      workspaceId: attempt.workspace_id,
       grantId: grant.id,
       // The grant's own `afg_` public id IS the stable submission id.
       submissionId: grant.public_id,
-      runId: leaseRow.run_id,
-      attemptId: lease.attemptId,
+      runId: attempt.run_id,
+      attemptId: attempt.attempt_id,
       sealId: seal.id,
     }),
   )) as unknown as Array<{ id: string }>;
   const obligation = obligationRows[0];
   if (!obligation) {
     throw new RunStoreStateError(
-      `attempt ${lease.attemptId} finalization obligation insert returned no row`,
+      `attempt ${attempt.attempt_id} finalization obligation insert returned no row`,
     );
   }
 
   return {
-    runId: leaseRow.run_id,
-    attemptId: lease.attemptId,
-    attemptPublicId: lease.attemptPublicId,
+    runId: attempt.run_id,
+    attemptId: attempt.attempt_id,
+    attemptPublicId: attempt.attempt_public_id,
     sealId: seal.id,
     terminalStatus: input.terminalStatus,
     grantId: grant.id,
@@ -2429,22 +1611,32 @@ async function sealAttemptInTx(
 /** Read back an existing seal's handle — the idempotent duplicate-seal path. */
 async function readSealedHandleInTx(
   tx: Tx,
-  lease: RunLeaseRef,
+  attempt: LockedAttemptRow,
 ): Promise<SealedAttemptHandle> {
   const rows = (await tx.execute(
-    buildSelectFinalizationHandleSql(lease.attemptId),
+    buildSelectFinalizationHandleSql(attempt.attempt_id),
   )) as unknown as FinalizationHandleRow[];
   const row = rows[0];
   if (!row) {
     throw new RunStoreStateError(
-      `attempt ${lease.attemptId} is sealed but has no finalization grant or obligation`,
+      `attempt ${attempt.attempt_id} is sealed but has no finalization grant or obligation`,
     );
   }
   return mapFinalizationHandleRow(row, {
-    runId: lease.runId,
-    attemptId: lease.attemptId,
-    attemptPublicId: lease.attemptPublicId,
+    runId: attempt.run_id,
+    attemptId: attempt.attempt_id,
+    attemptPublicId: attempt.attempt_public_id,
   });
+}
+
+async function lockAttemptInTx(
+  tx: Tx,
+  attemptId: string,
+): Promise<LockedAttemptRow | undefined> {
+  const rows = (await tx.execute(
+    buildLockAttemptForWriteSql(attemptId),
+  )) as unknown as LockedAttemptRow[];
+  return rows[0];
 }
 
 // ── The store ────────────────────────────────────────────────────────────────
@@ -2452,121 +1644,245 @@ async function readSealedHandleInTx(
 /** Fail-loud fallback sink — see `RunStoreOptions.securityEvents`. */
 const CONSOLE_SECURITY_EVENT_SINK: RunSecurityEventSink = {
   recordEventSequenceConflict(event) {
-    console.error(`[run-store] ${EVENT_SEQUENCE_CONFLICT_EVENT}`, event);
+    console.error(`[run-ledger] ${EVENT_SEQUENCE_CONFLICT_EVENT}`, event);
   },
 };
 
 export function createPostgresRunStore(
   options: RunStoreOptions = {},
-): RunStore & AttemptRunStore {
+): RunStore {
   const securityEvents = options.securityEvents ?? CONSOLE_SECURITY_EVENT_SINK;
   return {
-    async enqueueRun(input) {
+    async createRun(input) {
       const publicId = generateRunPublicId();
+      const specDigest = runSpecV2Digest(input.spec);
       return withTenantDb(async (tx: Tx) => {
         const rows = (await tx.execute(
-          buildEnqueueRunSql(publicId, input),
-        )) as unknown as Array<{ id: string; public_id: string }>;
+          buildCreateRunSql(publicId, specDigest, input),
+        )) as unknown as Array<
+          RunV2IdentityRow & { id: string; public_id: string }
+        >;
         const row = rows[0];
-        if (!row)
-          throw new Error("run-store: enqueueRun insert returned no row");
-        return { runId: row.id, publicId: row.public_id };
+        if (!row) {
+          throw new RunStoreStateError("createRun insert returned no row");
+        }
+        // Verify what Postgres ACTUALLY stored against the parsed spec —
+        // including that the internal uuids admission resolved really do
+        // address the public ids the spec pinned (that is what the joins in
+        // the query are for). A mismatch throws inside the transaction, so the
+        // run row never survives.
+        assertRunRowMatchesSpec(mapRunV2IdentityRow(row), input.spec);
+        return { runId: row.id, publicId: row.public_id, specDigest };
       });
     },
 
-    async claimNextRun(workerId, options) {
-      // The compatibility dispatcher. With a resolved engine identity it tries
-      // the fenced V2 queue first and falls back to V1; without one it can only
-      // claim V1 (a V2 attempt row REQUIRES a pinned engine name/version/build
-      // digest, so there is no "claim now, resolve later" path). Either way
-      // already-enqueued V1 work stays claimable until its later retirement.
-      if (options) {
-        const v2 = await this.claimNextRunV2(workerId, options);
-        if (v2) return v2;
+    async createAttempt(input) {
+      return withTenantDb(async (tx: Tx) => {
+        const runRows = (await tx.execute(
+          buildLockRunForAttemptSql(input.runId),
+        )) as unknown as Array<{
+          id: string;
+          org_id: string;
+          workspace_id: string;
+          spec_version: number | string;
+          status: string;
+          attempt_count: number | string;
+          max_attempts: number | string | null;
+        }>;
+        const run = runRows[0];
+        if (!run) {
+          throw new RunStoreStateError(`run ${input.runId} does not exist`);
+        }
+        if (Number(run.spec_version) !== 2 || run.max_attempts === null) {
+          // A preserved legacy row has no pinned attempt ceiling and no trusted
+          // identity, so it can never carry evidence-grade attempts.
+          throw new RunStoreStateError(
+            `run ${input.runId} is a preserved legacy row and cannot take attempts`,
+          );
+        }
+        const maxAttempts = Number(run.max_attempts);
+        const attemptNumber = Number(run.attempt_count) + 1;
+        if (attemptNumber > maxAttempts) {
+          throw new RunStoreStateError(
+            `run ${input.runId} has exhausted its pinned max_attempts (${maxAttempts})`,
+          );
+        }
+
+        const attemptRows = (await tx.execute(
+          buildInsertAttemptSql({
+            publicId: generateAttemptPublicId(),
+            orgId: run.org_id,
+            workspaceId: run.workspace_id,
+            runId: run.id,
+            attemptNumber,
+            producerId: input.producerId,
+            engine: input.engine,
+            resumedFrom: input.resumedFrom ?? null,
+          }),
+        )) as unknown as Array<{
+          id: string;
+          public_id: string;
+          attempt_number: number | string;
+        }>;
+        const attempt = attemptRows[0];
+        if (!attempt) {
+          throw new RunStoreStateError(
+            `run ${input.runId} attempt insert returned no row`,
+          );
+        }
+
+        const marked = (await tx.execute(
+          buildMarkRunAttemptedSql(run.id, attempt.id),
+        )) as unknown as Array<{ id: string }>;
+        if (marked.length === 0) {
+          throw new RunStoreStateError(
+            `run ${input.runId} could not be marked running`,
+          );
+        }
+
+        return {
+          attemptId: attempt.id,
+          attemptPublicId: attempt.public_id,
+          runId: run.id,
+          orgId: run.org_id,
+          workspaceId: run.workspace_id,
+          attemptNumber: Number(attempt.attempt_number),
+          maxAttempts,
+          engine: input.engine,
+          resumedFrom: input.resumedFrom ?? null,
+        };
+      });
+    },
+
+    async appendAttemptBatch(input) {
+      // Validate every payload BEFORE opening a transaction: an unknown event
+      // type or a smuggled raw field must fail without ever reaching SQL.
+      const prepared = input.events.map(prepareAttemptEvent);
+      let conflictScope: {
+        orgId: string;
+        workspaceId: string;
+        runId: string;
+        attemptPublicId: string;
+      } | null = null;
+      try {
+        return await withTenantDb(async (tx: Tx) => {
+          const attempt = assertAttemptWritable(
+            input.attemptId,
+            await lockAttemptInTx(tx, input.attemptId),
+          );
+          conflictScope = {
+            orgId: attempt.org_id,
+            workspaceId: attempt.workspace_id,
+            runId: attempt.run_id,
+            attemptPublicId: attempt.attempt_public_id,
+          };
+          const { state, rows } = await readAttemptStateInTx(
+            tx,
+            input.attemptId,
+          );
+          return appendPreparedBatchInTx(tx, attempt, state, rows, prepared);
+        });
+      } catch (err) {
+        // Reported AFTER the transaction rolled back, deliberately: a sink
+        // writing inside that transaction would have its audit row rolled back
+        // together with the conflicting append, erasing the one record this
+        // requirement exists to create.
+        if (err instanceof RunEventIntegrityError && conflictScope !== null) {
+          const scope: {
+            orgId: string;
+            workspaceId: string;
+            runId: string;
+            attemptPublicId: string;
+          } = conflictScope;
+          try {
+            await securityEvents.recordEventSequenceConflict({
+              type: EVENT_SEQUENCE_CONFLICT_EVENT,
+              orgId: scope.orgId,
+              workspaceId: scope.workspaceId,
+              runId: scope.runId,
+              attemptId: err.attemptId,
+              attemptPublicId: scope.attemptPublicId,
+              attemptSeq: err.attemptSeq,
+              storedDigest: err.storedDigest,
+              incomingDigest: err.incomingDigest,
+            });
+          } catch (sinkErr) {
+            // A sink that throws must not REPLACE the integrity error — the
+            // caller would then see an unrelated failure and could not tell an
+            // audit-transport outage from a benign append error. Log the sink
+            // failure loudly, keep the diagnostic that matters, and rethrow the
+            // original below.
+            console.error(
+              `[run-ledger] ${EVENT_SEQUENCE_CONFLICT_EVENT} sink failed`,
+              sinkErr,
+            );
+          }
+        }
+        throw err;
       }
-      return this.claimLegacyV1(workerId);
     },
 
-    async claimLegacyV1(workerId) {
-      return withSystemDb(async (tx: Tx) => {
-        const rows = (await tx.execute(
-          buildClaimNextRunSql(workerId),
-        )) as unknown as ClaimedRunRow[];
-        const row = rows[0];
-        return row ? mapClaimedRunRow(row) : null;
-      });
-    },
+    async sealAttempt(input) {
+      const terminalEvent = input.terminalEvent
+        ? prepareAttemptEvent(input.terminalEvent)
+        : null;
+      if (terminalEvent && !isTerminalEventType(terminalEvent.eventType)) {
+        throw new RunStoreStateError(
+          `event type ${terminalEvent.eventType} is not a terminal-stage event`,
+        );
+      }
 
-    async renewLease(runId, workerId) {
-      return withSystemDb(async (tx: Tx) => {
-        const rows = (await tx.execute(
-          buildRenewLeaseSql(runId, workerId),
-        )) as unknown as Array<{ id: string }>;
-        return rows.length > 0;
-      });
-    },
-
-    async appendEvents(runId, orgId, workspaceId, events) {
-      const query = buildAppendEventsSql(runId, orgId, workspaceId, events);
-      if (!query) return; // empty batch — nothing to do, no round-trip.
-      await withSystemDb((tx: Tx) => tx.execute(query));
-    },
-
-    async readEventsSince(runId, afterSeq, limit) {
       return withTenantDb(async (tx: Tx) => {
-        const rows = (await tx.execute(
-          buildReadEventsSinceSql(runId, afterSeq, limit),
-        )) as unknown as RunEventRow[];
-        return rows.map(mapRunEventRow);
-      });
-    },
+        const locked = await lockAttemptInTx(tx, input.attemptId);
+        // A duplicate seal returns the SAME handle — above all the same
+        // submission id — rather than minting a second grant.
+        if (attemptRejectionReason(locked) === "sealed") {
+          return readSealedHandleInTx(tx, locked as LockedAttemptRow);
+        }
+        const attempt = assertAttemptWritable(input.attemptId, locked);
 
-    async saveCheckpoint(runId, workerId, checkpointSeq, checkpoint) {
-      return withSystemDb(async (tx: Tx) => {
-        const rows = (await tx.execute(
-          buildSaveCheckpointSql(runId, workerId, checkpointSeq, checkpoint),
-        )) as unknown as Array<{ id: string }>;
-        return rows.length > 0;
-      });
-    },
+        const { state, rows } = await readAttemptStateInTx(tx, input.attemptId);
+        const appended = terminalEvent
+          ? await appendPreparedBatchInTx(tx, attempt, state, rows, [
+              terminalEvent,
+            ])
+          : null;
 
-    async completeRun(runId, workerId, result) {
-      return withSystemDb(async (tx: Tx) => {
-        const rows = (await tx.execute(
-          buildCompleteRunSql(runId, workerId, result),
-        )) as unknown as Array<{ id: string }>;
-        return rows.length > 0;
-      });
-    },
+        const eventCount = appended ? appended.eventCount : state.eventCount;
+        const hasEvents = eventCount > 0;
+        const handle = await sealAttemptInTx(tx, {
+          attempt,
+          terminalStatus: input.terminalStatus,
+          reasonCode: input.reasonCode ?? null,
+          eventCount,
+          // A zero-event attempt seals with a null final-event digest and the
+          // canonical empty-stream digest; it never invents a terminal event to
+          // satisfy the seal's shape.
+          finalRunSeq: hasEvents
+            ? (appended?.lastRunSeq ?? state.lastRunSeq)
+            : null,
+          finalAttemptSeq: hasEvents
+            ? (appended?.lastAttemptSeq ?? state.lastAttemptSeq)
+            : null,
+          finalEventDigest: hasEvents
+            ? (appended?.finalEventDigest ?? state.finalEventDigest)
+            : null,
+          eventStreamDigest: appended
+            ? appended.eventStreamDigest
+            : state.eventStreamDigest,
+          sealerId: input.sealerId,
+        });
 
-    async failRun(runId, workerId, error) {
-      return withSystemDb(async (tx: Tx) => {
-        const rows = (await tx.execute(
-          buildFailRunSql(runId, workerId, error),
-        )) as unknown as Array<{ id: string }>;
-        return rows.length > 0;
-      });
-    },
+        await tx.execute(
+          buildFinishRunSql(
+            attempt.run_id,
+            runStatusForTerminal(input.terminalStatus),
+            input.result ?? null,
+            input.error ?? null,
+          ),
+        );
 
-    async cancelRun(runId, workerId) {
-      return withSystemDb(async (tx: Tx) => {
-        const rows = (await tx.execute(
-          buildCancelRunSql(runId, workerId),
-        )) as unknown as Array<{ id: string }>;
-        return rows.length > 0;
-      });
-    },
-
-    async requestCancel(runId) {
-      await withTenantDb((tx: Tx) => tx.execute(buildRequestCancelSql(runId)));
-    },
-
-    async isCancelRequested(runId) {
-      return withTenantDb(async (tx: Tx) => {
-        const rows = (await tx.execute(
-          buildIsCancelRequestedSql(runId),
-        )) as unknown as Array<{ cancel_requested: boolean }>;
-        return Boolean(rows[0]?.cancel_requested);
+        return handle;
       });
     },
 
@@ -2580,416 +1896,67 @@ export function createPostgresRunStore(
       });
     },
 
-    // ── V2 — fenced immutable attempts ───────────────────────────────────────
-
-    async enqueueRunV2(input) {
-      const publicId = generateRunPublicId();
-      const specDigest = runSpecV2Digest(input.spec);
+    async listRunAttempts(runId) {
       return withTenantDb(async (tx: Tx) => {
         const rows = (await tx.execute(
-          buildEnqueueRunV2Sql(publicId, specDigest, input),
-        )) as unknown as Array<
-          RunV2IdentityRow & { id: string; public_id: string }
-        >;
-        const row = rows[0];
-        if (!row) {
-          throw new RunStoreStateError("enqueueRunV2 insert returned no row");
-        }
-        // Verify what Postgres ACTUALLY stored against the parsed spec —
-        // including that the internal uuids admission resolved really do
-        // address the public ids the spec pinned (that is what the joins in
-        // the query are for). Digest first, then field by field; a mismatch
-        // throws inside the transaction, so the run row never survives.
-        assertRunRowMatchesSpec(mapRunV2IdentityRow(row), input.spec);
-        return { runId: row.id, publicId: row.public_id, specDigest };
+          buildListRunAttemptsSql(runId),
+        )) as unknown as AttemptRow[];
+        return rows.map(mapAttemptRow);
       });
     },
 
-    async claimNextRunV2(workerId, options) {
-      const leaseSeconds = options.leaseSeconds ?? RUN_LEASE_SECONDS;
-      const restorableSchemas = options.restorableEngineStateSchemas ?? [];
-      return withSystemDb(async (tx: Tx) => {
-        const runRows = (await tx.execute(
-          buildLockClaimableRunV2Sql(),
-        )) as unknown as ClaimableRunV2Row[];
-        const run = runRows[0];
-        if (!run) return null;
-
-        // Restore BEFORE creating the attempt: the attempt row carries the
-        // complete restore tuple and is immutable once written.
-        let restore: RestoredCheckpointRef | null = null;
-        if (restorableSchemas.length > 0) {
-          const checkpointRows = (await tx.execute(
-            buildSelectRestorableCheckpointSql(run.id, restorableSchemas),
-          )) as unknown as RestorableCheckpointRow[];
-          const checkpoint = checkpointRows[0];
-          if (checkpoint) restore = mapRestorableCheckpointRow(checkpoint);
-        }
-
-        const attemptNumber = Number(run.attempt_count) + 1;
-        const maxAttempts = Number(run.max_attempts);
-        if (attemptNumber > maxAttempts) {
-          // Belt to the WHERE clause's braces: never retry without a bound.
-          throw new RunStoreStateError(
-            `run ${run.id} has exhausted its pinned max_attempts (${maxAttempts})`,
-          );
-        }
-
-        const attemptRows = (await tx.execute(
-          buildInsertAttemptSql({
-            publicId: generateAttemptPublicId(),
-            orgId: run.org_id,
-            workspaceId: run.workspace_id,
-            runId: run.id,
-            attemptNumber,
-            workerId,
-            engine: options.engine,
-            restore,
-          }),
-        )) as unknown as Array<{
-          id: string;
-          public_id: string;
-          attempt_number: number | string;
-        }>;
-        const attempt = attemptRows[0];
-        if (!attempt) {
-          throw new RunStoreStateError(
-            `run ${run.id} attempt insert returned no row`,
-          );
-        }
-
-        const epochRows = (await tx.execute(
-          buildSelectNextLeaseEpochSql(run.id),
-        )) as unknown as Array<{ next_epoch: number | string }>;
-        const leaseEpoch = Number(epochRows[0]?.next_epoch ?? 1);
-        const leaseToken = generateLeaseToken();
-
-        await tx.execute(
-          buildInsertAttemptLeaseSql({
-            orgId: run.org_id,
-            workspaceId: run.workspace_id,
-            runId: run.id,
-            attemptId: attempt.id,
-            leaseToken,
-            leaseEpoch,
-            workerId,
-            leaseSeconds,
-          }),
-        );
-
-        const claimed = (await tx.execute(
-          buildMarkRunClaimedV2Sql(run.id, workerId, attempt.id, leaseSeconds),
-        )) as unknown as Array<{ id: string }>;
-        if (claimed.length === 0) {
-          throw new RunStoreStateError(
-            `run ${run.id} could not be marked running`,
-          );
-        }
-
-        return mapClaimedRunV2(
-          run,
-          attempt,
-          { leaseToken, leaseEpoch },
-          options.engine,
-          restore,
-        );
+    async readAttemptState(attemptId) {
+      return withTenantDb(async (tx: Tx) => {
+        const { state } = await readAttemptStateInTx(tx, attemptId);
+        return state;
       });
-    },
-
-    async renewAttemptLease(lease, leaseSeconds = RUN_LEASE_SECONDS) {
-      return withSystemDb(async (tx: Tx) => {
-        const leaseRows = (await tx.execute(
-          buildLockAttemptLeaseSql(lease.attemptId),
-        )) as unknown as LockedLeaseRow[];
-        assertLeaseUsable(leaseRows[0], lease);
-        const rows = (await tx.execute(
-          buildRenewAttemptLeaseSql(lease, leaseSeconds),
-        )) as unknown as Array<{ expires_at: string | Date }>;
-        const row = rows[0];
-        if (!row) throw new RunLeaseFencedError(lease.attemptId, "fenced");
-        return { expiresAt: toDate(row.expires_at) };
-      });
-    },
-
-    async isAttemptCancelRequested(lease) {
-      return withSystemDb(async (tx: Tx) => {
-        const leaseRows = (await tx.execute(
-          buildLockAttemptLeaseSql(lease.attemptId),
-        )) as unknown as LockedLeaseRow[];
-        // Gated on the same fencing tuple as a write: a fenced attempt has no
-        // standing to ask whether it should keep going — it must stop either
-        // way, and answering "not cancelled" would tell it to continue.
-        assertLeaseUsable(leaseRows[0], lease);
-        const rows = (await tx.execute(
-          buildIsAttemptCancelRequestedSql(lease.attemptId),
-        )) as unknown as Array<{ cancel_requested: boolean }>;
-        return Boolean(rows[0]?.cancel_requested);
-      });
-    },
-
-    async appendAttemptBatch(input) {
-      // Validate every payload BEFORE opening a transaction: an unknown event
-      // type or a smuggled raw field must fail without ever reaching SQL.
-      const prepared = input.events.map(prepareAttemptEvent);
-      let conflictScope: {
-        orgId: string;
-        workspaceId: string;
-        runId: string;
-      } | null = null;
-      try {
-        return await withSystemDb(async (tx: Tx) => {
-          const leaseRows = (await tx.execute(
-            buildLockAttemptLeaseSql(input.lease.attemptId),
-          )) as unknown as LockedLeaseRow[];
-          const leaseRow = assertLeaseUsable(leaseRows[0], input.lease);
-          conflictScope = {
-            orgId: leaseRow.org_id,
-            workspaceId: leaseRow.workspace_id,
-            runId: leaseRow.run_id,
-          };
-          return appendPreparedBatchInTx(
-            tx,
-            input.lease,
-            leaseRow,
-            prepared,
-            input.checkpoint,
-          );
-        });
-      } catch (err) {
-        // Reported AFTER the transaction rolled back, deliberately: a sink
-        // writing inside that transaction would have its audit row rolled back
-        // together with the conflicting append, erasing the one record this
-        // requirement exists to create.
-        if (err instanceof RunEventIntegrityError && conflictScope !== null) {
-          const scope: { orgId: string; workspaceId: string; runId: string } =
-            conflictScope;
-          try {
-            await securityEvents.recordEventSequenceConflict({
-              type: EVENT_SEQUENCE_CONFLICT_EVENT,
-              orgId: scope.orgId,
-              workspaceId: scope.workspaceId,
-              runId: scope.runId,
-              attemptId: err.attemptId,
-              attemptPublicId: input.lease.attemptPublicId,
-              attemptSeq: err.attemptSeq,
-              storedDigest: err.storedDigest,
-              incomingDigest: err.incomingDigest,
-            });
-          } catch (sinkErr) {
-            // A sink that throws must not REPLACE the integrity error — the
-            // caller would then see an unrelated failure and could not tell an
-            // audit-transport outage from a benign append error. Log the sink
-            // failure loudly, keep the diagnostic that matters, and rethrow the
-            // original below.
-            console.error(
-              `[run-store] ${EVENT_SEQUENCE_CONFLICT_EVENT} sink failed`,
-              sinkErr,
-            );
-          }
-        }
-        throw err;
-      }
-    },
-
-    async sealAttempt(input) {
-      if (input.terminalStatus === "abandoned") {
-        throw new RunStoreStateError(
-          "abandoned is the reclaimer's terminal status; a worker cannot seal " +
-            "its own attempt as abandoned",
-        );
-      }
-      const terminalEvent = input.terminalEvent
-        ? prepareAttemptEvent(input.terminalEvent)
-        : null;
-      if (terminalEvent && !isTerminalEventType(terminalEvent.eventType)) {
-        throw new RunStoreStateError(
-          `event type ${terminalEvent.eventType} is not a terminal-stage event`,
-        );
-      }
-
-      return withSystemDb(async (tx: Tx) => {
-        const leaseRows = (await tx.execute(
-          buildLockAttemptLeaseSql(input.lease.attemptId),
-        )) as unknown as LockedLeaseRow[];
-        const rejection = leaseRejectionReason(leaseRows[0], input.lease);
-        // A duplicate seal returns the SAME handle — above all the same
-        // submission id — rather than minting a second grant.
-        if (rejection === "sealed") {
-          return readSealedHandleInTx(tx, input.lease);
-        }
-        const leaseRow = assertLeaseUsable(leaseRows[0], input.lease);
-
-        const appendResult = terminalEvent
-          ? await appendPreparedBatchInTx(
-              tx,
-              input.lease,
-              leaseRow,
-              [terminalEvent],
-              undefined,
-            )
-          : null;
-
-        const eventCount = appendResult
-          ? appendResult.eventCount
-          : Number(leaseRow.event_count);
-        const eventStreamDigest = appendResult
-          ? appendResult.eventStreamDigest
-          : (leaseRow.event_stream_digest ?? EMPTY_EVENT_STREAM_DIGEST);
-        const finalEventDigest = appendResult
-          ? appendResult.finalEventDigest
-          : (leaseRow.final_event_digest ?? null);
-        const finalRunSeq =
-          eventCount > 0
-            ? (appendResult?.lastRunSeq ?? String(leaseRow.last_run_seq))
-            : null;
-        const finalAttemptSeq =
-          eventCount > 0
-            ? (appendResult?.lastAttemptSeq ??
-              Number(leaseRow.last_attempt_seq))
-            : null;
-
-        const handle = await sealAttemptInTx(tx, {
-          lease: input.lease,
-          leaseRow,
-          terminalStatus: input.terminalStatus,
-          reasonCode: input.reasonCode ?? null,
-          eventCount,
-          finalRunSeq,
-          finalAttemptSeq,
-          finalEventDigest,
-          eventStreamDigest,
-          sealerKind: "worker",
-          sealerWorkerId: input.sealerWorkerId,
-        });
-
-        await tx.execute(
-          buildFinishRunV2Sql(
-            leaseRow.run_id,
-            runStatusForTerminal(input.terminalStatus),
-            input.result ?? null,
-            input.error ?? null,
-          ),
-        );
-
-        return handle;
-      });
-    },
-
-    async reclaimExpiredAttempts(options) {
-      const limit = options.limit ?? DEFAULT_RECLAIM_LIMIT;
-      const candidates = (await withSystemDb((tx: Tx) =>
-        tx.execute(buildSelectExpiredAttemptLeasesSql(limit)),
-      )) as unknown as Array<{
-        attempt_id: string;
-        run_id: string;
-        lease_token: string;
-        lease_epoch: number | string;
-        attempt_public_id: string;
-        attempt_number: number | string;
-        max_attempts: number | string;
-        attempt_count: number | string;
-      }>;
-
-      const reclaimed: ReclaimedAttempt[] = [];
-      for (const candidate of candidates) {
-        const lease: RunLeaseRef = {
-          runId: candidate.run_id,
-          attemptId: candidate.attempt_id,
-          attemptPublicId: candidate.attempt_public_id,
-          leaseToken: candidate.lease_token,
-          leaseEpoch: Number(candidate.lease_epoch),
-        };
-        const maxAttempts = Number(candidate.max_attempts);
-        const attemptCount = Number(candidate.attempt_count);
-        const successorPermitted = attemptCount < maxAttempts;
-
-        // One transaction PER attempt: a single poisoned row must not roll
-        // back every other seal the sweep already committed.
-        const result = await withSystemDb(async (tx: Tx) => {
-          const leaseRows = (await tx.execute(
-            buildLockAttemptLeaseSql(lease.attemptId),
-          )) as unknown as LockedLeaseRow[];
-          const rejection = leaseRejectionReason(leaseRows[0], lease, {
-            allowExpired: true,
-          });
-          if (rejection === "sealed") {
-            // Another sweeper won the race; return its handle unchanged and do
-            // NOT re-mutate the run it already requeued or failed.
-            return {
-              handle: await readSealedHandleInTx(tx, lease),
-              alreadyHandled: true,
-            };
-          }
-          if (rejection !== null) return null;
-          const leaseRow = leaseRows[0] as LockedLeaseRow;
-
-          // The zero-event path. `event_count = 0` means NOTHING was ever
-          // accepted from this attempt: it seals with a null final-event digest
-          // and the canonical empty-stream digest, and synthesizes no terminal
-          // event. Inventing one would put an observation in the ledger that
-          // no producer ever made.
-          const eventCount = Number(leaseRow.event_count);
-          const hasEvents = eventCount > 0;
-
-          const handle = await sealAttemptInTx(tx, {
-            lease,
-            leaseRow,
-            terminalStatus: "abandoned",
-            reasonCode: options.reasonCode ?? "lease_expired",
-            eventCount,
-            finalRunSeq: hasEvents ? String(leaseRow.last_run_seq) : null,
-            finalAttemptSeq: hasEvents
-              ? Number(leaseRow.last_attempt_seq)
-              : null,
-            finalEventDigest: hasEvents
-              ? (leaseRow.final_event_digest ?? null)
-              : null,
-            eventStreamDigest: hasEvents
-              ? (leaseRow.event_stream_digest ?? EMPTY_EVENT_STREAM_DIGEST)
-              : EMPTY_EVENT_STREAM_DIGEST,
-            sealerKind: "reclaimer",
-            sealerWorkerId: options.reclaimerWorkerId,
-          });
-
-          // The successor attempt is created by the NEXT claim, not here: an
-          // attempt row pins a resolved engine build digest that only a
-          // claiming worker knows. Seal + grant + obligation are already
-          // durable at this point, so evidence cannot be stranded either way.
-          if (successorPermitted) {
-            await tx.execute(buildRequeueRunForSuccessorSql(leaseRow.run_id));
-          } else {
-            await tx.execute(
-              buildFinishRunV2Sql(
-                leaseRow.run_id,
-                "failed",
-                null,
-                `run exhausted its pinned max_attempts (${maxAttempts})`,
-              ),
-            );
-          }
-          return { handle, alreadyHandled: false };
-        });
-
-        if (result) {
-          reclaimed.push({
-            handle: result.handle,
-            runId: candidate.run_id,
-            attemptNumber: Number(candidate.attempt_number),
-            maxAttempts,
-            successorPermitted,
-          });
-        }
-      }
-      return reclaimed;
     },
 
     async readAttemptEventsSince(runId, afterRunSeq, limit) {
       return withTenantDb(async (tx: Tx) => {
         const rows = (await tx.execute(
           buildReadAttemptEventsSinceSql(runId, afterRunSeq, limit),
-        )) as unknown as Parameters<typeof mapAttemptEventReadRow>[0][];
+        )) as unknown as AttemptEventReadRow[];
         return rows.map(mapAttemptEventReadRow);
       });
     },
+
+    async getFinalizationHandle(attemptId) {
+      return withTenantDb(async (tx: Tx) => {
+        const attemptRows = (await tx.execute(
+          buildListAttemptIdentitySql(attemptId),
+        )) as unknown as Array<{
+          attempt_id: string;
+          attempt_public_id: string;
+          run_id: string;
+        }>;
+        const attempt = attemptRows[0];
+        if (!attempt) return null;
+        const rows = (await tx.execute(
+          buildSelectFinalizationHandleSql(attemptId),
+        )) as unknown as FinalizationHandleRow[];
+        const row = rows[0];
+        return row
+          ? mapFinalizationHandleRow(row, {
+              runId: attempt.run_id,
+              attemptId: attempt.attempt_id,
+              attemptPublicId: attempt.attempt_public_id,
+            })
+          : null;
+      });
+    },
   };
+}
+
+/**
+ * Resolve one attempt's identity without taking a lock — the read-side
+ * counterpart of `buildLockAttemptForWriteSql`, used by the finalization-handle
+ * read where no write follows.
+ */
+export function buildListAttemptIdentitySql(attemptId: string): SQL {
+  return sql`
+    SELECT id AS attempt_id, public_id AS attempt_public_id, run_id
+    FROM agent.agent_run_attempts
+    WHERE id = ${attemptId}::uuid
+  `;
 }

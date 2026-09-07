@@ -93,9 +93,8 @@ export async function handleLogs(
   }
 
   // Follow mode redraws the terminal live (tail -f) — only meaningful against
-  // a real TTY. The REPL's inline capture-execution seam never passes
-  // --follow through (see repl/cli-bridge.ts); guard here too so a stray
-  // capture-mode call can't block forever on a `watch()` no one can Ctrl-C.
+  // the real process streams. Guard on the writer so a capture-mode call can't
+  // block forever on a `watch()` no one can Ctrl-C.
   if (!opts.follow || writer !== stdoutWriter) return;
 
   // Follow mode: re-read on every change to the file and print anything new.

@@ -1,11 +1,11 @@
-<!-- Generated: 2026-07-06, corrections applied 2026-07-10 | Files scanned: 261 (api) + 270 (handlers) | Token estimate: ~1000 -->
+<!-- Generated: 2026-07-06, corrections applied 2026-07-10, ADR-041 excision pass 2026-09-07 | Files scanned: ~178 (api) + ~224 (handlers), counts drift | Token estimate: ~1000 -->
 
 # Backend Architecture
 
 ## Entry Points
 ```
 apps/api/src/index.ts       → Hono server bootstrap (port 4000, from PORTS.api in @oxagen/config)
-apps/api/src/app.ts         → Route registration (271 route files; 261 under routes/v1)
+apps/api/src/app.ts         → Route registration (~178 route files, count drifts)
 apps/api/src/bootstrap.ts   → DB connection, Inngest client init
 ```
 
@@ -34,10 +34,8 @@ POST /webhooks/stripe                → Stripe events → @oxagen/billing/webho
 POST /webhooks/github/app            → GitHub App events → @oxagen/github
 POST /webhooks                       → Generic connector webhooks (HMAC boundary)
 POST /api/inngest                    → Inngest event receiver
-GET  /.well-known                    → A2A protocol discovery card (public/optional-auth)
 GET  /v1/auth/cli                    → CLI loopback token exchange (PKCE boundary)
 POST /v1/telemetry                   → anonymous CLI usage telemetry (rate-limited)
-POST /v1/cms                         → anonymous marketing-site lead gate (rate-limited)
 GET  /oauth/github                   → GitHub OAuth callback (HMAC-verified)
 ```
 
@@ -69,37 +67,15 @@ POST   /conversations/attachments    → link an already-uploaded asset to a con
 POST   /conversation/chat            → conversationChatRoute
 ```
 
-**A2A (Agent2Agent) — external agent interop**
+**Agent** (ADR-041 removed the sandbox, skills, plans, compose, subagent
+fan-out, background-task, and file-lock route groups that used to live here —
+along with the standalone A2A JSON-RPC mount, see below)
 ```
-GET  /a2a/card                       → governed Agent Card read (metered, IAM-gated;
-                                        org+workspace scoped) — a2a.card.get.ts
-```
-The A2A *transport* itself is NOT org/workspace-scoped — see the two standalone
-mounts below (`/a2a` JSON-RPC, `/.well-known` discovery).
-
-**Agent**
-```
-POST   /agent/code/execute           → @oxagen/sandbox code exec
-POST   /agent/sandbox/start|exec|snapshot|stop
-GET    /agent/sandbox/list           → durable sandbox session list (read-only)
-GET    /agent/sandbox/files          GET /agent/sandbox/file    (list vs single-file read)
-GET    /agent/sandbox/logs           → captured stdout/stderr for a session
 POST   /agent/tools                  → list available tools
 POST   /agent/mcp-servers            → register/list MCP server
 POST   /agent/mcp-servers/set-enabled|delete
 GET    /agent/mcp-consents           → list consent requests
 POST   /agent/mcp-consents/resolve
-GET    /agent/skills                 → list skills
-POST   /agent/skills/load
-POST   /agent/plans                  POST /agent/plans/approve
-POST   /agent/compose                → run_capability_chain (multi-step)
-POST   /agent/subagent/dispatch      → fan-out to Inngest
-POST   /agent/subagent/cancel|aggregate
-GET    /agent/subagent/fanouts       → list fan-outs
-GET    /agent/subagent/fanout        → get one fan-out + child runs
-GET    /agent/subagent/logs|siblings|result
-POST   /agent/tasks                  GET /agent/tasks           (start vs read background task)
-POST   /agent/tasks/cancel
 POST   /agent/memory/recall|remember|update|delete|cite|promote
 GET    /agent/memory/list            → list memories
 POST   /agent/memory                 → write memory (bare POST; NOT a list — mounted after
@@ -112,8 +88,8 @@ POST   /agent/approvals/resolve
 POST   /agent/execution/record       GET /agent/executions        (list, plural)
 GET    /agent/trace                  → get_execution_trace span tree
 GET    /agent/debug/trace            → dev-only trace introspection
-POST   /agent/file/lock/acquire|release  GET /agent/file/lock/list
-GET    /agent/environment/bind|unbind|list  ← agent-to-environment bindings (new, ADR-025-era)
+GET    /agent/environment/bind|unbind|list  ← agent-to-environment bindings
+POST   /agent/roles/assign|revoke    GET /agent/roles/get   GET /agent/roles  (list)
 ```
 `POST /v1/agent/llm/chat/completions` (OpenAI-compat proxy) is OUTSIDE this
 group — see "Standalone Top-Level Mounts" below.
@@ -126,22 +102,6 @@ POST   /agent/deploy
 ```
 `revise` (`agent.definition.revise.ts`, capability `revise_agent_def`) is a
 new addition since the last audit — no longer just create/update/publish/get/list/suggest.
-
-**Browser / Code**
-```
-POST   /browser/navigate|screenshot|fill|submit|click|refresh|read
-POST   /code/diff|patch|format|map
-```
-
-**Evals** (LLM-as-judge, scoped to metered run traces — not a standalone eval platform)
-```
-POST   /eval/datasets/from-traces    → build dataset from already-metered runs (hyphenated)
-GET    /eval/datasets/get
-POST   /eval/datasets/items          → add a dataset item
-POST   /eval/datasets                → create   GET /eval/datasets   (list)
-GET    /eval/runs/status             GET /eval/runs/get
-POST   /eval/runs                    → start a run
-```
 
 **Budget / Cost Governance**
 ```
@@ -160,7 +120,6 @@ POST   /graph/relationship/upsert    → canonical (graph/edge/upsert stays as a
 POST   /graph/search|cypher|ingest|export
 GET    /graph/stats
 POST   /semantic-edges               → canonical semantic.edge.* routes (approve/infer/suggest/list)
-POST   /semantic-relationships       → canonical semantic.relationship.* routes
 POST   /ontology/query               POST /ontology/neighbors
 POST   /schema (+ setup/toggle/validate/version/reconcile — see check_manifest false-positive note)
 ```
@@ -172,18 +131,6 @@ GET      /connections/github         → GitHub OAuth
 GET|POST /repos                      → repository list/ops
 GET|POST /integrations               → integration list/install/delete
 ```
-
-**Skills**
-```
-POST   /skill/create|edit|enable|export|author|draft|revise
-GET    /skill/workspace/list
-POST   /skill/workspace/install
-GET    /skill/version/list|get
-POST   /skill/version/upload|activate
-GET    /skill/metrics/read
-```
-`draft` and `revise` (capability `revise_skill`, `skill.revise.ts`) are new
-additions since the last audit.
 
 **Billing**
 ```
@@ -206,30 +153,23 @@ GET|POST /plugin-schema              GET|POST /plugin-versions
 GET|POST /plugin/registries          → CRUD (plural; add/remove sub-paths)
 ```
 
-**Environments / Secrets / Sandbox Templates**
+**Environments / Secrets** (ADR-041 removed the sandbox-template routes that
+used to live here)
 ```
 POST   /environment/create|update|delete|set-default  GET /environment/get|list
-POST   /sandbox/template/create|update|delete|set-default|set-tools|export|import
-GET    /sandbox/template/list|get
 POST   /secret/key/upsert|list|delete
 POST   /secret/value/set|unset       → only set/unset live under /secret/value/
 POST   /secret/reveal|export         GET /secret/import-env
                                       → reveal, import-env, export are directly under /secret/
 ```
 
-**Other**
+**Other** (ADR-041 removed the content-generation routes — web search/fetch,
+research swarm, documents/markdown/mermaid/video/svg/image, forms/fill,
+archive/create — that used to live here; there is no first-party content
+generation surface left)
 ```
-POST   /web/search|fetch
-POST   /research/swarm/start|status
-POST   /documents/generate           POST /documents/pdf     (no /generate/ prefix family)
-POST   /markdown/generate            POST /mermaid/generate
-POST   /video/generate               POST /svg/generate     POST /image/generate
-POST   /image/create|analyze         GET /image/list
-POST   /document/create|read         GET /document/list
-POST   /forms/fill                   → note plural "forms"
 POST   /command/menu/search|suggest
 POST   /reference/search
-POST   /archive/create
 POST   /asset/upload
 POST   /audit/log/query
 POST   /workspace/prompt-settings    → read + write (was /prompt/settings/*)
@@ -242,11 +182,9 @@ POST   /workspace/invite/send
 POST   /org/members                  POST /org/members/remove   POST /org/members/role
 POST   /org/invitations/accept|decline
 GET|POST /org/settings
-POST   /automation/list|create|update|enable|disable|trigger
 POST   /api-keys (create)  POST /api-keys/revoke  POST /api-keys/rotate
 GET    /notifications  POST /notifications/mark
 POST   /privacy/export|erase
-POST   /workflows
 GET    /telemetry/error/cluster      → fleet-wide error-cluster triage (org+workspace scoped)
 GET    /system/install-instructions  → one hyphenated segment (was /system/install/instructions)
 ```
@@ -260,17 +198,11 @@ different routes with different auth.
 POST /v1/agent/llm/chat/completions  → OpenAI-compat proxy; the platform API key
                                         carries org+workspace scope so this transport
                                         sits outside the org/workspace path group
-POST /a2a                            → A2A JSON-RPC transport (message/send, tasks/get,
-                                        tasks/resubscribe, tasks/cancel); same auth-only
-                                        scoping rationale as the LLM proxy above
-                                      → apps/api/src/routes/a2a/{rpc,bridge,protocol,
-                                        stream-registry,task-store,well-known,base-url}.ts
-                                      → message.metadata.skillId selects a deployed agent
-                                        slug (unknown/inactive falls back to the generic agent)
-                                      → runs land in the same execution + trace pipeline
-                                        (get_execution_trace) as subagent fan-out
 GET  /oauth/github                   → public OAuth callback (see Public / Webhook)
 ```
+ADR-041 removed the `/a2a` JSON-RPC transport and `/.well-known` A2A discovery
+mount entirely (2026-09-07) — see `docs/adr/ADR-041-runtime-excision.md` and
+`docs/specs/a2a-agent-identity/spec.md`'s 2026-09-07 note.
 
 ## Handler Pattern
 ```
@@ -284,10 +216,11 @@ Route file (apps/api/src/routes/v1/*.ts)
 
 ## Key Handler Packages
 ```
-@oxagen/handlers    (packages/handlers/src/*.ts)  — 270 non-test files, all domain logic
-@oxagen/agent       (packages/agent/src/)          — agent runtime, memory, dispatch (120 files)
-@oxagen/agent-engine (packages/agent-engine/src/)  — pipeline, planner, fork, oracle,
-                                                       evaluate, fleet, tools-structured (43 files)
+@oxagen/handlers    (packages/handlers/src/*.ts)  — ~224 non-test files, all domain logic
+@oxagen/agent       (packages/agent/src/)          — governed turn loop, MCP gateway,
+                                                       agent registry handlers (~73 files)
+@oxagen/run-ledger  (packages/run-ledger/src/)     — durable run/attempt/event evidence
+                                                       ledger (formerly agent-runner)
 @oxagen/billing     (packages/billing/src/)        — Stripe, credits, usage
 @oxagen/ingestion   (packages/ingestion/src/)      — connectors, parsers
 @oxagen/plugins     (packages/plugins/src/)        — catalog, credentials, entitlements

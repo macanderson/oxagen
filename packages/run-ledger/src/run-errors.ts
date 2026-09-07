@@ -1,11 +1,10 @@
 /**
- * Typed errors for durable-run admission and hydration
- * (docs/specs/run-evidence-ingress/02-run-attempt-foundation-plan.md, Task 1).
+ * Typed errors for run admission, attempt writes, and evidence hydration
+ * (docs/specs/run-evidence-ingress/spec.md).
  *
  * These live in their own dependency-free module — no zod, no drizzle, no
- * schema — so a surface (apps/api, the worker, the lease sweeper) can
- * `instanceof`-match them without importing the whole contract module. Same
- * rationale and shape as packages/agent/src/handlers/subagent-errors.ts.
+ * schema — so a surface (apps/api, an evidence-ingress handler) can
+ * `instanceof`-match them without importing the whole contract module.
  *
  * Every class carries a stable `code` discriminant. Prefer `instanceof`; the
  * exported guards fall back to `code` so a match still holds across a
@@ -82,8 +81,8 @@ export interface RunIdentityMismatch {
 }
 
 /**
- * The run row's typed security columns disagree with the serialized spec. The
- * worker raises this before materializing an engine or tool: either copy could
+ * The run row's typed security columns disagree with the serialized spec.
+ * Raised before any evidence is accepted against that run: either copy could
  * be the tampered one, so neither is trusted and the run fails closed.
  */
 export class RunSpecIdentityMismatchError extends Error {
@@ -125,7 +124,7 @@ export class CanonicalJsonError extends Error {
   }
 }
 
-// ── Fenced-attempt event errors (Task 3) ────────────────────────────────────
+// ── Attempt event errors ────────────────────────────────────────────────────
 
 /**
  * A producer named an event type that is not in the closed registry. Refused at
@@ -227,7 +226,7 @@ export class RunEventIntegrityError extends Error {
 
 /**
  * A batch's attempt sequences were not contiguous, did not start where the
- * lease left off, or skipped ahead. `attempt_seq` is producer-assigned and
+ * durable log left off, or skipped ahead. `attempt_seq` is producer-assigned and
  * dense from 1; a gap means events were lost before they were ever durable,
  * and accepting the batch would silently ratify that loss.
  */
@@ -250,42 +249,40 @@ export class RunEventSequenceGapError extends Error {
 }
 
 /**
- * The reason a fenced operation was refused. Every value is terminal for the
- * attempt that hit it — the worker stops immediately and performs no cleanup
- * mutation beyond local process shutdown.
+ * Why a write against an attempt was refused. Both values are terminal for the
+ * producer that hit one: an unknown attempt is not addressable evidence, and a
+ * sealed attempt's stream is already committed to.
+ *
+ * The pre-ADR-041 lease vocabulary (`token_mismatch`, `epoch_mismatch`,
+ * `expired`, `fenced`) went with `agent.agent_run_attempt_leases`. The seal is
+ * now the only fence.
  */
-export type LeaseRejectionReason =
-  | "unknown_lease"
-  | "token_mismatch"
-  | "epoch_mismatch"
-  | "expired"
-  | "fenced"
-  | "sealed";
+export type AttemptRejectionReason = "unknown_attempt" | "sealed";
 
 /**
- * A renew/append/checkpoint/cancel-check/seal was attempted without a valid
- * claim on the attempt. Raised rather than returned as `false` because, unlike
- * V1's benign "lost the row" race, a fenced V2 attempt writing again would be
- * appending to evidence another attempt now owns.
+ * An append or a second seal was attempted against an attempt that may not take
+ * writes. Raised rather than returned as `false`: writing past a seal would be
+ * appending to evidence whose stream digest is already committed and whose
+ * finalization grant is already minted.
  */
-export class RunLeaseFencedError extends Error {
-  readonly code = "run_lease_fenced";
+export class AttemptNotWritableError extends Error {
+  readonly code = "run_attempt_not_writable";
   readonly attemptId: string;
-  readonly reason: LeaseRejectionReason;
+  readonly reason: AttemptRejectionReason;
 
-  constructor(attemptId: string, reason: LeaseRejectionReason) {
-    super(`Attempt ${attemptId} may not write: ${reason}`);
-    this.name = "RunLeaseFencedError";
+  constructor(attemptId: string, reason: AttemptRejectionReason) {
+    super(`Attempt ${attemptId} may not take writes: ${reason}`);
+    this.name = "AttemptNotWritableError";
     this.attemptId = attemptId;
     this.reason = reason;
   }
 }
 
 /**
- * A V2 admission or claim could not proceed because trusted state was missing
- * or self-inconsistent (an absent run row, a checkpoint referencing an unknown
- * attempt, a claim whose pinned `max_attempts` is already exhausted). Always
- * fail-closed: the run does not execute.
+ * A ledger write could not proceed because trusted state was missing or
+ * self-inconsistent (an absent run row, a hole in an attempt's durable event
+ * log, an attempt past the run's pinned `max_attempts`). Always fail-closed:
+ * the record is not written.
  */
 export class RunStoreStateError extends Error {
   readonly code = "run_store_state_invalid";
@@ -396,10 +393,13 @@ export function isRunEventSequenceGapError(
 }
 
 /** Structural type guard — see isRunSpecValidationError for the rationale. */
-export function isRunLeaseFencedError(
+export function isAttemptNotWritableError(
   err: unknown,
-): err is RunLeaseFencedError {
-  return err instanceof RunLeaseFencedError || hasCode(err, "run_lease_fenced");
+): err is AttemptNotWritableError {
+  return (
+    err instanceof AttemptNotWritableError ||
+    hasCode(err, "run_attempt_not_writable")
+  );
 }
 
 /** Structural type guard — see isRunSpecValidationError for the rationale. */

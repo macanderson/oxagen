@@ -1015,7 +1015,7 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./environment.set_default"))
         .environmentSetDefaultHandler as CapabilityHandlerFn,
   );
-  // Sandbox templates + portable artifacts + agent-environment bindings (Spec §5.2–§5.6).
+  // Agent ↔ environment bindings — which vault an agent identity may resolve.
   registerHandler(
     "bind_agent_environment",
     async () =>

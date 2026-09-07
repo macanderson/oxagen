@@ -14,9 +14,8 @@
  * Two entry points, deliberately distinct:
  *
  *   - `parseRunSpecV2(raw)` re-validates data that is ALREADY persisted and
- *     trusted — the worker hydrating a claimed run, the finalizer reading a
- *     sealed attempt. It admits nothing new; it proves the stored bytes still
- *     satisfy the contract.
+ *     trusted — the finalizer reading a sealed attempt's run. It admits
+ *     nothing new; it proves the stored bytes still satisfy the contract.
  *   - `buildTrustedRunSpecV2(trusted, influence)` mints a NEW spec from
  *     server-resolved values plus a separately-validated caller-influence
  *     object.
@@ -29,7 +28,7 @@
  * ── Identifier kinds ────────────────────────────────────────────────────────
  *
  * The run row stores typed security columns beside the serialized spec so
- * security queries never parse JSON, and the worker compares the two before
+ * security queries never parse JSON, and the ledger compares the two before
  * materializing a tool (`compareRunRowIdentity`). For that comparison to be
  * direct equality rather than a join, each spec field holds the SAME kind of
  * value as the column it is compared against:
@@ -302,11 +301,9 @@ export type RetentionPolicyPublicId = z.output<
 // ── Admission ceilings and enumerations ─────────────────────────────────────
 
 /**
- * Engines admissible today. Stella is the only one: the TypeScript step loop
- * it replaced has been deleted, so a spec naming `ts` fails admission rather
- * than being resolved at claim time. `RETIRED_ENGINES` in
- * The former engine-choice resolver is what turned that failure into a sentence saying
- * the engine was removed, instead of "unknown engine".
+ * Engines admissible today. Stella is the only one: the TypeScript step loop it
+ * replaced was deleted with ADR-041, so a spec naming `ts` fails admission at
+ * the contract boundary rather than at some later resolution step.
  */
 export const RUN_ENGINES = ["stella"] as const;
 
@@ -317,9 +314,9 @@ export const REPOSITORY_PROVIDERS = ["github"] as const;
 export const TOOL_RISK_LEVELS = ["low", "medium", "high", "critical"] as const;
 
 /**
- * Hard admission ceiling on the trusted per-run attempt cap. The run row pins
- * its own `max_attempts` inside this bound; run-store's `MAX_RUN_ATTEMPTS` is
- * the separate V1 global default and does not constrain a V2 run.
+ * Hard admission ceiling on the trusted per-run attempt cap. Each run row pins
+ * its own `max_attempts` inside this bound, and the ledger refuses to create an
+ * attempt past it (`createAttempt`).
  */
 export const MAX_RUN_ATTEMPTS_CEILING = 10;
 
@@ -606,7 +603,7 @@ function parseOrThrow<T extends z.ZodTypeAny>(
 }
 
 /**
- * Validate persisted trusted data. Used by the worker hydrating a claimed run
+ * Validate persisted trusted data. Used when hydrating a persisted run
  * and by the finalizer reading a sealed attempt — it proves the stored bytes
  * still satisfy the contract, and admits nothing.
  */
@@ -821,7 +818,7 @@ export function compareRunRowIdentity(
 
 /**
  * Fail closed unless the run row, its stored digest, and the parsed spec all
- * agree. The worker calls this before materializing an engine or tool: either
+ * agree. Called before any evidence is accepted against the run: either
  * copy could be the tampered one, so neither is trusted when they disagree.
  *
  * Digest first — a spec that does not hash to its stored digest is not a

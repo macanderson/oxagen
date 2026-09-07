@@ -50,6 +50,3 @@ declaring which secret scope an agent identity is authorized to resolve —
 not runtime execution state; Oxagen has no execution engine of its own to
 inject those secrets into.
 
-## A2A exposure
-
-Every **deployed, active** agent is advertised as a skill on the workspace's [A2A agent card](/docs/a2a/overview), keyed by its slug. External agents address it by putting the slug in `message.metadata.skillId`; the task then runs under that agent's instructions. Unknown or inactive slugs fall back to the workspace baseline agent rather than erroring.

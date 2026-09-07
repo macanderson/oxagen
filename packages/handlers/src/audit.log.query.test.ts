@@ -2,9 +2,12 @@
  * audit.log.query handler tests.
  *
  * Strategy: mock withSystemDb so no DB is needed. A chainable query stub
- * captures the WHERE conditions and returns canned rows per table, letting us
- * assert: org-scoping is always applied (tenant isolation), the two spines are
- * merged newest-first, filters are forwarded, and pagination/ hasMore are right.
+ * captures the WHERE conditions and returns canned rows, letting us assert:
+ * org-scoping is always applied (tenant isolation), events come back
+ * newest-first, filters are forwarded, and pagination / hasMore are right.
+ *
+ * ADR-041 removed the second spine (playbook_events) with the automations
+ * subsystem, so `source: "playbook"` now matches nothing.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -12,7 +15,6 @@ const mocks = vi.hoisted(() => ({
   withSystemDb: vi.fn(),
   whereArgs: [] as unknown[],
   securityRows: [] as Record<string, unknown>[],
-  playbookRows: [] as Record<string, unknown>[],
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -30,16 +32,15 @@ function makeTx() {
   return {
     select: () => ({
       from: (table: unknown) => {
-        const isSecurity = table === schema.securityEvents;
+        // security_events is the only spine left; assert the handler never
+        // reaches for another table.
+        expect(table).toBe(schema.securityEvents);
         return {
           where: (cond: unknown) => {
             mocks.whereArgs.push(cond);
             return {
               orderBy: () => ({
-                limit: () =>
-                  Promise.resolve(
-                    isSecurity ? mocks.securityRows : mocks.playbookRows,
-                  ),
+                limit: () => Promise.resolve(mocks.securityRows),
               }),
             };
           },
@@ -53,14 +54,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.whereArgs = [];
   mocks.securityRows = [];
-  mocks.playbookRows = [];
   mocks.withSystemDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx()),
   );
 });
 
 describe("auditLogQueryHandler", () => {
-  it("merges security + playbook events newest-first and reports pagination", async () => {
+  it("returns security events newest-first and reports pagination", async () => {
     mocks.securityRows = [
       {
         eventType: "billing.plan_changed",
@@ -71,15 +71,14 @@ describe("auditLogQueryHandler", () => {
         outcome: "success",
         requestId: "req1",
       },
-    ];
-    mocks.playbookRows = [
       {
-        eventType: "run_completed",
+        eventType: "auth.sign_in",
         occurredAt: new Date("2024-01-05T00:00:00Z"),
+        actorUserId: "u1",
         workspaceId: "ws_1",
-        playbookRunId: "run_1",
-        sequence: 7,
-        eventData: { ok: true },
+        capability: null,
+        outcome: "success",
+        requestId: "req2",
       },
     ];
 
@@ -89,13 +88,40 @@ describe("auditLogQueryHandler", () => {
     );
 
     expect(result.events).toHaveLength(2);
-    // Newest first: playbook (Jan 5) before security (Jan 3).
-    expect(result.events[0]?.source).toBe("playbook");
-    expect(result.events[0]?.playbookRunId).toBe("run_1");
-    expect(result.events[1]?.source).toBe("security");
+    // Newest first: Jan 5 before Jan 3.
+    expect(result.events[0]?.eventType).toBe("auth.sign_in");
     expect(result.events[1]?.capability).toBe("start_subscription_upgrade");
+    // The playbook-only fields are always null now that the spine is gone.
+    expect(result.events.every((e) => e.source === "security")).toBe(true);
+    expect(result.events.every((e) => e.playbookRunId === null)).toBe(true);
+    expect(result.events.every((e) => e.sequence === null)).toBe(true);
+    expect(result.events.every((e) => e.eventData === null)).toBe(true);
     expect(result.hasMore).toBe(false);
     expect(result.total).toBe(2);
+  });
+
+  it("returns nothing for source=playbook — the spine is gone (ADR-041)", async () => {
+    mocks.securityRows = [
+      {
+        eventType: "auth.sign_in",
+        occurredAt: new Date("2024-01-01T00:00:00Z"),
+        actorUserId: "u1",
+        workspaceId: null,
+        capability: null,
+        outcome: "success",
+        requestId: null,
+      },
+    ];
+
+    const result = await auditLogQueryHandler(
+      { source: "playbook", limit: 50, offset: 0 },
+      CTX,
+    );
+
+    expect(result.events).toEqual([]);
+    expect(result.hasMore).toBe(false);
+    // No table was queried at all.
+    expect(mocks.whereArgs).toHaveLength(0);
   });
 
   it("only queries the security spine when source=security", async () => {
@@ -108,16 +134,6 @@ describe("auditLogQueryHandler", () => {
         capability: null,
         outcome: "success",
         requestId: null,
-      },
-    ];
-    mocks.playbookRows = [
-      {
-        eventType: "run_completed",
-        occurredAt: new Date(),
-        workspaceId: "ws",
-        playbookRunId: "r",
-        sequence: 1,
-        eventData: {},
       },
     ];
 
@@ -137,7 +153,7 @@ describe("auditLogQueryHandler", () => {
     // capability cannot run without producing a WHERE clause per queried table.
     await auditLogQueryHandler({ source: "all", limit: 10, offset: 0 }, CTX);
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
-    expect(mocks.whereArgs.length).toBe(2); // security + playbook both filtered
+    expect(mocks.whereArgs.length).toBe(1); // the one surviving spine, filtered
   });
 
   it("reports hasMore when more events exist than the page window", async () => {

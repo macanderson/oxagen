@@ -1,78 +1,87 @@
 /**
  * @oxagen/run-ledger — the durable evidence ledger for governed agent runs.
  *
- * Run identity, fenced immutable attempts, the append-only event log, seals,
+ * Run identity, immutable attempts, the append-only event log, seals,
  * authorization snapshots and finalization grants live here. Nothing in this
  * package executes an agent: the runner that used to sit behind it left with
  * ADR-041, and execution evidence now arrives through evidence ingress
  * (`docs/specs/run-evidence-ingress/spec.md`, `docs/specs/tacho/`).
+ *
+ * This package is the ONLY writer of the `agent.agent_runs*` tables.
  */
 export { type PlatformSurface } from "./surface";
 
-// Phase 2b — durable-run persistence (docs/specs/agent-engine-v2/plan.md,
-// Phase 2). run-store.ts is the only writer of agent.agent_runs /
-// agent.agent_run_events; surfaces and the worker pool both go through this
-// seam rather than issuing their own SQL against those tables.
+// The ledger itself: admission, immutable attempts, fenced appends, seals,
+// terminal outcome, and the read side.
 export {
   createPostgresRunStore,
-  MAX_RUN_ATTEMPTS,
-  RUN_LEASE_SECONDS,
-  type RunStore,
-  type EnqueueRunInput,
-  type ClaimedRun,
-  type RunEventRecord,
-  type RunSummary,
-} from "./run-store";
-
-// Fenced immutable attempts (PR 1A Task 3). The V2 surface is a SEPARATE
-// interface from `RunStore` so existing V1 callers keep compiling unchanged;
-// `createPostgresRunStore()` returns `RunStore & AttemptRunStore`.
-export {
-  DEFAULT_RECLAIM_LIMIT,
+  DEFAULT_READ_EVENTS_LIMIT,
   EVENT_SEQUENCE_CONFLICT_EVENT,
   ATTEMPT_TERMINAL_STATUSES,
-  generateLeaseToken,
+  generateRunPublicId,
   generateAttemptPublicId,
   buildRunRowIdentityFromSpec,
   mapRunV2IdentityRow,
-  mapClaimedRunV2,
+  mapRunSummaryRow,
+  mapAttemptRow,
   mapAttemptEventReadRow,
   prepareAttemptEvent,
   planAttemptBatch,
   reconcileReplayedEvents,
   foldAttemptStreamDigest,
-  leaseRejectionReason,
-  assertLeaseUsable,
+  foldAttemptEventState,
+  attemptRejectionReason,
+  assertAttemptWritable,
   runStatusForTerminal,
-  type AttemptRunStore,
-  type EnqueueRunV2Input,
-  type ClaimNextRunV2Options,
-  type ClaimedRunV2,
-  type ClaimedRunV2Detail,
-  type RunLeaseRef,
+  buildCreateRunSql,
+  buildLockRunForAttemptSql,
+  buildInsertAttemptSql,
+  buildMarkRunAttemptedSql,
+  buildLockAttemptForWriteSql,
+  buildSelectAttemptEventStateSql,
+  buildAllocateRunSeqSql,
+  buildInsertAttemptEventsSql,
+  buildInsertAttemptSealSql,
+  buildFinishRunSql,
+  buildGetRunByPublicIdSql,
+  buildListRunAttemptsSql,
+  buildListAttemptIdentitySql,
+  buildReadAttemptEventsSinceSql,
+  type RunStore,
+  type RunStoreOptions,
+  type RunSecurityEventSink,
+  type CreateRunInput,
+  type CreateAttemptInput,
+  type CreatedAttempt,
   type ResolvedEngineIdentity,
-  type RestoredCheckpointRef,
+  type AttemptProvenance,
   type AttemptEventInput,
-  type AttemptCheckpointInput,
   type AppendAttemptBatchInput,
   type AppendAttemptBatchResult,
   type AppendedAttemptEvent,
   type AttemptEventReadRecord,
+  type AttemptEventState,
   type AttemptTerminalStatus,
   type SealAttemptInput,
-  type ReclaimExpiredAttemptsOptions,
-  type ReclaimedAttempt,
-  type RunSecurityEventSink,
-  type RunStoreOptions,
+  type RunSummary,
+  type AttemptRecord,
+  type AttemptSealRecord,
   type PreparedAttemptEvent,
   type AttemptBatchPlan,
-  type LockedLeaseRow,
+  type AttemptEventInsertRow,
+  type InsertAttemptInput,
+  type InsertSealInput,
+  type LockedAttemptRow,
   type ExistingAttemptEventRow,
+  type AttemptEventStateRow,
   type RunV2IdentityRow,
+  type RunSummaryRow,
+  type AttemptRow,
+  type AttemptEventReadRow,
 } from "./run-store";
 
-// The closed V2 event vocabulary plus the digest contract PR 2's finalizer
-// must reproduce byte for byte.
+// The closed event vocabulary plus the digest contract the finalizer must
+// reproduce byte for byte.
 export {
   EVENT_SCHEMA_VERSION,
   MAX_INLINE_PAYLOAD_BYTES,
@@ -122,11 +131,10 @@ export {
   type SealedAttemptHandle,
 } from "./finalization-grant";
 
-// Run/attempt evidence foundation (PR 1A Task 1;
-// docs/specs/run-evidence-ingress/spec.md). RunSpecV2 is the trusted admission
-// contract — built ONLY by server code, never from a request body. Surfaces
-// parse caller input with `parseCallerRunInfluence` and hand the result to
-// `buildTrustedRunSpecV2` alongside separately-resolved trusted sections.
+// RunSpecV2 is the trusted admission contract — built ONLY by server code,
+// never from a request body. Surfaces parse caller input with
+// `parseCallerRunInfluence` and hand the result to `buildTrustedRunSpecV2`
+// alongside separately-resolved trusted sections.
 export {
   // primitives
   canonicalJson,
@@ -186,10 +194,8 @@ export {
   type DecimalGeneration,
 } from "./run-spec-v2";
 
-// The RETAINED legacy admission contract (PR 1A Task 6). Centralized here so
-// the enqueue side (apps/api's /runs POST) and the claim side (@oxagen/agent's
-// turn driver) share ONE definition while queued v1 work drains. v1 rows are
-// explicitly NON-EVIDENCE — see the module doc; they are never promoted to v2.
+// Typed, dependency-free errors — `instanceof`-matchable from any surface, with
+// structural `code` guards for bundling edge cases.
 export {
   CanonicalJsonError,
   RunSpecValidationError,
@@ -201,7 +207,7 @@ export {
   RunEventPayloadTooLargeError,
   RunEventIntegrityError,
   RunEventSequenceGapError,
-  RunLeaseFencedError,
+  AttemptNotWritableError,
   RunStoreStateError,
   isRunSpecValidationError,
   isRunSpecDigestMismatchError,
@@ -212,8 +218,8 @@ export {
   isRunEventPayloadTooLargeError,
   isRunEventIntegrityError,
   isRunEventSequenceGapError,
-  isRunLeaseFencedError,
+  isAttemptNotWritableError,
   isRunStoreStateError,
   type RunSpecIssue,
-  type LeaseRejectionReason,
+  type AttemptRejectionReason,
 } from "./run-errors";

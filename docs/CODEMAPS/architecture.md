@@ -8,26 +8,25 @@
 ## System Diagram
 
 ```
-                        ┌───────────────────────────────────────┐
-                        │                Clients                  │
-                        │  Browser │ CLI │ MCP Client │ A2A Caller │
-                        └─────┬────┴──┬──┴─────┬──────┴─────┬─────┘
-                              │       │         │            │
-                    ┌─────────▼──┐ ┌──▼─────┐ ┌─▼─────────┐  │
-                    │  apps/app  │ │apps/cli│ │ apps/mcp  │  │
-                    │ Next.js 16 │ │  Ink   │ │  xmcp     │  │
-                    │  (RSC+SA)  │ │  REPL  │ │ /mcp SSE  │  │
-                    └─────┬──────┘ └───┬────┘ └──┬────────┘  │
-                          │            │           │          │
-                          └────────────┼───────────┴──────────┘
-                                       │  REST + SSE + JSON-RPC (A2A)
+                        ┌──────────────────────────────┐
+                        │            Clients             │
+                        │  Browser │ CLI │ MCP Client    │
+                        └─────┬────┴──┬──┴─────┬─────────┘
+                              │       │         │
+                    ┌─────────▼──┐ ┌──▼─────┐ ┌─▼─────────┐
+                    │  apps/app  │ │apps/cli│ │ apps/mcp  │
+                    │ Next.js 16 │ │  Ink   │ │  xmcp     │
+                    │  (RSC+SA)  │ │  REPL  │ │ /mcp SSE  │
+                    └─────┬──────┘ └───┬────┘ └──┬────────┘
+                          │            │           │
+                          └────────────┼───────────┘
+                                       │  REST + SSE
                               ┌────────▼────────────┐
                               │      apps/api        │
                               │   Hono on Node.js    │
                               │   api.oxagen.sh       │
-                              │  (271 route files —   │
-                              │   261 under routes/v1;│
-                              │   /a2a JSON-RPC + SSE)│
+                              │  (~178 route files,   │
+                              │   count drifts)       │
                               └──┬────────────────────┘
                                  │
               ┌──────────────────┼──────────────────┐
@@ -50,7 +49,7 @@
 
 | Service | URL | Stack | Role |
 |---------|-----|-------|------|
-| `apps/api` | api.oxagen.sh | Hono + Node.js | REST API, webhooks, LLM proxy, A2A JSON-RPC |
+| `apps/api` | api.oxagen.sh | Hono + Node.js | REST API, webhooks, LLM proxy |
 | `apps/app` | app.oxagen.sh | Next.js 16 (App Router) | Web UI, Server Actions |
 | `apps/mcp` | mcp.oxagen.sh/mcp | xmcp (streamable HTTP) | MCP protocol surface |
 | `apps/cli` | npm: `oxagen` | Ink + Commander | Local agent REPL + fleet orchestration |
@@ -91,23 +90,14 @@ records, and `get_execution_trace` (file: `agent.trace.get.ts` /
 `oxagen trace`) reads them back with Neo4j-synced lineage. Oxagen stamps,
 grades, and rates the trace as evidence — it never re-runs it.
 
-## Data Flow — A2A (Agent2Agent) Interop
+## A2A (Agent2Agent) Interop — removed
 
-**Verify before relying on this section** — the A2A transport's route
-registration in `apps/api/src/app.ts` was observed disappearing mid-session
-during this audit (2026-09-07); it may be mid-removal by a concurrent change.
-As last confirmed live:
-
-```
-External caller → POST /a2a  (JSON-RPC: message/send, tasks/get,
-                                tasks/resubscribe, tasks/cancel)
-                → message.metadata.skillId selects a deployed agent slug
-                  (unknown/inactive slug falls back to the generic agent)
-                → same governed turn loop as in-app chat (no separate
-                  execution pipeline)
-                → tasks/resubscribe live-attaches to the in-flight SSE stream
-                  instead of polling
-```
+ADR-041 removed the A2A JSON-RPC transport entirely (2026-09-07): the
+`.well-known/agent-card.json` discovery endpoint, `POST /a2a`, the
+`a2a.card.get` capability, and the `agent.a2a_tasks` table are gone.
+Third-party agent identity and interop are future work through the evidence-
+ingress / MCP-gateway seam (ADR-040 Phase 2) — see
+`docs/specs/a2a-agent-identity/spec.md`'s 2026-09-07 note.
 
 ## Tenancy Model
 Hierarchy: **Organization → Workspace → User**

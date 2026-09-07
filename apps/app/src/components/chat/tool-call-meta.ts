@@ -1,25 +1,22 @@
 import {
   Bot,
   Brain,
-  Code2,
+  CreditCard,
   FileText,
   GitBranch,
-  Globe,
-  ImageIcon,
   KeyRound,
   MessageSquare,
   Network,
   Paperclip,
+  ScrollText,
   Search,
-  Terminal,
-  Video,
-  Workflow,
+  ShieldCheck,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
 
 /**
- * tool-call-meta — maps a raw capability name (e.g. `execute_code`) to a
+ * tool-call-meta — maps a raw capability name (e.g. `query_audit_log`) to a
  * human-readable label and a domain icon for the chat tool-call UI.
  *
  * Two layers:
@@ -40,96 +37,54 @@ export interface ToolCallMeta {
 // Curated labels for common capabilities. Icons resolve via the domain map
 // below unless overridden here.
 const CURATED: Record<string, { label: string; Icon?: LucideIcon }> = {
-  // Code + sandbox
-  execute_code: { label: "Run code", Icon: Code2 },
-  run_sandbox_command: { label: "Run command in sandbox", Icon: Terminal },
-  start_sandbox: { label: "Start sandbox", Icon: Terminal },
-  stop_sandbox: { label: "Stop sandbox", Icon: Terminal },
-  snapshot_sandbox: { label: "Snapshot sandbox", Icon: Terminal },
-  list_sandbox_files: { label: "List sandbox files", Icon: Terminal },
-  diff_code: { label: "Compare code" },
-  format_code: { label: "Format code" },
-  patch_code: { label: "Apply code patch" },
-  // Repo
-  open_pr: { label: "Open pull request" },
-  create_branch: { label: "Create branch" },
-  create_repo: { label: "Create repository" },
-  fork_repo: { label: "Fork repository" },
-  sync_repo: { label: "Sync repository" },
-  put_repo_file: { label: "Update repository file" },
-  get_repo_metrics: { label: "Read repository metrics" },
-  edit_repo_file: { label: "Edit repository" },
-  // Media + documents
-  generate_image: { label: "Generate image" },
-  create_image: { label: "Create image" },
-  analyze_image: { label: "Analyze image" },
-  generate_svg: { label: "Generate SVG" },
-  generate_mermaid: { label: "Generate diagram", Icon: Network },
-  generate_video: { label: "Generate video" },
-  generate_markdown: { label: "Generate document" },
-  generate_document: { label: "Generate document" },
-  create_document: { label: "Create document" },
-  read_document: { label: "Read document" },
-  list_documents: { label: "List documents" },
-  create_pdf: { label: "Create PDF" },
   // Knowledge graph
   query_ontology: { label: "Query knowledge graph" },
   get_ontology_neighbors: { label: "Explore graph neighbors" },
   search_graph: { label: "Search knowledge graph" },
   search_nodes: { label: "Search graph nodes" },
+  get_node: { label: "Read graph node" },
   get_graph_stats: { label: "Read graph statistics" },
   // Conversation + files
   list_conversation_files: { label: "List conversation files" },
   add_conversation_attachment: { label: "Add attachment" },
   send_message: { label: "Send message" },
   upload_asset: { label: "Upload file" },
-  // Web + browser
-  search_web: { label: "Search the web" },
-  fetch_web_page: { label: "Fetch web page" },
-  navigate_page: { label: "Open web page" },
-  screenshot_page: { label: "Take screenshot" },
-  read_page: { label: "Read web page" },
-  // Workflows + agents
+  // Fleet + governance
   list_agent_defs: { label: "List agents", Icon: Bot },
-  run_workflow: { label: "Run workflow" },
-  cancel_workflow: { label: "Cancel workflow" },
-  get_workflow_status: { label: "Check workflow status" },
-  dispatch_subagent: { label: "Dispatch subagent" },
-  aggregate_subagents: { label: "Aggregate subagent results" },
-  render_agent_ui: { label: "Render interactive view" },
-  verify_feature: { label: "Verify feature" },
-  fill_form: { label: "Fill form" },
+  get_agent_def: { label: "Read agent definition", Icon: Bot },
+  list_agent_executions: { label: "List agent runs", Icon: Bot },
+  get_agent_trace: { label: "Read run trace", Icon: ScrollText },
+  query_audit_log: { label: "Query the audit log", Icon: ScrollText },
+  list_capabilities: { label: "List capabilities" },
+  get_capability: { label: "Read capability contract" },
+  list_iam_roles: { label: "List IAM roles", Icon: ShieldCheck },
+  resolve_approval: { label: "Resolve approval", Icon: ShieldCheck },
+  // Metering + billing
+  get_usage_breakdown: { label: "Read usage breakdown", Icon: CreditCard },
+  get_budget_policy: { label: "Read budget policy", Icon: CreditCard },
+  read_subscription: { label: "Read subscription", Icon: CreditCard },
   // Memory
   recall_memory: { label: "Recall memory" },
   save_memory: { label: "Save memory" },
   write_memory: { label: "Save memory" },
   list_memories: { label: "List memories" },
-  // Research
-  start_research_swarm: { label: "Start research swarm" },
-  get_research_status: { label: "Check research status" },
 };
 
-// Domain keyword → icon. Checked against each dot-segment in order, so
-// `agent.code.execute` resolves via `code` and `agent.sandbox.exec` via
-// `sandbox`.
+// Domain keyword → icon. Checked against each name segment in order, so
+// `query_audit_log` resolves via `audit` and `get_ontology_neighbors` via
+// `ontology`.
 const DOMAIN_ICONS: Record<string, LucideIcon> = {
-  code: Code2,
-  sandbox: Terminal,
-  shell: Terminal,
   repo: GitBranch,
   git: GitBranch,
   branch: GitBranch,
   pr: GitBranch,
-  image: ImageIcon,
-  svg: ImageIcon,
-  video: Video,
   document: FileText,
-  pdf: FileText,
-  markdown: FileText,
   ontology: Network,
   graph: Network,
+  node: Network,
   semantic: Network,
   schema: Network,
+  lineage: Network,
   conversation: MessageSquare,
   chat: MessageSquare,
   message: MessageSquare,
@@ -139,11 +94,19 @@ const DOMAIN_ICONS: Record<string, LucideIcon> = {
   attachment: Paperclip,
   upload: Paperclip,
   search: Search,
-  web: Search,
-  browser: Globe,
   memory: Brain,
-  workflow: Workflow,
-  automation: Workflow,
+  audit: ScrollText,
+  trace: ScrollText,
+  execution: ScrollText,
+  agent: Bot,
+  iam: ShieldCheck,
+  approval: ShieldCheck,
+  consent: ShieldCheck,
+  policy: ShieldCheck,
+  billing: CreditCard,
+  usage: CreditCard,
+  budget: CreditCard,
+  subscription: CreditCard,
   secret: KeyRound,
   key: KeyRound,
 };
