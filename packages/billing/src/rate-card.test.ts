@@ -17,7 +17,7 @@ import {
   projectCost,
   compareModels,
   listRateCard,
-} from "../rate-card.js";
+} from "./rate-card";
 
 describe("familyOf", () => {
   it("strips a vendor prefix", () => {

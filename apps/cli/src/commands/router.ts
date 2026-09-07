@@ -18,7 +18,7 @@
  * table; failures are uniform stderr error lines.
  */
 import { apiGetOrThrow, apiPostOrThrow, printTable } from "../lib/api.js";
-import { formatUsd } from "../lib/rate-card.js";
+import { formatUsd } from "@oxagen/billing/rate-card";
 import { createOutput } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 

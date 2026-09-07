@@ -23,7 +23,7 @@ import {
   formatUsd,
   projectCost,
   type CostProjection,
-} from "../lib/rate-card.js";
+} from "@oxagen/billing/rate-card";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
 export interface CostOptions {
