@@ -7,6 +7,20 @@ export default defineConfig({
   test: {
     clearMocks: true,
     environment: "node",
+    // Vitest's 5000ms default is not enough for this package's jsdom
+    // interaction tests under CI's turbo parallelism. `avatar-maker.test.tsx`'s
+    // save-flow test runs six userEvent interactions against the emoji grid: it
+    // takes ~560ms on an idle machine and timed out past 5000ms on main
+    // (ef8baf2, run 34080854349) inside a 38-task turbo run where vitest
+    // reported 529s of `environment` time across a 544s wall clock. Nine other
+    // tests in the same file sit in the 380-560ms band, so the whole file was
+    // within one contention spike of the ceiling.
+    //
+    // This changes no assertion — a genuinely wedged test still fails, it just
+    // stops failing because the box was busy. 20000 matches the value
+    // packages/plugins and packages/stella-engine-client already set for the
+    // same reason.
+    testTimeout: 20000,
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     coverage: {
