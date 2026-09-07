@@ -62,6 +62,7 @@ Current topics (non-exhaustive — `ls docs/specs/` for the full, growing list):
 | [`specs/application-shell/`](specs/application-shell/spec.md) | Spec'd |
 | [`specs/command-menu/`](specs/command-menu/spec.md) | Spec'd |
 | [`specs/iam/`](specs/iam/plan.md) | Spec'd |
+| [`specs/tacho/`](specs/tacho/spec.md) | Proposed — Oxagen as the control plane for Claude Code, Claude Agent SDK, and custom agents |
 
 A number of specs describe features that have since shipped but carry no
 "Shipped"/"Archived" status header at the file itself — treat `apps/docs`'
