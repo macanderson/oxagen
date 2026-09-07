@@ -36,6 +36,7 @@ import {
   judgePanel,
   buildRevisionPrompt,
   resolveReviseMinConfidence,
+  isUnexaminedComplete,
 } from "../evaluate/judge";
 import { enhancePrompt } from "../evaluate/prompt-enhancer";
 import { createSpecTestTracker } from "../oracle/spec-test";
@@ -1346,10 +1347,10 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     // the agent, and asking the agent to "finish" work a judge just called done
     // spends a full round to re-derive the same verdict. Low confidence there
     // is a reason to surface the verdict, not to spend on it.
-    const unexaminedComplete =
-      verdict.complete &&
-      verdict.fallback &&
-      verdict.confidence < reviseMinConfidence;
+    const unexaminedComplete = isUnexaminedComplete(
+      verdict,
+      reviseMinConfidence,
+    );
     const canRevise =
       round < maxRounds &&
       !opts.readOnly &&

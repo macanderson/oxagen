@@ -19,6 +19,7 @@ import {
   pickAdvisorModel,
   DEFAULT_ADVISOR_MODEL,
   resolveReviseMinConfidence,
+  isUnexaminedComplete,
 } from "./judge";
 import { enhancePrompt } from "./prompt-enhancer";
 import type { AgentAi } from "../ports";
@@ -860,5 +861,52 @@ describe("buildRevisionPrompt on an unreviewed complete verdict", () => {
     });
     expect(prompt).toContain("is NOT done");
     expect(prompt).toContain("Tests were not added");
+  });
+});
+
+/**
+ * The floor's asymmetry is deliberate and narrow: it catches a `complete` that
+ * NOTHING examined. `fallback` cannot express that for a panel — #1427 made it
+ * `some` on purpose, so a panel with one degraded judge out of three reports
+ * `true` while its real majority read the diff. Reading `fallback` here pulled
+ * exactly the case the asymmetry leaves alone into a revise round.
+ */
+describe("isUnexaminedComplete separates 'nothing judged' from 'a judge judged'", () => {
+  const base = {
+    complete: true as boolean,
+    confidence: 30,
+    findings: [] as string[],
+    remainingWork: [] as string[],
+    reasoning: "r",
+    model: "a/model",
+    fallback: true,
+    usage: emptyUsage(),
+  };
+
+  it("is true for a lone heuristic judge below the floor", () => {
+    expect(isUnexaminedComplete(base, 40)).toBe(true);
+  });
+
+  it("is true for a panel where every judge degraded", () => {
+    expect(
+      isUnexaminedComplete(
+        { ...base, degradedJudges: { degraded: 3, total: 3 } },
+        40,
+      ),
+    ).toBe(true);
+  });
+
+  it("is FALSE when a real judge voted, however many degraded beside it", () => {
+    expect(
+      isUnexaminedComplete(
+        { ...base, degradedJudges: { degraded: 2, total: 3 } },
+        40,
+      ),
+    ).toBe(false);
+  });
+
+  it("is false above the floor, and false for an incomplete verdict", () => {
+    expect(isUnexaminedComplete({ ...base, confidence: 40 }, 40)).toBe(false);
+    expect(isUnexaminedComplete({ ...base, complete: false }, 40)).toBe(false);
   });
 });

@@ -467,6 +467,32 @@ export function resolveReviseMinConfidence(
   return value;
 }
 
+/**
+ * Whether a `complete` verdict is one that **nothing actually examined**, and
+ * so is worth a revise round despite saying the work is done.
+ *
+ * The question is "did any real judge read this", which is not what `fallback`
+ * answers for a panel: that is `some`, on purpose, because a consumer asking
+ * "was any of this guesswork" wants a yes when two of three judges were
+ * degraded (#1427). Reading it here would pull a panel whose real majority read
+ * the diff into a revise round — the exact case the floor's asymmetry
+ * deliberately leaves alone, since re-asking spends a full round to re-derive a
+ * verdict a judge already reached on the same evidence.
+ *
+ * `degradedJudges` is what distinguishes them. A single judge carries no count,
+ * so `fallback` is the whole answer there.
+ */
+export function isUnexaminedComplete(
+  verdict: JudgeVerdict,
+  minConfidence: number,
+): boolean {
+  if (!verdict.complete || verdict.confidence >= minConfidence) return false;
+  const counts = verdict.degradedJudges;
+  return counts === undefined
+    ? verdict.fallback
+    : counts.degraded === counts.total;
+}
+
 /** Reported once per distinct bad value, so a per-round resolve says it once. */
 const reportedConfidences = new Set<string>();
 
