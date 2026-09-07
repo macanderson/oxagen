@@ -5,18 +5,15 @@ export default defineConfig({
     clearMocks: true,
     environment: "node",
     globals: false,
-    // Ink/chalk pick a color depth from the environment at import time, and the
-    // slash-menu tests assert exact truecolor ANSI sequences. Pin truecolor so
-    // rendering is deterministic everywhere (GitHub Actions runners and local
-    // non-TTY shells otherwise downgrade to 16 colors and the assertions fail).
+    // Pin truecolor so any ANSI the CLI emits renders identically everywhere
+    // (GitHub Actions runners and local non-TTY shells otherwise downgrade to
+    // 16 colors and exact-output assertions fail).
     env: { FORCE_COLOR: "3" },
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     coverage: {
       provider: "v8",
-      // .tsx is measured too — an excluded-from-coverage component is exactly
-      // how the unmounted-HudPanel class of bug stays invisible. Ink components
-      // are harder to unit-drive than plain .ts, so they gate against their own
-      // per-glob floor below instead of the .ts ratchet.
+      // `.tsx` stays in the pattern so a future component is gated rather than
+      // ungated; the CLI currently ships none.
       include: ["src/**/*.ts", "src/**/*.tsx"],
       exclude: [
         "src/**/*.test.ts",
@@ -27,26 +24,21 @@ export default defineConfig({
         "src/index.ts",
       ],
       thresholds: {
-        // No top-level (global) numbers: vitest counts glob-matched files in the
-        // global pool too, which would blend the .ts ratchet with the .tsx floor.
-        // The two globs below partition src/** exactly, so nothing is ungated.
-        // The .ts gate keeps the ratchet global carried before .tsx was measured.
-        // ONE glob now, not two. The `.tsx` half gated a population of Ink
-        // components that the Stella cutover deleted along with the REPL; what
-        // remained under that glob was the command tree alone, and a
-        // component floor is not a meaningful gate for it. `.tsx` stays in the
-        // pattern so a future component is gated rather than ungated.
+        // ONE glob, matching src/** exactly, so nothing is ungated. No
+        // top-level (global) numbers: vitest counts glob-matched files in the
+        // global pool too, which would double-gate the same population.
         //
-        // Lines/statements moved 85 -> 84 because the SUBJECT changed, not the
-        // discipline: `program.ts` (the ~2.4k-line command tree) has always sat
-        // near 75%, and the large, well-tested REPL used to carry the average
-        // above it. Raising it back is tracked, not forgotten — see the issue
-        // tracked as issue 2587. Branches and functions are UNCHANGED and
-        // still clear their old bars.
+        // Ratchet state after the ADR-041 runtime excision (actual: 86.6%
+        // lines/statements, 89.3% branches, 94.8% functions). Branches moved
+        // 80 -> 86 and functions 85 -> 90 (the cap) on the new numbers, each
+        // keeping the required >=2.5% headroom below actual. Lines/statements
+        // stay at 84: floor(86.6 - 2.5) is 84, so the bar is already where the
+        // ratchet allows. `program.ts` (the command tree) sits near 75% and is
+        // what holds the line pool down — raising it is tracked as issue 2587.
         "src/**/*.{ts,tsx}": {
           lines: 84,
-          branches: 80,
-          functions: 85,
+          branches: 86,
+          functions: 90,
           statements: 84,
         },
       },

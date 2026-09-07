@@ -29,8 +29,6 @@ const {
   mockAssertOrgMember,
   mockRunInTenantScope,
   mockSeedRegistry,
-  mockSeedCapabilities,
-  mockSeedSkills,
   mockSeedEnvironment,
   mockBootstrapAgents,
   dbState,
@@ -62,8 +60,6 @@ const {
     mockAssertOrgMember: vi.fn(),
     mockRunInTenantScope: vi.fn((_scope: unknown, fn: () => unknown) => fn()),
     mockSeedRegistry: vi.fn(),
-    mockSeedCapabilities: vi.fn(),
-    mockSeedSkills: vi.fn(),
     mockSeedEnvironment: vi.fn(),
     mockBootstrapAgents: vi.fn(),
     dbState,
@@ -87,12 +83,6 @@ vi.mock("@oxagen/handlers/workspace-agents", () => ({
 }));
 vi.mock("@oxagen/handlers/workspace-registry-seed", () => ({
   seedWorkspaceDefaultRegistrySystem: mockSeedRegistry,
-}));
-vi.mock("@oxagen/handlers/workspace-capability-seed", () => ({
-  seedWorkspaceDefaultCapabilitiesSystem: mockSeedCapabilities,
-}));
-vi.mock("@oxagen/handlers/skill-workspace-seed", () => ({
-  seedWorkspaceDefaultSkillsSystem: mockSeedSkills,
 }));
 vi.mock("@oxagen/handlers/workspace-environment-seed", () => ({
   seedWorkspaceDefaultEnvironmentSystem: mockSeedEnvironment,
@@ -255,8 +245,6 @@ describe("createWorkspaceAction", () => {
     mockAssertOrgMember.mockResolvedValue(undefined);
     mockBootstrapAgents.mockResolvedValue(undefined);
     mockSeedRegistry.mockResolvedValue("mreg_123");
-    mockSeedCapabilities.mockResolvedValue(undefined);
-    mockSeedSkills.mockResolvedValue({ scanned: 3, inserted: 3 });
     mockSeedEnvironment.mockResolvedValue(undefined);
   });
 
@@ -339,12 +327,7 @@ describe("createWorkspaceAction", () => {
     );
     expect(res.ok).toBe(true);
 
-    for (const seeder of [
-      mockSeedRegistry,
-      mockSeedCapabilities,
-      mockSeedSkills,
-      mockSeedEnvironment,
-    ]) {
+    for (const seeder of [mockSeedRegistry, mockSeedEnvironment]) {
       expect(seeder).toHaveBeenCalledOnce();
       expect(seeder).toHaveBeenCalledWith({
         orgId: ORG.id,
@@ -376,26 +359,6 @@ describe("createWorkspaceAction", () => {
     expect(res.ok).toBe(true);
   });
 
-  it("seed failure in seedWorkspaceDefaultCapabilitiesSystem does NOT reject the action", async () => {
-    mockSeedCapabilities.mockRejectedValue(
-      new Error("capabilities seed failed"),
-    );
-    const res = await createWorkspaceAction(
-      "acme",
-      form({ name: "Main", slug: "main" }),
-    );
-    expect(res.ok).toBe(true);
-  });
-
-  it("seed failure in seedWorkspaceDefaultSkillsSystem does NOT reject the action", async () => {
-    mockSeedSkills.mockRejectedValue(new Error("skills seed failed"));
-    const res = await createWorkspaceAction(
-      "acme",
-      form({ name: "Main", slug: "main" }),
-    );
-    expect(res.ok).toBe(true);
-  });
-
   it("seed failure in seedWorkspaceDefaultEnvironmentSystem does NOT reject the action", async () => {
     mockSeedEnvironment.mockRejectedValue(new Error("environment seed failed"));
     const res = await createWorkspaceAction(
@@ -413,8 +376,6 @@ describe("createWorkspaceAction", () => {
     );
     expect(res.ok).toBe(false);
     expect(mockSeedRegistry).not.toHaveBeenCalled();
-    expect(mockSeedCapabilities).not.toHaveBeenCalled();
-    expect(mockSeedSkills).not.toHaveBeenCalled();
   });
 
   it("seeders are NOT called when the insert fails (tx error rolls back workspace)", async () => {
@@ -428,7 +389,5 @@ describe("createWorkspaceAction", () => {
     );
     expect(res.ok).toBe(false);
     expect(mockSeedRegistry).not.toHaveBeenCalled();
-    expect(mockSeedCapabilities).not.toHaveBeenCalled();
-    expect(mockSeedSkills).not.toHaveBeenCalled();
   });
 });

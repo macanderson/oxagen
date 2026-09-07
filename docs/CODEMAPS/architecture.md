@@ -3,7 +3,7 @@
 # Architecture — Oxagen v2
 
 ## Project Type
-**Monorepo** (pnpm workspaces + Turborepo) — 7 apps, 34 packages, 2 tooling packages. See `docs/VISION.md` for product north star: the metered, governed, graph-grounded control plane ("Stripe for agents").
+**Monorepo** (pnpm workspaces + Turborepo) — 7 apps, 27 packages (down from ~36 pre-ADR-041: `agent-engine`, `agent-worker`, `sandbox`, `skills`, `agent-artifacts`, `stella-engine-client`, and the search/fetch `web` package were removed; `agent-runner` was renamed `run-ledger`), plus `tools/` (codemods, env-manager, scripts). See `docs/VISION.md` for product north star: the metered, governed, graph-grounded control plane ("Stripe for agents").
 
 ## System Diagram
 
@@ -60,11 +60,17 @@
 
 ## Data Flow — Chat / Agent Execution
 
+ADR-041 (`docs/adr/ADR-041-runtime-excision.md`) deleted `@oxagen/agent-engine`
+(the coding pipeline: planner/fork/oracle/evaluate), the sandbox/browser/code
+tool surface, and subagent fan-out. What remains is one thin, in-process
+governed turn loop over `@oxagen/agent` and `@oxagen/ai`:
+
 ```
 User → apps/app chat UI → POST /api/v1/chat/stream
      (Next.js Route Handler, apps/app/src/app/api/v1/chat/stream/route.ts)
-     → calls @oxagen/agent-engine / @oxagen/agent directly in-process
-       (via withTenantDb — no HTTP hop to apps/api)
+     → runGovernedTurn (@oxagen/agent) — tools materialized from capability
+       contracts, invoked through kernel.invoke() (via withTenantDb — no HTTP
+       hop to apps/api)
      → SSE stream consumed by use-tool-stream.ts
      → Inngest: chat.persist-stream
      → Engram memory consolidation
@@ -75,31 +81,30 @@ The app UI's primary chat path is this in-process Next.js Route Handler, not a
 round trip through apps/api's Hono `/v1/:org/:ws/chat/messages` route — that
 route remains for CLI/MCP/API-key callers (see CLAUDE.md "Main chat path").
 
-## Data Flow — Background Agent / Fleet
+## Agent lineage (post-ADR-041)
 
-```
-CLI/MCP/A2A → dispatch_subagent (file: agent.subagent.dispatch.ts)
-            → Inngest: agent.execute-subagent
-            → @oxagen/agent-engine pipeline (planner/fork/oracle/evaluate)
-            → Tool calls (sandbox/browser/code)
-            → agent.sync-execution-to-graph
-            → Neo4j lineage (get_execution_trace, file: agent.trace.get.ts /
-              `oxagen trace`)
-```
-
-Post-ADR-025, capability *names* are verb-first snake_case
-(`dispatch_subagent`, `get_execution_trace`); the dotted forms above are
-still-current contract/route **file stems**, not registered names.
+There is no more subagent dispatch/fan-out and no coding pipeline to trace
+through planner/fork/oracle/evaluate steps. Lineage now comes from the
+evidence ledger (`@oxagen/run-ledger`, formerly `agent-runner`): externally-run
+agents (Stella's drain, a wrapper SDK) attest their own run/attempt/event
+records, and `get_execution_trace` (file: `agent.trace.get.ts` /
+`oxagen trace`) reads them back with Neo4j-synced lineage. Oxagen stamps,
+grades, and rates the trace as evidence — it never re-runs it.
 
 ## Data Flow — A2A (Agent2Agent) Interop
 
+**Verify before relying on this section** — the A2A transport's route
+registration in `apps/api/src/app.ts` was observed disappearing mid-session
+during this audit (2026-09-07); it may be mid-removal by a concurrent change.
+As last confirmed live:
+
 ```
-External caller → POST /v1/:org/:ws/a2a  (JSON-RPC: message/send, tasks/get,
-                                            tasks/resubscribe, tasks/cancel)
+External caller → POST /a2a  (JSON-RPC: message/send, tasks/get,
+                                tasks/resubscribe, tasks/cancel)
                 → message.metadata.skillId selects a deployed agent slug
                   (unknown/inactive slug falls back to the generic agent)
-                → apps/api/src/routes/a2a/{rpc,bridge,protocol,stream-registry}.ts
-                → same execution + lineage pipeline as subagent fan-out
+                → same governed turn loop as in-app chat (no separate
+                  execution pipeline)
                 → tasks/resubscribe live-attaches to the in-flight SSE stream
                   instead of polling
 ```
@@ -114,12 +119,12 @@ Hierarchy: **Organization → Workspace → User**
 
 | Package | Role |
 |---------|------|
-| `@oxagen/oxagen` | Contracts (Zod; 344 non-test contract files, 311 registered capabilities), CapabilityContext type, capability kernel |
-| `@oxagen/handlers` | Shared business logic handlers (270 non-test files) |
-| `@oxagen/database` | Drizzle schema + client (23 schema files, 55 migrations) |
+| `@oxagen/oxagen` | Contracts (Zod; ~237 non-test contract files post-ADR-041, count drifts), CapabilityContext type, capability kernel |
+| `@oxagen/handlers` | Shared business logic handlers (~224 non-test files, count drifts) |
+| `@oxagen/database` | Drizzle schema + client (23 schema files, ~90 migrations, count drifts) |
 | `@oxagen/engram` | Local DuckDB memory, context compilation, replay |
-| `@oxagen/agent` | Agent runtime, dispatch, memory adapters (120 files) |
-| `@oxagen/agent-engine` | Pipeline, planner, fork, oracle, evaluator, fleet (43 files) |
+| `@oxagen/agent` | Governed in-app agent turn loop (`runGovernedTurn`), MCP tool gateway, agent registry handlers (~73 files). No sandbox, subagent dispatch, or coding pipeline — see ADR-041. |
+| `@oxagen/run-ledger` | Durable run/attempt/event/seal evidence ledger (formerly `agent-runner`) |
 | `@oxagen/iam` | AuthZ, audit, access requests |
 | `@oxagen/auth` | Better Auth, session/API-key resolution |
 | `@oxagen/billing` | Stripe, credits, usage metering |

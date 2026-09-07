@@ -138,17 +138,19 @@ describe("deriveBucketKey", () => {
     const c = fakeContext({
       headers: { "x-forwarded-for": "203.0.113.7, 10.0.0.1" },
     });
-    expect(deriveBucketKey(c, "agent")).toBe("agent:ip:203.0.113.7");
+    expect(deriveBucketKey(c, "chat")).toBe("chat:ip:203.0.113.7");
   });
 
   it('uses x-real-ip, then "unknown", when x-forwarded-for is absent', () => {
     expect(
       deriveBucketKey(
         fakeContext({ headers: { "x-real-ip": "198.51.100.9" } }),
-        "a2a",
+        "stella-telemetry",
       ),
-    ).toBe("a2a:ip:198.51.100.9");
-    expect(deriveBucketKey(fakeContext(), "a2a")).toBe("a2a:ip:unknown");
+    ).toBe("stella-telemetry:ip:198.51.100.9");
+    expect(deriveBucketKey(fakeContext(), "stella-telemetry")).toBe(
+      "stella-telemetry:ip:unknown",
+    );
   });
 });
 

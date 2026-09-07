@@ -4,8 +4,13 @@
  * Composes entity search results from:
  *   1. The ontology graph (KnowledgeNodes) via graph.node.search — covers any
  *      node label: ontology entities, ingested records projected as nodes, etc.
- *   2. Operational Postgres tables — runs, playbooks, triggers, agents,
- *      principals — each filtered by the caller's tenant via withTenantDb.
+ *   2. Operational Postgres tables — runs, agents, principals — each filtered
+ *      by the caller's tenant via withTenantDb.
+ *
+ * ADR-041 note: `playbook` and `trigger` remain in the contract's
+ * SEARCHABLE_KINDS, but automations left with the runtime and their tables are
+ * dropped, so neither kind has a Postgres arm any more. Narrowing the enum is a
+ * follow-up in packages/oxagen.
  *
  * Results are merged and sliced to 8 rows as per the spec (§10) performance
  * target. The dedupe is by href, so it only collapses repeats WITHIN a source —
@@ -33,20 +38,6 @@ import { logger } from "./logger";
 
 function runHref(orgSlug: string, workspaceSlug: string, id: string): string {
   return `/${orgSlug}/${workspaceSlug}/activity/runs/${id}`;
-}
-function playbookHref(
-  orgSlug: string,
-  workspaceSlug: string,
-  id: string,
-): string {
-  return `/${orgSlug}/${workspaceSlug}/automation/playbooks/${id}`;
-}
-function triggerHref(
-  orgSlug: string,
-  workspaceSlug: string,
-  id: string,
-): string {
-  return `/${orgSlug}/${workspaceSlug}/automation/triggers/${id}`;
 }
 function agentHref(orgSlug: string, workspaceSlug: string, id: string): string {
   return `/${orgSlug}/${workspaceSlug}/agents/${id}`;
@@ -96,84 +87,6 @@ async function searchRuns(
     scope: `Workspace: ${workspaceSlug}`,
     contextLine: `Status: ${r.status}`,
     href: runHref(orgSlug, workspaceSlug, r.publicId),
-  }));
-}
-
-async function searchPlaybooks(
-  orgId: string,
-  workspaceId: string,
-  query: string,
-  orgSlug: string,
-  workspaceSlug: string,
-): Promise<SearchResultRow[]> {
-  const rows = await withTenantDb(async (tx) => {
-    return tx
-      .select({
-        publicId: schema.playbooks.publicId,
-        name: schema.playbooks.name,
-        status: schema.playbooks.status,
-      })
-      .from(schema.playbooks)
-      .where(
-        and(
-          eq(schema.playbooks.orgId, orgId),
-          eq(schema.playbooks.workspaceId, workspaceId),
-          isNull(schema.playbooks.deletedAt),
-          query.trim()
-            ? or(
-                ilike(schema.playbooks.name, `%${query}%`),
-                ilike(schema.playbooks.slug, `%${query}%`),
-              )
-            : undefined,
-        ),
-      )
-      .limit(8);
-  });
-
-  return rows.map((r) => ({
-    kind: "playbook" as const,
-    id: r.publicId,
-    label: r.name,
-    scope: `Workspace: ${workspaceSlug}`,
-    contextLine: `Status: ${r.status}`,
-    href: playbookHref(orgSlug, workspaceSlug, r.publicId),
-  }));
-}
-
-async function searchTriggers(
-  orgId: string,
-  workspaceId: string,
-  query: string,
-  orgSlug: string,
-  workspaceSlug: string,
-): Promise<SearchResultRow[]> {
-  const rows = await withTenantDb(async (tx) => {
-    return tx
-      .select({
-        publicId: schema.playbookTriggers.publicId,
-        triggerType: schema.playbookTriggers.triggerType,
-        isEnabled: schema.playbookTriggers.isEnabled,
-      })
-      .from(schema.playbookTriggers)
-      .where(
-        and(
-          eq(schema.playbookTriggers.orgId, orgId),
-          eq(schema.playbookTriggers.workspaceId, workspaceId),
-          query.trim()
-            ? ilike(schema.playbookTriggers.triggerType, `%${query}%`)
-            : undefined,
-        ),
-      )
-      .limit(8);
-  });
-
-  return rows.map((r) => ({
-    kind: "trigger" as const,
-    id: r.publicId,
-    label: r.triggerType,
-    scope: `Workspace: ${workspaceSlug}`,
-    contextLine: `${r.isEnabled ? "Enabled" : "Disabled"}`,
-    href: triggerHref(orgSlug, workspaceSlug, r.publicId),
   }));
 }
 
@@ -272,8 +185,6 @@ async function searchOntology(
     // Map entity kinds to Neo4j node labels used in the ontology.
     const labelMap: Partial<Record<SearchableKind, string>> = {
       run: "Run",
-      playbook: "Playbook",
-      trigger: "Trigger",
       agent: "Agent",
       event: "EventDef",
       principal: "Principal",
@@ -326,12 +237,6 @@ export const commandMenuSearchHandler: CapabilityHandler<
       const results = await Promise.all([
         wantKind("run")
           ? searchRuns(orgId, workspaceId, query, orgSlug, workspaceSlug)
-          : [],
-        wantKind("playbook")
-          ? searchPlaybooks(orgId, workspaceId, query, orgSlug, workspaceSlug)
-          : [],
-        wantKind("trigger")
-          ? searchTriggers(orgId, workspaceId, query, orgSlug, workspaceSlug)
           : [],
         wantKind("agent")
           ? searchAgents(orgId, workspaceId, query, orgSlug, workspaceSlug)

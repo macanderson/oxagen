@@ -1,11 +1,6 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-// Deep subpath, not the `@oxagen/agent` root: ADR-041's excision dropped the
-// root re-export of this dependency-free typed-error module along with the
-// subagent errors beside it. The subpath is a declared package export and
-// pulls in no handler code (no drizzle, no withTenantDb) — see the module
-// doc in packages/agent/src/handlers/execution-errors.ts.
-import { isExecutionNotFoundError } from "@oxagen/agent/handlers/execution-errors";
+import { isExecutionNotFoundError } from "@oxagen/agent";
 import { agentDebugTrace } from "@oxagen/oxagen/contracts/agent.debug.trace";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";

@@ -340,7 +340,7 @@ describe("agent.definition.create route", () => {
         retrieval: { strategy: "hybrid" },
         budget: { maxHops: 2, maxNodes: 20 },
       },
-      agentTools: [{ type: "skill", ref: "coding" }],
+      agentTools: [{ type: "function", ref: "list_agent_tools" }],
     },
   };
 
