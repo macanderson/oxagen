@@ -88,7 +88,7 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   };
 });
 
-vi.mock("@oxagen/agent-runner", async (importOriginal) => ({
+vi.mock("@oxagen/run-ledger", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   // The route enters the engine through the executeTurn seam. Stella is the
   // only engine now and a sidecar cannot be spawned in a route test, so the

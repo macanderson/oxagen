@@ -36,7 +36,7 @@ import {
 } from "@oxagen/agent/adapters";
 import { resolveGitHubToken } from "@oxagen/handlers/lib/github-token";
 import { parseMentions } from "@oxagen/ai/mentions";
-import { executeTurn, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/agent-runner";
+import { executeTurn, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/run-ledger";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke, isCodeAgentType } from "@oxagen/oxagen";

@@ -119,7 +119,7 @@ vi.mock("@oxagen/github", () => ({
   GitHubWorkspace: mocks.GitHubWorkspaceMock,
 }));
 
-vi.mock("@oxagen/agent-runner", () => ({
+vi.mock("@oxagen/run-ledger", () => ({
   // The handler enters the pipeline through the executePipelineTurn seam
   // (agent-engine v2 Phase 1); the double keeps runTurn's one-argument
   // contract by dropping the surface tag.

@@ -493,7 +493,7 @@ orgScoped.route("/agent/code/execute", agentCodeExecuteRoute);
 // Durable-run API (agent-engine v2 Phase 2 integration) — flag-gated behind
 // OXAGEN_DURABLE_RUNS; every route under /runs 404s until that var is "1"/
 // "true" (packages/config/src/registry.ts). Enqueue/status/resumable-SSE/
-// cancel over @oxagen/agent-runner's RunStore, not the capability kernel.
+// cancel over @oxagen/run-ledger's RunStore, not the capability kernel.
 orgScoped.route("/runs", agentRunRoute);
 // Durable sandbox sessions (clone → build → snapshot → PR), org+workspace scoped.
 orgScoped.route("/agent/sandbox/start", agentSandboxStartRoute);

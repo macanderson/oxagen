@@ -1,6 +1,0 @@
-schema_version = 1
-kind = "skill"
-name = "style"
-description = "House style for prose and code comments."
-instructions = "Comment the why, not the what."
-references = []

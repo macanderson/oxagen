@@ -16,7 +16,7 @@ import {
   waitForApproval,
 } from "@oxagen/agent";
 import { createPlatformAgentAi } from "@oxagen/agent/adapters";
-import { executeTurn, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/agent-runner";
+import { executeTurn, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/run-ledger";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen/kernel";

@@ -84,7 +84,7 @@ xmcp                    MCP server framework (streamable HTTP)
 | `@oxagen/agent` | api, app | Agent runtime, memory, dispatch |
 | `@oxagen/agent-artifacts` | cli, app, handlers, skills, oxagen | Agent/skill/command artifact format + serialization |
 | `@oxagen/agent-engine` | agent, api | Pipeline, planner, fleet, evaluator |
-| `@oxagen/agent-runner` | api, handlers, inngest-functions, agent, agent-worker | Agent run context, orchestration, Stella client |
+| `@oxagen/run-ledger` | api, handlers, inngest-functions, agent, agent-worker | Agent run context, orchestration, Stella client |
 | `@oxagen/agent-worker` | agent-runner | Long-running worker for agent dispatch |
 | `@oxagen/engram` | cli, agent | Local DuckDB memory, context compilation, replay |
 | `@oxagen/ai` | api, app, cli, mcp | AI SDK wrappers, prompt registry |

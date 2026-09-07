@@ -65,7 +65,7 @@
 - Modify: `packages/iam/src/bootstrap.ts`
 - Modify: `apps/api/src/routes/v1/agent.run.ts`
 - Modify: `apps/api/src/__tests__/routes.agent-run.test.ts`
-- Modify: `packages/agent-runner/src/{execute-turn,run-store}.ts`
+- Modify: `packages/run-ledger/src/{execute-turn,run-store}.ts`
 - Modify their co-located tests.
 
 **Interfaces:** `RunSpecV2 { version: 2; agentArtifact; input; principalRef; delegationRef?; ... }`; injected `RunPrincipalResolver` reuses the IAM spine without adding a direct agent-to-IAM dependency cycle.
@@ -108,7 +108,7 @@
 **Files:**
 - Modify: `packages/database/src/schema/agent.ts`
 - Create migration: `packages/database/atlas/migrations/20260721190000_agent_lifecycle_outbox.sql`
-- Modify: `packages/agent-runner/src/run-store.ts`
+- Modify: `packages/run-ledger/src/run-store.ts`
 - Modify: `packages/agent-worker/src/{types,terminal,worker}.ts`
 - Create: `packages/inngest-functions/src/functions/agent.lifecycle-after-turn.ts`
 - Create corresponding focused tests.

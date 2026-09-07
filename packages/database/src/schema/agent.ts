@@ -798,7 +798,7 @@ export const fileLockFences = agentSchema.table(
 
 // ── Durable agent runs (agent-engine v2 Phase 2a; docs/specs/agent-engine-v2)
 //
-// The run row that packages/agent-runner's executeTurn persists to starting
+// The run row that packages/run-ledger's executeTurn persists to starting
 // in Phase 2 (plan.md): one row per turn, across every surface. `surface`
 // mirrors agent-runner's PlatformSurface union (execute-turn.ts) so the row
 // and the seam can never drift into two vocabularies for the same thing.

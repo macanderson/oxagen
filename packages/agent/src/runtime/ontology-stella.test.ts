@@ -7,7 +7,7 @@
  * REAL: the capability registry (the shipped `query_ontology` contract, its Zod
  * input schema, its risk metadata), `materializeTools`' filtering and tool
  * construction, the mutating classification that decides Stella's dispatch bit,
- * and `@oxagen/agent-runner/stella`'s `toToolSchemas` / `executeToolRequest` —
+ * and `@oxagen/run-ledger/stella`'s `toToolSchemas` / `executeToolRequest` —
  * the two functions that turn a host `ToolSet` into what the engine is
  * advertised and turn an engine `tool_request` back into a host tool call.
  *
@@ -17,7 +17,7 @@
  * the engine holds no credential, and every graph read re-enters the host where
  * IAM, billing, entitlement and the decision-rules gate live.
  *
- * The sidecar transport is deliberately not exercised — `@oxagen/agent-runner`
+ * The sidecar transport is deliberately not exercised — `@oxagen/run-ledger`
  * already covers the SSE stream and reverse-request dispatch against a scripted
  * engine. What nothing covered until now is the COMPOSITION: that a real,
  * shipped ontology contract survives materialization, reaches the engine as a
@@ -28,7 +28,7 @@ import {
   executeToolRequest,
   mutatingToolSet,
   toToolSchemas,
-} from "@oxagen/agent-runner/stella";
+} from "@oxagen/run-ledger/stella";
 import type { CapabilityContext } from "../types";
 
 // ── Seams the graph read does not need, stubbed so the test is hermetic ──────

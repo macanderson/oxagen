@@ -146,7 +146,7 @@ export type ModelTier = (typeof modelTierEnum.enumValues)[number];
 
 // ── Agent-engine v2 durable-run row types (Phase 2a) ─────────────────────────
 // docs/specs/agent-engine-v2/plan.md Phase 2 — the run row + append-only
-// event log that packages/agent-runner's executeTurn persists to.
+// event log that packages/run-ledger's executeTurn persists to.
 
 /** Full SELECT row from `agent.agent_runs`. */
 export type AgentRunRow = InferSelectModel<typeof agentRuns>;

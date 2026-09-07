@@ -1,6 +1,0 @@
-schema_version = 1
-kind = "skill"
-name = "ingestion"
-description = "How to drive the ingestion pipeline."
-instructions = "Ingest sources in batches; never one row at a time."
-references = []

@@ -108,7 +108,7 @@ export const SECURITY_EVENT_TYPES = [
   //                             than the seal it was minted for
   //
   // Only the first is spelled by live code (EVENT_SEQUENCE_CONFLICT_EVENT in
-  // packages/agent-runner/src/run-store.ts). The other three are RESERVED — no
+  // packages/run-ledger/src/run-store.ts). The other three are RESERVED — no
   // emitter: the detectors that would raise them are not yet wired.
   "agent_run.event_sequence_conflict",
   "agent_run.forged_decision_reference",

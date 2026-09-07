@@ -6,8 +6,8 @@
  * Covers: the OXAGEN_DURABLE_RUNS flag gate (404 when off), the exact
  * RunSpec v1 shape enqueueRun is called with, status read (200/404), SSE
  * replay honoring `after` + terminal `done` emission, and the cancel path.
- * @oxagen/agent-runner's RunStore is mocked (house style — mirrors
- * a2a/bridge.test.ts's `@oxagen/agent-runner` mock); @oxagen/tenancy's
+ * @oxagen/run-ledger's RunStore is mocked (house style — mirrors
+ * a2a/bridge.test.ts's `@oxagen/run-ledger` mock); @oxagen/tenancy's
  * runInTenantScope is a passthrough (mirrors chat.stream.test.ts).
  */
 
@@ -35,7 +35,7 @@ vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: mocks.runInTenantScope,
 }));
 
-vi.mock("@oxagen/agent-runner", async () => {
+vi.mock("@oxagen/run-ledger", async () => {
   // `buildLegacyRunSpecV1` is the SHARED spec builder, not an incidental
   // helper — mocking it away would let this suite pass while the route and the
   // worker's parser disagreed about the enqueued shape, which is exactly the
@@ -44,8 +44,8 @@ vi.mock("@oxagen/agent-runner", async () => {
   // run-store.ts and therefore @oxagen/database, which this suite has no
   // business loading.
   const actual = await vi.importActual<
-    typeof import("@oxagen/agent-runner/run-spec-v1-legacy")
-  >("@oxagen/agent-runner/run-spec-v1-legacy");
+    typeof import("@oxagen/run-ledger/run-spec-v1-legacy")
+  >("@oxagen/run-ledger/run-spec-v1-legacy");
   return {
     buildLegacyRunSpecV1: actual.buildLegacyRunSpecV1,
     // Read at module scope by @oxagen/inngest-functions' lease sweeper, which
@@ -93,7 +93,7 @@ import {
   setRunSseTimingForTests,
   resetRunSseTimingForTests,
 } from "../routes/v1/agent.run";
-import type { RunSummary } from "@oxagen/agent-runner";
+import type { RunSummary } from "@oxagen/run-ledger";
 
 const BASE = "/v1/test-org/test-ws";
 

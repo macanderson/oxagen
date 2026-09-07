@@ -1476,7 +1476,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "GET /runs/:publicId, GET /runs/:publicId/events resumable SSE, POST /runs/:publicId/cancel) " +
       "under apps/api's /v1/:org_slug/:workspace_slug scope (agent-engine v2 Phase 2 integration, " +
       "docs/specs/agent-engine-v2/plan.md). OFF by default: every route under /runs 404s until this " +
-      "is set. Enqueues via @oxagen/agent-runner's RunStore (agent.agent_runs / agent.agent_run_events) " +
+      "is set. Enqueues via @oxagen/run-ledger's RunStore (agent.agent_runs / agent.agent_run_events) " +
       "— the durable worker that actually executes a claimed run is separate, dispatch-only wiring.",
     secret: false,
     clientExposed: false,

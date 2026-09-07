@@ -28,7 +28,7 @@
     "@opentelemetry/api": "1.9.1",
     "@oxagen/agent-artifacts": "workspace:*",
     "@oxagen/agent-engine": "workspace:*",
-    "@oxagen/agent-runner": "workspace:*",
+    "@oxagen/run-ledger": "workspace:*",
     "@oxagen/ai": "workspace:*",
     "@oxagen/billing": "workspace:*",
     "@oxagen/config": "workspace:*",

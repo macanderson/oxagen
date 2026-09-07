@@ -1,9 +1,0 @@
-schema_version = 1
-kind = "agent"
-name = "release-captain"
-description = "Drives the release checklist."
-model = "fast"
-developer_instructions = "Run the release checklist end to end."
-tools = [ "read_file", "list_dir", "glob", "grep", "bash" ]
-skills = []
-unresolved_tools = [ "Deploy", "mcp__internal__ship" ]
