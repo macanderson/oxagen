@@ -1,7 +1,7 @@
 {
   "name": "@oxagen/cli",
   "version": "2.1.1",
-  "description": "Oxagen platform CLI — workspace, context engine, and ops (agentic coding lives in the stella CLI)",
+  "description": "Oxagen platform CLI \u2014 workspace, context engine, and ops (agentic coding lives in the stella CLI)",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
@@ -44,9 +44,7 @@
     "@ai-sdk/openai-compatible": "3.0.5",
     "@ai-sdk/provider": "4.0.2",
     "@modelcontextprotocol/sdk": "1.29.0",
-    "@oxagen/agent-engine": "workspace:*",
     "@oxagen/ai": "workspace:*",
-    "@oxagen/agent-artifacts": "workspace:*",
     "@oxagen/billing": "workspace:*",
     "@oxagen/mcp-config": "workspace:*",
     "ai": "7.0.14",

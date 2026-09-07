@@ -1,5 +1,4 @@
 import type { z } from "zod";
-import type { LifecycleEvent } from "@oxagen/agent-artifacts";
 // Type-only imports: `AgentRunIAMContext` is referenced by CapabilityContext and
 // `AuthorizationDecisionRef` by the authorization-decision seam below, but neither
 // was imported when agent RBAC landed, leaving this package's typecheck red.
@@ -96,6 +95,13 @@ export interface CapabilityAgentMetadata {
   riskLevel?: RiskLevel;
   category?: string;
 }
+
+/**
+ * A lifecycle event name a capability may be invoked on out-of-model. The
+ * enumeration used to live in `@oxagen/agent-artifacts` (removed in ADR-041);
+ * the kernel only needs the gate, so the name is an opaque string here.
+ */
+export type LifecycleEvent = string;
 
 export interface CapabilityLifecycleMetadata {
   allowedEvents: readonly LifecycleEvent[];

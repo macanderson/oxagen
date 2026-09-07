@@ -2,11 +2,6 @@ import {
   oxagenPluginManifestSchema,
   type OxagenPluginManifest,
 } from "./manifest";
-import { mediaVideoManifest } from "./catalog/media-video/manifest";
-import { mediaImageManifest } from "./catalog/media-image/manifest";
-import { mediaSvgManifest } from "./catalog/media-svg/manifest";
-import { documentsManifest } from "./catalog/documents/manifest";
-import { sweBenchEvalsManifest } from "./catalog/swe-bench-evals/manifest";
 import { listCapabilities } from "../registry";
 
 // ── Plugin registry — bundler double-eval safety ─────────────────────────────
@@ -37,11 +32,9 @@ function buildRegistry(): {
   const contractIndex = new Map<string, OxagenPluginManifest>();
 
   const allManifests: OxagenPluginManifest[] = [
-    mediaVideoManifest,
-    mediaImageManifest,
-    mediaSvgManifest,
-    documentsManifest,
-    sweBenchEvalsManifest,
+    // No built-in capability packs ship today: the media, documents and
+    // swe-bench packs left with the agent runtime (ADR-041). Customer packs
+    // register through the plugin catalog (ADR-034).
   ];
 
   for (const raw of allManifests) {
