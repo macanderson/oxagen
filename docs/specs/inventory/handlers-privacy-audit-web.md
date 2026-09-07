@@ -1,10 +1,15 @@
 # Spec: handlers-privacy-audit-web
 
 > Auto-extracted by spec-miner. Last mined: 2026-06-20.
-> Source: privacy.data.export.ts, privacy.data.erase.ts, audit.log.query.ts, notifications.list.ts, notifications.mark.ts, web.fetch.ts, web.search.ts, prompt.settings.read.ts, prompt.settings.write.ts
+> Source: privacy.data.export.ts, privacy.data.erase.ts, audit.log.query.ts, notifications.list.ts, notifications.mark.ts, prompt.settings.read.ts, prompt.settings.write.ts
 > Last verified: 2026-06-20 (commit 2f628504)
+>
+> **2026-09-07 note:** [ADR-041](../../adr/ADR-041-runtime-excision.md) deleted
+> `web.fetch`/`web.search` (and the `@oxagen/web` package they lived in); their
+> Requirement/Invariant sections have been removed from this file rather than
+> kept as dead prose.
 
-Behavioral specs for privacy/GDPR handlers (data export, data erasure), audit-log query, notifications list/mark, web fetch/search (SSRF protections), and workspace-scoped prompt settings (read/write with enterprise tier gating).
+Behavioral specs for privacy/GDPR handlers (data export, data erasure), audit-log query, notifications list/mark, and workspace-scoped prompt settings (read/write with enterprise tier gating).
 
 ---
 
@@ -261,97 +266,6 @@ EVERY notifications.mark update MUST include WHERE conditions: publicId=id AND u
 
 ---
 
-### Requirement: Web fetch with SSRF protection and content extraction
-
-<!-- id: webFetchHandler.execute -->
-<!-- entities: URL, HTTPResponse -->
-<!-- enforced: webFetchHandler() -->
-<!-- test: web.fetch.test.ts -->
-
-Fetch a URL and optionally extract clean markdown content. The handler enforces strict SSRF protection: only http:// and https:// schemes are allowed. Content extraction removes script, style, nav, footer, header blocks and converts HTML to readable markdown.
-
-#### Scenario: Fetch with markdown extraction (default)
-<!-- test: web.fetch.test.ts (returns result matching the contract output shape) -->
-- **WHEN** user calls web.fetch with url="https://example.com", extractMarkdown=true (default), timeout=10000 (default)
-- **THEN** validate URL scheme is http:// or https://; set AbortController timeout; fetch with User-Agent and Accept headers; parse response.text(); extract markdown via extractMarkdownFromHtml(); return {url, title, content (markdown), wordCount, fetchedAt (ISO8601), statusCode}
-
-#### Scenario: Fetch raw HTML without extraction
-<!-- test: web.fetch.test.ts (passes extractMarkdown=false through to webFetch) -->
-- **WHEN** extractMarkdown=false
-- **THEN** fetch URL; return response.text() as-is (raw HTML); wordCount counted from raw text; title=""; return {url, title="", content (HTML), wordCount, fetchedAt, statusCode}
-
-#### Scenario: Scheme validation rejects non-http(s)
-<!-- test: web.fetch.test.ts (propagates scheme validation errors) -->
-- **WHEN** url="ftp://example.com/file" or any non-http(s) scheme
-- **THEN** throw error: "web.fetch: URL scheme \"<scheme>:\" is not allowed — only http:// and https:// are supported"
-
-#### Scenario: Timeout enforcement
-<!-- test: web.fetch.test.ts (propagates timeout errors) -->
-- **WHEN** fetch request exceeds timeout (e.g., 10000ms)
-- **THEN** AbortController.signal aborts; catch AbortError; throw error: "web.fetch: request timed out after <timeout>ms for URL \"<url>\""
-
-#### Scenario: Invalid URL format
-<!-- test: (pending) -->
-- **WHEN** url is malformed (e.g., "ht!tp://bad")
-- **THEN** new URL(options.url) throws; catch and throw: "web.fetch: invalid URL \"<url>\""
-
----
-
-### Invariant: HTML stripping removes dangerous blocks
-
-<!-- entities: URL, HTMLContent -->
-<!-- enforced: extractMarkdownFromHtml() -->
-<!-- verified_by: web.fetch.test.ts (HTML stripping suite) -->
-
-The extractMarkdownFromHtml function MUST remove entire <script>, <style>, <nav>, <footer>, and <header> blocks (content and tags) before processing. This prevents XSS and obfuscated content injection. All remaining HTML tags are then stripped, leaving only text and markdown-converted elements.
-
-> Last verified: 2026-06-20 (commit 2f628504)
-
----
-
-### Invariant: Only http and https schemes allowed
-
-<!-- entities: URL, HTTPRequest -->
-<!-- enforced: webFetchHandler() -->
-<!-- verified_by: web.fetch.test.ts (scheme validation) -->
-
-EVERY web.fetch request MUST validate that the URL scheme is http:// or https:// before any network call. SSRF attacks (file://, gopher://, data:, etc.) are blocked at the scheme check. No exceptions.
-
-> Last verified: 2026-06-20 (commit 2f628504)
-
----
-
-### Requirement: Web search with domain filtering and result mapping
-
-<!-- id: webSearchHandler.execute -->
-<!-- entities: SearchQuery, SearchResult, Domain -->
-<!-- enforced: webSearchHandler() -->
-<!-- test: web.search.test.ts -->
-
-User queries the web (via Tavily API) with optional domain inclusion/exclusion filters and search-depth control. The handler forwards parameters and maps Tavily results to the contract output shape.
-
-#### Scenario: Basic web search with defaults
-<!-- test: web.search.test.ts (returns mapped results matching the contract output shape) -->
-- **WHEN** user calls web.search with query="example query", maxResults defaults to 5, searchDepth defaults to "basic"
-- **THEN** call webSearch({query, maxResults: 5, searchDepth: "basic", includeDomains: undefined, excludeDomains: undefined}); map Tavily results array to {results: [{title, url, content, score, publishedDate?}, ...], totalResults: count, searchId: unique_id}
-
-#### Scenario: Advanced search with domain filters
-<!-- test: web.search.test.ts (forwards includeDomains and excludeDomains to webSearch) -->
-- **WHEN** includeDomains=["github.com"], excludeDomains=["twitter.com"], searchDepth="advanced"
-- **THEN** forward all three to webSearch(); return filtered and deep-searched results
-
-#### Scenario: Empty results
-<!-- test: web.search.test.ts (returns empty results without error) -->
-- **WHEN** query matches no pages
-- **THEN** return {results: [], totalResults: 0, searchId: unique_id}
-
-#### Scenario: Missing Tavily API key
-<!-- test: web.search.test.ts (propagates errors from webSearch — missing API key) -->
-- **WHEN** TAVILY_API_KEY environment variable is not set
-- **THEN** webSearch() throws; propagate error: "web.search: TAVILY_API_KEY environment variable is required but not set"
-
----
-
 ### Requirement: Workspace-scoped prompt settings read
 
 <!-- id: promptSettingsReadHandler.execute -->
@@ -459,5 +373,3 @@ EVERY prompt settings write operation MUST read workspace.settings (the full set
 ---
 
 <!-- uncertainty: privacy.data.export and privacy.data.erase lack unit tests in the codebase. The contracts define the input/output shapes and access control rules, and the handlers implement the queuing logic, but no test file was found. Behaviors are extracted from code analysis alone. -->
-
-<!-- uncertainty: web.search handler does not validate or document the TAVILY_API_KEY check — it is delegated to the @oxagen/web package. Behavior is inferred from test comments and error propagation. -->

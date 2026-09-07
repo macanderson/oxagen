@@ -11,13 +11,13 @@ Behavioral specs mined from existing code by the `spec-miner` agent (flat OpenSp
 - [inngest-billing-privacy-playbooks](inngest-billing-privacy-playbooks.md) — usage rollup, dunning, Stripe sync, GDPR erasure/export, audit rollover, playbook runs.
 
 ## packages/handlers
-- [handlers-agent-chat](handlers-agent-chat.md) — agent compose/execution, chat send, conversation lifecycle.
+- [handlers-agent-chat](handlers-agent-chat.md) — agent execution recording, chat send, conversation lifecycle.
 - [handlers-iam-org-workspace](handlers-iam-org-workspace.md) — org/workspace lifecycle, membership, roles, invitations, IAM provisioning, user prefs.
 - [handlers-billing-apikeys](handlers-billing-apikeys.md) — credits/subscription, API-key create/rotate/revoke.
 - [handlers-connections-integrations](handlers-connections-integrations.md) — connector/integration/repo lifecycle, mappings, sync (Postgres+Neo4j dual-write).
 - [handlers-graph-ontology](handlers-graph-ontology.md) — Neo4j node/edge/ingest/cypher, ontology queries, semantic-edge approval.
 - [handlers-plugins](handlers-plugins.md) — marketplace browse, org/workspace install & enablement, registry, credentials, schema, entitlements.
-- [handlers-privacy-audit-web](handlers-privacy-audit-web.md) — GDPR export/erase, audit-log query, notifications, web fetch/search, prompt settings.
+- [handlers-privacy-audit-web](handlers-privacy-audit-web.md) — GDPR export/erase, audit-log query, notifications, prompt settings.
 
 ## apps/app
 - [app-auth-onboarding](app-auth-onboarding.md) — Better Auth login/signup/reset/verify flows, org onboarding.

@@ -42,17 +42,13 @@ POST /api/v1/chat/stream accepts JSON body with user message content, optional c
 - **WHEN** resolveOrg(orgSlug) fails or assertOrgMember fails or resolveWorkspace fails
 - **THEN** returns 404 Org or workspace not found
 
-#### Scenario: User requests image generation instead of text agent
-- **WHEN** generate set to "image", mediaModel or mediaTier provided
-- **THEN** resolves media model (explicit mediaModel → effective workspace/user default → tier default), calls streamMediaGeneration with kind="image", returns image-preview component SSE event stream
-
-#### Scenario: User requests video generation (async)
-- **WHEN** generate set to "video", mediaTier or mediaModel provided
-- **THEN** resolves media model, creates pending generated_assets row, dispatches agent/video.render Inngest job, returns video-result component SSE that polls for completion
-
-#### Scenario: Page context with fillable form is provided
-- **WHEN** pageContext includes fillableForm with formId, title, fields, form fields array has ≤60 entries, all field names/labels ≤256 chars, entitySummary ≤500 chars, route ≤2048 chars
-- **THEN** registers request-scoped page_form_fill tool, appends form metadata to system prompt, tool routes form.fill invoke through kernel for IAM + metering
+> **2026-09-07 note:** [ADR-041](../../adr/ADR-041-runtime-excision.md) deleted
+> `image.generate`/`video.generate`/`form.fill` and `streamMediaGeneration`;
+> the chat route no longer accepts `generate: "image"/"video"` or registers a
+> `page_form_fill` tool — the two scenarios below describe removed behavior.
+> A stale comment referencing "Page-form-fill tool" still exists around line
+> 836 of `apps/app/src/app/api/v1/chat/stream/route.ts` with no matching tool
+> registration nearby — flagged as dead-comment residue for cleanup.
 
 #### Scenario: Page context is null or absent
 - **WHEN** pageContext null or omitted
@@ -463,8 +459,6 @@ POST /api/v1/chat/stream persists the assistant reply to messages, then updates 
 POST /api/v1/chat/stream wraps assistant-reply persistence in try/catch; if DB fails, the error is logged but does NOT corrupt the SSE response the client already consumed. autoTitleConversation() is fire-and-forget (void return) so any model/DB error is swallowed; title generation failure never blocks or delays the chat turn.
 
 ---
-
-<!-- uncertainty: Media generation fully specified in streamMediaGeneration helper (image synchronous via generateImageFor, video asynchronous via pending asset + Inngest dispatch); full event flow, error handling, and component rendering logic live in the helper. The route handler does not specify model selection fallback chains (basic vs advanced tier → default env vars) — those are in generateImageFor/videoTierModelId. Image placeholder rendering on model error is specified; video polling mechanism is not (client-side behavior). -->
 
 <!-- uncertainty: MCP OAuth authorize/callback use DbOAuthClientProvider (from @oxagen/plugins) to manage PKCE state + OAuth flow with the MCP SDK's mcpAuth function. The state storage mechanism (ephemeral vs durable, timeout duration) and token encryption are not specified in these route handlers — they are delegated to DbOAuthClientProvider and @oxagen/plugins. The safeFetch wrapper works around Next.js fetch behavior (per-URL dedup locks, Response.body.cancel() hangs) but does not specify why the deadlock occurs or when it was introduced. -->
 
