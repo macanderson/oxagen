@@ -25,13 +25,11 @@ import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { DbMessageRow, ConversationRow } from "@oxagen/database";
 import { getSessionOrRedirect } from "@/lib/session";
-import type { PlanStep } from "@/components/chat/stream-event-types";
 import type { ChatMessage } from "@/components/chat/chat-shell";
 import { walkActiveBranch } from "./[workspaceSlug]/_shared/walk-active-branch";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
 import { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.resolve";
 import { agentMcpConsentResolve } from "@oxagen/oxagen/contracts/agent.mcp_consent.resolve";
-import { agentPlanApprove } from "@oxagen/oxagen/contracts/agent.plan.approve";
 import { invoke } from "@oxagen/oxagen";
 import { logger } from "@oxagen/handlers/logger";
 
@@ -537,71 +535,6 @@ export async function wandResolveConsentAction(
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Failed to resolve consent",
-    };
-  }
-}
-
-// ---------------------------------------------------------------------------
-// wandResolvePlanAction
-// ---------------------------------------------------------------------------
-
-export async function wandResolvePlanAction(
-  orgSlug: string,
-  workspaceSlug: string,
-  planId: string,
-  decision: "approved" | "denied" | "amended",
-  amendedSteps?: PlanStep[],
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const session = await getSessionOrRedirect();
-
-  const resolved = await resolveWorkspaceFromSlugs(orgSlug, workspaceSlug);
-  if (!resolved) return { ok: false, error: "No active workspace." };
-  const { orgId, workspaceId } = resolved;
-
-  // Assert user is a member of the workspace (explicit IAM gate in apps/app —
-  // see wandResolveApprovalAction above for why this cannot rely on invoke()'s
-  // kernel IAM check from this surface).
-  const isMember = await assertWorkspaceMember(
-    orgId,
-    workspaceId,
-    session.user.id,
-  );
-  if (!isMember)
-    return { ok: false, error: "You don't have access to this workspace." };
-
-  const verbMap: Record<typeof decision, "approve" | "deny" | "amend"> = {
-    approved: "approve",
-    denied: "deny",
-    amended: "amend",
-  };
-  const parsed = agentPlanApprove.input.safeParse({
-    planId,
-    decision: verbMap[decision],
-    amendedSteps: amendedSteps?.map((s) => ({
-      id: s.id,
-      summary: s.summary,
-      intent: s.intent,
-      capability: s.capability,
-      inputPreview: s.inputPreview ?? null,
-      dependsOn: s.dependsOn,
-    })),
-  });
-  if (!parsed.success)
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
-
-  try {
-    await invoke(
-      "approve_plan",
-      parsed.data,
-      buildCapabilityContext({ orgId, workspaceId, userId: session.user.id }),
-      { surface: "agent" },
-    );
-    revalidatePath(`/${orgSlug}/${workspaceSlug}/sessions`);
-    return { ok: true };
-  } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Failed to resolve plan",
     };
   }
 }

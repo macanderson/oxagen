@@ -4,7 +4,6 @@
  *
  * The hook returns exactly 3 suggestions derived from the current screen context:
  *   - the registered page entity (kind + label)
- *   - the registered fillable form (title + fields)
  *   - the current pathname (route section: settings, billing, conversation, etc.)
  *
  * Design contract (stable — consumed by the chat agent's chip renderer):
@@ -21,7 +20,7 @@
 
 import { usePathname } from "next/navigation";
 import { usePageContext } from "./index";
-import type { PageEntity, RegisteredFillableForm } from "./types";
+import type { PageEntity } from "./types";
 
 // ---------------------------------------------------------------------------
 // Public type — the stable return-type contract for the chat agent.
@@ -59,7 +58,6 @@ export interface ConversationMessageSummary {
 export interface SuggestionCtx {
   pathname: string;
   entity: PageEntity | null;
-  fillableForm: RegisteredFillableForm | null;
   /**
    * Recent conversation messages (last ≤6) for context-aware suggestions.
    * When provided and non-empty the suggestions shift from page-context
@@ -255,50 +253,26 @@ export function deriveConversationSuggestions(
  *   1. When conversation history is present (multi-turn), derive continuation
  *      suggestions from the last assistant reply — these are more relevant than
  *      page-context defaults mid-conversation.
- *   2. If a fillable form is registered, one chip always targets form-fill.
- *   3. Remaining slots are filled from entity + route context.
- *   4. Fallback chips are provided when nothing is registered.
+ *   2. Remaining slots are filled from entity + route context.
+ *   3. Fallback chips are provided when nothing is registered.
  *
  * Always returns exactly 3 items.
  */
 export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
-  const { pathname, entity, fillableForm, conversationHistory } = ctx;
+  const { pathname, entity, conversationHistory } = ctx;
   const section = classifyRoute(pathname);
 
   // ── Conversation-continuation mode (multi-turn) ───────────────────────────
   // When there are messages in the conversation, derive continuation suggestions
   // from the conversation history instead of the page-context defaults.
-  // A fillable form chip is still prepended if registered, since form-fill is
-  // always actionable regardless of conversation state.
   if (conversationHistory && conversationHistory.length > 0) {
     const convSuggestions = deriveConversationSuggestions(conversationHistory);
-    if (convSuggestions.length === 3) {
-      if (fillableForm) {
-        // Replace the last chip with the form-fill chip so form-fill stays accessible.
-        return [
-          {
-            label: `Fill ${fillableForm.title}`,
-            prompt: `Fill in the ${fillableForm.title} form for me based on the context and best practices.`,
-          },
-          convSuggestions[0]!,
-          convSuggestions[1]!,
-        ];
-      }
-      return convSuggestions;
-    }
+    if (convSuggestions.length === 3) return convSuggestions;
   }
 
   const suggestions: SuggestedPrompt[] = [];
 
-  // ── Slot 1: fill chip (when a form is registered) ─────────────────────────
-  if (fillableForm) {
-    suggestions.push({
-      label: `Fill ${fillableForm.title}`,
-      prompt: `Fill in the ${fillableForm.title} form for me based on the context and best practices.`,
-    });
-  }
-
-  // ── Slot 2: entity-aware chip ─────────────────────────────────────────────
+  // ── Slot 1: entity-aware chip ─────────────────────────────────────────────
   if (entity) {
     const entityLabel = entity.label ?? entity.kind;
     switch (entity.kind) {
@@ -329,7 +303,7 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
     }
   }
 
-  // ── Slot 3 (and fill if needed): route-section chips ─────────────────────
+  // ── Slot 2: route-section chips ──────────────────────────────────────────
   switch (section) {
     case "settings":
       suggestions.push({
@@ -337,13 +311,11 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
         prompt:
           "Review the current settings on this page and suggest optimal values based on best practices.",
       });
-      if (!fillableForm) {
-        suggestions.push({
-          label: "Explain These Settings",
-          prompt:
-            "Explain what each setting on this page does and how it affects my workspace.",
-        });
-      }
+      suggestions.push({
+        label: "Explain These Settings",
+        prompt:
+          "Explain what each setting on this page does and how it affects my workspace.",
+      });
       break;
 
     case "billing":
@@ -483,7 +455,7 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
 /**
  * Returns exactly 3 context-aware suggested prompts for the current screen.
  *
- * Consumes `PageContext` (entity + fillableForm) and `usePathname()`.
+ * Consumes `PageContext` (entity) and `usePathname()`.
  * Must be called inside a `PageContextProvider` and a Next.js route.
  *
  * @param conversationHistory  Optional recent conversation messages. When
@@ -500,12 +472,7 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
 export function useSuggestedPrompts(
   conversationHistory?: ConversationMessageSummary[],
 ): SuggestedPrompt[] {
-  const { entity, fillableForm } = usePageContext();
+  const { entity } = usePageContext();
   const pathname = usePathname();
-  return deriveSuggestions({
-    pathname,
-    entity,
-    fillableForm,
-    conversationHistory,
-  });
+  return deriveSuggestions({ pathname, entity, conversationHistory });
 }

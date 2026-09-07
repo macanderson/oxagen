@@ -5,7 +5,6 @@ import { AppShell } from "@/components/shell/app-shell";
 import type { ShellNavData } from "@/components/shell/shell-nav-slots";
 import { PageContextProvider } from "@/lib/page-context";
 import { CommandMenu } from "@/components/shell/ask/command-menu";
-import { FillOverlay } from "@/components/shell/ask/fill-overlay";
 import type { ResolvedOrg } from "@/lib/resolve-org";
 
 export default async function AccountLayout({
@@ -93,7 +92,6 @@ export default async function AccountLayout({
       <CommandMenu ctx={ctx} />
 
       {/* Fill overlay — renders AI form-fill suggestions from AskBar */}
-      <FillOverlay />
     </PageContextProvider>
   );
 }

@@ -1,10 +1,7 @@
 import { ConversationPage } from "../_shared/conversation-page";
 import {
-  cancelBackgroundTaskAction,
-  readBackgroundTaskAction,
   resolveApprovalAction,
   resolveConsentAction,
-  resolvePlanAction,
   sendMessageAction,
 } from "./actions";
 
@@ -29,9 +26,6 @@ export default async function SessionsPage({
             sendMessageAction,
             resolveApprovalAction,
             resolveConsentAction,
-            resolvePlanAction,
-            cancelBackgroundTaskAction,
-            readBackgroundTaskAction,
           }}
         />
       </div>
