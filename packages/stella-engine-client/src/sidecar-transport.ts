@@ -70,17 +70,25 @@ export type ToolHandler = (
  * What {@link StellaSidecarClient.runTurn} does when a reverse-request handler
  * rejects.
  *
- * - `"throw"` (default) — collect the rejection and rethrow it once the stream
- *   ends. Right for a test or a script driving a scripted turn, where a handler
- *   rejection is a bug in the harness and should surface as itself.
+ * - `"throw"` (default) — cancel the turn, then collect the rejection and
+ *   rethrow it once the stream ends. Right for a test or a script driving a
+ *   scripted turn, where a handler rejection is a bug in the harness and should
+ *   surface as itself. The cancel is what makes "once the stream ends" prompt:
+ *   it unwinds the turn the engine is parked on, so the stream ends at request
+ *   latency rather than at the reverse-request deadline (#1279).
  * - `"report"` — tell the engine. A provider rejection is classified into a
  *   {@link ProviderError} and POSTed as the error arm; a tool rejection is
  *   POSTed as the `error` arm of {@link ToolOutput}. Right for a production
  *   host, because both failures are ones the engine is built to handle: a
  *   `transport`/`rate_limited` provider error is retried with backoff, and a
  *   failed tool is surfaced to the model as text it can react to. Under
- *   `"throw"` the engine learns nothing and the turn stalls until its
- *   reverse-request deadline, converting a retryable blip into a dead turn.
+ *   `"throw"` the engine learns nothing — the turn is cancelled rather than
+ *   retried, which converts a retryable blip into a dead turn. Reporting is
+ *   what a production host wants for exactly that reason.
+ *
+ * Either arm cancels when the reverse request goes unanswered, including a
+ * `"report"` whose own POST fails: at that point the host can neither answer
+ * nor report, and the engine would otherwise wait out its deadline.
  */
 export type ReverseRequestFailureMode = "throw" | "report";
 
@@ -148,6 +156,29 @@ export class SidecarHttpError extends Error {
     super(`${operation} failed: ${status} ${body}`);
     this.name = "SidecarHttpError";
   }
+}
+
+/**
+ * True for the answer a result POST gets when the turn it belongs to has
+ * already ended.
+ *
+ * Reverse requests are dispatched without being awaited, so a handler can still
+ * be running when the engine emits its terminal frame. When the stream ends the
+ * turn leaves the registry, and the late POST answers 404 — or 409 for a
+ * request id the turn no longer recognises. Neither says anything went wrong:
+ * the handler finished after the turn ended, which is ordinary for a
+ * cancellation and for any engine-side abort with a tool in flight.
+ *
+ * Narrow on purpose. Only these two statuses, only on the two result routes,
+ * and — at the one call site — only once a terminal outcome is in hand. A 404
+ * before the turn ends is a wrong turn id and stays an error (#1349).
+ */
+function isLateResultPost(err: unknown): boolean {
+  return (
+    err instanceof SidecarHttpError &&
+    (err.status === 404 || err.status === 409) &&
+    (err.operation === "provider-result" || err.operation === "tool-result")
+  );
 }
 
 export class StellaSidecarClient {
@@ -321,9 +352,22 @@ export class StellaSidecarClient {
    * `onFailure: "report"` it is POSTed back to the engine instead, which is
    * what a production host wants.
    *
+   * The default arm also cancels the turn as soon as a handler rejects. Without
+   * that the engine stays parked on a reverse request the client has already
+   * given up answering, and both sides wait out
+   * `reverse_request_timeout_ms` — the client because the rethrow cannot
+   * happen until the stream ends, and the stream cannot end until the engine
+   * unwinds (#1279).
+   *
    * One limit of the default arm: only the first collected failure is
    * rethrown. With several tool calls outstanding, the later errors are
    * dropped.
+   *
+   * Either arm can be racing the engine. A handler that finishes after the
+   * terminal frame POSTs into a turn that has left the registry and gets a 404
+   * or 409 back; that is discarded rather than thrown, so a turn cancelled with
+   * a tool in flight resolves with its `aborted` outcome instead of surfacing
+   * an HTTP error for a turn that ended exactly as asked (#1349).
    */
   async runTurn(
     request: TurnRequest,
@@ -340,10 +384,37 @@ export class StellaSidecarClient {
     let toolCalls = 0;
     let outcome: TurnOutcome | undefined;
 
+    // Under the default `throw` arm the client gives up on the turn, but the
+    // engine does not know that: it is parked on a reverse request whose answer
+    // is never coming, and only `reverse_request_timeout_ms` ends it. The
+    // client cannot even report the rejection until the stream ends, which is
+    // the same deadline — so a handler bug cost the full timeout on both sides.
+    // Signalling cancel unwinds the turn, which ends the stream, which is what
+    // lets the rethrow happen at request latency instead (#1279).
+    //
+    // Fire-and-forget and at most once: `cancelTurn` already tolerates a 404,
+    // so racing a turn that ended on its own is harmless, and a cancel that
+    // fails must not replace the handler error the caller actually needs to
+    // see.
+    let cancelSignalled = false;
+    const giveUpOnTurn = (): void => {
+      if (cancelSignalled) return;
+      cancelSignalled = true;
+      void this.cancelTurn(turnId).catch(() => {});
+    };
+
     const track = (work: Promise<void>): void => {
       inFlight.push(
         work.catch((err: unknown) => {
           failures.push(err);
+          // Unconditional, and that is the point. Anything reaching here is a
+          // reverse request the engine never got an answer to — under `report`
+          // a handler failure that WAS reported resolves and never lands in
+          // this catch, so arriving here means the report itself failed. A
+          // host that can neither answer nor report has lost the turn either
+          // way, and leaving it uncancelled costs the reverse-request deadline
+          // in both arms rather than only in `throw` (#1279).
+          giveUpOnTurn();
         }),
       );
     };
@@ -402,8 +473,16 @@ export class StellaSidecarClient {
     }
 
     await Promise.all(inFlight);
-    if (failures.length > 0) {
-      throw failures[0];
+    // A result POST that lands after the turn terminated is the expected
+    // answer, not a failure — the same tolerance `cancelTurn` already applies
+    // to its own 404. Filtered only when an outcome is in hand, so a 404 from a
+    // wrong turn id still surfaces, and only for that shape, so a handler that
+    // genuinely broke is rethrown exactly as before (#1349).
+    const realFailures = outcome
+      ? failures.filter((err) => !isLateResultPost(err))
+      : failures;
+    if (realFailures.length > 0) {
+      throw realFailures[0];
     }
     if (!outcome) {
       throw new Error(
