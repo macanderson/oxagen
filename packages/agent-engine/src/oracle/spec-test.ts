@@ -10,35 +10,14 @@
  * Pure TypeScript, no external deps, no I/O.
  */
 
-// ── Test command detection ─────────────────────────────────────────────────────
+// ── Test command detection ──────────────────────────────
 
-/**
- * Regex matching test/verification commands. Similar to apps/cli/src/agent/best-of-n.ts
- * but excludes linters (eslint, ruff, flake8, pylint, tsc) per F2 spec.
- *
- * Matches (case-insensitive), as whole words anywhere in the command:
- *  - Python: `pytest`, `py.test`, `unittest`, `nose`/`nose2`, `tox` — which also
- *    covers `python -m pytest` / `python -m unittest`; plus `runtests.py`.
- *  - JS/TS: `jest`, `vitest`, `mocha`, `ava`, `karma`, `tap`,
- *    `npm test` / `npm run test`, `pnpm test` / `pnpm run test` /
- *    `pnpm --filter <pkg> test…`, `yarn test`.
- *  - Other ecosystems: `go test`, `cargo test`, `mvn … test`, `gradle`/`gradlew
- *    test`, `rspec`, `phpunit`, `dotnet test`, `ctest`, `rake test`,
- *    `make test` / `make check`.
- *  - Any script path under `.oxagen/scratch/`.
- *
- * Does NOT match plain builds, installs, lints, or greps.
- */
-const TEST_COMMAND_RE =
-  /\b(pytest|py\.test|unittest|nose2?|tox|go test|cargo test|mvn(?:\s+-\S+)*\s+test|gradlew?\s+test|rspec|phpunit|dotnet test|jest|vitest|mocha|ava\b|karma|\btap\b|ctest|rake test|npm (?:run )?test|pnpm (?:run |--filter \S+ )?test\S*|yarn test|make (?:test|check))\b|runtests\.py\b|\.oxagen\/scratch\//i;
-
-/**
- * Returns true if the command looks like a test/repro execution — see
- * {@link TEST_COMMAND_RE} for the full list of runners it recognizes.
- */
-export function isTestLikeCommand(command: string): boolean {
-  return TEST_COMMAND_RE.test(command.trim());
-}
+// Whether a command runs tests is a parse of its argv-0, not a scan of the
+// line: see ./command-runs-tests.ts for why, and for what it admits. It is
+// re-exported here because this module's public surface is what callers have
+// always imported.
+export { isTestLikeCommand } from "./command-runs-tests";
+import { isTestLikeCommand } from "./command-runs-tests";
 
 // ── Normalization ─────────────────────────────────────────────────────────────
 

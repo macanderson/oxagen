@@ -54,8 +54,11 @@ class GateWorkspace implements Workspace {
   ]);
   /** Exit code the witness command returns when the fix is REVERTED. */
   exitWithoutFix: number;
-  constructor(exitWithoutFix: number) {
+  /** When set, the reverted witness run times out instead of exiting. */
+  timeOutWithoutFix: boolean;
+  constructor(exitWithoutFix: number, timeOutWithoutFix = false) {
     this.exitWithoutFix = exitWithoutFix;
+    this.timeOutWithoutFix = timeOutWithoutFix;
   }
   async readFile(p: string): Promise<string> {
     const t = this.files.get(p);
@@ -79,6 +82,9 @@ class GateWorkspace implements Workspace {
   }
   async exec(command: string): Promise<CommandResult> {
     const reverted = this.files.get("src/calc.ts") === ORIGINAL;
+    if (command === WITNESS && reverted && this.timeOutWithoutFix) {
+      return { exitCode: 0, stdout: "", stderr: "", timedOut: true };
+    }
     const exitCode = command === WITNESS && reverted ? this.exitWithoutFix : 0;
     return { exitCode, stdout: "", stderr: "", timedOut: false };
   }
@@ -217,6 +223,35 @@ describe("runTurn — mutation gate wiring", () => {
       "skipped",
     ]);
     expect(stages.some((l) => l.includes("mutation gate"))).toBe(false);
+  });
+
+  // Silence is right when nothing was re-run, and wrong the moment something
+  // was. #1359 and #1362 moved a timeout and a collection error out of
+  // `witnessed`, but the stage line was guarded on `status !== "skipped"` —
+  // the one status those two now carry — so the operator was told nothing at
+  // all about a measurement that had genuinely been attempted and failed.
+  it("says a re-run gate could not check, rather than saying nothing", async () => {
+    const ws = new GateWorkspace(1, true); // the shadow run times out
+    const stages: string[] = [];
+    const result = await runTurn({
+      execute: scriptedEngine,
+      prompt: "fix the answer",
+      workspace: ws,
+      ai: makeAi(),
+      onStage: (e) => stages.push(e.label),
+    });
+
+    expect(result.trace.mutationGates?.map((g) => g.status)).toEqual([
+      "skipped",
+    ]);
+    // The first "mutation gate" line is `onStart`'s "reverting fix…"; the
+    // verdict is the one after it, and it used never to be emitted at all.
+    const line = stages.filter((l) => l.includes("mutation gate")).at(-1);
+    expect(line).toContain("could not check");
+    expect(line).toContain("did not produce a usable result");
+    expect(line).toContain(WITNESS);
+    // A non-answer is not a finding: the verdict is untouched either way.
+    expect(result.trace.finalComplete).toBe(true);
   });
 
   it("is disabled entirely by OXAGEN_MUTATION_VERIFY=0", async () => {

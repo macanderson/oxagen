@@ -42,6 +42,7 @@ import { enhancePrompt } from "../evaluate/prompt-enhancer";
 import { createSpecTestTracker } from "../oracle/spec-test";
 import {
   runMutationGate,
+  describeMutationScore,
   applyGateToVerdict,
   resolveMutationVerifyEnabled,
   type MutationGateResult,
@@ -1236,18 +1237,29 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         },
       );
       mutationGates.push(gate);
-      if (gate.status !== "skipped") {
+      // Report every gate that actually re-ran something. The guard used to
+      // be `status !== "skipped"`, which excluded the only status the third
+      // label below can carry — so a timeout or a collection error, the two
+      // cases #1359 and #1362 moved out of `witnessed`, printed nothing at
+      // all and told the operator *less* than the wrong answer used to.
+      // `runs.length === 0` is the one skip with nothing to say: no witness
+      // command was re-run, so there is no measurement to report as missing.
+      if (gate.runs.length > 0) {
         opts.onStage?.({
           kind: "judge",
+          // A skipped gate is not a vacuous one: it established nothing, and
+          // saying "VACUOUS" would report a non-answer as a finding. Both the
+          // label and the score line below say when a measurement did not
+          // happen rather than printing a number for it (#1351, #1359).
           label:
             gate.status === "witnessed"
               ? "mutation gate: tests fail without the fix — the green is real"
-              : "mutation gate: VACUOUS — tests still pass without the fix",
+              : gate.status === "vacuous"
+                ? "mutation gate: VACUOUS — tests still pass without the fix"
+                : `mutation gate: could not check — ${gate.reason}`,
           detail:
             `${gate.runs.length} witness run(s) · ${gate.durationMs}ms` +
-            (gate.score
-              ? ` · mutant kill rate ${Math.round(gate.score.killRate * 100)}%`
-              : ""),
+            (gate.score ? ` · ${describeMutationScore(gate.score)}` : ""),
         });
         phases.push(
           phaseStat(
