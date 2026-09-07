@@ -193,6 +193,41 @@ describe("newSyntaxErrors identifies an error by its message, not its line", () 
       newSyntaxErrors(before, [...before, "Unexpected end of JSON input"]),
     ).toEqual(["Unexpected end of JSON input"]);
   });
+
+  // #1353's TS-side repro one file type over: a key inserted above a
+  // pre-existing JSON parse fault shifts V8's embedded byte offset, so the
+  // SAME fault must not be reported as newly introduced.
+  it("does not report a pre-existing JSON fault whose offset shifted", () => {
+    expect(
+      newSyntaxErrors(
+        ["Unexpected token } in JSON at position 41"],
+        ["Unexpected token } in JSON at position 58"],
+      ),
+    ).toEqual([]);
+  });
+
+  // Node >=20 additionally appends a `(line N column M)` suffix to the same
+  // message; that must shift-tolerate identically to the bare-offset form.
+  it("does not report a pre-existing JSON fault whose line/column shifted (Node >=20)", () => {
+    expect(
+      newSyntaxErrors(
+        ["Unexpected token } in JSON at position 41 (line 3 column 5)"],
+        ["Unexpected token } in JSON at position 58 (line 4 column 5)"],
+      ),
+    ).toEqual([]);
+  });
+
+  it("still reports a genuinely new JSON fault at a different position", () => {
+    expect(
+      newSyntaxErrors(
+        ["Unexpected token } in JSON at position 41"],
+        [
+          "Unexpected token } in JSON at position 58",
+          "Unexpected token ] in JSON at position 90",
+        ],
+      ),
+    ).toEqual(["Unexpected token ] in JSON at position 90"]);
+  });
 });
 
 /**

@@ -109,17 +109,41 @@ export function checkSyntax(path: string, content: string): SyntaxCheckResult {
 const LINE_PREFIX = /^line \d+: /;
 
 /**
+ * `Unexpected token } in JSON at position 41` → `Unexpected token }`, and
+ * `Unexpected token } in JSON at position 41 (line 3 column 5)` (Node ≥20)
+ * strips the same way. `checkSyntax`'s `.json` branch returns
+ * `JSON.parse`'s message VERBATIM — no `line N:` prefix — and V8 embeds the
+ * byte offset (and, on newer Node, the line/column) it failed at directly in
+ * that message. So a JSON parse error's identity was its position exactly the
+ * way a TS error's was its line number: an edit that inserts a key above a
+ * pre-existing JSON fault shifts the offset, the message text changes, and
+ * `newSyntaxErrors` reported the pre-existing fault as newly introduced —
+ * the same free-pass-inverted shape #1353 names for TypeScript, one file type
+ * over.
+ */
+const JSON_POSITION =
+  /\s+in JSON at position \d+(\s*\(line \d+ column \d+\))?$/;
+
+/** An error message's identity, independent of the position it happens to render at. */
+function errorIdentity(error: string): string {
+  return error.replace(LINE_PREFIX, "").replace(JSON_POSITION, "");
+}
+
+/**
  * The errors present AFTER an edit that were not present BEFORE — only the NEW
  * damage an edit introduces gates the write, so a file that was already broken
  * never blocks an unrelated edit. Pure.
  *
  * Identity is the MESSAGE, not the formatted string, because the formatted
- * string starts with a line number. Comparing those made an error's identity
- * its position, so any edit that shifted lines above a pre-existing error
- * renamed it: adding three imports at the top moved an unterminated string from
- * line 12 to line 15, the old text was not in `prior`, and the agent was told
- * it had introduced an error it had not touched — with the suggested next
- * action pointing at a line unrelated to its task (#1353).
+ * string embeds a position — a line number for TS diagnostics, a byte offset
+ * (plus, on newer Node, a line/column) for a `JSON.parse` failure. Comparing
+ * those made an error's identity its position, so any edit that shifted lines
+ * or bytes above a pre-existing error renamed it: adding three imports at the
+ * top moved an unterminated string from line 12 to line 15, the old text was
+ * not in `prior`, and the agent was told it had introduced an error it had
+ * not touched — with the suggested next action pointing at a line unrelated
+ * to its task (#1353). A JSON file's fault shifts the same way when a key is
+ * inserted above it.
  *
  * Matching keeps MULTIPLICITY, so identity survives a shift without hiding a
  * genuine second instance: two unterminated strings where there was one leaves
@@ -129,13 +153,13 @@ const LINE_PREFIX = /^line \d+: /;
 export function newSyntaxErrors(before: string[], after: string[]): string[] {
   const unclaimed = new Map<string, number>();
   for (const error of before) {
-    const message = error.replace(LINE_PREFIX, "");
+    const message = errorIdentity(error);
     unclaimed.set(message, (unclaimed.get(message) ?? 0) + 1);
   }
 
   const introduced: string[] = [];
   for (const error of after) {
-    const message = error.replace(LINE_PREFIX, "");
+    const message = errorIdentity(error);
     const remaining = unclaimed.get(message) ?? 0;
     if (remaining > 0) {
       unclaimed.set(message, remaining - 1);
