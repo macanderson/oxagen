@@ -344,6 +344,13 @@ export class StellaSidecarClient {
    * `onFailure: "report"` it is POSTed back to the engine instead, which is
    * what a production host wants.
    *
+   * The default arm also cancels the turn as soon as a handler rejects. Without
+   * that the engine stays parked on a reverse request the client has already
+   * given up answering, and both sides wait out
+   * `reverse_request_timeout_ms` — the client because the rethrow cannot
+   * happen until the stream ends, and the stream cannot end until the engine
+   * unwinds (#1279).
+   *
    * One limit of the default arm: only the first collected failure is
    * rethrown. With several tool calls outstanding, the later errors are
    * dropped.
@@ -369,10 +376,30 @@ export class StellaSidecarClient {
     let toolCalls = 0;
     let outcome: TurnOutcome | undefined;
 
+    // Under the default `throw` arm the client gives up on the turn, but the
+    // engine does not know that: it is parked on a reverse request whose answer
+    // is never coming, and only `reverse_request_timeout_ms` ends it. The
+    // client cannot even report the rejection until the stream ends, which is
+    // the same deadline — so a handler bug cost the full timeout on both sides.
+    // Signalling cancel unwinds the turn, which ends the stream, which is what
+    // lets the rethrow happen at request latency instead (#1279).
+    //
+    // Fire-and-forget and at most once: `cancelTurn` already tolerates a 404,
+    // so racing a turn that ended on its own is harmless, and a cancel that
+    // fails must not replace the handler error the caller actually needs to
+    // see.
+    let cancelSignalled = false;
+    const giveUpOnTurn = (): void => {
+      if (cancelSignalled) return;
+      cancelSignalled = true;
+      void this.cancelTurn(turnId).catch(() => {});
+    };
+
     const track = (work: Promise<void>): void => {
       inFlight.push(
         work.catch((err: unknown) => {
           failures.push(err);
+          if (!reportFailures) giveUpOnTurn();
         }),
       );
     };
