@@ -460,3 +460,83 @@ describe("validateRelationshipAgainstSchema", () => {
     expect(result.conformanceScore).toBe(1);
   });
 });
+
+/**
+ * #1425: an uncompilable pattern was treated as satisfied by every value, so a
+ * typo in a registry pattern silently disabled that constraint and inflated the
+ * conformance score it feeds. Not "we could not check it" — "it is fine".
+ */
+describe("an uncompilable schema pattern (#1425)", () => {
+  /** Unbalanced group: `new RegExp("(")` throws. */
+  const BROKEN = "(";
+
+  const withPattern = (pattern: string) =>
+    schema({
+      labels: [
+        {
+          schemaName: "crm",
+          name: "Person",
+          displayName: "Person",
+          description: null,
+          naturalKeyProps: [],
+          properties: [prop({ key: "email", constraints: { pattern } })],
+        },
+      ],
+    });
+
+  const validateWith = (pattern: string, value: unknown) =>
+    validateNodeAgainstSchema(
+      { label: "Person", properties: { email: value } },
+      withPattern(pattern),
+    );
+
+  it("does not mark every value conformant", () => {
+    const result = validateWith(BROKEN, "anything at all");
+    expect(result.errors.length).toBeGreaterThan(0);
+  });
+
+  it("reports it as a REGISTRY defect, not an ordinary data mismatch", () => {
+    const error = validateWith(BROKEN, "anything at all").errors.find(
+      (e) => e.field === "email",
+    );
+    expect(error?.code).toBe("patternInvalid");
+    expect(error?.message).toContain("not a valid regular expression");
+    expect(error?.message).toContain("schema registry");
+  });
+
+  it("fails closed the same way isUrl does, which is the consistency it lacked", () => {
+    // isUrl has always returned false for an unparseable URL. Both catch
+    // "this could not be evaluated"; they disagreed about what it means, and
+    // this is the one that was wrong.
+    expect(
+      validateWith(BROKEN, "x").errors.some((e) => e.code === "patternInvalid"),
+    ).toBe(true);
+  });
+
+  it("still reports an ordinary mismatch as `pattern`", () => {
+    const error = validateWith("^[a-z]+$", "NOT-LOWERCASE").errors.find(
+      (e) => e.field === "email",
+    );
+    expect(error?.code).toBe("pattern");
+  });
+
+  it("still passes a value that matches a valid pattern", () => {
+    expect(
+      validateWith("^[a-z]+$", "lowercase").errors.filter(
+        (e) => e.field === "email",
+      ),
+    ).toEqual([]);
+  });
+
+  it("does not throw on a broken pattern — ingestion stays up", () => {
+    // The original reasoning was right and is preserved: one bad registry
+    // entry must not crash validation. Only the direction changed.
+    expect(() => validateWith(BROKEN, "x")).not.toThrow();
+  });
+
+  it("drops the conformance score instead of leaving it perfect", () => {
+    // The score is what the defect inflated: a disabled constraint scored the
+    // same as a satisfied one.
+    expect(validateWith(BROKEN, "anything").conformanceScore).toBeLessThan(1);
+  });
+});
