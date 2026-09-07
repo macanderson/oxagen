@@ -47,7 +47,7 @@ Only `--env`, `--name`, and `--slug` are required; every other field falls back 
 
 - **`--provider`** is `modal`, `vercel`, or `docker`. The provisioner fails fast if that driver has no credentials configured.
 - **Resource caps** are bounded: `--vcpu` ≤ 4, `--memory-mb` ≤ 8192, `--timeout-ms` ≤ 300000, `--disk-mb` ≤ 20480. Each must be a positive integer.
-- **`--network-mode`** is one of `public`, `static_egress`, `aws_privatelink`, `gcp_psc`, `reverse_tunnel`, `ssh_bastion`. Only `public` and `static_egress` are implemented today; the others fail fast at provision time.
+- **`--network-mode`** is one of `public`, `static_egress`, `aws_privatelink`, `gcp_psc`, `reverse_tunnel`, `ssh_bastion`. Only `public` is provisionable today. The others fail fast at provision time, `static_egress` included: no egress address is pinned yet, so a run asking for one is refused rather than given the ordinary public egress it would otherwise get.
 - **`--env-var KEY=value`** is repeatable and is for **non-secret** literal config only — injected at lowest precedence. Real credentials belong in the vault (`oxagen secret set`), never here.
 - **`--set-default`** promotes the new template to its environment's default. Runs that don't name a template resolve to it.
 
