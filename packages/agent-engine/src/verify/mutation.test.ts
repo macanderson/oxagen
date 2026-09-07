@@ -386,6 +386,23 @@ describe("witnessOutcome", () => {
     ).toBe("tests-failed");
   });
 
+  // The markers are matched against combined stdout+stderr, so a suite whose
+  // own output quotes one is read as a suite that never started. Pinned rather
+  // than left to be rediscovered: this withholds a proof instead of granting
+  // one, which is the direction it is safe to be wrong in, and narrowing it
+  // needs a per-runner "tests ran" signal no two runners agree on.
+  it("errs towards did-not-run when a real failure quotes a marker", () => {
+    expect(
+      classifyWitnessRun({
+        command: "pytest -x",
+        exitCode: 1,
+        timedOut: false,
+        output:
+          "FAILED tests/test_parser.py::test_rejects - DID NOT RAISE SyntaxError",
+      }),
+    ).toBe("did-not-run");
+  });
+
   // The flip is the agent's own claimed witness. It used to carry no more
   // weight than any other command, so an unrelated failure could certify a
   // turn whose actual claim passed without the fix (#1359).

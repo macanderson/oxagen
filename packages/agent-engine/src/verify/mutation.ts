@@ -340,6 +340,14 @@ export type WitnessRunClass =
  * Classify a single re-run. Only `tests-failed` is evidence that the tests
  * witness the fix; the other three are each a reason the run cannot settle
  * anything.
+ *
+ * The `did-not-run` markers are matched against combined stdout+stderr, which
+ * misclassifies a genuine test failure whose own output contains one — a test
+ * asserting that a `SyntaxError` is raised, say, reads as a suite that never
+ * started. That direction withholds a proof rather than granting one, which is
+ * the safe way for this to be wrong, and it is pinned by a test rather than
+ * left to be rediscovered. Narrowing it needs a per-runner "tests ran" signal,
+ * which none of them agree on.
  */
 export function classifyWitnessRun(run: WitnessRun): WitnessRunClass {
   if (run.timedOut || run.exitCode === null) return "timed-out";
@@ -379,8 +387,20 @@ export interface MutationScore {
   /**
    * Files still holding a mutant because restoring them failed. Non-empty
    * means the working tree contains a line nobody wrote.
+   *
+   * Every entry is a file the gate mutated and could not put back. It is
+   * rendered to the user as a list of paths, so nothing else may be pushed
+   * into it — an error message here becomes a sentence claiming a MUTANT sits
+   * in a file named `Error: …`.
    */
   restoreFailures?: string[];
+  /**
+   * Why scoring ended in a `workspace-error`, when the cause was an exception
+   * rather than a mutant that could not be applied. Kept apart from
+   * {@link restoreFailures} because the two make different claims: this says
+   * the measurement broke, that says the tree is dirty.
+   */
+  scoringError?: string;
 }
 
 /** One line describing a score, for a status line that must not lie. */

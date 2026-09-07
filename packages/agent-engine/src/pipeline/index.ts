@@ -1235,7 +1235,14 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         },
       );
       mutationGates.push(gate);
-      if (gate.status !== "skipped") {
+      // Report every gate that actually re-ran something. The guard used to
+      // be `status !== "skipped"`, which excluded the only status the third
+      // label below can carry — so a timeout or a collection error, the two
+      // cases #1359 and #1362 moved out of `witnessed`, printed nothing at
+      // all and told the operator *less* than the wrong answer used to.
+      // `runs.length === 0` is the one skip with nothing to say: no witness
+      // command was re-run, so there is no measurement to report as missing.
+      if (gate.runs.length > 0) {
         opts.onStage?.({
           kind: "judge",
           // A skipped gate is not a vacuous one: it established nothing, and

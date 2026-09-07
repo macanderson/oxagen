@@ -7,10 +7,32 @@
  * the tree is byte-identical to its pre-gate state afterwards — including when
  * the gate throws, aborts, or scores mutants.
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import type { CommandResult, Workspace } from "../types";
 import { runMutationGate } from "./gate";
 import { describeMutationScore, type TestEvidence } from "./mutation";
+
+// `generateMutants` is the one call inside the scoring pass that is neither a
+// workspace read nor a workspace write, so it is how a test injects the
+// "something unexpected threw mid-pass" case the outer catch exists for.
+// Real by default: only the paths named here throw.
+const mutantPlanner = vi.hoisted(() => ({ throwsFor: new Set<string>() }));
+vi.mock("./mutation", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./mutation")>();
+  return {
+    ...actual,
+    generateMutants: (
+      file: Parameters<typeof actual.generateMutants>[0],
+      current: string,
+      budget: number,
+    ) => {
+      if (mutantPlanner.throwsFor.has(file.path)) {
+        throw new Error(`planner exploded on ${file.path}`);
+      }
+      return actual.generateMutants(file, current, budget);
+    },
+  };
+});
 
 // ── Fake workspace ─────────────────────────────────────────────────────────────
 
@@ -193,6 +215,51 @@ describe("runMutationGate — layer 1", () => {
     const result = await runMutationGate(ws, DIFF, evidence());
     expect(result.status).toBe("skipped");
     expect(result.reason).toContain("before running any test");
+  });
+
+  // The test above stages the collection error: its diff MODIFIES `src/calc.ts`
+  // rather than creating it, so the gate reverts content and never takes the
+  // `original === null → rm` path, and the `ModuleNotFoundError` comes from a
+  // hand-written stderr. Both halves of #1362's repro belong in one test — the
+  // module is genuinely deleted, and the failure is a consequence of that.
+  it("does not count an import failure the revert actually caused (#1362)", async () => {
+    const createdDiff = [
+      "diff --git a/src/helper.ts b/src/helper.ts",
+      "new file mode 100644",
+      "--- /dev/null",
+      "+++ b/src/helper.ts",
+      "@@ -0,0 +1 @@",
+      "+export const h = 1;",
+      "diff --git a/src/helper.test.ts b/src/helper.test.ts",
+      "new file mode 100644",
+      "--- /dev/null",
+      "+++ b/src/helper.test.ts",
+      "@@ -0,0 +1 @@",
+      "+import { h } from './helper';",
+    ].join("\n");
+    const ws = new FakeWorkspace({
+      "src/helper.ts": "export const h = 1;\n",
+      "src/helper.test.ts": "import { h } from './helper';\n",
+    });
+    // The suite dies at collection exactly when the module is not on disk,
+    // which is the state the revert puts the tree in.
+    ws.onExec = (cmd) =>
+      cmd === WITNESS && !ws.files.has("src/helper.ts")
+        ? {
+            exitCode: 1,
+            stdout: "",
+            stderr: "Error: Cannot find module './helper'",
+            timedOut: false,
+          }
+        : ok(0);
+
+    const result = await runMutationGate(ws, createdDiff, evidence());
+
+    // The delete path ran, so the failure below is the revert's doing.
+    expect(ws.execLog).toContain("rm -- 'src/helper.ts'");
+    expect(result.status).toBe("skipped");
+    expect(result.reason).toContain("before running any test");
+    expect(ws.files.get("src/helper.ts")).toBe("export const h = 1;\n");
   });
 
   it("reverts and restores a fix spanning MULTIPLE source files", async () => {
@@ -747,5 +814,105 @@ describe("a mutant restore that failed (#1352)", () => {
     expect(result.reason).toContain("MUTANT");
     expect(result.reason).toContain("src/ok.ts");
     expect(result.score?.restoreFailures?.length).toBeGreaterThan(0);
+  });
+});
+
+describe("a scoring pass that threw (#1352)", () => {
+  const TWO_FILE_FIXED_A = "export const ok = (n: number) => n >= 0;\n";
+  const TWO_FILE_FIXED_B = "export const hi = (n: number) => n >= 1;\n";
+  const TWO_FILE_DIFF = [
+    "diff --git a/src/ok.ts b/src/ok.ts",
+    "--- a/src/ok.ts",
+    "+++ b/src/ok.ts",
+    "@@ -1 +1 @@",
+    "-export const ok = (n: number) => n > 0;",
+    "+export const ok = (n: number) => n >= 0;",
+    "diff --git a/src/hi.ts b/src/hi.ts",
+    "--- a/src/hi.ts",
+    "+++ b/src/hi.ts",
+    "@@ -1 +1 @@",
+    "-export const hi = (n: number) => n > 1;",
+    "+export const hi = (n: number) => n >= 1;",
+    "diff --git a/src/ok.test.ts b/src/ok.test.ts",
+    "new file mode 100644",
+    "--- /dev/null",
+    "+++ b/src/ok.test.ts",
+    "@@ -0,0 +1,2 @@",
+    "+import { ok } from './ok';",
+    "+test('ok', () => {});",
+  ].join("\n");
+
+  function twoFileWorkspace(): FakeWorkspace {
+    const ws = new FakeWorkspace({
+      "src/ok.ts": TWO_FILE_FIXED_A,
+      "src/hi.ts": TWO_FILE_FIXED_B,
+      "src/ok.test.ts": "import { ok } from './ok';\ntest('ok', () => {});\n",
+    });
+    ws.onExec = (cmd) =>
+      cmd === MUTABLE_WITNESS
+        ? ws.files.get("src/ok.ts") === TWO_FILE_FIXED_A &&
+          ws.files.get("src/hi.ts") === TWO_FILE_FIXED_B
+          ? ok(0)
+          : ok(1)
+        : ok(0);
+    return ws;
+  }
+
+  afterEach(() => {
+    mutantPlanner.throwsFor.clear();
+  });
+
+  // The catch used to write `restoreFailures = ["scoring failed: Error: …"]`,
+  // and that list is rendered to the user as a list of FILE PATHS — so the
+  // sentence read "could not restore scoring failed: Error: … — these files
+  // still contain a MUTANT", asserting a deliberately broken line was sitting
+  // in the tree in the one case where the gate cannot know whether it is.
+  it("does not claim a file holds a mutant when nothing failed to restore", async () => {
+    const ws = mutableWorkspace();
+    mutantPlanner.throwsFor.add("src/ok.ts");
+
+    const result = await runMutationGate(ws, MUTABLE_DIFF, mutableEvidence(), {
+      score: true,
+    });
+
+    expect(result.status).toBe("witnessed");
+    expect(result.reason).not.toContain("MUTANT");
+    expect(result.reason).toContain("Mutation scoring did not complete");
+    expect(result.score?.state).toBe("workspace-error");
+    expect(result.score?.restoreFailures).toBeUndefined();
+    expect(result.score?.scoringError).toContain("planner exploded");
+    // Fail-open all the way: the fix is back on disk either way.
+    expect(ws.files.get("src/ok.ts")).toBe(MUTABLE_FIXED);
+  });
+
+  // The other half: a throw used to discard whatever `restoreFailures` the
+  // pass had already collected, so a mutant genuinely left on disk by an
+  // earlier file was replaced by the fabricated entry above.
+  it("keeps a real restore failure collected before the throw", async () => {
+    const ws = twoFileWorkspace();
+    // The mutant write-back for src/ok.ts fails, leaving a mutant on disk…
+    const realWriteFile = ws.writeFile.bind(ws);
+    let writesToOk = 0;
+    ws.writeFile = async (path: string, content: string): Promise<void> => {
+      if (path === "src/ok.ts") {
+        writesToOk++;
+        if (writesToOk >= 4) throw new Error("EACCES: src/ok.ts");
+      }
+      return realWriteFile(path, content);
+    };
+    // …and the pass then throws while planning the next file's mutants.
+    mutantPlanner.throwsFor.add("src/hi.ts");
+
+    const result = await runMutationGate(ws, TWO_FILE_DIFF, mutableEvidence(), {
+      score: true,
+    });
+
+    expect(result.status).toBe("witnessed");
+    expect(result.score?.state).toBe("workspace-error");
+    expect(result.score?.restoreFailures?.join(" ")).toContain("src/ok.ts");
+    // Both facts are reported, and each says only what it establishes.
+    expect(result.reason).toContain("MUTANT");
+    expect(result.reason).toContain("src/ok.ts");
+    expect(result.reason).toContain("Mutation scoring did not complete");
   });
 });
