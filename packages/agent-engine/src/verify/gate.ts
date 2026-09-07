@@ -217,6 +217,13 @@ export async function runMutationGate(
         command,
         exitCode: res.timedOut ? null : res.exitCode,
         timedOut: res.timedOut,
+        // The output is what separates a suite that failed from one that never
+        // ran — a revert deletes the module a new test imports, and that
+        // import error is an ordinary non-zero exit (#1362).
+        output: `${res.stdout}\n${res.stderr}`,
+        // The flip is the agent's own claimed witness, and only it can settle
+        // the verdict; the rest corroborate (#1359).
+        isClaim: evidence.flippedBy !== null && command === evidence.flippedBy,
       });
     }
   } catch (err) {
@@ -250,27 +257,53 @@ export async function runMutationGate(
     }
   }
 
-  const status = witnessOutcome(runs);
+  const verdict = witnessOutcome(runs);
 
   // ── Layer 2 (opt-in): mutation-score the patch, fix restored ──
   // `commands[0]` is the first PLANNED witness — the fail→pass flip when the
   // oracle saw one (planWitnessCommands puts it first), otherwise the first
   // passing test-like command. Only one is used: scoring re-runs it once per
   // mutant, so a second command would multiply the cost.
-  if (status === "witnessed" && opts.score) {
-    score = await scorePatch(workspace, reverts, commands[0]!, {
-      timeoutMs,
-      maxMutants: opts.maxMutants ?? DEFAULT_MAX_MUTANTS,
-      ...(opts.signal ? { signal: opts.signal } : {}),
-    });
+  //
+  // Scoring is opt-in and advisory, so it may never reject a turn the witness
+  // runs already cleared — including when restoring a mutant fails. That path
+  // used to throw straight out of `runMutationGate`, past the try/finally that
+  // protects everything else, breaking the gate's own fail-open contract and
+  // leaving a deliberately-broken line in a file the agent believes it fixed
+  // (#1352).
+  if (verdict.status === "witnessed" && opts.score) {
+    try {
+      score = await scorePatch(workspace, reverts, commands[0]!, {
+        timeoutMs,
+        maxMutants: opts.maxMutants ?? DEFAULT_MAX_MUTANTS,
+        ...(opts.signal ? { signal: opts.signal } : {}),
+      });
+    } catch (err) {
+      score = {
+        state: "workspace-error",
+        mutantsTried: 0,
+        mutantsKilled: 0,
+        killRate: null,
+        survivors: [],
+      };
+      score.restoreFailures = [`scoring failed: ${String(err)}`];
+    }
   }
 
+  // A mutant left on disk is the one thing here a human must not miss: the
+  // tree holds a plausible-looking line nobody wrote, in a file that reads as
+  // fixed, and a mutant is designed to survive a glance.
+  const mutantsLeftBehind = score?.restoreFailures ?? [];
+  const reason =
+    mutantsLeftBehind.length > 0
+      ? `${verdict.reason}. WARNING: mutation scoring could not restore ${mutantsLeftBehind.join(", ")} — ` +
+        "these files still contain a MUTANT (a deliberately broken line this gate wrote, not a missing fix); " +
+        "restore them before committing."
+      : verdict.reason;
+
   const result: MutationGateResult = {
-    status,
-    reason:
-      status === "witnessed"
-        ? "witness tests fail without the fix — the green is real"
-        : "witness tests still pass with the fix reverted — the tests do not witness the fix",
+    status: verdict.status,
+    reason,
     runs,
     revertedFiles: reverts.map((r) => r.file.path),
     testFiles: testFilePaths,
@@ -298,11 +331,18 @@ async function scorePatch(
   opts: { timeoutMs: number; maxMutants: number; signal?: AbortSignal },
 ): Promise<MutationScore> {
   const survivors: MutationScore["survivors"] = [];
+  const restoreFailures: string[] = [];
   let tried = 0;
   let killed = 0;
+  let aborted = false;
+  let workspaceError = false;
 
   for (const { file } of reverts) {
-    if (tried >= opts.maxMutants || opts.signal?.aborted) break;
+    if (opts.signal?.aborted) {
+      aborted = true;
+      break;
+    }
+    if (tried >= opts.maxMutants) break;
     let current: string;
     try {
       current = await workspace.readFile(file.path);
@@ -312,7 +352,10 @@ async function scorePatch(
     const mutants = generateMutants(file, current, opts.maxMutants - tried);
     let workspaceFailed = false;
     for (const mutant of mutants) {
-      if (opts.signal?.aborted) break;
+      if (opts.signal?.aborted) {
+        aborted = true;
+        break;
+      }
       tried++;
       try {
         await workspace.writeFile(mutant.path, mutant.mutatedContent);
@@ -334,14 +377,18 @@ async function scorePatch(
         // scoring instead of failing a turn the witness runs already cleared.
         tried--;
         workspaceFailed = true;
+        workspaceError = true;
       } finally {
+        // Layer 1's restore loop collects its failures by path and names them
+        // all; this one used to throw on the first, out through a call site
+        // that sits outside the try/finally protecting the rest of the gate.
+        // It is now as careful as Layer 1, and the file is named so a human
+        // knows a MUTANT is what is in it (#1352).
         try {
           await workspace.writeFile(mutant.path, current);
-        } catch (err) {
-          throw new Error(
-            `mutation gate could not restore ${mutant.path} after mutant "${mutant.description}" ` +
-              `(line ${mutant.line}) — the file may still contain the mutation; restore it from ` +
-              `the turn diff before continuing. Cause: ${String(err)}`,
+        } catch {
+          restoreFailures.push(
+            `${mutant.path} (line ${mutant.line}, mutant "${mutant.description}")`,
           );
         }
       }
@@ -350,10 +397,25 @@ async function scorePatch(
     if (workspaceFailed) break;
   }
 
-  return {
+  // A kill rate exists only when mutants actually ran. `tried === 0` used to
+  // render as `1` — the best possible score for a measurement that did not
+  // happen (#1351).
+  const state: MutationScore["state"] =
+    tried > 0
+      ? "measured"
+      : aborted
+        ? "aborted"
+        : workspaceError
+          ? "workspace-error"
+          : "not-applicable";
+
+  const score: MutationScore = {
+    state,
     mutantsTried: tried,
     mutantsKilled: killed,
-    killRate: tried === 0 ? 1 : killed / tried,
+    killRate: state === "measured" ? killed / tried : null,
     survivors,
   };
+  if (restoreFailures.length > 0) score.restoreFailures = restoreFailures;
+  return score;
 }

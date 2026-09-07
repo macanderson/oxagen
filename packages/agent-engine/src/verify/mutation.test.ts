@@ -16,6 +16,8 @@ import {
   planWitnessCommands,
   hasWitnessClaim,
   witnessOutcome,
+  classifyWitnessRun,
+  describeMutationScore,
   applyGateToVerdict,
   resolveMutationVerifyEnabled,
   generateMutants,
@@ -310,21 +312,150 @@ describe("hasWitnessClaim", () => {
 });
 
 describe("witnessOutcome", () => {
-  it("is witnessed when any run fails or times out", () => {
+  it("is witnessed when a run actually failed", () => {
     expect(
-      witnessOutcome([{ command: "c", exitCode: 1, timedOut: false }]),
-    ).toBe("witnessed");
-    expect(
-      witnessOutcome([{ command: "c", exitCode: null, timedOut: true }]),
+      witnessOutcome([{ command: "c", exitCode: 1, timedOut: false }]).status,
     ).toBe("witnessed");
   });
+
   it("is vacuous when every run passes", () => {
     expect(
       witnessOutcome([
         { command: "a", exitCode: 0, timedOut: false },
         { command: "b", exitCode: 0, timedOut: false },
-      ]),
+      ]).status,
     ).toBe("vacuous");
+  });
+
+  // This assertion is inverted from what it was. It used to require a
+  // timed-out run to read as "witnessed", which is the defect in #1359: the
+  // run did not finish, so it established nothing, and a wrong `witnessed` is
+  // silent because only a `vacuous` result is folded back into the revise loop.
+  it("does not turn a timeout into a proof", () => {
+    const verdict = witnessOutcome([
+      { command: "c", exitCode: null, timedOut: true, isClaim: true },
+    ]);
+    expect(verdict.status).toBe("skipped");
+    expect(verdict.reason).toContain("did not finish");
+    expect(verdict.reason).toContain("c");
+  });
+
+  it("does not turn a failure-to-start into a proof (#1362)", () => {
+    // The revert deletes the module the new test imports, so the suite exits
+    // non-zero at collection. The tests never ran.
+    const verdict = witnessOutcome([
+      {
+        command: "pytest -x",
+        exitCode: 2,
+        timedOut: false,
+        output: "ModuleNotFoundError: No module named 'src.thing'",
+        isClaim: true,
+      },
+    ]);
+    expect(verdict.status).toBe("skipped");
+    expect(verdict.reason).toContain("before running any test");
+  });
+
+  it.each([
+    ["ModuleNotFoundError: No module named 'x'", "python import"],
+    ["Error: Cannot find module './thing'", "node resolution"],
+    ["ERR_MODULE_NOT_FOUND", "node esm"],
+    ['Failed to resolve import "./thing"', "a bundler"],
+    ["ERROR collecting tests/test_thing.py", "a collection error"],
+    ["error TS2307: Cannot find module './thing'", "typescript"],
+    ["No test files found", "an empty run"],
+  ])("treats %s as not-run (%s)", (output) => {
+    expect(
+      classifyWitnessRun({
+        command: "c",
+        exitCode: 1,
+        timedOut: false,
+        output,
+      }),
+    ).toBe("did-not-run");
+  });
+
+  it("still calls an ordinary assertion failure a real failure", () => {
+    expect(
+      classifyWitnessRun({
+        command: "pytest -x",
+        exitCode: 1,
+        timedOut: false,
+        output: "FAILED tests/test_thing.py::test_it - assert 1 == 2",
+      }),
+    ).toBe("tests-failed");
+  });
+
+  // The flip is the agent's own claimed witness. It used to carry no more
+  // weight than any other command, so an unrelated failure could certify a
+  // turn whose actual claim passed without the fix (#1359).
+  it("lets the claim decide, so corroboration cannot rescue a vacuous turn", () => {
+    const verdict = witnessOutcome([
+      { command: "flip", exitCode: 0, timedOut: false, isClaim: true },
+      { command: "unrelated", exitCode: 1, timedOut: false },
+    ]);
+    expect(verdict.status).toBe("vacuous");
+  });
+
+  it("lets the claim decide in the other direction too", () => {
+    const verdict = witnessOutcome([
+      { command: "flip", exitCode: 1, timedOut: false, isClaim: true },
+      { command: "unrelated", exitCode: 0, timedOut: false },
+    ]);
+    expect(verdict.status).toBe("witnessed");
+  });
+
+  it("falls back to any real failure when there is no flip to judge", () => {
+    expect(
+      witnessOutcome([
+        { command: "a", exitCode: 0, timedOut: false },
+        { command: "b", exitCode: 1, timedOut: false },
+      ]).status,
+    ).toBe("witnessed");
+  });
+
+  it("skips rather than concluding when no run produced a usable result", () => {
+    const verdict = witnessOutcome([
+      { command: "a", exitCode: 0, timedOut: false },
+      { command: "b", exitCode: null, timedOut: true },
+    ]);
+    expect(verdict.status).toBe("skipped");
+  });
+
+  it("skips on no runs at all", () => {
+    expect(witnessOutcome([]).status).toBe("skipped");
+  });
+});
+
+describe("describeMutationScore (#1351)", () => {
+  it("never prints a percentage for a measurement that did not happen", () => {
+    for (const state of [
+      "not-applicable",
+      "aborted",
+      "workspace-error",
+    ] as const) {
+      const line = describeMutationScore({
+        state,
+        mutantsTried: 0,
+        mutantsKilled: 0,
+        killRate: null,
+        survivors: [],
+      });
+      expect(line).toContain("not measured");
+      expect(line).not.toMatch(/\d+%/);
+    }
+  });
+
+  it("prints the rate when there is one", () => {
+    expect(
+      describeMutationScore({
+        state: "measured",
+        mutantsTried: 4,
+        mutantsKilled: 3,
+        killRate: 0.75,
+        survivors: [],
+      }),
+    ).toContain("75%");
   });
 });
 

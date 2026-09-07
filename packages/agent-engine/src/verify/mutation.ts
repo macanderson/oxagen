@@ -273,15 +273,128 @@ export interface WitnessRun {
   /** Exit code without the fix; null when the run timed out. */
   exitCode: number | null;
   timedOut: boolean;
+  /**
+   * Combined stdout/stderr, needed to tell a suite that FAILED from one that
+   * never ran — see {@link classifyWitnessRun}. Optional so an older recorded
+   * run still type-checks; absent output is treated as uninformative.
+   */
+  output?: string;
+  /**
+   * True for the run of the fail→pass flip — the agent's own claimed witness,
+   * and the only run that can settle the verdict on its own.
+   */
+  isClaim?: boolean;
 }
 
-/** Layer 2: patch-scoped mutation-testing score. */
+/**
+ * Markers that a test command exited non-zero because it could not *run*, not
+ * because a test failed.
+ *
+ * This is the difference the gate exists to see. The shadow revert deletes the
+ * files the fix created, so the single most common shape of a real fix — add a
+ * module, add a test that imports it — makes the reverted suite fail at import
+ * with the module missing. Every runner reports that as an ordinary non-zero
+ * exit, so a verdict layer reading only the exit code stamps it
+ * "witness tests fail without the fix — the green is real". The tests never
+ * ran (#1362).
+ *
+ * This is not hypothetical: the sibling Rust harness recorded exactly this
+ * false proof from a benchmark trace — a confirmed witness off a
+ * `ModuleNotFoundError`, found only by reading the full trace.
+ *
+ * Matching is on output rather than exit code because exit codes do not agree
+ * across runners: pytest uses 2 for a collection error and 5 for "no tests
+ * collected", while a JS runner reports both as 1.
+ */
+const DID_NOT_RUN_MARKERS: readonly RegExp[] = [
+  /\bModuleNotFoundError\b/,
+  /\bImportError\b/,
+  /Cannot find module/i,
+  /\bMODULE_NOT_FOUND\b/,
+  /\bERR_MODULE_NOT_FOUND\b/,
+  /Failed to (?:load|resolve) import/i,
+  /unresolved import/i,
+  /error TS2307/,
+  /\bcollection error\b/i,
+  /\berrors? during collection\b/i,
+  /\bERROR collecting\b/i,
+  /\bINTERNALERROR\b/,
+  /\bno tests ran\b/i,
+  /\bno tests collected\b/i,
+  /\bNo test files found\b/i,
+  /\bSyntaxError\b/,
+  /\bcompilation (?:failed|error)\b/i,
+  /\bbuild failed\b/i,
+  /\bcommand not found\b/i,
+  /\bNo such file or directory\b/i,
+];
+
+/** What one witness re-run actually established. */
+export type WitnessRunClass =
+  | "tests-failed"
+  | "tests-passed"
+  | "did-not-run"
+  | "timed-out";
+
+/**
+ * Classify a single re-run. Only `tests-failed` is evidence that the tests
+ * witness the fix; the other three are each a reason the run cannot settle
+ * anything.
+ */
+export function classifyWitnessRun(run: WitnessRun): WitnessRunClass {
+  if (run.timedOut || run.exitCode === null) return "timed-out";
+  if (run.exitCode === 0) return "tests-passed";
+  const output = run.output ?? "";
+  if (DID_NOT_RUN_MARKERS.some((marker) => marker.test(output))) {
+    return "did-not-run";
+  }
+  return "tests-failed";
+}
+
+/** Layer 2's measurement state — whether a kill rate exists at all. */
+export type MutationScoreState =
+  | "measured"
+  | "not-applicable"
+  | "aborted"
+  | "workspace-error";
+
+/**
+ * Layer 2: patch-scoped mutation-testing score.
+ *
+ * `killRate` is `null` unless `state` is `"measured"`. It used to default to
+ * `1` when no mutant was tried, which rendered a measurement that did not
+ * happen as the best possible result — indistinguishable from "the tests
+ * caught every mutant", and passing any downstream threshold (#1351). A low
+ * score gets investigated; a flattering one does not, which is what made the
+ * unmeasured case the dangerous direction to default towards.
+ */
 export interface MutationScore {
+  /** Whether a kill rate was actually measured, and if not, why not. */
+  state: MutationScoreState;
   mutantsTried: number;
   mutantsKilled: number;
-  /** 0–1; 1 means every mutant of the fix was caught by the tests. */
-  killRate: number;
+  /** 0–1 when `state` is `"measured"`; `null` otherwise — never a stand-in. */
+  killRate: number | null;
   survivors: Array<{ path: string; line: number; description: string }>;
+  /**
+   * Files still holding a mutant because restoring them failed. Non-empty
+   * means the working tree contains a line nobody wrote.
+   */
+  restoreFailures?: string[];
+}
+
+/** One line describing a score, for a status line that must not lie. */
+export function describeMutationScore(score: MutationScore): string {
+  if (score.state === "measured" && score.killRate !== null) {
+    return `mutant kill rate ${Math.round(score.killRate * 100)}% (${score.mutantsKilled}/${score.mutantsTried})`;
+  }
+  if (score.state === "not-applicable") {
+    return "mutant kill rate not measured (no applicable mutants)";
+  }
+  if (score.state === "aborted") {
+    return "mutant kill rate not measured (scoring aborted)";
+  }
+  return "mutant kill rate not measured (workspace error during scoring)";
 }
 
 export type MutationGateStatus = "witnessed" | "vacuous" | "skipped";
@@ -302,13 +415,97 @@ export interface MutationGateResult {
   score?: MutationScore;
 }
 
-/** True when at least one witness re-run failed — the tests DO witness the fix. */
-export function witnessOutcome(runs: WitnessRun[]): "witnessed" | "vacuous" {
-  return runs.some(
-    (r) => r.timedOut || (r.exitCode !== null && r.exitCode !== 0),
-  )
-    ? "witnessed"
-    : "vacuous";
+/** The verdict of the shadow re-runs, with the sentence explaining it. */
+export interface WitnessVerdict {
+  status: MutationGateStatus;
+  reason: string;
+}
+
+/**
+ * Decide what the shadow re-runs established.
+ *
+ * The rule is that **the claim decides and corroboration cannot substitute for
+ * it**. `planWitnessCommands` puts the fail→pass flip first precisely because
+ * it is the agent's own claimed witness, and it used to carry no more weight
+ * than any other command: a turn whose flip command passed without the fix —
+ * genuinely vacuous — still reported `witnessed` if some unrelated third
+ * command happened to fail (#1359).
+ *
+ * Three things now separate a proof from a non-answer, where the old
+ * `runs.some(r => r.timedOut || r.exitCode !== 0)` saw one:
+ *
+ * - A run that **timed out** proves nothing. It says the command did not
+ *   finish inside the cap, which happens on a loaded box, on a suite slower
+ *   than the cap, on an interactive prompt the reverted code reaches, or on an
+ *   infinite loop introduced by the revert itself — the reconstructed pre-fix
+ *   file is not a state the code was ever tested in. A timeout is
+ *   infrastructure trouble, and the gate already has the honest answer for
+ *   that: `skipped` with a reason, the same path as "diff unparseable".
+ * - A run that **could not start** proves nothing either — see
+ *   {@link classifyWitnessRun} and #1362.
+ * - Only `tests-failed` is a proof, and only the claim's own result can turn
+ *   the verdict `vacuous`.
+ *
+ * The direction matters: `applyGateToVerdict` folds only a `vacuous` result
+ * back into the revise loop, so a wrong `witnessed` is silent by construction
+ * and nothing downstream can notice it.
+ */
+export function witnessOutcome(runs: WitnessRun[]): WitnessVerdict {
+  if (runs.length === 0) {
+    return { status: "skipped", reason: "no witness command was re-run" };
+  }
+
+  const claim = runs.find((run) => run.isClaim);
+  if (claim !== undefined) {
+    const claimClass = classifyWitnessRun(claim);
+    if (claimClass === "tests-failed") {
+      return {
+        status: "witnessed",
+        reason: "witness tests fail without the fix — the green is real",
+      };
+    }
+    if (claimClass === "tests-passed") {
+      return {
+        status: "vacuous",
+        reason:
+          "witness tests still pass with the fix reverted — the tests do not witness the fix",
+      };
+    }
+    return {
+      status: "skipped",
+      reason:
+        claimClass === "timed-out"
+          ? `witness command \`${claim.command}\` did not finish inside the per-command cap, so nothing was established`
+          : `witness command \`${claim.command}\` failed before running any test (missing module, collection or build error), so its failure is not evidence`,
+    };
+  }
+
+  // No flip this turn: the claim came from changed test files, so every run is
+  // corroboration and any real failure is enough.
+  const classes = runs.map(classifyWitnessRun);
+  if (classes.includes("tests-failed")) {
+    return {
+      status: "witnessed",
+      reason: "witness tests fail without the fix — the green is real",
+    };
+  }
+  const stalled = runs.filter(
+    (_, index) =>
+      classes[index] === "timed-out" || classes[index] === "did-not-run",
+  );
+  if (stalled.length > 0) {
+    return {
+      status: "skipped",
+      reason: `no witness command both ran and failed; ${stalled
+        .map((run) => `\`${run.command}\``)
+        .join(", ")} did not produce a usable result`,
+    };
+  }
+  return {
+    status: "vacuous",
+    reason:
+      "witness tests still pass with the fix reverted — the tests do not witness the fix",
+  };
 }
 
 // ── Verdict override ───────────────────────────────────────────────────────────

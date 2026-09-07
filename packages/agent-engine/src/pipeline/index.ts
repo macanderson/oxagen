@@ -40,6 +40,7 @@ import { enhancePrompt } from "../evaluate/prompt-enhancer";
 import { createSpecTestTracker } from "../oracle/spec-test";
 import {
   runMutationGate,
+  describeMutationScore,
   applyGateToVerdict,
   resolveMutationVerifyEnabled,
   type MutationGateResult,
@@ -1237,15 +1238,19 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       if (gate.status !== "skipped") {
         opts.onStage?.({
           kind: "judge",
+          // A skipped gate is not a vacuous one: it established nothing, and
+          // saying "VACUOUS" would report a non-answer as a finding. Both the
+          // label and the score line below say when a measurement did not
+          // happen rather than printing a number for it (#1351, #1359).
           label:
             gate.status === "witnessed"
               ? "mutation gate: tests fail without the fix — the green is real"
-              : "mutation gate: VACUOUS — tests still pass without the fix",
+              : gate.status === "vacuous"
+                ? "mutation gate: VACUOUS — tests still pass without the fix"
+                : `mutation gate: could not check — ${gate.reason}`,
           detail:
             `${gate.runs.length} witness run(s) · ${gate.durationMs}ms` +
-            (gate.score
-              ? ` · mutant kill rate ${Math.round(gate.score.killRate * 100)}%`
-              : ""),
+            (gate.score ? ` · ${describeMutationScore(gate.score)}` : ""),
         });
         phases.push(
           phaseStat(
