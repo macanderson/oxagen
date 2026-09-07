@@ -185,6 +185,8 @@ import { apiKeyRotate } from "./api.key.rotate";
 import { auditLogQuery } from "./audit.log.query";
 import { connectionPause } from "./connection.pause";
 import { connectionUpdate } from "./connection.update";
+import { orgDataPlaneGet } from "./org.data_plane.get";
+import { orgDataPlaneSet } from "./org.data_plane.set";
 import { orgSettingsRead } from "./org.settings.read";
 import { orgSettingsWrite } from "./org.settings.write";
 import { workspaceSettingsRead } from "./workspace.settings.read";
@@ -535,6 +537,8 @@ export {
   auditLogQuery,
   connectionPause,
   connectionUpdate,
+  orgDataPlaneGet,
+  orgDataPlaneSet,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,
@@ -774,6 +778,8 @@ export const contracts = [
   auditLogQuery,
   connectionPause,
   connectionUpdate,
+  orgDataPlaneGet,
+  orgDataPlaneSet,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,

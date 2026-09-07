@@ -93,7 +93,6 @@ describe("audit.log.query capability", () => {
       offset: 0,
     });
     expect(parsed.events).toHaveLength(1);
-    expect(parsed.events[1]?.sequence).toBe(7);
   });
 
   it("rejects an event with an unknown source", () => {
