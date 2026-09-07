@@ -27,15 +27,21 @@ export default defineConfig({
     // applied without re-running it. That closes the steady-state race this
     // setting was containing.
     //
-    // One window is still open: a genuinely fresh database (empty ledger,
+    // One window was still open: a genuinely fresh database (empty ledger,
     // no pre-existing tables — exactly what CI provisions per run) has no
-    // record to check yet, so two truly concurrent FIRST-EVER migrate()
-    // calls could both decide 0021 is unapplied and both run it. ClickHouse
-    // has no cross-statement locking migrate() could use to close that
-    // window itself. Left in place until that gap is closed or otherwise
-    // accepted — tracked on #2637 (the original race report), which still
-    // owns the misleading-suite-title fix and a witness test proving
-    // whether a fresh-database race survives with the ledger in place.
+    // record to check yet, so two truly concurrent migrate() calls could
+    // both decide a not-yet-ledgered file is unapplied and both run it.
+    // #2637 confirmed this with migrate-concurrency.integration.test.ts
+    // (clear a file's ledger row, fire two migrate() calls with
+    // Promise.all) and gave migrate() a same-process serializing queue
+    // (`migrationQueue` in migrate.ts) that closes it for two calls sharing
+    // one Node module. It does NOT close the gap between two SEPARATE
+    // processes — module state cannot span processes, and ClickHouse has no
+    // cross-statement lock migrate() could take out to close it from the SQL
+    // side. This setting stays in place as the containment for exactly that
+    // remaining shape (two different vitest worker files, each its own
+    // isolated module registry, racing one shared CI ClickHouse); #2687
+    // tracks a real cross-process guard.
     fileParallelism: false,
     coverage: {
       provider: "v8",
