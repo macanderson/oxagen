@@ -26,6 +26,31 @@
  * case-sensitive, which is the conservative direction — it can split one file
  * into two keys on a case-insensitive volume, where the failure is a redundant
  * check rather than a skipped one.
+ *
+ * Also deliberately NOT done: symlink resolution. `realpath` would make
+ * `link/foo.ts` and `real/foo.ts` one key, and #1357 and #1358 both asked for
+ * this to be decided rather than left to chance. It is declined, for two
+ * reasons that are about the shape of this function rather than its cost:
+ *
+ * - It is pure and synchronous, and every caller is on a hot path that runs
+ *   per read and per write. `realpath` is an I/O syscall, so taking it would
+ *   make a file's identity depend on filesystem state at the moment of the
+ *   call — two lookups either side of a `ln -s` would disagree.
+ * - The key must exist for a file that does not. A write that creates a file
+ *   anchors and locks before anything is on disk, and `realpath` on a missing
+ *   path either throws or resolves only the prefix, so the one operation that
+ *   most needs a stable key is the one it cannot produce.
+ *
+ * Unlike case folding, this residual does NOT fail in the safe direction, and
+ * saying so is the point of writing it down: two spellings of one file that
+ * differ only through a symlink stay two keys, and for the lock two keys means
+ * both agents are granted. The exposure needs a workspace that reaches one
+ * file through two paths differing by a symlink AND two agents on it at once;
+ * how often that shape occurs in practice has not been measured, so treat the
+ * bound as unknown rather than small. Closing it properly means moving
+ * identity behind an async, I/O-taking port rather than adding a `realpath`
+ * call here; that is a maintainer's call about this seam, not a line to slip
+ * into it.
  */
 
 /** `/abs`, `C:/abs` and `C:\abs` are absolute; everything else joins a root. */
