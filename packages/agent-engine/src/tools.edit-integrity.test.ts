@@ -7,6 +7,7 @@
  * edit-integrity.test.ts; here they are exercised through the real tools against
  * a MemoryWorkspace.
  */
+import { posix } from "node:path";
 import { describe, it, expect } from "vitest";
 import { MemoryWorkspace } from "./workspaces/memory";
 import { buildWorkspaceTools } from "./tools";
@@ -27,17 +28,21 @@ function fileEdits(events: CodingEvent[]): FileEditEvent[] {
 }
 
 /**
- * A MemoryWorkspace that resolves a relative and an absolute spelling of the
- * same path to ONE stored file, as a real filesystem does. MemoryWorkspace keys
- * files by the literal string, so this is needed to prove the tool-level ledger
- * keys by NORMALIZED path (via resolveDisplayPath) rather than by the exact
- * string the model happened to pass.
+ * A MemoryWorkspace that resolves every spelling of one path to ONE stored
+ * file, as a real filesystem does. MemoryWorkspace keys files by the literal
+ * string, so this is needed to prove the tool-level ledger keys by CANONICAL
+ * path (via canonicalPathKey) rather than by the exact string the model
+ * happened to pass.
+ *
+ * `posix.resolve` deliberately, rather than the `canonicalPathKey` under test:
+ * the fixture has to model a filesystem independently, or the test would only
+ * prove the canonicalizer agrees with itself. Node's resolver is the
+ * disinterested second opinion, and `.`/`..`/duplicate-separator collapsing is
+ * exactly what it does.
  */
 class NormalizingWorkspace extends MemoryWorkspace {
   private norm(p: string): string {
-    if (p.startsWith("/")) return p;
-    const base = this.root.endsWith("/") ? this.root.slice(0, -1) : this.root;
-    return `${base}/${p}`;
+    return posix.resolve(this.root, p);
   }
   override readFile(
     p: string,
@@ -208,6 +213,79 @@ describe("edit_file — syntax gate", () => {
     expect(result).toContain("Edited");
     expect(result).not.toContain("Edit rejected");
     expect(await ws.readFile("a.ts")).toBe("const x = (\nconst y = 2;");
+  });
+
+  /**
+   * #1353's definition of done: "a witness that actually shifts lines: a file
+   * broken at line N, an edit inserting above it, and an assertion that the
+   * write is NOT rejected."
+   *
+   * The test directly above edits line 2 of a file broken at line 1, so it
+   * passes whether or not an error's identity depends on its position — which
+   * is the issue's own complaint about the existing coverage. Inserting ABOVE
+   * the fault is the ordinary shape of an edit and the shape that failed: the
+   * untouched fault is renumbered, misses `prior`, and the agent is told it
+   * introduced an error it never touched, with the suggested next action
+   * pointing at a line unrelated to its task.
+   */
+  it("passes an edit that INSERTS ABOVE a pre-existing error, renumbering it", async () => {
+    const ws = new MemoryWorkspace({ "a.ts": "const y = 1;\nconst x = (" });
+    const tools = buildWorkspaceTools(ws);
+
+    const result = await run(tools.edit_file, {
+      path: "a.ts",
+      old_string: "const y = 1;",
+      new_string: "import a from './a';\nimport b from './b';\nconst y = 1;",
+    });
+
+    expect(result).not.toContain("Edit rejected");
+    expect(result).toContain("Edited");
+    expect(await ws.readFile("a.ts")).toBe(
+      "import a from './a';\nimport b from './b';\nconst y = 1;\nconst x = (",
+    );
+  });
+
+  it("still rejects a NEW error introduced by the same insert-above shape", async () => {
+    // The negative control for the test above: shifting a pre-existing fault is
+    // forgiven, adding a second one alongside it is not. Without this, making
+    // `newSyntaxErrors` return nothing at all would pass.
+    const ws = new MemoryWorkspace({ "a.ts": "const y = 1;\nconst x = (" });
+    const tools = buildWorkspaceTools(ws);
+
+    const result = await run(tools.edit_file, {
+      path: "a.ts",
+      old_string: "const y = 1;",
+      new_string: "const z = [;\nconst y = 1;",
+    });
+
+    expect(result).toContain("Edit rejected");
+    expect(await ws.readFile("a.ts")).toBe("const y = 1;\nconst x = (");
+  });
+
+  /**
+   * The JSON arm of the same defect. `checkSyntax`'s `.json` branch returns
+   * `JSON.parse`'s message verbatim and V8 embeds the byte offset (and, on
+   * Node >= 20, a line/column) in it, so a key inserted above a pre-existing
+   * fault renumbers the message exactly as a TS line prefix renumbers.
+   *
+   * This drives real content through `checkSyntax` rather than asserting on
+   * hand-written message arrays, so the identity-stripping regexes stay pinned
+   * to the shapes Node actually emits — a formatter change would otherwise
+   * silently stop matching with no test to notice.
+   */
+  it("passes a .json edit that inserts a key above a pre-existing parse fault", async () => {
+    const broken = '{\n  "a": 1,\n  "b": 2,,\n}\n';
+    const ws = new MemoryWorkspace({ "a.json": broken });
+    const tools = buildWorkspaceTools(ws);
+
+    const result = await run(tools.edit_file, {
+      path: "a.json",
+      old_string: '  "a": 1,',
+      new_string: '  "inserted": 0,\n  "a": 1,',
+    });
+
+    expect(result).not.toContain("Edit rejected");
+    expect(result).toContain("Edited");
   });
 
   it("does not gate a non-code file (unsupported extension)", async () => {
@@ -450,27 +528,101 @@ describe("write_file — optional DiagnosticsProvider", () => {
   });
 });
 
+/**
+ * #1357's definition of done asks for a witness that the spellings share one
+ * entry AND that "a stale write through EACH of them is refused". The first
+ * half is covered on the ledger itself in edit-integrity.test.ts; this is the
+ * second, which has to run through the real tool because the refusal is what
+ * the defect actually cost.
+ *
+ * The distinction is the whole point of the issue: an absent ledger entry is
+ * not a refusal, it is a free pass, and #1357 notes that "the result line still
+ * prints an `[anchor …]` pair for the new content, so the output of a guarded
+ * write and an unguarded one look the same". Asserting on the ledger proves the
+ * key; only asserting that `Stale anchor` comes back proves the guard fires.
+ *
+ * The relative/absolute pair was the one pairing that already worked before
+ * canonicalPathKey — `./a.ts`, `sub/../a.ts` and `/repo//a.ts` are the
+ * spellings that missed the map and clobbered the file.
+ */
 describe("edit gate — ledger key normalization (tool level)", () => {
-  it("shares one ledger entry across relative and absolute spellings, so a stale anchor is detected via either", async () => {
-    const ws = new NormalizingWorkspace({ "/repo/a.ts": "const x = 1;" });
+  const SPELLINGS = [
+    ["a.ts", "the plain relative spelling"],
+    ["/repo/a.ts", "the absolute spelling"],
+    ["./a.ts", "a leading dot"],
+    ["sub/../a.ts", "a round trip through the parent"],
+    ["./sub/.././a.ts", "interior dots and a parent"],
+    ["/repo//a.ts", "absolute with a duplicate separator"],
+    ["/repo/sub/../a.ts", "absolute through the parent"],
+  ] as const;
+
+  it.each(SPELLINGS)(
+    "refuses a stale edit_file spelled %s (%s)",
+    async (spelling) => {
+      const ws = new NormalizingWorkspace({ "/repo/a.ts": "const x = 1;" });
+      const tools = buildWorkspaceTools(ws);
+
+      // Read via the plain relative spelling — the anchor is recorded under the
+      // canonical key canonicalPathKey("/repo", "a.ts") === "/repo/a.ts".
+      await run(tools.read_file, { path: "a.ts" });
+      // Another writer changes the file out from under us.
+      await ws.writeFile("a.ts", "const x = 99;");
+
+      // Edit via each spelling in turn. Every one must resolve to the SAME
+      // ledger entry and see the stale anchor; a spelling that keys separately
+      // finds no entry, skips the check, and clobbers the external change.
+      const result = await run(tools.edit_file, {
+        path: spelling,
+        old_string: "99",
+        new_string: "2",
+      });
+
+      expect(result).toContain("Stale anchor");
+      expect(await ws.readFile("a.ts")).toBe("const x = 99;");
+    },
+  );
+
+  it.each(SPELLINGS)(
+    "refuses a stale write_file spelled %s (%s)",
+    async (spelling) => {
+      // write_file is the blunter of the two writes — it replaces the whole
+      // file, so a skipped anchor check here loses the external change
+      // entirely rather than failing to find an `old_string`.
+      const ws = new NormalizingWorkspace({ "/repo/a.ts": "const x = 1;" });
+      const tools = buildWorkspaceTools(ws);
+
+      await run(tools.read_file, { path: "a.ts" });
+      await ws.writeFile("a.ts", "const x = 99;");
+
+      const result = await run(tools.write_file, {
+        path: spelling,
+        content: "const x = 2;",
+      });
+
+      expect(result).toContain("Stale anchor");
+      expect(await ws.readFile("a.ts")).toBe("const x = 99;");
+    },
+  );
+
+  it("still lets a genuinely different file through under a confusable spelling", async () => {
+    // The negative control. If canonicalization collapsed too far, this would
+    // read as stale too, and the suite above would pass for the wrong reason.
+    const ws = new NormalizingWorkspace({
+      "/repo/a.ts": "const x = 1;",
+      "/repo/sub/a.ts": "const y = 1;",
+    });
     const tools = buildWorkspaceTools(ws);
 
-    // Read via the RELATIVE spelling — the anchor is recorded under the
-    // normalized key (resolveDisplayPath("/repo", "a.ts") === "/repo/a.ts").
     await run(tools.read_file, { path: "a.ts" });
-    // Another writer changes the file (same underlying file via normalization).
     await ws.writeFile("a.ts", "const x = 99;");
 
-    // Edit via the ABSOLUTE spelling — it must resolve to the SAME ledger entry
-    // and therefore see the stale anchor. If the two spellings keyed separately,
-    // the absolute edit would find no entry and clobber the file.
     const result = await run(tools.edit_file, {
-      path: "/repo/a.ts",
-      old_string: "99",
+      path: "sub/a.ts",
+      old_string: "1",
       new_string: "2",
     });
 
-    expect(result).toContain("Stale anchor");
-    expect(await ws.readFile("a.ts")).toBe("const x = 99;");
+    expect(result).not.toContain("Stale anchor");
+    expect(await ws.readFile("sub/a.ts")).toBe("const y = 2;");
   });
 });
