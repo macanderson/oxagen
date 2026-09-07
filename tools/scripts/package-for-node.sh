@@ -69,6 +69,15 @@ port_for() {
 # alpine is the default; a service that ships a glibc-linked binary in its
 # tarball (the worker carries stella-serve, built on the glibc arm runner)
 # must run on a glibc image or that binary fails to load at first spawn.
+#
+# The family is only half of it, and the half that used to be stated. glibc is
+# backward compatible and not forward compatible, so the image also has to be
+# no OLDER than the builder — a binary from a 2.39 runner does not load on a
+# 2.36 image, for the same "fails at first spawn" reason and with the same
+# invisibility (the sidecar pool starts lazily, so the container stays healthy
+# while every turn that reaches the engine dies). The builder and this image
+# are pinned in different files; check-glibc-parity.sh is what compares them,
+# and it reads the image name out of THIS assignment rather than repeating it.
 write_manifest() {
   local port=$1 memory=$2 health=$3 config=$4
   shift 4

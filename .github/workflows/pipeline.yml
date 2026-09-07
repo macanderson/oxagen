@@ -794,6 +794,16 @@ jobs:
             --manifest-path "$RUNNER_TEMP/stella-src/Cargo.toml"
           echo "STELLA_SERVE_ARTIFACT=$RUNNER_TEMP/stella-src/target/release/stella-serve" >> "$GITHUB_ENV"
 
+      # The binary is built here and runs in a container chosen in
+      # package-for-node.sh. glibc is backward compatible and not forward
+      # compatible, so a builder newer than that image ships a binary that
+      # cannot load — and the sidecar pool starts lazily, so the container
+      # stays healthy while every turn that reaches the engine dies (#2685).
+      # Free to check at this point: the artifact already exists.
+      - name: stella-serve loads in the image it ships to
+        if: matrix.service == 'worker'
+        run: tools/scripts/check-glibc-parity.sh "$STELLA_SERVE_ARTIFACT"
+
       - name: Package ${{ matrix.service }}
         run: |
           set -euo pipefail
