@@ -23,6 +23,7 @@ import {
   generateMutants,
   type DiffFile,
   type MutationGateResult,
+  type WitnessRun,
 } from "./mutation";
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
@@ -429,6 +430,49 @@ describe("witnessOutcome", () => {
         { command: "b", exitCode: 1, timedOut: false },
       ]).status,
     ).toBe("witnessed");
+  });
+
+  // The two shapes Sourcery's #1359 assessment read as gaps: a timed-out run
+  // sitting beside a run that really failed, with and without a claim. They
+  // are not gaps, and these pin why — the timeout is load-bearing for
+  // nothing. Each case asserts the verdict three times: with the timeout,
+  // without it (the same answer, so the timeout added nothing), and with the
+  // timeout alone (`skipped`, so it is not proof on its own). A change that
+  // made a timeout count as evidence would fail the third assertion; one that
+  // made it veto a genuine failing witness would fail the first.
+  it("does not let a corroborating timeout weigh on a claim that really failed (#1359)", () => {
+    const claim: WitnessRun = {
+      command: "flip",
+      exitCode: 1,
+      timedOut: false,
+      isClaim: true,
+    };
+    const stalled: WitnessRun = {
+      command: "corroborating",
+      exitCode: null,
+      timedOut: true,
+    };
+
+    expect(witnessOutcome([claim, stalled]).status).toBe("witnessed");
+    expect(witnessOutcome([claim]).status).toBe("witnessed");
+    expect(witnessOutcome([stalled]).status).toBe("skipped");
+  });
+
+  it("does not let a timeout weigh on a real failure when there is no claim (#1359)", () => {
+    const stalled: WitnessRun = {
+      command: "stalled",
+      exitCode: null,
+      timedOut: true,
+    };
+    const failed: WitnessRun = {
+      command: "failing",
+      exitCode: 1,
+      timedOut: false,
+    };
+
+    expect(witnessOutcome([stalled, failed]).status).toBe("witnessed");
+    expect(witnessOutcome([failed]).status).toBe("witnessed");
+    expect(witnessOutcome([stalled]).status).toBe("skipped");
   });
 
   it("skips rather than concluding when no run produced a usable result", () => {

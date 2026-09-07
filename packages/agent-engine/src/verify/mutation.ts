@@ -491,6 +491,15 @@ export interface WitnessVerdict {
  * - Only `tests-failed` is a proof, and only the claim's own result can turn
  *   the verdict `vacuous`.
  *
+ * What that leaves deliberately alone: a timed-out run sitting beside a run
+ * that ran and failed. The verdict there rests on the failing run, and the
+ * timeout adds nothing to it — drop the timed-out entry and the answer is the
+ * same. Making a stalled sibling veto a genuine failing witness would trade a
+ * false `witnessed` for a false `skipped`, and `skipped` is not free: it is
+ * the verdict that tells a correct fix its tests do not witness it. A timeout
+ * must never *be* the proof, which is what #1359 asks for; it is not asked to
+ * suppress one.
+ *
  * The direction matters: `applyGateToVerdict` folds only a `vacuous` result
  * back into the revise loop, so a wrong `witnessed` is silent by construction
  * and nothing downstream can notice it.
