@@ -45,6 +45,15 @@ describe("checkSyntax", () => {
     expect(r.errors[0]).toContain("Expression expected");
   });
 
+  // #1353 asks the comparison to be made on "TypeScript's `code` plus the
+  // flattened message". Rendering the code in is how the identity carries it
+  // without a second channel to keep in sync, and it is the form `tsc` prints,
+  // so the agent reading a rejection can look the diagnostic up.
+  it("renders the diagnostic code, so identity is code + message (#1353)", () => {
+    const r = checkSyntax("a.ts", "const a = 1;\nconst b = (");
+    expect(r.errors[0]).toMatch(/^line 2: TS\d+: /);
+  });
+
   it("passes valid JSX in a .tsx file without React in scope (jsx preserved)", () => {
     const r = checkSyntax(
       "a.tsx",
@@ -184,6 +193,21 @@ describe("newSyntaxErrors identifies an error by its message, not its line", () 
     expect(
       newSyntaxErrors([], ["line 1: ',' expected.", "line 2: ',' expected."]),
     ).toHaveLength(2);
+  });
+
+  // The converse free pass #1353 names in its last paragraph. Stripping the
+  // position alone would make these one error, and the new one would be
+  // filtered out as "not new"; the diagnostic code keeps them apart.
+  it("keeps two diagnostics apart when only their code differs", () => {
+    expect(
+      newSyntaxErrors(
+        ["line 12: TS1002: Unterminated string literal."],
+        [
+          "line 15: TS1002: Unterminated string literal.",
+          "line 15: TS1005: Unterminated string literal.",
+        ],
+      ),
+    ).toEqual(["line 15: TS1005: Unterminated string literal."]);
   });
 
   it("handles messages with no line prefix at all (JSON parse errors)", () => {

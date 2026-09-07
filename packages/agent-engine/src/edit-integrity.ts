@@ -94,7 +94,14 @@ export function checkSyntax(path: string, content: string): SyntaxCheckResult {
   const errors: string[] = [];
   for (const d of diagnostics ?? []) {
     if (errors.length >= MAX_SYNTAX_ERRORS) break;
-    const msg = ts.flattenDiagnosticMessageText(d.messageText, "\n");
+    // The diagnostic CODE rides in front of the flattened message, which is
+    // what makes `errorIdentity` compare "the diagnostic itself" rather than
+    // its rendered text (#1353). Without it, two distinct diagnostics that
+    // happen to flatten to the same words are one error to the delta, and the
+    // second is filtered out as "not new" — the converse free pass the issue
+    // names. It is also the form `tsc` itself prints, so an agent reading the
+    // rejection can look the code up.
+    const msg = `TS${d.code}: ${ts.flattenDiagnosticMessageText(d.messageText, "\n")}`;
     if (d.file && typeof d.start === "number") {
       const { line } = ts.getLineAndCharacterOfPosition(d.file, d.start);
       errors.push(`line ${line + 1}: ${msg}`);
@@ -124,7 +131,15 @@ const LINE_PREFIX = /^line \d+: /;
 const JSON_POSITION =
   /\s+in JSON at position \d+(\s*\(line \d+ column \d+\))?$/;
 
-/** An error message's identity, independent of the position it happens to render at. */
+/**
+ * An error's identity: everything except the position it happens to render at.
+ *
+ * For a TypeScript diagnostic that is `TS<code>: <flattened message>`, which is
+ * the pair #1353 asks the comparison to be made on — `checkSyntax` renders the
+ * code in so the identity carries it without a second channel to keep in sync.
+ * For a `JSON.parse` failure there is no code, so it is the message with V8's
+ * embedded offset stripped.
+ */
 function errorIdentity(error: string): string {
   return error.replace(LINE_PREFIX, "").replace(JSON_POSITION, "");
 }
