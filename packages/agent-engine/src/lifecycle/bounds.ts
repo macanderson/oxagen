@@ -19,6 +19,39 @@
  *
  * Every timer is `unref`'d: a bound must never be the thing keeping an
  * otherwise-finished process alive.
+ *
+ * ## The accepted grammar
+ *
+ * An env-var ceiling is **a whole decimal integer, or the word `off`** — after
+ * trimming, and nothing else. `120000` and `off` and `0` are the whole
+ * vocabulary; `30d`, `2gb`, `1e9`, `1_000_000` and `0.5` are all rejected, fall
+ * back to the default, and say so on stderr once.
+ *
+ * The strictness is the point. These resolvers used to run `Number.parseInt`,
+ * which stops at the first character it cannot use and returns what it read so
+ * far, reporting no error at all. `30d` became a 30-millisecond ceiling and
+ * `2gb` became a 2-megabyte one — bounds orders of magnitude tighter than the
+ * operator wrote, firing `onExpire` at once, and `onExpire` is wired to
+ * graceful abort paths that emit a terminal event, so the run read as "hit its
+ * ceiling" rather than as "misconfigured". Worse, `0.5` parsed to `0`, and `0`
+ * is this module's own disable sentinel: a value written to *tighten* a
+ * ceiling removed it. `Number.isNaN` was the only validity test and it cannot
+ * see any of those (#1409).
+ *
+ * Unit suffixes are a deliberate non-feature. Accepting them is a larger
+ * decision about a shared duration grammar; what could not stand is a suffix
+ * silently parsing as its leading digits.
+ *
+ * ## Ceilings longer than 24 days
+ *
+ * {@link startMaxLifetime} honours any finite ceiling by chaining timers.
+ * Node's `setTimeout` delay is a 32-bit signed integer, and a delay above
+ * `TIMEOUT_MAX` (2 147 483 647 ms) does not clamp — Node sets the duration to
+ * `1` and prints a `TimeoutOverflowWarning` to stderr, where a detached
+ * runner's output is a log file nobody reads. The bound was therefore
+ * inverted: the longer the ceiling asked for, the sooner the process died
+ * (#1408). Chaining rather than clamping, because clamping to 24.8 days would
+ * trade one wrong answer for another and say nothing.
  */
 
 export interface BoundHandle {
@@ -26,11 +59,29 @@ export interface BoundHandle {
   stop(): void;
 }
 
+/**
+ * The longest delay Node's `setTimeout` accepts: a 32-bit signed integer of
+ * milliseconds, about 24 days 20 hours. A larger delay is not clamped — the
+ * duration is set to `1` — so any ceiling past this has to be chained.
+ */
+export const TIMEOUT_MAX = 2_147_483_647;
+
+/** The subset of `setTimeout`/`clearTimeout` this module needs. */
+export type TimerHandle = unknown;
+
 export interface MaxLifetimeOptions {
   /** Ceiling in ms. `<= 0` or non-finite disables the bound entirely. */
   ms: number;
   /** Invoked exactly once when the ceiling elapses. */
   onExpire: () => void;
+  /**
+   * Injectable scheduler for tests, mirroring {@link RssWatchdogOptions.readRss}.
+   * Defaults to the global timers. A ceiling past {@link TIMEOUT_MAX} is
+   * chained, so a test can assert the requested delays without waiting weeks.
+   */
+  setTimeoutFn?: (fn: () => void, ms: number) => TimerHandle;
+  /** Companion to {@link MaxLifetimeOptions.setTimeoutFn}. */
+  clearTimeoutFn?: (handle: TimerHandle) => void;
 }
 
 /** A no-op handle for disabled bounds — callers never need a null check. */
@@ -40,20 +91,49 @@ const NOOP_HANDLE: BoundHandle = { stop: () => {} };
  * Start a hard wall-clock ceiling. The caller's `onExpire` should abort the
  * work gracefully (abort a controller, emit a terminal event) rather than
  * exiting mid-write.
+ *
+ * A ceiling longer than {@link TIMEOUT_MAX} is honoured by re-arming across
+ * however many timers it takes, so the process is bounded at the time asked
+ * for. `Infinity` and any non-finite value still disable the bound rather than
+ * chaining forever, and every timer is still `unref`'d.
  */
 export function startMaxLifetime(opts: MaxLifetimeOptions): BoundHandle {
   if (!Number.isFinite(opts.ms) || opts.ms <= 0) return NOOP_HANDLE;
+  const schedule =
+    opts.setTimeoutFn ??
+    ((fn: () => void, ms: number): TimerHandle => setTimeout(fn, ms));
+  const cancel =
+    opts.clearTimeoutFn ??
+    ((handle: TimerHandle): void => {
+      clearTimeout(handle as ReturnType<typeof setTimeout>);
+    });
+
   let fired = false;
-  const timer = setTimeout(() => {
-    if (fired) return;
-    fired = true;
-    opts.onExpire();
-  }, opts.ms);
-  (timer as { unref?: () => void }).unref?.();
+  let remaining = opts.ms;
+  let timer: TimerHandle;
+
+  const arm = (): void => {
+    const slice = Math.min(remaining, TIMEOUT_MAX);
+    remaining -= slice;
+    timer = schedule(() => {
+      if (fired) return;
+      // Not the last slice: re-arm for what is left rather than expiring.
+      if (remaining > 0) {
+        arm();
+        return;
+      }
+      fired = true;
+      opts.onExpire();
+    }, slice);
+    (timer as { unref?: () => void }).unref?.();
+  };
+
+  arm();
+
   return {
     stop: () => {
       fired = true;
-      clearTimeout(timer);
+      cancel(timer);
     },
   };
 }
@@ -122,40 +202,94 @@ export function startRssWatchdog(opts: RssWatchdogOptions): BoundHandle {
 }
 
 /**
- * Resolve a millisecond bound from an env var with a default. Accepts a plain
- * integer; `0`, a negative value, or `"off"` disables the bound (returns 0);
- * absent/unparsable falls back to `defaultMs`.
+ * Resolve a millisecond bound from an env var with a default.
+ *
+ * Accepts a whole decimal integer or `off` (see the module doc). `0`, a
+ * negative value, or `off` disables the bound and returns 0. An absent or
+ * empty variable takes `defaultMs` silently; anything else takes `defaultMs`
+ * and is reported once on stderr, because a ceiling the operator wrote and the
+ * process ignored must not be the quietest event in the log.
  */
 export function resolveBoundMs(
   envVar: string,
   defaultMs: number,
   env: Record<string, string | undefined> = process.env,
 ): number {
-  return resolveBound(env[envVar], defaultMs);
+  const parsed = parseBoundValue(envVar, env[envVar]);
+  return parsed === REJECTED ? defaultMs : parsed;
 }
 
 /**
  * Resolve a byte bound expressed in MEGABYTES in the env var (ceilings are
  * human-set; nobody wants to count bytes) with a default in bytes. Same
- * disable semantics as {@link resolveBoundMs}.
+ * grammar and same disable semantics as {@link resolveBoundMs}.
  */
 export function resolveBoundBytes(
   envVar: string,
   defaultBytes: number,
   env: Record<string, string | undefined> = process.env,
 ): number {
-  const raw = env[envVar];
-  if (raw === undefined) return defaultBytes;
-  if (raw.trim().toLowerCase() === "off") return 0;
-  const mb = Number.parseInt(raw, 10);
-  if (Number.isNaN(mb)) return defaultBytes;
-  return mb <= 0 ? 0 : mb * 1024 * 1024;
+  const megabytes = parseBoundValue(envVar, env[envVar]);
+  if (megabytes === REJECTED) return defaultBytes;
+  if (megabytes === 0) return 0;
+  const bytes = megabytes * 1024 * 1024;
+  // A megabyte count large enough to leave the safe-integer range is not a
+  // ceiling anyone meant; treat it like any other unusable value.
+  if (!Number.isSafeInteger(bytes)) {
+    reportRejected(envVar, env[envVar] ?? "", "megabyte count is too large");
+    return defaultBytes;
+  }
+  return bytes;
 }
 
-function resolveBound(raw: string | undefined, fallback: number): number {
-  if (raw === undefined) return fallback;
-  if (raw.trim().toLowerCase() === "off") return 0;
-  const n = Number.parseInt(raw, 10);
-  if (Number.isNaN(n)) return fallback;
-  return n <= 0 ? 0 : n;
+/**
+ * Sentinel for "this value cannot be used" — distinct from `0`, which is a
+ * real answer meaning the bound is disabled. Conflating the two is how `0.5`
+ * came to disable a ceiling.
+ */
+const REJECTED = Symbol("rejected");
+
+/** A whole decimal integer, with an optional sign and nothing else. */
+const WHOLE_INTEGER = /^[+-]?\d+$/;
+
+/** Env vars already reported, so a resolver called per process says it once. */
+const reported = new Set<string>();
+
+function reportRejected(envVar: string, raw: string, reason: string): void {
+  const key = `${envVar}=${raw}`;
+  if (reported.has(key)) return;
+  reported.add(key);
+  console.warn(
+    `[lifecycle] ${envVar}=${JSON.stringify(raw)} ignored: ${reason}. ` +
+      "Expected a whole number of milliseconds (or megabytes), or `off`. " +
+      "Using the default instead.",
+  );
+}
+
+function parseBoundValue(
+  envVar: string,
+  raw: string | undefined,
+): number | typeof REJECTED {
+  if (raw === undefined) return REJECTED;
+  const trimmed = raw.trim();
+  // An empty variable reads as "not set", which it usually is (`FOO=`).
+  if (trimmed === "") return REJECTED;
+  if (trimmed.toLowerCase() === "off") return 0;
+
+  if (!WHOLE_INTEGER.test(trimmed)) {
+    reportRejected(
+      envVar,
+      raw,
+      "not a whole number (a unit suffix, decimal point or exponent is not accepted)",
+    );
+    return REJECTED;
+  }
+
+  const value = Number(trimmed);
+  if (!Number.isSafeInteger(value)) {
+    reportRejected(envVar, raw, "outside the safe integer range");
+    return REJECTED;
+  }
+
+  return value <= 0 ? 0 : value;
 }
