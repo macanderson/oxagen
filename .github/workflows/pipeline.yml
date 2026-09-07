@@ -7,7 +7,26 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # A push to main gets a group of its own, per commit; everything else groups
+  # by ref so a new push supersedes the run before it.
+  #
+  # The paragraph below has described the eviction since 2026-08-27, and on
+  # 2026-09-07 it stopped being a footnote: merges arrived every 10-20 minutes
+  # against a run that takes ~75, so each new one evicted the queued run before
+  # it started and NOTHING finished for hours. Eight commits reached main
+  # undeployed, because deploy-web and deploy-node run only after the check
+  # passes and no check ever did. Cancelled runs read as ordinary cleanup, so
+  # nothing went red (#2730).
+  #
+  # Per-commit on main means a queued run cannot be evicted, which is what makes
+  # 'every commit on main gets a finished check' true rather than usually true.
+  # It costs concurrent runners during a burst; that is the trade, and the
+  # alternative was silently not deploying.
+  group: >-
+    ci-${{ github.ref }}${{
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
+        && format('-{0}', github.sha) || ''
+    }}
   # Auto-cancel superseded runs for PRs only. A push-to-main run used to carry
   # the prod migrate job, and cancelling the whole run mid-`atlas migrate apply`
   # would strand prod behind the committed migrations. That job is retired
@@ -25,11 +44,13 @@ concurrency:
   # 71007b78's run on 2026-08-27 — cancelled with zero jobs, moments after
   # 2a3fae4d was pushed behind it.
   #
-  # It costs nothing operationally: the evicting commit contains the evicted
-  # one, so its run covers both and its deploy ships both. What it does mean is
-  # that "every commit on main had its own green run" is false, and anything
-  # assuming one run per commit — a bisect over run history, say — will find
-  # gaps that are not failures.
+  # That reasoning held only while a run finished before the next merge. It
+  # said the evicting commit contains the evicted one so its run covers both —
+  # true, and irrelevant once the evicting run is itself evicted. Under
+  # sustained merge pressure the chain never terminates and no commit is
+  # covered by anything. The per-commit group above is why that can no longer
+  # happen on main; pull requests keep the old behaviour, where superseding is
+  # what you want.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
