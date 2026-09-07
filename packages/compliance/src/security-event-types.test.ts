@@ -1,12 +1,5 @@
-/**
- * #2528: the taxonomy declares types nothing writes, and an audit filter that
- * offers one returns zero rows — indistinguishable from "this never happened".
- *
- * The module's own note says the RESERVED markers are HAND-MAINTAINED and that
- * "no test asserts that an unmarked value has a live emitter, so a type can
- * lose its last emitter and keep reading as covered." This file is that test.
- */
-import { execFileSync } from "node:child_process";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   EMITTED_SECURITY_EVENT_TYPES,
@@ -16,49 +9,96 @@ import {
 } from "./security-event-types";
 
 /**
- * The repository root. vitest runs with the PACKAGE as its cwd, so a search
- * for `packages`/`apps` from there matches nothing and every type would look
- * orphaned — a scan that cannot see the tree it is judging.
+ * The repository root, found by walking up for the workspace manifest.
+ *
+ * Deliberately not `git rev-parse`: the CI container runs as a different user
+ * than the checkout owner, so git refuses with "detected dubious ownership" and
+ * a module-level call takes the whole file down with it. The question this scan
+ * asks — does any shipping file mention this literal — is about the filesystem,
+ * not about git, so it asks the filesystem.
  */
-const REPO_ROOT = execFileSync("git", ["rev-parse", "--show-toplevel"], {
-  encoding: "utf8",
-}).trim();
+function repoRoot(): string {
+  let dir = resolve(import.meta.dirname);
+  for (let up = 0; up < 10; up += 1) {
+    try {
+      statSync(join(dir, "pnpm-workspace.yaml"));
+      return dir;
+    } catch {
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
+  throw new Error(
+    "could not locate the workspace root from " + import.meta.dirname,
+  );
+}
+
+const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
+const SKIP_DIRS = new Set([
+  "node_modules",
+  "dist",
+  "build",
+  ".next",
+  ".turbo",
+  "coverage",
+  "__snapshots__",
+]);
 
 /**
- * Production files that mention the literal.
+ * Every shipping source file under `packages/` and `apps/`.
  *
- * Tests are excluded, and that distinction is the point: a test asserting a
- * type is NOT offered mentions the literal without emitting it, so counting
- * tests would let a type look covered because something checks it is absent.
- * An emitter is shipping code.
+ * Tests are excluded, and that distinction is the point: a test asserting a type
+ * is NOT offered mentions the literal without emitting it, so counting tests
+ * would let a type look covered because something checks it is absent. The
+ * taxonomy itself is excluded for the same reason — it declares the names.
  */
-function referencesOutsideTaxonomy(type: string): string[] {
-  let out = "";
-  try {
-    out = execFileSync(
-      "git",
-      [
-        "grep",
-        "-l",
-        "--fixed-strings",
-        `"${type}"`,
-        "--",
-        "packages",
-        "apps",
-        // Exclude every test file: see the note above.
-        ":(exclude)**/*.test.ts",
-        ":(exclude)**/*.test.tsx",
-        ":(exclude)**/__tests__/**",
-      ],
-      { encoding: "utf8", cwd: REPO_ROOT },
-    );
-  } catch {
-    // git grep exits 1 when nothing matches.
-    return [];
+function shippingSources(): string[] {
+  const root = repoRoot();
+  const out: string[] = [];
+
+  const walk = (dir: string): void => {
+    let entries: ReturnType<typeof readdirSync>;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (!SKIP_DIRS.has(entry.name) && !entry.name.startsWith(".")) {
+          walk(full);
+        }
+        continue;
+      }
+      if (!SOURCE_EXTENSIONS.some((ext) => entry.name.endsWith(ext))) continue;
+      if (entry.name.includes(".test.")) continue;
+      if (entry.name.startsWith("security-event-types")) continue;
+      out.push(full);
+    }
+  };
+
+  walk(join(root, "packages"));
+  walk(join(root, "apps"));
+  return out;
+}
+
+/** Event-type literals that appear in shipping source, computed in one pass. */
+function referencedTypes(): ReadonlySet<string> {
+  const found = new Set<string>();
+  for (const file of shippingSources()) {
+    let text: string;
+    try {
+      text = readFileSync(file, "utf8");
+    } catch {
+      continue;
+    }
+    for (const type of SECURITY_EVENT_TYPES) {
+      if (!found.has(type) && text.includes(`"${type}"`)) found.add(type);
+    }
   }
-  return out
-    .split("\n")
-    .filter((f) => f !== "" && !f.includes("security-event-types"));
+  return found;
 }
 
 describe("the emitted subset", () => {
@@ -103,8 +143,9 @@ describe("the emitted subset", () => {
  */
 describe("the RESERVED markers match the repository", () => {
   it("finds no emitter for any reserved type", () => {
-    const stale = RESERVED_SECURITY_EVENT_TYPES.filter(
-      (t) => referencesOutsideTaxonomy(t).length > 0,
+    const referenced = referencedTypes();
+    const stale = RESERVED_SECURITY_EVENT_TYPES.filter((t) =>
+      referenced.has(t),
     );
     expect(
       stale,
@@ -114,8 +155,9 @@ describe("the RESERVED markers match the repository", () => {
   });
 
   it("finds a reference for every emitted type", () => {
+    const referenced = referencedTypes();
     const orphaned = EMITTED_SECURITY_EVENT_TYPES.filter(
-      (t) => referencesOutsideTaxonomy(t).length === 0,
+      (t) => !referenced.has(t),
     );
     expect(
       orphaned,
