@@ -22,7 +22,7 @@
 import { createHash } from "node:crypto";
 import { extname } from "node:path";
 import ts from "typescript";
-import { resolveDisplayPath } from "./tools";
+import { canonicalPathKey } from "./path-identity";
 
 /** Max formatted syntax messages surfaced per file — keeps tool output bounded. */
 const MAX_SYNTAX_ERRORS = 5;
@@ -105,22 +105,59 @@ export function checkSyntax(path: string, content: string): SyntaxCheckResult {
   return { supported: true, errors };
 }
 
+/** `line 12: Unterminated string literal.` → `Unterminated string literal.` */
+const LINE_PREFIX = /^line \d+: /;
+
 /**
- * The errors present AFTER an edit whose formatted text was not present BEFORE.
- * A file that was already broken carries those errors in `before`, so they never
- * appear here — only the NEW damage an edit introduces gates the write. Pure.
+ * The errors present AFTER an edit that were not present BEFORE — only the NEW
+ * damage an edit introduces gates the write, so a file that was already broken
+ * never blocks an unrelated edit. Pure.
+ *
+ * Identity is the MESSAGE, not the formatted string, because the formatted
+ * string starts with a line number. Comparing those made an error's identity
+ * its position, so any edit that shifted lines above a pre-existing error
+ * renamed it: adding three imports at the top moved an unterminated string from
+ * line 12 to line 15, the old text was not in `prior`, and the agent was told
+ * it had introduced an error it had not touched — with the suggested next
+ * action pointing at a line unrelated to its task (#1353).
+ *
+ * Matching keeps MULTIPLICITY, so identity survives a shift without hiding a
+ * genuine second instance: two unterminated strings where there was one leaves
+ * exactly one error reported, and it is reported with its real (post-edit)
+ * line number.
  */
 export function newSyntaxErrors(before: string[], after: string[]): string[] {
-  const prior = new Set(before);
-  return after.filter((e) => !prior.has(e));
+  const unclaimed = new Map<string, number>();
+  for (const error of before) {
+    const message = error.replace(LINE_PREFIX, "");
+    unclaimed.set(message, (unclaimed.get(message) ?? 0) + 1);
+  }
+
+  const introduced: string[] = [];
+  for (const error of after) {
+    const message = error.replace(LINE_PREFIX, "");
+    const remaining = unclaimed.get(message) ?? 0;
+    if (remaining > 0) {
+      unclaimed.set(message, remaining - 1);
+      continue;
+    }
+    introduced.push(error);
+  }
+  return introduced;
 }
 
 /**
  * Per-run (per {@link buildWorkspaceTools} call, i.e. per agent turn) map of
  * normalized path → last-known content hash — the anchor store. A whole-file
- * read records the hash; an edit/write verifies it. Keys are normalized through
- * {@link resolveDisplayPath}(root, path) so a relative and an absolute spelling
- * of the same file share ONE entry.
+ * read records the hash; an edit/write verifies it.
+ *
+ * Keys go through {@link canonicalPathKey}, so every spelling of one file
+ * shares ONE entry. This used to use `resolveDisplayPath`, which joins a root
+ * and stops: the relative-versus-absolute case its doc named did work, and
+ * `./src/foo.ts`, `src/../src/foo.ts` and `src//foo.ts` each missed. A miss is
+ * not a refusal here — an absent entry reads as "never seen this run, nothing
+ * to anchor against" — so a second spelling skipped the stale-content check
+ * altogether (#1357).
  */
 export class EditIntegrityLedger {
   private readonly root: string;
@@ -131,7 +168,7 @@ export class EditIntegrityLedger {
   }
 
   private key(path: string): string {
-    return resolveDisplayPath(this.root, path);
+    return canonicalPathKey(this.root, path);
   }
 
   /** Record the last-known content hash for `path`. */
