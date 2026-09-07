@@ -32,12 +32,21 @@
 // with security_events. Closing that gap needs new taxonomy values plus an
 // additive migration, so it is a design decision, not an allowlist edit.
 //
-// KNOWN GAP — this guard is not reached by the affected-package gate.
-// `pnpm gate` runs `turbo ... --filter=...[origin/main]`, which selects a
-// package only when it or one of its dependencies changed. @oxagen/compliance
-// declares no dependency on @oxagen/handlers (deliberately — see the leaf-package
-// note below), so a PR that touches ONLY packages/handlers does not run this
-// file. Adding an unaudited billing handler is exactly that shape of PR.
+// CLOSED (#2526) — this guard now runs unconditionally in CI, as its own step
+// (`pnpm check:audit-coverage`, beside `check:manifest`), so it no longer
+// depends on the affected-package gate selecting @oxagen/compliance.
+//
+// The gap it closes: `pnpm gate` runs `turbo … --filter=…[origin/main]`, which
+// selects a package only when it or one of its dependencies changed, and
+// @oxagen/compliance declares NO @oxagen/* dependencies at all (deliberately —
+// see the leaf-package note below). A PR touching only packages/handlers is
+// exactly the shape that adds an unaudited handler, and it is the shape least
+// likely to pull this file in.
+//
+// The fix is a step rather than a dependency on purpose: adding
+// @oxagen/handlers to this package's manifest just to make turbo select it
+// would trade the gap for the leaf-package design, which is the more valuable
+// of the two.
 //
 // For each allowlisted handler the invariant is: the file must EITHER emit a
 // security event (one of the emit helpers) OR carry an explicit
