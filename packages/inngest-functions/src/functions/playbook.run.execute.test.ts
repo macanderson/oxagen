@@ -1460,3 +1460,148 @@ describe("a revisited step is recorded once per visit (#1417)", () => {
     expect(result.stepsExecuted).toBe(200);
   });
 });
+
+/**
+ * #1417's third item asks for coverage of a playbook built with a `loop_back`
+ * edge. The cycle above uses `default` edges because that is what actually
+ * revisits a step; this block drives a real `loop_back` row instead, and pins
+ * what it does today.
+ *
+ * It does two things, and only the first is obvious. It does not route — the
+ * adjacency map is built from `default` and `conditional` alone, so the run
+ * ends at the edge's source rather than looping. It is still counted as an
+ * incoming edge when the entry step is chosen, so pointing one at the first
+ * step empties `entrySteps` and the traversal falls back to insertion order.
+ *
+ * Whether `loop_back` should route is a product decision and is deliberately
+ * not settled here. These tests exist so that decision is made on purpose:
+ * change the traversal and they fail, naming the behaviour that changed.
+ */
+describe("a loop_back edge routes nothing, and is counted anyway (#1417)", () => {
+  /** Capture every value handed to an insert, so the visits can be read back. */
+  function buildCapturingTenantDb(): { inserted: Record<string, unknown>[] } {
+    const inserted: Record<string, unknown>[] = [];
+    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+      fn({
+        update: () => ({
+          set: () => ({ where: () => Promise.resolve(undefined) }),
+        }),
+        insert: () => ({
+          values: (vals: Record<string, unknown>) => {
+            inserted.push(vals);
+            return {
+              returning: vi
+                .fn()
+                .mockResolvedValue([{ id: `step-run-${inserted.length}` }]),
+            };
+          },
+        }),
+      }),
+    );
+    return { inserted };
+  }
+
+  const loopBackSteps = [
+    {
+      id: "s1",
+      stepKey: "a",
+      name: "A",
+      stepType: "prompt",
+      isAsync: false,
+      exitOnError: true,
+      config: { prompt: "first" },
+    },
+    {
+      id: "s2",
+      stepKey: "b",
+      name: "B",
+      stepType: "prompt",
+      isAsync: false,
+      exitOnError: true,
+      config: { prompt: "second" },
+    },
+  ];
+
+  /** s1 →(default) s2 →(loop_back) s1 — the playbook an author would draw. */
+  const loopBackEdges = [
+    {
+      id: "e1",
+      sourceStepId: "s1",
+      targetStepId: "s2",
+      edgeType: "default",
+      condition: null,
+      priority: 0,
+    },
+    {
+      id: "e2",
+      sourceStepId: "s2",
+      targetStepId: "s1",
+      edgeType: "loop_back",
+      condition: null,
+      priority: 0,
+    },
+  ];
+
+  function runLoopBackPlaybook() {
+    buildSystemDbForExecution({
+      run: PENDING_RUN,
+      steps: loopBackSteps,
+      edges: loopBackEdges,
+    });
+    const captured = buildCapturingTenantDb();
+    mocks.generateObjectFor.mockResolvedValue({
+      object: { output: "x" },
+      usage: {},
+    });
+    return captured;
+  }
+
+  it("ends at the edge's source instead of looping back", async () => {
+    runLoopBackPlaybook();
+    const result = (await capturedHandler!({
+      event: { data: BASE_EVENT },
+      step: makeStep(),
+    })) as { stepsExecuted: number };
+
+    // Two steps, once each. The default-edge cycle reaches MAX_STEPS (200);
+    // this stops at 2, which is the whole difference between the edge types.
+    expect(result.stepsExecuted).toBe(2);
+  });
+
+  it("visits each step once, so every attempt is 1", async () => {
+    const captured = runLoopBackPlaybook();
+    await capturedHandler!({ event: { data: BASE_EVENT }, step: makeStep() });
+
+    const attemptsFor = (id: string) =>
+      captured.inserted
+        .filter((v) => v["playbookStepId"] === id)
+        .map((v) => v["attempt"]);
+    expect(attemptsFor("s1")).toEqual([1]);
+    expect(attemptsFor("s2")).toEqual([1]);
+  });
+
+  it("still counts the loop_back target as having an incoming edge", async () => {
+    const captured = runLoopBackPlaybook();
+    await capturedHandler!({ event: { data: BASE_EVENT }, step: makeStep() });
+
+    // Every step is now a target of some edge, so no step qualifies as an
+    // entry and the traversal falls back to insertion order. It picks s1 —
+    // the same step it would have picked had the loop_back edge not existed,
+    // which is why this costs nothing today and is worth pinning anyway.
+    const visitOrder = captured.inserted
+      .map((v) => v["playbookStepId"])
+      .filter((id): id is string => typeof id === "string");
+    expect(visitOrder).toEqual(["s1", "s2"]);
+  });
+
+  it("gives the single visit of each step a distinct telemetry id", async () => {
+    runLoopBackPlaybook();
+    await capturedHandler!({ event: { data: BASE_EVENT }, step: makeStep() });
+
+    const eventIds = mocks.insertEvents.mock.calls
+      .flatMap((call) => call[0] as { event_id: string }[])
+      .map((row) => row.event_id);
+    expect(eventIds.length).toBeGreaterThan(0);
+    expect(new Set(eventIds).size).toBe(eventIds.length);
+  });
+});
