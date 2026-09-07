@@ -6,6 +6,7 @@ import {
   formatVerdict,
   linkedIssues,
   referencedIssues,
+  referencesIssue,
   verdict,
 } from "./scr-dod-check.mjs";
 
@@ -371,5 +372,43 @@ describe("closeExemptFromDod", () => {
   it("verifies a close that names no reason at all", () => {
     expect(closeExemptFromDod(undefined)).toBe(false);
     expect(closeExemptFromDod(null)).toBe(false);
+  });
+});
+
+describe("referencesIssue (#2638)", () => {
+  const HERE = { owner: "macanderson", repo: "oxagen", number: 42 };
+
+  it("matches a same-repo close and a same-repo Refs", () => {
+    expect(referencesIssue("Closes #42", HERE)).toBe(true);
+    expect(referencesIssue("Refs #42", HERE)).toBe(true);
+  });
+
+  it("does not match a different issue number", () => {
+    // The regression this exists for: the helpers return
+    // `{ owner, repo, number }` records, so a caller comparing the list against
+    // a bare number matches nothing at all. A test that only asserted `false`
+    // here would pass against that bug too — which is why the `true` cases
+    // above come first.
+    expect(referencesIssue("Closes #43", HERE)).toBe(false);
+    expect(referencesIssue("", HERE)).toBe(false);
+  });
+
+  it("does not match the same number in another repository", () => {
+    expect(referencesIssue("Closes macanderson/stella#42", HERE)).toBe(false);
+    expect(referencesIssue("Refs otherorg/oxagen#42", HERE)).toBe(false);
+  });
+
+  it("matches a fully-qualified reference to this repository", () => {
+    expect(referencesIssue("Closes macanderson/oxagen#42", HERE)).toBe(true);
+  });
+
+  it("ignores a negated close but still sees a Refs for the same issue", () => {
+    // `linkedIssues` drops a negated close; `referencedIssues` does not filter
+    // negation because there is no claim to disclaim. A body that says both
+    // still names the issue, which is what a recheck should act on.
+    expect(referencesIssue("This does not close #42.", HERE)).toBe(false);
+    expect(referencesIssue("This does not close #42. Refs #42", HERE)).toBe(
+      true,
+    );
   });
 });
