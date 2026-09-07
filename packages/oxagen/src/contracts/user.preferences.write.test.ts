@@ -22,8 +22,6 @@ describe("user.preferences.write capability", () => {
       pendingPromptBehavior: "interrupt",
       defaultTextTier: "precise",
       defaultTextModel: "anthropic/claude-opus-4.8",
-      defaultImageModel: "bfl/flux-2-max",
-      defaultVideoModel: "google/veo-3.0-generate-001",
     });
     expect(parsed.fontSize).toBe("large");
     expect(parsed.pendingPromptBehavior).toBe("interrupt");
@@ -34,8 +32,6 @@ describe("user.preferences.write capability", () => {
     const parsed = userPreferencesWrite.input.parse({
       defaultTextTier: null,
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     });
     expect(parsed.defaultTextTier).toBeNull();
     expect(parsed.defaultTextModel).toBeNull();
@@ -61,8 +57,6 @@ describe("user.preferences.write capability", () => {
       pendingPromptBehavior: "queue",
       defaultTextTier: null,
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
       timezone: "UTC",
       language: "en",
     });

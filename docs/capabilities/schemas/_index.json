@@ -1,14 +1,10 @@
 {
-  "generatedCount": 228,
+  "generatedCount": 230,
   "capabilities": [
     {
       "name": "accept_member_invite",
       "domain": "org",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -16,11 +12,7 @@
     {
       "name": "add_conversation_attachment",
       "domain": "conversation",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -28,11 +20,7 @@
     {
       "name": "add_org_member",
       "domain": "org",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -40,11 +28,7 @@
     {
       "name": "add_plugin_registry",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -52,11 +36,7 @@
     {
       "name": "archive_conversation",
       "domain": "conversation",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -64,10 +44,7 @@
     {
       "name": "archive_reseller_customer",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -75,11 +52,7 @@
     {
       "name": "assign_agent_role",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -87,11 +60,7 @@
     {
       "name": "attach_memory_evidence",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -99,11 +68,7 @@
     {
       "name": "bind_agent_environment",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -111,11 +76,7 @@
     {
       "name": "browse_plugin_catalog",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -123,11 +84,7 @@
     {
       "name": "change_member_role",
       "domain": "org",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -135,11 +92,7 @@
     {
       "name": "cite_memory",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -147,9 +100,7 @@
     {
       "name": "cite_reference",
       "domain": "reference",
-      "surfaces": [
-        "agent"
-      ],
+      "surfaces": ["agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -157,11 +108,7 @@
     {
       "name": "commit_memory_import",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -169,12 +116,7 @@
     {
       "name": "configure_integration",
       "domain": "integration",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "cli", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -182,12 +124,7 @@
     {
       "name": "configure_repo",
       "domain": "repo",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "cli", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -195,10 +132,7 @@
     {
       "name": "configure_reseller_stripe",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -206,11 +140,7 @@
     {
       "name": "create_agent_def",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -218,11 +148,7 @@
     {
       "name": "create_api_key",
       "domain": "api_key",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -230,11 +156,7 @@
     {
       "name": "create_connection",
       "domain": "connection",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -242,11 +164,7 @@
     {
       "name": "create_environment",
       "domain": "environment",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -254,11 +172,7 @@
     {
       "name": "create_org",
       "domain": "org",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -266,10 +180,7 @@
     {
       "name": "create_reseller_customer",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -277,10 +188,7 @@
     {
       "name": "create_reseller_price_plan",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -288,11 +196,7 @@
     {
       "name": "create_schema_version",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -300,9 +204,7 @@
     {
       "name": "create_stella_enrollment",
       "domain": "telemetry",
-      "surfaces": [
-        "api"
-      ],
+      "surfaces": ["api"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -310,11 +212,7 @@
     {
       "name": "create_workspace",
       "domain": "workspace",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -322,11 +220,7 @@
     {
       "name": "debug_execution",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -334,11 +228,7 @@
     {
       "name": "decline_member_invite",
       "domain": "org",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -346,11 +236,7 @@
     {
       "name": "delete_agent_def",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -358,11 +244,7 @@
     {
       "name": "delete_connection",
       "domain": "connection",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -370,11 +252,7 @@
     {
       "name": "delete_conversation",
       "domain": "conversation",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -382,11 +260,7 @@
     {
       "name": "delete_environment",
       "domain": "environment",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -394,12 +268,7 @@
     {
       "name": "delete_integration",
       "domain": "integration",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "cli", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -407,10 +276,7 @@
     {
       "name": "delete_mcp_server",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -418,11 +284,7 @@
     {
       "name": "delete_memory",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -430,10 +292,7 @@
     {
       "name": "delete_reseller_attribution_rule",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -441,9 +300,7 @@
     {
       "name": "delete_schema",
       "domain": "schema",
-      "surfaces": [
-        "agent"
-      ],
+      "surfaces": ["agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -451,11 +308,7 @@
     {
       "name": "delete_schema_label",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -463,11 +316,7 @@
     {
       "name": "delete_schema_property",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -475,11 +324,7 @@
     {
       "name": "delete_schema_relationship",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -487,11 +332,7 @@
     {
       "name": "delete_secret_key",
       "domain": "secret",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -499,11 +340,7 @@
     {
       "name": "demote_memory",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -511,11 +348,7 @@
     {
       "name": "deploy_agent",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -523,11 +356,7 @@
     {
       "name": "diff_schema_versions",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -535,11 +364,7 @@
     {
       "name": "dismiss_memory_promotion",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -547,11 +372,7 @@
     {
       "name": "dispatch_schema_reconcile",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -559,11 +380,7 @@
     {
       "name": "erase_data",
       "domain": "privacy",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -571,11 +388,7 @@
     {
       "name": "export_conversation",
       "domain": "conversation",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -583,11 +396,7 @@
     {
       "name": "export_data",
       "domain": "privacy",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -595,11 +404,7 @@
     {
       "name": "export_schema",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -607,10 +412,7 @@
     {
       "name": "export_secrets",
       "domain": "secret",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -618,11 +420,7 @@
     {
       "name": "get_agent_def",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -630,11 +428,7 @@
     {
       "name": "get_agent_role",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -642,11 +436,7 @@
     {
       "name": "get_auth_alerts",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -654,11 +444,7 @@
     {
       "name": "get_budget_policy",
       "domain": "workspace",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -666,11 +452,7 @@
     {
       "name": "get_capability_registry",
       "domain": "capability",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -678,11 +460,7 @@
     {
       "name": "get_catalog_plugin",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -690,11 +468,7 @@
     {
       "name": "get_ci_status",
       "domain": "repo",
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["agent", "api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -702,11 +476,7 @@
     {
       "name": "get_citation_stats",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -714,11 +484,7 @@
     {
       "name": "get_connection",
       "domain": "connection",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -726,11 +492,15 @@
     {
       "name": "get_connection_mappings",
       "domain": "connection",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_data_plane",
+      "domain": "org",
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -738,11 +508,7 @@
     {
       "name": "get_environment",
       "domain": "environment",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -750,11 +516,7 @@
     {
       "name": "get_execution_trace",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -762,11 +524,7 @@
     {
       "name": "get_graph_stats",
       "domain": "graph",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -774,11 +532,7 @@
     {
       "name": "get_install_instructions",
       "domain": "system",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -786,12 +540,7 @@
     {
       "name": "get_integration",
       "domain": "integration",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "cli", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -799,11 +548,7 @@
     {
       "name": "get_integration_metrics",
       "domain": "integration",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -811,11 +556,7 @@
     {
       "name": "get_memory_policy",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -823,10 +564,7 @@
     {
       "name": "get_message_execution",
       "domain": "chat",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -834,11 +572,7 @@
     {
       "name": "get_model_settings",
       "domain": "workspace",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -846,26 +580,15 @@
     {
       "name": "get_node",
       "domain": "graph",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "agent", "cli"],
       "component": "graph-node-card",
-      "produces": [
-        "graph.node"
-      ],
-      "consumes": [
-        "graph.nodeId"
-      ]
+      "produces": ["graph.node"],
+      "consumes": ["graph.nodeId"]
     },
     {
       "name": "get_node_labels",
       "domain": "graph",
-      "surfaces": [
-        "agent"
-      ],
+      "surfaces": ["agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -873,12 +596,7 @@
     {
       "name": "get_ontology_neighbors",
       "domain": "ontology",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "agent", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -886,11 +604,7 @@
     {
       "name": "get_org_settings",
       "domain": "org",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -898,11 +612,7 @@
     {
       "name": "get_plugin_schema",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -910,11 +620,7 @@
     {
       "name": "get_pr",
       "domain": "repo",
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["agent", "api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -922,11 +628,7 @@
     {
       "name": "get_pr_diff",
       "domain": "repo",
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["agent", "api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -934,11 +636,7 @@
     {
       "name": "get_prompt_settings",
       "domain": "workspace",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -946,11 +644,7 @@
     {
       "name": "get_reconcile_status",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -958,11 +652,7 @@
     {
       "name": "get_registry_config",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -970,11 +660,7 @@
     {
       "name": "get_repo_metrics",
       "domain": "repo",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -982,11 +668,7 @@
     {
       "name": "get_reseller_stripe_status",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -994,11 +676,7 @@
     {
       "name": "get_routing_policy",
       "domain": "router",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1006,11 +684,7 @@
     {
       "name": "get_schema_registry",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1018,12 +692,7 @@
     {
       "name": "get_spend_budget",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "agent", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1031,11 +700,7 @@
     {
       "name": "get_subscription",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1043,11 +708,7 @@
     {
       "name": "get_usage_breakdown",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1055,11 +716,7 @@
     {
       "name": "get_user_budget",
       "domain": "user",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1067,11 +724,7 @@
     {
       "name": "get_user_preferences",
       "domain": "user",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1079,11 +732,7 @@
     {
       "name": "get_workspace_settings",
       "domain": "workspace",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1091,11 +740,7 @@
     {
       "name": "get_workspace_user_preferences",
       "domain": "user",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1103,11 +748,7 @@
     {
       "name": "import_env_secrets",
       "domain": "secret",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1115,9 +756,7 @@
     {
       "name": "ingest_stella_operational_telemetry",
       "domain": "telemetry",
-      "surfaces": [
-        "api"
-      ],
+      "surfaces": ["api"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1125,12 +764,7 @@
     {
       "name": "install_integration",
       "domain": "integration",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "cli", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1138,11 +772,7 @@
     {
       "name": "install_plugin",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1150,11 +780,7 @@
     {
       "name": "install_plugins_bulk",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1162,11 +788,7 @@
     {
       "name": "list_agent_defs",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": "agent-definition-list-card",
       "produces": [],
       "consumes": []
@@ -1174,11 +796,7 @@
     {
       "name": "list_agent_environments",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1186,11 +804,7 @@
     {
       "name": "list_agent_roles",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1198,11 +812,7 @@
     {
       "name": "list_agent_tools",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1210,11 +820,7 @@
     {
       "name": "list_branches",
       "domain": "repo",
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["agent", "api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1222,11 +828,7 @@
     {
       "name": "list_capability_registry",
       "domain": "capability",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1234,11 +836,7 @@
     {
       "name": "list_connections",
       "domain": "connection",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1246,11 +844,7 @@
     {
       "name": "list_context_records",
       "domain": "context",
-      "surfaces": [
-        "api",
-        "agent",
-        "mcp"
-      ],
+      "surfaces": ["api", "agent", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1258,11 +852,7 @@
     {
       "name": "list_conversation_files",
       "domain": "conversation",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1270,25 +860,15 @@
     {
       "name": "list_conversations",
       "domain": "conversation",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": "conversation-list-card",
-      "produces": [
-        "conversation.id"
-      ],
+      "produces": ["conversation.id"],
       "consumes": []
     },
     {
       "name": "list_environments",
       "domain": "environment",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1296,11 +876,7 @@
     {
       "name": "list_error_clusters",
       "domain": "telemetry",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1308,11 +884,7 @@
     {
       "name": "list_executions",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1320,11 +892,7 @@
     {
       "name": "list_iam_roles",
       "domain": "iam",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1332,12 +900,7 @@
     {
       "name": "list_integrations",
       "domain": "integration",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "cli", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1345,11 +908,7 @@
     {
       "name": "list_mcp_consents",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1357,11 +916,7 @@
     {
       "name": "list_mcp_servers",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1369,11 +924,7 @@
     {
       "name": "list_memories",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1381,11 +932,7 @@
     {
       "name": "list_memory_citations",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1393,11 +940,7 @@
     {
       "name": "list_memory_promotions",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1405,11 +948,7 @@
     {
       "name": "list_model_capabilities",
       "domain": "model",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1417,25 +956,15 @@
     {
       "name": "list_nodes",
       "domain": "graph",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": "graph-node-list-card",
-      "produces": [
-        "graph.nodeId"
-      ],
+      "produces": ["graph.nodeId"],
       "consumes": []
     },
     {
       "name": "list_notifications",
       "domain": "notification",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1443,11 +972,7 @@
     {
       "name": "list_orgs",
       "domain": "org",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1455,11 +980,7 @@
     {
       "name": "list_plugin_registries",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1467,11 +988,7 @@
     {
       "name": "list_plugin_versions",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1479,11 +996,7 @@
     {
       "name": "list_plugins",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1491,11 +1004,7 @@
     {
       "name": "list_reseller_attribution_rules",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1503,11 +1012,7 @@
     {
       "name": "list_reseller_customers",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1515,11 +1020,7 @@
     {
       "name": "list_reseller_price_plans",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1527,11 +1028,7 @@
     {
       "name": "list_reseller_rebill_runs",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1539,11 +1036,7 @@
     {
       "name": "list_routing_stats",
       "domain": "router",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1551,11 +1044,7 @@
     {
       "name": "list_schema_versions",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1563,12 +1052,7 @@
     {
       "name": "list_schemas",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "cli", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1576,11 +1060,7 @@
     {
       "name": "list_secret_keys",
       "domain": "secret",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1588,11 +1068,7 @@
     {
       "name": "list_tool_declarations",
       "domain": "tool",
-      "surfaces": [
-        "api",
-        "agent",
-        "mcp"
-      ],
+      "surfaces": ["api", "agent", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1600,10 +1076,7 @@
     {
       "name": "list_workspace_members",
       "domain": "workspace",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1611,11 +1084,7 @@
     {
       "name": "list_workspaces",
       "domain": "workspace",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1623,11 +1092,7 @@
     {
       "name": "mark_notification",
       "domain": "notification",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1635,11 +1100,7 @@
     {
       "name": "parse_memory_import",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1647,11 +1108,7 @@
     {
       "name": "pause_connection",
       "domain": "connection",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1659,12 +1116,7 @@
     {
       "name": "pause_repo",
       "domain": "repo",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "cli", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1672,11 +1124,7 @@
     {
       "name": "pin_schema_version",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1684,10 +1132,7 @@
     {
       "name": "post_conversation_message",
       "domain": "conversation",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1695,11 +1140,7 @@
     {
       "name": "preview_connection",
       "domain": "connection",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1707,11 +1148,7 @@
     {
       "name": "preview_reseller_rebill",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1719,11 +1156,7 @@
     {
       "name": "preview_routing_decision",
       "domain": "router",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1731,9 +1164,7 @@
     {
       "name": "promote_context_record",
       "domain": "context",
-      "surfaces": [
-        "api"
-      ],
+      "surfaces": ["api"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1741,11 +1172,7 @@
     {
       "name": "promote_memory",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1753,11 +1180,7 @@
     {
       "name": "publish_agent_def",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1765,9 +1188,7 @@
     {
       "name": "publish_context_record",
       "domain": "context",
-      "surfaces": [
-        "api"
-      ],
+      "surfaces": ["api"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1775,9 +1196,7 @@
     {
       "name": "publish_tool_declaration",
       "domain": "tool",
-      "surfaces": [
-        "api"
-      ],
+      "surfaces": ["api"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1785,11 +1204,7 @@
     {
       "name": "purchase_credits",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1797,11 +1212,7 @@
     {
       "name": "purge_conversations",
       "domain": "conversation",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1809,10 +1220,7 @@
     {
       "name": "push_reseller_rebill",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1820,12 +1228,7 @@
     {
       "name": "query_audit_log",
       "domain": "audit",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "agent", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1833,12 +1236,7 @@
     {
       "name": "query_ontology",
       "domain": "ontology",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "agent", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1846,11 +1244,7 @@
     {
       "name": "reauth_plugin_credential",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1858,11 +1252,7 @@
     {
       "name": "recall_memory",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1870,12 +1260,7 @@
     {
       "name": "recommend_schema",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "cli", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1883,10 +1268,7 @@
     {
       "name": "record_execution",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1894,10 +1276,7 @@
     {
       "name": "register_mcp_server",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1905,11 +1284,7 @@
     {
       "name": "remove_org_member",
       "domain": "org",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1917,11 +1292,7 @@
     {
       "name": "remove_plugin_registry",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1929,11 +1300,7 @@
     {
       "name": "rename_conversation",
       "domain": "conversation",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1941,11 +1308,7 @@
     {
       "name": "resolve_approval",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1953,11 +1316,7 @@
     {
       "name": "resolve_mcp_consent",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1965,9 +1324,7 @@
     {
       "name": "resolve_mcp_servers",
       "domain": "agent",
-      "surfaces": [
-        "api"
-      ],
+      "surfaces": ["api"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1975,12 +1332,7 @@
     {
       "name": "resume_repo",
       "domain": "repo",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "cli", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1988,10 +1340,7 @@
     {
       "name": "reveal_secret",
       "domain": "secret",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1999,11 +1348,7 @@
     {
       "name": "revise_agent_def",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2011,11 +1356,7 @@
     {
       "name": "revoke_agent_role",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2023,11 +1364,7 @@
     {
       "name": "revoke_api_key",
       "domain": "api_key",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2035,11 +1372,7 @@
     {
       "name": "revoke_plugin_credential",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2047,11 +1380,7 @@
     {
       "name": "rotate_api_key",
       "domain": "api_key",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2059,10 +1388,7 @@
     {
       "name": "run_schema_chat",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "agent"
-      ],
+      "surfaces": ["api", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2070,11 +1396,7 @@
     {
       "name": "save_memory",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2082,10 +1404,7 @@
     {
       "name": "save_reseller_attribution_rule",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2093,10 +1412,7 @@
     {
       "name": "search_command_menu",
       "domain": "command",
-      "surfaces": [
-        "api",
-        "agent"
-      ],
+      "surfaces": ["api", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2104,12 +1420,7 @@
     {
       "name": "search_graph",
       "domain": "graph",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "agent", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2117,28 +1428,15 @@
     {
       "name": "search_nodes",
       "domain": "graph",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "agent", "cli"],
       "component": "graph-node-list-card",
-      "produces": [
-        "graph.nodeId"
-      ],
-      "consumes": [
-        "query"
-      ]
+      "produces": ["graph.nodeId"],
+      "consumes": ["query"]
     },
     {
       "name": "search_references",
       "domain": "reference",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2146,10 +1444,7 @@
     {
       "name": "send_message",
       "domain": "chat",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2157,10 +1452,7 @@
     {
       "name": "send_workspace_invite",
       "domain": "workspace",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2168,11 +1460,7 @@
     {
       "name": "set_auth_alerts",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2180,11 +1468,15 @@
     {
       "name": "set_connection_mappings",
       "domain": "connection",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_data_plane",
+      "domain": "org",
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2192,11 +1484,7 @@
     {
       "name": "set_default_environment",
       "domain": "environment",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2204,10 +1492,7 @@
     {
       "name": "set_mcp_enabled",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2215,11 +1500,7 @@
     {
       "name": "set_plugin_enabled",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2227,11 +1508,7 @@
     {
       "name": "set_plugin_secret",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2239,11 +1516,7 @@
     {
       "name": "set_routing_policy",
       "domain": "router",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2251,11 +1524,7 @@
     {
       "name": "set_secret_value",
       "domain": "secret",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2263,12 +1532,7 @@
     {
       "name": "set_spend_budget",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "agent", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2276,12 +1540,7 @@
     {
       "name": "setup_schema",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "cli", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2289,11 +1548,7 @@
     {
       "name": "start_subscription_upgrade",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2301,11 +1556,7 @@
     {
       "name": "suggest_agent_def",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2313,10 +1564,7 @@
     {
       "name": "suggest_commands",
       "domain": "command",
-      "surfaces": [
-        "api",
-        "agent"
-      ],
+      "surfaces": ["api", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2324,11 +1572,7 @@
     {
       "name": "suggest_connection_mappings",
       "domain": "connection",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2336,11 +1580,7 @@
     {
       "name": "suggest_promotion_rationales",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2348,11 +1588,7 @@
     {
       "name": "summarize_agent_def",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2360,12 +1596,7 @@
     {
       "name": "sync_integration",
       "domain": "integration",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "cli", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2373,10 +1604,7 @@
     {
       "name": "sync_plugin_catalog",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2384,12 +1612,7 @@
     {
       "name": "sync_repo",
       "domain": "repo",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "cli", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2397,11 +1620,7 @@
     {
       "name": "toggle_schema",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2409,11 +1628,7 @@
     {
       "name": "unbind_agent_environment",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2421,11 +1636,7 @@
     {
       "name": "uninstall_plugin",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2433,11 +1644,7 @@
     {
       "name": "unset_secret_value",
       "domain": "secret",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2445,11 +1652,7 @@
     {
       "name": "update_agent_def",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2457,11 +1660,7 @@
     {
       "name": "update_budget_policy",
       "domain": "workspace",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2469,11 +1668,7 @@
     {
       "name": "update_connection",
       "domain": "connection",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2481,11 +1676,7 @@
     {
       "name": "update_environment",
       "domain": "environment",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2493,11 +1684,7 @@
     {
       "name": "update_memory",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2505,11 +1692,7 @@
     {
       "name": "update_memory_policy",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2517,11 +1700,7 @@
     {
       "name": "update_model_settings",
       "domain": "workspace",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2529,11 +1708,7 @@
     {
       "name": "update_org_settings",
       "domain": "org",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2541,11 +1716,7 @@
     {
       "name": "update_prompt_settings",
       "domain": "workspace",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2553,10 +1724,7 @@
     {
       "name": "update_reseller_customer",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2564,10 +1732,7 @@
     {
       "name": "update_reseller_price_plan",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
+      "surfaces": ["api", "mcp"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2575,11 +1740,7 @@
     {
       "name": "update_user_budget",
       "domain": "user",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2587,11 +1748,7 @@
     {
       "name": "update_user_preferences",
       "domain": "user",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2599,11 +1756,7 @@
     {
       "name": "update_workspace_settings",
       "domain": "workspace",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2611,9 +1764,7 @@
     {
       "name": "update_workspace_user_preferences",
       "domain": "user",
-      "surfaces": [
-        "api"
-      ],
+      "surfaces": ["api"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2621,11 +1772,7 @@
     {
       "name": "upload_asset",
       "domain": "asset",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2633,12 +1780,7 @@
     {
       "name": "upsert_schema_label",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "cli", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2646,12 +1788,7 @@
     {
       "name": "upsert_schema_property",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "cli", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2659,12 +1796,7 @@
     {
       "name": "upsert_schema_relationship",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "cli",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "cli", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2672,11 +1804,7 @@
     {
       "name": "upsert_secret_key",
       "domain": "secret",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2684,11 +1812,7 @@
     {
       "name": "validate_plugin_schema",
       "domain": "plugin",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2696,12 +1820,7 @@
     {
       "name": "validate_schema_node",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "agent", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2709,12 +1828,7 @@
     {
       "name": "validate_schema_relationship",
       "domain": "schema",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent",
-        "cli"
-      ],
+      "surfaces": ["api", "mcp", "agent", "cli"],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2722,11 +1836,7 @@
     {
       "name": "write_memory",
       "domain": "agent",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
+      "surfaces": ["api", "mcp", "agent"],
       "component": null,
       "produces": [],
       "consumes": []

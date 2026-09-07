@@ -18,8 +18,6 @@ All fields are optional. Provide only the fields you want to change.
 |---|---|---|
 | `defaultTextTier` | `"fast" \| "balanced" \| "precise" \| null?` | Omit = no change; `null` = clear; string = set. |
 | `defaultTextModel` | `string \| null?` (1+ chars if string) | Omit = no change; `null` = clear; string = set. |
-| `defaultImageModel` | `string \| null?` (1+ chars if string) | Omit = no change; `null` = clear; string = set. |
-| `defaultVideoModel` | `string \| null?` (1+ chars if string) | Omit = no change; `null` = clear; string = set. |
 
 ## Output
 
@@ -29,8 +27,6 @@ Returns the full, merged workspace model settings after the update.
 |---|---|---|
 | `defaultTextTier` | `"fast" \| "balanced" \| "precise" \| null` | |
 | `defaultTextModel` | `string \| null` | |
-| `defaultImageModel` | `string \| null` | |
-| `defaultVideoModel` | `string \| null` | |
 
 ## Roles
 

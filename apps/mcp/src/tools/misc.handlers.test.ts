@@ -366,8 +366,6 @@ describe("user.preferences.read handler", () => {
       pendingPromptBehavior: "queue",
       defaultTextTier: null,
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
       timezone: "UTC",
       language: "en",
     };
@@ -406,8 +404,6 @@ describe("user.preferences.write handler", () => {
       pendingPromptBehavior: "queue" as const,
       defaultTextTier: null,
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
       timezone: "America/New_York",
       language: "en",
     };
@@ -420,8 +416,6 @@ describe("user.preferences.write handler", () => {
       pendingPromptBehavior: undefined,
       defaultTextTier: undefined,
       defaultTextModel: undefined,
-      defaultImageModel: undefined,
-      defaultVideoModel: undefined,
       timezone: undefined,
       language: undefined,
     };
@@ -453,8 +447,6 @@ describe("workspace.model.settings.read handler", () => {
     const fakeOutput = {
       defaultTextTier: null,
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
@@ -488,16 +480,12 @@ describe("workspace.model.settings.write handler", () => {
     const fakeOutput = {
       defaultTextTier: "balanced",
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = {
       defaultTextTier: "balanced" as const,
       defaultTextModel: undefined,
-      defaultImageModel: undefined,
-      defaultVideoModel: undefined,
     };
     await handler_workspaceModelSettingsWrite(args);
 
@@ -550,4 +538,3 @@ describe("system.install.instructions handler", () => {
     );
   });
 });
-

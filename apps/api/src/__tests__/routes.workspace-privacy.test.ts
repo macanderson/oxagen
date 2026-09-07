@@ -202,8 +202,6 @@ describe("workspace.model.settings.read route", () => {
     mocks.invoke.mockResolvedValue({
       defaultTextTier: "balanced",
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     });
 
     const res = await app.fetch(get(PATH));
@@ -232,8 +230,6 @@ describe("workspace.model.settings.write route", () => {
     mocks.invoke.mockResolvedValue({
       defaultTextTier: "fast",
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     });
 
     const res = await app.fetch(patch(PATH, { defaultTextTier: "fast" }));
@@ -249,11 +245,25 @@ describe("workspace.model.settings.write route", () => {
 
   it("passes optional model fields to invoke", async () => {
     await app.fetch(
-      patch(PATH, { defaultTextTier: "precise", defaultImageModel: null }),
+      patch(PATH, { defaultTextTier: "precise", defaultTextModel: null }),
     );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.defaultTextTier).toBe("precise");
-    expect(body.defaultImageModel).toBeNull();
+    expect(body.defaultTextModel).toBeNull();
+  });
+
+  // ADR-041: media generation is gone — the route's contract drops media fields.
+  it("drops an image or video model default from the payload", async () => {
+    await app.fetch(
+      patch(PATH, {
+        defaultTextTier: "fast",
+        defaultImageModel: "bfl/flux-2-max",
+        defaultVideoModel: "google/veo-3.0-generate-001",
+      }),
+    );
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body).not.toHaveProperty("defaultImageModel");
+    expect(body).not.toHaveProperty("defaultVideoModel");
   });
 });
 

@@ -1,13 +1,9 @@
 {
   "name": "get_model_settings",
   "domain": "workspace",
-  "description": "Read the workspace-level model defaults (text tier/model, image model, video model)",
+  "description": "Read the workspace-level model defaults (text tier and model)",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -34,11 +30,7 @@
         "anyOf": [
           {
             "type": "string",
-            "enum": [
-              "fast",
-              "balanced",
-              "precise"
-            ]
+            "enum": ["fast", "balanced", "precise"]
           },
           {
             "type": "null"
@@ -54,34 +46,9 @@
             "type": "null"
           }
         ]
-      },
-      "defaultImageModel": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ]
-      },
-      "defaultVideoModel": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ]
       }
     },
-    "required": [
-      "defaultTextTier",
-      "defaultTextModel",
-      "defaultImageModel",
-      "defaultVideoModel"
-    ],
+    "required": ["defaultTextTier", "defaultTextModel"],
     "additionalProperties": false
   }
 }

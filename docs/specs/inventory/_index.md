@@ -4,7 +4,7 @@ Behavioral specs mined from existing code by the `spec-miner` agent (flat OpenSp
 
 ## packages/ai
 - [ai-text-generation](ai-text-generation.md) — `streamText`/`generateObject`/`embed` wrappers; metering, duration, surface tagging, prompt hashing to ClickHouse.
-- [ai-media-and-models](ai-media-and-models.md) — image/video generation; model catalog & effective-default resolution (`modelIdOf`).
+- [ai-models](ai-models.md) — white-labeled text tiers, model catalog & effective-default resolution (`modelIdOf`).
 
 ## packages/inngest-functions
 - [inngest-agent-execution](inngest-agent-execution.md) — agent fan-out/aggregate, subagent execution, workflow supervisor, graph sync.

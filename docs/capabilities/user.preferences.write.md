@@ -22,8 +22,6 @@ All fields are optional. Provide only the fields you want to change.
 | `pendingPromptBehavior` | `"queue" \| "interrupt"?` | Behaviour while a response is streaming. |
 | `defaultTextTier` | `"fast" \| "balanced" \| "precise" \| null?` | Omit = no change; `null` = clear; string = set. |
 | `defaultTextModel` | `string \| null?` (1+ chars if string) | Omit = no change; `null` = clear; string = set. |
-| `defaultImageModel` | `string \| null?` (1+ chars if string) | Omit = no change; `null` = clear; string = set. |
-| `defaultVideoModel` | `string \| null?` (1+ chars if string) | Omit = no change; `null` = clear; string = set. |
 
 ## Output
 
@@ -37,8 +35,6 @@ Returns the full, merged preferences state after the update (same shape as `user
 | `pendingPromptBehavior` | `"queue" \| "interrupt"` | |
 | `defaultTextTier` | `"fast" \| "balanced" \| "precise" \| null` | |
 | `defaultTextModel` | `string \| null` | |
-| `defaultImageModel` | `string \| null` | |
-| `defaultVideoModel` | `string \| null` | |
 
 ## Roles
 

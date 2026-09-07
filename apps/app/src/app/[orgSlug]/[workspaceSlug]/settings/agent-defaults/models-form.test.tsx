@@ -44,8 +44,6 @@ vi.mock("@/components/settings/model-defaults-fields", () => ({
     value: {
       textTier: string | null;
       textModel: string | null;
-      imageModel: string | null;
-      videoModel: string | null;
     };
     onChange: (v: typeof value) => void;
     disabled?: boolean;
@@ -101,8 +99,6 @@ const defaultProps = {
   initial: {
     textTier: "balanced" as const,
     textModel: null,
-    imageModel: null,
-    videoModel: null,
   },
   canEdit: true,
   orgSlug: "test-org",

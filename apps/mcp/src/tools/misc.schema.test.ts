@@ -124,27 +124,9 @@ describe("user.preferences.write schema", () => {
     expect(result.defaultTextModel).toBeNull();
   });
 
-  it("accepts null for defaultImageModel (nullable — clears)", () => {
-    const result = Schema.parse({ defaultImageModel: null });
-    expect(result.defaultImageModel).toBeNull();
-  });
-
-  it("accepts null for defaultVideoModel (nullable — clears)", () => {
-    const result = Schema.parse({ defaultVideoModel: null });
-    expect(result.defaultVideoModel).toBeNull();
-  });
-
   it("rejects an empty string for defaultTextModel (min 1)", () => {
     // nullable-optional: null is OK, but empty string is not (z.string().min(1))
     expect(() => Schema.parse({ defaultTextModel: "" })).toThrow();
-  });
-
-  it("rejects an empty string for defaultImageModel (min 1)", () => {
-    expect(() => Schema.parse({ defaultImageModel: "" })).toThrow();
-  });
-
-  it("rejects an empty string for defaultVideoModel (min 1)", () => {
-    expect(() => Schema.parse({ defaultVideoModel: "" })).toThrow();
   });
 
   it("accepts a valid model id string for defaultTextModel", () => {
@@ -167,8 +149,6 @@ describe("user.preferences.write schema", () => {
       pendingPromptBehavior: "queue",
       defaultTextTier: "fast",
       defaultTextModel: "anthropic/claude-haiku-3",
-      defaultImageModel: "bfl/flux-2-max",
-      defaultVideoModel: "google/veo-3.0-generate-001",
     });
     expect(result.fontSize).toBe("small");
     expect(result.defaultTextTier).toBe("fast");
@@ -206,41 +186,24 @@ describe("workspace.model.settings.write schema", () => {
     expect(result.defaultTextModel).toBeNull();
   });
 
-  it("accepts null for defaultImageModel (nullable — clears)", () => {
-    const result = Schema.parse({ defaultImageModel: null });
-    expect(result.defaultImageModel).toBeNull();
-  });
-
-  it("accepts null for defaultVideoModel (nullable — clears)", () => {
-    const result = Schema.parse({ defaultVideoModel: null });
-    expect(result.defaultVideoModel).toBeNull();
-  });
-
   it("rejects an empty string for defaultTextModel (min 1)", () => {
     expect(() => Schema.parse({ defaultTextModel: "" })).toThrow();
-  });
-
-  it("rejects an empty string for defaultImageModel (min 1)", () => {
-    expect(() => Schema.parse({ defaultImageModel: "" })).toThrow();
-  });
-
-  it("rejects an empty string for defaultVideoModel (min 1)", () => {
-    expect(() => Schema.parse({ defaultVideoModel: "" })).toThrow();
-  });
-
-  it("accepts a valid model id string for defaultImageModel", () => {
-    const result = Schema.parse({ defaultImageModel: "bfl/flux-2-max" });
-    expect(result.defaultImageModel).toBe("bfl/flux-2-max");
   });
 
   it("accepts a fully-specified valid payload", () => {
     const result = Schema.parse({
       defaultTextTier: "balanced",
       defaultTextModel: "anthropic/claude-sonnet-5",
-      defaultImageModel: "bfl/flux-2-max",
-      defaultVideoModel: "google/veo-3.0-generate-001",
     });
     expect(result.defaultTextTier).toBe("balanced");
-    expect(result.defaultVideoModel).toBe("google/veo-3.0-generate-001");
+    expect(result.defaultTextModel).toBe("anthropic/claude-sonnet-5");
+  });
+
+  // ADR-041: media generation is gone — the tool schema has no media fields.
+  it("exposes only the two text model fields", () => {
+    expect(Object.keys(workspaceModelSettingsWriteSchema).sort()).toEqual([
+      "defaultTextModel",
+      "defaultTextTier",
+    ]);
   });
 });

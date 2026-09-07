@@ -58,13 +58,7 @@ describe("loadEffectiveModelDefaults", () => {
       workspaceId: null,
     });
     expect(result.text).toEqual({ tier: null, model: null });
-    expect(result.image).toEqual({ model: null });
-    expect(result.video).toEqual({ model: null });
-    expect(result.overriddenByWorkspace).toEqual({
-      text: false,
-      image: false,
-      video: false,
-    });
+    expect(result.overriddenByWorkspace).toEqual({ text: false });
   });
 
   it("resolves user preferences when workspace is null", async () => {
@@ -72,8 +66,6 @@ describe("loadEffectiveModelDefaults", () => {
       {
         defaultTextTier: "fast",
         defaultTextModel: null,
-        defaultImageModel: "openai/gpt-image-1",
-        defaultVideoModel: null,
       },
       null,
     );
@@ -82,8 +74,6 @@ describe("loadEffectiveModelDefaults", () => {
       workspaceId: null,
     });
     expect(result.text).toEqual({ tier: "fast", model: null });
-    expect(result.image).toEqual({ model: "openai/gpt-image-1" });
-    expect(result.video).toEqual({ model: null });
     expect(result.overriddenByWorkspace.text).toBe(false);
   });
 
@@ -92,14 +82,10 @@ describe("loadEffectiveModelDefaults", () => {
       {
         defaultTextTier: "fast",
         defaultTextModel: "anthropic/claude-haiku-4.5",
-        defaultImageModel: "openai/gpt-image-1",
-        defaultVideoModel: null,
       },
       {
         defaultTextTier: "precise",
         defaultTextModel: "anthropic/claude-opus-4.8",
-        defaultImageModel: "bfl/flux-2-max",
-        defaultVideoModel: "google/veo-3.0-generate-001",
       },
     );
     const result = await loadEffectiveModelDefaults({
@@ -110,13 +96,7 @@ describe("loadEffectiveModelDefaults", () => {
       tier: "precise",
       model: "anthropic/claude-opus-4.8",
     });
-    expect(result.image).toEqual({ model: "bfl/flux-2-max" });
-    expect(result.video).toEqual({ model: "google/veo-3.0-generate-001" });
-    expect(result.overriddenByWorkspace).toEqual({
-      text: true,
-      image: true,
-      video: true,
-    });
+    expect(result.overriddenByWorkspace).toEqual({ text: true });
   });
 
   it("does not query workspaces when workspaceId is null", async () => {
@@ -124,5 +104,27 @@ describe("loadEffectiveModelDefaults", () => {
     await loadEffectiveModelDefaults({ userId: "user-2", workspaceId: null });
     // The workspace query factory should never be called when workspaceId is null.
     expect(tx.query.workspaces.findFirst).not.toHaveBeenCalled();
+  });
+
+  // ADR-041: media generation is gone — neither query selects a media column.
+  it("selects only the text model columns from both tables", async () => {
+    const tx = setupWithTenantDb(
+      { defaultTextTier: "fast", defaultTextModel: null },
+      { defaultTextTier: null, defaultTextModel: null },
+    );
+    await loadEffectiveModelDefaults({ userId: "user-3", workspaceId: "ws-3" });
+
+    for (const findFirst of [
+      tx.query.userPreferences.findFirst,
+      tx.query.workspaces.findFirst,
+    ]) {
+      const arg = findFirst.mock.calls[0]?.[0] as {
+        columns: Record<string, boolean>;
+      };
+      expect(Object.keys(arg.columns).sort()).toEqual([
+        "defaultTextModel",
+        "defaultTextTier",
+      ]);
+    }
   });
 });

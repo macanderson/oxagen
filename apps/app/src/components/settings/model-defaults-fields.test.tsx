@@ -3,10 +3,11 @@
  * model-defaults-fields.test.tsx — tests for ModelDefaultsFields.
  *
  * Tests the pure encode/decode logic for the text model select, and verifies
- * that the component renders the three selects and the scope note.
+ * that the component renders the one remaining select and the scope note.
+ * ADR-041 removed media generation, so text is the only default dimension.
  *
- * The handleTextChange / handleImageChange / handleVideoChange handlers are
- * pure value-transformers; we test them through the onChange prop.
+ * The handleTextChange handler is a pure value-transformer; we test it through
+ * the onChange prop.
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -21,8 +22,6 @@ afterEach(cleanup);
 const defaultValue: ModelDefaultsValue = {
   textTier: null,
   textModel: null,
-  imageModel: null,
-  videoModel: null,
 };
 
 describe("ModelDefaultsFields — rendering", () => {
@@ -37,7 +36,8 @@ describe("ModelDefaultsFields — rendering", () => {
     expect(screen.getByLabelText(/default agent model/i)).toBeInTheDocument();
   });
 
-  it("renders 'Default image model' select", () => {
+  // ADR-041: media generation is gone — no image or video select is rendered.
+  it("renders no image or video model select", () => {
     render(
       <ModelDefaultsFields
         value={defaultValue}
@@ -45,18 +45,9 @@ describe("ModelDefaultsFields — rendering", () => {
         scope="user"
       />,
     );
-    expect(screen.getByLabelText(/default image model/i)).toBeInTheDocument();
-  });
-
-  it("renders 'Default video model' select", () => {
-    render(
-      <ModelDefaultsFields
-        value={defaultValue}
-        onChange={vi.fn()}
-        scope="user"
-      />,
-    );
-    expect(screen.getByLabelText(/default video model/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/default image model/i)).toBeNull();
+    expect(screen.queryByLabelText(/default video model/i)).toBeNull();
+    expect(screen.getAllByRole("combobox")).toHaveLength(1);
   });
 
   it("shows user scope note when scope='user'", () => {
@@ -68,7 +59,7 @@ describe("ModelDefaultsFields — rendering", () => {
       />,
     );
     expect(
-      screen.getByText(/workspace can override these defaults/i),
+      screen.getByText(/workspace can override this default/i),
     ).toBeInTheDocument();
   });
 
@@ -81,7 +72,7 @@ describe("ModelDefaultsFields — rendering", () => {
       />,
     );
     expect(
-      screen.getByText(/these defaults apply to all members/i),
+      screen.getByText(/this default applies to all members/i),
     ).toBeInTheDocument();
   });
 

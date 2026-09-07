@@ -8,30 +8,22 @@ describe("workspace.model.settings.read capability", () => {
     expect(parsed).toEqual({});
   });
 
-  it("parses a valid output with all four fields set", () => {
+  it("parses a valid output with both text fields set", () => {
     const parsed = workspaceModelSettingsRead.output.parse({
       defaultTextTier: "balanced",
       defaultTextModel: "anthropic/claude-sonnet-5",
-      defaultImageModel: "bfl/flux-2-max",
-      defaultVideoModel: "google/veo-3.0-generate-001",
     });
     expect(parsed.defaultTextTier).toBe("balanced");
     expect(parsed.defaultTextModel).toBe("anthropic/claude-sonnet-5");
-    expect(parsed.defaultImageModel).toBe("bfl/flux-2-max");
-    expect(parsed.defaultVideoModel).toBe("google/veo-3.0-generate-001");
   });
 
   it("parses a valid output with all fields null", () => {
     const parsed = workspaceModelSettingsRead.output.parse({
       defaultTextTier: null,
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     });
     expect(parsed.defaultTextTier).toBeNull();
     expect(parsed.defaultTextModel).toBeNull();
-    expect(parsed.defaultImageModel).toBeNull();
-    expect(parsed.defaultVideoModel).toBeNull();
   });
 
   it("rejects an invalid defaultTextTier value", () => {
@@ -39,10 +31,25 @@ describe("workspace.model.settings.read capability", () => {
       workspaceModelSettingsRead.output.parse({
         defaultTextTier: "turbo",
         defaultTextModel: null,
-        defaultImageModel: null,
-        defaultVideoModel: null,
       }),
     ).toThrow();
+  });
+
+  // ADR-041: media generation is gone, and so are the stored media defaults.
+  it("does not expose image or video model defaults", () => {
+    const parsed: Record<string, unknown> =
+      workspaceModelSettingsRead.output.parse({
+        defaultTextTier: null,
+        defaultTextModel: null,
+        defaultImageModel: "bfl/flux-2-max",
+        defaultVideoModel: "google/veo-3.0-generate-001",
+      });
+    expect(parsed).not.toHaveProperty("defaultImageModel");
+    expect(parsed).not.toHaveProperty("defaultVideoModel");
+    expect(Object.keys(workspaceModelSettingsRead.output.shape)).toEqual([
+      "defaultTextTier",
+      "defaultTextModel",
+    ]);
   });
 
   it("is registered in the capability registry", () => {

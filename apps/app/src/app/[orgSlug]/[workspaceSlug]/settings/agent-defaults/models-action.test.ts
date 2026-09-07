@@ -120,8 +120,6 @@ describe("updateWorkspaceModelsAction", () => {
       // @ts-expect-error — intentionally bad tier
       defaultTextTier: "ultra",
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     });
     expect(res.ok).toBe(false);
     expect(mockInvoke).not.toHaveBeenCalled();
@@ -134,8 +132,6 @@ describe("updateWorkspaceModelsAction", () => {
       workspaceSlug: "main",
       defaultTextTier: "fast",
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toContain("admin");
@@ -149,8 +145,6 @@ describe("updateWorkspaceModelsAction", () => {
       workspaceSlug: "main",
       defaultTextTier: "balanced",
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     });
     expect(res.ok).toBe(false);
     expect(mockInvoke).not.toHaveBeenCalled();
@@ -162,8 +156,6 @@ describe("updateWorkspaceModelsAction", () => {
       workspaceSlug: "main",
       defaultTextTier: "balanced",
       defaultTextModel: "claude-sonnet",
-      defaultImageModel: null,
-      defaultVideoModel: null,
     });
     expect(res.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
@@ -171,8 +163,6 @@ describe("updateWorkspaceModelsAction", () => {
       {
         defaultTextTier: "balanced",
         defaultTextModel: "claude-sonnet",
-        defaultImageModel: null,
-        defaultVideoModel: null,
       },
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
       { surface: "agent" },
@@ -185,8 +175,6 @@ describe("updateWorkspaceModelsAction", () => {
       workspaceSlug: "main",
       defaultTextTier: "fast",
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     });
     expect(mockRevalidatePath).toHaveBeenCalledWith(
       "/acme/main/settings/agent-defaults",
@@ -200,8 +188,6 @@ describe("updateWorkspaceModelsAction", () => {
       workspaceSlug: "main",
       defaultTextTier: "precise",
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toBe("model not found");
@@ -213,8 +199,6 @@ describe("updateWorkspaceModelsAction", () => {
       workspaceSlug: "main",
       defaultTextTier: null,
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     });
     expect(res.ok).toBe(true);
   });

@@ -84,8 +84,6 @@ describe("updateModelSettingsAction", () => {
     mockInvoke.mockResolvedValue({
       defaultTextTier: "balanced",
       defaultTextModel: "claude-3-sonnet",
-      defaultImageModel: null,
-      defaultVideoModel: null,
     });
   });
 

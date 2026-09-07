@@ -168,10 +168,9 @@ export function selectModel(selector: ModelSelector = {}): LanguageModel {
  * the metering the gateway exists to provide, and the first anyone would know
  * of it is the invoice. An operator opting out says so in the environment.
  *
- * Only the language path is redirected. `imageModel`, `video` and
- * `embeddingModel` stay on the gateway because OpenRouter serves none of
- * them — so image, video and embedding calls still fail on such a deployment,
- * and that is visible rather than papered over.
+ * Only the language path is redirected. `embeddingModel` stays on the gateway
+ * because OpenRouter does not serve it — so embedding calls still fail on such
+ * a deployment, and that is visible rather than papered over.
  *
  * Model ids are NOT rewritten between providers. The gateway spells a version
  * `claude-sonnet-4-6` and OpenRouter spells it `claude-sonnet-4.6`; mapping
