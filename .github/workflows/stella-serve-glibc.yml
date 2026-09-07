@@ -74,12 +74,28 @@ jobs:
       # binary in the real image, which is the thing the arithmetic is a proxy
       # for — and is the check issue #2586 asks for, on the artifact rather
       # than on the node.
+      #
+      # Asserted on the loader, not on the exit code. Whether the binary
+      # accepts a given flag is its CLI surface, and that moves between stella
+      # releases as the pin advances — v0.6.2 rejects `--version` outright and
+      # names `healthcheck` instead. A refused argument is still proof the
+      # dynamic linker resolved the binary and its own parser ran, which is the
+      # only thing this step is asking. A glibc failure looks completely
+      # different, and says so.
       - name: And it actually runs there
         run: |
           set -euo pipefail
           IMAGE="$(sed -n 's/^[[:space:]]*WRITE_MANIFEST_IMAGE="\([^"]*\)".*/\1/p' \
             tools/scripts/package-for-node.sh | head -1)"
-          echo "running stella-serve --version inside ${IMAGE}"
-          docker run --rm \
+          echo "booting stella-serve inside ${IMAGE}"
+          set +e
+          OUT="$(docker run --rm \
             -v "$RUNNER_TEMP/stella-src/target/release/stella-serve:/stella-serve:ro" \
-            --entrypoint /stella-serve "$IMAGE" --version
+            --entrypoint /stella-serve "$IMAGE" --version 2>&1)"
+          set -e
+          printf '  %s\n' "$OUT"
+          if printf '%s' "$OUT" | grep -qiE 'GLIBC_|error while loading shared libraries|cannot execute|exec format error'; then
+            echo "::error::stella-serve did not load in ${IMAGE} — see the message above"
+            exit 1
+          fi
+          echo "  ok — the binary loaded and answered for itself"
