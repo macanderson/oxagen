@@ -66,10 +66,17 @@ const permMocks = vi.hoisted(() => ({
   getNonDeniedTools: vi.fn((_serverName: string, tools: string[]) => tools),
 }));
 
-vi.mock("@oxagen/mcp-config/permissions", () => ({
-  filterToolVisibility: permMocks.filterToolVisibility,
-  getNonDeniedTools: permMocks.getNonDeniedTools,
-}));
+// `matchGlob` stays real: the managed-policy gate is now the real one, and it
+// matches through this module.
+vi.mock("@oxagen/mcp-config/permissions", async (importOriginal) => {
+  const real =
+    await importOriginal<typeof import("@oxagen/mcp-config/permissions")>();
+  return {
+    ...real,
+    filterToolVisibility: permMocks.filterToolVisibility,
+    getNonDeniedTools: permMocks.getNonDeniedTools,
+  };
+});
 
 const managedMocks = vi.hoisted(() => ({
   loadManagedConfig: vi.fn<
@@ -81,11 +88,20 @@ const managedMocks = vi.hoisted(() => ({
   >(() => null),
 }));
 
-vi.mock("@oxagen/mcp-config/managed", () => ({
-  loadManagedConfig: managedMocks.loadManagedConfig,
-  getManagedServers: managedMocks.getManagedServers,
-  checkToolDenied: managedMocks.checkToolDenied,
-}));
+// The policy gate is the REAL implementation: file-mcp.ts no longer carries a
+// private copy of the command matcher, so mocking these would test a stub of
+// the thing under test (#1383, #1424). Only the loader and the tool denylist
+// are stubbed, because those need fixture config rather than real files.
+vi.mock("@oxagen/mcp-config/managed", async (importOriginal) => {
+  const real =
+    await importOriginal<typeof import("@oxagen/mcp-config/managed")>();
+  return {
+    ...real,
+    loadManagedConfig: managedMocks.loadManagedConfig,
+    getManagedServers: managedMocks.getManagedServers,
+    checkToolDenied: managedMocks.checkToolDenied,
+  };
+});
 
 const mcpClientMocks = vi.hoisted(() => ({
   connectMcp: vi.fn<
