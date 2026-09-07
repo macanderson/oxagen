@@ -220,17 +220,26 @@ export function evaluateTurnBudget(
  * Shape of the engine's cumulative usage accumulator (a subset of
  * RunCodingAgentResult["usage"]).
  *
- * Note the missing cache-WRITE count: the engine does not accumulate one, so
- * {@link turnCostUsd} prices cache-creation tokens at the fresh-input rate. On
- * Anthropic models (cache writes bill at 1.25x input) that makes a budget
- * estimate slightly LOWER than what the gate actually debits via
- * chargeUsageCredits, which does receive cacheWriteTokens.
+ * `cacheWriteTokens` is here because the guard is only as good as the shape it
+ * can accept. Without it, cache-creation tokens reached {@link providerCostUsd}
+ * as fresh input while `chargeUsageCredits` priced the same tokens at the
+ * cache-write rate — so the guard believed a turn cost less than the customer
+ * was charged, and a ceiling admitted a turn that had already crossed it. On
+ * Anthropic, where a write bills at 1.25x input, that gap is the whole 25%
+ * premium on every priming step (#1414).
  */
 export interface TurnUsageSnapshot {
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
+  /** Prompt tokens served from the provider cache — a cache READ. */
   cachedInputTokens?: number;
+  /**
+   * Prompt tokens WRITTEN into the provider cache. A subset of `inputTokens`
+   * disjoint from `cachedInputTokens`. Omitting it prices them as fresh input,
+   * which is what every caller did before #1414.
+   */
+  cacheWriteTokens?: number;
 }
 
 /**
@@ -249,6 +258,7 @@ export function turnCostUsd(
       inputTokens: usage.inputTokens ?? 0,
       outputTokens: usage.outputTokens ?? 0,
       cachedTokens: usage.cachedInputTokens ?? 0,
+      cacheWriteTokens: usage.cacheWriteTokens ?? 0,
     },
     rateCard,
   );

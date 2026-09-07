@@ -448,6 +448,12 @@ export interface RunCodingAgentResult {
     totalTokens?: number;
     /** Prompt tokens served from the provider cache (a cache "hit"). */
     cachedInputTokens?: number;
+    /**
+     * Prompt tokens WRITTEN into the provider cache. A subset of `inputTokens`
+     * disjoint from `cachedInputTokens`, priced at the cache-write rate — 25%
+     * above fresh input on Anthropic, equal to it everywhere else (#1411).
+     */
+    cacheWriteTokens?: number;
   };
   messages: ModelMessage[];
   /**

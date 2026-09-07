@@ -21,11 +21,13 @@ describe("rateFor", () => {
       inputPer1M: 15,
       outputPer1M: 75,
       cachedInputPer1M: 1.5,
+      cacheWritePer1M: 18.75,
     });
     expect(rateFor("anthropic/claude-haiku-4.5")).toEqual({
       inputPer1M: 1,
       outputPer1M: 5,
       cachedInputPer1M: 0.1,
+      cacheWritePer1M: 1.25,
     });
   });
 
@@ -34,11 +36,13 @@ describe("rateFor", () => {
       inputPer1M: 0.15,
       outputPer1M: 0.6,
       cachedInputPer1M: 0.075,
+      cacheWritePer1M: 0.15,
     });
     expect(rateFor("openai/gpt-4o")).toEqual({
       inputPer1M: 2.5,
       outputPer1M: 10,
       cachedInputPer1M: 1.25,
+      cacheWritePer1M: 2.5,
     });
   });
 

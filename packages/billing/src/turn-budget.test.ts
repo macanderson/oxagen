@@ -6,6 +6,7 @@
  * that extends the ceiling and the grace cushion that eventually hard-stops).
  */
 import { describe, it, expect, vi } from "vitest";
+import { providerCostUsd } from "./pricing";
 import {
   TURN_BUDGET_MODES,
   TURN_BUDGET_MODE_VALUES,
@@ -128,6 +129,68 @@ describe("turnCostUsd", () => {
     // 1M output tokens on a $75/1M output model = $75.
     const cost = turnCostUsd("claude-opus-4-8", { outputTokens: 1_000_000 });
     expect(cost).toBeCloseTo(75, 5);
+  });
+
+  // #1414: the guard and the charge path must price one turn the same way.
+  // `chargeUsageCredits` prices through providerCostUsd with cacheWriteTokens;
+  // turnCostUsd could not accept the field, so it handed the same tokens over
+  // as fresh input and the guard believed the turn cost less than the customer
+  // was charged. A ceiling was permeable by exactly that gap.
+  const MODEL = "claude-opus-4-8";
+  const charged = (usage: Parameters<typeof providerCostUsd>[0]) =>
+    providerCostUsd(usage);
+
+  it("agrees with the charge path on a turn WITH cache writes", () => {
+    const guard = turnCostUsd(MODEL, {
+      inputTokens: 1_000_000,
+      outputTokens: 20_000,
+      cacheWriteTokens: 900_000,
+    });
+    const invoice = charged({
+      model: MODEL,
+      inputTokens: 1_000_000,
+      outputTokens: 20_000,
+      cacheWriteTokens: 900_000,
+    });
+    expect(guard).toBeCloseTo(invoice, 9);
+    // And the number is not the fresh-input one: 900k written tokens at Opus's
+    // $18.75 write rate rather than its $15.00 input rate is $3.375 more than
+    // the guard used to report.
+    const asFreshInput = charged({
+      model: MODEL,
+      inputTokens: 1_000_000,
+      outputTokens: 20_000,
+    });
+    expect(guard - asFreshInput).toBeCloseTo(3.375, 6);
+  });
+
+  it("agrees with the charge path on a turn with reads AND writes", () => {
+    const usage = {
+      inputTokens: 1_000_000,
+      outputTokens: 50_000,
+      cachedInputTokens: 600_000,
+      cacheWriteTokens: 300_000,
+    };
+    expect(turnCostUsd(MODEL, usage)).toBeCloseTo(
+      charged({
+        model: MODEL,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        cachedTokens: usage.cachedInputTokens,
+        cacheWriteTokens: usage.cacheWriteTokens,
+      }),
+      9,
+    );
+  });
+
+  it("leaves a turn with NO cache traffic exactly where it was", () => {
+    // The control. Without it, the two above would also pass if the whole
+    // input side had drifted, and this term could not be told from that.
+    const usage = { inputTokens: 1_000_000, outputTokens: 20_000 };
+    const guard = turnCostUsd(MODEL, usage);
+    expect(guard).toBeCloseTo(charged({ model: MODEL, ...usage }), 9);
+    // 1M in at $15 + 20k out at $75/1M = $15 + $1.50.
+    expect(guard).toBeCloseTo(16.5, 9);
   });
 });
 
