@@ -86,13 +86,11 @@ const producerFiles = sourceFiles.filter(
  * and simply gets scanned; this list exists so a *disappearance* — a rename, a
  * move, a path bug — is reported rather than silently shrinking the scan.
  */
+// The four execution-side producers (background tasks, subagents, workflow
+// tasks, playbook runs) left with the agent runtime (ADR-041).
 const KNOWN_PRODUCERS = [
   "packages/agent/src/runtime/materialize-tools.ts",
   "packages/handlers/src/graph.telemetry.ts",
-  "packages/inngest-functions/src/functions/agent.background-task.execute.ts",
-  "packages/inngest-functions/src/functions/agent.execute-subagent.ts",
-  "packages/inngest-functions/src/functions/agent.workflow.task.execute.ts",
-  "packages/inngest-functions/src/functions/playbook.run.execute.ts",
 ];
 
 /** Matches `execution_step_id: null` (or `undefined`) in an object literal. */
