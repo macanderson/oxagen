@@ -189,6 +189,75 @@ describe("dodStatus", () => {
     expect(status.present).toBe(true);
     expect(status.unchecked).toEqual(["something"]);
   });
+
+  // oxagen#1407. The witness: against the single-heading regex every spelling
+  // below except the first returns `present: false`, which is what failed PRs
+  // whose linked issue does state its done conditions.
+  describe("the done-condition headings this corpus actually uses (oxagen#1407)", () => {
+    const spellings = [
+      "Definition of done",
+      "Done means",
+      "Done when",
+      "What done looks like",
+      'What "done" looks like',
+      "what 'done' looks like",
+      "DONE WHEN",
+    ];
+
+    for (const spelling of spellings) {
+      it(`reads a section headed "${spelling}"`, () => {
+        const status = dodStatus(`## ${spelling}\n\n- [ ] the one item`);
+        expect(status.present).toBe(true);
+        expect(status.unchecked).toEqual(["the one item"]);
+      });
+    }
+
+    // The recorded decision (oxagen#1407 asks for it explicitly): bare `Done`
+    // is short enough to head a section written for some other purpose, and
+    // reading the wrong checklist as the DoD is the failure direction this
+    // gate exists to prevent. Those issues fail loudly and get told what to
+    // edit, which costs their closer one edit.
+    it("does not accept a bare `Done` heading", () => {
+      expect(dodStatus("## Done\n- [ ] shipped").present).toBe(false);
+    });
+
+    it("does not treat a mention of the phrase in prose as a section", () => {
+      const status = dodStatus(
+        "We never agreed the definition of done here.\n\n- [ ] a stray box",
+      );
+      expect(status.present).toBe(false);
+      expect(status.heading).toBeNull();
+    });
+  });
+
+  // The half that makes widening the headings safe. `verdict` passes on
+  // `unchecked.length === 0`, so a recognised section holding no checkboxes
+  // would be a gate that cannot fail — and the `Done when` cohort writes its
+  // conditions as plain bullets. The hole predates the widening: a canonical
+  // heading over prose already passed verifying nothing.
+  describe("a section with no checkboxes is not a checklist", () => {
+    it("rejects a recognised heading whose items are plain bullets", () => {
+      const status = dodStatus(
+        "## Done when\n\n- the parser is fixed\n- a test covers it",
+      );
+      expect(status.present).toBe(false);
+    });
+
+    it("rejects the canonical heading over prose, which passed before", () => {
+      expect(dodStatus("## Definition of done\n\nIt works.").present).toBe(
+        false,
+      );
+    });
+
+    it("still reports which heading it found, so the fix can be named", () => {
+      const status = dodStatus("## Done when\n\n- the parser is fixed");
+      expect(status.heading).toBe("Done when");
+    });
+
+    it("reports no heading at all when none is recognised", () => {
+      expect(dodStatus("### Context\n\nJust prose.").heading).toBeNull();
+    });
+  });
 });
 
 describe("verdict", () => {
@@ -289,7 +358,77 @@ describe("verdict", () => {
       issue("### Context\n\nFiled by hand, no template."),
     );
     expect(result.ok).toBe(false);
-    expect(result.reasons[0]).toContain('no "Definition of done" section');
+    expect(result.reasons[0]).toContain("states no done conditions");
+  });
+
+  it("passes when the linked issue states its DoD under an older heading", () => {
+    // oxagen#1407: this is the PR that used to go red for a reason unrelated
+    // to its diff, on an issue that does say what done means.
+    const result = verdict(
+      { body: "Closes #1321", labels: [] },
+      issue("## Done when\n\n- [x] the parser is fixed\n- [x] a test covers it"),
+    );
+    expect(result.ok).toBe(true);
+    expect(result.reasons).toEqual([]);
+  });
+
+  it("still fails an older-heading issue whose boxes are not all ticked", () => {
+    const result = verdict(
+      { body: "Closes #1321", labels: [] },
+      issue("## Done when\n\n- [x] the parser is fixed\n- [ ] a test covers it"),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.reasons[0]).toContain("1 unchecked DoD item(s)");
+    expect(result.reasons[0]).toContain("a test covers it");
+  });
+
+  it("fails a recognised section that holds no checkboxes at all", () => {
+    // Without this the widened heading set would hand the whole `Done when`
+    // cohort a gate that cannot fail: no boxes means nothing unchecked.
+    const result = verdict(
+      { body: "Closes #1321", labels: [] },
+      issue("## Done when\n\n- the parser is fixed\n- a test covers it"),
+    );
+    expect(result.ok).toBe(false);
+  });
+
+  // oxagen#1400. The old message named the one remedy that must not be taken
+  // ("refile it") and omitted the one that should. These pin the replacement,
+  // because the message is the entire interface of this gate.
+  describe("the failure message names the edit to make (oxagen#1400)", () => {
+    const reasonFor = (body: string) =>
+      verdict({ body: "Closes #1321", labels: [] }, issue(body)).reasons[0];
+
+    const noSection = () => reasonFor("### Context\n\nFiled by hand.");
+    const noBoxes = () => reasonFor("## Done when\n\n- the parser is fixed");
+
+    it("never tells the author to refile the issue", () => {
+      expect(noSection()).not.toContain("refile");
+      expect(noBoxes()).not.toContain("refile");
+    });
+
+    it("says the edit goes on the issue, not on the PR", () => {
+      expect(noSection()).toContain("Edit the ISSUE (not this PR)");
+      expect(noBoxes()).toContain("Edit the ISSUE (not this PR)");
+    });
+
+    it("says explicitly that closing and reopening is not the remedy", () => {
+      expect(noSection()).toContain("Do NOT close and reopen");
+      expect(noBoxes()).toContain("Do NOT close and reopen");
+    });
+
+    it("names the conversion for an issue whose conditions are prose", () => {
+      expect(noSection()).toContain("convert that paragraph into boxes");
+      expect(noSection()).toContain("Done means");
+    });
+
+    it("distinguishes a missing section from one holding no boxes", () => {
+      // The second has a mechanical fix — rewrite these bullets — and the
+      // first does not, so collapsing them costs the reader the fix.
+      expect(noBoxes()).toContain('"Done when" section');
+      expect(noBoxes()).toContain("nothing in it is a checkbox");
+      expect(noSection()).not.toContain("nothing in it is a checkbox");
+    });
   });
 
   it("reports every failing issue when a PR closes several", () => {

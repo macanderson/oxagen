@@ -230,20 +230,61 @@ export function referencedIssues(prBody) {
 }
 
 /**
+ * Headings this corpus writes its done conditions under (oxagen#1407).
+ *
+ * The template teaches one spelling; the gate reads the ones already in the
+ * tracker. Recognising only `Definition of done` made every pre-template issue
+ * a migration, and the migration was invisible until someone opened a PR
+ * against an old issue and got a red check for a reason unrelated to their
+ * change — a per-issue tax paid at the worst moment, by whoever happened to be
+ * closing it. A census of macanderson/stella's open non-epic issues found 36
+ * under `Done when`, 11 under `What "done" looks like`, and a further 60 under
+ * `Done means` that had already been migrated by hand (macanderson/stella#5193).
+ *
+ * Bare `Done` is deliberately **excluded**. It is short enough to head a
+ * section written for another purpose, and the cost of the two directions is
+ * not symmetric: a wrongly-recognised section makes this gate read some other
+ * checklist as the definition of done, which is the "a measurement that did not
+ * happen reads as success" failure the gate exists to prevent. Leaving those
+ * issues to fail loudly costs their closer one edit, and `verdict` now tells
+ * them exactly which edit to make.
+ *
+ * Anchored to a heading or a bold label, so a mention of the phrase in prose is
+ * not a section.
+ */
+const DOD_HEADING = new RegExp(
+  String.raw`^\s*(?:#{1,6}\s*|\*\*)\s*` +
+    String.raw`(?:definition of done|done means|done when|what ["']?done["']? looks like)\b`,
+  "im",
+);
+
+/**
  * Read the DoD checklist state out of an issue body.
  *
- * Only the section under a "Definition of done" heading or bold label counts.
- * Scanning the whole body would sweep in unrelated task lists — a Context
- * section listing options, say — and block merges on boxes that were never a
- * DoD. When no such section exists, `present` is false and the caller decides
- * what that means.
+ * Only the section under one of `DOD_HEADING`'s spellings counts. Scanning the
+ * whole body would sweep in unrelated task lists — a Context section listing
+ * options, say — and block merges on boxes that were never a DoD.
+ *
+ * `present` requires **both** a recognised heading and at least one `- [ ]`
+ * item under it. A section with no checkboxes is a paragraph, and `verdict`
+ * passes on `unchecked.length === 0`, so counting it as present would make the
+ * gate unfailable for exactly the issues whose conditions were written as
+ * prose. That hole predates the widened heading set — a canonical
+ * `## Definition of done` followed by plain bullets already passed verifying
+ * nothing — and widening the headings without closing it would have opened it
+ * to the whole `Done when` cohort at once.
+ *
+ * `heading` reports the matched heading text, or `null` when no recognised
+ * heading was found at all. The two absences need different remedies, so the
+ * caller must be able to tell "no section" from "a section with no boxes".
  */
 export function dodStatus(issueBody) {
-  if (!issueBody) return { present: false, checked: 0, unchecked: [] };
+  const absent = { present: false, heading: null, checked: 0, unchecked: [] };
+  if (!issueBody) return absent;
 
   const body = withoutNonProse(issueBody);
-  const heading = body.match(/^\s*(?:#{1,6}\s*|\*\*)\s*definition of done\b/im);
-  if (!heading) return { present: false, checked: 0, unchecked: [] };
+  const heading = body.match(DOD_HEADING);
+  if (!heading) return absent;
 
   const after = body.slice(heading.index + heading[0].length);
   // The DoD section ends at the next heading of any level, so a later
@@ -259,7 +300,56 @@ export function dodStatus(issueBody) {
     if (item[1] === " ") unchecked.push(item[2].trim());
     else checked += 1;
   }
-  return { present: true, checked, unchecked };
+
+  const label = heading[0].replace(/^\s*(?:#{1,6}\s*|\*\*)\s*/, "").trim();
+  if (checked === 0 && unchecked.length === 0) {
+    return { present: false, heading: label, checked: 0, unchecked: [] };
+  }
+  return { present: true, heading: label, checked, unchecked };
+}
+
+/**
+ * Say what edit an issue needs before its close can be verified (oxagen#1400).
+ *
+ * The old text said "refile it with the task template", which, read literally,
+ * means close this issue and open a new one — applied to an issue with
+ * comments, cross-references, a parent epic and a `Closes` link from the very
+ * PR being blocked, that destroys the thing the gate protects. It was also the
+ * *only* instruction given, so the message named the one remedy that must not
+ * be taken and omitted the one that should.
+ *
+ * This check is nearly always the only red on an otherwise green PR, failing
+ * for a reason unrelated to the diff, and it is read by someone who has never
+ * seen it before. The message is the whole interface of the gate, so it names
+ * the edit and where to make it.
+ *
+ * `heading` is the recognised heading found without checkboxes, or `null` when
+ * no done-conditions section was found at all. The two have different fixes.
+ */
+function missingDodReason(ref, heading) {
+  if (heading) {
+    return (
+      `${ref} has a "${heading}" section, but nothing in it is a checkbox — ` +
+      "so there is no state for this gate to read.\n" +
+      "  Edit the ISSUE (not this PR) and rewrite that section's bullets as " +
+      "`- [ ]` items stating the conditions this close must satisfy, then tick " +
+      "the ones that are genuinely done. Keep the prose around them.\n" +
+      "  Do NOT close and reopen the issue — its history, links and parent are " +
+      "the point."
+    );
+  }
+  return (
+    `${ref} states no done conditions this gate can read.\n` +
+    "  Edit the ISSUE (not this PR): add a `## Definition of done` heading " +
+    "followed by `- [ ]` boxes stating the conditions this close must satisfy, " +
+    "then tick them.\n" +
+    "  If the issue already has a done-conditions paragraph under some other " +
+    "heading, convert that paragraph into boxes under one of the headings this " +
+    "gate reads — `Definition of done`, `Done means`, `Done when`, " +
+    '`What "done" looks like` — and keep the prose.\n' +
+    "  Do NOT close and reopen the issue — its history, links and parent are " +
+    "the point."
+  );
 }
 
 /**
@@ -311,10 +401,7 @@ export function verdict(pr, issues) {
   for (const issue of issues) {
     const status = dodStatus(issue.body);
     if (!status.present) {
-      reasons.push(
-        `${issue.ref} has no "Definition of done" section — refile it with the task ` +
-          "template so the close can be verified (SCR-003).",
-      );
+      reasons.push(missingDodReason(issue.ref, status.heading));
       continue;
     }
     if (status.unchecked.length > 0) {
