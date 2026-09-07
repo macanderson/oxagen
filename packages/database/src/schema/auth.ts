@@ -302,11 +302,11 @@ export const userPreferences = authSchema.table(
     pendingPromptBehavior: pendingPromptBehaviorEnum("pending_prompt_behavior")
       .notNull()
       .default("queue"),
-    // Model preferences (user level; workspace level overrides available separately)
+    // Text model preferences (user level; workspace level overrides available
+    // separately). Image/video defaults were dropped with media generation
+    // (ADR-041).
     defaultTextTier: modelTierEnum("default_text_tier"),
     defaultTextModel: text("default_text_model"),
-    defaultImageModel: text("default_image_model"),
-    defaultVideoModel: text("default_video_model"),
     // Account-level preferences (distinct from the UI/model prefs above) —
     // surfaced by user.preferences.get / user.preferences.update.
     theme: text("theme").notNull().default("system"),
