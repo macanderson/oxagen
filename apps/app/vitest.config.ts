@@ -7,19 +7,27 @@ export default defineConfig({
   test: {
     clearMocks: true,
     environment: "node",
-    // Vitest's 5000ms default is not enough for this package's jsdom
-    // interaction tests under CI's turbo parallelism. `avatar-maker.test.tsx`'s
-    // save-flow test runs six userEvent interactions against the emoji grid: it
-    // takes ~560ms on an idle machine and timed out past 5000ms on main
-    // (ef8baf2, run 34080854349) inside a 38-task turbo run where vitest
-    // reported 529s of `environment` time across a 544s wall clock. Nine other
-    // tests in the same file sit in the 380-560ms band, so the whole file was
-    // within one contention spike of the ceiling.
+    // Headroom for this package's jsdom interaction tests under the runner
+    // contention AGENTS.md documents in "Test parallelism". apps/app is the
+    // repo's largest suite by a wide margin and is jsdom throughout, so it is
+    // the one most exposed to a busy box.
     //
-    // This changes no assertion — a genuinely wedged test still fails, it just
-    // stops failing because the box was busy. 20000 matches the value
-    // packages/plugins and packages/stella-engine-client already set for the
-    // same reason.
+    // The incident behind this is history, not the standing argument:
+    // avatar-maker.test.tsx's save-flow test timed out past 5000ms on main
+    // (ef8baf2, run 34080854349) inside a 38-task turbo run. #2708 then
+    // root-caused that test's own cost and cut it, so the ceiling is no longer
+    // what stands between that file and a red run.
+    //
+    // 20000 is the value packages/plugins and packages/stella-engine-client
+    // carry, but they set it for per-test cost of their own — cold drizzle
+    // module graphs, and booting a real stella-serve child — rather than for
+    // contention, and both are small suites. The repo's other large suites
+    // (packages/oxagen, packages/handlers, apps/cli, apps/api) still inherit
+    // the 5000ms default, so this is not yet a repo-wide policy.
+    //
+    // No assertion changes: a genuinely wedged test still fails, it just stops
+    // failing because the box was busy. The cost is that it now takes 20s to
+    // say so instead of 5s.
     testTimeout: 20000,
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
