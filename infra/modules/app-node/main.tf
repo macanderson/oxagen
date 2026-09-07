@@ -3,13 +3,20 @@
  * processes, and Neo4j — on one small ARM instance, behind an ALB rather than
  * a public IP.
  *
- * This replaces the old account's `data-node` for two of its three engines.
- * Postgres moves to Aurora Serverless v2 and ClickHouse's role moves to
- * Redshift Serverless — both scale to near-zero cost when idle, so both are
- * genuinely cheaper managed than self-hosted at this traffic level. Neo4j
- * stays here: Amazon's only graph product with native vector search
- * (Neptune Analytics) has a real floor cost that does not reach zero even
- * paused, and Neo4j 5.11+ already gives this app vector indexes today. The
+ * This replaces the old account's `data-node`. Postgres moves to Aurora
+ * Serverless v2, which is genuinely cheaper managed than self-hosted at this
+ * traffic level.
+ *
+ * ClickHouse and Neo4j both stay here, on this node. An earlier revision of
+ * this file said ClickHouse's role was moving to Redshift Serverless; that
+ * plan is withdrawn (#2682, 2026-09-07). The platform reads and writes
+ * ClickHouse directly — `packages/telemetry` does, through
+ * `/oxagen/production/CLICKHOUSE_URL` — and nothing was ever pointed at
+ * Redshift, so the migration existed only in this comment and in a workgroup
+ * nobody queried. Neo4j stays for its own reason: Amazon's only graph product
+ * with native vector search (Neptune Analytics) has a real floor cost that
+ * does not reach zero even paused, and Neo4j 5.11+ already gives this app
+ * vector indexes today. The
  * node therefore still carries one engine's worth of state, which is why it
  * is not fully disposable the way a pure web-tier instance would be — see
  * the EBS volume and its `prevent_destroy` below.
@@ -65,6 +72,22 @@ resource "aws_ssm_parameter" "neo4j" {
   description = "Neo4j password for ${var.name}"
   type        = "SecureString"
   value       = random_password.neo4j.result
+  tags        = local.tags
+}
+
+# ClickHouse's credential, the same shape as Neo4j's above and for the same
+# reason: the engine runs on this node, its password is generated here and
+# read from SSM by the platform, and it never leaves the account.
+resource "random_password" "clickhouse" {
+  length  = 32
+  special = false
+}
+
+resource "aws_ssm_parameter" "clickhouse" {
+  name        = "/${var.name}/clickhouse/password"
+  description = "ClickHouse default-user password for ${var.name}"
+  type        = "SecureString"
+  value       = random_password.clickhouse.result
   tags        = local.tags
 }
 
