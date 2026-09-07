@@ -8,9 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./run-spec-v2": "./src/run-spec-v2.ts",
-    "./run-spec-v1-legacy": "./src/run-spec-v1-legacy.ts",
-    "./run-errors": "./src/run-errors.ts",
-    "./stella": "./src/stella/index.ts"
+    "./run-errors": "./src/run-errors.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -30,5 +28,6 @@
     "@vitest/coverage-v8": "2.1.9",
     "eslint": "9.39.4",
     "vitest": "2.1.9"
-  }
+  },
+  "description": "Durable run / attempt / event / seal / finalization ledger \u2014 the evidence store for governed agent runs (ADR-041)."
 }

@@ -85,7 +85,7 @@
  */
 import { sql, type SQL } from "drizzle-orm";
 import { withSystemDb, withTenantDb, type Tx } from "@oxagen/database";
-import type { PlatformSurface } from "./execute-turn";
+import type { PlatformSurface } from "./surface";
 import {
   assertRunRowMatchesSpec,
   runSpecV2Digest,

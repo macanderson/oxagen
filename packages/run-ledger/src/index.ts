@@ -1,35 +1,13 @@
 /**
- * @oxagen/run-ledger — the platform's single seam into the agent engine
- * (agent-engine v2 Phase 1; docs/specs/agent-engine-v2/plan.md, ADR-033).
+ * @oxagen/run-ledger — the durable evidence ledger for governed agent runs.
  *
- * Surfaces import ONLY this package for engine-facing wiring; direct
- * `runTurn` imports outside it are a review error (the
- * Phase 1 exit criterion). Engine types and constants the surfaces legitimately
- * need are re-exported so the rule is cheap to follow.
+ * Run identity, fenced immutable attempts, the append-only event log, seals,
+ * authorization snapshots and finalization grants live here. Nothing in this
+ * package executes an agent: the runner that used to sit behind it left with
+ * ADR-041, and execution evidence now arrives through evidence ingress
+ * (`docs/specs/run-evidence-ingress/spec.md`, `docs/specs/tacho/`).
  */
-export {
-  executeTurn,
-  executePipelineTurn,
-  type ExecuteTurnOptions,
-  type PlatformSurface,
-} from "./execute-turn";
-
-// Phase C — the engine vocabulary (docs/specs/agent-engine-v2/plan.md).
-// Deliberately ONLY the flag-resolution half, which is pure. The Stella
-// adapter itself lives behind the `@oxagen/run-ledger/stella` subpath and is
-// NOT re-exported here: it reaches for `node:child_process`, `node:crypto` and
-// `node:fs` to supervise sidecar processes, and this barrel is imported by
-// `apps/app`, whose bundler must not be handed those through a path it can
-// reach statically. `executeTurn` loads the adapter with a dynamic import, so
-// a deployment on the TS engine never pulls it in at all.
-export {
-  DEFAULT_ENGINE,
-  ENGINE_ENV_VAR,
-  isEngineChoice,
-  resolveEngineChoice,
-  UnknownEngineError,
-  type EngineChoice,
-} from "./stella/engine-choice";
+export { type PlatformSurface } from "./surface";
 
 // Phase 2b — durable-run persistence (docs/specs/agent-engine-v2/plan.md,
 // Phase 2). run-store.ts is the only writer of agent.agent_runs /
@@ -213,18 +191,6 @@ export {
 // turn driver) share ONE definition while queued v1 work drains. v1 rows are
 // explicitly NON-EVIDENCE — see the module doc; they are never promoted to v2.
 export {
-  LEGACY_RUN_SPEC_VERSION,
-  LEGACY_CODE_MODE_SURFACES,
-  isLegacyCodeModeSurface,
-  runSpecV1Schema,
-  parseRunSpecV1,
-  buildLegacyRunSpecV1,
-  type RunSpecV1,
-  type LegacyToolPolicy,
-  type LegacyRunSpecV1Input,
-} from "./run-spec-v1-legacy";
-
-export {
   CanonicalJsonError,
   RunSpecValidationError,
   RunSpecDigestMismatchError,
@@ -251,17 +217,3 @@ export {
   type RunSpecIssue,
   type LeaseRejectionReason,
 } from "./run-errors";
-
-// Re-exports so surfaces don't need a second engine-facing import. Types are
-// pass-throughs; the constants are advertised limits, not engine behavior.
-export {
-  DEFAULT_AGENT_MODEL,
-  DEFAULT_MAX_AGENT_STEPS,
-} from "@oxagen/agent-engine";
-export type {
-  RunCodingAgentOptions,
-  RunCodingAgentResult,
-  RunTurnOptions,
-  RunTurnResult,
-  CodingEvent,
-} from "@oxagen/agent-engine";

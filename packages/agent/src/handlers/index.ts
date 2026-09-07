@@ -16,35 +16,14 @@ type LoaderEntry = () => Promise<
 
 // Single source of truth mapping capability name → handler module.
 const LOADERS: Record<string, LoaderEntry> = {
-  execute_code: () => import("./agent.code.execute"),
   // Durable sandbox sessions — long-lived, reconnectable sandboxes that persist
   // across agent turns (clone → build → snapshot → PR). The one-shot
   // agent.code.execute and these durable peers share the @oxagen/sandbox driver.
-  start_sandbox: () => import("./agent.sandbox.start"),
-  run_sandbox_command: () => import("./agent.sandbox.exec"),
-  snapshot_sandbox: () => import("./agent.sandbox.snapshot"),
-  stop_sandbox: () => import("./agent.sandbox.stop"),
-  rename_sandbox: () => import("./agent.sandbox.rename"),
-  list_sandboxes: () => import("./agent.sandbox.list"),
-  list_sandbox_files: () => import("./agent.sandbox_file.list"),
-  list_sandbox_logs: () => import("./agent.sandbox_log.list"),
-  read_sandbox_file: () => import("./agent.sandbox_file.read"),
   // Browser automation inside a durable session — all seven thin wrappers live
   // in one module (browser.ts) that drives `browserctl` via execInSession.
-  navigate_page: () => import("./browser"),
-  screenshot_page: () => import("./browser"),
-  fill_page: () => import("./browser"),
-  submit_page: () => import("./browser"),
-  click_page: () => import("./browser"),
-  refresh_page: () => import("./browser"),
-  read_page: () => import("./browser"),
   // Cross-LLM proof-of-done: an independent vision model judges the screenshots.
-  verify_feature: () => import("./agent.feature.verify"),
   // Code-execution surface peers of agent.code.execute. Co-located
   // here so the whole sandboxed code surface registers through one path.
-  diff_code: () => import("./code.diff"),
-  patch_code: () => import("./code.patch"),
-  format_code: () => import("./code.format"),
   list_agent_tools: () => import("./agent.tool.list"),
   register_mcp_server: () => import("./agent.mcp.register"),
   list_mcp_servers: () => import("./agent.mcp.list"),
@@ -53,13 +32,6 @@ const LOADERS: Record<string, LoaderEntry> = {
   delete_mcp_server: () => import("./agent.mcp.delete"),
   resolve_mcp_consent: () => import("./agent.mcp_consent.resolve"),
   list_mcp_consents: () => import("./agent.mcp_consent.list"),
-  approve_plan: () => import("./agent.plan.approve"),
-  create_plan: () => import("./agent.plan.create"),
-  get_plan: () => import("./agent.plan.get"),
-  list_plans: () => import("./agent.plan.list"),
-  start_background_task: () => import("./agent.background_task.start"),
-  get_background_task: () => import("./agent.background_task.read"),
-  cancel_background_task: () => import("./agent.background_task.cancel"),
   recall_memory: () => import("./agent.memory.recall"),
   write_memory: () => import("./agent.memory.write"),
   list_memories: () => import("./agent.memory.list"),
@@ -85,20 +57,8 @@ const LOADERS: Record<string, LoaderEntry> = {
   list_memory_citations: () => import("./agent.memory_citation.list"),
   get_citation_stats: () => import("./agent.memory_citation.stats"),
   resolve_approval: () => import("./agent.approval.resolve"),
-  list_agent_skills: () => import("./agent.skill.list"),
-  load_skill: () => import("./agent.skill.load"),
-  aggregate_subagents: () => import("./agent.subagent.aggregate"),
-  cancel_subagent: () => import("./agent.subagent.cancel"),
-  dispatch_subagent: () => import("./agent.subagent.dispatch"),
   // Manual acquire/force-release/introspection over the same transactional
   // Postgres leases write_file/edit_file acquire automatically.
-  acquire_file_lock: () => import("./agent.file_lock.acquire"),
-  release_file_lock: () => import("./agent.file_lock.release"),
-  list_file_locks: () => import("./agent.file_lock.list"),
-  get_subagent_fanout: () => import("./agent.subagent_fanout.get"),
-  get_subagent_result: () => import("./agent.subagent_result.get"),
-  list_subagent_siblings: () => import("./agent.subagent.siblings"),
-  list_subagent_fanouts: () => import("./agent.subagent_fanout.list"),
   list_executions: () => import("./agent.execution.list"),
   get_execution_trace: () => import("./agent.trace.get"),
   debug_execution: () => import("./agent.debug.trace"),
@@ -106,7 +66,6 @@ const LOADERS: Record<string, LoaderEntry> = {
   // fingerprint. Pure SQL (ADR-021 §1), the counterpart to the single-execution
   // failure frame above.
   list_error_clusters: () => import("./telemetry.error.cluster"),
-  render_agent_ui: () => import("./agent.ui.render"),
   create_agent_def: () => import("./agent.definition.create"),
   delete_agent_def: () => import("./agent.definition.delete"),
   update_agent_def: () => import("./agent.definition.update"),

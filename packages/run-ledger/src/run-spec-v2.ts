@@ -305,7 +305,7 @@ export type RetentionPolicyPublicId = z.output<
  * Engines admissible today. Stella is the only one: the TypeScript step loop
  * it replaced has been deleted, so a spec naming `ts` fails admission rather
  * than being resolved at claim time. `RETIRED_ENGINES` in
- * `stella/engine-choice.ts` is what turns that failure into a sentence saying
+ * The former engine-choice resolver is what turned that failure into a sentence saying
  * the engine was removed, instead of "unknown engine".
  */
 export const RUN_ENGINES = ["stella"] as const;

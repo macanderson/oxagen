@@ -10,20 +10,7 @@ export * from "./runtime/stream-events";
 // (docs/specs/agent-engine-v2/plan.md). Consumed by @oxagen/agent-worker's
 // main.ts to wire createAgentWorker; see the module doc for the RunSpec v1
 // contract and this v1 driver's explicit limitations.
-export {
-  createPlatformTurnDriver,
-  parseRunSpec,
-  assertClaimIsLegacyV1,
-  hydrateAgentRunContext,
-  runRowIdentityFromClaim,
-  type ClaimedRun,
-  type RunEventRecord,
-  type TurnDriver,
-  type RunSpecV1,
-  type HydratedAgentRun,
-} from "./runtime/turn-driver";
 export { isKnowledgeGraphEnabled } from "./runtime/knowledge-graph";
-export * from "./dispatch/subagent";
 export * from "./dispatch/mcp-client";
 export * from "./dispatch/lineage-outcome";
 export * from "./dispatch/lineage-projection";
@@ -34,33 +21,9 @@ export type { CapabilityHandlerFn } from "./handlers/index";
 // Sandbox session lifecycle & work-recovery (spec: sandbox-session-lifecycle).
 // The reaper (packages/inngest-functions) and the recover_sandbox_session
 // capability both drive these; exported here as the public lifecycle surface.
-export {
-  releaseSession,
-  sandboxGraceSeconds,
-  sandboxStaleRunningSeconds,
-  markSessionStatus,
-  getSessionByPublicId,
-} from "./handlers/_sandbox-session";
-export {
-  recoverSandboxSession,
-  recoveryLabel,
-} from "./handlers/recover-sandbox-session";
-export type {
-  RecoveryOutcome,
-  RecoveryKind,
-} from "./handlers/recover-sandbox-session";
-export { agentSandboxStopHandler } from "./handlers/agent.sandbox.stop";
 // Typed subagent-fanout errors — surfaces (apps/api) import these to map an
 // unknown / cross-tenant fanout id to a 404 instead of a 500 via instanceof,
 // not a brittle error-message regex.
-export {
-  FanoutNotFoundError,
-  isFanoutNotFoundError,
-  SubagentRunNotFoundError,
-  isSubagentRunNotFoundError,
-  ExecutionNotFoundError,
-  isExecutionNotFoundError,
-} from "./handlers/subagent-errors";
 export { buildChatSystemPrompt } from "./system-prompt";
 export type { SystemPromptContext } from "./system-prompt";
 // A2A skill-addressed routing (apps/api's A2A bridge resolves message.metadata.skillId
