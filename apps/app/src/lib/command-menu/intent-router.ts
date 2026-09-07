@@ -1,19 +1,20 @@
 /**
- * intent-router.ts — classify a query into one of five intent categories.
+ * intent-router.ts — classify a query into one of four intent categories.
  *
  * Intent types:
  *   Navigate — matches a known nav target from enumerateNavTargets
  *   Search   — looks like a search query (who/what/where/list/find)
  *   Action   — imperative verb targeting an in-product action
- *   Fill     — edit/fill/update instruction when a fillable form is registered
  *   Ask      — default: open the ask drawer with the query as seed text
  *
  * Resolution order:
- *   1. If a fillable form is registered AND the text is a fill instruction → Fill
- *   2. If the text matches a nav target (fuzzy, first-match) → Navigate
- *   3. If the text begins with a question/search term → Search
- *   4. If the text is an imperative action phrase → Action
- *   5. Default → Ask
+ *   1. If the text matches a nav target (fuzzy, first-match) → Navigate
+ *   2. If the text begins with a question/search term → Search
+ *   3. If the text is an imperative action phrase → Action
+ *   4. Default → Ask
+ *
+ * ADR-041 retired the fifth category (Fill): it dispatched the `form.fill`
+ * capability, which went with the runtime.
  *
  * No external dependencies — pure functions that work in any context.
  */
@@ -42,22 +43,12 @@ export type IntentAction = {
   query: string;
 };
 
-export type IntentFill = {
-  type: "fill";
-  instruction: string;
-};
-
 export type IntentAsk = {
   type: "ask";
   query: string;
 };
 
-export type Intent =
-  | IntentNavigate
-  | IntentSearch
-  | IntentAction
-  | IntentFill
-  | IntentAsk;
+export type Intent = IntentNavigate | IntentSearch | IntentAction | IntentAsk;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -111,23 +102,7 @@ const SEARCH_PREFIXES = [
   "are there",
 ];
 
-// Prefixes that signal an imperative fill/edit instruction.
-const FILL_VERBS = [
-  "fill",
-  "update",
-  "set",
-  "change",
-  "edit",
-  "populate",
-  "autofill",
-  "suggest",
-  "complete",
-  "fill in",
-  "fill out",
-  "fix",
-];
-
-// General action verbs (lower priority than fill when form is registered).
+// Imperative action verbs.
 const ACTION_VERBS = [
   "create",
   "new",
@@ -143,12 +118,6 @@ const ACTION_VERBS = [
   "save",
   "run",
 ];
-
-/** True when the query text reads as a fill/edit instruction. */
-function looksLikeFill(text: string): boolean {
-  const n = normalise(text);
-  return FILL_VERBS.some((v) => n.startsWith(v));
-}
 
 /** True when the query text looks like a question or search. */
 function looksLikeSearch(text: string): boolean {
@@ -171,11 +140,6 @@ export interface ClassifyOptions {
   query: string;
   /** The current scope context — used to enumerate nav targets. */
   ctx: ScopeContext;
-  /**
-   * Whether a fillable form is currently registered on the page.
-   * When true, fill-intent classification is attempted before navigate.
-   */
-  hasFillableForm: boolean;
 }
 
 /**
@@ -184,18 +148,13 @@ export interface ClassifyOptions {
  * @pure — no side effects, no async.
  */
 export function classifyIntent(options: ClassifyOptions): Intent {
-  const { query, ctx, hasFillableForm } = options;
+  const { query, ctx } = options;
   const trimmed = query.trim();
   if (!trimmed) return { type: "ask", query: trimmed };
 
   const n = normalise(trimmed);
 
-  // 1. Fill: fillable form registered + looks like an edit instruction.
-  if (hasFillableForm && looksLikeFill(trimmed)) {
-    return { type: "fill", instruction: trimmed };
-  }
-
-  // 2. Navigate: strip nav prefixes and fuzzy-match against known targets.
+  // 1. Navigate: strip nav prefixes and fuzzy-match against known targets.
   // Always attempt nav match — not gated on prefix, short exact labels match well.
   {
     // Find the first matching prefix and strip it once; do NOT reduce through
@@ -215,17 +174,17 @@ export function classifyIntent(options: ClassifyOptions): Intent {
     }
   }
 
-  // 3. Search.
+  // 2. Search.
   if (looksLikeSearch(trimmed)) {
     return { type: "search", query: trimmed };
   }
 
-  // 4. Action.
+  // 3. Action.
   if (looksLikeAction(trimmed)) {
     const verb = ACTION_VERBS.find((v) => n.startsWith(v)) ?? "action";
     return { type: "action", verb, query: trimmed };
   }
 
-  // 5. Default: Ask.
+  // 4. Default: Ask.
   return { type: "ask", query: trimmed };
 }

@@ -8,7 +8,6 @@ import {
   FolderGit2,
   GitBranch,
   Server,
-  Sparkles,
   Wrench,
   Zap,
 } from "lucide-react";
@@ -27,7 +26,6 @@ export const MENTION_TYPE_META: Record<MentionType, MentionTypeMeta> = {
   file: { icon: FileCode2, iconClassName: "text-sky-500" },
   directory: { icon: Folder, iconClassName: "text-amber-500" },
   agent: { icon: Bot, iconClassName: "text-fuchsia-500" },
-  skill: { icon: Sparkles, iconClassName: "text-lime-500" },
   tool: { icon: Wrench, iconClassName: "text-orange-500" },
   mcp_server: { icon: Server, iconClassName: "text-teal-500" },
   capability: { icon: Zap, iconClassName: "text-yellow-600" },

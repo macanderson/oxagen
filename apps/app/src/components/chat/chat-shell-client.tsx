@@ -693,19 +693,10 @@ export function ChatShellClient({
                 try {
                   const parsed = JSON.parse(raw) as Array<{
                     publicId?: unknown;
-                    keyframeForVideo?: unknown;
                   }>;
                   return parsed
                     .filter((a) => typeof a.publicId === "string")
-                    .map((a) => ({
-                      publicId: a.publicId as string,
-                      // Preserve the video↔keyframe link (Phase 2) so the route
-                      // can drop a video's sampled keyframes when it sends the
-                      // real video file part instead.
-                      ...(typeof a.keyframeForVideo === "string"
-                        ? { keyframeForVideo: a.keyframeForVideo }
-                        : {}),
-                    }));
+                    .map((a) => ({ publicId: a.publicId as string }));
                 } catch {
                   return [];
                 }
@@ -718,18 +709,6 @@ export function ChatShellClient({
               // (generic chat) agent — matching the stream route's BodySchema
               // `agentId: string | null`.
               agentId: (formData.get("agentId") as string) || null,
-              // Pinned chat context. The composer only sets this formData
-              // field when the user pinned a target — otherwise null, matching
-              // the stream route's BodySchema `pinnedContext: {...} | null`.
-              pinnedContext: (() => {
-                const raw = formData.get("pinnedContext") as string | null;
-                if (!raw) return null;
-                try {
-                  return JSON.parse(raw) as unknown;
-                } catch {
-                  return null;
-                }
-              })(),
             }),
           });
 
