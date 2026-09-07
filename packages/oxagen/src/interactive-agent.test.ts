@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   INTERACTIVE_AGENT_SLUG,
-  INTERACTIVE_AGENT_SKILLS,
+  INTERACTIVE_AGENT_CAPABILITIES,
   INTERACTIVE_AGENT_TYPE,
   buildInteractiveAgentConfig,
   computeConfigChecksum,
@@ -22,13 +22,22 @@ describe("interactive-agent config builder", () => {
     expect(config.graph.mode).toBe("read");
   });
 
-  it("loads every builtin skill as an agentTool of type skill", () => {
+  it("grants every allowlisted capability as an agentTool of type function", () => {
     const config = buildInteractiveAgentConfig("ws_1");
-    const skillRefs = config.agentTools
-      .filter((t) => t.type === "skill")
+    const refs = config.agentTools
+      .filter((t) => t.type === "function")
       .map((t) => t.ref);
-    for (const slug of INTERACTIVE_AGENT_SKILLS) {
-      expect(skillRefs).toContain(slug);
+    for (const name of INTERACTIVE_AGENT_CAPABILITIES) {
+      expect(refs).toContain(name);
+    }
+  });
+
+  // ADR-041: skills and subagents are gone; a grant names something the
+  // platform can actually gate (a capability, or a registered MCP server).
+  it("grants no skill or subagent tools", () => {
+    const config = buildInteractiveAgentConfig("ws_1");
+    for (const t of config.agentTools) {
+      expect(["function", "mcp_server"]).toContain(t.type);
     }
   });
 

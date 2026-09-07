@@ -38,13 +38,12 @@ const config: XmcpConfig = {
     };
 
     // Keep heavy packages out of the bundle to stay under the Vercel 250MB
-    // serverless function size limit. These fall into four groups:
-    //   - native addons rspack cannot parse (duckdb + its node-pre-gyp chain,
-    //     dockerode -> ssh2)
-    //   - large document/media libs loaded lazily via `await import()` in
-    //     handlers (exceljs, pptxgenjs, docx, pdf-lib)
-    //   - SDKs used only at runtime (inngest, ai, neo4j-driver,
-    //     @vercel/sandbox, stripe, better-auth)
+    // serverless function size limit. These fall into three groups:
+    //   - native addons rspack cannot parse (duckdb + its node-pre-gyp chain)
+    //   - a large lib loaded lazily via `await import()` in a handler
+    //     (pdf-lib, for `export_conversation`'s PDF rendering path)
+    //   - SDKs used only at runtime (inngest, ai, neo4j-driver, stripe,
+    //     better-auth)
     //   - store clients reached only from inside handlers (drizzle-orm,
     //     postgres, @clickhouse/client)
     //
@@ -54,6 +53,11 @@ const config: XmcpConfig = {
     // pnpm's strict layout only exposes packages this app declares. Adding an
     // entry here without the matching dependency yields a runtime MODULE_NOT_FOUND
     // that no build step catches.
+    //
+    // ADR-041 (runtime excision) removed the sandbox/document-generation
+    // capability families — @vercel/sandbox, dockerode, exceljs, pptxgenjs
+    // and docx are no longer pulled in by anything under apps/mcp and were
+    // dropped from this list and from package.json.
     const heavyPackages = [
       // duckdb is a native CJS addon, pulled into this build transitively:
       //   src/middleware.ts -> @oxagen/agent register/handlers
@@ -70,13 +74,8 @@ const config: XmcpConfig = {
       "mock-aws-s3",
       "aws-sdk",
       "nock",
-      "dockerode",
-      "exceljs",
-      "pptxgenjs",
-      "docx",
       "pdf-lib",
       "inngest",
-      "@vercel/sandbox",
       "neo4j-driver",
       "ai",
       "drizzle-orm",

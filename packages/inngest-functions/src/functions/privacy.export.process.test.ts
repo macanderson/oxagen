@@ -46,22 +46,6 @@ const schema = {
     orgId: "securityEvents.orgId",
     actorUserId: "securityEvents.actorUserId",
   },
-  generatedAssets: {
-    publicId: "generatedAssets.publicId",
-    kind: "generatedAssets.kind",
-    accessPolicy: "generatedAssets.accessPolicy",
-    status: "generatedAssets.status",
-    mimeType: "generatedAssets.mimeType",
-    sizeBytes: "generatedAssets.sizeBytes",
-    storageProvider: "generatedAssets.storageProvider",
-    storageUrl: "generatedAssets.storageUrl",
-    prompt: "generatedAssets.prompt",
-    model: "generatedAssets.model",
-    conversationId: "generatedAssets.conversationId",
-    createdAt: "generatedAssets.createdAt",
-    orgId: "generatedAssets.orgId",
-    userId: "generatedAssets.userId",
-  },
   orgUsers: {
     publicId: "orgUsers.publicId",
     userId: "orgUsers.userId",
@@ -218,9 +202,6 @@ function seedUserScopeRows() {
   mocks.rowsByTable.set(schema.securityEvents, [
     { id: "sec-1", eventType: "auth.sign_in", actorUserId: "user-1" },
   ]);
-  mocks.rowsByTable.set(schema.generatedAssets, [
-    { id: "gen_1", kind: "image", sizeBytes: 1234n, mimeType: "image/png" },
-  ]);
 }
 
 const baseEvent = {
@@ -286,7 +267,6 @@ describe("privacyExportProcess Inngest handler", () => {
         "conversations/cnv_1.json",
         "api-keys.json",
         "audit-log.json",
-        "generated-assets.json",
       ]),
     );
     // User scope must NOT include org-only artifacts.
@@ -300,12 +280,6 @@ describe("privacyExportProcess Inngest handler", () => {
     };
     expect(conv.conversation.publicId).toBe("cnv_1");
     expect(conv.messages).toHaveLength(1);
-
-    // bigint sizeBytes coerced to a JSON-safe number.
-    const assets = decodeEntry(entries, "generated-assets.json") as Array<{
-      sizeBytes: number;
-    }>;
-    expect(assets[0]?.sizeBytes).toBe(1234);
   });
 
   it("api-keys.json contains only metadata — never key material", async () => {

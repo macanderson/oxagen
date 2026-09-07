@@ -6,7 +6,9 @@ import {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Interactive agent — the single source of truth for the `qa-chat` agent that
-// backs BOTH the MCP server and the in-app Q&A surface. The seeder script and
+// backs BOTH the MCP server and the in-app governance Q&A surface. It is a
+// read-and-explain agent over the fleet record and the knowledge graph; it has
+// no execution surface of its own (ADR-041). The seeder script and
 // the workspace-creation bootstrap both build their published v1 config from
 // here so the chat.stream lookup (slug "qa-chat") always resolves to a fully
 // schema-conforming, published definition.
@@ -41,14 +43,26 @@ export function isManagedAgentType(agentType: string): boolean {
 /** Stable error code thrown when a mutation targets a product-managed agent. */
 export const MANAGED_AGENT_READONLY_CODE = "agent_managed_read_only";
 
-/** The builtin skills the interactive agent loads as agentTools (type "skill").
- *  These mirror the slugs seeded by `pnpm db:seed-skills`. */
-export const INTERACTIVE_AGENT_SKILLS = [
-  "coding",
-  "debugging",
-  "summarization",
-  "skill-builder",
-  "agent-builder",
+/**
+ * The capability allowlist the interactive agent is granted, as `function`
+ * agentTools. These are the governed reads that let it answer "what did my
+ * agents do, what grounded them, what is pending" — the graph and ontology
+ * read set, the execution record, and its own memory. Every entry is a
+ * registered capability name (ADR-025 verb-first snake_case), so each call
+ * still passes the kernel's IAM, entitlement and metering gates.
+ *
+ * ADR-041 replaced the previous skill list here: skills no longer exist, and a
+ * governed agent's grant is an allowlist of things the platform can gate, not
+ * a bundle of prompt fragments.
+ */
+export const INTERACTIVE_AGENT_CAPABILITIES = [
+  "query_ontology",
+  "get_ontology_neighbors",
+  "recall_memory",
+  "save_memory",
+  "cite_reference",
+  "list_executions",
+  "get_execution_trace",
 ] as const;
 
 /**
@@ -69,16 +83,18 @@ export function buildInteractiveAgentConfig(
       retrieval: { strategy: "hybrid" },
       budget: { maxHops: 3, maxNodes: 50, minRelevance: 0.5 },
     },
-    agentTools: INTERACTIVE_AGENT_SKILLS.map((slug) => ({
-      type: "skill",
-      ref: slug,
+    agentTools: INTERACTIVE_AGENT_CAPABILITIES.map((name) => ({
+      type: "function",
+      ref: name,
     })),
     instructions:
-      "You are the workspace Q&A agent. Answer questions grounded strictly in " +
-      "the workspace knowledge graph. Cite the nodes you used. When you lack " +
-      "grounding, say so rather than guessing. Use your loaded skills (coding, " +
-      "debugging, summarization) to shape responses, and defer structural or " +
-      "agent-authoring requests to the skill-builder and agent-builder skills.",
+      "You are the workspace governance and Q&A agent. Answer questions about " +
+      "this workspace's agents — what they did, what context grounded them, " +
+      "what they cost, what is pending approval — and about the workspace " +
+      "knowledge graph. Ground every claim in a tool result and cite the nodes " +
+      "you used by their human label. When you lack grounding, say so rather " +
+      "than guessing. You do not run, deploy, or edit anything: Oxagen governs " +
+      "agents, it does not execute them.",
   });
 }
 

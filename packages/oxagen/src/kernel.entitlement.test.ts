@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { CapabilityContext } from "./types";
 import { clearRegistryForTests, registerCapability } from "./registry";
@@ -13,7 +13,10 @@ import {
   registerHandler,
   setCapabilityEntitlementGate,
 } from "./kernel";
-import { clearPluginRegistryForTests } from "./plugins/registry";
+import {
+  clearPluginRegistryForTests,
+  registerOxagenPluginForTests,
+} from "./plugins/registry";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -94,6 +97,35 @@ const pluginClaimedUnscopedCap = () =>
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("kernel capability entitlement gate", () => {
+  beforeEach(() => {
+    clearPluginRegistryForTests();
+    // No pack ships built in (ADR-041); claim the two test contracts here.
+    registerOxagenPluginForTests({
+      id: "oxagen/media-image",
+      name: "Image Generation",
+      description: "Test fixture pack claiming generate_image.",
+      version: "1.0.0",
+      pluginType: "agent_capability",
+      tier: "free",
+      visibility: "ga",
+      category: "media",
+      contracts: ["generate_image"],
+      scopes: [],
+    });
+    registerOxagenPluginForTests({
+      id: "oxagen/media-svg",
+      name: "SVG Generation",
+      description: "Test fixture pack claiming generate_svg.",
+      version: "1.0.0",
+      pluginType: "agent_capability",
+      tier: "free",
+      visibility: "ga",
+      category: "media",
+      contracts: ["generate_svg"],
+      scopes: [],
+    });
+  });
+
   afterEach(() => {
     clearRegistryForTests();
     clearHandlersForTests();

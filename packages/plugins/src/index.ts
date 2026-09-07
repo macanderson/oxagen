@@ -1,5 +1,5 @@
 // @oxagen/plugins — installable-plugin spine: credential storage, OAuth,
-// entitlements, the credential vault, environments, and sandbox templates.
+// entitlements, the credential vault, environments, and agent bindings.
 export {
   encryptCredentialSecrets,
   decryptCredentialSecrets,
@@ -80,30 +80,13 @@ export type {
 } from "./environments/environment-service";
 export type { SecretSelection } from "./vault/vault-secret-service";
 
-// Sandbox templates + portable artifacts + agent-environment bindings
-// (see docs/specs/sandbox-templates-portable/plan.md).
+// Agent ↔ environment bindings (which vault an agent identity may resolve).
 export {
-  createTemplate,
-  listTemplates,
-  getTemplate,
-  updateTemplate,
-  deleteTemplate,
-  setDefaultTemplate,
-  setTemplateTools,
-  exportTemplate,
-  importTemplate,
   bindAgentEnvironment,
   unbindAgentEnvironment,
   listAgentBindings,
-  resolveSandboxTemplateForRun,
-  installTemplatesFromPack,
-} from "./environments/sandbox-template-service";
+} from "./environments/agent-environment-binding";
 export type {
-  SandboxTemplateActor,
-  SandboxTemplateSummary,
-  SandboxTemplateToolSummary,
+  AgentEnvironmentActor,
   AgentEnvironmentBinding,
-  ResolvedSandboxTemplate,
-  PackTemplateInstall,
-  InstallTemplatesFromPackResult,
-} from "./environments/sandbox-template-service";
+} from "./environments/agent-environment-binding";

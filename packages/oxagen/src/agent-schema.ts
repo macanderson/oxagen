@@ -13,8 +13,14 @@ import { z } from "zod";
 // for a run (persisted to ClickHouse).
 //
 // Naming aligns with the Vercel AI SDK and MCP: "tool" is the umbrella, and the
-// plain inline-callable kind is "function". A subagent is just an AgentTool of
-// type "agent" — A2A and subagents reuse the same loading model.
+// plain inline-callable kind is "function" — a platform capability the agent is
+// allowed to invoke through the kernel.
+//
+// ADR-041 removed the execution runtime, and with it every field that
+// described HOW an agent runs: skills, sandboxes, sandbox-bound environments
+// and code mode are gone. What remains is the governed-agent REGISTRY record —
+// identity, versioned instructions, the graph scope it may reason over, and the
+// allowlist of tools it may reach.
 //
 // The two escape hatches from the reference (`AgentTool.config` and
 // `AgentLogEntry.data`) stay typed as open records: they are deliberate seams
@@ -73,8 +79,7 @@ export const graphAccessSchema = z.object({
   mode: graphAccessModeSchema.default("read"),
   /** How the agent grounds itself before traversing — picks entry nodes. */
   retrieval: graphRetrievalSchema,
-  /** Bounds on any single context pull. A subagent inherits this and may narrow
-   *  it, never widen it. */
+  /** Bounds on any single context pull. */
   budget: graphBudgetSchema,
 });
 export type GraphAccess = z.infer<typeof graphAccessSchema>;
@@ -83,25 +88,26 @@ export type GraphAccess = z.infer<typeof graphAccessSchema>;
 // AGENT TOOLS — the uniform "things an agent loads" model
 // ═════════════════════════════════════════════════════════════════════════════
 
-/** `function` = inline callable; `mcp_server` = connection vending many tools;
- *  `skill` = a loaded skill; `agent` = a subagent (A2A). */
-export const agentToolTypeSchema = z.enum([
-  "function",
-  "mcp_server",
-  "skill",
-  "agent",
-]);
+/** The two kinds of thing a governed agent may be granted.
+ *  `function` = one platform capability, invoked through the kernel (so it
+ *  carries the IAM / entitlement / metering gates with it);
+ *  `mcp_server` = a registered MCP connection vending many tools, governed by
+ *  the workspace's tool RBAC rules and consent ledger.
+ *
+ *  ADR-041 removed `skill` (skills are gone) and `agent` (subagent fan-out is
+ *  gone). An allowlist entry names something the platform can actually gate. */
+export const agentToolTypeSchema = z.enum(["function", "mcp_server"]);
 export type AgentToolType = z.infer<typeof agentToolTypeSchema>;
 
 export const agentToolSchema = z.object({
   /** Which kind of thing is loaded. Drives how `ref` and `config` are read. */
   type: agentToolTypeSchema,
-  /** Reference to the loaded thing: a function/capability name, MCP server
-   *  url/id, skill slug, or agent id. */
+  /** Reference to the granted thing: a capability name (`function`) or an MCP
+   *  server public id (`mcp_server`). */
   ref: z.string(),
-  /** Type-specific config: MCP auth, skill version pin, subagent budget
-   *  overrides, etc. SEAM: typed loosely; tighten to a discriminated union on
-   *  `type` when hardening. */
+  /** Type-specific config, e.g. an MCP server's per-agent tool narrowing.
+   *  SEAM: typed loosely; tighten to a discriminated union on `type` when
+   *  hardening. */
   config: z.record(z.string(), z.unknown()).optional(),
 });
 export type AgentTool = z.infer<typeof agentToolSchema>;
@@ -116,38 +122,20 @@ export type AgentTool = z.infer<typeof agentToolSchema>;
 export const agentDeploymentStatusSchema = z.enum(["inactive", "active"]);
 export type AgentDeploymentStatus = z.infer<typeof agentDeploymentStatusSchema>;
 
-/**
- * The canonical `agentType` value that marks an agent as a CODE agent — one
- * that reasons over a repository. It's the "create prop": set `agentType:
- * "code"` on `agent.definition.create` and every surface (the chat stream
- * route, the app's new-session agent selector) treats the agent as code-capable
- * — binding the sandbox workspace + code-graph tools and revealing the repo/env
- * UI. Any other `agentType` (`custom`, `interactive_chat`, …) is a plain chat
- * agent with no repo tooling. `agentType` stays a free-form string (it also
- * carries the managed-vs-custom distinction, see isManagedAgentType); this is
- * simply the one value the code path keys on, centralized here so the app,
- * contracts, and handlers can never disagree on the spelling.
- */
-export const CODE_AGENT_TYPE = "code";
-
-/** Whether `agentType` identifies a code agent (repo/code tools + UI). */
-export function isCodeAgentType(agentType: string | null | undefined): boolean {
-  return agentType === CODE_AGENT_TYPE;
-}
-
 export const agentDefinitionSchema = z.object({
   /** Stable id. Slugged public_id + UUID under the hood, per Oxagen convention. */
   id: z.string(),
-  /** Human-readable name shown in selectors and A2A routing. */
+  /** Human-readable name shown in selectors and the agents registry. */
   name: z.string().min(1),
-  /** What this agent does — drives routing and subagent selection. */
+  /** What this agent does — the description a human governs it by. */
   description: z.string(),
   /** Immutable version. Publish a new version; never edit one in place. */
   version: z.string(),
   /** The ontology this agent reasons over and how it pulls context efficiently. */
   graph: graphAccessSchema,
-  /** Everything the agent loads: functions, MCP servers, skills, and subagents.
-   *  One uniform list so a subagent loads the same way as an MCP server. */
+  /** The tool allowlist: the capabilities and MCP servers this agent may
+   *  reach. One uniform list, and the ceiling the runtime materializes against
+   *  — a tool absent from it is never advertised to the model. */
   agentTools: z.array(agentToolSchema),
   /** Optional system prompt / instructions baked into the definition. */
   instructions: z.string().optional(),
@@ -209,8 +197,8 @@ export const agentInstanceSchema = z.object({
   /** The definition (by id + version) this instance executes. */
   definitionId: z.string(),
   definitionVersion: z.string(),
-  /** Who called it. Undefined for a top-level run, set for a subagent. The
-   *  parentRunId gives the call tree for free — audit, cost attribution, and the
+  /** The run that caused this one, when there is one (e.g. a scheduled
+   *  re-run). Undefined for a top-level run. Audit, cost attribution and the
    *  distributed trace all fall out of run lineage. */
   parentRunId: z.string().optional(),
   /** Run lifecycle status. */
@@ -230,8 +218,7 @@ export type AgentInstance = z.infer<typeof agentInstanceSchema>;
 // ═════════════════════════════════════════════════════════════════════════════
 // The log is ALWAYS on at info+ level — the baseline audit trail. DebugOptions
 // does not enable logging; it raises verbosity, promoting debug-level detail
-// into the same stream. One log per run, keyed by runId; subagent entries link
-// to child runs so the full A2A call tree is reconstructable.
+// into the same stream. One log per run, keyed by runId.
 
 /** The kind of event an entry records. Drives the shape of `AgentLogEntry.data`. */
 export const agentLogEntryTypeSchema = z.enum([
@@ -239,8 +226,7 @@ export const agentLogEntryTypeSchema = z.enum([
   "decision", // the agent chose a path / selected a tool
   "graph_query", // a read/traversal against the ontology
   "graph_write", // a proposed/committed node or edge (extend mode)
-  "tool_call", // an AgentTool invocation (function/mcp/skill)
-  "subagent_call", // delegation to a subagent (A2A)
+  "tool_call", // an AgentTool invocation (capability or MCP tool)
   "memory", // a memory read or write
   "error", // a recoverable or terminal failure
 ]);

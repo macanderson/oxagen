@@ -134,3 +134,28 @@ export function validateOxagenPluginContracts(): void {
 export function clearPluginRegistryForTests(): void {
   delete (globalRef as Partial<typeof globalRef>)[PLUGIN_REGISTRY_KEY];
 }
+
+/**
+ * Test-only registration of a plugin manifest. Production packs arrive through
+ * the plugin catalog (ADR-034); nothing ships built in, so tests that need a
+ * plugin-claimed contract register a fixture here and clear it afterwards.
+ */
+export function registerOxagenPluginForTests(raw: OxagenPluginManifest): void {
+  const parsed = oxagenPluginManifestSchema.parse(raw);
+  const store = getStore();
+  if (store.byId.has(parsed.id)) {
+    throw new Error(`Duplicate plugin id "${parsed.id}"`);
+  }
+  for (const contractName of parsed.contracts) {
+    const existing = store.contractIndex.get(contractName);
+    if (existing) {
+      throw new Error(
+        `Contract "${contractName}" is already claimed by plugin "${existing.id}"`,
+      );
+    }
+  }
+  store.byId.set(parsed.id, parsed);
+  for (const contractName of parsed.contracts) {
+    store.contractIndex.set(contractName, parsed);
+  }
+}

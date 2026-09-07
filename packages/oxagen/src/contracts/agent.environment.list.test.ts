@@ -21,8 +21,6 @@ describe("agent.environment.list contract", () => {
             environmentId: "env_1",
             environmentName: "Production",
             environmentSlug: "production",
-            sandboxTemplateId: null,
-            sandboxTemplateName: null,
             isPrimary: false,
           },
         ],

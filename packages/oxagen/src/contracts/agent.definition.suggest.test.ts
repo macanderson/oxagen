@@ -8,7 +8,7 @@ const VALID_CONFIG = {
     retrieval: { strategy: "hybrid" },
     budget: { maxHops: 2, maxNodes: 20 },
   },
-  agentTools: [{ type: "skill", ref: "summarization" }],
+  agentTools: [{ type: "function", ref: "recall_memory" }],
   instructions: "Scan deals and flag risk.",
 };
 
