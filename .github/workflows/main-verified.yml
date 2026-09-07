@@ -1,0 +1,56 @@
+# Has anything verified the recent commits on main? (#2730)
+#
+# A different question from "is main red", and the one every other signal here
+# answers by accident. pipeline.yml reports pass or fail on a commit that gets a
+# run; it says nothing about a commit that never got one. On 2026-09-07 merges
+# outpaced the run and each evicted the one queued behind it, so eight commits
+# reached main with no run at all — and because an evicted run concludes
+# `cancelled`, nothing went red anywhere.
+#
+# ADR-046 removed that cause by giving each push to main its own concurrency
+# group. This catches the next one, whatever it is: an Actions outage, a push
+# that raised no event, a workflow that failed to start.
+#
+# ## Why it is its own workflow
+#
+# It must answer in seconds and must not wait on the thing it is watching. As a
+# job inside pipeline.yml it would queue behind the same runners, and a timeout
+# there would take the answer away exactly when the answer matters.
+#
+# ## Why the schedule as well as the push
+#
+# A push that raises no event is one of the causes. The schedule is the only
+# thing that can notice that, because by definition no push triggered anything.
+name: main-verified
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Daily. The push trigger covers the ordinary case; this covers the case
+    # where the push itself produced no event.
+    - cron: "17 6 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+# Deliberately no concurrency group. This is the workflow that exists because a
+# shared group ate the runs — giving it one would be the same mistake one level
+# up, and it is cheap enough that overlap costs nothing.
+
+jobs:
+  verified:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Has anything verified main?
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node tools/scripts/check-main-verified.mjs --announce
