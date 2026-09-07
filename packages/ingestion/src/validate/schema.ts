@@ -31,6 +31,16 @@ export type SchemaFieldErrorCode =
   | "minLength"
   | "maxLength"
   | "pattern"
+  /**
+   * The schema's own `pattern` does not compile, so the constraint could not be
+   * evaluated. Distinct from `pattern` on purpose: `pattern` is a fact about
+   * the DATA, this is a fact about the REGISTRY, and collapsing them hides a
+   * schema defect inside a data verdict (#1425). A caller mapping onto a
+   * contract enum with no such variant should map it to `pattern` — the value
+   * is not conformant either way — but should prefer to surface it as a schema
+   * problem where it can.
+   */
+  | "patternInvalid"
   | "type"
   | "oneOf"
   | "unknown";
@@ -352,12 +362,26 @@ function checkValue(prop: PinnedProperty, value: unknown): SchemaFieldError[] {
         code: "maxLength",
       });
     }
-    if (c.pattern !== undefined && !safeTest(c.pattern, value)) {
-      errors.push({
-        field: prop.key,
-        message: `${prop.key} does not match required format`,
-        code: "pattern",
-      });
+    if (c.pattern !== undefined) {
+      const result = testPattern(c.pattern, value);
+      if (result === "invalid-pattern") {
+        // A registry defect, surfaced as one. The value is still not
+        // conformant — an unevaluable constraint is not a satisfied one.
+        errors.push({
+          field: prop.key,
+          message:
+            `${prop.key} could not be checked: the schema's pattern ` +
+            `${JSON.stringify(c.pattern)} is not a valid regular expression. ` +
+            `Fix the pattern in the schema registry.`,
+          code: "patternInvalid",
+        });
+      } else if (result === "no-match") {
+        errors.push({
+          field: prop.key,
+          message: `${prop.key} does not match required format`,
+          code: "pattern",
+        });
+      }
     }
   }
 
@@ -468,21 +492,45 @@ function clamp01(n: number): number {
 }
 
 /**
- * "Safe" here means only that a syntactically invalid pattern cannot throw —
- * an unparseable pattern in the registry passes rather than crashing
- * validation. It is NOT safe against a catastrophically backtracking pattern:
+ * An unparseable pattern cannot throw — one bad registry entry must never take
+ * down ingestion — but it no longer PASSES either. It used to return `true`,
+ * which the caller reads as "this value satisfies the constraint", so a typo in
+ * a registry pattern silently disabled that constraint and inflated the
+ * conformance score it feeds. Not "we could not check it": "it is fine"
+ * (#1425).
+ *
+ * It now fails closed, which is what `isUrl` three functions down has always
+ * done for the same class of failure — an input that could not be evaluated is
+ * not a passing input. The two disagreed, and this is the one that was wrong.
+ * The value is reported with the distinct `patternInvalid` code rather than
+ * `pattern`, so a schema defect is legible as a schema defect instead of
+ * arriving as an ordinary data mismatch.
+ *
+ * The remaining option, and why not: the most honest answer is to exclude an
+ * unevaluable property from the score's denominator entirely — neither
+ * conformant nor not. That needs the score to be able to say "not measured",
+ * which it currently cannot, and inventing that dimension is a larger change
+ * than this defect warrants. Failing closed with a distinct code gets the
+ * signal out without a new score concept; the denominator question is worth
+ * revisiting if it recurs.
+ *
+ * It is NOT safe against a catastrophically backtracking pattern:
  * both the pattern (author-supplied schema) and the value (connector-supplied
  * payload) are untrusted, and a runaway match blocks the event loop of
  * whichever worker is validating. Bounding that needs a timeout-capable regex
  * engine or a pattern linter at schema-publish time.
  */
-function safeTest(pattern: string, value: string): boolean {
+type PatternResult = "match" | "no-match" | "invalid-pattern";
+
+function testPattern(pattern: string, value: string): PatternResult {
+  let compiled: RegExp;
   try {
-    return new RegExp(pattern).test(value);
+    compiled = new RegExp(pattern);
   } catch {
-    // An invalid pattern in the registry should not crash validation.
-    return true;
+    // "Could not be checked", never "fine" — see the note above.
+    return "invalid-pattern";
   }
+  return compiled.test(value) ? "match" : "no-match";
 }
 
 function isUrl(value: string): boolean {
