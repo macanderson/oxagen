@@ -58,7 +58,7 @@ function shippingSources(): string[] {
   const out: string[] = [];
 
   const walk = (dir: string): void => {
-    let entries: ReturnType<typeof readdirSync>;
+    let entries;
     try {
       entries = readdirSync(dir, { withFileTypes: true });
     } catch {
