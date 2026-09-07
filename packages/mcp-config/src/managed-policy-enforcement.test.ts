@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 import {
   checkServerUrl,
   checkStdioCommand,
+  checkToolDenied,
   matchUrlPattern,
   validateServerAgainstPolicy,
   formatViolation,
@@ -197,5 +198,85 @@ describe("allowedCommands means one thing (#1424)", () => {
     expect(
       checkStdioCommand("anything", ["--x"], {} as ManagedPolicy),
     ).toBeNull();
+  });
+});
+
+/**
+ * #1423: the policy could deny a URL and a tool but not a COMMAND — and stdio
+ * is the one transport that spawns a local process, so the floor could not
+ * block the single registration that runs code on the machine.
+ */
+describe("a managed policy can deny a stdio command (#1423)", () => {
+  const denied = (patterns: string[]) =>
+    ({ deniedCommands: patterns }) as ManagedPolicy;
+
+  it("blocks a denied command", () => {
+    const violation = checkStdioCommand(
+      "npx",
+      ["-y", "@evil/server"],
+      denied(["*@evil/*"]),
+    );
+    expect(violation?.type).toBe("command_denied");
+    expect(formatViolation(violation!)).toContain("@evil/server");
+  });
+
+  it("checks deny BEFORE allow, as it already does for URLs", () => {
+    // An allowlist naming the command must not rescue it from the denylist.
+    const both = {
+      allowedCommands: ["npx*"],
+      deniedCommands: ["*@evil/*"],
+    } as ManagedPolicy;
+    expect(checkStdioCommand("npx", ["-y", "@evil/server"], both)?.type).toBe(
+      "command_denied",
+    );
+    // …and a command that is allowed and not denied still passes.
+    expect(checkStdioCommand("npx", ["-y", "@good/x"], both)).toBeNull();
+  });
+
+  it("reaches the command_denied variant, which nothing could produce before", () => {
+    const violation = checkStdioCommand(
+      "bash",
+      ["-c", "curl evil"],
+      denied(["bash*"]),
+    );
+    expect(violation).toMatchObject({
+      type: "command_denied",
+      pattern: "bash*",
+    });
+  });
+
+  it("routes a stdio server through the deny check", () => {
+    const violation = validateServerAgainstPolicy(
+      "local",
+      { transport: "stdio", command: "npx", args: ["-y", "@evil/x"] } as never,
+      managed(denied(["*@evil/*"])),
+    );
+    expect(violation?.type).toBe("command_denied");
+  });
+
+  it("leaves an unset allowedCommands unrestricted, as before", () => {
+    // Stated in schema.ts and kept deliberately: tightening it would silently
+    // refuse stdio servers for every policy already deployed.
+    expect(
+      checkStdioCommand("anything", ["--x"], denied(["*@evil/*"])),
+    ).toBeNull();
+  });
+
+  it("covers all three restrictable things, which was the gap", () => {
+    // URL, tool and command — the policy could express only the first two.
+    const policy = {
+      deniedServerUrls: ["https://evil.com/*"],
+      deniedTools: ["dangerous_*"],
+      deniedCommands: ["*@evil/*"],
+    } as ManagedPolicy;
+    expect(checkServerUrl("https://evil.com/x", policy)?.type).toBe(
+      "url_denied",
+    );
+    expect(checkToolDenied("srv", "dangerous_exec", policy)?.type).toBe(
+      "tool_denied",
+    );
+    expect(checkStdioCommand("npx", ["@evil/x"], policy)?.type).toBe(
+      "command_denied",
+    );
   });
 });
