@@ -30,6 +30,9 @@ describe("globToRegExp", () => {
   });
 
   it("`**/x` matches x at the root, not only in a subdirectory (#1387)", () => {
+    // #1387 stays open for the other half it asks for: one implementation,
+    // shared, with the copies deleted. Until then this pins the semantics so a
+    // copy cannot drift while it waits.
     // The `/` after `**` is consumed rather than emitted, so the pattern does
     // not require a separator. A copy of this function that emitted it lived in
     // the CLI's permission broker and decided allow/ask/deny, where `**/.env`

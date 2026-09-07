@@ -22,6 +22,9 @@ describe("matchGlobPattern", () => {
   });
 
   it("`**/x` matches x at the root, not only in a subdirectory (#1387)", () => {
+    // #1387 stays open for the other half it asks for: one implementation,
+    // shared, with the copies deleted. Until then this pins the semantics so a
+    // copy cannot drift while it waits.
     // This package carries its own copy of the compiler, so the semantics are
     // pinned here as well as in agent-engine's. `**` consumes the separator
     // that follows it; a copy that emitted it required at least one directory
