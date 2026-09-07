@@ -217,6 +217,13 @@ export async function runMutationGate(
         command,
         exitCode: res.timedOut ? null : res.exitCode,
         timedOut: res.timedOut,
+        // The output is what separates a suite that failed from one that never
+        // ran — a revert deletes the module a new test imports, and that
+        // import error is an ordinary non-zero exit (#1362).
+        output: `${res.stdout}\n${res.stderr}`,
+        // The flip is the agent's own claimed witness, and only it can settle
+        // the verdict; the rest corroborate (#1359).
+        isClaim: evidence.flippedBy !== null && command === evidence.flippedBy,
       });
     }
   } catch (err) {
@@ -250,27 +257,67 @@ export async function runMutationGate(
     }
   }
 
-  const status = witnessOutcome(runs);
+  const verdict = witnessOutcome(runs);
 
   // ── Layer 2 (opt-in): mutation-score the patch, fix restored ──
   // `commands[0]` is the first PLANNED witness — the fail→pass flip when the
   // oracle saw one (planWitnessCommands puts it first), otherwise the first
   // passing test-like command. Only one is used: scoring re-runs it once per
   // mutant, so a second command would multiply the cost.
-  if (status === "witnessed" && opts.score) {
-    score = await scorePatch(workspace, reverts, commands[0]!, {
-      timeoutMs,
-      maxMutants: opts.maxMutants ?? DEFAULT_MAX_MUTANTS,
-      ...(opts.signal ? { signal: opts.signal } : {}),
-    });
+  //
+  // Scoring is opt-in and advisory, so it may never reject a turn the witness
+  // runs already cleared — including when restoring a mutant fails. That path
+  // used to throw straight out of `runMutationGate`, past the try/finally that
+  // protects everything else, breaking the gate's own fail-open contract and
+  // leaving a deliberately-broken line in a file the agent believes it fixed
+  // (#1352).
+  if (verdict.status === "witnessed" && opts.score) {
+    try {
+      score = await scorePatch(workspace, reverts, commands[0]!, {
+        timeoutMs,
+        maxMutants: opts.maxMutants ?? DEFAULT_MAX_MUTANTS,
+        ...(opts.signal ? { signal: opts.signal } : {}),
+      });
+    } catch (err) {
+      // Last resort: `scorePatch` catches its own throws so the restore
+      // failures it collected survive, and this only fires if that contract
+      // is broken. The error goes in `scoringError`, never in
+      // `restoreFailures` — that list is rendered as file paths, so a message
+      // pushed into it produced "could not restore Error: … — these files
+      // still contain a MUTANT", asserting a broken line is on disk in the
+      // one case where the gate has no idea whether it is.
+      score = {
+        state: "workspace-error",
+        mutantsTried: 0,
+        mutantsKilled: 0,
+        killRate: null,
+        survivors: [],
+        scoringError: String(err),
+      };
+    }
+  }
+
+  // A mutant left on disk is the one thing here a human must not miss: the
+  // tree holds a plausible-looking line nobody wrote, in a file that reads as
+  // fixed, and a mutant is designed to survive a glance.
+  const mutantsLeftBehind = score?.restoreFailures ?? [];
+  let reason = verdict.reason;
+  if (mutantsLeftBehind.length > 0) {
+    reason +=
+      `. WARNING: mutation scoring could not restore ${mutantsLeftBehind.join(", ")} — ` +
+      "these files still contain a MUTANT (a deliberately broken line this gate wrote, not a missing fix); " +
+      "restore them before committing.";
+  }
+  // Said separately from the warning above, and only ever as "the measurement
+  // broke": an exception out of scoring says nothing about whether a mutant is
+  // still on disk, and the two must not be reported as one fact.
+  if (score?.scoringError) {
+    reason += `. Mutation scoring did not complete: ${score.scoringError}`;
   }
 
   const result: MutationGateResult = {
-    status,
-    reason:
-      status === "witnessed"
-        ? "witness tests fail without the fix — the green is real"
-        : "witness tests still pass with the fix reverted — the tests do not witness the fix",
+    status: verdict.status,
+    reason,
     runs,
     revertedFiles: reverts.map((r) => r.file.path),
     testFiles: testFilePaths,
@@ -287,9 +334,19 @@ export async function runMutationGate(
  *
  * Fail-open on the way in, LOUD on the way out: a workspace read/write/exec
  * failure while trying a mutant just ends the scoring pass (the score is
- * advisory — it must not sink an otherwise-witnessed turn), but a failure to
- * RESTORE a mutated file throws, because leaving a deliberately-broken line in
- * the user's tree silently is the one outcome worse than no score at all.
+ * advisory — it must not sink an otherwise-witnessed turn), and a failure to
+ * RESTORE a mutated file is collected in `restoreFailures` by path so the
+ * caller can name every one of them. It used to throw on the first, out
+ * through a call site outside the try/finally protecting the rest of the gate
+ * (#1352); the rationale for being loud is unchanged, but the mechanism is a
+ * returned list rather than an exception, because leaving a deliberately
+ * broken line in the user's tree silently is still the one outcome worse than
+ * no score at all — and an exception was losing the other files' names.
+ *
+ * It does not throw. An unexpected exception anywhere in the pass is caught
+ * here and returned as `state: "workspace-error"` **carrying whatever
+ * `restoreFailures` had already been collected**, because a real mutant left
+ * on disk by an earlier iteration must not be discarded by a later failure.
  */
 async function scorePatch(
   workspace: Workspace,
@@ -298,62 +355,108 @@ async function scorePatch(
   opts: { timeoutMs: number; maxMutants: number; signal?: AbortSignal },
 ): Promise<MutationScore> {
   const survivors: MutationScore["survivors"] = [];
+  const restoreFailures: string[] = [];
   let tried = 0;
   let killed = 0;
+  let aborted = false;
+  let workspaceError = false;
+  let scoringError: string | undefined;
 
-  for (const { file } of reverts) {
-    if (tried >= opts.maxMutants || opts.signal?.aborted) break;
-    let current: string;
-    try {
-      current = await workspace.readFile(file.path);
-    } catch {
-      continue; // created-then-restored files always exist; belt & braces
-    }
-    const mutants = generateMutants(file, current, opts.maxMutants - tried);
-    let workspaceFailed = false;
-    for (const mutant of mutants) {
-      if (opts.signal?.aborted) break;
-      tried++;
+  // Fail-open on the way out too: an exception from anywhere in the pass
+  // (a `generateMutants` throw on malformed input, say) used to propagate
+  // and discard every `restoreFailures` entry collected so far, so a mutant
+  // genuinely left on disk by an earlier iteration was replaced upstream by a
+  // fabricated one. The pass ends as a `workspace-error` carrying what it
+  // already knows instead.
+  try {
+    for (const { file } of reverts) {
+      if (opts.signal?.aborted) {
+        aborted = true;
+        break;
+      }
+      if (tried >= opts.maxMutants) break;
+      let current: string;
       try {
-        await workspace.writeFile(mutant.path, mutant.mutatedContent);
-        const res = await workspace.exec(witnessCommand, {
-          timeoutMs: opts.timeoutMs,
-          ...(opts.signal ? { signal: opts.signal } : {}),
-        });
-        if (res.timedOut || res.exitCode !== 0) {
-          killed++;
-        } else {
-          survivors.push({
-            path: mutant.path,
-            line: mutant.line,
-            description: mutant.description,
-          });
-        }
+        current = await workspace.readFile(file.path);
       } catch {
-        // Could not apply or run this mutant — the score is advisory, so stop
-        // scoring instead of failing a turn the witness runs already cleared.
-        tried--;
-        workspaceFailed = true;
-      } finally {
-        try {
-          await workspace.writeFile(mutant.path, current);
-        } catch (err) {
-          throw new Error(
-            `mutation gate could not restore ${mutant.path} after mutant "${mutant.description}" ` +
-              `(line ${mutant.line}) — the file may still contain the mutation; restore it from ` +
-              `the turn diff before continuing. Cause: ${String(err)}`,
-          );
+        continue; // created-then-restored files always exist; belt & braces
+      }
+      const mutants = generateMutants(file, current, opts.maxMutants - tried);
+      let workspaceFailed = false;
+      for (const mutant of mutants) {
+        if (opts.signal?.aborted) {
+          aborted = true;
+          break;
         }
+        tried++;
+        try {
+          await workspace.writeFile(mutant.path, mutant.mutatedContent);
+          const res = await workspace.exec(witnessCommand, {
+            timeoutMs: opts.timeoutMs,
+            ...(opts.signal ? { signal: opts.signal } : {}),
+          });
+          if (res.timedOut || res.exitCode !== 0) {
+            killed++;
+          } else {
+            survivors.push({
+              path: mutant.path,
+              line: mutant.line,
+              description: mutant.description,
+            });
+          }
+        } catch {
+          // Could not apply or run this mutant — the score is advisory, so stop
+          // scoring instead of failing a turn the witness runs already cleared.
+          tried--;
+          workspaceFailed = true;
+          workspaceError = true;
+        } finally {
+          // Layer 1's restore loop collects its failures by path and names them
+          // all; this one used to throw on the first, out through a call site
+          // that sits outside the try/finally protecting the rest of the gate.
+          // It is now as careful as Layer 1, and the file is named so a human
+          // knows a MUTANT is what is in it (#1352).
+          try {
+            await workspace.writeFile(mutant.path, current);
+          } catch {
+            restoreFailures.push(
+              `${mutant.path} (line ${mutant.line}, mutant "${mutant.description}")`,
+            );
+          }
+        }
+        if (workspaceFailed) break;
       }
       if (workspaceFailed) break;
     }
-    if (workspaceFailed) break;
+  } catch (err) {
+    workspaceError = true;
+    scoringError = String(err);
   }
 
-  return {
+  // A kill rate exists only when mutants ran *and the pass finished*.
+  // `tried === 0` used to render as `1` — the best possible score for a
+  // measurement that did not happen (#1351). An interrupted pass is the same
+  // defect one step along: stopping after three of fifty mutants leaves a
+  // ratio, but it is a ratio over whichever subset ran first, not over the
+  // patch, and #1351 asks for an aborted pass to be distinguishable from a
+  // completed one. So `aborted` and `workspace-error` outrank `measured`
+  // rather than being reachable only when nothing ran at all.
+  const state: MutationScore["state"] = aborted
+    ? "aborted"
+    : workspaceError
+      ? "workspace-error"
+      : tried > 0
+        ? "measured"
+        : "not-applicable";
+
+  const score: MutationScore = {
+    state,
     mutantsTried: tried,
     mutantsKilled: killed,
-    killRate: tried === 0 ? 1 : killed / tried,
+    killRate: state === "measured" ? killed / tried : null,
     survivors,
   };
+  if (restoreFailures.length > 0) score.restoreFailures = restoreFailures;
+  if (scoringError !== undefined) score.scoringError = scoringError;
+  return score;
 }

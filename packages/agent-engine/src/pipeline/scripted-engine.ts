@@ -146,7 +146,7 @@ export async function scriptedEngine(
     inputTokens?: number;
     outputTokens?: number;
     totalTokens?: number;
-    inputTokenDetails?: { cacheReadTokens?: number };
+    inputTokenDetails?: { cacheReadTokens?: number; cacheWriteTokens?: number };
   };
 
   const diff = options.workspace ? await options.workspace.diff() : "";
@@ -163,6 +163,7 @@ export async function scriptedEngine(
       outputTokens: usage.outputTokens,
       totalTokens: usage.totalTokens,
       cachedInputTokens: usage.inputTokenDetails?.cacheReadTokens,
+      cacheWriteTokens: usage.inputTokenDetails?.cacheWriteTokens,
     },
     messages: [...messages, { role: "assistant", content: text }],
   };

@@ -35,6 +35,7 @@ describe("rateFor", () => {
       inputPer1M: 15.0,
       outputPer1M: 75.0,
       cachedInputPer1M: 1.5,
+      cacheWritePer1M: 18.75,
     });
   });
 
@@ -43,6 +44,7 @@ describe("rateFor", () => {
       inputPer1M: 3.0,
       outputPer1M: 15.0,
       cachedInputPer1M: 0.3,
+      cacheWritePer1M: 3.75,
     });
   });
 
@@ -51,6 +53,7 @@ describe("rateFor", () => {
       inputPer1M: 1.4,
       outputPer1M: 4.4,
       cachedInputPer1M: 0.26,
+      cacheWritePer1M: 1.4,
     });
   });
 
@@ -59,16 +62,19 @@ describe("rateFor", () => {
       inputPer1M: 3.0,
       outputPer1M: 10.25,
       cachedInputPer1M: 0.5,
+      cacheWritePer1M: 3,
     });
     expect(rateFor("zai/glm-5-turbo")).toEqual({
       inputPer1M: 1.2,
       outputPer1M: 4.0,
       cachedInputPer1M: 0.24,
+      cacheWritePer1M: 1.2,
     });
     expect(rateFor("zai/glm-4.7-flash")).toEqual({
       inputPer1M: 0.95,
       outputPer1M: 3.15,
       cachedInputPer1M: 0.2,
+      cacheWritePer1M: 0.95,
     });
   });
 
@@ -77,11 +83,13 @@ describe("rateFor", () => {
       inputPer1M: 0.15,
       outputPer1M: 0.6,
       cachedInputPer1M: 0.075,
+      cacheWritePer1M: 0.15,
     });
     expect(rateFor("openai/gpt-4o")).toEqual({
       inputPer1M: 2.5,
       outputPer1M: 10.0,
       cachedInputPer1M: 1.25,
+      cacheWritePer1M: 2.5,
     });
   });
 
@@ -103,21 +111,25 @@ describe("rateFor", () => {
       inputPer1M: 3.0,
       outputPer1M: 15.0,
       cachedInputPer1M: 0.75,
+      cacheWritePer1M: 3,
     });
     expect(rateFor("xai/grok-4.5")).toEqual({
       inputPer1M: 2.0,
       outputPer1M: 6.0,
       cachedInputPer1M: 0.5,
+      cacheWritePer1M: 2,
     });
     expect(rateFor("xai/grok-4.3")).toEqual({
       inputPer1M: 1.25,
       outputPer1M: 2.5,
       cachedInputPer1M: 0.2,
+      cacheWritePer1M: 1.25,
     });
     expect(rateFor("xai/grok-build-0.1")).toEqual({
       inputPer1M: 1.0,
       outputPer1M: 2.0,
       cachedInputPer1M: 0.2,
+      cacheWritePer1M: 1,
     });
   });
 
@@ -126,16 +138,19 @@ describe("rateFor", () => {
       inputPer1M: 0.28,
       outputPer1M: 0.42,
       cachedInputPer1M: 0.03,
+      cacheWritePer1M: 0.28,
     });
     expect(rateFor("deepseek/deepseek-v4-pro")).toEqual({
       inputPer1M: 1.74,
       outputPer1M: 3.48,
       cachedInputPer1M: 0.0,
+      cacheWritePer1M: 1.74,
     });
     expect(rateFor("deepseek/deepseek-v4-flash")).toEqual({
       inputPer1M: 0.14,
       outputPer1M: 0.28,
       cachedInputPer1M: 0.0,
+      cacheWritePer1M: 0.14,
     });
     expect(rateFor("deepseek/deepseek-v4")).toEqual(FALLBACK_RATE);
   });
@@ -145,31 +160,37 @@ describe("rateFor", () => {
       inputPer1M: 1.75,
       outputPer1M: 14.0,
       cachedInputPer1M: 0.17,
+      cacheWritePer1M: 1.75,
     });
     expect(rateFor("openai/gpt-5-mini")).toEqual({
       inputPer1M: 0.25,
       outputPer1M: 2.0,
       cachedInputPer1M: 0.03,
+      cacheWritePer1M: 0.25,
     });
     expect(rateFor("openai/gpt-5-nano")).toEqual({
       inputPer1M: 0.05,
       outputPer1M: 0.4,
       cachedInputPer1M: 0.01,
+      cacheWritePer1M: 0.05,
     });
     expect(rateFor("openai/gpt-5")).toEqual({
       inputPer1M: 1.25,
       outputPer1M: 10.0,
       cachedInputPer1M: 0.13,
+      cacheWritePer1M: 1.25,
     });
     expect(rateFor("openai/o3")).toEqual({
       inputPer1M: 2.0,
       outputPer1M: 8.0,
       cachedInputPer1M: 0.5,
+      cacheWritePer1M: 2,
     });
     expect(rateFor("openai/o4-mini")).toEqual({
       inputPer1M: 1.1,
       outputPer1M: 4.4,
       cachedInputPer1M: 0.28,
+      cacheWritePer1M: 1.1,
     });
     // "openai/o4" (bare) is not a published Gateway SKU — falls back.
     expect(rateFor("openai/o4")).toEqual(FALLBACK_RATE);

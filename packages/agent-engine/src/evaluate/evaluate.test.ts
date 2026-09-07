@@ -18,6 +18,8 @@ import {
   buildRevisionPrompt,
   pickAdvisorModel,
   DEFAULT_ADVISOR_MODEL,
+  resolveReviseMinConfidence,
+  isUnexaminedComplete,
 } from "./judge";
 import { enhancePrompt } from "./prompt-enhancer";
 import type { AgentAi } from "../ports";
@@ -518,7 +520,12 @@ describe("judgePanel", () => {
       "x/y",
     ]);
     expect(verdict.complete).toBe(true);
-    expect(verdict.findings).toEqual([]);
+    // Changed from `toEqual([])`. A real dissenting judge's findings now
+    // survive a `complete` aggregate: they are the highest-grade evidence the
+    // panel produced, and dropping them is how a partial outage stopped the
+    // revise loop hearing about real gaps (#1427). The tally is still the
+    // verdict; the findings are no longer thrown away with it.
+    expect(verdict.findings).toEqual(["x/y says: missing tests"]);
   });
 
   it("propagates a fatal auth/billing error from any panel member instead of masking it in the vote", async () => {
@@ -636,5 +643,270 @@ describe("enhancePrompt", () => {
     const result = await enhancePrompt({ prompt: "test", memory });
     expect(result.hasMemory).toBe(false);
     expect(result.prompt).toBe("test");
+  });
+});
+
+// ── the judge's degraded paths ────────────────────────────────────────────────
+
+const OUTAGE = new Error("advisor timeout");
+
+function downAi(): AgentAi {
+  return makeAi({
+    generateObject: vi
+      .fn()
+      .mockRejectedValue(OUTAGE) as AgentAi["generateObject"],
+  });
+}
+
+function baseOpts(over: Record<string, unknown> = {}) {
+  return {
+    request: "Refactor the auth module",
+    response: "Here's what I'd suggest for the auth module.",
+    filesTouched: [] as string[],
+    commandsRun: [] as string[],
+    steps: 0,
+    executorModel: "anthropic/claude-sonnet-5",
+    ...over,
+  };
+}
+
+/**
+ * #1426 / #1390: the heuristic used to decide the zero-evidence case entirely on
+ * whether the closing message contained one of eleven English verbs. A response
+ * that missed the list scored complete: true at confidence 30, so an advisor
+ * outage plus a read-only-sounding reply shipped a no-op as done.
+ */
+describe("heuristic judge on no evidence at all", () => {
+  it("does not call a turn complete when nothing was done", async () => {
+    // This response deliberately avoids added/created/updated/edited/etc.
+    const result = await judgeCompleteness(baseOpts(), downAi());
+
+    expect(result.fallback).toBe(true);
+    expect(result.complete).toBe(false);
+    expect(result.findings.join(" ")).toMatch(/no files|wrote no files/i);
+  });
+
+  it.each([
+    "Here's what I'd suggest for the auth module.",
+    "The module looks fine to me.",
+    "Let me know if you want me to proceed.",
+    "",
+  ])("holds regardless of phrasing: %s", async (response) => {
+    const result = await judgeCompleteness(baseOpts({ response }), downAi());
+    expect(result.complete).toBe(false);
+  });
+
+  it("is confident about it, because absence of evidence is the evidence", async () => {
+    const result = await judgeCompleteness(baseOpts(), downAi());
+    expect(result.confidence).toBeGreaterThanOrEqual(60);
+  });
+
+  it("still allows a complete verdict when there IS evidence", async () => {
+    const result = await judgeCompleteness(
+      baseOpts({
+        response: "Done.",
+        filesTouched: ["src/auth.ts"],
+        steps: 4,
+      }),
+      downAi(),
+    );
+    expect(result.complete).toBe(true);
+    expect(result.fallback).toBe(true);
+    // Capped: the heuristic cannot read the diff.
+    expect(result.confidence).toBeLessThanOrEqual(70);
+  });
+});
+
+/**
+ * #1427: two heuristic fallbacks used to outvote the one judge that actually
+ * read the diff, discard its findings, and report fallback: false.
+ */
+describe("judgePanel weights judges by whether they judged", () => {
+  function mixedPanelAi(realModel: string): AgentAi {
+    return makeAi({
+      generateObject: vi.fn(async (args: { model: string }) => {
+        if (args.model === realModel) {
+          return {
+            object: {
+              complete: false,
+              confidence: 88,
+              findings: ["The migration was never written."],
+              remainingWork: ["Write the migration."],
+              reasoning: "The diff touches no migration file.",
+            },
+            usage: emptyUsage(),
+          };
+        }
+        throw OUTAGE;
+      }) as unknown as AgentAi["generateObject"],
+    });
+  }
+
+  const PANEL = ["a/real", "b/down", "c/down"];
+
+  it("does not let two fallbacks outvote one real judge", async () => {
+    const result = await judgePanel(
+      baseOpts({ filesTouched: ["src/auth.ts"], steps: 5 }),
+      mixedPanelAi("a/real"),
+      PANEL,
+    );
+    expect(result.complete).toBe(false);
+  });
+
+  it("keeps the real dissenter's findings", async () => {
+    const result = await judgePanel(
+      baseOpts({ filesTouched: ["src/auth.ts"], steps: 5 }),
+      mixedPanelAi("a/real"),
+      PANEL,
+    );
+    expect(result.findings).toContain("The migration was never written.");
+    expect(result.remainingWork).toContain("Write the migration.");
+  });
+
+  it("reports how many judges were degraded, not merely whether all were", async () => {
+    const result = await judgePanel(
+      baseOpts({ filesTouched: ["src/auth.ts"], steps: 5 }),
+      mixedPanelAi("a/real"),
+      PANEL,
+    );
+    // `every` used to make this false while two of three were guesswork.
+    expect(result.fallback).toBe(true);
+    expect(result.degradedJudges).toEqual({ degraded: 2, total: 3 });
+    expect(result.reasoning).toContain("degraded");
+  });
+
+  it("still returns a verdict when every judge is degraded", async () => {
+    const result = await judgePanel(
+      baseOpts({ filesTouched: ["src/auth.ts"], steps: 5 }),
+      downAi(),
+      PANEL,
+    );
+    expect(result.fallback).toBe(true);
+    expect(result.degradedJudges).toEqual({ degraded: 3, total: 3 });
+  });
+});
+
+/**
+ * #1390: `Number(...)` yields NaN for an unparseable value, and every
+ * comparison against NaN is false — so a typo silently turned "revise when
+ * confident enough" into "never revise", with nothing said.
+ */
+describe("resolveReviseMinConfidence", () => {
+  it("defaults when unset or empty", () => {
+    expect(resolveReviseMinConfidence({})).toBe(40);
+    expect(
+      resolveReviseMinConfidence({ OXAGEN_REVISE_MIN_CONFIDENCE: "" }),
+    ).toBe(40);
+  });
+
+  it("accepts a number in range, including the disable value", () => {
+    expect(
+      resolveReviseMinConfidence({ OXAGEN_REVISE_MIN_CONFIDENCE: "0" }),
+    ).toBe(0);
+    expect(
+      resolveReviseMinConfidence({ OXAGEN_REVISE_MIN_CONFIDENCE: "75" }),
+    ).toBe(75);
+  });
+
+  it.each(["high", "40%", "NaN", "-1", "101", "1e999"])(
+    "falls back to the default rather than yielding NaN for %s",
+    (raw) => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      expect(
+        resolveReviseMinConfidence({ OXAGEN_REVISE_MIN_CONFIDENCE: raw }),
+      ).toBe(40);
+      expect(
+        Number.isFinite(
+          resolveReviseMinConfidence({
+            OXAGEN_REVISE_MIN_CONFIDENCE: raw,
+          }),
+        ),
+      ).toBe(true);
+      warn.mockRestore();
+    },
+  );
+});
+
+/**
+ * A verdict can reach buildRevisionPrompt marked complete when the only judge
+ * available was the heuristic and it was not confident. Telling the agent its
+ * work "is NOT done" would be a claim nothing established.
+ */
+describe("buildRevisionPrompt on an unreviewed complete verdict", () => {
+  it("asks for verification rather than asserting the work is unfinished", () => {
+    const prompt = buildRevisionPrompt({
+      complete: true,
+      confidence: 30,
+      findings: [],
+      remainingWork: [],
+      reasoning: "Heuristic check (advisor unavailable).",
+      model: "a/model",
+      fallback: true,
+      usage: emptyUsage(),
+    });
+    expect(prompt).toContain("could not be reviewed");
+    expect(prompt).not.toContain("is NOT done");
+  });
+
+  it("still tells an incomplete verdict plainly", () => {
+    const prompt = buildRevisionPrompt({
+      complete: false,
+      confidence: 80,
+      findings: ["Tests were not added"],
+      remainingWork: ["Add tests"],
+      reasoning: "r",
+      model: "a/model",
+      fallback: false,
+      usage: emptyUsage(),
+    });
+    expect(prompt).toContain("is NOT done");
+    expect(prompt).toContain("Tests were not added");
+  });
+});
+
+/**
+ * The floor's asymmetry is deliberate and narrow: it catches a `complete` that
+ * NOTHING examined. `fallback` cannot express that for a panel — #1427 made it
+ * `some` on purpose, so a panel with one degraded judge out of three reports
+ * `true` while its real majority read the diff. Reading `fallback` here pulled
+ * exactly the case the asymmetry leaves alone into a revise round.
+ */
+describe("isUnexaminedComplete separates 'nothing judged' from 'a judge judged'", () => {
+  const base = {
+    complete: true as boolean,
+    confidence: 30,
+    findings: [] as string[],
+    remainingWork: [] as string[],
+    reasoning: "r",
+    model: "a/model",
+    fallback: true,
+    usage: emptyUsage(),
+  };
+
+  it("is true for a lone heuristic judge below the floor", () => {
+    expect(isUnexaminedComplete(base, 40)).toBe(true);
+  });
+
+  it("is true for a panel where every judge degraded", () => {
+    expect(
+      isUnexaminedComplete(
+        { ...base, degradedJudges: { degraded: 3, total: 3 } },
+        40,
+      ),
+    ).toBe(true);
+  });
+
+  it("is FALSE when a real judge voted, however many degraded beside it", () => {
+    expect(
+      isUnexaminedComplete(
+        { ...base, degradedJudges: { degraded: 2, total: 3 } },
+        40,
+      ),
+    ).toBe(false);
+  });
+
+  it("is false above the floor, and false for an incomplete verdict", () => {
+    expect(isUnexaminedComplete({ ...base, confidence: 40 }, 40)).toBe(false);
+    expect(isUnexaminedComplete({ ...base, complete: false }, 40)).toBe(false);
   });
 });

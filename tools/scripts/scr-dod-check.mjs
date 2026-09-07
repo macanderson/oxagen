@@ -230,6 +230,29 @@ export function referencedIssues(prBody) {
 }
 
 /**
+ * Does `prBody` name this exact issue, either as a close or as a `Refs`?
+ *
+ * Lives here rather than inline in `dod-recheck.yml` for the reason
+ * `closeExemptFromDod` does: a workflow's `script:` block is reachable by no
+ * test, and this predicate decides whether a stale red check ever gets
+ * re-run — a wrong answer here is a workflow that runs and does nothing.
+ *
+ * It is the shape that made that a real risk. `linkedIssues` and
+ * `referencedIssues` return `{ owner, repo, number }` records, not numbers, so
+ * comparing a list of them against an issue number matches nothing and fails
+ * silently. Same-repo references carry `null` for owner/repo, which is why the
+ * caller's repository is filled in before comparing (#2638).
+ */
+export function referencesIssue(prBody, { owner, repo, number }) {
+  return [...linkedIssues(prBody), ...referencedIssues(prBody)].some(
+    (ref) =>
+      ref.number === number &&
+      (ref.owner ?? owner) === owner &&
+      (ref.repo ?? repo) === repo,
+  );
+}
+
+/**
  * Headings this corpus writes its done conditions under (oxagen#1407).
  *
  * The template teaches one spelling; the gate reads the ones already in the

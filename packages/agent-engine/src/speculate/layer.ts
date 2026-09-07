@@ -17,7 +17,8 @@
  *   and when it settles, because it may have changed anything on disk. While
  *   one is in flight, speculation is suspended, so a read racing a mutation
  *   can never pin a half-mutated result. Known-pure interactive/query tools
- *   ({@link PURE_TOOLS}) are exempt from invalidating but still never cached.
+ *   ({@link PAUSING_TOOLS}) write nothing themselves, so they do not
+ *   invalidate on the way in, but they do on the way out.
  * - Tool results are strings by contract (errors included, tools never
  *   throw — see withBackstop in tools.ts), so a speculated failure serves
  *   exactly what a live call would have returned.
@@ -32,14 +33,19 @@ import {
 } from "./predictor";
 
 /** Read-only tools the layer may speculate and serve from cache. */
-export const SPECULATABLE_TOOLS = new Set([
-  "read_file",
-  "search",
-  "list_dir",
-]);
+export const SPECULATABLE_TOOLS = new Set(["read_file", "search", "list_dir"]);
 
-/** Known-pure tools that neither mutate the filesystem nor get speculated. */
-const PURE_TOOLS = new Set(["ask_user"]);
+/**
+ * Tools that write nothing themselves but hand control to a human, and are
+ * never speculated or cached.
+ *
+ * `ask_user` blocks the turn while a person answers. The workspace can change
+ * during that pause, by the very person being asked, so a read issued
+ * afterwards must not be served from a cache populated before the question
+ * (#1428). It was exempt from invalidating entirely, which is the one exemption
+ * a human pause cannot have.
+ */
+const PAUSING_TOOLS = new Set(["ask_user"]);
 
 export interface SpeculationStats {
   /** Speculative executions launched. */
@@ -197,8 +203,24 @@ export function wrapToolsWithSpeculation(
       continue;
     }
 
-    if (PURE_TOOLS.has(name)) {
-      out[name] = toolDef;
+    if (PAUSING_TOOLS.has(name)) {
+      out[name] = {
+        ...toolDef,
+        execute: async (input: unknown, options: unknown) => {
+          // No invalidate on the way in: nothing has changed at the moment the
+          // question is posed, and dropping the cache there would throw away
+          // entries that are still good. Speculation is fenced for the
+          // duration, because anything computed while a human is editing is
+          // both unreliable and about to be discarded anyway.
+          mutationsInFlight++;
+          try {
+            return await exec(input, options);
+          } finally {
+            mutationsInFlight--;
+            invalidate();
+          }
+        },
+      };
       continue;
     }
 

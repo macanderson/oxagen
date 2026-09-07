@@ -22,7 +22,7 @@
 import { createHash } from "node:crypto";
 import { extname } from "node:path";
 import ts from "typescript";
-import { resolveDisplayPath } from "./tools";
+import { canonicalPathKey } from "./path-identity";
 
 /** Max formatted syntax messages surfaced per file — keeps tool output bounded. */
 const MAX_SYNTAX_ERRORS = 5;
@@ -94,7 +94,14 @@ export function checkSyntax(path: string, content: string): SyntaxCheckResult {
   const errors: string[] = [];
   for (const d of diagnostics ?? []) {
     if (errors.length >= MAX_SYNTAX_ERRORS) break;
-    const msg = ts.flattenDiagnosticMessageText(d.messageText, "\n");
+    // The diagnostic CODE rides in front of the flattened message, which is
+    // what makes `errorIdentity` compare "the diagnostic itself" rather than
+    // its rendered text (#1353). Without it, two distinct diagnostics that
+    // happen to flatten to the same words are one error to the delta, and the
+    // second is filtered out as "not new" — the converse free pass the issue
+    // names. It is also the form `tsc` itself prints, so an agent reading the
+    // rejection can look the code up.
+    const msg = `TS${d.code}: ${ts.flattenDiagnosticMessageText(d.messageText, "\n")}`;
     if (d.file && typeof d.start === "number") {
       const { line } = ts.getLineAndCharacterOfPosition(d.file, d.start);
       errors.push(`line ${line + 1}: ${msg}`);
@@ -105,22 +112,91 @@ export function checkSyntax(path: string, content: string): SyntaxCheckResult {
   return { supported: true, errors };
 }
 
+/** `line 12: Unterminated string literal.` → `Unterminated string literal.` */
+const LINE_PREFIX = /^line \d+: /;
+
 /**
- * The errors present AFTER an edit whose formatted text was not present BEFORE.
- * A file that was already broken carries those errors in `before`, so they never
- * appear here — only the NEW damage an edit introduces gates the write. Pure.
+ * `Unexpected token } in JSON at position 41` → `Unexpected token }`, and
+ * `Unexpected token } in JSON at position 41 (line 3 column 5)` (Node ≥20)
+ * strips the same way. `checkSyntax`'s `.json` branch returns
+ * `JSON.parse`'s message VERBATIM — no `line N:` prefix — and V8 embeds the
+ * byte offset (and, on newer Node, the line/column) it failed at directly in
+ * that message. So a JSON parse error's identity was its position exactly the
+ * way a TS error's was its line number: an edit that inserts a key above a
+ * pre-existing JSON fault shifts the offset, the message text changes, and
+ * `newSyntaxErrors` reported the pre-existing fault as newly introduced —
+ * the same free-pass-inverted shape #1353 names for TypeScript, one file type
+ * over.
+ */
+const JSON_POSITION =
+  /\s+in JSON at position \d+(\s*\(line \d+ column \d+\))?$/;
+
+/**
+ * An error's identity: everything except the position it happens to render at.
+ *
+ * For a TypeScript diagnostic that is `TS<code>: <flattened message>`, which is
+ * the pair #1353 asks the comparison to be made on — `checkSyntax` renders the
+ * code in so the identity carries it without a second channel to keep in sync.
+ * For a `JSON.parse` failure there is no code, so it is the message with V8's
+ * embedded offset stripped.
+ */
+function errorIdentity(error: string): string {
+  return error.replace(LINE_PREFIX, "").replace(JSON_POSITION, "");
+}
+
+/**
+ * The errors present AFTER an edit that were not present BEFORE — only the NEW
+ * damage an edit introduces gates the write, so a file that was already broken
+ * never blocks an unrelated edit. Pure.
+ *
+ * Identity is the MESSAGE, not the formatted string, because the formatted
+ * string embeds a position — a line number for TS diagnostics, a byte offset
+ * (plus, on newer Node, a line/column) for a `JSON.parse` failure. Comparing
+ * those made an error's identity its position, so any edit that shifted lines
+ * or bytes above a pre-existing error renamed it: adding three imports at the
+ * top moved an unterminated string from line 12 to line 15, the old text was
+ * not in `prior`, and the agent was told it had introduced an error it had
+ * not touched — with the suggested next action pointing at a line unrelated
+ * to its task (#1353). A JSON file's fault shifts the same way when a key is
+ * inserted above it.
+ *
+ * Matching keeps MULTIPLICITY, so identity survives a shift without hiding a
+ * genuine second instance: two unterminated strings where there was one leaves
+ * exactly one error reported, and it is reported with its real (post-edit)
+ * line number.
  */
 export function newSyntaxErrors(before: string[], after: string[]): string[] {
-  const prior = new Set(before);
-  return after.filter((e) => !prior.has(e));
+  const unclaimed = new Map<string, number>();
+  for (const error of before) {
+    const message = errorIdentity(error);
+    unclaimed.set(message, (unclaimed.get(message) ?? 0) + 1);
+  }
+
+  const introduced: string[] = [];
+  for (const error of after) {
+    const message = errorIdentity(error);
+    const remaining = unclaimed.get(message) ?? 0;
+    if (remaining > 0) {
+      unclaimed.set(message, remaining - 1);
+      continue;
+    }
+    introduced.push(error);
+  }
+  return introduced;
 }
 
 /**
  * Per-run (per {@link buildWorkspaceTools} call, i.e. per agent turn) map of
  * normalized path → last-known content hash — the anchor store. A whole-file
- * read records the hash; an edit/write verifies it. Keys are normalized through
- * {@link resolveDisplayPath}(root, path) so a relative and an absolute spelling
- * of the same file share ONE entry.
+ * read records the hash; an edit/write verifies it.
+ *
+ * Keys go through {@link canonicalPathKey}, so every spelling of one file
+ * shares ONE entry. This used to use `resolveDisplayPath`, which joins a root
+ * and stops: the relative-versus-absolute case its doc named did work, and
+ * `./src/foo.ts`, `src/../src/foo.ts` and `src//foo.ts` each missed. A miss is
+ * not a refusal here — an absent entry reads as "never seen this run, nothing
+ * to anchor against" — so a second spelling skipped the stale-content check
+ * altogether (#1357).
  */
 export class EditIntegrityLedger {
   private readonly root: string;
@@ -131,7 +207,7 @@ export class EditIntegrityLedger {
   }
 
   private key(path: string): string {
-    return resolveDisplayPath(this.root, path);
+    return canonicalPathKey(this.root, path);
   }
 
   /** Record the last-known content hash for `path`. */

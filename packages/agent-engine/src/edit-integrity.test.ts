@@ -45,6 +45,15 @@ describe("checkSyntax", () => {
     expect(r.errors[0]).toContain("Expression expected");
   });
 
+  // #1353 asks the comparison to be made on "TypeScript's `code` plus the
+  // flattened message". Rendering the code in is how the identity carries it
+  // without a second channel to keep in sync, and it is the form `tsc` prints,
+  // so the agent reading a rejection can look the diagnostic up.
+  it("renders the diagnostic code, so identity is code + message (#1353)", () => {
+    const r = checkSyntax("a.ts", "const a = 1;\nconst b = (");
+    expect(r.errors[0]).toMatch(/^line 2: TS\d+: /);
+  });
+
   it("passes valid JSX in a .tsx file without React in scope (jsx preserved)", () => {
     const r = checkSyntax(
       "a.tsx",
@@ -131,5 +140,151 @@ describe("EditIntegrityLedger", () => {
     led.record("b.ts", "hash-b");
     expect(led.get("a.ts")).toBe("hash-a");
     expect(led.get("b.ts")).toBe("hash-b");
+  });
+});
+
+/**
+ * #1353: an error's identity was its POSITION, because the formatted string
+ * starts with a line number. Any edit that shifted lines above a pre-existing
+ * error renamed it, and the agent was told it had introduced damage it had not
+ * touched.
+ */
+describe("newSyntaxErrors identifies an error by its message, not its line", () => {
+  it("does not report a pre-existing error that an edit merely pushed down", () => {
+    const before = ["line 12: Unterminated string literal."];
+    // Three imports added at the top; the same untouched error is now at 15.
+    const after = ["line 15: Unterminated string literal."];
+    expect(newSyntaxErrors(before, after)).toEqual([]);
+  });
+
+  it("does not report one an edit pulled up either", () => {
+    expect(
+      newSyntaxErrors(
+        ["line 40: Declaration or statement expected."],
+        ["line 8: Declaration or statement expected."],
+      ),
+    ).toEqual([]);
+  });
+
+  it("still reports a genuinely new error", () => {
+    expect(
+      newSyntaxErrors(
+        ["line 12: Unterminated string literal."],
+        ["line 15: Unterminated string literal.", "line 3: ',' expected."],
+      ),
+    ).toEqual(["line 3: ',' expected."]);
+  });
+
+  it("reports a SECOND instance of a message that already appeared once", () => {
+    // Multiplicity is what stops the message-based match hiding real damage.
+    const introduced = newSyntaxErrors(
+      ["line 12: Unterminated string literal."],
+      [
+        "line 3: Unterminated string literal.",
+        "line 15: Unterminated string literal.",
+      ],
+    );
+    expect(introduced).toHaveLength(1);
+    // Reported with its real post-edit line number, not the pre-edit one.
+    expect(introduced[0]).toMatch(/^line \d+: Unterminated string literal\.$/);
+  });
+
+  it("reports every new instance when several appear", () => {
+    expect(
+      newSyntaxErrors([], ["line 1: ',' expected.", "line 2: ',' expected."]),
+    ).toHaveLength(2);
+  });
+
+  // The converse free pass #1353 names in its last paragraph. Stripping the
+  // position alone would make these one error, and the new one would be
+  // filtered out as "not new"; the diagnostic code keeps them apart.
+  it("keeps two diagnostics apart when only their code differs", () => {
+    expect(
+      newSyntaxErrors(
+        ["line 12: TS1002: Unterminated string literal."],
+        [
+          "line 15: TS1002: Unterminated string literal.",
+          "line 15: TS1005: Unterminated string literal.",
+        ],
+      ),
+    ).toEqual(["line 15: TS1005: Unterminated string literal."]);
+  });
+
+  it("handles messages with no line prefix at all (JSON parse errors)", () => {
+    const before = ["Unexpected token } in JSON at position 41"];
+    expect(newSyntaxErrors(before, before)).toEqual([]);
+    expect(
+      newSyntaxErrors(before, [...before, "Unexpected end of JSON input"]),
+    ).toEqual(["Unexpected end of JSON input"]);
+  });
+
+  // #1353's TS-side repro one file type over: a key inserted above a
+  // pre-existing JSON parse fault shifts V8's embedded byte offset, so the
+  // SAME fault must not be reported as newly introduced.
+  it("does not report a pre-existing JSON fault whose offset shifted", () => {
+    expect(
+      newSyntaxErrors(
+        ["Unexpected token } in JSON at position 41"],
+        ["Unexpected token } in JSON at position 58"],
+      ),
+    ).toEqual([]);
+  });
+
+  // Node >=20 additionally appends a `(line N column M)` suffix to the same
+  // message; that must shift-tolerate identically to the bare-offset form.
+  it("does not report a pre-existing JSON fault whose line/column shifted (Node >=20)", () => {
+    expect(
+      newSyntaxErrors(
+        ["Unexpected token } in JSON at position 41 (line 3 column 5)"],
+        ["Unexpected token } in JSON at position 58 (line 4 column 5)"],
+      ),
+    ).toEqual([]);
+  });
+
+  it("still reports a genuinely new JSON fault at a different position", () => {
+    expect(
+      newSyntaxErrors(
+        ["Unexpected token } in JSON at position 41"],
+        [
+          "Unexpected token } in JSON at position 58",
+          "Unexpected token ] in JSON at position 90",
+        ],
+      ),
+    ).toEqual(["Unexpected token ] in JSON at position 90"]);
+  });
+});
+
+/**
+ * #1357: the anchor treats an absent entry as "nothing to check", so every
+ * spelling that missed the map was a free pass past the stale-content refusal.
+ */
+describe("EditIntegrityLedger keys every spelling of one file together", () => {
+  it.each([
+    "src/foo.ts",
+    "./src/foo.ts",
+    "src/../src/foo.ts",
+    "src//foo.ts",
+    "/repo/src/foo.ts",
+  ])(
+    "reads back the anchor recorded under a different spelling: %s",
+    (spelling) => {
+      const ledger = new EditIntegrityLedger("/repo");
+      ledger.record("src/foo.ts", "deadbeefdeadbeef");
+      expect(ledger.get(spelling)).toBe("deadbeefdeadbeef");
+    },
+  );
+
+  it("records under one spelling and refuses to leak into another file", () => {
+    const ledger = new EditIntegrityLedger("/repo");
+    ledger.record("./src/foo.ts", "aaaaaaaaaaaaaaaa");
+    expect(ledger.get("src/foo.ts")).toBe("aaaaaaaaaaaaaaaa");
+    expect(ledger.get("src/bar.ts")).toBeUndefined();
+  });
+
+  it("lets a later record under another spelling overwrite the same entry", () => {
+    const ledger = new EditIntegrityLedger("/repo");
+    ledger.record("src/foo.ts", "aaaaaaaaaaaaaaaa");
+    ledger.record("/repo/src/foo.ts", "bbbbbbbbbbbbbbbb");
+    expect(ledger.get("./src/foo.ts")).toBe("bbbbbbbbbbbbbbbb");
   });
 });

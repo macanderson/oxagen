@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
   emitAudit: vi.fn<() => Promise<void>>(),
   resolveOrgTier: vi.fn(),
+  resolveOrgTierDetailed: vi.fn(),
   canAccessACL: vi.fn(),
   captureError: vi.fn(),
 }));
@@ -30,6 +31,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
   return {
     ...real,
     resolveOrgTier: mocks.resolveOrgTier,
+    resolveOrgTierDetailed: mocks.resolveOrgTierDetailed,
     canAccessACL: mocks.canAccessACL,
   };
 });
@@ -43,6 +45,22 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
 
 // Import AFTER mocks are wired.
 import { checkIAM } from "./check-iam";
+
+/**
+ * checkIAM resolves the tier through `resolveOrgTierDetailed`, not
+ * `resolveOrgTier`, because it needs to know whether the answer was
+ * ESTABLISHED or merely defaulted to — `free` is both a real tier and the hard
+ * default, and only the first is a reason to bypass the resolver (#1384).
+ * These tests therefore stub the detailed form; this helper is the
+ * "a real subscription said so" case every pre-existing test means.
+ */
+function mockEstablishedTier(tier: string): void {
+  mocks.resolveOrgTierDetailed.mockResolvedValue({
+    tier,
+    established: true,
+    source: "subscription",
+  });
+}
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ── Shared fixtures ───────────────────────────────────────────────────────────
@@ -131,7 +149,7 @@ describe("checkIAM()", () => {
     mocks.emitAudit.mockResolvedValue(undefined);
     // Default: enterprise org — resolver runs. Tests that want non-enterprise
     // override canAccessACL.mockReturnValue(false) explicitly.
-    mocks.resolveOrgTier.mockResolvedValue("enterprise");
+    mockEstablishedTier("enterprise");
     mocks.canAccessACL.mockReturnValue(true);
   });
 
@@ -139,7 +157,7 @@ describe("checkIAM()", () => {
 
   it("returns allow and skips the resolver for non-enterprise orgs on iam.* capabilities", async () => {
     mocks.canAccessACL.mockReturnValue(false);
-    mocks.resolveOrgTier.mockResolvedValue("build");
+    mockEstablishedTier("build");
 
     const result = await checkIAM({
       capability: "iam.roles.list",
@@ -155,7 +173,7 @@ describe("checkIAM()", () => {
 
   it("OXA-2058: non-enterprise bypass path also escalates via captureError when emitAudit rejects", async () => {
     mocks.canAccessACL.mockReturnValue(false);
-    mocks.resolveOrgTier.mockResolvedValue("build");
+    mockEstablishedTier("build");
     const auditErr = new Error("clickhouse down (bypass path)");
     mocks.emitAudit.mockRejectedValue(auditErr);
 
@@ -196,7 +214,7 @@ describe("checkIAM()", () => {
     });
 
     expect(result.result.outcome).toBe("allow");
-    expect(mocks.resolveOrgTier).not.toHaveBeenCalled();
+    expect(mocks.resolveOrgTierDetailed).not.toHaveBeenCalled();
     expect(mocks.canAccessACL).toHaveBeenCalledWith("scale");
   });
 
@@ -348,7 +366,7 @@ describe("checkIAM()", () => {
   it("billing.acl.manage (enterprise ACL prefix) on non-enterprise → allow, resolver skipped", async () => {
     // "billing.acl." prefix matches isAclCapability → non-enterprise bypass
     mocks.canAccessACL.mockReturnValue(false);
-    mocks.resolveOrgTier.mockResolvedValue("scale");
+    mockEstablishedTier("scale");
 
     const result = await checkIAM({
       capability: "billing.acl.manage",
@@ -365,7 +383,7 @@ describe("checkIAM()", () => {
   it('exact "iam" capability on non-enterprise → allow, resolver skipped', async () => {
     // capability === "iam" matches the third branch of isAclCapability
     mocks.canAccessACL.mockReturnValue(false);
-    mocks.resolveOrgTier.mockResolvedValue("build");
+    mockEstablishedTier("build");
 
     const result = await checkIAM({
       capability: "iam",
@@ -381,7 +399,7 @@ describe("checkIAM()", () => {
 
   it("any capability on non-enterprise → allow, resolver skipped", async () => {
     mocks.canAccessACL.mockReturnValue(false);
-    mocks.resolveOrgTier.mockResolvedValue("scale");
+    mockEstablishedTier("scale");
 
     const result = await checkIAM({
       capability: "send_message",
@@ -397,7 +415,7 @@ describe("checkIAM()", () => {
 
   it("non-enterprise fast-path covers iam.* capabilities too", async () => {
     mocks.canAccessACL.mockReturnValue(false);
-    mocks.resolveOrgTier.mockResolvedValue("build");
+    mockEstablishedTier("build");
 
     const result = await checkIAM({
       capability: "iam.roles.list",
@@ -409,5 +427,97 @@ describe("checkIAM()", () => {
     expect(result.result.outcome).toBe("allow");
     expect(mocks.resolve).not.toHaveBeenCalled();
     expect(mocks.fetchAuthz).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * #1384: the tier gate turned a billing state into a security state.
+ *
+ * `checkIAM` bypasses the resolver entirely below `enterprise`, so anything
+ * that under-reports a tier switches IAM off — and tier resolution counted a
+ * subscription only when its status was exactly `active`, while every other
+ * billing query in the package counts `trialing` too. An enterprise org in
+ * trial therefore had every capability check return allow with zero policy
+ * consulted.
+ */
+describe("checkIAM tier gate fails closed (#1384)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.emitAudit.mockResolvedValue(undefined);
+    mocks.canAccessACL.mockImplementation(
+      (tier: string) => tier === "enterprise",
+    );
+    mocks.fetchAuthz.mockResolvedValue(EMPTY_AUTHZ);
+    mocks.resolve.mockReturnValue({
+      outcome: "deny" as const,
+      trace: DENY_TRACE,
+      principal: PRINCIPAL,
+    });
+  });
+
+  it("enforces an enterprise org whose subscription is trialing", async () => {
+    // The tier resolver now counts a trial, so this org resolves enterprise.
+    mockEstablishedTier("enterprise");
+
+    const result = await checkIAM({
+      capability: "iam.roles.list",
+      ctx: CTX,
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    expect(mocks.resolve).toHaveBeenCalled();
+    expect(result.result.outcome).not.toBe("allow");
+  });
+
+  it("enforces rather than bypasses when nothing established the tier", async () => {
+    // No subscription and no organizations row: `free` here is the hard
+    // default, not a fact about the org, and treating the default as a licence
+    // to bypass allowed every capability with no policy consulted.
+    mocks.resolveOrgTierDetailed.mockResolvedValue({
+      tier: "free",
+      established: false,
+      source: "absent-org",
+    });
+
+    const result = await checkIAM({
+      capability: "iam.roles.list",
+      ctx: CTX,
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    expect(mocks.resolve).toHaveBeenCalled();
+    expect(result.result.outcome).not.toBe("allow");
+  });
+
+  it("still bypasses a genuinely free org, so nothing gets slower or stricter", async () => {
+    mocks.resolveOrgTierDetailed.mockResolvedValue({
+      tier: "free",
+      established: true,
+      source: "organization",
+    });
+
+    const result = await checkIAM({
+      capability: "iam.roles.list",
+      ctx: CTX,
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    expect(result.result.outcome).toBe("allow");
+    expect(mocks.resolve).not.toHaveBeenCalled();
+  });
+
+  it("takes a caller-supplied planTier as established", async () => {
+    const result = await checkIAM({
+      capability: "iam.roles.list",
+      ctx: { ...CTX, planTier: "build" as const },
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    expect(result.result.outcome).toBe("allow");
+    expect(mocks.resolveOrgTierDetailed).not.toHaveBeenCalled();
   });
 });

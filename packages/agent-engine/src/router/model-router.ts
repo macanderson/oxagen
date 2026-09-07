@@ -54,6 +54,7 @@ export function accumulateUsage(
     inputTokens?: number;
     outputTokens?: number;
     cachedInputTokens?: number;
+    cacheWriteTokens?: number;
   },
 ): UsageTotals {
   return {

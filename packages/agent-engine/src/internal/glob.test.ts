@@ -29,6 +29,27 @@ describe("globToRegExp", () => {
     expect(re.test("x.ts")).toBe(true);
   });
 
+  it("`**/x` matches x at the root, not only in a subdirectory (#1387)", () => {
+    // #1387 stays open for the other half it asks for: one implementation,
+    // shared, with the copies deleted. Until then this pins the semantics so a
+    // copy cannot drift while it waits.
+    // The `/` after `**` is consumed rather than emitted, so the pattern does
+    // not require a separator. A copy of this function that emitted it lived in
+    // the CLI's permission broker and decided allow/ask/deny, where `**/.env`
+    // silently stopped covering the workspace root — the one `.env` a deny rule
+    // is written for. That copy is gone; this pins the semantics it diverged
+    // from, for each subject the issue reported.
+    for (const [pattern, root, nested] of [
+      ["**/.env", ".env", "config/.env"],
+      ["**/secrets.txt", "secrets.txt", "a/b/secrets.txt"],
+      ["**/*.pem", "key.pem", "certs/key.pem"],
+    ] as const) {
+      const re = globToRegExp(pattern);
+      expect(re.test(root)).toBe(true);
+      expect(re.test(nested)).toBe(true);
+    }
+  });
+
   it("? matches exactly one non-separator character (line 19 branch)", () => {
     const re = globToRegExp("src/?.ts");
     expect(re.test("src/a.ts")).toBe(true);

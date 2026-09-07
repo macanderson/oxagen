@@ -47,6 +47,19 @@ export interface CircuitBreakerOptions {
   resetTimeoutMs?: number;
   /** Consecutive successes while `half-open` that close the breaker. Default 1. */
   successThreshold?: number;
+  /**
+   * How long a half-open probe may run before it is presumed lost and another
+   * caller may take its place. Defaults to `resetTimeoutMs`.
+   *
+   * A single-probe gate with no deadline has a failure mode of its own: a probe
+   * that never settles holds the gate forever, so a breaker whose dependency
+   * has recovered stays shut indefinitely and the only symptom is silence. The
+   * probe cannot be cancelled from here — `fn` owns its own timeout — so this
+   * bounds the GATE rather than the call: after the deadline the next caller
+   * becomes the probe, and the lost one's eventual result is ignored rather
+   * than being allowed to reopen or close a breaker it no longer speaks for.
+   */
+  probeTimeoutMs?: number;
   /** Injectable clock (epoch ms). Defaults to Date.now — overridden in tests. */
   now?: () => number;
   /** Called on every state transition. MUST NOT throw — the breaker guards it. */
@@ -95,10 +108,22 @@ export class CircuitBreaker {
   private probeSuccesses = 0;
   /** Epoch ms the breaker last opened; drives the reset-timeout window. */
   private openedAt = 0;
+  /**
+   * Token of the half-open probe currently in flight, or `null` when the gate
+   * is free. A token rather than a boolean because a probe presumed lost can
+   * still settle later, and its result must not be mistaken for the result of
+   * the probe that replaced it.
+   */
+  private probeToken: number | null = null;
+  /** Epoch ms the in-flight probe started, for the presumed-lost deadline. */
+  private probeStartedAt = 0;
+  /** Monotonic source of probe tokens. */
+  private nextProbeToken = 1;
 
   private readonly failureThreshold: number;
   private readonly resetTimeoutMs: number;
   private readonly successThreshold: number;
+  private readonly probeTimeoutMs: number;
   private readonly now: () => number;
   private readonly onTransition?: (t: BreakerTransition) => void;
 
@@ -109,6 +134,7 @@ export class CircuitBreaker {
     this.failureThreshold = opts.failureThreshold ?? DEFAULTS.failureThreshold;
     this.resetTimeoutMs = opts.resetTimeoutMs ?? DEFAULTS.resetTimeoutMs;
     this.successThreshold = opts.successThreshold ?? DEFAULTS.successThreshold;
+    this.probeTimeoutMs = opts.probeTimeoutMs ?? this.resetTimeoutMs;
     this.now = opts.now ?? Date.now;
     this.onTransition = opts.onTransition;
   }
@@ -128,19 +154,25 @@ export class CircuitBreaker {
   /**
    * Run `fn` under the breaker.
    *  - closed: run; reset on success, count failures and trip at threshold.
-   *  - open: if the reset window has elapsed, move to half-open and let this
-   *    call through; otherwise fail fast with `CircuitOpenError`.
-   *  - half-open: run the call; a success closes the breaker (after
-   *    successThreshold), a failure reopens it immediately.
+   *  - open: if the reset window has elapsed, move to half-open and let ONE
+   *    call through as the probe; otherwise fail fast with `CircuitOpenError`.
+   *  - half-open: exactly one probe runs at a time. Any other caller fails fast
+   *    like an open breaker. A success closes the breaker (after
+   *    successThreshold sequential probes), a failure reopens it immediately.
    *
-   * Half-open admits every concurrent caller, not a single probe. Once the
-   * reset window elapses the state flips to `half-open` synchronously and any
-   * further call sees `half-open` and runs straight through — there is no
-   * in-flight-probe counter. On a still-down dependency that means one burst of
-   * traffic reaches it per `resetTimeoutMs` before the first failure reopens the
-   * breaker. That is bounded and acceptable for the telemetry/Neo4j/Stripe paths
-   * this guards; a dependency that cannot absorb such a burst needs a real
-   * single-flight probe here.
+   * The single-probe gate is the point of the half-open state and it was
+   * missing: the state flipped synchronously on the first call past the reset
+   * window, and every later caller then saw `half-open` and ran straight
+   * through. With twenty concurrent callers, twenty reached the dependency
+   * (#1393). Concurrency is the normal condition for a breaker — a
+   * single-threaded caller would not need one — so the breaker was fully
+   * transparent exactly when it mattered, and it converted a steady overload
+   * into a burst arriving every `resetTimeoutMs` precisely while the dependency
+   * was trying to recover. The wrapped dependencies are ClickHouse, Neo4j and
+   * Stripe, all of which degrade further under a burst.
+   *
+   * `successThreshold > 1` therefore means N *sequential* probes, which is what
+   * it always claimed to mean and now follows from the same guard.
    */
   async exec<T>(fn: () => Promise<T>): Promise<T> {
     if (this.state === "open") {
@@ -148,24 +180,60 @@ export class CircuitBreaker {
       if (elapsed < this.resetTimeoutMs) {
         throw new CircuitOpenError(this.key, this.resetTimeoutMs - elapsed);
       }
-      // Reset window elapsed — move to half-open and let calls through again.
+      // Reset window elapsed — move to half-open and let ONE call through.
       this.transition("half-open", this.failures);
+    }
+
+    // Claim the probe slot, or shed. Only a half-open call is a probe; a call
+    // that started while closed is ordinary traffic and is never gated.
+    let probe: number | null = null;
+    if (this.state === "half-open") {
+      if (this.probeToken !== null) {
+        const probeElapsed = this.now() - this.probeStartedAt;
+        if (probeElapsed < this.probeTimeoutMs) {
+          throw new CircuitOpenError(
+            this.key,
+            this.probeTimeoutMs - probeElapsed,
+          );
+        }
+        // The holder has outlived the deadline: presume it lost and take over,
+        // rather than leaving the breaker shut on a probe that never settles.
+      }
+      probe = this.nextProbeToken++;
+      this.probeToken = probe;
+      this.probeStartedAt = this.now();
     }
 
     try {
       const result = await fn();
-      this.onSuccess();
+      this.onSuccess(probe);
       return result;
     } catch (err) {
       // A fail-fast from a NESTED breaker of the same key shouldn't be counted as
       // a dependency failure, but each breaker instance is per-key so that cannot
       // happen here; any thrown error is a real dependency failure.
-      this.onFailure(err);
+      this.onFailure(err, probe);
       throw err;
+    } finally {
+      // Release only our own claim: a probe presumed lost must not free the
+      // slot belonging to the probe that replaced it.
+      if (probe !== null && this.probeToken === probe) this.probeToken = null;
     }
   }
 
-  private onSuccess(): void {
+  /**
+   * Whether an outcome may still speak for the breaker.
+   *
+   * A probe that was presumed lost and then settled anyway is stale: the gate
+   * has moved on, and letting its result close or reopen the breaker would let
+   * an arbitrarily old call overrule the probe that replaced it.
+   */
+  private probeIsCurrent(probe: number | null): boolean {
+    return probe === null || this.probeToken === probe;
+  }
+
+  private onSuccess(probe: number | null = null): void {
+    if (!this.probeIsCurrent(probe)) return;
     if (this.state === "half-open") {
       this.probeSuccesses += 1;
       if (this.probeSuccesses >= this.successThreshold) {
@@ -179,7 +247,8 @@ export class CircuitBreaker {
     this.failures = 0;
   }
 
-  private onFailure(err: unknown): void {
+  private onFailure(err: unknown, probe: number | null = null): void {
+    if (!this.probeIsCurrent(probe)) return;
     this.failures += 1;
     const message = err instanceof Error ? err.message : String(err);
     if (this.state === "half-open") {
@@ -227,6 +296,8 @@ export class CircuitBreaker {
     this.failures = 0;
     this.probeSuccesses = 0;
     this.openedAt = 0;
+    this.probeToken = null;
+    this.probeStartedAt = 0;
   }
 }
 

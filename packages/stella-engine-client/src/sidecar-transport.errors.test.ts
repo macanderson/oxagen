@@ -238,6 +238,291 @@ describe("StellaSidecarClient error paths", () => {
     ).rejects.toThrow(/model adapter blew up/);
   });
 
+  // #1349: reverse requests are dispatched without being awaited, so a handler
+  // can still be running when the terminal frame arrives. Its POST then lands
+  // in a turn that has left the registry and answers 404 — and that used to be
+  // rethrown, discarding the outcome already in hand one line above. Every
+  // cancellation with a tool in flight took this path.
+  const lateResultStream = (kind: "tool_request" | "provider_request") =>
+    `data: ${JSON.stringify(
+      kind === "tool_request"
+        ? { type: "tool_request", request_id: "t-0", name: "read", input: {} }
+        : {
+            type: "provider_request",
+            request_id: "p-0",
+            request: { messages: [] },
+          },
+    )}\n\n` +
+    `data: ${JSON.stringify({
+      type: "turn_complete",
+      outcome: { status: "aborted", reason: "cancelled", cost_usd: 0 },
+    })}\n\n`;
+
+  const lateResultClient = (
+    kind: "tool_request" | "provider_request",
+    status: number,
+  ) =>
+    clientWith(
+      stubFetch(({ url }) => {
+        if (url.endsWith("/v1/turns")) {
+          return new Response(JSON.stringify({ turn_id: "turn-1" }), {
+            status: 200,
+          });
+        }
+        if (url.endsWith("/events")) {
+          return new Response(streamOf(lateResultStream(kind)), {
+            status: 200,
+          });
+        }
+        // The turn is gone by the time the handler answers.
+        return new Response("turn not found", { status });
+      }),
+    );
+
+  test.each([
+    ["tool_request", 404],
+    ["tool_request", 409],
+    ["provider_request", 404],
+  ] as const)(
+    "a %s result posted after the turn ended (%i) resolves with the outcome (#1349)",
+    async (kind, status) => {
+      const result = await lateResultClient(kind, status).runTurn(
+        { provider_id: "x", messages: [] },
+        {
+          onProviderRequest: async () =>
+            ({
+              text: "ok",
+              cost_usd: 0,
+            }) as never,
+          onToolRequest: async () => ({ ok: { content: "" } }),
+        },
+      );
+      expect(result.outcome).toEqual({
+        status: "aborted",
+        reason: "cancelled",
+        cost_usd: 0,
+      });
+    },
+  );
+
+  test("a 404 on a result route with NO terminal outcome still throws (#1349)", async () => {
+    // The control that keeps the tolerance narrow. Without an outcome in hand a
+    // 404 means a wrong turn id, not a race with the turn's end, and must stay
+    // an error — otherwise this becomes a blanket swallow.
+    const client = clientWith(
+      stubFetch(({ url }) => {
+        if (url.endsWith("/v1/turns")) {
+          return new Response(JSON.stringify({ turn_id: "turn-1" }), {
+            status: 200,
+          });
+        }
+        if (url.endsWith("/events")) {
+          return new Response(
+            streamOf(
+              `data: ${JSON.stringify({
+                type: "tool_request",
+                request_id: "t-0",
+                name: "read",
+                input: {},
+              })}\n\n`,
+            ),
+            { status: 200 },
+          );
+        }
+        return new Response("turn not found", { status: 404 });
+      }),
+    );
+    await expect(
+      client.runTurn(
+        { provider_id: "x", messages: [] },
+        {
+          onProviderRequest: async () => ({ text: "", cost_usd: 0 }) as never,
+          onToolRequest: async () => ({ ok: { content: "" } }),
+        },
+      ),
+    ).rejects.toThrow(SidecarHttpError);
+  });
+
+  /**
+   * A fake engine that behaves like the real one: it does NOT emit
+   * `turn_complete` until the client answers the reverse request it is parked
+   * on. Both tests below need that, and it is what #1348 and #1279 say was
+   * missing — the existing failure test answers `turn_complete` on the next
+   * frame regardless, so it could never observe the engine being left waiting.
+   */
+  function parkedEngine() {
+    const posts: Array<{ url: string; body: string }> = [];
+    let release!: () => void;
+    const answered = new Promise<void>((r) => (release = r));
+    const encoder = new TextEncoder();
+
+    const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/v1/turns")) {
+        return new Response(JSON.stringify({ turn_id: "turn-1" }), {
+          status: 200,
+        });
+      }
+      if (url.endsWith("/events")) {
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            async start(controller) {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "provider_request",
+                    request_id: "p-0",
+                    request: { messages: [] },
+                  })}\n\n`,
+                ),
+              );
+              // Parked: nothing more until the client says something.
+              await answered;
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "turn_complete",
+                    outcome: { status: "aborted", reason: "x", cost_usd: 0 },
+                  })}\n\n`,
+                ),
+              );
+              controller.close();
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      posts.push({ url, body: String(init?.body ?? "") });
+      release();
+      return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
+    }) as typeof fetch;
+
+    return { client: clientWith(fetchImpl), posts };
+  }
+
+  test("a rejecting provider handler POSTs the error arm under report mode (#1348)", async () => {
+    const { client, posts } = parkedEngine();
+    const result = await client.runTurn(
+      { provider_id: "x", messages: [] },
+      {
+        onFailure: "report",
+        onProviderRequest: async () => {
+          throw new Error("the host's model adapter blew up");
+        },
+        onToolRequest: async () => ({ ok: { content: "" } }),
+      },
+    );
+
+    // The engine only completed because the client answered — so this asserts
+    // the error actually reached it, not merely that runTurn returned.
+    const posted = posts.find((x) => x.url.endsWith("/provider-result"));
+    expect(posted).toBeDefined();
+    const body = JSON.parse(posted!.body) as {
+      status: string;
+      error?: { kind?: string };
+    };
+    expect(body.status).toBe("error");
+    expect(body.error?.kind).toBeTruthy();
+    expect(result.outcome.status).toBe("aborted");
+  });
+
+  test("a rejecting handler cancels the parked turn instead of waiting it out (#1279)", async () => {
+    const { client, posts } = parkedEngine();
+    await expect(
+      client.runTurn(
+        { provider_id: "x", messages: [] },
+        {
+          // Default arm: no onFailure.
+          onProviderRequest: async () => {
+            throw new Error("the host's model adapter blew up");
+          },
+          onToolRequest: async () => ({ ok: { content: "" } }),
+        },
+      ),
+    ).rejects.toThrow(/model adapter blew up/);
+
+    // The engine was parked and would have waited out
+    // reverse_request_timeout_ms. It completed because the client cancelled,
+    // which is the only POST this arm makes — and the handler's own error is
+    // still what surfaces, not a cancel failure.
+    expect(posts.map((x) => x.url.split("/").pop())).toContain("cancel");
+  });
+
+  test("report mode cancels too when the report itself fails (#1279)", async () => {
+    // Found by Sourcery on #2734's sibling. Under `report` a handler failure
+    // that IS reported never reaches track()'s catch, so arriving there means
+    // the report POST failed — the host can neither answer nor report, and the
+    // engine would otherwise wait out its deadline exactly as in `throw`.
+    const posts: string[] = [];
+    let release!: () => void;
+    const answered = new Promise<void>((r) => (release = r));
+    const encoder = new TextEncoder();
+
+    const client = clientWith((async (
+      input: string | URL,
+      init?: RequestInit,
+    ) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/v1/turns")) {
+        return new Response(JSON.stringify({ turn_id: "turn-1" }), {
+          status: 200,
+        });
+      }
+      if (url.endsWith("/events")) {
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            async start(controller) {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "provider_request",
+                    request_id: "p-0",
+                    request: { messages: [] },
+                  })}\n\n`,
+                ),
+              );
+              await answered;
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "turn_complete",
+                    outcome: { status: "aborted", reason: "x", cost_usd: 0 },
+                  })}\n\n`,
+                ),
+              );
+              controller.close();
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      posts.push(url.split("/").pop() ?? "");
+      if (url.endsWith("/provider-result")) {
+        // The report cannot be delivered.
+        return new Response("nope", { status: 500 });
+      }
+      release();
+      return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
+    }) as typeof fetch);
+
+    await expect(
+      client.runTurn(
+        { provider_id: "x", messages: [] },
+        {
+          onFailure: "report",
+          onProviderRequest: async () => {
+            throw new Error("adapter blew up");
+          },
+          onToolRequest: async () => ({ ok: { content: "" } }),
+        },
+      ),
+    ).rejects.toThrow(/provider-result failed: 500/);
+
+    // It tried to report, then cancelled rather than leaving the engine parked.
+    expect(posts).toContain("provider-result");
+    expect(posts).toContain("cancel");
+  });
+
   test("runTurn reports a stream that ends without a terminal frame", async () => {
     const client = clientWith(
       stubFetch(({ url }) => {

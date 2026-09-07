@@ -7,10 +7,32 @@
  * the tree is byte-identical to its pre-gate state afterwards — including when
  * the gate throws, aborts, or scores mutants.
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import type { CommandResult, Workspace } from "../types";
 import { runMutationGate } from "./gate";
-import type { TestEvidence } from "./mutation";
+import { describeMutationScore, type TestEvidence } from "./mutation";
+
+// `generateMutants` is the one call inside the scoring pass that is neither a
+// workspace read nor a workspace write, so it is how a test injects the
+// "something unexpected threw mid-pass" case the outer catch exists for.
+// Real by default: only the paths named here throw.
+const mutantPlanner = vi.hoisted(() => ({ throwsFor: new Set<string>() }));
+vi.mock("./mutation", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./mutation")>();
+  return {
+    ...actual,
+    generateMutants: (
+      file: Parameters<typeof actual.generateMutants>[0],
+      current: string,
+      budget: number,
+    ) => {
+      if (mutantPlanner.throwsFor.has(file.path)) {
+        throw new Error(`planner exploded on ${file.path}`);
+      }
+      return actual.generateMutants(file, current, budget);
+    },
+  };
+});
 
 // ── Fake workspace ─────────────────────────────────────────────────────────────
 
@@ -126,7 +148,11 @@ describe("runMutationGate — layer 1", () => {
 
     expect(result.status).toBe("witnessed");
     expect(result.runs).toEqual([
-      { command: WITNESS, exitCode: 1, timedOut: false },
+      expect.objectContaining({
+        command: WITNESS,
+        exitCode: 1,
+        timedOut: false,
+      }),
     ]);
     expect(result.revertedFiles).toEqual(["src/calc.ts"]);
     expect(result.testFiles).toEqual(["src/calc.test.ts"]);
@@ -150,16 +176,95 @@ describe("runMutationGate — layer 1", () => {
     expect(ws.files.get("src/calc.ts")).toBe(FIXED);
   });
 
-  it("counts a timed-out witness run as a failure (witnessed)", async () => {
+  // Inverted from what it was. This used to require a timed-out run to read as
+  // "witnessed" — the defect in #1359. A timeout says the command did not
+  // finish inside the cap, which happens on a loaded box, on a suite slower
+  // than the cap, or on a loop the revert itself introduced; none of those is
+  // evidence that the tests constrain the fix. `skipped` with a reason is the
+  // answer the gate already gives every other "could not determine".
+  it("does not count a timed-out witness run as a proof (#1359)", async () => {
     const ws = workspace();
     ws.onExec = (cmd) => (cmd === WITNESS ? ok(0, true) : ok(0));
     const result = await runMutationGate(ws, DIFF, evidence());
-    expect(result.status).toBe("witnessed");
-    expect(result.runs[0]).toEqual({
-      command: WITNESS,
-      exitCode: null,
-      timedOut: true,
+    expect(result.status).toBe("skipped");
+    expect(result.reason).toContain("did not finish");
+    expect(result.runs[0]).toEqual(
+      expect.objectContaining({
+        command: WITNESS,
+        exitCode: null,
+        timedOut: true,
+      }),
+    );
+  });
+
+  // The shape this is about is the most common shape of a real fix: add a
+  // module, add a test that imports it. The revert deletes the module, the
+  // suite dies at collection, and every runner reports that as an ordinary
+  // non-zero exit (#1362).
+  it("does not count an import failure as a proof (#1362)", async () => {
+    const ws = workspace();
+    ws.onExec = (cmd) =>
+      cmd === WITNESS
+        ? {
+            exitCode: 2,
+            stdout: "",
+            stderr: "ModuleNotFoundError: No module named 'src.calc'",
+            timedOut: false,
+          }
+        : ok(0);
+    const result = await runMutationGate(ws, DIFF, evidence());
+    expect(result.status).toBe("skipped");
+    expect(result.reason).toContain("before running any test");
+    // #1362 asks the reason to name what was missing, not just that something
+    // was: the runner already printed it, so it is quoted rather than summarised.
+    expect(result.reason).toContain(
+      "ModuleNotFoundError: No module named 'src.calc'",
+    );
+  });
+
+  // The test above stages the collection error: its diff MODIFIES `src/calc.ts`
+  // rather than creating it, so the gate reverts content and never takes the
+  // `original === null → rm` path, and the `ModuleNotFoundError` comes from a
+  // hand-written stderr. Both halves of #1362's repro belong in one test — the
+  // module is genuinely deleted, and the failure is a consequence of that.
+  it("does not count an import failure the revert actually caused (#1362)", async () => {
+    const createdDiff = [
+      "diff --git a/src/helper.ts b/src/helper.ts",
+      "new file mode 100644",
+      "--- /dev/null",
+      "+++ b/src/helper.ts",
+      "@@ -0,0 +1 @@",
+      "+export const h = 1;",
+      "diff --git a/src/helper.test.ts b/src/helper.test.ts",
+      "new file mode 100644",
+      "--- /dev/null",
+      "+++ b/src/helper.test.ts",
+      "@@ -0,0 +1 @@",
+      "+import { h } from './helper';",
+    ].join("\n");
+    const ws = new FakeWorkspace({
+      "src/helper.ts": "export const h = 1;\n",
+      "src/helper.test.ts": "import { h } from './helper';\n",
     });
+    // The suite dies at collection exactly when the module is not on disk,
+    // which is the state the revert puts the tree in.
+    ws.onExec = (cmd) =>
+      cmd === WITNESS && !ws.files.has("src/helper.ts")
+        ? {
+            exitCode: 1,
+            stdout: "",
+            stderr: "Error: Cannot find module './helper'",
+            timedOut: false,
+          }
+        : ok(0);
+
+    const result = await runMutationGate(ws, createdDiff, evidence());
+
+    // The delete path ran, so the failure below is the revert's doing.
+    expect(ws.execLog).toContain("rm -- 'src/helper.ts'");
+    expect(result.status).toBe("skipped");
+    expect(result.reason).toContain("before running any test");
+    expect(ws.files.get("src/helper.ts")).toBe("export const h = 1;\n");
   });
 
   it("reverts and restores a fix spanning MULTIPLE source files", async () => {
@@ -476,5 +581,343 @@ describe("runMutationGate — layer 2 (score)", () => {
     const result = await runMutationGate(ws, DIFF, evidence(), { score: true });
     expect(result.status).toBe("vacuous");
     expect(result.score).toBeUndefined();
+  });
+});
+
+// ── Layer 2: a score that did not happen, and a restore that failed ───────────
+
+/**
+ * A patch whose only changed line carries no mutable token, so
+ * `generateMutants` returns nothing and the scoring pass measures zero mutants.
+ */
+const NO_MUTANT_DIFF = [
+  "diff --git a/src/note.ts b/src/note.ts",
+  "--- a/src/note.ts",
+  "+++ b/src/note.ts",
+  "@@ -1 +1 @@",
+  "-export const note = 'a';",
+  "+export const note = 'b';",
+  "diff --git a/src/note.test.ts b/src/note.test.ts",
+  "new file mode 100644",
+  "--- /dev/null",
+  "+++ b/src/note.test.ts",
+  "@@ -0,0 +1,2 @@",
+  "+import { note } from './note';",
+  "+test('note', () => {});",
+].join("\n");
+
+/** A patch whose added line carries `>=`, so exactly one mutant is generated. */
+const MUTABLE_FIXED = "export const ok = (n: number) => n >= 0;\n";
+const MUTABLE_ORIGINAL = "export const ok = (n: number) => n > 0;\n";
+const MUTABLE_DIFF = [
+  "diff --git a/src/ok.ts b/src/ok.ts",
+  "--- a/src/ok.ts",
+  "+++ b/src/ok.ts",
+  "@@ -1 +1 @@",
+  "-export const ok = (n: number) => n > 0;",
+  "+export const ok = (n: number) => n >= 0;",
+  "diff --git a/src/ok.test.ts b/src/ok.test.ts",
+  "new file mode 100644",
+  "--- /dev/null",
+  "+++ b/src/ok.test.ts",
+  "@@ -0,0 +1,2 @@",
+  "+import { ok } from './ok';",
+  "+test('ok', () => {});",
+].join("\n");
+const MUTABLE_WITNESS = "pnpm vitest run src/ok.test.ts";
+
+function mutableWorkspace(): FakeWorkspace {
+  const ws = new FakeWorkspace({
+    "src/ok.ts": MUTABLE_FIXED,
+    "src/ok.test.ts": "import { ok } from './ok';\ntest('ok', () => {});\n",
+  });
+  // Fails against anything that is not the fixed content: the reverted file
+  // during layer 1, and a mutant during layer 2.
+  ws.onExec = (cmd) =>
+    cmd === MUTABLE_WITNESS
+      ? ws.files.get("src/ok.ts") === MUTABLE_FIXED
+        ? ok(0)
+        : ok(1)
+      : ok(0);
+  return ws;
+}
+
+function mutableEvidence(): TestEvidence {
+  return {
+    lastOutcomes: new Map([[MUTABLE_WITNESS, 0]]),
+    flippedBy: MUTABLE_WITNESS,
+  };
+}
+
+/**
+ * Two mutable added lines, so scoring generates two mutants and a signal that
+ * fires during the first one leaves a pass that ran real mutants and stopped.
+ * One mutant cannot express that: the loop exits before it re-checks the
+ * signal, so `aborted` never gets set.
+ */
+const TWO_MUTANT_FIXED =
+  "export const ok = (n: number) => n >= 0;\nexport const hi = (n: number) => n >= 1;\n";
+const TWO_MUTANT_DIFF = [
+  "diff --git a/src/ok.ts b/src/ok.ts",
+  "--- a/src/ok.ts",
+  "+++ b/src/ok.ts",
+  "@@ -1,2 +1,2 @@",
+  "-export const ok = (n: number) => n > 0;",
+  "-export const hi = (n: number) => n > 1;",
+  "+export const ok = (n: number) => n >= 0;",
+  "+export const hi = (n: number) => n >= 1;",
+  "diff --git a/src/ok.test.ts b/src/ok.test.ts",
+  "new file mode 100644",
+  "--- /dev/null",
+  "+++ b/src/ok.test.ts",
+  "@@ -0,0 +1,2 @@",
+  "+import { ok } from './ok';",
+  "+test('ok', () => {});",
+].join("\n");
+const TWO_MUTANT_WITNESS = "pnpm vitest run src/ok.test.ts";
+
+function twoMutantWorkspace(): FakeWorkspace {
+  return new FakeWorkspace({
+    "src/ok.ts": TWO_MUTANT_FIXED,
+    "src/ok.test.ts": "import { ok } from './ok';\ntest('ok', () => {});\n",
+  });
+}
+
+describe("a mutation score that measured nothing (#1351)", () => {
+  it("does not report a perfect kill rate for zero mutants", async () => {
+    const ws = new FakeWorkspace({
+      "src/note.ts": "export const note = 'b';\n",
+      "src/note.test.ts":
+        "import { note } from './note';\ntest('note', () => {});\n",
+    });
+    const witness = "pnpm vitest run src/note.test.ts";
+    ws.onExec = (cmd) =>
+      cmd === witness
+        ? ws.files.get("src/note.ts") === "export const note = 'a';\n"
+          ? ok(1)
+          : ok(0)
+        : ok(0);
+
+    const result = await runMutationGate(
+      ws,
+      NO_MUTANT_DIFF,
+      { lastOutcomes: new Map([[witness, 0]]), flippedBy: witness },
+      { score: true },
+    );
+
+    expect(result.status).toBe("witnessed");
+    expect(result.score?.mutantsTried).toBe(0);
+    // The old code returned 1 here — the best possible score, for a
+    // measurement that did not run.
+    expect(result.score?.killRate).toBeNull();
+    expect(result.score?.state).toBe("not-applicable");
+  });
+
+  it("measures a real rate when mutants do run, so the null above is not vacuous", async () => {
+    const ws = mutableWorkspace();
+    const result = await runMutationGate(ws, MUTABLE_DIFF, mutableEvidence(), {
+      score: true,
+    });
+
+    expect(result.status).toBe("witnessed");
+    expect(result.score?.state).toBe("measured");
+    expect(result.score?.mutantsTried).toBeGreaterThan(0);
+    expect(result.score?.killRate).toBe(1);
+  });
+
+  // #1351's third DoD item: "An aborted scoring pass is distinguishable from
+  // one that completed — those are different facts and today both produce the
+  // same object." Zero-mutant abort was already covered; this is the case the
+  // first cut of the fix still got wrong, because `tried > 0` outranked
+  // `aborted` in the state selection. One mutant runs, the signal fires, and
+  // the interrupted pass reported `measured` with killRate 1 — a 100% score
+  // out of a measurement that stopped, which is the very shape #1351 exists
+  // to stop.
+  it("does not report an interrupted pass as a completed measurement", async () => {
+    const ws = twoMutantWorkspace();
+    const controller = new AbortController();
+    let witnessRuns = 0;
+    ws.onExec = (cmd) => {
+      if (cmd !== TWO_MUTANT_WITNESS) return ok(0);
+      witnessRuns++;
+      // Run 1 is layer 1's re-run against the reverted file. Run 2 is the
+      // first mutant — abort there, so the pass stops with real work done.
+      if (witnessRuns === 2) controller.abort();
+      return ws.files.get("src/ok.ts") === TWO_MUTANT_FIXED ? ok(0) : ok(1);
+    };
+
+    const result = await runMutationGate(
+      ws,
+      TWO_MUTANT_DIFF,
+      {
+        lastOutcomes: new Map([[TWO_MUTANT_WITNESS, 0]]),
+        flippedBy: TWO_MUTANT_WITNESS,
+      },
+      { score: true, signal: controller.signal },
+    );
+
+    expect(result.status).toBe("witnessed");
+    expect(result.score?.mutantsTried).toBe(1);
+    expect(result.score?.state).toBe("aborted");
+    expect(result.score?.killRate).toBeNull();
+    // The partial work is still named — as a count of what ran, never a rate.
+    expect(describeMutationScore(result.score!)).not.toMatch(/\d+%/);
+    expect(describeMutationScore(result.score!)).toContain("1/1 mutants ran");
+  });
+
+  it("does not render a percentage for an unmeasured score", async () => {
+    const ws = new FakeWorkspace({
+      "src/note.ts": "export const note = 'b';\n",
+      "src/note.test.ts":
+        "import { note } from './note';\ntest('note', () => {});\n",
+    });
+    const witness = "pnpm vitest run src/note.test.ts";
+    ws.onExec = (cmd) =>
+      cmd === witness
+        ? ws.files.get("src/note.ts") === "export const note = 'a';\n"
+          ? ok(1)
+          : ok(0)
+        : ok(0);
+    const result = await runMutationGate(
+      ws,
+      NO_MUTANT_DIFF,
+      { lastOutcomes: new Map([[witness, 0]]), flippedBy: witness },
+      { score: true },
+    );
+    expect(describeMutationScore(result.score!)).not.toMatch(/\d+%/);
+  });
+});
+
+describe("a mutant restore that failed (#1352)", () => {
+  it("degrades the score instead of rejecting the gate, and names the file", async () => {
+    const ws = mutableWorkspace();
+
+    // The gate writes this path four times: revert to pre-fix, restore the
+    // fix, write the mutant, restore the fix again. The fourth is the one that
+    // used to throw straight out of `runMutationGate`, past the try/finally
+    // protecting everything else, leaving the mutant on disk.
+    //
+    // Injecting by position rather than by content on purpose: mutating `>=`
+    // to `>` reproduces the pre-fix line exactly, so a content check cannot
+    // tell the mutant from the revert.
+    const realWriteFile = ws.writeFile.bind(ws);
+    let writesToFixedFile = 0;
+    ws.writeFile = async (path: string, content: string): Promise<void> => {
+      if (path === "src/ok.ts") {
+        writesToFixedFile++;
+        if (writesToFixedFile >= 4) throw new Error("EACCES: src/ok.ts");
+      }
+      return realWriteFile(path, content);
+    };
+
+    // The gate's own contract: infrastructure trouble never rejects.
+    const result = await runMutationGate(ws, MUTABLE_DIFF, mutableEvidence(), {
+      score: true,
+    });
+
+    expect(result.status).toBe("witnessed");
+    expect(result.reason).toContain("MUTANT");
+    expect(result.reason).toContain("src/ok.ts");
+    expect(result.score?.restoreFailures?.length).toBeGreaterThan(0);
+  });
+});
+
+describe("a scoring pass that threw (#1352)", () => {
+  const TWO_FILE_FIXED_A = "export const ok = (n: number) => n >= 0;\n";
+  const TWO_FILE_FIXED_B = "export const hi = (n: number) => n >= 1;\n";
+  const TWO_FILE_DIFF = [
+    "diff --git a/src/ok.ts b/src/ok.ts",
+    "--- a/src/ok.ts",
+    "+++ b/src/ok.ts",
+    "@@ -1 +1 @@",
+    "-export const ok = (n: number) => n > 0;",
+    "+export const ok = (n: number) => n >= 0;",
+    "diff --git a/src/hi.ts b/src/hi.ts",
+    "--- a/src/hi.ts",
+    "+++ b/src/hi.ts",
+    "@@ -1 +1 @@",
+    "-export const hi = (n: number) => n > 1;",
+    "+export const hi = (n: number) => n >= 1;",
+    "diff --git a/src/ok.test.ts b/src/ok.test.ts",
+    "new file mode 100644",
+    "--- /dev/null",
+    "+++ b/src/ok.test.ts",
+    "@@ -0,0 +1,2 @@",
+    "+import { ok } from './ok';",
+    "+test('ok', () => {});",
+  ].join("\n");
+
+  function twoFileWorkspace(): FakeWorkspace {
+    const ws = new FakeWorkspace({
+      "src/ok.ts": TWO_FILE_FIXED_A,
+      "src/hi.ts": TWO_FILE_FIXED_B,
+      "src/ok.test.ts": "import { ok } from './ok';\ntest('ok', () => {});\n",
+    });
+    ws.onExec = (cmd) =>
+      cmd === MUTABLE_WITNESS
+        ? ws.files.get("src/ok.ts") === TWO_FILE_FIXED_A &&
+          ws.files.get("src/hi.ts") === TWO_FILE_FIXED_B
+          ? ok(0)
+          : ok(1)
+        : ok(0);
+    return ws;
+  }
+
+  afterEach(() => {
+    mutantPlanner.throwsFor.clear();
+  });
+
+  // The catch used to write `restoreFailures = ["scoring failed: Error: …"]`,
+  // and that list is rendered to the user as a list of FILE PATHS — so the
+  // sentence read "could not restore scoring failed: Error: … — these files
+  // still contain a MUTANT", asserting a deliberately broken line was sitting
+  // in the tree in the one case where the gate cannot know whether it is.
+  it("does not claim a file holds a mutant when nothing failed to restore", async () => {
+    const ws = mutableWorkspace();
+    mutantPlanner.throwsFor.add("src/ok.ts");
+
+    const result = await runMutationGate(ws, MUTABLE_DIFF, mutableEvidence(), {
+      score: true,
+    });
+
+    expect(result.status).toBe("witnessed");
+    expect(result.reason).not.toContain("MUTANT");
+    expect(result.reason).toContain("Mutation scoring did not complete");
+    expect(result.score?.state).toBe("workspace-error");
+    expect(result.score?.restoreFailures).toBeUndefined();
+    expect(result.score?.scoringError).toContain("planner exploded");
+    // Fail-open all the way: the fix is back on disk either way.
+    expect(ws.files.get("src/ok.ts")).toBe(MUTABLE_FIXED);
+  });
+
+  // The other half: a throw used to discard whatever `restoreFailures` the
+  // pass had already collected, so a mutant genuinely left on disk by an
+  // earlier file was replaced by the fabricated entry above.
+  it("keeps a real restore failure collected before the throw", async () => {
+    const ws = twoFileWorkspace();
+    // The mutant write-back for src/ok.ts fails, leaving a mutant on disk…
+    const realWriteFile = ws.writeFile.bind(ws);
+    let writesToOk = 0;
+    ws.writeFile = async (path: string, content: string): Promise<void> => {
+      if (path === "src/ok.ts") {
+        writesToOk++;
+        if (writesToOk >= 4) throw new Error("EACCES: src/ok.ts");
+      }
+      return realWriteFile(path, content);
+    };
+    // …and the pass then throws while planning the next file's mutants.
+    mutantPlanner.throwsFor.add("src/hi.ts");
+
+    const result = await runMutationGate(ws, TWO_FILE_DIFF, mutableEvidence(), {
+      score: true,
+    });
+
+    expect(result.status).toBe("witnessed");
+    expect(result.score?.state).toBe("workspace-error");
+    expect(result.score?.restoreFailures?.join(" ")).toContain("src/ok.ts");
+    // Both facts are reported, and each says only what it establishes.
+    expect(result.reason).toContain("MUTANT");
+    expect(result.reason).toContain("src/ok.ts");
+    expect(result.reason).toContain("Mutation scoring did not complete");
   });
 });
