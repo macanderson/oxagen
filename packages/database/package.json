@@ -31,6 +31,7 @@
   "dependencies": {
     "@oxagen/compliance": "workspace:*",
     "@oxagen/config": "workspace:*",
+    "@oxagen/crypto": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",

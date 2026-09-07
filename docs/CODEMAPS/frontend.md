@@ -77,9 +77,9 @@ apps/app/src/app/[orgSlug]/[workspaceSlug]/layout.tsx → workspace shell
 
   /workbench                             → redirects to /workbench/agents
     /agents                              → WorkbenchAgentsPage + AgentBuilder (new/[agentId])
-    /tools                               → Agent Tools hub (All Tools / Skills / MCP Servers / Capabilities)
+    /tools                               → Agent Tools hub (All Tools / MCP Servers / Capabilities)
     /environments                        → WorkbenchEnvironmentsPage (EnvironmentsPanel)
-    /sandboxes                           → WorkbenchSandboxesPage (sessions + SandboxTemplatesPanel)
+    (ADR-041 removed /workbench/sandboxes — no sandbox sessions or templates to manage)
 
   /marketplace                           → MarketplacePage
     /browse                              → BrowseMarketplacePage (plugin/skill catalog)
@@ -88,9 +88,7 @@ apps/app/src/app/[orgSlug]/[workspaceSlug]/layout.tsx → workspace shell
     /integrations                        → MarketplaceIntegrationsPage
     /agent-tools                         → MarketplaceAgentToolsPage
 
-  /evals                                 → EvalsPage (datasets + runs, LLM-as-judge)
-    /runs                                → EvalRunsListPage
-    /runs/[runId]                        → EvalRunDetailPage
+  (ADR-041 removed /evals — no standalone eval platform)
 
   /knowledge
     /                                    → KnowledgePage
@@ -110,7 +108,7 @@ apps/app/src/app/[orgSlug]/[workspaceSlug]/layout.tsx → workspace shell
     /models                              → ModelsForm
     /prompts                             → PromptSettingsForm
     /members                             → MembersPage
-    (/environments, /plugins, /skills    → redirects into Workbench)
+    (/environments, /plugins             → redirects into Workbench)
 ```
 
 ### Component Hierarchy

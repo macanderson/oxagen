@@ -179,6 +179,13 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Slug-rename audit. org_id NOT NULL, no workspace_id → org_only.
   // Resolver reads via withSystemDb (bypass); writes happen inside tenant scope.
   { table: "org.org_slug_history", policyClass: "org_only" },
+  // ADR-042 organisation-scoped data-plane bindings. org_id NOT NULL, no
+  // workspace_id → org_only, the same class the other platform-level
+  // org-scoped settings tables use (billing.org_billing_settings,
+  // security.org_security_policy). Every access is withSystemDb (the resolver
+  // runs before a tenant scope exists, and the row is platform state that must
+  // stay on the shared plane), so the policy is the backstop, not the filter.
+  { table: "org.data_planes", policyClass: "org_only" },
 
   // ── plugin.* (workspace-scoped) ────────────────────────────────────────────
   { table: "plugin.installed_plugins", policyClass: "standard" },

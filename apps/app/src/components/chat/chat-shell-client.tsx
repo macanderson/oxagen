@@ -7,17 +7,13 @@ import { cn } from "@/lib/utils";
 import { MessageTree } from "./message-tree";
 import { MessageComposer, type ComposerAction } from "./message-composer";
 import type { ChatMessage, MessageBubbleCallbacks } from "./message-bubble";
-import { PlanCard } from "./plan-card";
 import { ApprovalCard } from "./approval-card";
 import { ConsentCard } from "./consent-card";
 import {
   ToolActivityGroup,
   type ToolActivityItem,
 } from "./tool-activity-group";
-import { CodeExecuteCard } from "./code-execute-card";
 import { MemoryCard } from "./memory-card";
-import { BackgroundTaskCard } from "./background-task-card";
-import { SubagentFanout } from "./subagent-fanout";
 import {
   CHAT_COMPONENTS,
   logUnknownComponent,
@@ -35,10 +31,7 @@ import type {
   WorkspaceBudgetGovernance,
 } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
-import type { RepoOption } from "./repo-selector";
-import type { EnvironmentOption } from "./environment-selector";
 import type { AgentOption } from "./agent-picker/agent-picker-types";
-import type { StoredCodeBinding } from "@/app/api/v1/chat/stream/code-binding";
 import { ChatSelectionProvider } from "./agent-picker/chat-selection-context";
 import { ChatSessionProvider } from "./session/session-store";
 import type { SessionSeed } from "./session/session-state";
@@ -53,19 +46,11 @@ import { SessionSettings } from "./session/session-settings";
 import { useSessionSettingsData } from "./session/use-session-settings-data";
 import { useIsMobile, useMediaQuery } from "@/hooks/use-media-query";
 import { NotificationsBell } from "@/components/shell/notifications-bell";
-import {
-  resolveDefaultRepoKey,
-  resolveDefaultEnvId,
-} from "./agent-picker/code-session-defaults";
 import { resolveOptimisticDefaultAgent } from "./agent-picker/default-agent-optimistic";
-import { deriveComposerPr } from "./composer-pr-status-chip";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
 import type { ConversationMessageSummary } from "@/lib/page-context/suggested-prompts";
 import { ConversationExportMenu } from "./conversation-export-menu";
-import { AgentActivityRail } from "./agent-activity-rail";
 import { useLatestRef } from "@/lib/use-latest-ref";
-import type { FieldDescriptor } from "@/lib/ask/fill-types";
-import { interceptFormFillEvents } from "./intercept-form-fill";
 import { ThinkingBubble } from "./thinking-bubble";
 import { MessageFooter } from "./message-footer";
 import { useToast } from "@/components/ui/toast";
@@ -143,27 +128,20 @@ export async function readErrorMessage(res: Response): Promise<string | null> {
 export interface ChatPageContext {
   route: string;
   entitySummary?: string;
-  fillableForm?: {
-    formId: string;
-    title: string;
-    fields: FieldDescriptor[];
-  };
 }
 
 // Client surface for the chat. The RSC `ChatShell` resolves the messages
 // promise and hands them in; this component:
-//  - threads the approval/plan resolvers down to the bubbles,
+//  - threads the approval/consent resolvers down to the bubbles,
 //  - blocks the composer while any approval-request block is still
 //    awaiting a decision (spec §7 — "disabled while an approval is
 //    pending"),
 //  - calls POST /api/v1/chat/stream when a message is submitted, consumes
 //    the SSE response via `useToolStream`, and renders live stream events
-//    (plans, approvals, tool calls, code executes, memory recalls, memory
-//    writes, fanouts) inline before the RSC revalidate completes,
+//    (approvals, consents, tool calls, memory recalls, memory writes) inline
+//    before the RSC revalidate completes,
 //  - pauses the consume loop at `approval-required` events until the user
-//    resolves the approval, ensuring intermediate states are observable,
-//  - exposes a hook point for child-branch navigation that the subagent
-//    fanout cards delegate to.
+//    resolves the approval, ensuring intermediate states are observable.
 export function ChatShellClient({
   conversationId,
   conversationPublicId,
@@ -172,8 +150,6 @@ export function ChatShellClient({
   sendAction,
   resolveApprovalAction,
   resolveConsentAction,
-  resolvePlanAction,
-  agentCapabilities,
   orgSlug,
   workspaceSlug,
   modelConfig,
@@ -181,20 +157,12 @@ export function ChatShellClient({
   pendingPromptBehavior = "queue",
   initialModelState,
   availableMcpServers,
-  availableRepos,
-  availableEnvironments,
   availableAgents,
   defaultAgentId,
-  defaultRepoConnectionId,
-  defaultRepoSlug,
-  defaultEnvironmentId,
   setDefaultAgentAction,
   workspaceBudgetGovernance,
   agentId,
-  conversationCodeBinding,
   pageContext,
-  onFormFillStart,
-  onFormFillEnd,
   onConversationCreated,
   reloadMessages,
   showFiles = true,
@@ -210,8 +178,6 @@ export function ChatShellClient({
   sendAction: ComposerAction;
   resolveApprovalAction: ChatShellProps["resolveApprovalAction"];
   resolveConsentAction: ChatShellProps["resolveConsentAction"];
-  resolvePlanAction: ChatShellProps["resolvePlanAction"];
-  agentCapabilities?: ChatShellProps["agentCapabilities"];
   orgSlug: string;
   workspaceSlug: string;
   modelConfig: ResolvedTierCatalog;
@@ -223,20 +189,10 @@ export function ChatShellClient({
   initialModelState?: ComposerModelState;
   /** Available MCP servers for the per-turn activation picker. */
   availableMcpServers?: McpServerSummary[];
-  /** GitHub repos usable as the code-mode target (see _shared/code-mode-data.ts). */
-  availableRepos?: RepoOption[];
-  /** Workspace environments usable as the code-mode target. */
-  availableEnvironments?: EnvironmentOption[];
   /** Selectable agents for the composer's agent picker. */
   availableAgents?: AgentOption[];
   /** The workspace user's default agent preference (agt_… public id), or null. */
   defaultAgentId?: string | null;
-  /** Workspace user's default repo connection (con_…) for code-session prefill. */
-  defaultRepoConnectionId?: string | null;
-  /** Workspace user's default owner/repo slug for code-session prefill. */
-  defaultRepoSlug?: string | null;
-  /** Workspace user's default environment id for code-session prefill. */
-  defaultEnvironmentId?: string | null;
   /** Persists the workspace default agent when the picker's star is toggled. */
   setDefaultAgentAction?: (
     agentId: string | null,
@@ -249,28 +205,11 @@ export function ChatShellClient({
    * then carries it in each stream request as `agentId`. Null ⇒ unbound. */
   agentId?: string | null;
   /**
-   * The conversation's stored code binding (claimed on its first code turn).
-   * When present the selection is forced to it and locked read-only — the
-   * composer keeps sending the same bound `code` payload. Null ⇒ unbound. */
-  conversationCodeBinding?: StoredCodeBinding | null;
-  /**
-   * Page context forwarded from the current page. When a fillable form is
-   * registered (e.g. in AskDrawer/WandPanel wrappers), this is passed to the
-   * /api/v1/chat/stream body so the server can inject the `page_form_fill` tool.
+   * Page context forwarded from the current page — the route and a short
+   * entity summary — so the governed turn can ground its answer in what the
+   * user is looking at.
    */
   pageContext?: ChatPageContext | null;
-  /**
-   * Called when the agent starts invoking `page_form_fill` (tool-call-start).
-   * Use this to set isFilling=true in PageContext.
-   */
-  onFormFillStart?: () => void;
-  /**
-   * Called when `page_form_fill` completes (tool-call-end) with the fill result.
-   * Use this to set fillResult in PageContext.
-   */
-  onFormFillEnd?: (
-    result: import("@/lib/ask/fill-types").FormFillResult,
-  ) => void;
   /**
    * Embedded mode (e.g. the floating in-app agent panel): the embedder owns the
    * conversation state instead of the RSC. When provided, ChatShellClient calls
@@ -305,7 +244,6 @@ export function ChatShellClient({
   userFirstName?: string | null;
 }) {
   const {
-    plans,
     pendingApprovals,
     pendingConsents,
     toolCalls,
@@ -314,9 +252,7 @@ export function ChatShellClient({
     textSegments,
     memoryRecalls,
     memoryWrites,
-    activeFanouts,
     components: liveComponents,
-    backgroundTasks,
     order,
     turnUsage,
     turnError,
@@ -776,32 +712,17 @@ export function ChatShellClient({
                   return [];
                 }
               })(),
-              // Forward page context so the route can inject the page_form_fill tool.
+              // Forward page context so the governed turn can ground its
+              // answer in the surface the user is looking at.
               pageContext: pageContextRef.current ?? null,
-              // Code-mode sandbox target (OXA app-code-mode). The composer only
-              // sets this formData field when Code mode is ON and both a repo
-              // and environment are selected (see message-composer.tsx's send
-              // gate) — otherwise this is `null`, matching the stream route's
-              // BodySchema `code: {...} | null`.
-              code: (() => {
-                const raw = formData.get("code") as string | null;
-                if (!raw) return null;
-                try {
-                  return JSON.parse(raw) as unknown;
-                } catch {
-                  return null;
-                }
-              })(),
               // Selected agent (OXA app-agent-selector). The composer sets this
               // to the chosen agent's publicId, or omits it for the default
               // (generic chat) agent — matching the stream route's BodySchema
-              // `agentId: string | null`. A code agent (agentType==="code")
-              // drives the server's code-mode branch (sandbox + code tools).
+              // `agentId: string | null`.
               agentId: (formData.get("agentId") as string) || null,
-              // Pinned chat context (org/repo + environment). The composer only
-              // sets this formData field when the user pinned a target AND is
-              // not in code mode — otherwise null, matching the stream route's
-              // BodySchema `pinnedContext: {...} | null`.
+              // Pinned chat context. The composer only sets this formData
+              // field when the user pinned a target — otherwise null, matching
+              // the stream route's BodySchema `pinnedContext: {...} | null`.
               pinnedContext: (() => {
                 const raw = formData.get("pinnedContext") as string | null;
                 if (!raw) return null;
@@ -838,16 +759,7 @@ export function ChatShellClient({
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
 
-          // Wrap the SSE event stream to intercept page_form_fill tool events
-          // before they reach the reducer. On tool-call-start we signal that a
-          // fill is in progress; on tool-call-end we surface the fill result.
-          const rawStream = sseToEvents(reader, decoder, signal);
-          const fillAwareStream = interceptFormFillEvents(
-            rawStream,
-            onFormFillStartRef.current,
-            onFormFillEndRef.current,
-          );
-          await consumeRef.current(fillAwareStream);
+          await consumeRef.current(sseToEvents(reader, decoder, signal));
 
           // Turn finished cleanly: pull the now-persisted user + assistant turn
           // into the `messages` prop. The [messages] effect above then clears the
@@ -1040,20 +952,8 @@ export function ChatShellClient({
     () => ({
       onResolveApproval: wrappedResolveApproval,
       onResolveConsent: wrappedResolveConsent,
-      onResolvePlan: resolvePlanAction,
-      agentCapabilities,
-      onNavigateToChild: (childMessageId: string) => {
-        if (typeof window !== "undefined") {
-          window.location.hash = `m-${childMessageId}`;
-        }
-      },
     }),
-    [
-      wrappedResolveApproval,
-      wrappedResolveConsent,
-      resolvePlanAction,
-      agentCapabilities,
-    ],
+    [wrappedResolveApproval, wrappedResolveConsent],
   );
 
   // The live turn renders as a single ORDERED timeline (the chain of
@@ -1099,47 +999,6 @@ export function ChatShellClient({
           active: s.status === "running",
         };
       }
-      case "tool": {
-        const tc = toolCalls[id];
-        if (!tc) return null;
-        // Only code-execute renders individually here; every other tool call is
-        // merged into a ToolActivityGroup by the timeline builder below.
-        if (tc.capability !== "execute_code") return null;
-        const tone: TimelineTone =
-          tc.status === "completed"
-            ? "done"
-            : tc.status === "failed"
-              ? "failed"
-              : "running";
-        const active = tc.status === "pending" || tc.status === "running";
-        const preview =
-          (tc.inputPreview as Record<string, unknown> | null) ?? {};
-        const language =
-          typeof preview.language === "string" ? preview.language : "node";
-        const code = typeof preview.code === "string" ? preview.code : "";
-        const outputRecord =
-          (tc.output as Record<string, unknown> | null) ?? {};
-        const exitCode =
-          typeof outputRecord.exitCode === "number"
-            ? outputRecord.exitCode
-            : undefined;
-        return {
-          node: (
-            <CodeExecuteCard
-              toolCallId={tc.toolCallId}
-              language={language}
-              code={code}
-              status={tc.status}
-              stdout={tc.stdout}
-              stderr={tc.stderr}
-              exitCode={exitCode}
-              durationMs={tc.durationMs}
-            />
-          ),
-          tone,
-          active,
-        };
-      }
       case "text": {
         const seg = textSegments[key];
         if (!seg || !seg.text) return null;
@@ -1153,25 +1012,6 @@ export function ChatShellClient({
           ),
           tone: "idle",
           active: false,
-        };
-      }
-      case "plan": {
-        const plan = plans[id];
-        if (!plan) return null;
-        return {
-          node: (
-            <PlanCard
-              planId={plan.planId}
-              title={plan.title}
-              steps={plan.steps}
-              rationale={plan.rationale}
-              status={plan.status}
-              agentCapabilities={agentCapabilities}
-              onResolve={resolvePlanAction}
-            />
-          ),
-          tone: plan.status === "pending" ? "running" : "done",
-          active: plan.status === "pending",
         };
       }
       case "approval": {
@@ -1248,29 +1088,6 @@ export function ChatShellClient({
           active: false,
         };
       }
-      case "fanout": {
-        const f = activeFanouts[id];
-        if (!f) return null;
-        return {
-          node: (
-            <SubagentFanout
-              fanoutId={f.fanoutId}
-              parentMessageId={f.parentMessageId}
-              subagents={f.children}
-              status={f.status}
-              results={f.results}
-              onSelectChild={callbacks.onNavigateToChild}
-            />
-          ),
-          tone:
-            f.status === "completed"
-              ? "done"
-              : f.status === "running"
-                ? "running"
-                : "failed",
-          active: f.status === "running",
-        };
-      }
       case "component": {
         const lc = liveComponents[id];
         if (!lc) return null;
@@ -1295,47 +1112,17 @@ export function ChatShellClient({
           active: false,
         };
       }
-      case "bgtask": {
-        const t = backgroundTasks[id];
-        if (!t) return null;
-        const tone: TimelineTone =
-          t.status === "completed"
-            ? "done"
-            : t.status === "failed"
-              ? "failed"
-              : t.status === "cancelled"
-                ? "idle"
-                : "running";
-        const active = t.status === "pending" || t.status === "running";
-        return {
-          node: (
-            <BackgroundTaskCard
-              taskId={t.taskId}
-              kind={t.kind}
-              label={t.label}
-              status={t.status}
-              inngestRunId={t.inngestRunId}
-              progressPct={t.progressPct}
-            />
-          ),
-          tone,
-          active,
-        };
-      }
       default:
         return null;
     }
   };
 
-  // A groupable tool entry: a `tool:*` order key whose live tool call exists
-  // and is NOT code-execute (that keeps its rich CodeExecuteCard). Returns the
-  // live tool call, or null when the entry breaks a run.
+  // A groupable tool entry: a `tool:*` order key whose live tool call exists.
+  // Returns the live tool call, or null when the entry breaks a run.
   const groupableToolCall = (key: string) => {
     const sep = key.indexOf(":");
     if (key.slice(0, sep) !== "tool") return null;
-    const tc = toolCalls[key.slice(sep + 1)];
-    if (!tc || tc.capability === "execute_code") return null;
-    return tc;
+    return toolCalls[key.slice(sep + 1)] ?? null;
   };
 
   // Walk the ordered timeline, merging consecutive groupable tool calls into a

@@ -2491,7 +2491,7 @@
       "writes": []
     }
   ],
-  "contentHash": "25c017de2cd62835cf5889054f937a14de634cdf433cfff2dd74bb8c13200a47",
+  "contentHash": "c309f26e1a192d31b440ce34bec8a2931ae96d1a7e020252b8f06cb2778687fd",
   "domains": [
     {
       "name": "agent",
@@ -2737,6 +2737,7 @@
       ],
       "tables": [
         "neo4j:Tenant",
+        "postgres:org.data_planes",
         "postgres:org.invitations",
         "postgres:org.org_slug_history",
         "postgres:org.org_users",
@@ -2861,7 +2862,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 107
+      "tableCount": 108
     },
     {
       "domains": [
@@ -13146,6 +13147,125 @@
       "id": "postgres:notification.notifications",
       "name": "notifications",
       "rls": "workspace_nullable",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "deleted_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "deleted_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
+          "name": "kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "mode",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "config_ciphertext",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bytea"
+        },
+        {
+          "name": "config_key_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "config_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "schema_version",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "last_verified_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "rotated_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "org",
+      "id": "postgres:org.data_planes",
+      "name": "data_planes",
+      "rls": "org_only",
       "store": "postgres",
       "tenantScoped": true
     },

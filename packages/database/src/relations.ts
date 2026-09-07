@@ -8,7 +8,12 @@ import {
   relationshipTypes,
   schemaProperties,
 } from "./schema/schema-registry";
-import { organizations, orgUsers, invitations } from "./schema/org";
+import {
+  organizations,
+  orgUsers,
+  invitations,
+  dataPlanes,
+} from "./schema/org";
 import {
   principals,
   roles,
@@ -71,6 +76,18 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   paymentMethods: many(paymentMethods),
   invoices: many(invoices),
   apiKeys: many(apiKeys),
+  dataPlanes: many(dataPlanes),
+}));
+
+/**
+ * ADR-042 organisation-scoped store bindings. One row per (organisation, store
+ * kind); the `org` back-reference is the only join this table ever needs.
+ */
+export const dataPlanesRelations = relations(dataPlanes, ({ one }) => ({
+  org: one(organizations, {
+    fields: [dataPlanes.orgId],
+    references: [organizations.id],
+  }),
 }));
 
 export const invitationsRelations = relations(invitations, ({ one }) => ({

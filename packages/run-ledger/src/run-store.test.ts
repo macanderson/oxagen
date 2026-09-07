@@ -1,13 +1,11 @@
 /**
- * Unit coverage for run-store.ts (agent-engine v2 Phase 2b). No live database:
- * pure SQL builders + row mappers are asserted directly; the RunStore methods
- * are exercised with a fake `tx.execute` injected through
- * @oxagen/database's `makeWithTenantDbMock`/`makeWithSystemDbMock` test
- * doubles (real exports, not vi.mock'd) via a mocked `@oxagen/database`
- * module — the house style used by
- * packages/inngest-functions/src/lib/provision-webhook.test.ts. Captured SQL
- * is compiled to `{ sql, params }` with the real PgDialect, exactly like that
- * suite, so assertions are robust to drizzle internals.
+ * Unit coverage for run-store.ts — the evidence ledger (ADR-041). No live
+ * database: pure SQL builders and row mappers are asserted directly, and the
+ * `RunStore` methods run against a fake `tx.execute` injected through
+ * @oxagen/database's `makeWithTenantDbMock` test double (a real export, not a
+ * `vi.mock`'d one) via a mocked `@oxagen/database` module. Captured SQL is
+ * compiled to `{ sql, params }` with the real PgDialect, so assertions are
+ * robust to drizzle internals.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -15,68 +13,54 @@ import type { SQL } from "drizzle-orm";
 
 const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
-  withSystemDb: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return {
-    ...real,
-    withTenantDb: mocks.withTenantDb,
-    withSystemDb: mocks.withSystemDb,
-  };
+  return { ...real, withTenantDb: mocks.withTenantDb };
 });
 
-import { makeWithTenantDbMock, makeWithSystemDbMock } from "@oxagen/database";
+import { makeWithTenantDbMock } from "@oxagen/database";
 import {
-  MAX_RUN_ATTEMPTS,
-  RUN_LEASE_SECONDS,
   DEFAULT_READ_EVENTS_LIMIT,
-  generateRunPublicId,
-  mapClaimedRunRow,
-  mapRunEventRow,
-  mapRunSummaryRow,
-  buildEnqueueRunSql,
-  buildClaimNextRunSql,
-  buildRenewLeaseSql,
-  buildAppendEventsSql,
-  buildReadEventsSinceSql,
-  buildSaveCheckpointSql,
-  buildCompleteRunSql,
-  buildFailRunSql,
-  buildCancelRunSql,
-  buildRequestCancelSql,
-  buildIsCancelRequestedSql,
-  buildGetRunByPublicIdSql,
-  createPostgresRunStore,
-  type EnqueueRunInput,
-  // ── V2 — fenced immutable attempts ─────────────────────────────────────────
   EVENT_SEQUENCE_CONFLICT_EVENT,
-  generateLeaseToken,
+  ATTEMPT_TERMINAL_STATUSES,
+  createPostgresRunStore,
+  generateRunPublicId,
   generateAttemptPublicId,
   buildRunRowIdentityFromSpec,
   mapRunV2IdentityRow,
-  mapClaimedRunV2,
+  mapRunSummaryRow,
+  mapAttemptRow,
   mapAttemptEventReadRow,
   prepareAttemptEvent,
   planAttemptBatch,
   reconcileReplayedEvents,
   foldAttemptStreamDigest,
-  leaseRejectionReason,
-  assertLeaseUsable,
+  foldAttemptEventState,
+  attemptRejectionReason,
+  assertAttemptWritable,
   runStatusForTerminal,
-  buildEnqueueRunV2Sql,
-  buildLockClaimableRunV2Sql,
-  buildSelectRestorableCheckpointSql,
+  buildCreateRunSql,
+  buildLockRunForAttemptSql,
   buildInsertAttemptSql,
-  buildInsertAttemptEventsSql,
+  buildMarkRunAttemptedSql,
+  buildLockAttemptForWriteSql,
+  buildSelectAttemptEventStateSql,
   buildAllocateRunSeqSql,
+  buildInsertAttemptEventsSql,
+  buildInsertAttemptSealSql,
+  buildFinishRunSql,
+  buildGetRunByPublicIdSql,
+  buildListRunAttemptsSql,
+  buildListAttemptIdentitySql,
   buildReadAttemptEventsSinceSql,
-  buildSelectExpiredAttemptLeasesSql,
-  type LockedLeaseRow,
+  type AttemptEventStateRow,
+  type AttemptRow,
+  type LockedAttemptRow,
   type PreparedAttemptEvent,
-  type RunLeaseRef,
   type RunSecurityEventSink,
+  type RunSummaryRow,
   type RunV2IdentityRow,
 } from "./run-store";
 import {
@@ -90,18 +74,19 @@ import {
 } from "./finalization-grant";
 import { parseRunSpecV2, type RunSpecV2 } from "./run-spec-v2";
 import {
+  AttemptNotWritableError,
   ForbiddenEventPayloadFieldError,
   RunEventIntegrityError,
   RunEventPayloadTooLargeError,
   RunEventSequenceGapError,
-  RunLeaseFencedError,
+  RunSpecIdentityMismatchError,
   RunStoreStateError,
   UnknownRunEventTypeError,
+  isAttemptNotWritableError,
   isForbiddenEventPayloadFieldError,
   isRunEventIntegrityError,
   isRunEventPayloadTooLargeError,
   isRunEventSequenceGapError,
-  isRunLeaseFencedError,
   isRunStoreStateError,
   isUnknownRunEventTypeError,
 } from "./run-errors";
@@ -111,663 +96,11 @@ function compile(query: SQL): { sql: string; params: unknown[] } {
   return dialect.sqlToQuery(query);
 }
 
-/** Fake db executor: scripts sequential `tx.execute` returns, captures calls. */
-function makeFakeTx(queue: unknown[][]) {
-  const calls: unknown[] = [];
-  let i = 0;
-  const execute = vi.fn((query: unknown) => {
-    calls.push(query);
-    return Promise.resolve(queue[i++] ?? []);
-  });
-  return { tx: { execute }, calls, execute };
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-// ── Pure helpers ─────────────────────────────────────────────────────────────
-
-describe("generateRunPublicId", () => {
-  it("mints an arun_-prefixed id", () => {
-    expect(generateRunPublicId()).toMatch(/^arun_[0-9a-f]{22}$/);
-  });
-
-  it("is unique across calls", () => {
-    const ids = new Set(
-      Array.from({ length: 50 }, () => generateRunPublicId()),
-    );
-    expect(ids.size).toBe(50);
-  });
-});
-
-describe("mapClaimedRunRow", () => {
-  it("coerces numeric strings and defaults null checkpoint", () => {
-    const mapped = mapClaimedRunRow({
-      id: "run-1",
-      public_id: "arun_abc",
-      org_id: "org-1",
-      workspace_id: "ws-1",
-      surface: "chat",
-      spec: { instruction: "hi" },
-      attempts: "2",
-      checkpoint: null,
-      checkpoint_seq: "0",
-    });
-    expect(mapped).toEqual({
-      runId: "run-1",
-      publicId: "arun_abc",
-      orgId: "org-1",
-      workspaceId: "ws-1",
-      surface: "chat",
-      spec: { instruction: "hi" },
-      attempts: 2,
-      checkpoint: null,
-      checkpointSeq: 0,
-      // A legacy claim has no attempt identity and no fencing token, and says
-      // so explicitly so a consumer branches on specVersion rather than
-      // sniffing for undefined fields.
-      specVersion: 1,
-      lease: null,
-      v2: null,
-    });
-  });
-
-  it("passes through a non-null checkpoint", () => {
-    const mapped = mapClaimedRunRow({
-      id: "run-1",
-      public_id: "arun_abc",
-      org_id: "org-1",
-      workspace_id: "ws-1",
-      surface: "chat",
-      spec: {},
-      attempts: 1,
-      checkpoint: { step: 3 },
-      checkpoint_seq: 3,
-    });
-    expect(mapped.checkpoint).toEqual({ step: 3 });
-    expect(mapped.checkpointSeq).toBe(3);
-  });
-});
-
-describe("mapRunEventRow", () => {
-  it("coerces seq to a number and created_at to a Date", () => {
-    const mapped = mapRunEventRow({
-      seq: "5",
-      type: "text-delta",
-      payload: { text: "hi" },
-      created_at: "2026-07-18T00:00:00.000Z",
-    });
-    expect(mapped).toEqual({
-      seq: 5,
-      type: "text-delta",
-      payload: { text: "hi" },
-      createdAt: new Date("2026-07-18T00:00:00.000Z"),
-    });
-  });
-
-  it("passes through a Date instance unchanged", () => {
-    const d = new Date("2026-07-18T00:00:00.000Z");
-    const mapped = mapRunEventRow({
-      seq: 1,
-      type: "t",
-      payload: {},
-      created_at: d,
-    });
-    expect(mapped.createdAt).toBe(d);
-  });
-});
-
-describe("mapRunSummaryRow", () => {
-  it("coerces numeric strings, defaults null result/error, and maps dates", () => {
-    const mapped = mapRunSummaryRow({
-      id: "run-1",
-      public_id: "arun_abc",
-      surface: "api-chat",
-      spec_version: "1",
-      status: "completed",
-      result: { text: "done" },
-      error: null,
-      checkpoint_seq: "4",
-      attempts: "1",
-      created_at: "2026-07-18T00:00:00.000Z",
-      started_at: "2026-07-18T00:00:01.000Z",
-      completed_at: "2026-07-18T00:00:02.000Z",
-    });
-    expect(mapped).toEqual({
-      runId: "run-1",
-      publicId: "arun_abc",
-      surface: "api-chat",
-      specVersion: 1,
-      status: "completed",
-      result: { text: "done" },
-      error: null,
-      checkpointSeq: 4,
-      attempts: 1,
-      createdAt: new Date("2026-07-18T00:00:00.000Z"),
-      startedAt: new Date("2026-07-18T00:00:01.000Z"),
-      completedAt: new Date("2026-07-18T00:00:02.000Z"),
-    });
-  });
-
-  it("maps a pending run's null startedAt/completedAt/result", () => {
-    const mapped = mapRunSummaryRow({
-      id: "run-2",
-      public_id: "arun_def",
-      surface: "api-chat",
-      status: "pending",
-      result: null,
-      error: null,
-      checkpoint_seq: 0,
-      attempts: 0,
-      created_at: new Date("2026-07-18T00:00:00.000Z"),
-      started_at: null,
-      completed_at: null,
-    });
-    expect(mapped.status).toBe("pending");
-    expect(mapped.startedAt).toBeNull();
-    expect(mapped.completedAt).toBeNull();
-    expect(mapped.result).toBeNull();
-  });
-
-  it("passes through an error string for a failed run", () => {
-    const mapped = mapRunSummaryRow({
-      id: "run-3",
-      public_id: "arun_ghi",
-      surface: "api-chat",
-      status: "failed",
-      result: null,
-      error: "boom",
-      checkpoint_seq: 2,
-      attempts: 3,
-      created_at: new Date("2026-07-18T00:00:00.000Z"),
-      started_at: new Date("2026-07-18T00:00:01.000Z"),
-      completed_at: new Date("2026-07-18T00:00:02.000Z"),
-    });
-    expect(mapped.error).toBe("boom");
-    expect(mapped.status).toBe("failed");
-  });
-
-  it("maps spec_version = 2 to the V2 record contract", () => {
-    const mapped = mapRunSummaryRow({
-      id: "run-4",
-      public_id: "arun_v2",
-      surface: "api-chat",
-      spec_version: 2,
-      status: "running",
-      result: null,
-      error: null,
-      checkpoint_seq: 0,
-      attempts: 1,
-      created_at: new Date("2026-07-18T00:00:00.000Z"),
-      started_at: new Date("2026-07-18T00:00:01.000Z"),
-      completed_at: null,
-    });
-    expect(mapped.specVersion).toBe(2);
-  });
-
-  it.each([
-    ["a missing column (pre-expand build)", undefined],
-    ["an explicit null", null],
-    ["an unexpected version", 3],
-  ])("falls back to legacy v1 for %s", (_label, specVersion) => {
-    // Fail-closed direction: reading a run as v1 cursors on `seq`, which is
-    // NULL on every v2 event row, so a misread yields nothing rather than the
-    // wrong events.
-    const mapped = mapRunSummaryRow({
-      id: "run-5",
-      public_id: "arun_old",
-      surface: "api-chat",
-      spec_version: specVersion,
-      status: "completed",
-      result: null,
-      error: null,
-      checkpoint_seq: 0,
-      attempts: 1,
-      created_at: new Date("2026-07-18T00:00:00.000Z"),
-      started_at: null,
-      completed_at: null,
-    });
-    expect(mapped.specVersion).toBe(1);
-  });
-});
-
-// ── Pure SQL builders ────────────────────────────────────────────────────────
-
-describe("buildEnqueueRunSql", () => {
-  it("inserts pending status with the given org/workspace/surface/spec", () => {
-    const input: EnqueueRunInput = {
-      orgId: "org-1",
-      workspaceId: "ws-1",
-      surface: "chat",
-      spec: { instruction: "hi" },
-    };
-    const { sql: text, params } = compile(
-      buildEnqueueRunSql("arun_xyz", input),
-    );
-    expect(text).toContain("INSERT INTO agent.agent_runs");
-    expect(text).toContain("'pending'"); // literal in the template, not a bound param
-    expect(text).toContain("RETURNING id, public_id");
-    expect(params).toContain("arun_xyz");
-    expect(params).toContain("org-1");
-    expect(params).toContain("ws-1");
-    expect(params).toContain("chat");
-    expect(params).toContain(JSON.stringify({ instruction: "hi" }));
-  });
-});
-
-describe("buildClaimNextRunSql", () => {
-  it("guards on attempts < MAX_RUN_ATTEMPTS and pending-or-expired status", () => {
-    const { sql: text, params } = compile(buildClaimNextRunSql("worker-1"));
-    expect(text).toContain("FOR UPDATE SKIP LOCKED");
-    expect(text).toContain(
-      "status = 'pending' OR (status = 'running' AND lease_expires_at < now())",
-    );
-    expect(text).toContain("attempts + 1");
-    expect(params).toContain("worker-1");
-    expect(params).toContain(MAX_RUN_ATTEMPTS);
-    expect(params).toContain(RUN_LEASE_SECONDS);
-  });
-
-  it("honors an explicit attempt cap and lease window", () => {
-    const { params } = compile(buildClaimNextRunSql("worker-1", 7, 42));
-    expect(params).toContain(7);
-    expect(params).toContain(42);
-  });
-});
-
-describe("buildRenewLeaseSql / buildSaveCheckpointSql / buildCompleteRunSql / buildFailRunSql / buildCancelRunSql", () => {
-  it("all guard on claimed_by + status = 'running'", () => {
-    const builders: SQL[] = [
-      buildRenewLeaseSql("run-1", "worker-1"),
-      buildSaveCheckpointSql("run-1", "worker-1", 2, { step: 2 }),
-      buildCompleteRunSql("run-1", "worker-1", { ok: true }),
-      buildFailRunSql("run-1", "worker-1", "boom"),
-      buildCancelRunSql("run-1", "worker-1"),
-    ];
-    for (const b of builders) {
-      const { text, params } = ((): { text: string; params: unknown[] } => {
-        const { sql: t, params: p } = compile(b);
-        return { text: t, params: p };
-      })();
-      expect(text).toContain("claimed_by = ");
-      expect(text).toContain("status = 'running'");
-      expect(text).toContain("RETURNING id");
-      expect(params).toContain("run-1");
-      expect(params).toContain("worker-1");
-    }
-  });
-
-  it("completeRun writes result + clears the lease", () => {
-    const { sql: text, params } = compile(
-      buildCompleteRunSql("run-1", "worker-1", { text: "done" }),
-    );
-    expect(text).toContain("status = 'completed'");
-    expect(text).toContain("lease_expires_at = NULL");
-    expect(JSON.stringify(params)).toContain("done");
-  });
-
-  it("failRun writes the error + clears the lease", () => {
-    const { sql: text, params } = compile(
-      buildFailRunSql("run-1", "worker-1", "boom"),
-    );
-    expect(text).toContain("status = 'failed'");
-    expect(text).toContain("lease_expires_at = NULL");
-    expect(params).toContain("boom");
-  });
-
-  it("cancelRun sets status = 'cancelled' and clears the lease", () => {
-    const { sql: text } = compile(buildCancelRunSql("run-1", "worker-1"));
-    expect(text).toContain("status = 'cancelled'");
-    expect(text).toContain("lease_expires_at = NULL");
-  });
-});
-
-describe("buildAppendEventsSql", () => {
-  it("returns null for an empty batch", () => {
-    expect(buildAppendEventsSql("run-1", "org-1", "ws-1", [])).toBeNull();
-  });
-
-  it("builds a multi-row VALUES insert with ON CONFLICT DO NOTHING", () => {
-    const query = buildAppendEventsSql("run-1", "org-1", "ws-1", [
-      { seq: 1, type: "text-delta", payload: { text: "a" } },
-      { seq: 2, type: "text-delta", payload: { text: "b" } },
-    ]);
-    expect(query).not.toBeNull();
-    const { sql: text, params } = compile(query!);
-    expect(text).toContain("INSERT INTO agent.agent_run_events");
-    expect(text).toContain("ON CONFLICT (run_id, seq) DO NOTHING");
-    expect(params).toContain("run-1");
-    expect(params).toContain(1);
-    expect(params).toContain(2);
-    expect(params).toContain(JSON.stringify({ text: "a" }));
-    expect(params).toContain(JSON.stringify({ text: "b" }));
-  });
-});
-
-describe("buildReadEventsSinceSql", () => {
-  it("orders by seq ascending and filters seq > afterSeq", () => {
-    const { sql: text, params } = compile(buildReadEventsSinceSql("run-1", 3));
-    expect(text).toContain("ORDER BY seq ASC");
-    expect(text).toContain("seq >");
-    expect(params).toContain("run-1");
-    expect(params).toContain(3);
-    expect(params).toContain(DEFAULT_READ_EVENTS_LIMIT);
-  });
-
-  it("honors an explicit limit", () => {
-    const { params } = compile(buildReadEventsSinceSql("run-1", 0, 10));
-    expect(params).toContain(10);
-  });
-});
-
-describe("buildRequestCancelSql / buildIsCancelRequestedSql", () => {
-  it("requestCancel sets cancel_requested = true unconditionally on the row", () => {
-    const { sql: text, params } = compile(buildRequestCancelSql("run-1"));
-    expect(text).toContain("cancel_requested = true");
-    expect(params).toContain("run-1");
-  });
-
-  it("isCancelRequested reads cancel_requested by id", () => {
-    const { sql: text, params } = compile(buildIsCancelRequestedSql("run-1"));
-    expect(text).toContain("SELECT cancel_requested");
-    expect(params).toContain("run-1");
-  });
-});
-
-describe("buildGetRunByPublicIdSql", () => {
-  it("selects the RunSummary columns filtered by public_id (no org/workspace filter — RLS-scoped)", () => {
-    const { sql: text, params } = compile(buildGetRunByPublicIdSql("arun_abc"));
-    expect(text).toContain("SELECT id, public_id, surface, spec_version");
-    // The record-version discriminant is part of the read projection: without
-    // it a resumable subscriber cannot tell `seq` from `run_seq`.
-    expect(text).toContain("spec_version");
-    expect(text).toContain("checkpoint_seq");
-    expect(text).toContain("attempts");
-    expect(text).toContain("created_at");
-    expect(text).toContain("started_at");
-    expect(text).toContain("completed_at");
-    expect(text).toContain("WHERE public_id =");
-    expect(text).not.toContain("org_id");
-    expect(text).not.toContain("workspace_id");
-    expect(params).toContain("arun_abc");
-  });
-});
-
-// ── RunStore methods (fake db executor, no live DB) ─────────────────────────
-
-describe("createPostgresRunStore", () => {
-  it("enqueueRun uses withTenantDb and returns the inserted id/publicId", async () => {
-    const { tx, execute } = makeFakeTx([
-      [{ id: "run-uuid-1", public_id: "arun_abc" }],
-    ]);
-    mocks.withTenantDb.mockImplementation(makeWithTenantDbMock(tx));
-
-    const store = createPostgresRunStore();
-    const result = await store.enqueueRun({
-      orgId: "org-1",
-      workspaceId: "ws-1",
-      surface: "chat",
-      spec: { instruction: "hi" },
-    });
-
-    expect(result).toEqual({ runId: "run-uuid-1", publicId: "arun_abc" });
-    expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
-    expect(mocks.withSystemDb).not.toHaveBeenCalled();
-    expect(execute).toHaveBeenCalledTimes(1);
-  });
-
-  it("enqueueRun throws if the insert unexpectedly returns no row", async () => {
-    const { tx } = makeFakeTx([[]]);
-    mocks.withTenantDb.mockImplementation(makeWithTenantDbMock(tx));
-    const store = createPostgresRunStore();
-    await expect(
-      store.enqueueRun({
-        orgId: "o",
-        workspaceId: "w",
-        surface: "chat",
-        spec: {},
-      }),
-    ).rejects.toThrow(/enqueueRun/);
-  });
-
-  it("claimNextRun uses withSystemDb and maps the returned row", async () => {
-    const { tx } = makeFakeTx([
-      [
-        {
-          id: "run-1",
-          public_id: "arun_abc",
-          org_id: "org-1",
-          workspace_id: "ws-1",
-          surface: "chat",
-          spec: { instruction: "hi" },
-          attempts: 1,
-          checkpoint: null,
-          checkpoint_seq: 0,
-        },
-      ],
-    ]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-
-    const store = createPostgresRunStore();
-    const claimed = await store.claimNextRun("worker-1");
-
-    expect(claimed).toEqual({
-      runId: "run-1",
-      publicId: "arun_abc",
-      orgId: "org-1",
-      workspaceId: "ws-1",
-      surface: "chat",
-      spec: { instruction: "hi" },
-      attempts: 1,
-      checkpoint: null,
-      checkpointSeq: 0,
-      specVersion: 1,
-      lease: null,
-      v2: null,
-    });
-    expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
-    expect(mocks.withTenantDb).not.toHaveBeenCalled();
-  });
-
-  it("claimNextRun returns null when nothing is claimable", async () => {
-    const { tx } = makeFakeTx([[]]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    expect(await store.claimNextRun("worker-1")).toBeNull();
-  });
-
-  it("renewLease returns true when a row was updated", async () => {
-    const { tx } = makeFakeTx([[{ id: "run-1" }]]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    expect(await store.renewLease("run-1", "worker-1")).toBe(true);
-  });
-
-  it("renewLease returns false when claimed_by no longer matches (lease lost)", async () => {
-    const { tx } = makeFakeTx([[]]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    expect(await store.renewLease("run-1", "worker-stale")).toBe(false);
-  });
-
-  it("appendEvents skips the DB round-trip for an empty batch", async () => {
-    const { tx, execute } = makeFakeTx([]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    await store.appendEvents("run-1", "org-1", "ws-1", []);
-    expect(execute).not.toHaveBeenCalled();
-  });
-
-  it("appendEvents inserts a batch via withSystemDb (ON CONFLICT DO NOTHING)", async () => {
-    const { tx, execute } = makeFakeTx([[]]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    await store.appendEvents("run-1", "org-1", "ws-1", [
-      { seq: 1, type: "text-delta", payload: { text: "a" } },
-    ]);
-    expect(execute).toHaveBeenCalledTimes(1);
-    const { sql: text } = compile(execute.mock.calls[0]![0] as SQL);
-    expect(text).toContain("ON CONFLICT (run_id, seq) DO NOTHING");
-  });
-
-  it("readEventsSince uses withTenantDb and maps rows in order", async () => {
-    const { tx } = makeFakeTx([
-      [
-        {
-          seq: 1,
-          type: "text-delta",
-          payload: { text: "a" },
-          created_at: "2026-07-18T00:00:00.000Z",
-        },
-        {
-          seq: 2,
-          type: "final-diff",
-          payload: { diff: "x" },
-          created_at: "2026-07-18T00:00:01.000Z",
-        },
-      ],
-    ]);
-    mocks.withTenantDb.mockImplementation(makeWithTenantDbMock(tx));
-    const store = createPostgresRunStore();
-    const events = await store.readEventsSince("run-1", 0);
-    expect(events).toHaveLength(2);
-    expect(events[0]).toEqual({
-      seq: 1,
-      type: "text-delta",
-      payload: { text: "a" },
-      createdAt: new Date("2026-07-18T00:00:00.000Z"),
-    });
-    expect(mocks.withSystemDb).not.toHaveBeenCalled();
-  });
-
-  it("saveCheckpoint / completeRun / failRun / cancelRun all use withSystemDb and report the guard result", async () => {
-    const store = createPostgresRunStore();
-
-    mocks.withSystemDb.mockImplementation(
-      makeWithSystemDbMock(makeFakeTx([[{ id: "run-1" }]]).tx),
-    );
-    expect(
-      await store.saveCheckpoint("run-1", "worker-1", 1, { step: 1 }),
-    ).toBe(true);
-
-    mocks.withSystemDb.mockImplementation(
-      makeWithSystemDbMock(makeFakeTx([[]]).tx),
-    );
-    expect(
-      await store.saveCheckpoint("run-1", "worker-stale", 1, { step: 1 }),
-    ).toBe(false);
-
-    mocks.withSystemDb.mockImplementation(
-      makeWithSystemDbMock(makeFakeTx([[{ id: "run-1" }]]).tx),
-    );
-    expect(await store.completeRun("run-1", "worker-1", { text: "done" })).toBe(
-      true,
-    );
-
-    mocks.withSystemDb.mockImplementation(
-      makeWithSystemDbMock(makeFakeTx([[]]).tx),
-    );
-    expect(
-      await store.completeRun("run-1", "worker-stale", { text: "done" }),
-    ).toBe(false);
-
-    mocks.withSystemDb.mockImplementation(
-      makeWithSystemDbMock(makeFakeTx([[{ id: "run-1" }]]).tx),
-    );
-    expect(await store.failRun("run-1", "worker-1", "boom")).toBe(true);
-
-    mocks.withSystemDb.mockImplementation(
-      makeWithSystemDbMock(makeFakeTx([[]]).tx),
-    );
-    expect(await store.failRun("run-1", "worker-stale", "boom")).toBe(false);
-
-    mocks.withSystemDb.mockImplementation(
-      makeWithSystemDbMock(makeFakeTx([[{ id: "run-1" }]]).tx),
-    );
-    expect(await store.cancelRun("run-1", "worker-1")).toBe(true);
-
-    mocks.withSystemDb.mockImplementation(
-      makeWithSystemDbMock(makeFakeTx([[]]).tx),
-    );
-    expect(await store.cancelRun("run-1", "worker-stale")).toBe(false);
-  });
-
-  it("requestCancel writes via withTenantDb", async () => {
-    const { tx, execute } = makeFakeTx([[]]);
-    mocks.withTenantDb.mockImplementation(makeWithTenantDbMock(tx));
-    const store = createPostgresRunStore();
-    await store.requestCancel("run-1");
-    expect(execute).toHaveBeenCalledTimes(1);
-    const { sql: text } = compile(execute.mock.calls[0]![0] as SQL);
-    expect(text).toContain("cancel_requested = true");
-    expect(mocks.withSystemDb).not.toHaveBeenCalled();
-  });
-
-  it("isCancelRequested reads the flag via withTenantDb", async () => {
-    const { tx } = makeFakeTx([[{ cancel_requested: true }]]);
-    mocks.withTenantDb.mockImplementation(makeWithTenantDbMock(tx));
-    const store = createPostgresRunStore();
-    expect(await store.isCancelRequested("run-1")).toBe(true);
-  });
-
-  it("isCancelRequested defaults to false when the row is missing", async () => {
-    const { tx } = makeFakeTx([[]]);
-    mocks.withTenantDb.mockImplementation(makeWithTenantDbMock(tx));
-    const store = createPostgresRunStore();
-    expect(await store.isCancelRequested("missing-run")).toBe(false);
-  });
-
-  it("getRunByPublicId uses withTenantDb and maps the found row", async () => {
-    const { tx } = makeFakeTx([
-      [
-        {
-          id: "run-1",
-          public_id: "arun_abc",
-          surface: "api-chat",
-          spec_version: 1,
-          status: "running",
-          result: null,
-          error: null,
-          checkpoint_seq: 2,
-          attempts: 1,
-          created_at: "2026-07-18T00:00:00.000Z",
-          started_at: "2026-07-18T00:00:01.000Z",
-          completed_at: null,
-        },
-      ],
-    ]);
-    mocks.withTenantDb.mockImplementation(makeWithTenantDbMock(tx));
-    const store = createPostgresRunStore();
-    const summary = await store.getRunByPublicId("arun_abc");
-    expect(summary).toEqual({
-      runId: "run-1",
-      publicId: "arun_abc",
-      surface: "api-chat",
-      specVersion: 1,
-      status: "running",
-      result: null,
-      error: null,
-      checkpointSeq: 2,
-      attempts: 1,
-      createdAt: new Date("2026-07-18T00:00:00.000Z"),
-      startedAt: new Date("2026-07-18T00:00:01.000Z"),
-      completedAt: null,
-    });
-    expect(mocks.withSystemDb).not.toHaveBeenCalled();
-  });
-
-  it("getRunByPublicId returns null for an unknown or cross-tenant publicId", async () => {
-    const { tx } = makeFakeTx([[]]);
-    mocks.withTenantDb.mockImplementation(makeWithTenantDbMock(tx));
-    const store = createPostgresRunStore();
-    expect(await store.getRunByPublicId("arun_missing")).toBeNull();
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
-// V2 — fenced immutable attempts
-// ═══════════════════════════════════════════════════════════════════════════
+// ── Fixtures ─────────────────────────────────────────────────────────────────
 
 const UUID_ORG = "11111111-1111-4111-8111-111111111111";
 const UUID_WS = "22222222-2222-4222-8222-222222222222";
@@ -785,6 +118,7 @@ const SHA_3 = `sha256:${"3".repeat(64)}`;
 const COMMIT_SHA = "a".repeat(40);
 const TREE_SHA = "b".repeat(40);
 const ATTEMPT_PUBLIC_ID = "arat_0123456789abcdef0123";
+const PRIOR_ATTEMPT_PUBLIC_ID = "arat_fedcba98765432100000";
 const BLOB_REF = "evb_0123456789abcdef0123";
 const DECISION_REF = "azd_0123456789abcdef0123";
 const OBSERVED_AT = "2026-07-21T12:00:00.000Z";
@@ -844,7 +178,7 @@ function makeSpec(overrides: Record<string, unknown> = {}): RunSpecV2 {
   });
 }
 
-/** The typed columns a V2 run row returns, matching `makeSpec()` exactly. */
+/** The typed columns a run row returns, matching `makeSpec()` exactly. */
 function makeIdentityRow(
   overrides: Partial<RunV2IdentityRow> = {},
 ): RunV2IdentityRow {
@@ -875,32 +209,27 @@ function makeIdentityRow(
   };
 }
 
-const LEASE: RunLeaseRef = {
-  runId: UUID_RUN,
-  attemptId: UUID_ATTEMPT,
-  attemptPublicId: ATTEMPT_PUBLIC_ID,
-  leaseToken: "token-1",
-  leaseEpoch: 4,
-};
-
-function makeLeaseRow(overrides: Partial<LockedLeaseRow> = {}): LockedLeaseRow {
+function makeCreateRunInput() {
   return {
-    id: "lease-1",
+    orgId: UUID_ORG,
+    workspaceId: UUID_WS,
+    surface: "repo-edit" as const,
+    spec: makeSpec(),
+    retentionPolicyRowId: "66666666-6666-4666-8666-666666666666",
+    repositoryBindingRowId: "55555555-5555-4555-8555-555555555555",
+  };
+}
+
+function makeAttemptRow(
+  overrides: Partial<LockedAttemptRow> = {},
+): LockedAttemptRow {
+  return {
     attempt_id: UUID_ATTEMPT,
     attempt_public_id: ATTEMPT_PUBLIC_ID,
     run_id: UUID_RUN,
     org_id: UUID_ORG,
     workspace_id: UUID_WS,
-    lease_token: "token-1",
-    lease_epoch: 4,
-    worker_id: "worker-1",
-    expired: false,
-    fenced_at: null,
-    last_run_seq: null,
-    last_attempt_seq: null,
-    event_count: 0,
-    final_event_digest: null,
-    event_stream_digest: EMPTY_EVENT_STREAM_DIGEST,
+    attempt_number: 1,
     seal_id: null,
     ...overrides,
   };
@@ -928,6 +257,23 @@ function terminalEvent(attemptSeq: number) {
     eventType: "terminal.attempt_terminated",
     observedAt: OBSERVED_AT,
     payload: { terminal_status: "completed" as const },
+  };
+}
+
+/** A durable event row shaped exactly as `prepareAttemptEvent` produced it. */
+function durableRow(
+  prepared: PreparedAttemptEvent,
+  id: string,
+  runSeq: string,
+): AttemptEventStateRow {
+  return {
+    id,
+    attempt_seq: prepared.attemptSeq,
+    run_seq: runSeq,
+    event_schema_version: prepared.eventSchemaVersion,
+    event_type: prepared.eventType,
+    payload_digest: prepared.payloadDigest,
+    event_digest: prepared.eventDigest,
   };
 }
 
@@ -962,102 +308,277 @@ function ranSql(
   return executed.some((e) => pattern.test(e.sql));
 }
 
-// Both locks take their row in a CTE and project afterwards, so the routes key
-// on what is unique to each statement rather than on the locking clause.
-const LOCK_RUN = /spec_version = 2/;
-const LOCK_LEASE = /JOIN agent\.agent_run_attempts a ON a\.id = l\.attempt_id/;
-const SELECT_CHECKPOINT = /FROM agent\.agent_run_checkpoints c/;
+const CREATE_RUN = /INSERT INTO agent\.agent_runs/;
+const LOCK_RUN = /SELECT id, org_id, workspace_id, spec_version/;
 const INSERT_ATTEMPT = /INSERT INTO agent\.agent_run_attempts/;
-const SELECT_EPOCH = /COALESCE\(MAX\(lease_epoch\), 0\) \+ 1/;
-const INSERT_LEASE = /INSERT INTO agent\.agent_run_attempt_leases/;
-// Distinguishes the V2 claim from the V1 one, which also sets status =
-// 'running' but never touches attempt_count.
-const MARK_CLAIMED = /attempt_count = attempt_count \+ 1/;
-const LEGACY_CLAIM = /FOR UPDATE SKIP LOCKED/;
+const MARK_ATTEMPTED = /attempt_count = attempt_count \+ 1/;
+const LOCK_ATTEMPT = /JOIN locked lk ON lk\.id = a\.run_id/;
+const ATTEMPT_STATE = /ORDER BY attempt_seq ASC/;
 const ALLOCATE_RUN_SEQ = /next_run_seq = next_run_seq \+/;
 const INSERT_EVENTS = /INSERT INTO agent\.agent_run_events/;
-const SELECT_EXISTING_EVENTS = /SELECT id, attempt_seq, run_seq, event_digest/;
-const INSERT_CHECKPOINT = /INSERT INTO agent\.agent_run_checkpoints/;
-const SET_LATEST_CHECKPOINT = /latest_checkpoint_id = /;
-const ADVANCE_LEASE = /SET\s+last_run_seq/;
-const RENEW_LEASE = /SET\s+expires_at = now\(\)/;
-const FENCE_LEASE = /SET\s+fenced_at = now\(\)/;
 const INSERT_SEAL = /INSERT INTO agent\.agent_run_attempt_seals/;
 const INSERT_GRANT = /INSERT INTO agent\.agent_run_finalization_grants/;
 const INSERT_OBLIGATION =
   /INSERT INTO agent\.agent_run_finalization_obligations/;
 const SELECT_HANDLE = /JOIN agent\.agent_run_finalization_grants g/;
-const FINISH_RUN = /active_attempt_id = NULL,\s+claimed_by = NULL/;
-const REQUEUE_RUN = /status = 'pending'/;
-const SELECT_EXPIRED = /ORDER BY l\.expires_at ASC/;
-const CANCEL_CHECK = /SELECT r\.cancel_requested/;
+const FINISH_RUN = /active_attempt_id = NULL/;
+const GET_RUN = /WHERE public_id = /;
+const LIST_ATTEMPTS = /ORDER BY a\.attempt_number ASC/;
+const READ_EVENTS = /ORDER BY e\.run_seq ASC/;
+const ATTEMPT_IDENTITY = /SELECT id AS attempt_id/;
 
-// ── Public id + token generation ────────────────────────────────────────────
+function useTx(tx: { execute: unknown }) {
+  mocks.withTenantDb.mockImplementation(makeWithTenantDbMock(tx));
+}
 
-describe("V2 id generation", () => {
-  it("mints arat_, afg_, and opaque lease tokens", () => {
+// ── Public ids ───────────────────────────────────────────────────────────────
+
+describe("public id generation", () => {
+  it("mints arat_, afg_ and arun_ ids with the house shape", () => {
+    expect(generateRunPublicId()).toMatch(/^arun_[0-9a-f]{22}$/);
     expect(generateAttemptPublicId()).toMatch(/^arat_[0-9a-f]{22}$/);
     expect(generateFinalizationGrantPublicId()).toMatch(/^afg_[0-9a-f]{22}$/);
-    expect(generateLeaseToken()).toMatch(/^[0-9a-f-]{36}$/);
   });
 
-  it("mints a lease token that is not derived from any attempt id", () => {
-    const tokens = new Set(Array.from({ length: 50 }, generateLeaseToken));
-    expect(tokens.size).toBe(50);
-    expect(tokens.has(UUID_ATTEMPT)).toBe(false);
+  it("does not repeat", () => {
+    const ids = new Set(
+      Array.from({ length: 50 }, () => generateRunPublicId()),
+    );
+    expect(ids.size).toBe(50);
   });
 });
 
-// ── Row/spec identity ───────────────────────────────────────────────────────
+// ── Row mappers ──────────────────────────────────────────────────────────────
 
-describe("buildRunRowIdentityFromSpec / mapRunV2IdentityRow", () => {
-  it("projects a repo_edit spec into every typed column", () => {
-    const identity = buildRunRowIdentityFromSpec(makeSpec());
-    expect(identity.spec_version).toBe(2);
-    expect(identity.run_kind).toBe("repo_edit");
-    expect(identity.spec_digest).toMatch(/^sha256:[0-9a-f]{64}$/);
-    expect(identity.repository_binding_public_id).toBe(
-      "rpb_0123456789abcdef0123",
-    );
-    expect(identity.base_commit_sha).toBe(COMMIT_SHA);
-    expect(identity.max_attempts).toBe(3);
+describe("mapRunSummaryRow", () => {
+  const base: RunSummaryRow = {
+    id: UUID_RUN,
+    public_id: "arun_0123456789abcdef0123",
+    surface: "repo-edit",
+    spec_version: 2,
+    status: "running",
+    result: null,
+    error: null,
+    attempt_count: "2",
+    max_attempts: "3",
+    created_at: "2026-07-21T12:00:00.000Z",
+    started_at: "2026-07-21T12:00:01.000Z",
+    completed_at: null,
+  };
+
+  it("projects a v2 run, coercing driver-typed numerics and dates", () => {
+    const summary = mapRunSummaryRow(base);
+    expect(summary).toMatchObject({
+      runId: UUID_RUN,
+      surface: "repo-edit",
+      specVersion: 2,
+      status: "running",
+      attemptCount: 2,
+      maxAttempts: 3,
+      completedAt: null,
+    });
+    expect(summary.createdAt).toBeInstanceOf(Date);
+    expect(summary.startedAt).toBeInstanceOf(Date);
   });
 
-  it("nulls every repository column for a general run", () => {
-    const raw = JSON.parse(JSON.stringify(makeSpec())) as Record<
-      string,
-      unknown
-    >;
-    // A general spec is `.strict()`, so the repository sections must be ABSENT,
-    // not present-and-undefined — that is what stops a general run acquiring
-    // repository authority without being labelled repo_edit.
-    delete raw.repository_binding;
-    delete raw.output_policy;
-    const general = parseRunSpecV2({ ...raw, run_kind: "general" });
-    const identity = buildRunRowIdentityFromSpec(general);
+  it("reads anything that is not exactly 2 as legacy v1", () => {
+    expect(mapRunSummaryRow({ ...base, spec_version: 1 }).specVersion).toBe(1);
+    expect(mapRunSummaryRow({ ...base, spec_version: null }).specVersion).toBe(
+      1,
+    );
+    const { spec_version: _omitted, ...withoutColumn } = base;
+    expect(mapRunSummaryRow(withoutColumn).specVersion).toBe(1);
+  });
+
+  it("carries a null max_attempts through instead of coercing it to 0", () => {
+    expect(mapRunSummaryRow({ ...base, max_attempts: null }).maxAttempts).toBe(
+      null,
+    );
+  });
+
+  it("passes Date instances through untouched", () => {
+    const createdAt = new Date("2026-07-21T12:00:00.000Z");
+    expect(mapRunSummaryRow({ ...base, created_at: createdAt }).createdAt).toBe(
+      createdAt,
+    );
+  });
+});
+
+describe("mapAttemptRow", () => {
+  const base: AttemptRow = {
+    id: UUID_ATTEMPT,
+    public_id: ATTEMPT_PUBLIC_ID,
+    run_id: UUID_RUN,
+    attempt_number: "1",
+    worker_id: "drain-1",
+    engine_name: "stella",
+    engine_version: "2.1.1",
+    engine_build_digest: SHA_1,
+    resumed_from_attempt_id: null,
+    resumed_from_attempt_public_id: null,
+    claimed_at: "2026-07-21T12:00:00.000Z",
+    seal_id: null,
+    terminal_status: null,
+    reason_code: null,
+    event_count: null,
+    final_run_seq: null,
+    final_attempt_seq: null,
+    final_event_digest: null,
+    event_stream_digest: null,
+    sealed_at: null,
+  };
+
+  it("projects an open attempt with no seal and no provenance", () => {
+    const record = mapAttemptRow(base);
+    expect(record).toMatchObject({
+      attemptId: UUID_ATTEMPT,
+      attemptPublicId: ATTEMPT_PUBLIC_ID,
+      attemptNumber: 1,
+      producerId: "drain-1",
+      resumedFrom: null,
+      seal: null,
+    });
+    expect(record.engine).toEqual({
+      name: "stella",
+      version: "2.1.1",
+      buildDigest: SHA_1,
+    });
+  });
+
+  it("projects the attempt-provenance pair when both halves are present", () => {
+    expect(
+      mapAttemptRow({
+        ...base,
+        resumed_from_attempt_id: UUID_A,
+        resumed_from_attempt_public_id: PRIOR_ATTEMPT_PUBLIC_ID,
+      }).resumedFrom,
+    ).toEqual({
+      attemptId: UUID_A,
+      attemptPublicId: PRIOR_ATTEMPT_PUBLIC_ID,
+    });
+  });
+
+  it("refuses a half-present provenance pair rather than inventing one", () => {
+    expect(
+      mapAttemptRow({ ...base, resumed_from_attempt_id: UUID_A }).resumedFrom,
+    ).toBeNull();
+  });
+
+  it("projects a sealed attempt's terminal record", () => {
+    const record = mapAttemptRow({
+      ...base,
+      seal_id: "seal-1",
+      terminal_status: "completed",
+      reason_code: null,
+      event_count: "2",
+      final_run_seq: "9",
+      final_attempt_seq: "2",
+      final_event_digest: SHA_2,
+      event_stream_digest: SHA_3,
+      sealed_at: "2026-07-21T12:05:00.000Z",
+    });
+    expect(record.seal).toMatchObject({
+      sealId: "seal-1",
+      terminalStatus: "completed",
+      eventCount: 2,
+      finalRunSeq: "9",
+      finalAttemptSeq: 2,
+      finalEventDigest: SHA_2,
+      eventStreamDigest: SHA_3,
+    });
+  });
+
+  it("projects a zero-event seal with a null final-event digest", () => {
+    const record = mapAttemptRow({
+      ...base,
+      seal_id: "seal-1",
+      terminal_status: "abandoned",
+      reason_code: "producer_gone",
+      event_count: 0,
+      event_stream_digest: EMPTY_EVENT_STREAM_DIGEST,
+      sealed_at: "2026-07-21T12:05:00.000Z",
+    });
+    expect(record.seal).toMatchObject({
+      eventCount: 0,
+      finalRunSeq: null,
+      finalAttemptSeq: null,
+      finalEventDigest: null,
+      reasonCode: "producer_gone",
+      eventStreamDigest: EMPTY_EVENT_STREAM_DIGEST,
+    });
+  });
+});
+
+describe("mapAttemptEventReadRow", () => {
+  it("carries run_seq as an exact decimal string, never a number", () => {
+    const record = mapAttemptEventReadRow({
+      id: "event-1",
+      attempt_id: UUID_ATTEMPT,
+      attempt_public_id: ATTEMPT_PUBLIC_ID,
+      run_seq: "9007199254740993",
+      attempt_seq: "4",
+      event_schema_version: EVENT_SCHEMA_VERSION,
+      event_type: "tool.call_completed",
+      stage: "tool",
+      payload_digest: SHA_1,
+      event_digest: SHA_2,
+      payload_inline: { tool_call_id: "call_1" },
+      encrypted_payload_ref: null,
+      observed_at: OBSERVED_AT,
+      created_at: "2026-07-21T12:00:02.000Z",
+    });
+    expect(record.runSeq).toBe("9007199254740993");
+    expect(record.attemptSeq).toBe(4);
+    expect(record.payload).toEqual({ tool_call_id: "call_1" });
+    expect(record.encryptedPayloadRef).toBeNull();
+    expect(record.observedAt).toBeInstanceOf(Date);
+    expect(record.recordedAt).toBeInstanceOf(Date);
+  });
+
+  it("projects an encrypted-reference row with a null inline payload", () => {
+    const record = mapAttemptEventReadRow({
+      id: "event-2",
+      attempt_id: UUID_ATTEMPT,
+      attempt_public_id: ATTEMPT_PUBLIC_ID,
+      run_seq: "2",
+      attempt_seq: 2,
+      event_schema_version: EVENT_SCHEMA_VERSION,
+      event_type: "model.call_completed",
+      stage: "model",
+      payload_digest: SHA_1,
+      event_digest: SHA_2,
+      payload_inline: null,
+      encrypted_payload_ref: BLOB_REF,
+      observed_at: new Date(OBSERVED_AT),
+      created_at: new Date(OBSERVED_AT),
+    });
+    expect(record.payload).toBeNull();
+    expect(record.encryptedPayloadRef).toBe(BLOB_REF);
+  });
+});
+
+describe("buildRunRowIdentityFromSpec / mapRunV2IdentityRow", () => {
+  it("agree field for field on a repo_edit spec", () => {
+    expect(mapRunV2IdentityRow(makeIdentityRow())).toEqual(
+      buildRunRowIdentityFromSpec(makeSpec()),
+    );
+  });
+
+  it("nulls every repository field for a general run", () => {
+    const spec = makeSpec({
+      run_kind: "general",
+      repository_binding: undefined,
+      output_policy: { open_pull_request: false },
+    });
+    const identity = buildRunRowIdentityFromSpec(spec);
     expect(identity.repository_binding_public_id).toBeNull();
     expect(identity.provider).toBeNull();
     expect(identity.base_commit_sha).toBeNull();
   });
 
-  it("round-trips a stored row back to the same identity as the spec", () => {
-    const fromSpec = buildRunRowIdentityFromSpec(makeSpec());
-    const fromRow = mapRunV2IdentityRow(makeIdentityRow());
-    expect(fromRow).toEqual(fromSpec);
-  });
-
-  it("takes the public ids from the JOINED rows, not from the run's uuids", () => {
-    // The uuid columns and the public ids are DIFFERENT values; the projection
-    // must read the joined public id, which is what proves the resolved uuid
-    // really addresses the binding the spec pinned.
-    const mapped = mapRunV2IdentityRow(makeIdentityRow());
-    expect(mapped.retention_policy_id).toBe("rpv_0123456789abcdef0123");
-    expect(mapped.repository_binding_public_id).toBe(
-      "rpb_0123456789abcdef0123",
-    );
-  });
-
-  it("reports an unjoined binding as an empty/null public id so comparison fails", () => {
+  it("maps a missing joined public id to the empty string, never a uuid", () => {
+    // The join is the verification; an unmatched binding row must not silently
+    // pass the internal uuid off as the public id the spec pinned.
     const mapped = mapRunV2IdentityRow(
       makeIdentityRow({ retention_policy_public_id: null }),
     );
@@ -1065,10 +586,10 @@ describe("buildRunRowIdentityFromSpec / mapRunV2IdentityRow", () => {
   });
 });
 
-// ── Event preparation ───────────────────────────────────────────────────────
+// ── Event preparation ────────────────────────────────────────────────────────
 
 describe("prepareAttemptEvent", () => {
-  it("validates an inline payload and computes both digests", () => {
+  it("validates an inline payload and derives both digests", () => {
     const prepared = prepareAttemptEvent(toolEvent(1));
     expect(prepared.stage).toBe("tool");
     expect(prepared.eventSchemaVersion).toBe(EVENT_SCHEMA_VERSION);
@@ -1077,10 +598,10 @@ describe("prepareAttemptEvent", () => {
     expect(prepared.encryptedPayloadRef).toBeNull();
   });
 
-  it("accepts an encrypted reference plus a producer-supplied payload digest", () => {
+  it("accepts an encrypted reference with a caller-supplied payload digest", () => {
     const prepared = prepareAttemptEvent({
       attemptSeq: 1,
-      eventType: "context.frames_selected",
+      eventType: "model.call_completed",
       observedAt: OBSERVED_AT,
       encryptedPayloadRef: BLOB_REF,
       payloadDigest: SHA_1,
@@ -1090,17 +611,24 @@ describe("prepareAttemptEvent", () => {
     expect(prepared.payloadDigest).toBe(SHA_1);
   });
 
-  it("refuses an event carrying BOTH an inline payload and an encrypted ref", () => {
-    expect(() =>
-      prepareAttemptEvent({
-        ...toolEvent(1),
-        encryptedPayloadRef: BLOB_REF,
-        payloadDigest: SHA_1,
-      }),
-    ).toThrow(RunStoreStateError);
+  it("refuses both an inline payload and an encrypted reference", () => {
+    const err = (() => {
+      try {
+        prepareAttemptEvent({
+          ...toolEvent(1),
+          encryptedPayloadRef: BLOB_REF,
+          payloadDigest: SHA_1,
+        });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(isRunStoreStateError(err)).toBe(true);
+    expect(err).toBeInstanceOf(RunStoreStateError);
   });
 
-  it("refuses an event carrying NEITHER", () => {
+  it("refuses neither", () => {
     expect(() =>
       prepareAttemptEvent({
         attemptSeq: 1,
@@ -1110,28 +638,71 @@ describe("prepareAttemptEvent", () => {
     ).toThrow(RunStoreStateError);
   });
 
-  it("gives the same digest for a replayed event with the same observed time", () => {
-    expect(prepareAttemptEvent(toolEvent(1)).eventDigest).toBe(
-      prepareAttemptEvent(toolEvent(1)).eventDigest,
-    );
+  it("refuses an event type outside the closed registry", () => {
+    const err = (() => {
+      try {
+        prepareAttemptEvent({
+          attemptSeq: 1,
+          eventType: "tool.made_up",
+          observedAt: OBSERVED_AT,
+          payload: {},
+        });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(UnknownRunEventTypeError);
+    expect(isUnknownRunEventTypeError(err)).toBe(true);
   });
 
-  it("gives a DIFFERENT digest when the producer re-stamps observed_at", () => {
-    // Documented footgun: a replay must resend the ORIGINAL observation time.
-    const restamped = {
+  it("refuses a raw content field smuggled into an inline payload", () => {
+    const err = (() => {
+      try {
+        prepareAttemptEvent({
+          ...toolEvent(1),
+          payload: { ...toolEvent(1).payload, stdout: "secret" },
+        });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(ForbiddenEventPayloadFieldError);
+    expect(isForbiddenEventPayloadFieldError(err)).toBe(true);
+  });
+
+  it("refuses an oversized inline payload", () => {
+    const err = (() => {
+      try {
+        prepareAttemptEvent({
+          ...toolEvent(1),
+          payload: { ...toolEvent(1).payload, tool_call_id: "x".repeat(20_000) },
+        });
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(RunEventPayloadTooLargeError);
+    expect(isRunEventPayloadTooLargeError(err)).toBe(true);
+  });
+
+  it("changes the event digest when observed_at is re-stamped", () => {
+    const first = prepareAttemptEvent(toolEvent(1));
+    const second = prepareAttemptEvent({
       ...toolEvent(1),
-      observedAt: "2026-07-21T12:00:01.000Z",
-    };
-    expect(prepareAttemptEvent(restamped).eventDigest).not.toBe(
-      prepareAttemptEvent(toolEvent(1)).eventDigest,
-    );
+      observedAt: "2026-07-21T12:00:05.000Z",
+    });
+    expect(second.eventDigest).not.toBe(first.eventDigest);
   });
 });
 
-// ── Batch planning ──────────────────────────────────────────────────────────
+// ── Batch planning ───────────────────────────────────────────────────────────
 
 describe("planAttemptBatch", () => {
-  const prep = (seq: number) => prepareAttemptEvent(toolEvent(seq));
+  const prepared = (seqs: number[]) =>
+    seqs.map((seq) => prepareAttemptEvent(toolEvent(seq, `call_${seq}`)));
 
   it("returns an empty plan for an empty batch", () => {
     expect(planAttemptBatch(UUID_ATTEMPT, 0, [])).toEqual({
@@ -1140,236 +711,221 @@ describe("planAttemptBatch", () => {
     });
   });
 
-  it("classifies a fresh contiguous batch as all appends", () => {
-    const plan = planAttemptBatch(UUID_ATTEMPT, 0, [prep(1), prep(2), prep(3)]);
+  it("treats a contiguous batch past the durable tail as all appends", () => {
+    const plan = planAttemptBatch(UUID_ATTEMPT, 2, prepared([3, 4]));
     expect(plan.replays).toHaveLength(0);
-    expect(plan.appends.map((e) => e.attemptSeq)).toEqual([1, 2, 3]);
-  });
-
-  it("splits a crash retry into the durable prefix and the new suffix", () => {
-    const plan = planAttemptBatch(UUID_ATTEMPT, 2, [
-      prep(1),
-      prep(2),
-      prep(3),
-      prep(4),
-    ]);
-    expect(plan.replays.map((e) => e.attemptSeq)).toEqual([1, 2]);
     expect(plan.appends.map((e) => e.attemptSeq)).toEqual([3, 4]);
   });
 
-  it("classifies a fully-replayed batch as all replays", () => {
-    const plan = planAttemptBatch(UUID_ATTEMPT, 5, [prep(1), prep(2)]);
-    expect(plan.appends).toHaveLength(0);
-    expect(plan.replays).toHaveLength(2);
+  it("splits a crash retry into replays and appends", () => {
+    const plan = planAttemptBatch(UUID_ATTEMPT, 2, prepared([1, 2, 3]));
+    expect(plan.replays.map((e) => e.attemptSeq)).toEqual([1, 2]);
+    expect(plan.appends.map((e) => e.attemptSeq)).toEqual([3]);
   });
 
-  it("refuses a hole inside the batch", () => {
-    expect(() => planAttemptBatch(UUID_ATTEMPT, 0, [prep(1), prep(3)])).toThrow(
-      RunEventSequenceGapError,
-    );
+  it("refuses a batch that skips ahead of the durable tail", () => {
+    const err = (() => {
+      try {
+        planAttemptBatch(UUID_ATTEMPT, 1, prepared([3]));
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(RunEventSequenceGapError);
+    expect(isRunEventSequenceGapError(err)).toBe(true);
+    expect((err as RunEventSequenceGapError).expectedSeq).toBe(2);
   });
 
-  it("refuses a batch that skips ahead of the lease pointer", () => {
-    let caught: unknown;
-    try {
-      planAttemptBatch(UUID_ATTEMPT, 4, [prep(6)]);
-    } catch (err) {
-      caught = err;
-    }
-    expect(caught).toBeInstanceOf(RunEventSequenceGapError);
-    expect((caught as RunEventSequenceGapError).expectedSeq).toBe(5);
-    expect((caught as RunEventSequenceGapError).receivedSeq).toBe(6);
+  it("refuses a batch that is not internally contiguous", () => {
+    expect(() =>
+      planAttemptBatch(UUID_ATTEMPT, 4, prepared([5, 7])),
+    ).toThrow(RunEventSequenceGapError);
   });
 
   it("refuses a non-positive sequence", () => {
-    const zero = { ...prep(1), attemptSeq: 0 } as PreparedAttemptEvent;
-    expect(() => planAttemptBatch(UUID_ATTEMPT, 0, [zero])).toThrow(
+    expect(() => planAttemptBatch(UUID_ATTEMPT, 0, prepared([0]))).toThrow(
       RunEventSequenceGapError,
     );
   });
 });
 
-// ── Replay reconciliation — the integrity gate ──────────────────────────────
-
 describe("reconcileReplayedEvents", () => {
-  const prepared = prepareAttemptEvent(toolEvent(1));
+  const first = prepareAttemptEvent(toolEvent(1));
 
-  it("returns the prior row and run sequence for an identical digest", () => {
-    const result = reconcileReplayedEvents(
+  it("returns the prior rows unchanged when every digest matches", () => {
+    const out = reconcileReplayedEvents(
       UUID_ATTEMPT,
-      [prepared],
-      [
-        {
-          id: "event-1",
-          attempt_seq: 1,
-          run_seq: "17",
-          event_digest: prepared.eventDigest,
-        },
-      ],
+      [first],
+      [durableRow(first, "event-1", "7")],
     );
-    expect(result).toEqual([
+    expect(out).toEqual([
       {
         attemptSeq: 1,
-        runSeq: "17",
+        runSeq: "7",
         eventId: "event-1",
-        eventDigest: prepared.eventDigest,
+        eventDigest: first.eventDigest,
         idempotent: true,
       },
     ]);
   });
 
-  it("throws RunEventIntegrityError for the same sequence with a different digest", () => {
-    let caught: unknown;
-    try {
-      reconcileReplayedEvents(
-        UUID_ATTEMPT,
-        [prepared],
-        [
-          {
-            id: "event-1",
-            attempt_seq: 1,
-            run_seq: 17,
-            event_digest: SHA_3,
-          },
-        ],
-      );
-    } catch (err) {
-      caught = err;
-    }
-    expect(caught).toBeInstanceOf(RunEventIntegrityError);
-    expect((caught as RunEventIntegrityError).storedDigest).toBe(SHA_3);
-    expect((caught as RunEventIntegrityError).incomingDigest).toBe(
-      prepared.eventDigest,
-    );
-    expect((caught as RunEventIntegrityError).attemptSeq).toBe(1);
+  it("raises an integrity conflict on a same-seq different-digest replay", () => {
+    const err = (() => {
+      try {
+        reconcileReplayedEvents(UUID_ATTEMPT, [first], [
+          { ...durableRow(first, "event-1", "7"), event_digest: SHA_3 },
+        ]);
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(RunEventIntegrityError);
+    expect(isRunEventIntegrityError(err)).toBe(true);
+    expect((err as RunEventIntegrityError).storedDigest).toBe(SHA_3);
   });
 
-  it("throws when the lease pointer claims a sequence the log does not hold", () => {
-    expect(() => reconcileReplayedEvents(UUID_ATTEMPT, [prepared], [])).toThrow(
+  it("refuses to reconcile a sequence with no durable row", () => {
+    expect(() => reconcileReplayedEvents(UUID_ATTEMPT, [first], [])).toThrow(
       RunStoreStateError,
     );
   });
 });
 
-// ── Stream digest fold ──────────────────────────────────────────────────────
-
 describe("foldAttemptStreamDigest", () => {
-  it("folds only the NEW events, matching an event-by-event advance", () => {
-    const a = prepareAttemptEvent(toolEvent(1, "call_a"));
-    const b = prepareAttemptEvent(toolEvent(2, "call_b"));
-    const expected = advanceEventStreamDigest(
-      advanceEventStreamDigest(EMPTY_EVENT_STREAM_DIGEST, a),
-      b,
+  it("is the empty sentinel for no appended events", () => {
+    expect(foldAttemptStreamDigest(EMPTY_EVENT_STREAM_DIGEST, [])).toBe(
+      EMPTY_EVENT_STREAM_DIGEST,
     );
-    expect(foldAttemptStreamDigest(EMPTY_EVENT_STREAM_DIGEST, [a, b])).toBe(
+  });
+
+  it("reproduces advanceEventStreamDigest applied in order", () => {
+    const events = [1, 2].map((seq) =>
+      prepareAttemptEvent(toolEvent(seq, `call_${seq}`)),
+    );
+    const expected = events.reduce(
+      (digest, e) =>
+        advanceEventStreamDigest(digest, {
+          attemptSeq: e.attemptSeq,
+          eventSchemaVersion: e.eventSchemaVersion,
+          eventType: e.eventType,
+          payloadDigest: e.payloadDigest,
+        }),
+      EMPTY_EVENT_STREAM_DIGEST,
+    );
+    expect(foldAttemptStreamDigest(EMPTY_EVENT_STREAM_DIGEST, events)).toBe(
       expected,
     );
   });
+});
 
-  it("is a no-op for an empty append list — a pure replay never moves it", () => {
-    expect(foldAttemptStreamDigest(SHA_2, [])).toBe(SHA_2);
+describe("foldAttemptEventState", () => {
+  it("returns the canonical empty state for a zero-event attempt", () => {
+    expect(foldAttemptEventState(UUID_ATTEMPT, [])).toEqual({
+      eventCount: 0,
+      lastAttemptSeq: 0,
+      lastRunSeq: "0",
+      finalEventDigest: null,
+      eventStreamDigest: EMPTY_EVENT_STREAM_DIGEST,
+    });
+  });
+
+  it("folds the durable log into the same digest an append would produce", () => {
+    const events = [1, 2].map((seq) =>
+      prepareAttemptEvent(toolEvent(seq, `call_${seq}`)),
+    );
+    const state = foldAttemptEventState(UUID_ATTEMPT, [
+      durableRow(events[0] as PreparedAttemptEvent, "event-1", "5"),
+      durableRow(events[1] as PreparedAttemptEvent, "event-2", "6"),
+    ]);
+    expect(state).toEqual({
+      eventCount: 2,
+      lastAttemptSeq: 2,
+      lastRunSeq: "6",
+      finalEventDigest: (events[1] as PreparedAttemptEvent).eventDigest,
+      eventStreamDigest: foldAttemptStreamDigest(
+        EMPTY_EVENT_STREAM_DIGEST,
+        events,
+      ),
+    });
+  });
+
+  it("refuses to summarize a log with a hole in it", () => {
+    const events = [1, 3].map((seq) =>
+      prepareAttemptEvent(toolEvent(seq, `call_${seq}`)),
+    );
+    expect(() =>
+      foldAttemptEventState(UUID_ATTEMPT, [
+        durableRow(events[0] as PreparedAttemptEvent, "event-1", "5"),
+        durableRow(events[1] as PreparedAttemptEvent, "event-3", "7"),
+      ]),
+    ).toThrow(RunStoreStateError);
   });
 });
 
-// ── Lease validation ────────────────────────────────────────────────────────
+// ── Write gate ───────────────────────────────────────────────────────────────
 
-describe("leaseRejectionReason", () => {
-  it("permits a live, matching, unsealed lease", () => {
-    expect(leaseRejectionReason(makeLeaseRow(), LEASE)).toBeNull();
-  });
-
-  it("refuses an unknown lease", () => {
-    expect(leaseRejectionReason(undefined, LEASE)).toBe("unknown_lease");
-  });
-
-  it("refuses a mismatched token — a leaked attempt id must not grant writes", () => {
-    expect(
-      leaseRejectionReason(makeLeaseRow({ lease_token: "other" }), LEASE),
-    ).toBe("token_mismatch");
-  });
-
-  it("refuses a stale epoch", () => {
-    expect(leaseRejectionReason(makeLeaseRow({ lease_epoch: 3 }), LEASE)).toBe(
-      "epoch_mismatch",
+describe("attemptRejectionReason / assertAttemptWritable", () => {
+  it("admits an open attempt", () => {
+    expect(attemptRejectionReason(makeAttemptRow())).toBeNull();
+    expect(assertAttemptWritable(UUID_ATTEMPT, makeAttemptRow())).toMatchObject(
+      { attempt_id: UUID_ATTEMPT },
     );
   });
 
-  it("reports `sealed` ahead of `fenced` so a duplicate seal is recognizable", () => {
-    // A seal always fences its own lease. Testing the fence first would report
-    // every duplicate seal as a generic fence and the idempotent duplicate-sweep
-    // path could never recognize itself.
-    expect(
-      leaseRejectionReason(
-        makeLeaseRow({ seal_id: "seal-1", fenced_at: "2026-07-21T12:00:00Z" }),
-        LEASE,
-      ),
-    ).toBe("sealed");
+  it("refuses an attempt that does not exist", () => {
+    expect(attemptRejectionReason(undefined)).toBe("unknown_attempt");
+    const err = (() => {
+      try {
+        assertAttemptWritable(UUID_ATTEMPT, undefined);
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(AttemptNotWritableError);
+    expect(isAttemptNotWritableError(err)).toBe(true);
+    expect((err as AttemptNotWritableError).reason).toBe("unknown_attempt");
   });
 
-  it("reports a fence WITHOUT a seal as `fenced`", () => {
-    expect(
-      leaseRejectionReason(
-        makeLeaseRow({ fenced_at: "2026-07-21T12:00:00Z" }),
-        LEASE,
-      ),
-    ).toBe("fenced");
-  });
-
-  it("refuses an expired lease by default", () => {
-    expect(leaseRejectionReason(makeLeaseRow({ expired: true }), LEASE)).toBe(
-      "expired",
+  it("refuses a sealed attempt — the seal is the fence", () => {
+    const row = makeAttemptRow({ seal_id: "seal-1" });
+    expect(attemptRejectionReason(row)).toBe("sealed");
+    expect(() => assertAttemptWritable(UUID_ATTEMPT, row)).toThrow(
+      AttemptNotWritableError,
     );
-  });
-
-  it("permits an expired lease only for the reclaimer", () => {
-    expect(
-      leaseRejectionReason(makeLeaseRow({ expired: true }), LEASE, {
-        allowExpired: true,
-      }),
-    ).toBeNull();
-  });
-
-  it("assertLeaseUsable throws RunLeaseFencedError carrying the reason", () => {
-    let caught: unknown;
-    try {
-      assertLeaseUsable(makeLeaseRow({ expired: true }), LEASE);
-    } catch (err) {
-      caught = err;
-    }
-    expect(caught).toBeInstanceOf(RunLeaseFencedError);
-    expect((caught as RunLeaseFencedError).reason).toBe("expired");
-    expect((caught as RunLeaseFencedError).attemptId).toBe(UUID_ATTEMPT);
   });
 });
 
 describe("runStatusForTerminal", () => {
-  it("maps every terminal status onto a run status, denied included", () => {
+  it("maps every terminal status to a run status, failing closed", () => {
     expect(runStatusForTerminal("completed")).toBe("completed");
     expect(runStatusForTerminal("cancelled")).toBe("cancelled");
     expect(runStatusForTerminal("failed")).toBe("failed");
+    // A denial and an abandonment are failures of the RUN; the denial itself is
+    // evidence on the sealed attempt, not a separate run status.
     expect(runStatusForTerminal("denied")).toBe("failed");
     expect(runStatusForTerminal("abandoned")).toBe("failed");
   });
+
+  it("covers every declared terminal status", () => {
+    for (const status of ATTEMPT_TERMINAL_STATUSES) {
+      expect(["completed", "failed", "cancelled"]).toContain(
+        runStatusForTerminal(status),
+      );
+    }
+  });
 });
 
-// ── SQL builder shape ───────────────────────────────────────────────────────
+// ── SQL builders ─────────────────────────────────────────────────────────────
 
-describe("V2 SQL builders", () => {
-  it("enqueueRunV2 writes spec_version 2 and joins back to both bindings", () => {
+describe("SQL builders", () => {
+  it("buildCreateRunSql writes spec_version 2 and joins both bindings back", () => {
     const { sql: text, params } = compile(
-      buildEnqueueRunV2Sql("arun_x", SHA_1, {
-        orgId: UUID_ORG,
-        workspaceId: UUID_WS,
-        surface: "repo-edit",
-        spec: makeSpec(),
-        retentionPolicyRowId: "66666666-6666-4666-8666-666666666666",
-        repositoryBindingRowId: "55555555-5555-4555-8555-555555555555",
-      }),
+      buildCreateRunSql("arun_x", SHA_1, makeCreateRunInput()),
     );
     expect(text).toContain("INSERT INTO agent.agent_runs");
-    expect(text).toContain("'pending'");
-    // The joins ARE the verification: they prove the resolved uuid addresses
-    // the public id the spec pinned.
     expect(text).toContain(
       "LEFT JOIN ingestion.repository_bindings rb ON rb.id = i.repository_binding_id",
     );
@@ -1378,34 +934,19 @@ describe("V2 SQL builders", () => {
     );
     expect(params).toContain("arun_x");
     expect(params).toContain(SHA_1);
+    // The identity is written from the SPEC, never from a caller-supplied copy.
+    expect(params).toContain(UUID_A);
     expect(params).toContain(COMMIT_SHA);
-    expect(params).toContain(3); // max_attempts
   });
 
-  it("the V2 claim locks only PENDING rows under the pinned attempt cap", () => {
-    const { sql: text } = compile(buildLockClaimableRunV2Sql());
-    expect(text).toContain("spec_version = 2");
-    expect(text).toContain("status = 'pending'");
-    expect(text).toContain("attempt_count < max_attempts");
-    // A running V2 run is never stolen by a claim — only the reclaimer may
-    // fence it, because fencing means sealing and minting its grant.
-    expect(text).not.toContain("lease_expires_at <");
-    expect(text).toContain("FOR UPDATE SKIP LOCKED");
+  it("buildLockRunForAttemptSql takes the run row's FOR UPDATE lock", () => {
+    const { sql: text, params } = compile(buildLockRunForAttemptSql(UUID_RUN));
+    expect(text).toContain("FROM agent.agent_runs");
+    expect(text).toContain("FOR UPDATE");
+    expect(params).toEqual([UUID_RUN]);
   });
 
-  it("restores only a SEALED prior attempt's checkpoint with a parsable schema", () => {
-    const { sql: text, params } = compile(
-      buildSelectRestorableCheckpointSql(UUID_RUN, ["engine-state/v1"]),
-    );
-    expect(text).toContain(
-      "JOIN agent.agent_run_attempt_seals s ON s.attempt_id = c.attempt_id",
-    );
-    expect(text).toContain("engine_state_schema = ANY(");
-    expect(text).toContain("ORDER BY c.run_seq DESC");
-    expect(params).toContain(UUID_RUN);
-  });
-
-  it("pins the resolved engine identity and the whole restore tuple on the attempt", () => {
+  it("buildInsertAttemptSql writes the narrowed attempt-provenance pair only", () => {
     const { sql: text, params } = compile(
       buildInsertAttemptSql({
         publicId: ATTEMPT_PUBLIC_ID,
@@ -1413,1614 +954,952 @@ describe("V2 SQL builders", () => {
         workspaceId: UUID_WS,
         runId: UUID_RUN,
         attemptNumber: 2,
-        workerId: "worker-1",
+        producerId: "drain-1",
         engine: ENGINE,
-        restore: {
+        resumedFrom: {
           attemptId: UUID_A,
-          attemptPublicId: "arat_prior0123456789abcd",
-          checkpointId: UUID_B,
-          checkpointDigest: SHA_2,
-          streamDigest: SHA_3,
-          engineStateSchema: "engine-state/v1",
-          encryptedStateRef: BLOB_REF,
-          attemptSeq: 9,
-          runSeq: 14,
+          attemptPublicId: PRIOR_ATTEMPT_PUBLIC_ID,
         },
       }),
     );
     expect(text).toContain("INSERT INTO agent.agent_run_attempts");
-    expect(params).toContain("stella");
-    expect(params).toContain("2.1.1");
-    expect(params).toContain(SHA_1); // engine build digest
-    expect(params).toContain("arat_prior0123456789abcd");
-    expect(params).toContain(SHA_2); // restored checkpoint digest
+    expect(text).toContain("resumed_from_attempt_id");
+    // The checkpoint half of the old four-part restore tuple is gone (ADR-041).
+    expect(text).not.toContain("restored_checkpoint");
+    expect(params).toContain(PRIOR_ATTEMPT_PUBLIC_ID);
+    expect(params).toContain(ENGINE.buildDigest);
   });
 
-  it("allocates run sequences off the run row, not a SEQUENCE object", () => {
-    const { sql: text } = compile(buildAllocateRunSeqSql(UUID_RUN, 3));
-    // A SEQUENCE would burn numbers on a rolled-back append and leave holes an
-    // auditor cannot explain.
+  it("buildInsertAttemptSql nulls both provenance halves for a first attempt", () => {
+    const { params } = compile(
+      buildInsertAttemptSql({
+        publicId: ATTEMPT_PUBLIC_ID,
+        orgId: UUID_ORG,
+        workspaceId: UUID_WS,
+        runId: UUID_RUN,
+        attemptNumber: 1,
+        producerId: "drain-1",
+        engine: ENGINE,
+        resumedFrom: null,
+      }),
+    );
+    expect(params.filter((p) => p === null)).toHaveLength(2);
+  });
+
+  it("buildMarkRunAttemptedSql moves only operational columns", () => {
+    const { sql: text } = compile(
+      buildMarkRunAttemptedSql(UUID_RUN, UUID_ATTEMPT),
+    );
+    expect(text).toContain("attempt_count = attempt_count + 1");
+    expect(text).toContain("active_attempt_id");
+    expect(text).toContain("started_at = coalesce(started_at, now())");
+    expect(text).not.toContain("spec_digest");
+  });
+
+  it("buildLockAttemptForWriteSql locks the RUN row and joins the seal", () => {
+    const { sql: text, params } = compile(
+      buildLockAttemptForWriteSql(UUID_ATTEMPT),
+    );
+    expect(text).toContain("FROM agent.agent_runs r");
+    expect(text).toContain("FOR UPDATE");
+    expect(text).toContain(
+      "LEFT JOIN agent.agent_run_attempt_seals s ON s.attempt_id = a.id",
+    );
+    expect(params).toEqual([UUID_ATTEMPT, UUID_ATTEMPT]);
+  });
+
+  it("buildSelectAttemptEventStateSql reads the whole v2 stream in order", () => {
+    const { sql: text } = compile(
+      buildSelectAttemptEventStateSql(UUID_ATTEMPT),
+    );
+    expect(text).toContain("event_record_version = 2");
+    expect(text).toContain("run_seq::text");
+    expect(text).toContain("ORDER BY attempt_seq ASC");
+  });
+
+  it("buildAllocateRunSeqSql returns the FIRST reserved sequence as text", () => {
+    const { sql: text, params } = compile(buildAllocateRunSeqSql(UUID_RUN, 3));
     expect(text).toContain("next_run_seq = next_run_seq +");
-    expect(text).toContain("RETURNING (next_run_seq -");
+    expect(text).toContain("(next_run_seq - $2)::text AS first_run_seq");
+    expect(params).toEqual([3, UUID_RUN, 3]);
   });
 
-  it("the V2 event insert has NO conflict clause", () => {
+  it("buildInsertAttemptEventsSql has NO conflict clause", () => {
+    const prepared = [1, 2].map((seq) =>
+      prepareAttemptEvent(toolEvent(seq, `call_${seq}`)),
+    );
     const query = buildInsertAttemptEventsSql(
       UUID_RUN,
       UUID_ORG,
       UUID_WS,
       UUID_ATTEMPT,
-      [{ ...prepareAttemptEvent(toolEvent(1)), runSeq: "5" }],
+      prepared.map((e, i) => ({ ...e, runSeq: String(i + 5) })),
     );
-    expect(query).not.toBeNull();
-    const { sql: text } = compile(query as SQL);
-    expect(text).toContain("INSERT INTO agent.agent_run_events");
+    const { sql: text, params } = compile(query as SQL);
     expect(text).not.toContain("ON CONFLICT");
-    expect(text).toContain("event_record_version");
     expect(text).toContain("RETURNING id, attempt_seq, run_seq::text");
+    expect(params).toContain("5");
+    expect(params).toContain("6");
   });
 
-  it("returns null for an empty V2 batch instead of an INSERT with no VALUES", () => {
+  it("buildInsertAttemptEventsSql returns null for an empty batch", () => {
     expect(
-      buildInsertAttemptEventsSql(
-        UUID_RUN,
-        UUID_ORG,
-        UUID_WS,
-        UUID_ATTEMPT,
-        [],
-      ),
+      buildInsertAttemptEventsSql(UUID_RUN, UUID_ORG, UUID_WS, UUID_ATTEMPT, []),
     ).toBeNull();
   });
 
-  it("the V1 append KEEPS ON CONFLICT DO NOTHING", () => {
-    // V1 rows carry no digest, so the drop hides no integrity failure, and the
-    // V1 worker's crash-replay safety depends on it. Removing it here would be
-    // a regression, not a hardening.
-    const query = buildAppendEventsSql(UUID_RUN, UUID_ORG, UUID_WS, [
-      { seq: 1, type: "text-delta", payload: {} },
-    ]);
-    expect(compile(query as SQL).sql).toContain(
-      "ON CONFLICT (run_id, seq) DO NOTHING",
-    );
-  });
-
-  it("reads V2 events by decimal run_seq and returns it as text", () => {
+  it("buildInsertAttemptSealSql pins the schema's sealer_kind vocabulary", () => {
     const { sql: text, params } = compile(
-      buildReadAttemptEventsSinceSql(UUID_RUN, "9007199254740993", 10),
+      buildInsertAttemptSealSql({
+        orgId: UUID_ORG,
+        workspaceId: UUID_WS,
+        runId: UUID_RUN,
+        attemptId: UUID_ATTEMPT,
+        terminalStatus: "completed",
+        reasonCode: null,
+        eventCount: 2,
+        finalRunSeq: "6",
+        finalAttemptSeq: 2,
+        finalEventDigest: SHA_2,
+        eventStreamDigest: SHA_3,
+        sealerId: "drain-1",
+      }),
     );
-    expect(text).toContain("e.event_record_version = 2");
-    expect(text).toContain("e.run_seq::text AS run_seq");
+    expect(text).toContain("INSERT INTO agent.agent_run_attempt_seals");
+    expect(text).toContain("'worker'");
+    expect(params).toContain("drain-1");
+    expect(params).toContain(SHA_3);
+  });
+
+  it("buildFinishRunSql clears the active-attempt pointer", () => {
+    const { sql: text, params } = compile(
+      buildFinishRunSql(UUID_RUN, "failed", null, "boom"),
+    );
+    expect(text).toContain("active_attempt_id = NULL");
+    expect(text).toContain("completed_at = now()");
+    expect(params).toContain("boom");
+    // The result column stays NULL rather than being written as the string
+    // "null" — a JSON.stringify(null) would be indistinguishable from evidence.
+    expect(params).toContain(null);
+  });
+
+  it("buildFinishRunSql serializes a result payload", () => {
+    const { params } = compile(
+      buildFinishRunSql(UUID_RUN, "completed", { ok: true }, null),
+    );
+    expect(params).toContain('{"ok":true}');
+  });
+
+  it("buildGetRunByPublicIdSql has no tenant predicate — RLS scopes it", () => {
+    const { sql: text, params } = compile(
+      buildGetRunByPublicIdSql("arun_abc"),
+    );
+    expect(text).toContain("WHERE public_id =");
+    expect(text).not.toContain("org_id =");
+    expect(params).toEqual(["arun_abc"]);
+  });
+
+  it("buildListRunAttemptsSql orders by attempt_number and joins the seal", () => {
+    const { sql: text, params } = compile(buildListRunAttemptsSql(UUID_RUN));
+    expect(text).toContain("LEFT JOIN agent.agent_run_attempt_seals");
+    expect(text).toContain("ORDER BY a.attempt_number ASC");
+    expect(params).toEqual([UUID_RUN]);
+  });
+
+  it("buildReadAttemptEventsSinceSql cursors on the bigint run_seq", () => {
+    const { sql: text, params } = compile(
+      buildReadAttemptEventsSinceSql(UUID_RUN, "12"),
+    );
+    expect(text).toContain("e.run_seq > $2::bigint");
     expect(text).toContain("ORDER BY e.run_seq ASC");
-    expect(params).toContain("9007199254740993");
-    expect(params).toContain(10);
+    expect(params).toEqual([UUID_RUN, "12", DEFAULT_READ_EVENTS_LIMIT]);
   });
 
-  it("sweeps only expired, unfenced, unsealed leases", () => {
-    const { sql: text } = compile(buildSelectExpiredAttemptLeasesSql(5));
-    expect(text).toContain("l.fenced_at IS NULL");
-    expect(text).toContain("l.expires_at <= now()");
-    expect(text).toContain("s.id IS NULL");
-    expect(text).toContain("ORDER BY l.expires_at ASC");
-  });
-});
-
-describe("mapAttemptEventReadRow", () => {
-  it("carries run_seq as an exact DECIMAL STRING past 2^53", () => {
-    const mapped = mapAttemptEventReadRow({
-      id: "event-1",
-      attempt_id: UUID_ATTEMPT,
-      attempt_public_id: ATTEMPT_PUBLIC_ID,
-      run_seq: "9007199254740993",
-      attempt_seq: "3",
-      event_schema_version: EVENT_SCHEMA_VERSION,
-      event_type: "tool.call_completed",
-      stage: "tool",
-      payload_digest: SHA_1,
-      event_digest: SHA_2,
-      payload_inline: { ok: true },
-      encrypted_payload_ref: null,
-      observed_at: OBSERVED_AT,
-      created_at: "2026-07-21T12:00:02.000Z",
-    });
-    // A JS number would silently become 9007199254740992 here and resume a
-    // subscription at the wrong event.
-    expect(mapped.runSeq).toBe("9007199254740993");
-    expect(mapped.attemptSeq).toBe(3);
-    expect(mapped.observedAt).toEqual(new Date(OBSERVED_AT));
-    expect(mapped.recordedAt).toEqual(new Date("2026-07-21T12:00:02.000Z"));
-    expect(mapped.payload).toEqual({ ok: true });
+  it("buildReadAttemptEventsSinceSql honours an explicit limit", () => {
+    expect(
+      compile(buildReadAttemptEventsSinceSql(UUID_RUN, "0", 10)).params,
+    ).toEqual([UUID_RUN, "0", 10]);
   });
 
-  it("maps an encrypted-payload event with a null inline body", () => {
-    const mapped = mapAttemptEventReadRow({
-      id: "event-2",
-      attempt_id: UUID_ATTEMPT,
-      attempt_public_id: ATTEMPT_PUBLIC_ID,
-      run_seq: "2",
-      attempt_seq: 2,
-      event_schema_version: EVENT_SCHEMA_VERSION,
-      event_type: "context.frames_selected",
-      stage: "context",
-      payload_digest: SHA_1,
-      event_digest: SHA_2,
-      payload_inline: null,
-      encrypted_payload_ref: BLOB_REF,
-      observed_at: new Date(OBSERVED_AT),
-      created_at: new Date(OBSERVED_AT),
-    });
-    expect(mapped.payload).toBeNull();
-    expect(mapped.encryptedPayloadRef).toBe(BLOB_REF);
+  it("buildListAttemptIdentitySql resolves an attempt without a lock", () => {
+    const { sql: text, params } = compile(
+      buildListAttemptIdentitySql(UUID_ATTEMPT),
+    );
+    expect(text).toContain("SELECT id AS attempt_id");
+    expect(text).not.toContain("FOR UPDATE");
+    expect(params).toEqual([UUID_ATTEMPT]);
   });
 });
 
-// ── Store methods, one transaction at a time ────────────────────────────────
+// ── createRun ────────────────────────────────────────────────────────────────
 
-describe("enqueueRunV2", () => {
-  it("verifies what Postgres stored against the spec and returns the digest", async () => {
-    const spec = makeSpec();
-    const { tx } = makeRoutingTx([
+describe("createRun", () => {
+  it("inserts the trusted row and verifies it against the spec", async () => {
+    const { tx, executed } = makeRoutingTx([
       {
-        match: /INSERT INTO agent\.agent_runs/,
+        match: CREATE_RUN,
         rows: [{ id: UUID_RUN, public_id: "arun_x", ...makeIdentityRow() }],
       },
     ]);
-    mocks.withTenantDb.mockImplementation(makeWithTenantDbMock(tx));
-
-    const store = createPostgresRunStore();
-    const result = await store.enqueueRunV2({
-      orgId: UUID_ORG,
-      workspaceId: UUID_WS,
-      surface: "repo-edit",
-      spec,
-      retentionPolicyRowId: "66666666-6666-4666-8666-666666666666",
-      repositoryBindingRowId: "55555555-5555-4555-8555-555555555555",
-    });
-
+    useTx(tx);
+    const result = await createPostgresRunStore().createRun(
+      makeCreateRunInput(),
+    );
     expect(result.runId).toBe(UUID_RUN);
     expect(result.publicId).toBe("arun_x");
-    expect(result.specDigest).toBe(
-      buildRunRowIdentityFromSpec(spec).spec_digest,
-    );
-    expect(mocks.withSystemDb).not.toHaveBeenCalled();
+    expect(result.specDigest).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(ranSql(executed, CREATE_RUN)).toBe(true);
   });
 
   it("fails closed when the stored row disagrees with the spec", async () => {
     const { tx } = makeRoutingTx([
       {
-        match: /INSERT INTO agent\.agent_runs/,
+        match: CREATE_RUN,
         rows: [
           {
             id: UUID_RUN,
             public_id: "arun_x",
-            // A different agent version than the spec binds.
-            ...makeIdentityRow({ agent_version_id: UUID_A }),
+            ...makeIdentityRow({ base_commit_sha: "c".repeat(40) }),
           },
         ],
       },
     ]);
-    mocks.withTenantDb.mockImplementation(makeWithTenantDbMock(tx));
-    const store = createPostgresRunStore();
+    useTx(tx);
     await expect(
-      store.enqueueRunV2({
-        orgId: UUID_ORG,
-        workspaceId: UUID_WS,
-        surface: "repo-edit",
-        spec: makeSpec(),
-        retentionPolicyRowId: "66666666-6666-4666-8666-666666666666",
-        repositoryBindingRowId: "55555555-5555-4555-8555-555555555555",
-      }),
-    ).rejects.toThrow(/agent_version_id/);
-  });
-
-  it("fails closed when the resolved uuid addresses a DIFFERENT retention policy", async () => {
-    const { tx } = makeRoutingTx([
-      {
-        match: /INSERT INTO agent\.agent_runs/,
-        rows: [
-          {
-            id: UUID_RUN,
-            public_id: "arun_x",
-            ...makeIdentityRow({
-              retention_policy_public_id: "rpv_ffffffffffffffffffff",
-            }),
-          },
-        ],
-      },
-    ]);
-    mocks.withTenantDb.mockImplementation(makeWithTenantDbMock(tx));
-    const store = createPostgresRunStore();
-    await expect(
-      store.enqueueRunV2({
-        orgId: UUID_ORG,
-        workspaceId: UUID_WS,
-        surface: "repo-edit",
-        spec: makeSpec(),
-        retentionPolicyRowId: "66666666-6666-4666-8666-666666666666",
-        repositoryBindingRowId: "55555555-5555-4555-8555-555555555555",
-      }),
-    ).rejects.toThrow(/retention_policy_id/);
+      createPostgresRunStore().createRun(makeCreateRunInput()),
+    ).rejects.toBeInstanceOf(RunSpecIdentityMismatchError);
   });
 
   it("throws when the insert returns no row", async () => {
     const { tx } = makeRoutingTx([]);
-    mocks.withTenantDb.mockImplementation(makeWithTenantDbMock(tx));
-    const store = createPostgresRunStore();
+    useTx(tx);
     await expect(
-      store.enqueueRunV2({
-        orgId: UUID_ORG,
-        workspaceId: UUID_WS,
-        surface: "repo-edit",
-        spec: makeSpec(),
-        retentionPolicyRowId: "66666666-6666-4666-8666-666666666666",
-        repositoryBindingRowId: "55555555-5555-4555-8555-555555555555",
-      }),
-    ).rejects.toThrow(RunStoreStateError);
+      createPostgresRunStore().createRun(makeCreateRunInput()),
+    ).rejects.toBeInstanceOf(RunStoreStateError);
   });
 });
 
-describe("claimNextRunV2", () => {
-  function claimRoutes(
-    overrides: { run?: unknown[]; checkpoint?: unknown[] } = {},
-  ) {
-    return [
+// ── createAttempt ────────────────────────────────────────────────────────────
+
+function lockedRunRows(overrides: Record<string, unknown> = {}) {
+  return [
+    {
+      id: UUID_RUN,
+      org_id: UUID_ORG,
+      workspace_id: UUID_WS,
+      spec_version: 2,
+      status: "pending",
+      attempt_count: 0,
+      max_attempts: 3,
+      ...overrides,
+    },
+  ];
+}
+
+describe("createAttempt", () => {
+  const input = {
+    runId: UUID_RUN,
+    producerId: "drain-1",
+    engine: ENGINE,
+  };
+
+  it("creates the immutable attempt and marks the run attempted", async () => {
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_RUN, rows: lockedRunRows() },
       {
-        match: LOCK_RUN,
-        rows: overrides.run ?? [
+        match: INSERT_ATTEMPT,
+        rows: [
           {
-            id: UUID_RUN,
-            public_id: "arun_x",
-            org_id: UUID_ORG,
-            workspace_id: UUID_WS,
-            surface: "repo-edit",
-            spec: makeSpec(),
-            attempt_count: 0,
-            next_run_seq: 1,
-            latest_checkpoint_id: null,
-            ...makeIdentityRow(),
+            id: UUID_ATTEMPT,
+            public_id: ATTEMPT_PUBLIC_ID,
+            attempt_number: 1,
           },
         ],
       },
-      { match: SELECT_CHECKPOINT, rows: overrides.checkpoint ?? [] },
+      { match: MARK_ATTEMPTED, rows: [{ id: UUID_RUN, attempt_count: 1 }] },
+    ]);
+    useTx(tx);
+    const attempt = await createPostgresRunStore().createAttempt(input);
+    expect(attempt).toEqual({
+      attemptId: UUID_ATTEMPT,
+      attemptPublicId: ATTEMPT_PUBLIC_ID,
+      runId: UUID_RUN,
+      orgId: UUID_ORG,
+      workspaceId: UUID_WS,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      engine: ENGINE,
+      resumedFrom: null,
+    });
+    expect(ranSql(executed, MARK_ATTEMPTED)).toBe(true);
+  });
+
+  it("carries the attempt-provenance pair onto a successor", async () => {
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_RUN, rows: lockedRunRows({ attempt_count: 1 }) },
+      {
+        match: INSERT_ATTEMPT,
+        rows: [
+          { id: UUID_B, public_id: ATTEMPT_PUBLIC_ID, attempt_number: 2 },
+        ],
+      },
+      { match: MARK_ATTEMPTED, rows: [{ id: UUID_RUN, attempt_count: 2 }] },
+    ]);
+    useTx(tx);
+    const attempt = await createPostgresRunStore().createAttempt({
+      ...input,
+      resumedFrom: {
+        attemptId: UUID_ATTEMPT,
+        attemptPublicId: PRIOR_ATTEMPT_PUBLIC_ID,
+      },
+    });
+    expect(attempt.attemptNumber).toBe(2);
+    expect(attempt.resumedFrom).toEqual({
+      attemptId: UUID_ATTEMPT,
+      attemptPublicId: PRIOR_ATTEMPT_PUBLIC_ID,
+    });
+    const insert = executed.find((e) => INSERT_ATTEMPT.test(e.sql));
+    expect(insert?.params).toContain(PRIOR_ATTEMPT_PUBLIC_ID);
+  });
+
+  it("refuses an unknown run", async () => {
+    const { tx } = makeRoutingTx([]);
+    useTx(tx);
+    await expect(
+      createPostgresRunStore().createAttempt(input),
+    ).rejects.toThrow(/does not exist/);
+  });
+
+  it("refuses a preserved legacy run row", async () => {
+    const { tx } = makeRoutingTx([
+      {
+        match: LOCK_RUN,
+        rows: lockedRunRows({ spec_version: 1, max_attempts: null }),
+      },
+    ]);
+    useTx(tx);
+    await expect(
+      createPostgresRunStore().createAttempt(input),
+    ).rejects.toThrow(/preserved legacy row/);
+  });
+
+  it("refuses to exceed the run's pinned max_attempts", async () => {
+    const { tx } = makeRoutingTx([
+      { match: LOCK_RUN, rows: lockedRunRows({ attempt_count: 3 }) },
+    ]);
+    useTx(tx);
+    await expect(
+      createPostgresRunStore().createAttempt(input),
+    ).rejects.toThrow(/exhausted its pinned max_attempts/);
+  });
+
+  it("throws when the attempt insert returns no row", async () => {
+    const { tx } = makeRoutingTx([
+      { match: LOCK_RUN, rows: lockedRunRows() },
+    ]);
+    useTx(tx);
+    await expect(
+      createPostgresRunStore().createAttempt(input),
+    ).rejects.toThrow(/attempt insert returned no row/);
+  });
+
+  it("throws when the run cannot be marked running", async () => {
+    const { tx } = makeRoutingTx([
+      { match: LOCK_RUN, rows: lockedRunRows() },
       {
         match: INSERT_ATTEMPT,
         rows: [
           { id: UUID_ATTEMPT, public_id: ATTEMPT_PUBLIC_ID, attempt_number: 1 },
         ],
       },
-      { match: SELECT_EPOCH, rows: [{ next_epoch: "4" }] },
-      {
-        match: INSERT_LEASE,
-        rows: [{ id: "lease-1", expires_at: OBSERVED_AT }],
-      },
-      { match: MARK_CLAIMED, rows: [{ id: UUID_RUN }] },
-    ];
-  }
-
-  it("creates a distinct attempt with a fenced lease in ONE transaction", async () => {
-    const { tx, executed } = makeRoutingTx(claimRoutes());
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-
-    const store = createPostgresRunStore();
-    const claimed = await store.claimNextRunV2("worker-1", { engine: ENGINE });
-
-    expect(mocks.withSystemDb).toHaveBeenCalledTimes(1); // one transaction
-    expect(claimed).not.toBeNull();
-    expect(claimed?.specVersion).toBe(2);
-    expect(claimed?.lease).toEqual({
-      runId: UUID_RUN,
-      attemptId: UUID_ATTEMPT,
-      attemptPublicId: ATTEMPT_PUBLIC_ID,
-      leaseToken: expect.stringMatching(/^[0-9a-f-]{36}$/),
-      leaseEpoch: 4,
-    });
-    expect(claimed?.v2.engine).toEqual(ENGINE);
-    expect(claimed?.v2.attemptNumber).toBe(1);
-    expect(claimed?.v2.restore).toBeNull();
-    expect(ranSql(executed, INSERT_ATTEMPT)).toBe(true);
-    expect(ranSql(executed, INSERT_LEASE)).toBe(true);
-    expect(ranSql(executed, MARK_CLAIMED)).toBe(true);
-  });
-
-  it("returns null when nothing is claimable, without creating an attempt", async () => {
-    const { tx, executed } = makeRoutingTx(claimRoutes({ run: [] }));
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    expect(
-      await store.claimNextRunV2("worker-1", { engine: ENGINE }),
-    ).toBeNull();
-    expect(ranSql(executed, INSERT_ATTEMPT)).toBe(false);
-  });
-
-  it("records restored checkpoint provenance without reusing the prior attempt id", async () => {
-    const { tx } = makeRoutingTx(
-      claimRoutes({
-        checkpoint: [
-          {
-            id: UUID_B,
-            attempt_id: UUID_A,
-            attempt_public_id: "arat_prior0123456789abcd",
-            attempt_seq: "9",
-            run_seq: "14",
-            checkpoint_digest: SHA_2,
-            stream_digest: SHA_3,
-            engine_state_schema: "engine-state/v1",
-            encrypted_state_ref: BLOB_REF,
-          },
-        ],
-      }),
-    );
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-
-    const store = createPostgresRunStore();
-    const claimed = await store.claimNextRunV2("worker-1", {
-      engine: ENGINE,
-      restorableEngineStateSchemas: ["engine-state/v1"],
-    });
-
-    expect(claimed?.v2.restore).toEqual({
-      attemptId: UUID_A,
-      attemptPublicId: "arat_prior0123456789abcd",
-      checkpointId: UUID_B,
-      checkpointDigest: SHA_2,
-      streamDigest: SHA_3,
-      engineStateSchema: "engine-state/v1",
-      encryptedStateRef: BLOB_REF,
-      attemptSeq: 9,
-      runSeq: 14,
-    });
-    // The successor keeps its OWN attempt identity.
-    expect(claimed?.lease.attemptId).toBe(UUID_ATTEMPT);
-    expect(claimed?.lease.attemptId).not.toBe(UUID_A);
-    // attempt_seq restarts at 1 regardless of the restored position.
-    expect(claimed?.checkpointSeq).toBe(0);
-    expect(claimed?.checkpoint).toBeNull();
-  });
-
-  it("skips checkpoint restore entirely when the worker declares no parsable schema", async () => {
-    const { tx, executed } = makeRoutingTx(claimRoutes());
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    const claimed = await store.claimNextRunV2("worker-1", { engine: ENGINE });
-    expect(claimed?.v2.restore).toBeNull();
-    expect(ranSql(executed, SELECT_CHECKPOINT)).toBe(false);
-  });
-
-  it("refuses to retry past the pinned max_attempts", async () => {
-    const routes = claimRoutes();
-    routes[0] = {
-      match: LOCK_RUN,
-      rows: [
-        {
-          id: UUID_RUN,
-          public_id: "arun_x",
-          org_id: UUID_ORG,
-          workspace_id: UUID_WS,
-          surface: "repo-edit",
-          spec: makeSpec(),
-          attempt_count: 3,
-          next_run_seq: 1,
-          latest_checkpoint_id: null,
-          ...makeIdentityRow(),
-        },
-      ],
-    };
-    const { tx, executed } = makeRoutingTx(routes);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
+    ]);
+    useTx(tx);
     await expect(
-      store.claimNextRunV2("worker-1", { engine: ENGINE }),
-    ).rejects.toThrow(/max_attempts/);
-    expect(ranSql(executed, INSERT_ATTEMPT)).toBe(false);
-  });
-
-  it("throws rather than proceeding when the attempt insert returns no row", async () => {
-    const routes = claimRoutes();
-    routes[2] = { match: INSERT_ATTEMPT, rows: [] };
-    const { tx } = makeRoutingTx(routes);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    await expect(
-      store.claimNextRunV2("worker-1", { engine: ENGINE }),
-    ).rejects.toThrow(RunStoreStateError);
-  });
-
-  it("throws when the run could not be marked running", async () => {
-    const routes = claimRoutes();
-    routes[5] = { match: MARK_CLAIMED, rows: [] };
-    const { tx } = makeRoutingTx(routes);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    await expect(
-      store.claimNextRunV2("worker-1", { engine: ENGINE }),
+      createPostgresRunStore().createAttempt(input),
     ).rejects.toThrow(/could not be marked running/);
   });
-
-  it("claimNextRun dispatches to V2 first, then falls back to V1", async () => {
-    // No V2 work: the dispatcher must still hand back the queued V1 run.
-    const routes = [
-      ...claimRoutes({ run: [] }),
-      {
-        match: LEGACY_CLAIM,
-        rows: [
-          {
-            id: "legacy-run",
-            public_id: "arun_legacy",
-            org_id: UUID_ORG,
-            workspace_id: UUID_WS,
-            surface: "chat",
-            spec: { instruction: "hi" },
-            attempts: 1,
-            checkpoint: null,
-            checkpoint_seq: 0,
-          },
-        ],
-      },
-    ];
-    const { tx } = makeRoutingTx(routes);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    const claimed = await store.claimNextRun("worker-1", { engine: ENGINE });
-    expect(claimed?.specVersion).toBe(1);
-    expect(claimed?.publicId).toBe("arun_legacy");
-    expect(claimed?.lease).toBeNull();
-  });
-
-  it("claimNextRun without an engine identity claims V1 only", async () => {
-    const { tx, executed } = makeRoutingTx([
-      {
-        match: LEGACY_CLAIM,
-        rows: [
-          {
-            id: "legacy-run",
-            public_id: "arun_legacy",
-            org_id: UUID_ORG,
-            workspace_id: UUID_WS,
-            surface: "chat",
-            spec: {},
-            attempts: 1,
-            checkpoint: null,
-            checkpoint_seq: 0,
-          },
-        ],
-      },
-    ]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    const claimed = await store.claimNextRun("worker-1");
-    expect(claimed?.specVersion).toBe(1);
-    // A V2 attempt REQUIRES a pinned engine build digest, so there is no
-    // "claim now, resolve the engine later" path.
-    expect(ranSql(executed, LOCK_RUN)).toBe(false);
-  });
 });
 
-describe("renewAttemptLease / isAttemptCancelRequested", () => {
-  it("renews against a live lease and returns the new expiry", async () => {
-    const { tx, executed } = makeRoutingTx([
-      { match: LOCK_LEASE, rows: [makeLeaseRow()] },
-      { match: RENEW_LEASE, rows: [{ expires_at: OBSERVED_AT }] },
-    ]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    const result = await store.renewAttemptLease(LEASE);
-    expect(result.expiresAt).toEqual(new Date(OBSERVED_AT));
-    // The guard is restated in the UPDATE's WHERE clause, not only in the lock.
-    const renew = executed.find((e) => RENEW_LEASE.test(e.sql));
-    expect(renew?.sql).toContain("lease_token =");
-    expect(renew?.sql).toContain("lease_epoch =");
-    expect(renew?.sql).toContain("fenced_at IS NULL");
-  });
-
-  it("refuses to renew AT expiry — the reclaimer owns an expired attempt", async () => {
-    const { tx, executed } = makeRoutingTx([
-      { match: LOCK_LEASE, rows: [makeLeaseRow({ expired: true })] },
-    ]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    await expect(store.renewAttemptLease(LEASE)).rejects.toThrow(
-      RunLeaseFencedError,
-    );
-    expect(ranSql(executed, RENEW_LEASE)).toBe(false);
-  });
-
-  it("refuses to renew a fenced attempt", async () => {
-    const { tx } = makeRoutingTx([
-      { match: LOCK_LEASE, rows: [makeLeaseRow({ fenced_at: OBSERVED_AT })] },
-    ]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    await expect(store.renewAttemptLease(LEASE)).rejects.toThrow(
-      /may not write: fenced/,
-    );
-  });
-
-  it("throws when the lease vanished between the lock and the update", async () => {
-    const { tx } = makeRoutingTx([
-      { match: LOCK_LEASE, rows: [makeLeaseRow()] },
-      { match: RENEW_LEASE, rows: [] },
-    ]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    await expect(store.renewAttemptLease(LEASE)).rejects.toThrow(
-      RunLeaseFencedError,
-    );
-  });
-
-  it("gates the cancel check on the same fencing tuple as a write", async () => {
-    const { tx } = makeRoutingTx([
-      { match: LOCK_LEASE, rows: [makeLeaseRow({ fenced_at: OBSERVED_AT })] },
-      { match: CANCEL_CHECK, rows: [{ cancel_requested: false }] },
-    ]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    // Answering "not cancelled" to a fenced attempt would tell it to continue.
-    await expect(store.isAttemptCancelRequested(LEASE)).rejects.toThrow(
-      RunLeaseFencedError,
-    );
-  });
-
-  it("reports a live cancellation request", async () => {
-    const { tx } = makeRoutingTx([
-      { match: LOCK_LEASE, rows: [makeLeaseRow()] },
-      { match: CANCEL_CHECK, rows: [{ cancel_requested: true }] },
-    ]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    expect(await store.isAttemptCancelRequested(LEASE)).toBe(true);
-  });
-
-  it("defaults to false when the run row is missing", async () => {
-    const { tx } = makeRoutingTx([
-      { match: LOCK_LEASE, rows: [makeLeaseRow()] },
-      { match: CANCEL_CHECK, rows: [] },
-    ]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    expect(await store.isAttemptCancelRequested(LEASE)).toBe(false);
-  });
-});
+// ── appendAttemptBatch ───────────────────────────────────────────────────────
 
 describe("appendAttemptBatch", () => {
-  function appendRoutes(
-    lease: LockedLeaseRow,
-    opts: {
-      firstRunSeq?: string;
-      inserted?: unknown[];
-      existing?: unknown[];
-      checkpointRows?: unknown[];
-      onCheckpointInsert?: () => unknown[];
-    } = {},
-  ): Route[] {
-    return [
-      { match: LOCK_LEASE, rows: [lease] },
-      { match: SELECT_EXISTING_EVENTS, rows: opts.existing ?? [] },
-      {
-        match: ALLOCATE_RUN_SEQ,
-        rows: [{ first_run_seq: opts.firstRunSeq ?? "1" }],
-      },
-      { match: INSERT_EVENTS, rows: opts.inserted ?? [] },
-      {
-        match: INSERT_CHECKPOINT,
-        rows: opts.onCheckpointInsert ??
-          opts.checkpointRows ?? [{ id: "cp-1" }],
-      },
-      { match: SET_LATEST_CHECKPOINT, rows: [{ id: UUID_RUN }] },
-      { match: ADVANCE_LEASE, rows: [{ id: "lease-1" }] },
-    ];
-  }
-
-  it("appends a fresh batch, allocates run sequences, and advances the lease in ONE transaction", async () => {
-    const { tx, executed } = makeRoutingTx(
-      appendRoutes(makeLeaseRow(), {
-        firstRunSeq: "10",
-        inserted: [
-          { id: "e1", attempt_seq: 1, run_seq: "10" },
-          { id: "e2", attempt_seq: 2, run_seq: "11" },
-        ],
-      }),
+  it("appends a contiguous batch and folds the stream digest", async () => {
+    const prepared = [1, 2].map((seq) =>
+      prepareAttemptEvent(toolEvent(seq, `call_${seq}`)),
     );
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-
-    const store = createPostgresRunStore();
-    const result = await store.appendAttemptBatch({
-      lease: LEASE,
-      events: [toolEvent(1, "call_a"), toolEvent(2, "call_b")],
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows: [] },
+      { match: ALLOCATE_RUN_SEQ, rows: [{ first_run_seq: "5" }] },
+      {
+        match: INSERT_EVENTS,
+        // Deliberately out of order: multi-row RETURNING order is not
+        // guaranteed, so the store must match on attempt_seq, not position.
+        rows: [
+          { id: "event-2", attempt_seq: 2, run_seq: "6" },
+          { id: "event-1", attempt_seq: 1, run_seq: "5" },
+        ],
+      },
+    ]);
+    useTx(tx);
+    const result = await createPostgresRunStore().appendAttemptBatch({
+      attemptId: UUID_ATTEMPT,
+      events: [toolEvent(1, "call_1"), toolEvent(2, "call_2")],
     });
-
-    expect(mocks.withSystemDb).toHaveBeenCalledTimes(1); // one transaction
-    expect(result.events.map((e) => e.runSeq)).toEqual(["10", "11"]);
-    expect(result.events.every((e) => !e.idempotent)).toBe(true);
+    expect(result.events.map((e) => e.eventId)).toEqual([
+      "event-1",
+      "event-2",
+    ]);
+    expect(result.events.every((e) => e.idempotent === false)).toBe(true);
+    expect(result.eventCount).toBe(2);
     expect(result.lastAttemptSeq).toBe(2);
-    expect(result.lastRunSeq).toBe("11");
-    expect(result.eventCount).toBe(2);
+    expect(result.lastRunSeq).toBe("6");
     expect(result.eventStreamDigest).toBe(
-      foldAttemptStreamDigest(EMPTY_EVENT_STREAM_DIGEST, [
-        prepareAttemptEvent(toolEvent(1, "call_a")),
-        prepareAttemptEvent(toolEvent(2, "call_b")),
-      ]),
+      foldAttemptStreamDigest(EMPTY_EVENT_STREAM_DIGEST, prepared),
     );
-    expect(ranSql(executed, ALLOCATE_RUN_SEQ)).toBe(true);
-    expect(ranSql(executed, ADVANCE_LEASE)).toBe(true);
+    expect(result.finalEventDigest).toBe(
+      (prepared[1] as PreparedAttemptEvent).eventDigest,
+    );
+    // No pointer table is written: the log is the pointer.
+    expect(ranSql(executed, /agent_run_attempt_leases/)).toBe(false);
   });
 
-  it("matches returned rows on attempt_seq, not on RETURNING order", async () => {
-    const { tx } = makeRoutingTx(
-      appendRoutes(makeLeaseRow(), {
-        firstRunSeq: "10",
-        // Deliberately reversed: multi-row RETURNING order is not guaranteed.
-        inserted: [
-          { id: "e2", attempt_seq: 2, run_seq: "11" },
-          { id: "e1", attempt_seq: 1, run_seq: "10" },
-        ],
-      }),
-    );
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    const result = await store.appendAttemptBatch({
-      lease: LEASE,
-      events: [toolEvent(1, "call_a"), toolEvent(2, "call_b")],
+  it("is idempotent for a fully replayed batch and moves nothing", async () => {
+    const prepared = prepareAttemptEvent(toolEvent(1));
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows: [durableRow(prepared, "event-1", "5")] },
+    ]);
+    useTx(tx);
+    const result = await createPostgresRunStore().appendAttemptBatch({
+      attemptId: UUID_ATTEMPT,
+      events: [toolEvent(1)],
     });
-    expect(result.events[0]).toMatchObject({ attemptSeq: 1, eventId: "e1" });
-    expect(result.events[1]).toMatchObject({ attemptSeq: 2, eventId: "e2" });
-  });
-
-  it("throws when the insert does not return a row for a requested sequence", async () => {
-    const { tx } = makeRoutingTx(
-      appendRoutes(makeLeaseRow(), { firstRunSeq: "10", inserted: [] }),
-    );
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    await expect(
-      store.appendAttemptBatch({ lease: LEASE, events: [toolEvent(1)] }),
-    ).rejects.toThrow(RunStoreStateError);
-  });
-
-  it("throws when the run allocates no sequences", async () => {
-    const routes = appendRoutes(makeLeaseRow());
-    routes[2] = { match: ALLOCATE_RUN_SEQ, rows: [] };
-    const { tx } = makeRoutingTx(routes);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    await expect(
-      store.appendAttemptBatch({ lease: LEASE, events: [toolEvent(1)] }),
-    ).rejects.toThrow(/did not allocate run sequences/);
-  });
-
-  it("is idempotent for a crash retry with identical digests", async () => {
-    const first = prepareAttemptEvent(toolEvent(1, "call_a"));
-    const lease = makeLeaseRow({
-      last_attempt_seq: 1,
-      last_run_seq: 10,
-      event_count: 1,
-      final_event_digest: first.eventDigest,
-      event_stream_digest: foldAttemptStreamDigest(EMPTY_EVENT_STREAM_DIGEST, [
-        first,
-      ]),
-    });
-    const { tx, executed } = makeRoutingTx(
-      appendRoutes(lease, {
-        firstRunSeq: "11",
-        existing: [
-          {
-            id: "e1",
-            attempt_seq: 1,
-            run_seq: "10",
-            event_digest: first.eventDigest,
-          },
-        ],
-        inserted: [{ id: "e2", attempt_seq: 2, run_seq: "11" }],
-      }),
-    );
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-
-    const store = createPostgresRunStore();
-    const result = await store.appendAttemptBatch({
-      lease: LEASE,
-      events: [toolEvent(1, "call_a"), toolEvent(2, "call_b")],
-    });
-
-    expect(result.events[0]).toMatchObject({
-      attemptSeq: 1,
-      runSeq: "10",
-      eventId: "e1",
-      idempotent: true, // returned, not re-inserted
-    });
-    expect(result.events[1]).toMatchObject({
-      attemptSeq: 2,
-      idempotent: false,
-    });
-    // Only ONE new sequence was allocated — the replay reused its own.
-    const alloc = executed.find((e) => ALLOCATE_RUN_SEQ.test(e.sql));
-    expect(alloc?.params).toContain(1);
-    expect(result.eventCount).toBe(2);
-  });
-
-  it("makes a FULLY replayed batch a no-op that never rewinds the lease", async () => {
-    const first = prepareAttemptEvent(toolEvent(1, "call_a"));
-    const lease = makeLeaseRow({
-      last_attempt_seq: 5,
-      last_run_seq: 20,
-      event_count: 5,
-      final_event_digest: SHA_3,
-      event_stream_digest: SHA_2,
-    });
-    const { tx, executed } = makeRoutingTx(
-      appendRoutes(lease, {
-        existing: [
-          {
-            id: "e1",
-            attempt_seq: 1,
-            run_seq: "10",
-            event_digest: first.eventDigest,
-          },
-        ],
-      }),
-    );
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-
-    const store = createPostgresRunStore();
-    const result = await store.appendAttemptBatch({
-      lease: LEASE,
-      events: [toolEvent(1, "call_a")],
-    });
-
-    // Pointers stay where they were: moving them backwards would let the next
-    // append re-issue sequences the log already holds.
-    expect(result.lastAttemptSeq).toBe(5);
-    expect(result.lastRunSeq).toBe("20");
-    expect(result.eventCount).toBe(5);
-    expect(result.eventStreamDigest).toBe(SHA_2);
+    expect(result.events).toEqual([
+      {
+        attemptSeq: 1,
+        runSeq: "5",
+        eventId: "event-1",
+        eventDigest: prepared.eventDigest,
+        idempotent: true,
+      },
+    ]);
+    expect(result.eventCount).toBe(1);
+    expect(result.lastRunSeq).toBe("5");
     expect(ranSql(executed, ALLOCATE_RUN_SEQ)).toBe(false);
     expect(ranSql(executed, INSERT_EVENTS)).toBe(false);
-    expect(ranSql(executed, ADVANCE_LEASE)).toBe(false);
   });
 
-  it("throws RunEventIntegrityError and reports the security event AFTER rollback", async () => {
-    const conflicts: unknown[] = [];
-    const sink: RunSecurityEventSink = {
-      recordEventSequenceConflict(event) {
-        conflicts.push(event);
-      },
-    };
-    const lease = makeLeaseRow({
-      last_attempt_seq: 1,
-      last_run_seq: 10,
-      event_count: 1,
-      final_event_digest: SHA_3,
-    });
-    const { tx, executed } = makeRoutingTx(
-      appendRoutes(lease, {
-        existing: [
-          { id: "e1", attempt_seq: 1, run_seq: "10", event_digest: SHA_3 },
-        ],
-      }),
-    );
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-
-    const store = createPostgresRunStore({ securityEvents: sink });
-    await expect(
-      store.appendAttemptBatch({ lease: LEASE, events: [toolEvent(1)] }),
-    ).rejects.toThrow(RunEventIntegrityError);
-
-    // Nothing was written, and the audit record survives the rollback because
-    // the sink is called outside the transaction.
-    expect(ranSql(executed, INSERT_EVENTS)).toBe(false);
-    expect(conflicts).toHaveLength(1);
-    expect(conflicts[0]).toMatchObject({
-      type: EVENT_SEQUENCE_CONFLICT_EVENT,
-      orgId: UUID_ORG,
-      workspaceId: UUID_WS,
-      runId: UUID_RUN,
-      attemptId: UUID_ATTEMPT,
-      attemptPublicId: ATTEMPT_PUBLIC_ID,
-      attemptSeq: 1,
-      storedDigest: SHA_3,
-    });
-  });
-
-  it("does not report a security event for a non-integrity failure", async () => {
-    const conflicts: unknown[] = [];
-    const sink: RunSecurityEventSink = {
-      recordEventSequenceConflict(event) {
-        conflicts.push(event);
-      },
-    };
+  it("splits a crash retry into a replayed prefix and a new suffix", async () => {
+    const first = prepareAttemptEvent(toolEvent(1, "call_1"));
     const { tx } = makeRoutingTx([
-      { match: LOCK_LEASE, rows: [makeLeaseRow({ fenced_at: OBSERVED_AT })] },
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows: [durableRow(first, "event-1", "5")] },
+      { match: ALLOCATE_RUN_SEQ, rows: [{ first_run_seq: "6" }] },
+      {
+        match: INSERT_EVENTS,
+        rows: [{ id: "event-2", attempt_seq: 2, run_seq: "6" }],
+      },
     ]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore({ securityEvents: sink });
-    await expect(
-      store.appendAttemptBatch({ lease: LEASE, events: [toolEvent(1)] }),
-    ).rejects.toThrow(RunLeaseFencedError);
-    expect(conflicts).toHaveLength(0);
+    useTx(tx);
+    const result = await createPostgresRunStore().appendAttemptBatch({
+      attemptId: UUID_ATTEMPT,
+      events: [toolEvent(1, "call_1"), toolEvent(2, "call_2")],
+    });
+    expect(result.events.map((e) => e.idempotent)).toEqual([true, false]);
+    expect(result.eventCount).toBe(2);
   });
 
-  it("rejects an unknown event type before opening a transaction", async () => {
-    mocks.withSystemDb.mockImplementation(
-      makeWithSystemDbMock(makeRoutingTx([]).tx),
-    );
-    const store = createPostgresRunStore();
+  it("refuses to append to a sealed attempt", async () => {
+    const { tx } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow({ seal_id: "seal-1" })] },
+    ]);
+    useTx(tx);
     await expect(
-      store.appendAttemptBatch({
-        lease: LEASE,
+      createPostgresRunStore().appendAttemptBatch({
+        attemptId: UUID_ATTEMPT,
+        events: [toolEvent(1)],
+      }),
+    ).rejects.toBeInstanceOf(AttemptNotWritableError);
+  });
+
+  it("refuses an unknown attempt", async () => {
+    const { tx } = makeRoutingTx([]);
+    useTx(tx);
+    await expect(
+      createPostgresRunStore().appendAttemptBatch({
+        attemptId: UUID_ATTEMPT,
+        events: [toolEvent(1)],
+      }),
+    ).rejects.toBeInstanceOf(AttemptNotWritableError);
+  });
+
+  it("validates payloads before any SQL is issued", async () => {
+    const { tx, execute } = makeRoutingTx([]);
+    useTx(tx);
+    await expect(
+      createPostgresRunStore().appendAttemptBatch({
+        attemptId: UUID_ATTEMPT,
         events: [
           {
             attemptSeq: 1,
-            eventType: "model.freeform",
+            eventType: "tool.made_up",
             observedAt: OBSERVED_AT,
             payload: {},
           },
         ],
       }),
-    ).rejects.toThrow(/Unknown run event type/);
-    expect(mocks.withSystemDb).not.toHaveBeenCalled();
+    ).rejects.toBeInstanceOf(UnknownRunEventTypeError);
+    expect(execute).not.toHaveBeenCalled();
   });
 
-  it("rejects a sequence gap before touching the run's allocator", async () => {
-    const { tx, executed } = makeRoutingTx(
-      appendRoutes(makeLeaseRow({ last_attempt_seq: 4 })),
-    );
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
+  it("reports a same-seq different-digest conflict to the security sink", async () => {
+    const prepared = prepareAttemptEvent(toolEvent(1));
+    const { tx } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      {
+        match: ATTEMPT_STATE,
+        rows: [{ ...durableRow(prepared, "event-1", "5"), event_digest: SHA_3 }],
+      },
+    ]);
+    useTx(tx);
+    const recordEventSequenceConflict = vi.fn();
+    const sink: RunSecurityEventSink = { recordEventSequenceConflict };
     await expect(
-      store.appendAttemptBatch({ lease: LEASE, events: [toolEvent(6)] }),
-    ).rejects.toThrow(RunEventSequenceGapError);
-    expect(ranSql(executed, ALLOCATE_RUN_SEQ)).toBe(false);
-  });
-
-  it("writes the checkpoint bound to the batch's final event, in the same transaction", async () => {
-    const { tx, executed } = makeRoutingTx(
-      appendRoutes(makeLeaseRow(), {
-        firstRunSeq: "10",
-        inserted: [
-          { id: "e1", attempt_seq: 1, run_seq: "10" },
-          { id: "e2", attempt_seq: 2, run_seq: "11" },
-        ],
+      createPostgresRunStore({ securityEvents: sink }).appendAttemptBatch({
+        attemptId: UUID_ATTEMPT,
+        events: [toolEvent(1)],
+      }),
+    ).rejects.toBeInstanceOf(RunEventIntegrityError);
+    expect(recordEventSequenceConflict).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: EVENT_SEQUENCE_CONFLICT_EVENT,
+        orgId: UUID_ORG,
+        workspaceId: UUID_WS,
+        runId: UUID_RUN,
+        attemptId: UUID_ATTEMPT,
+        attemptPublicId: ATTEMPT_PUBLIC_ID,
+        attemptSeq: 1,
+        storedDigest: SHA_3,
+        incomingDigest: prepared.eventDigest,
       }),
     );
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-
-    const store = createPostgresRunStore();
-    const result = await store.appendAttemptBatch({
-      lease: LEASE,
-      events: [toolEvent(1, "call_a"), toolEvent(2, "call_b")],
-      checkpoint: {
-        engineStateSchema: "engine-state/v1",
-        checkpointDigest: SHA_2,
-        encryptedStateRef: BLOB_REF,
-      },
-    });
-
-    expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
-    expect(result.checkpointId).toBe("cp-1");
-    const cp = executed.find((e) => INSERT_CHECKPOINT.test(e.sql));
-    expect(cp?.params).toContain("e2"); // bound to the FINAL event
-    expect(cp?.params).toContain("11");
-    // The store owns the stream digest, not the producer.
-    expect(cp?.params).toContain(result.eventStreamDigest);
-    expect(ranSql(executed, SET_LATEST_CHECKPOINT)).toBe(true);
   });
 
-  it("rolls the whole batch back when the checkpoint insert fails", async () => {
-    const routes = appendRoutes(makeLeaseRow(), {
-      firstRunSeq: "10",
-      inserted: [{ id: "e1", attempt_seq: 1, run_seq: "10" }],
-    });
-    routes[4] = {
-      match: INSERT_CHECKPOINT,
-      rows: () => {
-        throw new Error("checkpoint blob unavailable");
+  it("keeps the integrity error when the sink itself throws", async () => {
+    const prepared = prepareAttemptEvent(toolEvent(1));
+    const { tx } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      {
+        match: ATTEMPT_STATE,
+        rows: [{ ...durableRow(prepared, "event-1", "5"), event_digest: SHA_3 }],
+      },
+    ]);
+    useTx(tx);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const sink: RunSecurityEventSink = {
+      recordEventSequenceConflict: () => {
+        throw new Error("audit transport down");
       },
     };
-    const { tx, executed } = makeRoutingTx(routes);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-
-    const store = createPostgresRunStore();
     await expect(
-      store.appendAttemptBatch({
-        lease: LEASE,
+      createPostgresRunStore({ securityEvents: sink }).appendAttemptBatch({
+        attemptId: UUID_ATTEMPT,
         events: [toolEvent(1)],
-        checkpoint: {
-          engineStateSchema: "engine-state/v1",
-          checkpointDigest: SHA_2,
-          encryptedStateRef: BLOB_REF,
-        },
       }),
-    ).rejects.toThrow(/checkpoint blob unavailable/);
-
-    // The events insert and the failing checkpoint shared ONE withSystemDb
-    // callback, so the real driver rolls the events back with it — and the
-    // lease pointer was never advanced.
-    expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
-    expect(ranSql(executed, INSERT_EVENTS)).toBe(true);
-    expect(ranSql(executed, ADVANCE_LEASE)).toBe(false);
+    ).rejects.toBeInstanceOf(RunEventIntegrityError);
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 
-  it("throws when the checkpoint insert returns no row", async () => {
-    const routes = appendRoutes(makeLeaseRow(), {
-      firstRunSeq: "10",
-      inserted: [{ id: "e1", attempt_seq: 1, run_seq: "10" }],
-      checkpointRows: [],
-    });
-    const { tx } = makeRoutingTx(routes);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
+  it("falls back to the loud console sink when none is injected", async () => {
+    const prepared = prepareAttemptEvent(toolEvent(1));
+    const { tx } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      {
+        match: ATTEMPT_STATE,
+        rows: [{ ...durableRow(prepared, "event-1", "5"), event_digest: SHA_3 }],
+      },
+    ]);
+    useTx(tx);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     await expect(
-      store.appendAttemptBatch({
-        lease: LEASE,
+      createPostgresRunStore().appendAttemptBatch({
+        attemptId: UUID_ATTEMPT,
         events: [toolEvent(1)],
-        checkpoint: {
-          engineStateSchema: "engine-state/v1",
-          checkpointDigest: SHA_2,
-          encryptedStateRef: BLOB_REF,
-        },
       }),
-    ).rejects.toThrow(/checkpoint insert returned no row/);
+    ).rejects.toBeInstanceOf(RunEventIntegrityError);
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.stringContaining(EVENT_SEQUENCE_CONFLICT_EVENT),
+      expect.objectContaining({ attemptSeq: 1 }),
+    );
+    consoleError.mockRestore();
   });
 
-  it("refuses a checkpoint with no event to bind it to", async () => {
-    const { tx } = makeRoutingTx(appendRoutes(makeLeaseRow()));
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    await expect(
-      store.appendAttemptBatch({
-        lease: LEASE,
-        events: [],
-        checkpoint: {
-          engineStateSchema: "engine-state/v1",
-          checkpointDigest: SHA_2,
-          encryptedStateRef: BLOB_REF,
-        },
-      }),
-    ).rejects.toThrow(/requires at least one event/);
-  });
-
-  it("treats a re-requested checkpoint on a replayed event as idempotent when it agrees", async () => {
-    const first = prepareAttemptEvent(toolEvent(1, "call_a"));
+  it("throws when the sequence allocator returns nothing", async () => {
     const { tx } = makeRoutingTx([
-      {
-        match: LOCK_LEASE,
-        rows: [
-          makeLeaseRow({
-            last_attempt_seq: 1,
-            last_run_seq: 10,
-            event_count: 1,
-            final_event_digest: first.eventDigest,
-          }),
-        ],
-      },
-      {
-        match: SELECT_EXISTING_EVENTS,
-        rows: [
-          {
-            id: "e1",
-            attempt_seq: 1,
-            run_seq: "10",
-            event_digest: first.eventDigest,
-          },
-        ],
-      },
-      {
-        match: /FROM agent\.agent_run_checkpoints\s+WHERE event_id/,
-        rows: [{ id: "cp-1", checkpoint_digest: SHA_2 }],
-      },
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows: [] },
     ]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    const result = await store.appendAttemptBatch({
-      lease: LEASE,
-      events: [toolEvent(1, "call_a")],
-      checkpoint: {
-        engineStateSchema: "engine-state/v1",
-        checkpointDigest: SHA_2,
-        encryptedStateRef: BLOB_REF,
-      },
-    });
-    expect(result.checkpointId).toBe("cp-1");
-  });
-
-  it("treats a DISAGREEING replayed checkpoint as an integrity failure", async () => {
-    const first = prepareAttemptEvent(toolEvent(1, "call_a"));
-    const { tx } = makeRoutingTx([
-      {
-        match: LOCK_LEASE,
-        rows: [
-          makeLeaseRow({
-            last_attempt_seq: 1,
-            last_run_seq: 10,
-            event_count: 1,
-            final_event_digest: first.eventDigest,
-          }),
-        ],
-      },
-      {
-        match: SELECT_EXISTING_EVENTS,
-        rows: [
-          {
-            id: "e1",
-            attempt_seq: 1,
-            run_seq: "10",
-            event_digest: first.eventDigest,
-          },
-        ],
-      },
-      {
-        match: /FROM agent\.agent_run_checkpoints\s+WHERE event_id/,
-        rows: [{ id: "cp-1", checkpoint_digest: SHA_3 }],
-      },
-    ]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
+    useTx(tx);
     await expect(
-      store.appendAttemptBatch({
-        lease: LEASE,
-        events: [toolEvent(1, "call_a")],
-        checkpoint: {
-          engineStateSchema: "engine-state/v1",
-          checkpointDigest: SHA_2,
-          encryptedStateRef: BLOB_REF,
-        },
+      createPostgresRunStore().appendAttemptBatch({
+        attemptId: UUID_ATTEMPT,
+        events: [toolEvent(1)],
       }),
-    ).rejects.toThrow(RunEventIntegrityError);
+    ).rejects.toThrow(/did not allocate run sequences/);
   });
 
-  it("throws when a replayed checkpoint has no stored row", async () => {
-    const first = prepareAttemptEvent(toolEvent(1, "call_a"));
+  it("throws when the insert does not return a row for a sequence", async () => {
     const { tx } = makeRoutingTx([
-      {
-        match: LOCK_LEASE,
-        rows: [
-          makeLeaseRow({
-            last_attempt_seq: 1,
-            last_run_seq: 10,
-            event_count: 1,
-            final_event_digest: first.eventDigest,
-          }),
-        ],
-      },
-      {
-        match: SELECT_EXISTING_EVENTS,
-        rows: [
-          {
-            id: "e1",
-            attempt_seq: 1,
-            run_seq: "10",
-            event_digest: first.eventDigest,
-          },
-        ],
-      },
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows: [] },
+      { match: ALLOCATE_RUN_SEQ, rows: [{ first_run_seq: "5" }] },
+      { match: INSERT_EVENTS, rows: [] },
     ]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
+    useTx(tx);
     await expect(
-      store.appendAttemptBatch({
-        lease: LEASE,
-        events: [toolEvent(1, "call_a")],
-        checkpoint: {
-          engineStateSchema: "engine-state/v1",
-          checkpointDigest: SHA_2,
-          encryptedStateRef: BLOB_REF,
-        },
+      createPostgresRunStore().appendAttemptBatch({
+        attemptId: UUID_ATTEMPT,
+        events: [toolEvent(1)],
       }),
-    ).rejects.toThrow(/no stored row for event/);
-  });
-
-  it("throws when the lease was fenced between the lock and the pointer advance", async () => {
-    const routes = appendRoutes(makeLeaseRow(), {
-      firstRunSeq: "10",
-      inserted: [{ id: "e1", attempt_seq: 1, run_seq: "10" }],
-    });
-    routes[6] = { match: ADVANCE_LEASE, rows: [] };
-    const { tx } = makeRoutingTx(routes);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    await expect(
-      store.appendAttemptBatch({ lease: LEASE, events: [toolEvent(1)] }),
-    ).rejects.toThrow(RunLeaseFencedError);
+    ).rejects.toThrow(/was not returned by the insert/);
   });
 });
 
+// ── sealAttempt ──────────────────────────────────────────────────────────────
+
+const SEAL_ROUTES: Route[] = [
+  { match: INSERT_SEAL, rows: [{ id: "seal-1" }] },
+  { match: INSERT_GRANT, rows: [{ id: "grant-1", public_id: "afg_abc" }] },
+  { match: INSERT_OBLIGATION, rows: [{ id: "obligation-1" }] },
+  { match: FINISH_RUN, rows: [{ id: UUID_RUN }] },
+];
+
 describe("sealAttempt", () => {
-  function sealRoutes(
-    lease: LockedLeaseRow,
-    opts: { inserted?: unknown[]; handle?: unknown[] } = {},
-  ): Route[] {
-    return [
-      { match: LOCK_LEASE, rows: [lease] },
-      { match: SELECT_HANDLE, rows: opts.handle ?? [] },
-      { match: SELECT_EXISTING_EVENTS, rows: [] },
-      { match: ALLOCATE_RUN_SEQ, rows: [{ first_run_seq: "20" }] },
+  it("appends the terminal event, seals, and mints grant + obligation", async () => {
+    const prepared = prepareAttemptEvent(terminalEvent(1));
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows: [] },
+      { match: ALLOCATE_RUN_SEQ, rows: [{ first_run_seq: "5" }] },
       {
         match: INSERT_EVENTS,
-        rows: opts.inserted ?? [
-          { id: "term-1", attempt_seq: 1, run_seq: "20" },
-        ],
+        rows: [{ id: "event-1", attempt_seq: 1, run_seq: "5" }],
       },
-      { match: ADVANCE_LEASE, rows: [{ id: "lease-1" }] },
-      { match: FENCE_LEASE, rows: [{ id: "lease-1" }] },
-      { match: INSERT_SEAL, rows: [{ id: "seal-1" }] },
-      {
-        match: INSERT_GRANT,
-        rows: [{ id: "grant-1", public_id: "afg_0123456789abcdef0123" }],
-      },
-      { match: INSERT_OBLIGATION, rows: [{ id: "obl-1" }] },
-      { match: FINISH_RUN, rows: [{ id: UUID_RUN }] },
-    ];
-  }
-
-  it("closes the normal-completion crash window: seal + grant + obligation in ONE transaction", async () => {
-    const { tx, executed } = makeRoutingTx(sealRoutes(makeLeaseRow()));
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-
-    const store = createPostgresRunStore();
-    const handle = await store.sealAttempt({
-      lease: LEASE,
+      ...SEAL_ROUTES,
+    ]);
+    useTx(tx);
+    const handle = await createPostgresRunStore().sealAttempt({
+      attemptId: UUID_ATTEMPT,
       terminalStatus: "completed",
-      sealerWorkerId: "worker-1",
       terminalEvent: terminalEvent(1),
+      sealerId: "drain-1",
       result: { ok: true },
     });
-
-    // A worker that finishes normally and then crashes cannot strand its
-    // evidence: the obligation was already durable when the seal committed.
-    expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
-    expect(ranSql(executed, FENCE_LEASE)).toBe(true);
-    expect(ranSql(executed, INSERT_SEAL)).toBe(true);
-    expect(ranSql(executed, INSERT_GRANT)).toBe(true);
-    expect(ranSql(executed, INSERT_OBLIGATION)).toBe(true);
-    expect(handle.alreadySealed).toBe(false);
-    expect(handle.terminalStatus).toBe("completed");
-  });
-
-  it("copies the afg_ grant public id into the obligation as the submission id", async () => {
-    const { tx, executed } = makeRoutingTx(sealRoutes(makeLeaseRow()));
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    const handle = await store.sealAttempt({
-      lease: LEASE,
+    expect(handle).toMatchObject({
+      runId: UUID_RUN,
+      attemptId: UUID_ATTEMPT,
+      attemptPublicId: ATTEMPT_PUBLIC_ID,
+      sealId: "seal-1",
       terminalStatus: "completed",
-      sealerWorkerId: "worker-1",
-      terminalEvent: terminalEvent(1),
+      grantId: "grant-1",
+      grantPublicId: "afg_abc",
+      // The grant's own public id IS the stable submission id.
+      submissionId: "afg_abc",
+      obligationId: "obligation-1",
+      eventCount: 1,
+      finalEventDigest: prepared.eventDigest,
+      alreadySealed: false,
     });
-
-    expect(handle.grantPublicId).toBe("afg_0123456789abcdef0123");
-    expect(handle.submissionId).toBe(handle.grantPublicId);
-    const obligation = executed.find((e) => INSERT_OBLIGATION.test(e.sql));
-    expect(obligation?.params).toContain("afg_0123456789abcdef0123");
-  });
-
-  it("mints a grant with NO expiry and exactly one capability", async () => {
-    const { tx, executed } = makeRoutingTx(sealRoutes(makeLeaseRow()));
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    await store.sealAttempt({
-      lease: LEASE,
-      terminalStatus: "completed",
-      sealerWorkerId: "worker-1",
-      terminalEvent: terminalEvent(1),
-    });
-
+    const seal = executed.find((e) => INSERT_SEAL.test(e.sql));
+    expect(seal?.params).toContain("5");
     const grant = executed.find((e) => INSERT_GRANT.test(e.sql));
-    // No expiry column is written because none exists: a KMS or storage outage
-    // must never strand an obligation behind a grant that timed out.
-    expect(grant?.sql).not.toMatch(/expires_at/);
     expect(grant?.params).toContain(FINALIZATION_GRANT_CAPABILITY);
-    // The public id is minted INSIDE the seal transaction, so assert its shape
-    // rather than a fixture value.
-    expect(
-      grant?.params.some(
-        (p) => typeof p === "string" && /^afg_[0-9a-f]{22}$/.test(p),
-      ),
-    ).toBe(true);
+    expect(ranSql(executed, FINISH_RUN)).toBe(true);
   });
 
-  it("appends the terminal event through the same contiguity and digest rules", async () => {
-    const { tx, executed } = makeRoutingTx(sealRoutes(makeLeaseRow()));
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    const handle = await store.sealAttempt({
-      lease: LEASE,
-      terminalStatus: "completed",
-      sealerWorkerId: "worker-1",
-      terminalEvent: terminalEvent(1),
+  it("seals a zero-event attempt with the empty-stream sentinel", async () => {
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows: [] },
+      ...SEAL_ROUTES,
+    ]);
+    useTx(tx);
+    const handle = await createPostgresRunStore().sealAttempt({
+      attemptId: UUID_ATTEMPT,
+      terminalStatus: "abandoned",
+      reasonCode: "producer_gone",
+      sealerId: "sweeper-1",
     });
-
-    expect(ranSql(executed, INSERT_EVENTS)).toBe(true);
-    expect(handle.eventCount).toBe(1);
-    expect(handle.finalEventDigest).toBe(
-      prepareAttemptEvent(terminalEvent(1)).eventDigest,
-    );
-    const seal = executed.find((e) => INSERT_SEAL.test(e.sql));
-    expect(seal?.params).toContain("20"); // final run seq
-    expect(seal?.params).toContain("worker");
-  });
-
-  it("refuses a non-terminal-stage event as the terminal event", async () => {
-    mocks.withSystemDb.mockImplementation(
-      makeWithSystemDbMock(makeRoutingTx([]).tx),
-    );
-    const store = createPostgresRunStore();
-    await expect(
-      store.sealAttempt({
-        lease: LEASE,
-        terminalStatus: "completed",
-        sealerWorkerId: "worker-1",
-        terminalEvent: toolEvent(1),
-      }),
-    ).rejects.toThrow(/is not a terminal-stage event/);
-    expect(mocks.withSystemDb).not.toHaveBeenCalled();
-  });
-
-  it("refuses `abandoned` — that is the reclaimer's status, not a worker's", async () => {
-    mocks.withSystemDb.mockImplementation(
-      makeWithSystemDbMock(makeRoutingTx([]).tx),
-    );
-    const store = createPostgresRunStore();
-    await expect(
-      store.sealAttempt({
-        lease: LEASE,
-        terminalStatus: "abandoned",
-        sealerWorkerId: "worker-1",
-      }),
-    ).rejects.toThrow(/reclaimer's terminal status/);
-    expect(mocks.withSystemDb).not.toHaveBeenCalled();
-  });
-
-  it("seals from the lease pointers when the terminal event was already appended", async () => {
-    const lease = makeLeaseRow({
-      last_attempt_seq: 7,
-      last_run_seq: 31,
-      event_count: 7,
-      final_event_digest: SHA_3,
-      event_stream_digest: SHA_2,
-    });
-    const { tx, executed } = makeRoutingTx(sealRoutes(lease));
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    const handle = await store.sealAttempt({
-      lease: LEASE,
-      terminalStatus: "failed",
-      reasonCode: "verification_failed",
-      sealerWorkerId: "worker-1",
-      error: "tests failed",
-    });
-
+    expect(handle.eventCount).toBe(0);
+    expect(handle.finalEventDigest).toBeNull();
+    expect(handle.eventStreamDigest).toBe(EMPTY_EVENT_STREAM_DIGEST);
+    // Nothing was synthesized to make the seal look complete.
     expect(ranSql(executed, INSERT_EVENTS)).toBe(false);
-    expect(handle.eventCount).toBe(7);
-    expect(handle.finalEventDigest).toBe(SHA_3);
-    expect(handle.eventStreamDigest).toBe(SHA_2);
     const seal = executed.find((e) => INSERT_SEAL.test(e.sql));
-    expect(seal?.params).toContain("verification_failed");
-    const finish = executed.find((e) => FINISH_RUN.test(e.sql));
-    expect(finish?.params).toContain("failed");
-    expect(finish?.params).toContain("tests failed");
+    expect(seal?.params).toContain("producer_gone");
+    // An abandoned attempt fails its run.
+    expect(
+      executed.find((e) => FINISH_RUN.test(e.sql))?.params,
+    ).toContain("failed");
   });
 
-  it("returns the SAME handle for a duplicate seal instead of minting a second grant", async () => {
-    const sealed = makeLeaseRow({
-      seal_id: "seal-1",
-      fenced_at: OBSERVED_AT,
-      expired: true,
+  it("seals an attempt whose terminal event is already durable", async () => {
+    const prepared = prepareAttemptEvent(terminalEvent(1));
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows: [durableRow(prepared, "event-1", "5")] },
+      ...SEAL_ROUTES,
+    ]);
+    useTx(tx);
+    const handle = await createPostgresRunStore().sealAttempt({
+      attemptId: UUID_ATTEMPT,
+      terminalStatus: "completed",
+      sealerId: "drain-1",
     });
-    const { tx, executed } = makeRoutingTx(
-      sealRoutes(sealed, {
-        handle: [
+    expect(handle.eventCount).toBe(1);
+    expect(handle.finalEventDigest).toBe(prepared.eventDigest);
+    expect(ranSql(executed, INSERT_EVENTS)).toBe(false);
+  });
+
+  it("returns the SAME handle for a duplicate seal", async () => {
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow({ seal_id: "seal-1" })] },
+      {
+        match: SELECT_HANDLE,
+        rows: [
           {
             seal_id: "seal-1",
             terminal_status: "completed",
-            event_count: "3",
-            final_event_digest: SHA_3,
-            event_stream_digest: SHA_2,
+            event_count: "2",
+            final_event_digest: SHA_2,
+            event_stream_digest: SHA_3,
             grant_id: "grant-1",
-            grant_public_id: "afg_0123456789abcdef0123",
-            obligation_id: "obl-1",
-            submission_id: "afg_0123456789abcdef0123",
+            grant_public_id: "afg_abc",
+            obligation_id: "obligation-1",
+            submission_id: "afg_abc",
           },
         ],
-      }),
-    );
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-
-    const store = createPostgresRunStore();
-    const handle = await store.sealAttempt({
-      lease: LEASE,
+      },
+    ]);
+    useTx(tx);
+    const handle = await createPostgresRunStore().sealAttempt({
+      attemptId: UUID_ATTEMPT,
       terminalStatus: "completed",
-      sealerWorkerId: "worker-1",
+      sealerId: "drain-2",
     });
-
-    expect(handle.alreadySealed).toBe(true);
-    expect(handle.submissionId).toBe("afg_0123456789abcdef0123");
-    expect(handle.eventCount).toBe(3);
+    expect(handle).toMatchObject({
+      sealId: "seal-1",
+      submissionId: "afg_abc",
+      eventCount: 2,
+      alreadySealed: true,
+    });
+    // No second grant is minted and the run is not re-finished.
     expect(ranSql(executed, INSERT_GRANT)).toBe(false);
-    expect(ranSql(executed, INSERT_SEAL)).toBe(false);
+    expect(ranSql(executed, FINISH_RUN)).toBe(false);
   });
 
-  it("throws when a sealed attempt has no grant or obligation to hand back", async () => {
-    const sealed = makeLeaseRow({ seal_id: "seal-1", fenced_at: OBSERVED_AT });
-    const { tx } = makeRoutingTx(sealRoutes(sealed, { handle: [] }));
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
+  it("throws when a sealed attempt has no grant or obligation", async () => {
+    const { tx } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow({ seal_id: "seal-1" })] },
+    ]);
+    useTx(tx);
     await expect(
-      store.sealAttempt({
-        lease: LEASE,
+      createPostgresRunStore().sealAttempt({
+        attemptId: UUID_ATTEMPT,
         terminalStatus: "completed",
-        sealerWorkerId: "worker-1",
+        sealerId: "drain-1",
       }),
     ).rejects.toThrow(/no finalization grant or obligation/);
   });
 
-  it("refuses to seal an expired lease on the worker path", async () => {
-    const { tx, executed } = makeRoutingTx(
-      sealRoutes(makeLeaseRow({ expired: true })),
-    );
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
+  it("refuses a terminal event that is not a terminal-stage event", async () => {
+    const { tx, execute } = makeRoutingTx([]);
+    useTx(tx);
     await expect(
-      store.sealAttempt({
-        lease: LEASE,
+      createPostgresRunStore().sealAttempt({
+        attemptId: UUID_ATTEMPT,
         terminalStatus: "completed",
-        sealerWorkerId: "worker-1",
+        terminalEvent: toolEvent(1),
+        sealerId: "drain-1",
       }),
-    ).rejects.toThrow(RunLeaseFencedError);
-    expect(ranSql(executed, INSERT_SEAL)).toBe(false);
+    ).rejects.toThrow(/is not a terminal-stage event/);
+    expect(execute).not.toHaveBeenCalled();
   });
 
-  it("throws when the seal, grant, or obligation insert returns no row", async () => {
-    for (const [pattern, message] of [
-      [INSERT_SEAL, /seal insert returned no row/],
-      [INSERT_GRANT, /finalization grant insert returned no row/],
-      [INSERT_OBLIGATION, /finalization obligation insert returned no row/],
-    ] as const) {
-      const routes = sealRoutes(makeLeaseRow()).map((r) =>
-        r.match === pattern ? { match: pattern, rows: [] } : r,
-      );
-      const { tx } = makeRoutingTx(routes);
-      mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-      const store = createPostgresRunStore();
-      await expect(
-        store.sealAttempt({
-          lease: LEASE,
-          terminalStatus: "completed",
-          sealerWorkerId: "worker-1",
-        }),
-      ).rejects.toThrow(message);
-    }
+  it("refuses to seal an unknown attempt", async () => {
+    const { tx } = makeRoutingTx([]);
+    useTx(tx);
+    await expect(
+      createPostgresRunStore().sealAttempt({
+        attemptId: UUID_ATTEMPT,
+        terminalStatus: "completed",
+        sealerId: "drain-1",
+      }),
+    ).rejects.toBeInstanceOf(AttemptNotWritableError);
   });
-});
 
-describe("reclaimExpiredAttempts", () => {
-  function candidate(overrides: Record<string, unknown> = {}) {
-    return {
-      attempt_id: UUID_ATTEMPT,
-      run_id: UUID_RUN,
-      lease_token: "token-1",
-      lease_epoch: "4",
-      attempt_public_id: ATTEMPT_PUBLIC_ID,
-      attempt_number: "1",
-      max_attempts: "3",
-      attempt_count: "1",
-      ...overrides,
-    };
-  }
+  it("throws when the seal insert returns no row", async () => {
+    const { tx } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows: [] },
+    ]);
+    useTx(tx);
+    await expect(
+      createPostgresRunStore().sealAttempt({
+        attemptId: UUID_ATTEMPT,
+        terminalStatus: "failed",
+        sealerId: "drain-1",
+        error: "boom",
+      }),
+    ).rejects.toThrow(/seal insert returned no row/);
+  });
 
-  function reclaimRoutes(
-    lease: LockedLeaseRow,
-    candidates: unknown[],
-    handle: unknown[] = [],
-  ): Route[] {
-    return [
-      { match: SELECT_EXPIRED, rows: candidates },
-      { match: LOCK_LEASE, rows: [lease] },
-      { match: SELECT_HANDLE, rows: handle },
-      { match: FENCE_LEASE, rows: [{ id: "lease-1" }] },
+  it("throws when the grant insert returns no row", async () => {
+    const { tx } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows: [] },
       { match: INSERT_SEAL, rows: [{ id: "seal-1" }] },
-      {
-        match: INSERT_GRANT,
-        rows: [{ id: "grant-1", public_id: "afg_0123456789abcdef0123" }],
-      },
-      { match: INSERT_OBLIGATION, rows: [{ id: "obl-1" }] },
-      { match: REQUEUE_RUN, rows: [{ id: UUID_RUN }] },
-      { match: FINISH_RUN, rows: [{ id: UUID_RUN }] },
-    ];
-  }
-
-  it("seals a ZERO-EVENT abandoned attempt with the empty-stream sentinel and no invented event", async () => {
-    const { tx, executed } = makeRoutingTx(
-      reclaimRoutes(makeLeaseRow({ expired: true }), [candidate()]),
-    );
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-
-    const store = createPostgresRunStore();
-    const [reclaimed] = await store.reclaimExpiredAttempts({
-      reclaimerWorkerId: "sweeper-1",
-    });
-
-    expect(reclaimed?.handle.eventCount).toBe(0);
-    expect(reclaimed?.handle.finalEventDigest).toBeNull();
-    expect(reclaimed?.handle.eventStreamDigest).toBe(EMPTY_EVENT_STREAM_DIGEST);
-    expect(reclaimed?.handle.terminalStatus).toBe("abandoned");
-    // Inventing a terminal event would put an observation in the ledger that
-    // no producer ever made.
-    expect(ranSql(executed, INSERT_EVENTS)).toBe(false);
-    const seal = executed.find((e) => INSERT_SEAL.test(e.sql));
-    expect(seal?.params).toContain("reclaimer");
-    expect(seal?.params).toContain("abandoned");
-    expect(seal?.params).toContain("lease_expired");
-    expect(seal?.params).toContain(EMPTY_EVENT_STREAM_DIGEST);
+    ]);
+    useTx(tx);
+    await expect(
+      createPostgresRunStore().sealAttempt({
+        attemptId: UUID_ATTEMPT,
+        terminalStatus: "completed",
+        sealerId: "drain-1",
+      }),
+    ).rejects.toThrow(/finalization grant insert returned no row/);
   });
 
-  it("still mints the grant and obligation for a zero-event attempt", async () => {
-    const { tx, executed } = makeRoutingTx(
-      reclaimRoutes(makeLeaseRow({ expired: true }), [candidate()]),
-    );
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    const [reclaimed] = await store.reclaimExpiredAttempts({
-      reclaimerWorkerId: "sweeper-1",
-    });
-    expect(ranSql(executed, INSERT_GRANT)).toBe(true);
-    expect(ranSql(executed, INSERT_OBLIGATION)).toBe(true);
-    expect(reclaimed?.handle.submissionId).toBe("afg_0123456789abcdef0123");
-  });
-
-  it("seals from the last ACCEPTED event when the attempt made progress", async () => {
-    const lease = makeLeaseRow({
-      expired: true,
-      event_count: 4,
-      last_run_seq: 21,
-      last_attempt_seq: 4,
-      final_event_digest: SHA_3,
-      event_stream_digest: SHA_2,
-    });
-    const { tx, executed } = makeRoutingTx(reclaimRoutes(lease, [candidate()]));
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    const [reclaimed] = await store.reclaimExpiredAttempts({
-      reclaimerWorkerId: "sweeper-1",
-    });
-    expect(reclaimed?.handle.eventCount).toBe(4);
-    expect(reclaimed?.handle.finalEventDigest).toBe(SHA_3);
-    expect(reclaimed?.handle.eventStreamDigest).toBe(SHA_2);
-    const seal = executed.find((e) => INSERT_SEAL.test(e.sql));
-    expect(seal?.params).toContain("21");
-    expect(seal?.params).toContain(4);
-  });
-
-  it("requeues the run for a successor while the pinned max_attempts permits", async () => {
-    const { tx, executed } = makeRoutingTx(
-      reclaimRoutes(makeLeaseRow({ expired: true }), [
-        candidate({ attempt_count: "1", max_attempts: "3" }),
-      ]),
-    );
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    const [reclaimed] = await store.reclaimExpiredAttempts({
-      reclaimerWorkerId: "sweeper-1",
-    });
-    expect(reclaimed?.successorPermitted).toBe(true);
-    expect(ranSql(executed, REQUEUE_RUN)).toBe(true);
-    expect(ranSql(executed, FINISH_RUN)).toBe(false);
-    // The successor ATTEMPT is created by the next claim: an attempt row pins a
-    // resolved engine build digest only a claiming worker knows.
-    expect(ranSql(executed, INSERT_ATTEMPT)).toBe(false);
-  });
-
-  it("fails the run after sealing the final attempt when the retry cap is exhausted", async () => {
-    const { tx, executed } = makeRoutingTx(
-      reclaimRoutes(makeLeaseRow({ expired: true }), [
-        candidate({ attempt_count: "3", max_attempts: "3" }),
-      ]),
-    );
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    const [reclaimed] = await store.reclaimExpiredAttempts({
-      reclaimerWorkerId: "sweeper-1",
-    });
-    expect(reclaimed?.successorPermitted).toBe(false);
-    // Sealed FIRST, then failed — the exhausted run stays evidence-finalizable.
-    expect(ranSql(executed, INSERT_SEAL)).toBe(true);
-    expect(ranSql(executed, REQUEUE_RUN)).toBe(false);
-    const finish = executed.find((e) => FINISH_RUN.test(e.sql));
-    expect(finish?.params).toContain("failed");
-    expect(String(finish?.params)).toContain("max_attempts");
-  });
-
-  it("is idempotent under a duplicate sweep and does not re-mutate the run", async () => {
-    const sealed = makeLeaseRow({
-      expired: true,
-      fenced_at: OBSERVED_AT,
-      seal_id: "seal-1",
-    });
-    const { tx, executed } = makeRoutingTx(
-      reclaimRoutes(
-        sealed,
-        [candidate()],
-        [
-          {
-            seal_id: "seal-1",
-            terminal_status: "abandoned",
-            event_count: "0",
-            final_event_digest: null,
-            event_stream_digest: EMPTY_EVENT_STREAM_DIGEST,
-            grant_id: "grant-1",
-            grant_public_id: "afg_0123456789abcdef0123",
-            obligation_id: "obl-1",
-            submission_id: "afg_0123456789abcdef0123",
-          },
-        ],
-      ),
-    );
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    const [reclaimed] = await store.reclaimExpiredAttempts({
-      reclaimerWorkerId: "sweeper-2",
-    });
-    expect(reclaimed?.handle.alreadySealed).toBe(true);
-    expect(reclaimed?.handle.submissionId).toBe("afg_0123456789abcdef0123");
-    expect(ranSql(executed, INSERT_SEAL)).toBe(false);
-    expect(ranSql(executed, REQUEUE_RUN)).toBe(false);
-    expect(ranSql(executed, FINISH_RUN)).toBe(false);
-  });
-
-  it("skips a lease another sweeper fenced but has not yet sealed", async () => {
-    const { tx, executed } = makeRoutingTx(
-      reclaimRoutes(makeLeaseRow({ expired: true, fenced_at: OBSERVED_AT }), [
-        candidate(),
-      ]),
-    );
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    const reclaimed = await store.reclaimExpiredAttempts({
-      reclaimerWorkerId: "sweeper-2",
-    });
-    expect(reclaimed).toHaveLength(0);
-    expect(ranSql(executed, INSERT_SEAL)).toBe(false);
-  });
-
-  it("uses one transaction PER attempt so a poisoned row cannot roll back the sweep", async () => {
-    const { tx } = makeRoutingTx(
-      reclaimRoutes(makeLeaseRow({ expired: true }), [
-        candidate(),
-        candidate({ attempt_id: UUID_A }),
-      ]),
-    );
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    await store.reclaimExpiredAttempts({ reclaimerWorkerId: "sweeper-1" });
-    // One for the candidate scan, one per reclaimed attempt.
-    expect(mocks.withSystemDb).toHaveBeenCalledTimes(3);
-  });
-
-  it("returns an empty list when nothing has expired", async () => {
-    const { tx } = makeRoutingTx([{ match: SELECT_EXPIRED, rows: [] }]);
-    mocks.withSystemDb.mockImplementation(makeWithSystemDbMock(tx));
-    const store = createPostgresRunStore();
-    expect(
-      await store.reclaimExpiredAttempts({ reclaimerWorkerId: "sweeper-1" }),
-    ).toEqual([]);
-    expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
+  it("throws when the obligation insert returns no row", async () => {
+    const { tx } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows: [] },
+      { match: INSERT_SEAL, rows: [{ id: "seal-1" }] },
+      { match: INSERT_GRANT, rows: [{ id: "grant-1", public_id: "afg_abc" }] },
+    ]);
+    useTx(tx);
+    await expect(
+      createPostgresRunStore().sealAttempt({
+        attemptId: UUID_ATTEMPT,
+        terminalStatus: "completed",
+        sealerId: "drain-1",
+      }),
+    ).rejects.toThrow(/finalization obligation insert returned no row/);
   });
 });
 
-describe("readAttemptEventsSince", () => {
-  it("reads V2 events through withTenantDb and maps them in order", async () => {
+// ── Read side ────────────────────────────────────────────────────────────────
+
+describe("read side", () => {
+  it("getRunByPublicId projects a found row", async () => {
     const { tx } = makeRoutingTx([
       {
-        match: /e\.event_record_version = 2/,
+        match: GET_RUN,
         rows: [
           {
-            id: "e1",
+            id: UUID_RUN,
+            public_id: "arun_x",
+            surface: "repo-edit",
+            spec_version: 2,
+            status: "completed",
+            result: { ok: true },
+            error: null,
+            attempt_count: 1,
+            max_attempts: 3,
+            created_at: OBSERVED_AT,
+            started_at: OBSERVED_AT,
+            completed_at: OBSERVED_AT,
+          },
+        ],
+      },
+    ]);
+    useTx(tx);
+    const summary = await createPostgresRunStore().getRunByPublicId("arun_x");
+    expect(summary).toMatchObject({ runId: UUID_RUN, status: "completed" });
+  });
+
+  it("getRunByPublicId returns null for an unknown or cross-tenant id", async () => {
+    const { tx } = makeRoutingTx([]);
+    useTx(tx);
+    expect(
+      await createPostgresRunStore().getRunByPublicId("arun_missing"),
+    ).toBeNull();
+  });
+
+  it("listRunAttempts maps every attempt row", async () => {
+    const { tx } = makeRoutingTx([
+      {
+        match: LIST_ATTEMPTS,
+        rows: [
+          {
+            id: UUID_ATTEMPT,
+            public_id: ATTEMPT_PUBLIC_ID,
+            run_id: UUID_RUN,
+            attempt_number: 1,
+            worker_id: "drain-1",
+            engine_name: "stella",
+            engine_version: "2.1.1",
+            engine_build_digest: SHA_1,
+            resumed_from_attempt_id: null,
+            resumed_from_attempt_public_id: null,
+            claimed_at: OBSERVED_AT,
+            seal_id: null,
+            terminal_status: null,
+            reason_code: null,
+            event_count: null,
+            final_run_seq: null,
+            final_attempt_seq: null,
+            final_event_digest: null,
+            event_stream_digest: null,
+            sealed_at: null,
+          },
+        ],
+      },
+    ]);
+    useTx(tx);
+    const attempts = await createPostgresRunStore().listRunAttempts(UUID_RUN);
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0]).toMatchObject({ attemptNumber: 1, seal: null });
+  });
+
+  it("readAttemptState folds the durable log", async () => {
+    const prepared = prepareAttemptEvent(toolEvent(1));
+    const { tx } = makeRoutingTx([
+      { match: ATTEMPT_STATE, rows: [durableRow(prepared, "event-1", "5")] },
+    ]);
+    useTx(tx);
+    const state = await createPostgresRunStore().readAttemptState(UUID_ATTEMPT);
+    expect(state).toMatchObject({
+      eventCount: 1,
+      lastAttemptSeq: 1,
+      lastRunSeq: "5",
+      finalEventDigest: prepared.eventDigest,
+    });
+  });
+
+  it("readAttemptEventsSince maps every returned event", async () => {
+    const { tx } = makeRoutingTx([
+      {
+        match: READ_EVENTS,
+        rows: [
+          {
+            id: "event-1",
             attempt_id: UUID_ATTEMPT,
             attempt_public_id: ATTEMPT_PUBLIC_ID,
-            run_seq: "10",
+            run_seq: "5",
             attempt_seq: 1,
             event_schema_version: EVENT_SCHEMA_VERSION,
             event_type: "tool.call_completed",
             stage: "tool",
             payload_digest: SHA_1,
             event_digest: SHA_2,
-            payload_inline: { ok: true },
+            payload_inline: {},
             encrypted_payload_ref: null,
             observed_at: OBSERVED_AT,
             created_at: OBSERVED_AT,
@@ -3028,87 +1907,79 @@ describe("readAttemptEventsSince", () => {
         ],
       },
     ]);
-    mocks.withTenantDb.mockImplementation(makeWithTenantDbMock(tx));
-    const store = createPostgresRunStore();
-    const events = await store.readAttemptEventsSince(UUID_RUN, "9");
+    useTx(tx);
+    const events = await createPostgresRunStore().readAttemptEventsSince(
+      UUID_RUN,
+      "0",
+    );
     expect(events).toHaveLength(1);
-    expect(events[0]?.runSeq).toBe("10");
-    expect(events[0]?.stage).toBe("tool");
-    expect(mocks.withSystemDb).not.toHaveBeenCalled();
-  });
-});
-
-// ── Typed error guards ──────────────────────────────────────────────────────
-
-describe("V2 error guards", () => {
-  it("match their own errors by instance", () => {
-    expect(
-      isUnknownRunEventTypeError(new UnknownRunEventTypeError("x", ["y"])),
-    ).toBe(true);
-    expect(
-      isForbiddenEventPayloadFieldError(
-        new ForbiddenEventPayloadFieldError("x", ["path"]),
-      ),
-    ).toBe(true);
-    expect(
-      isRunEventPayloadTooLargeError(
-        new RunEventPayloadTooLargeError("x", 1, 0),
-      ),
-    ).toBe(true);
-    expect(
-      isRunEventIntegrityError(
-        new RunEventIntegrityError(UUID_ATTEMPT, 1, SHA_1, SHA_2),
-      ),
-    ).toBe(true);
-    expect(
-      isRunEventSequenceGapError(
-        new RunEventSequenceGapError(UUID_ATTEMPT, 2, 5),
-      ),
-    ).toBe(true);
-    expect(
-      isRunLeaseFencedError(new RunLeaseFencedError(UUID_ATTEMPT, "fenced")),
-    ).toBe(true);
-    expect(isRunStoreStateError(new RunStoreStateError("bad"))).toBe(true);
+    expect(events[0]?.runSeq).toBe("5");
   });
 
-  it("match structurally across a duplicated class identity", () => {
-    // A bundler can produce two copies of a class; the `code` discriminant is
-    // what keeps an `instanceof`-based catch working across that boundary.
-    const structural = Object.assign(new Error("copy"), {
-      code: "run_event_integrity_conflict",
+  it("getFinalizationHandle returns a sealed attempt's grant", async () => {
+    const { tx } = makeRoutingTx([
+      {
+        match: ATTEMPT_IDENTITY,
+        rows: [
+          {
+            attempt_id: UUID_ATTEMPT,
+            attempt_public_id: ATTEMPT_PUBLIC_ID,
+            run_id: UUID_RUN,
+          },
+        ],
+      },
+      {
+        match: SELECT_HANDLE,
+        rows: [
+          {
+            seal_id: "seal-1",
+            terminal_status: "completed",
+            event_count: 1,
+            final_event_digest: SHA_2,
+            event_stream_digest: SHA_3,
+            grant_id: "grant-1",
+            grant_public_id: "afg_abc",
+            obligation_id: "obligation-1",
+            submission_id: "afg_abc",
+          },
+        ],
+      },
+    ]);
+    useTx(tx);
+    const handle =
+      await createPostgresRunStore().getFinalizationHandle(UUID_ATTEMPT);
+    expect(handle).toMatchObject({
+      runId: UUID_RUN,
+      attemptPublicId: ATTEMPT_PUBLIC_ID,
+      submissionId: "afg_abc",
+      alreadySealed: true,
     });
-    expect(isRunEventIntegrityError(structural)).toBe(true);
-    expect(
-      isRunLeaseFencedError(
-        Object.assign(new Error("copy"), { code: "run_lease_fenced" }),
-      ),
-    ).toBe(true);
   });
 
-  it("do not match unrelated errors", () => {
-    const other = new Error("nope");
-    expect(isUnknownRunEventTypeError(other)).toBe(false);
-    expect(isForbiddenEventPayloadFieldError(other)).toBe(false);
-    expect(isRunEventPayloadTooLargeError(other)).toBe(false);
-    expect(isRunEventIntegrityError(other)).toBe(false);
-    expect(isRunEventSequenceGapError(other)).toBe(false);
-    expect(isRunLeaseFencedError(other)).toBe(false);
-    expect(isRunStoreStateError(other)).toBe(false);
-    expect(isRunStoreStateError("not an error")).toBe(false);
+  it("getFinalizationHandle returns null for an unknown attempt", async () => {
+    const { tx } = makeRoutingTx([]);
+    useTx(tx);
+    expect(
+      await createPostgresRunStore().getFinalizationHandle(UUID_ATTEMPT),
+    ).toBeNull();
   });
 
-  it("carry a stable code and a diagnostic message", () => {
-    const integrity = new RunEventIntegrityError(UUID_ATTEMPT, 3, SHA_1, SHA_2);
-    expect(integrity.code).toBe("run_event_integrity_conflict");
-    expect(integrity.message).toContain("seq 3");
-    expect(new RunLeaseFencedError(UUID_ATTEMPT, "sealed").code).toBe(
-      "run_lease_fenced",
-    );
-    expect(new UnknownRunEventTypeError("x", ["a", "b"]).message).toContain(
-      "a, b",
-    );
+  it("getFinalizationHandle returns null while the attempt is unsealed", async () => {
+    const { tx } = makeRoutingTx([
+      {
+        match: ATTEMPT_IDENTITY,
+        rows: [
+          {
+            attempt_id: UUID_ATTEMPT,
+            attempt_public_id: ATTEMPT_PUBLIC_ID,
+            run_id: UUID_RUN,
+          },
+        ],
+      },
+    ]);
+    useTx(tx);
     expect(
-      new ForbiddenEventPayloadFieldError("x", ["a.path"]).message,
-    ).toContain("a.path");
+      await createPostgresRunStore().getFinalizationHandle(UUID_ATTEMPT),
+    ).toBeNull();
   });
 });

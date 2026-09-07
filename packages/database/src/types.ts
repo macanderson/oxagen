@@ -32,6 +32,7 @@ import type {
   agentRunAttemptSeals,
   agentRunFinalizationGrants,
   agentRunFinalizationObligations,
+  dataPlanes,
 } from "./schema/index";
 
 // ── Billing row types ────────────────────────────────────────────────────────
@@ -202,3 +203,15 @@ export type AgentRunFinalizationObligationRow = InferSelectModel<
 export type NewAgentRunFinalizationObligationRow = InferInsertModel<
   typeof agentRunFinalizationObligations
 >;
+
+// ── Organisation-scoped data planes (ADR-042) ────────────────────────────────
+
+/**
+ * Full SELECT row from `org.data_planes`. `configCiphertext` is the KMS
+ * envelope — it is opaque bytes here and must be decrypted through the
+ * resolver, never handed to a surface.
+ */
+export type DataPlaneRow = InferSelectModel<typeof dataPlanes>;
+
+/** INSERT shape for `org.data_planes`. */
+export type NewDataPlaneRow = InferInsertModel<typeof dataPlanes>;

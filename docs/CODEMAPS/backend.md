@@ -228,45 +228,40 @@ Route file (apps/api/src/routes/v1/*.ts)
 @oxagen/iam         (packages/iam/src/)            — authz, audit emit
 ```
 
-## Background Jobs (Inngest) — 47 functions (count drifts; verify via
+## Background Jobs (Inngest) — 22 functions (count drifts; verify via
 `grep -rl "createFunction(" packages/inngest-functions/src/functions`)
+
+ADR-041 removed every agent-runtime job that used to live here: fan-out
+collection/dispatch (`agent.aggregate-fanout`, `agent.execute-subagent`),
+background-task execution and lease sweeping, the sandbox reaper, video
+rendering, playbook/workflow orchestration (`agent.workflow.supervisor`,
+`agent.workflow.task.execute`, `playbook-run-execute`,
+`playbook-trigger-match`), the LLM-as-judge eval runner (`eval.run.execute`),
+AI Gateway batch-job reconciliation, generated-file graph sync, and
+`web.search.ingest-graph`.
+
 ```
-agent.aggregate-fanout                → collect subagent results
-agent.background-task.execute         → long-running task runner
-agent.execute-subagent                → fan-out subagent execution
-agent.lease-sweep                     → reclaim stale agent leases
-agent.sandbox-reaper                  → reap orphaned/expired durable sandbox sessions (new)
-agent.video-render
-agent.workflow.supervisor             → playbook orchestration
-agent.workflow.task.execute           → individual playbook step
-ai-batch-reconcile                    → reconcile AI Gateway batch jobs
-auth/session-expiry-audit             → hourly cron; literal id contains a slash
+auth.session-expiry-audit             → hourly cron
 billing.dunning-sweep                 → failed payment retry
-billing.rollup-usage                  → usage aggregation
 chat.persist-stream                   → save streamed messages
-content.sync-generated-file-to-graph
-eval.run.execute                      → LLM-as-judge eval run
-ingestion-connection-poll             → ingestion-poll-scheduler
-ingestion-delete-connection
-ingestion-github-commit-files / -infer-domains / -infer-features(-batch) /
-  -initial-sync / -parse-file         → GitHub sync pipeline (7 functions)
-ingestion-oauth-refresh
-ingestion-pipeline                    → document ingestion
-ingestion-semantic-edge-infer         → AI edge inference
-ingestion-sync-requested
+ingestion.connection-poll             ingestion.poll-scheduler
+ingestion.delete                      → delete a connection
+ingestion.github-initial-sync
+ingestion.oauth-refresh
+ingestion.pipeline                    → document ingestion
+ingestion.sync-requested
+ingestion.webhook-provision           ingestion.webhook-renew
 mcp.tool-snapshot-retention
 memory.decay-pass                     → salience decay
 observability.capture-failure
-playbook-run-execute                  → playbook run
-playbook-trigger-match                → event → playbook match
 plugin.catalog-sync                   → plugin registry refresh
 plugin.oauth-refresh-watcher
-privacy.erasure-execute               → GDPR erase
-privacy.export-process                → GDPR export
-schema-reconcile                      → schema version reconcile
+privacy.erasure.execute               → GDPR erase
+privacy.export.process                → GDPR export
+schema.reconcile                      → schema version reconcile
 security.audit-partition-rollover
-stripe.sync-invoice|subscription
-web.search.ingest-graph
+stripe.sync-invoice
+stripe.sync-subscription
 ```
 Note: `ingestion.feature-inference.ts` is shared building-block code imported by
 several jobs above, not its own registered function — don't count it separately.

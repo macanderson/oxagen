@@ -47,27 +47,37 @@ messages            id, conversationId, role, content (JSON), toolCalls (JSON), 
 ```
 
 ### Schema: agent.ts
+
+ADR-041 (runtime excision, 2026-09-07) dropped `skills`, `skillVersions`,
+`backgroundTasks`, `subagentFanouts`, `subagentRuns`, `sandboxSessions`,
+`agentPlans`, `fileLocks`, `fileLockFences`, `agentRunCheckpoints`, and
+`agentRunAttemptLeases`. `a2aTasks` is slated to be dropped along with the
+removed A2A transport (see `docs/adr/ADR-041-runtime-excision.md` and
+`docs/specs/a2a-agent-identity/spec.md`). What remains (18 tables):
+
 ```
-agents              id, orgId, workspaceId, name, description, config (JSON)
-agentTriggers       agentId, type, config (JSON), enabled
-agentVersions       agentId, version, config (JSON), publishedAt
-skills              id, orgId, name, slug, description
-skillVersions       skillId, version, content, status
-backgroundTasks     id, orgId, workspaceId, agentId, status, result, startedAt, endedAt
-approvalRequests    id, agentId, taskId, type, payload, status, resolvedAt
-subagentFanouts     id, parentTaskId, orgId, workspaceId, status
-subagentRuns        fanoutId, agentId, status, result, logs
-agentExecutions     id, agentId, conversationId, status, startedAt, endedAt
-agentExecutionSteps executionId, stepIndex, type, input, output, durationMs
-agentToolCalls      executionId, stepId, tool, input, output, durationMs
-sandboxSessions     id, orgId, workspaceId, agentId, sandboxId, status
-agentPlans          id, agentId, taskId, steps (JSON), status
-a2aTasks            id, orgId, workspaceId, publicId, skillId, status — A2A
-                    JSON-RPC task state; `public_id` backs the SSE
-                    tasks/resubscribe live-attach in apps/api/src/routes/a2a/
-                    stream-registry.ts
-fileLocks           id, orgId, workspaceId, path, agentId, acquiredAt — cross-agent
-                    file lock for parallel fleet work
+agents                          id, orgId, slug, name, agentType, activeVersionId,
+                                 status (draft/active/archived), deploymentStatus
+agentVersions                   agentId, version, config (JSON), publishedAt
+approvalRequests                id, agentId, taskId, type, payload, status, resolvedAt
+agentExecutions                 id, agentId, conversationId, status, startedAt, endedAt
+agentExecutionSteps             executionId, stepIndex, type, input, output, durationMs
+agentToolCalls                  executionId, stepId, tool, input, output, durationMs
+a2aTasks                        id, orgId, workspaceId, publicId, skillId, status — being
+                                 dropped with the removed A2A transport
+agentRuns                       id, orgId, surface, status, spec (JSON), claimedBy,
+                                 leaseExpiresAt — the run-ledger evidence root
+agentRunEvents                  runId, sequence, type, payload (JSON) — append-only
+agentRunAttempts                runId, attemptNumber, status
+agentRunAttemptSeals            attemptId, sealedAt, digest — tamper-evidence seal
+agentRunFinalizationGrants      runId, grantedAt, grantedBy
+agentRunFinalizationObligations runId, obligation, satisfiedAt
+tools                           id, orgId, workspaceId, name, activeVersionId
+toolVersions                    toolId, version, manifest (JSON), publishedAt
+contextRecords                  id, orgId, slug, title, status (active/retired/superseded),
+                                 activeVersionId
+contextRecordVersions           recordId, version, body, checksum
+contextPromotions               recordId, action, chainDigest — hash-chained ledger
 fileLockFences      lockId, fenceToken, expiresAt — lease/fencing tokens
 ```
 
@@ -90,21 +100,19 @@ stripeEventProcessing id, eventId, status, attempts
 ```
 
 ### Schema: ai.ts
+
+`aiBatchJobs` was dropped under ADR-041 (AI Gateway batch reconciliation left
+with the runtime).
+
 ```
 aiResponseCache     id, orgId, cacheKey, promptHash, model, surface, responseKind,
                     response (JSON), usage (JSON), embedding (JSON, semantic layer) —
                     layered deterministic-call cache; OPT-IN per call site, NEVER
                     engaged for chat/agent-loop calls (see @oxagen/ai `cache` option)
-aiBatchJobs         id, orgId, provider batch job id, status — AI Gateway batch
-                    reconciliation state (ai.batch-reconcile Inngest fn)
 ```
 
-### Schema: eval.ts (Evals v1 — LLM-as-judge, scoped to metered run traces)
-```
-evalDatasets        id, orgId, workspaceId, name, description
-evalDatasetItems    datasetId, input, expected (JSON)
-evalRuns            id, datasetId, orgId, workspaceId, status, judgeModel, results (JSON)
-```
+`eval.ts` (Evals v1: `evalDatasets`, `evalDatasetItems`, `evalRuns`) was
+dropped entirely under ADR-041 — there is no standalone eval platform.
 
 ### Schema: ingestion.ts
 ```
@@ -141,18 +149,9 @@ accessRequests      id, principalId, resource, action, status, requestedAt
 principalRoleAssignments principalId, roleId, assignedAt
 ```
 
-### Schema: workflow.ts (Playbooks)
-```
-playbooks           id, orgId, workspaceId, name, description
-playbookVersions    playbookId, version, definition (JSON)
-playbookSteps       id, playbookId, type, config (JSON)
-playbookEdges       fromStepId, toStepId, condition
-playbookTriggers    playbookId, type, config (JSON)
-playbookRuns        id, playbookId, status, startedAt, endedAt
-playbookStepRuns    runId, stepId, status, input, output
-playbookEvents      runId, type, payload, createdAt
-playbookApprovals   runId, stepId, status, resolvedAt
-```
+`workflow.ts` (playbooks: definitions/steps/edges/triggers/runs/approvals) was
+dropped entirely under ADR-041 — the automation/workflow surface no longer
+exists.
 
 ### Schema: schema-registry.ts (Ontology)
 ```
@@ -166,27 +165,32 @@ schemaProperties    nodeLabel, name, type, required
 ```
 
 ### Schema: environments.ts
+
+`sandboxTemplates` and `sandboxTemplateTools` were dropped under ADR-041.
+
 ```
 environments        id, orgId, workspaceId, name, isDefault
 secretKeys          id, environmentId, name, description
 secretValues        keyId, environmentId, encryptedValue
 secretAccessLog     keyId, userId, accessedAt, action
-sandboxTemplates    id, environmentId, provider, runtimeImage, resources (JSON),
-                    network posture, isDefault — portable sandbox templates
-                    (create/list/get/update/delete/set_default/set_tools/export/import)
-sandboxTemplateTools templateId, tool, config (JSON) — preloaded tools per template
+agentEnvironmentBindings agentId, environmentId, isPrimary — governance metadata:
+                    which secret scope an agent identity may resolve
 ```
 
 ### Schema: Other
-```
--- cms.ts (marketing-site lead gate, unauthenticated /v1/cms surface)
-leads               id, email, companySize, referralSource, createdAt
-bookEditions        id, slug, title — ebook editions (field-manual/page-flip-reader)
-bookAccessCodes     id, editionId, code, status (active|consumed|revoked)
 
+`cms.ts` (`leads`, `bookEditions`, `bookAccessCodes` — the marketing-site lead
+gate and ebook access system) was dropped entirely. `content.ts`'s
+`documents` table (the in-app generation path) was dropped under ADR-041;
+`generatedAssets` survives, narrowed to the upload/attachment path.
+
+```
 -- content.ts
-generatedAssets     id, orgId, workspaceId, type, url, metadata (JSON)
-documents           id, orgId, workspaceId, title, content, format
+generatedAssets     id, orgId, workspaceId, userId, kind, source (user_upload|generated),
+                    accessPolicy, storageProvider/Key/Url, mimeType — blob reference
+                    for chat/agent attachments (asset.upload, conversation.attachment.add);
+                    'generated' source rows are preserved history from the retired
+                    in-app generation path, no longer written
 
 -- notification.ts
 notifications       id, orgId, userId, type, payload (JSON), readAt
@@ -244,14 +248,15 @@ Package: packages/telemetry/src/ (migrate.ts runs schema.sql then every
 ```
 BLOB_READ_WRITE_TOKEN (env)
 Package: packages/storage/src/
-Usage: avatar uploads, generated assets, skill exports, archives
+Usage: avatar uploads, chat/agent attachment uploads
 ```
 
 ## Migrations
 ```
 Location: packages/database/atlas/migrations/
 Tool:     Atlas (pnpm migrate in database package)
-Count:    55 SQL files tracked (latest: 20260721120000_source_connections_poll_due_partial_idx.sql)
+Count:    ~90 SQL files tracked (latest: 20260907140000_data_plane_security_event.sql;
+          includes 20260907120000_drop_agent_runtime_tables.sql — the ADR-041 cut)
           — count drifts fast; verify via `ls packages/database/atlas/migrations/*.sql | wc -l`
 Checksum: atlas.sum — regenerate via `atlas migrate hash --dir "file://atlas/migrations"`
           from packages/database after adding/renaming a migration; never hand-edit.

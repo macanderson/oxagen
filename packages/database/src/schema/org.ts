@@ -10,7 +10,13 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { orgSchema } from "./_schemas";
-import { auditMixin, citext, idMixin } from "./_mixins";
+import {
+  auditMixin,
+  bytea,
+  citext,
+  idMixin,
+  softDeleteMixin,
+} from "./_mixins";
 
 export const organizations = orgSchema.table(
   "organizations",
@@ -168,6 +174,88 @@ export const invitations = orgSchema.table(
     roleCheck: check(
       "invitations_role_check",
       sql`lower(${t.role}) IN ('owner', 'admin', 'member', 'billing', 'compliance', 'viewer')`,
+    ),
+  }),
+);
+
+// ── Organisation-scoped data planes (ADR-042) ────────────────────────────────
+// One row per (organisation, store kind) binding the organisation's traces,
+// graph, and evidence to a physical endpoint. Absence of a row means the
+// SHARED platform plane — the table is sparse by design, and a fresh
+// deployment has none at all.
+//
+// `config_ciphertext` is the KMS envelope (@oxagen/crypto `encrypt`, the same
+// envelope the credential vault uses) over the JSON connection config. The
+// plaintext DSN NEVER exists in a column, a log line, a read capability's
+// output, or an error message: `get_data_plane` returns host + database name
+// only. `config_key_id` records which KEK wrapped the DEK so a rotation can
+// route the decrypt, and `config_digest` is a SHA-256 over the canonical
+// plaintext config — it is the cache/pool key the store clients evict on, so
+// a rotated credential produces a new key rather than reusing a pool bound to
+// a revoked password. A digest of a secret is not a secret: it is
+// preimage-resistant and the config carries a high-entropy password.
+//
+// This is a PLATFORM-LEVEL org-scoped settings table, like
+// billing.org_billing_settings and security.org_security_policy: org_id NOT
+// NULL, no workspace_id → the `org_only` RLS class. It always lives on the
+// shared plane (a plane binding cannot be stored on the plane it describes),
+// which is why every access goes through withSystemDb.
+export const dataPlanes = orgSchema.table(
+  "data_planes",
+  {
+    ...idMixin("dpl"),
+    ...auditMixin(),
+    ...softDeleteMixin(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
+    // Which store this binding governs. CHECK enforced below.
+    kind: text("kind").notNull(),
+    // 'shared' = the platform plane (config columns stay NULL);
+    // 'dedicated' = a customer-controlled endpoint (config columns required).
+    mode: text("mode").notNull().default("shared"),
+    // KMS envelope over the JSON connection config. NULL on a shared row.
+    configCiphertext: bytea("config_ciphertext"),
+    configKeyId: text("config_key_id"),
+    configDigest: text("config_digest"),
+    status: text("status").notNull().default("active"),
+    // Applied schema version of a dedicated plane. A plane lagging the
+    // platform is marked `degraded` and its writes fail closed (ADR-042 §3).
+    schemaVersion: text("schema_version"),
+    lastVerifiedAt: timestamp("last_verified_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    rotatedAt: timestamp("rotated_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+  },
+  (t) => ({
+    // One LIVE binding per (organisation, store). Partial on deleted_at so a
+    // retired binding stays readable as history without blocking a new one.
+    orgKindIdx: uniqueIndex("data_planes_org_kind_idx")
+      .on(t.orgId, t.kind)
+      .where(sql`${t.deletedAt} IS NULL`),
+    kindCheck: check(
+      "data_planes_kind_check",
+      sql`${t.kind} IN ('postgres','neo4j','clickhouse')`,
+    ),
+    modeCheck: check(
+      "data_planes_mode_check",
+      sql`${t.mode} IN ('shared','dedicated')`,
+    ),
+    statusCheck: check(
+      "data_planes_status_check",
+      sql`${t.status} IN ('active','degraded','disabled')`,
+    ),
+    // A dedicated plane is unusable without its envelope; a shared plane must
+    // not carry one. Enforcing the pairing in the database means a partial
+    // write can never produce a row the resolver has to guess about.
+    configPairingCheck: check(
+      "data_planes_config_pairing_check",
+      sql`(${t.mode} = 'shared' AND ${t.configCiphertext} IS NULL AND ${t.configKeyId} IS NULL)
+       OR (${t.mode} = 'dedicated' AND ${t.configCiphertext} IS NOT NULL AND ${t.configKeyId} IS NOT NULL)`,
     ),
   }),
 );

@@ -19,9 +19,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...real, withTenantDb: mocks.withTenantDb };
 });
 
-vi.mock("@oxagen/telemetry", () => ({
-  readRoutingStats: mocks.readRoutingStats,
-}));
+// Spread the real module: lib/market-router resolves tier → gateway slug through
+// @oxagen/ai, which transitively pulls other @oxagen/telemetry exports, so a
+// bare factory mock would break the import graph rather than just this one read.
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/telemetry")>();
+  return { ...real, readRoutingStats: mocks.readRoutingStats };
+});
 
 import { routerPolicyGetHandler } from "./router.policy.get";
 import { routerPolicySetHandler } from "./router.policy.set";
