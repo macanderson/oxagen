@@ -235,20 +235,70 @@ export async function reactivateOrgSubscription(orgId: string): Promise<void> {
   });
 }
 
+/**
+ * Build the Stripe idempotency key for a plan change.
+ *
+ * The key identifies the INTENT, never the clock. It used to carry
+ * `Math.floor(Date.now() / 10_000)`, on the reasoning that a 10-second window
+ * dedupes a double-click while still allowing a deliberate later change. A
+ * fixed bucket is the wrong shape for that: `floor(now / 10_000)` does not give
+ * each submit a 10-second window, it gives the CLOCK fixed boundaries, and a
+ * resubmit landing on the far side of one is treated as a new intent however
+ * close the two clicks were. Measured, a 250 ms double-click produced two keys
+ * — and therefore two proration invoices — for 2.5% of start offsets, and a
+ * one-second client retry for 10% (#1421). `prorationBehavior` defaults to
+ * `always_invoice`, so a duplicate is a duplicate INVOICE against a real
+ * customer; both calls succeed, both reconcile to the same end state, and only
+ * Stripe shows the second one.
+ *
+ * `setSubscriptionSeats` next door already had the right shape
+ * (`seats:${subId}:${seats}`, no clock), and `autoreload.ts` reaches the same
+ * conclusion the other way — it persists the key it charged under, because no
+ * wall-clock derivation could survive a retry (#1420).
+ *
+ * Two guarantees, and the caller chooses which:
+ *
+ * - **With `requestId`** — the one the UI should send. Every submit of one
+ *   intent carries one id, so a double-click or a client retry dedupes no
+ *   matter how far apart the two land, and a deliberate later change to the
+ *   same price carries a NEW id and is correctly not deduped.
+ * - **Without it** — the key is the intent alone, so any repeat of the same
+ *   change dedupes for as long as Stripe remembers the key (24 hours). This
+ *   never fires a duplicate invoice, which is the failure that costs money. The
+ *   cost is the other direction: switching to a different plan and back to this
+ *   one inside 24 hours is deduped and does not apply. That is the trade the
+ *   old comment claimed to have avoided and did not — it avoided it only away
+ *   from bucket boundaries.
+ */
+export function planChangeIdempotencyKey(
+  stripeSubId: string,
+  newPriceId: string,
+  requestId?: string,
+): string {
+  const base = `plan_change:${stripeSubId}:${newPriceId}`;
+  return requestId ? `${base}:${requestId}` : base;
+}
+
 export async function upgradeSubscription(
   stripeSubId: string,
   newPriceId: string,
   prorationBehavior: "always_invoice" | "none" = "always_invoice",
+  /**
+   * Identifies THIS submit. Pass the client's request id so a double-click and
+   * a deliberate later change are told apart — see
+   * {@link planChangeIdempotencyKey} for what each choice guarantees.
+   */
+  requestId?: string,
 ): Promise<void> {
   logger.info(
     { stripeSubId, newPriceId, prorationBehavior },
     "billing: upgrading subscription price",
   );
-  // Idempotency: dedupe a double-submitted plan change (double-click / client
-  // retry) so we never fire two proration invoices. Bucketed to a 10s window —
-  // dedupes rapid resubmits, still allows a deliberate later change (Stripe
-  // keys expire after 24h regardless).
-  const idempotencyKey = `plan_change:${stripeSubId}:${newPriceId}:${Math.floor(Date.now() / 10_000)}`;
+  const idempotencyKey = planChangeIdempotencyKey(
+    stripeSubId,
+    newPriceId,
+    requestId,
+  );
   await billingProvider().upgradeSubscription(stripeSubId, {
     newPriceId,
     prorationBehavior,
@@ -331,7 +381,17 @@ export async function changeOrgPlan(
   orgId: string,
   targetPlanSlug: string,
   interval: "month" | "year",
-  opts?: { successUrl?: string; cancelUrl?: string },
+  opts?: {
+    successUrl?: string;
+    cancelUrl?: string;
+    /**
+     * Identifies this submit, so a double-click or a client retry is one
+     * intent and a deliberate later change is another. Threaded to
+     * {@link planChangeIdempotencyKey}; see it for what omitting it
+     * guarantees.
+     */
+    requestId?: string;
+  },
 ): Promise<{ checkoutUrl: string } | null> {
   // billing.plans is a shared platform catalog (no org_id, RLS not enabled) —
   // read via withSystemDb to match the catalog-read convention used everywhere
@@ -429,6 +489,7 @@ export async function changeOrgPlan(
     activeSub.stripeSubscriptionId,
     newPriceId,
     prorationBehavior,
+    opts?.requestId,
   );
 
   // SOC2 audit: an org's plan tier changed on an active subscription (upgrade
