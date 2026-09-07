@@ -14,6 +14,16 @@
  *   - The emoji search filter narrows the grid
  *   - An invalid custom hex shows an error and disables Save
  *   - Cancel discards changes without calling onChange
+ *
+ * Queries are scoped to the Design tab's four labelled `role="group"` regions
+ * (`designRegions` below) rather than run against `screen`. The open dialog
+ * holds ~200 buttons — almost all of them emoji cells — and an unscoped
+ * `getByRole(role, { name })` computes an accessible name and a visibility
+ * verdict for every one of them, ~25ms per query warm and ~140ms cold. That
+ * cost, five queries deep, is what put the save-flow case at 1.6s on an idle
+ * CI runner and 5.07s on a contended one, tripping vitest's 5s default and
+ * turning main red (run 34080854349). Scoped, the same assertions cost ~2ms
+ * each. Keep new queries scoped.
  */
 
 import * as React from "react";
@@ -54,6 +64,25 @@ async function openDialog() {
   const user = userEvent.setup();
   await user.click(screen.getByRole("button", { name: "Edit avatar" }));
   return user;
+}
+
+/** The open dialog plus the Design tab's four labelled regions. */
+function designRegions() {
+  const dialog = screen.getByRole("dialog");
+  const named = (name: string) => within(dialog).getByRole("group", { name });
+  return {
+    dialog,
+    categories: named("Emoji categories"),
+    icons: named("Choose an icon"),
+    colors: named("Preset background colors"),
+    mode: named("Color mode"),
+    actions: named("Avatar actions"),
+  };
+}
+
+/** The emoji cell whose aria-label is `keyword`, or null when filtered out. */
+function emojiCell(icons: HTMLElement, keyword: string): HTMLElement | null {
+  return within(icons).queryByLabelText(keyword);
 }
 
 describe("AvatarMaker — trigger", () => {
@@ -136,20 +165,18 @@ describe("AvatarMaker — Design tab pre-population", () => {
     });
     render(<AvatarMaker value={value} onChange={vi.fn()} name="Acme Team" />);
     await openDialog();
+    const { icons, mode } = designRegions();
 
     // Emoji button for the fox is pressed.
-    expect(screen.getByRole("button", { name: "fox" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(emojiCell(icons, "fox")).toHaveAttribute("aria-pressed", "true");
     // Custom hex field reflects the current background.
     expect(
       screen.getByLabelText("Custom background color hex value"),
     ).toHaveValue("#3b82f6");
     // Color mode segmented control reflects the current mode.
-    expect(screen.getByRole("button", { name: "Mono light" })).toHaveAttribute(
-      "data-pressed",
-    );
+    expect(
+      within(mode).getByRole("button", { name: "Mono light" }),
+    ).toHaveAttribute("data-pressed");
   });
 });
 
@@ -160,14 +187,15 @@ describe("AvatarMaker — Design tab save flow", () => {
     const user = await openDialog();
 
     await user.click(screen.getByRole("tab", { name: "Design" }));
-    await user.click(screen.getByRole("button", { name: "fox" }));
-    await user.click(
-      screen.getByRole("button", { name: "Background color #f59e0b" }),
-    );
-    await user.click(screen.getByRole("button", { name: "Mono dark" }));
+    const { actions, icons, colors, mode } = designRegions();
 
-    const dialog = screen.getByRole("dialog");
-    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+    await user.click(emojiCell(icons, "fox") as HTMLElement);
+    await user.click(
+      within(colors).getByRole("button", { name: "Background color #f59e0b" }),
+    );
+    await user.click(within(mode).getByRole("button", { name: "Mono dark" }));
+
+    await user.click(within(actions).getByRole("button", { name: "Save" }));
 
     expect(onChange).toHaveBeenCalledWith(
       'avatar:v1:{"emoji":"🦊","bg":"#f59e0b","mode":"mono-dark"}',
@@ -178,28 +206,26 @@ describe("AvatarMaker — Design tab save flow", () => {
     render(<AvatarMaker value={null} onChange={vi.fn()} name="Acme Team" />);
     const user = await openDialog();
     await user.click(screen.getByRole("tab", { name: "Design" }));
+    const { icons } = designRegions();
 
-    expect(screen.getByRole("button", { name: "fox" })).toBeInTheDocument();
+    expect(emojiCell(icons, "fox")).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Icon"), "cat");
 
-    expect(screen.getByRole("button", { name: "cat" })).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "fox" }),
-    ).not.toBeInTheDocument();
+    expect(emojiCell(icons, "cat")).toBeInTheDocument();
+    expect(emojiCell(icons, "fox")).not.toBeInTheDocument();
   });
 
   it("filters the emoji grid to a single category when a category chip is clicked", async () => {
     render(<AvatarMaker value={null} onChange={vi.fn()} name="Acme Team" />);
     const user = await openDialog();
     await user.click(screen.getByRole("tab", { name: "Design" }));
+    const { categories, icons } = designRegions();
 
-    await user.click(screen.getByRole("button", { name: "Food" }));
+    await user.click(within(categories).getByRole("button", { name: "Food" }));
 
-    expect(screen.getByRole("button", { name: "pizza" })).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "fox" }),
-    ).not.toBeInTheDocument();
+    expect(emojiCell(icons, "pizza")).toBeInTheDocument();
+    expect(emojiCell(icons, "fox")).not.toBeInTheDocument();
   });
 
   it("shows an error and disables Save for an invalid custom hex value", async () => {
@@ -212,8 +238,10 @@ describe("AvatarMaker — Design tab save flow", () => {
     await user.type(hexInput, "not-a-color");
 
     expect(screen.getByRole("alert")).toHaveTextContent(/hex color/i);
-    const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+    const { actions } = designRegions();
+    expect(
+      within(actions).getByRole("button", { name: "Save" }),
+    ).toBeDisabled();
   });
 
   it("normalizes a valid custom hex value and enables Save", async () => {
@@ -226,8 +254,8 @@ describe("AvatarMaker — Design tab save flow", () => {
     await user.clear(hexInput);
     await user.type(hexInput, "#ABCDEF");
 
-    const dialog = screen.getByRole("dialog");
-    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+    const { actions } = designRegions();
+    await user.click(within(actions).getByRole("button", { name: "Save" }));
 
     expect(onChange).toHaveBeenCalledWith(
       expect.stringContaining('"bg":"#abcdef"'),
@@ -241,9 +269,10 @@ describe("AvatarMaker — cancel", () => {
     render(<AvatarMaker value={null} onChange={onChange} name="Acme Team" />);
     const user = await openDialog();
     await user.click(screen.getByRole("tab", { name: "Design" }));
-    await user.click(screen.getByRole("button", { name: "fox" }));
+    const { actions, icons } = designRegions();
+    await user.click(emojiCell(icons, "fox") as HTMLElement);
 
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(within(actions).getByRole("button", { name: "Cancel" }));
 
     expect(onChange).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
