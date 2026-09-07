@@ -51,8 +51,6 @@ export interface PreferencesFormProps {
     pendingPromptBehavior: PendingPromptBehavior;
     defaultTextTier: "fast" | "balanced" | "precise" | null;
     defaultTextModel: string | null;
-    defaultImageModel: string | null;
-    defaultVideoModel: string | null;
     timezone: string;
     language: string;
   };
@@ -78,8 +76,6 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
   const [modelDefaults, setModelDefaults] = React.useState<ModelDefaultsValue>({
     textTier: initial.defaultTextTier,
     textModel: initial.defaultTextModel,
-    imageModel: initial.defaultImageModel,
-    videoModel: initial.defaultVideoModel,
   });
 
   const [status, setStatus] = React.useState<
@@ -123,8 +119,6 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
       pendingPromptBehavior,
       defaultTextTier: modelDefaults.textTier,
       defaultTextModel: modelDefaults.textModel,
-      defaultImageModel: modelDefaults.imageModel,
-      defaultVideoModel: modelDefaults.videoModel,
       timezone,
       language,
     };

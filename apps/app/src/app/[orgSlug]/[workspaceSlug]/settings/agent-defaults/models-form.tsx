@@ -49,8 +49,6 @@ export function WorkspaceModelsForm({
           workspaceSlug,
           defaultTextTier: value.textTier,
           defaultTextModel: value.textModel,
-          defaultImageModel: value.imageModel,
-          defaultVideoModel: value.videoModel,
         });
       if (result.ok) {
         setSavedAt(new Date());

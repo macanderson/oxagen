@@ -125,8 +125,6 @@ export default async function AgentDefaultsPage({
   const modelDefaultsInitial: ModelDefaultsValue = {
     textTier: modelSettings.defaultTextTier,
     textModel: modelSettings.defaultTextModel,
-    imageModel: modelSettings.defaultImageModel,
-    videoModel: modelSettings.defaultVideoModel,
   };
 
   // Effective system prompt: pure function of workspace context + the saved
@@ -158,8 +156,8 @@ export default async function AgentDefaultsPage({
                   AI model defaults
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  The default text tier and models applied to every agent turn
-                  in this workspace. Workspace defaults take precedence over
+                  The default text tier or model applied to every agent turn in
+                  this workspace. Workspace defaults take precedence over
                   personal preferences for all members.
                 </p>
               </div>
