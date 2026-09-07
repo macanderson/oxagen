@@ -102,7 +102,6 @@ oxagen/
 │   ├── mcp          MCP server (streamable HTTP at /mcp) — mcp.oxagen.sh
 │   ├── cli          Developer CLI + coding agent (Commander + Ink)
 │   ├── docs         Documentation site (Fumadocs) — docs.oxagen.sh
-│   ├── schemas      JSON Schema hosting, generated from Zod — schemas.oxagen.sh
 │   └── web          Public website — oxagen.sh
 │
 ├── packages/
