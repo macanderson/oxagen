@@ -1114,7 +1114,10 @@ export function buildInsertAttemptSql(input: InsertAttemptInput): SQL {
  * columns move — the `agent_runs_v2_immutability` trigger rejects any change to
  * the trusted bindings, so this statement cannot rewrite identity by accident.
  */
-export function buildMarkRunAttemptedSql(runId: string, attemptId: string): SQL {
+export function buildMarkRunAttemptedSql(
+  runId: string,
+  attemptId: string,
+): SQL {
   return sql`
     UPDATE agent.agent_runs SET
       status = 'running',

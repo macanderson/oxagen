@@ -66,6 +66,7 @@ import {
 import {
   EMPTY_EVENT_STREAM_DIGEST,
   EVENT_SCHEMA_VERSION,
+  MAX_INLINE_PAYLOAD_BYTES,
   advanceEventStreamDigest,
 } from "./event-payload-registry";
 import {
@@ -176,6 +177,16 @@ function makeSpec(overrides: Record<string, unknown> = {}): RunSpecV2 {
     output_policy: { open_pull_request: true },
     ...overrides,
   });
+}
+
+/** The same spec, narrowed to a general (non-repository) run. */
+function makeGeneralSpec(): RunSpecV2 {
+  const {
+    repository_binding: _repository,
+    output_policy: _output,
+    ...rest
+  } = makeSpec() as unknown as Record<string, unknown>;
+  return parseRunSpecV2({ ...rest, run_kind: "general" });
 }
 
 /** The typed columns a run row returns, matching `makeSpec()` exactly. */
@@ -565,12 +576,7 @@ describe("buildRunRowIdentityFromSpec / mapRunV2IdentityRow", () => {
   });
 
   it("nulls every repository field for a general run", () => {
-    const spec = makeSpec({
-      run_kind: "general",
-      repository_binding: undefined,
-      output_policy: { open_pull_request: false },
-    });
-    const identity = buildRunRowIdentityFromSpec(spec);
+    const identity = buildRunRowIdentityFromSpec(makeGeneralSpec());
     expect(identity.repository_binding_public_id).toBeNull();
     expect(identity.provider).toBeNull();
     expect(identity.base_commit_sha).toBeNull();
@@ -676,8 +682,13 @@ describe("prepareAttemptEvent", () => {
     const err = (() => {
       try {
         prepareAttemptEvent({
-          ...toolEvent(1),
-          payload: { ...toolEvent(1).payload, tool_call_id: "x".repeat(20_000) },
+          attemptSeq: 1,
+          eventType: "checkout.unavailable",
+          observedAt: OBSERVED_AT,
+          payload: {
+            reason_code: "sandbox_unavailable",
+            provider_repository_id: "y".repeat(MAX_INLINE_PAYLOAD_BYTES + 1),
+          },
         });
         return null;
       } catch (e) {
@@ -738,9 +749,9 @@ describe("planAttemptBatch", () => {
   });
 
   it("refuses a batch that is not internally contiguous", () => {
-    expect(() =>
-      planAttemptBatch(UUID_ATTEMPT, 4, prepared([5, 7])),
-    ).toThrow(RunEventSequenceGapError);
+    expect(() => planAttemptBatch(UUID_ATTEMPT, 4, prepared([5, 7]))).toThrow(
+      RunEventSequenceGapError,
+    );
   });
 
   it("refuses a non-positive sequence", () => {
@@ -773,9 +784,11 @@ describe("reconcileReplayedEvents", () => {
   it("raises an integrity conflict on a same-seq different-digest replay", () => {
     const err = (() => {
       try {
-        reconcileReplayedEvents(UUID_ATTEMPT, [first], [
-          { ...durableRow(first, "event-1", "7"), event_digest: SHA_3 },
-        ]);
+        reconcileReplayedEvents(
+          UUID_ATTEMPT,
+          [first],
+          [{ ...durableRow(first, "event-1", "7"), event_digest: SHA_3 }],
+        );
         return null;
       } catch (e) {
         return e;
@@ -1020,7 +1033,7 @@ describe("SQL builders", () => {
   it("buildAllocateRunSeqSql returns the FIRST reserved sequence as text", () => {
     const { sql: text, params } = compile(buildAllocateRunSeqSql(UUID_RUN, 3));
     expect(text).toContain("next_run_seq = next_run_seq +");
-    expect(text).toContain("(next_run_seq - $2)::text AS first_run_seq");
+    expect(text).toContain("(next_run_seq - $3)::text AS first_run_seq");
     expect(params).toEqual([3, UUID_RUN, 3]);
   });
 
@@ -1044,7 +1057,13 @@ describe("SQL builders", () => {
 
   it("buildInsertAttemptEventsSql returns null for an empty batch", () => {
     expect(
-      buildInsertAttemptEventsSql(UUID_RUN, UUID_ORG, UUID_WS, UUID_ATTEMPT, []),
+      buildInsertAttemptEventsSql(
+        UUID_RUN,
+        UUID_ORG,
+        UUID_WS,
+        UUID_ATTEMPT,
+        [],
+      ),
     ).toBeNull();
   });
 
@@ -1091,9 +1110,7 @@ describe("SQL builders", () => {
   });
 
   it("buildGetRunByPublicIdSql has no tenant predicate — RLS scopes it", () => {
-    const { sql: text, params } = compile(
-      buildGetRunByPublicIdSql("arun_abc"),
-    );
+    const { sql: text, params } = compile(buildGetRunByPublicIdSql("arun_abc"));
     expect(text).toContain("WHERE public_id =");
     expect(text).not.toContain("org_id =");
     expect(params).toEqual(["arun_abc"]);
@@ -1239,9 +1256,7 @@ describe("createAttempt", () => {
       { match: LOCK_RUN, rows: lockedRunRows({ attempt_count: 1 }) },
       {
         match: INSERT_ATTEMPT,
-        rows: [
-          { id: UUID_B, public_id: ATTEMPT_PUBLIC_ID, attempt_number: 2 },
-        ],
+        rows: [{ id: UUID_B, public_id: ATTEMPT_PUBLIC_ID, attempt_number: 2 }],
       },
       { match: MARK_ATTEMPTED, rows: [{ id: UUID_RUN, attempt_count: 2 }] },
     ]);
@@ -1265,9 +1280,9 @@ describe("createAttempt", () => {
   it("refuses an unknown run", async () => {
     const { tx } = makeRoutingTx([]);
     useTx(tx);
-    await expect(
-      createPostgresRunStore().createAttempt(input),
-    ).rejects.toThrow(/does not exist/);
+    await expect(createPostgresRunStore().createAttempt(input)).rejects.toThrow(
+      /does not exist/,
+    );
   });
 
   it("refuses a preserved legacy run row", async () => {
@@ -1278,9 +1293,9 @@ describe("createAttempt", () => {
       },
     ]);
     useTx(tx);
-    await expect(
-      createPostgresRunStore().createAttempt(input),
-    ).rejects.toThrow(/preserved legacy row/);
+    await expect(createPostgresRunStore().createAttempt(input)).rejects.toThrow(
+      /preserved legacy row/,
+    );
   });
 
   it("refuses to exceed the run's pinned max_attempts", async () => {
@@ -1288,19 +1303,17 @@ describe("createAttempt", () => {
       { match: LOCK_RUN, rows: lockedRunRows({ attempt_count: 3 }) },
     ]);
     useTx(tx);
-    await expect(
-      createPostgresRunStore().createAttempt(input),
-    ).rejects.toThrow(/exhausted its pinned max_attempts/);
+    await expect(createPostgresRunStore().createAttempt(input)).rejects.toThrow(
+      /exhausted its pinned max_attempts/,
+    );
   });
 
   it("throws when the attempt insert returns no row", async () => {
-    const { tx } = makeRoutingTx([
-      { match: LOCK_RUN, rows: lockedRunRows() },
-    ]);
+    const { tx } = makeRoutingTx([{ match: LOCK_RUN, rows: lockedRunRows() }]);
     useTx(tx);
-    await expect(
-      createPostgresRunStore().createAttempt(input),
-    ).rejects.toThrow(/attempt insert returned no row/);
+    await expect(createPostgresRunStore().createAttempt(input)).rejects.toThrow(
+      /attempt insert returned no row/,
+    );
   });
 
   it("throws when the run cannot be marked running", async () => {
@@ -1314,9 +1327,9 @@ describe("createAttempt", () => {
       },
     ]);
     useTx(tx);
-    await expect(
-      createPostgresRunStore().createAttempt(input),
-    ).rejects.toThrow(/could not be marked running/);
+    await expect(createPostgresRunStore().createAttempt(input)).rejects.toThrow(
+      /could not be marked running/,
+    );
   });
 });
 
@@ -1346,10 +1359,7 @@ describe("appendAttemptBatch", () => {
       attemptId: UUID_ATTEMPT,
       events: [toolEvent(1, "call_1"), toolEvent(2, "call_2")],
     });
-    expect(result.events.map((e) => e.eventId)).toEqual([
-      "event-1",
-      "event-2",
-    ]);
+    expect(result.events.map((e) => e.eventId)).toEqual(["event-1", "event-2"]);
     expect(result.events.every((e) => e.idempotent === false)).toBe(true);
     expect(result.eventCount).toBe(2);
     expect(result.lastAttemptSeq).toBe(2);
@@ -1459,7 +1469,9 @@ describe("appendAttemptBatch", () => {
       { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
       {
         match: ATTEMPT_STATE,
-        rows: [{ ...durableRow(prepared, "event-1", "5"), event_digest: SHA_3 }],
+        rows: [
+          { ...durableRow(prepared, "event-1", "5"), event_digest: SHA_3 },
+        ],
       },
     ]);
     useTx(tx);
@@ -1492,7 +1504,9 @@ describe("appendAttemptBatch", () => {
       { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
       {
         match: ATTEMPT_STATE,
-        rows: [{ ...durableRow(prepared, "event-1", "5"), event_digest: SHA_3 }],
+        rows: [
+          { ...durableRow(prepared, "event-1", "5"), event_digest: SHA_3 },
+        ],
       },
     ]);
     useTx(tx);
@@ -1520,7 +1534,9 @@ describe("appendAttemptBatch", () => {
       { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
       {
         match: ATTEMPT_STATE,
-        rows: [{ ...durableRow(prepared, "event-1", "5"), event_digest: SHA_3 }],
+        rows: [
+          { ...durableRow(prepared, "event-1", "5"), event_digest: SHA_3 },
+        ],
       },
     ]);
     useTx(tx);
@@ -1644,9 +1660,9 @@ describe("sealAttempt", () => {
     const seal = executed.find((e) => INSERT_SEAL.test(e.sql));
     expect(seal?.params).toContain("producer_gone");
     // An abandoned attempt fails its run.
-    expect(
-      executed.find((e) => FINISH_RUN.test(e.sql))?.params,
-    ).toContain("failed");
+    expect(executed.find((e) => FINISH_RUN.test(e.sql))?.params).toContain(
+      "failed",
+    );
   });
 
   it("seals an attempt whose terminal event is already durable", async () => {

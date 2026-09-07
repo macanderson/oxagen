@@ -32,14 +32,13 @@
  * would make a stream digest un-reproducible from the envelope's own tuple
  * list.
  *
- * It is a CHAINED FOLD, not a digest over a materialized list, because the
- * lease row advances it once per append and never re-reads the whole log
- * (`agent_run_attempt_leases.event_stream_digest`: "Running digest over the
- * ordered … tuples"). `computeEventStreamDigest` is the same fold applied over
- * a whole list, so PR 2's finalizer — which recomputes the digest from the
- * authoritative event log — reproduces the exact bytes the seal committed to.
- * `EMPTY_EVENT_STREAM_DIGEST` is the seed and is also the literal value a
- * zero-event abandoned attempt seals with.
+ * It is a CHAINED FOLD, not a digest over a materialized list: `run-store`'s
+ * append advances it one event at a time from the state it just folded, and
+ * `computeEventStreamDigest` is the same fold applied over a whole list — so a
+ * finalizer that recomputes the digest from the authoritative event log
+ * reproduces the exact bytes the seal committed to. `EMPTY_EVENT_STREAM_DIGEST`
+ * is the seed and is also the literal value a zero-event abandoned attempt
+ * seals with.
  *
  * The pinned vectors in event-payload-registry.test.ts are the cross-PR
  * contract: if a later change to `canonicalJson` or to the fold shape moves
