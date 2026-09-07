@@ -36,19 +36,23 @@ import type { ChatSessionState } from "./session-state";
 
 /**
  * The unified store presented as the legacy `ChatSelectionStore`, or null
- * when no session provider is mounted. `selectionLocked` maps to the agent
- * lock (set after the conversation's first message); the store's write path
- * enforces it too, so a legacy agent-chip write after lock is rejected there
- * as well.
+ * when no session provider is mounted.
+ *
+ * `selectionLocked` is always false: the only lock the chip ever honoured was
+ * the CODE lock (a coding target claimed on the first code turn), and that
+ * left with the runtime (ADR-041). The agent lock (after the conversation's
+ * first message) is enforced by the store's write path, so the chip must stay
+ * openable — its picker also hosts the "default assistant" star, which is a
+ * workspace preference, not a conversation binding.
  */
 export function useSessionSelectionBridge(): ChatSelectionStore | null {
   const session = useChatSessionContext();
   return React.useMemo<ChatSelectionStore | null>(() => {
     if (!session) return null;
-    const { state, locks, updateSession, noteMessageSent } = session;
+    const { state, updateSession, noteMessageSent } = session;
     return {
       selectedAgentId: state.agentId,
-      selectionLocked: locks.agent,
+      selectionLocked: false,
       setSelectedAgentId: (id) => updateSession({ agentId: id }),
       applyAgentSelection: (sel: AgentSelectionApply) =>
         updateSession({ agentId: sel.agentId }),
