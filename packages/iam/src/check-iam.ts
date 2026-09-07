@@ -33,7 +33,7 @@ import {
   type AgentRunAuthorizationResult,
 } from "./live-agent-run-authorization";
 import { emitAudit } from "./emit-audit";
-import { resolveOrgTier, canAccessACL } from "@oxagen/billing";
+import { resolveOrgTierDetailed, canAccessACL } from "@oxagen/billing";
 import { captureError } from "@oxagen/telemetry";
 import { logger } from "./logger";
 
@@ -145,8 +145,18 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
   // entirely and return allow — zero DB queries, zero latency cost.
   // Enterprise orgs fall through to the full resolver below. Human/service
   // traffic is behaviorally untouched by Agent RBAC (spec §3.4).
-  const tier = ctx.planTier ?? (await resolveOrgTier(ctx.orgId));
-  if (!canAccessACL(tier)) {
+  // The tier gate decides whether the resolver runs at all, so it must fail
+  // CLOSED — enforce — on a tier nothing established. `free` is both a real
+  // tier and the hard default, and treating the default as a licence to bypass
+  // meant an org with no organizations row got every capability allowed with
+  // zero policy consulted (#1384). A caller-supplied `ctx.planTier` is taken as
+  // established: the middleware resolved it through the same path.
+  const resolution =
+    ctx.planTier !== undefined
+      ? { tier: ctx.planTier, established: true }
+      : await resolveOrgTierDetailed(ctx.orgId);
+  const tier = resolution.tier;
+  if (resolution.established && !canAccessACL(tier)) {
     const bypassStep = {
       rule: "tier_gate",
       description: `tier:${tier} — non-enterprise org bypasses IAM resolver → allow`,

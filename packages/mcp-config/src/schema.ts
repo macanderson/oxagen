@@ -138,11 +138,39 @@ export type Settings = z.infer<typeof settingsSchema>;
 // ── Managed Policy (Org-Level) ────────────────────────────────────────────────
 
 export const managedPolicySchema = z.object({
-  /** Glob patterns for server URLs that are permitted. Empty = all allowed. */
+  /**
+   * Server URLs that are permitted. Empty/absent = all allowed.
+   *
+   * Matched STRUCTURALLY, not as a raw string: scheme exactly, host as a
+   * hostname (case-insensitive, `*.corp.com` matching any subdomain but not the
+   * apex), port only when the pattern names one, and path as a glob. So
+   * `https://*.corp.com/*` admits `https://api.corp.com/mcp` and refuses
+   * `https://evil.com/x.corp.com/y` — which a raw-string glob would have
+   * allowed, because the allowlist entry appears in the path.
+   */
   allowedServerUrls: z.array(z.string()).optional(),
-  /** Glob patterns for stdio commands that are permitted. Empty = all allowed. */
+  /**
+   * Glob patterns for stdio commands that are permitted. Empty/absent = all
+   * allowed.
+   *
+   * Matched against the FULL ARGV — `[command, ...args].join(" ")` — not
+   * against the binary alone. `"npx"` therefore permits exactly `npx` with no
+   * arguments, and pinning an invocation means writing it:
+   * `"npx -y @good/server"`, or `"npx -y @good/*"`.
+   *
+   * This is stated here because it used to mean two different things. The
+   * runtime matched the binary alone, so `"npx"` admitted `npx -y @evil/server`
+   * — every package in the registry — while the documented matcher in
+   * `managed.ts` matched the full argv and refused a correctly-pinned
+   * invocation. Three of four cases disagreed, in both directions (#1424).
+   * `*` matches any run of characters; `?` is a literal, per `matchGlob`.
+   */
   allowedCommands: z.array(z.string()).optional(),
-  /** Glob patterns for server URLs that are always blocked. */
+  /**
+   * Server URLs that are always blocked, matched the same structural way as
+   * {@link managedPolicySchema.shape.allowedServerUrls}. Checked first, so a
+   * denied URL stays denied however permissive the allowlist is.
+   */
   deniedServerUrls: z.array(z.string()).optional(),
   /** Glob patterns for tool names that are always blocked (any server). */
   deniedTools: z.array(z.string()).optional(),
