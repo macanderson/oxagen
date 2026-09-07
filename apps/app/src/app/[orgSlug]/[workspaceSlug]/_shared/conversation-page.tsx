@@ -402,8 +402,6 @@ export async function ConversationPage({
     ? buildSeededModelState({
         textModel: effectiveModelDefaults.text.model,
         textTier: effectiveModelDefaults.text.tier,
-        imageModel: effectiveModelDefaults.image.model,
-        videoModel: effectiveModelDefaults.video.model,
         budget: budgetDefault,
       })
     : undefined;

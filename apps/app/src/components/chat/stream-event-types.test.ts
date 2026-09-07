@@ -114,7 +114,7 @@ describe("ToolCallContentBlock", () => {
     }
   });
 
-  it("accepts optional stdout/stderr/errorReason/durationMs/output", () => {
+  it("accepts optional errorReason/durationMs/output", () => {
     const block: ToolCallContentBlock = {
       type: "tool-call",
       toolCallId: "tc-xyz",
@@ -122,14 +122,10 @@ describe("ToolCallContentBlock", () => {
       inputPreview: null,
       riskLevel: "high",
       status: "completed",
-      stdout: "output",
-      stderr: "error",
       errorReason: "timeout",
       durationMs: 100,
       output: { result: 42 },
     };
-    expect(block.stdout).toBe("output");
-    expect(block.stderr).toBe("error");
     expect(block.errorReason).toBe("timeout");
     expect(block.durationMs).toBe(100);
   });
@@ -632,19 +628,6 @@ describe("StreamEvent union — member shapes", () => {
       expect(evt.memories).toHaveLength(1);
     }
   });
-  it("'tool-call-output' chunk has channel and data", () => {
-    const evt: StreamEvent = {
-      type: "tool-call-output",
-      toolCallId: "tc-out",
-      chunk: { channel: "stdout", data: "line 1\n" },
-    };
-    expect(evt.type).toBe("tool-call-output");
-    if (evt.type === "tool-call-output") {
-      expect(evt.chunk.channel).toBe("stdout");
-      expect(evt.chunk.data).toBe("line 1\n");
-    }
-  });
-
   it("'step-start' event has messageId and stepIndex", () => {
     const evt: StreamEvent = {
       type: "step-start",

@@ -15,24 +15,19 @@ describe("SLASH_COMMANDS registry", () => {
     }
   });
 
-  it("agent-interpreted commands carry guidance; client actions do not", () => {
+  it("every command is agent-interpreted and carries guidance (ADR-041: no client-handled commands)", () => {
     for (const c of SLASH_COMMANDS) {
-      if (c.clientAction) {
-        expect(c.agentGuidance).toBeUndefined();
-      } else {
-        expect(c.agentGuidance).toBeTruthy();
-      }
+      expect(c.agentGuidance).toBeTruthy();
     }
   });
 
   it("exposes the expected core commands", () => {
     const names = SLASH_COMMANDS.map((c) => c.name);
     expect(names).toEqual(
-      expect.arrayContaining(["pr", "diff", "ci", "repos", "pin"]),
+      expect.arrayContaining(["pr", "diff", "ci", "repos"]),
     );
-    expect(SLASH_COMMANDS.find((c) => c.name === "pin")?.clientAction).toBe(
-      "pin",
-    );
+    // The pin command named a repository sandbox the runtime excision removed.
+    expect(names).not.toContain("pin");
   });
 });
 
@@ -46,7 +41,7 @@ describe("matchSlashCommands", () => {
       matchSlashCommands("p")
         .map((c) => c.name)
         .sort(),
-    ).toEqual(["pin", "pr"]);
+    ).toEqual(["pr"]);
     expect(matchSlashCommands("CI").map((c) => c.name)).toEqual(["ci"]);
   });
 

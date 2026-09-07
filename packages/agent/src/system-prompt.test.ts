@@ -148,3 +148,49 @@ describe("buildChatSystemPrompt", () => {
     });
   });
 });
+
+// ── Composed shared sections (ADR-041: one prompt, one registry each) ────────
+describe("buildChatSystemPrompt — composed protocol sections", () => {
+  const CTX = {
+    orgSlug: "acme",
+    workspaceSlug: "main",
+    orgName: "Acme",
+    workspaceName: "Main",
+  };
+
+  it("carries the slash-command table generated from the shared registry", () => {
+    const prompt = buildChatSystemPrompt(CTX);
+    expect(prompt).toContain("## Slash commands");
+    // Generated from @oxagen/ai's SLASH_COMMANDS — the same registry the
+    // composer menu renders, so the prompt and the menu cannot disagree.
+    expect(prompt).toContain("`/pr <pr-number>`");
+    expect(prompt).toContain("`/ci [ref]`");
+  });
+
+  it("carries the @-mention grammar so mention tokens are not opaque", () => {
+    const prompt = buildChatSystemPrompt(CTX);
+    expect(prompt).toContain("## Reference mentions");
+    expect(prompt).toContain("[:TYPE|:SLUG|:LOCATION|:LABEL]");
+  });
+
+  it("never offers a repository EDIT — Oxagen governs agents, it does not run them", () => {
+    const prompt = buildChatSystemPrompt(CTX);
+    expect(prompt).toContain("Oxagen does not edit repositories");
+    expect(prompt).not.toMatch(/\bpin(ned)? (a |the )?repos(itory)?\b/i);
+  });
+
+  it("names no excised runtime tool", () => {
+    const prompt = buildChatSystemPrompt(CTX);
+    for (const dead of [
+      "load_skill",
+      "render_agent_ui",
+      "run_workflow",
+      "create_plan",
+      "dispatch_subagent",
+      "execute_code",
+      "A2A",
+    ]) {
+      expect(prompt).not.toContain(dead);
+    }
+  });
+});

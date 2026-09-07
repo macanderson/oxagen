@@ -179,32 +179,25 @@ describe("extractToolActivity", () => {
 });
 
 describe("renderTurnActivity", () => {
-  it("renders tool lines with failures and a changed-files section", () => {
-    const rendered = renderTurnActivity(
-      [
-        { capability: "search_repo", inputPreview: '{"query":"q"}' },
-        { capability: "edit_file", errorReason: "permission denied" },
-      ],
-      ["apps/app/src/a.ts", "apps/app/src/b.ts"],
-    );
-    expect(rendered).toContain('search_repo({"query":"q"})');
-    expect(rendered).toContain("edit_file — FAILED: permission denied");
-    expect(rendered).toContain("Files changed this turn:");
-    expect(rendered).toContain("- apps/app/src/a.ts");
+  it("renders tool lines with their inputs and failures", () => {
+    const rendered = renderTurnActivity([
+      { capability: "search_graph", inputPreview: '{"query":"q"}' },
+      { capability: "list_executions", errorReason: "permission denied" },
+    ]);
+    expect(rendered).toContain('search_graph({"query":"q"})');
+    expect(rendered).toContain("list_executions — FAILED: permission denied");
   });
 
   it("caps long lists and reports the overflow count", () => {
     const tools = Array.from({ length: 20 }, (_, i) => ({
       capability: `tool_${i}`,
     }));
-    const files = Array.from({ length: 30 }, (_, i) => `f${i}.ts`);
-    const rendered = renderTurnActivity(tools, files);
+    const rendered = renderTurnActivity(tools);
     expect(rendered).toContain("…and 8 more tool calls");
-    expect(rendered).toContain("…and 10 more files");
   });
 
   it("returns empty string when there is nothing to report", () => {
-    expect(renderTurnActivity([], [])).toBe("");
+    expect(renderTurnActivity([])).toBe("");
   });
 });
 
@@ -280,22 +273,17 @@ describe("generateTurnSuggestions", () => {
       recentTurns: [{ role: "user", content: "fix the failing route" }],
       toolActivity: [
         {
-          capability: "run_tests",
-          inputPreview: "route.test.ts",
-          errorReason: "2 assertions failed",
+          capability: "get_execution_trace",
+          inputPreview: "exec_42",
+          errorReason: "2 steps failed",
         },
       ],
-      changedFiles: ["apps/api/src/routes/v1/billing.ts"],
-      codeMode: true,
     });
     const args = generateObjectFor.mock.calls[0]![0] as Record<string, unknown>;
     const prompt = args.prompt as string;
     expect(prompt).toContain(
-      "run_tests(route.test.ts) — FAILED: 2 assertions failed",
+      "get_execution_trace(exec_42) — FAILED: 2 steps failed",
     );
-    expect(prompt).toContain("apps/api/src/routes/v1/billing.ts");
-    // Code mode appends the coding-session steer to the system prompt.
-    expect(args.system as string).toContain("coding session");
   });
 
   it("omits the activity section and code-mode steer when absent", async () => {

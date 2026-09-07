@@ -264,7 +264,7 @@ describe("ModelPicker", () => {
   it("re-exports defaultModelState with tier=fast", async () => {
     const { defaultModelState } = await import("./model-picker");
     expect(defaultModelState.tier).toBe("fast");
-    expect(defaultModelState.generate).toBeNull();
+    expect(defaultModelState.model).toBeNull();
   });
 
   it("re-exports buildSeededModelState", async () => {
@@ -272,8 +272,6 @@ describe("ModelPicker", () => {
     const state = buildSeededModelState({
       textTier: "balanced",
       textModel: null,
-      imageModel: null,
-      videoModel: null,
     });
     expect(state.tier).toBe("balanced");
   });

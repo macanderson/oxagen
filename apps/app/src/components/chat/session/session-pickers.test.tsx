@@ -107,14 +107,6 @@ const MODEL_CONFIG: ResolvedTierCatalog = {
     balanced: "anthropic/claude-sonnet-5",
     precise: "anthropic/claude-opus-4.8",
   },
-  image: {
-    basic: "google/gemini-3.1-flash-image-preview",
-    advanced: "bfl/flux-2-max",
-  },
-  video: {
-    basic: "google/veo-3.0-fast-generate-001",
-    advanced: "google/veo-3.0-generate-001",
-  },
 };
 
 const SEED: SessionSeed = {

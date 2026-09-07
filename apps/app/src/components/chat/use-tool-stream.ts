@@ -25,8 +25,6 @@ export interface LiveToolCall {
   inputPreview: unknown;
   riskLevel: RiskLevel;
   status: ToolCallStatus;
-  stdout: string;
-  stderr: string;
   output?: unknown;
   errorReason?: string;
   durationMs?: number;
@@ -357,8 +355,6 @@ export function reducer(
               inputPreview: undefined,
               riskLevel: "low",
               status: "pending",
-              stdout: "",
-              stderr: "",
               partialInput: "",
               startedAt: Date.now(),
             } satisfies LiveToolCall),
@@ -394,8 +390,6 @@ export function reducer(
             inputPreview: e.inputPreview,
             riskLevel: e.riskLevel,
             status: "running",
-            stdout: existing?.stdout ?? "",
-            stderr: existing?.stderr ?? "",
             output: existing?.output,
             errorReason: existing?.errorReason,
             durationMs: existing?.durationMs,
@@ -405,18 +399,6 @@ export function reducer(
         },
         order: withOrder(state.order, `tool:${e.toolCallId}`),
         activeTextKey: null,
-      };
-    }
-    case "tool-call-output": {
-      const existing = state.toolCalls[e.toolCallId];
-      if (!existing) return state;
-      const key = e.chunk.channel;
-      return {
-        ...state,
-        toolCalls: {
-          ...state.toolCalls,
-          [e.toolCallId]: { ...existing, [key]: existing[key] + e.chunk.data },
-        },
       };
     }
     case "tool-call-end": {

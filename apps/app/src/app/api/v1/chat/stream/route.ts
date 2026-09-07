@@ -16,12 +16,15 @@ import {
   modelIdOf,
   loadEffectiveModelDefaults,
   loadWorkspacePromptConfig,
+  resolvePrompt,
   type ModelMessage,
 } from "@oxagen/ai";
 import {
   materializeTools,
   createApprovalRequest,
   waitForApproval,
+  runGovernedTurn,
+  buildChatSystemPrompt,
 } from "@oxagen/agent";
 import { parseMentions } from "@oxagen/ai/mentions";
 import { withTenantDb, schema } from "@oxagen/database";
@@ -45,7 +48,7 @@ import {
 import {
   createTurnTranslator,
   emitUsageEvent,
-  type TurnUsage as TranslatorTurnUsage,
+  translateAgentStream,
 } from "./translate-stream";
 import { formatStreamError } from "./stream-parts";
 import {
@@ -62,7 +65,6 @@ import {
   resolveGroundingCitations,
 } from "./recall-context";
 import { buildPageContextMessage } from "./page-context";
-import { evaluateTurnCreditGate } from "./credit-gate";
 import {
   applyAgentBinding,
   type AgentBindingDefinition,
@@ -73,6 +75,7 @@ import {
 // its own SSE/approval machinery.
 import {
   createTurnBudgetGuard,
+  evaluateTurnCreditGate,
   formatBudgetUsd,
   resolveEffectiveTurnBudget,
   TURN_BUDGET_OFF,
@@ -86,8 +89,8 @@ import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
 import { isCurrentUserTurnAtHead } from "./history-dedup";
 
 // Side-effect imports: bind every handler into the shared kernel BEFORE
-// materializeTools runs so invoke() can resolve both agent.* and all
-// non-agent.* agent-surface capabilities (form.fill, svg.generate, etc.).
+// materializeTools runs so invoke() can resolve every agent-surface capability
+// the turn's tools dispatch to.
 import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 
@@ -204,50 +207,6 @@ const ATTACHMENT_VISION_TIER_FALLBACK = [
 // (`sendMessageAction`) only handles Postgres persistence. History is loaded
 // here directly from the messages table, scoped to the resolved workspace and
 // ordered deterministically by createdAt.
-/**
- * TODO(ADR-041): replaced by runGovernedTurn.
- *
- * Everything the governed turn loop consumes, resolved by this handler. Naming
- * the inputs explicitly keeps the resolution code above it live and
- * type-checked (and documents the contract the rebuilt loop must satisfy)
- * while `runGovernedTurn` is written in a follow-up task.
- */
-interface GovernedTurnInput {
-  /** IAM-gated, metered tool set + the display-name map the translator uses. */
-  tools: unknown;
-  mutatingToolNames: readonly string[];
-  /** Workspace prompt config ⊕ the bound agent's instructions. */
-  promptConfig: unknown;
-  boundInstructions: string;
-  /** Gateway model id for this turn, and reasoning effort when supported. */
-  modelId: string;
-  effort: "low" | "medium" | "high" | null;
-  /** Chronological history, current user turn already excluded. */
-  history: ModelMessage[];
-  /** Per-turn USER context messages (ADR-021 §2), in injection order. */
-  contextMessages: Array<ModelMessage | undefined>;
-  /** Memories recalled for this turn — grounding for the answer + citations. */
-  recalledMemories: unknown;
-  /** Multimodal parts resolved from this turn's attachments. */
-  imageAttachments: Array<{ data: Buffer; mediaType: string }>;
-  videoAttachments: Array<{ data: Buffer; mediaType: string }>;
-  /** Per-turn dollar guard; undefined when the effective policy is off. */
-  budgetGuard: unknown;
-}
-
-/**
- * Stand-in for the excised `executeTurn` turn loop, typed as the shape the
- * rest of the handler consumes so the surrounding persistence, citation,
- * suggestion and usage code stays intact and type-checked while the governed
- * loop is rebuilt. Always throws.
- */
-function pendingGovernedTurn(_input: GovernedTurnInput): Promise<{
-  usage: TranslatorTurnUsage;
-  changedFiles: string[];
-}> {
-  throw new Error("chat_stream_pending_governed_turn");
-}
-
 export async function POST(request: NextRequest): Promise<Response> {
   // Auth: reject unauthenticated requests before consuming the body.
   let session: Awaited<ReturnType<typeof getSessionOrRedirect>>;
@@ -718,13 +677,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         // When the request carries an `agentId`, load that agent's definition ONCE
         // and merge its config into THIS turn BEFORE tools + prompt are assembled:
         //   • instructions → appended to the system-prompt baseline (below),
-        //   • skill agentTools → unioned into the pinned-skill slugs,
-        //   • mcp_server agentTools → unioned into the MCP server allowlist,
-        //   • agentType "code"/"coding" → the ONLY thing that can put a turn
-        //     in coding flow: `useCodeModePrompt` and the authoritative
-        //     `codeMode` gate below both derive from `agentIsCode`. A `code`
-        //     payload without a code agent is dropped regardless of what the
-        //     client sent.
+        //   • mcp_server agentTools → unioned into the MCP server allowlist.
         // Absent an agent, every effective value is exactly the request value.
         //
         // FAIL-OPEN: a failed/denied agent.definition.get must NEVER break the
@@ -746,7 +699,6 @@ export async function POST(request: NextRequest): Promise<Response> {
             );
             const binding = applyAgentBinding({
               def: def as AgentBindingDefinition,
-              skills: [],
               serverAllowlist: activeServerIds,
             });
             boundInstructions = binding.instructions;
@@ -1103,34 +1055,93 @@ export async function POST(request: NextRequest): Promise<Response> {
           }
         }
 
-        // TODO(ADR-041): replaced by runGovernedTurn.
+        // ── The system prompt ──────────────────────────────────────────────
+        // `@oxagen/agent` owns the governance agent's baseline: the prompt and
+        // the tool surface it describes are one artifact and must change
+        // together (there is no second copy in @oxagen/ai's registry). A bound
+        // agent's own instructions ride BELOW it in a labelled section, so the
+        // governance contract always sits above customer text, and
+        // `resolvePrompt` then appends the workspace's additional
+        // instructions. `chat.system` is append-only — a workspace can add to
+        // this prompt, never replace it.
         //
-        // The first-party agent runtime (`executeTurn`) is gone with ADR-041 —
-        // Oxagen governs agents, it does not run them. Everything above this
-        // point is the input the governed turn loop takes: the resolved tenant
-        // + capability context, the materialized (IAM-gated, metered) tool set
-        // (`agentTools` / `toolNameMap` / `mutatingToolNames`), the history +
-        // page/pinned/reference/memory context messages, the system prompt
-        // (`chatSystemPrompt` ⊕ `boundInstructions`, through `resolvePrompt`),
-        // the model id, and the per-turn budget guard. The loop that consumes
-        // them — `runGovernedTurn` in `@oxagen/agent`, streaming its raw parts
-        // into `translator.onPart` — is rebuilt in a follow-up task.
-        const result = await pendingGovernedTurn({
-          tools: agentTools,
-          mutatingToolNames,
-          promptConfig,
-          boundInstructions,
-          modelId,
-          effort: turnEffort ?? null,
-          history: historyForEngine,
-          contextMessages: [pageContextMessage, referencesContextMessage],
-          recalledMemories: recalledMemory.memories,
-          imageAttachments,
-          videoAttachments,
-          budgetGuard,
+        // Everything interpolated here is stable for the conversation, so the
+        // Anthropic prompt-cache breakpoint on the system prefix keeps hitting;
+        // volatile per-turn context rides as USER messages (ADR-021 §2).
+        const systemPrompt = resolvePrompt({
+          key: "chat.system",
+          baseline:
+            buildChatSystemPrompt({
+              orgSlug,
+              workspaceSlug,
+              orgName: tenant.name,
+              workspaceName: workspace.name,
+            }) +
+            (boundInstructions
+              ? `\n\n---\n\n## Agent instructions\n\n${boundInstructions}`
+              : ""),
+          config: promptConfig,
         });
 
-        const { assistantText, persistedBlocks } = translator.finish();
+        // ── The governed turn ──────────────────────────────────────────────
+        // ADR-041 §2: one thin, bounded, metered in-process loop over
+        // @oxagen/ai with tools materialised from capability contracts. It
+        // hands back the raw AI-SDK stream; `translateAgentStream` is the only
+        // place those parts become this surface's SSE wire format. Tool
+        // approval/consent pauses are already wired through
+        // `materializeTools`' hooks above — the loop just keeps streaming
+        // across them.
+        const turn = await runGovernedTurn({
+          telemetry: {
+            orgId: tenant.id,
+            workspaceId: workspace.id,
+            surface: "app",
+            messageId: capCtx.messageId,
+          },
+          model: turnModel,
+          system: systemPrompt,
+          history: historyForEngine,
+          contextMessages: [
+            recalledMemory.message,
+            pageContextMessage,
+            referencesContextMessage,
+          ],
+          instruction: content,
+          attachments: [
+            ...imageAttachments.map((a) => ({
+              kind: "image" as const,
+              data: new Uint8Array(a.data),
+              mediaType: a.mediaType,
+            })),
+            ...videoAttachments.map((a) => ({
+              kind: "file" as const,
+              data: new Uint8Array(a.data),
+              mediaType: a.mediaType,
+            })),
+          ],
+          tools: agentTools,
+          mutatingToolNames,
+          effort: turnEffort ?? null,
+          ...(budgetGuard !== undefined ? { budgetGuard } : {}),
+          abortSignal: request.signal,
+        });
+
+        const {
+          assistantText,
+          persistedBlocks,
+          usage: usageFromStream,
+        } = await translateAgentStream({
+          fullStream: turn.fullStream,
+          requestId,
+          toolNameMap,
+          orgSlug,
+          workspaceSlug,
+          modelId,
+          emit,
+          // The translator is owned by the enclosing scope so the catch below
+          // can still flush and persist a partial turn after a mid-stream throw.
+          translator,
+        });
 
         // ── Per-turn next-step suggestions ─────────────────────────────────
         // Kick off conversation-aware suggestion generation NOW — the moment the
@@ -1150,8 +1161,6 @@ export async function POST(request: NextRequest): Promise<Response> {
             // of generic next steps. Both values already exist for memory
             // capture above; this adds no extra work to the turn.
             toolActivity: extractToolActivity(persistedBlocks),
-            changedFiles: [],
-            codeMode: false,
             orgId: tenant.id,
             workspaceId: workspace.id,
             messageId: requestId,
@@ -1186,12 +1195,15 @@ export async function POST(request: NextRequest): Promise<Response> {
           ];
         }
 
-        // ONE aggregated usage event from the engine's summed per-step usage
-        // (each step's own `finish` is suppressed by the translator). Credits are
-        // charged per step inside streamAgentReply's onFinish — the ledger fans
-        // out to one row per step sharing this turn's messageId, summing to the
-        // same total the client sees here (C4).
-        const emittedUsage = emitUsageEvent(emit, result.usage, modelId);
+        // ONE aggregated usage event for the turn. `translateAgentStream`
+        // already emitted it from the stream's `finish` part (whose `totalUsage`
+        // sums every step of the tool loop); we reuse those exact numbers for
+        // the persisted receipt so the live event and the stored receipt can
+        // never disagree. A stream that carried no `finish` part (aborted /
+        // errored) falls back to the loop's own aggregated usage.
+        const emittedUsage =
+          usageFromStream ??
+          emitUsageEvent(emit, await turn.usage, modelId);
 
         await persistAssistantTurn(assistantText, blocksToPersist, {
           model: modelId,
@@ -1249,16 +1261,10 @@ export async function POST(request: NextRequest): Promise<Response> {
           ...(code !== undefined ? { code } : {}),
         });
       } finally {
-        // Release the code-mode sandbox back to 'idle' WITHOUT tearing it down,
-        // so the next turn of this conversation reconnects to the SAME warm
-        // sandbox and its working tree (including uncommitted edits). The
-        // sandbox-reaper drops it ~2-3 min after the last turn — recovering any
-        // uncommitted work to a recovery branch first (spec:
-        // sandbox-session-lifecycle). Must run whether the turn succeeded or threw.
-        //
-        // Guarded: a throwing release() must never skip the [DONE] sentinel and
-        // the close() below, or the client's EventSource reader hangs until its
-        // own timeout on every failed teardown.
+        // Terminate the SSE response whether the turn succeeded or threw: the
+        // client's reader waits on the [DONE] sentinel and hangs until its own
+        // timeout without it. There is nothing else to release — ADR-041 left
+        // the turn with no sandbox, no session and no external process.
         if (!closed) {
           try {
             controller.enqueue(encoder.encode("event: done\ndata: [DONE]\n\n"));

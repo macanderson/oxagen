@@ -405,15 +405,30 @@ export function createTurnTranslator(args: {
   return { onPart, finish };
 }
 
+/** What the single-pass wrapper returns: the turn, plus the usage it emitted. */
+export interface TranslatedTurnWithUsage extends TranslatedTurn {
+  /**
+   * The client-shape usage emitted from the stream's `finish` part, so the
+   * caller can persist the SAME numbers on the message receipt. `null` when the
+   * stream carried no `finish` part (an aborted or errored turn) — the caller
+   * then emits from the turn's own aggregated usage instead.
+   */
+  usage: ClientTurnUsage | null;
+}
+
 /**
  * Single-pass wrapper: consume a whole `fullStream` into a `createTurnTranslator`
- * and return the accumulated turn. Unlike the engine path (which drives
- * `onPart` step-by-step and emits usage/error itself), this wrapper also handles
- * the `finish` part (→ one `usage` event) and `error` part (→ structured `error`
- * event), preserving the exact behaviour callers relied on before the engine
- * unification. Iterating `fullStream` never rejects: provider/gateway failures
- * arrive as an `error` PART, forwarded here as a structured error event rather
- * than letting the turn produce silent zero output.
+ * and return the accumulated turn. This is what the governed turn loop
+ * (`runGovernedTurn` in `@oxagen/agent`) is drained through: the loop hands back
+ * the raw AI-SDK stream and this is the only place its parts become the app's
+ * SSE wire format. On top of the stateful translator it also handles the
+ * `finish` part (→ one `usage` event) and the `error` part (→ structured
+ * `error` event). Iterating `fullStream` normally never rejects:
+ * provider/gateway failures arrive as an `error` PART, forwarded here as a
+ * structured error event rather than letting the turn produce silent zero
+ * output. A genuine throw (a client-disconnect abort) propagates to the
+ * caller's catch, which is why `translator` can be supplied from outside — the
+ * caller keeps a handle on the partial turn and can still persist it.
  */
 export async function translateAgentStream(args: {
   fullStream: AsyncIterable<unknown>;
@@ -424,7 +439,13 @@ export async function translateAgentStream(args: {
   /** Gateway model id (from modelIdOf(turnModel)) used to compute credits charged. */
   modelId: string;
   emit: (event: StreamEvent) => void;
-}): Promise<TranslatedTurn> {
+  /**
+   * Reuse a translator the caller already built. Pass one when the caller needs
+   * to flush a PARTIAL turn from its own catch block after a mid-stream throw;
+   * omit it and the wrapper owns a fresh translator for the whole turn.
+   */
+  translator?: TurnTranslator;
+}): Promise<TranslatedTurnWithUsage> {
   const {
     fullStream,
     requestId,
@@ -434,13 +455,16 @@ export async function translateAgentStream(args: {
     modelId,
     emit,
   } = args;
-  const translator = createTurnTranslator({
-    requestId,
-    toolNameMap,
-    orgSlug,
-    workspaceSlug,
-    emit,
-  });
+  const translator =
+    args.translator ??
+    createTurnTranslator({
+      requestId,
+      toolNameMap,
+      orgSlug,
+      workspaceSlug,
+      emit,
+    });
+  let usage: ClientTurnUsage | null = null;
 
   for await (const raw of fullStream) {
     const pType = partType(raw);
@@ -452,7 +476,7 @@ export async function translateAgentStream(args: {
           totalTokens?: number;
         };
       };
-      emitUsageEvent(emit, part.totalUsage, modelId);
+      usage = emitUsageEvent(emit, part.totalUsage, modelId);
     } else if (pType === "error") {
       // Forward a structured `error` event (NOT text) so the client shows a
       // readable toast instead of raw JSON. Never folded into assistantText —
@@ -471,5 +495,5 @@ export async function translateAgentStream(args: {
     }
   }
 
-  return translator.finish();
+  return { ...translator.finish(), usage };
 }

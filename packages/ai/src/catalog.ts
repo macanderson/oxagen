@@ -47,9 +47,6 @@ export type MediaKind = "image" | "video";
 /** White-labeled text tiers (resolve to OXAGEN_LLM_FAST/BALANCED/PRECISE). */
 export type TextTier = "fast" | "balanced" | "precise";
 
-/** White-labeled media tiers (resolve to OXAGEN_LLM_{IMAGE,VIDEO}_{BASIC,ADVANCED}). */
-export type MediaTier = "basic" | "advanced";
-
 export interface GatewayModel {
   /** Vercel AI Gateway model string, e.g. "anthropic/claude-opus-4.8". */
   id: string;
@@ -94,12 +91,6 @@ export const TEXT_TIERS: { id: TextTier; name: string; blurb: string }[] = [
     name: "Oxagen Precise",
     blurb: "Most capable, deep reasoning",
   },
-];
-
-/** Display metadata for the two white-labeled media tiers (image + video). */
-export const MEDIA_TIERS: { id: MediaTier; name: string; blurb: string }[] = [
-  { id: "basic", name: "Oxagen Basic", blurb: "Fast, economical generation" },
-  { id: "advanced", name: "Oxagen Advanced", blurb: "Highest fidelity" },
 ];
 
 /**
@@ -333,13 +324,6 @@ export function supportsText(
 }
 
 /** True when the model can produce the requested media kind. */
-export function supportsMedia(
-  model: string | GatewayModel | undefined,
-  kind: MediaKind,
-): boolean {
-  return kind === "image" ? supportsImage(model) : supportsVideo(model);
-}
-
 export function capabilityLabel(c: Capability): string {
   switch (c) {
     case "reasoning":
@@ -379,8 +363,6 @@ export function formatReleaseDate(iso: string): string {
  */
 export interface ResolvedTierCatalog {
   text: Record<TextTier, string>;
-  image: Record<MediaTier, string>;
-  video: Record<MediaTier, string>;
 }
 
 // Re-export the pure client-safe model-default resolver so it is available

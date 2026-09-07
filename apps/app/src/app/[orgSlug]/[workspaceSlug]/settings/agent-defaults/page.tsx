@@ -19,7 +19,10 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
 // Side-effect import: bind every foundation handler so invoke() can resolve.
 import "@oxagen/handlers/register";
-import { resolvePrompt, chatSystemPrompt } from "@oxagen/ai";
+import { resolvePrompt } from "@oxagen/ai";
+// The chat baseline lives with the tool surface it describes (ADR-041) — there
+// is one copy, in @oxagen/agent, and this preview renders exactly it.
+import { buildChatSystemPrompt } from "@oxagen/agent";
 import type { WorkspaceModelSettingsReadOutput } from "@oxagen/oxagen/contracts/workspace.model_settings.read";
 import type { WorkspaceBudgetPolicyReadOutput } from "@oxagen/oxagen/contracts/workspace.budget_policy.read";
 import type { ModelDefaultsValue } from "@/components/settings/model-defaults-fields";
@@ -130,7 +133,7 @@ export default async function AgentDefaultsPage({
   // Additional instructions — what admins see here is what the agent runs.
   const effectiveSystemPrompt = resolvePrompt({
     key: "chat.system",
-    baseline: chatSystemPrompt({
+    baseline: buildChatSystemPrompt({
       orgSlug,
       workspaceSlug,
       orgName: org.name,

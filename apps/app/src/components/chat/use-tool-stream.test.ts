@@ -141,8 +141,6 @@ describe("tool-call-start", () => {
     expect(tc).toBeDefined();
     expect(tc?.status).toBe("running");
     expect(tc?.capability).toBe("fs.read");
-    expect(tc?.stdout).toBe("");
-    expect(tc?.stderr).toBe("");
     expect(typeof tc?.startedAt).toBe("number");
   });
 
@@ -160,68 +158,6 @@ describe("tool-call-start", () => {
       }),
     );
     expect(Object.keys(s.toolCalls)).toHaveLength(2);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// tool-call-output
-// ---------------------------------------------------------------------------
-
-describe("tool-call-output", () => {
-  it("appends to stdout channel", () => {
-    let s = stateWithRunningTool();
-    s = reducer(
-      s,
-      event({
-        type: "tool-call-output",
-        toolCallId: TOOL_ID,
-        chunk: { channel: "stdout", data: "line1\n" },
-      }),
-    );
-    s = reducer(
-      s,
-      event({
-        type: "tool-call-output",
-        toolCallId: TOOL_ID,
-        chunk: { channel: "stdout", data: "line2\n" },
-      }),
-    );
-    expect(s.toolCalls[TOOL_ID]?.stdout).toBe("line1\nline2\n");
-  });
-
-  it("appends to stderr channel separately from stdout", () => {
-    let s = stateWithRunningTool();
-    s = reducer(
-      s,
-      event({
-        type: "tool-call-output",
-        toolCallId: TOOL_ID,
-        chunk: { channel: "stdout", data: "out" },
-      }),
-    );
-    s = reducer(
-      s,
-      event({
-        type: "tool-call-output",
-        toolCallId: TOOL_ID,
-        chunk: { channel: "stderr", data: "err" },
-      }),
-    );
-    expect(s.toolCalls[TOOL_ID]?.stdout).toBe("out");
-    expect(s.toolCalls[TOOL_ID]?.stderr).toBe("err");
-  });
-
-  it("returns the same state reference when toolCallId is unknown", () => {
-    const s = INITIAL_STATE;
-    const next = reducer(
-      s,
-      event({
-        type: "tool-call-output",
-        toolCallId: "unknown",
-        chunk: { channel: "stdout", data: "x" },
-      }),
-    );
-    expect(next).toBe(s);
   });
 });
 

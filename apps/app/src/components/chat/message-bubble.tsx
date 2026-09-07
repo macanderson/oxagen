@@ -260,8 +260,6 @@ function toolCallBlockToItem(block: ToolCallContentBlock): ToolActivityItem {
     riskLevel: block.riskLevel,
     status: block.status,
     output: block.output,
-    stdout: block.stdout,
-    stderr: block.stderr,
     errorReason: block.errorReason,
     durationMs: block.durationMs,
   };
@@ -309,8 +307,6 @@ function renderBlock(
           riskLevel={block.riskLevel}
           status={block.status}
           output={block.output}
-          stdout={block.stdout}
-          stderr={block.stderr}
           errorReason={block.errorReason}
           durationMs={block.durationMs}
         />

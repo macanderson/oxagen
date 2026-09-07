@@ -173,11 +173,12 @@ export const baseEnvSchema = z.object({
   STORAGE_FS_ROOT: z.string().min(1).optional(),
 
   // Vercel AI Gateway — the platform's default AI auth boundary.
-  // AI_GATEWAY_API_KEY authenticates every model call (text, image, embeddings,
-  // video). The OXAGEN_LLM_* tiers are white-labeled model handles ("Oxagen
-  // Mini/Plus/Max") resolving to concrete model ids in `creator/model` form.
-  // Defaults mirror the registry staticValues so local dev and tests resolve a
-  // tier without extra configuration.
+  // AI_GATEWAY_API_KEY authenticates every model call (text and embeddings).
+  // The OXAGEN_LLM_* tiers are white-labeled model handles ("Oxagen
+  // Fast/Balanced/Precise") resolving to concrete model ids in `creator/model`
+  // form. Defaults mirror the registry staticValues so local dev and tests
+  // resolve a tier without extra configuration. ADR-041 removed image and video
+  // generation, so text is the only tier family left.
   AI_GATEWAY_API_KEY: z.string().optional(),
   // Which provider serves LANGUAGE models. The gateway is the default and the
   // metered path; "openrouter" selects a direct OpenAI-compatible provider for
@@ -187,8 +188,8 @@ export const baseEnvSchema = z.object({
   // here, because a silent failover would move spend to another vendor's bill
   // and skip the metering the gateway exists to provide.
   //
-  // Image, video and embeddings stay on the gateway either way — OpenRouter
-  // serves none of them. See packages/ai/src/models.ts.
+  // Embeddings stay on the gateway either way — OpenRouter does not serve them.
+  // See packages/ai/src/models.ts.
   OXAGEN_MODEL_PROVIDER: z.enum(["gateway", "openrouter"]).default("gateway"),
   // Required only when OXAGEN_MODEL_PROVIDER=openrouter; optional here so every
   // other deployment stays valid without it.
@@ -196,17 +197,6 @@ export const baseEnvSchema = z.object({
   OXAGEN_LLM_FAST: z.string().default("anthropic/claude-haiku-4.5"),
   OXAGEN_LLM_BALANCED: z.string().default("anthropic/claude-sonnet-5"),
   OXAGEN_LLM_PRECISE: z.string().default("anthropic/claude-fable-5"),
-  // Media-generation tiers. Image and video each expose a "basic" (default,
-  // cheaper) and "advanced" tier that resolve to concrete gateway model ids,
-  // mirroring the text tiers above. The composer's image/video model picker
-  // shows "basic" as the default and "advanced" in the primary list; @oxagen/ai
-  // resolves them via imageTierModelId / videoTierModelId.
-  OXAGEN_LLM_IMAGE_BASIC: z.string().default("openai/gpt-image-1"),
-  OXAGEN_LLM_IMAGE_ADVANCED: z.string().default("bfl/flux-2-max"),
-  OXAGEN_LLM_VIDEO_BASIC: z
-    .string()
-    .default("google/veo-3.0-fast-generate-001"),
-  OXAGEN_LLM_VIDEO_ADVANCED: z.string().default("google/veo-3.0-generate-001"),
 
   // ── Email (transactional, via @oxagen/notifications SMTP transport) ──
   // Optional in the base schema (not every service sends mail); the

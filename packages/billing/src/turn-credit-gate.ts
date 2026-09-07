@@ -1,7 +1,7 @@
 /**
- * credit-gate.ts
+ * turn-credit-gate.ts
  *
- * Pre-turn credit admission gate for the chat stream route.
+ * Pre-turn credit admission gate for every chat streaming surface.
  *
  * WHY this exists — closing the free-ride:
  *
@@ -32,17 +32,17 @@
  *     never block a paying customer's turn; any tool call within the turn is
  *     still guarded by the invoke() admission gate as a backstop.
  *
- * The route maps `{ ok: false }` to a structured HTTP 402 (Payment Required)
- * before any streaming begins. This module keeps the classify-and-map logic
- * testable in isolation (route.ts is excluded from coverage), mirroring
- * page-context.ts.
+ * The caller maps `{ ok: false }` to a structured HTTP 402 (Payment Required)
+ * before any streaming begins. It lives in `@oxagen/billing` rather than in one
+ * app so BOTH chat streaming surfaces (the Next.js route and the REST route)
+ * admit turns by the same rule — there is one gate, not one per surface.
  */
 
 import {
   assertCanStartTurn,
   InsufficientCreditsError,
   BillingSuspendedError,
-} from "@oxagen/billing";
+} from "./metering";
 
 /** The 402 error codes surfaced to the client — match errorMiddleware's billing shape. */
 export type CreditGateDenyCode = "insufficient_credits" | "billing_suspended";

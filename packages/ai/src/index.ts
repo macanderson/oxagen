@@ -1,21 +1,12 @@
 export {
   selectModel,
   defaultModel,
-  selectImageModel,
-  selectVideoModel,
   tierModelId,
-  imageTierModelId,
-  videoTierModelId,
   resolvedTierCatalog,
   modelIdOf,
   DEFAULT_TIER,
 } from "./models";
-export type {
-  ModelSelector,
-  ImageModelSelector,
-  VideoModelSelector,
-  OxagenTier,
-} from "./models";
+export type { ModelSelector, OxagenTier } from "./models";
 
 // Re-export the client-safe catalog from the package root for server callers
 // (route guards, RSC). Client components should import from "@oxagen/ai/catalog"
@@ -30,11 +21,9 @@ export {
   supportsVision,
   supportsVideoInput,
   supportsText,
-  supportsMedia,
   capabilityLabel,
   formatReleaseDate,
   TEXT_TIERS,
-  MEDIA_TIERS,
 } from "./catalog";
 export type {
   Capability,
@@ -42,7 +31,6 @@ export type {
   EffortLevel,
   MediaKind,
   TextTier,
-  MediaTier,
   GatewayModel,
   ResolvedTierCatalog,
 } from "./catalog";
@@ -113,25 +101,6 @@ export type {
   GenerateObjectUsage,
   GenerateObjectResult,
 } from "./generate-object";
-export { generateImageFor } from "./generate-image";
-export type {
-  GenerateImageForArgs,
-  GenerateImageForResult,
-} from "./generate-image";
-export {
-  generateVideoFor,
-  supportedVideoDurations,
-  resolveVideoDurationSeconds,
-  videoDurationAlternatives,
-} from "./generate-video";
-export type {
-  GenerateVideoForArgs,
-  GenerateVideoForResult,
-  VideoModel,
-  ResolvedVideoDuration,
-  VideoDurationAlternative,
-} from "./generate-video";
-
 // Model-default resolver (client-safe, also re-exported from @oxagen/ai/catalog).
 export { resolveModelDefaults } from "./resolve-model-defaults";
 export type {
@@ -149,11 +118,7 @@ export {
   resolvePrompt,
   isOverridablePromptKey,
   OVERRIDABLE_PROMPT_KEYS,
-  chatSystemPrompt,
-  codeModeSystemPrompt,
   conversationTitlePrompt,
-  svgGeneratePrompt,
-  imageAnalyzePrompt,
   loadWorkspacePromptConfig,
   loadWorkspacePromptConfigSafe,
   normalizePromptConfig,
@@ -166,8 +131,6 @@ export type {
   PromptKey,
   OverridablePromptKey,
   PromptConfig,
-  SystemPromptContext,
-  SkillIndexEntry,
   EnhancePromptArgs,
   EnhancePromptResult,
   SlashCommand,

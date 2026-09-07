@@ -27,6 +27,9 @@ export * from "./runtime/materialize-tools";
 // narrowed run. A surface that wants to grant the graph names this set rather
 // than spelling eight capability names of its own.
 export * from "./runtime/ontology-tools";
+// The governed turn loop — ONE bounded, metered model turn over the
+// materialised tools (ADR-041 §2). The only thing left of "running an agent".
+export * from "./runtime/governed-turn";
 export * from "./runtime/approval";
 export * from "./runtime/stream-events";
 export { isKnowledgeGraphEnabled } from "./runtime/knowledge-graph";

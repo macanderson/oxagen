@@ -179,11 +179,6 @@ export type StreamEvent =
       riskLevel: RiskLevel;
     }
   | {
-      type: "tool-call-output";
-      toolCallId: string;
-      chunk: { channel: "stdout" | "stderr"; data: string };
-    }
-  | {
       type: "tool-call-end";
       toolCallId: string;
       status: "completed" | "failed";
@@ -354,8 +349,6 @@ export interface ToolCallContentBlock {
   riskLevel: RiskLevel;
   status: ToolCallStatus;
   output?: unknown;
-  stdout?: string;
-  stderr?: string;
   errorReason?: string;
   durationMs?: number;
 }

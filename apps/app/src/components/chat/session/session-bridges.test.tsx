@@ -60,7 +60,6 @@ function ModelProbe() {
           effort: model.effort,
           budgetEnabled: model.budgetEnabled,
           budgetUsd: model.budgetUsd,
-          generate: model.generate,
         })}
       </output>
       <button onClick={() => setModel((s) => ({ ...s, effort: "high" }))}>

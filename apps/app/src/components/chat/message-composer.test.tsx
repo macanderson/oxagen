@@ -202,14 +202,9 @@ vi.mock("./model-picker", async () => {
         onClick={() =>
           onChange({
             tier: "fast",
-            generate: null,
-            model: null,
+              model: null,
             effort: null,
-            mediaTier: null,
-            mediaModel: null,
-            seededImageModel: null,
-            seededVideoModel: null,
-          })
+                  })
         }
       />
     ),
@@ -1163,13 +1158,8 @@ describe("MessageComposer — queue drain: model & refs", () => {
         pendingPromptBehavior="queue"
         initialModelState={{
           tier: null,
-          generate: null,
           model: "claude-opus-4-5",
           effort: null,
-          mediaTier: null,
-          mediaModel: null,
-          seededImageModel: null,
-          seededVideoModel: null,
           budgetEnabled: false,
           budgetUsd: null,
           budgetMode: "prompt",
@@ -1192,13 +1182,8 @@ describe("MessageComposer — queue drain: model & refs", () => {
         pendingPromptBehavior="queue"
         initialModelState={{
           tier: null,
-          generate: null,
           model: "claude-opus-4-5",
           effort: null,
-          mediaTier: null,
-          mediaModel: null,
-          seededImageModel: null,
-          seededVideoModel: null,
           budgetEnabled: false,
           budgetUsd: null,
           budgetMode: "prompt",
@@ -1272,13 +1257,8 @@ describe("MessageComposer — effort control", () => {
         modelConfig={DEFAULT_MODEL_CONFIG}
         initialModelState={{
           tier: "precise",
-          generate: null,
           model: null,
           effort: "high",
-          mediaTier: null,
-          mediaModel: null,
-          seededImageModel: null,
-          seededVideoModel: null,
           budgetEnabled: false,
           budgetUsd: null,
           budgetMode: "prompt",
@@ -1309,13 +1289,8 @@ describe("MessageComposer — model branch (explicit model.model)", () => {
         modelConfig={DEFAULT_MODEL_CONFIG}
         initialModelState={{
           tier: null,
-          generate: null,
           model: "claude-opus-4-5",
           effort: null,
-          mediaTier: null,
-          mediaModel: null,
-          seededImageModel: null,
-          seededVideoModel: null,
           budgetEnabled: false,
           budgetUsd: null,
           budgetMode: "prompt",
@@ -1376,13 +1351,8 @@ describe("MessageComposer — null tier in initialModelState", () => {
         modelConfig={DEFAULT_MODEL_CONFIG}
         initialModelState={{
           tier: null,
-          generate: null,
           model: null,
           effort: null,
-          mediaTier: null,
-          mediaModel: null,
-          seededImageModel: null,
-          seededVideoModel: null,
           budgetEnabled: false,
           budgetUsd: null,
           budgetMode: "prompt",
@@ -1448,13 +1418,8 @@ describe("MessageComposer — queue drain: null tier fallback", () => {
     const { MessageComposer } = await import("./message-composer");
     const nullTierState = {
       tier: null as null,
-      generate: null as null,
       model: null as null,
       effort: null as null,
-      mediaTier: null as null,
-      mediaModel: null as null,
-      seededImageModel: null as null,
-      seededVideoModel: null as null,
       budgetEnabled: false as const,
       budgetUsd: null as null,
       budgetMode: "prompt" as const,
@@ -1503,13 +1468,8 @@ describe("MessageComposer — queue drain: effort in drained message", () => {
     const { MessageComposer } = await import("./message-composer");
     const effortState = {
       tier: "precise" as const,
-      generate: null as null,
       model: null as null,
       effort: "high" as const,
-      mediaTier: null as null,
-      mediaModel: null as null,
-      seededImageModel: null as null,
-      seededVideoModel: null as null,
       budgetEnabled: false as const,
       budgetUsd: null as null,
       budgetMode: "prompt" as const,

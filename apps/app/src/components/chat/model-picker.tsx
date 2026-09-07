@@ -6,18 +6,13 @@ import {
   gatewayModels,
   vendorLabels,
   getModel,
-  supportsImage,
-  supportsVideo,
   supportsText,
   capabilityLabel,
   formatReleaseDate,
   TEXT_TIERS,
-  MEDIA_TIERS,
 } from "@oxagen/ai/catalog";
 import type {
   TextTier,
-  MediaTier,
-  MediaKind,
   ResolvedTierCatalog,
   Vendor,
 } from "@oxagen/ai/catalog";
@@ -101,25 +96,18 @@ function ModelPostureBadges({
 // ─── "Other Models" flyout list ───────────────────────────────────────────────
 
 interface OtherModelsListProps {
-  generate: MediaKind | null;
   activeModelId: string | null;
   onSelect: (id: string) => void;
 }
 
-function OtherModelsList({
-  generate,
-  activeModelId,
-  onSelect,
-}: OtherModelsListProps) {
+function OtherModelsList({ activeModelId, onSelect }: OtherModelsListProps) {
   return (
     <div className="max-h-80 overflow-y-auto py-1">
       {gatewayModels.map((m) => {
-        const disabled =
-          generate === null
-            ? !supportsText(m)
-            : generate === "image"
-              ? !supportsImage(m)
-              : !supportsVideo(m);
+        // Pure image/video models are never selectable: ADR-041 removed
+        // generation, so a model that cannot take part in a chat turn has no
+        // way to serve one.
+        const disabled = !supportsText(m);
         const isActive = activeModelId === m.id;
 
         return (
@@ -190,59 +178,23 @@ export function ModelPicker({
 }: ModelPickerProps) {
   // Compute the display label for the trigger button.
   const triggerLabel = React.useMemo<string>(() => {
-    if (value.generate === null) {
-      // Text mode
-      if (value.model) {
-        return getModel(value.model)?.name ?? value.model;
-      }
-      const tier = TEXT_TIERS.find((t) => t.id === (value.tier ?? "fast"));
-      return tier?.name ?? "Oxagen Fast";
+    if (value.model) {
+      return getModel(value.model)?.name ?? value.model;
     }
-    // Media mode
-    if (value.mediaModel) {
-      return getModel(value.mediaModel)?.name ?? value.mediaModel;
-    }
-    const tiers = MEDIA_TIERS;
-    const mediaTier = tiers.find((t) => t.id === (value.mediaTier ?? "basic"));
-    return mediaTier?.name ?? "Oxagen Basic";
+    const tier = TEXT_TIERS.find((t) => t.id === (value.tier ?? "fast"));
+    return tier?.name ?? "Oxagen Fast";
   }, [value]);
-
-  // Resolved tier config for the current generate mode.
-  const tierMap =
-    value.generate === "image"
-      ? modelConfig.image
-      : value.generate === "video"
-        ? modelConfig.video
-        : modelConfig.text;
-
-  const panelHeader =
-    value.generate === "image"
-      ? "Oxagen image models"
-      : value.generate === "video"
-        ? "Oxagen video models"
-        : "Oxagen models";
 
   // Handler: select a text tier.
   function selectTextTier(id: TextTier) {
     onChange({ ...value, tier: id, model: null });
   }
 
-  // Handler: select a media tier.
-  function selectMediaTier(id: MediaTier) {
-    onChange({ ...value, mediaTier: id, mediaModel: null });
-  }
-
   // Handler: select an explicit gateway model.
   function selectOtherModel(id: string) {
-    if (value.generate === null) {
-      onChange({ ...value, model: id, tier: null });
-    } else {
-      onChange({ ...value, mediaModel: id, mediaTier: null });
-    }
+    onChange({ ...value, model: id, tier: null });
   }
 
-  const activeExplicitModel =
-    value.generate === null ? value.model : value.mediaModel;
 
   return (
     <Menu>
@@ -264,72 +216,37 @@ export function ModelPicker({
       <MenuPopup sideOffset={8} align="start" className="w-72 p-0">
         {/* Header */}
         <MenuGroupLabel className="border-b border-border px-3 py-2 text-xs text-muted-foreground">
-          {panelHeader}
+          Oxagen models
         </MenuGroupLabel>
 
         <div className="p-1">
-          {/* Primary tier list */}
-          {value.generate === null
-            ? // Text tiers
-              TEXT_TIERS.map((t) => {
-                const resolvedId = modelConfig.text[t.id];
-                const resolvedName = getModel(resolvedId)?.name ?? resolvedId;
-                const isActive = value.model === null && value.tier === t.id;
+          {/* Primary tier list — the three white-labeled text tiers. */}
+          {TEXT_TIERS.map((t) => {
+            const resolvedId = modelConfig.text[t.id];
+            const resolvedName = getModel(resolvedId)?.name ?? resolvedId;
+            const isActive = value.model === null && value.tier === t.id;
 
-                return (
-                  <MenuItem
-                    key={t.id}
-                    onClick={() => selectTextTier(t.id)}
-                    className="flex-col items-start gap-0 px-3 py-2"
-                  >
-                    <span className="flex w-full items-center gap-1.5">
-                      <span className="flex-1 text-sm font-medium">
-                        {t.name}
-                      </span>
-                      {isActive && (
-                        <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
-                      )}
-                    </span>
-                    <span className="block text-xs text-muted-foreground">
-                      {t.blurb}
-                    </span>
-                    <span className="mt-0.5 block font-mono text-[10px] text-muted-foreground/70">
-                      {resolvedName}
-                    </span>
-                  </MenuItem>
-                );
-              })
-            : // Media tiers (image or video)
-              MEDIA_TIERS.map((t) => {
-                const resolvedId =
-                  (tierMap as Record<string, string | undefined>)[t.id] ?? t.id;
-                const resolvedName = getModel(resolvedId)?.name ?? resolvedId;
-                const isActive =
-                  value.mediaModel === null && value.mediaTier === t.id;
-
-                return (
-                  <MenuItem
-                    key={t.id}
-                    onClick={() => selectMediaTier(t.id)}
-                    className="flex-col items-start gap-0 px-3 py-2"
-                  >
-                    <span className="flex w-full items-center gap-1.5">
-                      <span className="flex-1 text-sm font-medium">
-                        {t.name}
-                      </span>
-                      {isActive && (
-                        <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
-                      )}
-                    </span>
-                    <span className="block text-xs text-muted-foreground">
-                      {t.blurb}
-                    </span>
-                    <span className="mt-0.5 block font-mono text-[10px] text-muted-foreground/70">
-                      {resolvedName}
-                    </span>
-                  </MenuItem>
-                );
-              })}
+            return (
+              <MenuItem
+                key={t.id}
+                onClick={() => selectTextTier(t.id)}
+                className="flex-col items-start gap-0 px-3 py-2"
+              >
+                <span className="flex w-full items-center gap-1.5">
+                  <span className="flex-1 text-sm font-medium">{t.name}</span>
+                  {isActive && (
+                    <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
+                  )}
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  {t.blurb}
+                </span>
+                <span className="mt-0.5 block font-mono text-[10px] text-muted-foreground/70">
+                  {resolvedName}
+                </span>
+              </MenuItem>
+            );
+          })}
 
           <MenuSeparator />
 
@@ -345,8 +262,7 @@ export function ModelPicker({
               className="w-80 p-0"
             >
               <OtherModelsList
-                generate={value.generate}
-                activeModelId={activeExplicitModel}
+                activeModelId={value.model}
                 onSelect={selectOtherModel}
               />
             </MenuSubPopup>

@@ -4,12 +4,12 @@ import { agentMemoryRecall } from "@oxagen/oxagen/contracts/agent.memory.recall"
 
 // Deterministic per-turn memory recall for the REST chat surface.
 //
-// RETAINED THROUGH ADR-041. The A2A transport and the turn loop that called
-// this are gone; chat.stream currently answers 501 and `runGovernedTurn` in
-// @oxagen/agent will call this again. It survives the cut because grounding an
-// answer in recalled, cited workspace memory is exactly what the governance
-// agent is for, and because it does that through the metered, IAM-gated
-// `agent.memory.recall` capability rather than a raw graph call.
+// RETAINED THROUGH ADR-041 and called again by chat.stream, which injects the
+// block it returns as a per-turn context message into `runGovernedTurn`. It
+// survives the cut because grounding an answer in recalled, cited workspace
+// memory is exactly what the governance agent is for, and because it does that
+// through the metered, IAM-gated `agent.memory.recall` capability rather than a
+// raw graph call.
 //
 // This mirrors the app-chat surface's recall wiring (ADR-021 §2/§8):
 // recall workspace memory BEFORE the turn acts, via the metered, IAM-gated

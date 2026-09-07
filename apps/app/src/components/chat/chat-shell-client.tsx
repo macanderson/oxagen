@@ -654,9 +654,6 @@ export function ChatShellClient({
               tier: (formData.get("tier") as string) || null,
               model: (formData.get("model") as string) || null,
               effort: (formData.get("effort") as string) || null,
-              generate: (formData.get("generate") as string) || null,
-              mediaTier: (formData.get("mediaTier") as string) || null,
-              mediaModel: (formData.get("mediaModel") as string) || null,
               activeServerIds: (() => {
                 const raw = formData.get("activeServerIds") as string | null;
                 if (!raw) return [];
@@ -1125,8 +1122,6 @@ export function ChatShellClient({
           riskLevel: tc.riskLevel,
           status: tc.status,
           output: tc.output,
-          stdout: tc.stdout,
-          stderr: tc.stderr,
           errorReason: tc.errorReason,
           durationMs: tc.durationMs,
         });

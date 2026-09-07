@@ -1,18 +1,14 @@
 /**
- * Unit tests for POST /:org_slug/:workspace_slug/chat/stream
+ * Integration tests for POST /:org_slug/:workspace_slug/chat/stream, mounted in
+ * the real Hono app so the auth guard, the org/workspace scoping and the
+ * published ingress contract are exercised end to end.
  *
- * ADR-041 excised the agent runtime, so this route no longer streams: it
- * authenticates, scopes, validates the body, and then answers
- * 501 { error: { code: "chat_stream_pending_governed_turn" } } until
- * `runGovernedTurn` lands in @oxagen/agent.
- *
- * What is covered here is exactly what the route still does, and it is not
- * placeholder coverage — the auth guard, the tenant scoping, the ingress
- * contract (malformed JSON, missing/empty content, the shared content cap, the
- * per-turn budget schema) and the 501 discriminant are the parts of this
- * surface a client depends on today. The SSE, tool-loop, persistence and
- * SOC 2 execution-recording tests went with the engine; they come back with
- * the governed turn, not before.
+ * The order the route applies its gates is the thing this file locks in:
+ * auth → body validation → the pre-turn CREDIT admission gate → the governed
+ * turn. The credit gate is stubbed to DENY here, so a request that gets past
+ * validation stops at a 402 and no test ever reaches a model, Neo4j or
+ * Postgres. The turn itself — tools, prompt, streaming, usage — is covered in
+ * isolation by routes/v1/chat.stream.test.ts.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -26,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   resolveOrgScope: vi.fn(),
   resolveWorkspaceScope: vi.fn(),
   invoke: vi.fn(),
+  evaluateTurnCreditGate: vi.fn(),
 }));
 
 vi.mock("@oxagen/auth", () => ({
@@ -39,6 +36,14 @@ vi.mock("@oxagen/auth", () => ({
 vi.mock("@oxagen/oxagen/kernel", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/oxagen/kernel")>();
   return { ...real, invoke: mocks.invoke };
+});
+
+// Only the credit gate is stubbed: it is the first thing the route does after
+// validation, and denying it stops the turn before any store is touched. Every
+// other billing export stays real so the budget schema still validates bodies.
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/billing")>();
+  return { ...real, evaluateTurnCreditGate: mocks.evaluateTurnCreditGate };
 });
 
 vi.mock("../middleware/logger", () => ({
@@ -72,12 +77,19 @@ function post(body: unknown, extraHeaders?: Record<string, string>): Request {
   });
 }
 
-type PendingBody = { error?: { code?: string; message?: string } };
+type ErrorBody = { error?: { code?: string; message?: string } };
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.resolveApiKey.mockResolvedValue(makeApiKeyOk());
   mocks.invoke.mockResolvedValue(undefined);
+  // Deny by default so a valid request stops at the gate instead of opening a
+  // real turn. The admitted path is covered in routes/v1/chat.stream.test.ts.
+  mocks.evaluateTurnCreditGate.mockResolvedValue({
+    ok: false,
+    code: "insufficient_credits",
+    message: "Insufficient credits: your balance is empty.",
+  });
 });
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
@@ -99,13 +111,13 @@ describe("chat stream: auth guard", () => {
     expect(res.status).toBe(401);
   });
 
-  // The 501 must sit BEHIND the auth guard, not in front of it: an unauthorized
-  // caller learns nothing about which capabilities the surface currently has.
-  it("does not leak the pending-implementation code to an unauthorized caller", async () => {
+  // Auth runs FIRST: an unauthorized caller never reaches billing, so it can
+  // never learn anything about the org's balance from this endpoint.
+  it("rejects an unauthorized caller before the credit gate runs", async () => {
     mocks.resolveApiKey.mockResolvedValue({ ok: false, kind: "invalid" });
     const res = await app.fetch(post({ content: "hi" }));
-    const body = (await res.json()) as PendingBody;
-    expect(body.error?.code).not.toBe("chat_stream_pending_governed_turn");
+    expect(res.status).toBe(401);
+    expect(mocks.evaluateTurnCreditGate).not.toHaveBeenCalled();
   });
 });
 
@@ -150,13 +162,13 @@ describe("chat stream: body validation", () => {
     expect(res.status).toBe(400);
   });
 
-  // Validation runs BEFORE the 501: a caller sending a bad body still gets the
-  // specific 400 that tells them what is wrong with it.
-  it("rejects a malformed body with 400, not the 501", async () => {
+  // Validation runs BEFORE the credit gate: a caller sending a bad body gets
+  // the specific 400 that tells them what is wrong with it, and is not billed
+  // for the attempt.
+  it("rejects a malformed body with 400 before the credit gate runs", async () => {
     const res = await app.fetch(post({ content: "" }));
     expect(res.status).toBe(400);
-    const body = (await res.json()) as PendingBody;
-    expect(body.error?.code).not.toBe("chat_stream_pending_governed_turn");
+    expect(mocks.evaluateTurnCreditGate).not.toHaveBeenCalled();
   });
 });
 
@@ -168,21 +180,46 @@ describe("chat stream: content ingress cap", () => {
     expect(res.status).toBe(400);
   });
 
-  it("accepts content exactly at the cap (past validation, into the 501)", async () => {
+  it("accepts content exactly at the cap (past validation, into the credit gate)", async () => {
     const res = await app.fetch(post({ content: "x".repeat(CONTENT_CAP) }));
-    expect(res.status).toBe(501);
+    expect(res.status).toBe(402);
   });
 });
 
-// ── Pending governed turn (ADR-041) ───────────────────────────────────────────
+// ── Pre-turn credit admission gate ───────────────────────────────────────────
 
-describe("chat stream: pending governed turn", () => {
-  it("returns 501 with the chat_stream_pending_governed_turn code for a valid request", async () => {
+describe("chat stream: credit admission gate", () => {
+  it("answers 402 with the billing code when the org cannot spend", async () => {
     const res = await app.fetch(post({ content: "Hello" }));
-    expect(res.status).toBe(501);
-    const body = (await res.json()) as PendingBody;
-    expect(body.error?.code).toBe("chat_stream_pending_governed_turn");
-    expect(body.error?.message).toContain("ADR-041");
+    expect(res.status).toBe(402);
+    const body = (await res.json()) as ErrorBody;
+    expect(body.error?.code).toBe("insufficient_credits");
+    expect(mocks.evaluateTurnCreditGate).toHaveBeenCalledTimes(1);
+  });
+
+  // The top-level model call reaches @oxagen/ai directly rather than through
+  // invoke(), which is exactly why this gate exists: without it a turn that
+  // called no tool would run entirely unmetered.
+  it("never reaches the capability kernel when the gate denies", async () => {
+    await app.fetch(post({ content: "Hello" }));
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("answers JSON, not an SSE stream, when it refuses the turn", async () => {
+    const res = await app.fetch(post({ content: "Hello" }));
+    expect(res.headers.get("content-type")).toContain("application/json");
+  });
+
+  it("answers 402 for a suspended org", async () => {
+    mocks.evaluateTurnCreditGate.mockResolvedValue({
+      ok: false,
+      code: "billing_suspended",
+      message: "Billing suspended",
+    });
+    const res = await app.fetch(post({ content: "Hello" }));
+    expect(res.status).toBe(402);
+    const body = (await res.json()) as ErrorBody;
+    expect(body.error?.code).toBe("billing_suspended");
   });
 
   it("accepts every optional field the ingress contract still publishes", async () => {
@@ -202,19 +239,7 @@ describe("chat stream: pending governed turn", () => {
         },
       }),
     );
-    expect(res.status).toBe(501);
-  });
-
-  // No engine means no metered work: the route must not reach the kernel at
-  // all, so a caller is never charged for a turn that cannot run.
-  it("never reaches the capability kernel", async () => {
-    const res = await app.fetch(post({ content: "Hello" }));
-    expect(res.status).toBe(501);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-
-  it("answers JSON, not an SSE stream", async () => {
-    const res = await app.fetch(post({ content: "Hello" }));
-    expect(res.headers.get("content-type")).toContain("application/json");
+    // Past validation — refused by the (denying) credit gate, not by the schema.
+    expect(res.status).toBe(402);
   });
 });

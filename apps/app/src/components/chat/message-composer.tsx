@@ -605,14 +605,8 @@ export function MessageComposer({
   // (its system prompt documents the commands — see @oxagen/ai slash-commands).
   const [slashQuery, setSlashQuery] = React.useState<string | null>(null);
   const [slashActiveIndex, setSlashActiveIndex] = React.useState(0);
-  // `clientAction` commands (`/pin`) are filtered out of the app's menu: there
-  // is no repo/environment pin in the app, so offering `/pin` would be a
-  // control that cannot do anything. The CLI keeps its own `/pin` semantics.
   const slashCommands = React.useMemo(
-    () =>
-      slashQuery === null
-        ? []
-        : matchSlashCommands(slashQuery).filter((c) => !c.clientAction),
+    () => (slashQuery === null ? [] : matchSlashCommands(slashQuery)),
     [slashQuery],
   );
   const slashOpen = slashQuery !== null && slashCommands.length > 0;
@@ -743,8 +737,8 @@ export function MessageComposer({
     const ta = formRef.current?.elements.namedItem(
       "content",
     ) as HTMLTextAreaElement | null;
-    // No `clientAction` branch: those commands are filtered out of this
-    // menu (see `slashCommands` above) — the app has no per-turn pinning.
+    // Every command is agent-interpreted (ADR-041 removed the one
+    // client-handled command), so this only ever fills the composer.
     if (ta) {
       ta.value = `/${command.name} `;
       ta.focus();
@@ -1130,34 +1124,19 @@ export function MessageComposer({
     [],
   );
 
-  // Resolve which text model is active (for reasoning capability check).
+  // Resolve which model is active (for the reasoning capability check).
   const resolvedTextModelId =
-    model.generate === null
-      ? (model.model ?? modelConfig.text[model.tier ?? "fast"])
-      : null;
-  const resolvedTextModel =
-    resolvedTextModelId !== null ? getModel(resolvedTextModelId) : undefined;
-  const showEffortControl =
-    model.generate === null && supportsReasoning(resolvedTextModel);
+    model.model ?? modelConfig.text[model.tier ?? "fast"];
+  const resolvedTextModel = getModel(resolvedTextModelId);
+  const showEffortControl = supportsReasoning(resolvedTextModel);
 
-  // Placeholder text varies by media mode; in v2 a selected agent names the
-  // recipient ("Message Software Architect…") so the pick → type flow reads
-  // as addressing someone.
+  // In v2 a selected agent names the recipient ("Message Software Architect…")
+  // so the pick → type flow reads as addressing someone.
   const placeholder = disabled
     ? (disabledReason ?? "Composer paused.")
-    : model.generate === "image"
-      ? "Describe the image you want…"
-      : model.generate === "video"
-        ? "Describe the video you want…"
-        : v2Active && selectedAgentName
-          ? `Message ${selectedAgentName}…`
-          : "Send a message…";
-
-  // Image/video generation is not a manual composer mode — the server
-  // infers it from the prompt (infer-media-intent.ts). `model.generate` stays a
-  // latent field of ComposerModelState (still honored for explicit API callers
-  // and the model picker's media catalog), so `generate === null` below is a
-  // defensive guard, never toggled on from the app UI.
+    : v2Active && selectedAgentName
+      ? `Message ${selectedAgentName}…`
+      : "Send a message…";
 
   /** Build a FormData for the current form state + a given model snapshot. */
   function buildFormData(
@@ -1180,26 +1159,17 @@ export function MessageComposer({
     if (attachmentsSnapshot.length > 0) {
       fd.set("attachments", JSON.stringify(attachmentsSnapshot));
     }
-    if (modelSnapshot.generate === null) {
-      if (modelSnapshot.model) {
-        fd.set("model", modelSnapshot.model);
-      } else {
-        fd.set("tier", modelSnapshot.tier ?? "fast");
-      }
-      // Effort only when the resolved model supports reasoning.
-      const resolvedId =
-        modelSnapshot.model ?? modelConfig.text[modelSnapshot.tier ?? "fast"];
-      const resolvedMeta = resolvedId ? getModel(resolvedId) : undefined;
-      if (supportsReasoning(resolvedMeta) && modelSnapshot.effort) {
-        fd.set("effort", modelSnapshot.effort);
-      }
+    if (modelSnapshot.model) {
+      fd.set("model", modelSnapshot.model);
     } else {
-      fd.set("generate", modelSnapshot.generate);
-      if (modelSnapshot.mediaModel) {
-        fd.set("mediaModel", modelSnapshot.mediaModel);
-      } else {
-        fd.set("mediaTier", modelSnapshot.mediaTier ?? "basic");
-      }
+      fd.set("tier", modelSnapshot.tier ?? "fast");
+    }
+    // Effort only when the resolved model supports reasoning.
+    const resolvedId =
+      modelSnapshot.model ?? modelConfig.text[modelSnapshot.tier ?? "fast"];
+    const resolvedMeta = resolvedId ? getModel(resolvedId) : undefined;
+    if (supportsReasoning(resolvedMeta) && modelSnapshot.effort) {
+      fd.set("effort", modelSnapshot.effort);
     }
     if (activeServerIds.size > 0) {
       fd.set("activeServerIds", JSON.stringify([...activeServerIds]));
@@ -1334,24 +1304,15 @@ export function MessageComposer({
         fd.set("attachments", JSON.stringify(next.attachments));
       }
       const ms = next.modelState;
-      if (ms.generate === null) {
-        if (ms.model) {
-          fd.set("model", ms.model);
-        } else {
-          fd.set("tier", ms.tier ?? "fast");
-        }
-        const resolvedId = ms.model ?? modelConfig.text[ms.tier ?? "fast"];
-        const resolvedMeta = resolvedId ? getModel(resolvedId) : undefined;
-        if (supportsReasoning(resolvedMeta) && ms.effort) {
-          fd.set("effort", ms.effort);
-        }
+      if (ms.model) {
+        fd.set("model", ms.model);
       } else {
-        fd.set("generate", ms.generate);
-        if (ms.mediaModel) {
-          fd.set("mediaModel", ms.mediaModel);
-        } else {
-          fd.set("mediaTier", ms.mediaTier ?? "basic");
-        }
+        fd.set("tier", ms.tier ?? "fast");
+      }
+      const resolvedId = ms.model ?? modelConfig.text[ms.tier ?? "fast"];
+      const resolvedMeta = resolvedId ? getModel(resolvedId) : undefined;
+      if (supportsReasoning(resolvedMeta) && ms.effort) {
+        fd.set("effort", ms.effort);
       }
       const currentActiveServerIds = activeServerIdsRef.current;
       if (currentActiveServerIds.size > 0) {
@@ -1924,15 +1885,9 @@ export function MessageComposer({
                     </Button>
                   ) : null}
 
-                  {/* No manual image/video generation toggles: the system infers
-                media intent from the prompt server-side (infer-media-intent.ts)
-                and routes the turn to media generation when it's clearly asked
-                for. Attaching an image/video is the paperclip above. */}
-
-                  {/* Code mode is governed SOLELY by the selected agent's identity
-                (a code agent turns it on and reveals the repo/environment
-                pickers below) — there is no manual toggle. Selecting a coding
-                agent is the deliberate act that enters the agentic coding flow. */}
+                  {/* ADR-041: no image/video generation toggles and no code
+                mode — Oxagen governs agents, it does not run them. Attaching an
+                image or video for the model to READ is the paperclip above. */}
 
                   {!isMobile && (
                     <>

@@ -1,5 +1,5 @@
 /**
- * credit-gate.test.ts
+ * turn-credit-gate.test.ts
  *
  * Unit tests for evaluateTurnCreditGate — the pre-turn credit admission gate
  * that mirrors the invoke()-wired assertCanStartTurn before the top-level model
@@ -10,12 +10,12 @@
  *   (d) fail-open  → { ok: true } on any NON-billing (infra/DB) error, so a
  *                    metering hiccup never blocks a paying customer's turn
  *
- * @oxagen/billing is mocked so no DB or Stripe calls run; the mock supplies the
+ * ./metering is mocked so no DB or Stripe calls run; the mock supplies the
  * real error-class shapes the helper's `instanceof` checks depend on.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ── Mock @oxagen/billing — must be hoisted before importing ./credit-gate. ─────
+// ── Mock ./metering — must be hoisted before importing ./turn-credit-gate. ────
 class InsufficientCreditsError extends Error {
   readonly code = "insufficient_credits" as const;
   constructor() {
@@ -34,13 +34,13 @@ class BillingSuspendedError extends Error {
 }
 const assertCanStartTurnMock = vi.fn<(orgId: string) => Promise<void>>();
 
-vi.mock("@oxagen/billing", () => ({
+vi.mock("./metering", () => ({
   assertCanStartTurn: (orgId: string) => assertCanStartTurnMock(orgId),
   InsufficientCreditsError,
   BillingSuspendedError,
 }));
 
-const { evaluateTurnCreditGate } = await import("./credit-gate");
+const { evaluateTurnCreditGate } = await import("./turn-credit-gate");
 
 describe("evaluateTurnCreditGate", () => {
   beforeEach(() => {

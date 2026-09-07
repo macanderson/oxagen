@@ -28,8 +28,6 @@ export interface ToolCallCardProps {
   riskLevel: RiskLevel;
   status: ToolCallStatus;
   output?: unknown;
-  stdout?: string;
-  stderr?: string;
   errorReason?: string;
   durationMs?: number;
   defaultOpen?: boolean;
@@ -95,8 +93,6 @@ export function ToolCallCard(props: ToolCallCardProps) {
     riskLevel,
     status,
     output,
-    stdout,
-    stderr,
     errorReason,
     durationMs,
     defaultOpen = false,
@@ -105,15 +101,6 @@ export function ToolCallCard(props: ToolCallCardProps) {
   const [openState, setOpen] = React.useState(defaultOpen);
   // Headerless bodies are always open — the enclosing row owns the toggle.
   const open = hideHeader ? true : openState;
-  const streamRef = React.useRef<HTMLDivElement>(null);
-
-  // Auto-scroll the output pane to the bottom while the call is running.
-  // Freeze on terminal state so the user can scroll back through history.
-  React.useEffect(() => {
-    if (status !== "running") return;
-    if (!streamRef.current) return;
-    streamRef.current.scrollTop = streamRef.current.scrollHeight;
-  }, [stdout, stderr, status]);
 
   // Human-readable label + domain icon — the raw capability string is never the
   // primary label; it lives in the expanded body and `title` only.
@@ -237,26 +224,13 @@ export function ToolCallCard(props: ToolCallCardProps) {
               ) : null}
             </>
           )}
-          {(stdout || stderr || status === "running") && (
-            <Section label="Output stream">
-              <div
-                ref={streamRef}
-                className="max-h-48 overflow-y-auto rounded-lg bg-black/85 p-2 font-mono text-xs text-success"
-              >
-                {stdout ? (
-                  <pre className="whitespace-pre-wrap">{stdout}</pre>
-                ) : null}
-                {stderr ? (
-                  <pre className="whitespace-pre-wrap text-error">{stderr}</pre>
-                ) : null}
-                {status === "running" && !stdout && !stderr ? (
-                  <span className="text-muted-foreground">
-                    Waiting for output…
-                  </span>
-                ) : null}
-              </div>
+          {status === "running" ? (
+            <Section label="Status">
+              <span className="text-xs text-muted-foreground">
+                Waiting for the result…
+              </span>
             </Section>
-          )}
+          ) : null}
           {status === "failed" && errorReason ? (
             <Section label="Error">
               {/* The error message body is the one place destructive color is

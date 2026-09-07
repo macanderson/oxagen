@@ -1,13 +1,10 @@
 import { gateway } from "@ai-sdk/gateway";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { wrapLanguageModel } from "ai";
-import type { ImageModel, LanguageModel } from "ai";
-import type {
-  Experimental_VideoModelV4,
-  LanguageModelV4,
-} from "@ai-sdk/provider";
+import type { LanguageModel } from "ai";
+import type { LanguageModelV4 } from "@ai-sdk/provider";
 import { requireEnv } from "@oxagen/config/env";
-import type { MediaTier, ResolvedTierCatalog } from "./catalog";
+import type { ResolvedTierCatalog } from "./catalog";
 
 /**
  * Wrap a language model with AI SDK devtools middleware in development.
@@ -121,47 +118,6 @@ export function tierModelId(tier: OxagenTier): string {
   return tierFromEnv(env, tier);
 }
 
-// ── Media tiers (image + video) ────────────────────────────────────────────
-//
-// Image and video generation expose two white-labeled tiers — "basic" (the
-// default, cheaper) and "advanced" — that resolve to concrete gateway model ids
-// via the OXAGEN_LLM_{IMAGE,VIDEO}_{BASIC,ADVANCED} env vars. Same pattern as
-// the text tiers above: the customer-facing name stays decoupled from the
-// vendor model so swapping the underlying generator is an env change.
-
-const IMAGE_TIER_ENV_KEY = {
-  basic: "OXAGEN_LLM_IMAGE_BASIC",
-  advanced: "OXAGEN_LLM_IMAGE_ADVANCED",
-} as const satisfies Record<MediaTier, string>;
-
-const VIDEO_TIER_ENV_KEY = {
-  basic: "OXAGEN_LLM_VIDEO_BASIC",
-  advanced: "OXAGEN_LLM_VIDEO_ADVANCED",
-} as const satisfies Record<MediaTier, string>;
-
-/** Resolve an image tier to its concrete gateway model id from env. */
-export function imageTierModelId(tier: MediaTier): string {
-  const env = requireEnv([
-    "OXAGEN_LLM_IMAGE_BASIC",
-    "OXAGEN_LLM_IMAGE_ADVANCED",
-  ] as const);
-  // requireEnv applies the zod schema defaults (env.ts), so both keys are always
-  // strings in any real environment and this coalesce is unreachable there. It
-  // exists only for a test that stubs requireEnv with a partial object — and note
-  // it answers the BASIC model for either tier, so an "advanced" request under
-  // such a stub silently degrades rather than throwing. Do not lean on it.
-  return env[IMAGE_TIER_ENV_KEY[tier]] ?? "openai/gpt-image-1";
-}
-
-/** Resolve a video tier to its concrete gateway model id from env. */
-export function videoTierModelId(tier: MediaTier): string {
-  const env = requireEnv([
-    "OXAGEN_LLM_VIDEO_BASIC",
-    "OXAGEN_LLM_VIDEO_ADVANCED",
-  ] as const);
-  return env[VIDEO_TIER_ENV_KEY[tier]] ?? "google/veo-3.0-fast-generate-001";
-}
-
 /**
  * Resolve every white-labeled tier to its concrete gateway model id in a single
  * read. Server-only (reads env); the chat RSC calls this and passes the result
@@ -174,14 +130,6 @@ export function resolvedTierCatalog(): ResolvedTierCatalog {
       fast: tierModelId("fast"),
       balanced: tierModelId("balanced"),
       precise: tierModelId("precise"),
-    },
-    image: {
-      basic: imageTierModelId("basic"),
-      advanced: imageTierModelId("advanced"),
-    },
-    video: {
-      basic: videoTierModelId("basic"),
-      advanced: videoTierModelId("advanced"),
     },
   };
 }
@@ -271,96 +219,3 @@ function languageProvider(): {
 
 /** The platform default model — the balanced tier through the gateway. */
 export const defaultModel = () => selectModel();
-
-// ── Image model selection ─────────────────────────────────────────────────────
-//
-// Single chokepoint for all image model construction. Like selectModel(), every
-// call routes through the Vercel AI Gateway (`@ai-sdk/gateway`) so packages
-// outside @oxagen/ai never import a provider SDK directly. The gateway exposes
-// image models in `creator/model` form (e.g. "openai/gpt-image-1",
-// "bfl/flux-2-max", "google/gemini-3.1-flash-image-preview").
-
-export interface ImageModelSelector {
-  /**
-   * Gateway image model id, e.g. "openai/gpt-image-1" or "bfl/flux-2-max".
-   * Defaults to GPT Image 1.
-   */
-  model?: string;
-}
-
-const IMAGE_DEFAULT_GATEWAY = "openai/gpt-image-1";
-
-/**
- * Build and return the AI SDK `ImageModel` for the requested model, always
- * through the Vercel AI Gateway. The gateway client reads `AI_GATEWAY_API_KEY`
- * from the environment; callers handle the no-key / failure case (placeholder)
- * as `image.generate.ts` does — this never throws on a missing key, it builds a
- * client that surfaces the error at call time.
- */
-export function selectImageModel(
-  selector: ImageModelSelector = {},
-): ImageModel {
-  return gateway.imageModel(selector.model ?? IMAGE_DEFAULT_GATEWAY);
-}
-
-// ── Video model selection ─────────────────────────────────────────────────────
-//
-// Single chokepoint for all video model construction. Uses `@ai-sdk/gateway`
-// directly (not the OpenAI-compat shim) because the gateway SDK exposes a
-// `.video(modelId)` factory that returns an `Experimental_VideoModelV4`, which
-// is what `experimental_generateVideo` expects. There is no direct-provider
-// fallback for video: if AI_GATEWAY_API_KEY is absent the factory still builds
-// a gateway client (it will surface an auth error at call time, not here).
-
-/** Default gateway video model ids for each tier. */
-const VIDEO_DEFAULT_BASIC = "google/veo-3.0-fast-generate-001";
-const VIDEO_DEFAULT_ADVANCED = "google/veo-3.0-generate-001";
-
-export interface VideoModelSelector {
-  /**
-   * Explicit Vercel AI Gateway video model id in `creator/model` form, e.g.
-   * "google/veo-3.0-generate-001". Takes precedence over `tier`.
-   */
-  model?: string;
-  /**
-   * White-labeled media tier; resolves to a gateway video model id from the
-   * `OXAGEN_LLM_VIDEO_{BASIC,ADVANCED}` env vars.
-   */
-  tier?: MediaTier;
-}
-
-/**
- * Build and return an `Experimental_VideoModelV4` for the requested model tier.
- * Always routes through the Vercel AI Gateway via `@ai-sdk/gateway`; the gateway
- * SDK is the only official way to get a typed VideoModelV4 for Veo and other
- * hosted video providers. `AI_GATEWAY_API_KEY` is read from env at call time and
- * forwarded automatically by the gateway client.
- *
- * Callers that need the raw gateway model id string (e.g. for telemetry) can
- * call `videoTierModelId(tier)` directly.
- */
-export function selectVideoModel(
-  selector: VideoModelSelector = {},
-): Experimental_VideoModelV4 {
-  // Resolve the concrete model id: explicit model > tier env var > hardcoded default.
-  let modelId: string;
-  if (selector.model) {
-    modelId = selector.model;
-  } else {
-    const tier = selector.tier ?? "basic";
-    const env = requireEnv([
-      "OXAGEN_LLM_VIDEO_BASIC",
-      "OXAGEN_LLM_VIDEO_ADVANCED",
-    ] as const);
-    if (tier === "advanced") {
-      modelId = env.OXAGEN_LLM_VIDEO_ADVANCED ?? VIDEO_DEFAULT_ADVANCED;
-    } else {
-      modelId = env.OXAGEN_LLM_VIDEO_BASIC ?? VIDEO_DEFAULT_BASIC;
-    }
-  }
-
-  // `gateway.video(modelId)` constructs an Experimental_VideoModelV4 that reads
-  // AI_GATEWAY_API_KEY from the environment. The key is not injected here so the
-  // call site (which already checks env) stays the authority.
-  return gateway.video(modelId);
-}

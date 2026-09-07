@@ -15,15 +15,22 @@
  *
  * The baseline lives here rather than in `@oxagen/ai`'s registry because the
  * prompt is a property of THIS runtime's tool surface: the two must change
- * together. Call sites that hold a workspace PromptConfig should still layer
- * customer "additional instructions" on top via
+ * together. There is exactly ONE chat baseline in the repository — the registry
+ * keeps only the customer-override resolution (`resolvePrompt`) that layers on
+ * top of it. Call sites that hold a workspace PromptConfig should use
  * `resolvePrompt({ key: "chat.system", baseline: buildChatSystemPrompt(ctx), config })`
  * rather than concatenating strings of their own.
+ *
+ * Two sections are composed in from `@oxagen/ai` rather than restated here —
+ * the slash-command table and the @-mention grammar. Both are protocols shared
+ * with the composer UI, and each is generated from the SAME registry the
+ * composer renders, so the prompt and the menu can never disagree.
  */
 
-/** Scope the prompt is rendered for. Structurally compatible with
- *  `@oxagen/ai`'s `SystemPromptContext` so either can be passed at a call site
- *  that already resolved one. */
+import { slashCommandsPromptSection } from "@oxagen/ai";
+import { mentionGrammarPrompt } from "@oxagen/ai/mentions";
+
+/** Scope the prompt is rendered for. */
 export interface SystemPromptContext {
   orgSlug: string;
   workspaceSlug: string;
@@ -80,6 +87,16 @@ first-use consent; that is normal, not an error. If a call is refused, report
 the refusal and its reason accurately — never retry it under a different name,
 never work around it, and never ask the user to disable a gate. If a capability
 is not in your tool set, you do not have it; say so.
+
+---
+
+${slashCommandsPromptSection()}
+
+---
+
+${mentionGrammarPrompt()}
+
+---
 
 Current scope: organization "${orgName}" (${orgSlug}), workspace
 "${workspaceName}" (${workspaceSlug}). Every answer is about this workspace

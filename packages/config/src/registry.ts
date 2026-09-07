@@ -1008,52 +1008,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "static",
     staticValue: { "*": "anthropic/claude-fable-5" },
   },
-  OXAGEN_LLM_IMAGE_BASIC: {
-    group: "AI providers",
-    description:
-      'Basic image tier ("Oxagen Basic") — default gateway image model for composer ' +
-      "image generation.",
-    secret: false,
-    clientExposed: false,
-    services: ["api", "app", "mcp"],
-    requiredIn: [],
-    valueOrigin: "static",
-    staticValue: { "*": "openai/gpt-image-1" },
-  },
-  OXAGEN_LLM_IMAGE_ADVANCED: {
-    group: "AI providers",
-    description:
-      'Advanced image tier ("Oxagen Advanced") — high-fidelity gateway image model.',
-    secret: false,
-    clientExposed: false,
-    services: ["api", "app", "mcp"],
-    requiredIn: [],
-    valueOrigin: "static",
-    staticValue: { "*": "bfl/flux-2-max" },
-  },
-  OXAGEN_LLM_VIDEO_BASIC: {
-    group: "AI providers",
-    description:
-      'Basic video tier ("Oxagen Basic") — default gateway video model for composer ' +
-      "video generation (pipeline stub).",
-    secret: false,
-    clientExposed: false,
-    services: ["api", "app", "mcp"],
-    requiredIn: [],
-    valueOrigin: "static",
-    staticValue: { "*": "google/veo-3.0-fast-generate-001" },
-  },
-  OXAGEN_LLM_VIDEO_ADVANCED: {
-    group: "AI providers",
-    description:
-      'Advanced video tier ("Oxagen Advanced") — high-fidelity gateway video model.',
-    secret: false,
-    clientExposed: false,
-    services: ["api", "app", "mcp"],
-    requiredIn: [],
-    valueOrigin: "static",
-    staticValue: { "*": "google/veo-3.0-generate-001" },
-  },
 
   // ── Email (transactional — @oxagen/notifications SMTP transport) ─────────────
   // SMTP is the vendor-neutral seam: Resend today, any SMTP provider tomorrow

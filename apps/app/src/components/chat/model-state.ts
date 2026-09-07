@@ -7,42 +7,22 @@
 // system). A `"use client"` module's function exports become client references
 // when imported by a server component and throw if called there, so the pure
 // state logic lives here and `model-picker.tsx` re-exports it for client code.
-import type {
-  TextTier,
-  MediaTier,
-  MediaKind,
-  EffortLevel,
-} from "@oxagen/ai/catalog";
+import type { TextTier, EffortLevel } from "@oxagen/ai/catalog";
 // Type-only import — erased at compile time, so this never pulls @oxagen/billing's
 // Stripe/DB-touching barrel into the client bundle (see budget-control.tsx for
 // the same rationale on the literal mode copy).
 import type { TurnBudgetMode } from "@oxagen/billing";
 
+// ADR-041 removed image and video generation, so a composer turn is text +
+// reasoning effort and nothing else — there is no generate mode, no media tier
+// and no media model to carry.
 export interface ComposerModelState {
-  /** null = text chat, "image"/"video" = media generation */
-  generate: MediaKind | null;
   /** Selected text tier (mutually exclusive with `model`) */
   tier: TextTier | null;
-  /** Explicit "Other Models" gateway model id for text */
+  /** Explicit "Other Models" gateway model id */
   model: string | null;
-  /** Reasoning level (text only) */
+  /** Reasoning level */
   effort: EffortLevel | null;
-  /** Selected media tier */
-  mediaTier: MediaTier | null;
-  /** Explicit "Other Models" gateway model id for media */
-  mediaModel: string | null;
-  /**
-   * Internal seed memory — the workspace/user preferred image model id
-   * seeded at mount time. NOT serialized into the request payload; only used
-   * to pre-fill `mediaModel` when the user switches INTO image mode.
-   */
-  seededImageModel: string | null;
-  /**
-   * Internal seed memory — the workspace/user preferred video model id
-   * seeded at mount time. NOT serialized into the request payload; only used
-   * to pre-fill `mediaModel` when the user switches INTO video mode.
-   */
-  seededVideoModel: string | null;
   /**
    * Per-turn dollar budget (OXA — turn-budget). Off by default. Seeded from
    * the user's saved default (`budget.policy.read`) at mount time; the
@@ -76,14 +56,9 @@ const BUDGET_OFF_DEFAULTS = {
 };
 
 export const defaultModelState: ComposerModelState = {
-  generate: null,
   tier: "fast",
   model: null,
   effort: "medium",
-  mediaTier: "basic",
-  mediaModel: null,
-  seededImageModel: null,
-  seededVideoModel: null,
   ...BUDGET_OFF_DEFAULTS,
 };
 
@@ -97,10 +72,6 @@ export interface ModelStateSeed {
   textModel: string | null;
   /** Text tier to pre-select (used only when textModel is null). */
   textTier: TextTier | null;
-  /** Image model id to pre-select in image-generation mode. */
-  imageModel: string | null;
-  /** Video model id to pre-select in video-generation mode. */
-  videoModel: string | null;
   /**
    * The user's saved per-turn budget default (`budget.policy.read`), resolved
    * server-side. Null/omitted degrades to the off state (BUDGET_OFF_DEFAULTS)
@@ -119,18 +90,9 @@ export function buildSeededModelState(
   seed: ModelStateSeed,
 ): ComposerModelState {
   return {
-    generate: null,
     tier: seed.textModel ? null : (seed.textTier ?? "fast"),
     model: seed.textModel ?? null,
     effort: "medium",
-    // Start in text mode with no media model active. The seeded image/video
-    // model ids are stored in seededImageModel / seededVideoModel so that
-    // toggleGenerate() can pre-fill mediaModel the moment the user enters
-    // image or video mode.
-    mediaTier: "basic",
-    mediaModel: null,
-    seededImageModel: seed.imageModel ?? null,
-    seededVideoModel: seed.videoModel ?? null,
     budgetEnabled: seed.budget?.enabled ?? BUDGET_OFF_DEFAULTS.budgetEnabled,
     budgetUsd: seed.budget?.enabled ? (seed.budget.limitUsd ?? null) : null,
     budgetMode: seed.budget?.mode ?? BUDGET_OFF_DEFAULTS.budgetMode,
