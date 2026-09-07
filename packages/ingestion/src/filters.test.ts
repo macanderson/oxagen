@@ -21,6 +21,17 @@ describe("matchGlobPattern", () => {
     expect(matchGlobPattern("node_modules/foo.ts", [])).toBe(false);
   });
 
+  it("`**/x` matches x at the root, not only in a subdirectory (#1387)", () => {
+    // This package carries its own copy of the compiler, so the semantics are
+    // pinned here as well as in agent-engine's. `**` consumes the separator
+    // that follows it; a copy that emitted it required at least one directory
+    // and stopped matching the root.
+    expect(matchGlobPattern(".env", ["**/.env"])).toBe(true);
+    expect(matchGlobPattern("config/.env", ["**/.env"])).toBe(true);
+    expect(matchGlobPattern("secrets.txt", ["**/secrets.txt"])).toBe(true);
+    expect(matchGlobPattern("key.pem", ["**/*.pem"])).toBe(true);
+  });
+
   it("matches ** glob — any depth path", () => {
     expect(
       matchGlobPattern("node_modules/foo/bar.ts", ["node_modules/**"]),
