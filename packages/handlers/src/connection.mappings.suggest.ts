@@ -80,10 +80,17 @@ Return suggestions for all ${input.recordTypes.length} record types.`;
     // record types is a large one and still lands far inside 8192 tokens.
     //
     // Bounded because the alternative is not "no cap" but "the model's cap".
-    // Sending no max_tokens makes a metered provider reserve credit against
-    // the full ceiling — 65536 for claude-sonnet-5 — regardless of how short
-    // the answer will be, and OpenRouter refuses the call outright when the
-    // balance cannot cover the reservation, before generating a token.
+    // Sending no max_tokens makes a metered gateway reserve credit against the
+    // full ceiling — 65536 for claude-sonnet-5 — regardless of how short the
+    // answer will be, and it refuses the call outright when the balance cannot
+    // cover the reservation, before generating a token.
+    //
+    // A balance too low even for THIS ceiling no longer fails the call:
+    // generateObjectFor catches the refusal, reads the ceiling the gateway said
+    // it could afford, and asks again once at that number (#2629). So this is
+    // an upper bound the gateway may lower, not a value the call dies on. Only
+    // a balance that cannot fund the reply at all surfaces, as a typed
+    // OutputBudgetError rather than a provider string.
     //
     // The cost of this being wrong is visible rather than silent: too low and
     // the object is truncated, which fails SuggestionSchema and surfaces as a

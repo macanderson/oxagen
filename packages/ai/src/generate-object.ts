@@ -1,4 +1,5 @@
 import pino from "pino";
+import { withOutputBudgetRetry } from "./output-budget";
 import { generateObject, type LanguageModel, type ModelMessage } from "ai";
 import { z } from "zod";
 import {
@@ -56,10 +57,14 @@ export interface GenerateObjectArgs<T> {
    * Unset by default, which is what every existing call site keeps: the SDK
    * then sends no `max_tokens` and the provider applies the model's own
    * ceiling. That costs nothing on a flat-rate gateway and a great deal
-   * elsewhere — OpenRouter reserves credit against the **full** ceiling rather
+   * elsewhere — the gateway reserves credit against the **full** ceiling rather
    * than against what the answer will use, so a 64k-ceiling model is refused
-   * outright on a small balance ("requires more credits, or fewer
-   * max_tokens") before generating anything.
+   * outright on a small balance before generating anything.
+   *
+   * That refusal is now handled rather than described: it names the ceiling the
+   * balance can afford, and `withOutputBudgetRetry` asks again at exactly that
+   * number, once (#2629). A ceiling set here is therefore an upper bound the
+   * gateway may lower, not a value the call fails on.
    *
    * Set it where the shape of the answer is known and bounded. Whoever sets it
    * owns the truncation: too low and the object arrives incomplete and fails
@@ -221,22 +226,31 @@ export async function generateObjectFor<T>(
   // AI SDK v6 models the prompt as a `messages` XOR `prompt` union — passing
   // both (even as undefined) no longer type-checks. Include exactly one:
   // messages when provided, otherwise the single-turn prompt string.
-  const result = await generateObject({
-    model,
-    schema: args.schema,
-    system: args.system,
-    temperature: args.temperature ?? 0,
-    ...(args.abortSignal ? { abortSignal: args.abortSignal } : {}),
-    ...(args.maxRetries !== undefined ? { maxRetries: args.maxRetries } : {}),
-    // Spread rather than passed as undefined: a call site that does not set a
-    // cap must send no max_tokens at all, exactly as before.
-    ...(args.maxOutputTokens !== undefined
-      ? { maxOutputTokens: args.maxOutputTokens }
-      : {}),
-    ...(args.messages
-      ? { messages: args.messages }
-      : { prompt: args.prompt ?? "" }),
-  });
+  // The gateway prices the request against the CEILING, not against what the
+  // answer will use, so a low balance is refused before a word is written. The
+  // refusal names the ceiling it can afford, so it is answerable: ask once more
+  // at that number (#2629). Anything that is not a credit refusal propagates
+  // untouched, and a second refusal is not retried again.
+  const result = await withOutputBudgetRetry(
+    (maxOutputTokens) =>
+      generateObject({
+        model,
+        schema: args.schema,
+        system: args.system,
+        temperature: args.temperature ?? 0,
+        ...(args.abortSignal ? { abortSignal: args.abortSignal } : {}),
+        ...(args.maxRetries !== undefined
+          ? { maxRetries: args.maxRetries }
+          : {}),
+        // Spread rather than passed as undefined: a call site that does not set
+        // a cap must send no max_tokens at all, exactly as before.
+        ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
+        ...(args.messages
+          ? { messages: args.messages }
+          : { prompt: args.prompt ?? "" }),
+      }),
+    args.maxOutputTokens,
+  );
 
   const durationMs = Date.now() - startedAt;
   // AI SDK v6: usage fields renamed to inputTokens/outputTokens.
