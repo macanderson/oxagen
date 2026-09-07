@@ -456,12 +456,7 @@ export function MessageComposer({
   // empty-state gallery drive the SAME selection. Without a provider (a bare
   // composer in tests) this transparently falls back to a self-contained local
   // store, so the composer behaves identically either way.
-  const {
-    selectedAgentId,
-    selectionLocked,
-    applyAgentSelection,
-    lockSelection,
-  } = useComposerSelectionState();
+  const { selectedAgentId, applyAgentSelection } = useComposerSelectionState();
   const selectedAgentName =
     availableAgents?.find((a) => a.agentId === selectedAgentId)?.name ?? null;
 
@@ -1218,11 +1213,6 @@ export function MessageComposer({
 
     const attachmentsSnapshot = toUploadedMeta(attachments);
 
-    // The first turn binds the conversation's agent for its lifetime — lock the
-    // picker client-side now (it becomes read-only) so the user can't retarget
-    // mid-conversation, without waiting for a reload.
-    lockSelection();
-
     // If a stream is in flight, honour the pending-prompt behavior.
     if (isStreaming && !pending) {
       if (pendingPromptBehavior === "interrupt") {
@@ -1860,7 +1850,6 @@ export function MessageComposer({
                         onSetDefaultAgent={onSetDefaultAgent}
                         selectedAgentId={selectedAgentId}
                         onApply={applyAgentSelection}
-                        locked={selectionLocked}
                         workspaceSlug={workspaceSlug}
                       />
                       {showEffortControl && effortSelect}
@@ -2050,7 +2039,6 @@ export function MessageComposer({
                     onSetDefaultAgent={onSetDefaultAgent}
                     selectedAgentId={selectedAgentId}
                     onApply={applyAgentSelection}
-                    locked={selectionLocked}
                   />
                 </div>
               )}

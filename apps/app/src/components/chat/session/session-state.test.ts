@@ -75,21 +75,18 @@ describe("seedSessionState", () => {
   });
 });
 
+// The agent lock is derived from ONE input — server truth. The shell passes
+// `hasMessages = messages.length > 0 || isStreaming`, and isStreaming flips
+// synchronously at submit, so there is no send→revalidate gap for a client-side
+// latch to cover (and a failed send correctly releases the lock again).
 describe("computeSessionLocks", () => {
   it("locks the agent after the first message", () => {
-    expect(
-      computeSessionLocks({ hasMessages: true, clientLocked: false }),
-    ).toEqual({ agent: true });
-  });
-  it("client lock covers the send→revalidate gap", () => {
-    expect(
-      computeSessionLocks({ hasMessages: false, clientLocked: true }),
-    ).toEqual({ agent: true });
+    expect(computeSessionLocks({ hasMessages: true })).toEqual({ agent: true });
   });
   it("a brand-new chat is unlocked", () => {
-    expect(
-      computeSessionLocks({ hasMessages: false, clientLocked: false }),
-    ).toEqual({ agent: false });
+    expect(computeSessionLocks({ hasMessages: false })).toEqual({
+      agent: false,
+    });
   });
 });
 

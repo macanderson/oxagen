@@ -135,9 +135,8 @@ export interface SessionLocks {
 
 export function computeSessionLocks(args: {
   hasMessages: boolean;
-  clientLocked: boolean;
 }): SessionLocks {
-  return { agent: args.hasMessages || args.clientLocked };
+  return { agent: args.hasMessages };
 }
 
 /**

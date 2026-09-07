@@ -69,11 +69,6 @@ export interface ChatSessionStore {
   /** The ONE write path. Locked fields are rejected, not silently dropped. */
   updateSession: (patch: ChatSessionPatch) => void;
   resetToDefaults: () => void;
-  /**
-   * Mark that a message was sent in this view: locks the agent and (for a new
-   * chat) migrates the draft session onto the real conversation key.
-   */
-  noteMessageSent: (conversationId: string | null) => void;
 }
 
 const ChatSessionContext = React.createContext<ChatSessionStore | null>(null);
@@ -138,10 +133,13 @@ export function ChatSessionProvider({
       : defaults,
   );
 
-  const [clientLocked, setClientLocked] = React.useState(false);
+  // `hasMessages` is the shell's `messages.length > 0 || isStreaming`, and
+  // isStreaming flips true synchronously at submit — so the agent lock lands on
+  // the same commit as the send, with no client-side latch to keep in sync (and
+  // it correctly releases again if the send fails before a message exists).
   const locks = React.useMemo(
-    () => computeSessionLocks({ hasMessages, clientLocked }),
-    [hasMessages, clientLocked],
+    () => computeSessionLocks({ hasMessages }),
+    [hasMessages],
   );
   const locksRef = React.useRef(locks);
   React.useEffect(() => {
@@ -168,24 +166,6 @@ export function ChatSessionProvider({
       return defaults;
     });
   }, [defaults]);
-
-  const noteMessageSent = React.useCallback(
-    (newConversationId: string | null) => {
-      setClientLocked(true);
-      setState((prev) => {
-        // Draft → conversation key migration on first send.
-        const prevKey = storageKeyRef.current;
-        if (newConversationId && prevKey.startsWith(SESSION_DRAFT_PREFIX)) {
-          const newKey = sessionStorageKey(workspaceSlug, newConversationId);
-          writeStorage(newKey, encodeSessionState(prev));
-          writeStorage(prevKey, null);
-          storageKeyRef.current = newKey;
-        }
-        return prev;
-      });
-    },
-    [workspaceSlug],
-  );
 
   // ── Hydration on mount / conversation switch ─────────────────────────────
   React.useEffect(() => {
@@ -229,17 +209,8 @@ export function ChatSessionProvider({
       isDirty,
       updateSession,
       resetToDefaults,
-      noteMessageSent,
     }),
-    [
-      state,
-      defaults,
-      locks,
-      isDirty,
-      updateSession,
-      resetToDefaults,
-      noteMessageSent,
-    ],
+    [state, defaults, locks, isDirty, updateSession, resetToDefaults],
   );
 
   return (

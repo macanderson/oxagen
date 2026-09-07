@@ -102,29 +102,21 @@ vi.mock("@/components/ui/sheet", () => ({
 // AgentContextChip stub — renders null when there are no agents (matching the
 // real chip) and, otherwise, one button per agent (+ a default) so a test can
 // drive the selection deterministically without opening a real popover portal.
-// Calls the real `onApply` (the composer's shared-store applyAgentSelection) so
-// the code-mode gating derivations run exactly as in production.
+// Calls the real `onApply` (the composer's shared-store applyAgentSelection).
 //
-// `pick-on-branch` mirrors what the real panel's code-agent setup step applies:
-// the whole target atomically (agent + repo + branch + environment), which is
-// the only way a branch ever enters the selection store.
+// `locked` is deliberately still accepted even though the real chip no longer
+// has that prop: it is the SENTINEL for the regression below. If the composer
+// ever re-acquires a post-send agent lock, `data-locked` reappears here and
+// "keeps the agent chip live after a turn is sent" fails — which is the unit
+// signal that was missing when the e2e chat-agent-picker spec broke.
 vi.mock("./agent-picker/agent-context-chip", () => ({
   AgentContextChip: ({
     agents,
-    repos,
-    environments,
     onApply,
     locked,
   }: {
-    agents: Array<{ agentId: string; isCode: boolean }>;
-    repos?: Array<{ key: string }>;
-    environments?: Array<{ id: string }>;
-    onApply: (sel: {
-      agentId: string | null;
-      repoKey?: string | null;
-      branch?: string | null;
-      envId?: string | null;
-    }) => void;
+    agents: Array<{ agentId: string }>;
+    onApply: (sel: { agentId: string | null }) => void;
     locked?: boolean;
   }) =>
     agents.length === 0 ? null : (
@@ -144,21 +136,6 @@ vi.mock("./agent-picker/agent-context-chip", () => ({
             pick {a.agentId}
           </button>
         ))}
-        <button
-          type="button"
-          data-testid="pick-on-branch"
-          disabled={locked}
-          onClick={() =>
-            onApply({
-              agentId: agents.find((a) => a.isCode)?.agentId ?? null,
-              repoKey: repos?.[0]?.key ?? null,
-              branch: "release/2.x",
-              envId: environments?.[0]?.id ?? null,
-            })
-          }
-        >
-          pick on branch
-        </button>
         <button
           type="button"
           data-testid="pick-default"
@@ -2302,15 +2279,23 @@ describe("MessageComposer — no code target (ADR-041)", () => {
     expect(fd.get("code")).toBeNull();
   });
 
-  it("locks the agent chip after a turn is sent", async () => {
+  // REGRESSION (e2e chat-agent-picker): the composer must NOT freeze the agent
+  // picker after a turn. Under ADR-041 `agentId` is a PER-TURN parameter of
+  // /api/v1/chat/stream (route.ts BodySchema: "this turn is BOUND to that
+  // agent") — the durable conversation binding that justified a lock was the
+  // CODE binding, and it left with the runtime. A locked chip also strands the
+  // picker's "default assistant" star, which is a workspace preference, not
+  // conversation state.
+  it("keeps the agent chip live after a turn is sent — selection stays editable", async () => {
+    const action = makeAction();
     const { MessageComposer } = await import("./message-composer");
     render(
       <MessageComposer
         conversationId={null}
         parentMessageId={null}
-        action={makeAction()}
+        action={action}
         modelConfig={DEFAULT_MODEL_CONFIG}
-        availableAgents={[CODE_AGENT]}
+        availableAgents={[CODE_AGENT, CHAT_AGENT]}
       />,
     );
     fireEvent.click(screen.getByTestId("pick-agt_code"));
@@ -2322,15 +2307,24 @@ describe("MessageComposer — no code target (ADR-041)", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "Send message" }));
 
-    // After the first turn the conversation's agent is claimed, so the
-    // composer passes locked=true down to the agent chip (mocked here →
-    // data-locked).
+    // The chip is never handed a locked state (the stub mirrors the real chip:
+    // `locked` → data-locked), so it keeps its "Agent: <name>" trigger instead
+    // of collapsing to the read-only "Agent locked: <name>" button.
     await waitFor(() =>
-      expect(screen.getByTestId("agent-selector")).toHaveAttribute(
-        "data-locked",
-        "true",
-      ),
+      expect(screen.getByTestId("agent-selector")).toBeVisible(),
     );
+    expect(screen.getByTestId("agent-selector")).not.toHaveAttribute(
+      "data-locked",
+    );
+
+    // ...and the selection still commits: picking a different agent after the
+    // send is accepted by the store and rides the NEXT turn.
+    fireEvent.click(screen.getByTestId("pick-agt_chat"));
+    await userEvent.type(screen.getByRole("textbox"), "and now this");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(2));
+    const second = action.mock.calls[1][0] as FormData;
+    expect(second.get("agentId")).toBe("agt_chat");
   });
 });
 

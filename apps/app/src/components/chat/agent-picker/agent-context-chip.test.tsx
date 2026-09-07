@@ -107,17 +107,17 @@ describe("AgentContextChip", () => {
     expect(panel).toHaveAttribute("data-selected", "agt_code");
   });
 
-  it("locked: renders a read-only chip showing the bound agent, and does NOT open the panel", async () => {
-    renderChip({ selectedAgentId: "agt_code", locked: true });
-    const chip = screen.getByTestId("agent-context-chip-locked");
-    expect(chip).toBeDisabled();
-    // The bound agent is still visible, with the lock hint as a native tooltip.
-    expect(chip).toHaveTextContent("Coder");
-    expect(chip.getAttribute("title")).toContain(
-      "Locked for this conversation",
-    );
-    // Clicking a disabled trigger never mounts the picker panel.
+  // REGRESSION (e2e chat-agent-picker): there is no read-only variant. The
+  // chip's accessible name is ALWAYS "Agent: <name>" — never "Agent locked:
+  // <name>" — so the picker (and the workspace "default assistant" star it
+  // hosts) stays reachable after a turn has been sent. ADR-041 removed the
+  // durable code binding that a conversation-scoped lock protected.
+  it("stays openable after a turn: no locked variant, name never changes", async () => {
+    renderChip({ selectedAgentId: "agt_code" });
+    expect(screen.queryByTestId("agent-context-chip-locked")).toBeNull();
+    const chip = screen.getByRole("button", { name: "Agent: Coder" });
+    expect(chip).not.toBeDisabled();
     await userEvent.click(chip);
-    expect(screen.queryByTestId("picker-panel")).not.toBeInTheDocument();
+    expect(await screen.findByTestId("picker-panel")).toBeInTheDocument();
   });
 });

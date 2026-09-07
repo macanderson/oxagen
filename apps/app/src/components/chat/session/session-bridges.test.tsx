@@ -32,10 +32,7 @@ function SelectionProbe() {
   return (
     <div>
       <output data-testid="sel">
-        {JSON.stringify({
-          agent: sel.selectedAgentId,
-          locked: sel.selectionLocked,
-        })}
+        {JSON.stringify({ agent: sel.selectedAgentId })}
       </output>
       <button onClick={() => sel.setSelectedAgentId("agt_direct")}>
         set-agent

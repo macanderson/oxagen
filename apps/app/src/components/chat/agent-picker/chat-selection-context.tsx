@@ -29,7 +29,17 @@ import { useSessionSelectionBridge } from "../session/session-bridges";
  *
  * ADR-041 reduced the selection to the agent alone: the repo / branch /
  * sandbox-environment half of it described a coding turn, and Oxagen no longer
- * runs one.
+ * runs one. It also removed the selection LOCK. The lock existed because a
+ * code turn claimed a durable `StoredCodeBinding` server-side that pinned the
+ * conversation's agent + repo + environment for its lifetime; that binding
+ * left with the runtime. What remains is a per-TURN parameter — the stream
+ * route's `agentId` merges an agent's instructions and MCP servers into THIS
+ * turn only (see app/api/v1/chat/stream/route.ts) — so there is nothing for a
+ * conversation-scoped lock to protect, and freezing the composer chip would
+ * also strand the picker's "default assistant" star, which is a workspace
+ * preference rather than conversation state. The v2 session-settings AgentRow
+ * still shows an agent lock, but it is derived from server truth
+ * (`computeSessionLocks({ hasMessages })`), not from a client-side latch.
  */
 
 /** The atomic selection the picker applies to the composer. */
@@ -40,22 +50,10 @@ export interface AgentSelectionApply {
 
 export interface ChatSelectionStore {
   selectedAgentId: string | null;
-  /**
-   * True once the conversation's agent is LOCKED — a turn has already been
-   * sent in this view. While locked the agent cannot change: the picker
-   * renders read-only and the committing setter below rejects mutations.
-   */
-  selectionLocked: boolean;
   /** Set the agent and persist the choice for this conversation. */
   setSelectedAgentId: (id: string | null) => void;
   /** Apply an agent selection (the picker's confirm). */
   applyAgentSelection: (sel: AgentSelectionApply) => void;
-  /**
-   * Lock the current selection client-side. Called the instant a turn is sent
-   * so the picker locks immediately, without waiting for the page to reload.
-   * Idempotent.
-   */
-  lockSelection: () => void;
 }
 
 const ChatSelectionContext = React.createContext<ChatSelectionStore | null>(
@@ -78,31 +76,17 @@ export function useComposerSelectionState(): ChatSelectionStore {
   const sessionBridge = useSessionSelectionBridge();
   const shared = useChatSelectionContext();
   const [agentId, setAgentId] = React.useState<string | null>(null);
-  const [locked, setLocked] = React.useState(false);
-  // Latest-lock ref so the guarded setters see the current lock state without
-  // stale closures (same pattern as the provider store below).
-  const lockedRef = React.useRef(locked);
-  React.useEffect(() => {
-    lockedRef.current = locked;
-  }, [locked]);
-  const setAgentGuarded = React.useCallback((id: string | null) => {
-    if (lockedRef.current) return;
-    setAgentId(id);
-  }, []);
-  const applyLocal = React.useCallback((sel: AgentSelectionApply) => {
-    if (lockedRef.current) return;
-    setAgentId(sel.agentId);
-  }, []);
-  const lockLocal = React.useCallback(() => setLocked(true), []);
+  const applyLocal = React.useCallback(
+    (sel: AgentSelectionApply) => setAgentId(sel.agentId),
+    [],
+  );
   const local = React.useMemo<ChatSelectionStore>(
     () => ({
       selectedAgentId: agentId,
-      selectionLocked: locked,
-      setSelectedAgentId: setAgentGuarded,
+      setSelectedAgentId: setAgentId,
       applyAgentSelection: applyLocal,
-      lockSelection: lockLocal,
     }),
-    [agentId, locked, setAgentGuarded, applyLocal, lockLocal],
+    [agentId, applyLocal],
   );
   return sessionBridge ?? shared ?? local;
 }
@@ -146,23 +130,10 @@ export function ChatSelectionProvider({
       }),
   );
 
-  // Client-side lock: flipped the instant a turn is sent in this view, so the
-  // picker locks immediately rather than waiting for the page to reload.
-  const [clientLocked, setClientLocked] = React.useState(false);
-
-  // Latest-locked ref so the committing setter can reject a mutation once the
-  // selection is locked (belt-and-braces — the UI already renders the picker
-  // read-only). Seeded from the first render and kept in sync via an effect.
-  const lockedRef = React.useRef(clientLocked);
-  React.useEffect(() => {
-    lockedRef.current = clientLocked;
-  }, [clientLocked]);
-
   // Persist in the committing setter (never a key-scoped effect) so switching
   // conversations can't write the previous chat's agent under the new key.
   const commitAgentId = React.useCallback(
     (id: string | null) => {
-      if (lockedRef.current) return;
       setSelectedAgentId(id);
       writeStoredAgentId(agentStorageKey(workspaceSlug, conversationId), id);
     },
@@ -170,14 +141,9 @@ export function ChatSelectionProvider({
   );
 
   const applyAgentSelection = React.useCallback(
-    (sel: AgentSelectionApply) => {
-      if (lockedRef.current) return;
-      commitAgentId(sel.agentId);
-    },
+    (sel: AgentSelectionApply) => commitAgentId(sel.agentId),
     [commitAgentId],
   );
-
-  const lockSelection = React.useCallback(() => setClientLocked(true), []);
 
   // Hydrate the per-conversation persisted selection on mount / conversation
   // switch, carrying a draft selection onto the real conversation key the first
@@ -214,18 +180,10 @@ export function ChatSelectionProvider({
   const store = React.useMemo<ChatSelectionStore>(
     () => ({
       selectedAgentId,
-      selectionLocked: clientLocked,
       setSelectedAgentId: commitAgentId,
       applyAgentSelection,
-      lockSelection,
     }),
-    [
-      selectedAgentId,
-      clientLocked,
-      commitAgentId,
-      applyAgentSelection,
-      lockSelection,
-    ],
+    [selectedAgentId, commitAgentId, applyAgentSelection],
   );
 
   return (

@@ -38,25 +38,23 @@ import type { ChatSessionState } from "./session-state";
  * The unified store presented as the legacy `ChatSelectionStore`, or null
  * when no session provider is mounted.
  *
- * `selectionLocked` is always false: the only lock the chip ever honoured was
- * the CODE lock (a coding target claimed on the first code turn), and that
- * left with the runtime (ADR-041). The agent lock (after the conversation's
- * first message) is enforced by the store's write path, so the chip must stay
- * openable — its picker also hosts the "default assistant" star, which is a
- * workspace preference, not a conversation binding.
+ * There is no lock here. The only lock the composer chip ever honoured was the
+ * CODE lock — a coding target claimed on the first code turn — and it left with
+ * the runtime (ADR-041). `agentId` is now a per-turn parameter of the stream
+ * route, so the chip stays a live control for the whole conversation; the
+ * read-only agent affordance that survives is the v2 session-settings AgentRow,
+ * driven by `locks.agent` (server truth: `hasMessages`).
  */
 export function useSessionSelectionBridge(): ChatSelectionStore | null {
   const session = useChatSessionContext();
   return React.useMemo<ChatSelectionStore | null>(() => {
     if (!session) return null;
-    const { state, updateSession, noteMessageSent } = session;
+    const { state, updateSession } = session;
     return {
       selectedAgentId: state.agentId,
-      selectionLocked: false,
       setSelectedAgentId: (id) => updateSession({ agentId: id }),
       applyAgentSelection: (sel: AgentSelectionApply) =>
         updateSession({ agentId: sel.agentId }),
-      lockSelection: () => noteMessageSent(null),
     };
   }, [session]);
 }

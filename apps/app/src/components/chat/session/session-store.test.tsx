@@ -6,8 +6,9 @@
  * ADR-041 removed the code half of the session (repo / branch / sandbox
  * environment, per-agent code memory, the durable code binding), so what is
  * left to prove is the governance-relevant contract: the agent binding, the
- * model/tier/effort/budget settings, the agent lock after first send, and
- * that persistence never leaks one conversation's session onto another key.
+ * model/tier/effort/budget settings, the agent lock (derived from server truth
+ * — `hasMessages` — not a client-side latch), and that persistence never leaks
+ * one conversation's session onto another key.
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
@@ -51,7 +52,6 @@ function Probe() {
         pick-model
       </button>
       <button onClick={() => store.resetToDefaults()}>reset</button>
-      <button onClick={() => store.noteMessageSent("cnv_new")}>send</button>
     </div>
   );
 }
@@ -138,22 +138,52 @@ describe("ChatSessionProvider", () => {
     expect(s.budgetUsd).toBe(2);
   });
 
-  it("noteMessageSent locks the agent and migrates the draft", () => {
-    renderProvider();
+  // The draft session survives the first send: chat-shell-client pins the URL
+  // to `?c=<publicId>` once the conversation row exists, the RSC re-renders with
+  // a conversationId, and the hydration effect carries the draft onto the real
+  // key. This is now the ONLY migration path — the send-time hook that
+  // duplicated it was removed with the client-side agent latch.
+  it("carries the draft session onto the conversation key when the id arrives", () => {
+    const { rerender } = renderProvider();
     fireEvent.click(screen.getByText("pick-agent"));
     fireEvent.click(screen.getByText("set-budget"));
-    fireEvent.click(screen.getByText("send"));
-    // Agent locked → further agent changes rejected.
-    expect(JSON.parse(screen.getByTestId("locks").textContent ?? "{}")).toEqual(
-      { agent: true },
+    expect(
+      window.localStorage.getItem(sessionStorageKey("ws", null)),
+    ).toContain('"budgetUsd":2');
+
+    rerender(
+      <ChatSessionProvider
+        workspaceSlug="ws"
+        conversationId="cnv_new"
+        boundAgentId={null}
+        isNewConversation={false}
+        hasMessages
+        seed={SEED}
+      >
+        <Probe />
+      </ChatSessionProvider>,
     );
-    // Draft migrated onto the conversation key.
+
     expect(
       window.localStorage.getItem(sessionStorageKey("ws", null)),
     ).toBeNull();
     expect(
       window.localStorage.getItem(sessionStorageKey("ws", "cnv_new")),
     ).toContain('"budgetUsd":2');
+    expect(stateOf().agentId).toBe("agt_pick");
+    expect(stateOf().budgetUsd).toBe(2);
+  });
+
+  // The lock is derived from server truth alone, so a send that FAILS before a
+  // message exists leaves the agent editable — the old client-side latch was
+  // one-way and stranded the picker after a failed turn.
+  it("a new chat with no messages keeps the agent unlocked", () => {
+    renderProvider();
+    expect(JSON.parse(screen.getByTestId("locks").textContent ?? "{}")).toEqual(
+      { agent: false },
+    );
+    fireEvent.click(screen.getByText("pick-agent"));
+    expect(stateOf().agentId).toBe("agt_pick");
   });
 
   it("an existing conversation with messages locks the agent up front", () => {
@@ -188,13 +218,9 @@ describe("ChatSessionProvider", () => {
       // Writes still update in-memory state without crashing…
       fireEvent.click(screen.getByText("raise-effort"));
       expect(stateOf().effort).toBe("high");
-      // …and the send-time bookkeeping (draft migration, storage-backed)
-      // survives too.
+      // …and an agent pick still lands in memory when the write-through throws.
       fireEvent.click(screen.getByText("pick-agent"));
-      fireEvent.click(screen.getByText("send"));
-      expect(
-        JSON.parse(screen.getByTestId("locks").textContent ?? "{}"),
-      ).toEqual({ agent: true });
+      expect(stateOf().agentId).toBe("agt_pick");
     } finally {
       getSpy.mockRestore();
       setSpy.mockRestore();

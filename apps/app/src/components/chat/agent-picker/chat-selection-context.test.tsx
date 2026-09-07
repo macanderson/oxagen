@@ -38,24 +38,21 @@ const CODER: AgentOption = {
 };
 
 function Probe() {
-  const {
-    selectedAgentId,
-    selectionLocked,
-    applyAgentSelection,
-    lockSelection,
-  } = useComposerSelectionState();
+  const { selectedAgentId, applyAgentSelection } = useComposerSelectionState();
   return (
     <div>
       <span data-testid="agent">{selectedAgentId ?? "none"}</span>
-      <span data-testid="locked">{selectionLocked ? "yes" : "no"}</span>
       <button
         type="button"
         onClick={() => applyAgentSelection({ agentId: "agt_code" })}
       >
         apply
       </button>
-      <button type="button" onClick={() => lockSelection()}>
-        lock
+      <button
+        type="button"
+        onClick={() => applyAgentSelection({ agentId: "agt_other" })}
+      >
+        apply other
       </button>
     </div>
   );
@@ -142,25 +139,22 @@ describe("ChatSelectionProvider — initial resolution", () => {
   });
 });
 
-describe("useComposerSelectionState — client-side lock", () => {
-  it("lockSelection() flips selectionLocked and freezes further edits (local fallback)", () => {
+// REGRESSION (e2e chat-agent-picker): the store has NO lock. It used to latch
+// on the first send, which froze the composer chip into a disabled "Agent
+// locked: <name>" button for the rest of the conversation. ADR-041 removed the
+// durable code binding that latch stood in for — `agentId` is a per-turn
+// parameter of /api/v1/chat/stream — so every apply must keep committing, for
+// the whole conversation, in BOTH stores.
+describe("useComposerSelectionState — no conversation lock", () => {
+  it("keeps accepting applies after a selection is made (local fallback)", () => {
     render(<Probe />);
-    expect(screen.getByTestId("locked")).toHaveTextContent("no");
-
-    act(() => {
-      fireEvent.click(screen.getByText("lock"));
-    });
-    expect(screen.getByTestId("locked")).toHaveTextContent("yes");
-
-    // An apply after locking is rejected — the selection never leaves its
-    // initial empty state.
-    act(() => {
-      fireEvent.click(screen.getByText("apply"));
-    });
-    expect(screen.getByTestId("agent")).toHaveTextContent("none");
+    fireEvent.click(screen.getByText("apply"));
+    expect(screen.getByTestId("agent")).toHaveTextContent("agt_code");
+    fireEvent.click(screen.getByText("apply other"));
+    expect(screen.getByTestId("agent")).toHaveTextContent("agt_other");
   });
 
-  it("the provider store rejects an apply once locked", () => {
+  it("keeps accepting applies — and persisting them — in the provider store", () => {
     render(
       <ChatSelectionProvider
         agents={[CODER]}
@@ -174,12 +168,18 @@ describe("useComposerSelectionState — client-side lock", () => {
       </ChatSelectionProvider>,
     );
     act(() => {
-      fireEvent.click(screen.getByText("lock"));
-    });
-    act(() => {
       fireEvent.click(screen.getByText("apply"));
     });
-    expect(screen.getByTestId("agent")).toHaveTextContent("none");
-    expect(screen.getByTestId("locked")).toHaveTextContent("yes");
+    expect(screen.getByTestId("agent")).toHaveTextContent("agt_code");
+
+    // A second apply — the "after a turn was sent" case — still commits and
+    // still writes through to the per-conversation key.
+    act(() => {
+      fireEvent.click(screen.getByText("apply other"));
+    });
+    expect(screen.getByTestId("agent")).toHaveTextContent("agt_other");
+    expect(window.localStorage.getItem(agentStorageKey("ws", "conv_1"))).toBe(
+      "agt_other",
+    );
   });
 });
