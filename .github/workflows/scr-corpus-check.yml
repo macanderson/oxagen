@@ -1,8 +1,16 @@
-# SCR corpus drift check (oxagen #1320).
+# SCR corpus drift check (oxagen #1320), extended to the compiled AGENTS.md
+# summary of that same corpus (oxagen #2684).
 #
 # ADR-038 replicated docs/scr/ byte-identically across the five org repos and
 # accepted cross-repo drift as a known cost. docs/scr/README.md declares that
-# drift is a bug — this workflow is the thing that notices.
+# drift is a bug — this workflow is the thing that notices. oxagen#2684 added
+# the other half of the same drift: each repo's AGENTS.md carries a compiled
+# summary of the corpus under "## Standing decisions", and that summary is
+# what an agent actually loads at session start — the record in docs/scr/ can
+# be perfectly in sync while the summary of it still describes a directive
+# that record no longer states (oxagen#2673). One script now checks both and
+# reports them as one signal; see scr-corpus-check.mjs's header for why a
+# byte comparison of AGENTS.md itself would be wrong.
 #
 # ## Why this lives only in oxagen
 #
@@ -33,9 +41,12 @@ on:
   workflow_dispatch: {}
   # Re-check immediately when the corpus itself changes here, so a same-day
   # partial rollout is caught while the author still has the context loaded.
+  # AGENTS.md is included because it is now half of what this check compares
+  # (oxagen #2684) — a same-day edit to oxagen's own compiled summary must
+  # re-run this just as reliably as a docs/scr/ edit does.
   push:
     branches: [main]
-    paths: ["docs/scr/**"]
+    paths: ["docs/scr/**", "AGENTS.md"]
 
 permissions:
   contents: read
@@ -56,7 +67,7 @@ jobs:
       # plus fetch). Installing the workspace to run one script would make a
       # five-minute job out of a five-second one, and would couple the health
       # of the process check to the health of the product's dependency tree.
-      - name: Compare docs/scr/ across the five org repos
+      - name: Compare docs/scr/ and each AGENTS.md summary across the five org repos
         id: check
         continue-on-error: true
         env:
@@ -90,6 +101,9 @@ jobs:
               '',
               'The SCR corpus has drifted between the five org repos. ADR-038 replicates',
               '`docs/scr/` identically across them and `docs/scr/README.md` declares drift a bug.',
+              'That includes each repo\'s compiled `AGENTS.md` "Standing decisions" summary of the',
+              'same corpus (oxagen#2684) — a bullet\'s title is expected to read the same in every',
+              'repo even where its body legitimately names a repo-specific command.',
               '',
               process.env.REPORT,
               '',
