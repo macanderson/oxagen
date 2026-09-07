@@ -62,7 +62,10 @@ export interface ResolvedPlaneKms {
 export function resolveDataPlaneKms(): ResolvedPlaneKms | null {
   const key = process.env.AUTH_TOKEN_ENCRYPTION_KEY;
   if (!key) return null;
-  return { adapter: createLocalKmsAdapter(loadMasterKey(key)), keyId: DATA_PLANE_KEY_ID };
+  return {
+    adapter: createLocalKmsAdapter(loadMasterKey(key)),
+    keyId: DATA_PLANE_KEY_ID,
+  };
 }
 
 /**
@@ -96,9 +99,10 @@ export function invalidateDataPlaneCache(
   kind?: DataPlaneKind,
 ): void {
   if (kind) cache.delete(cacheKey(orgId, kind));
-  else for (const key of cache.keys()) {
-    if (key.startsWith(`${orgId}:`)) cache.delete(key);
-  }
+  else
+    for (const key of cache.keys()) {
+      if (key.startsWith(`${orgId}:`)) cache.delete(key);
+    }
   // The pool is keyed by config digest, so a rotation would eventually miss it
   // anyway; evicting here closes the pool bound to the superseded credential
   // instead of leaving it open until LRU pressure removes it.
@@ -113,10 +117,7 @@ export function clearDataPlaneCache(): void {
 }
 
 /** The shared-plane binding — what "no row" means (ADR-042 §1). */
-function sharedBinding(
-  orgId: string,
-  kind: DataPlaneKind,
-): DataPlaneBinding {
+function sharedBinding(orgId: string, kind: DataPlaneKind): DataPlaneBinding {
   return {
     orgId,
     kind,

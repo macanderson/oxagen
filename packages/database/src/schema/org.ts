@@ -10,13 +10,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { orgSchema } from "./_schemas";
-import {
-  auditMixin,
-  bytea,
-  citext,
-  idMixin,
-  softDeleteMixin,
-} from "./_mixins";
+import { auditMixin, bytea, citext, idMixin, softDeleteMixin } from "./_mixins";
 
 export const organizations = orgSchema.table(
   "organizations",

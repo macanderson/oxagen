@@ -197,9 +197,9 @@ describe("platformDataPlaneResolver caching", () => {
       "pg down",
     );
     mocks.findFirst.mockResolvedValue(undefined);
-    await expect(platformDataPlaneResolver(ORG, "postgres")).resolves.toMatchObject(
-      { mode: "shared" },
-    );
+    await expect(
+      platformDataPlaneResolver(ORG, "postgres"),
+    ).resolves.toMatchObject({ mode: "shared" });
   });
 
   it("invalidation forces a re-read and evicts the org's Postgres pool", async () => {

@@ -55,7 +55,10 @@ describe("default resolver", () => {
 describe("injected resolver", () => {
   it("is consulted with the organisation id and store kind", async () => {
     const resolver = vi.fn(
-      async (orgId: string, kind: DataPlaneKind): Promise<DataPlaneBinding> => ({
+      async (
+        orgId: string,
+        kind: DataPlaneKind,
+      ): Promise<DataPlaneBinding> => ({
         orgId,
         kind,
         mode: "dedicated",

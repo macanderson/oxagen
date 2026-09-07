@@ -83,6 +83,9 @@ export async function register(): Promise<void> {
       "@oxagen/database/security"
     );
     const { assertRlsConnectionSafe } = await import("@oxagen/database");
+    const { bootstrapDataPlaneResolver } = await import(
+      "@oxagen/database/data-plane"
+    );
 
     // Refuse to boot if a production runtime disabled RLS enforcement, or if
     // TENANT_RLS_ENFORCEMENT_ENABLED=true but the DB role silently bypasses RLS
@@ -90,6 +93,9 @@ export async function register(): Promise<void> {
     // dead weight.
     await assertRlsConnectionSafe();
 
+    // ADR-042: wire the organisation-scoped data-plane resolver before any
+    // scoped store access. Inert until an org has a data_planes row.
+    bootstrapDataPlaneResolver();
     bootstrapIAMRuntime();
     // Wire the billing admission gate (suspended / zero-balance refusal +
     // auto-reload) into kernel.invoke(), alongside the IAM gate.

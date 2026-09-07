@@ -65,8 +65,16 @@ beforeEach(() => {
 
 describe("dedicatedDb", () => {
   it("opens one pool and reuses it for the same org + digest", () => {
-    const a = dedicatedDb({ orgId: org(1), config: CONFIG, configDigest: "d1" });
-    const b = dedicatedDb({ orgId: org(1), config: CONFIG, configDigest: "d1" });
+    const a = dedicatedDb({
+      orgId: org(1),
+      config: CONFIG,
+      configDigest: "d1",
+    });
+    const b = dedicatedDb({
+      orgId: org(1),
+      config: CONFIG,
+      configDigest: "d1",
+    });
     expect(a).toBe(b);
     expect(mocks.postgres).toHaveBeenCalledTimes(1);
     expect(dedicatedPoolCount()).toBe(1);

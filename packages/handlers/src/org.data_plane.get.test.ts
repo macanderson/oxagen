@@ -39,7 +39,9 @@ describe("hostFor", () => {
 
   it("extracts host:port from a neo4j URI without userinfo", () => {
     expect(
-      hostFor("neo4j", { uri: "neo4j+s://neo4j:s3cret@graph.acme.example:7687" }),
+      hostFor("neo4j", {
+        uri: "neo4j+s://neo4j:s3cret@graph.acme.example:7687",
+      }),
     ).toBe("graph.acme.example:7687");
   });
 

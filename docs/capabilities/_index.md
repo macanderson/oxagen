@@ -9,7 +9,7 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**246 capabilities across 35 domains.**
+**248 capabilities across 35 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
@@ -217,9 +217,11 @@ Capabilities granted to an agent as a set have a page of their own:
 - [ontology.neighbors](ontology.neighbors.md) — The one-hop neighborhood of a node — a focused traversal primitive pairing with `ontology.query`
 - [ontology.query](ontology.query.md) — Typed multi-hop traversal over the knowledge graph via a governed, non-Cypher shape
 
-## Org (12)
+## Org (14)
 
 - [org.create](org.create.md) — Create a new organization with a globally-unique slug and attach the caller as first member
+- [get_data_plane](get_data_plane.md) — Read the organisation's data-plane binding for one store (postgres/neo4j/clickhouse): shared or dedicated, health status, endpoint host and database name — never a credential
+- [set_data_plane](set_data_plane.md) — Bind one of the organisation's stores to a dedicated customer-controlled endpoint, or return it to the shared platform plane; the config is envelope-encrypted and never readable back
 - [org.list](org.list.md) — List the organizations the authenticated user belongs to, with the caller's role in each; backs the CLI tenant picker
 - [org.member.add](org.member.add.md) — Invite a user to join the org by email; enforces seat limits
 - [org.member.invite.accept](org.member.invite.accept.md) — Accept a pending org invitation; creates membership and provisions IAM

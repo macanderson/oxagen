@@ -139,7 +139,13 @@ export const orgDataPlaneGetHandler: CapabilityHandler<
   const dto = toBindingDto({ kind, row: row ?? null, config });
   logger.info(
     // Never the config: mode/status/kind only.
-    { orgId: ctx.orgId, kind, mode: dto.mode, status: dto.status, surface: ctx.surface },
+    {
+      orgId: ctx.orgId,
+      kind,
+      mode: dto.mode,
+      status: dto.status,
+      surface: ctx.surface,
+    },
     "org.data_plane.get: returned the organisation's plane binding",
   );
   return dto;

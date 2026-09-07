@@ -8,21 +8,13 @@ import { z } from "zod";
  */
 
 /** The three stores that can be bound per organisation. */
-export const dataPlaneKindSchema = z.enum([
-  "postgres",
-  "neo4j",
-  "clickhouse",
-]);
+export const dataPlaneKindSchema = z.enum(["postgres", "neo4j", "clickhouse"]);
 
 /** shared = the platform plane; dedicated = a customer-controlled endpoint. */
 export const dataPlaneModeSchema = z.enum(["shared", "dedicated"]);
 
 /** Only `active` admits traffic; the other two make scoped access fail closed. */
-export const dataPlaneStatusSchema = z.enum([
-  "active",
-  "degraded",
-  "disabled",
-]);
+export const dataPlaneStatusSchema = z.enum(["active", "degraded", "disabled"]);
 
 /**
  * A hostname or IP for a customer-controlled endpoint. Deliberately permissive

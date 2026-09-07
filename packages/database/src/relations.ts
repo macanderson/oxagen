@@ -8,12 +8,7 @@ import {
   relationshipTypes,
   schemaProperties,
 } from "./schema/schema-registry";
-import {
-  organizations,
-  orgUsers,
-  invitations,
-  dataPlanes,
-} from "./schema/org";
+import { organizations, orgUsers, invitations, dataPlanes } from "./schema/org";
 import {
   principals,
   roles,

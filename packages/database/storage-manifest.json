@@ -673,6 +673,16 @@
       "writes": []
     },
     {
+      "domain": "org",
+      "name": "get_data_plane",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "environment",
       "name": "get_environment",
       "reads": [],
@@ -1994,6 +2004,16 @@
       "writes": []
     },
     {
+      "domain": "org",
+      "name": "set_data_plane",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "environment",
       "name": "set_default_environment",
       "reads": [],
@@ -2491,7 +2511,7 @@
       "writes": []
     }
   ],
-  "contentHash": "c309f26e1a192d31b440ce34bec8a2931ae96d1a7e020252b8f06cb2778687fd",
+  "contentHash": "4d1f4d24525de264883d5e9ce31f49d0535fa061dee57d418d42bebc4cacf4e6",
   "domains": [
     {
       "name": "agent",

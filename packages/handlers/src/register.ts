@@ -320,6 +320,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .workspaceSettingsWriteHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_data_plane",
+    async () =>
+      (await import("./org.data_plane.get"))
+        .orgDataPlaneGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_data_plane",
+    async () =>
+      (await import("./org.data_plane.set"))
+        .orgDataPlaneSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_org_settings",
     async () =>
       (await import("./org.settings.read"))

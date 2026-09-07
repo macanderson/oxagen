@@ -46,8 +46,16 @@ beforeEach(() => {
 
 describe("dedicatedClickhouse", () => {
   it("creates one client per (org, digest) and reuses it", () => {
-    const a = dedicatedClickhouse({ orgId: org(1), config: CONFIG, configDigest: "d" });
-    const b = dedicatedClickhouse({ orgId: org(1), config: CONFIG, configDigest: "d" });
+    const a = dedicatedClickhouse({
+      orgId: org(1),
+      config: CONFIG,
+      configDigest: "d",
+    });
+    const b = dedicatedClickhouse({
+      orgId: org(1),
+      config: CONFIG,
+      configDigest: "d",
+    });
     expect(a).toBe(b);
     expect(mocks.createClient).toHaveBeenCalledTimes(1);
     expect(dedicatedClickhouseCount()).toBe(1);
