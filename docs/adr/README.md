@@ -35,3 +35,8 @@ with a new ADR if the call changes.
 ## CLI & Local Agent Runtime epic
 
 - [ADR-016](./ADR-016-oxagen-cli-daemon-live-code-graph.md) — Oxagen CLI daemon: live code-graph memory fed by coding-agent hooks (Proposed)
+
+## Governance plane
+
+- [ADR-041](./ADR-041-runtime-excision.md) — Excise the agent runtime: Oxagen governs agents, it does not run them
+- [ADR-042](./ADR-042-tenant-data-planes.md) — Organisation-scoped data planes: every store switches at the tenant
