@@ -43,7 +43,6 @@ import {
   SessionSettingsSlideOver,
 } from "./session/session-settings-host";
 import { SessionSettings } from "./session/session-settings";
-import { useSessionSettingsData } from "./session/use-session-settings-data";
 import { useIsMobile, useMediaQuery } from "@/hooks/use-media-query";
 import { NotificationsBell } from "@/components/shell/notifications-bell";
 import { resolveOptimisticDefaultAgent } from "./agent-picker/default-agent-optimistic";
@@ -1520,7 +1519,6 @@ export function ChatShellClient({
                       agents={availableAgents ?? []}
                       modelConfig={modelConfig}
                       orgSlug={orgSlug}
-                      workspaceSlug={workspaceSlug}
                       walletBalanceCents={walletBalanceCents ?? null}
                     />
                   </div>
@@ -1577,7 +1575,6 @@ export function ChatShellClient({
           agents={availableAgents ?? []}
           modelConfig={modelConfig}
           orgSlug={orgSlug}
-          workspaceSlug={workspaceSlug}
           walletBalanceCents={walletBalanceCents ?? null}
         />
       ) : null}
@@ -1606,15 +1603,10 @@ export function ChatShellClient({
 /**
  * MobileSessionChrome — the v2 mobile header + session-settings drawer,
  * rendered as a child of `ChatSessionProvider` (so `useChatSession()` always
- * resolves) whenever `v2MobileChrome` is true. Branch-list fetch/caching for
- * the drawer's Code section is shared with the desktop rail panel and
- * mid-width slide-over via `useSessionSettingsData` (see
- * `session/use-session-settings-data.ts`).
+ * resolves) whenever `v2MobileChrome` is true.
  */
 function MobileSessionChrome({
   agents,
-  repos,
-  environments,
   modelConfig,
   orgSlug,
   workspaceSlug,
@@ -1625,8 +1617,6 @@ function MobileSessionChrome({
   walletBalanceCents,
 }: {
   agents: AgentOption[];
-  repos: RepoOption[];
-  environments: EnvironmentOption[];
   modelConfig: ResolvedTierCatalog;
   orgSlug: string;
   workspaceSlug: string;
@@ -1637,15 +1627,11 @@ function MobileSessionChrome({
   walletBalanceCents: number | null;
 }) {
   const router = useRouter();
-  const { branches, branchesLoading, onLoadBranches, defaultBranch } =
-    useSessionSettingsData({ repos, orgSlug, workspaceSlug });
 
   return (
     <>
       <ChatHeaderMobile
         agents={agents}
-        repos={repos}
-        environments={environments}
         isStreaming={isStreaming}
         onOpenSettings={() => onSessionSettingsOpenChange(true)}
         onOpenActivity={onOpenActivity}
@@ -1661,13 +1647,7 @@ function MobileSessionChrome({
         <SessionSettings
           variant="drawer"
           agents={agents}
-          repos={repos}
-          environments={environments}
           modelConfig={modelConfig}
-          branches={branches}
-          branchesLoading={branchesLoading}
-          onLoadBranches={onLoadBranches}
-          defaultBranch={defaultBranch}
           walletBalanceUsd={
             walletBalanceCents !== null ? walletBalanceCents / 100 : null
           }
@@ -1684,42 +1664,27 @@ function MobileSessionChrome({
 /**
  * DesktopSessionPanel — the chat_ux_v2 desktop rail's writable Session panel:
  * `SessionSettingsRail` chrome wrapping `SessionSettings variant="rail"`,
- * rendered as the rail's `sessionPanelSlot` (replacing the read-only legacy
- * Context card). Same branch-fetch hook as the mobile drawer.
+ * rendered as the rail's `sessionPanelSlot`.
  */
 function DesktopSessionPanel({
   agents,
-  repos,
-  environments,
   modelConfig,
   orgSlug,
-  workspaceSlug,
   walletBalanceCents,
 }: {
   agents: AgentOption[];
-  repos: RepoOption[];
-  environments: EnvironmentOption[];
   modelConfig: ResolvedTierCatalog;
   orgSlug: string;
-  workspaceSlug: string;
   walletBalanceCents: number | null;
 }) {
   const router = useRouter();
-  const { branches, branchesLoading, onLoadBranches, defaultBranch } =
-    useSessionSettingsData({ repos, orgSlug, workspaceSlug });
 
   return (
     <SessionSettingsRail>
       <SessionSettings
         variant="rail"
         agents={agents}
-        repos={repos}
-        environments={environments}
         modelConfig={modelConfig}
-        branches={branches}
-        branchesLoading={branchesLoading}
-        onLoadBranches={onLoadBranches}
-        defaultBranch={defaultBranch}
         walletBalanceUsd={
           walletBalanceCents !== null ? walletBalanceCents / 100 : null
         }
@@ -1738,39 +1703,25 @@ function DesktopSessionSlideOver({
   open,
   onOpenChange,
   agents,
-  repos,
-  environments,
   modelConfig,
   orgSlug,
-  workspaceSlug,
   walletBalanceCents,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   agents: AgentOption[];
-  repos: RepoOption[];
-  environments: EnvironmentOption[];
   modelConfig: ResolvedTierCatalog;
   orgSlug: string;
-  workspaceSlug: string;
   walletBalanceCents: number | null;
 }) {
   const router = useRouter();
-  const { branches, branchesLoading, onLoadBranches, defaultBranch } =
-    useSessionSettingsData({ repos, orgSlug, workspaceSlug });
 
   return (
     <SessionSettingsSlideOver open={open} onOpenChange={onOpenChange}>
       <SessionSettings
         variant="slide-over"
         agents={agents}
-        repos={repos}
-        environments={environments}
         modelConfig={modelConfig}
-        branches={branches}
-        branchesLoading={branchesLoading}
-        onLoadBranches={onLoadBranches}
-        defaultBranch={defaultBranch}
         walletBalanceUsd={
           walletBalanceCents !== null ? walletBalanceCents / 100 : null
         }

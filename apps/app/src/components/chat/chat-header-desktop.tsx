@@ -3,8 +3,8 @@
  * chat-header-desktop.tsx — the v2 desktop chat header (chat_ux_v2 + non-mobile
  * viewport only; see chat-shell-client.tsx's mount gate). A single compact
  * (~48px) row at the top of the conversation column: agent avatar + name over
- * a `{model} · {repo} @ {branch} · {environment}` subtitle, with a pulsing
- * activity dot while streaming.
+ * a `{model} · {budget}` subtitle, with a pulsing activity dot while
+ * streaming.
  *
  * The ENTIRE header is one button — there is no separate settings icon.
  * Clicking it calls `onFocusSessionPanel`, which the caller wires to scroll
@@ -26,8 +26,6 @@ import { useChatSession } from "./session/session-store";
 import { sessionSubtitleParts } from "./session/session-state";
 import { modelLabelOf } from "./message-receipt";
 import { AgentAvatar } from "./agent-picker/agent-avatar";
-import type { RepoOption } from "./repo-selector";
-import type { EnvironmentOption } from "./environment-selector";
 import type { AgentOption } from "./agent-picker/agent-picker-types";
 
 /** "fast" → "Fast" — the no-catalog fallback label for a bare tier id. */
@@ -37,9 +35,9 @@ function tierLabel(tier: string): string {
 
 /**
  * Middle-ellipsize a value once it exceeds `maxLen`: keep the first `headLen`
- * characters, an ellipsis, then the last `tailLen` characters. Used ONLY for
- * the header's repo segment — the full, unellipsized value always lives in
- * the rail's Session panel, so nothing is ever lost, just abbreviated here.
+ * characters, an ellipsis, then the last `tailLen` characters. The full,
+ * unellipsized value always lives in the rail's Session panel, so nothing is
+ * ever lost, just abbreviated here.
  */
 export function middleEllipsis(
   value: string,
@@ -54,10 +52,6 @@ export function middleEllipsis(
 export interface ChatHeaderDesktopProps {
   /** Selectable agents, for resolving the current agent's display name + avatar. */
   agents: readonly AgentOption[];
-  /** GitHub repos, for resolving the current repo/branch subtitle segment. */
-  repos: readonly RepoOption[];
-  /** Workspace environments, for resolving the current environment segment. */
-  environments: readonly EnvironmentOption[];
   /** Shows a pulsing activity dot while true. */
   isStreaming: boolean;
   /** Scrolls the rail's Session panel into view and focuses its first
@@ -67,8 +61,6 @@ export interface ChatHeaderDesktopProps {
 
 export function ChatHeaderDesktop({
   agents,
-  repos,
-  environments,
   isStreaming,
   onFocusSessionPanel,
 }: ChatHeaderDesktopProps) {
@@ -80,17 +72,8 @@ export function ChatHeaderDesktop({
     ? modelLabelOf(state.model)
     : tierLabel(state.tier ?? "fast");
 
-  const parts = sessionSubtitleParts(state, {
-    repos,
-    environments,
-    modelLabel,
-  });
-  const repoSegment = parts.repo
-    ? parts.branch
-      ? `${middleEllipsis(parts.repo)} @ ${parts.branch}`
-      : middleEllipsis(parts.repo)
-    : null;
-  const subtitle = [parts.model, repoSegment, parts.environment]
+  const parts = sessionSubtitleParts(state, { modelLabel });
+  const subtitle = [middleEllipsis(parts.model, 32, 20, 10), parts.budget]
     .filter((part): part is string => Boolean(part))
     .join(" · ");
 

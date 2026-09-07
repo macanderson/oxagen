@@ -36,7 +36,10 @@ export const orgDataPlaneGet = registerCapability({
   },
   sensitivity: "high",
   defaultEffect: "deny",
-  defaultRoles: { org: { Owner: "allow", Admin: "allow" } },
+  // Organisation-level governance: org Owner/Admin only. `workspace: {}` is
+  // required by the declaration type and is deliberately EMPTY — a workspace
+  // role must never reach a binding that moves the whole organisation's data.
+  defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
   // Reading where an organisation's data lives is governance, not AI usage —
   // it consumes no credits.
   noBillingGate: true,

@@ -3,7 +3,7 @@
  * chat-header-mobile.tsx — the v2 mobile chat header (chat_ux_v2 + phone
  * width only; see chat-shell-client.tsx's mount gate). Slim 48px bar:
  * conversations on the left, a tap-to-open session-settings summary in the
- * center (agent name over the `{model} · {branch}` subtitle), activity +
+ * center (agent name over the `{model} · {budget}` subtitle), activity +
  * notifications on the right.
  *
  * Props-driven — no data fetching here. The center summary reads the
@@ -19,8 +19,6 @@ import { cn } from "@/lib/utils";
 import { useChatSession } from "./session/session-store";
 import { sessionSubtitleParts } from "./session/session-state";
 import { modelLabelOf } from "./message-receipt";
-import type { RepoOption } from "./repo-selector";
-import type { EnvironmentOption } from "./environment-selector";
 import type { AgentOption } from "./agent-picker/agent-picker-types";
 
 /** "fast" → "Fast" — the no-catalog fallback label for a bare tier id. */
@@ -31,11 +29,6 @@ function tierLabel(tier: string): string {
 export interface ChatHeaderMobileProps {
   /** Selectable agents, for resolving the current agent's display name. */
   agents: readonly AgentOption[];
-  /** GitHub repos, for resolving the current repo/branch subtitle. */
-  repos: readonly RepoOption[];
-  /** Workspace environments (unused in the mobile subtitle, kept for parity
-   * with `sessionSubtitleParts`' options shape). */
-  environments: readonly EnvironmentOption[];
   /** Shows a pulsing status dot on the Activity button while true. */
   isStreaming: boolean;
   /** Opens the conversations list/drawer. Omit to render an inert button. */
@@ -53,8 +46,6 @@ export interface ChatHeaderMobileProps {
 
 export function ChatHeaderMobile({
   agents,
-  repos,
-  environments,
   isStreaming,
   onOpenConversations,
   onOpenSettings,
@@ -71,13 +62,9 @@ export function ChatHeaderMobile({
     ? modelLabelOf(state.model)
     : tierLabel(state.tier ?? "fast");
 
-  const parts = sessionSubtitleParts(state, {
-    repos,
-    environments,
-    modelLabel,
-  });
-  const subtitle = parts.branch
-    ? `${parts.model} · ${parts.branch}`
+  const parts = sessionSubtitleParts(state, { modelLabel });
+  const subtitle = parts.budget
+    ? `${parts.model} · ${parts.budget}`
     : parts.model;
 
   return (

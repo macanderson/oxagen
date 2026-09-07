@@ -332,6 +332,27 @@ export type {
 
 // Sandbox-template value objects + portable manifest v1 (shared schema module).
 
+// ADR-042 data-plane wire schemas (not capabilities themselves) — re-exported
+// so surfaces and the app import one canonical shape, and so the contracts
+// guard sees this sibling module referenced.
+export {
+  dataPlaneKindSchema,
+  dataPlaneModeSchema,
+  dataPlaneStatusSchema,
+  dataPlaneBindingSchema,
+  dataPlaneConfigSchema,
+  postgresPlaneConfigSchema,
+  neo4jPlaneConfigSchema,
+  clickhousePlaneConfigSchema,
+} from "./org.data_plane.shared";
+export type {
+  DataPlaneKindValue,
+  DataPlaneBindingDto,
+  PostgresPlaneConfigInput,
+  Neo4jPlaneConfigInput,
+  ClickHousePlaneConfigInput,
+} from "./org.data_plane.shared";
+
 // Shared reseller-revenue wire schemas (not capabilities themselves) — re-exported
 // so surfaces and the app import one canonical shape, and so the contracts guard
 // sees this sibling module referenced.
