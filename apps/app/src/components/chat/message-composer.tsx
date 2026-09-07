@@ -161,7 +161,9 @@ function budgetPayload(modelSnapshot: ComposerModelState) {
 }
 
 export interface ComposerAction {
-  (formData: FormData): Promise<{
+  (
+    formData: FormData,
+  ): Promise<{
     ok: boolean;
     error?: string;
     // sendMessageAction returns these on success so the caller can start the

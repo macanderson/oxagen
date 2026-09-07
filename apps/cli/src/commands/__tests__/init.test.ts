@@ -234,7 +234,10 @@ describe("runInit linker", () => {
   });
 
   it("is idempotent — reuses an existing link without re-prompting", async () => {
-    writeWorkspaceLink(tmpDir, { ...ACCOUNT, linkedAt: "2026-01-01T00:00:00Z" });
+    writeWorkspaceLink(tmpDir, {
+      ...ACCOUNT,
+      linkedAt: "2026-01-01T00:00:00Z",
+    });
     mockToken.mockReturnValue("oxk_live_x");
     mockGet.mockResolvedValue({ connections: [] });
 

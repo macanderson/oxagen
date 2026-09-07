@@ -63,11 +63,18 @@ function failing(status: number, body = "boom"): Response {
   } as unknown as Response;
 }
 
-function captureWriter(): { writer: CommandWriter; out: string[]; err: string[] } {
+function captureWriter(): {
+  writer: CommandWriter;
+  out: string[];
+  err: string[];
+} {
   const out: string[] = [];
   const err: string[] = [];
   return {
-    writer: { write: (l) => void out.push(l), writeErr: (l) => void err.push(l) },
+    writer: {
+      write: (l) => void out.push(l),
+      writeErr: (l) => void err.push(l),
+    },
     out,
     err,
   };

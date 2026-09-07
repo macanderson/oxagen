@@ -49,7 +49,10 @@ const profileEntity: PageEntity = {
 // Helper — build a minimal SuggestionCtx
 // ---------------------------------------------------------------------------
 
-function ctx(pathname: string, entity: PageEntity | null = null): SuggestionCtx {
+function ctx(
+  pathname: string,
+  entity: PageEntity | null = null,
+): SuggestionCtx {
   return { pathname, entity };
 }
 
@@ -66,10 +69,7 @@ describe("invariant: always exactly 3 SuggestedPrompts", () => {
     ["billing no entity", ctx("/acme/billing/subscription")],
     ["conversation with ws entity", ctx("/acme/prod/ask", wsEntity)],
     ["default no entity", ctx("/acme/prod")],
-    [
-      "account with user entity",
-      ctx("/account/profile", profileEntity),
-    ],
+    ["account with user entity", ctx("/account/profile", profileEntity)],
     ["knowledge no extras", ctx("/acme/prod/knowledge")],
   ];
 
@@ -109,9 +109,9 @@ describe("A: settings route with a workspace entity", () => {
   });
 
   it("never offers a form-fill chip (ADR-041 removed Ask-to-Fill)", () => {
-    expect(
-      prompts.some((p) => p.label.toLowerCase().startsWith("fill")),
-    ).toBe(false);
+    expect(prompts.some((p) => p.label.toLowerCase().startsWith("fill"))).toBe(
+      false,
+    );
   });
 });
 
@@ -367,5 +367,4 @@ describe("deriveSuggestions — conversation-history mode", () => {
     const labels = prompts.map((p) => p.label);
     expect(labels).not.toContain("Summarize So Far");
   });
-
 });

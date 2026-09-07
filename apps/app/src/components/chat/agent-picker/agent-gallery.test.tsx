@@ -33,12 +33,7 @@ const CHATTER: AgentOption = {
 
 describe("AgentGallery", () => {
   it("renders the hero heading and the gallery-variant panel", () => {
-    render(
-      <AgentGallery
-        agents={[CHATTER]}
-        defaultAgentId={null}
-      />,
-    );
+    render(<AgentGallery agents={[CHATTER]} defaultAgentId={null} />);
     expect(
       screen.getByRole("heading", { name: "Choose your assistant" }),
     ).toBeInTheDocument();
@@ -49,10 +44,7 @@ describe("AgentGallery", () => {
 
   it("renders nothing when the workspace has no agents", () => {
     const { container } = render(
-      <AgentGallery
-        agents={[]}
-        defaultAgentId={null}
-      />,
+      <AgentGallery agents={[]} defaultAgentId={null} />,
     );
     expect(container).toBeEmptyDOMElement();
   });

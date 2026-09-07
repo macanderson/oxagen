@@ -3,12 +3,7 @@
   "domain": "ontology",
   "description": "Multi-hop traversal FROM a known start node over named relationship type(s) to a given depth (1–5); returns the reachable customer-context subgraph (nodes + edges), org + workspace scoped, read-only, no Cypher required. Prefer over get_ontology_neighbors when you need MORE than one hop. This tool discovers CONNECTIONS, not nodes: it requires a startNodeId you already have — do NOT use it to find a node by name, topic, or keyword (use search_graph for semantic lookup or search_nodes for name/label lookup first).",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent",
-    "cli"
-  ],
+  "surfaces": ["api", "mcp", "agent", "cli"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -37,11 +32,7 @@
       },
       "direction": {
         "type": "string",
-        "enum": [
-          "out",
-          "in",
-          "both"
-        ],
+        "enum": ["out", "in", "both"],
         "description": "Direction to traverse relative to each node: 'out' follows outgoing edges, 'in' incoming, 'both' either.",
         "default": "out"
       },
@@ -64,9 +55,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "startNodeId"
-    ],
+    "required": ["startNodeId"],
     "additionalProperties": false
   },
   "output": {
@@ -236,12 +225,7 @@
         "description": "True when the result was capped by `limit` and more nodes were reachable"
       }
     },
-    "required": [
-      "startNode",
-      "nodes",
-      "edges",
-      "truncated"
-    ],
+    "required": ["startNode", "nodes", "edges", "truncated"],
     "additionalProperties": false
   }
 }

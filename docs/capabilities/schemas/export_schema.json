@@ -3,11 +3,7 @@
   "domain": "schema",
   "description": "Build a ZIP of a version (grouped by schema) via the create_archive plumbing; returns access-controlled serveUrl.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "cli"
-  ],
+  "surfaces": ["api", "mcp", "cli"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -48,12 +44,7 @@
         "type": "number"
       }
     },
-    "required": [
-      "assetId",
-      "serveUrl",
-      "versionId",
-      "versionNumber"
-    ],
+    "required": ["assetId", "serveUrl", "versionId", "versionNumber"],
     "additionalProperties": false
   }
 }

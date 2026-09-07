@@ -11,11 +11,7 @@ import {
   formatReleaseDate,
   TEXT_TIERS,
 } from "@oxagen/ai/catalog";
-import type {
-  TextTier,
-  ResolvedTierCatalog,
-  Vendor,
-} from "@oxagen/ai/catalog";
+import type { TextTier, ResolvedTierCatalog, Vendor } from "@oxagen/ai/catalog";
 import { postureForModel } from "@oxagen/ai/posture";
 import { Button } from "@/components/ui/button";
 import { PostureBadgeGroup } from "@/components/ai/posture-badges";
@@ -194,7 +190,6 @@ export function ModelPicker({
   function selectOtherModel(id: string) {
     onChange({ ...value, model: id, tier: null });
   }
-
 
   return (
     <Menu>

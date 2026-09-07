@@ -63,10 +63,9 @@ export function AgentEnvironmentsCard(props: Props) {
       <div>
         <h3 className="text-sm font-medium">Environments</h3>
         <p className="text-xs text-muted-foreground">
-          Bind this agent to the environments whose variables and secrets it
-          is authorised to resolve. The primary binding resolves first;
-          unbinding the primary falls back to the workspace default
-          environment.
+          Bind this agent to the environments whose variables and secrets it is
+          authorised to resolve. The primary binding resolves first; unbinding
+          the primary falls back to the workspace default environment.
         </p>
       </div>
 

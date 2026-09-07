@@ -29,17 +29,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const {
-  mockAction,
-  mockReplace,
-  mockRefresh,
-  mockUseRegisterPageEntity,
-} = vi.hoisted(() => ({
-  mockAction: vi.fn(),
-  mockReplace: vi.fn(),
-  mockRefresh: vi.fn(),
-  mockUseRegisterPageEntity: vi.fn(),
-}));
+const { mockAction, mockReplace, mockRefresh, mockUseRegisterPageEntity } =
+  vi.hoisted(() => ({
+    mockAction: vi.fn(),
+    mockReplace: vi.fn(),
+    mockRefresh: vi.fn(),
+    mockUseRegisterPageEntity: vi.fn(),
+  }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: mockReplace, refresh: mockRefresh }),

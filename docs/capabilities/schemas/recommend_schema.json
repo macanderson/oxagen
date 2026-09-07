@@ -3,12 +3,7 @@
   "domain": "schema",
   "description": "AI onboarding: read existing graph (get_graph_stats + graph_observed_labels ClickHouse telemetry + sampled query_ontology) and the workspace's enabled schemas → propose a starter schema or additions.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "cli",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "cli", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -94,18 +89,12 @@
                               "type": "string"
                             }
                           },
-                          "required": [
-                            "key",
-                            "dataType",
-                            "required"
-                          ],
+                          "required": ["key", "dataType", "required"],
                           "additionalProperties": false
                         }
                       }
                     },
-                    "required": [
-                      "name"
-                    ],
+                    "required": ["name"],
                     "additionalProperties": false
                   }
                 },
@@ -127,9 +116,7 @@
                         "type": "string"
                       }
                     },
-                    "required": [
-                      "name"
-                    ],
+                    "required": ["name"],
                     "additionalProperties": false
                   }
                 }
@@ -144,9 +131,7 @@
             }
           }
         },
-        "required": [
-          "schemas"
-        ],
+        "required": ["schemas"],
         "additionalProperties": false
       },
       "rationale": {
@@ -156,11 +141,7 @@
         "type": "integer"
       }
     },
-    "required": [
-      "proposal",
-      "rationale",
-      "sampledCount"
-    ],
+    "required": ["proposal", "rationale", "sampledCount"],
     "additionalProperties": false
   }
 }

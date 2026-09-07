@@ -175,7 +175,6 @@ describe("agentLogSchema", () => {
       }),
     ).toThrow();
   });
-
 });
 
 // ADR-041 excised the execution runtime, so the definition record carries no

@@ -7,7 +7,6 @@ Behavioral specs mined from existing code by the `spec-miner` agent (flat OpenSp
 - [ai-models](ai-models.md) — white-labeled text tiers, model catalog & effective-default resolution (`modelIdOf`).
 
 ## packages/inngest-functions
-- [inngest-agent-execution](inngest-agent-execution.md) — agent fan-out/aggregate, subagent execution, workflow supervisor, graph sync.
 - [inngest-ingestion](inngest-ingestion.md) — GitHub sync/parse, ingestion pipeline dual-write, OAuth refresh, semantic-edge inference.
 - [inngest-billing-privacy-playbooks](inngest-billing-privacy-playbooks.md) — usage rollup, dunning, Stripe sync, GDPR erasure/export, audit rollover, playbook runs.
 
@@ -17,10 +16,7 @@ Behavioral specs mined from existing code by the `spec-miner` agent (flat OpenSp
 - [handlers-billing-apikeys](handlers-billing-apikeys.md) — credits/subscription, API-key create/rotate/revoke.
 - [handlers-connections-integrations](handlers-connections-integrations.md) — connector/integration/repo lifecycle, mappings, sync (Postgres+Neo4j dual-write).
 - [handlers-graph-ontology](handlers-graph-ontology.md) — Neo4j node/edge/ingest/cypher, ontology queries, semantic-edge approval.
-- [handlers-media-documents](handlers-media-documents.md) — image/video/svg/markdown/mermaid gen, asset persist/serve, documents/PDF, forms.
 - [handlers-plugins](handlers-plugins.md) — marketplace browse, org/workspace install & enablement, registry, credentials, schema, entitlements.
-- [handlers-skills](handlers-skills.md) — skill edit, versioning, workspace install/list, seeding.
-- [handlers-automation-workflow](handlers-automation-workflow.md) — automation lifecycle, workflow run/cancel/status, research swarm.
 - [handlers-privacy-audit-web](handlers-privacy-audit-web.md) — GDPR export/erase, audit-log query, notifications, web fetch/search, prompt settings.
 
 ## apps/app

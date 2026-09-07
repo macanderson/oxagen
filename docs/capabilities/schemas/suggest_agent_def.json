@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "AI-assisted agent setup: turn a plain-language description of what an agent should do into a complete draft agent configuration (identity, instructions, graph access, tools), grounded in the workspace's real ontologies, MCP servers, and governed capabilities. Returns a suggestion shaped exactly like agent.definition.create input, plus a rationale and any warnings — nothing is persisted; the caller reviews, edits, and saves the draft explicitly.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -34,9 +30,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "description"
-    ],
+    "required": ["description"],
     "additionalProperties": false
   },
   "output": {
@@ -73,10 +67,7 @@
                   },
                   "mode": {
                     "type": "string",
-                    "enum": [
-                      "read",
-                      "extend"
-                    ],
+                    "enum": ["read", "extend"],
                     "default": "read"
                   },
                   "retrieval": {
@@ -84,12 +75,7 @@
                     "properties": {
                       "strategy": {
                         "type": "string",
-                        "enum": [
-                          "semantic",
-                          "lexical",
-                          "hybrid",
-                          "explicit"
-                        ]
+                        "enum": ["semantic", "lexical", "hybrid", "explicit"]
                       },
                       "scopeToTypes": {
                         "type": "array",
@@ -98,9 +84,7 @@
                         }
                       }
                     },
-                    "required": [
-                      "strategy"
-                    ],
+                    "required": ["strategy"],
                     "additionalProperties": false
                   },
                   "budget": {
@@ -124,18 +108,11 @@
                         "minimum": 0
                       }
                     },
-                    "required": [
-                      "maxHops",
-                      "maxNodes"
-                    ],
+                    "required": ["maxHops", "maxNodes"],
                     "additionalProperties": false
                   }
                 },
-                "required": [
-                  "ontologyId",
-                  "retrieval",
-                  "budget"
-                ],
+                "required": ["ontologyId", "retrieval", "budget"],
                 "additionalProperties": false
               },
               "agentTools": {
@@ -145,10 +122,7 @@
                   "properties": {
                     "type": {
                       "type": "string",
-                      "enum": [
-                        "function",
-                        "mcp_server"
-                      ]
+                      "enum": ["function", "mcp_server"]
                     },
                     "ref": {
                       "type": "string"
@@ -158,10 +132,7 @@
                       "additionalProperties": {}
                     }
                   },
-                  "required": [
-                    "type",
-                    "ref"
-                  ],
+                  "required": ["type", "ref"],
                   "additionalProperties": false
                 },
                 "default": []
@@ -171,19 +142,11 @@
                 "minLength": 1
               }
             },
-            "required": [
-              "graph",
-              "instructions"
-            ],
+            "required": ["graph", "instructions"],
             "additionalProperties": false
           }
         },
-        "required": [
-          "slug",
-          "name",
-          "description",
-          "config"
-        ],
+        "required": ["slug", "name", "description", "config"],
         "additionalProperties": false,
         "description": "A complete agent configuration, shaped exactly like agent.definition.create input. Every field is a reviewable suggestion — the caller may edit anything before saving."
       },
@@ -205,9 +168,7 @@
           "properties": {
             "kind": {
               "type": "string",
-              "enum": [
-                "mcp_server"
-              ],
+              "enum": ["mcp_server"],
               "description": "What kind of thing to connect: an MCP server from the synced registry catalog."
             },
             "ref": {
@@ -223,12 +184,7 @@
               "description": "Why this agent needs it, phrased against the user's description (e.g. 'watches PRs for schema changes — needs GitHub access')."
             }
           },
-          "required": [
-            "kind",
-            "ref",
-            "name",
-            "reason"
-          ],
+          "required": ["kind", "ref", "name", "reason"],
           "additionalProperties": false
         },
         "default": []
@@ -238,11 +194,7 @@
         "properties": {
           "roleName": {
             "type": "string",
-            "enum": [
-              "Agent Observer",
-              "Agent Contributor",
-              "Agent Operator"
-            ],
+            "enum": ["Agent Observer", "Agent Contributor", "Agent Operator"],
             "description": "The narrowest system agent role that can still run this draft."
           },
           "reason": {
@@ -251,17 +203,11 @@
             "description": "Why this role and not a narrower one — cites the equipped capabilities, MCP servers, or graph-write request that a smaller ceiling would block."
           }
         },
-        "required": [
-          "roleName",
-          "reason"
-        ],
+        "required": ["roleName", "reason"],
         "additionalProperties": false
       }
     },
-    "required": [
-      "suggestion",
-      "rationale"
-    ],
+    "required": ["suggestion", "rationale"],
     "additionalProperties": false
   }
 }

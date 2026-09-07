@@ -22,7 +22,10 @@ vi.mock("next/navigation", () => ({
 // ---------------------------------------------------------------------------
 // Helper
 // ---------------------------------------------------------------------------
-function ctx(pathname: string, entity: PageEntity | null = null): SuggestionCtx {
+function ctx(
+  pathname: string,
+  entity: PageEntity | null = null,
+): SuggestionCtx {
   return { pathname, entity };
 }
 

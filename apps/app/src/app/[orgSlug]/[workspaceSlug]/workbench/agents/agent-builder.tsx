@@ -837,8 +837,8 @@ export function AgentBuilder({
                 <p className="text-xs text-muted-foreground">
                   Oxagen drafts a complete configuration — identity, prompt,
                   tools, and graph access — grounded in this workspace&rsquo;s
-                  real capabilities and ontologies. You review and edit every field
-                  before anything is saved.
+                  real capabilities and ontologies. You review and edit every
+                  field before anything is saved.
                 </p>
               </div>
 

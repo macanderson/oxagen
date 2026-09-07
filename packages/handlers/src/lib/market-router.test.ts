@@ -149,9 +149,9 @@ describe("deriveTaskClass", () => {
   });
 
   it("buckets cross-package work ahead of the file-count buckets", () => {
-    expect(
-      deriveTaskClass({ text: "look at this", crossPackage: true }),
-    ).toBe("general/cross-package");
+    expect(deriveTaskClass({ text: "look at this", crossPackage: true })).toBe(
+      "general/cross-package",
+    );
     // …but a truly wide change still wins over cross-package.
     expect(
       deriveTaskClass({
@@ -246,9 +246,17 @@ describe("decideMarketRoute", () => {
       taskClass: "auth/single",
       policy: ENFORCING,
       stats: [
-        stat({ model: "cheap-but-bad", verifiedRate: 0.6, avgCostUsdMicros: 100 }),
+        stat({
+          model: "cheap-but-bad",
+          verifiedRate: 0.6,
+          avgCostUsdMicros: 100,
+        }),
         stat({ model: "mid", verifiedRate: 0.97, avgCostUsdMicros: 3000 }),
-        stat({ model: "cheap-and-good", verifiedRate: 0.96, avgCostUsdMicros: 800 }),
+        stat({
+          model: "cheap-and-good",
+          verifiedRate: 0.96,
+          avgCostUsdMicros: 800,
+        }),
       ],
     });
     expect(d.source).toBe("market");
@@ -260,9 +268,9 @@ describe("decideMarketRoute", () => {
       "cheap-and-good",
       "mid",
     ]);
-    expect(d.candidates.find((c) => c.model === "cheap-but-bad")?.eligible).toBe(
-      false,
-    );
+    expect(
+      d.candidates.find((c) => c.model === "cheap-but-bad")?.eligible,
+    ).toBe(false);
     expect(d.policySnapshot).toEqual(ENFORCING);
   });
 

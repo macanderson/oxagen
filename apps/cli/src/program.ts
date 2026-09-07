@@ -694,9 +694,7 @@ export function buildProgram(): Command {
 
   agentEnv
     .command("list <agent>")
-    .description(
-      "List an agent's environment bindings",
-    )
+    .description("List an agent's environment bindings")
     .option("--json", "Emit raw JSON output")
     .action(async (agentHandle: string, opts: { json?: boolean }) => {
       const { handleAgentEnvList } = await import("./commands/agent-env.js");

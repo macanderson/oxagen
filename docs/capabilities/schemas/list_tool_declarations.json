@@ -3,11 +3,7 @@
   "domain": "tool",
   "description": "List the tool declarations registered in the active workspace, each with its pinned active version's schema facts (read-only flag, risk grade, policy group, checksum)",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "agent",
-    "mcp"
-  ],
+  "surfaces": ["api", "agent", "mcp"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -26,12 +22,7 @@
     "properties": {
       "source": {
         "type": "string",
-        "enum": [
-          "builtin",
-          "custom",
-          "mcp",
-          "foundry"
-        ]
+        "enum": ["builtin", "custom", "mcp", "foundry"]
       },
       "limit": {
         "type": "integer",
@@ -158,10 +149,7 @@
         "description": "Total declarations in the workspace matching the filter"
       }
     },
-    "required": [
-      "tools",
-      "total"
-    ],
+    "required": ["tools", "total"],
     "additionalProperties": false
   }
 }

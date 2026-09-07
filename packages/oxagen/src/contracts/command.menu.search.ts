@@ -13,12 +13,7 @@ import { registerCapability } from "../registry";
  */
 
 /** Closed set of searchable entity kinds from spec §10. */
-export const SEARCHABLE_KINDS = [
-  "run",
-  "principal",
-  "event",
-  "agent",
-] as const;
+export const SEARCHABLE_KINDS = ["run", "principal", "event", "agent"] as const;
 
 export type SearchableKind = (typeof SEARCHABLE_KINDS)[number];
 

@@ -40,7 +40,6 @@ const CODER: AgentOption = {
   toolRefs: [],
 };
 
-
 const BASE_SEED: SessionSeed = {
   defaultAgentId: null,
   textModel: null,
@@ -103,7 +102,6 @@ describe("ChatHeaderDesktop — session summary", () => {
     );
     expect(screen.getByText("Claude Sonnet 5")).toBeInTheDocument();
   });
-
 });
 
 describe("middleEllipsis", () => {

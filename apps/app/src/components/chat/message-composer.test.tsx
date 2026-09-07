@@ -202,9 +202,9 @@ vi.mock("./model-picker", async () => {
         onClick={() =>
           onChange({
             tier: "fast",
-              model: null,
+            model: null,
             effort: null,
-                  })
+          })
         }
       />
     ),

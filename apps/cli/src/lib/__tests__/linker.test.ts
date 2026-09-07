@@ -142,7 +142,13 @@ const ORG_A = {
   role: "owner",
   avatarUrl: null,
 };
-const ORG_B = { ...ORG_A, id: "org-b", publicId: "pub-b", slug: "beta", name: "Beta LLC" };
+const ORG_B = {
+  ...ORG_A,
+  id: "org-b",
+  publicId: "pub-b",
+  slug: "beta",
+  name: "Beta LLC",
+};
 const WS_MAIN = {
   id: "ws-1",
   publicId: "pub-ws-1",
@@ -150,7 +156,13 @@ const WS_MAIN = {
   name: "Main",
   role: "owner",
 };
-const WS_STAGE = { ...WS_MAIN, id: "ws-2", publicId: "pub-ws-2", slug: "stage", name: "Stage" };
+const WS_STAGE = {
+  ...WS_MAIN,
+  id: "ws-2",
+  publicId: "pub-ws-2",
+  slug: "stage",
+  name: "Stage",
+};
 const ORG_DETAILS = {
   id: "org-a",
   publicId: "pub-a",
@@ -285,11 +297,9 @@ describe("linker selection paths", () => {
         workspaceSlug: "main",
         workspaceName: "Main",
       });
-      expect(mockUserApiPostOrThrow).toHaveBeenNthCalledWith(
-        2,
-        "workspaces",
-        { orgSlug: "acme" },
-      );
+      expect(mockUserApiPostOrThrow).toHaveBeenNthCalledWith(2, "workspaces", {
+        orgSlug: "acme",
+      });
     });
 
     it("passes both explicit slugs straight through the pickers", async () => {

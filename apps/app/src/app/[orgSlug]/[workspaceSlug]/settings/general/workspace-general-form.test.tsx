@@ -29,15 +29,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const {
-  mockAction,
-  mockReplace,
-  mockUseRegisterPageEntity,
-} = vi.hoisted(() => ({
-  mockAction: vi.fn(),
-  mockReplace: vi.fn(),
-  mockUseRegisterPageEntity: vi.fn(),
-}));
+const { mockAction, mockReplace, mockUseRegisterPageEntity } = vi.hoisted(
+  () => ({
+    mockAction: vi.fn(),
+    mockReplace: vi.fn(),
+    mockUseRegisterPageEntity: vi.fn(),
+  }),
+);
 
 vi.mock("./actions", () => ({
   updateWorkspaceGeneralAction: mockAction,

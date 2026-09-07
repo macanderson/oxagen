@@ -127,7 +127,6 @@ describe("commandMenuSearchHandler", () => {
     expect(row?.scope).toBe("Workspace: prod");
   });
 
-
   it("merges graph + Postgres results, deduplicates by href", async () => {
     // Graph returns a node for the same entity, under a different route.
     mockInvoke.mockResolvedValue({

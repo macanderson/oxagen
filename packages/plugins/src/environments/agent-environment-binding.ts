@@ -120,7 +120,8 @@ async function resolveAgentInternalId(
       ),
     )
     .limit(1);
-  if (!row) throw new Error(`[agent-environment] agent not found: ${identifier}`);
+  if (!row)
+    throw new Error(`[agent-environment] agent not found: ${identifier}`);
   return row.id;
 }
 

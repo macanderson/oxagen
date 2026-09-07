@@ -74,12 +74,8 @@ export async function updateWorkspaceModelsAction(
     };
   }
 
-  const {
-    orgSlug,
-    workspaceSlug,
-    defaultTextTier,
-    defaultTextModel,
-  } = parsed.data;
+  const { orgSlug, workspaceSlug, defaultTextTier, defaultTextModel } =
+    parsed.data;
 
   // Resolve org + workspace — notFound() on slug mismatch prevents cross-tenant writes.
   const org = await resolveOrg(orgSlug);

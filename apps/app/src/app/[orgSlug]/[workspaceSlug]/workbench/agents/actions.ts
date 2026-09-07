@@ -168,15 +168,8 @@ export async function createAgentAction(
       error: parsed.error.issues[0]?.message ?? "Invalid input",
     };
   }
-  const {
-    orgSlug,
-    workspaceSlug,
-    slug,
-    name,
-    description,
-    avatarUrl,
-    config,
-  } = parsed.data;
+  const { orgSlug, workspaceSlug, slug, name, description, avatarUrl, config } =
+    parsed.data;
 
   const { ctx, canManage } = await resolveWorkbenchScope(
     orgSlug,

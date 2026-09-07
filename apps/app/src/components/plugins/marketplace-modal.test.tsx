@@ -535,7 +535,6 @@ describe("MarketplaceModal — auth filter visibility", () => {
       { timeout: 3000 },
     );
   });
-
 });
 
 describe("MarketplaceModal — selection and bulk install", () => {

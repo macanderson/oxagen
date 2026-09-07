@@ -61,7 +61,6 @@ test.describe("Page Screenshots", () => {
     });
   });
 
-
   test("Settings page with sidebar nav", async ({ page }) => {
     await page.goto(`${BASE}/${ORG}/${WS}/settings/general`);
     await page.waitForLoadState("networkidle");

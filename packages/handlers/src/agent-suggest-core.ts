@@ -357,9 +357,7 @@ export const synthesisSchema = z.object({
   agentTools: z
     .array(
       z.object({
-        type: z
-          .enum(["function", "mcp_server"])
-          .describe("The kind of tool."),
+        type: z.enum(["function", "mcp_server"]).describe("The kind of tool."),
         ref: z
           .string()
           .describe(

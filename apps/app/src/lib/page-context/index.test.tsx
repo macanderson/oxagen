@@ -145,4 +145,3 @@ describe("useRegisterPageEntity", () => {
     expect(result.current.entity?.kind).toBe("organization");
   });
 });
-

@@ -37,8 +37,10 @@ describe("applyAgentBinding", () => {
 
   it("treats null/empty instructions as no instructions", () => {
     expect(
-      applyAgentBinding({ def: def({ instructions: null }), serverAllowlist: [] })
-        .instructions,
+      applyAgentBinding({
+        def: def({ instructions: null }),
+        serverAllowlist: [],
+      }).instructions,
     ).toBe("");
     expect(
       applyAgentBinding({

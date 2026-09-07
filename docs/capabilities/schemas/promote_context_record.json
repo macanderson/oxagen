@@ -3,9 +3,7 @@
   "domain": "context",
   "description": "Append a lifecycle action (promote / retire / supersede) to a context record's hash-chained promotions ledger and apply it to the record — mirrors Stella's promotions.jsonl: chain_digest = sha256(prev_digest + canonical row)",
   "mode": "sync",
-  "surfaces": [
-    "api"
-  ],
+  "surfaces": ["api"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -29,11 +27,7 @@
       },
       "action": {
         "type": "string",
-        "enum": [
-          "promote",
-          "retire",
-          "supersede"
-        ],
+        "enum": ["promote", "retire", "supersede"],
         "description": "promote pins a version active; retire ends the record's life; supersede marks it replaced"
       },
       "version_id": {
@@ -45,11 +39,7 @@
         "description": "The governance policy version this action was taken under"
       }
     },
-    "required": [
-      "record_id",
-      "action",
-      "policy_version"
-    ],
+    "required": ["record_id", "action", "policy_version"],
     "additionalProperties": false
   },
   "output": {
@@ -62,11 +52,7 @@
       },
       "action": {
         "type": "string",
-        "enum": [
-          "promote",
-          "retire",
-          "supersede"
-        ]
+        "enum": ["promote", "retire", "supersede"]
       },
       "seq": {
         "type": "integer",
@@ -82,13 +68,7 @@
         "description": "The record's lifecycle status after the action"
       }
     },
-    "required": [
-      "recordId",
-      "action",
-      "seq",
-      "chainDigest",
-      "status"
-    ],
+    "required": ["recordId", "action", "seq", "chainDigest", "status"],
     "additionalProperties": false
   }
 }

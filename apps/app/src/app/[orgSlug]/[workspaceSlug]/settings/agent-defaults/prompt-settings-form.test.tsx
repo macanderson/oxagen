@@ -25,10 +25,7 @@ import type { PromptSettingsInput } from "./prompt-settings-action";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const {
-  mockUpdatePromptSettingsAction,
-  mockAddToast,
-} = vi.hoisted(() => ({
+const { mockUpdatePromptSettingsAction, mockAddToast } = vi.hoisted(() => ({
   mockUpdatePromptSettingsAction: vi.fn(),
   mockAddToast: vi.fn(),
 }));

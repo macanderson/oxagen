@@ -41,8 +41,6 @@ const CODER: AgentOption = {
   toolRefs: [],
 };
 
-
-
 const BASE_SEED: SessionSeed = {
   defaultAgentId: null,
   textModel: null,

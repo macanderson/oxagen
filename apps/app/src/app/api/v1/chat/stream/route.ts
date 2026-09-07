@@ -1202,8 +1202,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         // never disagree. A stream that carried no `finish` part (aborted /
         // errored) falls back to the loop's own aggregated usage.
         const emittedUsage =
-          usageFromStream ??
-          emitUsageEvent(emit, await turn.usage, modelId);
+          usageFromStream ?? emitUsageEvent(emit, await turn.usage, modelId);
 
         await persistAssistantTurn(assistantText, blocksToPersist, {
           model: modelId,

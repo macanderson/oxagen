@@ -542,8 +542,11 @@ chatStreamRoute.post("/", async (c) => {
           translator.onPart(part);
         }
 
-        const { assistantText, execution: collectedExecution, streamErrored } =
-          translator.finish();
+        const {
+          assistantText,
+          execution: collectedExecution,
+          streamErrored,
+        } = translator.finish();
 
         // ONE aggregated usage event for the turn, in the same position (last
         // before `[DONE]`) and the same shape the surface has always emitted.

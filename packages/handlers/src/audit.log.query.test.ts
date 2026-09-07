@@ -96,7 +96,6 @@ describe("auditLogQueryHandler", () => {
     expect(result.total).toBe(2);
   });
 
-
   it("only queries the security spine when source=security", async () => {
     mocks.securityRows = [
       {

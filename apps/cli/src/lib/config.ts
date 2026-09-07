@@ -106,4 +106,3 @@ export function getAppUrl(): string {
     "https://app.oxagen.sh"
   );
 }
-

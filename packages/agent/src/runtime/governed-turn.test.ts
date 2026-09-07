@@ -17,7 +17,7 @@ vi.mock("@oxagen/ai", () => ({
 }));
 
 vi.mock("@oxagen/tenancy", () => ({
-  runInTenantScope: <T,>(_scope: unknown, fn: () => Promise<T> | T) => fn(),
+  runInTenantScope: <T>(_scope: unknown, fn: () => Promise<T> | T) => fn(),
 }));
 
 import type { GovernedTurnInput } from "./governed-turn";
@@ -82,13 +82,13 @@ describe("runGovernedTurn — the tool loop reaches the model", () => {
     const tools = { list_executions: { description: "d", execute: vi.fn() } };
     streamAgentReply.mockReturnValue(fakeStream([]));
 
-    await runGovernedTurn(
-      baseInput({ tools: tools as never }),
-    );
+    await runGovernedTurn(baseInput({ tools: tools as never }));
 
     expect(streamAgentReply).toHaveBeenCalledTimes(1);
     const args = streamAgentReply.mock.calls[0]![0] as AnyRecord;
-    expect(Object.keys(args["tools"] as AnyRecord)).toEqual(["list_executions"]);
+    expect(Object.keys(args["tools"] as AnyRecord)).toEqual([
+      "list_executions",
+    ]);
     expect(args["system"]).toBe("SYSTEM");
     expect(args["telemetry"]).toEqual(TELEMETRY);
   });
@@ -132,9 +132,7 @@ describe("runGovernedTurn — the tool loop reaches the model", () => {
   it("falls back to the platform default model when none is supplied", async () => {
     streamAgentReply.mockReturnValue(fakeStream([]));
 
-    const result = await runGovernedTurn(
-      baseInput(),
-    );
+    const result = await runGovernedTurn(baseInput());
 
     expect(defaultModel).toHaveBeenCalledTimes(1);
     expect(result.modelId).toBe("anthropic/claude-sonnet-5");
@@ -142,17 +140,13 @@ describe("runGovernedTurn — the tool loop reaches the model", () => {
 
   it("forwards reasoning effort only when the caller supplies one", async () => {
     streamAgentReply.mockReturnValue(fakeStream([]));
-    await runGovernedTurn(
-      baseInput({ effort: "high" }),
-    );
+    await runGovernedTurn(baseInput({ effort: "high" }));
     expect((streamAgentReply.mock.calls[0]![0] as AnyRecord)["effort"]).toBe(
       "high",
     );
 
     streamAgentReply.mockReturnValue(fakeStream([]));
-    await runGovernedTurn(
-      baseInput({ effort: null }),
-    );
+    await runGovernedTurn(baseInput({ effort: null }));
     expect(streamAgentReply.mock.calls[1]![0] as AnyRecord).not.toHaveProperty(
       "effort",
     );
@@ -165,9 +159,7 @@ describe("runGovernedTurn — the tool loop reaches the model", () => {
     ];
     streamAgentReply.mockReturnValue(fakeStream(parts, { text: "ab" }));
 
-    const result = await runGovernedTurn(
-      baseInput(),
-    );
+    const result = await runGovernedTurn(baseInput());
     const seen: unknown[] = [];
     for await (const p of result.fullStream) seen.push(p);
 
@@ -187,9 +179,7 @@ describe("runGovernedTurn — the tool loop reaches the model", () => {
       }),
     );
 
-    const result = await runGovernedTurn(
-      baseInput(),
-    );
+    const result = await runGovernedTurn(baseInput());
 
     await expect(result.usage).resolves.toEqual({
       inputTokens: 900,
@@ -204,13 +194,11 @@ describe("runGovernedTurn — the step cap", () => {
   it("bounds the loop at the default step count", async () => {
     streamAgentReply.mockReturnValue(fakeStream([]));
 
-    const result = await runGovernedTurn(
-      baseInput(),
-    );
+    const result = await runGovernedTurn(baseInput());
 
-    expect((streamAgentReply.mock.calls[0]![0] as AnyRecord)["stopWhen"]).toEqual(
-      { __stepCountIs: DEFAULT_GOVERNED_TURN_MAX_STEPS },
-    );
+    expect(
+      (streamAgentReply.mock.calls[0]![0] as AnyRecord)["stopWhen"],
+    ).toEqual({ __stepCountIs: DEFAULT_GOVERNED_TURN_MAX_STEPS });
     expect(result.maxSteps).toBe(DEFAULT_GOVERNED_TURN_MAX_STEPS);
     expect(result.budgeted).toBe(false);
   });
@@ -218,13 +206,11 @@ describe("runGovernedTurn — the step cap", () => {
   it("honours a caller-configured cap", async () => {
     streamAgentReply.mockReturnValue(fakeStream([]));
 
-    const result = await runGovernedTurn(
-      baseInput({ maxSteps: 3 }),
-    );
+    const result = await runGovernedTurn(baseInput({ maxSteps: 3 }));
 
-    expect((streamAgentReply.mock.calls[0]![0] as AnyRecord)["stopWhen"]).toEqual(
-      { __stepCountIs: 3 },
-    );
+    expect(
+      (streamAgentReply.mock.calls[0]![0] as AnyRecord)["stopWhen"],
+    ).toEqual({ __stepCountIs: 3 });
     expect(result.maxSteps).toBe(3);
   });
 
@@ -232,9 +218,7 @@ describe("runGovernedTurn — the step cap", () => {
     streamAgentReply.mockReturnValue(fakeStream([]));
     const budgetGuard = vi.fn().mockResolvedValue("stop");
 
-    const result = await runGovernedTurn(
-      baseInput({ budgetGuard }),
-    );
+    const result = await runGovernedTurn(baseInput({ budgetGuard }));
 
     expect(result.budgeted).toBe(true);
     const stopWhen = (streamAgentReply.mock.calls[0]![0] as AnyRecord)[
@@ -268,9 +252,7 @@ describe("runGovernedTurn — the step cap", () => {
     streamAgentReply.mockReturnValue(fakeStream([]));
     const budgetGuard = vi.fn().mockResolvedValue("continue");
 
-    await runGovernedTurn(
-      baseInput({ budgetGuard }),
-    );
+    await runGovernedTurn(baseInput({ budgetGuard }));
 
     const stopWhen = (streamAgentReply.mock.calls[0]![0] as AnyRecord)[
       "stopWhen"
@@ -326,9 +308,7 @@ describe("runGovernedTurn — approval pauses keep the turn streaming", () => {
       };
     });
 
-    const result = await runGovernedTurn(
-      baseInput({ tools: tools as never }),
-    );
+    const result = await runGovernedTurn(baseInput({ tools: tools as never }));
     const seen: string[] = [];
     for await (const p of result.fullStream) {
       seen.push((p as { type: string }).type);
@@ -355,9 +335,7 @@ describe("runGovernedTurn — error part propagation", () => {
       ]),
     );
 
-    const result = await runGovernedTurn(
-      baseInput(),
-    );
+    const result = await runGovernedTurn(baseInput());
     const seen: unknown[] = [];
     for await (const p of result.fullStream) seen.push(p);
 
@@ -371,9 +349,7 @@ describe("runGovernedTurn — error part propagation", () => {
     streamAgentReply.mockReturnValue(fakeStream([]));
     const onError = vi.fn();
 
-    await runGovernedTurn(
-      baseInput({ onError }),
-    );
+    await runGovernedTurn(baseInput({ onError }));
 
     expect((streamAgentReply.mock.calls[0]![0] as AnyRecord)["onError"]).toBe(
       onError,
@@ -390,9 +366,7 @@ describe("runGovernedTurn — error part propagation", () => {
       totalUsage: Promise.resolve({}),
     });
 
-    const result = await runGovernedTurn(
-      baseInput(),
-    );
+    const result = await runGovernedTurn(baseInput());
     await expect(
       (async () => {
         for await (const _p of result.fullStream) void _p;
@@ -424,10 +398,7 @@ describe("serializeMutatingTools", () => {
     const tools = { read_a: mk("read_a", 10), read_b: mk("read_b", 1) };
     const out = serializeMutatingTools(tools as never, ["write_x"]);
 
-    await Promise.all([
-      executeOf(out["read_a"])(),
-      executeOf(out["read_b"])(),
-    ]);
+    await Promise.all([executeOf(out["read_a"])(), executeOf(out["read_b"])()]);
 
     // Interleaved: b finished before a, so they genuinely ran side by side.
     expect(order).toEqual([
@@ -505,7 +476,9 @@ describe("aggregateStepUsage", () => {
       aggregateStepUsage([
         {},
         { usage: { inputTokens: 5, cachedInputTokens: 2 } },
-        { usage: { inputTokens: 5, inputTokenDetails: { cacheReadTokens: 3 } } },
+        {
+          usage: { inputTokens: 5, inputTokenDetails: { cacheReadTokens: 3 } },
+        },
       ]),
     ).toEqual({
       inputTokens: 10,

@@ -164,9 +164,7 @@ describe("agentDefinitionReviseHandler (@oxagen/handlers)", () => {
       "Equipped the GitHub MCP server",
       "Renamed to Risk Scanner",
     ]);
-    expect(out.rationale).toBe(
-      "Reading PR state sharpens the risk write-ups.",
-    );
+    expect(out.rationale).toBe("Reading PR state sharpens the risk write-ups.");
   });
 
   it("composes update_agent_def with the designed config and never sends a slug or agentType", async () => {

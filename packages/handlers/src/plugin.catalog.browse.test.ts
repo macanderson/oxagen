@@ -474,9 +474,24 @@ describe("plugin.catalog.browse handler — agent_skill path", () => {
 
   it("returns an empty page regardless of search, pagination, or installed filter", async () => {
     for (const input of [
-      { pluginType: "agent_skill" as const, search: "web", limit: 30, offset: 0 },
-      { pluginType: "agent_skill" as const, installed: true, limit: 1, offset: 0 },
-      { pluginType: "agent_skill" as const, installed: false, limit: 1, offset: 5 },
+      {
+        pluginType: "agent_skill" as const,
+        search: "web",
+        limit: 30,
+        offset: 0,
+      },
+      {
+        pluginType: "agent_skill" as const,
+        installed: true,
+        limit: 1,
+        offset: 0,
+      },
+      {
+        pluginType: "agent_skill" as const,
+        installed: false,
+        limit: 1,
+        offset: 5,
+      },
     ]) {
       const result = (await handler(input, ctx)) as {
         servers: unknown[];

@@ -57,12 +57,7 @@ describe("command.menu.search contract", () => {
   });
 
   it("validates the SEARCHABLE_KINDS list covers all spec §10 entity types", () => {
-    const expected = [
-      "run",
-      "principal",
-      "event",
-      "agent",
-    ] as const;
+    const expected = ["run", "principal", "event", "agent"] as const;
     expect(SEARCHABLE_KINDS).toEqual(expected);
   });
 

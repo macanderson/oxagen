@@ -69,7 +69,7 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 vi.mock("@oxagen/tenancy", () => ({
-  runInTenantScope: <T,>(_s: unknown, fn: () => Promise<T> | T) => fn(),
+  runInTenantScope: <T>(_s: unknown, fn: () => Promise<T> | T) => fn(),
 }));
 vi.mock("@oxagen/billing", async () => {
   const { z } = await import("zod");

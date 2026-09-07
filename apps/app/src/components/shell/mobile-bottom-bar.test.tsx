@@ -153,9 +153,10 @@ describe("MobileBottomBar — primary tabs", () => {
         "/acme/prod/workbench/tools",
       );
     });
-    expect(
-      screen.getByRole("link", { name: "Environments" }),
-    ).toHaveAttribute("href", "/acme/prod/workbench/environments");
+    expect(screen.getByRole("link", { name: "Environments" })).toHaveAttribute(
+      "href",
+      "/acme/prod/workbench/environments",
+    );
     expect(screen.queryByRole("link", { name: "Repos" })).toBeNull();
   });
 });

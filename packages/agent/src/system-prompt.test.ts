@@ -132,7 +132,9 @@ describe("buildChatSystemPrompt", () => {
         orgName: "Slug Org",
         workspaceName: "Slug WS",
       });
-      expect((prompt.match(/slug-org/g) ?? []).length).toBeGreaterThanOrEqual(2);
+      expect((prompt.match(/slug-org/g) ?? []).length).toBeGreaterThanOrEqual(
+        2,
+      );
       expect((prompt.match(/slug-ws/g) ?? []).length).toBeGreaterThanOrEqual(2);
     });
 

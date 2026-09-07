@@ -102,7 +102,9 @@ export const CHAT_COMPONENTS = {
   ),
   "confirm-destructive-inline": lazy(
     () =>
-      import("@/components/chat/registry-components/confirm-destructive-inline"),
+      import(
+        "@/components/chat/registry-components/confirm-destructive-inline"
+      ),
   ),
   "file-attachment": lazy(
     () => import("@/components/chat/registry-components/file-attachment"),
@@ -138,16 +140,22 @@ export const CHAT_COMPONENTS = {
   // dump for this capability.
   "agent-definition-list-card": lazy(
     () =>
-      import("@/components/chat/registry-components/agent-definition-list-card"),
+      import(
+        "@/components/chat/registry-components/agent-definition-list-card"
+      ),
   ),
   // Schema registry mutation — shows a schema add/update/remove action card in chat.
   "schema-mutation-card": lazy(
     () =>
-      import("@/components/knowledge/schema-builder/registry-components/schema-mutation-card"),
+      import(
+        "@/components/knowledge/schema-builder/registry-components/schema-mutation-card"
+      ),
   ),
   // Schema label approval — lets the user accept/dismiss an AI-proposed label in chat.
   "schema-label-approval": lazy(
     () =>
-      import("@/components/knowledge/schema-builder/registry-components/schema-label-approval"),
+      import(
+        "@/components/knowledge/schema-builder/registry-components/schema-label-approval"
+      ),
   ),
 } as unknown as Record<string, AnyLazy>;

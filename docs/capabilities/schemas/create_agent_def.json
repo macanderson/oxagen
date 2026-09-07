@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "Create a new agent definition — inserts the agent identity row (draft, inactive) and an immutable v1 version snapshot with the supplied, schema-validated config (graph access, tools, instructions)",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -54,10 +50,7 @@
               },
               "mode": {
                 "type": "string",
-                "enum": [
-                  "read",
-                  "extend"
-                ],
+                "enum": ["read", "extend"],
                 "default": "read"
               },
               "retrieval": {
@@ -65,12 +58,7 @@
                 "properties": {
                   "strategy": {
                     "type": "string",
-                    "enum": [
-                      "semantic",
-                      "lexical",
-                      "hybrid",
-                      "explicit"
-                    ]
+                    "enum": ["semantic", "lexical", "hybrid", "explicit"]
                   },
                   "scopeToTypes": {
                     "type": "array",
@@ -79,9 +67,7 @@
                     }
                   }
                 },
-                "required": [
-                  "strategy"
-                ],
+                "required": ["strategy"],
                 "additionalProperties": false
               },
               "budget": {
@@ -105,18 +91,11 @@
                     "minimum": 0
                   }
                 },
-                "required": [
-                  "maxHops",
-                  "maxNodes"
-                ],
+                "required": ["maxHops", "maxNodes"],
                 "additionalProperties": false
               }
             },
-            "required": [
-              "ontologyId",
-              "retrieval",
-              "budget"
-            ],
+            "required": ["ontologyId", "retrieval", "budget"],
             "additionalProperties": false
           },
           "agentTools": {
@@ -126,10 +105,7 @@
               "properties": {
                 "type": {
                   "type": "string",
-                  "enum": [
-                    "function",
-                    "mcp_server"
-                  ]
+                  "enum": ["function", "mcp_server"]
                 },
                 "ref": {
                   "type": "string"
@@ -139,10 +115,7 @@
                   "additionalProperties": {}
                 }
               },
-              "required": [
-                "type",
-                "ref"
-              ],
+              "required": ["type", "ref"],
               "additionalProperties": false
             },
             "default": []
@@ -151,17 +124,11 @@
             "type": "string"
           }
         },
-        "required": [
-          "graph"
-        ],
+        "required": ["graph"],
         "additionalProperties": false
       }
     },
-    "required": [
-      "slug",
-      "name",
-      "config"
-    ],
+    "required": ["slug", "name", "config"],
     "additionalProperties": false
   },
   "output": {
@@ -182,12 +149,7 @@
         "minimum": 0
       }
     },
-    "required": [
-      "agentId",
-      "publicId",
-      "slug",
-      "version"
-    ],
+    "required": ["agentId", "publicId", "slug", "version"],
     "additionalProperties": false
   }
 }

@@ -3,12 +3,7 @@
   "domain": "schema",
   "description": "Interactive LLM-assisted registry walkthrough: recommend → intent Q&A (run_schema_chat) → apply → activate.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "cli",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "cli", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -33,11 +28,7 @@
       },
       "enforcement": {
         "type": "string",
-        "enum": [
-          "strict",
-          "lenient",
-          "off"
-        ]
+        "enum": ["strict", "lenient", "off"]
       },
       "noInteractive": {
         "type": "boolean"

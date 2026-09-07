@@ -480,4 +480,3 @@ describe("wandResolveConsentAction", () => {
     );
   });
 });
-

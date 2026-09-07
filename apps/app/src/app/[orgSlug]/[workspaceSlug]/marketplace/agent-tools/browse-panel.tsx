@@ -138,9 +138,12 @@ function pluginTypeDefault(pluginType: string): {
   color: string;
 } {
   return (
-    (PLUGIN_TYPE_DEFAULTS as Record<string, { iconName: string; color: string }>)[
-      pluginType
-    ] ?? { iconName: "plug", color: "#3b82f6" }
+    (
+      PLUGIN_TYPE_DEFAULTS as Record<
+        string,
+        { iconName: string; color: string }
+      >
+    )[pluginType] ?? { iconName: "plug", color: "#3b82f6" }
   );
 }
 

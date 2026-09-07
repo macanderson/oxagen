@@ -56,8 +56,6 @@ const CODER: AgentOption = {
   toolRefs: [],
 };
 
-
-
 const MODEL_CONFIG: ResolvedTierCatalog = {
   text: {
     fast: "anthropic/claude-haiku-4.5",
