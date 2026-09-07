@@ -29,7 +29,7 @@ docs/       capability specs, ADRs, architecture docs
 | Package | Key File | Purpose |
 |---|---|---|
 | `oxagen` | `src/kernel.ts` | Capability kernel — the one `invoke()` path |
-| `oxagen` | `src/contracts/` | ~349 registered capabilities (count drifts; Zod schemas + metadata) |
+| `oxagen` | `src/contracts/` | ~238 registered capabilities (count drifts; Zod schemas + metadata) |
 | `oxagen` | `src/iam/resolve.ts` | IAM policy resolution |
 | `oxagen` | `src/registry.ts` | Capability registry (`registerCapability`, `getCapability`) |
 | `oxagen` | `src/plugins/` | Plugin manifest registry + built-in plugin catalogs |
