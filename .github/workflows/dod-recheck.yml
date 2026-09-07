@@ -29,16 +29,21 @@
 # issue, and what keeps this from becoming a rate-limit problem across the five
 # repos that share the checker.
 #
-# ## What this does NOT fix
+# ## How the callers get this
 #
-# The four caller repos (ADR-039) reach `dod-check.yml` through `workflow_call`,
-# but an `issues: edited` event fires in the repo the issue lives in. A caller's
-# issue edit raises no event here, so each caller needs its own copy of this
-# file to get the same behaviour. #2638 tracks that; this fixes oxagen, whose
-# issues are the ones the other four repos' PRs also link.
+# An `issues: edited` event fires in the repository the issue lives in, so
+# oxagen hearing its own edits does nothing for a caller's. Each of the four
+# repos carries a stub subscribing to its own issue edits and calling this file
+# — the same shape as their dod-check stubs, and the reason this workflow takes
+# `workflow_call` and fetches the checker rather than assuming it is local.
 name: dod-recheck
 
 on:
+  # Reusable, for the same reason dod-check.yml is (ADR-039): the four caller
+  # repos need this behaviour too, and an `issues: edited` event fires in the
+  # repository the issue lives in — so oxagen hearing its own edits does
+  # nothing for theirs. Each caller carries a stub that calls this.
+  workflow_call: {}
   issues:
     types: [edited]
 
@@ -52,13 +57,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v5
+      # The checker lives in oxagen, and a caller repo does not have it. Same
+      # sparse checkout dod-check.yml uses, for the same reason — one
+      # implementation of the reference-parsing rule rather than five copies of
+      # it drifting apart.
+      - name: Fetch the SCR checker
+        uses: actions/checkout@v5
+        with:
+          repository: macanderson/oxagen
+          ref: ${{ github.repository == 'macanderson/oxagen' && github.sha || 'main' }}
+          path: .scr-tools
+          sparse-checkout: tools/scripts
+          sparse-checkout-cone-mode: false
 
       - uses: actions/github-script@v7
         with:
           script: |
             const { referencesIssue } = await import(
-              `${process.env.GITHUB_WORKSPACE}/tools/scripts/scr-dod-check.mjs`)
+              `${process.env.GITHUB_WORKSPACE}/.scr-tools/tools/scripts/scr-dod-check.mjs`)
 
             const issueNumber = context.payload.issue.number
             const { owner, repo } = context.repo
