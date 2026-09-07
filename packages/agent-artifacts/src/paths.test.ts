@@ -48,7 +48,13 @@ describe("artifact reference containment", () => {
     // `assets` is inside the bundle by name and outside it on disk.
     await symlink(join(outside, "drop"), join(root, "assets"));
 
-    // Nothing is written at either path: this is the state a writer is in.
+    // Both halves of the repro, through the SAME symlink. The existing half
+    // was already refused; the missing half is what this fixes, and pairing
+    // them is what shows the answer no longer depends on what is on disk.
+    await writeFile(join(outside, "drop", "existing.png"), "x");
+    await expect(
+      resolveContainedPath(join(root, "skill.toml"), "assets/existing.png"),
+    ).rejects.toThrowError(/invalid_reference_path/);
     await expect(
       resolveContainedPath(join(root, "skill.toml"), "assets/new-file.png"),
     ).rejects.toThrowError(/invalid_reference_path/);
