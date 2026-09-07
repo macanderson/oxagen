@@ -82,12 +82,22 @@ jobs:
             for (const pr of claims) {
               // Fail open, per PR: one unreadable run must not stop the rest.
               try {
-                const runs = await github.rest.actions.listWorkflowRunsForRepo({
-                  owner, repo, head_sha: pr.head.sha, per_page: 100,
+                // Scoped to the one workflow rather than every run for this
+                // SHA. Listing the repo's runs and filtering client-side reads
+                // only the first page, so on a commit with more than 100 runs
+                // the dod run can sit on a later page and be reported absent —
+                // the stale red check would then never be re-run, which is the
+                // bug this file exists to fix.
+                const runs = await github.rest.actions.listWorkflowRuns({
+                  owner,
+                  repo,
+                  workflow_id: "dod-check.yml",
+                  head_sha: pr.head.sha,
+                  per_page: 100,
                 })
-                const dod = runs.data.workflow_runs
-                  .filter((r) => r.path.endsWith("/dod-check.yml"))
-                  .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]
+                const dod = runs.data.workflow_runs.sort(
+                  (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
+                )[0]
 
                 if (!dod) {
                   core.notice(`#${pr.number}: no dod run on ${pr.head.sha.slice(0, 8)}.`)
