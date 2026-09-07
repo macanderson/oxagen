@@ -70,6 +70,7 @@ beforeEach(() => {
     creditsMetered: 1n,
     creditsCharged: 1n,
     shortfallCredits: 0n,
+    rateCardMiss: false,
   });
 });
 

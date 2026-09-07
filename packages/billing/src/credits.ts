@@ -1,6 +1,7 @@
 import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import { and, asc, eq, isNull, or, sql, gt } from "drizzle-orm";
 import { CREDIT_REASONS } from "./constants";
+import { MICRO_CREDITS_PER_CREDIT } from "./pricing";
 
 const ALLOWED_REASONS = new Set<string>(Object.values(CREDIT_REASONS));
 
@@ -229,14 +230,31 @@ export async function effectiveBalance(
 // Consume credits — soonest-expiring-first, no overdraft
 // ---------------------------------------------------------------------------
 
-export interface ConsumeCreditsArgs {
+interface ConsumeCreditsBase {
   orgId: string;
-  /** Credits the caller wants to spend (positive). 1 credit = 1 cent. */
-  requestedCents: bigint;
   reason: string;
   referenceType?: string;
   referenceId?: string;
 }
+
+/**
+ * What to spend, in one of two units — a caller gives exactly one.
+ *
+ * `requestedCents` is a spend the caller already knows in whole credits: a
+ * grant reversal, a manual adjustment. It is debited as given.
+ *
+ * `requestedMicroCents` is a spend that can be a FRACTION of a credit, which is
+ * every metered model call. The fraction is banked against the org and only
+ * whole credits are debited, so a sequence of sub-credit calls costs exactly
+ * what it should. Rounding each one up instead charged a 200-token embedding
+ * 739x its cost (#1413), and the platform makes one such call per ingested
+ * entity.
+ */
+export type ConsumeCreditsArgs = ConsumeCreditsBase &
+  (
+    | { requestedCents: bigint; requestedMicroCents?: never }
+    | { requestedMicroCents: bigint; requestedCents?: never }
+  );
 
 export interface ConsumeCreditsResult {
   /** Credits actually debited (== requested unless the balance was short). */
@@ -245,13 +263,28 @@ export interface ConsumeCreditsResult {
   shortfallCents: bigint;
   /** Resulting effective balance. */
   balanceCents: bigint;
+  /**
+   * Sub-credit remainder left banked against the org after this call, in
+   * micro-credits — always in [0, 1e6). Zero for a `requestedCents` caller,
+   * which does not carry.
+   *
+   * Same caveat as `balanceCents`: a non-positive request short-circuits before
+   * opening a transaction, so this reads 0 without the stored carry having been
+   * looked at. Meaningful only when the request was positive.
+   */
+  carryMicroCents: bigint;
 }
 
 /**
- * Atomically debit up to `requestedCents` credits from the org's lots, drawing
- * from soonest-expiring lots first (expires_at NULLS LAST). Never drives any
- * lot's remaining_cents below zero. Returns the amount actually charged and any
+ * Atomically debit the requested spend from the org's lots, drawing from
+ * soonest-expiring lots first (expires_at NULLS LAST). Never drives any lot's
+ * remaining_cents below zero. Returns the amount actually charged and any
  * shortfall.
+ *
+ * A `requestedMicroCents` caller is debited only the whole credits its running
+ * total has reached; the sub-credit remainder is banked on the org's settings
+ * row inside this same transaction, so a crash cannot charge a fraction twice
+ * or lose it.
  *
  * A zero or fully-clamped debit writes NO ledger row (the ledger CHECK forbids
  * a zero delta). credit_balances is decremented in the same transaction to keep
@@ -268,12 +301,66 @@ export async function consumeCredits(
   if (!ALLOWED_REASONS.has(args.reason)) {
     throw new Error(`invalid credit reason: ${args.reason}`);
   }
-  if (args.requestedCents <= 0n) {
-    return { chargedCents: 0n, shortfallCents: 0n, balanceCents: 0n };
+  const micro = args.requestedMicroCents;
+  const nothingToSpend =
+    micro === undefined ? (args.requestedCents ?? 0n) <= 0n : micro <= 0n;
+  if (nothingToSpend) {
+    return {
+      chargedCents: 0n,
+      shortfallCents: 0n,
+      balanceCents: 0n,
+      carryMicroCents: 0n,
+    };
   }
 
   return await withTenantDb(async (tx) => {
     const now = new Date();
+
+    // Resolve the sub-credit carry BEFORE touching the lots, so the whole-credit
+    // figure below is what the org actually owes across its call history rather
+    // than this call rounded up on its own. Ordering also fixes the lock order
+    // (settings, then lots) for the one path that takes both.
+    //
+    // The accumulate and the write-back are two statements in one transaction:
+    // the upsert takes the row lock, so a concurrent charge for the same org
+    // blocks here and reads the post-write remainder rather than racing it.
+    let requested = args.requestedCents ?? 0n;
+    let carryMicroCents = 0n;
+    if (micro !== undefined) {
+      const accumulated = await tx
+        .insert(schema.orgBillingSettings)
+        .values({ orgId: args.orgId, meterCarryMicroCredits: micro })
+        .onConflictDoUpdate({
+          target: schema.orgBillingSettings.orgId,
+          set: {
+            meterCarryMicroCredits: sql`${schema.orgBillingSettings.meterCarryMicroCredits} + ${micro}`,
+            updatedAt: now,
+          },
+        })
+        .returning({
+          total: schema.orgBillingSettings.meterCarryMicroCredits,
+        });
+
+      const total = BigInt(accumulated[0]?.total ?? micro);
+      requested = total / MICRO_CREDITS_PER_CREDIT;
+      carryMicroCents = total % MICRO_CREDITS_PER_CREDIT;
+
+      await tx
+        .update(schema.orgBillingSettings)
+        .set({ meterCarryMicroCredits: carryMicroCents, updatedAt: now })
+        .where(eq(schema.orgBillingSettings.orgId, args.orgId));
+
+      // Still under a whole credit even with everything banked before it —
+      // nothing to debit yet, and nothing lost: it stays in the carry.
+      if (requested <= 0n) {
+        return {
+          chargedCents: 0n,
+          shortfallCents: 0n,
+          balanceCents: 0n,
+          carryMicroCents,
+        };
+      }
+    }
 
     // Lock and read all non-expired lots for this org, soonest-expiring first.
     // expires_at NULLS LAST → non-expiring (free) lots are consumed last.
@@ -306,17 +393,18 @@ export async function consumeCredits(
           : BigInt(l.remainingCents)),
       0n,
     );
-    const charge =
-      args.requestedCents <= totalAvailable
-        ? args.requestedCents
-        : totalAvailable;
-    const shortfall = args.requestedCents - charge;
+    const charge = requested <= totalAvailable ? requested : totalAvailable;
+    // A shortfall is not re-banked into the carry: credit_balances forbids an
+    // overdraft, so an org that outran its credits mid-turn owes nothing later.
+    // The pre-turn guard is what stops it happening.
+    const shortfall = requested - charge;
 
     if (charge <= 0n) {
       return {
         chargedCents: 0n,
         shortfallCents: shortfall,
         balanceCents: totalAvailable,
+        carryMicroCents,
       };
     }
 
@@ -365,6 +453,7 @@ export async function consumeCredits(
       chargedCents: charge,
       shortfallCents: shortfall,
       balanceCents: newBalance,
+      carryMicroCents,
     };
   });
 }

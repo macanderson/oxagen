@@ -1,7 +1,7 @@
 import type { CapabilityContext } from "../types";
 import { writeMemory } from "../memory/neo4j";
 import type { ActorKind } from "../memory/neo4j";
-import { embedText } from "../memory/embed";
+import { embedText, embedMany } from "../memory/embed";
 import { isKnowledgeGraphEnabled } from "../runtime/knowledge-graph";
 import { mapWithConcurrency } from "../memory/import";
 import { assertMemoryClassInvariants } from "@oxagen/oxagen/contracts/agent.memory.model";
@@ -15,8 +15,8 @@ export type { AgentMemoryImportCommitInput, AgentMemoryImportCommitOutput };
 /** Free-form notes with no code anchor group under this synthetic ref. */
 const USER_MEMORY_NODE_REF = "user-memory";
 
-// Each write embeds the lesson (a metered AI call). Cap concurrency so a
-// 200-draft commit doesn't open 200 simultaneous embedding requests.
+// The graph write per draft. Embedding happens once for the whole commit
+// (see below), so this caps concurrent Neo4j writes rather than AI calls.
 const WRITE_CONCURRENCY = 5;
 
 /** `source` "user" is a human-provenance write; everything else is agent-provenance. */
@@ -51,10 +51,36 @@ export async function agentMemoryImportCommitHandler(
     return { results, imported: 0, failed: results.length };
   }
 
+  const telemetry = {
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+    surface: ctx.surface,
+    executionStepId: ctx.messageId ?? ctx.requestId,
+  };
+
+  // Embed the whole commit in ONE gateway call, metered once. Doing it per
+  // draft was one round trip and one charge each, and while every call was
+  // rounded up to a whole credit that made a 200-draft commit cost 200 credits
+  // however little the lessons were worth (#1413).
+  //
+  // On failure fall back to per-draft embedding inside the map below, so a
+  // single unembeddable lesson still fails alone — the per-item error capture
+  // this handler promises. A systemic failure (gateway down) fails every draft
+  // there too, and each one reports its own error, so nothing is swallowed.
+  let batchEmbeddings: number[][] | null = null;
+  try {
+    batchEmbeddings = await embedMany(
+      input.drafts.map((draft) => draft.lesson),
+      { telemetry },
+    );
+  } catch {
+    batchEmbeddings = null;
+  }
+
   const results = await mapWithConcurrency(
     input.drafts,
     WRITE_CONCURRENCY,
-    async (draft) => {
+    async (draft, index) => {
       try {
         const source = draft.source ?? "user";
         const memoryClass = draft.memoryClass ?? "OBSERVATION";
@@ -66,14 +92,9 @@ export async function agentMemoryImportCommitHandler(
           memoryClass,
           enforcementScore: draft.enforcementScore ?? null,
         });
-        const embedding = await embedText(draft.lesson, {
-          telemetry: {
-            orgId: ctx.orgId,
-            workspaceId: ctx.workspaceId,
-            surface: ctx.surface,
-            executionStepId: ctx.messageId ?? ctx.requestId,
-          },
-        });
+        const embedding =
+          batchEmbeddings?.[index] ??
+          (await embedText(draft.lesson, { telemetry }));
         const { memoryId } = await writeMemory({
           nodeRef: draft.nodeRef ?? USER_MEMORY_NODE_REF,
           embedding,
