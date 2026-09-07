@@ -179,12 +179,26 @@ jobs:
     # against any branch reached this job — and this job assumes a role with
     # AdministratorAccess and applies the Terraform from that branch.
     #
-    # The `production` environment was supposed to be what stopped that. As of
-    # 2026-09-06 it has no protection rules and no deployment branch policy
-    # (`gh api repos/macanderson/oxagen/environments/production`), so it gates
-    # nothing: any branch may deploy to it. The comment here used to say
-    # otherwise. Configuring it is #2679; this line closes the path in
-    # the meantime and stays correct afterwards.
+    # The `production` environment was supposed to be what stopped that. On
+    # 2026-09-06 it had no protection rules and no deployment branch policy, so
+    # it gated nothing and any branch could deploy to it — while the comment
+    # here claimed the opposite. That is #2679, and it is now settled two ways:
+    #
+    #   - The environment has a deployment branch policy naming `main` alone,
+    #     so the ref check below is a second line of defence rather than the
+    #     only one. Verify with:
+    #       gh api repos/macanderson/oxagen/environments/production/deployment-branch-policies
+    #
+    #   - There is deliberately NO required reviewer and no wait timer. A push
+    #     to `main` applies with no human in the loop, and that is a decision
+    #     rather than an omission (#2679, 2026-09-07): with no customers, the
+    #     round-trip costs more than the risk it removes. Revisit it before the
+    #     first paying customer, alongside the SCR-004 scope note that expires
+    #     on the same event.
+    #
+    # Recorded here because the previous comment's failure was not being wrong
+    # about a setting — it was that a control nobody had configured read as one
+    # that existed, which stops anyone asking.
     if: >-
       github.event_name != 'pull_request'
       && github.ref == 'refs/heads/main'
