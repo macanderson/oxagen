@@ -4,7 +4,13 @@
  * secrets, caps oversized strings, reads back the tail (skipping corrupt lines),
  * and clears cleanly.
  */
-import { mkdtempSync, rmSync, existsSync, appendFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  existsSync,
+  appendFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, describe, it, expect, vi } from "vitest";
@@ -144,5 +150,82 @@ describe("clearing", () => {
     await debugLog("turn", "before-clear");
     await clearDebugLog();
     expect(await readDebugLog()).toEqual([]);
+  });
+});
+
+describe("sanitizing exotic payloads", () => {
+  it("unwraps an Error into name/message/stack rather than an empty object", async () => {
+    enable();
+    const err = new TypeError("kaboom");
+    await debugLog("api", "request.failed", { err });
+    const [entry] = await readDebugLog(1);
+    const data = entry!.data as { err: Record<string, unknown> };
+    expect(data.err.name).toBe("TypeError");
+    expect(data.err.message).toBe("kaboom");
+    expect(typeof data.err.stack).toBe("string");
+  });
+
+  it("stringifies values JSON has no representation for", async () => {
+    enable();
+    await debugLog("api", "odd.payload", {
+      fn: () => 1,
+      big: BigInt(9),
+      sym: Symbol("s"),
+    });
+    const [entry] = await readDebugLog(1);
+    const data = entry!.data as Record<string, string>;
+    expect(data.fn).toContain("=>");
+    expect(data.big).toBe("9");
+    expect(data.sym).toBe("Symbol(s)");
+  });
+});
+
+describe("failure handling — never propagates, reports under OXAGEN_DEBUG", () => {
+  /** Make the log PATH a directory so appendFile/writeFile fail at the OS level. */
+  function blockLogFile(): void {
+    rmSync(debugLogFile(), { force: true });
+    mkdirSync(debugLogFile(), { recursive: true });
+  }
+  function unblockLogFile(): void {
+    rmSync(debugLogFile(), { recursive: true, force: true });
+  }
+
+  it("swallows an append failure and reports it on stderr under OXAGEN_DEBUG", async () => {
+    enable();
+    blockLogFile();
+    process.env["OXAGEN_DEBUG"] = "1";
+    const written: string[] = [];
+    const original = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((s: string) => {
+      written.push(s);
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      await expect(debugLog("api", "will.fail")).resolves.toBeUndefined();
+    } finally {
+      process.stderr.write = original;
+      delete process.env["OXAGEN_DEBUG"];
+      unblockLogFile();
+    }
+    expect(written.join("")).toContain("[debug-log] append failed");
+  });
+
+  it("swallows a clear failure and reports it on stderr under OXAGEN_DEBUG", async () => {
+    blockLogFile();
+    process.env["OXAGEN_DEBUG"] = "1";
+    const written: string[] = [];
+    const original = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((s: string) => {
+      written.push(s);
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      await expect(clearDebugLog()).resolves.toBeUndefined();
+    } finally {
+      process.stderr.write = original;
+      delete process.env["OXAGEN_DEBUG"];
+      unblockLogFile();
+    }
+    expect(written.join("")).toContain("[debug-log] clear failed");
   });
 });
