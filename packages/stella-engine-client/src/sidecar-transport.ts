@@ -150,6 +150,29 @@ export class SidecarHttpError extends Error {
   }
 }
 
+/**
+ * True for the answer a result POST gets when the turn it belongs to has
+ * already ended.
+ *
+ * Reverse requests are dispatched without being awaited, so a handler can still
+ * be running when the engine emits its terminal frame. When the stream ends the
+ * turn leaves the registry, and the late POST answers 404 — or 409 for a
+ * request id the turn no longer recognises. Neither says anything went wrong:
+ * the handler finished after the turn ended, which is ordinary for a
+ * cancellation and for any engine-side abort with a tool in flight.
+ *
+ * Narrow on purpose. Only these two statuses, only on the two result routes,
+ * and — at the one call site — only once a terminal outcome is in hand. A 404
+ * before the turn ends is a wrong turn id and stays an error (#1349).
+ */
+function isLateResultPost(err: unknown): boolean {
+  return (
+    err instanceof SidecarHttpError &&
+    (err.status === 404 || err.status === 409) &&
+    (err.operation === "provider-result" || err.operation === "tool-result")
+  );
+}
+
 export class StellaSidecarClient {
   /** Normalized base URL, exposed so callers can probe routes off the client. */
   readonly baseUrl: string;
@@ -324,6 +347,12 @@ export class StellaSidecarClient {
    * One limit of the default arm: only the first collected failure is
    * rethrown. With several tool calls outstanding, the later errors are
    * dropped.
+   *
+   * Either arm can be racing the engine. A handler that finishes after the
+   * terminal frame POSTs into a turn that has left the registry and gets a 404
+   * or 409 back; that is discarded rather than thrown, so a turn cancelled with
+   * a tool in flight resolves with its `aborted` outcome instead of surfacing
+   * an HTTP error for a turn that ended exactly as asked (#1349).
    */
   async runTurn(
     request: TurnRequest,
@@ -402,8 +431,16 @@ export class StellaSidecarClient {
     }
 
     await Promise.all(inFlight);
-    if (failures.length > 0) {
-      throw failures[0];
+    // A result POST that lands after the turn terminated is the expected
+    // answer, not a failure — the same tolerance `cancelTurn` already applies
+    // to its own 404. Filtered only when an outcome is in hand, so a 404 from a
+    // wrong turn id still surfaces, and only for that shape, so a handler that
+    // genuinely broke is rethrown exactly as before (#1349).
+    const realFailures = outcome
+      ? failures.filter((err) => !isLateResultPost(err))
+      : failures;
+    if (realFailures.length > 0) {
+      throw realFailures[0];
     }
     if (!outcome) {
       throw new Error(

@@ -238,6 +238,111 @@ describe("StellaSidecarClient error paths", () => {
     ).rejects.toThrow(/model adapter blew up/);
   });
 
+  // #1349: reverse requests are dispatched without being awaited, so a handler
+  // can still be running when the terminal frame arrives. Its POST then lands
+  // in a turn that has left the registry and answers 404 — and that used to be
+  // rethrown, discarding the outcome already in hand one line above. Every
+  // cancellation with a tool in flight took this path.
+  const lateResultStream = (kind: "tool_request" | "provider_request") =>
+    `data: ${JSON.stringify(
+      kind === "tool_request"
+        ? { type: "tool_request", request_id: "t-0", name: "read", input: {} }
+        : {
+            type: "provider_request",
+            request_id: "p-0",
+            request: { messages: [] },
+          },
+    )}\n\n` +
+    `data: ${JSON.stringify({
+      type: "turn_complete",
+      outcome: { status: "aborted", reason: "cancelled", cost_usd: 0 },
+    })}\n\n`;
+
+  const lateResultClient = (
+    kind: "tool_request" | "provider_request",
+    status: number,
+  ) =>
+    clientWith(
+      stubFetch(({ url }) => {
+        if (url.endsWith("/v1/turns")) {
+          return new Response(JSON.stringify({ turn_id: "turn-1" }), {
+            status: 200,
+          });
+        }
+        if (url.endsWith("/events")) {
+          return new Response(streamOf(lateResultStream(kind)), {
+            status: 200,
+          });
+        }
+        // The turn is gone by the time the handler answers.
+        return new Response("turn not found", { status });
+      }),
+    );
+
+  test.each([
+    ["tool_request", 404],
+    ["tool_request", 409],
+    ["provider_request", 404],
+  ] as const)(
+    "a %s result posted after the turn ended (%i) resolves with the outcome (#1349)",
+    async (kind, status) => {
+      const result = await lateResultClient(kind, status).runTurn(
+        { provider_id: "x", messages: [] },
+        {
+          onProviderRequest: async () =>
+            ({
+              text: "ok",
+              cost_usd: 0,
+            }) as never,
+          onToolRequest: async () => ({ ok: { content: "" } }),
+        },
+      );
+      expect(result.outcome).toEqual({
+        status: "aborted",
+        reason: "cancelled",
+        cost_usd: 0,
+      });
+    },
+  );
+
+  test("a 404 on a result route with NO terminal outcome still throws (#1349)", async () => {
+    // The control that keeps the tolerance narrow. Without an outcome in hand a
+    // 404 means a wrong turn id, not a race with the turn's end, and must stay
+    // an error — otherwise this becomes a blanket swallow.
+    const client = clientWith(
+      stubFetch(({ url }) => {
+        if (url.endsWith("/v1/turns")) {
+          return new Response(JSON.stringify({ turn_id: "turn-1" }), {
+            status: 200,
+          });
+        }
+        if (url.endsWith("/events")) {
+          return new Response(
+            streamOf(
+              `data: ${JSON.stringify({
+                type: "tool_request",
+                request_id: "t-0",
+                name: "read",
+                input: {},
+              })}\n\n`,
+            ),
+            { status: 200 },
+          );
+        }
+        return new Response("turn not found", { status: 404 });
+      }),
+    );
+    await expect(
+      client.runTurn(
+        { provider_id: "x", messages: [] },
+        {
+          onProviderRequest: async () => ({ text: "", cost_usd: 0 }) as never,
+          onToolRequest: async () => ({ ok: { content: "" } }),
+        },
+      ),
+    ).rejects.toThrow(SidecarHttpError);
+  });
+
   test("runTurn reports a stream that ends without a terminal frame", async () => {
     const client = clientWith(
       stubFetch(({ url }) => {
