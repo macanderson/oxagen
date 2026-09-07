@@ -22,6 +22,7 @@ vi.mock("@oxagen/plugins", async (importOriginal) => {
   };
 });
 
+import { sandboxNetworkModeSchema } from "@oxagen/oxagen/contracts";
 import { driverNetworkForMode, resolveRunTemplate } from "./_sandbox-template";
 
 beforeEach(() => {
@@ -33,8 +34,27 @@ describe("driverNetworkForMode", () => {
     expect(driverNetworkForMode("public")).toBe("allow");
   });
 
-  it("maps static_egress → allow", () => {
-    expect(driverNetworkForMode("static_egress")).toBe("allow");
+  // Replaces "maps static_egress → allow", which asserted the #1410 defect: the
+  // one mode that asked for a locked-down network was the one that silently got
+  // the same unrestricted egress `public` gets.
+  it("refuses static_egress rather than granting public egress (#1410)", () => {
+    expect(() => driverNetworkForMode("static_egress")).toThrow(/not enforced/);
+    // The refusal has to say what to do next, because an operator hitting it
+    // has a template that used to work.
+    expect(() => driverNetworkForMode("static_egress")).toThrow(/#2724/);
+  });
+
+  it("is the only mode that maps to allow (#1410)", () => {
+    // The guard against this becoming a no-op again: any mode added to the
+    // allow arm without a provisioner fails here.
+    const allowed = sandboxNetworkModeSchema.options.filter((mode) => {
+      try {
+        return driverNetworkForMode(mode) === "allow";
+      } catch {
+        return false;
+      }
+    });
+    expect(allowed).toEqual(["public"]);
   });
 
   it.each([

@@ -34,9 +34,13 @@ export const sandboxResourcesSchema = z
 export type SandboxResources = z.output<typeof sandboxResourcesSchema>;
 
 // ── network ──────────────────────────────────────────────────────────────────
-// All six modes are valid in the schema; the provisioner fails fast on modes it
-// has not yet implemented (aws_privatelink/gcp_psc/reverse_tunnel/ssh_bastion →
-// "requires Phase 2/3"). `config` carries mode-specific provisioning detail.
+// All six modes are valid in the schema, so a template can be authored ahead of
+// the provisioner. Only `public` can actually be provisioned today: the four
+// private-connectivity modes fail fast with "requires Phase 2/3", and
+// `static_egress` fails fast because nothing pins an egress address, so
+// granting it would hand a template that asked for a locked-down network the
+// same unrestricted egress `public` gets (#1410; pinning is #2724).
+// `config` carries mode-specific provisioning detail.
 export const sandboxNetworkModeSchema = z.enum([
   "public",
   "static_egress",
