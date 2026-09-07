@@ -84,7 +84,7 @@ async function countByEventId(eventId: string): Promise<number> {
 }
 
 describe.skipIf(!chUp)(
-  "migrate() applied-migrations ledger (#2632) (integration) [skipped: local ClickHouse unreachable at :8123]",
+  "migrate() applied-migrations ledger (#2632) (integration)",
   () => {
     it("a table created by an earlier migration still exists — with its data — after a second migrate() run", async () => {
       const { migrate } = await import("./migrate");
