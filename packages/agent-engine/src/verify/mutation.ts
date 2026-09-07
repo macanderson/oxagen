@@ -359,6 +359,24 @@ export function classifyWitnessRun(run: WitnessRun): WitnessRunClass {
   return "tests-failed";
 }
 
+/**
+ * The line that made a run `did-not-run`, for the reason string.
+ *
+ * "Failed before running any test" is true but not actionable; #1362 asks the
+ * reason to name what was missing, and the runner already printed it. Quoted
+ * verbatim and capped, because it is the runner's words rather than ours —
+ * paraphrasing a diagnostic is how a report starts saying more than it knows.
+ */
+function didNotRunExcerpt(run: WitnessRun): string {
+  const line = (run.output ?? "")
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => DID_NOT_RUN_MARKERS.some((marker) => marker.test(l)));
+  if (line === undefined) return "";
+  const excerpt = line.length > 200 ? `${line.slice(0, 200)}…` : line;
+  return `: ${excerpt}`;
+}
+
 /** Layer 2's measurement state — whether a kill rate exists at all. */
 export type MutationScoreState =
   | "measured"
@@ -503,7 +521,7 @@ export function witnessOutcome(runs: WitnessRun[]): WitnessVerdict {
       reason:
         claimClass === "timed-out"
           ? `witness command \`${claim.command}\` did not finish inside the per-command cap, so nothing was established`
-          : `witness command \`${claim.command}\` failed before running any test (missing module, collection or build error), so its failure is not evidence`,
+          : `witness command \`${claim.command}\` failed before running any test (missing module, collection or build error), so its failure is not evidence${didNotRunExcerpt(claim)}`,
     };
   }
 

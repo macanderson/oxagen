@@ -215,6 +215,11 @@ describe("runMutationGate — layer 1", () => {
     const result = await runMutationGate(ws, DIFF, evidence());
     expect(result.status).toBe("skipped");
     expect(result.reason).toContain("before running any test");
+    // #1362 asks the reason to name what was missing, not just that something
+    // was: the runner already printed it, so it is quoted rather than summarised.
+    expect(result.reason).toContain(
+      "ModuleNotFoundError: No module named 'src.calc'",
+    );
   });
 
   // The test above stages the collection error: its diff MODIFIES `src/calc.ts`
