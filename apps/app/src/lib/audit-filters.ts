@@ -5,6 +5,7 @@
 
 import {
   SECURITY_EVENT_TYPES,
+  EMITTED_SECURITY_EVENT_TYPES,
   SECURITY_OUTCOMES,
   isSecurityEventType,
   isSecurityOutcome,
@@ -124,14 +125,33 @@ export function hasActiveFilter(f: AuditFilter): boolean {
   );
 }
 
+/**
+ * The event types this filter offers.
+ *
+ * Only the ones something actually writes. `SECURITY_EVENT_TYPES` also declares
+ * types with no emitter, and offering one of those returns zero rows — which
+ * reads as "this never happened" when the true answer is "we do not log this
+ * yet". In a compliance tool that difference is the whole point, and the filter
+ * cannot express it, so it does not offer the choice (#2528).
+ *
+ * The declared union is still exported below: the database CHECK constraint and
+ * anything reading historical rows need the full list.
+ */
+export const FILTERABLE_EVENT_TYPES: readonly SecurityEventType[] =
+  EMITTED_SECURITY_EVENT_TYPES;
+
 /** The set of event-type "group" prefixes, for the quick-filter chips. */
 export const EVENT_TYPE_GROUPS = Array.from(
-  new Set(SECURITY_EVENT_TYPES.map((t) => t.split(".")[0]!)),
+  new Set(FILTERABLE_EVENT_TYPES.map((t) => t.split(".")[0]!)),
 );
 
-/** All event types in a group prefix (e.g. "auth" → auth.*). */
+/** All filterable event types in a group prefix (e.g. "auth" → auth.*). */
 export function eventTypesInGroup(group: string): SecurityEventType[] {
-  return SECURITY_EVENT_TYPES.filter((t) => t.startsWith(`${group}.`));
+  return FILTERABLE_EVENT_TYPES.filter((t) => t.startsWith(`${group}.`));
 }
 
-export { SECURITY_EVENT_TYPES, SECURITY_OUTCOMES };
+export {
+  SECURITY_EVENT_TYPES,
+  EMITTED_SECURITY_EVENT_TYPES,
+  SECURITY_OUTCOMES,
+};

@@ -1,226 +1,126 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+/**
+ * #2528: the taxonomy declares types nothing writes, and an audit filter that
+ * offers one returns zero rows — indistinguishable from "this never happened".
+ *
+ * The module's own note says the RESERVED markers are HAND-MAINTAINED and that
+ * "no test asserts that an unmarked value has a live emitter, so a type can
+ * lose its last emitter and keep reading as covered." This file is that test.
+ */
+import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import {
+  EMITTED_SECURITY_EVENT_TYPES,
+  RESERVED_SECURITY_EVENT_TYPES,
   SECURITY_EVENT_TYPES,
-  SECURITY_OUTCOMES,
-  isSecurityEventType,
-  isSecurityOutcome,
+  isEmittedSecurityEventType,
 } from "./security-event-types";
-import {
-  generateEventTypeCheckClause,
-  generateOutcomeCheckClause,
-  quotedEventTypeList,
-  quotedOutcomeList,
-} from "./db-check";
-import * as barrel from "./index";
 
-describe("security event taxonomy invariants", () => {
-  it("has no duplicate event types", () => {
-    expect(new Set(SECURITY_EVENT_TYPES).size).toBe(
-      SECURITY_EVENT_TYPES.length,
+/**
+ * The repository root. vitest runs with the PACKAGE as its cwd, so a search
+ * for `packages`/`apps` from there matches nothing and every type would look
+ * orphaned — a scan that cannot see the tree it is judging.
+ */
+const REPO_ROOT = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+  encoding: "utf8",
+}).trim();
+
+/**
+ * Production files that mention the literal.
+ *
+ * Tests are excluded, and that distinction is the point: a test asserting a
+ * type is NOT offered mentions the literal without emitting it, so counting
+ * tests would let a type look covered because something checks it is absent.
+ * An emitter is shipping code.
+ */
+function referencesOutsideTaxonomy(type: string): string[] {
+  let out = "";
+  try {
+    out = execFileSync(
+      "git",
+      [
+        "grep",
+        "-l",
+        "--fixed-strings",
+        `"${type}"`,
+        "--",
+        "packages",
+        "apps",
+        // Exclude every test file: see the note above.
+        ":(exclude)**/*.test.ts",
+        ":(exclude)**/*.test.tsx",
+        ":(exclude)**/__tests__/**",
+      ],
+      { encoding: "utf8", cwd: REPO_ROOT },
     );
-  });
-
-  it("has no duplicate outcomes", () => {
-    expect(new Set(SECURITY_OUTCOMES).size).toBe(SECURITY_OUTCOMES.length);
-  });
-
-  it("groups all values of a domain contiguously (no interleaving)", () => {
-    // Each domain's entries must form one contiguous run, so the file stays
-    // readable as grouped blocks even though within-group order is by lifecycle.
-    const seen = new Set<string>();
-    let currentDomain: string | null = null;
-    for (const t of SECURITY_EVENT_TYPES) {
-      const domain = t.split(".")[0]!;
-      if (domain !== currentDomain) {
-        expect(seen.has(domain)).toBe(false);
-        seen.add(domain);
-        currentDomain = domain;
-      }
-    }
-  });
-
-  it("uses the <domain>.<event> naming shape for every type", () => {
-    for (const t of SECURITY_EVENT_TYPES) {
-      expect(t).toMatch(/^[a-z_]+\.[a-z_]+$/);
-    }
-  });
-
-  it("includes exactly the expected plugin.* governance event types", () => {
-    // SOC2 CC6.3/CC6.8 drift guard — privileged plugin mutations (install,
-    // uninstall, enabled-state change, denylist add/remove) must stay auditable.
-    const pluginTypes = SECURITY_EVENT_TYPES.filter((t) =>
-      t.startsWith("plugin."),
-    );
-    const expected = [
-      "plugin.installed",
-      "plugin.uninstalled",
-      "plugin.enabled_changed",
-      "plugin.denylist_added",
-      "plugin.denylist_removed",
-    ];
-    expect([...pluginTypes].sort()).toEqual([...expected].sort());
-  });
-
-  it("includes exactly the four governed-run integrity event types", () => {
-    // docs/specs/run-evidence-ingress — drift guard. These are INTEGRITY
-    // failures (a contradicted evidence chain), never ordinary policy denials,
-    // which stay on capability.invoke_denied.
-    const runTypes = SECURITY_EVENT_TYPES.filter((t) =>
-      t.startsWith("agent_run."),
-    );
-    expect([...runTypes].sort()).toEqual([
-      "agent_run.event_sequence_conflict",
-      "agent_run.finalization_grant_misuse",
-      "agent_run.forged_decision_reference",
-      "agent_run.stale_deny_generation",
-    ]);
-  });
-});
-
-describe("migration drift — the DB CHECK must match the taxonomy", () => {
-  // The security_events event_type CHECK is generated FROM this module (see
-  // db-check.ts). Adding an event type without the paired additive migration
-  // fails SILENTLY at review time and LOUDLY in production: the TS union already
-  // admits the value, so the insert compiles and then dies on a constraint
-  // violation. This test is the thing that fails first.
-  //
-  // The migration is DISCOVERED, not hard-coded: whoever adds the next event
-  // type writes a new migration, and this guard must move to it automatically
-  // rather than demand an unrelated edit here.
-  const MIGRATIONS_DIR = fileURLToPath(
-    new URL("../../database/atlas/migrations/", import.meta.url),
-  );
-
-  /** The most recent migration that redefines the named CHECK constraint. */
-  function latestMigrationDefining(constraint: string): {
-    file: string;
-    sql: string;
-  } {
-    const candidates = readdirSync(MIGRATIONS_DIR)
-      .filter((f) => f.endsWith(".sql"))
-      .sort()
-      .reverse();
-    for (const file of candidates) {
-      const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf8");
-      if (sql.includes(constraint)) {
-        return { file, sql };
-      }
-    }
-    throw new Error(
-      `No migration defines ${constraint} — that column has no enforcing ` +
-        "constraint.",
-    );
+  } catch {
+    // git grep exits 1 when nothing matches.
+    return [];
   }
+  return out
+    .split("\n")
+    .filter((f) => f !== "" && !f.includes("security-event-types"));
+}
 
-  const latestEventTypeMigration = () =>
-    latestMigrationDefining("security_events_event_type_check");
-
-  it("the latest event_type migration contains every value in SECURITY_EVENT_TYPES", () => {
-    const { file, sql } = latestEventTypeMigration();
-    for (const type of SECURITY_EVENT_TYPES) {
-      // The failure message names the migration so the fix is obvious: either
-      // add a new additive migration, or the type was added without one.
-      expect(sql, `${type} is missing from ${file}`).toContain(`'${type}'`);
-    }
-  });
-
-  it("the migration's CHECK body is byte-identical to the generated clause", () => {
-    const { file, sql } = latestEventTypeMigration();
+describe("the emitted subset", () => {
+  it("is the full union minus the reserved list, with no third copy to drift", () => {
+    expect(new Set(EMITTED_SECURITY_EVENT_TYPES)).toEqual(
+      new Set(
+        SECURITY_EVENT_TYPES.filter(
+          (t) => !RESERVED_SECURITY_EVENT_TYPES.includes(t as never),
+        ),
+      ),
+    );
     expect(
-      sql,
-      `${file} drifted from generateEventTypeCheckClause()`,
-    ).toContain(generateEventTypeCheckClause("event_type"));
+      EMITTED_SECURITY_EVENT_TYPES.length +
+        RESERVED_SECURITY_EVENT_TYPES.length,
+    ).toBe(SECURITY_EVENT_TYPES.length);
   });
 
-  it("the latest outcome migration contains every value in SECURITY_OUTCOMES", () => {
-    // Same failure mode as event_type, and previously unguarded: SECURITY_OUTCOMES
-    // is a const-union the emit path type-checks against, so adding a fifth
-    // outcome without an additive migration compiles cleanly and then dies on a
-    // constraint violation in production.
-    //
-    // Value-containment, not byte-identity: the shipped constraint is written as
-    // `outcome = ANY (ARRAY['allow'::text, ...])` (Postgres' normalised form),
-    // which is semantically equal to generateOutcomeCheckClause()'s `IN (...)`
-    // but not textually equal. Requiring byte-identity here would fail on a
-    // correct database.
-    const { file, sql } = latestMigrationDefining(
-      "security_events_outcome_check",
-    );
-    for (const outcome of SECURITY_OUTCOMES) {
-      expect(sql, `${outcome} is missing from ${file}`).toContain(
-        `'${outcome}'`,
-      );
-    }
-  });
-});
-
-describe("public entry point (./index barrel)", () => {
-  // Every external consumer imports "@oxagen/compliance", which resolves to the
-  // barrel — apps/app's audit-filter parser, @oxagen/telemetry's emit helper, and
-  // @oxagen/database's CHECK-constraint builder all do. Dropping a re-export line
-  // from index.ts would break all three, so assert the surface directly rather
-  // than only reaching the modules by their deep paths.
-  it("re-exports the whole taxonomy and generator surface", () => {
-    expect(barrel.SECURITY_EVENT_TYPES).toBe(SECURITY_EVENT_TYPES);
-    expect(barrel.SECURITY_OUTCOMES).toBe(SECURITY_OUTCOMES);
-    expect(barrel.isSecurityEventType).toBe(isSecurityEventType);
-    expect(barrel.isSecurityOutcome).toBe(isSecurityOutcome);
-    expect(barrel.quotedEventTypeList).toBe(quotedEventTypeList);
-    expect(barrel.quotedOutcomeList).toBe(quotedOutcomeList);
-    expect(barrel.generateEventTypeCheckClause).toBe(
-      generateEventTypeCheckClause,
-    );
-    expect(barrel.generateOutcomeCheckClause).toBe(generateOutcomeCheckClause);
-  });
-});
-
-describe("type guards", () => {
-  it("recognises known event types and rejects unknown ones", () => {
-    expect(isSecurityEventType("auth.sign_in")).toBe(true);
-    expect(isSecurityEventType("auth.telepathy")).toBe(false);
-    expect(isSecurityEventType("")).toBe(false);
-  });
-
-  it("recognises known outcomes and rejects unknown ones", () => {
-    expect(isSecurityOutcome("allow")).toBe(true);
-    expect(isSecurityOutcome("maybe")).toBe(false);
-  });
-});
-
-describe("db CHECK clause generation", () => {
-  it("includes every event type, single-quoted", () => {
-    const list = quotedEventTypeList();
-    for (const t of SECURITY_EVENT_TYPES) {
-      expect(list).toContain(`'${t}'`);
+  it("excludes every reserved type", () => {
+    for (const type of RESERVED_SECURITY_EVENT_TYPES) {
+      expect(EMITTED_SECURITY_EVENT_TYPES, type).not.toContain(type);
+      expect(isEmittedSecurityEventType(type), type).toBe(false);
     }
   });
 
-  it("includes every outcome, single-quoted", () => {
-    const list = quotedOutcomeList();
-    for (const o of SECURITY_OUTCOMES) {
-      expect(list).toContain(`'${o}'`);
+  it("keeps the full union intact for the DB CHECK and historical rows", () => {
+    // Narrowing what a UI offers must never narrow what the column accepts.
+    for (const type of RESERVED_SECURITY_EVENT_TYPES) {
+      expect(SECURITY_EVENT_TYPES).toContain(type);
     }
   });
 
-  it("builds a column-scoped IN expression for event types", () => {
-    const clause = generateEventTypeCheckClause("event_type");
-    expect(clause).toBe(`event_type IN (${quotedEventTypeList()})`);
-    expect(clause.startsWith("event_type IN (")).toBe(true);
+  it("names the eight the audit found", () => {
+    expect(RESERVED_SECURITY_EVENT_TYPES).toHaveLength(8);
+  });
+});
+
+/**
+ * The markers are only worth anything if they are true. These fail in BOTH
+ * directions, which is what the module's note asks for: a reserved type that
+ * gained an emitter is a stale marker, and a non-reserved type that lost its
+ * last one is a type quietly reading as covered.
+ */
+describe("the RESERVED markers match the repository", () => {
+  it("finds no emitter for any reserved type", () => {
+    const stale = RESERVED_SECURITY_EVENT_TYPES.filter(
+      (t) => referencesOutsideTaxonomy(t).length > 0,
+    );
+    expect(
+      stale,
+      `these are marked RESERVED but something now references them — ` +
+        `move them into the emitted set: ${stale.join(", ")}`,
+    ).toEqual([]);
   });
 
-  it("builds a column-scoped IN expression for outcomes", () => {
-    expect(generateOutcomeCheckClause()).toBe(
-      `outcome IN (${quotedOutcomeList()})`,
+  it("finds a reference for every emitted type", () => {
+    const orphaned = EMITTED_SECURITY_EVENT_TYPES.filter(
+      (t) => referencesOutsideTaxonomy(t).length === 0,
     );
-  });
-
-  it("escapes embedded single quotes (injection-safety regression)", () => {
-    // Drive the escape branch directly; our real constants never contain quotes.
-    expect(quotedEventTypeList(["o'brien.test" as never])).toBe(
-      "'o''brien.test'",
-    );
+    expect(
+      orphaned,
+      `these are offered as filterable but nothing references them — ` +
+        `mark them RESERVED: ${orphaned.join(", ")}`,
+    ).toEqual([]);
   });
 });
