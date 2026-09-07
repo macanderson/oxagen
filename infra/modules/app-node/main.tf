@@ -50,9 +50,6 @@ locals {
   tags = merge(var.tags, { Service = var.name })
 }
 
-data "aws_ssm_parameter" "al2023" {
-  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64"
-}
 
 # ---------------------------------------------------------------------------
 # Neo4j credential
@@ -214,7 +211,7 @@ resource "aws_volume_attachment" "neo4j_data" {
 # ---------------------------------------------------------------------------
 
 resource "aws_instance" "node" {
-  ami                  = data.aws_ssm_parameter.al2023.value
+  ami                  = var.ami_id
   instance_type        = var.instance_type
   subnet_id            = var.subnet_id
   iam_instance_profile = aws_iam_instance_profile.node.name

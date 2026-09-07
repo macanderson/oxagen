@@ -59,3 +59,16 @@ variable "oxagen_ai_redirect_to" {
   type    = string
   default = "https://oxagen.sh/"
 }
+
+# One pin for both instances, because they run the same image and there is no
+# reason for the NAT and the app node to drift apart. Bumping this replaces
+# both, which is the honest shape: an AMI change IS an instance replacement,
+# and it should read like one in the plan rather than arriving as a side effect
+# of an unrelated apply.
+#
+# Set in terraform.tfvars rather than defaulted here, so the value a plan uses
+# is in the file someone opens to change it.
+variable "node_ami" {
+  description = "AMI for the app node and the NAT instance."
+  type        = string
+}
