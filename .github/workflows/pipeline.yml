@@ -12,9 +12,9 @@ concurrency:
   # the prod migrate job, and cancelling the whole run mid-`atlas migrate apply`
   # would strand prod behind the committed migrations. That job is retired
   # (#1341), so nothing in a main run is mid-flight against a real database
-  # today. What was meant to replace it is named at the migrate job's
-  # retirement comment below, along with the fact that it does not currently
-  # work (#2542, #2652). It stays
+  # today. Production applies are dispatched by hand through `db-migrate.yml`;
+  # the migrate job's retirement comment below has the detail, including which
+  # of the two named routes is the stale one (#2542, #2652). It stays
   # off for main anyway, because the deploy jobs are, and half a deploy is worse
   # than a slow one.
   #
@@ -595,20 +595,25 @@ jobs:
   #                       RLS suite, and seeds platform defaults
   #   rds-compatibility   applies it again from empty as a NON-superuser role,
   #                       which is what a managed target actually is (#1347)
-  # In production: nothing that works today. `oxagen-aws-infra`'s
-  # `run-db-migrations.sh` is the only named mechanism, and it still targets the
-  # account the 2026-08-27 cutover left behind — it SSM-targets the old combined
-  # data node and `docker exec`s a Postgres container the new account does not
-  # have (#2652).
+  # In production: `db-migrate.yml`, dispatched by hand. It applies the same
+  # committed Atlas migrations against `PRODUCTION_DATABASE_URL`, and its
+  # `environment: production` is what puts required reviewers in front of an
+  # apply. That is the path to reach for.
   #
-  # Where production Postgres actually is, because two comments in this file
-  # disagreed and one of them sent people hunting for a connection string
-  # (#2542): Aurora PostgreSQL Serverless v2, cluster `oxagen-postgres`,
-  # declared at `infra/stacks-new/oxagen/data-services.tf`'s
-  # `aws_rds_cluster.postgres`, reachable from the app node over the VPC. That
-  # is the Terraform in this repository — what we intend to be deployed, not a
-  # reading of the account. Confirming it against the account is #2542's first
-  # item and needs credentials no contributor here has.
+  # NOT `oxagen-aws-infra`'s `run-db-migrations.sh`, which earlier comments here
+  # named as the production route. It still targets the account the 2026-08-27
+  # cutover left behind — it SSM-targets the old combined data node and
+  # `docker exec`s a Postgres container the new account does not have (#2652).
+  #
+  # Where production Postgres is *intended* to be, since two comments in this
+  # file disagreed and one sent people hunting for a connection string that
+  # could not exist (#2542): Aurora PostgreSQL Serverless v2, cluster
+  # `oxagen-postgres`, declared at `infra/stacks-new/oxagen/data-services.tf`'s
+  # `aws_rds_cluster.postgres`. Intended, not observed — that is Terraform in
+  # this repository, and drift between it and the account is the sort of thing
+  # that produced #2542 in the first place. #2542's first item is an
+  # `aws rds describe-db-clusters` confirming it, which needs credentials no
+  # contributor here has, so nothing below states it as an observation.
   #
   # What is NOT covered, named so its absence is trackable rather than merely
   # true — retiring a job silently is how the last two months happened:
