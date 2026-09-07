@@ -138,10 +138,11 @@ function lineFromMessage(msg: string | undefined): number | null {
 
 /** Strip ANSI escapes and collapse whitespace runs in a reason string. */
 function cleanReason(msg: string): string {
-  // The CSI body (`[0;31m`) is matched without the leading ESC, so no control
-  // character appears in the pattern (hence no no-control-regex disable needed).
+  // The ESC is written as `\u001b` rather than as a raw byte: a literal
+  // control character here would make git call this file binary, so its
+  // diffs would render as `Bin` and ripgrep would skip it (#1416).
   return msg
-    .replace(/\[[0-9;]*m/g, "")
+    .replace(/\u001b\[[0-9;]*m/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
