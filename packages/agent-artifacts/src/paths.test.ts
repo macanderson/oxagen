@@ -36,4 +36,49 @@ describe("artifact reference containment", () => {
       resolveContainedPath(join(root, "skill.toml"), "escape.txt"),
     ).rejects.toThrowError(/invalid_reference_path/);
   });
+  // The write case (#1429). Containment used to be proved only for a path that
+  // already existed: a target that did not resolved to ENOENT and was returned
+  // on the lexical check alone, so a reference THROUGH a symlinked directory
+  // was accepted and a write to it landed outside the bundle.
+  it("rejects a not-yet-existing target reached through a symlinked directory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "artifact-path-"));
+    const outside = await mkdtemp(join(tmpdir(), "artifact-outside-"));
+    await writeFile(join(root, "skill.toml"), "");
+    await mkdir(join(outside, "drop"), { recursive: true });
+    // `assets` is inside the bundle by name and outside it on disk.
+    await symlink(join(outside, "drop"), join(root, "assets"));
+
+    // Both halves of the repro, through the SAME symlink. The existing half
+    // was already refused; the missing half is what this fixes, and pairing
+    // them is what shows the answer no longer depends on what is on disk.
+    await writeFile(join(outside, "drop", "existing.png"), "x");
+    await expect(
+      resolveContainedPath(join(root, "skill.toml"), "assets/existing.png"),
+    ).rejects.toThrowError(/invalid_reference_path/);
+    await expect(
+      resolveContainedPath(join(root, "skill.toml"), "assets/new-file.png"),
+    ).rejects.toThrowError(/invalid_reference_path/);
+    await expect(
+      resolveContainedPath(
+        join(root, "skill.toml"),
+        "assets/deep/new-file.png",
+      ),
+    ).rejects.toThrowError(/invalid_reference_path/);
+  });
+
+  it("still allows a not-yet-existing target under a real directory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "artifact-path-"));
+    await writeFile(join(root, "skill.toml"), "");
+    await mkdir(join(root, "assets"), { recursive: true });
+
+    // The control the check above needs: without it, refusing every missing
+    // path would pass that test and break every artifact that writes one.
+    await expect(
+      resolveContainedPath(join(root, "skill.toml"), "assets/new-file.png"),
+    ).resolves.toBe(join(root, "assets", "new-file.png"));
+    // Neither the file nor its directory exists yet.
+    await expect(
+      resolveContainedPath(join(root, "skill.toml"), "fresh/dir/new-file.png"),
+    ).resolves.toBe(join(root, "fresh", "dir", "new-file.png"));
+  });
 });
