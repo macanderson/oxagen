@@ -80,7 +80,7 @@ graph TB
 
 ### The metering→billing loop
 
-Every `invoke()` call, agent step, and LLM call (all LLM traffic goes through `@oxagen/ai`, never raw SDK imports) emits usage events into ClickHouse: org, workspace, user, run, model, tokens, duration, surface. Those events price against Stripe meters (`pnpm billing:stripe-sync`), so a team reselling agents can meter observed usage and bill their customers. The run-ledger (`packages/run-ledger`) carries the same discipline into externally-run agent fleets: evidence ingress (`client_attested`, e.g. Stella's drain) records every run, attempt, and event with typed lineage plus cost — Oxagen governs and rates the trace, it never re-runs it (ADR-041).
+Every `invoke()` call, agent step, and LLM call (all LLM traffic goes through `@oxagen/ai`, never raw SDK imports) emits usage events into ClickHouse: org, workspace, user, run, model, tokens, duration, surface. Those events price against Stripe meters (`pnpm billing:stripe-sync`), so a team reselling agents can meter observed usage and bill their customers. The run-ledger (`packages/run-ledger`) carries the same discipline into externally-run agent fleets: evidence ingress (`client_attested`, e.g. Stella's drain) records every run, attempt, and event with typed lineage plus cost — Oxagen governs and rates the trace, it never re-runs it (ADR-043).
 
 ### The knowledge graph
 
@@ -125,7 +125,7 @@ oxagen/
 │                    github, mcp-config, notifications, prompt-templates,
 │                    storage, and more
 │
-│   (ADR-041 removed the agent runtime: agent-engine, agent-worker, sandbox,
+│   (ADR-043 removed the agent runtime: agent-engine, agent-worker, sandbox,
 │   skills, agent-artifacts, and stella-engine-client packages are gone.)
 │
 ├── tools/scripts    Dev orchestration, CI checks (manifest, vision gate)

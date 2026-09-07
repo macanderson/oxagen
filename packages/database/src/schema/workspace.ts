@@ -49,7 +49,7 @@ export const workspaces = workspaceSchema.table(
     // Workspace-level text model defaults. NULL means the workspace sets no
     // default and the user's own preference (or the system default) applies. An
     // explicit value overrides user preferences for all members. Image/video
-    // defaults were dropped with media generation (ADR-041).
+    // defaults were dropped with media generation (ADR-043).
     // Uses the same model_tier enum declared in the auth schema (shared type).
     defaultTextTier: modelTierEnum("default_text_tier"),
     defaultTextModel: text("default_text_model"),

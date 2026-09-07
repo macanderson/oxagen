@@ -154,7 +154,7 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
       slug,
       name: object.name.trim() || slug,
       description: object.description.trim() || object.name.trim() || slug,
-      // ADR-041 removed code mode; every governed agent definition is "custom".
+      // ADR-043 removed code mode; every governed agent definition is "custom".
       agentType: "custom",
       // `instructions` is optional on agentDefinitionConfigSchema but required on
       // the suggestion — synthesis guarantees a non-empty value, so re-attach it

@@ -94,7 +94,7 @@ describe("resolveSidebarMode", () => {
 //     — the "Agents" group (group: "tools") holds the three fleet destinations
 //       (Agents, Tools, Environments) as first-class items — there is
 //       deliberately NO secondary nav. Marketplace + Settings are pinned to the
-//       footer group. Per ADR-041 the runtime surfaces (Sandboxes, Repos,
+//       footer group. Per ADR-043 the runtime surfaces (Sandboxes, Repos,
 //       Evals, Automations, Skills) are gone: Oxagen governs agents, it does
 //       not run them.
 //   org:       8 items (Dashboard, Workspaces, Members, Governance, Security, Billing, Developer, Settings)
@@ -105,7 +105,7 @@ describe("getSidebarConfig item counts", () => {
   it("workspace config has exactly 8 items", () => {
     const config = getSidebarConfig("workspace");
     expect(config.mode).toBe("workspace");
-    // ADR-041 excised the runtime surfaces (Sandboxes, Repos, Evals,
+    // ADR-043 excised the runtime surfaces (Sandboxes, Repos, Evals,
     // Automations) — what remains is the governance observatory.
     expect(config.items).toHaveLength(8);
   });
@@ -148,7 +148,7 @@ describe("getSidebarConfig item counts", () => {
     ]);
   });
 
-  it("does NOT surface the excised runtime items (ADR-041)", () => {
+  it("does NOT surface the excised runtime items (ADR-043)", () => {
     const ids = getSidebarConfig("workspace").items.map((i) => i.id);
     expect(ids).not.toContain("skills");
     expect(ids).not.toContain("sandboxes");

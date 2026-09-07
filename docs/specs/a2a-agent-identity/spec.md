@@ -1,6 +1,6 @@
 # A2A Agent Identity, Lineage & Live Subscription — Design Specification
 
-> **2026-09-07 note:** [ADR-041](../../adr/ADR-041-runtime-excision.md) removed
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) removed
 > the A2A transport entirely as part of the agent-runtime excision — the
 > `.well-known/agent-card.json` discovery endpoint, `POST /a2a` JSON-RPC route,
 > the `a2a.card.get` capability, and the `agent.a2a_tasks` table are gone. This

@@ -8,7 +8,7 @@
  * caller can construct it purely to introspect command names + descriptions
  * without running anything.
  *
- * Scope, after ADR-041: Oxagen governs, grounds, explains, meters/bills and
+ * Scope, after ADR-043: Oxagen governs, grounds, explains, meters/bills and
  * rates agents — it does not run them. So every command below is a governance
  * *operation* against the platform API: spend ceilings and cost, run traces,
  * graph grounding, agent memory, credentials and environments, audit logs,
@@ -77,7 +77,7 @@ export function buildProgram(): Command {
   retiredCommand("replay", "Local turn replay");
   retiredCommand("fleet", "The session fleet");
 
-  // Retired with the agent runtime (ADR-041). Grouped by what they ran:
+  // Retired with the agent runtime (ADR-043). Grouped by what they ran:
   // execution surfaces, local authoring surfaces, and repo/CI automation.
   retiredCommand("sandbox", "Agent sandbox sessions");
   retiredCommand("sandbox-template", "Sandbox template management");

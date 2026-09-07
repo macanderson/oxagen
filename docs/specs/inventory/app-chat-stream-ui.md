@@ -4,7 +4,7 @@
 > Source: use-tool-stream.ts, stream-event-types.ts, chat-shell-client.tsx, chat-component-registry.tsx, activity-timeline.tsx, message-bubble.tsx
 > Last verified: 2026-06-20 (commit 2f628504)
 >
-> **2026-09-07 note:** [ADR-041](../../adr/ADR-041-runtime-excision.md) deleted
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
 > plan mode (`plan-proposed`/`plan-resolved`), subagent fan-out
 > (`subagent-dispatched`), `agent.code.execute`'s CodeExecuteCard dispatch, and
 > `intercept-form-fill.ts`/`page_form_fill` entirely — none of those stream

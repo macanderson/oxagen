@@ -107,7 +107,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // ── chat.* / content.* (orgScopeMixin) ───────────────────────────────────
   { table: "chat.conversations", policyClass: "standard" },
   { table: "chat.messages", policyClass: "standard" },
-  // content.documents went with the runtime (ADR-041); the attachment
+  // content.documents went with the runtime (ADR-043); the attachment
   // reference row stays and is still tenant-owned.
   { table: "content.generated_assets", policyClass: "standard" },
 

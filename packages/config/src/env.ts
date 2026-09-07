@@ -177,7 +177,7 @@ export const baseEnvSchema = z.object({
   // The OXAGEN_LLM_* tiers are white-labeled model handles ("Oxagen
   // Fast/Balanced/Precise") resolving to concrete model ids in `creator/model`
   // form. Defaults mirror the registry staticValues so local dev and tests
-  // resolve a tier without extra configuration. ADR-041 removed image and video
+  // resolve a tier without extra configuration. ADR-043 removed image and video
   // generation, so text is the only tier family left.
   AI_GATEWAY_API_KEY: z.string().optional(),
   // Which provider serves LANGUAGE models. The gateway is the default and the

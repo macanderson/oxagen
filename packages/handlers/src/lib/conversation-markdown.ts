@@ -194,7 +194,7 @@ export function messageToBlocks(row: ExportMessageRow): ExportBlock[] {
         }
         default:
           // Non-exportable block types (approvals, components, …) — skip.
-          // ADR-041 retired the execution block types (code, diffs, terminal
+          // ADR-043 retired the execution block types (code, diffs, terminal
           // output, generated media); a historical row still carrying one
           // falls through here and is dropped rather than rendered.
           break;

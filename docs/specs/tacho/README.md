@@ -32,4 +32,4 @@ the Oxagen half. When Stella revises one, re-copy and bump the commit above.
 
 Oxagen's ledger side of this seam is `docs/specs/run-evidence-ingress/spec.md`
 (Approved) and `@oxagen/run-ledger`; the excision that made the wrapper the
-only agent surface is ADR-041.
+only agent surface is ADR-043.

@@ -451,7 +451,7 @@ describe("plugin.catalog.browse handler — agent_capability path", () => {
   });
 });
 
-// ── Tests: agent_skill path (retired by ADR-041) ─────────────────────────────
+// ── Tests: agent_skill path (retired by ADR-043) ─────────────────────────────
 
 describe("plugin.catalog.browse handler — agent_skill path", () => {
   beforeEach(() => {

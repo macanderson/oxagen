@@ -1,4 +1,4 @@
-<!-- Generated: 2026-07-06, corrections applied 2026-07-10, ADR-041 excision pass 2026-09-07 | Files scanned: ~178 (api) + ~224 (handlers), counts drift | Token estimate: ~1000 -->
+<!-- Generated: 2026-07-06, corrections applied 2026-07-10, ADR-043 excision pass 2026-09-07 | Files scanned: ~178 (api) + ~224 (handlers), counts drift | Token estimate: ~1000 -->
 
 # Backend Architecture
 
@@ -67,7 +67,7 @@ POST   /conversations/attachments    → link an already-uploaded asset to a con
 POST   /conversation/chat            → conversationChatRoute
 ```
 
-**Agent** (ADR-041 removed the sandbox, skills, plans, compose, subagent
+**Agent** (ADR-043 removed the sandbox, skills, plans, compose, subagent
 fan-out, background-task, and file-lock route groups that used to live here —
 along with the standalone A2A JSON-RPC mount, see below)
 ```
@@ -153,7 +153,7 @@ GET|POST /plugin-schema              GET|POST /plugin-versions
 GET|POST /plugin/registries          → CRUD (plural; add/remove sub-paths)
 ```
 
-**Environments / Secrets** (ADR-041 removed the sandbox-template routes that
+**Environments / Secrets** (ADR-043 removed the sandbox-template routes that
 used to live here)
 ```
 POST   /environment/create|update|delete|set-default  GET /environment/get|list
@@ -163,7 +163,7 @@ POST   /secret/reveal|export         GET /secret/import-env
                                       → reveal, import-env, export are directly under /secret/
 ```
 
-**Other** (ADR-041 removed the content-generation routes — web search/fetch,
+**Other** (ADR-043 removed the content-generation routes — web search/fetch,
 research swarm, documents/markdown/mermaid/video/svg/image, forms/fill,
 archive/create — that used to live here; there is no first-party content
 generation surface left)
@@ -200,8 +200,8 @@ POST /v1/agent/llm/chat/completions  → OpenAI-compat proxy; the platform API k
                                         sits outside the org/workspace path group
 GET  /oauth/github                   → public OAuth callback (see Public / Webhook)
 ```
-ADR-041 removed the `/a2a` JSON-RPC transport and `/.well-known` A2A discovery
-mount entirely (2026-09-07) — see `docs/adr/ADR-041-runtime-excision.md` and
+ADR-043 removed the `/a2a` JSON-RPC transport and `/.well-known` A2A discovery
+mount entirely (2026-09-07) — see `docs/adr/ADR-043-runtime-excision.md` and
 `docs/specs/a2a-agent-identity/spec.md`'s 2026-09-07 note.
 
 ## Handler Pattern
@@ -231,7 +231,7 @@ Route file (apps/api/src/routes/v1/*.ts)
 ## Background Jobs (Inngest) — 22 functions (count drifts; verify via
 `grep -rl "createFunction(" packages/inngest-functions/src/functions`)
 
-ADR-041 removed every agent-runtime job that used to live here: fan-out
+ADR-043 removed every agent-runtime job that used to live here: fan-out
 collection/dispatch (`agent.aggregate-fanout`, `agent.execute-subagent`),
 background-task execution and lease sweeping, the sandbox reaper, video
 rendering, playbook/workflow orchestration (`agent.workflow.supervisor`,

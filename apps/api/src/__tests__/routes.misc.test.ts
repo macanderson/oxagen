@@ -3,7 +3,7 @@
  *   asset.upload, system.install.instructions
  *
  * The media-generation, form.fill, archive.create and workflow blocks that
- * shared this file went with their capabilities in ADR-041's runtime excision.
+ * shared this file went with their capabilities in ADR-043's runtime excision.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";

@@ -8,7 +8,7 @@ import {
 // Interactive agent — the single source of truth for the `qa-chat` agent that
 // backs BOTH the MCP server and the in-app governance Q&A surface. It is a
 // read-and-explain agent over the fleet record and the knowledge graph; it has
-// no execution surface of its own (ADR-041). The seeder script and
+// no execution surface of its own (ADR-043). The seeder script and
 // the workspace-creation bootstrap both build their published v1 config from
 // here so the chat.stream lookup (slug "qa-chat") always resolves to a fully
 // schema-conforming, published definition.
@@ -51,7 +51,7 @@ export const MANAGED_AGENT_READONLY_CODE = "agent_managed_read_only";
  * registered capability name (ADR-025 verb-first snake_case), so each call
  * still passes the kernel's IAM, entitlement and metering gates.
  *
- * ADR-041 replaced the previous skill list here: skills no longer exist, and a
+ * ADR-043 replaced the previous skill list here: skills no longer exist, and a
  * governed agent's grant is an allowlist of things the platform can gate, not
  * a bundle of prompt fragments.
  */

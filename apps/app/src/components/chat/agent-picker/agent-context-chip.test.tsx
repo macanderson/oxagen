@@ -110,7 +110,7 @@ describe("AgentContextChip", () => {
   // REGRESSION (e2e chat-agent-picker): there is no read-only variant. The
   // chip's accessible name is ALWAYS "Agent: <name>" — never "Agent locked:
   // <name>" — so the picker (and the workspace "default assistant" star it
-  // hosts) stays reachable after a turn has been sent. ADR-041 removed the
+  // hosts) stays reachable after a turn has been sent. ADR-043 removed the
   // durable code binding that a conversation-scoped lock protected.
   it("stays openable after a turn: no locked variant, name never changes", async () => {
     renderChip({ selectedAgentId: "agt_code" });

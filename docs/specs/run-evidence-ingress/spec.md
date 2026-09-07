@@ -1,6 +1,6 @@
 # Governed run evidence ingress — first vertical slice
 
-> **2026-09-07 note:** [ADR-041](../../adr/ADR-041-runtime-excision.md) deleted
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
 > the `edit_repo_file` (`agent.repo.edit`) capability, the sandbox-backed
 > durable worker, and the repository *mutation* capabilities
 > (`repo.create`/`fork`/`file.put`/`pr.open`/`branch.create`) that this vertical
@@ -9,7 +9,7 @@
 > survives independently as `@oxagen/run-ledger` (`agent_runs`,
 > `agent_run_events`, `agent_run_attempts`, `agent_run_attempt_seals`,
 > `agent_run_finalization_{grants,obligations}` — deliberately NOT dropped by
-> the ADR-041 migration) and is now fed by evidence ingress from external
+> the ADR-043 migration) and is now fed by evidence ingress from external
 > agents (Stella's drain, a wrapper SDK) rather than the in-repo worker
 > described below. Read the repo-edit specifics as historical design intent,
 > not current behavior.

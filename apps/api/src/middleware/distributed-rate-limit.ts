@@ -276,7 +276,7 @@ export function distributedRateLimiter(
  * breaker-config.ts's `breakerEnvConfig()` and keeps route tests that mock
  * requireEnv from tripping over the limiter wiring.
  *
- * Chat is the only env-tunable budget left. ADR-041 excised the agent runtime,
+ * Chat is the only env-tunable budget left. ADR-043 excised the agent runtime,
  * and with it every surface that drew on RATE_LIMIT_AGENT_EXEC_PER_MIN (code
  * execution, compose, sandbox ops, background tasks, the A2A transport); that
  * env key is retired. The ceilings that remain on non-chat surfaces are

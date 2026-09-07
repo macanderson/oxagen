@@ -13,7 +13,7 @@
  * the in-progress builder isn't lost. Renders nothing when there is nothing to
  * recommend.
  *
- * Per ADR-041 the skill recommendation kind is filtered out: skills are gone
+ * Per ADR-043 the skill recommendation kind is filtered out: skills are gone
  * with the runtime, so a skill recommendation has no surface to connect on.
  *
  * Extracted from agent-builder.tsx so the panel is unit-testable without

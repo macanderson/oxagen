@@ -290,7 +290,7 @@ userScoped.route("/user/budget/write", budgetPolicyWriteRoute);
 app.route("/v1", userScoped);
 
 // Post-auth ceiling for enrolled Stella evidence ingress, in requests/minute.
-// A constant rather than an env budget: ADR-041 retired the agent runtime and
+// A constant rather than an env budget: ADR-043 retired the agent runtime and
 // with it RATE_LIMIT_AGENT_EXEC_PER_MIN, whose value this limiter used to
 // borrow. The two pre-auth ceilings on the same path (just below) are constants
 // for the same reason — a drain rate is a property of the ingress, not of a

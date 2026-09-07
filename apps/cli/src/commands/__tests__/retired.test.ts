@@ -1,5 +1,5 @@
 /**
- * `retired.ts` — the single notice every command removed by the ADR-041 runtime
+ * `retired.ts` — the single notice every command removed by the ADR-043 runtime
  * excision prints. It must name what was retired, point at the ADR and at
  * Stella, and set a NON-ZERO exit code so a script that still calls the old
  * command fails loudly instead of silently succeeding.
@@ -31,7 +31,7 @@ describe("printRetiredNotice", () => {
     const out = capture(() => printRetiredNotice("`oxagen run`"));
 
     expect(out).toContain("`oxagen run`");
-    expect(out).toContain("docs/adr/ADR-041-runtime-excision.md");
+    expect(out).toContain("docs/adr/ADR-043-runtime-excision.md");
     expect(out).toContain("stella");
     expect(out.endsWith("\n")).toBe(true);
   });

@@ -29,5 +29,5 @@
     "eslint": "9.39.4",
     "vitest": "2.1.9"
   },
-  "description": "Durable run / attempt / event / seal / finalization ledger \u2014 the evidence store for governed agent runs (ADR-041)."
+  "description": "Durable run / attempt / event / seal / finalization ledger \u2014 the evidence store for governed agent runs (ADR-043)."
 }

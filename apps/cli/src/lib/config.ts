@@ -9,7 +9,7 @@ import { atomicWriteFileSync } from "./atomic-write.js";
  * It holds exactly the platform session (`oxagen login` writes it, `oxagen
  * logout` clears it) plus the anonymous-telemetry preferences. The model keys,
  * default model/effort, and TUI settings this file used to carry belonged to
- * the local coding agent and went with it (ADR-041) — the CLI makes no LLM
+ * the local coding agent and went with it (ADR-043) — the CLI makes no LLM
  * calls of its own, so there is no provider key to store.
  */
 export interface CliConfig {

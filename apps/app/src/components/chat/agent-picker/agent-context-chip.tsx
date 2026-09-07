@@ -17,7 +17,7 @@ import type { AgentSelectionApply } from "./chat-selection-context";
  * instantiate its own).
  *
  * The chip has no locked/read-only variant. It used to render one after a code
- * turn claimed the conversation's durable coding target, but ADR-041 removed
+ * turn claimed the conversation's durable coding target, but ADR-043 removed
  * that binding and made `agentId` a per-turn parameter — so the chip stays a
  * live control for the whole conversation (see chat-selection-context.tsx).
  */

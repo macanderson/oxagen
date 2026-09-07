@@ -90,7 +90,7 @@ describe("model catalog (@oxagen/ai/catalog)", () => {
     expect(capabilityLabel("video")).toBe("Video gen");
   });
 
-  it("exposes the three text tiers — the only white-labeled tiers left (ADR-041)", () => {
+  it("exposes the three text tiers — the only white-labeled tiers left (ADR-043)", () => {
     expect(TEXT_TIERS.map((t: { id: string }) => t.id)).toEqual([
       "fast",
       "balanced",

@@ -22,7 +22,7 @@ import type { AgentSelectionApply } from "./chat-selection-context";
  * as a composer popover (`variant="popover"`) or as an empty-state gallery hero
  * (`variant="gallery"`). Lists the workspace's agents with avatar, a one-line
  * description, and a capability strip; a star per row sets the user's default.
- * Every pick applies immediately — ADR-041 removed the code-agent setup step
+ * Every pick applies immediately — ADR-043 removed the code-agent setup step
  * (repository → branch → sandbox environment), because a conversation is no
  * longer grounded in a repository.
  *

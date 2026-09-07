@@ -3,7 +3,7 @@
  * session-store.test.tsx — the unified session provider: seeding, the single
  * write path (locks), and persistence (draft carry, per-conversation keys).
  *
- * ADR-041 removed the code half of the session (repo / branch / sandbox
+ * ADR-043 removed the code half of the session (repo / branch / sandbox
  * environment, per-agent code memory, the durable code binding), so what is
  * left to prove is the governance-relevant contract: the agent binding, the
  * model/tier/effort/budget settings, the agent lock (derived from server truth

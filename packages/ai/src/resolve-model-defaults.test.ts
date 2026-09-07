@@ -153,7 +153,7 @@ describe("resolveModelDefaults", () => {
     expect(result.overriddenByWorkspace.text).toBe(true);
   });
 
-  // ── ADR-041: media generation, and its stored defaults, are gone ───────────
+  // ── ADR-043: media generation, and its stored defaults, are gone ───────────
 
   it("resolves text as the only dimension — no image or video model", () => {
     const result = resolveModelDefaults({

@@ -100,7 +100,7 @@ function OtherModelsList({ activeModelId, onSelect }: OtherModelsListProps) {
   return (
     <div className="max-h-80 overflow-y-auto py-1">
       {gatewayModels.map((m) => {
-        // Pure image/video models are never selectable: ADR-041 removed
+        // Pure image/video models are never selectable: ADR-043 removed
         // generation, so a model that cannot take part in a chat turn has no
         // way to serve one.
         const disabled = !supportsText(m);

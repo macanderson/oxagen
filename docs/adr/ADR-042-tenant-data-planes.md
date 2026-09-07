@@ -4,7 +4,7 @@
 - **Date:** 2026-09-07
 - **Owners:** platform
 - **Related:** ADR-031 (platform storage ontology), `docs/specs/tenancy-rls/`,
-  ADR-041, `oxagen-tenancy` skill
+  ADR-043, `oxagen-tenancy` skill
 
 ## Context
 

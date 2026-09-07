@@ -99,7 +99,7 @@ const pluginClaimedUnscopedCap = () =>
 describe("kernel capability entitlement gate", () => {
   beforeEach(() => {
     clearPluginRegistryForTests();
-    // No pack ships built in (ADR-041); claim the two test contracts here.
+    // No pack ships built in (ADR-043); claim the two test contracts here.
     registerOxagenPluginForTests({
       id: "oxagen/media-image",
       name: "Image Generation",

@@ -1,6 +1,6 @@
 # IAM — Implementation Plan (Wave 1: The Spine)
 
-> **2026-09-07 note:** [ADR-041](../../adr/ADR-041-runtime-excision.md) deleted
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
 > `agent.plan.approve` and `agent.code.execute` (and their handler files
 > referenced below) along with the rest of the agent runtime. The IAM default-
 > role table entries for them no longer apply; the resolution mechanism they

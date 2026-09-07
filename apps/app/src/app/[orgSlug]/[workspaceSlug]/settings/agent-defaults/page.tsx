@@ -20,7 +20,7 @@ import { invoke } from "@oxagen/oxagen";
 // Side-effect import: bind every foundation handler so invoke() can resolve.
 import "@oxagen/handlers/register";
 import { resolvePrompt } from "@oxagen/ai";
-// The chat baseline lives with the tool surface it describes (ADR-041) — there
+// The chat baseline lives with the tool surface it describes (ADR-043) — there
 // is one copy, in @oxagen/agent, and this preview renders exactly it.
 import { buildChatSystemPrompt } from "@oxagen/agent";
 import type { WorkspaceModelSettingsReadOutput } from "@oxagen/oxagen/contracts/workspace.model_settings.read";

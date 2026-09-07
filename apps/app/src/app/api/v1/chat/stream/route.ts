@@ -113,7 +113,7 @@ const BodySchema = z.object({
   // Reasoning effort for reasoning-capable models. Forwarded to streamAgentReply
   // only when the resolved model actually supports reasoning (guard below).
   effort: z.enum(["low", "medium", "high"]).nullable().default(null),
-  // ADR-041: the media-generation intent fields (`generate` / `mediaTier` /
+  // ADR-043: the media-generation intent fields (`generate` / `mediaTier` /
   // `mediaModel`) were removed with the image/video capabilities.
   // True when the client created this conversation on this turn (first message).
   // Used to trigger auto-title generation after the assistant replies.
@@ -121,7 +121,7 @@ const BodySchema = z.object({
   // Per-turn MCP server allowlist: publicIds of servers the user has activated
   // in the chat composer. When non-empty, only those servers' tools are loaded.
   activeServerIds: z.array(z.string()).optional().default([]),
-  // ADR-041: session-level skill pinning (`skills`) was removed with the skill
+  // ADR-043: session-level skill pinning (`skills`) was removed with the skill
   // system.
   // Attachments for this turn — IDS ONLY (never base64/bytes through this
   // 32 KiB body). Each publicId is re-resolved server-side below (ownership +
@@ -161,7 +161,7 @@ const BodySchema = z.object({
   // lives in @oxagen/billing (turn-budget-policy) so every chat surface
   // validates and resolves budgets identically.
   budget: requestTurnBudgetSchema.nullable().default(null),
-  // ADR-041: code mode (`code` — repo + sandbox environment) was removed with
+  // ADR-043: code mode (`code` — repo + sandbox environment) was removed with
   // the runtime. Oxagen governs agents; it does not run them, so a conversation
   // is no longer grounded in a repository.
   // Selected/bound agent (OXA app-agent-selector + Workbench chat↔agent binding) —
@@ -172,7 +172,7 @@ const BodySchema = z.object({
   // extend the toolset. Absent `agentId`, every downstream value is untouched
   // (byte-for-byte the pre-binding behavior).
   agentId: z.string().min(1).max(64).nullable().default(null),
-  // ADR-041: the pinned repo/environment chat context (`pinnedContext`) went
+  // ADR-043: the pinned repo/environment chat context (`pinnedContext`) went
   // with the code target it named.
 });
 
@@ -1084,7 +1084,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         });
 
         // ── The governed turn ──────────────────────────────────────────────
-        // ADR-041 §2: one thin, bounded, metered in-process loop over
+        // ADR-043 §2: one thin, bounded, metered in-process loop over
         // @oxagen/ai with tools materialised from capability contracts. It
         // hands back the raw AI-SDK stream; `translateAgentStream` is the only
         // place those parts become this surface's SSE wire format. Tool
@@ -1262,7 +1262,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       } finally {
         // Terminate the SSE response whether the turn succeeded or threw: the
         // client's reader waits on the [DONE] sentinel and hangs until its own
-        // timeout without it. There is nothing else to release — ADR-041 left
+        // timeout without it. There is nothing else to release — ADR-043 left
         // the turn with no sandbox, no session and no external process.
         if (!closed) {
           try {

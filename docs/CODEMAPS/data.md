@@ -48,11 +48,11 @@ messages            id, conversationId, role, content (JSON), toolCalls (JSON), 
 
 ### Schema: agent.ts
 
-ADR-041 (runtime excision, 2026-09-07) dropped `skills`, `skillVersions`,
+ADR-043 (runtime excision, 2026-09-07) dropped `skills`, `skillVersions`,
 `backgroundTasks`, `subagentFanouts`, `subagentRuns`, `sandboxSessions`,
 `agentPlans`, `fileLocks`, `fileLockFences`, `agentRunCheckpoints`, and
 `agentRunAttemptLeases`. `a2aTasks` is slated to be dropped along with the
-removed A2A transport (see `docs/adr/ADR-041-runtime-excision.md` and
+removed A2A transport (see `docs/adr/ADR-043-runtime-excision.md` and
 `docs/specs/a2a-agent-identity/spec.md`). What remains (18 tables):
 
 ```
@@ -101,7 +101,7 @@ stripeEventProcessing id, eventId, status, attempts
 
 ### Schema: ai.ts
 
-`aiBatchJobs` was dropped under ADR-041 (AI Gateway batch reconciliation left
+`aiBatchJobs` was dropped under ADR-043 (AI Gateway batch reconciliation left
 with the runtime).
 
 ```
@@ -112,7 +112,7 @@ aiResponseCache     id, orgId, cacheKey, promptHash, model, surface, responseKin
 ```
 
 `eval.ts` (Evals v1: `evalDatasets`, `evalDatasetItems`, `evalRuns`) was
-dropped entirely under ADR-041 — there is no standalone eval platform.
+dropped entirely under ADR-043 — there is no standalone eval platform.
 
 ### Schema: ingestion.ts
 ```
@@ -150,7 +150,7 @@ principalRoleAssignments principalId, roleId, assignedAt
 ```
 
 `workflow.ts` (playbooks: definitions/steps/edges/triggers/runs/approvals) was
-dropped entirely under ADR-041 — the automation/workflow surface no longer
+dropped entirely under ADR-043 — the automation/workflow surface no longer
 exists.
 
 ### Schema: schema-registry.ts (Ontology)
@@ -166,7 +166,7 @@ schemaProperties    nodeLabel, name, type, required
 
 ### Schema: environments.ts
 
-`sandboxTemplates` and `sandboxTemplateTools` were dropped under ADR-041.
+`sandboxTemplates` and `sandboxTemplateTools` were dropped under ADR-043.
 
 ```
 environments        id, orgId, workspaceId, name, isDefault
@@ -181,7 +181,7 @@ agentEnvironmentBindings agentId, environmentId, isPrimary — governance metada
 
 `cms.ts` (`leads`, `bookEditions`, `bookAccessCodes` — the marketing-site lead
 gate and ebook access system) was dropped entirely. `content.ts`'s
-`documents` table (the in-app generation path) was dropped under ADR-041;
+`documents` table (the in-app generation path) was dropped under ADR-043;
 `generatedAssets` survives, narrowed to the upload/attachment path.
 
 ```
@@ -256,7 +256,7 @@ Usage: avatar uploads, chat/agent attachment uploads
 Location: packages/database/atlas/migrations/
 Tool:     Atlas (pnpm migrate in database package)
 Count:    ~90 SQL files tracked (latest: 20260907140000_data_plane_security_event.sql;
-          includes 20260907120000_drop_agent_runtime_tables.sql — the ADR-041 cut)
+          includes 20260907120000_drop_agent_runtime_tables.sql — the ADR-043 cut)
           — count drifts fast; verify via `ls packages/database/atlas/migrations/*.sql | wc -l`
 Checksum: atlas.sum — regenerate via `atlas migrate hash --dir "file://atlas/migrations"`
           from packages/database after adding/renaming a migration; never hand-edit.

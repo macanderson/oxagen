@@ -108,7 +108,7 @@ describe("A: settings route with a workspace entity", () => {
     expect(prompts[2]?.prompt).toMatch(/setting/i);
   });
 
-  it("never offers a form-fill chip (ADR-041 removed Ask-to-Fill)", () => {
+  it("never offers a form-fill chip (ADR-043 removed Ask-to-Fill)", () => {
     expect(prompts.some((p) => p.label.toLowerCase().startsWith("fill"))).toBe(
       false,
     );

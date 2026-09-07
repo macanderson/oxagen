@@ -42,7 +42,7 @@ POST /api/v1/chat/stream accepts JSON body with user message content, optional c
 - **WHEN** resolveOrg(orgSlug) fails or assertOrgMember fails or resolveWorkspace fails
 - **THEN** returns 404 Org or workspace not found
 
-> **2026-09-07 note:** [ADR-041](../../adr/ADR-041-runtime-excision.md) deleted
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
 > `image.generate`/`video.generate`/`form.fill` and `streamMediaGeneration`;
 > the chat route no longer accepts `generate: "image"/"video"` or registers a
 > `page_form_fill` tool — the two scenarios below describe removed behavior.

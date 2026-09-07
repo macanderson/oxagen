@@ -5,7 +5,7 @@
  *
  * Verbs: bind <agent> --env <slug> [--primary], unbind <agent> --env <slug>,
  * list <agent> (--json). The sandbox-template half of a binding went with the
- * runtime (ADR-041) — an environment is now a governed configuration record,
+ * runtime (ADR-043) — an environment is now a governed configuration record,
  * not an execution target.
  *
  * Agent addressing mirrors the rest of the platform: the `<agent>` argument is

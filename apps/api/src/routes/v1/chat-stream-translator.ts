@@ -8,7 +8,7 @@
 // nothing about who is feeding it — it takes generic AI-SDK parts (text,
 // reasoning, step boundaries, tool calls/results, usage, error) and no others.
 //
-// RETAINED THROUGH ADR-041 and now driven by `runGovernedTurn` (@oxagen/agent),
+// RETAINED THROUGH ADR-043 and now driven by `runGovernedTurn` (@oxagen/agent),
 // whose raw AI-SDK `fullStream` chat.stream feeds through it one part at a
 // time. It survives the cut deliberately — it is the published REST chat wire
 // format and it is engine-agnostic. There was never a code/sandbox/media/

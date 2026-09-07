@@ -4,7 +4,7 @@ import { agentMemoryRecall } from "@oxagen/oxagen/contracts/agent.memory.recall"
 
 // Deterministic per-turn memory recall for the REST chat surface.
 //
-// RETAINED THROUGH ADR-041 and called again by chat.stream, which injects the
+// RETAINED THROUGH ADR-043 and called again by chat.stream, which injects the
 // block it returns as a per-turn context message into `runGovernedTurn`. It
 // survives the cut because grounding an answer in recalled, cited workspace
 // memory is exactly what the governance agent is for, and because it does that

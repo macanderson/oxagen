@@ -2,7 +2,7 @@
  * workbench/equip-sources.ts — server-only source lists for the Agent Builder's
  * tool-allowlist step.
  *
- * Per ADR-041 an agent's allowlist draws from exactly two pools: capabilities
+ * Per ADR-043 an agent's allowlist draws from exactly two pools: capabilities
  * (see ./tools.ts) and registered MCP servers. Skills and subagent fan-out are
  * retired with the runtime. This module supplies the pool that doesn't already
  * have a Workbench wrapper: installed MCP-server plugins.

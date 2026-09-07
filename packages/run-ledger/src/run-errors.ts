@@ -253,7 +253,7 @@ export class RunEventSequenceGapError extends Error {
  * producer that hit one: an unknown attempt is not addressable evidence, and a
  * sealed attempt's stream is already committed to.
  *
- * The pre-ADR-041 lease vocabulary (`token_mismatch`, `epoch_mismatch`,
+ * The pre-ADR-043 lease vocabulary (`token_mismatch`, `epoch_mismatch`,
  * `expired`, `fenced`) went with `agent.agent_run_attempt_leases`. The seal is
  * now the only fence.
  */

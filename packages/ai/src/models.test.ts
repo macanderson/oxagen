@@ -81,7 +81,7 @@ describe("selectModel (@oxagen/ai) — gateway only", () => {
 describe("tier resolution (@oxagen/ai)", () => {
   beforeEach(resetMocks);
 
-  // ADR-041 removed image and video GENERATION, and with it the media tiers
+  // ADR-043 removed image and video GENERATION, and with it the media tiers
   // and their OXAGEN_LLM_{IMAGE,VIDEO}_* env keys. Text is the only white-
   // labeled tier family left.
   it("joins every tier to its concrete gateway model id — text only", () => {

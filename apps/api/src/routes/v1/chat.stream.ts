@@ -121,7 +121,7 @@ async function resolveScopeNames(ctx: {
 // Each SSE line: `data: <JSON ApiStreamEvent>\n\n`
 // Terminal: `event: done\ndata: [DONE]\n\n`
 //
-// ADR-041: the turn is `runGovernedTurn` from @oxagen/agent — one bounded,
+// ADR-043: the turn is `runGovernedTurn` from @oxagen/agent — one bounded,
 // metered in-process loop over @oxagen/ai whose tools are materialised
 // capability contracts dispatched through kernel.invoke(). There is no sandbox,
 // no filesystem, no browser and no subagents behind it. This route is a THIN

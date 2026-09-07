@@ -1,7 +1,7 @@
 /**
  * content — the blob reference/provenance row for workspace media.
  *
- * ADR-041 (runtime excision) retired the generation side of this domain: the
+ * ADR-043 (runtime excision) retired the generation side of this domain: the
  * `image.*` / `video.generate` / `document.*` capabilities and the
  * `content.documents` table are gone with the runtime. What survives is the
  * ATTACHMENT half — a user uploads a file and asks the governance agent about
@@ -48,7 +48,7 @@ export const generatedAssets = contentSchema.table(
     // Provenance discriminator. 'user_upload' = a chat/agent attachment the
     // user supplied (no prompt — `prompt` defaults to ''), the only value new
     // writes use. 'generated' is preserved history from the retired in-app
-    // generation path (ADR-041).
+    // generation path (ADR-043).
     source: text("source").notNull().default("generated"),
     accessPolicy: text("access_policy").notNull().default("user"),
     status: text("status").notNull().default("ready"),

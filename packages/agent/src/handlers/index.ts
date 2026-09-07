@@ -18,7 +18,7 @@ type LoaderEntry = () => Promise<
 // Every entry is a governance capability: the governed-tool catalogue, the
 // MCP registry + consent ledger, agent memory, approvals, the execution
 // evidence record, the agent-definition registry, and agent RBAC. Oxagen
-// governs agents; nothing here executes one (ADR-041).
+// governs agents; nothing here executes one (ADR-043).
 const LOADERS: Record<string, LoaderEntry> = {
   list_agent_tools: () => import("./agent.tool.list"),
   register_mcp_server: () => import("./agent.mcp.register"),

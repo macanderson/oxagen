@@ -1,6 +1,6 @@
 # Governed Repository Edit Implementation Plan
 
-> **2026-09-07 note:** [ADR-041](../../adr/ADR-041-runtime-excision.md) deleted
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
 > `edit_repo_file`/`agent.repo.edit`, its sandbox worker, and the repo-mutation
 > capabilities (`repo.create`/`fork`/`file.put`/`pr.open`/`branch.create`) this
 > plan wires up — none of it exists in the repository anymore. Kept as

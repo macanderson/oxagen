@@ -4,7 +4,7 @@
 > Source: apps/app/src/app/actions/*.action.ts, apps/app/src/lib/actions/*.ts
 > Last verified: 2026-06-20 (commit 2f62850)
 >
-> **2026-09-07 note:** [ADR-041](../../adr/ADR-041-runtime-excision.md) deleted
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
 > `automation.create`/`automation.enable` and `video.generate`; the
 > `automation-inline.action.ts` and video-generate action files this spec
 > documented no longer exist in `apps/app/src`. Their Requirement sections

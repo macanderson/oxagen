@@ -77,7 +77,7 @@ interface MarketplaceModalProps {
 
 // Agent-tool types only: MCP servers and capabilities. Integrations (data
 // connectors) are discovered on the Marketplace → Integrations side, not in
-// this modal. ADR-041 removed the Skills tab with the skill system.
+// this modal. ADR-043 removed the Skills tab with the skill system.
 const PLUGIN_TABS = [
   { value: "mcp_server" as PluginTypeValue, label: "MCP Servers" },
   { value: "agent_capability" as PluginTypeValue, label: "Capabilities" },
@@ -125,7 +125,7 @@ function ServerIcon({
 
 /**
  * Icon defaults for a plugin type, tolerant of a retired type. A catalog row
- * written before ADR-041 can still carry `agent_skill`; a hard index would
+ * written before ADR-043 can still carry `agent_skill`; a hard index would
  * crash the whole grid on one legacy row, so unknown types fall back to the
  * generic plug rather than throwing.
  */

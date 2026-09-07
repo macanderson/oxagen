@@ -16,7 +16,7 @@ import { z } from "zod";
 // plain inline-callable kind is "function" — a platform capability the agent is
 // allowed to invoke through the kernel.
 //
-// ADR-041 removed the execution runtime, and with it every field that
+// ADR-043 removed the execution runtime, and with it every field that
 // described HOW an agent runs: skills, sandboxes, sandbox-bound environments
 // and code mode are gone. What remains is the governed-agent REGISTRY record —
 // identity, versioned instructions, the graph scope it may reason over, and the
@@ -94,7 +94,7 @@ export type GraphAccess = z.infer<typeof graphAccessSchema>;
  *  `mcp_server` = a registered MCP connection vending many tools, governed by
  *  the workspace's tool RBAC rules and consent ledger.
  *
- *  ADR-041 removed `skill` (skills are gone) and `agent` (subagent fan-out is
+ *  ADR-043 removed `skill` (skills are gone) and `agent` (subagent fan-out is
  *  gone). An allowlist entry names something the platform can actually gate. */
 export const agentToolTypeSchema = z.enum(["function", "mcp_server"]);
 export type AgentToolType = z.infer<typeof agentToolTypeSchema>;

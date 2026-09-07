@@ -4,7 +4,7 @@
  *
  * Phase 0 ("Vault + Environments core", §18) shipped four tables; §5.6 binds
  * an agent to one of them. The sandbox-template tables (§5.2–§5.3) were
- * dropped with the agent runtime in ADR-041 — Oxagen governs agents, it does
+ * dropped with the agent runtime in ADR-043 — Oxagen governs agents, it does
  * not run them, so it has no sandbox to configure.
  *
  * Tables:
@@ -205,7 +205,7 @@ export const secretAccessLog = environmentsSchema.table(
 // is_primary=true (DB partial-unique + handler guard) — the one used when a run
 // doesn't name an environment. Bindings stay OUT of agent_versions.config
 // (mutable operational config). The sandbox-template half of this binding went
-// with environments.sandbox_templates in ADR-041.
+// with environments.sandbox_templates in ADR-043.
 
 export const agentEnvironmentBindings = environmentsSchema.table(
   "agent_environment_bindings",

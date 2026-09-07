@@ -13,7 +13,7 @@
  *    gates are not negotiable — so replacement is refused and only the
  *    appended instructions take effect.
  *
- * ADR-041: the BASELINE for `chat.system` does not live here. `@oxagen/agent`
+ * ADR-043: the BASELINE for `chat.system` does not live here. `@oxagen/agent`
  * owns it (`buildChatSystemPrompt`), because the prompt and the tool surface it
  * describes are one artifact and must change together. This module resolves the
  * customer layer over whatever baseline the caller passes; there is exactly one

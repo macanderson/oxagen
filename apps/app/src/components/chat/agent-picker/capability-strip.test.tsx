@@ -41,7 +41,7 @@ describe("summarizeToolRefs", () => {
     expect(s.counts.map((c) => c.kind)).toEqual(["mcp_server", "function"]);
   });
 
-  it("folds a retired kind (ADR-041 'skill') into the tool bucket", () => {
+  it("folds a retired kind (ADR-043 'skill') into the tool bucket", () => {
     // A legacy agent definition can still carry `skill`; it must count as a
     // tool rather than emitting a second, duplicate "N tools" segment.
     const s = summarizeToolRefs([

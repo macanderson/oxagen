@@ -1,7 +1,7 @@
 // generated-asset.persist.ts — upload an asset to blob storage and record a
 // `content.generated_assets` reference row in one call.
 //
-// ADR-041 removed the generation half of this table: image / video / document
+// ADR-043 removed the generation half of this table: image / video / document
 // generation left with the runtime, and with them the asynchronous render path
 // (`createPendingGeneratedAsset`, the `pending` → `ready` walk). What remains is
 // the ATTACHMENT half — a human uploading a file into a conversation so the

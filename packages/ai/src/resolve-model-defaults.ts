@@ -4,7 +4,7 @@
 // Precedence per dimension:
 //   workspace value ?? user value ?? null
 //
-// The text dimension is the ONLY stored default dimension (ADR-041 removed
+// The text dimension is the ONLY stored default dimension (ADR-043 removed
 // image/video generation from the platform, and with it the stored media model
 // defaults). It resolves `model` and `tier` on two INDEPENDENT chains:
 //   text.model = workspace.model ?? user.model ?? null

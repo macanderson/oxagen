@@ -3,9 +3,9 @@
  * `agent.agent_run_events`, `agent.agent_run_attempts`,
  * `agent.agent_run_attempt_seals`, `agent.agent_run_finalization_grants` and
  * `agent.agent_run_finalization_obligations`
- * (docs/specs/run-evidence-ingress/spec.md; ADR-041).
+ * (docs/specs/run-evidence-ingress/spec.md; ADR-043).
  *
- * Nothing here executes an agent. ADR-041 removed the durable worker that used
+ * Nothing here executes an agent. ADR-043 removed the durable worker that used
  * to claim runs, lease them, checkpoint engine state and reclaim expired
  * attempts, along with the two tables that existed only to support it
  * (`agent_run_checkpoints`, `agent_run_attempt_leases`). What remains is the
@@ -53,7 +53,7 @@
  * Every method runs under `withTenantDb`, so RLS from the caller's ambient
  * tenant scope is the tenant filter. That is now the whole story: the
  * cross-tenant `withSystemDb` paths in this module existed for the worker pool
- * and the lease sweeper, and both left with ADR-041. Evidence ingress reaches
+ * and the lease sweeper, and both left with ADR-043. Evidence ingress reaches
  * this store through `kernel.invoke()`, which always establishes scope.
  *
  * Every SQL-building and row-mapping decision is a pure, exported function —
@@ -142,7 +142,7 @@ export interface ResolvedEngineIdentity {
  * Provenance of a successor attempt: which earlier attempt of the same run it
  * resumed. The successor keeps its OWN attempt identity — attempt ids are never
  * reused (spec.md §"Attempt identity"). The checkpoint half of this tuple went
- * with `agent.agent_run_checkpoints` in ADR-041: Oxagen restores no engine
+ * with `agent.agent_run_checkpoints` in ADR-043: Oxagen restores no engine
  * state, so only the provenance chain remains as evidence.
  */
 export interface AttemptProvenance {
@@ -155,7 +155,7 @@ export interface AttemptProvenance {
  *
  * `producerId` is the identity of the process that produced this attempt's
  * evidence (an external engine's drain, a wrapper SDK submission). It is stored
- * in the legacy-named `worker_id` column, which predates ADR-041.
+ * in the legacy-named `worker_id` column, which predates ADR-043.
  */
 export interface CreateAttemptInput {
   runId: string;
@@ -1081,7 +1081,7 @@ export interface InsertAttemptInput {
 /**
  * Create the immutable attempt. The restore tuple is the attempt-provenance
  * PAIR only — the checkpoint half of it went with `agent_run_checkpoints` in
- * ADR-041, and `agent_run_attempts_restore_tuple_check` now enforces the
+ * ADR-043, and `agent_run_attempts_restore_tuple_check` now enforces the
  * narrowed all-or-nothing pair.
  */
 export function buildInsertAttemptSql(input: InsertAttemptInput): SQL {
@@ -1256,7 +1256,7 @@ export interface InsertSealInput {
 
 /**
  * Insert the immutable seal. `sealer_kind` is `'ingress'` — the one kind Oxagen
- * writes now that ADR-041 removed the runtime: evidence ingress stamps a seal
+ * writes now that ADR-043 removed the runtime: evidence ingress stamps a seal
  * for a submission, it never seals on behalf of a worker it supervised. The
  * column's CHECK still admits the retired `'worker'` and `'reclaimer'` so
  * historical rows stay valid; nothing writes them.

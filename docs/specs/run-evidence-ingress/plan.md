@@ -1,6 +1,6 @@
 # Governed Run Evidence Ingress Implementation Plan
 
-> **2026-09-07 note:** [ADR-041](../../adr/ADR-041-runtime-excision.md) deleted
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
 > `edit_repo_file`/`agent.repo.edit`, the sandbox worker, and the repo-mutation
 > capabilities this plan targets. The evidence-ledger tables it introduced
 > (`agent_runs` and friends) survive as `@oxagen/run-ledger`; see `spec.md`'s

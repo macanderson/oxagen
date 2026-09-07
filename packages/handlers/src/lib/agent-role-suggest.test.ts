@@ -167,7 +167,7 @@ describe("suggestNarrowestAgentRole — resource-scope dimensions", () => {
   });
 
   it("ignores tool kinds no system role constrains (e.g. a legacy `skill` entry on an old version)", () => {
-    // ADR-041 narrowed agentToolTypeSchema to function | mcp_server, but a
+    // ADR-043 narrowed agentToolTypeSchema to function | mcp_server, but a
     // stored agent_versions.config from before the cut can still carry other
     // kinds. They must be inert here, not silently escalate the ceiling.
     expect(

@@ -10,7 +10,7 @@
  * conversation files, so there is exactly one implementation of "list this
  * conversation's files".
  *
- * ADR-041 removed the second "Workspace" tab: it browsed a live sandbox
+ * ADR-043 removed the second "Workspace" tab: it browsed a live sandbox
  * working tree (`list_sandbox_files`), and Oxagen no longer runs sandboxes.
  * With one surface left the tab strip itself is gone — a single-tab tab bar is
  * chrome that explains nothing.

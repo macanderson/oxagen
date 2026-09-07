@@ -1,10 +1,10 @@
--- Finish the runtime excision on the KEPT tables — ADR-041 follow-up.
+-- Finish the runtime excision on the KEPT tables — ADR-043 follow-up.
 --
 -- 20260907120000_drop_agent_runtime_tables.sql dropped the runtime's own
 -- tables. This migration cleans up what it deliberately left behind: one table
 -- whose transport went with the runtime, five dead worker columns on the
 -- evidence ledger's run row, and two CHECK constraints still spelling the
--- pre-ADR-041 vocabulary.
+-- pre-ADR-043 vocabulary.
 --
 -- Like its predecessor this is a CONTRACT migration: every reader of the
 -- dropped table and columns was removed in the same body of work, and
@@ -18,7 +18,7 @@
 -- ════════════════════════════════════════════════════════════════════════════
 -- 1. agent.a2a_tasks — the A2A transport's durable task store
 -- ════════════════════════════════════════════════════════════════════════════
--- ADR-041 retired `a2a.card.get` and the POST /a2a JSON-RPC surface that this
+-- ADR-043 retired `a2a.card.get` and the POST /a2a JSON-RPC surface that this
 -- table was the durable state for. Nothing outside packages/database referenced
 -- it afterwards. CASCADE takes its four indexes, its state CHECK, its
 -- tenant_isolation policy and its grants with it.
@@ -71,7 +71,7 @@ ALTER TABLE "agent"."agent_run_attempt_seals"
     sealer_kind IN ('ingress', 'worker', 'reclaimer')
   );
 
--- A `client_attested` submission (ADR-041 §3) is admitted by no interactive
+-- A `client_attested` submission (ADR-043 §3) is admitted by no interactive
 -- Oxagen surface — the engine ran elsewhere — so it needs a surface value of
 -- its own. `external` is that value; it completes PlatformSurface in
 -- packages/run-ledger/src/surface.ts.

@@ -13,7 +13,7 @@ import type { TextTier, EffortLevel } from "@oxagen/ai/catalog";
 // the same rationale on the literal mode copy).
 import type { TurnBudgetMode } from "@oxagen/billing";
 
-// ADR-041 removed image and video generation, so a composer turn is text +
+// ADR-043 removed image and video generation, so a composer turn is text +
 // reasoning effort and nothing else — there is no generate mode, no media tier
 // and no media model to carry.
 export interface ComposerModelState {

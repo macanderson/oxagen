@@ -199,7 +199,7 @@ describe("workspace.model.settings.write schema", () => {
     expect(result.defaultTextModel).toBe("anthropic/claude-sonnet-5");
   });
 
-  // ADR-041: media generation is gone — the tool schema has no media fields.
+  // ADR-043: media generation is gone — the tool schema has no media fields.
   it("exposes only the two text model fields", () => {
     expect(Object.keys(workspaceModelSettingsWriteSchema).sort()).toEqual([
       "defaultTextModel",

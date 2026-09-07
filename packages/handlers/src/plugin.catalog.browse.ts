@@ -100,13 +100,13 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   };
 
   // ── agent_skill path ────────────────────────────────────────────────────────
-  // ADR-041 removed skills; `agent.skills` is dropped. The pluginType is still
+  // ADR-043 removed skills; `agent.skills` is dropped. The pluginType is still
   // in the contract's enum, so an explicit request for it returns an empty page
   // rather than an error. Narrowing the enum is a follow-up in packages/oxagen.
   if (pluginType === "agent_skill") {
     logger.info(
       { limit, offset, orgId: ctx.orgId },
-      "plugin.catalog.browse agent_skill: retired (ADR-041) — empty page",
+      "plugin.catalog.browse agent_skill: retired (ADR-043) — empty page",
     );
     return { servers: [], nextOffset: null, total: 0 };
   }

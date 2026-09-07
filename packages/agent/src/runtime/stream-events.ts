@@ -2,7 +2,7 @@
 // The frontend matches on `type` to render tool-call cards, approval prompts
 // and MCP consent prompts inline in the message DAG.
 //
-// This is the governance vocabulary and nothing more (ADR-041): Oxagen governs
+// This is the governance vocabulary and nothing more (ADR-043): Oxagen governs
 // agents, it does not run them, so there are no plan, subagent-fanout,
 // background-task or sandbox/terminal events here. Every variant below
 // corresponds to a gate `materializeTools` actually applies per tool call —

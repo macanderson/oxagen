@@ -1,6 +1,6 @@
 # Workflow Runs Clarification
 
-> **2026-09-07 note:** [ADR-041](../adr/ADR-041-runtime-excision.md) deleted
+> **2026-09-07 note:** [ADR-043](../adr/ADR-043-runtime-excision.md) deleted
 > `workflow.run`/`workflow.cancel`/`workflow.status` and the `workflow.ts`
 > Postgres schema entirely — the divergence this spec documents (workflow
 > runs stored as `agent_executions` rows) is now moot; there is no workflow

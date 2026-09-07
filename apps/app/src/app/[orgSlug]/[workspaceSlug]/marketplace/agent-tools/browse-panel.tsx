@@ -129,7 +129,7 @@ function ServerIcon({
 
 /**
  * Icon defaults for a plugin type, tolerant of a retired type. A catalog row
- * written before ADR-041 can still carry `agent_skill`; a hard index would
+ * written before ADR-043 can still carry `agent_skill`; a hard index would
  * crash the whole grid on one legacy row, so unknown types fall back to the
  * generic plug rather than throwing.
  */

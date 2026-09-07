@@ -38,5 +38,6 @@ with a new ADR if the call changes.
 
 ## Governance plane
 
-- [ADR-041](./ADR-041-runtime-excision.md) — Excise the agent runtime: Oxagen governs agents, it does not run them
+- [ADR-041](./ADR-041-canonical-json-one-rule-not-one-implementation.md) — Canonical JSON: one rule, not one implementation
 - [ADR-042](./ADR-042-tenant-data-planes.md) — Organisation-scoped data planes: every store switches at the tenant
+- [ADR-043](./ADR-043-runtime-excision.md) — Excise the agent runtime: Oxagen governs agents, it does not run them

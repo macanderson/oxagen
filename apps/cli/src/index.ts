@@ -9,7 +9,7 @@
  *   oxagen trace --dispatch <id>
  *
  * Oxagen governs, grounds, explains, meters and rates agents; it does not run
- * them (ADR-041). Agentic coding lives in the `stella` CLI, which talks to
+ * them (ADR-043). Agentic coding lives in the `stella` CLI, which talks to
  * Oxagen over MCP/API. The Commander command tree lives in ./program.ts; this
  * entry stays thin — fatal-error plumbing, then hand off to the tree.
  */

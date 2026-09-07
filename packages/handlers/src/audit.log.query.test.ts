@@ -6,7 +6,7 @@
  * org-scoping is always applied (tenant isolation), events come back
  * newest-first, filters are forwarded, and pagination / hasMore are right.
  *
- * ADR-041 removed the second spine (playbook_events) with the automations
+ * ADR-043 removed the second spine (playbook_events) with the automations
  * subsystem, so `source: "playbook"` now matches nothing.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";

@@ -33,7 +33,7 @@ function buildRegistry(): {
 
   const allManifests: OxagenPluginManifest[] = [
     // No built-in capability packs ship today: the media, documents and
-    // swe-bench packs left with the agent runtime (ADR-041). Customer packs
+    // swe-bench packs left with the agent runtime (ADR-043). Customer packs
     // register through the plugin catalog (ADR-034).
   ];
 

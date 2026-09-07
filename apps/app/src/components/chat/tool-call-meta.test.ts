@@ -70,7 +70,7 @@ describe("toolCallMeta — curated map", () => {
     expect(toolCallMeta("upload_asset").label).toBe("Upload file");
   });
 
-  it("no longer curates any excised runtime capability (ADR-041)", () => {
+  it("no longer curates any excised runtime capability (ADR-043)", () => {
     // A retired capability name has no curated entry — it falls through to the
     // derivation, which is exactly what a legacy persisted tool call needs.
     expect(toolCallMeta("execute_code").label).toBe("Execute code");

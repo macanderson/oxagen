@@ -4,7 +4,7 @@
 > Source: agent.execution.record.ts, chat.message.send.ts, chat.message.execution.ts, conversation.chat.ts, conversation.list.ts, conversation.rename.ts, conversation.archive.ts, conversation.delete.ts, conversation.purge.ts, conversation.files.list.ts
 > Last verified: 2026-06-20 (commit 2f628504)
 >
-> **2026-09-07 note:** [ADR-041](../../adr/ADR-041-runtime-excision.md) deleted
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
 > `agent.compose` (plan/execute/summarize a capability chain) and
 > `agent.subagent.logs` entirely; their Requirement/Invariant sections have
 > been removed from this file rather than kept as dead prose.

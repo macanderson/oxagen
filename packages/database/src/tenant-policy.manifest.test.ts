@@ -62,7 +62,7 @@ describe("tenant policy manifest", () => {
     expect(tables).not.toContain("agent.mcp_servers"); // moved to mcp.mcp_servers
     expect(tables).not.toContain("workflow.automations");
     expect(tables).not.toContain("workflow.automation_runs");
-    // ADR-041 runtime excision: the whole workflow/content/cms/eval domains,
+    // ADR-043 runtime excision: the whole workflow/content/cms/eval domains,
     // plus the agent-runtime tables, are gone from the schema entirely.
     expect(tables).not.toContain("workflow.playbooks");
     expect(tables).not.toContain("content.documents");
@@ -85,7 +85,7 @@ describe("tenant policy manifest", () => {
     expect(tables).toContain("privacy.privacy_erasure_requests");
   });
 
-  it("keeps content.generated_assets — the attachment path survived ADR-041", () => {
+  it("keeps content.generated_assets — the attachment path survived ADR-043", () => {
     // content.documents went with the runtime; the blob reference row backs
     // asset.upload / conversation.attachment.add / conversation.files.list.
     const entry = POLICY_MANIFEST.find(

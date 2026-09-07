@@ -3,7 +3,7 @@
  * single-model projection render correctly and that --json is machine-readable.
  *
  * The `--session` rollup this command used to offer read the local coding
- * agent's turn store, which was retired with the runtime (ADR-041); observed
+ * agent's turn store, which was retired with the runtime (ADR-043); observed
  * spend now comes from the platform via `budget show` and `trace`.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";

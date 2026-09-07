@@ -1,6 +1,6 @@
 # xmcp Migration Plan: `apps/mcp`
 
-> **2026-09-07 note:** [ADR-041](../../adr/ADR-041-runtime-excision.md) deleted
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
 > `agent.skill.list`, `agent.code.execute`, `agent.plan.approve`/`create`,
 > `agent.skill.load`, and `agent.subagent.aggregate`/`dispatch` — the tool file
 > example and the "not yet exposed" follow-up list below both cite capabilities

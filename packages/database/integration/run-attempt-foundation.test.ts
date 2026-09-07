@@ -450,7 +450,7 @@ describe("T3: append-only privileges, read back from the catalog", () => {
 // ---------------------------------------------------------------------------
 // T4 — attempt identity uniqueness
 //
-// The mutable fenced lease went with the runtime in ADR-041: Oxagen no longer
+// The mutable fenced lease went with the runtime in ADR-043: Oxagen no longer
 // claims or executes runs, so there is no live lease to fence. What remains is
 // the attempt identity itself, which must stay dense and unique per run for the
 // seal → grant → obligation chain to address it.

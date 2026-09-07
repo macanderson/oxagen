@@ -3,7 +3,7 @@
  * marketplace-modal.test.tsx — render tests for MarketplaceModal.
  *
  * The modal is the Agent Tools Marketplace. It exposes exactly THREE tabs, in
- * order: MCP Servers (mcp_server), Capabilities (agent_capability) — ADR-041
+ * order: MCP Servers (mcp_server), Capabilities (agent_capability) — ADR-043
  * removed the Skills tab. The default/active tab on open is mcp_server. The
  * Integrations and Knowledge Sources tabs were removed from this modal —
  * integrations now live on the standalone Marketplace → Integrations page — so
@@ -138,7 +138,7 @@ describe("MarketplaceModal — open", () => {
     expect(screen.getByText("Agent Tools Marketplace")).toBeInTheDocument();
   });
 
-  it("does NOT render a Skills tab (ADR-041 removed skill packs)", () => {
+  it("does NOT render a Skills tab (ADR-043 removed skill packs)", () => {
     render(<MarketplaceModal {...defaultProps} open />);
     expect(
       screen.queryByTestId("marketplace-tab-agent_skill"),

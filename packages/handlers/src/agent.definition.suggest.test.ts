@@ -35,7 +35,7 @@ import { TEST_CTX, makeCTX } from "./test-utils/fixtures";
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
-// ADR-041: a governed agent definition grants exactly two kinds of tool.
+// ADR-043: a governed agent definition grants exactly two kinds of tool.
 type ToolFixture = {
   type: "function" | "mcp_server";
   ref: string;
@@ -164,7 +164,7 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     expect(() => agentDefinitionSuggest.output.parse(result)).not.toThrow();
   });
 
-  it("always reports agentType 'custom' — ADR-041 removed code mode", async () => {
+  it("always reports agentType 'custom' — ADR-043 removed code mode", async () => {
     setupWorld();
     mocks.generateObjectFor.mockResolvedValue({ object: baseSynthesis() });
 

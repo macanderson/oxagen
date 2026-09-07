@@ -3,7 +3,7 @@
      added or deleted, so it goes stale silently -- two deleted packages and six
      missing ones were found here at once (#2631). If you add or remove a package,
      either re-run that command or edit this table by hand.
-     Last reconciled against `packages/` on 2026-09-07 (ADR-041 excision pass). -->
+     Last reconciled against `packages/` on 2026-09-07 (ADR-043 excision pass). -->
 
 # Dependencies & Integrations
 
@@ -100,7 +100,7 @@ xmcp                    MCP server framework (streamable HTTP)
 | `@oxagen/functions` | api, app | Shared function utilities |
 | `@oxagen/mcp-config` | cli, mcp | MCP server config schema |
 
-ADR-041 (runtime excision, 2026-09-07) removed `@oxagen/agent-artifacts`,
+ADR-043 (runtime excision, 2026-09-07) removed `@oxagen/agent-artifacts`,
 `@oxagen/agent-engine`, `@oxagen/agent-worker`, `@oxagen/sandbox`,
 `@oxagen/skills`, `@oxagen/stella-engine-client`, and the search/fetch
 `@oxagen/web` package entirely; `@oxagen/agent-runner` was renamed

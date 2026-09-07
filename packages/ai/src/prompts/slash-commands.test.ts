@@ -15,7 +15,7 @@ describe("SLASH_COMMANDS registry", () => {
     }
   });
 
-  it("every command is agent-interpreted and carries guidance (ADR-041: no client-handled commands)", () => {
+  it("every command is agent-interpreted and carries guidance (ADR-043: no client-handled commands)", () => {
     for (const c of SLASH_COMMANDS) {
       expect(c.agentGuidance).toBeTruthy();
     }

@@ -76,7 +76,7 @@ export type DbMessageRow = InferSelectModel<typeof messages>;
 
 /**
  * Row type for `content.generated_assets` — the workspace media reference row
- * (chat/agent attachments, plus preserved generation history; see ADR-041).
+ * (chat/agent attachments, plus preserved generation history; see ADR-043).
  */
 export type GeneratedAssetRow = InferSelectModel<typeof generatedAssets>;
 
@@ -166,7 +166,7 @@ export type NewAgentRunEventRow = InferInsertModel<typeof agentRunEvents>;
 // docs/specs/run-evidence-ingress — the immutable attempt identity and the
 // seal → grant → obligation chain every terminal outcome writes in one
 // transaction. The mutable fenced lease and the checkpoint table went with the
-// runtime in ADR-041.
+// runtime in ADR-043.
 
 /** Full SELECT row from `agent.agent_run_attempts` (immutable). */
 export type AgentRunAttemptRow = InferSelectModel<typeof agentRunAttempts>;

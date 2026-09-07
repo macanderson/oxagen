@@ -79,7 +79,7 @@ apps/app/src/app/[orgSlug]/[workspaceSlug]/layout.tsx → workspace shell
     /agents                              → WorkbenchAgentsPage + AgentBuilder (new/[agentId])
     /tools                               → Agent Tools hub (All Tools / MCP Servers / Capabilities)
     /environments                        → WorkbenchEnvironmentsPage (EnvironmentsPanel)
-    (ADR-041 removed /workbench/sandboxes — no sandbox sessions or templates to manage)
+    (ADR-043 removed /workbench/sandboxes — no sandbox sessions or templates to manage)
 
   /marketplace                           → MarketplacePage
     /browse                              → BrowseMarketplacePage (plugin/skill catalog)
@@ -88,7 +88,7 @@ apps/app/src/app/[orgSlug]/[workspaceSlug]/layout.tsx → workspace shell
     /integrations                        → MarketplaceIntegrationsPage
     /agent-tools                         → MarketplaceAgentToolsPage
 
-  (ADR-041 removed /evals — no standalone eval platform)
+  (ADR-043 removed /evals — no standalone eval platform)
 
   /knowledge
     /                                    → KnowledgePage

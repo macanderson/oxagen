@@ -256,7 +256,7 @@ When resolvedTierCatalog is called, the function SHALL read all OXAGEN_LLM_* env
 #### Scenario: Catalog aggregates all tiers
 <!-- test: models.test.ts -->
 - **WHEN** resolvedTierCatalog() is called
-- **THEN** a ResolvedTierCatalog object is returned with structure: {text:{fast:..., balanced:..., precise:...}} — text is the only tier dimension (ADR-041 removed the image/video tiers)
+- **THEN** a ResolvedTierCatalog object is returned with structure: {text:{fast:..., balanced:..., precise:...}} — text is the only tier dimension (ADR-043 removed the image/video tiers)
 
 #### Scenario: Single environment read per call
 <!-- test: models.test.ts -->
@@ -309,7 +309,7 @@ The @oxagen/ai package is the single AI SDK chokepoint. All models (language, em
 <!-- entities: PromptKey, PromptConfig -->
 <!-- enforced: prompts/registry.chatSystemPrompt(), prompts/registry.conversationTitlePrompt(), etc. -->
 
-Every baseline system prompt (chat.system, conversation.title — the only two `PromptKey` values left after ADR-041 removed the generation-capability prompt keys) is built by a pure function (chatSystemPrompt, conversationTitlePrompt, etc.) that takes no input except the PromptKey and optional SystemPromptContext (org/workspace slugs and names). Baselines are never cached at module scope — each call re-renders the baseline, ensuring workspace context is always fresh. The workspace prompt config (additionalInstructions, overrides) is loaded on-demand via loadWorkspacePromptConfig, providing a strict separation between platform defaults and user customization.
+Every baseline system prompt (chat.system, conversation.title — the only two `PromptKey` values left after ADR-043 removed the generation-capability prompt keys) is built by a pure function (chatSystemPrompt, conversationTitlePrompt, etc.) that takes no input except the PromptKey and optional SystemPromptContext (org/workspace slugs and names). Baselines are never cached at module scope — each call re-renders the baseline, ensuring workspace context is always fresh. The workspace prompt config (additionalInstructions, overrides) is loaded on-demand via loadWorkspacePromptConfig, providing a strict separation between platform defaults and user customization.
 
 > Last verified: 2026-06-20 (commit 2f628504)
 

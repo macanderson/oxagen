@@ -11,7 +11,7 @@
  *   - Renders payment method select when methods are provided
  *   - Save button present
 
- * ADR-041 removed Ask-to-Fill (`useRegisterFillableForm`), so the fill
+ * ADR-043 removed Ask-to-Fill (`useRegisterFillableForm`), so the fill
  * registration + apply round-trip block that lived here is gone with it.
  */
 

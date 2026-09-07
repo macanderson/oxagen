@@ -345,7 +345,7 @@ describe("ConversationFilesList", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows the file count once MORE THAN ONE file exists, and never a ZIP link (ADR-041)", async () => {
+  it("shows the file count once MORE THAN ONE file exists, and never a ZIP link (ADR-043)", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,

@@ -1,7 +1,7 @@
 /**
  * `@oxagen/agent` — the governed-agent runtime library.
  *
- * Oxagen governs agents; it does not run them (ADR-041). What survives here is
+ * Oxagen governs agents; it does not run them (ADR-043). What survives here is
  * the machinery that makes a governed turn possible and auditable:
  *
  *   1. `runtime/` — materialising capability contracts and registered MCP
@@ -28,7 +28,7 @@ export * from "./runtime/materialize-tools";
 // than spelling eight capability names of its own.
 export * from "./runtime/ontology-tools";
 // The governed turn loop — ONE bounded, metered model turn over the
-// materialised tools (ADR-041 §2). The only thing left of "running an agent".
+// materialised tools (ADR-043 §2). The only thing left of "running an agent".
 export * from "./runtime/governed-turn";
 export * from "./runtime/approval";
 export * from "./runtime/stream-events";

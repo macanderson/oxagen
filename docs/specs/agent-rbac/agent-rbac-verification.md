@@ -1,6 +1,6 @@
 # Agent RBAC — acceptance verification
 
-> **2026-09-07 note:** [ADR-041](../../adr/ADR-041-runtime-excision.md) deleted
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
 > `agent.subagent.dispatch` (criterion 7 below verifies behavior on a
 > capability that no longer exists). Kept as historical verification record.
 

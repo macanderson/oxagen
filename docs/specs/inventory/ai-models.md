@@ -1,7 +1,7 @@
 # Spec: ai-models
 
 > Auto-extracted by spec-miner. Last mined: 2026-06-20.
-> Rewritten 2026-09-07 for ADR-041: image/video generation was removed from the
+> Rewritten 2026-09-07 for ADR-043: image/video generation was removed from the
 > platform, and with it `generate-image.ts`, `generate-video.ts`, the media
 > tiers, and the stored `defaultImageModel` / `defaultVideoModel` columns. What
 > remains — and all this spec describes — is the white-labeled **text** tier
@@ -86,7 +86,7 @@ When a caller invokes `resolvedTierCatalog()`, the function SHALL read all text 
 #### Scenario: Complete tier catalog
 <!-- test: models.test.ts → "joins every tier to its concrete gateway model id — text only" -->
 - **WHEN** `resolvedTierCatalog()` is called with all env vars set
-- **THEN** result is `{ text: { fast, balanced, precise } }` with each field mapping to its gateway model id — there are no media tiers (ADR-041)
+- **THEN** result is `{ text: { fast, balanced, precise } }` with each field mapping to its gateway model id — there are no media tiers (ADR-043)
 
 ---
 
@@ -155,7 +155,7 @@ When a caller invokes `supportsReasoning(model)` with a model id string or objec
 <!-- enforced: supportsVision(), supportsVideoInput() -->
 <!-- test: catalog.test.ts → "distinguishes vision (image input) from image generation" -->
 
-A text model that accepts image or video attachments is *multimodal input*, which ADR-041 did not remove — the chat stream route still upgrades a turn to a vision-capable model when the user attaches an image. `supportsVision()` and `supportsVideoInput()` report those input capabilities and MUST NOT be confused with media generation, which no longer exists on the platform.
+A text model that accepts image or video attachments is *multimodal input*, which ADR-043 did not remove — the chat stream route still upgrades a turn to a vision-capable model when the user attaches an image. `supportsVision()` and `supportsVideoInput()` report those input capabilities and MUST NOT be confused with media generation, which no longer exists on the platform.
 
 #### Scenario: Vision input is not image generation
 <!-- test: catalog.test.ts → "distinguishes vision (image input) from image generation" -->
@@ -271,7 +271,7 @@ When env var reading returns undefined (e.g., in test environments where mocking
 <!-- id: text-only-tier-invariant -->
 <!-- entities: OxagenTier -->
 <!-- enforced: resolvedTierCatalog(), resolveModelDefaults() -->
-<!-- verified_by: catalog.test.ts → "exposes the three text tiers — the only white-labeled tiers left (ADR-041)" -->
+<!-- verified_by: catalog.test.ts → "exposes the three text tiers — the only white-labeled tiers left (ADR-043)" -->
 
 `fast` / `balanced` / `precise` are the complete set of Oxagen tiers. There are no image or video tiers, no `OXAGEN_LLM_IMAGE_*` / `OXAGEN_LLM_VIDEO_*` env vars, and no stored media model defaults at either the user or workspace level.
 
@@ -297,4 +297,4 @@ When both a model id and a tier are available (via env, selector arg, or databas
 
 ---
 
-<!-- uncertainty: catalog.ts still carries residual media-generation entries and the supportsImage/supportsVideo/supportsMedia helpers. Nothing in the platform calls them for generation any more (ADR-041 removed every consumer); their removal is a separate catalog cleanup and is deliberately not specified here. -->
+<!-- uncertainty: catalog.ts still carries residual media-generation entries and the supportsImage/supportsVideo/supportsMedia helpers. Nothing in the platform calls them for generation any more (ADR-043 removed every consumer); their removal is a separate catalog cleanup and is deliberately not specified here. -->

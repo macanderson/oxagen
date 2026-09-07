@@ -155,7 +155,7 @@ describe("messageToBlocks", () => {
     ]);
   });
 
-  it("drops retired execution block types (ADR-041) instead of rendering them", () => {
+  it("drops retired execution block types (ADR-043) instead of rendering them", () => {
     const blocks = messageToBlocks(
       row({
         id: "a",

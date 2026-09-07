@@ -8,7 +8,7 @@
 // only does the async load, the try/catch, and the wiring of these outputs
 // into resolvePrompt/materializeTools.
 //
-// ADR-041: skill pinning and the `code` agent flow went with the runtime, so a
+// ADR-043: skill pinning and the `code` agent flow went with the runtime, so a
 // binding now carries exactly two things — instructions and MCP servers.
 //
 // Instruction merging is ADDITIVE and idempotent: an unbound turn never calls

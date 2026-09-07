@@ -14,7 +14,7 @@ import type { OxagenPluginManifest } from "./manifest";
 // is empty and every contract would appear unknown.
 import "../contracts/index";
 
-// No pack ships built in (ADR-041): the registry starts empty and customer
+// No pack ships built in (ADR-043): the registry starts empty and customer
 // packs arrive through the plugin catalog (ADR-034). Tests register fixtures.
 const fixture: OxagenPluginManifest = {
   id: "acme/graph-readers",

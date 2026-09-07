@@ -48,7 +48,7 @@ describe("mapSuggestionToPrefill", () => {
     expect(p.maxNodes).toBe(60);
   });
 
-  it("never carries an agentType into the prefill (ADR-041 retired the code type)", () => {
+  it("never carries an agentType into the prefill (ADR-043 retired the code type)", () => {
     expect(Object.keys(mapSuggestionToPrefill(suggestion()))).not.toContain(
       "codeFeatures",
     );

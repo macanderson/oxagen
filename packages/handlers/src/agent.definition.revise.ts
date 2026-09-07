@@ -143,7 +143,7 @@ export const agentDefinitionReviseHandler: CapabilityHandler<
       name: object.name.trim() || current.name,
       description:
         object.description.trim() || current.description || undefined,
-      // agentType is deliberately not sent: ADR-041 removed code mode, so a
+      // agentType is deliberately not sent: ADR-043 removed code mode, so a
       // revision never changes it — omitted leaves the stored value untouched.
       config,
     },

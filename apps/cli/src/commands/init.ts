@@ -11,7 +11,7 @@
  * Everything here talks to the platform API. The settings-file scaffolding init
  * used to do (`.oxagen/settings.json`, permissions, hooks, model defaults)
  * configured the local coding agent, which was retired with the runtime
- * (ADR-041) — Stella owns that file format now.
+ * (ADR-043) — Stella owns that file format now.
  *
  * `init` is idempotent: re-running against an already-linked project reuses the
  * existing link instead of re-prompting.

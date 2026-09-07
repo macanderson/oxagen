@@ -12,7 +12,7 @@
  * Slash commands are NOT a client-side router: the composer sends the literal
  * text (e.g. "/ci main") and the agent — told about these commands in its
  * system prompt — maps it to the right capability. Every command is
- * agent-interpreted; ADR-041 removed the one client-handled command (`/pin`,
+ * agent-interpreted; ADR-043 removed the one client-handled command (`/pin`,
  * which named a repository sandbox that no longer exists).
  */
 

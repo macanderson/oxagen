@@ -54,7 +54,7 @@ const config: XmcpConfig = {
     // entry here without the matching dependency yields a runtime MODULE_NOT_FOUND
     // that no build step catches.
     //
-    // ADR-041 (runtime excision) removed the sandbox/document-generation
+    // ADR-043 (runtime excision) removed the sandbox/document-generation
     // capability families — @vercel/sandbox, dockerode, exceljs, pptxgenjs
     // and docx are no longer pulled in by anything under apps/mcp and were
     // dropped from this list and from package.json.

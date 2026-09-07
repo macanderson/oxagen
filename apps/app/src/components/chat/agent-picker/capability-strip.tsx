@@ -11,7 +11,7 @@ import type { AgentToolRef } from "./agent-picker-types";
  * tell at a glance what an agent may call without ever seeing a raw slug or
  * UUID.
  *
- * `AgentToolRef.type` is an open string (ADR-041 retired the `skill` and
+ * `AgentToolRef.type` is an open string (ADR-043 retired the `skill` and
  * `agent` kinds but a legacy definition may still carry one), so an unknown
  * kind falls back to the generic tool icon and noun rather than crashing.
  */
@@ -30,7 +30,7 @@ type ToolKind = AgentToolRef["type"];
 const KIND_ORDER: readonly ToolKind[] = ["mcp_server", "function"];
 
 /**
- * Fold an unrecognised kind onto `function`. ADR-041 retired the `skill` and
+ * Fold an unrecognised kind onto `function`. ADR-043 retired the `skill` and
  * `agent` kinds, but a legacy agent definition can still carry one; without
  * this the summary would emit two separate "N tools" segments (one per unknown
  * kind) for what the user reads as a single bucket.

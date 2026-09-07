@@ -34,7 +34,7 @@ await build({
   // binaries esbuild cannot read out of the bundle.
   //
   // `dockerode` used to be here because @oxagen/sandbox pulled it in through
-  // the agent handlers. ADR-041 deleted that package with the rest of the
+  // the agent handlers. ADR-043 deleted that package with the rest of the
   // runtime, so nothing in this bundle reaches it any more and the entry is
   // gone with it.
   external: [

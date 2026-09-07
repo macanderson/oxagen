@@ -302,7 +302,7 @@ export type RetentionPolicyPublicId = z.output<
 
 /**
  * Engines admissible today. Stella is the only one: the TypeScript step loop it
- * replaced was deleted with ADR-041, so a spec naming `ts` fails admission at
+ * replaced was deleted with ADR-043, so a spec naming `ts` fails admission at
  * the contract boundary rather than at some later resolution step.
  */
 export const RUN_ENGINES = ["stella"] as const;

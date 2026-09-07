@@ -4,7 +4,7 @@
  * An environment is a named set of secrets (the vault). Binding an agent to
  * one declares which credentials that agent identity may resolve at run time
  * — governance metadata on the agent registry, not runtime state. The
- * sandbox-template half of the old binding left with the runtime (ADR-041);
+ * sandbox-template half of the old binding left with the runtime (ADR-043);
  * a binding is now environment + primary flag only.
  */
 import { and, eq, isNull } from "drizzle-orm";

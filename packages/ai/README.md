@@ -40,7 +40,7 @@ Model IDs are maintained in `src/catalog.ts`. The catalog is the single source o
 | `balanced` | `OXAGEN_LLM_BALANCED` | `anthropic/claude-sonnet-5` |
 | `precise` | `OXAGEN_LLM_PRECISE` | `anthropic/claude-fable-5` |
 
-ADR-041 removed image and video generation, so text is the only tier family.
+ADR-043 removed image and video generation, so text is the only tier family.
 
 ## Source layout
 

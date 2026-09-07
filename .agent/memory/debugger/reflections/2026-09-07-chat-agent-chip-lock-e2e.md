@@ -3,12 +3,12 @@
 ### What I set out to do
 Root-cause the CI e2e failure at `apps/app/e2e/chat-agent-picker.spec.ts:64`
 (`await chip.click()` times out after the message is sent, on a branch executing
-ADR-041), fix it in app code, and prove it with a vitest test that fails before
+ADR-043), fix it in app code, and prove it with a vitest test that fails before
 and passes after — with no Postgres/Neo4j/Docker available, so no e2e run.
 
 ### What I actually did (measurable deltas)
 - Identified a one-line regression in `apps/app/src/components/chat/message-composer.tsx`:
-  ADR-041 commit `ae4b46968` changed `if (codeMode) lockSelection();` (origin/main:1538)
+  ADR-043 commit `ae4b46968` changed `if (codeMode) lockSelection();` (origin/main:1538)
   to unconditional `lockSelection();` (branch:1224). That flips
   `ChatSelectionProvider.clientLocked`, which the composer forwarded as
   `locked={selectionLocked}` to `AgentContextChip`, whose locked branch renders a
@@ -82,7 +82,7 @@ and passes after — with no Postgres/Neo4j/Docker available, so no e2e run.
 - `hasMessages` is `messages.length > 0 || isStreaming` and `setIsStreaming(true)` fires
   synchronously at submit — so the entire `clientLocked` latch that existed "to cover the
   send→revalidate gap" was provably redundant, and strictly worse (it never released).
-- ADR-041 is unusually well-written for tracing residue: the contract-families list let
+- ADR-043 is unusually well-written for tracing residue: the contract-families list let
   me confirm in seconds that the code binding was intentionally deleted rather than lost.
 
 ### Risks I am leaving behind (untouched on purpose, and why)

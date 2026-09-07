@@ -40,7 +40,7 @@ import type { ChatSessionState } from "./session-state";
  *
  * There is no lock here. The only lock the composer chip ever honoured was the
  * CODE lock — a coding target claimed on the first code turn — and it left with
- * the runtime (ADR-041). `agentId` is now a per-turn parameter of the stream
+ * the runtime (ADR-043). `agentId` is now a per-turn parameter of the stream
  * route, so the chip stays a live control for the whole conversation; the
  * read-only agent affordance that survives is the v2 session-settings AgentRow,
  * driven by `locks.agent` (server truth: `hasMessages`).

@@ -1,6 +1,6 @@
--- Drop the stored image/video model defaults — ADR-041 follow-up.
+-- Drop the stored image/video model defaults — ADR-043 follow-up.
 --
--- ADR-041 removed media generation from the platform: there are no `image.*`
+-- ADR-043 removed media generation from the platform: there are no `image.*`
 -- or `video.generate` capabilities, no media tiers in @oxagen/ai, and nothing
 -- left that could consume a stored image or video model id. The two columns on
 -- each of `workspace.workspaces` and `auth.user_preferences` are the last

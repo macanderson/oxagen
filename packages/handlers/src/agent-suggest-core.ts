@@ -8,7 +8,7 @@
  * substitutes an out-of-workspace ontology, and validates the final
  * AgentDefinitionConfig.
  *
- * ADR-041 scope: Oxagen governs agents, it does not run them. A definition is
+ * ADR-043 scope: Oxagen governs agents, it does not run them. A definition is
  * therefore a REGISTRY record — identity, versioned instructions, the graph
  * scope it may reason over, the memory policy it inherits, and the allowlist of
  * things it may reach (platform capabilities and registered MCP servers). There
@@ -45,7 +45,7 @@ export class AgentSuggestError extends Error {
  * plain-language description into a valid governed-agent definition.
  *
  * This used to be loaded from a tenant-installed `create-agent` skill with an
- * embedded builtin fallback. Skills are gone (ADR-041), and a governance
+ * embedded builtin fallback. Skills are gone (ADR-043), and a governance
  * product should not make its own authoring prompt a tenant-editable,
  * un-versioned document anyway: it is platform behaviour, so it is code, and it
  * ships identically in every bundle and every environment.

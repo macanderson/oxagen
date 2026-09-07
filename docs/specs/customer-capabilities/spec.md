@@ -1,12 +1,12 @@
 # Customer-Built Capability Packages (`.cap`)
 
-> **2026-09-07 note:** [ADR-041](../../adr/ADR-041-runtime-excision.md) deleted
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
 > `generate_svg`/`generate_image`/`generate_video`, `agent.sandbox.start`,
 > `agent.compose`, and `skill.version.activate` — the worked examples this
 > spec uses throughout to illustrate the generic capability-mounting
 > mechanism (REST route table, app runner page, storage adapter seam, chain
 > tagging). The generic `.cap` mechanism the spec proposes is orthogonal to
-> ADR-041 and not itself deleted; re-ground each worked example in a
+> ADR-043 and not itself deleted; re-ground each worked example in a
 > capability that still exists (e.g. `ontology.query` or any other surviving
 > `agent`-surface capability) before implementing against it.
 

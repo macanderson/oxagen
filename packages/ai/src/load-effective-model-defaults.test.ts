@@ -106,7 +106,7 @@ describe("loadEffectiveModelDefaults", () => {
     expect(tx.query.workspaces.findFirst).not.toHaveBeenCalled();
   });
 
-  // ADR-041: media generation is gone — neither query selects a media column.
+  // ADR-043: media generation is gone — neither query selects a media column.
   it("selects only the text model columns from both tables", async () => {
     const tx = setupWithTenantDb(
       { defaultTextTier: "fast", defaultTextModel: null },

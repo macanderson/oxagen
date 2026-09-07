@@ -3,7 +3,7 @@
  * agent-picker-panel.test.tsx — the shared picker panel: rendering, search,
  * immediate apply, the default star, and roving keyboard focus.
  *
- * ADR-041 removed the code-agent repo → branch → environment setup step: every
+ * ADR-043 removed the code-agent repo → branch → environment setup step: every
  * agent now applies on pick, because a conversation is no longer grounded in a
  * repository.
  */
@@ -142,7 +142,7 @@ describe("AgentPickerPanel — selection", () => {
     expect(onApply).toHaveBeenCalledWith({ agentId: null });
   });
 
-  it("applies every agent immediately — there is no setup step (ADR-041)", () => {
+  it("applies every agent immediately — there is no setup step (ADR-043)", () => {
     const { onApply, onDismiss } = renderPanel();
     fireEvent.click(screen.getByRole("option", { name: /Coder/ }));
     expect(onApply).toHaveBeenCalledWith({ agentId: "agt_code" });

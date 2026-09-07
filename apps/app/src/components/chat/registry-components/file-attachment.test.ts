@@ -133,7 +133,7 @@ describe("CHAT_COMPONENTS — file-attachment registration", () => {
     expect(renderer).not.toBeNull();
   });
 
-  it("does NOT contain 'html-artifact' — the artifact iframe went with the runtime (ADR-041)", () => {
+  it("does NOT contain 'html-artifact' — the artifact iframe went with the runtime (ADR-043)", () => {
     expect(CHAT_COMPONENTS).not.toHaveProperty("html-artifact");
   });
 });

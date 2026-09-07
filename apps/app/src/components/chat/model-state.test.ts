@@ -27,9 +27,9 @@ describe("defaultModelState", () => {
     expect(defaultModelState.effort).toBe("medium");
   });
 
-  // ADR-041 removed image and video generation, so the composer state carries
+  // ADR-043 removed image and video generation, so the composer state carries
   // no generate mode, media tier or media model at all.
-  it("carries no media-generation fields (ADR-041)", () => {
+  it("carries no media-generation fields (ADR-043)", () => {
     expect(defaultModelState).not.toHaveProperty("generate");
     expect(defaultModelState).not.toHaveProperty("mediaTier");
     expect(defaultModelState).not.toHaveProperty("mediaModel");

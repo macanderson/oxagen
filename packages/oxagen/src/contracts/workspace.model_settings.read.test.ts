@@ -35,7 +35,7 @@ describe("workspace.model.settings.read capability", () => {
     ).toThrow();
   });
 
-  // ADR-041: media generation is gone, and so are the stored media defaults.
+  // ADR-043: media generation is gone, and so are the stored media defaults.
   it("does not expose image or video model defaults", () => {
     const parsed: Record<string, unknown> =
       workspaceModelSettingsRead.output.parse({

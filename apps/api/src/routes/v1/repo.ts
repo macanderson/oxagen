@@ -12,7 +12,7 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
 
-// Read/observe half of the repo surface. ADR-041 removed the mutation half
+// Read/observe half of the repo surface. ADR-043 removed the mutation half
 // (create / fork / file.put / branch.create / pr.open, and the governed
 // agent.repo.edit): Oxagen governs and observes repositories, it no longer
 // writes to them. What remains configures ingestion and reads state that the

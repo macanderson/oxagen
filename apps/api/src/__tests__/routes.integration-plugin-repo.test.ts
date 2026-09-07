@@ -5,7 +5,7 @@
  *   plugin.schema.get, plugin.schema.validate, plugin.version.list,
  *   repo.configure, repo.sync, repo.pause, repo.resume, repo.metrics
  *
- * ADR-041 removed the repo mutation half (create / fork / file.put /
+ * ADR-043 removed the repo mutation half (create / fork / file.put /
  * branch.create / pr.open) and the web.* capabilities, so only the
  * read/observe repo routes are exercised here.
  */

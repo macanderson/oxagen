@@ -299,7 +299,7 @@ describe("ConversationPage — non-fatal degrade logging", () => {
   });
 });
 
-describe("ConversationPage — no conversation code binding (ADR-041)", () => {
+describe("ConversationPage — no conversation code binding (ADR-043)", () => {
   afterEach(() => {
     shellSpy.props = null;
     vi.mocked(withTenantDb).mockReset();

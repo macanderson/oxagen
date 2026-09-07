@@ -5,7 +5,7 @@ cost, run traces, knowledge-graph grounding, agent memory,
 environments, the credential vault, and audit logs — from the terminal.
 
 Oxagen **governs, grounds, explains, meters/bills and rates** agents; it does
-not run them ([ADR-041](../../docs/adr/ADR-041-runtime-excision.md)). The
+not run them ([ADR-043](../../docs/adr/ADR-043-runtime-excision.md)). The
 interactive coding agent this CLI used to ship — the REPL, sandboxes, skills,
 slash commands, evals, local rules and settings — is gone. Stella owns all
 things agentic: use the `stella` CLI with the oxagen MCP server. Every removed

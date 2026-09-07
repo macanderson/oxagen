@@ -482,7 +482,7 @@ export function ConversationFilesList({
         </div>
       ) : (
         <div className="flex flex-col">
-          {/* ADR-041: the "Download all" ZIP affordance was removed with the
+          {/* ADR-043: the "Download all" ZIP affordance was removed with the
               archive capability (the runtime excision took `archive.create`
               and its handler). The file count still anchors the list; each
               row downloads on its own. */}

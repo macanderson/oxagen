@@ -8,7 +8,7 @@
  * see the note in e2e/workbench-agent-ai-setup.spec.ts. This component test covers
  * the panel directly instead: each connectable recommendation renders its name +
  * reason + kind badge, the Connect affordance links to the developer MCP page in
- * a new tab, and (ADR-041) a `skill` recommendation is filtered out entirely
+ * a new tab, and (ADR-043) a `skill` recommendation is filtered out entirely
  * because skills no longer have a surface to connect on.
  */
 import { describe, it, expect, afterEach } from "vitest";
@@ -73,7 +73,7 @@ describe("RecommendedConnections", () => {
     expect(connect.getAttribute("rel")).toContain("noreferrer");
   });
 
-  it("filters out a skill recommendation — skills are retired (ADR-041)", () => {
+  it("filters out a skill recommendation — skills are retired (ADR-043)", () => {
     const { container } = renderPanel([SKILL_REC]);
     expect(container).toBeEmptyDOMElement();
   });

@@ -96,7 +96,7 @@ describe("isOverridablePromptKey", () => {
   });
 });
 
-describe("registry ownership (ADR-041)", () => {
+describe("registry ownership (ADR-043)", () => {
   it("no longer ships a chat.system baseline — @oxagen/agent owns it", async () => {
     const registry = await import("./registry");
     // One chat prompt in the repository: the registry resolves the customer

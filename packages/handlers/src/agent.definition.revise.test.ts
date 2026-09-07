@@ -182,7 +182,7 @@ describe("agentDefinitionReviseHandler (@oxagen/handlers)", () => {
     expect(updateInput).not.toHaveProperty("slug");
     expect(updateInput.agentId).toBe("agt_DEAL01");
     expect(updateInput.name).toBe("Risk Scanner");
-    // ADR-041 removed code mode, so a revision never touches agentType.
+    // ADR-043 removed code mode, so a revision never touches agentType.
     expect(updateInput).not.toHaveProperty("agentType");
     const config = updateInput.config as { agentTools: Array<{ ref: string }> };
     expect(config.agentTools.map((t) => t.ref)).toEqual([

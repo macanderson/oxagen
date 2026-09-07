@@ -734,7 +734,7 @@ export function MessageComposer({
     const ta = formRef.current?.elements.namedItem(
       "content",
     ) as HTMLTextAreaElement | null;
-    // Every command is agent-interpreted (ADR-041 removed the one
+    // Every command is agent-interpreted (ADR-043 removed the one
     // client-handled command), so this only ever fills the composer.
     if (ta) {
       ta.value = `/${command.name} `;
@@ -1876,7 +1876,7 @@ export function MessageComposer({
                     </Button>
                   ) : null}
 
-                  {/* ADR-041: no image/video generation toggles and no code
+                  {/* ADR-043: no image/video generation toggles and no code
                 mode — Oxagen governs agents, it does not run them. Attaching an
                 image or video for the model to READ is the paperclip above. */}
 

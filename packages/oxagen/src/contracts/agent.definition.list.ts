@@ -57,7 +57,7 @@ export const agentDefinitionList = registerCapability({
          * The agent's type discriminator (free-form; e.g. `custom` or
          * `interactive_chat`). Surfaced verbatim so callers — notably the
          * app's agent selector — can label and group agents; it carries the
-         * managed-vs-custom distinction (see isManagedAgentType). ADR-041
+         * managed-vs-custom distinction (see isManagedAgentType). ADR-043
          * retired the `code` value with the execution runtime: no surface
          * branches on agentType to bind repo/sandbox tooling any more.
          */

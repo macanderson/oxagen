@@ -46,7 +46,7 @@ await build({
   // optional would fail at first request rather than at build. Adding a name
   // to this list is a claim that the module is lazily required behind a
   // fallback; check that before adding one. (`dockerode` left with
-  // @oxagen/sandbox in ADR-041's runtime excision.)
+  // @oxagen/sandbox in ADR-043's runtime excision.)
   external: [
     "pg-native",
     "better-sqlite3",

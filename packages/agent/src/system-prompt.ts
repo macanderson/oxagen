@@ -1,7 +1,7 @@
 /**
  * The governance agent's system prompt.
  *
- * Oxagen governs agents; it no longer runs them (ADR-041). The one
+ * Oxagen governs agents; it no longer runs them (ADR-043). The one
  * conversational surface the platform keeps exists to interrogate the fleet
  * record and the knowledge graph — what did my agents do, what context did
  * they have, what did it cost, what is pending approval — over tools

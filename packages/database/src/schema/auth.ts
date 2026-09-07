@@ -304,7 +304,7 @@ export const userPreferences = authSchema.table(
       .default("queue"),
     // Text model preferences (user level; workspace level overrides available
     // separately). Image/video defaults were dropped with media generation
-    // (ADR-041).
+    // (ADR-043).
     defaultTextTier: modelTierEnum("default_text_tier"),
     defaultTextModel: text("default_text_model"),
     // Account-level preferences (distinct from the UI/model prefs above) —

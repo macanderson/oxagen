@@ -59,7 +59,7 @@ describe("proxy — IA realignment redirects (§16)", () => {
     expect(status("/acme/prod/studio")).toBe(301);
   });
 
-  it("does NOT redirect the excised Skills routes (ADR-041) — they 404", () => {
+  it("does NOT redirect the excised Skills routes (ADR-043) — they 404", () => {
     // Skills were removed with the runtime; a dead redirect would be worse
     // than a 404, so the shim was deleted rather than repointed.
     expect(location("/acme/prod/workbench/skills")).toBeNull();

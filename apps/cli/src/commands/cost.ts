@@ -15,7 +15,7 @@
  * platform-reported and lives in `oxagen budget show` (period-to-date spend
  * against the ceiling). The `--session` rollup this command used to offer read
  * the local coding agent's turn store, which was retired with the runtime
- * (ADR-041).
+ * (ADR-043).
  */
 import {
   RATE_CARD,

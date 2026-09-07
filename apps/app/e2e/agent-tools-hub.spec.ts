@@ -3,7 +3,7 @@
  *
  * E2E for the consolidated Agent Tools IA:
  *   1. Agents → Tools hub — the single home for everything an agent can be
- *      equipped with: All Tools / MCP Servers / Capabilities tabs. (ADR-041
+ *      equipped with: All Tools / MCP Servers / Capabilities tabs. (ADR-043
  *      removed the Skills tab with the runtime.)
  *   2. Marketplace is two-sided — Agent Tools + Integrations — and the root
  *      redirects to the Agent Tools side.
@@ -171,7 +171,7 @@ test.describe("Agent Tools consolidated IA", () => {
     await browseBtn.click();
 
     // The Agent Tools Marketplace modal opens with the surviving two-tab
-    // taxonomy — ADR-041 removed the skill packs.
+    // taxonomy — ADR-043 removed the skill packs.
     await expect(page.getByText("Agent Tools Marketplace")).toBeVisible({
       timeout: 15_000,
     });

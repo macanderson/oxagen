@@ -83,7 +83,7 @@ const MESSAGE_ROWS = [
         status: "success",
         durationMs: 300,
       },
-      // ADR-041 retired the execution block types; a historical row can still
+      // ADR-043 retired the execution block types; a historical row can still
       // carry one and it must be dropped from the export, not rendered.
       {
         type: "code-execute",

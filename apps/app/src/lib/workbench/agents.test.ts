@@ -91,7 +91,7 @@ describe("workbench/agents.ts kernel wrappers", () => {
     expect(result).toBe(suggestion);
   });
 
-  it("createAgent always persists DEFAULT_AGENT_TYPE (ADR-041 retired the code type)", async () => {
+  it("createAgent always persists DEFAULT_AGENT_TYPE (ADR-043 retired the code type)", async () => {
     const created = { agentId: "a1", publicId: "pub", slug: "s", version: 1 };
     mockInvoke.mockResolvedValue(created);
 

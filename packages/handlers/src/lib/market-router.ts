@@ -4,7 +4,7 @@
  * Model routing is BYOK governance: the platform decides WHICH model a tenant's
  * spend is routed to, from evidence the platform already meters (verified
  * outcomes and observed cost per task class), under an admin-set policy. It is
- * not an execution concern, so it survived the ADR-041 runtime excision — but
+ * not an execution concern, so it survived the ADR-043 runtime excision — but
  * its former home (`@oxagen/agent-engine`) did not. The minimal pure core the
  * `router.*` governance capabilities need therefore lives here, next to the
  * handlers that are its only remaining consumers.

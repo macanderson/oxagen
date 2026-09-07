@@ -3,7 +3,7 @@
 Reference for all declared capabilities across the Oxagen platform.
 Each capability is implemented across API, MCP, and agent surfaces with
 contract-first design, IAM enforcement, and instrumentation. Following
-[ADR-041](../adr/ADR-041-runtime-excision.md), Oxagen is a governance plane —
+[ADR-043](../adr/ADR-043-runtime-excision.md), Oxagen is a governance plane —
 it does not run agents. Deleted runtime families (sandboxes, code execution,
 subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,

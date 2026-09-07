@@ -64,7 +64,7 @@ describe("applyAgentBinding", () => {
     expect(result.serverAllowlist).toEqual(["srv_1", "srv_2"]);
   });
 
-  it("ignores every agentTool type that is not an mcp_server (ADR-041: no skills, no subagents)", () => {
+  it("ignores every agentTool type that is not an mcp_server (ADR-043: no skills, no subagents)", () => {
     const result = applyAgentBinding({
       def: def({
         agentTools: [

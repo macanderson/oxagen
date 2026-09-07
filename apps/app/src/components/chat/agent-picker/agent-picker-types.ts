@@ -12,7 +12,7 @@
  * One of an agent's allowlisted tools, as returned by `list_agent_defs`
  * (`toolRefs`). `type` groups it for the capability strip; `ref` is the raw
  * slug/id (a capability name or an MCP server name) — prettified for display,
- * never shown as a bare UUID. ADR-041 retired the `skill` and `agent`
+ * never shown as a bare UUID. ADR-043 retired the `skill` and `agent`
  * (subagent) kinds along with the runtime; `type` stays a string so a legacy
  * row read back from an old definition still renders instead of crashing.
  */

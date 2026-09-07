@@ -83,7 +83,7 @@ describe("CHAT_COMPONENTS — config-derived completeness", () => {
     expect(CHAT_COMPONENTS).toHaveProperty("install-instructions");
   });
 
-  it("no longer registers a renderer for an excised runtime capability (ADR-041)", () => {
+  it("no longer registers a renderer for an excised runtime capability (ADR-043)", () => {
     for (const retired of [
       "svg-preview",
       "image-preview",

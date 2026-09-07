@@ -103,7 +103,7 @@ export type AgentDetail = {
 
 /**
  * The agentType every agent registered through the builder is persisted with.
- * ADR-041 retired the "code" agentType along with the sandbox/coding path —
+ * ADR-043 retired the "code" agentType along with the sandbox/coding path —
  * Oxagen governs agents, it does not run them — so the builder no longer offers
  * a type choice and always writes this value. The column stays a free-form
  * string on the contract because managed (platform-seeded) agents carry their

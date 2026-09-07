@@ -21,7 +21,7 @@
  *   6. Review    — summary + effective scope (role ∩ config) + Save draft /
  *                  Publish / Publish & Deploy.
  *
- * Per ADR-041 there is no sandbox, repo, skill, subagent, or trigger surface
+ * Per ADR-043 there is no sandbox, repo, skill, subagent, or trigger surface
  * here — Oxagen governs agents, it does not run them. The definition is a pure,
  * portable governance object.
  *

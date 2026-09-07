@@ -87,7 +87,7 @@ const producerFiles = sourceFiles.filter(
  * move, a path bug — is reported rather than silently shrinking the scan.
  */
 // The four execution-side producers (background tasks, subagents, workflow
-// tasks, playbook runs) left with the agent runtime (ADR-041).
+// tasks, playbook runs) left with the agent runtime (ADR-043).
 const KNOWN_PRODUCERS = [
   "packages/agent/src/runtime/materialize-tools.ts",
   "packages/handlers/src/graph.telemetry.ts",

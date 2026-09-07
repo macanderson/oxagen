@@ -90,7 +90,7 @@ describe("systemInstallInstructionsHandler", () => {
   });
 
   it("never instructs the user to install a coding agent or a runtime", async () => {
-    // ADR-041: Oxagen governs agents, it does not run them. These instructions
+    // ADR-043: Oxagen governs agents, it does not run them. These instructions
     // connect an EXTERNAL client to the governed MCP gateway; they must never
     // describe installing a sandbox, a worker, or an Oxagen-hosted coding agent.
     for (const client of CLIENTS) {

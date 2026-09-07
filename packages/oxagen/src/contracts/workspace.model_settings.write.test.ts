@@ -55,7 +55,7 @@ describe("workspace.model.settings.write capability", () => {
     expect(parsed.defaultTextModel).toBeNull();
   });
 
-  // ADR-041: media generation is gone, and so are the stored media defaults.
+  // ADR-043: media generation is gone, and so are the stored media defaults.
   it("accepts neither an image nor a video model default", () => {
     expect(Object.keys(workspaceModelSettingsWrite.input.shape)).toEqual([
       "defaultTextTier",

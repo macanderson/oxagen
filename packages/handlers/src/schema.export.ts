@@ -1,7 +1,7 @@
 // schema.export.ts — build a ZIP of one schema-registry version.
 //
 // The ZIP is assembled here with fflate and persisted through the shared asset
-// chokepoint. It used to compose the `create_archive` capability, which ADR-041
+// chokepoint. It used to compose the `create_archive` capability, which ADR-043
 // removed along with the rest of the generation surface; exporting your own
 // ontology is governance, not generation, so the ~20 lines of zip + persist it
 // actually needed were inlined rather than keeping a capability alive for one

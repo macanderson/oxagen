@@ -45,7 +45,7 @@ describe("applySessionPatch", () => {
     );
   });
 
-  it("carries no repo/branch/environment fields (ADR-041)", () => {
+  it("carries no repo/branch/environment fields (ADR-043)", () => {
     expect(Object.keys(defaultChatSessionState).sort()).toEqual([
       "agentId",
       "budgetUsd",

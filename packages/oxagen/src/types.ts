@@ -98,7 +98,7 @@ export interface CapabilityAgentMetadata {
 
 /**
  * A lifecycle event name a capability may be invoked on out-of-model. The
- * enumeration used to live in `@oxagen/agent-artifacts` (removed in ADR-041);
+ * enumeration used to live in `@oxagen/agent-artifacts` (removed in ADR-043);
  * the kernel only needs the gate, so the name is an opaque string here.
  */
 export type LifecycleEvent = string;

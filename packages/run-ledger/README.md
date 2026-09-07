@@ -3,7 +3,7 @@
 The durable **evidence ledger** for governed agent runs. It is the only writer
 of the `agent.agent_runs*` tables, and it executes nothing.
 
-[ADR-041](../../docs/adr/ADR-041-runtime-excision.md) removed Oxagen's agent
+[ADR-043](../../docs/adr/ADR-043-runtime-excision.md) removed Oxagen's agent
 runtime. The durable worker that claimed runs, leased them, checkpointed engine
 state and reclaimed expired attempts is gone, along with the two tables that
 existed only to support it (`agent_run_checkpoints`,

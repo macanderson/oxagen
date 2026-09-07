@@ -55,7 +55,7 @@ describe("describeCliCommands", () => {
   });
 
   it("keeps every command excised with the runtime registered as a stub", () => {
-    // ADR-041: a stale `oxagen sandbox …` must fail with guidance pointing at
+    // ADR-043: a stale `oxagen sandbox …` must fail with guidance pointing at
     // Stella, not with an unknown-command parse error.
     for (const name of [
       "sandbox",

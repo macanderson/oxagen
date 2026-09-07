@@ -4,7 +4,7 @@
  * allowlist step.
  *
  * An agent's allowlist is ONE uniform list — capabilities and MCP servers —
- * modeled as AgentTool { type, ref, config? }. Per ADR-041 the skill and
+ * modeled as AgentTool { type, ref, config? }. Per ADR-043 the skill and
  * subagent pools are gone with the runtime. This component surfaces the two
  * remaining pools as tabs and toggles each item in or out of the caller-owned
  * agentTools[] via onChange. It holds no state of its own; the builder owns

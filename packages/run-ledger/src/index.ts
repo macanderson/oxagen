@@ -4,7 +4,7 @@
  * Run identity, immutable attempts, the append-only event log, seals,
  * authorization snapshots and finalization grants live here. Nothing in this
  * package executes an agent: the runner that used to sit behind it left with
- * ADR-041, and execution evidence now arrives through evidence ingress
+ * ADR-043, and execution evidence now arrives through evidence ingress
  * (`docs/specs/run-evidence-ingress/spec.md`, `docs/specs/tacho/`).
  *
  * This package is the ONLY writer of the `agent.agent_runs*` tables.

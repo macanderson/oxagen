@@ -27,7 +27,7 @@ import { useSessionSelectionBridge } from "../session/session-bridges";
  * key-scoped effect, so switching conversations can never persist one chat's
  * selection under another chat's key.
  *
- * ADR-041 reduced the selection to the agent alone: the repo / branch /
+ * ADR-043 reduced the selection to the agent alone: the repo / branch /
  * sandbox-environment half of it described a coding turn, and Oxagen no longer
  * runs one. It also removed the selection LOCK. The lock existed because a
  * code turn claimed a durable `StoredCodeBinding` server-side that pinned the

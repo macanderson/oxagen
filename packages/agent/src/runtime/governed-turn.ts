@@ -1,5 +1,5 @@
 /**
- * `runGovernedTurn` — the in-app governance agent's turn loop (ADR-041 §2).
+ * `runGovernedTurn` — the in-app governance agent's turn loop (ADR-043 §2).
  *
  * Oxagen governs agents; it does not run them. What is left of "running" is
  * this: ONE bounded, metered, tool-calling model turn whose tools are the

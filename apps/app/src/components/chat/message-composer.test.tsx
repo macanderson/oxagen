@@ -1968,7 +1968,7 @@ describe("MessageComposer — attachments", () => {
     );
   });
 
-  it("attaches a video as exactly one upload — ADR-041 removed client keyframe sampling", async () => {
+  it("attaches a video as exactly one upload — ADR-043 removed client keyframe sampling", async () => {
     const user = userEvent.setup();
     const { MessageComposer } = await import("./message-composer");
     const { container } = render(
@@ -2229,7 +2229,7 @@ const CODE_REPO_2 = {
   defaultBranch: "main",
 };
 
-describe("MessageComposer — no code target (ADR-041)", () => {
+describe("MessageComposer — no code target (ADR-043)", () => {
   // Oxagen governs agents, it does not run them: there is no repository,
   // sandbox environment, or code send-gate left anywhere in the composer.
   // What must still hold — no code control row, no `code` field on the wire,
@@ -2280,7 +2280,7 @@ describe("MessageComposer — no code target (ADR-041)", () => {
   });
 
   // REGRESSION (e2e chat-agent-picker): the composer must NOT freeze the agent
-  // picker after a turn. Under ADR-041 `agentId` is a PER-TURN parameter of
+  // picker after a turn. Under ADR-043 `agentId` is a PER-TURN parameter of
   // /api/v1/chat/stream (route.ts BodySchema: "this turn is BOUND to that
   // agent") — the durable conversation binding that justified a lock was the
   // CODE binding, and it left with the runtime. A locked chip also strands the
@@ -2491,7 +2491,7 @@ describe("MessageComposer — collapsible composer", () => {
 
 // The "compact context controls in code mode" block lived here. The control row
 // it covered (repo + environment selectors + pin toggle under the prompt) was
-// removed outright, and ADR-041 then removed the code target itself, so the
+// removed outright, and ADR-043 then removed the code target itself, so the
 // block went with it rather than being weakened into assertions about a
 // component the composer no longer renders.
 
@@ -2561,7 +2561,7 @@ describe("MessageComposer — mobile toolbar", () => {
     expect(screen.getByTestId("budget-control")).toBeInTheDocument();
   });
 
-  it("never renders a code-context row — ADR-041 removed the code target", async () => {
+  it("never renders a code-context row — ADR-043 removed the code target", async () => {
     const { MessageComposer } = await import("./message-composer");
     render(
       <MessageComposer
@@ -2742,7 +2742,7 @@ describe("MessageComposer — pin context & slash commands", () => {
 
   it("never encodes pinnedContext, even for a conversation pinned by an earlier version", async () => {
     const action = makeAction();
-    // A pin written before the pin UI was removed. ADR-041 removed the repo
+    // A pin written before the pin UI was removed. ADR-043 removed the repo
     // context it named along with the runtime, so a stale pin must be ignored
     // rather than resurrected onto the wire.
     window.localStorage.setItem(

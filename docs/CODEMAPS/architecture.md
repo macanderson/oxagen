@@ -3,7 +3,7 @@
 # Architecture — Oxagen v2
 
 ## Project Type
-**Monorepo** (pnpm workspaces + Turborepo) — 7 apps, 27 packages (down from ~36 pre-ADR-041: `agent-engine`, `agent-worker`, `sandbox`, `skills`, `agent-artifacts`, `stella-engine-client`, and the search/fetch `web` package were removed; `agent-runner` was renamed `run-ledger`), plus `tools/` (codemods, env-manager, scripts). See `docs/VISION.md` for product north star: the metered, governed, graph-grounded control plane ("Stripe for agents").
+**Monorepo** (pnpm workspaces + Turborepo) — 7 apps, 27 packages (down from ~36 pre-ADR-043: `agent-engine`, `agent-worker`, `sandbox`, `skills`, `agent-artifacts`, `stella-engine-client`, and the search/fetch `web` package were removed; `agent-runner` was renamed `run-ledger`), plus `tools/` (codemods, env-manager, scripts). See `docs/VISION.md` for product north star: the metered, governed, graph-grounded control plane ("Stripe for agents").
 
 ## System Diagram
 
@@ -59,7 +59,7 @@
 
 ## Data Flow — Chat / Agent Execution
 
-ADR-041 (`docs/adr/ADR-041-runtime-excision.md`) deleted `@oxagen/agent-engine`
+ADR-043 (`docs/adr/ADR-043-runtime-excision.md`) deleted `@oxagen/agent-engine`
 (the coding pipeline: planner/fork/oracle/evaluate), the sandbox/browser/code
 tool surface, and subagent fan-out. What remains is one thin, in-process
 governed turn loop over `@oxagen/agent` and `@oxagen/ai`:
@@ -80,7 +80,7 @@ The app UI's primary chat path is this in-process Next.js Route Handler, not a
 round trip through apps/api's Hono `/v1/:org/:ws/chat/messages` route — that
 route remains for CLI/MCP/API-key callers (see CLAUDE.md "Main chat path").
 
-## Agent lineage (post-ADR-041)
+## Agent lineage (post-ADR-043)
 
 There is no more subagent dispatch/fan-out and no coding pipeline to trace
 through planner/fork/oracle/evaluate steps. Lineage now comes from the
@@ -92,7 +92,7 @@ grades, and rates the trace as evidence — it never re-runs it.
 
 ## A2A (Agent2Agent) Interop — removed
 
-ADR-041 removed the A2A JSON-RPC transport entirely (2026-09-07): the
+ADR-043 removed the A2A JSON-RPC transport entirely (2026-09-07): the
 `.well-known/agent-card.json` discovery endpoint, `POST /a2a`, the
 `a2a.card.get` capability, and the `agent.a2a_tasks` table are gone.
 Third-party agent identity and interop are future work through the evidence-
@@ -109,11 +109,11 @@ Hierarchy: **Organization → Workspace → User**
 
 | Package | Role |
 |---------|------|
-| `@oxagen/oxagen` | Contracts (Zod; ~237 non-test contract files post-ADR-041, count drifts), CapabilityContext type, capability kernel |
+| `@oxagen/oxagen` | Contracts (Zod; ~237 non-test contract files post-ADR-043, count drifts), CapabilityContext type, capability kernel |
 | `@oxagen/handlers` | Shared business logic handlers (~224 non-test files, count drifts) |
 | `@oxagen/database` | Drizzle schema + client (23 schema files, ~90 migrations, count drifts) |
 | `@oxagen/engram` | Local DuckDB memory, context compilation, replay |
-| `@oxagen/agent` | Governed in-app agent turn loop (`runGovernedTurn`), MCP tool gateway, agent registry handlers (~73 files). No sandbox, subagent dispatch, or coding pipeline — see ADR-041. |
+| `@oxagen/agent` | Governed in-app agent turn loop (`runGovernedTurn`), MCP tool gateway, agent registry handlers (~73 files). No sandbox, subagent dispatch, or coding pipeline — see ADR-043. |
 | `@oxagen/run-ledger` | Durable run/attempt/event/seal evidence ledger (formerly `agent-runner`) |
 | `@oxagen/iam` | AuthZ, audit, access requests |
 | `@oxagen/auth` | Better Auth, session/API-key resolution |

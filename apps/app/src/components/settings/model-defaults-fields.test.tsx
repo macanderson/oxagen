@@ -4,7 +4,7 @@
  *
  * Tests the pure encode/decode logic for the text model select, and verifies
  * that the component renders the one remaining select and the scope note.
- * ADR-041 removed media generation, so text is the only default dimension.
+ * ADR-043 removed media generation, so text is the only default dimension.
  *
  * The handleTextChange handler is a pure value-transformer; we test it through
  * the onChange prop.
@@ -36,7 +36,7 @@ describe("ModelDefaultsFields — rendering", () => {
     expect(screen.getByLabelText(/default agent model/i)).toBeInTheDocument();
   });
 
-  // ADR-041: media generation is gone — no image or video select is rendered.
+  // ADR-043: media generation is gone — no image or video select is rendered.
   it("renders no image or video model select", () => {
     render(
       <ModelDefaultsFields

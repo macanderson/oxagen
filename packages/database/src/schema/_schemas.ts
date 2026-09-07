@@ -10,7 +10,7 @@ export const workspaceSchema = pgSchema("workspace");
 export const agentSchema = pgSchema("agent");
 export const chatSchema = pgSchema("chat");
 // content — the blob reference/provenance row for workspace media. Reduced to
-// content.generated_assets by ADR-041 (the generation capabilities and
+// content.generated_assets by ADR-043 (the generation capabilities and
 // content.documents went with the runtime); the attachment path stays.
 export const contentSchema = pgSchema("content");
 export const billingSchema = pgSchema("billing");

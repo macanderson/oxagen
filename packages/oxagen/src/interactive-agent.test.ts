@@ -32,7 +32,7 @@ describe("interactive-agent config builder", () => {
     }
   });
 
-  // ADR-041: skills and subagents are gone; a grant names something the
+  // ADR-043: skills and subagents are gone; a grant names something the
   // platform can actually gate (a capability, or a registered MCP server).
   it("grants no skill or subagent tools", () => {
     const config = buildInteractiveAgentConfig("ws_1");

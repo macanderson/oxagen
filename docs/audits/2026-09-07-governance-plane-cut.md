@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-07 · **Branch:** `claude/oxagen-architecture-audit-pfgivw` ·
 **Baseline:** `9711041769218ab6f8ed2b63b33e77aa5ecd5b83` (main) ·
-**Ratified by:** ADR-041 (runtime excision), ADR-042 (tenant data planes)
+**Ratified by:** ADR-043 (runtime excision), ADR-042 (tenant data planes)
 
 This is a boundary-and-concept audit, file by file, not a line review. It
 answers three questions: (1) is the code organised along seams that will hold

@@ -319,7 +319,7 @@ describe("org.invitations", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// content schema — reduced to the attachment reference row by ADR-041
+// content schema — reduced to the attachment reference row by ADR-043
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("content.generated_assets", () => {
@@ -340,7 +340,7 @@ describe("content.generated_assets", () => {
   ]);
 
   it("kind CHECK still admits the preserved generation kinds", () => {
-    // image/video predate ADR-041 and existing rows carry them; narrowing the
+    // image/video predate ADR-043 and existing rows carry them; narrowing the
     // CHECK would be a data migration, not a schema edit.
     const checks = getChecks(generatedAssets);
     const kindCheck = checks.find(

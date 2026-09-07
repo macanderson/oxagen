@@ -1,4 +1,4 @@
-# ADR-041: Excise the agent runtime — Oxagen governs agents, it does not run them
+# ADR-043: Excise the agent runtime — Oxagen governs agents, it does not run them
 
 - **Status:** Accepted
 - **Date:** 2026-09-07

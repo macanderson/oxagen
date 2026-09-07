@@ -1,5 +1,5 @@
 /**
- * Unit coverage for run-store.ts — the evidence ledger (ADR-041). No live
+ * Unit coverage for run-store.ts — the evidence ledger (ADR-043). No live
  * database: pure SQL builders and row mappers are asserted directly, and the
  * `RunStore` methods run against a fake `tx.execute` injected through
  * @oxagen/database's `makeWithTenantDbMock` test double (a real export, not a
@@ -977,7 +977,7 @@ describe("SQL builders", () => {
     );
     expect(text).toContain("INSERT INTO agent.agent_run_attempts");
     expect(text).toContain("resumed_from_attempt_id");
-    // The checkpoint half of the old four-part restore tuple is gone (ADR-041).
+    // The checkpoint half of the old four-part restore tuple is gone (ADR-043).
     expect(text).not.toContain("restored_checkpoint");
     expect(params).toContain(PRIOR_ATTEMPT_PUBLIC_ID);
     expect(params).toContain(ENGINE.buildDigest);
@@ -1085,7 +1085,7 @@ describe("SQL builders", () => {
       }),
     );
     expect(text).toContain("INSERT INTO agent.agent_run_attempt_seals");
-    // ADR-041: evidence ingress stamps the seal. The CHECK still admits the
+    // ADR-043: evidence ingress stamps the seal. The CHECK still admits the
     // retired runtime's 'worker'/'reclaimer' for historical rows, but no code
     // path may write either one again.
     expect(text).toContain("'ingress'");

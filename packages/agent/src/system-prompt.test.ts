@@ -40,7 +40,7 @@ describe("buildChatSystemPrompt", () => {
     });
   });
 
-  // ADR-041: Oxagen governs agents, it does not run them. The prompt must not
+  // ADR-043: Oxagen governs agents, it does not run them. The prompt must not
   // advertise an execution surface the runtime no longer has — a model told it
   // can run code burns a turn discovering the tool does not exist.
   describe("governance posture (no execution runtime)", () => {
@@ -151,7 +151,7 @@ describe("buildChatSystemPrompt", () => {
   });
 });
 
-// ── Composed shared sections (ADR-041: one prompt, one registry each) ────────
+// ── Composed shared sections (ADR-043: one prompt, one registry each) ────────
 describe("buildChatSystemPrompt — composed protocol sections", () => {
   const CTX = {
     orgSlug: "acme",

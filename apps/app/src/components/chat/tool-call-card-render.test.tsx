@@ -179,7 +179,7 @@ describe("ToolCallCard", () => {
     expect(screen.getByText("Connection refused")).toBeInTheDocument();
   });
 
-  // ADR-041 removed the streaming stdout/stderr channel with the sandbox and
+  // ADR-043 removed the streaming stdout/stderr channel with the sandbox and
   // shell tools: a governed capability call has an input and a result, never a
   // terminal. A running call now shows a status line instead of a stream pane.
   it("shows a waiting status while the call is running, and no output stream", async () => {

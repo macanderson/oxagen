@@ -6,7 +6,7 @@ description: How the Oxagen in-app agent works — a governed turn loop over the
 Oxagen governs the agents your organization builds and runs; it does not run
 a coding agent of its own. The sandbox layer, subagent fan-out, background
 tasks, plan mode, skills authoring, and content-generation tools have been
-excised (ADR-041, `docs/adr/ADR-041-runtime-excision.md` in the repository).
+excised (ADR-043, `docs/adr/ADR-043-runtime-excision.md` in the repository).
 What remains is one conversational surface: a thin, in-process governed turn
 loop (`runGovernedTurn`) whose job is to interrogate the **fleet record** and
 the **knowledge graph** — what did my agents do, what context did they have,

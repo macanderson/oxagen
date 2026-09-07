@@ -11,7 +11,7 @@ vi.mock("./schema.versioning", () => ({
     mocks.getOrCreateRegistry(...args),
 }));
 
-// ADR-041 removed `create_archive`; schema.export now builds the ZIP itself and
+// ADR-043 removed `create_archive`; schema.export now builds the ZIP itself and
 // writes it through the shared asset chokepoint, so that is the seam to stub.
 vi.mock("./generated-asset.persist", () => ({
   persistGeneratedAsset: (...args: unknown[]) =>

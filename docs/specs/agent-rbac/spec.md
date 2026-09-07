@@ -1,6 +1,6 @@
 # Agent RBAC — Design Specification
 
-> **2026-09-07 note:** [ADR-041](../../adr/ADR-041-runtime-excision.md) deleted
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
 > `agent.code.execute`, `agent.subagent.dispatch`/`aggregate`, and
 > `agent.skill.load`/`agent.skill.list` — every capability this spec cites as
 > a worked example of role-vs-request intersection. The **mechanism**

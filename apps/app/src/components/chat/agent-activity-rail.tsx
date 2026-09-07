@@ -9,7 +9,7 @@
  *     a compact "Working · N tools" / "Turn complete" status line above.
  *   • Files — the conversation's attachments (reuses `WorkspaceContextTabs`).
  *
- * ADR-041 removed the third card (Context): it described the repository,
+ * ADR-043 removed the third card (Context): it described the repository,
  * branch, sandbox environment, and open PR a coding turn was grounded in, and
  * Oxagen no longer runs coding turns. In chat_ux_v2 the writable Session panel
  * (`sessionPanelSlot`) already occupies that slot.

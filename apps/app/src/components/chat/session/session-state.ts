@@ -8,7 +8,7 @@
  * one store value, so a mismatch between what the UI shows and what the turn
  * runs with is structurally impossible: there is nothing else to disagree with.
  *
- * ADR-041 removed the code half of this model (org / repo / branch / sandbox
+ * ADR-043 removed the code half of this model (org / repo / branch / sandbox
  * environment, the per-agent code memory, and the durable code binding):
  * Oxagen governs agents, it does not run them, so a conversation is no longer
  * grounded in a repository.

@@ -177,7 +177,7 @@ describe("agentLogSchema", () => {
   });
 });
 
-// ADR-041 excised the execution runtime, so the definition record carries no
+// ADR-043 excised the execution runtime, so the definition record carries no
 // field describing HOW an agent runs. A grant names something the platform can
 // actually gate — a capability or a registered MCP server — and the log
 // vocabulary has no delegation entry, because there is no delegation.

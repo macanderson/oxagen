@@ -21,7 +21,7 @@ import type { StoreKind } from "./types";
  * Used as the target vocabulary for the name-prefix heuristic so cross-store
  * tables land in the SAME domain as their Postgres siblings where the names
  * line up (e.g. ClickHouse `ai_*` → the `ai` domain). Domains that exist only
- * in a non-Postgres store (telemetry, graph, and the ADR-041 leftovers still
+ * in a non-Postgres store (telemetry, graph, and the ADR-043 leftovers still
  * declared in the ClickHouse/Neo4j schemas) are assigned by the override maps
  * below, not by this list.
  */

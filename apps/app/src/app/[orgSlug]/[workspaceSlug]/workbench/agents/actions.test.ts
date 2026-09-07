@@ -123,7 +123,7 @@ describe("createAgentAction", () => {
       expect(res.publicId).toBe("agt_1");
       expect(res.agentId).toBe("agt_1");
     }
-    // No agentType is accepted or forwarded — ADR-041 retired the code type.
+    // No agentType is accepted or forwarded — ADR-043 retired the code type.
     expect(createAgent).toHaveBeenCalledWith(
       CTX,
       expect.not.objectContaining({ agentType: expect.anything() }),

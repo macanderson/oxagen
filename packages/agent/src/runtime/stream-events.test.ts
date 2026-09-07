@@ -60,7 +60,7 @@ describe("AgentStreamEvent variants", () => {
     expect(out[4]).toBe("cons:a2:srv_1:search");
   });
 
-  // Governance vocabulary only (ADR-041): no plan / subagent-fanout /
+  // Governance vocabulary only (ADR-043): no plan / subagent-fanout /
   // background-task / sandbox-terminal events survive the runtime excision.
   it("carries no execution-runtime event variants", () => {
     const types: AgentStreamEvent["type"][] = [

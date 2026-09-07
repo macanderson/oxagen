@@ -2,7 +2,7 @@
 /**
  * chat-selection-context.test.tsx — the shared agent-selection store: the
  * local fallback (no provider), and the provider's initial resolution +
- * persistence. ADR-041 reduced the selection to the agent alone, so the
+ * persistence. ADR-043 reduced the selection to the agent alone, so the
  * repo/branch/environment half of these tests went with the runtime.
  */
 import { describe, it, expect, afterEach } from "vitest";
@@ -141,7 +141,7 @@ describe("ChatSelectionProvider — initial resolution", () => {
 
 // REGRESSION (e2e chat-agent-picker): the store has NO lock. It used to latch
 // on the first send, which froze the composer chip into a disabled "Agent
-// locked: <name>" button for the rest of the conversation. ADR-041 removed the
+// locked: <name>" button for the rest of the conversation. ADR-043 removed the
 // durable code binding that latch stood in for — `agentId` is a per-turn
 // parameter of /api/v1/chat/stream — so every apply must keep committing, for
 // the whole conversation, in BOTH stores.

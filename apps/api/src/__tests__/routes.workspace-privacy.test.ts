@@ -6,7 +6,7 @@
  *   api.key.rotate
  *
  * The automation, skill, code.* and research.swarm blocks that shared this file
- * went with their capabilities in ADR-041's runtime excision.
+ * went with their capabilities in ADR-043's runtime excision.
  *
  * Pattern: mock at the adapter seam, assert happy path forwards invoke result
  * as JSON, invoke called once with correct contract name + surface "api".
@@ -252,7 +252,7 @@ describe("workspace.model.settings.write route", () => {
     expect(body.defaultTextModel).toBeNull();
   });
 
-  // ADR-041: media generation is gone — the route's contract drops media fields.
+  // ADR-043: media generation is gone — the route's contract drops media fields.
   it("drops an image or video model default from the payload", async () => {
     await app.fetch(
       patch(PATH, {

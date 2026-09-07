@@ -6,7 +6,7 @@
  *   - apps/app/src/app/account/preferences/preferences-form.tsx (user scope)
  *   - workspace settings agent (workspace scope) — imports this exact path
  *
- * ADR-041 removed image/video generation from the platform, so the only stored
+ * ADR-043 removed image/video generation from the platform, so the only stored
  * default dimension is text (an Oxagen tier or an explicit model id).
  *
  * Contract (do not change signatures without coordinating with the workspace

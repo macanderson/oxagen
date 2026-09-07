@@ -125,7 +125,7 @@ export function lastAssistantText(
  * Governance-oriented suggestion bank for conversation mode (the no-LLM
  * fallback).
  *
- * Per ADR-041 Oxagen governs agents; it does not run them. Every entry pushes
+ * Per ADR-043 Oxagen governs agents; it does not run them. Every entry pushes
  * the user toward INTERROGATING the fleet record and the knowledge graph — what
  * did my agents do, what context did they have, what did it cost, what is
  * pending approval — or toward tightening the governance objects (contracts,

@@ -94,11 +94,11 @@ describe("agent.definition.list handler", () => {
     ]);
   });
 
-  // ADR-041 narrowed agentToolTypeSchema to the two gateable kinds. Configs
+  // ADR-043 narrowed agentToolTypeSchema to the two gateable kinds. Configs
   // persisted before the cut still carry `skill` / `agent` entries, and the
   // list must degrade to the entries it can still govern rather than throwing
   // or surfacing a grant the platform can no longer honour.
-  it("drops legacy skill / subagent entries from a pre-ADR-041 config", async () => {
+  it("drops legacy skill / subagent entries from a pre-ADR-043 config", async () => {
     fake.enqueue([
       {
         id: "uuid-legacy",

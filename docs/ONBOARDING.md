@@ -131,19 +131,19 @@ shape.
 | `org` | `org.ts` | `organizations`, `org_users`, `invitations`, slug history |
 | `workspace` | `workspace.ts` | `workspaces`, workspace membership, memory/budget/routing policy |
 | `iam` | `iam.ts` | `principals`, `roles`, `role_grants`, access requests, authorization decisions — who can do what |
-| `agent` | `agent.ts` | Agent definitions and versions, approvals, executions/steps/tool calls, A2A tasks, the run/attempt/seal/finalization evidence ledger, tool & context-record registries (18 tables — the biggest domain). ADR-041 dropped the skills, subagent fan-out, sandbox session, plan, and file-lock tables that used to live here. |
+| `agent` | `agent.ts` | Agent definitions and versions, approvals, executions/steps/tool calls, A2A tasks, the run/attempt/seal/finalization evidence ledger, tool & context-record registries (18 tables — the biggest domain). ADR-043 dropped the skills, subagent fan-out, sandbox session, plan, and file-lock tables that used to live here. |
 | `chat` | `chat.ts` | `conversations`, `messages` |
 | `billing` | `billing.ts` + `reseller.ts` | Plans, subscriptions, invoices, credits, Stripe events, spend budgets, and reseller price plans/customers/rebilling |
 | `mcp` | `mcp.ts` | MCP server registries, credentials, consents, catalog |
 | `plugin` | `plugin.ts` | `installed_plugins` |
 | `ingestion` | `ingestion.ts` | Data connectors: source connections, OAuth tokens, webhooks, GitHub installs, repo bindings |
 | `schema_registry` | `schema-registry.ts` | The graph's own schema: node labels, relationship types, properties, versions |
-| `environments` | `environments.ts` | Secrets, secret access log, agent-environment bindings. ADR-041 dropped the sandbox-template tables that used to live here. |
+| `environments` | `environments.ts` | Secrets, secret access log, agent-environment bindings. ADR-043 dropped the sandbox-template tables that used to live here. |
 | `security` | `security.ts` | Security events, org security policy, MCP change log |
 | `privacy` | `privacy.ts` | Data export/erasure requests |
 | `notification` | `notification.ts` | `notifications` |
-| `ai` | `ai.ts` | `response_cache` (ADR-041 dropped `batch_jobs`) |
-| `content` | `content.ts` | `generated_assets` — the blob reference/provenance row for workspace media. Now backs upload-only attachments (`asset.upload`, `conversation.attachment.add`); ADR-041 dropped the in-app generation path (`content.documents`, `image.*`/`video.generate`/`document.*`) that used to write here, and history from that path is preserved but no longer written. |
+| `ai` | `ai.ts` | `response_cache` (ADR-043 dropped `batch_jobs`) |
+| `content` | `content.ts` | `generated_assets` — the blob reference/provenance row for workspace media. Now backs upload-only attachments (`asset.upload`, `conversation.attachment.add`); ADR-043 dropped the in-app generation path (`content.documents`, `image.*`/`video.generate`/`document.*`) that used to write here, and history from that path is preserved but no longer written. |
 | `ratelimit` | `ratelimit.ts` | Rate limit counters |
 | `evidence` | `run-evidence-foundation.ts` | Retention policy versions |
 
@@ -184,9 +184,9 @@ mind gets a new ADR that supersedes the old one. Full text lives in
 | [005](./adr/ADR-005-single-version-monorepo.md) | One version number for the whole monorepo |
 | [006](./adr/ADR-006-better-auth-bound-to-canonical-users.md) | Better Auth writes straight into our `auth.users` table |
 
-### Agent runtime (superseded — see ADR-041)
+### Agent runtime (superseded — see ADR-043)
 
-[ADR-041](./adr/ADR-041-runtime-excision.md) deleted the first-party agent
+[ADR-043](./adr/ADR-043-runtime-excision.md) deleted the first-party agent
 runtime — sandboxes, subagent fan-out, background tasks, the coding pipeline,
 and the Stella sidecar transport. The ADRs below are kept as historical
 record (ADRs are immutable) but the runtime they describe no longer exists in
@@ -194,19 +194,19 @@ this repository; Stella is the reference implementation now.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [007](./adr/ADR-007-docker-as-code-sandbox.md) | Docker, short-lived containers, as the code sandbox | Superseded (ADR-041) |
-| [008](./adr/ADR-008-skills-filesystem-first.md) | Skills live on disk first, database second | Superseded (ADR-041) |
+| [007](./adr/ADR-007-docker-as-code-sandbox.md) | Docker, short-lived containers, as the code sandbox | Superseded (ADR-043) |
+| [008](./adr/ADR-008-skills-filesystem-first.md) | Skills live on disk first, database second | Superseded (ADR-043) |
 | [009](./adr/ADR-009-unified-capability-tool-model.md) | Tools *are* capabilities — one model, not two | Active |
-| [010](./adr/ADR-010-subagent-fanout-via-inngest.md) | Subagents fan out via Inngest's `step.invoke()` | Superseded (ADR-041) |
-| [011](./adr/ADR-011-vercel-sandbox-driver.md) | A Vercel Sandbox driver for Vercel-hosted functions | Superseded (ADR-041) |
-| [019](./adr/ADR-019-unified-agent-engine.md) | One shared agent "brain," adapters per environment | Superseded (ADR-041) |
+| [010](./adr/ADR-010-subagent-fanout-via-inngest.md) | Subagents fan out via Inngest's `step.invoke()` | Superseded (ADR-043) |
+| [011](./adr/ADR-011-vercel-sandbox-driver.md) | A Vercel Sandbox driver for Vercel-hosted functions | Superseded (ADR-043) |
+| [019](./adr/ADR-019-unified-agent-engine.md) | One shared agent "brain," adapters per environment | Superseded (ADR-043) |
 | [021](./adr/ADR-021-inference-doctrine.md) | The "determinism ladder" — when to let the model decide vs. code | Active |
 | [023](./adr/ADR-023-cli-fleet-session-event-log.md) | Every unit of agent work is a session with an append-only log | Active (CLI-scoped) |
-| [028](./adr/ADR-028-time-travel-replay.md) | Every fleet session gets a replayable event record | Superseded (ADR-041) |
-| [029](./adr/ADR-029-mutation-verifier-gate.md) | A deterministic gate checks agent-made changes after the fact | Superseded (ADR-041) |
-| [030](./adr/ADR-030-speculative-tool-execution.md) | Speculatively run likely-next tool calls ahead of confirmation | Superseded (ADR-041) |
-| [033](./adr/ADR-033-stella-engine-core.md) | Adopt the Stella engine core | Superseded (ADR-041) |
-| [041](./adr/ADR-041-runtime-excision.md) | Excise the agent runtime — Oxagen governs agents, it does not run them | Active |
+| [028](./adr/ADR-028-time-travel-replay.md) | Every fleet session gets a replayable event record | Superseded (ADR-043) |
+| [029](./adr/ADR-029-mutation-verifier-gate.md) | A deterministic gate checks agent-made changes after the fact | Superseded (ADR-043) |
+| [030](./adr/ADR-030-speculative-tool-execution.md) | Speculatively run likely-next tool calls ahead of confirmation | Superseded (ADR-043) |
+| [033](./adr/ADR-033-stella-engine-core.md) | Adopt the Stella engine core | Superseded (ADR-043) |
+| [041](./adr/ADR-043-runtime-excision.md) | Excise the agent runtime — Oxagen governs agents, it does not run them | Active |
 
 ### Marketplace & plugins
 

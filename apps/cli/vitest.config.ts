@@ -28,7 +28,7 @@ export default defineConfig({
         // top-level (global) numbers: vitest counts glob-matched files in the
         // global pool too, which would double-gate the same population.
         //
-        // Ratchet state after the ADR-041 runtime excision (actual: 86.6%
+        // Ratchet state after the ADR-043 runtime excision (actual: 86.6%
         // lines/statements, 89.3% branches, 94.8% functions). Branches moved
         // 80 -> 86 and functions 85 -> 90 (the cap) on the new numbers, each
         // keeping the required >=2.5% headroom below actual. Lines/statements

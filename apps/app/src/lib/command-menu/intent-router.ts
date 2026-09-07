@@ -13,7 +13,7 @@
  *   3. If the text is an imperative action phrase → Action
  *   4. Default → Ask
  *
- * ADR-041 retired the fifth category (Fill): it dispatched the `form.fill`
+ * ADR-043 retired the fifth category (Fill): it dispatched the `form.fill`
  * capability, which went with the runtime.
  *
  * No external dependencies — pure functions that work in any context.

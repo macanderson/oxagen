@@ -1,4 +1,4 @@
--- Drop the agent-runtime Postgres surface — ADR-041 (runtime excision).
+-- Drop the agent-runtime Postgres surface — ADR-043 (runtime excision).
 --
 -- Oxagen governs agents; it does not run them. Everything dropped here is
 -- EXECUTION state for a first-party runtime that no longer exists in this
@@ -131,7 +131,7 @@ DROP TABLE IF EXISTS "ingestion"."governed_repository_selections" CASCADE;
 -- row is the reference/provenance record for chat and agent ATTACHMENTS
 -- (asset.upload's `user_upload` branch, conversation.attachment.add,
 -- conversation.files.list). Uploading a file and asking the governance agent
--- about it is a governance-plane feature, so ADR-041 §1's blanket `content.*`
+-- about it is a governance-plane feature, so ADR-043 §1's blanket `content.*`
 -- line is over-broad and only the documents half applies.
 DROP TABLE IF EXISTS "content"."documents" CASCADE;
 

@@ -4,7 +4,7 @@
 > Source: privacy.data.export.ts, privacy.data.erase.ts, audit.log.query.ts, notifications.list.ts, notifications.mark.ts, prompt.settings.read.ts, prompt.settings.write.ts
 > Last verified: 2026-06-20 (commit 2f628504)
 >
-> **2026-09-07 note:** [ADR-041](../../adr/ADR-041-runtime-excision.md) deleted
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
 > `web.fetch`/`web.search` (and the `@oxagen/web` package they lived in); their
 > Requirement/Invariant sections have been removed from this file rather than
 > kept as dead prose.

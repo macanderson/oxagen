@@ -25,7 +25,7 @@ type AgentToolRef = { type: AgentToolType; ref: string };
  * thrown — unlike parseAgentDefinitionConfig, which is strict. Config payloads
  * (MCP auth, per-server tool narrowing) are intentionally dropped; this is
  * refs-only. An entry whose `type` is no longer a gateable kind — a `skill` or
- * `agent` grant persisted before ADR-041 — fails the schema probe and is
+ * `agent` grant persisted before ADR-043 — fails the schema probe and is
  * dropped with the rest, so the list never advertises a grant the platform can
  * no longer honour.
  */

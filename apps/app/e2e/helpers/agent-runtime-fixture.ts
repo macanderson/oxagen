@@ -3,7 +3,7 @@ import neo4j, { type Driver, type Session } from "neo4j-driver";
 
 // Test fixture for the governed-agent E2E surface. Manages a deterministic
 // tenant + workspace + user + auth session, plus the approval row a governed
-// turn produces. ADR-041 excised the runtime, so the sandbox/subagent fan-out
+// turn produces. ADR-043 excised the runtime, so the sandbox/subagent fan-out
 // rows this fixture used to seed are gone with their tables. All inserts are
 // idempotent via ON CONFLICT DO NOTHING so reruns don't fail on leftover state
 // from a previous aborted run.
@@ -250,7 +250,7 @@ export async function setupAgentRuntimeFixture(
 
   // ─── Seed deterministic governance rows ────────────────────────────────────
   // agent.tools and the execution.* tables were dropped (migrations 0020–0021)
-  // — tool-call tracking lives in ClickHouse telemetry. ADR-041 dropped
+  // — tool-call tracking lives in ClickHouse telemetry. ADR-043 dropped
   // agent.subagent_fanouts / agent.subagent_runs with the runtime. What remains
   // in Postgres, and what this fixture seeds, is the approval record.
 
@@ -341,7 +341,7 @@ export async function setupAgentRuntimeFixture(
     workspaceSlug: opts.workspaceSlug,
     async queryDbState(): Promise<DbState> {
       // execution.tool_calls / agent.tools were dropped (migrations 0020–0021)
-      // and the subagent fan-out tables went with the runtime (ADR-041); the
+      // and the subagent fan-out tables went with the runtime (ADR-043); the
       // approval record is the surviving Postgres governance row.
       const approvalRequests = await sql<
         { id: string; resolution: string | null }[]
@@ -395,7 +395,7 @@ export async function teardownFixture(opts: {
   if (t) {
     const orgId = t.id;
     // execution.* and agent.tools were dropped (migrations 0020–0021); the
-    // subagent fan-out tables were dropped with the runtime (ADR-041).
+    // subagent fan-out tables were dropped with the runtime (ADR-043).
     await sql`DELETE FROM agent.approval_requests WHERE org_id = ${orgId}`;
     // IAM rows seeded when FixtureOptions.bootstrapIam was set. They reference
     // the org and its users, so delete them in FK-safe order BEFORE the

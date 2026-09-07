@@ -331,10 +331,10 @@ export const agentToolCalls = agentSchema.table(
 // One row per governed run, across every surface, written exclusively by
 // @oxagen/run-ledger. `surface` mirrors that package's PlatformSurface union
 // so the row and the seam can never drift into two vocabularies for the same
-// thing; ADR-041 added `external` to both for a `client_attested` submission
+// thing; ADR-043 added `external` to both for a `client_attested` submission
 // that no Oxagen surface admitted interactively.
 //
-// ADR-041 (runtime excision) removed the durable worker, and with it the
+// ADR-043 (runtime excision) removed the durable worker, and with it the
 // claim/lease trio (`claimed_by` / `lease_expires_at` / `attempts`) and the
 // engine-state checkpoint pair (`checkpoint` / `checkpoint_seq`). Oxagen
 // claims nothing, leases nothing and restores no engine state: an external
@@ -359,7 +359,7 @@ export const agentRuns = agentSchema.table(
     result: jsonb("result"),
     error: text("error"),
     // Set by the cancel path. Cooperative, not enforcement: the worker that
-    // used to observe it left with ADR-041, so this is now a governance
+    // used to observe it left with ADR-043, so this is now a governance
     // signal an external engine's drain may honour, and the record that
     // cancellation was requested either way.
     cancelRequested: boolean("cancel_requested").notNull().default(false),
@@ -414,12 +414,12 @@ export const agentRuns = agentSchema.table(
     retentionPolicyDigest: text("retention_policy_digest"),
     // Trusted engine policy: the pinned ceiling `attempt_count` is bounded
     // against. The V1 `attempts` counter it used to coexist with went with the
-    // worker in ADR-041.
+    // worker in ADR-043.
     maxAttempts: integer("max_attempts"),
 
     // ── Operational V2 pointers (mutable; see the immutability trigger) ──────
     // The attempt currently open (created, not yet sealed); null otherwise.
-    // Not a lease — the seal is the only fence (ADR-041).
+    // Not a lease — the seal is the only fence (ADR-043).
     activeAttemptId: uuid("active_attempt_id"),
     // Number of attempts ever created for this run, bounded by max_attempts.
     attemptCount: integer("attempt_count").notNull().default(0),
@@ -448,7 +448,7 @@ export const agentRuns = agentSchema.table(
     parentRunIdx: index("agent_runs_parent_run_idx")
       .on(t.parentRunId)
       .where(sql`parent_run_id IS NOT NULL`),
-    // `external` is the post-ADR-041 addition: a `client_attested` submission
+    // `external` is the post-ADR-043 addition: a `client_attested` submission
     // from an engine Oxagen did not host has no interactive surface of origin.
     // The other four are kept because historical rows carry them.
     surfaceCheck: check(
@@ -716,7 +716,7 @@ export const agentRunAttempts = agentSchema.table(
     engineBuildDigest: text("engine_build_digest").notNull(),
     // ── Restore tuple: both present, or both absent ─────────────────────────
     // The checkpoint half (`restored_checkpoint_id` / `restored_checkpoint_digest`)
-    // went with agent.agent_run_checkpoints in ADR-041: Oxagen no longer runs
+    // went with agent.agent_run_checkpoints in ADR-043: Oxagen no longer runs
     // agents, so there is no engine state to restore — only the attempt
     // provenance chain remains as evidence.
     resumedFromAttemptId: uuid("resumed_from_attempt_id"),
@@ -802,7 +802,7 @@ export const agentRunAttemptSeals = agentSchema.table(
     ),
     // `ingress` is the only kind a seal is written under today — evidence
     // ingress stamps it. `worker` and `reclaimer` are the retired runtime's
-    // vocabulary, kept solely so historical rows stay valid (ADR-041).
+    // vocabulary, kept solely so historical rows stay valid (ADR-043).
     sealerKindCheck: check(
       "agent_run_attempt_seals_sealer_kind_check",
       sql`${t.sealerKind} IN ('ingress', 'worker', 'reclaimer')`,
