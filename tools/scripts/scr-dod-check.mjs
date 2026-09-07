@@ -46,6 +46,24 @@ import { pathToFileURL } from "node:url";
 export const ESCAPE_HATCH_LABEL = "no-issue";
 
 /**
+ * Label for a substantial PR that deliberately closes no issue.
+ *
+ * `no-issue` says *this change is trivial*. A large one that closes nothing —
+ * an audit, a mechanical refactor, a sweep that FILES issues rather than
+ * closing them — could claim neither that nor a `Closes #N` without saying
+ * something untrue, so it stayed red on a real and valid PR. #1941 changed
+ * 3,285 files, filed about 1,020 issues, closed none, and sat red on `dod`
+ * alone while every other check passed; two automated passes stopped at it
+ * rather than pick a false label (#2551).
+ *
+ * A second label rather than widening `no-issue`, because the two are
+ * different claims and a reviewer should be able to tell them apart at a
+ * glance: one says the change is too small to need an issue, the other says it
+ * is large and closes none.
+ */
+export const CLOSES_NOTHING_LABEL = "closes-nothing";
+
+/**
  * The `state_reason` values that close an issue without claiming its DoD was
  * met, so the close guard must not reopen them.
  *
@@ -304,8 +322,18 @@ export function dodStatus(issueBody) {
  */
 export function verdict(pr, issues) {
   const labels = pr.labels ?? [];
-  if (labels.includes(ESCAPE_HATCH_LABEL)) {
-    return { ok: true, waived: true, refsOnly: false, reasons: [] };
+  // Both waive the linked-issue requirement; `waivedBy` keeps them distinct so
+  // the comment a reviewer reads says which claim was made.
+  for (const label of [ESCAPE_HATCH_LABEL, CLOSES_NOTHING_LABEL]) {
+    if (labels.includes(label)) {
+      return {
+        ok: true,
+        waived: true,
+        waivedBy: label,
+        refsOnly: false,
+        reasons: [],
+      };
+    }
   }
 
   const links = linkedIssues(pr.body);
@@ -317,8 +345,10 @@ export function verdict(pr, issues) {
       refsOnly: false,
       reasons: [
         "This PR links no issue. Add a closing reference (`Closes #123`) if it " +
-          "finishes one, `Refs #123` if it only advances one, or apply the " +
-          `\`${ESCAPE_HATCH_LABEL}\` label if the change is genuinely trivial (SCR-003).`,
+          "finishes one, `Refs #123` if it only advances one, or label it: " +
+          `\`${ESCAPE_HATCH_LABEL}\` if the change is genuinely trivial, ` +
+          `\`${CLOSES_NOTHING_LABEL}\` if it is substantial and closes no ` +
+          "issue by design (SCR-003).",
       ],
     };
   }
@@ -359,7 +389,12 @@ export function verdict(pr, issues) {
  */
 export function formatVerdict(result) {
   if (result.waived) {
-    return `SCR-003 DoD check waived by the \`${ESCAPE_HATCH_LABEL}\` label.`;
+    const label = result.waivedBy ?? ESCAPE_HATCH_LABEL;
+    const why =
+      label === CLOSES_NOTHING_LABEL
+        ? "this PR closes no issue by design"
+        : "this change is trivial";
+    return `SCR-003 DoD check waived by the \`${label}\` label — ${why}.`;
   }
   if (result.refsOnly) {
     return (

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   closeExemptFromDod,
+  CLOSES_NOTHING_LABEL,
   dodStatus,
   ESCAPE_HATCH_LABEL,
   formatVerdict,
@@ -410,5 +411,47 @@ describe("referencesIssue (#2638)", () => {
     expect(referencesIssue("This does not close #42. Refs #42", HERE)).toBe(
       true,
     );
+  });
+});
+
+describe("closes-nothing (#2551)", () => {
+  const bigAudit = {
+    labels: [CLOSES_NOTHING_LABEL],
+    body: "3,285 files; files ~1,020 issues; closes none",
+  };
+
+  it("lets a substantial PR that closes nothing pass", () => {
+    // The case that had no honest route: `Closes #N` would be untrue and
+    // `no-issue` claims triviality. #1941 sat red on `dod` alone for this.
+    const v = verdict(bigAudit, []);
+    expect(v.ok).toBe(true);
+    expect(v.waived).toBe(true);
+  });
+
+  it("reads differently from a trivial waiver", () => {
+    // The DoD's third item: a reviewer must still be able to tell a small
+    // trivial PR from a large one that closes nothing.
+    const big = formatVerdict(verdict(bigAudit, []));
+    const trivial = formatVerdict(
+      verdict({ labels: [ESCAPE_HATCH_LABEL], body: "typo" }, []),
+    );
+    expect(big).toContain("closes no issue by design");
+    expect(trivial).toContain("this change is trivial");
+    expect(big).not.toEqual(trivial);
+  });
+
+  it("still fails a PR that links nothing and claims neither", () => {
+    // The control. If this passed, the change would have removed the gate
+    // rather than given it an honest exit.
+    const v = verdict({ labels: [], body: "no reference at all" }, []);
+    expect(v.ok).toBe(false);
+    expect(v.reasons.join(" ")).toContain(CLOSES_NOTHING_LABEL);
+  });
+
+  it("names both labels in the failure message, so the remedy is findable", () => {
+    const v = verdict({ labels: [], body: "" }, []);
+    const text = v.reasons.join(" ");
+    expect(text).toContain(ESCAPE_HATCH_LABEL);
+    expect(text).toContain(CLOSES_NOTHING_LABEL);
   });
 });
