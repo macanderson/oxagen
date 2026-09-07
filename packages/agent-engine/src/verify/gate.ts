@@ -397,17 +397,21 @@ async function scorePatch(
     if (workspaceFailed) break;
   }
 
-  // A kill rate exists only when mutants actually ran. `tried === 0` used to
-  // render as `1` — the best possible score for a measurement that did not
-  // happen (#1351).
-  const state: MutationScore["state"] =
-    tried > 0
-      ? "measured"
-      : aborted
-        ? "aborted"
-        : workspaceError
-          ? "workspace-error"
-          : "not-applicable";
+  // A kill rate exists only when mutants ran *and the pass finished*.
+  // `tried === 0` used to render as `1` — the best possible score for a
+  // measurement that did not happen (#1351). An interrupted pass is the same
+  // defect one step along: stopping after three of fifty mutants leaves a
+  // ratio, but it is a ratio over whichever subset ran first, not over the
+  // patch, and #1351 asks for an aborted pass to be distinguishable from a
+  // completed one. So `aborted` and `workspace-error` outrank `measured`
+  // rather than being reachable only when nothing ran at all.
+  const state: MutationScore["state"] = aborted
+    ? "aborted"
+    : workspaceError
+      ? "workspace-error"
+      : tried > 0
+        ? "measured"
+        : "not-applicable";
 
   const score: MutationScore = {
     state,

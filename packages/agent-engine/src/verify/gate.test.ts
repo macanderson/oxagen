@@ -577,6 +577,40 @@ function mutableEvidence(): TestEvidence {
   };
 }
 
+/**
+ * Two mutable added lines, so scoring generates two mutants and a signal that
+ * fires during the first one leaves a pass that ran real mutants and stopped.
+ * One mutant cannot express that: the loop exits before it re-checks the
+ * signal, so `aborted` never gets set.
+ */
+const TWO_MUTANT_FIXED =
+  "export const ok = (n: number) => n >= 0;\nexport const hi = (n: number) => n >= 1;\n";
+const TWO_MUTANT_DIFF = [
+  "diff --git a/src/ok.ts b/src/ok.ts",
+  "--- a/src/ok.ts",
+  "+++ b/src/ok.ts",
+  "@@ -1,2 +1,2 @@",
+  "-export const ok = (n: number) => n > 0;",
+  "-export const hi = (n: number) => n > 1;",
+  "+export const ok = (n: number) => n >= 0;",
+  "+export const hi = (n: number) => n >= 1;",
+  "diff --git a/src/ok.test.ts b/src/ok.test.ts",
+  "new file mode 100644",
+  "--- /dev/null",
+  "+++ b/src/ok.test.ts",
+  "@@ -0,0 +1,2 @@",
+  "+import { ok } from './ok';",
+  "+test('ok', () => {});",
+].join("\n");
+const TWO_MUTANT_WITNESS = "pnpm vitest run src/ok.test.ts";
+
+function twoMutantWorkspace(): FakeWorkspace {
+  return new FakeWorkspace({
+    "src/ok.ts": TWO_MUTANT_FIXED,
+    "src/ok.test.ts": "import { ok } from './ok';\ntest('ok', () => {});\n",
+  });
+}
+
 describe("a mutation score that measured nothing (#1351)", () => {
   it("does not report a perfect kill rate for zero mutants", async () => {
     const ws = new FakeWorkspace({
@@ -617,6 +651,46 @@ describe("a mutation score that measured nothing (#1351)", () => {
     expect(result.score?.state).toBe("measured");
     expect(result.score?.mutantsTried).toBeGreaterThan(0);
     expect(result.score?.killRate).toBe(1);
+  });
+
+  // #1351's third DoD item: "An aborted scoring pass is distinguishable from
+  // one that completed — those are different facts and today both produce the
+  // same object." Zero-mutant abort was already covered; this is the case the
+  // first cut of the fix still got wrong, because `tried > 0` outranked
+  // `aborted` in the state selection. One mutant runs, the signal fires, and
+  // the interrupted pass reported `measured` with killRate 1 — a 100% score
+  // out of a measurement that stopped, which is the very shape #1351 exists
+  // to stop.
+  it("does not report an interrupted pass as a completed measurement", async () => {
+    const ws = twoMutantWorkspace();
+    const controller = new AbortController();
+    let witnessRuns = 0;
+    ws.onExec = (cmd) => {
+      if (cmd !== TWO_MUTANT_WITNESS) return ok(0);
+      witnessRuns++;
+      // Run 1 is layer 1's re-run against the reverted file. Run 2 is the
+      // first mutant — abort there, so the pass stops with real work done.
+      if (witnessRuns === 2) controller.abort();
+      return ws.files.get("src/ok.ts") === TWO_MUTANT_FIXED ? ok(0) : ok(1);
+    };
+
+    const result = await runMutationGate(
+      ws,
+      TWO_MUTANT_DIFF,
+      {
+        lastOutcomes: new Map([[TWO_MUTANT_WITNESS, 0]]),
+        flippedBy: TWO_MUTANT_WITNESS,
+      },
+      { score: true, signal: controller.signal },
+    );
+
+    expect(result.status).toBe("witnessed");
+    expect(result.score?.mutantsTried).toBe(1);
+    expect(result.score?.state).toBe("aborted");
+    expect(result.score?.killRate).toBeNull();
+    // The partial work is still named — as a count of what ran, never a rate.
+    expect(describeMutationScore(result.score!)).not.toMatch(/\d+%/);
+    expect(describeMutationScore(result.score!)).toContain("1/1 mutants ran");
   });
 
   it("does not render a percentage for an unmeasured score", async () => {

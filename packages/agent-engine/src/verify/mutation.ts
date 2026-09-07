@@ -391,10 +391,17 @@ export function describeMutationScore(score: MutationScore): string {
   if (score.state === "not-applicable") {
     return "mutant kill rate not measured (no applicable mutants)";
   }
+  // A pass that stopped partway still did real work, and dropping it would
+  // trade one silence for another — so the progress is named as a count of
+  // what ran, never as a rate over what did not.
+  const progress =
+    score.mutantsTried > 0
+      ? `, ${score.mutantsKilled}/${score.mutantsTried} mutants ran`
+      : "";
   if (score.state === "aborted") {
-    return "mutant kill rate not measured (scoring aborted)";
+    return `mutant kill rate not measured (scoring aborted${progress})`;
   }
-  return "mutant kill rate not measured (workspace error during scoring)";
+  return `mutant kill rate not measured (workspace error during scoring${progress})`;
 }
 
 export type MutationGateStatus = "witnessed" | "vacuous" | "skipped";
