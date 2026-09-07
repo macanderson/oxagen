@@ -158,6 +158,22 @@ export const managedPolicySchema = z.object({
    * arguments, and pinning an invocation means writing it:
    * `"npx -y @good/server"`, or `"npx -y @good/*"`.
    *
+   * UNSET MEANS UNRESTRICTED. An absent or empty `allowedCommands` places no
+   * restriction on stdio at all; only `deniedCommands` applies. That is the
+   * pre-existing behaviour and it is kept, because changing it would silently
+   * tighten every policy already deployed — an org that restricts URLs today
+   * would start refusing stdio servers it never listed. An org that wants stdio
+   * restricted says so, with one list or the other.
+   *
+   * WHAT THIS IS NOT. Matching is over the command STRING. An equivalent
+   * command spelled differently — a different path to the same binary, a
+   * shell wrapper, an env var indirection — is a different string and is not
+   * caught. This raises the floor against accident and casual evasion; it is
+   * not a sandbox, and nothing here stops a determined local user from running
+   * a program by another name. The sandboxing gate is the
+   * `OXAGEN_ALLOW_STDIO_MCP` env switch, which decides whether stdio spawning
+   * is possible at all.
+   *
    * This is stated here because it used to mean two different things. The
    * runtime matched the binary alone, so `"npx"` admitted `npx -y @evil/server`
    * — every package in the registry — while the documented matcher in
@@ -172,6 +188,19 @@ export const managedPolicySchema = z.object({
    * denied URL stays denied however permissive the allowlist is.
    */
   deniedServerUrls: z.array(z.string()).optional(),
+  /**
+   * Stdio commands that are always blocked. Matched against the full argv, the
+   * same subject as `allowedCommands`, and checked FIRST — so a denied command
+   * stays denied however permissive the allowlist is, exactly as
+   * `deniedServerUrls` behaves for URLs.
+   *
+   * Without this the policy could deny a URL and a tool but not a command, and
+   * stdio is the one transport that spawns a local process: the
+   * "unoverridable floor" could not block the single registration that executes
+   * code on the machine. An org writing a policy in the natural denylist style
+   * — block these known-bad servers — got no stdio restriction at all (#1423).
+   */
+  deniedCommands: z.array(z.string()).optional(),
   /** Glob patterns for tool names that are always blocked (any server). */
   deniedTools: z.array(z.string()).optional(),
 });

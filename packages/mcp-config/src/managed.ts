@@ -235,9 +235,16 @@ export function checkServerUrl(
  * The full command string is "command arg1 arg2 ...".
  * Returns null if allowed, or a PolicyViolation describing the block.
  *
- * Only the `allowedCommands` allowlist is consulted — ManagedPolicy has no
- * `deniedCommands` field, so the `command_denied` variant of PolicyViolation is
- * unreachable until one is added.
+ * Deny is checked BEFORE allow, matching {@link checkServerUrl}, so a denied
+ * command stays denied however permissive the allowlist is. `deniedCommands`
+ * did not exist until #1423: the policy could deny a URL and a tool but not a
+ * command, and stdio is the one transport that spawns a local process — so the
+ * "unoverridable floor" could not block the single registration that runs code
+ * on the machine.
+ *
+ * An unset `allowedCommands` still means unrestricted; see the field's own doc
+ * in schema.ts for why that default is kept and for what string matching does
+ * and does not buy.
  */
 export function checkStdioCommand(
   command: string,
@@ -247,6 +254,15 @@ export function checkStdioCommand(
   if (!policy) return null;
 
   const fullCommand = [command, ...args].join(" ");
+
+  // Denylist takes priority, as it does for URLs.
+  if (policy.deniedCommands) {
+    for (const pattern of policy.deniedCommands) {
+      if (matchGlob(pattern, fullCommand)) {
+        return { type: "command_denied", command: fullCommand, pattern };
+      }
+    }
+  }
 
   // Allowlist: if non-empty, the command must match at least one pattern
   if (policy.allowedCommands && policy.allowedCommands.length > 0) {

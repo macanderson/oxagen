@@ -84,6 +84,14 @@ export type {
 } from "./cache";
 
 export { generateObjectFor } from "./generate-object";
+export {
+  OutputBudgetError,
+  OUTPUT_BUDGET_CODE,
+  isOutputBudgetError,
+  parseOutputBudgetRefusal,
+  withOutputBudgetRetry,
+  type OutputBudgetRefusal,
+} from "./output-budget";
 export type {
   GenerateObjectArgs,
   GenerateObjectUsage,
