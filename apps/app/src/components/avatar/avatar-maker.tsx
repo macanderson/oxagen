@@ -94,6 +94,70 @@ const DEFAULT_DESIGN: DesignState = {
 
 const HEX_INPUT_RE = /^#[0-9a-fA-F]{6}$/;
 
+interface EmojiSwatchProps {
+  entry: EmojiEntry;
+  selected: boolean;
+  onSelect: (emoji: string) => void;
+}
+
+/**
+ * One emoji cell of the picker grid.
+ *
+ * Memoized because the grid is ~170 cells and every one of them lives under
+ * the same component as the background-color and color-mode state: without
+ * this, a single keystroke in the custom-hex field (or a mode toggle, or a
+ * preset click) re-rendered all 170 buttons. `entry` comes from a module-level
+ * constant and `onSelect` from a `useCallback`, so both references are stable
+ * and only the two cells whose `selected` actually flips ever re-render.
+ */
+const EmojiSwatch = React.memo(function EmojiSwatch({
+  entry,
+  selected,
+  onSelect,
+}: EmojiSwatchProps): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(entry.emoji)}
+      aria-pressed={selected}
+      aria-label={entry.keywords[0] ?? "icon"}
+      className={cn(
+        "flex size-10 shrink-0 items-center justify-center rounded-md text-xl transition-colors hover:bg-muted",
+        selected && "bg-muted ring-2 ring-ring",
+      )}
+    >
+      <span aria-hidden="true">{entry.emoji}</span>
+    </button>
+  );
+});
+
+interface PresetSwatchProps {
+  preset: string;
+  selected: boolean;
+  onSelect: (preset: string) => void;
+}
+
+/** One preset background-color swatch. Memoized for the same reason as `EmojiSwatch`. */
+const PresetSwatch = React.memo(function PresetSwatch({
+  preset,
+  selected,
+  onSelect,
+}: PresetSwatchProps): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(preset)}
+      aria-pressed={selected}
+      aria-label={`Background color ${preset}`}
+      className={cn(
+        "size-10 shrink-0 rounded-full ring-1 ring-border",
+        selected && "ring-2 ring-ring ring-offset-2 ring-offset-background",
+      )}
+      style={{ backgroundColor: preset }}
+    />
+  );
+});
+
 /** Derives the Design tab's initial fields + starting tab from the current value. */
 function initialStateFromValue(value: string | null | undefined): {
   tab: MakerTab;
@@ -194,6 +258,12 @@ export function AvatarMaker({
     setBg(preset);
     setHexInput(preset);
     setHexError(null);
+  }, []);
+
+  // Stable identity so the memoized swatches below never re-render on an
+  // unrelated state change (background color, color mode, hex text, search).
+  const handlePickEmoji = React.useCallback((next: string) => {
+    setEmoji(next);
   }, []);
 
   const handleSaveDesign = React.useCallback(() => {
@@ -371,19 +441,12 @@ export function AvatarMaker({
                     aria-label="Choose an icon"
                   >
                     {filteredEntries.map((entry) => (
-                      <button
+                      <EmojiSwatch
                         key={entry.emoji}
-                        type="button"
-                        onClick={() => setEmoji(entry.emoji)}
-                        aria-pressed={emoji === entry.emoji}
-                        aria-label={entry.keywords[0] ?? "icon"}
-                        className={cn(
-                          "flex size-10 shrink-0 items-center justify-center rounded-md text-xl transition-colors hover:bg-muted",
-                          emoji === entry.emoji && "bg-muted ring-2 ring-ring",
-                        )}
-                      >
-                        <span aria-hidden="true">{entry.emoji}</span>
-                      </button>
+                        entry={entry}
+                        selected={emoji === entry.emoji}
+                        onSelect={handlePickEmoji}
+                      />
                     ))}
                     {filteredEntries.length === 0 && (
                       <p className="col-span-full py-4 text-center text-sm text-muted-foreground">
@@ -402,18 +465,11 @@ export function AvatarMaker({
                     aria-label="Preset background colors"
                   >
                     {BG_PRESETS.map((preset) => (
-                      <button
+                      <PresetSwatch
                         key={preset}
-                        type="button"
-                        onClick={() => handlePickPreset(preset)}
-                        aria-pressed={bg === preset}
-                        aria-label={`Background color ${preset}`}
-                        className={cn(
-                          "size-10 shrink-0 rounded-full ring-1 ring-border",
-                          bg === preset &&
-                            "ring-2 ring-ring ring-offset-2 ring-offset-background",
-                        )}
-                        style={{ backgroundColor: preset }}
+                        preset={preset}
+                        selected={bg === preset}
+                        onSelect={handlePickPreset}
                       />
                     ))}
                   </div>
@@ -444,6 +500,7 @@ export function AvatarMaker({
                 <div className="flex flex-col gap-2">
                   <Label>Color mode</Label>
                   <SegmentedControl
+                    aria-label="Color mode"
                     value={mode}
                     onValueChange={(v) => setMode(v as AvatarMode)}
                   >
@@ -462,7 +519,7 @@ export function AvatarMaker({
             </Tabs>
           </DialogPanel>
 
-          <DialogFooter>
+          <DialogFooter role="group" aria-label="Avatar actions">
             <DialogClose
               render={
                 <Button
