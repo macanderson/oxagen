@@ -455,3 +455,45 @@ describe("closes-nothing (#2551)", () => {
     expect(text).toContain(CLOSES_NOTHING_LABEL);
   });
 });
+
+describe("a waiver label does not waive a PR that closes something (#2742 review)", () => {
+  // The hole the first draft shipped: the label short-circuited before the body
+  // was parsed, so `closes-nothing` plus `Closes #N` skipped that issue's DoD
+  // entirely. That is a way PAST the gate rather than an exit from it, and it
+  // would have been worse than the problem the label was added to solve.
+  it("refuses closes-nothing on a PR that closes an issue", () => {
+    const v = verdict(
+      { labels: [CLOSES_NOTHING_LABEL], body: "Closes #9" },
+      [],
+    );
+    expect(v.ok).toBe(false);
+    expect(v.reasons.join(" ")).toContain(CLOSES_NOTHING_LABEL);
+    // The message must name the contradiction, not just refuse.
+    expect(v.reasons.join(" ")).toContain("#9");
+  });
+
+  it("refuses no-issue on a PR that closes an issue", () => {
+    // The same hole was already there for the older label. Fixed with it: no
+    // open PR combined the two, so nothing reddens that was not already
+    // bypassing verification.
+    const v = verdict({ labels: [ESCAPE_HATCH_LABEL], body: "Closes #9" }, []);
+    expect(v.ok).toBe(false);
+  });
+
+  it("still waives when the PR genuinely closes nothing", () => {
+    expect(
+      verdict({ labels: [CLOSES_NOTHING_LABEL], body: "an audit" }, []).ok,
+    ).toBe(true);
+    expect(verdict({ labels: [ESCAPE_HATCH_LABEL], body: "typo" }, []).ok).toBe(
+      true,
+    );
+  });
+
+  it("allows a waiver alongside Refs, which closes nothing", () => {
+    // The control that keeps this from over-refusing: `Refs` deliberately does
+    // not close, so it does not contradict the label.
+    expect(
+      verdict({ labels: [CLOSES_NOTHING_LABEL], body: "Refs #9" }, []).ok,
+    ).toBe(true);
+  });
+});

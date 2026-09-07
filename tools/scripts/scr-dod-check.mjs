@@ -322,22 +322,42 @@ export function dodStatus(issueBody) {
  */
 export function verdict(pr, issues) {
   const labels = pr.labels ?? [];
-  // Both waive the linked-issue requirement; `waivedBy` keeps them distinct so
-  // the comment a reviewer reads says which claim was made.
-  for (const label of [ESCAPE_HATCH_LABEL, CLOSES_NOTHING_LABEL]) {
-    if (labels.includes(label)) {
+  const waiver = [ESCAPE_HATCH_LABEL, CLOSES_NOTHING_LABEL].find((label) =>
+    labels.includes(label),
+  );
+
+  const links = linkedIssues(pr.body);
+  const refs = referencedIssues(pr.body);
+
+  // A waiver is a claim that this PR closes nothing, so it waives only when
+  // that is true. Applied before the body was parsed, the label short-circuited
+  // everything — a PR carrying `Closes #N` AND a waiver skipped its issue's DoD
+  // entirely, which is a way past the gate rather than an exit from it. Found
+  // by Sourcery on #2742; `no-issue` had the same hole and is fixed with it,
+  // since no open PR combines the two.
+  if (waiver) {
+    if (links.length === 0) {
       return {
         ok: true,
         waived: true,
-        waivedBy: label,
+        waivedBy: waiver,
         refsOnly: false,
         reasons: [],
       };
     }
+    return {
+      ok: false,
+      waived: false,
+      waivedBy: waiver,
+      refsOnly: false,
+      reasons: [
+        `This PR carries the \`${waiver}\` label but its description closes ` +
+          `${links.map((l) => l.ref ?? `#${l.number}`).join(", ")}. The label ` +
+          "says the PR closes no issue; the body says otherwise. Drop whichever " +
+          "one is wrong (SCR-003).",
+      ],
+    };
   }
-
-  const links = linkedIssues(pr.body);
-  const refs = referencedIssues(pr.body);
   if (links.length === 0 && refs.length === 0) {
     return {
       ok: false,
