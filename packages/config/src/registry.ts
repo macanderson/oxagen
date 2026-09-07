@@ -301,19 +301,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "60",
   },
-  RATE_LIMIT_AGENT_EXEC_PER_MIN: {
-    group: "Rate limiting",
-    description:
-      "Max agent-execution requests per minute per workspace (fallback: per org, then " +
-      "per IP) — code-exec / compose / sandbox ops / background-task start / A2A RPC. " +
-      "Optional — defaults to 30 in packages/config/src/env.ts.",
-    secret: false,
-    clientExposed: false,
-    services: ["api"],
-    requiredIn: [],
-    valueOrigin: "manual",
-    placeholder: "30",
-  },
 
   // ── Error alerting (vendor-neutral outbound webhook) ────────────────────────
   ALERT_WEBHOOK_URL: {

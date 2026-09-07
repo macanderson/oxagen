@@ -54,11 +54,12 @@ export const agentDefinitionList = registerCapability({
         // does. Null until agent.definition.summarize has run for the agent.
         summary: z.string().nullable(),
         /**
-         * The agent's type discriminator (free-form; e.g. `custom`,
-         * `interactive_chat`, or `code`). Surfaced so callers — notably the
-         * app's new-session agent selector — can classify a code agent
-         * (`agentType === "code"`, see isCodeAgentType) and gate the repo/code
-         * tooling + UI accordingly.
+         * The agent's type discriminator (free-form; e.g. `custom` or
+         * `interactive_chat`). Surfaced verbatim so callers — notably the
+         * app's agent selector — can label and group agents; it carries the
+         * managed-vs-custom distinction (see isManagedAgentType). ADR-041
+         * retired the `code` value with the execution runtime: no surface
+         * branches on agentType to bind repo/sandbox tooling any more.
          */
         agentType: z.string(),
         status: z.enum(["draft", "active", "archived"]),
