@@ -2511,7 +2511,7 @@
       "writes": []
     }
   ],
-  "contentHash": "489c5058dfad099aa86db9b5b29b2281f28b4211db13fa73c0da39f0d4267f48",
+  "contentHash": "a9d420c5094531bb8aeee8b5506025c4928617ca55bed0e94bb954f0f67eb58d",
   "domains": [
     {
       "name": "agent",
@@ -7433,18 +7433,6 @@
         },
         {
           "name": "default_text_model",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "default_image_model",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "default_video_model",
           "nullable": true,
           "primaryKey": false,
           "type": "text"
@@ -15154,18 +15142,6 @@
         },
         {
           "name": "default_text_model",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "default_image_model",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "default_video_model",
           "nullable": true,
           "primaryKey": false,
           "type": "text"
