@@ -189,7 +189,7 @@ async function recordApplied(
 // error_events, usage_events, memory_changes, schema_conformance_events,
 // stella_operational_events and the claude_* tables are defined only in
 // migrations/. Treat schema.sql plus migrations/ together as the desired state.
-export async function migrate(): Promise<void> {
+async function migrateOnce(): Promise<void> {
   const here = dirname(fileURLToPath(import.meta.url));
   await ensureDatabase();
   const ch = clickhouse();
@@ -231,6 +231,53 @@ export async function migrate(): Promise<void> {
       await recordApplied(ch, [file]);
     }
   }
+}
+
+// ── Same-process concurrency guard (#2637) ────────────────────────────────
+//
+// The ledger above (#2632) stops a SECOND, non-overlapping migrate() call
+// from re-executing a file the first one already recorded. It does nothing
+// for two calls whose execution windows overlap: `applied` inside
+// migrateOnce() is a snapshot taken ONCE per call and never re-read for the
+// rest of that call's loop over migrations/*.sql. Two overlapping calls that
+// both take their snapshot before either has recorded anything will BOTH
+// decide an unrecorded file is unapplied — and for a DROP+RECREATE file like
+// 0021, BOTH will replay the DROP, discarding whatever the other has written
+// since. That is demonstrated, not theoretical:
+// migrate-concurrency.integration.test.ts reproduces it deterministically by
+// clearing a file's ledger row and firing two migrate() calls together with
+// Promise.all — and fails without this queue (temporarily calling
+// migrateOnce() directly from migrate() reproduces the failure).
+//
+// Serializing every call IN THIS PROCESS closes that window for calls that
+// share this module: a caller that arrives while another is still running
+// waits for it to finish — and record its result — before taking its own
+// ledger snapshot. It does NOT close the window between two SEPARATE
+// processes (two independent `pnpm db:migrate` invocations, or — the
+// CI-observed shape that motivated vitest.config.ts's `fileParallelism:
+// false` — two different vitest worker files, each with its own isolated
+// module registry, racing the same ClickHouse). This module's state cannot
+// span processes, and ClickHouse has no lock migrate() could take out across
+// DDL statements to close that gap from the SQL side either. That residual
+// is accepted for now: CI's containment stays `fileParallelism: false`
+// (#2633), and production runs ClickHouse/Neo4j migrations as a single
+// serialized step (tools/scripts/db-migrate.ts, over SSM — see
+// pipeline.yml's concurrency-group comment) rather than fanning them out.
+// #2687 tracks a real cross-process guard if that deploy topology ever
+// changes.
+let migrationQueue: Promise<void> = Promise.resolve();
+
+export function migrate(): Promise<void> {
+  const run: Promise<void> = migrationQueue.then(
+    () => migrateOnce(),
+    () => migrateOnce(),
+  );
+  // Keep the queue moving even when this run fails — only THIS call's own
+  // caller (the `run` promise returned below) should observe that failure;
+  // a later caller must still get its turn rather than inherit a
+  // permanently wedged queue.
+  migrationQueue = run.catch(() => undefined);
+  return run;
 }
 
 // Bundle-safe direct-run guard (see is-direct-run.ts): the bare

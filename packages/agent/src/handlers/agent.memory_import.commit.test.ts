@@ -6,11 +6,15 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   writeMemoryMock: vi.fn(),
   embedTextMock: vi.fn(),
+  embedManyMock: vi.fn(),
   isKnowledgeGraphEnabledMock: vi.fn(),
 }));
 
 vi.mock("../memory/neo4j", () => ({ writeMemory: mocks.writeMemoryMock }));
-vi.mock("../memory/embed", () => ({ embedText: mocks.embedTextMock }));
+vi.mock("../memory/embed", () => ({
+  embedText: mocks.embedTextMock,
+  embedMany: mocks.embedManyMock,
+}));
 vi.mock("../runtime/knowledge-graph", () => ({
   isKnowledgeGraphEnabled: mocks.isKnowledgeGraphEnabledMock,
 }));
@@ -36,10 +40,14 @@ describe("agent.memory.import.commit handler", () => {
   beforeEach(() => {
     mocks.writeMemoryMock.mockReset();
     mocks.embedTextMock.mockReset();
+    mocks.embedManyMock.mockReset();
     mocks.isKnowledgeGraphEnabledMock.mockReset();
     mocks.isKnowledgeGraphEnabledMock.mockReturnValue(true);
     mocks.embedTextMock.mockImplementation(async () =>
       new Array(1536).fill(0.05),
+    );
+    mocks.embedManyMock.mockImplementation(async (texts: string[]) =>
+      texts.map(() => new Array(1536).fill(0.05)),
     );
     let n = 0;
     mocks.writeMemoryMock.mockImplementation(async () => ({
@@ -63,7 +71,10 @@ describe("agent.memory.import.commit handler", () => {
     });
     expect(out.results[0]?.memoryId).toMatch(/^m_/);
     expect(mocks.writeMemoryMock).toHaveBeenCalledTimes(2);
-    expect(mocks.embedTextMock).toHaveBeenCalledTimes(2);
+    // One embedding call for the whole commit, not one per draft (#1413).
+    expect(mocks.embedManyMock).toHaveBeenCalledTimes(1);
+    expect(mocks.embedManyMock.mock.calls[0]![0]).toEqual(["A", "B"]);
+    expect(mocks.embedTextMock).not.toHaveBeenCalled();
   });
 
   it("passes memoryClass, memoryKind, enforcementScore, lesson, nodeRef, and source through to writeMemory", async () => {
@@ -172,7 +183,10 @@ describe("agent.memory.import.commit handler", () => {
     expect(mocks.writeMemoryMock).not.toHaveBeenCalled();
   });
 
-  it("captures embedding failures per item", async () => {
+  it("falls back to per-draft embedding when the batch call fails, and still captures failures per item", async () => {
+    // A batch that cannot be embedded must not fail every draft together — the
+    // handler's contract is per-item error capture, so it retries one at a time.
+    mocks.embedManyMock.mockRejectedValueOnce(new Error("batch embed failed"));
     mocks.embedTextMock
       .mockImplementationOnce(async () => {
         throw new Error("embedding gateway down");
@@ -189,6 +203,7 @@ describe("agent.memory.import.commit handler", () => {
     });
     expect(out.failed).toBe(1);
     expect(out.imported).toBe(1);
+    expect(mocks.embedTextMock).toHaveBeenCalledTimes(2);
   });
 
   it("reports every draft as failed when the knowledge graph is not configured", async () => {
@@ -203,6 +218,7 @@ describe("agent.memory.import.commit handler", () => {
     expect(out.results[0]?.error).toMatch(/not configured/i);
     // Nothing is embedded or written when the graph is off.
     expect(mocks.embedTextMock).not.toHaveBeenCalled();
+    expect(mocks.embedManyMock).not.toHaveBeenCalled();
     expect(mocks.writeMemoryMock).not.toHaveBeenCalled();
   });
 });

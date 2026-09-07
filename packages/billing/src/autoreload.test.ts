@@ -10,7 +10,7 @@
  *  - maybeAutoReload: idempotency (reloaded within last hour)
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -47,13 +47,33 @@ vi.mock("./billing-settings", () => ({
 }));
 
 // DB mock.
+//
+// `update(...).set(...).where(...)` is awaitable AND carries `.returning()`,
+// which is the shape drizzle's builder has and the shape claimReloadEpisode
+// reads the episode key back through. The episode row is modelled rather than
+// stubbed: a claim against an open episode hands back the key it already has,
+// which is what the real statement's COALESCE does — and is the whole property
+// #1420 turns on.
 interface DbState {
   subRow: Record<string, unknown> | null;
-  updateCalled: boolean;
+  /** Set by closeReloadEpisode; the marker that a reload actually finished. */
+  lastAutoReloadAt: Date | null;
+  episodeKey: string | null;
+  episodeStartedAt: Date | null;
+  claimCount: number;
+  /** What a fresh claim records as the episode's start. Tests move this. */
+  now: Date;
 }
 
 function makeState(): DbState {
-  return { subRow: null, updateCalled: false };
+  return {
+    subRow: null,
+    lastAutoReloadAt: null,
+    episodeKey: null,
+    episodeStartedAt: null,
+    claimCount: 0,
+    now: new Date(),
+  };
 }
 
 function makeDb(state: DbState) {
@@ -64,11 +84,36 @@ function makeDb(state: DbState) {
       },
     },
     update: vi.fn(() => ({
-      set: vi.fn((vals: unknown) => {
-        state.updateCalled = true;
-        void vals;
+      set: vi.fn((vals: Record<string, unknown>) => {
+        // closeReloadEpisode writes literal nulls and a date; claimReloadEpisode
+        // writes COALESCE expressions, handled in returning() below.
+        if (vals["autoReloadEpisodeKey"] === null) {
+          state.episodeKey = null;
+          state.episodeStartedAt = null;
+        }
+        if (vals["lastAutoReloadAt"] instanceof Date) {
+          state.lastAutoReloadAt = vals["lastAutoReloadAt"] as Date;
+        }
         return {
-          where: vi.fn(() => Promise.resolve()),
+          where: vi.fn(() => {
+            const builder = Promise.resolve(undefined) as Promise<unknown> & {
+              returning: () => Promise<unknown[]>;
+            };
+            builder.returning = async () => {
+              if (!state.episodeKey) {
+                state.claimCount += 1;
+                state.episodeKey = `episode-${state.claimCount}`;
+                state.episodeStartedAt = state.now;
+              }
+              return [
+                {
+                  idempotencyKey: state.episodeKey,
+                  startedAt: state.episodeStartedAt,
+                },
+              ];
+            };
+            return builder;
+          }),
         };
       }),
     })),
@@ -307,8 +352,9 @@ describe("maybeAutoReload", () => {
         reason: "grant_auto_reload",
       }),
     );
-    // lastAutoReloadAt should be updated.
-    expect(state.updateCalled).toBe(true);
+    // The episode is finished: the reload is stamped and the key released.
+    expect(state.lastAutoReloadAt).toBeInstanceOf(Date);
+    expect(state.episodeKey).toBeNull();
   });
 
   it("uses customer default payment method when no saved PM in settings", async () => {
@@ -344,7 +390,7 @@ describe("maybeAutoReload", () => {
     expect(result.reloaded).toBe(false);
     expect(result.reason).toBe("card_declined");
     expect(createCreditLotMock).not.toHaveBeenCalled();
-    expect(state.updateCalled).toBe(false);
+    expect(state.lastAutoReloadAt).toBeNull();
   });
 
   it("does not throw and does not stamp lastAutoReloadAt when the grant fails after a successful charge", async () => {
@@ -367,8 +413,11 @@ describe("maybeAutoReload", () => {
     const result = await maybeAutoReload("org-abc");
     expect(result.reloaded).toBe(false);
     expect(result.reason).toBe("grant_failed_after_charge");
-    // The reload window must NOT be marked consumed, so a retry can self-heal.
-    expect(state.updateCalled).toBe(false);
+    // The reload window must NOT be marked consumed, so a retry can self-heal —
+    // and the episode key must stay claimed, since that is what the retry
+    // charges under.
+    expect(state.lastAutoReloadAt).toBeNull();
+    expect(state.episodeKey).not.toBeNull();
   });
 
   it("returns reloaded=false when charge did not succeed", async () => {
@@ -387,5 +436,111 @@ describe("maybeAutoReload", () => {
     expect(result.reloaded).toBe(false);
     expect(result.reason).toBe("charge_status:requires_payment_method");
     expect(createCreditLotMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("maybeAutoReload — one charge per low-balance episode (#1420)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getDefaultPaymentMethodIdMock.mockResolvedValue("pm_default");
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("retries under the ORIGINAL idempotency key across an hour boundary", async () => {
+    // The witness for #1420. The key used to be bucketed by calendar hour while
+    // the retry it protects is bounded by elapsed time, so a retry forty
+    // seconds after a 10:59:30 charge computed a different key, Stripe did not
+    // de-duplicate it, and the card was charged twice for one top-up — on the
+    // error path that exists to protect the customer.
+    const state = makeState();
+    state.subRow = { stripeCustomerId: "cus_test_001" };
+    dbHolder.instance = makeDb(state);
+    getOrgBillingSettingsMock.mockResolvedValue(makeSettings());
+    effectiveBalanceMock.mockResolvedValue(100n);
+    chargeOffSessionMock.mockResolvedValue({
+      paymentIntentId: "pi_test_001",
+      status: "succeeded",
+      succeeded: true,
+    });
+
+    vi.useFakeTimers();
+
+    // 10:59:30 — the card is charged and the credit grant then fails.
+    const chargedAt = new Date(Date.UTC(2026, 8, 6, 10, 59, 30));
+    vi.setSystemTime(chargedAt);
+    state.now = chargedAt;
+    createCreditLotMock.mockRejectedValueOnce(new Error("db connection lost"));
+    const first = await maybeAutoReload("org-abc");
+    expect(first.reason).toBe("grant_failed_after_charge");
+
+    // 11:00:10 — forty seconds later, on the other side of the hour.
+    const retriedAt = new Date(Date.UTC(2026, 8, 6, 11, 0, 10));
+    vi.setSystemTime(retriedAt);
+    state.now = retriedAt;
+    createCreditLotMock.mockResolvedValue({
+      lotId: "lot-1",
+      effectiveBalanceCents: 3000n,
+    });
+    const second = await maybeAutoReload("org-abc");
+    expect(second.reloaded).toBe(true);
+
+    const keys = chargeOffSessionMock.mock.calls.map(
+      (call) => (call[0] as { idempotencyKey: string }).idempotencyKey,
+    );
+    expect(keys).toHaveLength(2);
+    // One key, so Stripe sees one charge.
+    expect(keys[1]).toBe(keys[0]);
+
+    // The episode ends when the credits exist, not when the clock rolls over.
+    expect(state.lastAutoReloadAt).toEqual(retriedAt);
+    expect(state.episodeKey).toBeNull();
+  });
+
+  it("refuses to charge again once the episode outlives Stripe's idempotency window", async () => {
+    // Past 24 hours Stripe has forgotten the key, so re-sending it would charge
+    // the card rather than de-duplicate. Stop and alert instead.
+    const state = makeState();
+    state.subRow = { stripeCustomerId: "cus_test_001" };
+    dbHolder.instance = makeDb(state);
+    getOrgBillingSettingsMock.mockResolvedValue(makeSettings());
+    effectiveBalanceMock.mockResolvedValue(100n);
+
+    state.episodeKey = "auto_reload:org-abc:stale";
+    state.episodeStartedAt = new Date(Date.now() - 25 * 60 * 60 * 1000);
+
+    const result = await maybeAutoReload("org-abc");
+    expect(result.reloaded).toBe(false);
+    expect(result.reason).toBe("episode_stale");
+    expect(chargeOffSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("gives a fresh episode a new key once the previous one is closed", async () => {
+    const state = makeState();
+    state.subRow = { stripeCustomerId: "cus_test_001" };
+    dbHolder.instance = makeDb(state);
+    getOrgBillingSettingsMock.mockResolvedValue(makeSettings());
+    effectiveBalanceMock.mockResolvedValue(100n);
+    chargeOffSessionMock.mockResolvedValue({
+      paymentIntentId: "pi_test_001",
+      status: "succeeded",
+      succeeded: true,
+    });
+    createCreditLotMock.mockResolvedValue({
+      lotId: "lot-1",
+      effectiveBalanceCents: 3000n,
+    });
+
+    await maybeAutoReload("org-abc");
+    await maybeAutoReload("org-abc");
+
+    const keys = chargeOffSessionMock.mock.calls.map(
+      (call) => (call[0] as { idempotencyKey: string }).idempotencyKey,
+    );
+    expect(keys).toHaveLength(2);
+    // A finished reload releases its key, so the next top-up is its own charge.
+    expect(keys[1]).not.toBe(keys[0]);
   });
 });

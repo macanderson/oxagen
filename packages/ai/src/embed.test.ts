@@ -5,6 +5,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // ClickHouse internals to callers.
 const mocks = vi.hoisted(() => ({
   embed: vi.fn(),
+  embedMany: vi.fn(),
   embeddingModel: vi.fn(),
   insertTokenUsage: vi.fn(),
   hashPrompt: vi.fn(),
@@ -18,6 +19,14 @@ mocks.embed.mockImplementation(async () => ({
   embedding: new Array(1536).fill(0).map((_, i) => i / 1536),
   usage: { tokens: 7 },
 }));
+mocks.embedMany.mockImplementation(
+  async ({ values }: { values: string[] }) => ({
+    embeddings: values.map((_, n) =>
+      new Array(1536).fill(0).map((_v, i) => (i + n) / 1536),
+    ),
+    usage: { tokens: 7 * values.length },
+  }),
+);
 mocks.embeddingModel.mockReturnValue({
   modelId: "openai/text-embedding-3-small",
 });
@@ -31,9 +40,10 @@ mocks.chargeUsageCredits.mockResolvedValue({
   creditsMetered: 1n,
   creditsCharged: 1n,
   shortfallCredits: 0n,
+  rateCardMiss: false,
 });
 
-vi.mock("ai", () => ({ embed: mocks.embed }));
+vi.mock("ai", () => ({ embed: mocks.embed, embedMany: mocks.embedMany }));
 vi.mock("@ai-sdk/gateway", () => ({
   gateway: { embeddingModel: mocks.embeddingModel },
 }));
@@ -174,6 +184,7 @@ describe("embedText (@oxagen/ai)", () => {
         creditsMetered: 1n,
         creditsCharged: 1n,
         shortfallCredits: 0n,
+        rateCardMiss: false,
       };
     });
 
@@ -193,6 +204,7 @@ describe("embedText (@oxagen/ai)", () => {
         creditsMetered: 1n,
         creditsCharged: 1n,
         shortfallCredits: 0n,
+        rateCardMiss: false,
       };
     });
 
@@ -280,5 +292,77 @@ describe("embedText (@oxagen/ai)", () => {
     expect(mocks.chargeUsageCredits).toHaveBeenCalledWith(
       expect.objectContaining({ inputTokens: 0 }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// embedMany — one call, one charge (#1413)
+// ---------------------------------------------------------------------------
+
+describe("embedMany", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.hashPrompt.mockResolvedValue("deadbeefdeadbeef");
+    mocks.providerCostUsdMicros.mockReturnValue(42);
+    mocks.chargeUsageCredits.mockResolvedValue({
+      costUsdMicros: 42,
+      creditsMetered: 1n,
+      creditsCharged: 1n,
+      shortfallCredits: 0n,
+      rateCardMiss: false,
+    });
+  });
+
+  const telemetry = {
+    orgId: "11111111-1111-4111-8111-111111111111",
+    workspaceId: "22222222-2222-4222-8222-222222222222",
+    surface: "api" as const,
+    executionStepId: null,
+  };
+
+  it("embeds a batch in ONE gateway call and charges ONE time", async () => {
+    const { embedMany } = await import("./embed");
+
+    const vectors = await embedMany(["alpha", "beta", "gamma"], { telemetry });
+
+    expect(vectors).toHaveLength(3);
+    // One round trip, carrying every value.
+    expect(mocks.embedMany).toHaveBeenCalledTimes(1);
+    expect(mocks.embedMany.mock.calls[0]![0]).toMatchObject({
+      values: ["alpha", "beta", "gamma"],
+    });
+    // One charge and one telemetry row for the batch — the per-item shape was
+    // three of each.
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
+    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
+    // Charged for the batch's whole token count, not one item's.
+    expect(mocks.chargeUsageCredits.mock.calls[0]![0]).toMatchObject({
+      inputTokens: 21,
+      outputTokens: 0,
+    });
+  });
+
+  it("does no work and meters nothing for an empty batch", async () => {
+    const { embedMany } = await import("./embed");
+
+    await expect(embedMany([], { telemetry })).resolves.toEqual([]);
+    expect(mocks.embedMany).not.toHaveBeenCalled();
+    expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
+    expect(mocks.insertTokenUsage).not.toHaveBeenCalled();
+  });
+
+  it("warns rather than silently billing zero when usage is absent", async () => {
+    mocks.embedMany.mockResolvedValueOnce({
+      embeddings: [[0.1], [0.2]],
+      usage: undefined,
+    });
+    const { embedMany } = await import("./embed");
+
+    await embedMany(["alpha", "beta"], { telemetry });
+
+    expect(mocks.warn).toHaveBeenCalled();
+    expect(mocks.chargeUsageCredits.mock.calls[0]![0]).toMatchObject({
+      inputTokens: 0,
+    });
   });
 });

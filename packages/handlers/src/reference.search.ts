@@ -610,7 +610,7 @@ export const referenceSearchHandler: CapabilityHandler<
   const seen = new Set<string>();
   const merged: ReferenceResultRow[] = [];
   for (const row of resultsByType.flat()) {
-    const key = `${row.type} ${row.slug} ${row.location}`;
+    const key = `${row.type}\0${row.slug}\0${row.location}`;
     if (!seen.has(key)) {
       seen.add(key);
       merged.push(row);

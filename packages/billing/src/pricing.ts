@@ -28,6 +28,16 @@ import { requireEnv } from "@oxagen/config/env";
 /** USD value of one credit. Locked business rule — do not change. */
 export const CREDIT_VALUE_USD = 0.01;
 
+/**
+ * Micro-credits in one credit — the resolution the cost meter computes at.
+ *
+ * The ledger is whole credits and one credit is a cent, so a call worth a
+ * fraction of a cent has no representation there. Metering at this resolution
+ * and banking the remainder is what lets a 200-token embedding cost what it
+ * costs instead of a whole cent (#1413).
+ */
+export const MICRO_CREDITS_PER_CREDIT = 1_000_000n;
+
 /** Default target *blended* gross margin across all products. */
 export const DEFAULT_TARGET_MARGIN = 0.65;
 
@@ -38,7 +48,18 @@ export const DEFAULT_TARGET_MARGIN = 0.65;
 // provider invoices; everything downstream (cost, credits charged, margin)
 // derives from these.
 
-export type ProviderName = "anthropic" | "openai";
+/**
+ * Vendor that invoices us for a model. Mirrors the `vendor` column of the
+ * engine's card (`packages/agent-engine/src/router/rate-card.ts`) — the router
+ * can select any of these, so billing must be able to price all of them.
+ */
+export type ProviderName =
+  | "anthropic"
+  | "openai"
+  | "zai"
+  | "xai"
+  | "deepseek"
+  | "google";
 
 export interface ProviderModelRate {
   /** Provider that bills us for this model. */
@@ -134,6 +155,40 @@ export const PROVIDER_RATE_CARD: RateCard = {
     cachedInputPer1M: 0.1,
     cacheWritePer1M: 1.25,
   },
+  // Bare Anthropic family prefixes, matching the families the engine's card
+  // keys on. The version-specific rows above still win by longest prefix; these
+  // catch the next minor before it reaches a customer. Without them a slug of
+  // "claude-haiku-5" matched no key — "claude-haiku-5".startsWith("claude-haiku-4")
+  // is false — and Anthropic's cheapest tier billed at the Sonnet fallback, 3x
+  // its rate. Every Anthropic tier holds the same 1.25x cache-write premium.
+  "claude-fable": {
+    provider: "anthropic",
+    inputPer1M: 15.0,
+    outputPer1M: 75.0,
+    cachedInputPer1M: 1.5,
+    cacheWritePer1M: 18.75,
+  },
+  "claude-opus": {
+    provider: "anthropic",
+    inputPer1M: 15.0,
+    outputPer1M: 75.0,
+    cachedInputPer1M: 1.5,
+    cacheWritePer1M: 18.75,
+  },
+  "claude-sonnet": {
+    provider: "anthropic",
+    inputPer1M: 3.0,
+    outputPer1M: 15.0,
+    cachedInputPer1M: 0.3,
+    cacheWritePer1M: 3.75,
+  },
+  "claude-haiku": {
+    provider: "anthropic",
+    inputPer1M: 1.0,
+    outputPer1M: 5.0,
+    cachedInputPer1M: 0.1,
+    cacheWritePer1M: 1.25,
+  },
   // OpenAI caching is automatic with no write premium — cache creation is billed
   // at the fresh input rate, so cacheWritePer1M == inputPer1M.
   "gpt-4o": {
@@ -207,6 +262,166 @@ export const PROVIDER_RATE_CARD: RateCard = {
     cachedInputPer1M: 1.25,
     cacheWritePer1M: 2.5,
   },
+  // ── Every other family the cost router can select ─────────────────────────
+  // Rates mirror the engine's card (packages/agent-engine/src/router/rate-card.ts)
+  // family for family; `rate-card-parity.test.ts` prices identical usage through
+  // both and fails if any family drifts, so these numbers cannot diverge
+  // silently. Keys are the BARE family — {@link resolveRate} strips a gateway
+  // "creator/" prefix before matching, so one key prices both "gpt-5" and
+  // "openai/gpt-5". Until these rows existed every one of them resolved to the
+  // Sonnet fallback: DeepSeek V3.2 metered at 25.7x its cost, gpt-5.5-pro at
+  // 0.09x (sold below cost).
+  //
+  // cacheWritePer1M: only Anthropic charges a cache-write premium (1.25x input,
+  // 5-minute TTL). Every vendor below bills cache creation at the fresh input
+  // rate, so their write rate equals inputPer1M.
+  "gpt-5.5-pro": {
+    provider: "openai",
+    inputPer1M: 30.0,
+    outputPer1M: 180.0,
+    cachedInputPer1M: 15.0,
+    cacheWritePer1M: 30.0,
+  },
+  "gpt-5.5": {
+    provider: "openai",
+    inputPer1M: 5.0,
+    outputPer1M: 30.0,
+    cachedInputPer1M: 0.5,
+    cacheWritePer1M: 5.0,
+  },
+  "gpt-5.2": {
+    provider: "openai",
+    inputPer1M: 1.75,
+    outputPer1M: 14.0,
+    cachedInputPer1M: 0.17,
+    cacheWritePer1M: 1.75,
+  },
+  "gpt-5-mini": {
+    provider: "openai",
+    inputPer1M: 0.25,
+    outputPer1M: 2.0,
+    cachedInputPer1M: 0.03,
+    cacheWritePer1M: 0.25,
+  },
+  "gpt-5-nano": {
+    provider: "openai",
+    inputPer1M: 0.05,
+    outputPer1M: 0.4,
+    cachedInputPer1M: 0.01,
+    cacheWritePer1M: 0.05,
+  },
+  "gpt-5": {
+    provider: "openai",
+    inputPer1M: 1.25,
+    outputPer1M: 10.0,
+    cachedInputPer1M: 0.13,
+    cacheWritePer1M: 1.25,
+  },
+  o3: {
+    provider: "openai",
+    inputPer1M: 2.0,
+    outputPer1M: 8.0,
+    cachedInputPer1M: 0.5,
+    cacheWritePer1M: 2.0,
+  },
+  "o4-mini": {
+    provider: "openai",
+    inputPer1M: 1.1,
+    outputPer1M: 4.4,
+    cachedInputPer1M: 0.28,
+    cacheWritePer1M: 1.1,
+  },
+  "glm-5.2-fast": {
+    provider: "zai",
+    inputPer1M: 3.0,
+    outputPer1M: 10.25,
+    cachedInputPer1M: 0.5,
+    cacheWritePer1M: 3.0,
+  },
+  "glm-5.2": {
+    provider: "zai",
+    inputPer1M: 1.4,
+    outputPer1M: 4.4,
+    cachedInputPer1M: 0.26,
+    cacheWritePer1M: 1.4,
+  },
+  "glm-5-turbo": {
+    provider: "zai",
+    inputPer1M: 1.2,
+    outputPer1M: 4.0,
+    cachedInputPer1M: 0.24,
+    cacheWritePer1M: 1.2,
+  },
+  glm: {
+    provider: "zai",
+    inputPer1M: 0.95,
+    outputPer1M: 3.15,
+    cachedInputPer1M: 0.2,
+    cacheWritePer1M: 0.95,
+  },
+  "grok-4.5": {
+    provider: "xai",
+    inputPer1M: 2.0,
+    outputPer1M: 6.0,
+    cachedInputPer1M: 0.5,
+    cacheWritePer1M: 2.0,
+  },
+  "grok-4.3": {
+    provider: "xai",
+    inputPer1M: 1.25,
+    outputPer1M: 2.5,
+    cachedInputPer1M: 0.2,
+    cacheWritePer1M: 1.25,
+  },
+  "grok-build-0.1": {
+    provider: "xai",
+    inputPer1M: 1.0,
+    outputPer1M: 2.0,
+    cachedInputPer1M: 0.2,
+    cacheWritePer1M: 1.0,
+  },
+  "grok-4": {
+    provider: "xai",
+    inputPer1M: 3.0,
+    outputPer1M: 15.0,
+    cachedInputPer1M: 0.75,
+    cacheWritePer1M: 3.0,
+  },
+  "deepseek-v4-pro": {
+    provider: "deepseek",
+    inputPer1M: 1.74,
+    outputPer1M: 3.48,
+    cachedInputPer1M: 0.0,
+    cacheWritePer1M: 1.74,
+  },
+  "deepseek-v4-flash": {
+    provider: "deepseek",
+    inputPer1M: 0.14,
+    outputPer1M: 0.28,
+    cachedInputPer1M: 0.0,
+    cacheWritePer1M: 0.14,
+  },
+  "deepseek-v3.2": {
+    provider: "deepseek",
+    inputPer1M: 0.28,
+    outputPer1M: 0.42,
+    cachedInputPer1M: 0.03,
+    cacheWritePer1M: 0.28,
+  },
+  "gemini-3-pro": {
+    provider: "google",
+    inputPer1M: 2.0,
+    outputPer1M: 12.0,
+    cachedInputPer1M: 0.2,
+    cacheWritePer1M: 2.0,
+  },
+  gemini: {
+    provider: "google",
+    inputPer1M: 1.25,
+    outputPer1M: 5.0,
+    cachedInputPer1M: 0.3125,
+    cacheWritePer1M: 1.25,
+  },
   // NOTE: image & video models are billed PER ASSET, not per token — they live in
   // IMAGE_RATE_CARD / VIDEO_RATE_CARD below, not here. The per-1M-token fields
   // cannot express a per-image price, so a token-rate entry for them would always
@@ -237,22 +452,89 @@ export const PROVIDER_RATE_CARD: RateCard = {
  * Both directions are wrong, so a model the platform actually routes to must
  * have its own entry in {@link PROVIDER_RATE_CARD} — the fallback is a floor
  * against a $0 bill, not a substitute for a real rate.
+ *
+ * Two things keep it from being reached quietly. `rate-card-parity.test.ts`
+ * fails when any family the router can select has no row here, so a new family
+ * cannot ship without one; and a charge that lands here anyway is reported by
+ * `metering.ts` as a `billing_rate_card_miss` alert rather than recorded as a
+ * measured cost. Use {@link isRateCardMiss} to ask before charging.
  */
 export const FALLBACK_RATE_MODEL = "claude-sonnet-5";
 
-/** Resolve a model id to its rate, matching the longest rate-card key prefix. */
-export function resolveRate(
+/** How a model id was priced — which card key matched, or none. */
+export interface RateResolution {
+  rate: ProviderModelRate;
+  /**
+   * The rate-card key that priced this model, or `null` when nothing matched
+   * and {@link FALLBACK_RATE_MODEL} was used. A `null` here means the charge is
+   * a guess: callers that debit real credits must surface it (see
+   * `metering.ts`'s `billing_rate_card_miss` alert) rather than record it as
+   * fact.
+   */
+  matchedKey: string | null;
+}
+
+/** Longest-prefix match over the card's keys; null when nothing matches. */
+function longestPrefixMatch(
   modelId: string,
-  rateCard: RateCard = PROVIDER_RATE_CARD,
-): ProviderModelRate {
-  if (rateCard[modelId]) return rateCard[modelId];
+  rateCard: RateCard,
+): { key: string; rate: ProviderModelRate } | null {
+  if (rateCard[modelId]) return { key: modelId, rate: rateCard[modelId] };
   let best: { key: string; rate: ProviderModelRate } | null = null;
   for (const [key, rate] of Object.entries(rateCard)) {
     if (modelId.startsWith(key) && (!best || key.length > best.key.length)) {
       best = { key, rate };
     }
   }
-  return best?.rate ?? rateCard[FALLBACK_RATE_MODEL]!;
+  return best;
+}
+
+/**
+ * Resolve a model id to its rate and say which key priced it.
+ *
+ * Two passes, because a model id reaches billing in two shapes. Direct callers
+ * pass the bare id (`claude-sonnet-5`); a call routed through the Vercel AI
+ * Gateway arrives in `creator/model` form (`anthropic/claude-sonnet-5`). The
+ * first pass matches the id as given, so an explicit gateway-form key still
+ * wins; the second strips the `creator/` prefix and matches the bare family,
+ * which is exactly what the engine's card does (`familyOf` +
+ * `startsWith`). Without the second pass every family that carries only a bare
+ * key priced gateway traffic at the fallback rate.
+ */
+export function resolveRateEntry(
+  modelId: string,
+  rateCard: RateCard = PROVIDER_RATE_CARD,
+): RateResolution {
+  const direct = longestPrefixMatch(modelId, rateCard);
+  if (direct) return { rate: direct.rate, matchedKey: direct.key };
+
+  const slash = modelId.indexOf("/");
+  if (slash >= 0) {
+    const family = modelId.slice(slash + 1);
+    const byFamily = longestPrefixMatch(family, rateCard);
+    if (byFamily) return { rate: byFamily.rate, matchedKey: byFamily.key };
+  }
+
+  return { rate: rateCard[FALLBACK_RATE_MODEL]!, matchedKey: null };
+}
+
+/** Resolve a model id to its rate, matching the longest rate-card key prefix. */
+export function resolveRate(
+  modelId: string,
+  rateCard: RateCard = PROVIDER_RATE_CARD,
+): ProviderModelRate {
+  return resolveRateEntry(modelId, rateCard).rate;
+}
+
+/**
+ * True when no card key prices this model and the fallback rate would be used.
+ * A charge in this state is not a measurement — see {@link FALLBACK_RATE_MODEL}.
+ */
+export function isRateCardMiss(
+  modelId: string,
+  rateCard: RateCard = PROVIDER_RATE_CARD,
+): boolean {
+  return resolveRateEntry(modelId, rateCard).matchedKey === null;
 }
 
 // ── Provider cost ────────────────────────────────────────────────────────

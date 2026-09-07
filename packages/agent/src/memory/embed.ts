@@ -1,4 +1,8 @@
-import { embedText as embedTextAI, type EmbedTextOpts } from "@oxagen/ai";
+import {
+  embedText as embedTextAI,
+  embedMany as embedManyAI,
+  type EmbedTextOpts,
+} from "@oxagen/ai";
 
 export type { EmbedTextOpts };
 
@@ -15,4 +19,17 @@ export async function embedText(
   opts: EmbedTextOpts,
 ): Promise<number[]> {
   return embedTextAI(text, opts);
+}
+
+/**
+ * Embed several texts in one gateway call, metered once for the batch.
+ *
+ * Prefer this wherever the caller already holds the whole list — one round trip
+ * and one line in the usage ledger, instead of one of each per item.
+ */
+export async function embedMany(
+  texts: string[],
+  opts: EmbedTextOpts,
+): Promise<number[][]> {
+  return embedManyAI(texts, opts);
 }
