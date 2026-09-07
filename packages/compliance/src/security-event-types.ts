@@ -130,6 +130,62 @@ export const SECURITY_EVENT_TYPES = [
   "privacy.org_erasure_requested",
 ] as const;
 
+// ---------------------------------------------------------------------------
+// RESERVED vs EMITTED — the machine-readable half of the note above.
+// ---------------------------------------------------------------------------
+
+/**
+ * Types that are DECLARED but that nothing in the repo writes.
+ *
+ * The comments above mark these in prose; this is the same fact in a form code
+ * can consult. An audit UI that offers a reserved type as a filter returns zero
+ * rows, which looks exactly like "this never happened" when the true answer is
+ * "we do not log this yet" — a compliance tool misleading the person running
+ * the audit (#2528).
+ *
+ * Kept in sync by `security-event-types.test.ts`, which greps the repo for each
+ * literal and fails in BOTH directions: a reserved type that gained an emitter,
+ * and a non-reserved type that lost its last one. The note above says these
+ * markers are hand-maintained and unchecked — they are checked now.
+ */
+export const RESERVED_SECURITY_EVENT_TYPES = [
+  // Better Auth hooks emit only sign_in and sign_out.
+  "auth.token_refreshed",
+  "auth.password_changed",
+  "auth.email_verified",
+  // There is no org plugin denylist.
+  "plugin.denylist_added",
+  "plugin.denylist_removed",
+  // The detectors that would raise these three are not yet wired; only
+  // agent_run.event_sequence_conflict is spelled by live code.
+  "agent_run.forged_decision_reference",
+  "agent_run.stale_deny_generation",
+  "agent_run.finalization_grant_misuse",
+] as const satisfies readonly SecurityEventType[];
+
+export type ReservedSecurityEventType =
+  (typeof RESERVED_SECURITY_EVENT_TYPES)[number];
+
+const RESERVED_SET: ReadonlySet<string> = new Set(
+  RESERVED_SECURITY_EVENT_TYPES,
+);
+
+/**
+ * The types something actually writes — what an audit filter should offer.
+ *
+ * Derived rather than listed a second time, so the two cannot drift: this is
+ * exactly `SECURITY_EVENT_TYPES` minus
+ * {@link RESERVED_SECURITY_EVENT_TYPES}. The database CHECK constraint stays on
+ * the FULL union; this narrows what a UI offers, never what the column accepts.
+ */
+export const EMITTED_SECURITY_EVENT_TYPES: readonly SecurityEventType[] =
+  SECURITY_EVENT_TYPES.filter((t) => !RESERVED_SET.has(t));
+
+/** Whether anything in the repo writes this event type. */
+export function isEmittedSecurityEventType(type: SecurityEventType): boolean {
+  return !RESERVED_SET.has(type);
+}
+
 export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];
 
 // ---------------------------------------------------------------------------

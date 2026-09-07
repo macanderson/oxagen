@@ -151,6 +151,17 @@ jobs:
       - name: Manifest, contracts, env invariants
         run: pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations
 
+      # Unconditional, and that is the whole point. The affected-package gate
+      # (`turbo … --filter=…[origin/main]`) selects a package only when it or one
+      # of its dependencies changed, and @oxagen/compliance declares no
+      # dependency on @oxagen/handlers — deliberately, to keep it a leaf. So a PR
+      # touching ONLY packages/handlers never ran the one guard that checks a
+      # privileged handler emits its audit row, which is exactly the shape of PR
+      # that adds an unaudited handler (#2526). Running it here costs seconds and
+      # does not reintroduce the dependency.
+      - name: SOC2 audit coverage (runs on every PR, not only compliance ones)
+        run: pnpm check:audit-coverage
+
       # UI Capability Parity is now a hard gate (web-app-2.0 Phase 0). --strict
       # fails only on NON-grandfathered forward gaps: every app-layer capability
       # shipped from here on must have a binding + existing page + runtime proof.
