@@ -1,11 +1,16 @@
 # db-migrate.yml — manual, reusable Postgres migration runner.
 #
-# Why this exists: the main pipeline's `atlas migrate apply --env ci` step is
-# meant to migrate prod on every push to main, but org-billing gating can stop
-# Actions jobs from starting, so prod drifts behind the committed migrations
-# ("column ... does not exist" 500s). This workflow is a hand-triggered escape
-# hatch to apply the committed Atlas migrations to production (or preview) on
-# demand, using the same PRODUCTION_DATABASE_URL secret the pipeline uses.
+# Why this exists: pipeline.yml used to carry a `migrate` job that applied the
+# committed Atlas migrations to prod on every push to main. That job was retired
+# in #1341, having been unable to act on any event since #1280. So this workflow
+# is no longer an escape hatch beside an automatic path — it is the only working
+# path from a committed migration to production Postgres, and prod drifts behind
+# the migration directory until someone runs it ("column ... does not exist"
+# 500s).
+#
+# pipeline.yml still runs `atlas migrate apply --env ci` in three jobs, but each
+# targets an ephemeral Postgres service container in CI, never production.
+# `PRODUCTION_DATABASE_URL` is read here and in no other workflow.
 #
 # Safe by default: a run with apply=false only prints `atlas migrate status`
 # (the pending list) and changes nothing. Re-run with apply=true to apply.
