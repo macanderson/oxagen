@@ -41,3 +41,4 @@ with a new ADR if the call changes.
 - [ADR-041](./ADR-041-canonical-json-one-rule-not-one-implementation.md) — Canonical JSON: one rule, not one implementation
 - [ADR-042](./ADR-042-tenant-data-planes.md) — Organisation-scoped data planes: every store switches at the tenant
 - [ADR-043](./ADR-043-runtime-excision.md) — Excise the agent runtime: Oxagen governs agents, it does not run them
+- [ADR-044](./ADR-044-memory-record-merge-is-total.md) — Memory-record merge is total: every field carries a merge rule
