@@ -182,6 +182,19 @@ function computeEventHash(
  * It never enables anything. Steps requiring human approval pause the run
  * instead of self-approving.
  */
+/**
+ * The visit ordinal as a `deterministicEventId` part — empty for the first
+ * visit.
+ *
+ * Appending nothing on visit 1 keeps every id a single-visit step has ever
+ * produced byte-identical, so existing rows and their dedup keys are untouched;
+ * only a revisit, which currently collides with the visit before it, gets a new
+ * identity.
+ */
+function visitPart(visit: number): string[] {
+  return visit > 1 ? [`visit:${visit}`] : [];
+}
+
 export const [playbookRunExecute] = createFunction(
   {
     id: "playbook-run-execute",
@@ -427,8 +440,42 @@ export const [playbookRunExecute] = createFunction(
     let stepsExecuted = 0;
     const MAX_STEPS = 200; // guard against infinite loops via loop_back edges
 
+    // On duplicate Inngest step ids, confirmed against the installed SDK rather
+    // than assumed: inngest 3.54.2 AUTO-INDEXES them. `execution/v1.js` sees
+    // that a hashed id is already in `state.steps` and rewrites it to
+    // `originalId + STEP_INDEXING_SUFFIX + i` — the suffix is ":" — so a
+    // repeated `step.run("x")` becomes "x:1", "x:2", … It does not memoize the
+    // second call and silently skip it, so a loop-back has never LOST step
+    // rows. That is why the step ids below are left alone: the SDK already
+    // separates them, and rewriting them would change memoization keys for
+    // in-flight runs to no benefit. What the SDK cannot fix is the two things
+    // this code owns — the `attempt` column and the derived telemetry ids —
+    // which is what changed here (#1417).
+
+    /**
+     * How many times each step has been entered in THIS run.
+     *
+     * A playbook may revisit a step — that is what a `loop_back` edge is for,
+     * and MAX_STEPS above exists precisely because it can. Nothing in this loop
+     * distinguished one visit from another: the step-run row was written with
+     * `attempt: 1` every time, and the telemetry ids derived from
+     * (runId, stepDef.id) were identical on every visit. A step that executed
+     * five times was recorded as having executed once (#1417).
+     *
+     * The ordinal below is what separates them. It keeps retries collapsing —
+     * a retry of the SAME visit re-derives the SAME number, because Inngest
+     * replays the function from the top and the counter is rebuilt identically
+     * — while a genuine revisit gets its own identity. That is exactly the
+     * distinction `deterministicEventId`'s design note asks for and the one
+     * case `runId` alone cannot express, since a loop-back shares a runId with
+     * the visit before it.
+     */
+    const visitsByStep = new Map<string, number>();
+
     while (currentStep && stepsExecuted < MAX_STEPS) {
       const stepDef = currentStep;
+      const visit = (visitsByStep.get(stepDef.id) ?? 0) + 1;
+      visitsByStep.set(stepDef.id, visit);
       const stepInvocationId = crypto.randomUUID();
       const stepStartedAt = Date.now();
       let shouldContinue = true;
@@ -448,7 +495,8 @@ export const [playbookRunExecute] = createFunction(
                     workspaceId,
                     playbookRunId: runId,
                     playbookStepId: stepDef.id,
-                    attempt: 1,
+                    // Which visit this is, so N executions are N rows 1..N.
+                    attempt: visit,
                     status: "running",
                     input: runPayload,
                     startedAt: new Date(),
@@ -1146,14 +1194,22 @@ export const [playbookRunExecute] = createFunction(
       // `tool_invocations` are plain append-only MergeTree tables — no
       // background dedup — so those duplicates were permanent. event_id /
       // invocation_id are now derived deterministically from (runId,
-      // stepDef.id) instead of crypto.randomUUID() so the row identity is
-      // reproducible rather than re-randomized per replay.
+      // stepDef.id, visit) instead of crypto.randomUUID() so the row identity
+      // is reproducible rather than re-randomized per replay.
+      //
+      // `visit` is in the derivation because (runId, stepDef.id) alone is
+      // identical on every loop-back visit, and the destination tables dedup on
+      // it — so a step executed five times contributed one row. It is appended
+      // only from the second visit on, which leaves every id a single-visit
+      // step has ever produced byte-identical while giving revisits their own
+      // (#1417).
       await step.run(`emit-step-telemetry-${stepDef.id}`, async () => {
         const telRow: EventRow = {
           event_id: deterministicEventId(
             runId,
             stepDef.id,
             "playbook_step.executed",
+            ...visitPart(visit),
           ),
           org_id: orgId,
           workspace_id: workspaceId,
@@ -1187,6 +1243,7 @@ export const [playbookRunExecute] = createFunction(
               runId,
               stepDef.id,
               "tool_invocation",
+              ...visitPart(visit),
             ),
             org_id: orgId,
             workspace_id: workspaceId,

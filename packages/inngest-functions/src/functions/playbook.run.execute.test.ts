@@ -1317,3 +1317,146 @@ describe("playbook-run-execute Inngest function", () => {
     expect(returnedResult).toBeUndefined();
   });
 });
+
+/**
+ * #1417. A playbook may revisit a step, and nothing distinguished one visit
+ * from another: the step-run row carried `attempt: 1` every time and the
+ * telemetry ids derived from (runId, stepId) were identical on every visit. A
+ * step that executed five times was recorded as having executed once.
+ *
+ * Revisits happen through a CYCLE OF DEFAULT EDGES. `loop_back` is a declared
+ * edge type in the schema, but the traversal only reads `default` and
+ * `conditional` when it builds its adjacency map, so a `loop_back` row routes
+ * nothing today. The cycle below is therefore the shape that actually revisits
+ * a step, and MAX_STEPS is what stops it.
+ */
+describe("a revisited step is recorded once per visit (#1417)", () => {
+  /** Capture every value handed to an insert, so `attempt` can be read back. */
+  function buildCapturingTenantDb(): { inserted: Record<string, unknown>[] } {
+    const inserted: Record<string, unknown>[] = [];
+    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+      fn({
+        update: () => ({
+          set: () => ({ where: () => Promise.resolve(undefined) }),
+        }),
+        insert: () => ({
+          values: (vals: Record<string, unknown>) => {
+            inserted.push(vals);
+            return {
+              returning: vi
+                .fn()
+                .mockResolvedValue([{ id: `step-run-${inserted.length}` }]),
+            };
+          },
+        }),
+      }),
+    );
+    return { inserted };
+  }
+
+  const cyclicSteps = [
+    {
+      id: "s1",
+      stepKey: "a",
+      name: "A",
+      stepType: "prompt",
+      isAsync: false,
+      exitOnError: true,
+      config: { prompt: "first" },
+    },
+    {
+      id: "s2",
+      stepKey: "b",
+      name: "B",
+      stepType: "prompt",
+      isAsync: false,
+      exitOnError: true,
+      config: { prompt: "second" },
+    },
+  ];
+
+  /** s1 → s2 → s1: the cycle a loop-back playbook actually traverses. */
+  const cyclicEdges = [
+    {
+      id: "e1",
+      sourceStepId: "s1",
+      targetStepId: "s2",
+      edgeType: "default",
+      condition: null,
+      priority: 0,
+    },
+    {
+      id: "e2",
+      sourceStepId: "s2",
+      targetStepId: "s1",
+      edgeType: "default",
+      condition: null,
+      priority: 0,
+    },
+  ];
+
+  function runCyclicPlaybook() {
+    buildSystemDbForExecution({
+      run: PENDING_RUN,
+      steps: cyclicSteps,
+      edges: cyclicEdges,
+    });
+    const captured = buildCapturingTenantDb();
+    mocks.generateObjectFor.mockResolvedValue({
+      object: { output: "x" },
+      usage: {},
+    });
+    return captured;
+  }
+
+  it("gives each visit its own attempt number, 1..N", async () => {
+    const captured = runCyclicPlaybook();
+    await capturedHandler!({ event: { data: BASE_EVENT }, step: makeStep() });
+
+    const attemptsForS1 = captured.inserted
+      .filter((v) => v["playbookStepId"] === "s1")
+      .map((v) => v["attempt"]);
+
+    // Before the fix every one of these was 1.
+    expect(attemptsForS1.length).toBeGreaterThan(2);
+    expect(attemptsForS1.slice(0, 4)).toEqual([1, 2, 3, 4]);
+    // Strictly increasing by one, with no repeats anywhere.
+    expect(attemptsForS1).toEqual(attemptsForS1.map((_, i) => i + 1));
+  });
+
+  it("counts each step's visits separately", async () => {
+    const captured = runCyclicPlaybook();
+    await capturedHandler!({ event: { data: BASE_EVENT }, step: makeStep() });
+
+    const first = (id: string) =>
+      captured.inserted.find((v) => v["playbookStepId"] === id)?.["attempt"];
+    expect(first("s1")).toBe(1);
+    expect(first("s2")).toBe(1);
+  });
+
+  it("gives each visit its own telemetry event and invocation id", async () => {
+    runCyclicPlaybook();
+    await capturedHandler!({ event: { data: BASE_EVENT }, step: makeStep() });
+
+    const eventIds = mocks.insertEvents.mock.calls
+      .flatMap((call) => call[0] as { event_id: string }[])
+      .map((row) => row.event_id);
+    // Before the fix these collided, and the destination table dedups on them,
+    // so a step executed N times contributed one row.
+    expect(new Set(eventIds).size).toBe(eventIds.length);
+
+    const invocationIds = mocks.insertToolInvocation.mock.calls.map(
+      (call) => (call[0] as { invocation_id: string }).invocation_id,
+    );
+    expect(new Set(invocationIds).size).toBe(invocationIds.length);
+  });
+
+  it("still bounds the run at MAX_STEPS rather than looping forever", async () => {
+    runCyclicPlaybook();
+    const result = (await capturedHandler!({
+      event: { data: BASE_EVENT },
+      step: makeStep(),
+    })) as { stepsExecuted: number };
+    expect(result.stepsExecuted).toBe(200);
+  });
+});
