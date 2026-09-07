@@ -48,9 +48,6 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.agent_execution_steps", policyClass: "standard" },
   { table: "agent.agent_tool_calls", policyClass: "standard" },
   { table: "agent.approval_requests", policyClass: "standard" },
-  // Durable A2A task store (orgScopeMixin + tenant_isolation RLS in
-  // 20260704230000_a2a_tasks.sql).
-  { table: "agent.a2a_tasks", policyClass: "standard" },
   // Durable agent-engine v2 run rows + append-only event log (Phase 2a;
   // docs/specs/agent-engine-v2). Both carry orgScopeMixin (org_id +
   // workspace_id NOT NULL) + tenant_isolation RLS added in the Phase 2a

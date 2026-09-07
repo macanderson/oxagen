@@ -1067,7 +1067,7 @@ describe("SQL builders", () => {
     ).toBeNull();
   });
 
-  it("buildInsertAttemptSealSql pins the schema's sealer_kind vocabulary", () => {
+  it("buildInsertAttemptSealSql seals as 'ingress', never the retired 'worker'", () => {
     const { sql: text, params } = compile(
       buildInsertAttemptSealSql({
         orgId: UUID_ORG,
@@ -1085,7 +1085,12 @@ describe("SQL builders", () => {
       }),
     );
     expect(text).toContain("INSERT INTO agent.agent_run_attempt_seals");
-    expect(text).toContain("'worker'");
+    // ADR-041: evidence ingress stamps the seal. The CHECK still admits the
+    // retired runtime's 'worker'/'reclaimer' for historical rows, but no code
+    // path may write either one again.
+    expect(text).toContain("'ingress'");
+    expect(text).not.toContain("'worker'");
+    expect(text).not.toContain("'reclaimer'");
     expect(params).toContain("drain-1");
     expect(params).toContain(SHA_3);
   });

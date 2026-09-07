@@ -326,80 +326,27 @@ export const agentToolCalls = agentSchema.table(
   }),
 );
 
-// A2A (Agent2Agent) protocol tasks — durable state for the A2A transport
-// surface (POST /a2a JSON-RPC, alongside /mcp). One row per A2A task. The
-// external `public_id` (a2a_...) is the opaque `taskId` A2A clients see; the
-// caller-supplied A2A `contextId` groups tasks in one multi-turn conversation.
-// State uses the A2A lowercase wire strings (submitted/working/…); the CHECK
-// mirrors the A2A_TASK_STATES list. message_history and artifacts are stored as
-// the exact A2A wire JSON so tasks/get can round-trip them without translation.
-export const a2aTasks = agentSchema.table(
-  "a2a_tasks",
-  {
-    ...idMixin("a2a"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    ...softDeleteMixin(),
-    // A2A conversation-grouping id (opaque; caller-supplied or server-minted).
-    contextId: text("context_id").notNull(),
-    // A2A task lifecycle state (lowercase wire string). DEFAULT 'submitted'.
-    state: text("state").notNull().default("submitted"),
-    // The A2A Message[] history (user turn + agent reply) as wire JSON.
-    messageHistory: jsonb("message_history")
-      .notNull()
-      .default(sql`'[]'::jsonb`),
-    // The A2A Artifact[] produced by the agent as wire JSON.
-    artifacts: jsonb("artifacts").notNull().default(sql`'[]'::jsonb`),
-    // The current TaskStatus.message (agent-facing status text), if any.
-    statusMessage: jsonb("status_message"),
-    // Terminal error detail for failed/rejected tasks (null otherwise).
-    errorMessage: text("error_message"),
-    // Arbitrary caller/agent metadata carried on the task.
-    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
-    // Which agent this task is/was addressed to (routing input — the
-    // resolved skillId target). App-enforced ref to agent.agents.id; null
-    // when the task ran the generic chat baseline (no skillId, or an
-    // unknown/inactive one, which falls back rather than 500ing).
-    agentId: uuid("agent_id"),
-  },
-  (t) => ({
-    orgIdx: index("a2a_tasks_org_idx").on(t.orgId, t.workspaceId),
-    contextIdx: index("a2a_tasks_context_idx").on(t.workspaceId, t.contextId),
-    stateIdx: index("a2a_tasks_state_idx").on(t.orgId, t.workspaceId, t.state),
-    // "List this agent's A2A tasks" — paginated per performance conventions.
-    agentIdx: index("a2a_tasks_agent_idx").on(
-      t.orgId,
-      t.workspaceId,
-      t.agentId,
-    ),
-    stateCheck: check(
-      "a2a_tasks_state_check",
-      sql`${t.state} IN ('submitted','working','input-required','auth-required','completed','canceled','failed','rejected','unknown')`,
-    ),
-  }),
-);
-
-// ── Durable agent runs (agent-engine v2 Phase 2a; docs/specs/agent-engine-v2)
+// ── Durable agent runs — the evidence ledger's run identity ─────────────────
 //
-// The run row that packages/run-ledger's executeTurn persists to starting
-// in Phase 2 (plan.md): one row per turn, across every surface. `surface`
-// mirrors agent-runner's PlatformSurface union (execute-turn.ts) so the row
-// and the seam can never drift into two vocabularies for the same thing.
+// One row per governed run, across every surface, written exclusively by
+// @oxagen/run-ledger. `surface` mirrors that package's PlatformSurface union
+// so the row and the seam can never drift into two vocabularies for the same
+// thing; ADR-041 added `external` to both for a `client_attested` submission
+// that no Oxagen surface admitted interactively.
 //
-// Durable claim/lease trio (claimedBy/leaseExpiresAt/attempts) is the same
-// discipline used elsewhere: claimedBy is the owning worker's identity,
-// a null lease means unclaimed-or-terminal, and the lease sweeper requeues
-// expired-lease rows until the attempt cap so a killed worker's run is
-// reclaimed without a coordinator. The claim query here is cross-org — a
-// small dedicated worker pool claims ANY pending run via withSystemDb + FOR
-// UPDATE SKIP LOCKED, not one org's queue — so agent_runs_claim_idx (below)
-// carries no org_id prefix.
+// ADR-041 (runtime excision) removed the durable worker, and with it the
+// claim/lease trio (`claimed_by` / `lease_expires_at` / `attempts`) and the
+// engine-state checkpoint pair (`checkpoint` / `checkpoint_seq`). Oxagen
+// claims nothing, leases nothing and restores no engine state: an external
+// engine executes and submits, and this row records WHO was authorized to do
+// so. Attempt bookkeeping that survives is evidence, not scheduling —
+// `attempt_count` against the pinned `max_attempts` ceiling, and
+// `active_attempt_id`.
 //
-// `spec` is the serialized RunSpec (instruction, model, option snapshot) —
-// data only, never the live engine ports/callbacks a worker constructs
-// in-process from it. `checkpoint`/`checkpointSeq` hold the LATEST checkpoint
-// only (messages digest + budget/oracle/loop state, one transaction with the
-// event append per plan.md Phase 2); the full history is agent_run_events.
+// `spec` is the serialized RunSpecV2 (trusted identity, bindings, engine
+// policy) — data only, never live engine ports or callbacks. The full
+// per-attempt history is agent_run_events, which is append-only and
+// digest-chained; there is no mutable pointer summarizing it.
 export const agentRuns = agentSchema.table(
   "agent_runs",
   {
@@ -409,21 +356,12 @@ export const agentRuns = agentSchema.table(
     surface: text("surface").notNull(),
     status: text("status").notNull().default("pending"),
     spec: jsonb("spec").notNull(),
-    // Durable claim/lease — see module comment above.
-    claimedBy: text("claimed_by"),
-    leaseExpiresAt: timestamp("lease_expires_at", {
-      withTimezone: true,
-      mode: "date",
-    }),
-    attempts: integer("attempts").notNull().default(0),
-    // Latest checkpoint only; append-only history lives in agent_run_events.
-    checkpoint: jsonb("checkpoint"),
-    checkpointSeq: integer("checkpoint_seq").notNull().default(0),
     result: jsonb("result"),
     error: text("error"),
-    // Set by the cancel path; the worker observes this and drops the run
-    // future (Stella-style structured cancellation, spec.md §4.2) instead of
-    // being torn down out-of-band.
+    // Set by the cancel path. Cooperative, not enforcement: the worker that
+    // used to observe it left with ADR-041, so this is now a governance
+    // signal an external engine's drain may honour, and the record that
+    // cancellation was requested either way.
     cancelRequested: boolean("cancel_requested").notNull().default(false),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
     completedAt: timestamp("completed_at", {
@@ -474,12 +412,14 @@ export const agentRuns = agentSchema.table(
     // identity and its canonical digest, so a swapped row is detectable.
     retentionPolicyId: uuid("retention_policy_id"),
     retentionPolicyDigest: text("retention_policy_digest"),
-    // Trusted engine policy. `attempts` above stays the V1 counter; V2 bounds
-    // retries against this pinned ceiling.
+    // Trusted engine policy: the pinned ceiling `attempt_count` is bounded
+    // against. The V1 `attempts` counter it used to coexist with went with the
+    // worker in ADR-041.
     maxAttempts: integer("max_attempts"),
 
     // ── Operational V2 pointers (mutable; see the immutability trigger) ──────
-    // The attempt currently holding a live lease, null between attempts.
+    // The attempt currently open (created, not yet sealed); null otherwise.
+    // Not a lease — the seal is the only fence (ADR-041).
     activeAttemptId: uuid("active_attempt_id"),
     // Number of attempts ever created for this run, bounded by max_attempts.
     attemptCount: integer("attempt_count").notNull().default(0),
@@ -490,15 +430,14 @@ export const agentRuns = agentSchema.table(
   },
   (t) => ({
     orgIdx: index("agent_runs_org_idx").on(t.orgId, t.workspaceId),
-    // Cross-org on purpose (see module comment): the claim UPDATE and the
-    // lease sweeper scan across every tenant, so org_id would only shrink this
-    // index without ever appearing in their WHERE clause.
+    // Both partial indexes were cut for the worker's cross-org claim UPDATE
+    // and lease sweeper (hence no org_id prefix). Those queries left with the
+    // runtime; the indexes stay because "which runs are still open, oldest
+    // first" is now an OPERATOR question — the stuck-run and unsealed-attempt
+    // views the governance surfaces read.
     claimIdx: index("agent_runs_claim_idx")
       .on(t.status, t.createdAt)
       .where(sql`${t.status} IN ('pending', 'running')`),
-    // V2 claim dispatch: the V2 worker path claims only spec_version = 2 rows,
-    // and the V1 compatibility path only spec_version = 1, so neither scans
-    // the other's queue while both drain.
     v2ClaimIdx: index("agent_runs_v2_claim_idx")
       .on(t.status, t.createdAt)
       .where(sql`spec_version = 2 AND status IN ('pending', 'running')`),
@@ -509,9 +448,12 @@ export const agentRuns = agentSchema.table(
     parentRunIdx: index("agent_runs_parent_run_idx")
       .on(t.parentRunId)
       .where(sql`parent_run_id IS NOT NULL`),
+    // `external` is the post-ADR-041 addition: a `client_attested` submission
+    // from an engine Oxagen did not host has no interactive surface of origin.
+    // The other four are kept because historical rows carry them.
     surfaceCheck: check(
       "agent_runs_surface_check",
-      sql`${t.surface} IN ('chat', 'api-chat', 'a2a', 'repo-edit')`,
+      sql`${t.surface} IN ('chat', 'api-chat', 'a2a', 'repo-edit', 'external')`,
     ),
     statusCheck: check(
       "agent_runs_status_check",
@@ -763,8 +705,7 @@ export const agentRunAttempts = agentSchema.table(
     // 1-based, dense, and unique per run — the retry counter the pinned
     // max_attempts ceiling bounds.
     attemptNumber: integer("attempt_number").notNull(),
-    // Identity of the claiming worker process (same vocabulary as
-    // agent_runs.claimed_by).
+    // Identity of the external engine process that produced this attempt.
     workerId: text("worker_id").notNull(),
     claimedAt: timestamp("claimed_at", { withTimezone: true, mode: "date" })
       .notNull()
@@ -859,9 +800,12 @@ export const agentRunAttemptSeals = agentSchema.table(
       "agent_run_attempt_seals_terminal_status_check",
       sql`${t.terminalStatus} IN ('completed', 'failed', 'cancelled', 'denied', 'abandoned')`,
     ),
+    // `ingress` is the only kind a seal is written under today — evidence
+    // ingress stamps it. `worker` and `reclaimer` are the retired runtime's
+    // vocabulary, kept solely so historical rows stay valid (ADR-041).
     sealerKindCheck: check(
       "agent_run_attempt_seals_sealer_kind_check",
-      sql`${t.sealerKind} IN ('worker', 'reclaimer')`,
+      sql`${t.sealerKind} IN ('ingress', 'worker', 'reclaimer')`,
     ),
     // Zero-event seals carry no final-event evidence; non-zero seals carry all
     // of it. Anything else is an unprovable claim about the stream.

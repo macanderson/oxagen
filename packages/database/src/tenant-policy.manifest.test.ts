@@ -12,7 +12,7 @@ describe("tenant policy manifest", () => {
     ];
     for (const entry of POLICY_MANIFEST) {
       expect(classes).toContain(entry.policyClass);
-      expect(entry.table).toMatch(/^[a-z_]+\.[a-z][a-z0-9_]*$/); // schema.table (digits ok after first char, e.g. a2a_tasks)
+      expect(entry.table).toMatch(/^[a-z_]+\.[a-z][a-z0-9_]*$/); // schema.table (digits ok after the first char)
     }
   });
 
@@ -72,6 +72,9 @@ describe("tenant policy manifest", () => {
     expect(tables).not.toContain("agent.file_locks");
     expect(tables).not.toContain("agent.agent_run_checkpoints");
     expect(tables).not.toContain("agent.agent_run_attempt_leases");
+    // The A2A JSON-RPC transport went with the runtime, and its durable task
+    // store with it (20260907150000_agent_runs_post_runtime.sql).
+    expect(tables).not.toContain("agent.a2a_tasks");
     expect(tables).not.toContain("environments.sandbox_templates");
     expect(tables).not.toContain("ai.batch_jobs");
     expect(tables).not.toContain("ingestion.governed_repository_selections");
@@ -130,7 +133,7 @@ describe("tenant policy manifest", () => {
     // manifest and this count (and regenerating the Atlas RLS migration), so
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
-    expect(POLICY_MANIFEST.length).toBe(89);
+    expect(POLICY_MANIFEST.length).toBe(88);
   });
 
   it("covers the run/attempt/authorization foundation (run-evidence-ingress)", () => {

@@ -820,7 +820,7 @@ describe("T7: agent_runs V2 immutability trigger", () => {
   it("leaves a preserved V1 run freely updatable", async () => {
     const rows = await asSystem(
       (tx) => tx<{ status: string }[]>`
-        UPDATE agent.agent_runs SET status = 'running', claimed_by = 'legacy-worker'
+        UPDATE agent.agent_runs SET status = 'running', error = 'legacy'
         WHERE id = ${RUN_V1} RETURNING status
       `,
     );

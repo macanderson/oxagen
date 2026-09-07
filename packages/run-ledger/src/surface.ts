@@ -4,10 +4,10 @@
  * attested run. The runner that used to route on this value is gone
  * (ADR-041); the vocabulary stays because the ledger rows carry it.
  *
- * NOTE: `agent_runs_surface_check` in packages/database currently admits only
- * the first four values. `external` — the surface an ADR-041 `client_attested`
- * submission belongs on — needs that CHECK widened before a run can be admitted
- * under it.
+ * `external` is the surface an ADR-041 `client_attested` submission belongs on
+ * — an engine Oxagen never hosted, so no interactive surface admitted it.
+ * `agent_runs_surface_check` in packages/database admits all five as of
+ * 20260907150000_agent_runs_post_runtime.sql.
  */
 export type PlatformSurface =
   | "chat"

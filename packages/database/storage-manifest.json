@@ -2511,7 +2511,7 @@
       "writes": []
     }
   ],
-  "contentHash": "4d1f4d24525de264883d5e9ce31f49d0535fa061dee57d418d42bebc4cacf4e6",
+  "contentHash": "489c5058dfad099aa86db9b5b29b2281f28b4211db13fa73c0da39f0d4267f48",
   "domains": [
     {
       "name": "agent",
@@ -2537,7 +2537,6 @@
         "neo4j:SkillVersion",
         "neo4j:Tool",
         "neo4j:ToolVersion",
-        "postgres:agent.a2a_tasks",
         "postgres:agent.agent_execution_steps",
         "postgres:agent.agent_executions",
         "postgres:agent.agent_run_attempt_seals",
@@ -2882,7 +2881,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 108
+      "tableCount": 107
     },
     {
       "domains": [
@@ -4860,124 +4859,6 @@
           "type": "uuid"
         },
         {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "context_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "state",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "message_history",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "artifacts",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "status_message",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "error_message",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "metadata",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "agent_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        }
-      ],
-      "domain": "agent",
-      "id": "postgres:agent.a2a_tasks",
-      "name": "a2a_tasks",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
           "name": "execution_id",
           "nullable": false,
           "primaryKey": false,
@@ -5811,36 +5692,6 @@
           "nullable": false,
           "primaryKey": false,
           "type": "jsonb"
-        },
-        {
-          "name": "claimed_by",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "lease_expires_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "attempts",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "checkpoint",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "checkpoint_seq",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
         },
         {
           "name": "result",

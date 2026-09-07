@@ -1255,9 +1255,11 @@ export interface InsertSealInput {
 }
 
 /**
- * Insert the immutable seal. `sealer_kind` is pinned to `'worker'`: the column's
- * CHECK still spells the pre-ADR-041 vocabulary (`'worker' | 'reclaimer'`), and
- * narrowing it is a schema change, not a ledger change.
+ * Insert the immutable seal. `sealer_kind` is `'ingress'` — the one kind Oxagen
+ * writes now that ADR-041 removed the runtime: evidence ingress stamps a seal
+ * for a submission, it never seals on behalf of a worker it supervised. The
+ * column's CHECK still admits the retired `'worker'` and `'reclaimer'` so
+ * historical rows stay valid; nothing writes them.
  */
 export function buildInsertAttemptSealSql(input: InsertSealInput): SQL {
   return sql`
@@ -1278,7 +1280,7 @@ export function buildInsertAttemptSealSql(input: InsertSealInput): SQL {
       ${input.finalAttemptSeq},
       ${input.finalEventDigest},
       ${input.eventStreamDigest},
-      'worker',
+      'ingress',
       ${input.sealerId}
     )
     RETURNING id
