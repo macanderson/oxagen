@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
   emitAudit: vi.fn<(args: unknown) => Promise<void>>(),
   createAccessRequest: vi.fn<(args: unknown) => Promise<string | null>>(),
   resolveOrgTier: vi.fn(),
+  resolveOrgTierDetailed: vi.fn(),
   canAccessACL: vi.fn(),
   captureError: vi.fn(),
   select: vi.fn(),
@@ -68,6 +69,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
   return {
     ...real,
     resolveOrgTier: mocks.resolveOrgTier,
+    resolveOrgTierDetailed: mocks.resolveOrgTierDetailed,
     canAccessACL: mocks.canAccessACL,
   };
 });
@@ -404,7 +406,14 @@ describe("Agent RBAC Phase 2 — kernel enforcement via checkIAM", () => {
     // NON-enterprise tier throughout: humans ride the fast-path, agents must
     // not (spec §3.4 — enforcement runs at every tier).
     mocks.canAccessACL.mockReturnValue(false);
-    mocks.resolveOrgTier.mockResolvedValue("build");
+    // checkIAM resolves through the detailed form so it can tell an
+    // ESTABLISHED tier from the hard default (#1384); a real subscription
+    // saying "build" is what this test means.
+    mocks.resolveOrgTierDetailed.mockResolvedValue({
+      tier: "build",
+      established: true,
+      source: "subscription",
+    });
     mocks.createAccessRequest.mockResolvedValue(null);
     bootstrapIAMRuntime();
     registerTestCapabilities();
@@ -434,7 +443,7 @@ describe("Agent RBAC Phase 2 — kernel enforcement via checkIAM", () => {
     // The tier fast-path was NOT consulted for the agent principal — the
     // resolution ran despite the non-enterprise tier (spec §3.4)...
     expect(mocks.canAccessACL).not.toHaveBeenCalled();
-    expect(mocks.resolveOrgTier).not.toHaveBeenCalled();
+    expect(mocks.resolveOrgTierDetailed).not.toHaveBeenCalled();
     // ...and the single-principal human fetch path was never used.
     expect(mocks.fetchAuthz).not.toHaveBeenCalled();
 
