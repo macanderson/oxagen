@@ -448,6 +448,81 @@ describe("StellaSidecarClient error paths", () => {
     expect(posts.map((x) => x.url.split("/").pop())).toContain("cancel");
   });
 
+  test("report mode cancels too when the report itself fails (#1279)", async () => {
+    // Found by Sourcery on #2734's sibling. Under `report` a handler failure
+    // that IS reported never reaches track()'s catch, so arriving there means
+    // the report POST failed — the host can neither answer nor report, and the
+    // engine would otherwise wait out its deadline exactly as in `throw`.
+    const posts: string[] = [];
+    let release!: () => void;
+    const answered = new Promise<void>((r) => (release = r));
+    const encoder = new TextEncoder();
+
+    const client = clientWith((async (
+      input: string | URL,
+      init?: RequestInit,
+    ) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/v1/turns")) {
+        return new Response(JSON.stringify({ turn_id: "turn-1" }), {
+          status: 200,
+        });
+      }
+      if (url.endsWith("/events")) {
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            async start(controller) {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "provider_request",
+                    request_id: "p-0",
+                    request: { messages: [] },
+                  })}\n\n`,
+                ),
+              );
+              await answered;
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "turn_complete",
+                    outcome: { status: "aborted", reason: "x", cost_usd: 0 },
+                  })}\n\n`,
+                ),
+              );
+              controller.close();
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      posts.push(url.split("/").pop() ?? "");
+      if (url.endsWith("/provider-result")) {
+        // The report cannot be delivered.
+        return new Response("nope", { status: 500 });
+      }
+      release();
+      return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
+    }) as typeof fetch);
+
+    await expect(
+      client.runTurn(
+        { provider_id: "x", messages: [] },
+        {
+          onFailure: "report",
+          onProviderRequest: async () => {
+            throw new Error("adapter blew up");
+          },
+          onToolRequest: async () => ({ ok: { content: "" } }),
+        },
+      ),
+    ).rejects.toThrow(/provider-result failed: 500/);
+
+    // It tried to report, then cancelled rather than leaving the engine parked.
+    expect(posts).toContain("provider-result");
+    expect(posts).toContain("cancel");
+  });
+
   test("runTurn reports a stream that ends without a terminal frame", async () => {
     const client = clientWith(
       stubFetch(({ url }) => {

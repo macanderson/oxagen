@@ -70,17 +70,25 @@ export type ToolHandler = (
  * What {@link StellaSidecarClient.runTurn} does when a reverse-request handler
  * rejects.
  *
- * - `"throw"` (default) — collect the rejection and rethrow it once the stream
- *   ends. Right for a test or a script driving a scripted turn, where a handler
- *   rejection is a bug in the harness and should surface as itself.
+ * - `"throw"` (default) — cancel the turn, then collect the rejection and
+ *   rethrow it once the stream ends. Right for a test or a script driving a
+ *   scripted turn, where a handler rejection is a bug in the harness and should
+ *   surface as itself. The cancel is what makes "once the stream ends" prompt:
+ *   it unwinds the turn the engine is parked on, so the stream ends at request
+ *   latency rather than at the reverse-request deadline (#1279).
  * - `"report"` — tell the engine. A provider rejection is classified into a
  *   {@link ProviderError} and POSTed as the error arm; a tool rejection is
  *   POSTed as the `error` arm of {@link ToolOutput}. Right for a production
  *   host, because both failures are ones the engine is built to handle: a
  *   `transport`/`rate_limited` provider error is retried with backoff, and a
  *   failed tool is surfaced to the model as text it can react to. Under
- *   `"throw"` the engine learns nothing and the turn stalls until its
- *   reverse-request deadline, converting a retryable blip into a dead turn.
+ *   `"throw"` the engine learns nothing — the turn is cancelled rather than
+ *   retried, which converts a retryable blip into a dead turn. Reporting is
+ *   what a production host wants for exactly that reason.
+ *
+ * Either arm cancels when the reverse request goes unanswered, including a
+ * `"report"` whose own POST fails: at that point the host can neither answer
+ * nor report, and the engine would otherwise wait out its deadline.
  */
 export type ReverseRequestFailureMode = "throw" | "report";
 
@@ -399,7 +407,14 @@ export class StellaSidecarClient {
       inFlight.push(
         work.catch((err: unknown) => {
           failures.push(err);
-          if (!reportFailures) giveUpOnTurn();
+          // Unconditional, and that is the point. Anything reaching here is a
+          // reverse request the engine never got an answer to — under `report`
+          // a handler failure that WAS reported resolves and never lands in
+          // this catch, so arriving here means the report itself failed. A
+          // host that can neither answer nor report has lost the turn either
+          // way, and leaving it uncancelled costs the reverse-request deadline
+          // in both arms rather than only in `throw` (#1279).
+          giveUpOnTurn();
         }),
       );
     };
