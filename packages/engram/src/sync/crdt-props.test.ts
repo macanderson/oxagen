@@ -138,14 +138,33 @@ const BASE_RECORDS: MemoryRecord[] = Array.from({ length: 6 }, (_, i) =>
   }),
 );
 
+/**
+ * The WHOLE record, not the merged subset.
+ *
+ * This compared `id`, `salience`, `confidence` and `causality` — the three
+ * fields the merge already handled, plus the one that cannot differ. So the
+ * convergence property below was asserted over exactly the subset that already
+ * converged, and passed while `provenance`, `createdAt`, `ttl` and
+ * `lastReinforcedAt` were taken from whichever side was passed first (#1388).
+ *
+ * A normalizer that omits a field is a property test that cannot fail on it.
+ */
 function normalizeRecords(records: MemoryRecord[]): string {
   return JSON.stringify(
     records
       .map((r) => ({
         id: r.id,
+        kind: r.kind,
+        namespace: r.namespace,
+        body: r.body,
         salience: r.salience,
         confidence: r.confidence,
         causality: [...r.causality].sort(),
+        provenance: r.provenance,
+        createdAt: r.createdAt,
+        ttl: r.ttl ?? null,
+        lastReinforcedAt: r.lastReinforcedAt ?? null,
+        embedding: r.embedding ? Array.from(r.embedding) : null,
       }))
       .sort((a, b) => a.id.localeCompare(b.id)),
   );
@@ -155,12 +174,29 @@ function randomRecordSet(r: () => number): MemoryRecord[] {
   const out: MemoryRecord[] = [];
   for (const base of BASE_RECORDS) {
     if (r() < 0.5) continue; // each replica holds a random subset
-    out.push({
+    // Every field two replicas can legitimately hold differently for one ID is
+    // varied here. The generator used to vary only the three the merge handled,
+    // which is the other half of why #1388 survived this file: the property was
+    // true of the records it was given and false of the ones it was not.
+    const rec: MemoryRecord = {
       ...base,
       salience: Math.floor(r() * 11) / 10,
       confidence: Math.floor(r() * 11) / 10,
       causality: r() < 0.5 ? ["x", "y"] : ["y", "z"],
-    });
+      createdAt: 1_000 + Math.floor(r() * 5) * 100,
+      provenance: {
+        author: pick(r, ["alice", "bob", "carol"]),
+        derivedFrom: r() < 0.5 ? [] : ["parent"],
+        timestamp: 1 + Math.floor(r() * 4),
+        ...(r() < 0.5 ? {} : { tool: "search" }),
+      },
+    };
+    // Optional fields, present on some replicas and absent on others — which is
+    // the case the merge has to get right in BOTH directions.
+    if (r() < 0.7) rec.ttl = 10_000 + Math.floor(r() * 5) * 1_000;
+    if (r() < 0.7) rec.lastReinforcedAt = 2_000 + Math.floor(r() * 5) * 100;
+    if (r() < 0.5) rec.embedding = Int8Array.from([Math.floor(r() * 7), 2, 3]);
+    out.push(rec);
   }
   return out;
 }
