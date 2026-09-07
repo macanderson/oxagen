@@ -27,10 +27,6 @@
 | `OXAGEN_LLM_FAST` | Fast model (Haiku-class) |
 | `OXAGEN_LLM_BALANCED` | Balanced model (Sonnet-class) |
 | `OXAGEN_LLM_PRECISE` | Precise model (Opus-class) |
-| `OXAGEN_LLM_ADVISOR` | Advisor/evaluator model |
-| `OXAGEN_LLM_EVALUATOR` | Evaluation tasks |
-| `OXAGEN_LLM_IMAGE_BASIC/ADVANCED` | Image generation |
-| `OXAGEN_LLM_VIDEO_BASIC/ADVANCED` | Video generation |
 
 All inference routes through **Vercel AI Gateway** (`@ai-sdk/openai-compatible`).
 Package: `packages/ai/src/` — stream, generate-object, prompts registry.

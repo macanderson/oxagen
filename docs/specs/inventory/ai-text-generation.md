@@ -256,12 +256,12 @@ When resolvedTierCatalog is called, the function SHALL read all OXAGEN_LLM_* env
 #### Scenario: Catalog aggregates all tiers
 <!-- test: models.test.ts -->
 - **WHEN** resolvedTierCatalog() is called
-- **THEN** a ResolvedTierCatalog object is returned with structure: {text:{fast:..., balanced:..., precise:...}, image:{basic:..., advanced:...}, video:{basic:..., advanced:...}}
+- **THEN** a ResolvedTierCatalog object is returned with structure: {text:{fast:..., balanced:..., precise:...}} — text is the only tier dimension (ADR-041 removed the image/video tiers)
 
 #### Scenario: Single environment read per call
 <!-- test: models.test.ts -->
 - **WHEN** resolvedTierCatalog() is called
-- **THEN** all 7 tier environment variables (OXAGEN_LLM_FAST/BALANCED/PRECISE, OXAGEN_LLM_IMAGE_BASIC/ADVANCED, OXAGEN_LLM_VIDEO_BASIC/ADVANCED) are read in one pass and assembled
+- **THEN** all 3 tier environment variables (OXAGEN_LLM_FAST/BALANCED/PRECISE) are read in one pass and assembled
 
 ---
 
