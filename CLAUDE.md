@@ -91,6 +91,8 @@ This gate is non-negotiable. Do not mark the work ready to merge until all four 
 2. Verify `.env.example` and lockfile are in sync.
 3. CI runs on every push and PR; after you push, confirm it green via `gh run watch`.
 
+**Merging several PRs in a row?** Every push to `main` now starts its own run rather than evicting the queued one (ADR-046), so a burst costs concurrent runners instead of silently skipping deploys. Confirm each merge produced a *finished* run — a `cancelled` conclusion on `main` used to be normal and no longer is.
+
 ## Database and migration targeting
 
 Before running any mutation/migration script, **confirm you are targeting the correct database.**
