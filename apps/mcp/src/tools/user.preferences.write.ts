@@ -25,14 +25,6 @@ export const schema = {
   defaultTextModel: userPreferencesWrite.input.shape.defaultTextModel.describe(
     "Explicit text model id, e.g. 'anthropic/claude-opus-4.8' (null clears)",
   ),
-  defaultImageModel:
-    userPreferencesWrite.input.shape.defaultImageModel.describe(
-      "Explicit image model id, e.g. 'bfl/flux-2-max' (null clears)",
-    ),
-  defaultVideoModel:
-    userPreferencesWrite.input.shape.defaultVideoModel.describe(
-      "Explicit video model id, e.g. 'google/veo-3.0-generate-001' (null clears)",
-    ),
 };
 
 export const metadata: ToolMetadata = {

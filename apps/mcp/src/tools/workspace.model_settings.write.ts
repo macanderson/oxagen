@@ -14,14 +14,6 @@ export const schema = {
     workspaceModelSettingsWrite.input.shape.defaultTextModel.describe(
       "Explicit workspace text model id (null clears)",
     ),
-  defaultImageModel:
-    workspaceModelSettingsWrite.input.shape.defaultImageModel.describe(
-      "Explicit workspace image model id (null clears)",
-    ),
-  defaultVideoModel:
-    workspaceModelSettingsWrite.input.shape.defaultVideoModel.describe(
-      "Explicit workspace video model id (null clears)",
-    ),
 };
 
 export const metadata: ToolMetadata = {
