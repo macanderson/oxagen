@@ -9,8 +9,8 @@
  * following the same convention as chat-header-mobile.test.tsx.
  *
  * Covers:
- *   - agent name + full `{model} · {repo} @ {branch} · {environment}` subtitle
- *   - middle-ellipsis kicks in for a long repo segment (+ the helper directly)
+ *   - agent name + the `{model}` / `{model} · {budget}` subtitle
+ *   - the middleEllipsis helper directly
  *   - omits missing segments cleanly
  *   - the whole header is a button that calls onFocusSessionPanel
  *   - the activity dot appears only while isStreaming
@@ -22,8 +22,6 @@ import { ChatHeaderDesktop, middleEllipsis } from "./chat-header-desktop";
 import { ChatSessionProvider } from "./session/session-store";
 import type { SessionSeed } from "./session/session-state";
 import type { AgentOption } from "./agent-picker/agent-picker-types";
-import type { RepoOption } from "./repo-selector";
-import type { EnvironmentOption } from "./environment-selector";
 
 afterEach(() => {
   cleanup();
@@ -35,42 +33,16 @@ const CODER: AgentOption = {
   slug: "coder",
   name: "Coder",
   description: null,
-  agentType: "code",
-  isCode: true,
+  agentType: "custom",
   avatarUrl: null,
   summary: null,
   managed: false,
   toolRefs: [],
 };
 
-const REPOS: RepoOption[] = [
-  {
-    key: "con_1::acme/platform",
-    connectionId: "con_1",
-    owner: "acme",
-    name: "platform",
-    defaultBranch: "main",
-  },
-];
-
-const LONG_REPOS: RepoOption[] = [
-  {
-    key: "con_1::acme-corp-engineering/a-very-long-repository-name",
-    connectionId: "con_1",
-    owner: "acme-corp-engineering",
-    name: "a-very-long-repository-name",
-    defaultBranch: "main",
-  },
-];
-
-const ENVIRONMENTS: EnvironmentOption[] = [
-  { id: "env_1", name: "Node 22", isDefault: true },
-];
 
 const BASE_SEED: SessionSeed = {
   defaultAgentId: null,
-  defaultRepoKey: null,
-  defaultEnvId: null,
   textModel: null,
   textTier: "fast",
   budgetUsd: null,
@@ -91,8 +63,6 @@ function renderHeader(
     >
       <ChatHeaderDesktop
         agents={[CODER]}
-        repos={REPOS}
-        environments={ENVIRONMENTS}
         isStreaming={false}
         onFocusSessionPanel={vi.fn()}
         {...props}
@@ -108,25 +78,20 @@ describe("ChatHeaderDesktop — session summary", () => {
     expect(screen.getByText("Fast")).toBeInTheDocument();
   });
 
-  it("renders the current agent's name and the full model/repo/branch/environment subtitle", () => {
+  it("renders the current agent's name and the `{model} · {budget}` subtitle", () => {
     renderHeader(
       { agents: [CODER] },
       {
         ...BASE_SEED,
         defaultAgentId: "agt_code",
-        defaultRepoKey: "con_1::acme/platform",
-        defaultEnvId: "env_1",
+        budgetUsd: 1,
       },
     );
     expect(screen.getByText("Coder")).toBeInTheDocument();
-    // No explicit branch chosen — sessionSubtitleParts falls back to the
-    // repo's default branch ("main"); repo segment isn't long enough to ellipsize.
-    expect(
-      screen.getByText("Fast · acme/platform @ main · Node 22"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Fast · $1.00 cap")).toBeInTheDocument();
   });
 
-  it("omits missing segments (no repo, no environment) cleanly", () => {
+  it("omits the budget segment cleanly when the turn is uncapped", () => {
     renderHeader({}, { ...BASE_SEED, defaultAgentId: "agt_code" });
     expect(screen.getByText("Fast")).toBeInTheDocument();
   });
@@ -139,22 +104,6 @@ describe("ChatHeaderDesktop — session summary", () => {
     expect(screen.getByText("Claude Sonnet 5")).toBeInTheDocument();
   });
 
-  it("middle-ellipsizes a long repo segment, keeping the branch alongside it", () => {
-    renderHeader(
-      { repos: LONG_REPOS },
-      {
-        ...BASE_SEED,
-        defaultRepoKey:
-          "con_1::acme-corp-engineering/a-very-long-repository-name",
-      },
-    );
-    // "acme-corp-engineering/a-very-long-repository-name" (51 chars) > 24 →
-    // first 12 + … + last 8, per middleEllipsis's own defaults.
-    const full = "acme-corp-engineering/a-very-long-repository-name";
-    const ellipsized = middleEllipsis(full);
-    expect(screen.getByText(`Fast · ${ellipsized} @ main`)).toBeInTheDocument();
-    expect(screen.queryByText(`Fast · ${full} @ main`)).not.toBeInTheDocument();
-  });
 });
 
 describe("middleEllipsis", () => {

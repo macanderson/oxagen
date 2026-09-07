@@ -369,16 +369,6 @@ vi.mock("next/image", () => ({
   ),
 }));
 
-// Client-side keyframe extraction needs a real <video>/<canvas> (absent in
-// jsdom) — mock it so a video test can control how many frames come back.
-const { mockExtractVideoFrames } = vi.hoisted(() => ({
-  mockExtractVideoFrames:
-    vi.fn<() => Promise<Array<{ blob: Blob; atSeconds: number }>>>(),
-}));
-vi.mock("./extract-video-frames", () => ({
-  extractVideoFrames: mockExtractVideoFrames,
-}));
-
 // MentionChip reads org/workspace slugs for hover hydration via useParams —
 // give it a stable router context. Spread the real module so sibling imports
 // (useRouter, usePathname, …) keep working (full-replacement mocks drop them).
@@ -1823,8 +1813,6 @@ describe("MessageComposer — attachments", () => {
     vi.stubGlobal("XMLHttpRequest", FakeXHR);
     URL.createObjectURL = vi.fn(() => "blob:mock-preview");
     URL.revokeObjectURL = vi.fn();
-    // Default: no keyframes (image-only tests never attach a video).
-    mockExtractVideoFrames.mockResolvedValue([]);
   });
 
   it("hides the attach button when orgSlug/workspaceSlug are not provided", async () => {
@@ -2043,12 +2031,8 @@ describe("MessageComposer — attachments", () => {
     );
   });
 
-  it("attaches a video as one visible chip and uploads its sampled keyframes hidden", async () => {
+  it("attaches a video as exactly one upload — ADR-041 removed client keyframe sampling", async () => {
     const user = userEvent.setup();
-    mockExtractVideoFrames.mockResolvedValue([
-      { blob: new Blob(["f1"], { type: "image/webp" }), atSeconds: 1 },
-      { blob: new Blob(["f2"], { type: "image/webp" }), atSeconds: 2 },
-    ]);
     const { MessageComposer } = await import("./message-composer");
     const { container } = render(
       <MessageComposer
@@ -2069,23 +2053,16 @@ describe("MessageComposer — attachments", () => {
       new File(["v"], "clip.mp4", { type: "video/mp4" }),
     );
 
-    // The video uploads as kind=video and its keyframes upload as kind=image.
-    await waitFor(() => expect(FakeXHR.instances).toHaveLength(3));
+    // The video uploads once, as kind=video. No derived keyframe uploads ride
+    // along any more — frame extraction went with the runtime.
+    await waitFor(() => expect(FakeXHR.instances).toHaveLength(1));
     expect(FakeXHR.instances[0]!.body?.get("kind")).toBe("video");
-    expect(FakeXHR.instances[1]!.body?.get("kind")).toBe("image");
-    expect(FakeXHR.instances[2]!.body?.get("kind")).toBe("image");
-
-    // Only the video shows a chip; the keyframes are hidden derived attachments.
     expect(screen.getAllByTestId("attachment-chip")).toHaveLength(1);
   });
 
-  it("links keyframes to their video via keyframeForVideo in the submitted FormData", async () => {
+  it("submits the video attachment alone, with no keyframeForVideo links", async () => {
     const user = userEvent.setup();
     const action = makeAction();
-    mockExtractVideoFrames.mockResolvedValue([
-      { blob: new Blob(["f1"], { type: "image/webp" }), atSeconds: 1 },
-      { blob: new Blob(["f2"], { type: "image/webp" }), atSeconds: 2 },
-    ]);
     const { MessageComposer } = await import("./message-composer");
     const { container } = render(
       <MessageComposer
@@ -2105,7 +2082,7 @@ describe("MessageComposer — attachments", () => {
       fileInput,
       new File(["v"], "clip.mp4", { type: "video/mp4" }),
     );
-    await waitFor(() => expect(FakeXHR.instances).toHaveLength(3));
+    await waitFor(() => expect(FakeXHR.instances).toHaveLength(1));
 
     act(() => {
       FakeXHR.instances[0]!.respond(201, {
@@ -2114,20 +2091,6 @@ describe("MessageComposer — attachments", () => {
         name: "clip.mp4",
         mimeType: "video/mp4",
         url: "/api/v1/assets/gen_vid",
-      });
-      FakeXHR.instances[1]!.respond(201, {
-        publicId: "gen_kf1",
-        kind: "image",
-        name: "clip-frame-1.webp",
-        mimeType: "image/webp",
-        url: "/api/v1/assets/gen_kf1",
-      });
-      FakeXHR.instances[2]!.respond(201, {
-        publicId: "gen_kf2",
-        kind: "image",
-        name: "clip-frame-2.webp",
-        mimeType: "image/webp",
-        url: "/api/v1/assets/gen_kf2",
       });
     });
 
@@ -2149,18 +2112,7 @@ describe("MessageComposer — attachments", () => {
     }>;
     expect(parsed).toEqual([
       expect.objectContaining({ publicId: "gen_vid", kind: "video" }),
-      expect.objectContaining({
-        publicId: "gen_kf1",
-        kind: "image",
-        keyframeForVideo: "gen_vid",
-      }),
-      expect.objectContaining({
-        publicId: "gen_kf2",
-        kind: "image",
-        keyframeForVideo: "gen_vid",
-      }),
     ]);
-    // The video carries no keyframeForVideo of its own.
     expect(parsed[0]!.keyframeForVideo).toBeUndefined();
   });
 
@@ -2314,7 +2266,6 @@ const CODE_AGENT = {
   name: "Coder",
   description: null,
   agentType: "code",
-  isCode: true,
   avatarUrl: null,
   summary: null,
   managed: false,
@@ -2326,7 +2277,6 @@ const CHAT_AGENT = {
   name: "Chatter",
   description: null,
   agentType: "custom",
-  isCode: false,
   avatarUrl: null,
   summary: null,
   managed: false,
@@ -2342,16 +2292,11 @@ const CODE_REPO_2 = {
   defaultBranch: "main",
 };
 
-describe("MessageComposer — code mode (agent-governed)", () => {
-  // The composer no longer renders a repo/environment/pin control row under the
-  // prompt at all — the whole code target (org → repository → branch →
-  // environment) is chosen ONCE in the agent picker's setup step and is
-  // immutable for the conversation. The tests that asserted that row's
-  // pin/code modes and its "Select repository"/"Select environment" selectors
-  // are gone with it; the picker's own setup step is covered in
-  // agent-picker/agent-picker-panel.test.tsx. What must still hold — the send
-  // gate, the FormData `code` payload, and the post-send lock — is asserted
-  // below.
+describe("MessageComposer — no code target (ADR-041)", () => {
+  // Oxagen governs agents, it does not run them: there is no repository,
+  // sandbox environment, or code send-gate left anywhere in the composer.
+  // What must still hold — no code control row, no `code` field on the wire,
+  // and the post-send agent lock — is asserted below.
   it("never renders a repo/environment control row under the prompt for a code agent", async () => {
     const { MessageComposer } = await import("./message-composer");
     const { container } = render(
@@ -2361,8 +2306,6 @@ describe("MessageComposer — code mode (agent-governed)", () => {
         action={makeAction()}
         modelConfig={DEFAULT_MODEL_CONFIG}
         availableAgents={[CODE_AGENT, CHAT_AGENT]}
-        availableRepos={[CODE_REPO]}
-        availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
     fireEvent.click(screen.getByTestId("pick-agt_code"));
@@ -2379,104 +2322,7 @@ describe("MessageComposer — code mode (agent-governed)", () => {
     expect(screen.queryByTestId("pin-to-chat")).toBeNull();
   });
 
-  it("auto-fills the sole repo + default environment and opens the send gate for a code agent", async () => {
-    const action = makeAction();
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={action}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-        availableAgents={[CODE_AGENT]}
-        availableRepos={[CODE_REPO]}
-        availableEnvironments={[CODE_ENV_DEFAULT]}
-      />,
-    );
-    await userEvent.type(screen.getByRole("textbox"), "fix the bug");
-    fireEvent.click(screen.getByTestId("pick-agt_code"));
-    // The sole repo + the isDefault environment both auto-fill, so the gate
-    // opens without any manual selection — the user just SEES the target.
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Send message" }),
-      ).not.toBeDisabled(),
-    );
-    expect(screen.queryByTestId("code-mode-gate-hint")).toBeNull();
-
-    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
-    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
-    const fd = action.mock.calls[0][0] as FormData;
-    const code = JSON.parse(fd.get("code") as string) as Record<
-      string,
-      unknown
-    >;
-    expect(code).toEqual({
-      connectionId: "con_1",
-      owner: "acme",
-      name: "widgets",
-      defaultBranch: "main",
-      environmentId: "env_default",
-      environmentName: "Default",
-      sandboxSessionId: null,
-    });
-    // The bound agent id rides along too.
-    expect(fd.get("agentId")).toBe("agt_code");
-  });
-
-  it("does NOT auto-fill a repo when there is more than one and no default (gate stays blocked)", async () => {
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={makeAction()}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-        availableAgents={[CODE_AGENT]}
-        availableRepos={[CODE_REPO, CODE_REPO_2]}
-        availableEnvironments={[CODE_ENV_DEFAULT]}
-      />,
-    );
-    await userEvent.type(screen.getByRole("textbox"), "fix the bug");
-    fireEvent.click(screen.getByTestId("pick-agt_code"));
-    // Environment auto-fills (isDefault) but the repo is ambiguous (2 options,
-    // no default) — the gate stays blocked until the user picks a repo.
-    await waitFor(() =>
-      expect(screen.getByTestId("code-mode-gate-hint")).toHaveTextContent(
-        "Select a repository and environment to start coding.",
-      ),
-    );
-    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
-  });
-
-  it("blocks send with a hint for a code agent when no environment is available", async () => {
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={makeAction()}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-        availableAgents={[CODE_AGENT]}
-        availableRepos={[CODE_REPO]}
-        availableEnvironments={[]}
-      />,
-    );
-    await userEvent.type(screen.getByRole("textbox"), "fix the bug");
-    fireEvent.click(screen.getByTestId("pick-agt_code"));
-    // The sole repo auto-fills, but there is no environment to pick — the gate
-    // stays blocked. A coding agent REQUIRES both a repo and an environment.
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Send message" }),
-      ).toBeDisabled(),
-    );
-    expect(screen.getByTestId("code-mode-gate-hint")).toHaveTextContent(
-      "Select a repository and environment to start coding.",
-    );
-  });
-
-  it("does NOT encode a code field for a chat agent (code mode off)", async () => {
+  it("never encodes a code field on the wire", async () => {
     const action = makeAction();
     const { MessageComposer } = await import("./message-composer");
     render(
@@ -2486,8 +2332,6 @@ describe("MessageComposer — code mode (agent-governed)", () => {
         action={action}
         modelConfig={DEFAULT_MODEL_CONFIG}
         availableAgents={[CODE_AGENT, CHAT_AGENT]}
-        availableRepos={[CODE_REPO]}
-        availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
     fireEvent.click(screen.getByTestId("pick-agt_chat"));
@@ -2498,7 +2342,7 @@ describe("MessageComposer — code mode (agent-governed)", () => {
     expect(fd.get("code")).toBeNull();
   });
 
-  it("locks the agent chip after a code turn is sent", async () => {
+  it("locks the agent chip after a turn is sent", async () => {
     const { MessageComposer } = await import("./message-composer");
     render(
       <MessageComposer
@@ -2507,8 +2351,6 @@ describe("MessageComposer — code mode (agent-governed)", () => {
         action={makeAction()}
         modelConfig={DEFAULT_MODEL_CONFIG}
         availableAgents={[CODE_AGENT]}
-        availableRepos={[CODE_REPO]}
-        availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
     fireEvent.click(screen.getByTestId("pick-agt_code"));
@@ -2520,10 +2362,9 @@ describe("MessageComposer — code mode (agent-governed)", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "Send message" }));
 
-    // After the first code turn the conversation's target is claimed, so the
+    // After the first turn the conversation's agent is claimed, so the
     // composer passes locked=true down to the agent chip (mocked here →
-    // data-locked). The repo/env half of the old lock is moot: there is no
-    // repo/env control under the prompt to lock any more.
+    // data-locked).
     await waitFor(() =>
       expect(screen.getByTestId("agent-selector")).toHaveAttribute(
         "data-locked",
@@ -2675,7 +2516,7 @@ describe("MessageComposer — collapsible composer", () => {
     ).toBeInTheDocument();
   });
 
-  it("hides the code-mode agent toolbar and gate hint while collapsed", async () => {
+  it("hides the agent toolbar while collapsed", async () => {
     const { MessageComposer } = await import("./message-composer");
     render(
       <MessageComposer
@@ -2684,27 +2525,20 @@ describe("MessageComposer — collapsible composer", () => {
         action={makeAction()}
         modelConfig={DEFAULT_MODEL_CONFIG}
         availableAgents={[CODE_AGENT]}
-        availableRepos={[CODE_REPO]}
-        availableEnvironments={[]}
       />,
     );
     fireEvent.click(screen.getByTestId("pick-agt_code"));
-    // No environment to resolve ⇒ the gate hint explains why send is blocked.
-    await waitFor(() =>
-      expect(screen.getByTestId("code-mode-gate-hint")).toBeInTheDocument(),
-    );
     expect(screen.getByTestId("agent-selector")).toBeInTheDocument();
 
     await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
-    expect(screen.queryByTestId("code-mode-gate-hint")).toBeNull();
     expect(screen.queryByTestId("agent-selector")).toBeNull();
   });
 });
 
 // The "compact context controls in code mode" block lived here. The control row
 // it covered (repo + environment selectors + pin toggle under the prompt) was
-// removed outright — the code target is picked once in the agent picker — so
-// the block went with it rather than being weakened into assertions about a
+// removed outright, and ADR-041 then removed the code target itself, so the
+// block went with it rather than being weakened into assertions about a
 // component the composer no longer renders.
 
 // ── mobile toolbar (OXA mobile-agent-ux) ───────────────────────────────────────
@@ -2773,7 +2607,7 @@ describe("MessageComposer — mobile toolbar", () => {
     expect(screen.getByTestId("budget-control")).toBeInTheDocument();
   });
 
-  it("shows the chat's repository as a read-only row in the composer-options sheet", async () => {
+  it("never renders a code-context row — ADR-041 removed the code target", async () => {
     const { MessageComposer } = await import("./message-composer");
     render(
       <MessageComposer
@@ -2782,80 +2616,10 @@ describe("MessageComposer — mobile toolbar", () => {
         action={makeAction()}
         modelConfig={DEFAULT_MODEL_CONFIG}
         availableAgents={[CODE_AGENT]}
-        availableRepos={[CODE_REPO]}
-        availableEnvironments={[CODE_ENV_DEFAULT]}
-      />,
-    );
-    // The agent chip lives in the overflow sheet on mobile, alongside the row.
-    await userEvent.click(screen.getByTestId("composer-overflow-btn"));
-    // A code agent resolves the sole repo — the row answers "what am I on?".
-    fireEvent.click(screen.getByTestId("pick-agt_code"));
-
-    const row = await screen.findByTestId("composer-options-code-context");
-    expect(row).toHaveTextContent("Repository");
-    expect(row).toHaveTextContent("acme/widgets");
-    // Read-only: the target is chosen once with the agent, so this row must
-    // offer no way to change it.
-    expect(within(row).queryByRole("button")).toBeNull();
-    expect(within(row).queryByRole("combobox")).toBeNull();
-  });
-
-  it("appends the chosen branch to the read-only repository row", async () => {
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={makeAction()}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-        availableAgents={[CODE_AGENT]}
-        availableRepos={[CODE_REPO]}
-        availableEnvironments={[CODE_ENV_DEFAULT]}
-      />,
-    );
-    await userEvent.click(screen.getByTestId("composer-overflow-btn"));
-    // The picker's setup step applies the whole target, branch included.
-    fireEvent.click(screen.getByTestId("pick-on-branch"));
-
-    expect(
-      await screen.findByTestId("composer-options-code-context"),
-    ).toHaveTextContent("acme/widgets · release/2.x");
-  });
-
-  it("shows the repository alone when the repo's default branch is in use", async () => {
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={makeAction()}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-        availableAgents={[CODE_AGENT]}
-        availableRepos={[CODE_REPO]}
-        availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
     await userEvent.click(screen.getByTestId("composer-overflow-btn"));
     fireEvent.click(screen.getByTestId("pick-agt_code"));
-
-    // branch === null means "the repo's default" — the row must not render a
-    // dangling " · " separator with nothing after it.
-    const row = await screen.findByTestId("composer-options-code-context");
-    expect(row).toHaveTextContent("acme/widgets");
-    expect(row.textContent).not.toContain("·");
-  });
-
-  it("omits the code-context row entirely when the chat has no repository", async () => {
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={makeAction()}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-      />,
-    );
-    await userEvent.click(screen.getByTestId("composer-overflow-btn"));
     expect(screen.getByTestId("composer-overflow-sheet")).toBeInTheDocument();
     expect(
       screen.queryByTestId("composer-options-code-context"),
@@ -2926,8 +2690,6 @@ describe("MessageComposer — pin context & slash commands", () => {
         parentMessageId={null}
         action={makeAction()}
         modelConfig={DEFAULT_MODEL_CONFIG}
-        availableRepos={[CODE_REPO]}
-        availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
     expect(screen.queryByTestId("composer-context-controls")).toBeNull();
@@ -2942,8 +2704,6 @@ describe("MessageComposer — pin context & slash commands", () => {
         parentMessageId={null}
         action={makeAction()}
         modelConfig={DEFAULT_MODEL_CONFIG}
-        availableRepos={[CODE_REPO]}
-        availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
     await userEvent.type(screen.getByRole("textbox"), "/pin");
@@ -3026,14 +2786,14 @@ describe("MessageComposer — pin context & slash commands", () => {
     );
   });
 
-  it("still encodes pinnedContext for a conversation pinned by an earlier version", async () => {
+  it("never encodes pinnedContext, even for a conversation pinned by an earlier version", async () => {
     const action = makeAction();
-    // A pin written before the pin UI was removed. The composer can no longer
-    // CREATE one, but it must keep honouring one it finds — those conversations
-    // would otherwise silently lose the repo context they were built around.
+    // A pin written before the pin UI was removed. ADR-041 removed the repo
+    // context it named along with the runtime, so a stale pin must be ignored
+    // rather than resurrected onto the wire.
     window.localStorage.setItem(
       "oxagen:chat-pins:conv:conv_pinned",
-      JSON.stringify({ repoKey: CODE_REPO.key, envId: CODE_ENV_DEFAULT.id }),
+      JSON.stringify({ repoKey: "con_1::acme/widgets", envId: "env_default" }),
     );
     const { MessageComposer } = await import("./message-composer");
     render(
@@ -3042,8 +2802,6 @@ describe("MessageComposer — pin context & slash commands", () => {
         parentMessageId={null}
         action={action}
         modelConfig={DEFAULT_MODEL_CONFIG}
-        availableRepos={[CODE_REPO]}
-        availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
 
@@ -3052,22 +2810,7 @@ describe("MessageComposer — pin context & slash commands", () => {
 
     await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
     const fd = action.mock.calls[0][0] as FormData;
-    const pinned = JSON.parse(fd.get("pinnedContext") as string) as {
-      repo: {
-        connectionId: string;
-        owner: string;
-        name: string;
-        defaultBranch: string | null;
-      } | null;
-      environment: { id: string; name: string } | null;
-    };
-    expect(pinned.repo).toEqual({
-      connectionId: "con_1",
-      owner: "acme",
-      name: "widgets",
-      defaultBranch: "main",
-    });
-    expect(pinned.environment).toEqual({ id: "env_default", name: "Default" });
+    expect(fd.get("pinnedContext")).toBeNull();
   });
 
   it("does NOT encode pinnedContext for an unpinned conversation", async () => {
@@ -3079,8 +2822,6 @@ describe("MessageComposer — pin context & slash commands", () => {
         parentMessageId={null}
         action={action}
         modelConfig={DEFAULT_MODEL_CONFIG}
-        availableRepos={[CODE_REPO]}
-        availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
     // Nothing stored for this conversation and no way to pin one now — repos
@@ -3104,8 +2845,6 @@ describe("MessageComposer — agent selection gating", () => {
         action={makeAction()}
         modelConfig={DEFAULT_MODEL_CONFIG}
         availableAgents={[]}
-        availableRepos={[CODE_REPO]}
-        availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
     // The manual code toggle is gone entirely — code mode is agent-governed, and
@@ -3149,8 +2888,6 @@ describe("MessageComposer — agent selection gating", () => {
         action={action}
         modelConfig={DEFAULT_MODEL_CONFIG}
         availableAgents={[CODE_AGENT, CHAT_AGENT]}
-        availableRepos={[CODE_REPO]}
-        availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
     fireEvent.click(screen.getByTestId("pick-agt_code"));

@@ -25,7 +25,6 @@ const CHATTER: AgentOption = {
   name: "Chatter",
   description: null,
   agentType: "custom",
-  isCode: false,
   avatarUrl: null,
   summary: null,
   managed: false,
@@ -37,10 +36,6 @@ describe("AgentGallery", () => {
     render(
       <AgentGallery
         agents={[CHATTER]}
-        repos={[]}
-        environments={[]}
-        defaultRepoKey={null}
-        defaultEnvId={null}
         defaultAgentId={null}
       />,
     );
@@ -56,10 +51,6 @@ describe("AgentGallery", () => {
     const { container } = render(
       <AgentGallery
         agents={[]}
-        repos={[]}
-        environments={[]}
-        defaultRepoKey={null}
-        defaultEnvId={null}
         defaultAgentId={null}
       />,
     );

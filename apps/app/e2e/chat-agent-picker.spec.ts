@@ -8,8 +8,6 @@
  *      /api/v1/chat/stream body carries the chosen agentId.
  *   3. The picker's per-agent star sets the workspace default assistant, which
  *      survives a reload (persisted via update_workspace_user_preferences).
- *   4. For a code agent (with a seeded GitHub repo), the picker slides in the
- *      repo + environment setup step; confirming applies the code session.
  *
  * Screenshots go to apps/app/e2e/screenshots/ (gitignored). Write-only spec —
  * executed by CI, not locally.
@@ -20,7 +18,6 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { signUpFreshUser } from "./helpers/signup";
 import { interceptAgentStream } from "./helpers/agent-stream-mock";
-import { seedConnectedGithubRepo } from "./helpers/seed-code-repo";
 
 const SCREENSHOT_DIR = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -29,16 +26,14 @@ const SCREENSHOT_DIR = path.join(
 
 /**
  * Create an agent through the builder deterministically: skip the AI describe
- * step (no LLM), fill identity, optionally flip on "Code features" (persists
- * agentType "code" → isCode), step through to Review with builder-next (the
+ * step (no LLM), fill identity, step through to Review with builder-next (the
  * wizard has no single "jump to review" control — only Back/Next over the
- * identity → prompt → equip → ground → triggers → review steps), then save
- * the draft.
+ * identity → prompt → equip → ground → review steps), then save the draft.
  */
 async function createAgent(
   page: Page,
   orgSlug: string,
-  opts: { name: string; slug: string; codeFeatures?: boolean },
+  opts: { name: string; slug: string },
 ): Promise<void> {
   await page.goto(`/${orgSlug}/default/workbench/agents/new`);
   await expect(page.getByTestId("step-describe")).toBeVisible({
@@ -48,10 +43,6 @@ async function createAgent(
   await expect(page.getByTestId("step-identity")).toBeVisible();
   await page.getByTestId("agent-name-input").fill(opts.name);
   await page.getByTestId("agent-slug-input").fill(opts.slug);
-  if (opts.codeFeatures) {
-    // "Code features" switch (Identity step) → agentType "code".
-    await page.getByTestId("agent-code-features-switch").click();
-  }
   // Bounded so a stalled step fails fast with a clear error instead of the
   // outer test timeout.
   for (let i = 0; i < 10; i++) {
@@ -149,60 +140,5 @@ test.describe("chat.agent-picker", () => {
     ).toBeVisible({
       timeout: 15_000,
     });
-  });
-
-  test("a code agent opens the repo + environment setup step before applying", async ({
-    page,
-  }) => {
-    test.setTimeout(180_000);
-    const { orgSlug } = await signUpFreshUser(page, {
-      orgPrefix: "agent-picker-code",
-    });
-    const seeded = await seedConnectedGithubRepo({ orgSlug });
-    try {
-      const slug = `coder-${Date.now().toString(36)}`;
-      await createAgent(page, orgSlug, {
-        name: "Repo Coder",
-        slug,
-        codeFeatures: true,
-      });
-
-      // Same as above: the picker opens from the composer chip.
-      await page.goto(`/${orgSlug}/default/sessions?new=1`);
-      await page.getByRole("button", { name: /^Agent: / }).click();
-      const picker = page.locator('[data-agent-picker="popover"]');
-      await expect(picker).toBeVisible({ timeout: 15_000 });
-
-      // The code agent's row carries a "code" badge; picking it slides in the
-      // inline repo + environment setup step instead of applying immediately.
-      const coderRow = picker.getByRole("option", { name: /Repo Coder/ });
-      await expect(coderRow).toBeVisible();
-      await coderRow.click();
-
-      await expect(
-        page.getByRole("button", { name: /Chat with Repo Coder/ }),
-      ).toBeVisible();
-      const repoTrigger = page.getByLabel("Session repository");
-      await expect(repoTrigger).toBeVisible();
-      await expect(page.getByLabel("Session environment")).toBeVisible();
-      await page.screenshot({
-        path: path.join(SCREENSHOT_DIR, "agent-code-setup-step.png"),
-      });
-
-      // Choose the seeded repo, then confirm — the chip reflects the code agent.
-      await repoTrigger.click();
-      await page
-        .getByRole("option", { name: `${seeded.owner}/${seeded.repo}` })
-        .click();
-      await page.getByRole("button", { name: /Chat with Repo Coder/ }).click();
-      await expect(
-        page.getByRole("button", { name: "Agent: Repo Coder" }),
-      ).toBeVisible();
-      await page.screenshot({
-        path: path.join(SCREENSHOT_DIR, "agent-code-confirmed.png"),
-      });
-    } finally {
-      await seeded.cleanup();
-    }
   });
 });

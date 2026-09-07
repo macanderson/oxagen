@@ -18,7 +18,6 @@ type PluginTypeValue =
   | "mcp_server"
   | "integration"
   | "agent_capability"
-  | "agent_skill"
   | "knowledge_source";
 
 interface CatalogDetail {
@@ -172,9 +171,7 @@ export function PluginDetailPanel({
   }
 
   const isAgentOrKnowledge =
-    pluginType === "agent_capability" ||
-    pluginType === "agent_skill" ||
-    pluginType === "knowledge_source";
+    pluginType === "agent_capability" || pluginType === "knowledge_source";
 
   return (
     <div className="flex h-full flex-col" data-testid="plugin-detail-panel">

@@ -26,7 +26,6 @@ import {
 import { cn, formatCentsCompact } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   SegmentedControl,
   SegmentedControlItem,
@@ -44,12 +43,7 @@ import {
   BUDGET_MIN_USD,
   BUDGET_STEP_USD,
 } from "./session-state";
-import {
-  SessionPickerList,
-  ModelPickerRows,
-  type SessionPickerGroup,
-  type SessionPickerRow,
-} from "./session-pickers";
+import { ModelPickerRows } from "./session-pickers";
 import { AgentAvatar } from "../agent-picker/agent-avatar";
 import type { AgentOption } from "../agent-picker/agent-picker-types";
 

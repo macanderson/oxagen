@@ -23,8 +23,6 @@ import { ChatHeaderMobile } from "./chat-header-mobile";
 import { ChatSessionProvider } from "./session/session-store";
 import type { SessionSeed } from "./session/session-state";
 import type { AgentOption } from "./agent-picker/agent-picker-types";
-import type { RepoOption } from "./repo-selector";
-import type { EnvironmentOption } from "./environment-selector";
 
 afterEach(() => {
   cleanup();
@@ -37,31 +35,16 @@ const CODER: AgentOption = {
   name: "Coder",
   description: null,
   agentType: "code",
-  isCode: true,
   avatarUrl: null,
   summary: null,
   managed: false,
   toolRefs: [],
 };
 
-const REPOS: RepoOption[] = [
-  {
-    key: "con_1::acme/platform",
-    connectionId: "con_1",
-    owner: "acme",
-    name: "platform",
-    defaultBranch: "main",
-  },
-];
 
-const ENVIRONMENTS: EnvironmentOption[] = [
-  { id: "env_1", name: "Node 22", isDefault: true },
-];
 
 const BASE_SEED: SessionSeed = {
   defaultAgentId: null,
-  defaultRepoKey: null,
-  defaultEnvId: null,
   textModel: null,
   textTier: "fast",
   budgetUsd: null,
@@ -82,8 +65,6 @@ function renderHeader(
     >
       <ChatHeaderMobile
         agents={[CODER]}
-        repos={REPOS}
-        environments={ENVIRONMENTS}
         isStreaming={false}
         onOpenSettings={vi.fn()}
         onOpenActivity={vi.fn()}
@@ -100,19 +81,17 @@ describe("ChatHeaderMobile — session summary", () => {
     expect(screen.getByText("Fast")).toBeInTheDocument();
   });
 
-  it("renders the current agent's name and `{model} · {branch}` subtitle when an agent + repo are seeded", () => {
+  it("renders the current agent's name and the `{model} · {budget}` subtitle", () => {
     renderHeader(
       { agents: [CODER] },
       {
         ...BASE_SEED,
         defaultAgentId: "agt_code",
-        defaultRepoKey: "con_1::acme/platform",
+        budgetUsd: 1,
       },
     );
     expect(screen.getByText("Coder")).toBeInTheDocument();
-    // No explicit branch chosen — sessionSubtitleParts falls back to the
-    // repo's default branch ("main").
-    expect(screen.getByText("Fast · main")).toBeInTheDocument();
+    expect(screen.getByText("Fast · $1.00 cap")).toBeInTheDocument();
   });
 
   it("uses modelLabelOf to prettify an explicit gateway model id", () => {

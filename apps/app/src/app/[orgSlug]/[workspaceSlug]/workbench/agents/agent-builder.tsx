@@ -62,7 +62,6 @@ import {
   SelectPopup,
   SelectItem,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { CopyableId } from "@/components/knowledge/graph-explorer/copyable-id";
@@ -137,16 +136,16 @@ export interface AgentBuilderProps {
    */
   installAction: (input: {
     orgSlug: string;
-    workspaceSlug: string;
-    workspaceId: string;
-    catalogServerId: string;
+    workspaceSlug?: string;
+    workspaceId?: string;
+    catalogServerId?: string;
     pluginType: EquipInstallPluginType;
     pluginId?: string;
   }) => Promise<{ ok: boolean; orgListingId?: string; error?: string }>;
   installBulkAction: (input: {
     orgSlug: string;
-    workspaceSlug: string;
-    workspaceId: string;
+    workspaceSlug?: string;
+    workspaceId?: string;
     items: Array<{
       catalogServerId?: string;
       pluginType: EquipInstallPluginType;

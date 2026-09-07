@@ -504,13 +504,13 @@ describe("StreamEvent union — member shapes", () => {
       type: "tool-call-start",
       messageId: "msg-2",
       toolCallId: "tc-ev",
-      capability: "search_web",
+      capability: "query_audit_log",
       inputPreview: { query: "test" },
       riskLevel: "low",
     };
     expect(evt.type).toBe("tool-call-start");
     if (evt.type === "tool-call-start") {
-      expect(evt.capability).toBe("search_web");
+      expect(evt.capability).toBe("query_audit_log");
       expect(evt.riskLevel).toBe("low");
     }
   });

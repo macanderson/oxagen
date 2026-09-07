@@ -37,9 +37,7 @@ const InstallSchema = z.object({
     .enum([
       "mcp_server",
       "integration",
-      "content_tool",
       "capability",
-      "agent_skill",
       "agent_capability",
       "knowledge_source",
     ])
@@ -71,7 +69,6 @@ export async function installPlugin(
     // Map browse-row fields to plugin.org.install input.
     // For mcp_server/integration: pass custom endpoint details (no catalogServerId).
     // For agent_capability: pass pluginId.
-    // For agent_skill: install the builtin template into the workspace.
     // For knowledge_source: installed by default, nothing to install.
     const pluginType = parsed.data.pluginType;
     let installInput: {
@@ -84,20 +81,7 @@ export async function installPlugin(
         authKind: "oauth" | "secret" | "none";
       };
     };
-    if (pluginType === "agent_skill") {
-      // agent_skill entries install a workspace-owned copy of the builtin
-      // template (idempotent on slug). The browse-row id carries the slug.
-      const slug = parsed.data.catalogServerId ?? parsed.data.pluginId;
-      if (!slug) return { ok: false, error: "skill slug is required" };
-      await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-        // install_skill (skill.workspace.install) is exposed on ["api","mcp"]
-        // only — passing { surface: "agent" } throws surface_denied. Omit it.
-        invoke("install_skill", { slug, workspace_id: ws.id }, ctx),
-      );
-      const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-      revalidatePath(capabilitiesPath(routeCtx));
-      return { ok: true };
-    } else if (pluginType === "agent_capability") {
+    if (pluginType === "agent_capability") {
       installInput = {
         pluginType,
         pluginId: parsed.data.pluginId ?? parsed.data.catalogServerId,
@@ -153,9 +137,7 @@ const InstallBulkSchema = z.object({
           .enum([
             "mcp_server",
             "integration",
-            "content_tool",
             "capability",
-            "agent_skill",
             "agent_capability",
             "knowledge_source",
           ])
@@ -186,62 +168,39 @@ export async function installBulkPlugin(
     // The marketplace sends each selected row as { catalogServerId, pluginType }
     // only. plugin.org.install_bulk → installOne expects the SAME per-type shape
     // the single-install action builds: agent_capability needs `pluginId`;
-    // mcp_server / integration / knowledge_source need `custom` (endpoint resolved
-    // from the workspace registries by name); agent_skill installs through a
-    // different contract entirely. Normalise here, mirroring installPlugin — the
-    // raw rows would make installOne reject every item.
+    // mcp_server / integration / knowledge_source need `custom` (endpoint
+    // resolved from the workspace registries by name). Normalise here,
+    // mirroring installPlugin — the raw rows would make installOne reject
+    // every item.
     const items = parsed.data.items;
     const failures: string[] = [];
     let attempted = 0;
 
-    // agent_skill rows install a workspace-owned copy of the builtin template
-    // via skill.workspace.install — never plugin.org.install_bulk.
-    const skillItems = items.filter((i) => i.pluginType === "agent_skill");
-    for (const it of skillItems) {
-      attempted += 1;
-      const slug = it.catalogServerId ?? it.pluginId;
-      if (!slug) {
-        failures.push("skill slug is required");
-        continue;
+    // Map the rows to the plugin.org.install_bulk input shape.
+    const bulkItems = items.map((it) => {
+      const rowId = it.pluginId ?? it.catalogServerId;
+      const pluginType =
+        it.pluginType === "capability" ? "agent_capability" : it.pluginType;
+      if (pluginType === "agent_capability") {
+        return { pluginType, pluginId: rowId };
       }
-      try {
-        await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-          // install_skill (skill.workspace.install) is exposed on ["api","mcp"]
-          // only — passing { surface: "agent" } throws surface_denied. Omit it.
-          invoke("install_skill", { slug, workspace_id: ws.id }, ctx),
-        );
-      } catch (e) {
-        failures.push(e instanceof Error ? e.message : "skill install failed");
-      }
-    }
-
-    // Map the remaining rows to the plugin.org.install_bulk input shape.
-    const bulkItems = items
-      .filter((i) => i.pluginType !== "agent_skill")
-      .map((it) => {
-        const rowId = it.pluginId ?? it.catalogServerId;
-        const pluginType =
-          it.pluginType === "capability" ? "agent_capability" : it.pluginType;
-        if (pluginType === "agent_capability") {
-          return { pluginType, pluginId: rowId };
-        }
-        // mcp_server / integration / knowledge_source: pass the row id as the
-        // custom server name with an empty endpoint so installOne resolves the
-        // real endpoint from the workspace's enabled registries.
-        return {
-          pluginType,
-          ...(rowId
-            ? {
-                custom: {
-                  name: rowId,
-                  endpointUrl: "",
-                  transport: "streamable-http",
-                  authKind: "none" as const,
-                },
-              }
-            : {}),
-        };
-      });
+      // mcp_server / integration / knowledge_source: pass the row id as the
+      // custom server name with an empty endpoint so installOne resolves the
+      // real endpoint from the workspace's enabled registries.
+      return {
+        pluginType,
+        ...(rowId
+          ? {
+              custom: {
+                name: rowId,
+                endpointUrl: "",
+                transport: "streamable-http",
+                authKind: "none" as const,
+              },
+            }
+          : {}),
+      };
+    });
 
     if (bulkItems.length > 0) {
       attempted += bulkItems.length;

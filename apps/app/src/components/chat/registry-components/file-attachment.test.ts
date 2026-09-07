@@ -122,7 +122,7 @@ vi.mock("react", () => ({
 
 import { CHAT_COMPONENTS } from "../chat-component-registry";
 
-describe("CHAT_COMPONENTS — file-attachment and html-artifact registration", () => {
+describe("CHAT_COMPONENTS — file-attachment registration", () => {
   it("contains 'file-attachment' as a registered componentId", () => {
     expect(CHAT_COMPONENTS).toHaveProperty("file-attachment");
   });
@@ -133,13 +133,7 @@ describe("CHAT_COMPONENTS — file-attachment and html-artifact registration", (
     expect(renderer).not.toBeNull();
   });
 
-  it("contains 'html-artifact' as a registered componentId", () => {
-    expect(CHAT_COMPONENTS).toHaveProperty("html-artifact");
-  });
-
-  it("'html-artifact' renderer is defined (not null/undefined)", () => {
-    const renderer = CHAT_COMPONENTS["html-artifact"];
-    expect(renderer).toBeDefined();
-    expect(renderer).not.toBeNull();
+  it("does NOT contain 'html-artifact' — the artifact iframe went with the runtime (ADR-041)", () => {
+    expect(CHAT_COMPONENTS).not.toHaveProperty("html-artifact");
   });
 });

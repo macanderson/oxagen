@@ -23,7 +23,7 @@ export interface ProfileFormProps {
 }
 
 export function ProfileForm({
-  userId,
+  userId: _userId,
   initialDisplayName,
   email,
   initialAvatarUrl,

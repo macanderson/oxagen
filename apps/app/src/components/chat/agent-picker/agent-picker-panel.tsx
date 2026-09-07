@@ -4,7 +4,6 @@ import { motion, useReducedMotion } from "motion/react";
 import { Bot, Check, Shield, Star } from "lucide-react";
 import { fadeInUp, staggerContainer, transition } from "@oxagen/ui/lib/motion";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { AgentAvatar } from "./agent-avatar";
 import { AgentInfoButton } from "./agent-info-button";

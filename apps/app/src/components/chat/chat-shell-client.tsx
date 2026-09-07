@@ -1588,7 +1588,7 @@ function MobileSessionChrome({
   agents,
   modelConfig,
   orgSlug,
-  workspaceSlug,
+  workspaceSlug: _workspaceSlug,
   isStreaming,
   sessionSettingsOpen,
   onSessionSettingsOpenChange,

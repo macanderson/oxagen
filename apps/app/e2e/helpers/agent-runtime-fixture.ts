@@ -1,12 +1,12 @@
 import postgres from "postgres";
 import neo4j, { type Driver, type Session } from "neo4j-driver";
 
-// Test fixture for the agent runtime E2E. Manages a deterministic tenant +
-// workspace + user + auth session, plus the execution/approval/fanout rows
-// that the scripted scenario (`scriptedScenarioEvents`) would produce if the
-// full agent runtime were running. All inserts are idempotent via ON CONFLICT
-// DO NOTHING so reruns don't fail on leftover state from a previous aborted
-// run.
+// Test fixture for the governed-agent E2E surface. Manages a deterministic
+// tenant + workspace + user + auth session, plus the approval row a governed
+// turn produces. ADR-041 excised the runtime, so the sandbox/subagent fan-out
+// rows this fixture used to seed are gone with their tables. All inserts are
+// idempotent via ON CONFLICT DO NOTHING so reruns don't fail on leftover state
+// from a previous aborted run.
 
 export interface FixtureOptions {
   orgSlug: string;
@@ -45,11 +45,7 @@ const IAM_E2E_GRANTS = [
 ] as const;
 
 export interface DbState {
-  toolCalls: Array<{ id: string; capability: string; status: string }>;
-  toolCallsByCapability: Record<string, number>;
   approvalRequests: Array<{ id: string; resolution: string | null }>;
-  subagentFanouts: Array<{ id: string; status: string; totalChildren: number }>;
-  subagentRuns: Array<{ id: string; status: string; capability: string }>;
 }
 
 export interface Neo4jState {
@@ -252,13 +248,13 @@ export async function setupAgentRuntimeFixture(
     ON CONFLICT (id) DO NOTHING
   `;
 
-  // ─── Seed deterministic execution scenario rows ────────────────────────────
-  // agent.tools, execution.executions, execution.execution_steps, and
-  // execution.tool_calls were all dropped (migrations 0020–0021). Tool-call
-  // tracking now lives in ClickHouse telemetry. Only approval_requests,
-  // subagent_fanouts, and subagent_runs still live in Postgres and are seeded.
+  // ─── Seed deterministic governance rows ────────────────────────────────────
+  // agent.tools and the execution.* tables were dropped (migrations 0020–0021)
+  // — tool-call tracking lives in ClickHouse telemetry. ADR-041 dropped
+  // agent.subagent_fanouts / agent.subagent_runs with the runtime. What remains
+  // in Postgres, and what this fixture seeds, is the approval record.
 
-  // 5. Approval request — mirrors the `approval-required` scripted event.
+  // Approval request — the governed-turn human-in-the-loop record.
   // The `message_id` column is a UUID; we use a deterministic UUID derived
   // from the scenario's `parentMessageId` = "msg_root".
   const msgRootUuid = "00000000-e2e0-0000-0005-000000000001";
@@ -273,8 +269,8 @@ export async function setupAgentRuntimeFixture(
       ${orgId},
       ${workspaceId},
       ${msgRootUuid}::uuid,
-      'agent.plan',
-      '{"planId":"pln_001"}'::jsonb,
+      'run_agent',
+      '{"agentId":"agt_e2e"}'::jsonb,
       'high',
       'approved',
       now(),
@@ -283,86 +279,15 @@ export async function setupAgentRuntimeFixture(
     ON CONFLICT (public_id) DO NOTHING
   `;
 
-  // 6. Subagent fanout + three runs (public_ids suffixed via `sfx`, see above).
-  const fanoutPublicId = `fan_e2e_${sfx}`;
-  const [fanoutRow] = await sql<{ id: string }[]>`
-    INSERT INTO agent.subagent_fanouts (
-      id, public_id, org_id, workspace_id, parent_message_id, status, total_children, completed_children
-    )
-    VALUES (
-      gen_random_uuid(),
-      ${fanoutPublicId},
-      ${orgId},
-      ${workspaceId},
-      ${msgRootUuid}::uuid,
-      'completed',
-      3,
-      3
-    )
-    ON CONFLICT (public_id) DO NOTHING
-    RETURNING id
-  `;
-
-  // `fanoutRow` may be null if the row already existed (ON CONFLICT DO NOTHING).
-  // Re-fetch if needed.
-  const [fanoutExisting] = fanoutRow
-    ? [fanoutRow]
-    : await sql<{ id: string }[]>`
-        SELECT id FROM agent.subagent_fanouts WHERE public_id = ${fanoutPublicId}
-      `;
-
-  if (fanoutExisting) {
-    const fanoutId = fanoutExisting.id;
-    // child_message_id is a UUID column — use deterministic UUIDs.
-    const subagentRuns = [
-      {
-        publicId: `sr_e2e_${sfx}_001`,
-        childMessageUuid: "00000000-e2e0-0000-0006-000000000001",
-        capability: "execute_code",
-      },
-      {
-        publicId: `sr_e2e_${sfx}_002`,
-        childMessageUuid: "00000000-e2e0-0000-0006-000000000002",
-        capability: "execute_code",
-      },
-      {
-        publicId: `sr_e2e_${sfx}_003`,
-        childMessageUuid: "00000000-e2e0-0000-0006-000000000003",
-        capability: "execute_code",
-      },
-    ];
-    for (const run of subagentRuns) {
-      await sql`
-        INSERT INTO agent.subagent_runs (
-          id, public_id, fanout_id, child_message_id, capability_name,
-          input_payload, status, org_id, workspace_id
-        )
-        VALUES (
-          gen_random_uuid(),
-          ${run.publicId},
-          ${fanoutId}::uuid,
-          ${run.childMessageUuid}::uuid,
-          ${run.capability},
-          '{}'::jsonb,
-          'completed',
-          ${orgId},
-          ${workspaceId}
-        )
-        ON CONFLICT (public_id) DO NOTHING
-      `;
-    }
-  }
-
   // ─── Seed Neo4j scenario nodes ─────────────────────────────────────────────
-  // INVOKED edges from the 5 tool calls + 1 AgentMemory node from the write.
+  // INVOKED edges + 1 AgentMemory node, so the isolation specs have countable
+  // tenant-scoped graph rows.
   try {
     const driver = getNeo();
     const session: Session = driver.session();
     try {
-      // Create INVOKED edges: one per tool call in the scenario.
-      // We use CREATE (not MERGE) so each tool call produces a distinct edge
-      // even when the same capability is called multiple times (e.g. three
-      // agent.code.execute calls). The spec asserts invokedEdges >= 5.
+      // Create INVOKED edges: one per governed capability call. CREATE (not
+      // MERGE) so a repeated capability still produces a distinct edge.
       await session.run(
         `
         MERGE (a:AgentRun {orgId: $orgId, runId: $runId})
@@ -376,9 +301,9 @@ export async function setupAgentRuntimeFixture(
           runId: `e2e-run-${orgId}`,
           caps: [
             "recall_memory",
-            "execute_code",
-            "execute_code",
-            "execute_code",
+            "list_agent_executions",
+            "get_agent_trace",
+            "list_audit_events",
             "write_memory",
           ],
         },
@@ -415,15 +340,9 @@ export async function setupAgentRuntimeFixture(
     orgSlug: opts.orgSlug,
     workspaceSlug: opts.workspaceSlug,
     async queryDbState(): Promise<DbState> {
-      // execution.tool_calls and agent.tools were dropped (migrations 0020–0021).
-      // Tool-call tracking is now in ClickHouse telemetry.
-      const toolCalls: Array<{
-        id: string;
-        capability: string;
-        status: string;
-      }> = [];
-      const byCap: Record<string, number> = {};
-
+      // execution.tool_calls / agent.tools were dropped (migrations 0020–0021)
+      // and the subagent fan-out tables went with the runtime (ADR-041); the
+      // approval record is the surviving Postgres governance row.
       const approvalRequests = await sql<
         { id: string; resolution: string | null }[]
       >`
@@ -431,30 +350,7 @@ export async function setupAgentRuntimeFixture(
         FROM agent.approval_requests
         WHERE org_id = ${orgId}
       `;
-      const subagentFanouts = await sql<
-        { id: string; status: string; totalChildren: number }[]
-      >`
-        SELECT id::text AS id, status, total_children AS "totalChildren"
-        FROM agent.subagent_fanouts
-        WHERE org_id = ${orgId}
-      `;
-      const subagentRuns = await sql<
-        { id: string; status: string; capability: string }[]
-      >`
-        SELECT sr.id::text AS id,
-               sr.status,
-               sr.capability_name AS capability
-        FROM agent.subagent_runs sr
-        JOIN agent.subagent_fanouts f ON f.id = sr.fanout_id
-        WHERE f.org_id = ${orgId}
-      `;
-      return {
-        toolCalls,
-        toolCallsByCapability: byCap,
-        approvalRequests,
-        subagentFanouts,
-        subagentRuns,
-      };
+      return { approvalRequests };
     },
     async queryNeo4jState(): Promise<Neo4jState> {
       const driver = getNeo();
@@ -498,11 +394,8 @@ export async function teardownFixture(opts: {
   `;
   if (t) {
     const orgId = t.id;
-    // execution.* and agent.tools were dropped (migrations 0020–0021).
-    await sql`DELETE FROM agent.subagent_runs WHERE fanout_id IN (
-      SELECT id FROM agent.subagent_fanouts WHERE org_id = ${orgId}
-    )`;
-    await sql`DELETE FROM agent.subagent_fanouts WHERE org_id = ${orgId}`;
+    // execution.* and agent.tools were dropped (migrations 0020–0021); the
+    // subagent fan-out tables were dropped with the runtime (ADR-041).
     await sql`DELETE FROM agent.approval_requests WHERE org_id = ${orgId}`;
     // IAM rows seeded when FixtureOptions.bootstrapIam was set. They reference
     // the org and its users, so delete them in FK-safe order BEFORE the

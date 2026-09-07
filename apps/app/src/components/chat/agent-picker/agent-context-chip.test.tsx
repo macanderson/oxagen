@@ -8,8 +8,6 @@ import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AgentContextChip } from "./agent-context-chip";
 import type { AgentOption } from "./agent-picker-types";
-import type { RepoOption } from "../repo-selector";
-import type { EnvironmentOption } from "../environment-selector";
 
 // Stub the panel so opening the popover is observable without a real portal.
 vi.mock("./agent-picker-panel", () => ({
@@ -48,14 +46,11 @@ const CODER: AgentOption = {
   name: "Coder",
   description: null,
   agentType: "code",
-  isCode: true,
   avatarUrl: null,
   summary: null,
   managed: false,
   toolRefs: [],
 };
-const REPOS: RepoOption[] = [];
-const ENVS: EnvironmentOption[] = [];
 
 function renderChip(
   overrides: Partial<React.ComponentProps<typeof AgentContextChip>> = {},
@@ -63,14 +58,8 @@ function renderChip(
   render(
     <AgentContextChip
       agents={[CODER]}
-      repos={REPOS}
-      environments={ENVS}
-      defaultRepoKey={null}
-      defaultEnvId={null}
       defaultAgentId={null}
       selectedAgentId={null}
-      selectedRepoKey={null}
-      selectedEnvId={null}
       onApply={vi.fn()}
       {...overrides}
     />,
@@ -82,14 +71,8 @@ describe("AgentContextChip", () => {
     const { container } = render(
       <AgentContextChip
         agents={[]}
-        repos={REPOS}
-        environments={ENVS}
-        defaultRepoKey={null}
-        defaultEnvId={null}
         defaultAgentId={null}
         selectedAgentId={null}
-        selectedRepoKey={null}
-        selectedEnvId={null}
         onApply={vi.fn()}
       />,
     );

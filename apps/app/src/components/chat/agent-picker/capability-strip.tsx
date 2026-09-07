@@ -29,8 +29,18 @@ type ToolKind = AgentToolRef["type"];
 // unrecognised kind sorts last.
 const KIND_ORDER: readonly ToolKind[] = ["mcp_server", "function"];
 
+/**
+ * Fold an unrecognised kind onto `function`. ADR-041 retired the `skill` and
+ * `agent` kinds, but a legacy agent definition can still carry one; without
+ * this the summary would emit two separate "N tools" segments (one per unknown
+ * kind) for what the user reads as a single bucket.
+ */
+function normalizeKind(kind: ToolKind): ToolKind {
+  return KIND_ORDER.includes(kind) ? kind : "function";
+}
+
 function kindIndex(kind: ToolKind): number {
-  const i = KIND_ORDER.indexOf(kind);
+  const i = KIND_ORDER.indexOf(normalizeKind(kind));
   return i === -1 ? KIND_ORDER.length : i;
 }
 
@@ -66,7 +76,7 @@ export function prettifyRef(ref: string): string {
 export interface ToolRefSummary {
   /** Count per kind, in display order; kinds with zero are omitted. */
   counts: Array<{ kind: ToolKind; count: number }>;
-  /** The summary line text, e.g. "3 skills · 2 MCP · 5 tools". */
+  /** The summary line text, e.g. "2 MCP · 5 tools". */
   label: string;
   /** Total number of refs. */
   total: number;
@@ -77,7 +87,10 @@ export function summarizeToolRefs(
   toolRefs: readonly AgentToolRef[],
 ): ToolRefSummary {
   const byKind = new Map<ToolKind, number>();
-  for (const t of toolRefs) byKind.set(t.type, (byKind.get(t.type) ?? 0) + 1);
+  for (const t of toolRefs) {
+    const kind = normalizeKind(t.type);
+    byKind.set(kind, (byKind.get(kind) ?? 0) + 1);
+  }
   const counts = [...byKind.entries()]
     .sort(([a], [b]) => kindIndex(a) - kindIndex(b))
     .map(([kind, count]) => ({ kind, count }));

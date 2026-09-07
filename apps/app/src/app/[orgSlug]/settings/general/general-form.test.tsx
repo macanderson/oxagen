@@ -11,7 +11,6 @@
  *   (f) Slug-changed path — router.replace is called with the new slug.
  *   (g) Same-slug path — router.refresh is called instead.
  *   (h) Error path — action returns ok:false, shows error alert.
- *   (i) useRegisterFillableForm is called (formId + fields captured).
  *   (j) Apply round-trip: apply({ name, slug }) updates controlled state.
  */
 
@@ -34,13 +33,11 @@ const {
   mockAction,
   mockReplace,
   mockRefresh,
-  mockUseRegisterFillableForm,
   mockUseRegisterPageEntity,
 } = vi.hoisted(() => ({
   mockAction: vi.fn(),
   mockReplace: vi.fn(),
   mockRefresh: vi.fn(),
-  mockUseRegisterFillableForm: vi.fn(),
   mockUseRegisterPageEntity: vi.fn(),
 }));
 
@@ -49,7 +46,6 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/page-context", () => ({
-  useRegisterFillableForm: mockUseRegisterFillableForm,
   useRegisterPageEntity: mockUseRegisterPageEntity,
 }));
 
@@ -138,8 +134,6 @@ import { OrgGeneralForm } from "./general-form";
 // Fixtures
 // ---------------------------------------------------------------------------
 
-let capturedApply: ((proposed: Record<string, unknown>) => void) | null = null;
-
 const defaultProps = {
   orgSlug: "acme",
   initialName: "Acme Corp",
@@ -158,12 +152,6 @@ describe("OrgGeneralForm", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    capturedApply = null;
-    mockUseRegisterFillableForm.mockImplementation(
-      (spec: { apply: (proposed: Record<string, unknown>) => void }) => {
-        capturedApply = spec.apply;
-      },
-    );
     mockUseRegisterPageEntity.mockImplementation(() => undefined);
   });
 
@@ -290,39 +278,7 @@ describe("OrgGeneralForm", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Slug already taken");
   });
 
-  // (i) useRegisterFillableForm called
-  it("registers the fillable form with the correct formId", () => {
-    render(<OrgGeneralForm {...defaultProps} />);
-
-    expect(mockUseRegisterFillableForm).toHaveBeenCalledWith(
-      expect.objectContaining({ formId: "org-general-acme" }),
-    );
-  });
-
   // (j) Apply round-trip
-  it("apply({ name, slug }) updates controlled name and slug state", async () => {
-    mockAction.mockResolvedValue({ ok: true, slug: "proposed-slug" });
-
-    render(<OrgGeneralForm {...defaultProps} />);
-
-    expect(capturedApply).not.toBeNull();
-
-    act(() => {
-      capturedApply!({ name: "Proposed Name", slug: "proposed-slug" });
-    });
-
-    fireEvent.submit(
-      screen.getByRole("form", { name: /organization general settings/i }),
-    );
-
-    await waitFor(() => {
-      expect(mockAction).toHaveBeenCalledOnce();
-    });
-
-    const [formData] = mockAction.mock.calls[0] as [FormData];
-    expect(formData.get("name")).toBe("Proposed Name");
-    expect(formData.get("slug")).toBe("proposed-slug");
-  });
 
   // Avatar URL included in FormData
   it("includes updated avatarUrl in FormData after AvatarUpload onChange", async () => {

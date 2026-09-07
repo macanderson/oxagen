@@ -40,7 +40,6 @@ type PluginTypeValue =
   | "mcp_server"
   | "integration"
   | "agent_capability"
-  | "agent_skill"
   | "knowledge_source";
 
 interface CatalogServer {
@@ -64,14 +63,14 @@ interface BrowsePanelProps {
   workspaceSlug: string;
   installAction: (input: {
     orgSlug: string;
-    workspaceSlug: string;
-    catalogServerId: string;
+    workspaceSlug?: string;
+    catalogServerId?: string;
     pluginType: PluginTypeValue;
     pluginId?: string;
   }) => Promise<{ ok: boolean; orgListingId?: string; error?: string }>;
   installBulkAction: (input: {
     orgSlug: string;
-    workspaceSlug: string;
+    workspaceSlug?: string;
     items: Array<{
       catalogServerId?: string;
       pluginType: PluginTypeValue;
@@ -82,11 +81,9 @@ interface BrowsePanelProps {
   }) => Promise<{ ok: boolean; error?: string; failures?: string[] }>;
 }
 
-// The Agent Tools side of the Marketplace: skills, MCP servers, and
-// capabilities. Data connectors live on the Integrations side (see
-// ../integrations), not here.
+// The Agent Tools side of the Marketplace: MCP servers and capabilities. Data
+// connectors live on the Integrations side (see ../integrations), not here.
 const PLUGIN_TABS = [
-  { value: "agent_skill" as PluginTypeValue, label: "Skills" },
   { value: "mcp_server" as PluginTypeValue, label: "MCP Servers" },
   { value: "agent_capability" as PluginTypeValue, label: "Capabilities" },
 ] as const satisfies ReadonlyArray<{ value: PluginTypeValue; label: string }>;
@@ -121,13 +118,30 @@ function ServerIcon({
     return (
       <CapabilityIcon
         iconName={resolved.iconName}
-        color={resolved.color ?? PLUGIN_TYPE_DEFAULTS[pluginType].color}
+        color={resolved.color ?? pluginTypeDefault(pluginType).color}
         size={size}
       />
     );
   }
-  const { iconName, color } = PLUGIN_TYPE_DEFAULTS[pluginType];
+  const { iconName, color } = pluginTypeDefault(pluginType);
   return <CapabilityIcon iconName={iconName} color={color} size={size} />;
+}
+
+/**
+ * Icon defaults for a plugin type, tolerant of a retired type. A catalog row
+ * written before ADR-041 can still carry `agent_skill`; a hard index would
+ * crash the whole grid on one legacy row, so unknown types fall back to the
+ * generic plug rather than throwing.
+ */
+function pluginTypeDefault(pluginType: string): {
+  iconName: string;
+  color: string;
+} {
+  return (
+    (PLUGIN_TYPE_DEFAULTS as Record<string, { iconName: string; color: string }>)[
+      pluginType
+    ] ?? { iconName: "plug", color: "#3b82f6" }
+  );
 }
 
 // ── BrowsePanel ───────────────────────────────────────────────────────────────
@@ -141,7 +155,7 @@ export function BrowsePanel({
   const toast = useToast();
   const { workspaceId } = useTenant();
   const [activeTab, setActiveTab] =
-    React.useState<PluginTypeValue>("agent_skill");
+    React.useState<PluginTypeValue>("mcp_server");
   const [search, setSearch] = React.useState("");
   const [servers, setServers] = React.useState<CatalogServer[]>([]);
   const [total, setTotal] = React.useState(0);

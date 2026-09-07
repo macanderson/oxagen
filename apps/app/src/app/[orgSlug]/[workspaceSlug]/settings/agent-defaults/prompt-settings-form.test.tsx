@@ -4,7 +4,6 @@
  *
  * Covers:
  *   (a) Initial render — form renders with aria-label.
- *   (b) useRegisterFillableForm is called (formId verified via mock capture).
  *   (c) apply round-trip: autoImprove + additionalInstructions reflected on submit.
  *   (d) Happy path — submit calls updatePromptSettingsAction.
  *   (e) Error toast on action failure.
@@ -29,23 +28,14 @@ import type { PromptSettingsInput } from "./prompt-settings-action";
 const {
   mockUpdatePromptSettingsAction,
   mockAddToast,
-  mockUseRegisterFillableForm,
 } = vi.hoisted(() => ({
   mockUpdatePromptSettingsAction: vi.fn(),
   mockAddToast: vi.fn(),
-  mockUseRegisterFillableForm: vi.fn(),
 }));
 
 vi.mock("./prompt-settings-action", () => ({
   updatePromptSettingsAction: mockUpdatePromptSettingsAction,
 }));
-
-vi.mock("@/lib/page-context", () => ({
-  useRegisterFillableForm: mockUseRegisterFillableForm,
-}));
-
-// Capture the apply callback so we can test round-trips.
-let capturedApply: ((proposed: Record<string, unknown>) => void) | null = null;
 
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ add: mockAddToast }),
@@ -204,17 +194,6 @@ const defaultProps = {
 describe("PromptSettingsForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    capturedApply = null;
-    // Set the implementation after clearAllMocks so we can capture the apply cb.
-    mockUseRegisterFillableForm.mockImplementation(
-      (spec: {
-        formId: string;
-        fields: unknown[];
-        apply: (proposed: Record<string, unknown>) => void;
-      }) => {
-        capturedApply = spec.apply;
-      },
-    );
   });
 
   afterEach(() => {
@@ -247,84 +226,7 @@ describe("PromptSettingsForm", () => {
     expect(screen.getByRole("textbox")).toBeInTheDocument();
   });
 
-  // ── (b) useRegisterFillableForm called ────────────────────────────────────
-
-  it("calls useRegisterFillableForm with a formId containing 'workspace-prompts'", () => {
-    render(<PromptSettingsForm {...defaultProps} />);
-    expect(mockUseRegisterFillableForm).toHaveBeenCalled();
-    const callArg = (
-      mockUseRegisterFillableForm.mock.calls[0] as unknown as [
-        { formId: string; fields: unknown[] },
-      ]
-    )[0];
-    expect(callArg.formId).toContain("workspace-prompts");
-  });
-
-  it("registers 2 fields: autoImprove and additionalInstructions", () => {
-    render(<PromptSettingsForm {...defaultProps} />);
-    const callArg = (
-      mockUseRegisterFillableForm.mock.calls[0] as unknown as [
-        { formId: string; fields: { name: string }[] },
-      ]
-    )[0];
-    expect(callArg.fields).toHaveLength(2);
-    const names = callArg.fields.map((f) => f.name);
-    expect(names).toContain("autoImprove");
-    expect(names).toContain("additionalInstructions");
-  });
-
   // ── (c) apply round-trip ──────────────────────────────────────────────────
-
-  it("apply round-trips autoImprove and additionalInstructions into the action call", async () => {
-    mockUpdatePromptSettingsAction.mockResolvedValue({ ok: true, data: {} });
-
-    render(<PromptSettingsForm {...defaultProps} />);
-
-    expect(capturedApply).not.toBeNull();
-    act(() => {
-      capturedApply!({
-        autoImprove: true,
-        additionalInstructions: "Be concise.",
-      });
-    });
-
-    fireEvent.submit(
-      screen.getByRole("form", { name: /workspace prompt settings/i }),
-    );
-
-    await waitFor(() => {
-      expect(mockUpdatePromptSettingsAction).toHaveBeenCalledOnce();
-    });
-
-    const [arg] = mockUpdatePromptSettingsAction.mock.calls[0] as [
-      PromptSettingsInput,
-    ];
-    expect(arg.autoImprovePrompts).toBe(true);
-    expect(arg.additionalInstructions).toBe("Be concise.");
-  });
-
-  it("apply ignores non-boolean autoImprove values", async () => {
-    mockUpdatePromptSettingsAction.mockResolvedValue({ ok: true, data: {} });
-
-    render(<PromptSettingsForm {...defaultProps} />);
-
-    expect(capturedApply).not.toBeNull();
-    // Pass invalid type for autoImprove — should remain false
-    capturedApply!({ autoImprove: "yes" });
-
-    fireEvent.submit(
-      screen.getByRole("form", { name: /workspace prompt settings/i }),
-    );
-
-    await waitFor(() => {
-      expect(mockUpdatePromptSettingsAction).toHaveBeenCalledOnce();
-    });
-
-    const [arg] = mockUpdatePromptSettingsAction.mock.calls[0] as [
-      PromptSettingsInput,
-    ];
-    expect(arg.autoImprovePrompts).toBe(false);
-  });
 
   // ── (d) Happy path ────────────────────────────────────────────────────────
 
@@ -437,7 +339,6 @@ describe("PromptSettingsForm", () => {
 describe("PromptSettingsForm — per-prompt override entitlement", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUseRegisterFillableForm.mockImplementation(() => {});
   });
 
   afterEach(() => {

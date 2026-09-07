@@ -7,7 +7,6 @@
  *   (b) Name change auto-derives slug when slug is empty.
  *   (c) Name change does NOT overwrite a non-empty slug.
  *   (d) Slug input normalizes to a slug-safe value (slugify applied).
- *   (e) useRegisterFillableForm is called (formId captured).
  *   (f) apply({ name, slug, description }) updates controlled state; reflected on submit.
  *   (g) Happy path (same slug) — action called, saved-at indicator shown.
  *   (h) Slug-changed path — router.replace called with new path.
@@ -33,12 +32,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const {
   mockAction,
   mockReplace,
-  mockUseRegisterFillableForm,
   mockUseRegisterPageEntity,
 } = vi.hoisted(() => ({
   mockAction: vi.fn(),
   mockReplace: vi.fn(),
-  mockUseRegisterFillableForm: vi.fn(),
   mockUseRegisterPageEntity: vi.fn(),
 }));
 
@@ -51,7 +48,6 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/page-context", () => ({
-  useRegisterFillableForm: mockUseRegisterFillableForm,
   useRegisterPageEntity: mockUseRegisterPageEntity,
 }));
 
@@ -111,14 +107,6 @@ import { WorkspaceGeneralForm } from "./workspace-general-form";
 // Fixtures
 // ---------------------------------------------------------------------------
 
-let capturedApply:
-  | ((
-      proposed: Record<string, unknown>,
-      mode: "field" | "all",
-      fieldName?: string,
-    ) => void)
-  | null = null;
-
 const defaultProps = {
   orgSlug: "acme",
   workspaceSlug: "research",
@@ -138,18 +126,6 @@ describe("WorkspaceGeneralForm", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    capturedApply = null;
-    mockUseRegisterFillableForm.mockImplementation(
-      (spec: {
-        apply: (
-          proposed: Record<string, unknown>,
-          mode: "field" | "all",
-          fieldName?: string,
-        ) => void;
-      }) => {
-        capturedApply = spec.apply;
-      },
-    );
     mockUseRegisterPageEntity.mockImplementation(() => undefined);
   });
 
@@ -213,42 +189,7 @@ describe("WorkspaceGeneralForm", () => {
     expect(slugInput.value).not.toContain(" ");
   });
 
-  // (e) useRegisterFillableForm called
-  it("registers the fillable form", () => {
-    render(<WorkspaceGeneralForm {...defaultProps} />);
-    expect(mockUseRegisterFillableForm).toHaveBeenCalledOnce();
-  });
-
   // (f) Apply round-trip
-  it("apply({ name, slug, description }) updates state and is reflected on submit", async () => {
-    mockAction.mockResolvedValue({ ok: true, slug: "new-slug" });
-
-    render(<WorkspaceGeneralForm {...defaultProps} />);
-
-    expect(capturedApply).not.toBeNull();
-
-    act(() => {
-      capturedApply!(
-        { name: "Proposed", slug: "new-slug", description: "New desc" },
-        "all",
-      );
-    });
-
-    fireEvent.submit(
-      screen.getByRole("form", { name: /workspace general settings/i }),
-    );
-
-    await waitFor(() => {
-      expect(mockAction).toHaveBeenCalledOnce();
-    });
-
-    const [arg] = mockAction.mock.calls[0] as [
-      { name: string; slug: string; description?: string },
-    ];
-    expect(arg.name).toBe("Proposed");
-    expect(arg.slug).toBe("new-slug");
-    expect(arg.description).toBe("New desc");
-  });
 
   // (g) Happy path — same slug shows saved-at
   it("shows saved-at indicator after a successful save (same-slug path)", async () => {

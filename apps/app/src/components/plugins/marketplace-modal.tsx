@@ -40,7 +40,6 @@ interface CatalogServer {
     | "mcp_server"
     | "integration"
     | "agent_capability"
-    | "agent_skill"
     | "knowledge_source";
   /** Returned by the API but not rendered in the UI */
   tier?: "free" | "premium";
@@ -51,7 +50,6 @@ type PluginTypeValue =
   | "mcp_server"
   | "integration"
   | "agent_capability"
-  | "agent_skill"
   | "knowledge_source";
 
 interface MarketplaceModalProps {
@@ -60,15 +58,15 @@ interface MarketplaceModalProps {
   /** Server action: install single plugin */
   installAction: (input: {
     orgSlug: string;
-    workspaceId: string;
-    catalogServerId: string;
+    workspaceId?: string;
+    catalogServerId?: string;
     pluginType: PluginTypeValue;
     pluginId?: string;
   }) => Promise<{ ok: boolean; orgListingId?: string; error?: string }>;
   /** Server action: bulk install */
   installBulkAction: (input: {
     orgSlug: string;
-    workspaceId: string;
+    workspaceId?: string;
     items: Array<{
       catalogServerId?: string;
       pluginType: PluginTypeValue;
@@ -77,11 +75,10 @@ interface MarketplaceModalProps {
   }) => Promise<{ ok: boolean; error?: string }>;
 }
 
-// Agent-tool types only: skills, MCP servers, capabilities. Integrations
-// (data connectors) are discovered on the Marketplace → Integrations side,
-// not in this modal.
+// Agent-tool types only: MCP servers and capabilities. Integrations (data
+// connectors) are discovered on the Marketplace → Integrations side, not in
+// this modal. ADR-041 removed the Skills tab with the skill system.
 const PLUGIN_TABS = [
-  { value: "agent_skill" as PluginTypeValue, label: "Skills" },
   { value: "mcp_server" as PluginTypeValue, label: "MCP Servers" },
   { value: "agent_capability" as PluginTypeValue, label: "Capabilities" },
 ] as const satisfies ReadonlyArray<{ value: PluginTypeValue; label: string }>;
@@ -116,14 +113,34 @@ function ServerIcon({
     return (
       <CapabilityIcon
         iconName={resolved.iconName}
-        color={resolved.color ?? PLUGIN_TYPE_DEFAULTS[pluginType].color}
+        color={resolved.color ?? pluginTypeDefault(pluginType).color}
         size={size}
       />
     );
   }
   // default — per-type colored icon
-  const { iconName, color } = PLUGIN_TYPE_DEFAULTS[pluginType];
+  const { iconName, color } = pluginTypeDefault(pluginType);
   return <CapabilityIcon iconName={iconName} color={color} size={size} />;
+}
+
+/**
+ * Icon defaults for a plugin type, tolerant of a retired type. A catalog row
+ * written before ADR-041 can still carry `agent_skill`; a hard index would
+ * crash the whole grid on one legacy row, so unknown types fall back to the
+ * generic plug rather than throwing.
+ */
+function pluginTypeDefault(pluginType: string): {
+  iconName: string;
+  color: string;
+} {
+  return (
+    (
+      PLUGIN_TYPE_DEFAULTS as Record<
+        string,
+        { iconName: string; color: string }
+      >
+    )[pluginType] ?? { iconName: "plug", color: "#3b82f6" }
+  );
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -137,7 +154,7 @@ export function MarketplaceModal({
   const toast = useToast();
   const { orgSlug, workspaceId } = useTenant();
   const [activeTab, setActiveTab] =
-    React.useState<PluginTypeValue>("agent_skill");
+    React.useState<PluginTypeValue>("mcp_server");
   const [search, setSearch] = React.useState("");
   const [authFilter, setAuthFilter] = React.useState<
     "" | "oauth" | "secret" | "none"
@@ -510,7 +527,6 @@ export function MarketplaceModal({
                         <p className="mb-3 text-xs text-muted-foreground">
                           {total}{" "}
                           {value === "agent_capability" ||
-                          value === "agent_skill" ||
                           value === "knowledge_source"
                             ? "plugins"
                             : "servers"}

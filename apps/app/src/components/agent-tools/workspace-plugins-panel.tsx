@@ -39,14 +39,12 @@ interface WorkspacePluginsPanelProps {
   installAction: (input: {
     orgSlug: string;
     workspaceSlug: string;
-    workspaceId: string;
-    catalogServerId: string;
+    workspaceId?: string;
+    catalogServerId?: string;
     pluginType:
       | "mcp_server"
       | "integration"
-      | "content_tool"
       | "capability"
-      | "agent_skill"
       | "agent_capability"
       | "knowledge_source";
     pluginId?: string;
@@ -60,9 +58,7 @@ interface WorkspacePluginsPanelProps {
       pluginType:
         | "mcp_server"
         | "integration"
-        | "content_tool"
         | "capability"
-        | "agent_skill"
         | "agent_capability"
         | "knowledge_source";
       pluginId?: string;
@@ -86,16 +82,14 @@ interface WorkspacePluginsPanelProps {
 // Per-type colored icon defaults for the installed-plugins table.
 // Matches PLUGIN_TYPE_DEFAULTS in capability-icon.tsx; duplicated here to
 // cover types that exist in installed plugins but not in the marketplace tabs
-// (e.g. "content_tool", generic "capability").
+// (the generic "capability", plus retired types a legacy row may still carry).
 const INSTALLED_TYPE_ICON: Record<string, { iconName: string; color: string }> =
   {
     mcp_server: { iconName: "plug", color: "#3b82f6" },
     integration: { iconName: "package", color: "#4E6A7A" },
     agent_capability: { iconName: "brain-circuit", color: "#f59e0b" },
     capability: { iconName: "brain-circuit", color: "#f59e0b" },
-    agent_skill: { iconName: "sparkles", color: "#10b981" },
     knowledge_source: { iconName: "book-open", color: "#0ea5e9" },
-    content_tool: { iconName: "file-text", color: "#64748b" },
   };
 
 function pluginTypeIcon(type: string) {
@@ -116,7 +110,6 @@ function pluginTypeBadgeVariant(
   type: string,
 ): "outline" | "muted" | "secondary" | "info" {
   if (type === "integration") return "muted";
-  if (type === "content_tool") return "secondary";
   if (type === "capability" || type === "agent_capability") return "info";
   return "outline";
 }

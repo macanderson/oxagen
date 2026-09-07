@@ -147,29 +147,6 @@ vi.mock("./message-tree", () => ({ MessageTree: () => null }));
 vi.mock("./suggested-prompt-chips", () => ({
   SuggestedPromptChips: () => null,
 }));
-vi.mock("./coding-trace-panel", () => ({
-  // The AgentActivityRail's ProgressCard renders CodingTraceStages (driven by
-  // groupCodingTraceStages), not CodingTracePanel — so stub all three exports
-  // the rail touches. groupCodingTraceStages returns one non-empty stage group
-  // so ProgressCard's `hasContent` is true and the rail's testid mounts.
-  CodingTracePanel: () => <div data-testid="coding-trace-panel" />,
-  CodingTraceStages: () => <div data-testid="coding-trace-panel" />,
-  groupCodingTraceStages: () => ({
-    plan: [
-      {
-        key: "plan:stub",
-        label: "Plan",
-        tone: "done",
-        active: false,
-        anchorId: "turn-entry-plan:stub",
-      },
-    ],
-    tool: [],
-    code: [],
-    subagent: [],
-    result: [],
-  }),
-}));
 vi.mock("./workspace-context-panel", () => ({
   // The rail's OutputsCard renders WorkspaceContextTabs; keep WorkspaceContextPanel
   // stubbed for the registry path. Both map to the same testid.
@@ -181,7 +158,7 @@ vi.mock("./activity-timeline", () => ({
     <div>{children}</div>
   ),
   // Forward `id` so tests can assert the `#turn-entry-<key>` deep-link anchor
-  // the coding-trace-panel rail relies on actually lands on the DOM node.
+  // the activity rail relies on actually lands on the DOM node.
   TimelineItem: ({
     children,
     id,
@@ -282,7 +259,6 @@ async function renderClient(
       sendAction={noop}
       resolveApprovalAction={async () => ({ ok: true })}
       resolveConsentAction={async () => ({ ok: true })}
-      resolvePlanAction={async () => ({ ok: true })}
       orgSlug="test-org"
       workspaceSlug="test-ws"
       modelConfig={modelConfig}
@@ -304,7 +280,6 @@ async function renderMobileChrome(props: { chatUxV2?: boolean } = {}) {
       sendAction={noop}
       resolveApprovalAction={async () => ({ ok: true })}
       resolveConsentAction={async () => ({ ok: true })}
-      resolvePlanAction={async () => ({ ok: true })}
       orgSlug="test-org"
       workspaceSlug="test-ws"
       modelConfig={modelConfig}
@@ -362,7 +337,6 @@ describe("ChatShellClient — new-conversation empty state", () => {
         sendAction={noop}
         resolveApprovalAction={async () => ({ ok: true })}
         resolveConsentAction={async () => ({ ok: true })}
-        resolvePlanAction={async () => ({ ok: true })}
         orgSlug="test-org"
         workspaceSlug="test-ws"
         modelConfig={modelConfig}
@@ -466,7 +440,6 @@ describe("ChatShellClient — activeServerIds in stream request body", () => {
         })}
         resolveApprovalAction={async () => ({ ok: true })}
         resolveConsentAction={async () => ({ ok: true })}
-        resolvePlanAction={async () => ({ ok: true })}
         orgSlug="test-org"
         workspaceSlug="test-ws"
         modelConfig={modelConfig}
@@ -540,7 +513,6 @@ describe("ChatShellClient — stream error banner on non-2xx SSE response", () =
         })}
         resolveApprovalAction={async () => ({ ok: true })}
         resolveConsentAction={async () => ({ ok: true })}
-        resolvePlanAction={async () => ({ ok: true })}
         orgSlug="test-org"
         workspaceSlug="test-ws"
         modelConfig={modelConfig}
@@ -699,7 +671,6 @@ describe("ChatShellClient — embedded mode (in-app panel)", () => {
         })}
         resolveApprovalAction={async () => ({ ok: true })}
         resolveConsentAction={async () => ({ ok: true })}
-        resolvePlanAction={async () => ({ ok: true })}
         orgSlug="test-org"
         workspaceSlug="test-ws"
         modelConfig={modelConfig}
@@ -739,11 +710,10 @@ describe("ChatShellClient — embedded mode (in-app panel)", () => {
     expect(mockRefresh).not.toHaveBeenCalled();
   });
 
-  it("mounts the coding-trace-panel + workspace-context-panel rail by default, hides it when showFiles={false}", async () => {
+  it("mounts the workspace-context-panel rail by default, hides it when showFiles={false}", async () => {
     cleanup();
     await renderClient();
     // Default (showFiles undefined → true) mounts the right rail.
-    expect(screen.getByTestId("coding-trace-panel")).toBeInTheDocument();
     expect(screen.getByTestId("workspace-context-panel")).toBeInTheDocument();
 
     cleanup();
@@ -757,14 +727,12 @@ describe("ChatShellClient — embedded mode (in-app panel)", () => {
         sendAction={noop}
         resolveApprovalAction={async () => ({ ok: true })}
         resolveConsentAction={async () => ({ ok: true })}
-        resolvePlanAction={async () => ({ ok: true })}
         orgSlug="test-org"
         workspaceSlug="test-ws"
         modelConfig={modelConfig}
         showFiles={false}
       />,
     );
-    expect(screen.queryByTestId("coding-trace-panel")).not.toBeInTheDocument();
     expect(
       screen.queryByTestId("workspace-context-panel"),
     ).not.toBeInTheDocument();

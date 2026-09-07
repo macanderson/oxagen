@@ -8,7 +8,6 @@ import { resolveRenderDirective } from "@oxagen/oxagen/capability-meta";
 import { meterCreditsForUsage } from "@oxagen/billing";
 import {
   partType,
-  isRecord,
   errorMessageOf,
   formatStreamError,
   type TextDeltaPart,
@@ -226,33 +225,21 @@ export function createTurnTranslator(args: {
     } else if (pType === "tool-call") {
       const part = raw as ToolCallPart;
       toolStartedAt[part.toolCallId] = Date.now();
-      // Translate the model-safe tool name back to the real dotted capability
-      // name so the UI labels and routes (e.g. agent.code.execute →
-      // CodeExecuteCard) on the real name.
+      // Translate the model-safe tool name back to the real capability name
+      // so the UI labels and routes on the real name.
       const capability = toolNameMap[part.toolName] ?? part.toolName;
       toolCapability[part.toolCallId] = capability;
       flushText();
       // Reserve a terminal block; tool-result/tool-error fills it in.
       toolBlockIndex[part.toolCallId] = blocks.length;
-      if (capability === "execute_code") {
-        const inp = isRecord(part.input) ? part.input : {};
-        blocks.push({
-          type: "code-execute",
-          toolCallId: part.toolCallId,
-          language: typeof inp.language === "string" ? inp.language : "node",
-          code: typeof inp.code === "string" ? inp.code : "",
-          status: "running",
-        });
-      } else {
-        blocks.push({
-          type: "tool-call",
-          toolCallId: part.toolCallId,
-          capability,
-          inputPreview: part.input,
-          riskLevel: "low",
-          status: "running",
-        });
-      }
+      blocks.push({
+        type: "tool-call",
+        toolCallId: part.toolCallId,
+        capability,
+        inputPreview: part.input,
+        riskLevel: "low",
+        status: "running",
+      });
       emit({
         type: "tool-call-start",
         messageId: requestId,
@@ -280,14 +267,6 @@ export function createTurnTranslator(args: {
         if (blk && blk.type === "tool-call") {
           blk.status = "completed";
           blk.output = part.output;
-          blk.durationMs = durationMs;
-        } else if (blk && blk.type === "code-execute") {
-          const out = isRecord(part.output) ? part.output : {};
-          blk.status = "completed";
-          if (typeof out.stdout === "string") blk.stdout = out.stdout;
-          if (typeof out.stderr === "string") blk.stderr = out.stderr;
-          if (typeof out.exitCode === "number") blk.exitCode = out.exitCode;
-          if (typeof out.oomKilled === "boolean") blk.oomKilled = out.oomKilled;
           blk.durationMs = durationMs;
         }
       }
@@ -374,49 +353,6 @@ export function createTurnTranslator(args: {
           });
         }
       }
-      // Background-task lifecycle: when the agent dispatches a
-      // long-running Inngest job via agent.task.background.start, surface a live
-      // BackgroundTaskCard and persist a terminal block so the task is visible
-      // inline (and linked to the BackgroundTaskTray), not only after a refresh.
-      if (capabilityForResult === "start_background_task") {
-        const startOut = isRecord(rawResult) ? rawResult : null;
-        const taskId =
-          startOut !== null && typeof startOut.taskId === "string"
-            ? startOut.taskId
-            : null;
-        if (taskId !== null) {
-          const inngestRunId =
-            startOut !== null && typeof startOut.inngestRunId === "string"
-              ? startOut.inngestRunId
-              : undefined;
-          // kind (required) + label (optional) come from the tool input recorded
-          // on the reserved tool-call block for this call.
-          const reserved = blocks[toolBlockIndex[part.toolCallId] ?? -1];
-          const inputPreview =
-            reserved !== undefined && reserved.type === "tool-call"
-              ? reserved.inputPreview
-              : undefined;
-          const ip = isRecord(inputPreview) ? inputPreview : {};
-          const kind = typeof ip.kind === "string" ? ip.kind : "agent.task";
-          const label = typeof ip.label === "string" ? ip.label : undefined;
-          blocks.push({
-            type: "background-task",
-            taskId,
-            kind,
-            status: "pending",
-            ...(label !== undefined ? { label } : {}),
-            ...(inngestRunId !== undefined ? { inngestRunId } : {}),
-          });
-          emit({
-            type: "background-task-progress",
-            taskId,
-            kind,
-            status: "pending",
-            ...(label !== undefined ? { label } : {}),
-            ...(inngestRunId !== undefined ? { inngestRunId } : {}),
-          });
-        }
-      }
     } else if (pType === "tool-error") {
       // A tool whose execute() THREW surfaces as a `tool-error` part (not
       // `tool-result`). Without this arm the client's tool card would spin
@@ -430,11 +366,10 @@ export function createTurnTranslator(args: {
       const idx = toolBlockIndex[part.toolCallId];
       if (idx !== undefined) {
         const blk = blocks[idx];
-        if (blk && (blk.type === "tool-call" || blk.type === "code-execute")) {
+        if (blk && blk.type === "tool-call") {
           blk.status = "failed";
           blk.durationMs = durationMs;
-          if (blk.type === "tool-call") blk.errorReason = errorReason;
-          else blk.stderr = (blk.stderr ?? "") + errorReason;
+          blk.errorReason = errorReason;
         }
       }
       emit({

@@ -59,19 +59,11 @@ describe("proxy — IA realignment redirects (§16)", () => {
     expect(status("/acme/prod/studio")).toBe(301);
   });
 
-  it("301s the workbench/settings Skills shims → /workbench/tools/skills (tail preserved)", () => {
-    expect(location("/acme/prod/workbench/skills")).toBe(
-      `${ORIGIN}/acme/prod/workbench/tools/skills`,
-    );
-    expect(location("/acme/prod/workbench/skills/my-skill")).toBe(
-      `${ORIGIN}/acme/prod/workbench/tools/skills/my-skill`,
-    );
-    expect(location("/acme/prod/settings/skills")).toBe(
-      `${ORIGIN}/acme/prod/workbench/tools/skills`,
-    );
-    expect(location("/acme/prod/settings/skills/my-skill")).toBe(
-      `${ORIGIN}/acme/prod/workbench/tools/skills/my-skill`,
-    );
+  it("does NOT redirect the excised Skills routes (ADR-041) — they 404", () => {
+    // Skills were removed with the runtime; a dead redirect would be worse
+    // than a 404, so the shim was deleted rather than repointed.
+    expect(location("/acme/prod/workbench/skills")).toBeNull();
+    expect(location("/acme/prod/settings/skills")).toBeNull();
   });
 
   it("301s the retired settings tool tabs → their Workbench homes", () => {

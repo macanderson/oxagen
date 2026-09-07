@@ -6,7 +6,7 @@ import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
 import { firstNameOf } from "@/lib/utils";
 import { ChatShell, type ChatMessage } from "@/components/chat/chat-shell";
-import { listCapabilities, getSurfaces, invoke } from "@oxagen/oxagen";
+import { invoke } from "@oxagen/oxagen";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { loadEffectiveModelDefaults } from "@oxagen/ai";
 import { isLowBalance } from "@oxagen/billing";
