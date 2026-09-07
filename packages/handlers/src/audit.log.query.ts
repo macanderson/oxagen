@@ -10,11 +10,18 @@ import { logger } from "./logger";
 /**
  * audit.log.query handler.
  *
- * Reads the two append-only audit spines and returns a unified, newest-first
- * feed. Both tables are read through withSystemDb (security_events is partitioned
- * and lives in a bypass-only schema), so tenant isolation is enforced HERE,
- * explicitly: EVERY query filters by ctx.orgId. Never relax this — a missing org
- * filter would leak another tenant's audit trail (SOC 2 §0).
+ * Reads the append-only audit spine and returns a newest-first feed. The table
+ * is read through withSystemDb (security_events is partitioned and lives in a
+ * bypass-only schema), so tenant isolation is enforced HERE, explicitly: EVERY
+ * query filters by ctx.orgId. Never relax this — a missing org filter would leak
+ * another tenant's audit trail (SOC 2 §0).
+ *
+ * ADR-041 note: this used to merge a SECOND spine, `playbook_events` — the
+ * hash-chained automation trail. Automations/playbooks left with the runtime and
+ * that table is dropped, so `source: "playbook"` now matches nothing and the
+ * playbook-only fields (playbookRunId / sequence / eventData) are always null.
+ * The contract still declares the value; narrowing its enum is a follow-up in
+ * packages/oxagen.
  *
  * Workspace narrowing comes ONLY from `input.workspaceId`; ctx.workspaceId is
  * deliberately not applied, so the default result is the whole org's feed. That
@@ -22,9 +29,9 @@ import { logger } from "./logger";
  * workspace scope reads events from sibling workspaces — see the contract's
  * defaultRoles before widening who may invoke this.
  *
- * Pagination across two heterogeneous tables is done by over-fetching
- * (offset+limit+1) from each requested source, merging by occurredAt desc, then
- * slicing the window. Correct and bounded for the realistic admin use case.
+ * Pagination is done by over-fetching (offset+limit+1), ordering by occurredAt
+ * desc, then slicing the window. Correct and bounded for the realistic admin
+ * use case.
  */
 export const auditLogQueryHandler: CapabilityHandler<
   typeof auditLogQuery
@@ -35,7 +42,6 @@ export const auditLogQueryHandler: CapabilityHandler<
   const toDate = input.to ? new Date(input.to) : null;
 
   const wantSecurity = input.source === "all" || input.source === "security";
-  const wantPlaybook = input.source === "all" || input.source === "playbook";
 
   const events: AuditEvent[] = [];
 
@@ -86,53 +92,9 @@ export const auditLogQueryHandler: CapabilityHandler<
         });
       }
     }
-
-    if (wantPlaybook) {
-      const conds: SQL[] = [eq(schema.playbookEvents.orgId, orgId)];
-      if (input.workspaceId)
-        conds.push(eq(schema.playbookEvents.workspaceId, input.workspaceId));
-      if (input.eventType)
-        conds.push(eq(schema.playbookEvents.eventType, input.eventType));
-      if (input.playbookRunId)
-        conds.push(
-          eq(schema.playbookEvents.playbookRunId, input.playbookRunId),
-        );
-      if (fromDate) conds.push(gte(schema.playbookEvents.occurredAt, fromDate));
-      if (toDate) conds.push(lt(schema.playbookEvents.occurredAt, toDate));
-
-      const rows = await tx
-        .select({
-          eventType: schema.playbookEvents.eventType,
-          occurredAt: schema.playbookEvents.occurredAt,
-          workspaceId: schema.playbookEvents.workspaceId,
-          playbookRunId: schema.playbookEvents.playbookRunId,
-          sequence: schema.playbookEvents.sequence,
-          eventData: schema.playbookEvents.eventData,
-        })
-        .from(schema.playbookEvents)
-        .where(and(...conds))
-        .orderBy(desc(schema.playbookEvents.occurredAt))
-        .limit(window);
-
-      for (const r of rows) {
-        events.push({
-          source: "playbook",
-          eventType: r.eventType,
-          occurredAt: r.occurredAt.toISOString(),
-          actorUserId: null,
-          workspaceId: r.workspaceId,
-          capability: null,
-          outcome: null,
-          requestId: null,
-          playbookRunId: r.playbookRunId,
-          sequence: r.sequence,
-          eventData: (r.eventData ?? null) as Record<string, unknown> | null,
-        });
-      }
-    }
   });
 
-  // Merge the two spines newest-first, then slice the requested page.
+  // Newest-first, then slice the requested page.
   events.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
   const page = events.slice(input.offset, input.offset + input.limit);
   const hasMore = events.length > input.offset + input.limit;

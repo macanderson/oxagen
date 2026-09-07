@@ -7,24 +7,16 @@ function summarize(e: AgentStreamEvent): string {
   switch (e.type) {
     case "tool-call-start":
       return `start:${e.callId}:${e.capability}`;
-    case "tool-call-output":
-      return `out:${e.callId}:${e.chunk.length}`;
     case "tool-call-end":
       return `end:${e.callId}:${e.status}`;
     case "approval-required":
       return `appr:${e.approvalId}:${e.riskLevel}`;
     case "approval-resolved":
       return `appr-r:${e.approvalId}:${e.resolution}`;
-    case "plan-proposed":
-      return `plan:${e.planId}:${e.title}`;
-    case "plan-resolved":
-      return `plan-r:${e.planId}:${e.status}`;
-    case "subagent-dispatched":
-      return `fan:${e.fanoutId}:${e.childMessageIds.length}`;
-    case "subagent-aggregated":
-      return `agg:${e.fanoutId}:${e.status}`;
-    case "background-task-started":
-      return `bg:${e.taskId}:${e.kind}`;
+    case "consent-required":
+      return `cons:${e.approvalId}:${e.serverId}:${e.toolName}`;
+    case "consent-resolved":
+      return `cons-r:${e.approvalId}:${e.resolution}`;
   }
 }
 
@@ -34,45 +26,52 @@ describe("AgentStreamEvent variants", () => {
       {
         type: "tool-call-start",
         callId: "c1",
-        capability: "execute_code",
+        capability: "recall_memory",
         input: {},
       },
-      { type: "tool-call-output", callId: "c1", chunk: "hello" },
       {
         type: "tool-call-end",
         callId: "c1",
-        capability: "execute_code",
+        capability: "recall_memory",
         status: "completed",
         output: { ok: true },
       },
       {
         type: "approval-required",
         approvalId: "a1",
-        capability: "execute_code",
+        capability: "delete_agent_def",
         riskLevel: "high",
         inputPreview: {},
       },
       { type: "approval-resolved", approvalId: "a1", resolution: "approved" },
-      { type: "plan-proposed", planId: "p1", title: "do the thing", steps: [] },
-      { type: "plan-resolved", planId: "p1", status: "approved" },
       {
-        type: "subagent-dispatched",
-        fanoutId: "f1",
-        parentMessageId: "m1",
-        childMessageIds: ["c1", "c2"],
+        type: "consent-required",
+        approvalId: "a2",
+        capability: "mcp.srv_1.search",
+        serverId: "srv_1",
+        toolName: "search",
+        inputPreview: {},
       },
-      { type: "subagent-aggregated", fanoutId: "f1", status: "completed" },
-      {
-        type: "background-task-started",
-        taskId: "t1",
-        kind: "scan",
-        inngestRunId: "run_1",
-      },
+      { type: "consent-resolved", approvalId: "a2", resolution: "granted" },
     ];
     const out = events.map(summarize);
-    expect(out).toHaveLength(10);
-    expect(out[0]).toBe("start:c1:execute_code");
-    expect(out[7]).toBe("fan:f1:2");
+    expect(out).toHaveLength(6);
+    expect(out[0]).toBe("start:c1:recall_memory");
+    expect(out[4]).toBe("cons:a2:srv_1:search");
+  });
+
+  // Governance vocabulary only (ADR-041): no plan / subagent-fanout /
+  // background-task / sandbox-terminal events survive the runtime excision.
+  it("carries no execution-runtime event variants", () => {
+    const types: AgentStreamEvent["type"][] = [
+      "tool-call-start",
+      "tool-call-end",
+      "approval-required",
+      "approval-resolved",
+      "consent-required",
+      "consent-resolved",
+    ];
+    expect(types).toHaveLength(6);
   });
 
   it("isAgentStreamEvent accepts well-formed objects", () => {

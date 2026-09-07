@@ -9,7 +9,6 @@ describe("tenant policy manifest", () => {
       "org_only",
       "workspace_only",
       "org_or_global",
-      "standard_or_builtin",
     ];
     for (const entry of POLICY_MANIFEST) {
       expect(classes).toContain(entry.policyClass);
@@ -19,29 +18,13 @@ describe("tenant policy manifest", () => {
 
   it("includes the known standard owned tables", () => {
     const tables = POLICY_MANIFEST.map((e) => e.table);
-    expect(tables).toContain("agent.skills");
     expect(tables).toContain("agent.agents");
     expect(tables).toContain("chat.conversations");
   });
 
-  it("covers the playbook domain", () => {
-    const find = (t: string) => POLICY_MANIFEST.find((e) => e.table === t);
-    for (const t of [
-      "workflow.playbooks",
-      "workflow.playbook_triggers",
-      "workflow.playbook_runs",
-      "workflow.playbook_step_runs",
-      "workflow.playbook_events",
-      "workflow.playbook_approvals",
-    ]) {
-      expect(find(t)?.policyClass, t).toBe("standard");
-    }
-    // Immutable children carry no org cols — isolation is transitive via FK,
-    // so they must NOT be in the manifest (a policy on them cannot compile).
+  it("omits immutable children whose isolation is transitive via FK", () => {
+    // They carry no org cols — a policy on them cannot compile.
     const tables = POLICY_MANIFEST.map((e) => e.table);
-    expect(tables).not.toContain("workflow.playbook_versions");
-    expect(tables).not.toContain("workflow.playbook_steps");
-    expect(tables).not.toContain("workflow.playbook_edges");
     expect(tables).not.toContain("agent.agent_versions");
   });
 
@@ -79,6 +62,19 @@ describe("tenant policy manifest", () => {
     expect(tables).not.toContain("agent.mcp_servers"); // moved to mcp.mcp_servers
     expect(tables).not.toContain("workflow.automations");
     expect(tables).not.toContain("workflow.automation_runs");
+    // ADR-041 runtime excision: the whole workflow/content/cms/eval domains,
+    // plus the agent-runtime tables, are gone from the schema entirely.
+    expect(tables).not.toContain("workflow.playbooks");
+    expect(tables).not.toContain("content.documents");
+    expect(tables).not.toContain("eval.eval_runs");
+    expect(tables).not.toContain("agent.skills");
+    expect(tables).not.toContain("agent.sandbox_sessions");
+    expect(tables).not.toContain("agent.file_locks");
+    expect(tables).not.toContain("agent.agent_run_checkpoints");
+    expect(tables).not.toContain("agent.agent_run_attempt_leases");
+    expect(tables).not.toContain("environments.sandbox_templates");
+    expect(tables).not.toContain("ai.batch_jobs");
+    expect(tables).not.toContain("ingestion.governed_repository_selections");
     expect(tables).not.toContain("auth.privacy_export_requests"); // moved to privacy.*
     expect(tables).not.toContain("auth.privacy_erasure_requests");
     expect(tables).toContain("mcp.mcp_servers");
@@ -86,7 +82,9 @@ describe("tenant policy manifest", () => {
     expect(tables).toContain("privacy.privacy_erasure_requests");
   });
 
-  it("content.generated_assets is present as standard", () => {
+  it("keeps content.generated_assets — the attachment path survived ADR-041", () => {
+    // content.documents went with the runtime; the blob reference row backs
+    // asset.upload / conversation.attachment.add / conversation.files.list.
     const entry = POLICY_MANIFEST.find(
       (e) => e.table === "content.generated_assets",
     );
@@ -100,13 +98,6 @@ describe("tenant policy manifest", () => {
       (e) => e.table === "workspace.workspace_users",
     );
     expect(entry?.policyClass).toBe("workspace_only");
-  });
-
-  it("skills tables are the only standard_or_builtin tables — builtin catalog readable, writes tenant-only", () => {
-    const builtinReadable = POLICY_MANIFEST.filter(
-      (e) => e.policyClass === "standard_or_builtin",
-    ).map((e) => e.table);
-    expect(builtinReadable).toEqual(["agent.skills", "agent.skill_versions"]);
   });
 
   it("there are no org_or_global tables", () => {
@@ -139,7 +130,7 @@ describe("tenant policy manifest", () => {
     // manifest and this count (and regenerating the Atlas RLS migration), so
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
-    expect(POLICY_MANIFEST.length).toBe(113);
+    expect(POLICY_MANIFEST.length).toBe(88);
   });
 
   it("covers the run/attempt/authorization foundation (run-evidence-ingress)", () => {
@@ -148,14 +139,11 @@ describe("tenant policy manifest", () => {
     // — append-only privileges stop mutation, not cross-tenant reads.
     for (const t of [
       "agent.agent_run_attempts",
-      "agent.agent_run_attempt_leases",
-      "agent.agent_run_checkpoints",
       "agent.agent_run_attempt_seals",
       "agent.agent_run_finalization_grants",
       "agent.agent_run_finalization_obligations",
       "ingestion.repository_bindings",
       "ingestion.repository_binding_heads",
-      "ingestion.governed_repository_selections",
       "evidence.retention_policy_versions",
       // A run always executes in exactly one workspace, so its pinned ceiling
       // is workspace-scoped rather than org-wide.

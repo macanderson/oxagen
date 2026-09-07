@@ -2,19 +2,26 @@ import type { ModelMessage } from "ai";
 import { invoke, type CapabilityContext } from "@oxagen/oxagen";
 import { agentMemoryRecall } from "@oxagen/oxagen/contracts/agent.memory.recall";
 
-// Deterministic per-turn memory recall for the REST chat + A2A agent surfaces.
+// Deterministic per-turn memory recall for the REST chat surface.
+//
+// RETAINED THROUGH ADR-041. The A2A transport and the turn loop that called
+// this are gone; chat.stream currently answers 501 and `runGovernedTurn` in
+// @oxagen/agent will call this again. It survives the cut because grounding an
+// answer in recalled, cited workspace memory is exactly what the governance
+// agent is for, and because it does that through the metered, IAM-gated
+// `agent.memory.recall` capability rather than a raw graph call.
 //
 // This mirrors the app-chat surface's recall wiring (ADR-021 §2/§8):
 // recall workspace memory BEFORE the turn acts, via the metered, IAM-gated
 // `agent.memory.recall` capability (never a raw Neo4j call), and inject the
 // result per-turn AFTER the stable/cached system prefix — never into the cached
-// system block. The agent-engine owns injection: it places the recalled block as
-// a volatile USER message between history and the instruction, so recalled
+// system block. The caller owns injection: it places the recalled block as a
+// volatile USER message between history and the instruction, so recalled
 // memory (which changes every turn) never busts the Anthropic prompt-cache
-// breakpoint on the stable system prefix (packages/agent-engine/src/engine.ts).
+// breakpoint on the stable system prefix.
 //
-// Unlike the app surface this omits UI citation resolution — the REST/A2A wire
-// formats carry no "Grounded in" citation strip — but the recall query itself is
+// Unlike the app surface this omits UI citation resolution — the REST wire
+// format carries no "Grounded in" citation strip — but the recall query itself is
 // identical, including `executionRef` so recalled memories are auto-cited as
 // CONSIDERED (the promotion / self-improvement flywheel).
 

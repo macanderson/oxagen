@@ -54,7 +54,7 @@
           "properties": {
             "capability": {
               "type": "string",
-              "description": "Contract name, e.g. schema.label.upsert"
+              "description": "Capability name, e.g. upsert_schema_label"
             },
             "input": {
               "type": "object",

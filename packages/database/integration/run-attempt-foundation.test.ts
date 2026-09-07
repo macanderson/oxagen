@@ -9,7 +9,7 @@
  *   T1  tenant isolation on every new foundation table
  *   T2  scope agreement — an attempt cannot be written into another tenant
  *   T3  ACTUAL database privileges: append-only tables have no UPDATE/DELETE
- *   T4  fence enforcement — one lease per attempt, one epoch per run
+ *   T4  attempt identity — one attempt number per run
  *   T5  the V1/V2 partial constraints, including the dropped full unique
  *   T6  same-transaction seal → grant → obligation, and its atomic rollback
  *   T7  the V2 immutability trigger on agent_runs
@@ -62,7 +62,6 @@ const EMPTY_STREAM_DIGEST = D("e");
 // The tables whose application-role grants must be SELECT + INSERT only.
 const APPEND_ONLY_TABLES: ReadonlyArray<[string, string]> = [
   ["agent", "agent_run_attempts"],
-  ["agent", "agent_run_checkpoints"],
   ["agent", "agent_run_attempt_seals"],
   ["agent", "agent_run_finalization_grants"],
   ["agent", "agent_run_finalization_obligations"],
@@ -73,9 +72,7 @@ const APPEND_ONLY_TABLES: ReadonlyArray<[string, string]> = [
 
 // Mutable operational state: UPDATE allowed, DELETE still denied.
 const UPDATE_BUT_NEVER_DELETE_TABLES: ReadonlyArray<[string, string]> = [
-  ["agent", "agent_run_attempt_leases"],
   ["ingestion", "repository_binding_heads"],
-  ["ingestion", "governed_repository_selections"],
 ];
 
 // ---------------------------------------------------------------------------
@@ -195,13 +192,15 @@ beforeAll(async () => {
       ON CONFLICT (id) DO NOTHING
     `;
 
+    // A successor attempt — T6 seals it as the zero-event abandoned case.
     await tx`
-      INSERT INTO agent.agent_run_attempt_leases
-        (org_id, workspace_id, attempt_id, run_id, lease_token, lease_epoch,
-         worker_id, expires_at)
+      INSERT INTO agent.agent_run_attempts
+        (id, public_id, org_id, workspace_id, run_id, attempt_number, worker_id,
+         engine_name, engine_version, engine_build_digest)
       VALUES
-        (${ORG_A}, ${WS_A}, ${ATTEMPT_1}, ${RUN_V2}, 'tok-1', 1, 'worker-1', now() + interval '5 minutes')
-      ON CONFLICT DO NOTHING
+        (${ATTEMPT_2}, 'raf_test_arat_2', ${ORG_A}, ${WS_A}, ${RUN_V2}, 2, 'worker-2',
+         'ts-engine', '2.0.0', ${DIGEST_A})
+      ON CONFLICT (id) DO NOTHING
     `;
   });
 });
@@ -212,12 +211,9 @@ afterAll(async () => {
     await tx`DELETE FROM agent.agent_run_finalization_obligations WHERE org_id IN (${ORG_A}, ${ORG_B})`;
     await tx`DELETE FROM agent.agent_run_finalization_grants WHERE org_id IN (${ORG_A}, ${ORG_B})`;
     await tx`DELETE FROM agent.agent_run_attempt_seals WHERE org_id IN (${ORG_A}, ${ORG_B})`;
-    await tx`DELETE FROM agent.agent_run_checkpoints WHERE org_id IN (${ORG_A}, ${ORG_B})`;
-    await tx`DELETE FROM agent.agent_run_attempt_leases WHERE org_id IN (${ORG_A}, ${ORG_B})`;
     await tx`DELETE FROM agent.agent_run_events WHERE org_id IN (${ORG_A}, ${ORG_B})`;
     await tx`DELETE FROM agent.agent_run_attempts WHERE org_id IN (${ORG_A}, ${ORG_B})`;
     await tx`DELETE FROM agent.agent_runs WHERE org_id IN (${ORG_A}, ${ORG_B})`;
-    await tx`DELETE FROM ingestion.governed_repository_selections WHERE org_id IN (${ORG_A}, ${ORG_B})`;
     await tx`DELETE FROM ingestion.repository_binding_heads WHERE org_id IN (${ORG_A}, ${ORG_B})`;
     await tx`DELETE FROM ingestion.repository_bindings WHERE org_id IN (${ORG_A}, ${ORG_B})`;
     await tx`DELETE FROM evidence.retention_policy_versions WHERE org_id IN (${ORG_A}, ${ORG_B})`;
@@ -304,23 +300,20 @@ describe("T1: tenant isolation on the attempt foundation", () => {
     expect(rows.every((r) => r.org_id === ORG_A)).toBe(true);
   });
 
-  it("org B sees none of org A's attempts, leases, or bindings", async () => {
+  it("org B sees none of org A's attempts or bindings", async () => {
     const counts = await asTenant(ORG_B, WS_B, async (tx) => {
       const attempts = await tx<
         { n: string }[]
       >`SELECT count(*)::text AS n FROM agent.agent_run_attempts`;
-      const leases = await tx<
-        { n: string }[]
-      >`SELECT count(*)::text AS n FROM agent.agent_run_attempt_leases`;
       const bindings = await tx<
         { n: string }[]
       >`SELECT count(*)::text AS n FROM ingestion.repository_bindings`;
       const retention = await tx<
         { n: string }[]
       >`SELECT count(*)::text AS n FROM evidence.retention_policy_versions`;
-      return [attempts[0]?.n, leases[0]?.n, bindings[0]?.n, retention[0]?.n];
+      return [attempts[0]?.n, bindings[0]?.n, retention[0]?.n];
     });
-    expect(counts).toEqual(["0", "0", "0", "0"]);
+    expect(counts).toEqual(["0", "0", "0"]);
   });
 
   it("no GUC + bypass off returns zero rows (fail-closed)", async () => {
@@ -455,58 +448,15 @@ describe("T3: append-only privileges, read back from the catalog", () => {
 });
 
 // ---------------------------------------------------------------------------
-// T4 — fence enforcement
+// T4 — attempt identity uniqueness
+//
+// The mutable fenced lease went with the runtime in ADR-041: Oxagen no longer
+// claims or executes runs, so there is no live lease to fence. What remains is
+// the attempt identity itself, which must stay dense and unique per run for the
+// seal → grant → obligation chain to address it.
 // ---------------------------------------------------------------------------
 
-describe("T4: lease fencing", () => {
-  it("rejects a second lease for the same attempt", async () => {
-    await expect(
-      asSystem(
-        (tx) => tx`
-          INSERT INTO agent.agent_run_attempt_leases
-            (org_id, workspace_id, attempt_id, run_id, lease_token, lease_epoch, worker_id, expires_at)
-          VALUES
-            (${ORG_A}, ${WS_A}, ${ATTEMPT_1}, ${RUN_V2}, 'tok-dup', 2, 'worker-2', now() + interval '5 minutes')
-        `,
-      ),
-    ).rejects.toThrow(/agent_run_attempt_leases_attempt_uq/);
-  });
-
-  it("rejects reusing a fencing epoch within one run", async () => {
-    // A successor attempt exists, but epoch 1 was already consumed — reusing it
-    // would let a stale worker's late write be accepted as current.
-    await asSystem(
-      (tx) => tx`
-        INSERT INTO agent.agent_run_attempts
-          (id, public_id, org_id, workspace_id, run_id, attempt_number, worker_id,
-           engine_name, engine_version, engine_build_digest)
-        VALUES
-          (${ATTEMPT_2}, 'raf_test_arat_2', ${ORG_A}, ${WS_A}, ${RUN_V2}, 2, 'worker-2',
-           'ts-engine', '2.0.0', ${DIGEST_A})
-        ON CONFLICT (id) DO NOTHING
-      `,
-    );
-    await expect(
-      asSystem(
-        (tx) => tx`
-          INSERT INTO agent.agent_run_attempt_leases
-            (org_id, workspace_id, attempt_id, run_id, lease_token, lease_epoch, worker_id, expires_at)
-          VALUES
-            (${ORG_A}, ${WS_A}, ${ATTEMPT_2}, ${RUN_V2}, 'tok-2', 1, 'worker-2', now() + interval '5 minutes')
-        `,
-      ),
-    ).rejects.toThrow(/agent_run_attempt_leases_run_epoch_uq/);
-  });
-
-  it("rejects a fenced_at without a reason (half-fenced lease)", async () => {
-    await expect(
-      asSystem(
-        (tx) =>
-          tx`UPDATE agent.agent_run_attempt_leases SET fenced_at = now() WHERE attempt_id = ${ATTEMPT_1}`,
-      ),
-    ).rejects.toThrow(/agent_run_attempt_leases_fence_check/);
-  });
-
+describe("T4: attempt identity uniqueness", () => {
   it("rejects a duplicate attempt number within one run", async () => {
     await expect(
       asSystem(

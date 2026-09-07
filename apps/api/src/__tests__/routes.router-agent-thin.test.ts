@@ -1,6 +1,6 @@
 /**
- * Unit tests for the thin dispatch routes added by the eval, market-router,
- * subagent-fanout, and per-workspace-preferences merges. Each is a one-line
+ * Unit tests for the thin dispatch routes added by the market-router, agent
+ * trace, and per-workspace-preferences merges. Each is a one-line
  * adapter — parse the request, call invoke(<capability>, …, { surface: "api" }),
  * return the result — so the tests assert the adapter contract:
  *   - a valid request 200/201/202s and forwards the right capability + input,
@@ -190,130 +190,6 @@ describe("router.stats + router.preview routes", () => {
 
 // ── eval routes ─────────────────────────────────────────────────────────────
 
-describe("eval dataset routes", () => {
-  it("POST /eval/datasets → 201 create", async () => {
-    mocks.invoke.mockResolvedValue({ dataset: { publicId: "eds_1" } });
-    const res = await app.fetch(post("/eval/datasets", { name: "Golden set" }));
-    expect(res.status).toBe(201);
-    expect(invokedCapability()).toBe("create_dataset");
-    expect(invokedInput().name).toBe("Golden set");
-  });
-
-  it("POST /eval/datasets rejects a blank name with 400", async () => {
-    const res = await app.fetch(post("/eval/datasets", { name: "" }));
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-
-  it("GET /eval/datasets → 200 list", async () => {
-    mocks.invoke.mockResolvedValue({ datasets: [] });
-    const res = await app.fetch(get("/eval/datasets"));
-    expect(res.status).toBe(200);
-    expect(invokedCapability()).toBe("list_datasets");
-  });
-
-  it("GET /eval/datasets/get coerces the limit query param", async () => {
-    mocks.invoke.mockResolvedValue({ items: [], nextCursor: null });
-    const res = await app.fetch(
-      get("/eval/datasets/get?datasetPublicId=eds_1&limit=25&cursor=c1"),
-    );
-    expect(res.status).toBe(200);
-    expect(invokedCapability()).toBe("get_dataset");
-    const input = invokedInput();
-    expect(input.datasetPublicId).toBe("eds_1");
-    expect(input.limit).toBe(25);
-    expect(input.cursor).toBe("c1");
-  });
-
-  it("GET /eval/datasets/get without a datasetPublicId → 400", async () => {
-    const res = await app.fetch(get("/eval/datasets/get"));
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-
-  it("POST /eval/datasets/items → 201 add", async () => {
-    mocks.invoke.mockResolvedValue({ added: 1 });
-    const res = await app.fetch(
-      post("/eval/datasets/items", {
-        datasetPublicId: "eds_1",
-        items: [{ input: "What is 2+2?" }],
-      }),
-    );
-    expect(res.status).toBe(201);
-    expect(invokedCapability()).toBe("add_dataset_item");
-    expect(Array.isArray(invokedInput().items)).toBe(true);
-  });
-
-  it("POST /eval/datasets/items rejects an empty items array with 400", async () => {
-    const res = await app.fetch(
-      post("/eval/datasets/items", { datasetPublicId: "eds_1", items: [] }),
-    );
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-
-  it("POST /eval/datasets/from-traces → 201 with defaulted sinceHours/limit", async () => {
-    mocks.invoke.mockResolvedValue({
-      dataset: { publicId: "eds_2" },
-      captured: 5,
-    });
-    const res = await app.fetch(
-      post("/eval/datasets/from-traces", { name: "From traces" }),
-    );
-    expect(res.status).toBe(201);
-    expect(invokedCapability()).toBe("create_trace_dataset");
-    const input = invokedInput();
-    expect(input.sinceHours).toBe(24 * 7);
-    expect(input.limit).toBe(50);
-  });
-});
-
-describe("eval run routes", () => {
-  it("POST /eval/runs → 200 start (model target)", async () => {
-    mocks.invoke.mockResolvedValue({ run: { publicId: "erun_1" } });
-    const res = await app.fetch(
-      post("/eval/runs", {
-        datasetPublicId: "eds_1",
-        target: { kind: "model", model: "openai/gpt-4o-mini" },
-      }),
-    );
-    expect(res.status).toBe(200);
-    expect(invokedCapability()).toBe("start_eval_run");
-    expect(invokedInput().passThreshold).toBe(0.7); // schema default applied
-  });
-
-  it("POST /eval/runs rejects a missing datasetPublicId with 400", async () => {
-    const res = await app.fetch(
-      post("/eval/runs", { target: { kind: "model" } }),
-    );
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-
-  it("GET /eval/runs/status → 200", async () => {
-    mocks.invoke.mockResolvedValue({ status: "running" });
-    const res = await app.fetch(get("/eval/runs/status?runPublicId=erun_1"));
-    expect(res.status).toBe(200);
-    expect(invokedCapability()).toBe("get_eval_status");
-    expect(invokedInput().runPublicId).toBe("erun_1");
-  });
-
-  it("GET /eval/runs/status without runPublicId → 400", async () => {
-    const res = await app.fetch(get("/eval/runs/status"));
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-
-  it("GET /eval/runs/get → 200", async () => {
-    mocks.invoke.mockResolvedValue({ run: {}, items: [] });
-    const res = await app.fetch(get("/eval/runs/get?runPublicId=erun_1"));
-    expect(res.status).toBe(200);
-    expect(invokedCapability()).toBe("get_eval_run");
-  });
-});
-
-// ── agent introspection routes (thin getters + typed 404s) ───────────────────
-
 describe("agent.execution.list route", () => {
   it("GET /agent/executions coerces limit and forwards before/status", async () => {
     mocks.invoke.mockResolvedValue({ executions: [] });
@@ -337,28 +213,6 @@ describe("agent.execution.list route", () => {
     expect(input.limit).toBe(25); // schema default
     expect(input.before).toBeUndefined();
     expect(input.status).toBeUndefined();
-  });
-});
-
-describe("agent.file_lock.list route", () => {
-  it("GET /agent/file/lock/list forwards path/owner/repo filters", async () => {
-    mocks.invoke.mockResolvedValue({ locks: [] });
-    const res = await app.fetch(
-      get("/agent/file/lock/list?path=src/index.ts&owner=acme&repo=platform"),
-    );
-    expect(res.status).toBe(200);
-    expect(invokedCapability()).toBe("list_file_locks");
-    const input = invokedInput();
-    expect(input.path).toBe("src/index.ts");
-    expect(input.owner).toBe("acme");
-    expect(input.repo).toBe("platform");
-  });
-
-  it("GET /agent/file/lock/list with no filters passes an empty input", async () => {
-    mocks.invoke.mockResolvedValue({ locks: [] });
-    const res = await app.fetch(get("/agent/file/lock/list"));
-    expect(res.status).toBe(200);
-    expect(invokedInput()).toEqual({});
   });
 });
 
@@ -414,41 +268,6 @@ describe("agent.debug.trace route", () => {
     expect(res.status).toBe(404);
   });
 });
-
-describe("agent subagent result / siblings routes", () => {
-  it("GET /agent/subagent/result/:runId → 200", async () => {
-    mocks.invoke.mockResolvedValue({ result: {} });
-    const res = await app.fetch(get("/agent/subagent/result/run_1"));
-    expect(res.status).toBe(200);
-    expect(invokedCapability()).toBe("get_subagent_result");
-    expect(invokedInput().runId).toBe("run_1");
-  });
-
-  it("GET /agent/subagent/result/:runId → 404 for an unknown run", async () => {
-    mocks.invoke.mockRejectedValue(
-      Object.assign(new Error("nope"), { code: "subagent_run_not_found" }),
-    );
-    const res = await app.fetch(get("/agent/subagent/result/run_missing"));
-    expect(res.status).toBe(404);
-  });
-
-  it("GET /agent/subagent/siblings/:runId → 200", async () => {
-    mocks.invoke.mockResolvedValue({ siblings: [] });
-    const res = await app.fetch(get("/agent/subagent/siblings/run_1"));
-    expect(res.status).toBe(200);
-    expect(invokedCapability()).toBe("list_subagent_siblings");
-  });
-
-  it("GET /agent/subagent/siblings/:runId → 404 for an unknown run", async () => {
-    mocks.invoke.mockRejectedValue(
-      Object.assign(new Error("nope"), { code: "subagent_run_not_found" }),
-    );
-    const res = await app.fetch(get("/agent/subagent/siblings/run_missing"));
-    expect(res.status).toBe(404);
-  });
-});
-
-// ── telemetry error-cluster route ────────────────────────────────────────────
 
 describe("telemetry.error.cluster route", () => {
   it("GET /telemetry/error/cluster coerces sinceHours / limit and forwards filters", async () => {
@@ -563,101 +382,3 @@ describe("privacy.data.export route", () => {
 });
 
 // ── skill-version + document read routes (nullish query defaults) ────────────
-
-describe("skill-version + document read routes", () => {
-  it("GET /skill/version/get forwards skill_id + version_id", async () => {
-    mocks.invoke.mockResolvedValue({ version: {} });
-    const res = await app.fetch(
-      get("/skill/version/get?skill_id=skl_1&version_id=slv_1"),
-    );
-    expect(res.status).toBe(200);
-    expect(invokedCapability()).toBe("get_skill_version");
-    const input = invokedInput();
-    expect(input.skill_id).toBe("skl_1");
-    expect(input.version_id).toBe("slv_1");
-  });
-
-  it("GET /skill/version/list coerces limit + offset when present", async () => {
-    mocks.invoke.mockResolvedValue({ versions: [] });
-    const res = await app.fetch(
-      get("/skill/version/list?skill_id=skl_1&limit=10&offset=5"),
-    );
-    expect(res.status).toBe(200);
-    expect(invokedCapability()).toBe("list_skill_versions");
-    const input = invokedInput();
-    expect(input.limit).toBe(10);
-    expect(input.offset).toBe(5);
-  });
-
-  it("GET /skill/version/list applies schema defaults when limit/offset are absent", async () => {
-    mocks.invoke.mockResolvedValue({ versions: [] });
-    const res = await app.fetch(get("/skill/version/list?skill_id=skl_1"));
-    expect(res.status).toBe(200);
-    const input = invokedInput();
-    expect(input.limit).toBe(20); // schema default
-    expect(input.offset).toBe(0);
-  });
-
-  it("GET /skill/version/get leaves the optional version_id absent", async () => {
-    mocks.invoke.mockResolvedValue({ version: null });
-    const res = await app.fetch(get("/skill/version/get"));
-    expect(res.status).toBe(200);
-    const input = invokedInput();
-    expect(input.skill_id).toBe("");
-    expect(input.version_id).toBeUndefined();
-  });
-
-  it("GET /document/read forwards the document_id", async () => {
-    mocks.invoke.mockResolvedValue({ document: {} });
-    const res = await app.fetch(get("/document/read?document_id=doc_1"));
-    expect(res.status).toBe(200);
-    expect(invokedCapability()).toBe("read_document");
-    expect(invokedInput().document_id).toBe("doc_1");
-  });
-
-  it("GET /document/read falls back to an empty document_id when absent", async () => {
-    mocks.invoke.mockResolvedValue({ document: null });
-    const res = await app.fetch(get("/document/read"));
-    expect(res.status).toBe(200);
-    expect(invokedInput().document_id).toBe("");
-  });
-});
-
-// ── subagent fanout aggregate (typed 404) ────────────────────────────────────
-
-describe("agent.subagent.aggregate route", () => {
-  it("POST /agent/subagent/aggregate → 200 with defaulted timeout/includeOutputs", async () => {
-    mocks.invoke.mockResolvedValue({
-      fanoutId: "fan_1",
-      status: "completed",
-      children: [],
-    });
-    const res = await app.fetch(
-      post("/agent/subagent/aggregate", { fanoutId: "fan_1" }),
-    );
-    expect(res.status).toBe(200);
-    expect(invokedCapability()).toBe("aggregate_subagents");
-    const input = invokedInput();
-    expect(input.timeoutMs).toBe(5 * 60 * 1000); // schema default
-    expect(input.includeOutputs).toBe(false);
-  });
-
-  it("POST /agent/subagent/aggregate → 404 for an unknown fanout (typed error)", async () => {
-    mocks.invoke.mockRejectedValue(
-      Object.assign(new Error("nope"), { code: "fanout_not_found" }),
-    );
-    const res = await app.fetch(
-      post("/agent/subagent/aggregate", { fanoutId: "fan_missing" }),
-    );
-    expect(res.status).toBe(404);
-  });
-
-  it("POST /agent/subagent/aggregate → 500 for an unrelated error", async () => {
-    mocks.invoke.mockRejectedValue(new Error("neo4j unreachable"));
-    const res = await app.fetch(
-      post("/agent/subagent/aggregate", { fanoutId: "fan_1" }),
-    );
-    expect(res.status).toBe(500);
-    expect(mocks.invoke).toHaveBeenCalled();
-  });
-});

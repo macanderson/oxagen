@@ -30,19 +30,16 @@ await build({
   format: "cjs",
   target: "node22",
   // Optional native bindings — required lazily; the DB drivers fall back to
-  // pure JS when the native module is absent.
+  // pure JS when the native module is absent. Externalizing them keeps `.node`
+  // binaries esbuild cannot read out of the bundle.
   //
-  // `dockerode` (→ docker-modem → ssh2, which ships native .node files esbuild
-  // can't load) reaches this bundle via @oxagen/sandbox, imported by the agent
-  // handlers. The docker driver only runs in local dev / self-hosted, never in
-  // this serverless function (SANDBOX_DRIVER=vercel|modal in prod), and
-  // createDockerSandbox loads dockerode lazily — so the external require is
-  // never resolved at runtime here. Externalizing it keeps the native bindings
-  // out of the bundle.
+  // `dockerode` used to be here because @oxagen/sandbox pulled it in through
+  // the agent handlers. ADR-041 deleted that package with the rest of the
+  // runtime, so nothing in this bundle reaches it any more and the entry is
+  // gone with it.
   external: [
     "pg-native",
     "better-sqlite3",
-    "dockerode",
     "aws-sdk",
     "nock",
     "mock-aws-s3",
@@ -52,8 +49,8 @@ await build({
   logLevel: "info",
   // Left at esbuild's default (a warning) rather than silenced: this closure has
   // guarded uses of import.meta that are correct, and an unguarded one at module
-  // scope is caught by booting the bundle — see packages/agent-worker's
-  // src/cjs-bundle.test.ts. Silencing hid exactly that defect in #2567.
+  // scope is caught by booting the bundle. Silencing hid exactly that defect in
+  // #2567.
 });
 
 // Built-in connector schema YAMLs: packages/ingestion's loadBuiltInSchema reads

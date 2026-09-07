@@ -20,16 +20,17 @@ Your MCP client can also just ask. Call `tools/list` after connecting and the se
 | Tool                     | Description                                          |
 | ------------------------ | ---------------------------------------------------- |
 | `list_agent_tools`       | List available tools for the current workspace       |
-| `list_agent_skills`      | List available skills                                |
+| `list_agent_defs`        | List agent definitions in the workspace              |
+| `deploy_agent`           | Set an agent's deployment posture                    |
+| `bind_agent_environment` | Bind an agent to an environment                      |
 | `list_mcp_servers`       | List registered external MCP servers                 |
 | `register_mcp_server`    | Register an external MCP server                      |
-| `approve_plan`           | Approve a pending agent plan                         |
 | `resolve_approval`       | Approve or deny a pending tool-call approval request |
+| `resolve_mcp_consent`    | Grant or deny first-use consent for an MCP tool      |
 | `recall_memory`          | Recall memories from the workspace knowledge graph   |
 | `write_memory`           | Write a new memory to the workspace knowledge graph  |
-| `start_background_task`  | Start a long-running background task                 |
-| `get_background_task`    | Read the status of a background task                 |
-| `cancel_background_task` | Cancel a running background task                     |
+| `list_executions`        | List past agent executions                           |
+| `get_execution_trace`    | Read the trace for an agent execution                |
 
 ### Chat and conversations
 
@@ -47,17 +48,6 @@ Your MCP client can also just ask. Call `tools/list` after connecting and the se
 | Tool           | Description                                  |
 | -------------- | -------------------------------------------- |
 | `upload_asset` | Upload a binary asset (image, PDF, document) |
-
-### Content generation
-
-| Tool                | Description                                   |
-| ------------------- | --------------------------------------------- |
-| `generate_document` | Generate a document (Word, Markdown, or HTML) |
-| `create_pdf`        | Generate a PDF document                       |
-| `generate_image`    | Generate an image                             |
-| `generate_svg`      | Generate an SVG graphic                       |
-| `generate_video`    | Generate a video (async; returns task ID)     |
-| `fill_form`         | Fill a form with structured data              |
 
 ### Organization and workspace
 

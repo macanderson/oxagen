@@ -5,12 +5,12 @@ import {
   type MarketRoutingPolicy,
   type ResolvedRoutingPolicy,
   type RoutingMode,
-} from "@oxagen/agent-engine";
+} from "./market-router";
 
 // Shared loader for the Verified-Outcome Market Router governance rows. The
 // get / list / preview handlers all resolve the effective policy the same way,
 // so the DB read + normalization lives here once. The pure resolution + the
-// policy shape live in @oxagen/agent-engine (resolveEffectiveRoutingPolicy).
+// policy shape live in ./market-router (resolveEffectiveRoutingPolicy).
 
 /** Normalize a free-text stored mode to a canonical value, defaulting to "off". */
 export function normalizeRoutingMode(

@@ -45,11 +45,11 @@ await build({
   // Nothing installs these next to the bundle, so an external that is NOT
   // optional would fail at first request rather than at build. Adding a name
   // to this list is a claim that the module is lazily required behind a
-  // fallback; check that before adding one.
+  // fallback; check that before adding one. (`dockerode` left with
+  // @oxagen/sandbox in ADR-041's runtime excision.)
   external: [
     "pg-native",
     "better-sqlite3",
-    "dockerode",
     "aws-sdk",
     "nock",
     "mock-aws-s3",
@@ -59,8 +59,8 @@ await build({
   logLevel: "info",
   // Left at esbuild's default (a warning) rather than silenced: this closure has
   // guarded uses of import.meta that are correct, and an unguarded one at module
-  // scope is caught by booting the bundle — see packages/agent-worker's
-  // src/cjs-bundle.test.ts. Silencing hid exactly that defect in #2567.
+  // scope is caught by booting the bundle. Silencing hid exactly that defect in
+  // #2567.
 });
 
 // Built-in connector schema YAMLs are read at runtime with readFileSync, so

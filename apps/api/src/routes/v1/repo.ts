@@ -4,20 +4,19 @@ import { repoSync } from "@oxagen/oxagen/contracts/repo.sync";
 import { repoPause } from "@oxagen/oxagen/contracts/repo.pause";
 import { repoResume } from "@oxagen/oxagen/contracts/repo.resume";
 import { repoMetrics } from "@oxagen/oxagen/contracts/repo.metrics";
-import { repoCreate } from "@oxagen/oxagen/contracts/repo.create";
-import { repoFilePut } from "@oxagen/oxagen/contracts/repo.file.put";
-import { repoFork } from "@oxagen/oxagen/contracts/repo.fork";
-import { repoBranchCreate } from "@oxagen/oxagen/contracts/repo.branch.create";
 import { repoBranchList } from "@oxagen/oxagen/contracts/repo.branch.list";
-import { repoPrOpen } from "@oxagen/oxagen/contracts/repo.pr.open";
 import { repoPrGet } from "@oxagen/oxagen/contracts/repo.pr.get";
 import { repoPrDiff } from "@oxagen/oxagen/contracts/repo.pr.diff";
 import { repoCiStatus } from "@oxagen/oxagen/contracts/repo.ci.status";
-import { agentRepoEdit } from "@oxagen/oxagen/contracts/agent.repo.edit";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
 
+// Read/observe half of the repo surface. ADR-041 removed the mutation half
+// (create / fork / file.put / branch.create / pr.open, and the governed
+// agent.repo.edit): Oxagen governs and observes repositories, it no longer
+// writes to them. What remains configures ingestion and reads state that the
+// graph and the evidence ledger cite.
 export const repoRoute = new Hono<AppEnv>();
 
 // PATCH /repos/:id/configure — update repo-specific ingestion config
@@ -69,48 +68,6 @@ repoRoute.get("/:id/metrics", async (c) => {
   return c.json(out);
 });
 
-// POST /repos — create a new GitHub repository
-repoRoute.post("/", async (c) => {
-  const body = repoCreate.input.parse(
-    (await c.req.json()) as Record<string, unknown>,
-  );
-  const ctx = capabilityContext(c);
-  const out = await invoke(repoCreate.name, body, ctx, { surface: "api" });
-  return c.json(out, 201);
-});
-
-// POST /repos/fork — fork a GitHub repository into user account or organisation
-repoRoute.post("/fork", async (c) => {
-  const body = repoFork.input.parse(
-    (await c.req.json()) as Record<string, unknown>,
-  );
-  const ctx = capabilityContext(c);
-  const out = await invoke(repoFork.name, body, ctx, { surface: "api" });
-  return c.json(out, 201);
-});
-
-// PUT /repos/file — commit a file (create or update) in a GitHub repository
-repoRoute.put("/file", async (c) => {
-  const body = repoFilePut.input.parse(
-    (await c.req.json()) as Record<string, unknown>,
-  );
-  const ctx = capabilityContext(c);
-  const out = await invoke(repoFilePut.name, body, ctx, { surface: "api" });
-  return c.json(out);
-});
-
-// POST /repos/branch — create a new branch in a GitHub repository
-repoRoute.post("/branch", async (c) => {
-  const body = repoBranchCreate.input.parse(
-    (await c.req.json()) as Record<string, unknown>,
-  );
-  const ctx = capabilityContext(c);
-  const out = await invoke(repoBranchCreate.name, body, ctx, {
-    surface: "api",
-  });
-  return c.json(out, 201);
-});
-
 // GET /repos/branches — list branches in a GitHub repository
 repoRoute.get("/branches", async (c) => {
   const body = repoBranchList.input.parse({
@@ -120,16 +77,6 @@ repoRoute.get("/branches", async (c) => {
   const ctx = capabilityContext(c);
   const out = await invoke(repoBranchList.name, body, ctx, { surface: "api" });
   return c.json(out);
-});
-
-// POST /repos/pulls — open a pull request in a GitHub repository
-repoRoute.post("/pulls", async (c) => {
-  const body = repoPrOpen.input.parse(
-    (await c.req.json()) as Record<string, unknown>,
-  );
-  const ctx = capabilityContext(c);
-  const out = await invoke(repoPrOpen.name, body, ctx, { surface: "api" });
-  return c.json(out, 201);
 });
 
 // GET /repos/ci/status — read CI check-run + commit-status results for a ref
@@ -166,14 +113,4 @@ repoRoute.get("/pulls/:number/diff", async (c) => {
   const ctx = capabilityContext(c);
   const out = await invoke(repoPrDiff.name, body, ctx, { surface: "api" });
   return c.json(out);
-});
-
-// POST /repos/agent/edit — run the coding agent against a repo and open a PR
-repoRoute.post("/agent/edit", async (c) => {
-  const body = agentRepoEdit.input.parse(
-    (await c.req.json()) as Record<string, unknown>,
-  );
-  const ctx = capabilityContext(c);
-  const out = await invoke(agentRepoEdit.name, body, ctx, { surface: "api" });
-  return c.json(out, 201);
 });

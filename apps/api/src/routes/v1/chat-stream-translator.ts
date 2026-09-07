@@ -3,13 +3,19 @@
 // shapes the chat.stream route has always emitted, while collecting per-step
 // execution metadata for the SOC 2 audit trail.
 //
-// It is the SINGLE source of truth for the part→SSE mapping. The route drives it
-// via the engine's `onStreamPart` tap (one part at a time, across the
-// engine's per-step model calls) instead of a hand-rolled `for await`
-// over a single `streamAgentReply` — so the multi-step tool loop (`stopWhen`),
-// invoke()-gated tools, per-turn memory recall, and the USD budget guard all
-// apply, with the client wire protocol byte-identical to before the engine
-// unification.
+// It is the SINGLE source of truth for the part→SSE mapping: one part in, the
+// SSE events for it out, plus the running per-step execution record. It knows
+// nothing about who is feeding it — it takes generic AI-SDK parts (text,
+// reasoning, step boundaries, tool calls/results, usage, error) and no others.
+//
+// RETAINED THROUGH ADR-041. The runtime excision removed the turn loop that
+// used to drive this (`executeTurn`), so chat.stream currently answers 501 and
+// nothing calls it yet; `runGovernedTurn` in @oxagen/agent reattaches to it.
+// It survives the cut deliberately — it is the published REST chat wire
+// format, it is engine-agnostic, and it is fully covered by
+// chat-stream-translator.test.ts. There was never a code/sandbox/media/
+// subagent branch here to strip: the coding-agent generative-UI mapping lived
+// on the client, not in this translator.
 
 // Minimal typed stream events emitted over SSE. UNCHANGED wire shapes — every
 // field name and event `type` matches the pre-engine chat.stream output. The

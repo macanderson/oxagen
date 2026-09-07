@@ -131,7 +131,6 @@ import "./contracts/integration.list";
 import "./contracts/integration.metrics";
 import "./contracts/integration.sync";
 import "./contracts/knowledge.node-ref";
-import "./contracts/lineage.query";
 import "./contracts/model.capability.list";
 import "./contracts/notification.list";
 import "./contracts/notification.mark";

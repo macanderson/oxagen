@@ -1,5 +1,15 @@
 # A2A Agent Identity, Lineage & Live Subscription — Design Specification
 
+> **2026-09-07 note:** [ADR-041](../../adr/ADR-041-runtime-excision.md) deleted
+> the `a2a.card.get` governed capability (contract, handler, API/MCP wiring) as
+> part of the agent-runtime excision — the `packages/agent/src/handlers/
+> a2a.card.get.ts` reference below no longer exists. The A2A transport itself
+> (`.well-known/agent-card.json` discovery + `POST /a2a`) is unaffected and
+> still runs execution through the governed in-app agent turn loop
+> (`runGovernedTurn`), not a re-run engine. Read per-agent addressing and
+> lineage sections against that: the discovery card is now served directly by
+> the transport, not through a kernel capability.
+
 Linear: [OXA-2063](https://linear.app/oxagen/issue/OXA-2063/a2a-agent-identity-lineage-and-live-subscription)
 (sub-issues OXA-2064–OXA-2069). Branch `feat/a2a-agent-identity-lineage`.
 

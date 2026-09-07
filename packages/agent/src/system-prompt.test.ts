@@ -17,139 +17,93 @@ describe("buildChatSystemPrompt", () => {
 
   describe("identity + context section", () => {
     it("interpolates orgName into the identity line", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain('"Acme Corp"');
+      expect(buildChatSystemPrompt(BASE_CTX)).toContain('"Acme Corp"');
     });
 
     it("interpolates workspaceName into the identity line", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain('"Main Workspace"');
+      expect(buildChatSystemPrompt(BASE_CTX)).toContain('"Main Workspace"');
     });
 
     it("includes orgSlug in the identity line", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("org: acme");
+      expect(buildChatSystemPrompt(BASE_CTX)).toContain("org: acme");
     });
 
     it("includes workspaceSlug in the identity line", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("workspace: main");
+      expect(buildChatSystemPrompt(BASE_CTX)).toContain("workspace: main");
     });
 
     it("repeats org and workspace context in the footer", () => {
       const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("Acme Corp");
-      expect(prompt).toContain("Main Workspace");
+      const tail = prompt.slice(-400);
+      expect(tail).toContain("Acme Corp");
+      expect(tail).toContain("Main Workspace");
     });
   });
 
-  describe("UI rendering guidance section", () => {
-    it("mentions create-workspace-inline component", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("create-workspace-inline");
+  // ADR-041: Oxagen governs agents, it does not run them. The prompt must not
+  // advertise an execution surface the runtime no longer has — a model told it
+  // can run code burns a turn discovering the tool does not exist.
+  describe("governance posture (no execution runtime)", () => {
+    it("states plainly that it is not a coding agent", () => {
+      expect(buildChatSystemPrompt(BASE_CTX)).toContain("NOT a coding agent");
     });
 
-    it("mentions create-org-inline component", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("create-org-inline");
-    });
+    it.each(["sandbox", "shell", "file system", "browser"])(
+      "disclaims the %s rather than offering it",
+      (surface) => {
+        const prompt = buildChatSystemPrompt(BASE_CTX);
+        expect(prompt).toContain(`no ${surface}`);
+      },
+    );
 
-    it("mentions invite-member-inline component", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("invite-member-inline");
-    });
-
-    it("mentions model-settings-inline component", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("model-settings-inline");
-    });
-
-    it("mentions billing-upgrade-inline component", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("billing-upgrade-inline");
-    });
-
-    it("mentions credits-purchase-inline component", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("credits-purchase-inline");
-    });
-
-    it("mentions confirm-destructive-inline for destructive actions", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("confirm-destructive-inline");
-    });
-
-    it("references agent.ui.render as the tool to call", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("render_agent_ui");
-    });
-
-    it("explains that api.key.create handles its own render directive", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("create_api_key");
-      expect(prompt).toContain("render directive automatically");
+    it.each([
+      "subagent",
+      "skill",
+      "execute_code",
+      "run_sandbox_command",
+      "dispatch_subagent",
+      "render_agent_ui",
+      "create_plan",
+      "run_workflow",
+    ])("never references the removed %s surface", (removed) => {
+      expect(buildChatSystemPrompt(BASE_CTX)).not.toContain(removed);
     });
   });
 
-  describe("direct-action guidance section", () => {
-    it("mentions workspace.create as a direct-call capability", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("create_workspace");
+  describe("grounding + governance guidance", () => {
+    it("requires claims to be grounded in a tool result", () => {
+      expect(buildChatSystemPrompt(BASE_CTX)).toContain(
+        "Ground every factual claim in a tool result",
+      );
     });
 
-    it("mentions api.key.create as a direct-call capability", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("create_api_key");
+    it("forbids citing a node by its raw UUID", () => {
+      expect(buildChatSystemPrompt(BASE_CTX)).toContain("never by a raw UUID");
     });
 
-    it("instructs to invoke directly when all params are known", () => {
+    it("separates observed evidence from client attestation", () => {
       const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("invoke the capability directly");
-    });
-  });
-
-  describe("workflow guidance section", () => {
-    it("references workflow.run for large parallel tasks", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("run_workflow");
+      expect(prompt).toContain("OBSERVED");
+      expect(prompt).toContain("ATTESTED");
     });
 
-    it("specifies threshold of 10+ tasks for workflow.run", () => {
+    it("names the gates every tool call passes through", () => {
       const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("10 or more parallel");
+      for (const gate of [
+        "IAM",
+        "entitlement",
+        "tool RBAC",
+        "consent",
+        "approval",
+      ]) {
+        expect(prompt).toContain(gate);
+      }
     });
 
-    it("instructs agent.plan.create for N > 20 tasks before dispatching", () => {
+    it("instructs the model never to work around a refused call", () => {
       const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("create_plan");
-      expect(prompt).toContain("N > 20");
-    });
-
-    it("allows skipping approval for N <= 20 tasks", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("N ≤ 20");
-    });
-
-    it("includes recognizable large-task examples", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("Fortune 500");
-    });
-  });
-
-  describe("subagent guidance section", () => {
-    it("references agent.subagent.dispatch for 2-9 parallel tasks", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("dispatch_subagent");
-    });
-
-    it("specifies the 2-9 task range for subagent dispatch", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("2–9 parallel tasks");
-    });
-
-    it("explains subagent dispatch is faster than workflow.run", () => {
-      const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("faster than");
+      expect(prompt).toContain("never work around it");
+      expect(prompt).toContain("never ask the user to disable a gate");
     });
   });
 
@@ -178,10 +132,8 @@ describe("buildChatSystemPrompt", () => {
         orgName: "Slug Org",
         workspaceName: "Slug WS",
       });
-      const orgSlugOccurrences = (prompt.match(/slug-org/g) ?? []).length;
-      const wsSlugOccurrences = (prompt.match(/slug-ws/g) ?? []).length;
-      expect(orgSlugOccurrences).toBeGreaterThanOrEqual(2);
-      expect(wsSlugOccurrences).toBeGreaterThanOrEqual(2);
+      expect((prompt.match(/slug-org/g) ?? []).length).toBeGreaterThanOrEqual(2);
+      expect((prompt.match(/slug-ws/g) ?? []).length).toBeGreaterThanOrEqual(2);
     });
 
     it("handles special characters in org/workspace names without breaking the prompt", () => {

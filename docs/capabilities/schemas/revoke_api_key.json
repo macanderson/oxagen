@@ -5,7 +5,8 @@
   "mode": "sync",
   "surfaces": [
     "api",
-    "mcp"
+    "mcp",
+    "agent"
   ],
   "sensitivity": "high",
   "agent": {

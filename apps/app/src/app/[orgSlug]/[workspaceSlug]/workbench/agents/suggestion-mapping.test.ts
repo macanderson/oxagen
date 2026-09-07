@@ -11,8 +11,8 @@ import type {
 } from "@/lib/workbench/agents";
 
 // A minimal, well-formed suggestion. Individual tests override slices of it to
-// pin down each mapping branch (agentType → codeFeatures, trigger fan-out,
-// graph defaults) without re-stating the whole object.
+// pin down each mapping branch (identity, allowlist, graph defaults) without
+// re-stating the whole object.
 function suggestion(overrides: Partial<AgentSuggestion> = {}): AgentSuggestion {
   return {
     slug: "release-notes-writer",
@@ -26,8 +26,7 @@ function suggestion(overrides: Partial<AgentSuggestion> = {}): AgentSuggestion {
         retrieval: { strategy: "hybrid" },
         budget: { maxHops: 3, maxNodes: 60 },
       },
-      agentTools: [{ type: "skill", ref: "changelog" }],
-      triggers: [{ type: "manual", enabled: true }],
+      agentTools: [{ type: "function", ref: "query_graph" }],
       instructions: "You draft release notes.",
     },
     ...overrides,
@@ -41,7 +40,7 @@ describe("mapSuggestionToPrefill", () => {
     expect(p.slug).toBe("release-notes-writer");
     expect(p.description).toBe("Drafts changelogs from merged PRs.");
     expect(p.instructions).toBe("You draft release notes.");
-    expect(p.agentTools).toEqual([{ type: "skill", ref: "changelog" }]);
+    expect(p.agentTools).toEqual([{ type: "function", ref: "query_graph" }]);
     expect(p.ontologyId).toBe("ont_eng");
     expect(p.graphMode).toBe("read");
     expect(p.strategy).toBe("hybrid");
@@ -49,11 +48,10 @@ describe("mapSuggestionToPrefill", () => {
     expect(p.maxNodes).toBe(60);
   });
 
-  it("flags code features when agentType is code", () => {
-    expect(mapSuggestionToPrefill(suggestion()).codeFeatures).toBe(false);
-    expect(
-      mapSuggestionToPrefill(suggestion({ agentType: "code" })).codeFeatures,
-    ).toBe(true);
+  it("never carries an agentType into the prefill (ADR-041 retired the code type)", () => {
+    expect(Object.keys(mapSuggestionToPrefill(suggestion()))).not.toContain(
+      "codeFeatures",
+    );
   });
 
   it("never carries recommendations into the wizard's persisted prefill state", () => {
@@ -65,7 +63,7 @@ describe("mapSuggestionToPrefill", () => {
     const p = mapSuggestionToPrefill(suggestion());
     expect(Object.keys(p)).not.toContain("recommendations");
     // The only tools in prefill are the ones already available (config.agentTools).
-    expect(p.agentTools).toEqual([{ type: "skill", ref: "changelog" }]);
+    expect(p.agentTools).toEqual([{ type: "function", ref: "query_graph" }]);
   });
 
   // ── suggested role (Agent RBAC Phase 5b) ──────────────────────────────────

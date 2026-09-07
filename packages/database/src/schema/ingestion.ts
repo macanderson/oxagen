@@ -556,44 +556,6 @@ export const repositoryBindingHeads = ingestionSchema.table(
   }),
 );
 
-// ── Explicit primary-repository selection per governed connection ────────────
-//
-// Security admission follows THIS pointer and never infers repository identity
-// from `delivery_config`. The unique key is the connection, so a connection
-// with several repositories and no explicit selection has no row and admission
-// FAILS CLOSED rather than guessing which repository the agent may edit.
-export const governedRepositorySelections = ingestionSchema.table(
-  "governed_repository_selections",
-  {
-    id: uuid("id").primaryKey().default(uuidv7Default),
-    ...orgScopeMixin(),
-    connectionId: uuid("connection_id").notNull(),
-    primaryBindingId: uuid("primary_binding_id").notNull(),
-    selectedByUserId: uuid("selected_by_user_id"),
-    selectedAt: timestamp("selected_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => ({
-    // Exactly one current primary binding per governed connection.
-    connectionUniq: uniqueIndex(
-      "governed_repository_selections_connection_uq",
-    ).on(t.connectionId),
-    orgIdx: index("governed_repository_selections_org_idx").on(
-      t.orgId,
-      t.workspaceId,
-    ),
-  }),
-);
-
 export type RepositoryBinding = typeof repositoryBindings.$inferSelect;
 export type NewRepositoryBinding = typeof repositoryBindings.$inferInsert;
 export type RepositoryBindingHead = typeof repositoryBindingHeads.$inferSelect;
-export type GovernedRepositorySelection =
-  typeof governedRepositorySelections.$inferSelect;

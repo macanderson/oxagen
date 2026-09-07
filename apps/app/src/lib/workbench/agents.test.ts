@@ -4,7 +4,7 @@
  * Mock seam: @oxagen/oxagen → invoke. Every export here is a thin, typed
  * pass-through to invoke() with a fixed capability name — verify the correct
  * capability + args + ctx + surface are used and the (mocked) output is
- * returned as-is, plus isCodingAgent's two accepted spellings.
+ * returned as-is.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -15,7 +15,6 @@ vi.mock("@oxagen/oxagen", () => ({
 
 import { invoke } from "@oxagen/oxagen";
 import {
-  isCodingAgent,
   listAgents,
   getAgent,
   suggestAgentDefinition,
@@ -23,7 +22,6 @@ import {
   updateAgent,
   publishAgent,
   deployAgent,
-  CODING_AGENT_TYPE,
   DEFAULT_AGENT_TYPE,
 } from "./agents";
 import type { WorkbenchCtx } from "./scope";
@@ -39,18 +37,6 @@ const ctx: WorkbenchCtx = {
   surface: "app",
   messageId: null,
 };
-
-describe("isCodingAgent", () => {
-  it('accepts the platform convention "code"', () => {
-    expect(isCodingAgent(CODING_AGENT_TYPE)).toBe(true);
-  });
-  it('stays read-tolerant of the earlier "coding" spelling', () => {
-    expect(isCodingAgent("coding")).toBe(true);
-  });
-  it("returns false for the default conversational type", () => {
-    expect(isCodingAgent(DEFAULT_AGENT_TYPE)).toBe(false);
-  });
-});
 
 describe("workbench/agents.ts kernel wrappers", () => {
   beforeEach(() => {
@@ -105,7 +91,7 @@ describe("workbench/agents.ts kernel wrappers", () => {
     expect(result).toBe(suggestion);
   });
 
-  it("createAgent defaults agentType to DEFAULT_AGENT_TYPE when omitted", async () => {
+  it("createAgent always persists DEFAULT_AGENT_TYPE (ADR-041 retired the code type)", async () => {
     const created = { agentId: "a1", publicId: "pub", slug: "s", version: 1 };
     mockInvoke.mockResolvedValue(created);
 
@@ -128,36 +114,6 @@ describe("workbench/agents.ts kernel wrappers", () => {
       { surface: "agent" },
     );
     expect(result).toBe(created);
-  });
-
-  it("createAgent passes through an explicit agentType", async () => {
-    mockInvoke.mockResolvedValue({
-      agentId: "a1",
-      publicId: "pub",
-      slug: "s",
-      version: 1,
-    });
-
-    await createAgent(ctx, {
-      slug: "s",
-      name: "Agent",
-      description: "desc",
-      agentType: CODING_AGENT_TYPE,
-      config: {} as never,
-    });
-
-    expect(mockInvoke).toHaveBeenCalledWith(
-      "create_agent_def",
-      {
-        slug: "s",
-        name: "Agent",
-        description: "desc",
-        agentType: CODING_AGENT_TYPE,
-        config: {},
-      },
-      ctx,
-      { surface: "agent" },
-    );
   });
 
   it("updateAgent forwards the whole input object", async () => {

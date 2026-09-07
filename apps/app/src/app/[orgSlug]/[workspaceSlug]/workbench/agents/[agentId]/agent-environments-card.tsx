@@ -9,7 +9,6 @@ import type {
   ActionResult,
   AgentEnvironmentBinding,
   EnvironmentOption,
-  TemplateOption,
 } from "./environments-actions";
 
 interface Scope {
@@ -23,12 +22,10 @@ interface Props {
   canManage: boolean;
   bindings: AgentEnvironmentBinding[];
   environments: EnvironmentOption[];
-  templates: TemplateOption[];
   bindAction: (
     args: Scope & {
       agentId: string;
       environmentId: string;
-      sandboxTemplateId?: string | null;
       isPrimary?: boolean;
     },
   ) => Promise<ActionResult<{ binding: AgentEnvironmentBinding }>>;
@@ -38,8 +35,7 @@ interface Props {
 }
 
 export function AgentEnvironmentsCard(props: Props) {
-  const { scope, agentId, canManage, bindings, environments, templates } =
-    props;
+  const { scope, agentId, canManage, bindings, environments } = props;
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -50,13 +46,7 @@ export function AgentEnvironmentsCard(props: Props) {
   );
   const availableEnvs = environments.filter((e) => !boundEnvIds.has(e.id));
   const [envId, setEnvId] = useState<string>("");
-  const [templateId, setTemplateId] = useState<string>("");
   const [primary, setPrimary] = useState(false);
-
-  const templatesForEnv = useMemo(
-    () => templates.filter((t) => t.environmentId === envId),
-    [templates, envId],
-  );
 
   const run = (fn: () => Promise<ActionResult<unknown>>) =>
     start(async () => {
@@ -73,10 +63,10 @@ export function AgentEnvironmentsCard(props: Props) {
       <div>
         <h3 className="text-sm font-medium">Environments</h3>
         <p className="text-xs text-muted-foreground">
-          Bind this agent to environments and their sandbox templates. The
-          primary binding resolves first at run time; unbinding the primary
-          falls back to the workspace default environment and its default
-          template.
+          Bind this agent to the environments whose variables and secrets it
+          is authorised to resolve. The primary binding resolves first;
+          unbinding the primary falls back to the workspace default
+          environment.
         </p>
       </div>
 
@@ -89,8 +79,7 @@ export function AgentEnvironmentsCard(props: Props) {
 
       {bindings.length === 0 ? (
         <p className="rounded-md border border-border/40 px-3 py-4 text-center text-sm text-muted-foreground">
-          No bindings — this agent uses the workspace default environment and
-          template.
+          No bindings — this agent uses the workspace default environment.
         </p>
       ) : (
         <ul className="divide-y divide-border/30 overflow-hidden rounded-md border border-border/40 text-sm">
@@ -107,18 +96,6 @@ export function AgentEnvironmentsCard(props: Props) {
                 </span>
               </div>
               <dl className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                <div>
-                  <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Template
-                  </dt>
-                  <dd className="mt-0.5 text-xs">
-                    {b.sandboxTemplateName ?? (
-                      <span className="text-muted-foreground">
-                        environment default
-                      </span>
-                    )}
-                  </dd>
-                </div>
                 <div>
                   <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     Primary
@@ -140,7 +117,6 @@ export function AgentEnvironmentsCard(props: Props) {
                               ...scope,
                               agentId,
                               environmentId: b.environmentId,
-                              sandboxTemplateId: b.sandboxTemplateId,
                               isPrimary: true,
                             }),
                           )
@@ -193,34 +169,13 @@ export function AgentEnvironmentsCard(props: Props) {
               <select
                 className="max-md:h-11 rounded-md border border-border/50 bg-background px-2 py-1.5 text-sm"
                 value={envId}
-                onChange={(e) => {
-                  setEnvId(e.target.value);
-                  setTemplateId("");
-                }}
+                onChange={(e) => setEnvId(e.target.value)}
                 data-testid="agent-bind-env-select"
               >
                 <option value="">Select…</option>
                 {availableEnvs.map((env) => (
                   <option key={env.id} value={env.id}>
                     {env.name} ({env.slug}){env.isDefault ? " ★" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-xs">
-              <span className="text-muted-foreground">Template (optional)</span>
-              <select
-                className="max-md:h-11 rounded-md border border-border/50 bg-background px-2 py-1.5 text-sm"
-                value={templateId}
-                onChange={(e) => setTemplateId(e.target.value)}
-                disabled={!envId}
-                data-testid="agent-bind-template-select"
-              >
-                <option value="">Environment default</option>
-                {templatesForEnv.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                    {t.isDefault ? " ★" : ""}
                   </option>
                 ))}
               </select>
@@ -239,12 +194,10 @@ export function AgentEnvironmentsCard(props: Props) {
                     ...scope,
                     agentId,
                     environmentId: envId,
-                    sandboxTemplateId: templateId || null,
                     isPrimary: primary,
                   });
                   if (res.ok) {
                     setEnvId("");
-                    setTemplateId("");
                     setPrimary(false);
                   }
                   return res;

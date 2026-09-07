@@ -102,21 +102,14 @@ export type AgentDetail = {
 };
 
 /**
- * Code features are not a first-class column on AgentDefinition. We persist the
- * flag on the identity row's agentType: "code" enables the sandbox/coding path
- * at launch, "custom" is a plain conversational/tool agent. This keeps the
- * feature real with zero schema migration (see 04-build-plan-and-prompts.md).
- *
- * "code" is the platform convention (aligns with the chat composer's code-mode
- * gate). isCodingAgent stays read-tolerant of the earlier "coding" spelling so
- * agents created before the convention settled still enable the coding path.
+ * The agentType every agent registered through the builder is persisted with.
+ * ADR-041 retired the "code" agentType along with the sandbox/coding path —
+ * Oxagen governs agents, it does not run them — so the builder no longer offers
+ * a type choice and always writes this value. The column stays a free-form
+ * string on the contract because managed (platform-seeded) agents carry their
+ * own type values.
  */
-export const CODING_AGENT_TYPE = "code";
 export const DEFAULT_AGENT_TYPE = "custom";
-
-export function isCodingAgent(agentType: string): boolean {
-  return agentType === CODING_AGENT_TYPE || agentType === "coding";
-}
 
 // ── Reads ─────────────────────────────────────────────────────────────────────
 
@@ -162,7 +155,6 @@ export type CreateAgentInput = {
   description?: string;
   /** https:// URL or "avatar:v1:<json>" designed-avatar string. Omit to leave unset. */
   avatarUrl?: string;
-  agentType?: string;
   config: AgentDefinitionConfig;
 };
 
@@ -182,7 +174,7 @@ export async function createAgent(
       name: input.name,
       description: input.description,
       avatarUrl: input.avatarUrl,
-      agentType: input.agentType ?? DEFAULT_AGENT_TYPE,
+      agentType: DEFAULT_AGENT_TYPE,
       config: input.config,
     },
     ctx,
@@ -199,12 +191,6 @@ export type UpdateAgentInput = {
    * "avatar:v1:<json>" designed-avatar string), null = clear the avatar.
    */
   avatarUrl?: string | null;
-  /**
-   * Optional agentType change (e.g. flip code features on/off after creation).
-   * Requires the agent.definition.update contract to accept agentType — added
-   * as part of the Agent Workbench work package.
-   */
-  agentType?: string;
   config: AgentDefinitionConfig;
 };
 

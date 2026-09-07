@@ -1,0 +1,116 @@
+{
+  "name": "publish_tool_declaration",
+  "domain": "tool",
+  "description": "Publish a tool declaration into the workspace agent-asset registry — upserts the agent.tools row by (workspace, name) and creates a new immutable tool_versions row when the canonical manifest changed. Idempotent on an unchanged manifest.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Tool name (snake_case identifier, e.g. read_file) — the workspace-unique key"
+      },
+      "description": {
+        "type": "string",
+        "minLength": 1,
+        "description": "What the tool does"
+      },
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": {},
+        "description": "JSON Schema for the tool's input parameters"
+      },
+      "read_only": {
+        "type": "boolean",
+        "default": false
+      },
+      "risk_grade": {
+        "type": "string",
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "description": "Declared risk grade of invoking this tool"
+      },
+      "policy_group": {
+        "type": "string"
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "builtin",
+          "custom",
+          "mcp",
+          "foundry"
+        ],
+        "description": "Where the declaration came from"
+      },
+      "manifest": {
+        "type": "object",
+        "additionalProperties": {},
+        "description": "The full declared manifest body, verbatim"
+      }
+    },
+    "required": [
+      "name",
+      "description",
+      "input_schema",
+      "risk_grade",
+      "source",
+      "manifest"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "publicId": {
+        "type": "string",
+        "description": "Public tool ID (tol_…)"
+      },
+      "slug": {
+        "type": "string"
+      },
+      "version": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "checksum": {
+        "type": "string",
+        "description": "SHA-256 hex over the canonical (sorted-key) manifest JSON"
+      },
+      "published": {
+        "type": "boolean",
+        "description": "false when the latest version already carries this checksum (idempotent)"
+      }
+    },
+    "required": [
+      "publicId",
+      "slug",
+      "version",
+      "checksum",
+      "published"
+    ],
+    "additionalProperties": false
+  }
+}

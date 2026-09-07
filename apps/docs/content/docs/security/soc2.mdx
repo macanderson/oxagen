@@ -55,7 +55,7 @@ All data is transmitted over TLS 1.2 or higher. The API and MCP server enforce H
 
 ### CC6.8 — Malicious software and unauthorized code prevention
 
-Code execution runs in isolated Firecracker microVMs (production) or Docker containers (local development) with: read-only rootfs, all Linux capabilities dropped (`--cap-drop=ALL`), no-new-privileges, network denied by default, memory and CPU hard limits, and a 30-second wallclock timeout. User code cannot access host resources or other tenants' data. See [Code execution security](/docs/security/code-execution).
+Oxagen is a governance plane, not an execution runtime: it holds no sandbox, no file system, and no arbitrary-code-execution surface for the platform to compromise (ADR-041, `docs/adr/ADR-041-runtime-excision.md`). The agents Oxagen governs run in a customer's own infrastructure or in the reference coding agent (Stella); Oxagen never runs their code itself. Third-party MCP server tools invoked through the governed gateway pass through IAM, entitlement, and audit checks identical to any other capability call — there is no unmediated code path into the platform.
 
 ---
 
@@ -109,7 +109,7 @@ Code changes to the audit, IAM, and billing paths require explicit review. The S
 
 ### CC9.1 — Risk assessment
 
-High-risk capabilities (code execution, subagent dispatch, memory write) are tagged `riskLevel: high` in the contract registry. At the workspace level, high-risk tools require explicit user approval before they run — the agent pauses the stream, renders an approval card, and waits for the user to confirm or deny. Default-deny applies to high-risk tools in workspace tool policies.
+High-risk capabilities (deleting an agent's IAM principal, changing a member's org role, publishing a steering context record or tool declaration) are tagged `riskLevel: high` in the contract registry. At the workspace level, high-risk tools require explicit user approval before they run — the agent pauses the stream, renders an approval card, and waits for the user to confirm or deny. Default-deny applies to high-risk tools in workspace tool policies.
 
 ### CC9.2 — Vendor and third-party risk
 

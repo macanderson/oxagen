@@ -53,7 +53,7 @@ graph LR
 
 ### The capability kernel
 
-Every feature is a **capability**: a snake_case name (`send_message`, `run_workflow`, `suggest_semantic_edges`) declared once as a typed contract in `packages/oxagen/src/contracts/` and dispatched through a single `invoke()` path. The kernel injects three gates on every call — IAM policy resolution, plugin entitlement, and billing admission — and emits metering and lineage as a side effect of execution.
+Every feature is a **capability**: a snake_case name (`send_message`, `query_ontology`, `suggest_semantic_edges`) declared once as a typed contract in `packages/oxagen/src/contracts/` and dispatched through a single `invoke()` path. The kernel injects three gates on every call — IAM policy resolution, plugin entitlement, and billing admission — and emits metering and lineage as a side effect of execution.
 
 Capabilities are exposed with parity across four surfaces: the REST API (`apps/api`), the MCP server (`apps/mcp`), the CLI (`apps/cli`), and the web app (`apps/app`). `pnpm check:manifest` verifies the parity.
 
@@ -80,7 +80,7 @@ graph TB
 
 ### The metering→billing loop
 
-Every `invoke()` call, agent step, and LLM call (all LLM traffic goes through `@oxagen/ai`, never raw SDK imports) emits usage events into ClickHouse: org, workspace, user, run, model, tokens, duration, surface. Those events price against Stripe meters (`pnpm billing:stripe-sync`), so a team reselling agents can meter observed usage and bill their customers. Fan-out primitives (`agent.subagent.dispatch` / `agent.subagent.aggregate`) carry the same discipline into fleets: every subagent step emits typed lineage plus cost.
+Every `invoke()` call, agent step, and LLM call (all LLM traffic goes through `@oxagen/ai`, never raw SDK imports) emits usage events into ClickHouse: org, workspace, user, run, model, tokens, duration, surface. Those events price against Stripe meters (`pnpm billing:stripe-sync`), so a team reselling agents can meter observed usage and bill their customers. The run-ledger (`packages/run-ledger`) carries the same discipline into externally-run agent fleets: evidence ingress (`client_attested`, e.g. Stella's drain) records every run, attempt, and event with typed lineage plus cost — Oxagen governs and rates the trace, it never re-runs it (ADR-041).
 
 ### The knowledge graph
 
@@ -108,8 +108,8 @@ oxagen/
 ├── packages/
 │   ├── oxagen       Capability kernel, contracts, IAM resolution (source of truth)
 │   ├── handlers     Built-in capability handler implementations
-│   ├── agent        Agent runtime & tool dispatch
-│   ├── agent-engine Agent execution engine (planning, steps, fleet coordination)
+│   ├── agent        Governed in-app agent turn loop, MCP tool gateway, agent registry handlers
+│   ├── run-ledger   Durable run/attempt/event evidence ledger (was agent-runner)
 │   ├── ai           LLM access layer — all model calls go through here (metered)
 │   ├── billing      Credit gate, usage metering, Stripe meter/ledger sync
 │   ├── database     Drizzle schemas + Atlas migrations (Postgres)
@@ -124,7 +124,10 @@ oxagen/
 │   ├── ui           Component system (@oxagen/ui)
 │   └── …            code-graph, compliance, config, crypto, engram, functions,
 │                    github, mcp-config, notifications, prompt-templates,
-│                    sandbox, skills, storage, and more
+│                    storage, and more
+│
+│   (ADR-041 removed the agent runtime: agent-engine, agent-worker, sandbox,
+│   skills, agent-artifacts, and stella-engine-client packages are gone.)
 │
 ├── tools/scripts    Dev orchestration, CI checks (manifest, vision gate)
 └── docs/            VISION.md, capability registry, ADRs, architecture

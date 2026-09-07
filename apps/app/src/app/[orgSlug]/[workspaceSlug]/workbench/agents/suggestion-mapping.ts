@@ -4,9 +4,9 @@
  * shape.
  *
  * Extracted from agent-builder.tsx so the mapping is unit-testable without
- * mounting the wizard. This module imports only types (erased at build time)
- * and the two literal agentType discriminators, so it stays free of the
- * server-only kernel and safe to import from a "use client" component.
+ * mounting the wizard. This module imports only types (erased at build time),
+ * so it stays free of the server-only kernel and safe to import from a
+ * "use client" component.
  */
 import type {
   AgentSuggestion,
@@ -24,10 +24,6 @@ import type {
  */
 export type { AgentRecommendation, AgentSuggestedRole };
 
-// Client-safe mirror of CODING_AGENT_TYPE from lib/workbench/agents.ts (server-only).
-// Keep in sync with agent-builder.tsx.
-const CODING_AGENT_TYPE = "code";
-
 /**
  * Client-safe mirror of DEFAULT_AGENT_ROLE_NAME from
  * packages/agent/src/handlers/_agent-role.ts (server-only): the role the
@@ -44,7 +40,6 @@ export interface BuilderPrefill {
   name: string;
   slug: string;
   description: string;
-  codeFeatures: boolean;
   instructions: string;
   agentTools: AgentSuggestion["config"]["agentTools"];
   ontologyId: string;
@@ -82,7 +77,6 @@ export function mapSuggestionToPrefill(
     name: suggestion.name,
     slug: suggestion.slug,
     description: suggestion.description ?? "",
-    codeFeatures: suggestion.agentType === CODING_AGENT_TYPE,
     instructions: config.instructions ?? "",
     agentTools: config.agentTools ?? [],
     ontologyId: config.graph?.ontologyId ?? "",

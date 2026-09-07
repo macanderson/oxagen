@@ -1,6 +1,13 @@
 // Typed interleaved events the chat stream emits alongside model tokens.
-// The frontend matches on `type` to render tool-call cards, approval
-// prompts, plan proposals, and subagent fanouts inline in the DAG.
+// The frontend matches on `type` to render tool-call cards, approval prompts
+// and MCP consent prompts inline in the message DAG.
+//
+// This is the governance vocabulary and nothing more (ADR-041): Oxagen governs
+// agents, it does not run them, so there are no plan, subagent-fanout,
+// background-task or sandbox/terminal events here. Every variant below
+// corresponds to a gate `materializeTools` actually applies per tool call —
+// invoke, approve, consent — so the client can only render what the runtime
+// can actually produce.
 
 export type AgentStreamEvent =
   | {
@@ -8,12 +15,6 @@ export type AgentStreamEvent =
       callId: string;
       capability: string;
       input: unknown;
-    }
-  | {
-      type: "tool-call-output";
-      callId: string;
-      chunk: string;
-      channel?: "stdout" | "stderr";
     }
   | {
       type: "tool-call-end";
@@ -35,28 +36,20 @@ export type AgentStreamEvent =
       approvalId: string;
       resolution: "approved" | "denied" | "expired";
     }
-  | { type: "plan-proposed"; planId: string; title: string; steps: unknown }
   | {
-      type: "plan-resolved";
-      planId: string;
-      status: "approved" | "denied" | "amended";
+      // First-use consent for an external MCP tool (or an agent-RBAC "ask"
+      // rule). Mirrors MaterializeOptions.onConsentRequired's payload.
+      type: "consent-required";
+      approvalId: string;
+      capability: string;
+      serverId: string;
+      toolName: string;
+      inputPreview: unknown;
     }
   | {
-      type: "subagent-dispatched";
-      fanoutId: string;
-      parentMessageId: string;
-      childMessageIds: string[];
-    }
-  | {
-      type: "subagent-aggregated";
-      fanoutId: string;
-      status: "pending" | "completed" | "partial" | "timed_out";
-    }
-  | {
-      type: "background-task-started";
-      taskId: string;
-      kind: string;
-      inngestRunId: string;
+      type: "consent-resolved";
+      approvalId: string;
+      resolution: "granted" | "denied" | "expired";
     };
 
 export function isAgentStreamEvent(x: unknown): x is AgentStreamEvent {

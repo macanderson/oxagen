@@ -24,7 +24,7 @@
  * stderr error lines (exit 2 for a bad flag, exit 1 for an API failure).
  */
 import { apiGetOrThrow, apiPutOrThrow, printTable } from "../lib/api.js";
-import { formatUsd } from "../agent/rate-card.js";
+import { formatUsd } from "../lib/rate-card.js";
 import { createOutput } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 

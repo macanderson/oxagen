@@ -110,7 +110,6 @@ import { workspaceBudgetPolicyRead } from "./workspace.budget_policy.read";
 import { workspaceBudgetPolicyWrite } from "./workspace.budget_policy.write";
 import { billingBudgetGet } from "./billing.budget.get";
 import { billingBudgetSet } from "./billing.budget.set";
-import { lineageQuery } from "./lineage.query";
 import { workspaceModelSettingsRead } from "./workspace.model_settings.read";
 import { workspaceModelSettingsWrite } from "./workspace.model_settings.write";
 import { promptSettingsRead } from "./prompt.settings.read";
@@ -459,7 +458,6 @@ export {
   budgetPolicyWrite,
   billingBudgetGet,
   billingBudgetSet,
-  lineageQuery,
   workspaceBudgetPolicyRead,
   workspaceBudgetPolicyWrite,
   workspaceModelSettingsRead,
@@ -697,7 +695,6 @@ export const contracts = [
   budgetPolicyWrite,
   billingBudgetGet,
   billingBudgetSet,
-  lineageQuery,
   workspaceBudgetPolicyRead,
   workspaceBudgetPolicyWrite,
   workspaceModelSettingsRead,

@@ -58,7 +58,6 @@ import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve";
 import { agentExecutionRecordRoute } from "./routes/v1/agent.execution.record";
 import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
 import { agentDebugTraceRoute } from "./routes/v1/agent.debug.trace";
-import { lineageQueryRoute } from "./routes/v1/lineage.query";
 import { telemetryErrorClusterRoute } from "./routes/v1/telemetry.error.cluster";
 import { agentExecutionListRoute } from "./routes/v1/agent.execution.list";
 import { modelCapabilityListRoute } from "./routes/v1/model.capability.list";
@@ -120,7 +119,7 @@ import { environmentGetRoute } from "./routes/v1/environment.get";
 import { environmentUpdateRoute } from "./routes/v1/environment.update";
 import { environmentDeleteRoute } from "./routes/v1/environment.delete";
 import { environmentSetDefaultRoute } from "./routes/v1/environment.set_default";
-// Sandbox templates + portable artifacts + agent-environment bindings.
+// Agent ↔ environment bindings.
 import { agentEnvironmentBindRoute } from "./routes/v1/agent.environment.bind";
 import { agentEnvironmentUnbindRoute } from "./routes/v1/agent.environment.unbind";
 import { agentEnvironmentListRoute } from "./routes/v1/agent.environment.list";
@@ -196,7 +195,6 @@ import { authCliTokenRoute } from "./routes/v1/auth.cli.token";
 import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
 import { telemetryStellaEnrollRoute } from "./routes/v1/telemetry.stella.enroll";
 import { telemetryStellaIngestRoute } from "./routes/v1/telemetry.stella.ingest";
-import { cmsRoute } from "./routes/v1/cms";
 
 export type AppEnv = {
   Variables: {
@@ -230,10 +228,6 @@ app.route("/webhooks", webhookRoute);
 // Inngest cloud polls /api/inngest for the function manifest; signing-key
 // verification is enforced inside the inngest/hono serve handler.
 app.route("/api/inngest", inngestRoute);
-
-// A2A (Agent2Agent) protocol discovery document — public, optional auth. A
-// valid workspace API key yields the full workspace card; anonymous callers get
-// a base card. Mounted BEFORE the auth-gated groups so discovery never 401s.
 
 // Public CLI token exchange — no auth middleware (the code + PKCE verifier are
 // the security boundary; RFC 8252 + RFC 7636 S256). Must be mounted BEFORE the
@@ -273,12 +267,6 @@ app.use(
   }),
 );
 
-// Public, anonymous ebook lead gate for the marketing site (oxagen.sh). Same
-// security model as /v1/telemetry: no auth (callers are website visitors),
-// strict schema validation + per-IP rate limit inside the route. Mounted BEFORE
-// the auth-gated /v1 groups so a lead POST never hits authMiddleware.
-app.route("/v1/cms", cmsRoute);
-
 // /v1 user-level routes (org + workspace CRUD) require auth but no
 // org scope: a freshly-authenticated user can create their first
 // org without one existing.
@@ -300,6 +288,15 @@ userScoped.route("/user/budget/read", budgetPolicyReadRoute);
 userScoped.route("/user/budget/write", budgetPolicyWriteRoute);
 app.route("/v1", userScoped);
 
+// Post-auth ceiling for enrolled Stella evidence ingress, in requests/minute.
+// A constant rather than an env budget: ADR-041 retired the agent runtime and
+// with it RATE_LIMIT_AGENT_EXEC_PER_MIN, whose value this limiter used to
+// borrow. The two pre-auth ceilings on the same path (just below) are constants
+// for the same reason — a drain rate is a property of the ingress, not of a
+// per-deployment knob. The value matches the retired budget's default so the
+// effective limit is unchanged.
+const STELLA_TELEMETRY_PER_MIN = 30;
+
 // Enrolled Stella operational telemetry is machine-to-machine only. The
 // workspace API key carries its immutable org+workspace scope, so this static
 // path sits outside the human-readable /:org_slug/:workspace_slug group.
@@ -309,7 +306,7 @@ stellaTelemetryScoped.use(
   "*",
   distributedRateLimiter({
     keyPrefix: "stella-telemetry",
-    max: () => rateLimitBudgets().agentExec,
+    max: STELLA_TELEMETRY_PER_MIN,
   }),
 );
 stellaTelemetryScoped.route("/", telemetryStellaIngestRoute);
@@ -325,31 +322,15 @@ const chatRateLimiter = distributedRateLimiter({
   keyPrefix: "chat",
   max: () => rateLimitBudgets().chat,
 });
-const agentExecRateLimiter = distributedRateLimiter({
-  keyPrefix: "agent",
-  max: () => rateLimitBudgets().agentExec,
-});
-// A2A is an external agent-to-agent surface — give it its own bucket (same
-// budget) so inbound A2A traffic can't starve the interactive agent bucket.
-const a2aRateLimiter = distributedRateLimiter({
-  keyPrefix: "a2a",
-  max: () => rateLimitBudgets().agentExec,
-});
-
 // /v1/:org_slug/:workspace_slug/* — org + workspace scoped routes.
 const orgScoped = new Hono<AppEnv>();
 orgScoped.use("*", authMiddleware, orgMiddleware, workspaceMiddleware);
 // Rate limiting: mounted AFTER auth/org/workspace (so orgId/workspaceId are
 // populated for keying) and BEFORE the route registrations below — Hono runs
 // middleware in registration order, so a limiter registered after a route would
-// not wrap it. The limiter counts POST only, so cheap co-located GET reads
-// (e.g. /agent/sandbox/list under the /agent/sandbox/* mount, or the
-// /agent/tasks background-task read) pass through untouched.
+// not wrap it. The limiter counts POST only, so cheap co-located GET reads pass
+// through untouched.
 orgScoped.use("/chat/*", chatRateLimiter);
-orgScoped.use("/agent/code/execute", agentExecRateLimiter);
-orgScoped.use("/agent/compose", agentExecRateLimiter);
-orgScoped.use("/agent/sandbox/*", agentExecRateLimiter);
-orgScoped.use("/agent/tasks", agentExecRateLimiter);
 orgScoped.route("/workspaces", workspaceCreateRoute);
 // Minting an enrollment is an operator action, so it sits behind the session
 // auth this router applies — not beside the ingest route, whose API-key gate
@@ -379,20 +360,8 @@ orgScoped.route("/conversations/delete", conversationDeleteRoute);
 orgScoped.route("/conversations/purge", conversationPurgeRoute);
 // POST /conversations/attachments — link an already-uploaded asset to a conversation.
 orgScoped.route("/conversations/attachments", conversationAttachmentAddRoute);
-// Agent-runtime routes live under the org + workspace scope so the runner
-// inherits the same auth, isolation, and audit envelope as every other v1 call.
-// Durable-run API (agent-engine v2 Phase 2 integration) — flag-gated behind
-// OXAGEN_DURABLE_RUNS; every route under /runs 404s until that var is "1"/
-// "true" (packages/config/src/registry.ts). Enqueue/status/resumable-SSE/
-// cancel over @oxagen/run-ledger's RunStore, not the capability kernel.
-// Durable sandbox sessions (clone → build → snapshot → PR), org+workspace scoped.
-// Set a session's human-friendly display label (metadata-only, no driver call).
-// List durable sessions in the workspace (id, status, timestamps) — read-only.
-// Captured stdout/stderr/command output for a session — the log-console read.
-// Single-file read — the viewer counterpart of the /files listing above.
-// Browser automation inside a durable sandbox (proof-of-done), org+workspace scoped.
-// Cross-LLM proof-of-done judge.
-// Code-execution surface peers (OXA-1352) under the same org+workspace scope.
+// Agent governance routes live under the org + workspace scope so every call
+// inherits the same auth, isolation, and audit envelope as the rest of v1.
 orgScoped.route("/agent/tools", agentToolListRoute);
 orgScoped.route("/agent/mcp-servers", agentMcpRegisterRoute);
 orgScoped.route("/agent/mcp-servers", agentMcpListRoute);
@@ -436,18 +405,11 @@ orgScoped.route("/agent/memory/citations/stats", agentMemoryCitationStatsRoute);
 orgScoped.route("/agent/memory", agentMemoryWriteRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
 orgScoped.route("/agent/execution/record", agentExecutionRecordRoute);
-// Agent file locking: manual acquire/force-release/introspection over the
-// transactional Postgres leases that write_file/edit_file acquire
-// automatically inside every coding-agent turn.
-// Read side of the fan-out feature: list fan-outs, then get one with child runs.
-// Agent run-trace span tree: one execution + its steps, tool calls, and child
-// executions (subagent/A2A lineage). The list route backs the Activity index.
+// Agent run-trace span tree: one execution plus its steps and tool calls. The
+// list route backs the Activity index.
 orgScoped.route("/agent/executions", agentExecutionListRoute);
 orgScoped.route("/agent/trace", agentTraceGetRoute);
 orgScoped.route("/agent/debug/trace", agentDebugTraceRoute);
-// Fleet-lineage explorer data spine: the dispatch tree rooted at one fan-out,
-// flattened with per-node principal/delegation-ceiling/spend/outcome.
-orgScoped.route("/lineage/query", lineageQueryRoute);
 // Fleet-wide error triage overview — clusters ClickHouse error_events by
 // fingerprint. Pure SQL (ADR-021 §1), the counterpart to agent/debug/trace's
 // single-execution failure frame above.
@@ -477,8 +439,6 @@ orgScoped.route("/agent/roles/revoke", agentRoleRevokeRoute);
 orgScoped.route("/agent/roles/get", agentRoleGetRoute);
 orgScoped.route("/agent/roles", agentRoleListRoute);
 orgScoped.route("/agent/deploy", agentDeployRoute);
-// Eval datasets/runs: from-traces/get/items sub-paths mounted before the base
-// path so they aren't swallowed by the create/list routes' GET/POST on "/".
 // Verified-Outcome Market Router governance + inspection.
 orgScoped.route("/router/policy/set", routerPolicySetRoute);
 orgScoped.route("/router/policy", routerPolicyGetRoute);
@@ -540,8 +500,7 @@ orgScoped.route("/environment/get", environmentGetRoute);
 orgScoped.route("/environment/update", environmentUpdateRoute);
 orgScoped.route("/environment/delete", environmentDeleteRoute);
 orgScoped.route("/environment/set-default", environmentSetDefaultRoute);
-// Sandbox templates + portable artifacts + agent-environment bindings.
-orgScoped.route("/sandbox/template/set-default");
+// Agent ↔ environment bindings.
 orgScoped.route("/agent/environment/bind", agentEnvironmentBindRoute);
 orgScoped.route("/agent/environment/unbind", agentEnvironmentUnbindRoute);
 orgScoped.route("/agent/environment/list", agentEnvironmentListRoute);
@@ -598,31 +557,7 @@ orgScoped.route("/graph/stats", graphStatsRoute);
 orgScoped.route("/ontology/query", ontologyQueryRoute);
 orgScoped.route("/ontology/neighbors", ontologyNeighborsRoute);
 orgScoped.route("/audit/log/query", auditLogQueryRoute);
-// A2A Agent Card management read (metered, IAM-gated) — the governed parity
-// surface for the card; the transport itself lives at /a2a + /.well-known.
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);
-
-// OpenAI-compatible agent LLM proxy (ADR-019 B4): the CLI routes ALL model
-// inference through the platform via `@ai-sdk/openai-compatible` (no BYOK).
-// Auth is the platform API key (Bearer); the key carries org+workspace scope,
-// so this surface sits OUTSIDE the /:org/:workspace path group. The static
-// `/v1/agent/llm` prefix takes priority over the `:org_slug/:workspace_slug`
-// param route in Hono's router. Full path: POST /v1/agent/llm/chat/completions.
-const agentLlmScoped = new Hono<AppEnv>();
-agentLlmScoped.use("*", authMiddleware);
-app.route("/v1/agent/llm", agentLlmScoped);
-
-// A2A (Agent2Agent) protocol JSON-RPC transport. Like /mcp, it is a transport,
-// not a per-capability surface: the workspace API key (Bearer) carries org+
-// workspace scope, so it sits OUTSIDE the /:org/:workspace path group and is
-// gated by authMiddleware only. Full endpoint: POST /a2a.
-const a2aScoped = new Hono<AppEnv>();
-a2aScoped.use("*", authMiddleware);
-// Rate-limit the A2A RPC transport (POST /a2a) — the API key carries
-// org+workspace scope, so the limiter keys per workspace just like the /v1
-// agent surfaces. Registered before the route so it wraps it.
-a2aScoped.use("*", a2aRateLimiter);
-app.route("/a2a", a2aScoped);
 
 // Public OAuth callback — HMAC-verified state param is the security boundary.
 // Must NOT be inside the workspace-scoped group (user has no session when GitHub redirects).

@@ -118,7 +118,7 @@ describe("messageToBlocks", () => {
     expect(blocks).toEqual([{ kind: "text", text: "hello" }]);
   });
 
-  it("maps text, reasoning, tool-call, and code-execute blocks", () => {
+  it("maps text, reasoning, and tool-call blocks", () => {
     const blocks = messageToBlocks(
       row({
         id: "a",
@@ -139,13 +139,6 @@ describe("messageToBlocks", () => {
             durationMs: 420,
             resultPreview: { hits: 3 },
           },
-          {
-            type: "code-execute",
-            toolCallId: "t2",
-            language: "python",
-            code: "print(1)",
-            status: "success",
-          },
         ],
       }),
     );
@@ -159,8 +152,30 @@ describe("messageToBlocks", () => {
         durationMs: 420,
         resultPreview: '{"hits":3}',
       },
-      { kind: "code", language: "python", code: "print(1)" },
     ]);
+  });
+
+  it("drops retired execution block types (ADR-041) instead of rendering them", () => {
+    const blocks = messageToBlocks(
+      row({
+        id: "a",
+        role: "assistant",
+        contentBlocks: [
+          { type: "text", text: "kept" },
+          // Historical rows can still carry these; they must not export.
+          {
+            type: "code-execute",
+            toolCallId: "t2",
+            language: "python",
+            code: "print(1)",
+            status: "success",
+          },
+          { type: "code-diff", path: "src/a.ts", patch: "@@ -1 +1 @@" },
+          { type: "terminal", output: "$ ls" },
+        ],
+      }),
+    );
+    expect(blocks).toEqual([{ kind: "text", text: "kept" }]);
   });
 
   it("omits oversized tool result previews (>200 chars)", () => {
@@ -281,7 +296,7 @@ describe("conversationToMarkdown", () => {
     expect(md).toContain("</details>");
   });
 
-  it("renders tool calls as compact fenced summaries and code with language fences", () => {
+  it("renders tool calls as compact fenced summaries", () => {
     const md = conversationToMarkdown(
       model({
         messages: branchToExportMessages([
@@ -295,7 +310,6 @@ describe("conversationToMarkdown", () => {
                 status: "success",
                 durationMs: 90,
               },
-              { type: "code-execute", language: "ts", code: "const x = 1;" },
             ],
           }),
         ]),
@@ -305,7 +319,6 @@ describe("conversationToMarkdown", () => {
     expect(md).toContain(
       "```\ntool: query_ontology · status: success · duration: 90ms\n```",
     );
-    expect(md).toContain("```ts\nconst x = 1;\n```");
   });
 
   it("renders attachments as markdown links", () => {

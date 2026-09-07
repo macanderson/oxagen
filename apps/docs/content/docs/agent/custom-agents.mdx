@@ -40,9 +40,15 @@ Triggers bind an agent to a start condition and can be enabled or disabled indep
 
 A trigger only fires when the agent is deployed **active**.
 
-## Environments and sandboxes
+## Environments
 
-Coding agents run in a sandbox resolved from the agent's **environment binding**: bind an agent to an [environment](/docs/configuration/environments-and-secrets) (and optionally a specific sandbox template within it), and mark one binding primary. Without a binding, the workspace's default environment and its default template apply. The bound environment's secrets are injected into the sandbox at run time.
+An agent resolves which credentials it may use at run time through its
+**environment binding**: bind an agent to an [environment](/docs/configuration/environments-and-secrets),
+and mark one binding primary. Without a binding, the workspace's default
+environment applies. This is governance metadata on the agent registry —
+declaring which secret scope an agent identity is authorized to resolve —
+not runtime execution state; Oxagen has no execution engine of its own to
+inject those secrets into.
 
 ## A2A exposure
 

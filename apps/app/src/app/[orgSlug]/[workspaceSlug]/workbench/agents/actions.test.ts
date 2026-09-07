@@ -63,7 +63,7 @@ const GRAPH = {
   retrieval: { strategy: "hybrid" as const },
   budget: { maxHops: 2, maxNodes: 40 },
 };
-const CONFIG = { graph: GRAPH, agentTools: [], triggers: [] };
+const CONFIG = { graph: GRAPH, agentTools: [] };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -76,7 +76,6 @@ describe("createAgentAction", () => {
       ...SCOPE,
       slug: "Not Kebab",
       name: "X",
-      agentType: "custom",
       config: CONFIG,
     });
     expect(res.ok).toBe(false);
@@ -88,7 +87,6 @@ describe("createAgentAction", () => {
       ...SCOPE,
       slug: "ok-slug",
       name: "",
-      agentType: "custom",
       config: CONFIG,
     });
     expect(res.ok).toBe(false);
@@ -100,7 +98,6 @@ describe("createAgentAction", () => {
       ...SCOPE,
       slug: "ok-slug",
       name: "Agent",
-      agentType: "coding",
       config: CONFIG,
     });
     expect(res.ok).toBe(false);
@@ -119,7 +116,6 @@ describe("createAgentAction", () => {
       ...SCOPE,
       slug: "ok-slug",
       name: "Agent",
-      agentType: "coding",
       config: CONFIG,
     });
     expect(res.ok).toBe(true);
@@ -127,10 +123,10 @@ describe("createAgentAction", () => {
       expect(res.publicId).toBe("agt_1");
       expect(res.agentId).toBe("agt_1");
     }
-    // agentType flows through to the helper (code-features persistence).
+    // No agentType is accepted or forwarded — ADR-041 retired the code type.
     expect(createAgent).toHaveBeenCalledWith(
       CTX,
-      expect.objectContaining({ agentType: "coding" }),
+      expect.not.objectContaining({ agentType: expect.anything() }),
     );
   });
 
@@ -140,7 +136,6 @@ describe("createAgentAction", () => {
       ...SCOPE,
       slug: "ok-slug",
       name: "Agent",
-      agentType: "custom",
       config: CONFIG,
     });
     expect(res.ok).toBe(false);
@@ -149,7 +144,7 @@ describe("createAgentAction", () => {
 });
 
 describe("updateAgentAction", () => {
-  it("passes an agentType change through to updateAgent", async () => {
+  it("forwards the identity + config change to updateAgent", async () => {
     updateAgent.mockResolvedValue({
       agentId: "agt_1",
       version: 2,
@@ -159,13 +154,12 @@ describe("updateAgentAction", () => {
       ...SCOPE,
       agentId: "agt_1",
       name: "Agent",
-      agentType: "custom",
       config: CONFIG,
     });
     expect(res.ok).toBe(true);
     expect(updateAgent).toHaveBeenCalledWith(
       CTX,
-      expect.objectContaining({ agentId: "agt_1", agentType: "custom" }),
+      expect.objectContaining({ agentId: "agt_1", name: "Agent" }),
     );
   });
 
@@ -186,11 +180,9 @@ describe("suggestAgentAction", () => {
     slug: "release-notes-writer",
     name: "Release Notes Writer",
     description: "Drafts changelogs from merged PRs.",
-    agentType: "custom",
     config: {
       graph: GRAPH,
       agentTools: [],
-      triggers: [{ type: "manual" as const, enabled: true }],
       instructions: "You draft release notes.",
     },
   };

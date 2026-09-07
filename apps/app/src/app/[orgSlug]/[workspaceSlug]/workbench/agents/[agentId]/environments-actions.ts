@@ -2,14 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { invoke } from "@oxagen/oxagen";
-// Side-effect import: bind agent.environment.* + sandbox.template.* + environment.*
-// handlers so invoke() can resolve them.
+// Side-effect import: bind agent.environment.* + environment.* handlers so
+// invoke() can resolve them.
 import "@oxagen/handlers/register";
 import { agentEnvironmentBind } from "@oxagen/oxagen/contracts/agent.environment.bind";
 import { agentEnvironmentUnbind } from "@oxagen/oxagen/contracts/agent.environment.unbind";
 import { agentEnvironmentList } from "@oxagen/oxagen/contracts/agent.environment.list";
 import { environmentList } from "@oxagen/oxagen/contracts/environment.list";
-import { sandboxTemplateList } from "@oxagen/oxagen/contracts/sandbox.template.list";
 import type { AgentEnvironmentListOutput } from "@oxagen/oxagen/contracts/agent.environment.list";
 import { resolveWorkbenchScope } from "@/lib/workbench/scope";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -27,14 +26,6 @@ export interface EnvironmentOption {
   isDefault: boolean;
 }
 
-export interface TemplateOption {
-  id: string;
-  environmentId: string;
-  name: string;
-  slug: string;
-  isDefault: boolean;
-}
-
 export type ActionResult<T = unknown> =
   | ({ ok: true } & T)
   | { ok: false; error: string };
@@ -44,9 +35,8 @@ interface Scope {
   workspaceSlug: string;
 }
 
-// agent.environment.* + environment.* + sandbox.template.* surface
-// ["api","mcp","agent"] (not "app"), so every invoke() below passes
-// opts.surface "agent".
+// agent.environment.* + environment.* surface ["api","mcp","agent"] (not
+// "app"), so every invoke() below passes opts.surface "agent".
 const AGENT_SURFACE = { surface: "agent" } as const;
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -100,45 +90,12 @@ export async function readEnvironmentOptionsAction(
   });
 }
 
-export async function readTemplateOptionsAction(
-  args: Scope,
-): Promise<TemplateOption[]> {
-  const { ctx, org, ws } = await resolveWorkbenchScope(
-    args.orgSlug,
-    args.workspaceSlug,
-  );
-  return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-    const out = (await invoke(
-      sandboxTemplateList.name,
-      {},
-      ctx,
-      AGENT_SURFACE,
-    )) as {
-      templates: {
-        id: string;
-        environmentId: string;
-        name: string;
-        slug: string;
-        isDefault: boolean;
-      }[];
-    };
-    return out.templates.map((t) => ({
-      id: t.id,
-      environmentId: t.environmentId,
-      name: t.name,
-      slug: t.slug,
-      isDefault: t.isDefault,
-    }));
-  });
-}
-
 // ── Mutations (owner/admin) ───────────────────────────────────────────────────
 
 export async function bindAgentEnvironmentAction(
   args: Scope & {
     agentId: string;
     environmentId: string;
-    sandboxTemplateId?: string | null;
     isPrimary?: boolean;
   },
 ): Promise<ActionResult<{ binding: AgentEnvironmentBinding }>> {
@@ -159,7 +116,6 @@ export async function bindAgentEnvironmentAction(
         {
           agentId: args.agentId,
           environmentId: args.environmentId,
-          sandboxTemplateId: args.sandboxTemplateId ?? null,
           isPrimary: args.isPrimary,
         },
         ctx,

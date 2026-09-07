@@ -4,7 +4,7 @@
 // (get_routing_policy / set_routing_policy / list_routing_stats /
 // preview_routing_decision) and the shared loadEffectiveRoutingPolicy helper.
 // @oxagen/database (withTenantDb) and @oxagen/telemetry (readRoutingStats) are
-// mocked; @oxagen/agent-engine's pure decision core runs for real, so the tests
+// mocked; the pure decision core in lib/market-router runs for real, so the tests
 // exercise the true resolution / decision logic end to end from the handler.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";

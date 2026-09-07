@@ -17,6 +17,23 @@ export { systemInstallInstructionsHandler } from "./system.install.instructions"
 export { orgMemberAddHandler } from "./org.member.add";
 export { orgMemberInviteAcceptHandler } from "./org.member_invite.accept";
 export { orgMemberInviteDeclineHandler } from "./org.member_invite.decline";
+export { persistGeneratedAsset } from "./generated-asset.persist";
+export type {
+  PersistGeneratedAssetArgs,
+  PersistedGeneratedAsset,
+  AssetKind,
+  AssetAccessPolicy,
+  AssetSource,
+} from "./generated-asset.persist";
+export {
+  serveGeneratedAsset,
+  GeneratedAssetNotFoundError,
+  GeneratedAssetForbiddenError,
+} from "./generated-asset.serve";
+export type {
+  AssetServePrincipal,
+  AssetServeResult,
+} from "./generated-asset.serve";
 export { workspaceMemberListHandler } from "./workspace.member.list";
 export { workspaceInviteSendHandler } from "./workspace.invite.send";
 export { conversationChatHandler } from "./conversation.chat";

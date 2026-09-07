@@ -80,10 +80,8 @@ describe("agent.definition.list handler", () => {
         // Mirrors the jsonb the pg driver returns for agent_versions.config.
         selectedConfig: {
           agentTools: [
-            { type: "skill", ref: "web-search", config: { pin: "1.2.0" } },
             { type: "mcp_server", ref: "github", config: { auth: "oauth" } },
             { type: "function", ref: "sum" },
-            { type: "agent", ref: "agt_child" },
           ],
         },
       },
@@ -91,10 +89,39 @@ describe("agent.definition.list handler", () => {
     const out = await agentDefinitionListHandler({}, CTX);
     // type + ref only — the per-tool `config` payloads are dropped.
     expect(out.agents[0]!.toolRefs).toEqual([
-      { type: "skill", ref: "web-search" },
       { type: "mcp_server", ref: "github" },
       { type: "function", ref: "sum" },
-      { type: "agent", ref: "agt_child" },
+    ]);
+  });
+
+  // ADR-041 narrowed agentToolTypeSchema to the two gateable kinds. Configs
+  // persisted before the cut still carry `skill` / `agent` entries, and the
+  // list must degrade to the entries it can still govern rather than throwing
+  // or surfacing a grant the platform can no longer honour.
+  it("drops legacy skill / subagent entries from a pre-ADR-041 config", async () => {
+    fake.enqueue([
+      {
+        id: "uuid-legacy",
+        publicId: "agt_legacy",
+        slug: "old-agent",
+        name: "Old",
+        description: null,
+        agentType: "custom",
+        status: "active",
+        deploymentStatus: "active",
+        latestVersion: 4,
+        selectedConfig: {
+          agentTools: [
+            { type: "skill", ref: "coding" },
+            { type: "agent", ref: "agt_child" },
+            { type: "function", ref: "recall_memory" },
+          ],
+        },
+      },
+    ]);
+    const out = await agentDefinitionListHandler({}, CTX);
+    expect(out.agents[0]!.toolRefs).toEqual([
+      { type: "function", ref: "recall_memory" },
     ]);
   });
 
@@ -112,10 +139,10 @@ describe("agent.definition.list handler", () => {
         latestVersion: 1,
         selectedConfig: {
           agentTools: [
-            { type: "skill", ref: "keep-me" }, // valid → kept
+            { type: "function", ref: "keep-me" }, // valid → kept
             { type: "not-a-type", ref: "x" }, // unknown type → dropped
-            { type: "skill" }, // missing ref → dropped
-            { type: "skill", ref: "" }, // empty ref → dropped
+            { type: "function" }, // missing ref → dropped
+            { type: "function", ref: "" }, // empty ref → dropped
             null, // not an object → dropped
             "nope", // not an object → dropped
           ],
@@ -137,27 +164,30 @@ describe("agent.definition.list handler", () => {
     ]);
     const out = await agentDefinitionListHandler({}, CTX);
     expect(out.agents[0]!.toolRefs).toEqual([
-      { type: "skill", ref: "keep-me" },
+      { type: "function", ref: "keep-me" },
     ]);
     expect(out.agents[1]!.toolRefs).toEqual([]);
   });
 
-  it("surfaces agentType 'code' so callers can flag a code agent", async () => {
+  // agentType stays a free-form discriminator on the row (it carries the
+  // managed-vs-custom distinction); the handler passes it through verbatim
+  // rather than interpreting it.
+  it("passes an arbitrary agentType through verbatim", async () => {
     fake.enqueue([
       {
         id: "uuid-3",
         publicId: "agt_3",
-        slug: "repo-fixer",
-        name: "Repo Fixer",
+        slug: "fleet-analyst",
+        name: "Fleet Analyst",
         description: null,
-        agentType: "code",
+        agentType: "custom",
         status: "active",
         deploymentStatus: "active",
         latestVersion: 1,
       },
     ]);
     const out = await agentDefinitionListHandler({}, CTX);
-    expect(out.agents[0]!.agentType).toBe("code");
+    expect(out.agents[0]!.agentType).toBe("custom");
   });
 
   it("sets managed=true for an interactive_chat agent", async () => {

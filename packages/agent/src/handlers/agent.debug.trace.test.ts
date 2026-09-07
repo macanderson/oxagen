@@ -24,7 +24,7 @@ import {
 import { generateObjectFor } from "@oxagen/ai";
 import { agentTraceGetHandler } from "./agent.trace.get";
 import { agentDebugTraceHandler } from "./agent.debug.trace";
-import { ExecutionNotFoundError } from "./subagent-errors";
+import { ExecutionNotFoundError } from "./execution-errors";
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 const wtd = vi.mocked(withTenantDb);

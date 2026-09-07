@@ -6,14 +6,7 @@ export type PolicyClass =
   // org_or_global: org_id is NULLABLE — NULL rows are a shared/global catalog
   // visible to every tenant, non-NULL rows are tenant-private. Used by
   // mcp.registries (global default-seed registry + optional per-org registries).
-  | "org_or_global"
-  // standard_or_builtin: like standard, but rows stamped with the nil-UUID
-  // sentinel org/workspace (packages/skills BUILTIN_*) are a platform-global
-  // catalog READABLE by every tenant. WRITES stay tenant-only — creating or
-  // altering a builtin row is reserved for the seeding/system path
-  // (app.rls_bypass='on'), mirroring the org_or_global asymmetry. Used by the
-  // skills tables so seeded builtin skills are visible through withTenantDb.
-  | "standard_or_builtin";
+  | "org_or_global";
 
 export interface PolicyEntry {
   readonly table: string; // schema-qualified (schema.table_name)
@@ -35,8 +28,7 @@ export interface PolicyEntry {
 //
 // Tables WITHOUT org_id/workspace_id are intentionally absent — their
 // isolation is transitive through an FK to a policied parent (e.g.
-// agent.agent_versions → agent.agents, workflow.playbook_steps →
-// workflow.playbook_versions → workflow.playbooks, ingestion.oauth_tokens →
+// agent.agent_versions → agent.agents, ingestion.oauth_tokens →
 // ingestion.source_connections) or they are shared/system catalogs
 // (billing.plans, billing.stripe_events, mcp.catalog_servers,
 // ingestion.connector_schemas, Better Auth).
@@ -44,8 +36,6 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // ── agent.* (orgScopeMixin: org_id + workspace_id NOT NULL) ──────────────
   // agent.agent_versions excluded: immutable child, no org cols, FK → agents.
   { table: "agent.agents", policyClass: "standard" },
-  { table: "agent.skills", policyClass: "standard_or_builtin" },
-  { table: "agent.skill_versions", policyClass: "standard_or_builtin" },
   // Workspace agent-asset registry (20260831120000_agent_asset_registry.sql):
   // tool declarations + context records + the append-only promotions ledger.
   // All tenant-authored (no builtin sentinel rows), so plain standard.
@@ -54,41 +44,27 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.context_records", policyClass: "standard" },
   { table: "agent.context_record_versions", policyClass: "standard" },
   { table: "agent.context_promotions", policyClass: "standard" },
-  { table: "agent.agent_plans", policyClass: "standard" },
   { table: "agent.agent_executions", policyClass: "standard" },
   { table: "agent.agent_execution_steps", policyClass: "standard" },
   { table: "agent.agent_tool_calls", policyClass: "standard" },
   { table: "agent.approval_requests", policyClass: "standard" },
-  { table: "agent.background_tasks", policyClass: "standard" },
-  { table: "agent.subagent_fanouts", policyClass: "standard" },
-  { table: "agent.subagent_runs", policyClass: "standard" },
-  // Durable code-agent sandbox session registry (orgScopeMixin + tenant_isolation
-  // RLS in 20260628120000_agent_sandbox_sessions.sql).
-  { table: "agent.sandbox_sessions", policyClass: "standard" },
   // Durable A2A task store (orgScopeMixin + tenant_isolation RLS in
   // 20260704230000_a2a_tasks.sql).
   { table: "agent.a2a_tasks", policyClass: "standard" },
-  // File-lock lease authority + fencing-token counter (ADR-021 §5;
-  // orgScopeMixin + tenant_isolation RLS in
-  // 20260708130000_agent_file_locks.sql).
-  { table: "agent.file_locks", policyClass: "standard" },
-  { table: "agent.file_lock_fences", policyClass: "standard" },
   // Durable agent-engine v2 run rows + append-only event log (Phase 2a;
   // docs/specs/agent-engine-v2). Both carry orgScopeMixin (org_id +
   // workspace_id NOT NULL) + tenant_isolation RLS added in the Phase 2a
   // migration. agent_run_events has no idMixin (bare uuid pk, immutable
-  // child) but is still row-scoped, same as file_lock_fences above.
+  // child) but is still row-scoped.
   { table: "agent.agent_runs", policyClass: "standard" },
   { table: "agent.agent_run_events", policyClass: "standard" },
-  // Fenced attempt foundation (docs/specs/run-evidence-ingress). All six carry
+  // Fenced attempt foundation (docs/specs/run-evidence-ingress). All four carry
   // orgScopeMixin-equivalent scope columns (org_id + workspace_id NOT NULL) +
   // forced tenant_isolation RLS from the run-attempt-foundation migration.
-  // Every one of them EXCEPT the lease is append-only at the grant level
-  // (SELECT, INSERT — never UPDATE/DELETE for oxagen_app); RLS is orthogonal to
-  // that and still required, or a tenant could read another tenant's evidence.
+  // Every one of them is append-only at the grant level (SELECT, INSERT —
+  // never UPDATE/DELETE for oxagen_app); RLS is orthogonal to that and still
+  // required, or a tenant could read another tenant's evidence.
   { table: "agent.agent_run_attempts", policyClass: "standard" },
-  { table: "agent.agent_run_attempt_leases", policyClass: "standard" },
-  { table: "agent.agent_run_checkpoints", policyClass: "standard" },
   { table: "agent.agent_run_attempt_seals", policyClass: "standard" },
   { table: "agent.agent_run_finalization_grants", policyClass: "standard" },
   {
@@ -96,16 +72,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
     policyClass: "standard",
   },
 
-  // ── ai.* — response cache + batch jobs use orgScopeMixin (tenant_isolation
-  // RLS created in 20260704200000_ai_cache_and_batch_jobs.sql) ─────────────
+  // ── ai.* — response cache uses orgScopeMixin (tenant_isolation RLS created
+  // in 20260704200000_ai_cache_and_batch_jobs.sql) ──────────────────────────
   { table: "ai.response_cache", policyClass: "standard" },
-  { table: "ai.batch_jobs", policyClass: "standard" },
-
-  // ── eval.* — datasets/items/runs use orgScopeMixin (tenant_isolation RLS
-  // created in 20260704220000_evals_v1.sql) ────────────────────────────────
-  { table: "eval.eval_datasets", policyClass: "standard" },
-  { table: "eval.eval_dataset_items", policyClass: "standard" },
-  { table: "eval.eval_runs", policyClass: "standard" },
 
   // ── auth.* — api_keys uses orgScopeMixin ──────────────────────────────────
   // Better Auth tables (users/sessions/accounts/verifications/rate_limit/
@@ -141,8 +110,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // ── chat.* / content.* (orgScopeMixin) ───────────────────────────────────
   { table: "chat.conversations", policyClass: "standard" },
   { table: "chat.messages", policyClass: "standard" },
+  // content.documents went with the runtime (ADR-041); the attachment
+  // reference row stays and is still tenant-owned.
   { table: "content.generated_assets", policyClass: "standard" },
-  { table: "content.documents", policyClass: "standard" },
 
   // ── graph.* — no graph.* tenant tables. Projection runs directly from the
   //   Inngest sync-execution-to-graph function; there is no outbox table.
@@ -180,14 +150,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "ingestion.deletion_jobs", policyClass: "standard" },
   { table: "ingestion.oauth_accounts", policyClass: "org_only" },
   // Governed repository bindings (docs/specs/run-evidence-ingress). The
-  // immutable versioned binding plus its two mutable pointer tables; all three
-  // carry org_id + workspace_id NOT NULL → standard.
+  // immutable versioned binding plus its mutable head pointer; both carry
+  // org_id + workspace_id NOT NULL → standard.
   { table: "ingestion.repository_bindings", policyClass: "standard" },
   { table: "ingestion.repository_binding_heads", policyClass: "standard" },
-  {
-    table: "ingestion.governed_repository_selections",
-    policyClass: "standard",
-  },
 
   // ── mcp.* — all three tables below are tenant-owned (workspace-scoped).
   //   catalog_servers still exists (schema/mcp.ts) but is deliberately NOT
@@ -229,15 +195,6 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // workspace_id are both NOT NULL (servers are workspace-scoped) → standard.
   { table: "security.mcp_server_changes", policyClass: "standard" },
 
-  // ── workflow.* — playbook domain. Versions/steps/edges
-  //   carry no org cols (immutable children of playbooks → transitive). ──────
-  { table: "workflow.playbooks", policyClass: "standard" },
-  { table: "workflow.playbook_triggers", policyClass: "standard" },
-  { table: "workflow.playbook_runs", policyClass: "standard" },
-  { table: "workflow.playbook_step_runs", policyClass: "standard" },
-  { table: "workflow.playbook_events", policyClass: "standard" },
-  { table: "workflow.playbook_approvals", policyClass: "standard" },
-
   // ── schema_registry.* — Workspace Schema Registry (Spec §4 + §11 RLS).
   //   All 7 tables carry orgScopeMixin (org_id + workspace_id NOT NULL) → standard.
   //   schema_versions has no softDeleteMixin (immutable once published) but has
@@ -278,10 +235,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "environments.secret_keys", policyClass: "standard" },
   { table: "environments.secret_values", policyClass: "standard" },
   { table: "environments.secret_access_log", policyClass: "standard" },
-  // Sandbox templates + portable artifacts (Phase 1, Spec §5.2–§5.3, §5.6).
-  //   All three carry org_id + workspace_id NOT NULL → standard tenant_isolation.
-  { table: "environments.sandbox_templates", policyClass: "standard" },
-  { table: "environments.sandbox_template_tools", policyClass: "standard" },
+  // Agent → environment bindings (Spec §5.6). org_id + workspace_id NOT NULL
+  //   → standard tenant_isolation.
   { table: "environments.agent_environment_bindings", policyClass: "standard" },
 
   // ── evidence.* — immutable governed-run evidence (run-evidence-ingress).

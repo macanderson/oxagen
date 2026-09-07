@@ -348,13 +348,10 @@ describe("rateLimitBudgets", () => {
   // first — assert the memoization contract itself (same instance, one
   // requireEnv call) rather than re-asserting specific values per call.
   it("resolves the budgets from the validated env once, then memoizes the result", () => {
-    mocks.requireEnv.mockReturnValue({
-      RATE_LIMIT_CHAT_PER_MIN: 90,
-      RATE_LIMIT_AGENT_EXEC_PER_MIN: 45,
-    });
+    mocks.requireEnv.mockReturnValue({ RATE_LIMIT_CHAT_PER_MIN: 90 });
 
     const first = rateLimitBudgets();
-    expect(first).toEqual({ chat: 90, agentExec: 45 });
+    expect(first).toEqual({ chat: 90 });
 
     // Second call returns the SAME cached object without re-reading env — the
     // memoization that keeps app import from tripping env access at module load.

@@ -89,28 +89,25 @@ describe("resolveSidebarMode", () => {
 // 2. getSidebarConfig — item counts per mode
 //
 // Spec:
-//   workspace: 9 items (Ask, Knowledge, Evals | Agents, Agent Tools,
-//       Environments, Sandboxes | Marketplace, Settings)
-//     — Evals scores what actually ran and got billed, in the primary group.
-//       The Workbench "tools" group holds all four build destinations (Agents,
-//       Agent Tools, Environments, Sandboxes) as first-class items — there is
-//       deliberately NO Workbench secondary nav. Marketplace + Settings are
-//       pinned to the footer group. The old catch-all Automation area stays
-//       removed; "Workflows" is gone too (banned term). The Activity run-trace
-//       section was removed as well — agent runs are inspected in context
-//       (chat, evals) rather than in a standalone list.
+//   workspace: 8 items (Overview, Sessions, Knowledge | Agents, Tools,
+//       Environments | Marketplace, Settings)
+//     — the "Agents" group (group: "tools") holds the three fleet destinations
+//       (Agents, Tools, Environments) as first-class items — there is
+//       deliberately NO secondary nav. Marketplace + Settings are pinned to the
+//       footer group. Per ADR-041 the runtime surfaces (Sandboxes, Repos,
+//       Evals, Automations, Skills) are gone: Oxagen governs agents, it does
+//       not run them.
 //   org:       8 items (Dashboard, Workspaces, Members, Governance, Security, Billing, Developer, Settings)
 //   account:   5 items (Back to app, Profile, Preferences, Security, Privacy)
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
-  it("workspace config has exactly 12 items", () => {
+  it("workspace config has exactly 8 items", () => {
     const config = getSidebarConfig("workspace");
     expect(config.mode).toBe("workspace");
-    // web-app-2.0 added Overview, Automations, and Repos to the base; the
-    // Activity run-trace surface was later removed (runs are inspected in
-    // context — chat, evals — not in a standalone section).
-    expect(config.items).toHaveLength(12);
+    // ADR-041 excised the runtime surfaces (Sandboxes, Repos, Evals,
+    // Automations) — what remains is the governance observatory.
+    expect(config.items).toHaveLength(8);
   });
 
   it("org config has 8 items by default (access filtered for non-enterprise)", () => {
@@ -140,45 +137,36 @@ describe("getSidebarConfig item counts", () => {
     expect(returnItems[0]?.id).toBe("back");
   });
 
-  it("workspace config 'tools' group holds the five first-class Workbench destinations", () => {
-    const items = getSidebarConfig("workspace").items;
-    const toolsItems = items.filter((item) => item.group === "tools");
+  it("workspace config 'Agents' group holds the three first-class destinations", () => {
+    const config = getSidebarConfig("workspace");
+    expect(config.toolsLabel).toBe("Agents");
+    const toolsItems = config.items.filter((item) => item.group === "tools");
     expect(toolsItems.map((i) => i.id)).toEqual([
       "agents",
-      "agent-tools",
+      "tools",
       "environments",
-      "sandboxes",
-      "repos",
     ]);
   });
 
-  it("does NOT surface standalone Skills / Tools / Subagent Runs / Workflows items", () => {
+  it("does NOT surface the excised runtime items (ADR-041)", () => {
     const ids = getSidebarConfig("workspace").items.map((i) => i.id);
-    // Skills and Tools collapsed into the single Agent Tools hub.
     expect(ids).not.toContain("skills");
-    expect(ids).not.toContain("tools");
-    expect(ids).not.toContain("agent-runs");
-    // Workflows is a tab under Automations, not a standalone sidebar item.
+    expect(ids).not.toContain("sandboxes");
+    expect(ids).not.toContain("repos");
+    expect(ids).not.toContain("evals");
+    expect(ids).not.toContain("automations");
     expect(ids).not.toContain("workflows");
+    expect(ids).not.toContain("agent-runs");
     // The clean spec tree, in raw declaration order (the mobile bottom bar's
     // unfiltered MAX_BAR_ITEMS cut relies on this exact order — see
-    // mobile-bottom-bar.tsx). Evals (group: "primary") is declared after
-    // "agents" so it renders in the desktop sidebar's group-filtered view (see
-    // the "workspace config 'tools' group" test below) without displacing
-    // Agents from the mobile bar's first four; the Workbench "tools" group then
-    // promotes all four build destinations (Agents, Agent Tools, Environments,
-    // Sandboxes) to the sidebar.
+    // mobile-bottom-bar.tsx).
     expect(ids).toEqual([
       "overview",
       "sessions",
       "knowledge",
-      "automations",
       "agents",
-      "evals",
-      "agent-tools",
+      "tools",
       "environments",
-      "sandboxes",
-      "repos",
       "marketplace",
       "settings",
     ]);
@@ -231,10 +219,6 @@ describe("href builders produce correct paths", () => {
       );
     });
 
-    it("evals -> /{org}/{ws}/evals", () => {
-      expect(findItem("evals").href(wsCtx)).toBe("/acme/production/evals");
-    });
-
     it("marketplace -> /{org}/{ws}/marketplace (workspace-scoped, from ws ctx)", () => {
       expect(findItem("marketplace").href(wsCtx)).toBe(
         "/acme/production/marketplace",
@@ -247,8 +231,8 @@ describe("href builders produce correct paths", () => {
       );
     });
 
-    it("agent-tools -> /{org}/{ws}/workbench/tools", () => {
-      expect(findItem("agent-tools").href(wsCtx)).toBe(
+    it("tools -> /{org}/{ws}/workbench/tools", () => {
+      expect(findItem("tools").href(wsCtx)).toBe(
         "/acme/production/workbench/tools",
       );
     });
@@ -259,32 +243,14 @@ describe("href builders produce correct paths", () => {
       );
     });
 
-    it("sandboxes -> /{org}/{ws}/workbench/sandboxes", () => {
-      expect(findItem("sandboxes").href(wsCtx)).toBe(
-        "/acme/production/workbench/sandboxes",
-      );
-    });
-
     it("settings -> /{org}/{ws}/settings", () => {
       expect(findItem("settings").href(wsCtx)).toBe(
         "/acme/production/settings",
       );
     });
 
-    it("overview -> /{org}/{ws} (workspace root, web-app-2.0)", () => {
+    it("overview -> /{org}/{ws} (workspace root)", () => {
       expect(findItem("overview").href(wsCtx)).toBe("/acme/production");
-    });
-
-    it("automations -> /{org}/{ws}/automations (web-app-2.0)", () => {
-      expect(findItem("automations").href(wsCtx)).toBe(
-        "/acme/production/automations",
-      );
-    });
-
-    it("repos -> /{org}/{ws}/workbench/repos (web-app-2.0)", () => {
-      expect(findItem("repos").href(wsCtx)).toBe(
-        "/acme/production/workbench/repos",
-      );
     });
   });
 
@@ -557,23 +523,23 @@ describe("IA realignment (spec §4/§5/§19)", () => {
   it("enumerateNavTargets has no Workflows destination and no bare Workbench root", () => {
     const targets = enumerateNavTargets(ctx);
     expect(targets.find((t) => t.label === "Workflows")).toBeUndefined();
-    // Workbench pages are targets (Agents, Agent Tools, …) but the bare
+    // Agents-group pages are targets (Agents, Tools, …) but the bare
     // /workbench root is a redirect, never a destination itself.
     expect(targets.find((t) => t.label === "Workbench")).toBeUndefined();
     expect(targets.map((t) => t.href)).not.toContain("/acme/prod/workflows");
     expect(targets.map((t) => t.href)).not.toContain("/acme/prod/workbench");
   });
 
-  it("enumerateNavTargets surfaces the four first-class Workbench destinations", () => {
+  it("enumerateNavTargets surfaces the three first-class Agents destinations", () => {
     const targets = enumerateNavTargets(ctx);
     const byLabel = (label: string) => targets.find((t) => t.label === label);
     expect(byLabel("Agents")?.href).toBe("/acme/prod/workbench/agents");
-    expect(byLabel("Agent Tools")?.href).toBe("/acme/prod/workbench/tools");
+    expect(byLabel("Tools")?.href).toBe("/acme/prod/workbench/tools");
     expect(byLabel("Environments")?.href).toBe(
       "/acme/prod/workbench/environments",
     );
-    expect(byLabel("Sandboxes")?.href).toBe("/acme/prod/workbench/sandboxes");
-    expect(byLabel("Agent Tools · MCP Servers")?.href).toBe(
+    expect(byLabel("Sandboxes")).toBeUndefined();
+    expect(byLabel("Tools · MCP Servers")?.href).toBe(
       "/acme/prod/workbench/tools/mcp",
     );
     expect(byLabel("Settings · MCP Registries")?.href).toBe(
