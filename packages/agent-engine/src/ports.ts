@@ -64,6 +64,14 @@ export interface UsageTokens {
    * way — see engine.ts).
    */
   cachedInputTokens?: number;
+  /**
+   * Prompt tokens WRITTEN into the provider's cache — also a SUBSET of
+   * `inputTokens` and disjoint from `cachedInputTokens`. The AI SDK reports it
+   * beside the read count as `usage.inputTokenDetails.cacheWriteTokens`;
+   * adapters flatten it here the same way. Priced at the cache-write rate,
+   * which the engine could not see at all before #1411.
+   */
+  cacheWriteTokens?: number;
 }
 
 export interface ObjectRunResult<T> {

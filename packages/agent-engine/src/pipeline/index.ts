@@ -420,6 +420,12 @@ export interface RunTurnResult {
     totalTokens?: number;
     /** Prompt tokens served from the provider cache (a cache "hit"), summed across rounds. */
     cachedInputTokens?: number;
+    /**
+     * Prompt tokens WRITTEN into the provider cache, summed across rounds.
+     * Priced at the cache-write rate, which Anthropic sets 25% above fresh
+     * input — the spend guard could not see these at all before #1414.
+     */
+    cacheWriteTokens?: number;
   };
   /** The full, persisted record of how this turn was handled. */
   trace: TurnTrace;
@@ -687,8 +693,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
             inputTokens: usage.inputTokens,
             outputTokens: usage.outputTokens,
             // No execution round has run yet at the scope-review gate, so no
-            // provider cache reads have happened either — always 0 here.
+            // provider cache reads or writes have happened either — 0 both.
             cachedInputTokens: 0,
+            cacheWriteTokens: 0,
           },
           trace,
         };
@@ -709,6 +716,10 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   // line's cache "hit" counter). Tracked alongside — not inside — UsageTotals,
   // which is cost accounting and has no cache field.
   let cachedInputTokens = 0;
+  // Cache-WRITE tokens summed the same way. Kept beside the read counter rather
+  // than folded into it: they are disjoint subsets of the input tokens and are
+  // priced differently, which is the whole of #1411/#1414.
+  let cacheWriteTokens = 0;
 
   // Per-turn budget baseline: the engine guard sees only ONE round's usage, but
   // the budget is a per-TURN cap, so carry a running baseline of the tokens
@@ -721,6 +732,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     inputTokens: 0,
     outputTokens: 0,
     cachedInputTokens: 0,
+    cacheWriteTokens: 0,
   };
   // Budget-guard tier-escalation repricing. The caller's guard prices the whole
   // turn against ONE reference model, but market-router `enforce` mode can
@@ -738,17 +750,20 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     inputTokens: 0,
     outputTokens: 0,
     cachedInputTokens: 0,
+    cacheWriteTokens: 0,
   };
   const escalationFactor = (u: {
     inputTokens?: number;
     outputTokens?: number;
     cachedInputTokens?: number;
+    cacheWriteTokens?: number;
   }): number => {
     if (routed.model === initialWorkerModel) return 1;
     const usage = {
       inputTokens: u.inputTokens ?? 0,
       outputTokens: u.outputTokens ?? 0,
       cachedTokens: u.cachedInputTokens ?? 0,
+      cacheWriteTokens: u.cacheWriteTokens ?? 0,
     };
     const base = estimateCostUsd(initialWorkerModel, usage);
     if (base <= 0) return 1;
@@ -769,11 +784,16 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
           budgetBaseline.cachedInputTokens +
           budgetEscalationPremium.cachedInputTokens +
           (u.cachedInputTokens ?? 0) * f;
+        const cacheWriteTokens =
+          budgetBaseline.cacheWriteTokens +
+          budgetEscalationPremium.cacheWriteTokens +
+          (u.cacheWriteTokens ?? 0) * f;
         return opts.budgetGuard!({
           inputTokens,
           outputTokens,
           totalTokens: inputTokens + outputTokens,
           cachedInputTokens,
+          cacheWriteTokens,
         });
       }
     : undefined;
@@ -898,6 +918,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     budgetBaseline.inputTokens = usage.inputTokens;
     budgetBaseline.outputTokens = usage.outputTokens;
     budgetBaseline.cachedInputTokens = cachedInputTokens;
+    budgetBaseline.cacheWriteTokens = cacheWriteTokens;
     // Capture bash command outputs THIS round so the judge sees test results
     // (the decisive completeness signal), not just the command strings.
     const roundCommandOutputs: Array<{
@@ -1030,6 +1051,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
           cachedInputTokens:
             (phaseAResult.usage.cachedInputTokens ?? 0) +
             (phaseBResult.usage.cachedInputTokens ?? 0),
+          cacheWriteTokens:
+            (phaseAResult.usage.cacheWriteTokens ?? 0) +
+            (phaseBResult.usage.cacheWriteTokens ?? 0),
         },
       };
       // Reset prompt to original for the end-of-round judge input below.
@@ -1055,6 +1079,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     lastText = result.text;
     totalSteps += result.steps;
     cachedInputTokens += result.usage.cachedInputTokens ?? 0;
+    cacheWriteTokens += result.usage.cacheWriteTokens ?? 0;
 
     // Union the git-diff file list into filesTouched. This is the ground truth
     // for what changed and supplements tool-call events (which may not fire in
@@ -1328,6 +1353,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
           inputTokens: result.usage.inputTokens,
           outputTokens: result.usage.outputTokens,
           cachedInputTokens: result.usage.cachedInputTokens,
+          cacheWriteTokens: result.usage.cacheWriteTokens,
         });
         budgetEscalationPremium.inputTokens +=
           (f - 1) * (result.usage.inputTokens ?? 0);
@@ -1335,6 +1361,8 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
           (f - 1) * (result.usage.outputTokens ?? 0);
         budgetEscalationPremium.cachedInputTokens +=
           (f - 1) * (result.usage.cachedInputTokens ?? 0);
+        budgetEscalationPremium.cacheWriteTokens +=
+          (f - 1) * (result.usage.cacheWriteTokens ?? 0);
       }
     }
 
@@ -1473,6 +1501,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       cachedInputTokens,
+      cacheWriteTokens,
     },
     trace,
   };
@@ -1921,6 +1950,7 @@ async function runBare(
       inputTokens: result.usage.inputTokens,
       outputTokens: result.usage.outputTokens,
       cachedInputTokens: result.usage.cachedInputTokens,
+      cacheWriteTokens: result.usage.cacheWriteTokens,
     },
     trace,
   };

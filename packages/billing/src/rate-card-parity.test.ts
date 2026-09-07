@@ -3,7 +3,7 @@ import {
   RATE_CARD,
   estimateCostUsd,
 } from "@oxagen/agent-engine/router/rate-card";
-import { providerCostUsd, isRateCardMiss } from "./pricing";
+import { providerCostUsd, isRateCardMiss, PROVIDER_RATE_CARD } from "./pricing";
 
 /**
  * The two rate cards, held together.
@@ -19,6 +19,13 @@ import { providerCostUsd, isRateCardMiss } from "./pricing";
  * A new family therefore fails here until it has a billing row. That is the
  * point: the failure lands on the PR that adds the family, not on a customer's
  * invoice.
+ *
+ * It drifted a second way, and this test could not see it: the engine's card
+ * had no cache-WRITE rate at all, so it priced a cache write as fresh input
+ * while the invoice charged the write rate. Every shape below left the write
+ * term at zero, so the two cards agreed on a rate neither was exercising
+ * (#1411). Two shapes now carry one, and the invariants at the bottom pin the
+ * rule the rates follow.
  */
 
 /** Usage shapes that exercise every term the two cards share. */
@@ -33,6 +40,26 @@ const SHAPES = [
     cachedTokens: 800_000,
   },
   { label: "a small real step", inputTokens: 1_500, outputTokens: 40 },
+  {
+    // The shape that was missing, and the reason #1411 survived this test: with
+    // no cache-write term in any shape, both cards agreed on a rate neither was
+    // exercising. A priming step is mostly this — the whole system prompt and
+    // code-graph context written into the cache in one call.
+    label: "a priming step (cache write)",
+    inputTokens: 1_000_000,
+    outputTokens: 20_000,
+    cacheWriteTokens: 900_000,
+  },
+  {
+    // Both halves at once, since they are disjoint subsets of inputTokens and
+    // a card that subtracts only one of them still lands on the wrong fresh
+    // remainder.
+    label: "cache read and write together",
+    inputTokens: 1_000_000,
+    outputTokens: 50_000,
+    cachedTokens: 600_000,
+    cacheWriteTokens: 300_000,
+  },
 ] as const;
 
 describe("rate-card parity: engine card vs billing card", () => {
@@ -108,5 +135,58 @@ describe("isRateCardMiss", () => {
   it("is false for a versioned id that prefix-matches a family", () => {
     expect(isRateCardMiss("claude-sonnet-5-20260101")).toBe(false);
     expect(isRateCardMiss("openai/gpt-5-mini-2026-01-01")).toBe(false);
+  });
+});
+
+describe("the cache-write rate itself (#1411)", () => {
+  it("matches billing field for field, on every family", () => {
+    // The shapes above compare totals, which can agree by cancellation. This
+    // compares the numbers.
+    const mismatches: string[] = [];
+    for (const entry of RATE_CARD) {
+      const billing =
+        PROVIDER_RATE_CARD[entry.family] ??
+        Object.entries(PROVIDER_RATE_CARD).find(([key]) =>
+          key.endsWith(`/${entry.family}`),
+        )?.[1];
+      if (!billing) continue; // the row above already fails for this family
+      for (const field of [
+        "inputPer1M",
+        "outputPer1M",
+        "cachedInputPer1M",
+        "cacheWritePer1M",
+      ] as const) {
+        if (entry.rate[field] !== billing[field]) {
+          mismatches.push(
+            `${entry.family}.${field}: engine ${entry.rate[field]} vs billing ${billing[field]}`,
+          );
+        }
+      }
+    }
+    expect(mismatches).toEqual([]);
+  });
+
+  it("never prices a write below fresh input, or a read above it", () => {
+    // The invariant that would have caught #1411 on its own: pricing a write as
+    // fresh input made the two exactly equal on Anthropic, where the real rate
+    // is 25% higher.
+    for (const entry of RATE_CARD) {
+      expect(entry.rate.cacheWritePer1M).toBeGreaterThanOrEqual(
+        entry.rate.inputPer1M,
+      );
+      expect(entry.rate.cachedInputPer1M).toBeLessThanOrEqual(
+        entry.rate.inputPer1M,
+      );
+    }
+  });
+
+  it("keeps Anthropic's 25% write premium, and no premium anywhere else", () => {
+    for (const entry of RATE_CARD) {
+      const expected =
+        entry.vendor === "anthropic"
+          ? entry.rate.inputPer1M * 1.25
+          : entry.rate.inputPer1M;
+      expect(entry.rate.cacheWritePer1M).toBeCloseTo(expected, 6);
+    }
   });
 });
