@@ -1,14 +1,21 @@
 # Spec: app-chat-stream-ui
 
 > Auto-extracted by spec-miner. Last mined: 2026-06-20.
-> Source: use-tool-stream.ts, stream-event-types.ts, chat-shell-client.tsx, chat-component-registry.tsx, activity-timeline.tsx, intercept-form-fill.ts, message-bubble.tsx
+> Source: use-tool-stream.ts, stream-event-types.ts, chat-shell-client.tsx, chat-component-registry.tsx, activity-timeline.tsx, message-bubble.tsx
 > Last verified: 2026-06-20 (commit 2f628504)
+>
+> **2026-09-07 note:** [ADR-041](../../adr/ADR-041-runtime-excision.md) deleted
+> plan mode (`plan-proposed`/`plan-resolved`), subagent fan-out
+> (`subagent-dispatched`), `agent.code.execute`'s CodeExecuteCard dispatch, and
+> `intercept-form-fill.ts`/`page_form_fill` entirely — none of those stream
+> event types, cards, or files exist anymore. Their Requirement/Invariant
+> sections have been removed from this file rather than kept as dead prose.
 
 ---
 
 ## Overview
 
-The chat stream surface consumes SSE events from `POST /api/v1/chat/stream` and renders live tool calls, reasoning, plans, approvals, consents, memory operations, and subagent fanouts in true stream order via an activity timeline. A single transport (no ai/rsc). Generative UI: structured output components dispatched from a registry via render directives. Stream consumption pauses at approval/consent gates until user resolution or incoming *-resolved events unblock the loop. Text and tool events interleave; the reducer maintains an ordered timeline key list so reasoning, tool calls, and text segments appear in exact stream-arrival order, not grouped by type.
+The chat stream surface consumes SSE events from `POST /api/v1/chat/stream` and renders live tool calls, reasoning, approvals, consents, and memory operations in true stream order via an activity timeline. A single transport (no ai/rsc). Generative UI: structured output components dispatched from a registry via render directives. Stream consumption pauses at approval/consent gates until user resolution or incoming *-resolved events unblock the loop. Text and tool events interleave; the reducer maintains an ordered timeline key list so reasoning, tool calls, and text segments appear in exact stream-arrival order, not grouped by type.
 
 ---
 
@@ -63,16 +70,6 @@ The reducer accepts stream events one at a time and accumulates mutable state ke
 <!-- test: use-tool-stream.test.ts:consentPause -->
 - **WHEN** consent-required event arrives (OXA-816 first-use external MCP consent)
 - **THEN** the consent is added to `state.pendingConsents` (keyed by approvalId), its key is added to order, `activeTextKey` is set to null, and the consume loop pauses (reusing the same approval waiter mechanism).
-
-#### Scenario: plan-proposed and plan-resolved cycle
-<!-- test: use-tool-stream.test.ts:planProposed -->
-- **WHEN** plan-proposed arrives with `planId`, `title`, `steps`, and optional `rationale`
-- **THEN** a plan entry is created with `status: "pending"`; when plan-resolved arrives with `decision: "approved" | "denied" | "amended"`, the status is updated.
-
-#### Scenario: subagent-dispatched initiates fanout tracking
-<!-- test: use-tool-stream.test.ts:subagentDispatched -->
-- **WHEN** subagent-dispatched arrives with `fanoutId`, `parentMessageId`, and `children[]` array
-- **THEN** an entry in `state.activeFanouts[fanoutId]` is created with `status: "running"` and the children mapped to running status; when subagent-completed arrives, the status and results are updated.
 
 #### Scenario: memory-recalled and memory-written track memory operations
 <!-- test: use-tool-stream.test.ts:memoryOps -->
@@ -202,12 +199,12 @@ The sseToEvents helper reads chunks from a ReadableStreamDefaultReader, accumula
 <!-- depends_on: Stream event reducer accumulates SSE state, Stream consumption pauses at approval and consent gates, SSE stream is converted from ReadableStream to async iterable -->
 <!-- enforced: chat-shell-client.ChatShellClient() -->
 
-ChatShellClient wraps the useToolStream hook, manages the POST /api/v1/chat/stream fetch, and renders live timeline entries in true stream order. It intercepts page_form_fill tool events for cross-page form integration. The composer is disabled while hasPendingApproval is true (blocking approvals or consents). Approval/consent resolution via wrappedResolveApproval/wrappedResolveConsent immediately signals the consume loop, unblocking the stream before the server action completes. On stream completion, router.refresh() revalidates the RSC so persisted content replaces live state.
+ChatShellClient wraps the useToolStream hook, manages the POST /api/v1/chat/stream fetch, and renders live timeline entries in true stream order. The composer is disabled while hasPendingApproval is true (blocking approvals or consents). Approval/consent resolution via wrappedResolveApproval/wrappedResolveConsent immediately signals the consume loop, unblocking the stream before the server action completes. On stream completion, router.refresh() revalidates the RSC so persisted content replaces live state.
 
 #### Scenario: submitted message triggers SSE fetch and live stream consumption
 <!-- test: chat-shell-client.test.ts:submitTriggersFetch -->
 - **WHEN** the user submits a message via the composer
-- **THEN** wrappedSendAction calls sendAction (persisting the user message), obtains conversationId and userMessageId, then fetches `POST /api/v1/chat/stream` with the message, model, effort, and other form data; the response body is converted to an async event stream via sseToEvents, then piped through interceptFormFillEvents, then consumed via consume().
+- **THEN** wrappedSendAction calls sendAction (persisting the user message), obtains conversationId and userMessageId, then fetches `POST /api/v1/chat/stream` with the message, model, effort, and other form data; the response body is converted to an async event stream via sseToEvents, then consumed via consume().
 
 #### Scenario: live turn renders in correct stream order via order list
 <!-- test: chat-shell-client.test.ts:liveTimelineOrder -->
@@ -219,11 +216,6 @@ ChatShellClient wraps the useToolStream hook, manages the POST /api/v1/chat/stre
 - **WHEN** a tool call is rendered with `active: true` (status pending or running) and `isStreaming: true`
 - **THEN** the ToolCallCard is passed `defaultOpen={true}`, so the user watches the tool arguments stream and output accumulate live.
 
-#### Scenario: code-execute capability renders as CodeExecuteCard instead of generic tool
-<!-- test: chat-shell-client.test.ts:codeExecuteCard -->
-- **WHEN** a tool call with `capability === "agent.code.execute"` arrives
-- **THEN** the renderEntry switch dispatches to CodeExecuteCard (with language extracted from inputPreview) instead of the generic ToolCallCard.
-
 #### Scenario: approval card is rendered and blocks composer
 <!-- test: chat-shell-client.test.ts:approvalBlocksComposer -->
 - **WHEN** an approval-required event arrives
@@ -234,20 +226,10 @@ ChatShellClient wraps the useToolStream hook, manages the POST /api/v1/chat/stre
 - **WHEN** a consent-required event arrives (OXA-816)
 - **THEN** ConsentCard is rendered with the capability, serverId, toolName, inputPreview, and expiresAt; the composer is disabled (hasBlockingConsent becomes true) until the consent is resolved; the card has a "Grant all tools" option to auto-grant future consent for that serverId.
 
-#### Scenario: plan card is rendered with pending/resolved status
-<!-- test: chat-shell-client.test.ts:planCard -->
-- **WHEN** plan-proposed arrives with title and steps
-- **THEN** PlanCard is rendered with `status: "pending"` and onResolve callback; when the user approves/denies/amends, resolvePlanAction is called; when plan-resolved arrives, the status updates.
-
 #### Scenario: reasoning card is rendered with thinking status
 <!-- test: chat-shell-client.test.ts:reasoningCard -->
 - **WHEN** reasoning-start → delta* → reasoning-end arrives
 - **THEN** ReasoningCard is rendered with text accumulating in real time (typewriter effect if isStreaming), and once reasoning-end arrives, the card shows "Thought for Xs" (collapsed disclosure, re-expandable).
-
-#### Scenario: subagent fanout shows multiple child branches executing in parallel
-<!-- test: chat-shell-client.test.ts:subagentFanout -->
-- **WHEN** subagent-dispatched arrives with children array
-- **THEN** SubagentFanout is rendered with the children, each showing capability and optional label; when the user clicks a child, onNavigateToChild is called (which sets window.location.hash to navigate to that message branch).
 
 #### Scenario: memory recall and memory write cards display operation confirmations
 <!-- test: chat-shell-client.test.ts:memoryCards -->
@@ -292,11 +274,6 @@ ChatShellClient wraps the useToolStream hook, manages the POST /api/v1/chat/stre
 <!-- test: chat-shell-client.test.ts:newConversationNav -->
 - **WHEN** the user submits a message and wasNewConversation is true and result.conversationPublicId is returned
 - **THEN** router.replace(`${pathname}?c=${conversationPublicId}`) updates the URL, and router.refresh() revalidates so the conversation nav list shows the new conversation immediately (without waiting for the stream to finish).
-
-#### Scenario: page form fill events are intercepted before dispatch
-<!-- test: chat-shell-client.test.ts:pageFormFill -->
-- **WHEN** fillAwareStream (from interceptFormFillEvents) is consumed
-- **THEN** page_form_fill tool-call-start events trigger onFormFillStartRef.current() (if set), and tool-call-end events with status "completed" and valid fields trigger onFormFillEndRef.current(result); all events are yielded unchanged after interception so the reducer still processes them.
 
 #### Scenario: stream fetch failure is swallowed if persist succeeds
 - **WHEN** the fetch to /api/v1/chat/stream fails (network error, timeout, etc.)
@@ -359,31 +336,6 @@ CHAT_COMPONENTS is a Record mapping stable componentId keys (e.g., "svg-preview"
 #### Scenario: connection-create-inline renders an inline connection wizard
 - **WHEN** componentId is "connection-create-inline"
 - **THEN** the component renders an inline GitHub (or fallback) connection flow.
-
----
-
-### Requirement: Form fill events are transparently intercepted before dispatch
-<!-- id: intercept-form-fill.interceptFormFillEvents -->
-<!-- entities: StreamEvent, PageFormFillOutput, FormFillResult -->
-<!-- enforced: intercept-form-fill.interceptFormFillEvents() -->
-
-interceptFormFillEvents wraps an async generator of StreamEvents and yields every event unchanged, but intercepts page_form_fill tool events: on tool-call-start with capability "page_form_fill", the onStart callback is fired (optional); on tool-call-end for a tracked fill call (status "completed" and valid fields array in output), onEnd is called with a FormFillResult. Both callbacks are optional and never throw. The generator continues regardless.
-
-#### Scenario: page_form_fill tool-call-start triggers onStart callback
-- **WHEN** a tool-call-start event arrives with `capability === "page_form_fill"`
-- **THEN** the toolCallId is registered in fillToolCallIds, onStart() is called, and the event is yielded unchanged.
-
-#### Scenario: page_form_fill tool-call-end with valid output triggers onEnd
-- **WHEN** tool-call-end arrives for a tracked fill toolCallId with `status: "completed"` and `output.fields` is an array
-- **THEN** onEnd is called with a FormFillResult containing the fields; the toolCallId is removed from fillToolCallIds; the event is yielded unchanged.
-
-#### Scenario: form fill callbacks are optional and never throw
-- **WHEN** onStart is null or onEnd is null
-- **THEN** the callback is not called, but interception continues; no error is thrown.
-
-#### Scenario: unrelated tool events pass through unchanged
-- **WHEN** tool-call-start or tool-call-end arrive for non-page_form_fill tools
-- **THEN** the events are yielded unchanged without triggering interception.
 
 ---
 
@@ -452,16 +404,6 @@ When a component event arrives with a componentId that is not in CHAT_COMPONENTS
 
 ---
 
-### Invariant: Form fill interception is transparent and non-blocking
-<!-- entities: interceptFormFillEvents, StreamEvent -->
-<!-- enforced: intercept-form-fill.interceptFormFillEvents() -->
-
-interceptFormFillEvents passes every event through unchanged. Callbacks (onStart, onEnd) are optional and never throw. Interception of page_form_fill tool events is side-effect only; it does not alter the event or block the stream. The stream continues regardless of callback success or failure.
-
-> Last verified: 2026-06-20 (commit 2f628504)
-
----
-
 ### Invariant: SSE [DONE] sentinel ends stream cleanly
 <!-- entities: StreamEvent -->
 <!-- enforced: chat-shell-client.sseToEvents() -->
@@ -492,5 +434,4 @@ After router.refresh() revalidates the RSC and the messages prop is updated with
 
 ---
 
-<!-- uncertainty: The exact shape and contract of the pageContext and fillableForm objects is not fully specified in the sampled files. The integration assumes a specific schema for form fill callbacks (onFormFillStart, onFormFillEnd) passed from a parent wrapper (AskDrawer/WandPanel). Full validation of this contract would require reading the ask/ and fill-types.ts modules. -->
 
