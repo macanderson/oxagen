@@ -49,17 +49,17 @@ agent and Oxagen is the governor, grounder, explainer, meter and rater.
 
 | Package | Lines (before → after) | Decision | Reason |
 |---|---|---|---|
-| `oxagen` (kernel, contracts, IAM resolve, plugins) | 62.6k → ~40k | **Keep** | The product. 367 → ~236 contracts. |
+| `oxagen` (kernel, contracts, IAM resolve, plugins) | 62.6k → 43.7k | **Keep** | The product. 367 → 238 registered contracts (incl. the two new data-plane ones). |
 | `iam`, `tenancy`, `compliance`, `telemetry`, `crypto`, `config`, `auth`, `notifications`, `storage` | — | **Keep** | Governance, audit, trust. |
 | `billing` (+reseller) | 21.9k | **Keep** | Meter→Stripe loop. `runner_observed` attribution retired; gateway + evidence ingress attribution stays. |
 | `plugins` (entitlements, credentials/KMS, OAuth, MCP registry) | 11.8k | **Keep** | The governed tool gateway's install and credential plane. |
 | `ontology`, `ingestion`, `engram`, `github` (App + repo observation) | — | **Keep** | Graph grounding, memory, knowledge sources. GitHub mutation half deleted. |
-| `run-ledger` (was `agent-runner`) | 15.6k → 10.8k | **Keep, renamed** | Evidence ledger: runs, attempts, events, seals, finalization grants. |
+| `run-ledger` (was `agent-runner`) | 15.6k → 8.7k | **Keep, renamed** | Evidence ledger: runs, attempts, events, seals, finalization grants. |
 | `run-evidence` | 3.2k | **Keep, promote** | CGP conformance + RFC-8785 digests; becomes the spine of ingress. |
 | `rules` | 1.4k | **Keep** | Decision rules gate in the kernel — the "refund rules" page. |
-| `agent` | 44.9k → ~27k | **Keep, slimmed** | Governed tool materialisation (IAM → entitlement → RBAC → consent → approval → telemetry per call), agent registry handlers, memory, MCP. Sandbox/subagent/plan/skill/browser/code handlers deleted. |
-| `handlers` | 86.6k → ~65k | **Keep, slimmed** | Foundation handlers minus deleted families. |
-| `inngest-functions` | 25.2k → ~14k | **Keep, slimmed** | Execution functions deleted; billing/ingestion/privacy/security/plugin/schema stay. |
+| `agent` | 44.9k → 25.7k | **Keep, slimmed** | Governed tool materialisation (IAM → entitlement → RBAC → consent → approval → telemetry per call), agent registry handlers, memory, MCP. Sandbox/subagent/plan/skill/browser/code handlers deleted. |
+| `handlers` | 86.6k → 64.0k | **Keep, slimmed** | Foundation handlers minus deleted families. |
+| `inngest-functions` | 25.2k → 13.7k | **Keep, slimmed** | Execution functions deleted; billing/ingestion/privacy/security/plugin/schema stay. |
 | `ui`, `mcp-config`, `functions` | — | **Keep** | |
 | `agent-engine` | 28.7k | **Delete** | Stella's coding loop, in TypeScript. |
 | `agent-worker` | 4.3k | **Delete** | The durable runner. |
@@ -68,8 +68,9 @@ agent and Oxagen is the governor, grounder, explainer, meter and rater.
 | `stella-engine-client` | 2.1k | **Delete** | Sidecar transport; Oxagen is not Stella's host process. |
 | `web` (Tavily) | 0.8k | **Delete** | Agent tool. |
 | `apps/web2` | 4.4k | **Delete** | Undeployed duplicate site. |
-| `apps/cli` | 47.6k → ~17k | **Slim** | Governance ops only. |
-| `apps/api`, `apps/mcp`, `apps/app`, `apps/docs`, `apps/schemas`, `apps/web` | — | **Keep, slimmed** | Surfaces of surviving contracts. |
+| `apps/cli` | 47.6k → 15.4k | **Slim** | Governance ops only. |
+| `apps/api` (38.9k → 25.6k), `apps/mcp` (17.4k → 12.2k), `apps/app` (282k → 205k), `apps/docs`, `apps/web` | — | **Keep, slimmed** | Surfaces of surviving contracts. |
+| `apps/schemas` | 0.2k | **Delete** | Hosted only the deleted CLI's settings JSON schema. |
 
 ## 3. Disposition by contract family (registered capabilities)
 
@@ -124,7 +125,24 @@ SDKs, tenant-switchable stores.
 | Tenant data planes | **Missing.** | ADR-042 first slice in this branch. |
 | Encryption at rest | **Partial.** KMS envelope for credentials/billing/ingestion; Postgres/Neo4j/ClickHouse rely on provider disk encryption. | Document per-store posture in `docs/compliance`; per-plane KMS keys ride ADR-042. |
 
-## 6. How the cut was verified
+## 6. Outcome
+
+| Metric | Before | After |
+|---|---|---|
+| TypeScript lines (apps + packages) | ~800k | ~568k |
+| Packages | 36 | 27 |
+| Apps | 8 | 6 |
+| Registered contracts | 367 | 238 |
+| Postgres tables | 138 | 107 (+1 `org.data_planes`) |
+| Env registry keys | 193 | 93 |
+| CLI command modules | 40 | 18 |
+| Root-level Inngest functions | 47 | 26 |
+
+`apps/app` remains the largest surface (205k lines); the chat components and
+knowledge explorer dominate it. The next cut candidate is the chat transcript
+UI once the standalone approvals queue exists (ADR-040 Phase 3).
+
+## 7. How the cut was verified
 
 - Every package typechecks (`tsc --noEmit`) — see the PR checklist.
 - `pnpm check:contracts`, `pnpm check:manifest`, `pnpm check:ui-parity`,
