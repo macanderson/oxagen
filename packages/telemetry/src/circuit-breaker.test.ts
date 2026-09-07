@@ -221,3 +221,195 @@ describe("isCircuitOpenError", () => {
     expect(isCircuitOpenError(new Error("other"))).toBe(false);
   });
 });
+
+/**
+ * #1393's repro. The existing suite drives the state machine sequentially,
+ * which is why this was invisible: every assertion above still passes against
+ * the broken breaker. Concurrency is the normal condition for a breaker — a
+ * single-threaded caller would not need one.
+ */
+describe("half-open admits ONE probe (#1393)", () => {
+  /** A dependency that counts arrivals and settles only when told to. */
+  function gatedDependency() {
+    let arrivals = 0;
+    const settle: Array<(value: string) => void> = [];
+    const reject: Array<(err: unknown) => void> = [];
+    return {
+      get arrivals() {
+        return arrivals;
+      },
+      call: () =>
+        new Promise<string>((resolveCall, rejectCall) => {
+          arrivals += 1;
+          settle.push(resolveCall);
+          reject.push(rejectCall);
+        }),
+      settleAll: () => {
+        for (const r of settle.splice(0)) r("ok");
+        reject.splice(0);
+      },
+      failAll: () => {
+        for (const r of reject.splice(0)) r(new Error("dependency down"));
+        settle.splice(0);
+      },
+    };
+  }
+
+  /** Trip the breaker open, then advance past the reset window. */
+  async function openedBreaker(clock: ReturnType<typeof fakeClock>) {
+    const b = new CircuitBreaker("k", {
+      failureThreshold: 2,
+      resetTimeoutMs: 1000,
+      now: clock.now,
+    });
+    await expect(b.exec(boom)).rejects.toThrow();
+    await expect(b.exec(boom)).rejects.toThrow();
+    expect(b.getState()).toBe("open");
+    clock.advance(1001);
+    return b;
+  }
+
+  it("lets exactly one of twenty concurrent callers reach the dependency", async () => {
+    const clock = fakeClock();
+    const b = await openedBreaker(clock);
+    const dep = gatedDependency();
+
+    const calls = Array.from({ length: 20 }, () =>
+      b.exec(dep.call).catch((err: unknown) => err),
+    );
+    // Let the probe claim the slot and the other nineteen shed.
+    await Promise.resolve();
+
+    // Before the fix this was 20.
+    expect(dep.arrivals).toBe(1);
+
+    dep.settleAll();
+    const results = await Promise.all(calls);
+    const shed = results.filter((r) => isCircuitOpenError(r));
+    expect(shed).toHaveLength(19);
+  });
+
+  it("frees the slot once the probe settles", async () => {
+    const clock = fakeClock();
+    const b = await openedBreaker(clock);
+    const dep = gatedDependency();
+
+    const first = b.exec(dep.call);
+    await Promise.resolve();
+    await expect(b.exec(ok)).rejects.toBeInstanceOf(CircuitOpenError);
+
+    dep.settleAll();
+    await first;
+    // The probe succeeded, so the breaker closed and traffic flows again.
+    expect(b.getState()).toBe("closed");
+    expect(await b.exec(ok)).toBe("ok");
+  });
+
+  it("reopens on a failed probe without letting the shed callers through", async () => {
+    const clock = fakeClock();
+    const b = await openedBreaker(clock);
+    const dep = gatedDependency();
+
+    const probe = b.exec(dep.call);
+    await Promise.resolve();
+    const shed = b.exec(dep.call).catch((err: unknown) => err);
+
+    dep.failAll();
+    await expect(probe).rejects.toThrow("dependency down");
+    expect(await shed).toBeInstanceOf(CircuitOpenError);
+    expect(dep.arrivals).toBe(1);
+    expect(b.getState()).toBe("open");
+  });
+
+  it("means successThreshold > 1 is N SEQUENTIAL probes", async () => {
+    const clock = fakeClock();
+    const b = new CircuitBreaker("k", {
+      failureThreshold: 1,
+      resetTimeoutMs: 1000,
+      successThreshold: 2,
+      now: clock.now,
+    });
+    await expect(b.exec(boom)).rejects.toThrow();
+    clock.advance(1001);
+
+    const dep = gatedDependency();
+    const first = b.exec(dep.call);
+    await Promise.resolve();
+    // A concurrent second call cannot be the second probe.
+    await expect(b.exec(ok)).rejects.toBeInstanceOf(CircuitOpenError);
+    dep.settleAll();
+    await first;
+    expect(b.getState()).toBe("half-open");
+
+    // Sequentially, it can.
+    expect(await b.exec(ok)).toBe("ok");
+    expect(b.getState()).toBe("closed");
+  });
+
+  it("does not gate ordinary traffic while closed", async () => {
+    const b = new CircuitBreaker("k", { failureThreshold: 3 });
+    const dep = gatedDependency();
+    const calls = Array.from({ length: 5 }, () => b.exec(dep.call));
+    await Promise.resolve();
+    expect(dep.arrivals).toBe(5);
+    dep.settleAll();
+    await Promise.all(calls);
+  });
+
+  /**
+   * The gate needs a deadline of its own: a probe that never settles would
+   * otherwise hold it forever, leaving a recovered dependency shut out with
+   * silence as the only symptom.
+   */
+  it("lets another caller take over a probe that outlived its deadline", async () => {
+    const clock = fakeClock();
+    const b = new CircuitBreaker("k", {
+      failureThreshold: 1,
+      resetTimeoutMs: 1000,
+      probeTimeoutMs: 5000,
+      now: clock.now,
+    });
+    await expect(b.exec(boom)).rejects.toThrow();
+    clock.advance(1001);
+
+    const dep = gatedDependency();
+    void b.exec(dep.call).catch(() => undefined); // the probe that hangs
+    await Promise.resolve();
+    expect(dep.arrivals).toBe(1);
+
+    // Still inside the deadline — shed.
+    clock.advance(4000);
+    await expect(b.exec(ok)).rejects.toBeInstanceOf(CircuitOpenError);
+
+    // Past it — the next caller becomes the probe.
+    clock.advance(1001);
+    expect(await b.exec(ok)).toBe("ok");
+    expect(b.getState()).toBe("closed");
+  });
+
+  it("ignores a presumed-lost probe that settles after being replaced", async () => {
+    const clock = fakeClock();
+    const b = new CircuitBreaker("k", {
+      failureThreshold: 1,
+      resetTimeoutMs: 1000,
+      probeTimeoutMs: 5000,
+      now: clock.now,
+    });
+    await expect(b.exec(boom)).rejects.toThrow();
+    clock.advance(1001);
+
+    const dep = gatedDependency();
+    const lost = b.exec(dep.call).catch((err: unknown) => err);
+    await Promise.resolve();
+
+    clock.advance(5001);
+    expect(await b.exec(ok)).toBe("ok");
+    expect(b.getState()).toBe("closed");
+
+    // The abandoned probe now fails — it must not reopen a breaker it no
+    // longer speaks for.
+    dep.failAll();
+    await lost;
+    expect(b.getState()).toBe("closed");
+  });
+});
