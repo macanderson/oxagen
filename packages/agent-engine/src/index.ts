@@ -18,6 +18,10 @@ export {
   EditIntegrityLedger,
 } from "./edit-integrity";
 export type { SyntaxCheckResult } from "./edit-integrity";
+export {
+  canonicalPathKey,
+  canonicalRelativePathKey,
+} from "./path-identity";
 // LocalWorkspace is a CLI adapter (Stage B), not engine code — see ADR-019.
 // DEFAULT_AGENT_MODEL / DEFAULT_MAX_AGENT_STEPS come through ./types above.
 export { changedFilesFromDiff } from "./diff";
