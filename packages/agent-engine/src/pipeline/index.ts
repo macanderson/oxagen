@@ -35,6 +35,7 @@ import {
   judgeCompleteness,
   judgePanel,
   buildRevisionPrompt,
+  resolveReviseMinConfidence,
 } from "../evaluate/judge";
 import { enhancePrompt } from "../evaluate/prompt-enhancer";
 import { createSpecTestTracker } from "../oracle/spec-test";
@@ -1330,15 +1331,31 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     // complete — revising it doubles turn cost for marginal expected gain.
     // Confident-incomplete verdicts still revise. Tune/disable via
     // OXAGEN_REVISE_MIN_CONFIDENCE (default 40; 0 restores always-revise).
-    const reviseMinConfidence = Number(
-      process.env["OXAGEN_REVISE_MIN_CONFIDENCE"] ?? 40,
-    );
+    const reviseMinConfidence = resolveReviseMinConfidence(process.env);
+
+    // The floor is asymmetric, and #1390 is right that an unexamined `complete`
+    // deserves as much suspicion as an unexamined `incomplete`. It applies to
+    // the case where the asymmetry is not defensible: a DEGRADED judge that
+    // said complete. That verdict is not a judgement at all — the heuristic
+    // cannot read the diff, and it returns `complete` for any turn with a file
+    // or a command in it — so a low-confidence one is exactly "we could not
+    // judge", and shipping it as done is the failure the issue names.
+    //
+    // A REAL judge's low-confidence `complete` is left alone, and that is the
+    // argued half: it read the same evidence a revise round would hand back to
+    // the agent, and asking the agent to "finish" work a judge just called done
+    // spends a full round to re-derive the same verdict. Low confidence there
+    // is a reason to surface the verdict, not to spend on it.
+    const unexaminedComplete =
+      verdict.complete &&
+      verdict.fallback &&
+      verdict.confidence < reviseMinConfidence;
     const canRevise =
-      !verdict.complete &&
       round < maxRounds &&
       !opts.readOnly &&
       !opts.signal?.aborted &&
-      verdict.confidence >= reviseMinConfidence;
+      (unexaminedComplete ||
+        (!verdict.complete && verdict.confidence >= reviseMinConfidence));
     if (!canRevise) break;
     prompt = buildRevisionPrompt(verdict);
 

@@ -195,9 +195,23 @@ function evidenceBlock(opts: JudgeOptions): string {
 }
 
 /**
- * Heuristic verdict for when the advisor model is unavailable. Conservative: it
- * flags the obvious "claimed a change but touched no files" case and otherwise
- * abstains to a low-confidence "complete" so a model outage never wedges the loop.
+ * Heuristic verdict for when the advisor model is unavailable.
+ *
+ * Its direction, branch by branch, because "conservative" used to be the whole
+ * description and it was only conservative on one of them:
+ *
+ * - **No evidence at all** — no files, no commands, no steps: `complete: false`.
+ *   An agent that did nothing has completed nothing, and that is decidable
+ *   without reading its prose. This used to depend entirely on whether the
+ *   agent's closing message happened to contain one of eleven English verbs: a
+ *   turn that said "Here's what I'd suggest" and touched nothing scored
+ *   `complete: true` at confidence 30, and an advisor outage plus a
+ *   read-only-sounding reply shipped a no-op as done (#1426, #1390).
+ * - **Some evidence, and prose claiming edits that the evidence contradicts** —
+ *   `complete: false`, as before.
+ * - **Some evidence** — `complete: true` at a capped confidence. The heuristic
+ *   cannot read the diff, so it cannot do better than "something happened";
+ *   the cap plus `fallback: true` is what tells the caller not to trust it.
  */
 function heuristicVerdict(opts: JudgeOptions, model: string): JudgeVerdict {
   const claimsChange =
@@ -206,6 +220,30 @@ function heuristicVerdict(opts: JudgeOptions, model: string): JudgeVerdict {
     );
   const touchedNothing =
     opts.filesTouched.length === 0 && opts.commandsRun.length === 0;
+
+  // Decided on evidence, not on phrasing: the verb list is no longer the only
+  // thing standing between "did nothing" and "complete".
+  if (touchedNothing && opts.steps === 0) {
+    return {
+      complete: false,
+      confidence: 90,
+      findings: [
+        "The agent wrote no files, ran no commands, and took no tool-loop steps.",
+      ],
+      remainingWork: [
+        "Do the work: make the changes the request asks for, then verify them.",
+      ],
+      reasoning:
+        "Heuristic check (advisor unavailable): no file, command or tool-loop " +
+        "activity at all, so there is nothing that could constitute completed work. " +
+        "This is a high-confidence observation, not a guess — the absence of evidence " +
+        "is itself the evidence.",
+      model,
+      fallback: true,
+      usage: emptyUsage(),
+    };
+  }
+
   if (claimsChange && touchedNothing) {
     return {
       complete: false,
@@ -328,10 +366,22 @@ function dedupe(items: string[]): string[] {
 
 /**
  * Run a PANEL of judges (distinct cross-vendor models) concurrently and
- * aggregate: the work is complete only if a MAJORITY say so; findings and
- * remaining work are the union across the dissenting judges; confidence is the
- * mean. A single judge failing degrades to its heuristic (handled inside
- * {@link judgeCompleteness}) rather than sinking the panel.
+ * aggregate.
+ *
+ * **Only judges that actually judged get a vote.** A heuristic fallback is not
+ * an opinion about the work — it is the record of a model being unavailable,
+ * and it defaults to `complete` whenever any evidence exists. Counting those as
+ * votes meant a partial outage decided the verdict: two degraded judges
+ * out-voted the one that read the diff, its findings were dropped by the
+ * `complete ? [] : findings` line, and the result reported `fallback: false`
+ * because `every` was not satisfied. A reviewer downstream saw a confident,
+ * finding-free "complete" produced by one working judge that had said the
+ * opposite (#1427).
+ *
+ * So: the majority is taken among real verdicts; if none is real the panel is a
+ * fallback and says so. A real dissenting judge's findings survive a `complete`
+ * aggregate, because they are the highest-grade evidence the panel produced and
+ * discarding them is how the revise loop stops being told about real gaps.
  */
 export async function judgePanel(
   opts: JudgeOptions,
@@ -345,13 +395,24 @@ export async function judgePanel(
   const verdicts = await Promise.all(
     models.map((m) => judgeCompleteness({ ...opts, advisorModel: m }, ai)),
   );
-  const completes = verdicts.filter((v) => v.complete).length;
-  const complete = completes * 2 > verdicts.length; // strict majority
-  const dissenting = verdicts.filter((v) => !v.complete);
+
+  const real = verdicts.filter((v) => !v.fallback);
+  const degraded = verdicts.length - real.length;
+  // The electorate: real judges when there are any, otherwise every judge —
+  // a fully degraded panel still has to return something.
+  const voting = real.length > 0 ? real : verdicts;
+  const completes = voting.filter((v) => v.complete).length;
+  const complete = completes * 2 > voting.length; // strict majority
+
+  // Findings come from every REAL dissenter, whatever the tally says. A
+  // heuristic dissent carries no detail worth forwarding, and when the panel is
+  // fully degraded `voting` is every judge, so the dissent is still reported.
+  const dissenting = voting.filter((v) => !v.complete);
   const findings = dedupe(dissenting.flatMap((v) => v.findings));
   const remainingWork = dedupe(dissenting.flatMap((v) => v.remainingWork));
+
   const confidence = Math.round(
-    verdicts.reduce((s, v) => s + v.confidence, 0) / verdicts.length,
+    voting.reduce((s, v) => s + v.confidence, 0) / voting.length,
   );
   const usage = verdicts.reduce(
     (acc, v) => accumulateUsage(acc, v.model, v.usage),
@@ -360,27 +421,90 @@ export async function judgePanel(
   return {
     complete,
     confidence,
-    findings: complete ? [] : findings,
-    remainingWork: complete ? [] : remainingWork,
+    findings,
+    remainingWork,
     reasoning:
       `Panel of ${verdicts.length} (${models.map((m) => m.split("/").pop()).join(", ")}): ` +
-      `${completes}/${verdicts.length} judged complete. ` +
+      `${completes}/${voting.length} judged complete` +
+      (degraded > 0
+        ? `, ${degraded} of ${verdicts.length} degraded to the heuristic and did not vote`
+        : "") +
+      ". " +
       dissenting
         .map((v) => `${v.model.split("/").pop()}: ${v.reasoning}`)
         .join(" | "),
     model: `panel(${models.join(",")})`,
-    fallback: verdicts.every((v) => v.fallback),
+    fallback: verdicts.some((v) => v.fallback),
+    degradedJudges: { degraded, total: verdicts.length },
     usage,
   };
+}
+
+/** Default floor for {@link resolveReviseMinConfidence}. */
+const DEFAULT_REVISE_MIN_CONFIDENCE = 40;
+
+/**
+ * Resolve the confidence floor below which a verdict is not worth a revise
+ * round, from `OXAGEN_REVISE_MIN_CONFIDENCE`.
+ *
+ * A bare `Number(...)` yields `NaN` for anything unparseable, and every
+ * comparison against `NaN` is false — so a typo silently turned "revise when
+ * confident enough" into "never revise", with nothing said. An unusable value
+ * now falls back to the default and reports itself once.
+ */
+export function resolveReviseMinConfidence(
+  env: Record<string, string | undefined>,
+): number {
+  const raw = env["OXAGEN_REVISE_MIN_CONFIDENCE"];
+  if (raw === undefined || raw.trim() === "") {
+    return DEFAULT_REVISE_MIN_CONFIDENCE;
+  }
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0 || value > 100) {
+    reportUnusableConfidence(raw);
+    return DEFAULT_REVISE_MIN_CONFIDENCE;
+  }
+  return value;
+}
+
+/** Reported once per distinct bad value, so a per-round resolve says it once. */
+const reportedConfidences = new Set<string>();
+
+function reportUnusableConfidence(raw: string): void {
+  if (reportedConfidences.has(raw)) return;
+  reportedConfidences.add(raw);
+  console.warn(
+    `[judge] OXAGEN_REVISE_MIN_CONFIDENCE=${JSON.stringify(raw)} ignored: ` +
+      `expected a number between 0 and 100. Using ${DEFAULT_REVISE_MIN_CONFIDENCE}.`,
+  );
 }
 
 /**
  * Compose the follow-up prompt that drives the agent to finish incomplete work.
  * Exported so the REPL and tests can show/inspect exactly what the agent is told.
+ *
+ * A verdict can also reach here `complete` — when the only judge available was
+ * the heuristic and it was not confident (see the pipeline's
+ * `unexaminedComplete`). Telling the agent its work "is NOT done" would be a
+ * claim nothing established, so that case asks for verification instead.
  */
 export function buildRevisionPrompt(verdict: JudgeVerdict): string {
   const findings = verdict.findings.map((f) => `- ${f}`).join("\n");
   const work = verdict.remainingWork.map((w) => `- ${w}`).join("\n");
+
+  if (verdict.complete) {
+    return [
+      "Your work could not be reviewed — the completeness judge was unavailable, so nothing has checked it.",
+      "Verify it yourself: re-read the original request, confirm every part of it is actually done,",
+      "and run the tests or commands that would show it.",
+      findings ? `\nPoints raised:\n${findings}` : "",
+      "",
+      "If something is missing, fix it now. If it is genuinely complete, say what you verified and how.",
+    ]
+      .filter((s) => s !== "")
+      .join("\n");
+  }
+
   return [
     "A completeness review found your previous work is NOT done. Do not re-explain — finish it.",
     "",
