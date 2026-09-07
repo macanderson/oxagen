@@ -155,7 +155,7 @@ When resolvePrompt is called with a baseline prompt, a key, and optional workspa
 
 #### Scenario: Empty or whitespace overrides are skipped
 <!-- test: prompts/registry.test.ts -->
-- **WHEN** config.overrides={svg.generate:""} or config.overrides={svg.generate:"  \n"} (overridable key, but empty/whitespace)
+- **WHEN** config.overrides={chat.system:""} or config.overrides={chat.system:"  \n"} (overridable key, but empty/whitespace)
 - **THEN** the override is rejected, and the baseline is used in its place
 
 ---
@@ -309,7 +309,7 @@ The @oxagen/ai package is the single AI SDK chokepoint. All models (language, em
 <!-- entities: PromptKey, PromptConfig -->
 <!-- enforced: prompts/registry.chatSystemPrompt(), prompts/registry.conversationTitlePrompt(), etc. -->
 
-Every baseline system prompt (chat.system, conversation.title, svg.generate, image.analyze, workflow.supervisor, workflow.task, form.fill) is built by a pure function (chatSystemPrompt, conversationTitlePrompt, etc.) that takes no input except the PromptKey and optional SystemPromptContext (org/workspace slugs and names). Baselines are never cached at module scope — each call re-renders the baseline, ensuring workspace context is always fresh. The workspace prompt config (additionalInstructions, overrides) is loaded on-demand via loadWorkspacePromptConfig, providing a strict separation between platform defaults and user customization.
+Every baseline system prompt (chat.system, conversation.title — the only two `PromptKey` values left after ADR-041 removed the generation-capability prompt keys) is built by a pure function (chatSystemPrompt, conversationTitlePrompt, etc.) that takes no input except the PromptKey and optional SystemPromptContext (org/workspace slugs and names). Baselines are never cached at module scope — each call re-renders the baseline, ensuring workspace context is always fresh. The workspace prompt config (additionalInstructions, overrides) is loaded on-demand via loadWorkspacePromptConfig, providing a strict separation between platform defaults and user customization.
 
 > Last verified: 2026-06-20 (commit 2f628504)
 
