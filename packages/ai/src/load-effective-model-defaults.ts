@@ -42,8 +42,6 @@ export async function loadEffectiveModelDefaults(
         columns: {
           defaultTextTier: true,
           defaultTextModel: true,
-          defaultImageModel: true,
-          defaultVideoModel: true,
         },
       }),
       args.workspaceId
@@ -52,8 +50,6 @@ export async function loadEffectiveModelDefaults(
             columns: {
               defaultTextTier: true,
               defaultTextModel: true,
-              defaultImageModel: true,
-              defaultVideoModel: true,
             },
           })
         : Promise.resolve(null),
@@ -64,8 +60,6 @@ export async function loadEffectiveModelDefaults(
     ? {
         defaultTextTier: userPrefsRow.defaultTextTier ?? null,
         defaultTextModel: userPrefsRow.defaultTextModel ?? null,
-        defaultImageModel: userPrefsRow.defaultImageModel ?? null,
-        defaultVideoModel: userPrefsRow.defaultVideoModel ?? null,
       }
     : null;
 
@@ -73,8 +67,6 @@ export async function loadEffectiveModelDefaults(
     ? {
         defaultTextTier: workspaceRow.defaultTextTier ?? null,
         defaultTextModel: workspaceRow.defaultTextModel ?? null,
-        defaultImageModel: workspaceRow.defaultImageModel ?? null,
-        defaultVideoModel: workspaceRow.defaultVideoModel ?? null,
       }
     : null;
 
