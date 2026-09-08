@@ -8,7 +8,14 @@ export default defineConfig({
     clearMocks: true,
     environment: "node",
     setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    include: [
+      "src/**/*.test.ts",
+      "src/**/*.test.tsx",
+      // Pure helpers under e2e/ — decisions the Playwright config makes
+      // before a browser starts, which no browser run can check. The
+      // specs themselves are `*.spec.ts` and are not collected here.
+      "e2e/helpers/**/*.test.ts",
+    ],
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts", "src/**/*.tsx"],
