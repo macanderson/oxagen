@@ -1,6 +1,6 @@
 /**
  * One operational dashboard: ALB traffic and health, the app node's own
- * vitals, Aurora's capacity usage, Redshift's capacity usage, and an
+ * vitals, Aurora's capacity usage, and an
  * error-rate graph built from the same log groups observability.tf ships to
  * CloudWatch. A CloudWatch Dashboard rather than Amazon Managed Grafana —
  * the latter bills per user per month on top of its data source costs,
@@ -56,20 +56,6 @@ resource "aws_cloudwatch_dashboard" "oxagen" {
           metrics = [
             ["AWS/RDS", "ServerlessDatabaseCapacity", "DBClusterIdentifier", aws_rds_cluster.postgres.cluster_identifier],
             ["AWS/RDS", "DatabaseConnections", "DBClusterIdentifier", aws_rds_cluster.postgres.cluster_identifier],
-          ]
-        }
-      },
-      {
-        type   = "metric"
-        x      = 12
-        y      = 6
-        width  = 12
-        height = 6
-        properties = {
-          title  = "Redshift Serverless — RPU capacity"
-          region = var.region
-          metrics = [
-            ["AWS/Redshift-Serverless", "ComputeCapacity", "Workgroup", aws_redshiftserverless_workgroup.oxagen.workgroup_name],
           ]
         }
       },

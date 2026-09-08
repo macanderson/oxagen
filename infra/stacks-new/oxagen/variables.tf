@@ -14,7 +14,7 @@ variable "account_id" {
 }
 
 variable "availability_zones" {
-  description = "Three AZs for the new VPC — Redshift Serverless requires subnets across at least three, which sets the floor for the whole network module."
+  description = "Three AZs for the new VPC. Redshift Serverless set that floor and is gone (#2693); three is kept because dropping to two destroys subnets to save nothing — see modules/network/variables.tf."
   type        = list(string)
   default     = ["us-east-1a", "us-east-1b", "us-east-1c"]
 }

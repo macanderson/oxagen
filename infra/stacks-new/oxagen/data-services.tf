@@ -1,20 +1,26 @@
 /**
- * The data plane: Aurora PostgreSQL Serverless v2 and Redshift Serverless.
+ * The data plane: Aurora PostgreSQL Serverless v2.
  *
- * Both replace what the old account self-hosted on the data node — Postgres
- * and ClickHouse respectively — and both were chosen over the old account's
- * approach specifically because they now scale close enough to zero to beat
- * self-hosting at this traffic level, which was not true when the old
- * data-node module's own header was written. Neo4j stays self-hosted on
- * modules.app (see that module's header): Neptune Analytics, Amazon's only
- * graph product with native embeddings, has a real floor cost that does not
- * reach zero even paused.
+ * It replaces the Postgres the old account self-hosted on the data node, and
+ * was chosen over that approach specifically because it now scales close
+ * enough to zero to beat self-hosting at this traffic level — which was not
+ * true when the old data-node module's own header was written.
  *
- * Both secrets go to Parameter Store rather than Secrets Manager, same
+ * ClickHouse and Neo4j both stay self-hosted on modules.app (see that
+ * module's header). An earlier revision of this file paired Aurora with
+ * Redshift Serverless as ClickHouse's replacement; that plan is withdrawn
+ * (#2693). Nothing was ever pointed at it — `CLICKHOUSE_URL` has always been
+ * the node's own loopback and `packages/telemetry` reads it — so the
+ * migration existed in this comment and in a workgroup no query reached.
+ * Neo4j stays for its own reason: Neptune Analytics, Amazon's only graph
+ * product with native embeddings, has a real floor cost that does not reach
+ * zero even paused.
+ *
+ * Aurora's secret goes to Parameter Store rather than Secrets Manager, same
  * reasoning as everywhere else in this repository: standard parameters are
  * free, and they land under `/oxagen-app/*`, which the app node's own IAM
  * role can already read (modules/app-node/main.tf scopes it there) — no
- * extra IAM grant needed for the node to fetch either password at boot.
+ * extra IAM grant needed for the node to fetch it at boot.
  */
 
 resource "aws_db_subnet_group" "data" {
@@ -32,22 +38,6 @@ resource "aws_security_group" "aurora" {
     description     = "Postgres from the app node"
     from_port       = 5432
     to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [module.app.security_group_id]
-  }
-
-  tags = { Brand = local.brand }
-}
-
-resource "aws_security_group" "redshift" {
-  name        = "oxagen-redshift"
-  description = "oxagen Redshift Serverless - inbound from the app node only"
-  vpc_id      = module.network.vpc_id
-
-  ingress {
-    description     = "Redshift from the app node"
-    from_port       = 5439
-    to_port         = 5439
     protocol        = "tcp"
     security_groups = [module.app.security_group_id]
   }
@@ -114,62 +104,6 @@ resource "aws_rds_cluster_instance" "postgres" {
   instance_class     = "db.serverless"
   engine             = aws_rds_cluster.postgres.engine
   engine_version     = aws_rds_cluster.postgres.engine_version
-
-  tags = { Brand = local.brand }
-}
-
-# ---------------------------------------------------------------------------
-# Redshift Serverless — the ClickHouse-equivalent analytics store
-# ---------------------------------------------------------------------------
-
-resource "random_password" "redshift" {
-  length  = 32
-  special = false
-}
-
-resource "aws_ssm_parameter" "redshift_password" {
-  name        = "/oxagen-app/redshift/password"
-  description = "Redshift Serverless admin password"
-  type        = "SecureString"
-  value       = random_password.redshift.result
-  tags        = { Brand = local.brand }
-}
-
-resource "aws_redshiftserverless_namespace" "oxagen" {
-  namespace_name      = "oxagen"
-  db_name             = "oxagen"
-  admin_username      = "oxagen"
-  admin_user_password = random_password.redshift.result
-
-  # Redshift Serverless takes its own automatic recovery points — every 30
-  # minutes, or every 5GB/node changed if that comes first — with no
-  # Terraform-configurable interval to tune. Verified against AWS's own docs
-  # (docs.aws.amazon.com/redshift/latest/mgmt/serverless-snapshots-recovery-points.html),
-  # not assumed: this beats the "no more than a day" fallback RPO comfortably,
-  # but each automatic recovery point is only retained 24 hours. Restoring
-  # further back than that requires converting a recovery point to a
-  # snapshot before it ages out — not wired up here; add a scheduled Lambda
-  # if a longer restore window turns out to matter.
-  log_exports = ["useractivitylog", "userlog", "connectionlog"]
-
-  tags = { Brand = local.brand }
-}
-
-resource "aws_redshiftserverless_workgroup" "oxagen" {
-  namespace_name = aws_redshiftserverless_namespace.oxagen.namespace_name
-  workgroup_name = "oxagen"
-
-  # 4 RPU is the current minimum (reduced from 8 in mid-2025) — the cheapest
-  # base capacity this product offers. Compute bills per RPU-second while a
-  # query runs and the workgroup auto-pauses between them, so idle cost is
-  # storage only.
-  base_capacity = 4
-
-  subnet_ids         = module.network.private_subnet_ids
-  security_group_ids = [aws_security_group.redshift.id]
-
-  publicly_accessible  = false
-  enhanced_vpc_routing = true
 
   tags = { Brand = local.brand }
 }

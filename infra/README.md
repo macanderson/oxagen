@@ -257,10 +257,12 @@ five packages, not the one that surfaced in the error.
 ## Reaching the databases
 
 **This section is `stacks/oxagen-data` — the old account's self-hosted
-Postgres, Neo4j and ClickHouse.** The new account's Aurora and Redshift
-(`stacks-new/oxagen`'s `data-services.tf`) are reached over the VPC from the
-app node instead; their passwords live at `/oxagen-app/postgres/password` and
-`/oxagen-app/redshift/password` rather than under `/oxagen-data/`.
+Postgres, Neo4j and ClickHouse.** In the new account only Postgres is
+managed: Aurora (`stacks-new/oxagen`'s `data-services.tf`) is reached over
+the VPC from the app node, and its password lives at
+`/oxagen-app/postgres/password` rather than under `/oxagen-data/`. ClickHouse
+and Neo4j both run on the app node there, with passwords at
+`/oxagen-app/clickhouse/password` and `/oxagen-app/neo4j/password`.
 
 Nothing is exposed. The security group opens no inbound port and there is no
 SSH key; every port is additionally bound to loopback on the instance, so a

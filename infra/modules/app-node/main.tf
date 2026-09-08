@@ -190,7 +190,7 @@ resource "aws_security_group" "node" {
   }
 
   egress {
-    description      = "Container images, package updates, Aurora/Redshift, the SSM channel"
+    description      = "Container images, package updates, Aurora, the SSM channel"
     from_port        = 0
     to_port          = 0
     protocol         = "-1"
