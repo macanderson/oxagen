@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { traceMode } from "./e2e/helpers/trace-mode";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -94,7 +95,10 @@ export default defineConfig({
   reporter: "html",
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
-    trace: "on-first-retry",
+    // `on-first-retry` never traces the attempt that failed — it starts at
+    // the retry, which for a flake usually passes. The nightly sets
+    // PLAYWRIGHT_TRACE_ALL and gets every attempt (#2559).
+    trace: traceMode(),
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
