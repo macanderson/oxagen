@@ -1,0 +1,46 @@
+{
+  "env": {
+    "CLAUDE_CODE_ENTRYPOINT": "sdk-cli",
+    "CLAUDE_EFFORT": "high",
+    "CLAUDE_CODE_BRIDGE_SESSION_ID": "session_0000000000000000000000000",
+    "SHELL": "/bin/zsh",
+    "CLAUDE_CODE_CHILD_SESSION": "1",
+    "CLAUDE_PID": "59942",
+    "CLAUDE_PROJECT_DIR": "/home/dev/proj",
+    "CLAUDE_CODE_WORKTREE_BASE_DIR": "${CLAUDE_PROJECT_DIR}/.worktrees",
+    "CLAUDE_CODE_SYNTAX_HIGHLIGHT": "true",
+    "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA": "1",
+    "CLAUDE_CODE_UNDERCOVER": "1",
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "CLAUDE_CODE_AGENT": "claude",
+    "PWD": "/home/dev/proj",
+    "CLAUDE_JOB_DIR": "/home/dev/.claude/jobs/job",
+    "CLAUDE_CODE_EXECPATH": "/home/dev/.local/share/claude/versions/2.1.263",
+    "CLAUDE_CODE_SESSION_ID": "340ed354-6344-4727-9f8b-1e40b5e12aa7",
+    "CLAUDECODE": "1",
+    "CLAUDE_CODE_MESSAGING_SOCKET": "/tmp/cc-socks/59942.sock"
+  },
+  "stdin": {
+    "session_id": "340ed354-6344-4727-9f8b-1e40b5e12aa7",
+    "transcript_path": "/home/dev/.claude/projects/-home-dev-proj/340ed354-6344-4727-9f8b-1e40b5e12aa7.jsonl",
+    "cwd": "/home/dev/proj",
+    "prompt_id": "c9d2d48b-6dd0-4099-bd02-5a0d5a8cfc86",
+    "permission_mode": "bypassPermissions",
+    "agent_id": "aebd5e72360a0fb91",
+    "agent_type": "Explore",
+    "hook_event_name": "SubagentStop",
+    "stop_hook_active": false,
+    "agent_transcript_path": "/home/dev/.claude/projects/-home-dev-proj/340ed354-6344-4727-9f8b-1e40b5e12aa7/subagents/agent-aebd5e72360a0fb91.jsonl",
+    "last_assistant_message": "Here are all the files in `/home/dev/proj`:\n\n**Project Root Files:**\n- `/home/dev/proj/README.md`\n- `/home/dev/proj/probe.txt`\n\n**Git Directory Files:**\nThe `.git` directory contains standard Git internal files:\n- Configuration files (config, HEAD, description)\n- Commit history and logs\n- Object database files\n- Sample git hooks\n- Index file\n\nThis appears to be a small project with just 2 main files (README.md and probe.txt) tracked in a Git repository.",
+    "background_tasks": [
+      {
+        "id": "aebd5e72360a0fb91",
+        "type": "subagent",
+        "status": "running",
+        "description": "List files in current directory",
+        "agent_type": "Explore"
+      }
+    ],
+    "session_crons": []
+  }
+}

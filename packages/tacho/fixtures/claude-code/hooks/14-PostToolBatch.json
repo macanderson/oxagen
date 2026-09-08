@@ -1,0 +1,57 @@
+{
+  "env": {
+    "CLAUDE_CODE_ENTRYPOINT": "sdk-cli",
+    "CLAUDE_EFFORT": "high",
+    "CLAUDE_CODE_BRIDGE_SESSION_ID": "session_0000000000000000000000000",
+    "SHELL": "/bin/zsh",
+    "CLAUDE_CODE_CHILD_SESSION": "1",
+    "CLAUDE_PID": "59942",
+    "CLAUDE_PROJECT_DIR": "/home/dev/proj",
+    "CLAUDE_CODE_WORKTREE_BASE_DIR": "${CLAUDE_PROJECT_DIR}/.worktrees",
+    "CLAUDE_CODE_SYNTAX_HIGHLIGHT": "true",
+    "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA": "1",
+    "CLAUDE_CODE_UNDERCOVER": "1",
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "CLAUDE_CODE_AGENT": "claude",
+    "PWD": "/home/dev/proj",
+    "CLAUDE_JOB_DIR": "/home/dev/.claude/jobs/job",
+    "CLAUDE_CODE_EXECPATH": "/home/dev/.local/share/claude/versions/2.1.263",
+    "CLAUDE_CODE_SESSION_ID": "340ed354-6344-4727-9f8b-1e40b5e12aa7",
+    "CLAUDECODE": "1",
+    "CLAUDE_CODE_MESSAGING_SOCKET": "/tmp/cc-socks/59942.sock"
+  },
+  "stdin": {
+    "session_id": "340ed354-6344-4727-9f8b-1e40b5e12aa7",
+    "transcript_path": "/home/dev/.claude/projects/-home-dev-proj/340ed354-6344-4727-9f8b-1e40b5e12aa7.jsonl",
+    "cwd": "/home/dev/proj",
+    "prompt_id": "c9d2d48b-6dd0-4099-bd02-5a0d5a8cfc86",
+    "permission_mode": "bypassPermissions",
+    "hook_event_name": "PostToolBatch",
+    "tool_calls": [
+      {
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "/home/dev/proj/probe.txt",
+          "content": "ok"
+        },
+        "tool_use_id": "toolu_01WBw3NqrqHvqHkhb9bHKUBZ",
+        "tool_response": "File created successfully at: /home/dev/proj/probe.txt (file state is current in your context \u2014 no need to Read it back)"
+      },
+      {
+        "tool_name": "Agent",
+        "tool_input": {
+          "description": "List files in current directory",
+          "subagent_type": "Explore",
+          "prompt": "List all files in the directory /home/dev/proj using a file search to show what files exist there."
+        },
+        "tool_use_id": "toolu_015RS92XewsETKAFSwTf9TpR",
+        "tool_response": [
+          {
+            "type": "text",
+            "text": "Async agent launched successfully. (This tool result is internal metadata \u2014 never quote or paste any part of it, including the agentId below, into a user-facing reply.)\nagentId: aebd5e72360a0fb91 (internal ID - do not mention to user. Use SendMessage with to: 'aebd5e72360a0fb91', summary: '<5-10 word recap>' to continue this agent.)\nThe agent is working in the background. You will be notified automatically when it completes. You know nothing about its results until that notification arrives \u2014 do not report, assume, or predict them; continue other work or respond to the user in the meantime.\nDo not duplicate this agent's work \u2014 avoid working with the same files or topics it is using.\noutput_file: /tmp/claude-1000/-home-dev-proj/340ed354-6344-4727-9f8b-1e40b5e12aa7/tasks/aebd5e72360a0fb91.output\nDo NOT Read or tail this file via the shell tool \u2014 it is the full subagent JSONL transcript and reading it will overflow your context. If the user asks for progress, say the agent is still running; you'll get a completion notification."
+          }
+        ]
+      }
+    ]
+  }
+}
