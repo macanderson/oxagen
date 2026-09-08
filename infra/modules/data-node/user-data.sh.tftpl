@@ -75,7 +75,51 @@ if ! grep -q "$DATA_UUID" /etc/fstab; then
 fi
 mount -a
 
-mkdir -p /data/{postgres,neo4j/data,neo4j/logs,clickhouse}
+mkdir -p /data/{postgres,neo4j/data,neo4j/logs,clickhouse,clickhouse-config}
+
+# ---------------------------------------------------------------------------
+# ClickHouse: size its logging to this node, not to the machine it imagines
+#
+# This module is not instantiated by stacks-new/ — the new account uses
+# Redshift Serverless for analytics and runs no self-hosted ClickHouse, so
+# the incident below cannot recur there. Carried anyway: the fix was
+# measured by hand on the old node and lived only on a laptop and in a
+# now-archived repository, and a module that is still in the tree can still
+# be stood up.
+# ---------------------------------------------------------------------------
+
+# The compose block below caps ClickHouse's memory because it sizes caches from
+# total RAM. Its *logging* defaults need the same treatment and did not get it,
+# which cost this node a day.
+#
+# metric_log and asynchronous_metric_log write a row every second, and the
+# shipped logger level is <trace>. On 2026-08-25 that produced ~160 log lines a
+# second and 68M rows of metric logging on a database holding ten rows of real
+# data. Merging that backlog kept hitting the container's mem_limit — 37,300
+# MEMORY_LIMIT_EXCEEDED — and every failed retry logged more, creating more
+# parts to merge. CPU climbed from 35% to 85% over 26 hours until the box sat
+# pinned at its burst ceiling with zero credits.
+#
+# Mounted as a single file rather than over config.d/, so ClickHouse's own
+# docker_related_config.xml survives. See macanderson/oxagen#1305.
+cat >/data/clickhouse-config/zz-oxagen-limits.xml <<'CHXMLEOF'
+<clickhouse>
+    <logger>
+        <level>warning</level>
+    </logger>
+
+    <asynchronous_metric_log remove="1"/>
+    <metric_log remove="1"/>
+    <text_log remove="1"/>
+    <trace_log remove="1"/>
+
+    <!-- Sized to the container, not the host: the stock 5 GB mark cache is
+         four times this container's entire memory limit. -->
+    <mark_cache_size>268435456</mark_cache_size>
+    <max_server_memory_usage>1073741824</max_server_memory_usage>
+</clickhouse>
+CHXMLEOF
+chmod 644 /data/clickhouse-config/zz-oxagen-limits.xml
 
 # ---------------------------------------------------------------------------
 # Swap
@@ -198,6 +242,7 @@ services:
       CLICKHOUSE_SKIP_USER_SETUP: "0"
     volumes:
       - /data/clickhouse:/var/lib/clickhouse
+      - /data/clickhouse-config/zz-oxagen-limits.xml:/etc/clickhouse-server/config.d/zz-oxagen-limits.xml:ro
     mem_limit: 1280m
     ulimits:
       nofile:
