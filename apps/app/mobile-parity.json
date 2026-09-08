@@ -67,18 +67,6 @@
       "equivalent": "The inline node/edge type-visibility filter panel is desktop-only; on mobile the identical filterPanel content opens in a bottom Sheet (mobileFiltersOpen state, rendered later in this file) triggered by the same FilterToggle control."
     },
     {
-      "file": "apps/app/src/components/chat/registry-components/workspace-context-panel.tsx",
-      "match": "hidden font-mono text-[11px] sm:inline",
-      "kind": "reflow",
-      "equivalent": "Only the short session-id preview text is hidden below sm; the CopyButton icon stays visible with the full session id in its title attribute, so the copy action remains fully available on mobile."
-    },
-    {
-      "file": "apps/app/src/components/chat/registry-components/svg-preview.tsx",
-      "match": "hidden sm:inline",
-      "kind": "reflow",
-      "equivalent": "The \"Download\"/\"Copy SVG\" text labels hide below sm; both buttons keep their 44px touch target and aria-label, so download and copy remain fully functional icon-only actions on mobile."
-    },
-    {
       "file": "apps/app/src/app/[orgSlug]/access/sessions/page.tsx",
       "match": "hidden px-4 sm:grid",
       "kind": "reflow",
@@ -100,13 +88,13 @@
       "file": "apps/app/src/app/[orgSlug]/settings/layout.tsx",
       "match": "hidden w-48 shrink-0 md:block",
       "kind": "reflow",
-      "equivalent": "Settings section nav re-presented on mobile as MobileSettingsNav — a sticky bottom-sheet section switcher above the app bottom bar with 44px targets and the identical item list."
+      "equivalent": "Settings section nav re-presented on mobile as MobileSettingsNav \u2014 a sticky bottom-sheet section switcher above the app bottom bar with 44px targets and the identical item list."
     },
     {
       "file": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/layout.tsx",
       "match": "hidden w-48 shrink-0 md:block",
       "kind": "reflow",
-      "equivalent": "Settings section nav re-presented on mobile as MobileSettingsNav — a sticky bottom-sheet section switcher above the app bottom bar with 44px targets and the identical item list."
+      "equivalent": "Settings section nav re-presented on mobile as MobileSettingsNav \u2014 a sticky bottom-sheet section switcher above the app bottom bar with 44px targets and the identical item list."
     },
     {
       "file": "apps/app/src/app/[orgSlug]/security/layout.tsx",
@@ -118,19 +106,19 @@
       "file": "apps/app/src/app/[orgSlug]/billing/layout.tsx",
       "match": "mb-6 max-md:hidden",
       "kind": "reflow",
-      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Billing\") in this layout — a sticky mobile section switcher with the identical Subscription/Usage/Revenue/Invoices destinations."
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Billing\") in this layout \u2014 a sticky mobile section switcher with the identical Subscription/Usage/Revenue/Invoices destinations."
     },
     {
       "file": "apps/app/src/app/[orgSlug]/members/layout.tsx",
       "match": "mb-6 max-md:hidden",
       "kind": "reflow",
-      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Members\") in this layout — a sticky mobile section switcher with the identical People/Invited destinations."
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Members\") in this layout \u2014 a sticky mobile section switcher with the identical People/Invited destinations."
     },
     {
       "file": "apps/app/src/app/[orgSlug]/developer/layout.tsx",
       "match": "mb-6 max-md:hidden",
       "kind": "reflow",
-      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Developer\") in this layout — a sticky mobile section switcher with the identical MCP/Tokens destinations."
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Developer\") in this layout \u2014 a sticky mobile section switcher with the identical MCP/Tokens destinations."
     },
     {
       "file": "apps/app/src/app/[orgSlug]/access/layout.tsx",
@@ -148,19 +136,19 @@
       "file": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/layout.tsx",
       "match": "mb-6 max-md:hidden",
       "kind": "reflow",
-      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Marketplace\") in this layout — a sticky mobile section switcher with the identical Agent Tools/Integrations destinations."
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Marketplace\") in this layout \u2014 a sticky mobile section switcher with the identical Agent Tools/Integrations destinations."
     },
     {
       "file": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/layout.tsx",
       "match": "mb-6 max-md:hidden",
       "kind": "reflow",
-      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Agent Tools\") in this layout — a sticky mobile section switcher with the identical All Tools/Skills/MCP/Capabilities destinations."
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Agent Tools\") in this layout \u2014 a sticky mobile section switcher with the identical All Tools/Skills/MCP/Capabilities destinations."
     },
     {
       "file": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/layout.tsx",
       "match": "mb-6 max-md:hidden",
       "kind": "reflow",
-      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Knowledge\") in this layout — a sticky mobile section switcher with the identical Knowledge tab destinations."
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Knowledge\") in this layout \u2014 a sticky mobile section switcher with the identical Knowledge tab destinations."
     },
     {
       "file": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/tools-catalog.tsx",

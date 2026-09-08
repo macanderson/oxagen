@@ -9,7 +9,7 @@
  *     connection.mappings.set writes; see code-mode-data.ts).
  *   - file / directory — the pushed code graph via `search_nodes`
  *     (`:SourceFile` / `:Directory` type labels, displayName = repo path).
- *   - agent / skill / mcp_server — operational Postgres tables.
+ *   - agent / mcp_server — operational Postgres tables.
  *   - tool / capability — the in-process capability registry (+ MCP
  *     discoveredTools for external tools).
  *   - node / edge — the knowledge graph (`search_nodes` / direct scoped
@@ -350,7 +350,7 @@ async function searchEdges(
   return rows;
 }
 
-// ── agent / skill / mcp_server (Postgres) ────────────────────────────────────
+// ── agent / mcp_server (Postgres) ────────────────────────────────────────────
 
 async function searchAgents(
   args: SearchArgs,
@@ -391,55 +391,6 @@ async function searchAgents(
     label: r.name,
     description: r.description,
     properties: { slug: r.slug, status: r.status },
-  }));
-}
-
-async function searchSkills(
-  args: SearchArgs,
-  orgId: string,
-  workspaceId: string,
-): Promise<ReferenceResultRow[]> {
-  const rows = await withTenantDb(async (tx) => {
-    return tx
-      .select({
-        publicId: schema.skills.publicId,
-        slug: schema.skills.slug,
-        name: schema.skills.name,
-        description: schema.skills.description,
-        source: schema.skills.source,
-        enabled: schema.skills.enabled,
-        usageCount: schema.skills.usageCount,
-      })
-      .from(schema.skills)
-      .where(
-        and(
-          eq(schema.skills.orgId, orgId),
-          eq(schema.skills.workspaceId, workspaceId),
-          isNull(schema.skills.deletedAt),
-          args.slug
-            ? eq(schema.skills.publicId, args.slug)
-            : args.query.trim()
-              ? or(
-                  ilike(schema.skills.name, `%${args.query}%`),
-                  ilike(schema.skills.slug, `%${args.query}%`),
-                )
-              : undefined,
-        ),
-      )
-      .limit(args.limit);
-  });
-  return rows.map((r) => ({
-    type: "skill" as const,
-    slug: r.publicId,
-    location: "",
-    label: r.name,
-    description: r.description,
-    properties: {
-      slug: r.slug,
-      source: r.source,
-      enabled: r.enabled,
-      usageCount: r.usageCount,
-    },
   }));
 }
 
@@ -649,7 +600,6 @@ export const referenceSearchHandler: CapabilityHandler<
       graphNodeRows(args, ctx, { type: "directory", labels: ["Directory"] }),
     ),
     safe("agent", () => searchAgents(args, orgId, workspaceId)),
-    safe("skill", () => searchSkills(args, orgId, workspaceId)),
     safe("tool", () => searchTools(args, orgId, workspaceId)),
     safe("mcp_server", () => searchMcpServers(args, orgId, workspaceId)),
     safe("capability", () => searchCapabilities(args)),

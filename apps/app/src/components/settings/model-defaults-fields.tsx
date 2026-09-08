@@ -6,6 +6,9 @@
  *   - apps/app/src/app/account/preferences/preferences-form.tsx (user scope)
  *   - workspace settings agent (workspace scope) — imports this exact path
  *
+ * ADR-043 removed image/video generation from the platform, so the only stored
+ * default dimension is text (an Oxagen tier or an explicit model id).
+ *
  * Contract (do not change signatures without coordinating with the workspace
  * settings agent):
  *
@@ -18,8 +21,6 @@ import {
   TEXT_TIERS,
   vendorLabels,
   supportsText,
-  supportsImage,
-  supportsVideo,
   type GatewayModel,
 } from "@oxagen/ai/catalog";
 import type { Vendor } from "@oxagen/ai/catalog";
@@ -50,10 +51,6 @@ export interface ModelDefaultsValue {
   textTier: "fast" | "balanced" | "precise" | null;
   /** Explicit vision/multimodal gateway slug; when set, WINS over textTier. */
   textModel: string | null;
-  /** Image-capable gateway slug. */
-  imageModel: string | null;
-  /** Video-capable gateway slug. */
-  videoModel: string | null;
 }
 
 export interface ModelDefaultsFieldsProps {
@@ -73,13 +70,6 @@ const multimodalTextModels: GatewayModel[] = gatewayModels.filter(
     m.capabilities.includes("vision") &&
     !m.capabilities.includes("image") &&
     !m.capabilities.includes("video"),
-);
-
-const imageModels: GatewayModel[] = gatewayModels.filter((m) =>
-  supportsImage(m),
-);
-const videoModels: GatewayModel[] = gatewayModels.filter((m) =>
-  supportsVideo(m),
 );
 
 /** Group a list of models by vendor, return ordered vendor→model map. */
@@ -119,17 +109,13 @@ export function ModelDefaultsFields({
   disabled = false,
 }: ModelDefaultsFieldsProps): React.JSX.Element {
   const textValue = encodeTextValue(value.textModel, value.textTier);
-  const imageValue = value.imageModel ?? SYSTEM_VALUE;
-  const videoValue = value.videoModel ?? SYSTEM_VALUE;
 
   const multimodalByVendor = groupByVendor(multimodalTextModels);
-  const imageByVendor = groupByVendor(imageModels);
-  const videoByVendor = groupByVendor(videoModels);
 
   const scopeNote =
     scope === "user"
-      ? "A workspace can override these defaults when you're in that workspace."
-      : "These defaults apply to all members of this workspace.";
+      ? "A workspace can override this default when you're in that workspace."
+      : "This default applies to all members of this workspace.";
 
   // ── Handler: text model/tier change ──────────────────────────────────────
 
@@ -143,20 +129,6 @@ export function ModelDefaultsFields({
       const modelId = encoded.slice(6);
       onChange({ ...value, textModel: modelId, textTier: null });
     }
-  }
-
-  function handleImageChange(encoded: string | null): void {
-    onChange({
-      ...value,
-      imageModel: !encoded || encoded === SYSTEM_VALUE ? null : encoded,
-    });
-  }
-
-  function handleVideoChange(encoded: string | null): void {
-    onChange({
-      ...value,
-      videoModel: !encoded || encoded === SYSTEM_VALUE ? null : encoded,
-    });
   }
 
   return (
@@ -217,92 +189,6 @@ export function ModelDefaultsFields({
                     </React.Fragment>
                   ),
                 )}
-              </SelectGroup>
-            )}
-          </SelectPopup>
-        </Select>
-      </div>
-
-      {/* ── Default image model ── */}
-      <div className="flex flex-col gap-1.5">
-        <Label>Default image model</Label>
-        <Select
-          value={imageValue}
-          onValueChange={handleImageChange}
-          disabled={disabled}
-        >
-          <SelectTrigger
-            size="default"
-            className="w-full max-w-sm"
-            aria-label="Default image model"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectPopup className="w-[var(--available-width)]">
-            <SelectItem value={SYSTEM_VALUE}>
-              <span className="font-medium">System default</span>
-              <span className="ml-2 text-xs text-muted-foreground">
-                Oxagen selects automatically
-              </span>
-            </SelectItem>
-            {imageModels.length > 0 && (
-              <SelectGroup>
-                <SelectLabel>Image models</SelectLabel>
-                {Array.from(imageByVendor.entries()).map(([vendor, models]) => (
-                  <React.Fragment key={vendor}>
-                    {models.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        <span className="font-medium">{m.name}</span>
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          {vendorLabels[vendor]}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </React.Fragment>
-                ))}
-              </SelectGroup>
-            )}
-          </SelectPopup>
-        </Select>
-      </div>
-
-      {/* ── Default video model ── */}
-      <div className="flex flex-col gap-1.5">
-        <Label>Default video model</Label>
-        <Select
-          value={videoValue}
-          onValueChange={handleVideoChange}
-          disabled={disabled}
-        >
-          <SelectTrigger
-            size="default"
-            className="w-full max-w-sm"
-            aria-label="Default video model"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectPopup className="w-[var(--available-width)]">
-            <SelectItem value={SYSTEM_VALUE}>
-              <span className="font-medium">System default</span>
-              <span className="ml-2 text-xs text-muted-foreground">
-                Oxagen selects automatically
-              </span>
-            </SelectItem>
-            {videoModels.length > 0 && (
-              <SelectGroup>
-                <SelectLabel>Video models</SelectLabel>
-                {Array.from(videoByVendor.entries()).map(([vendor, models]) => (
-                  <React.Fragment key={vendor}>
-                    {models.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        <span className="font-medium">{m.name}</span>
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          {vendorLabels[vendor]}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </React.Fragment>
-                ))}
               </SelectGroup>
             )}
           </SelectPopup>

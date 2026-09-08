@@ -1,14 +1,8 @@
-// Typed shapes for the interleaved chat stream chunks emitted by the agent
-// runtime. Each event is rendered inline against the assistant message
-// identified by `messageId` / `toolCallId` / `approvalId` / `planId` /
-// `fanoutId`. The producer side lives in
-// apps/app/src/app/api/v1/chat/stream/translate-stream.ts.
-
-// Reuse the background-task status union defined by the tray so the inline
-// streaming card and the tray never drift (queued|running|completed|failed|cancelled).
-import type { BackgroundTaskStatus } from "./background-task-types";
+// Typed shapes for the interleaved chat stream chunks emitted by the governed
+// turn loop. Each event is rendered inline against the assistant message
+// identified by `messageId` / `toolCallId` / `approvalId`. The producer side
+// lives in apps/app/src/app/api/v1/chat/stream/translate-stream.ts.
 import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/knowledge.node-ref";
-export type { BackgroundTaskStatus };
 export type { KnowledgeNodeRef };
 
 export type RiskLevel = "low" | "medium" | "high";
@@ -106,8 +100,6 @@ export type ApprovalResolution = "approved" | "denied" | "expired";
 // ApprovalResolution: a consent grant is "granted"/"denied" (not "approved").
 export type ConsentResolution = "granted" | "denied" | "expired";
 
-export type PlanDecision = "approved" | "denied" | "amended";
-
 /** Mirrors TurnBudgetMode in @oxagen/billing (kept as a literal string union
  * here — this module is imported by client code, so it stays dependency-light
  * rather than importing the value-heavy @oxagen/billing barrel; see
@@ -123,19 +115,8 @@ export type TurnBudgetModeName = "grace" | "prompt" | "enforce";
  * events (and the client's approval-waiter machinery) already provide. */
 export type TurnBudgetNoticeState = "stopped" | "within_grace";
 
-export type SubagentStatus = "running" | "completed" | "partial" | "timed_out";
-
 /** Epistemic status on the confidence ladder (agent.memory.model#memoryClassEnum). */
 export type MemoryClass = "OBSERVATION" | "RULE" | "FACT";
-
-export interface PlanStep {
-  id: string;
-  summary: string;
-  intent: string;
-  capability: string | null;
-  dependsOn: string[];
-  inputPreview?: unknown;
-}
 
 export interface MemoryRecallHit {
   id: string;
@@ -159,14 +140,6 @@ export interface MemoryRecallHit {
    * UUID. Absent for memories whose subject is not (yet) materialised as a node.
    */
   node?: KnowledgeNodeRef;
-}
-
-export interface SubagentChild {
-  childMessageId: string;
-  capability: string;
-  label?: string;
-  status?: SubagentStatus;
-  resultPreview?: unknown;
 }
 
 export type StreamEvent =
@@ -204,11 +177,6 @@ export type StreamEvent =
       capability: string;
       inputPreview: unknown;
       riskLevel: RiskLevel;
-    }
-  | {
-      type: "tool-call-output";
-      toolCallId: string;
-      chunk: { channel: "stdout" | "stderr"; data: string };
     }
   | {
       type: "tool-call-end";
@@ -251,30 +219,6 @@ export type StreamEvent =
       resolution: ConsentResolution;
     }
   | {
-      type: "plan-proposed";
-      planId: string;
-      title: string;
-      steps: PlanStep[];
-      rationale?: string;
-    }
-  | { type: "plan-resolved"; planId: string; decision: PlanDecision }
-  | {
-      type: "subagent-dispatched";
-      fanoutId: string;
-      parentMessageId: string;
-      children: Array<{
-        childMessageId: string;
-        capability: string;
-        label?: string;
-      }>;
-    }
-  | {
-      type: "subagent-completed";
-      fanoutId: string;
-      status: "completed" | "partial" | "timed_out";
-      results?: Array<{ childMessageId: string; output: unknown }>;
-    }
-  | {
       type: "memory-recalled";
       queryId: string;
       memories: MemoryRecallHit[];
@@ -285,20 +229,6 @@ export type StreamEvent =
       nodeRef: string;
       memoryClass: MemoryClass | string;
       enforcementScore: number | null;
-    }
-  | {
-      /**
-       * Emitted when the agent starts or advances a long-running background
-       * task via agent.task.background.start. Drives the inline
-       * BackgroundTaskCard and links to the BackgroundTaskTray.
-       */
-      type: "background-task-progress";
-      taskId: string;
-      kind: string;
-      label?: string;
-      status: BackgroundTaskStatus;
-      inngestRunId?: string;
-      progressPct?: number;
     }
   | {
       /**
@@ -419,22 +349,7 @@ export interface ToolCallContentBlock {
   riskLevel: RiskLevel;
   status: ToolCallStatus;
   output?: unknown;
-  stdout?: string;
-  stderr?: string;
   errorReason?: string;
-  durationMs?: number;
-}
-
-export interface CodeExecuteContentBlock {
-  type: "code-execute";
-  toolCallId: string;
-  language: "node" | "python" | "shell" | string;
-  code: string;
-  status: ToolCallStatus;
-  stdout?: string;
-  stderr?: string;
-  exitCode?: number;
-  oomKilled?: boolean;
   durationMs?: number;
 }
 
@@ -464,24 +379,6 @@ export interface ConsentRequestContentBlock {
   resolution?: ConsentResolution;
 }
 
-export interface PlanContentBlock {
-  type: "plan";
-  planId: string;
-  title: string;
-  steps: PlanStep[];
-  rationale?: string;
-  status: "pending" | PlanDecision;
-}
-
-export interface SubagentFanoutContentBlock {
-  type: "subagent-fanout";
-  fanoutId: string;
-  parentMessageId: string;
-  children: SubagentChild[];
-  status: SubagentStatus;
-  results?: Array<{ childMessageId: string; output: unknown }>;
-}
-
 export interface MemoryRecallContentBlock {
   type: "memory-recall";
   queryId: string;
@@ -501,28 +398,11 @@ export interface ComponentContentBlock {
   props: Record<string, unknown>;
 }
 
-/**
- * A persisted background-task block — the terminal form of a
- * "background-task-progress" event written to `chat.messages.content_blocks`.
- */
-export interface BackgroundTaskContentBlock {
-  type: "background-task";
-  taskId: string;
-  kind: string;
-  label?: string;
-  status: BackgroundTaskStatus;
-  inngestRunId?: string;
-}
-
 export type AssistantContentBlock =
   | TextContentBlock
   | ReasoningContentBlock
   | ToolCallContentBlock
-  | CodeExecuteContentBlock
   | ApprovalRequestContentBlock
   | ConsentRequestContentBlock
-  | PlanContentBlock
-  | SubagentFanoutContentBlock
   | MemoryRecallContentBlock
-  | BackgroundTaskContentBlock
   | ComponentContentBlock;

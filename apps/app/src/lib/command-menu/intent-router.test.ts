@@ -2,7 +2,6 @@
  * intent-router.test.ts — unit tests for classifyIntent and helpers.
  *
  * Covers:
- *   (a) Fill intent when hasFillableForm=true and query starts with a fill verb
  *   (b) Navigate match for a known nav target label
  *   (c) Search intent for question prefix
  *   (d) Action intent for imperative verb
@@ -34,60 +33,11 @@ vi.mock("@/lib/sidebar", () => ({
 const ctx = { orgSlug: "acme", workspaceSlug: "prod" };
 
 // ---------------------------------------------------------------------------
-// (a) Fill intent
-// ---------------------------------------------------------------------------
-
-describe("Fill intent", () => {
-  it("returns fill when hasFillableForm=true and query starts with a fill verb", () => {
-    const result = classifyIntent({
-      query: "fill in the project name",
-      ctx,
-      hasFillableForm: true,
-    });
-    expect(result.type).toBe("fill");
-    if (result.type === "fill") {
-      expect(result.instruction).toBe("fill in the project name");
-    }
-  });
-
-  it("does NOT return fill when hasFillableForm=false even with a fill verb", () => {
-    const result = classifyIntent({
-      query: "fill in the project name",
-      ctx,
-      hasFillableForm: false,
-    });
-    expect(result.type).not.toBe("fill");
-  });
-
-  it("matches 'update' as a fill verb", () => {
-    const result = classifyIntent({
-      query: "update the description",
-      ctx,
-      hasFillableForm: true,
-    });
-    expect(result.type).toBe("fill");
-  });
-
-  it("matches 'edit' as a fill verb", () => {
-    const result = classifyIntent({
-      query: "edit the title field",
-      ctx,
-      hasFillableForm: true,
-    });
-    expect(result.type).toBe("fill");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// (b) Navigate intent
-// ---------------------------------------------------------------------------
-
 describe("Navigate intent", () => {
   it("returns navigate for an exact label match", () => {
     const result = classifyIntent({
       query: "Sessions",
       ctx,
-      hasFillableForm: false,
     });
     expect(result.type).toBe("navigate");
     if (result.type === "navigate") {
@@ -100,7 +50,6 @@ describe("Navigate intent", () => {
     const result = classifyIntent({
       query: "go to Knowledge",
       ctx,
-      hasFillableForm: false,
     });
     expect(result.type).toBe("navigate");
     if (result.type === "navigate") {
@@ -112,7 +61,6 @@ describe("Navigate intent", () => {
     const result = classifyIntent({
       query: "invoices",
       ctx,
-      hasFillableForm: false,
     });
     expect(result.type).toBe("navigate");
     if (result.type === "navigate") {
@@ -124,7 +72,6 @@ describe("Navigate intent", () => {
     const result = classifyIntent({
       query: "open members",
       ctx,
-      hasFillableForm: false,
     });
     expect(result.type).toBe("navigate");
     if (result.type === "navigate") {
@@ -142,7 +89,6 @@ describe("Search intent", () => {
     const result = classifyIntent({
       query: "who created this workspace",
       ctx,
-      hasFillableForm: false,
     });
     expect(result.type).toBe("search");
     if (result.type === "search") {
@@ -154,7 +100,6 @@ describe("Search intent", () => {
     const result = classifyIntent({
       query: "list all active runs",
       ctx,
-      hasFillableForm: false,
     });
     expect(result.type).toBe("search");
   });
@@ -163,7 +108,6 @@ describe("Search intent", () => {
     const result = classifyIntent({
       query: "find the latest invoice",
       ctx,
-      hasFillableForm: false,
     });
     expect(result.type).toBe("search");
   });
@@ -178,7 +122,6 @@ describe("Action intent", () => {
     const result = classifyIntent({
       query: "create a new agent",
       ctx,
-      hasFillableForm: false,
     });
     expect(result.type).toBe("action");
     if (result.type === "action") {
@@ -191,7 +134,6 @@ describe("Action intent", () => {
     const result = classifyIntent({
       query: "delete this workspace",
       ctx,
-      hasFillableForm: false,
     });
     expect(result.type).toBe("action");
     if (result.type === "action") {
@@ -203,7 +145,6 @@ describe("Action intent", () => {
     const result = classifyIntent({
       query: "invite a new team member",
       ctx,
-      hasFillableForm: false,
     });
     expect(result.type).toBe("action");
   });
@@ -218,7 +159,6 @@ describe("Ask fallback", () => {
     const result = classifyIntent({
       query: "something completely unmatched xyz123",
       ctx,
-      hasFillableForm: false,
     });
     expect(result.type).toBe("ask");
     if (result.type === "ask") {
@@ -227,7 +167,7 @@ describe("Ask fallback", () => {
   });
 
   it("returns ask for an empty string", () => {
-    const result = classifyIntent({ query: "", ctx, hasFillableForm: false });
+    const result = classifyIntent({ query: "", ctx });
     expect(result.type).toBe("ask");
   });
 
@@ -235,7 +175,6 @@ describe("Ask fallback", () => {
     const result = classifyIntent({
       query: "   ",
       ctx,
-      hasFillableForm: false,
     });
     expect(result.type).toBe("ask");
   });
@@ -250,7 +189,6 @@ describe("nav prefix routing", () => {
     const result = classifyIntent({
       query: "go to Knowledge",
       ctx,
-      hasFillableForm: false,
     });
     expect(result.type).toBe("navigate");
   });
@@ -259,7 +197,6 @@ describe("nav prefix routing", () => {
     const result = classifyIntent({
       query: "navigate to Members",
       ctx,
-      hasFillableForm: false,
     });
     expect(result.type).toBe("navigate");
   });
@@ -268,7 +205,6 @@ describe("nav prefix routing", () => {
     const result = classifyIntent({
       query: "show me Knowledge",
       ctx,
-      hasFillableForm: false,
     });
     expect(result.type).toBe("navigate");
   });

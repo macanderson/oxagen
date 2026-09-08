@@ -3,8 +3,8 @@
  * server actions (agent.environment.* capability family).
  *
  * Covers:
- *   - reads (list bindings / environment options / template options) invoke the
- *     right capability with surface:"agent"
+ *   - reads (list bindings / environment options) invoke the right capability
+ *     with surface:"agent"
  *   - bind/unbind happy paths → ok:true, revalidatePath called
  *   - the Owner/Admin gate (canManage:false) → ok:false, invoke NOT called
  *   - invoke throwing → ok:false with the propagated message
@@ -46,7 +46,6 @@ vi.mock("@oxagen/handlers/register", () => ({}));
 import {
   readAgentBindingsAction,
   readEnvironmentOptionsAction,
-  readTemplateOptionsAction,
   bindAgentEnvironmentAction,
   unbindAgentEnvironmentAction,
 } from "./environments-actions";
@@ -60,8 +59,6 @@ const BINDING = {
   environmentId: "env_1",
   environmentName: "Production",
   environmentSlug: "production",
-  sandboxTemplateId: null,
-  sandboxTemplateName: null,
   isPrimary: true,
 };
 
@@ -115,41 +112,6 @@ describe("readEnvironmentOptionsAction", () => {
   });
 });
 
-describe("readTemplateOptionsAction", () => {
-  it("invokes list_sandbox_templates and projects options", async () => {
-    mockInvoke.mockResolvedValue({
-      templates: [
-        {
-          id: "tpl_1",
-          environmentId: "env_1",
-          name: "Base",
-          slug: "base",
-          isDefault: false,
-          extra: "ignored",
-        },
-      ],
-    });
-    const out = await readTemplateOptionsAction(SCOPE);
-    expect(out).toEqual([
-      {
-        id: "tpl_1",
-        environmentId: "env_1",
-        name: "Base",
-        slug: "base",
-        isDefault: false,
-      },
-    ]);
-    expect(mockInvoke).toHaveBeenCalledWith(
-      "list_sandbox_templates",
-      {},
-      expect.any(Object),
-      {
-        surface: "agent",
-      },
-    );
-  });
-});
-
 describe("bindAgentEnvironmentAction", () => {
   it("owner: invokes bind_agent_environment, returns binding, revalidates", async () => {
     mockInvoke.mockResolvedValue({ binding: BINDING });
@@ -157,7 +119,6 @@ describe("bindAgentEnvironmentAction", () => {
       ...SCOPE,
       agentId: AGENT,
       environmentId: "env_1",
-      sandboxTemplateId: null,
       isPrimary: true,
     });
     expect(res).toEqual({ ok: true, binding: BINDING });
@@ -166,7 +127,6 @@ describe("bindAgentEnvironmentAction", () => {
       {
         agentId: AGENT,
         environmentId: "env_1",
-        sandboxTemplateId: null,
         isPrimary: true,
       },
       expect.any(Object),

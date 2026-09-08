@@ -1,6 +1,6 @@
 // agent.schema.test.ts — unit tests for agent tool input schemas.
 //
-// Covers: agent.memory.write, agent.plan.approve, agent.mcp.register.
+// Covers: agent.memory.write, agent.mcp.register.
 // Pure schema logic; no network / DB / xmcp runtime involved.
 
 import { describe, it, expect } from "vitest";
@@ -111,126 +111,6 @@ describe("agent.memory.write schema", () => {
     // The contract uses z.string() without .min(1) — graph ref is validated by
     // the handler, not the schema layer.
     expect(() => Schema.parse({ ...validPayload, nodeRef: "" })).not.toThrow();
-  });
-});
-
-// ── agent.plan.approve ───────────────────────────────────────────────────────
-
-import { schema as agentPlanApproveSchema } from "./agent.plan.approve";
-
-describe("agent.plan.approve schema", () => {
-  const Schema = obj(agentPlanApproveSchema);
-
-  const validApprove = {
-    planId: "plan-123",
-    decision: "approve",
-  };
-
-  it("accepts a minimal approve decision (no amendedSteps, no note)", () => {
-    expect(() => Schema.parse(validApprove)).not.toThrow();
-  });
-
-  it("accepts a deny decision", () => {
-    const result = Schema.parse({ planId: "plan-123", decision: "deny" });
-    expect(result.decision).toBe("deny");
-  });
-
-  it("accepts an amend decision with amendedSteps", () => {
-    const amendedStep = {
-      id: "step-1",
-      summary: "Revised step",
-      intent: "Do something safer",
-      capability: "rename_conversation",
-      inputPreview: { title: "New name" },
-      dependsOn: [],
-    };
-    expect(() =>
-      Schema.parse({
-        planId: "plan-abc",
-        decision: "amend",
-        amendedSteps: [amendedStep],
-      }),
-    ).not.toThrow();
-  });
-
-  it("rejects an invalid decision enum", () => {
-    expect(() =>
-      Schema.parse({ planId: "plan-123", decision: "reject" }),
-    ).toThrow();
-  });
-
-  it("rejects decision 'skip' (not in enum)", () => {
-    expect(() =>
-      Schema.parse({ planId: "plan-123", decision: "skip" }),
-    ).toThrow();
-  });
-
-  it("rejects decision 'accept' (not in enum)", () => {
-    expect(() =>
-      Schema.parse({ planId: "plan-123", decision: "accept" }),
-    ).toThrow();
-  });
-
-  it("accepts all valid decision values", () => {
-    for (const decision of ["approve", "deny", "amend"] as const) {
-      expect(() =>
-        Schema.parse({ planId: "plan-123", decision }),
-      ).not.toThrow();
-    }
-  });
-
-  it("amendedSteps is optional — omitting it is valid", () => {
-    const result = Schema.parse({ planId: "plan-abc", decision: "amend" });
-    expect(result.amendedSteps).toBeUndefined();
-  });
-
-  it("note is optional — omitting it is valid", () => {
-    const result = Schema.parse({ planId: "plan-123", decision: "deny" });
-    expect(result.note).toBeUndefined();
-  });
-
-  it("accepts a note string alongside a decision", () => {
-    const result = Schema.parse({
-      planId: "plan-123",
-      decision: "deny",
-      note: "Too risky at this stage",
-    });
-    expect(result.note).toBe("Too risky at this stage");
-  });
-
-  it("dependsOn in an amended step defaults to []", () => {
-    const stepWithoutDependsOn = {
-      id: "s1",
-      summary: "Step",
-      intent: "Do it",
-      capability: null,
-      inputPreview: null,
-      // dependsOn omitted → should default to []
-    };
-    const result = Schema.parse({
-      planId: "plan-abc",
-      decision: "amend",
-      amendedSteps: [stepWithoutDependsOn],
-    });
-    expect(result.amendedSteps![0]!.dependsOn).toEqual([]);
-  });
-
-  it("nested amendedStep accepts null capability and null inputPreview", () => {
-    const step = {
-      id: "s1",
-      summary: "A step",
-      intent: "Intent",
-      capability: null,
-      inputPreview: null,
-      dependsOn: ["s0"],
-    };
-    expect(() =>
-      Schema.parse({ planId: "p", decision: "amend", amendedSteps: [step] }),
-    ).not.toThrow();
-  });
-
-  it("rejects missing planId", () => {
-    expect(() => Schema.parse({ decision: "approve" })).toThrow();
   });
 });
 

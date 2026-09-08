@@ -43,7 +43,7 @@ type CatalogServer = {
   authKind: string;
   categories: string[];
   version: string;
-  pluginType: "agent_skill" | "mcp_server" | "agent_capability";
+  pluginType: "mcp_server" | "agent_capability";
   tier?: "free" | "premium";
   installed?: boolean;
 };
@@ -59,7 +59,7 @@ function makeServer(overrides: Partial<CatalogServer> = {}): CatalogServer {
     authKind: "none",
     categories: ["research"],
     version: "1.0.0",
-    pluginType: "agent_skill",
+    pluginType: "mcp_server",
     tier: "free",
     installed: false,
     ...overrides,
@@ -151,8 +151,8 @@ describe("BrowsePanel — bulk install", () => {
       orgSlug: "acme",
       workspaceSlug: "main",
       items: [
-        { catalogServerId: "web-scraper", pluginType: "agent_skill" },
-        { catalogServerId: "pdf-parser", pluginType: "agent_skill" },
+        { catalogServerId: "web-scraper", pluginType: "mcp_server" },
+        { catalogServerId: "pdf-parser", pluginType: "mcp_server" },
       ],
     });
 
@@ -221,7 +221,7 @@ describe("BrowsePanel — terminal states", () => {
     );
 
     const empty = await screen.findByTestId("marketplace-browse-empty");
-    expect(empty).toHaveTextContent("No plugins available");
+    expect(empty).toHaveTextContent("No servers available");
     // The loading skeleton must not be the terminal state.
     expect(
       screen.queryByTestId("marketplace-browse-skeleton"),
@@ -256,7 +256,7 @@ describe("BrowsePanel — terminal states", () => {
 
     // ErrorState (role="alert") instead of a stranded skeleton or empty state.
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Couldn't load skills");
+    expect(alert).toHaveTextContent("Couldn't load mcp servers");
     expect(alert).toHaveTextContent("registry unreachable");
     expect(
       screen.queryByTestId("marketplace-browse-skeleton"),

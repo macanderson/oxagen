@@ -7,7 +7,7 @@ export const repoResume = registerCapability({
   description: "Resume automatic syncing for a paused repository connection.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "ingestion" },
   sensitivity: "low",

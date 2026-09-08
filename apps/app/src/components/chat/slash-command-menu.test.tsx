@@ -20,12 +20,22 @@ vi.mock("@/lib/utils", () => ({
 }));
 
 const COMMANDS: readonly SlashCommand[] = [
-  { name: "pr", args: "<pr-number>", summary: "Show pull-request stats." },
-  { name: "ci", args: "[ref]", summary: "Show CI / check status." },
   {
-    name: "pin",
-    summary: "Pin the selected repo + environment.",
-    clientAction: "pin",
+    name: "pr",
+    args: "<pr-number>",
+    summary: "Show pull-request stats.",
+    agentGuidance: "Call `get_pr`.",
+  },
+  {
+    name: "ci",
+    args: "[ref]",
+    summary: "Show CI / check status.",
+    agentGuidance: "Call `get_ci_status`.",
+  },
+  {
+    name: "repos",
+    summary: "List connected repositories.",
+    agentGuidance: "Call `list_connections`.",
   },
 ];
 

@@ -19,13 +19,13 @@ import {
 } from "@/lib/agent-tools/install-actions";
 
 export const metadata: Metadata = {
-  title: "New Agent | Workbench",
+  title: "New Agent | Agents",
 };
 
 /**
- * Workbench → Agents → New. Gathers the four Equip pools (skills / tools /
- * subagents / MCP servers) and renders the Agent Builder in "create" mode.
- * Non-managers are bounced back to the list — building is Owner/Admin-only.
+ * Agents → New. Gathers the two allowlist pools (capabilities / MCP servers)
+ * and renders the Agent Builder in "create" mode. Non-managers are bounced back
+ * to the list — building is Owner/Admin-only.
  *
  * Slugs come from the request URL (requestScopeSlugs), NOT `params`: the
  * non-manager `redirect()` below regresses to a client meta-refresh and 500s
@@ -43,7 +43,7 @@ export default async function NewAgentPage() {
   );
   if (!canManage) redirect(workspace.workbench.agents(routeCtx));
 
-  // Timeout-guarded so a slow/hanging equip source never blocks the builder.
+  // Timeout-guarded so a slow/hanging allowlist source never blocks the builder.
   const sources = await loadEquipSources(ctx, org.id, ws.id);
 
   // Role picker data (Agent RBAC Phase 5a). Fail-soft: a load failure falls
@@ -65,7 +65,7 @@ export default async function NewAgentPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="New agent"
-        description="Compose an agent step by step — identity, instructions, and everything it's equipped with."
+        description="Compose an agent step by step — identity, instructions, the graph it may reach, and the tools it may call."
         className="pb-0"
         breadcrumb={
           <Breadcrumb

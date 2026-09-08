@@ -1,69 +1,50 @@
+/**
+ * `@oxagen/agent` — the governed-agent runtime library.
+ *
+ * Oxagen governs agents; it does not run them (ADR-043). What survives here is
+ * the machinery that makes a governed turn possible and auditable:
+ *
+ *   1. `runtime/` — materialising capability contracts and registered MCP
+ *      servers into AI-SDK tools, with IAM → entitlement → tool RBAC →
+ *      consent → approval → telemetry applied per call.
+ *   2. `handlers/` — the surviving `agent.*` capability handlers: approvals,
+ *      the MCP registry and its consent ledger, agent memory, the agent
+ *      definition registry and its RBAC roles, the execution record, traces,
+ *      and error clustering.
+ *   3. `dispatch/` — the MCP client, and the Neo4j projection of the tools an
+ *      execution invoked.
+ *
+ * There is no sandbox, no coding engine, no worker, no subagent fan-out and no
+ * background-task machinery behind any of it.
+ */
+
+// Tool materialization — the one seam where a capability contract or an
+// external MCP tool becomes something a model may call, and the one place the
+// per-call governance gates are applied.
 export * from "./runtime/materialize-tools";
 // The ontology read set — the graph capabilities an agent reasons over, plus
 // the read-only guard and the per-run allowlist union that carries them into a
 // narrowed run. A surface that wants to grant the graph names this set rather
 // than spelling eight capability names of its own.
 export * from "./runtime/ontology-tools";
+// The governed turn loop — ONE bounded, metered model turn over the
+// materialised tools (ADR-043 §2). The only thing left of "running an agent".
+export * from "./runtime/governed-turn";
 export * from "./runtime/approval";
 export * from "./runtime/stream-events";
-// The platform TurnDriver — agent-engine v2 Phase 2 integration
-// (docs/specs/agent-engine-v2/plan.md). Consumed by @oxagen/agent-worker's
-// main.ts to wire createAgentWorker; see the module doc for the RunSpec v1
-// contract and this v1 driver's explicit limitations.
-export {
-  createPlatformTurnDriver,
-  parseRunSpec,
-  assertClaimIsLegacyV1,
-  hydrateAgentRunContext,
-  runRowIdentityFromClaim,
-  type ClaimedRun,
-  type RunEventRecord,
-  type TurnDriver,
-  type RunSpecV1,
-  type HydratedAgentRun,
-} from "./runtime/turn-driver";
 export { isKnowledgeGraphEnabled } from "./runtime/knowledge-graph";
-export * from "./dispatch/subagent";
 export * from "./dispatch/mcp-client";
-export * from "./dispatch/lineage-outcome";
-export * from "./dispatch/lineage-projection";
 export * from "./dispatch/tool-projection";
 export * from "./memory/neo4j";
 export { resolveHandler, invokeCapability } from "./handlers/index";
 export type { CapabilityHandlerFn } from "./handlers/index";
-// Sandbox session lifecycle & work-recovery (spec: sandbox-session-lifecycle).
-// The reaper (packages/inngest-functions) and the recover_sandbox_session
-// capability both drive these; exported here as the public lifecycle surface.
+// Typed execution-lookup error — surfaces (apps/api) import these to map an
+// unknown / cross-tenant execution id to a 404 instead of a 500 via
+// instanceof, not a brittle error-message regex.
 export {
-  releaseSession,
-  sandboxGraceSeconds,
-  sandboxStaleRunningSeconds,
-  markSessionStatus,
-  getSessionByPublicId,
-} from "./handlers/_sandbox-session";
-export {
-  recoverSandboxSession,
-  recoveryLabel,
-} from "./handlers/recover-sandbox-session";
-export type {
-  RecoveryOutcome,
-  RecoveryKind,
-} from "./handlers/recover-sandbox-session";
-export { agentSandboxStopHandler } from "./handlers/agent.sandbox.stop";
-// Typed subagent-fanout errors — surfaces (apps/api) import these to map an
-// unknown / cross-tenant fanout id to a 404 instead of a 500 via instanceof,
-// not a brittle error-message regex.
-export {
-  FanoutNotFoundError,
-  isFanoutNotFoundError,
-  SubagentRunNotFoundError,
-  isSubagentRunNotFoundError,
   ExecutionNotFoundError,
   isExecutionNotFoundError,
-} from "./handlers/subagent-errors";
+} from "./handlers/execution-errors";
+// The governance agent's system prompt (no coding, no shell, no sandbox).
 export { buildChatSystemPrompt } from "./system-prompt";
 export type { SystemPromptContext } from "./system-prompt";
-// A2A skill-addressed routing (apps/api's A2A bridge resolves message.metadata.skillId
-// against this before composing the per-task system prompt).
-export { resolveAgentForA2A } from "./handlers/_agent-definition";
-export type { AgentForA2A } from "./handlers/_agent-definition";

@@ -38,16 +38,15 @@ describe("handler registry", () => {
     expect(res).toEqual({ tools: [] });
   });
 
-  // ADR-022 snake_case capability names don't camelize to their module's
-  // readable export via the dot-segment derivation ("agent.sandbox_file.list"
-  // derives "agentSandbox_fileListHandler" but the module exports
-  // "agentSandboxFilesListHandler"). resolveHandler must fall back to the
+  // ADR-025 snake_case capability names don't camelize to their module's
+  // readable export via the dot-segment derivation ("list_memory_citations"
+  // derives "list_memory_citationsHandler" but the module exports
+  // "agentMemoryCitationListHandler"). resolveHandler must fall back to the
   // module's unique `*Handler` export — regression coverage for the fix.
   it.each([
-    "list_sandbox_files",
-    "read_sandbox_file",
-    "start_background_task",
-    "acquire_file_lock",
+    "list_memory_citations",
+    "get_citation_stats",
+    "list_memory_promotions",
     "resolve_mcp_consent",
   ])(
     "resolves a handler function for snake_case capability %s",

@@ -8,18 +8,18 @@ import { parseCypherSchema } from "./sources/neo4j";
 import { GENERATED_ASSET_KINDS, collectBlobAssets } from "./sources/blob";
 import { PG_DOMAINS } from "./domains";
 
-// The 22 Postgres schema domains declared in schema/_schemas.ts. The manifest
-// must surface every one of these as a domain — this is the coverage contract.
+// The Postgres schema domains declared in schema/_schemas.ts. The manifest must
+// surface every one of these as a domain — this is the coverage contract.
+// (cms / eval / workflow were dropped with the runtime in ADR-043; `content`
+// survives, reduced to content.generated_assets.)
 const EXPECTED_PG_SCHEMAS = [
   "agent",
   "ai",
   "auth",
   "billing",
   "chat",
-  "cms",
   "content",
   "environments",
-  "eval",
   "evidence",
   "iam",
   "ingestion",
@@ -31,7 +31,6 @@ const EXPECTED_PG_SCHEMAS = [
   "ratelimit",
   "schema_registry",
   "security",
-  "workflow",
   "workspace",
 ] as const;
 

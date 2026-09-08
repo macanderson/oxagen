@@ -36,12 +36,6 @@ export const userPreferencesWriteHandler: CapabilityHandler<
     ...("defaultTextModel" in input
       ? { defaultTextModel: input.defaultTextModel }
       : {}),
-    ...("defaultImageModel" in input
-      ? { defaultImageModel: input.defaultImageModel }
-      : {}),
-    ...("defaultVideoModel" in input
-      ? { defaultVideoModel: input.defaultVideoModel }
-      : {}),
   };
 
   // Build the partial update set — only update fields that were explicitly provided.
@@ -62,10 +56,6 @@ export const userPreferencesWriteHandler: CapabilityHandler<
     updateSet.defaultTextTier = input.defaultTextTier;
   if ("defaultTextModel" in input)
     updateSet.defaultTextModel = input.defaultTextModel;
-  if ("defaultImageModel" in input)
-    updateSet.defaultImageModel = input.defaultImageModel;
-  if ("defaultVideoModel" in input)
-    updateSet.defaultVideoModel = input.defaultVideoModel;
 
   await withSystemDb((tx) =>
     tx.insert(schema.userPreferences).values(insertValues).onConflictDoUpdate({
@@ -85,8 +75,6 @@ export const userPreferencesWriteHandler: CapabilityHandler<
         pendingPromptBehavior: true,
         defaultTextTier: true,
         defaultTextModel: true,
-        defaultImageModel: true,
-        defaultVideoModel: true,
         timezone: true,
         language: true,
       },
@@ -112,8 +100,6 @@ export const userPreferencesWriteHandler: CapabilityHandler<
     pendingPromptBehavior: row.pendingPromptBehavior,
     defaultTextTier: row.defaultTextTier ?? null,
     defaultTextModel: row.defaultTextModel ?? null,
-    defaultImageModel: row.defaultImageModel ?? null,
-    defaultVideoModel: row.defaultVideoModel ?? null,
     timezone: row.timezone,
     language: row.language,
   };

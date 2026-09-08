@@ -1,0 +1,155 @@
+{
+  "name": "list_tool_declarations",
+  "domain": "tool",
+  "description": "List the tool declarations registered in the active workspace, each with its pinned active version's schema facts (read-only flag, risk grade, policy group, checksum)",
+  "mode": "sync",
+  "surfaces": ["api", "agent", "mcp"],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "source": {
+        "type": "string",
+        "enum": ["builtin", "custom", "mcp", "foundry"]
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 200,
+        "default": 50
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "tools": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Public tool ID (tol_…)"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "source": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "readOnly": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "riskGrade": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "policyGroup": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "version": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "checksum": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "updatedAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "slug",
+            "name",
+            "description",
+            "source",
+            "enabled",
+            "readOnly",
+            "riskGrade",
+            "policyGroup",
+            "version",
+            "checksum",
+            "updatedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "total": {
+        "type": "integer",
+        "description": "Total declarations in the workspace matching the filter"
+      }
+    },
+    "required": ["tools", "total"],
+    "additionalProperties": false
+  }
+}

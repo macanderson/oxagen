@@ -7,7 +7,6 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   generateObjectFor: vi.fn(),
   invoke: vi.fn(),
-  createBuiltinSkillRegistry: vi.fn(),
   listCapabilities: vi.fn(),
   getSurfaces: vi.fn(),
 }));
@@ -18,10 +17,6 @@ vi.mock("@oxagen/ai", () => ({
 
 vi.mock("@oxagen/oxagen/kernel", () => ({
   invoke: mocks.invoke,
-}));
-
-vi.mock("@oxagen/skills", () => ({
-  createBuiltinSkillRegistry: mocks.createBuiltinSkillRegistry,
 }));
 
 vi.mock("@oxagen/oxagen", () => ({
@@ -37,8 +32,6 @@ import { AgentSuggestError } from "./agent-suggest-core";
 import { TEST_CTX } from "./test-utils/fixtures";
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
-
-const SKILL_BODY = "# Synthesising an agent configuration\n\nFill the config.";
 
 const CURRENT_AGENT = {
   agentId: "uuid-agent-1",
@@ -63,7 +56,6 @@ const CURRENT_AGENT = {
       budget: { maxHops: 2, maxNodes: 40 },
     },
     agentTools: [{ type: "function", ref: "graph.query" }],
-    triggers: [],
     instructions: "Inspect each deal, flag risk.",
   },
 };
@@ -76,7 +68,6 @@ function baseSynthesis() {
     slug: "renamed-scanner",
     name: "Risk Scanner",
     description: "Scans deals for risk and cites the source.",
-    agentType: "custom" as "custom" | "code",
     instructions: "Inspect each deal, flag risk, cite the graph node.",
     graph: {
       ontologyId: "sales",
@@ -93,18 +84,17 @@ function baseSynthesis() {
     },
     agentTools: [
       { type: "function", ref: "graph.query" },
-      { type: "skill", ref: "summarization" },
-    ],
-    triggers: [{ type: "manual" as const }],
+      { type: "mcp_server", ref: "mcp_srv1" },
+    ] as Array<{ type: "function" | "mcp_server"; ref: string }>,
     changeSummary: [
-      "Equipped the summarization skill",
+      "Equipped the GitHub MCP server",
       "Renamed to Risk Scanner",
     ],
-    rationale: "Adding a summariser sharpens the risk write-ups.",
+    rationale: "Reading PR state sharpens the risk write-ups.",
   };
 }
 
-/** Candidate world: one ontology, one function cap, one skill, no MCP/agents. */
+/** Candidate world: one ontology, one function cap, one registered MCP server. */
 function setupWorld(currentOverrides: Partial<typeof CURRENT_AGENT> = {}) {
   mocks.listCapabilities.mockReturnValue([
     { name: "graph.query", description: "Query the graph" },
@@ -115,26 +105,22 @@ function setupWorld(currentOverrides: Partial<typeof CURRENT_AGENT> = {}) {
     switch (cap) {
       case "get_agent_def":
         return { ...CURRENT_AGENT, ...currentOverrides };
-      case "load_skill":
-        return { loaded: true, body: SKILL_BODY };
       case "list_schemas":
         return {
           schemas: [
             { schemaName: "sales", displayName: "Sales", enabled: true },
           ],
         };
-      case "list_agent_skills":
+      case "get_memory_policy":
         return {
-          skills: [
-            {
-              slug: "summarization",
-              name: "Summarise Text",
-              description: "Summarise text",
-            },
-          ],
+          halfLifeLowDays: 30,
+          halfLifeHighDays: 90,
+          recallThreshold: 0.1,
+          complianceThreshold: 70,
+          defaultDecayFloor: 5,
         };
       case "list_mcp_servers":
-        return { servers: [] };
+        return { servers: [{ publicId: "mcp_srv1", name: "GitHub" }] };
       case "list_agent_defs":
         return {
           agents: [
@@ -147,17 +133,6 @@ function setupWorld(currentOverrides: Partial<typeof CURRENT_AGENT> = {}) {
         };
       case "browse_plugin_catalog":
         return { servers: [] };
-      case "list_workspace_skills":
-        return {
-          skills: [
-            {
-              id: "sk_summ",
-              name: "Summarise Text",
-              description: "Summarise text",
-              enabled: true,
-            },
-          ],
-        };
       case "update_agent_def":
         return { agentId: "agt_DEAL01", version: 2, isPublished: false };
       default:
@@ -186,15 +161,13 @@ describe("agentDefinitionReviseHandler (@oxagen/handlers)", () => {
     expect(out.version).toBe(2);
     expect(out.isPublished).toBe(false);
     expect(out.changeSummary).toEqual([
-      "Equipped the summarization skill",
+      "Equipped the GitHub MCP server",
       "Renamed to Risk Scanner",
     ]);
-    expect(out.rationale).toBe(
-      "Adding a summariser sharpens the risk write-ups.",
-    );
+    expect(out.rationale).toBe("Reading PR state sharpens the risk write-ups.");
   });
 
-  it("composes update_agent_def with the designed config and never sends a slug", async () => {
+  it("composes update_agent_def with the designed config and never sends a slug or agentType", async () => {
     setupWorld();
     mocks.generateObjectFor.mockResolvedValue({ object: baseSynthesis() });
 
@@ -209,18 +182,19 @@ describe("agentDefinitionReviseHandler (@oxagen/handlers)", () => {
     expect(updateInput).not.toHaveProperty("slug");
     expect(updateInput.agentId).toBe("agt_DEAL01");
     expect(updateInput.name).toBe("Risk Scanner");
-    expect(updateInput.agentType).toBe("custom");
+    // ADR-043 removed code mode, so a revision never touches agentType.
+    expect(updateInput).not.toHaveProperty("agentType");
     const config = updateInput.config as { agentTools: Array<{ ref: string }> };
     expect(config.agentTools.map((t) => t.ref)).toEqual([
       "graph.query",
-      "summarization",
+      "mcp_srv1",
     ]);
   });
 
   it("drops a hallucinated tool ref and reports it as a warning", async () => {
     setupWorld();
     const synth = baseSynthesis();
-    synth.agentTools.push({ type: "skill", ref: "does-not-exist" });
+    synth.agentTools.push({ type: "mcp_server", ref: "does-not-exist" });
     mocks.generateObjectFor.mockResolvedValue({ object: synth });
 
     const out = await agentDefinitionReviseHandler(INPUT, TEST_CTX);

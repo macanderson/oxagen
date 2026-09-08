@@ -1,7 +1,7 @@
 // misc.handlers.test.ts — handler invocation tests for miscellaneous tools:
 // notifications, org members, organization.create, workspace.create,
 // user.preferences.*, workspace.model.settings.*, system.install.instructions,
-// workflow.*, and organization tools.
+// and organization tools.
 //
 // Pattern: vi.mock the kernel `invoke` and context seam `buildContext`.
 
@@ -366,8 +366,6 @@ describe("user.preferences.read handler", () => {
       pendingPromptBehavior: "queue",
       defaultTextTier: null,
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
       timezone: "UTC",
       language: "en",
     };
@@ -406,8 +404,6 @@ describe("user.preferences.write handler", () => {
       pendingPromptBehavior: "queue" as const,
       defaultTextTier: null,
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
       timezone: "America/New_York",
       language: "en",
     };
@@ -420,8 +416,6 @@ describe("user.preferences.write handler", () => {
       pendingPromptBehavior: undefined,
       defaultTextTier: undefined,
       defaultTextModel: undefined,
-      defaultImageModel: undefined,
-      defaultVideoModel: undefined,
       timezone: undefined,
       language: undefined,
     };
@@ -453,8 +447,6 @@ describe("workspace.model.settings.read handler", () => {
     const fakeOutput = {
       defaultTextTier: null,
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
@@ -488,16 +480,12 @@ describe("workspace.model.settings.write handler", () => {
     const fakeOutput = {
       defaultTextTier: "balanced",
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = {
       defaultTextTier: "balanced" as const,
       defaultTextModel: undefined,
-      defaultImageModel: undefined,
-      defaultVideoModel: undefined,
     };
     await handler_workspaceModelSettingsWrite(args);
 
@@ -544,125 +532,6 @@ describe("system.install.instructions handler", () => {
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "get_install_instructions",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
-  });
-});
-
-// ── workflow.run ──────────────────────────────────────────────────────────────
-
-import handler_workflowRun, {
-  schema as workflowRunSchema,
-  metadata as workflowRunMetadata,
-} from "./workflow.run";
-
-describe("workflow.run handler", () => {
-  it("exports schema and metadata", () => {
-    expect(workflowRunSchema).toBeDefined();
-    expect(workflowRunMetadata.name).toBe("run_workflow");
-  });
-
-  it("calls invoke with workflow run args", async () => {
-    const fakeOutput = {
-      workflowId: "uuid-wfr-1",
-      publicId: "wfr_1",
-      status: "planning" as const,
-      render: {
-        componentId: "workflow-progress" as const,
-        props: { workflowId: "uuid-wfr-1" },
-      },
-    };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
-    const args = {
-      goal: "Profile Fortune 500 CEOs",
-      title: undefined,
-      outputFormat: "json" as const,
-      maxParallelism: 10,
-    };
-    await handler_workflowRun(args);
-
-    expect(mocks.invoke).toHaveBeenCalledWith("run_workflow", args, fakeCtx, {
-      surface: "mcp",
-    });
-  });
-});
-
-// ── workflow.status ───────────────────────────────────────────────────────────
-
-import handler_workflowStatus, {
-  schema as workflowStatusSchema,
-  metadata as workflowStatusMetadata,
-} from "./workflow.status";
-
-describe("workflow.status handler", () => {
-  it("exports schema and metadata", () => {
-    expect(workflowStatusSchema).toBeDefined();
-    expect(workflowStatusMetadata.name).toBe("get_workflow_status");
-  });
-
-  it("calls invoke with workflow status args", async () => {
-    const fakeOutput = {
-      workflow: {
-        id: "uuid-wfr-1",
-        publicId: "wfr_1",
-        orgId: "org_test",
-        workspaceId: "ws_test",
-        title: "Fortune 500 Research",
-        goal: "Profile Fortune 500 CEOs",
-        status: "running" as const,
-        planJson: null,
-        totalTasks: 10,
-        completedTasks: 3,
-        failedTasks: 0,
-        maxParallelism: 10,
-        outputFormat: "json" as const,
-        resultUrl: null,
-        startedAt: "2026-01-01T00:00:00.000Z",
-        completedAt: null,
-        createdAt: "2026-01-01T00:00:00.000Z",
-        updatedAt: "2026-01-01T00:00:00.000Z",
-      },
-      tasks: [],
-    };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
-    const args = { workflowId: "wfr_1" };
-    await handler_workflowStatus(args);
-
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "get_workflow_status",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
-  });
-});
-
-// ── workflow.cancel ───────────────────────────────────────────────────────────
-
-import handler_workflowCancel, {
-  schema as workflowCancelSchema,
-  metadata as workflowCancelMetadata,
-} from "./workflow.cancel";
-
-describe("workflow.cancel handler", () => {
-  it("exports schema and metadata", () => {
-    expect(workflowCancelSchema).toBeDefined();
-    expect(workflowCancelMetadata.name).toBe("cancel_workflow");
-  });
-
-  it("calls invoke with workflow cancel args", async () => {
-    const fakeOutput = { cancelled: true };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
-    const args = { workflowId: "wfr_1" };
-    await handler_workflowCancel(args);
-
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "cancel_workflow",
       args,
       fakeCtx,
       { surface: "mcp" },

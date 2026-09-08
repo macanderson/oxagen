@@ -15,15 +15,14 @@ describe("describeCliCommands", () => {
   const byName = new Map(meta.map((m) => [m.name, m]));
 
   it("surfaces the same top-level commands `oxagen --help` lists", () => {
-    // A representative spread across the command tree.
+    // A representative spread across the surviving governance command tree.
     for (const name of [
-      "agents",
+      "budget",
       "cost",
       "graph",
-      "code",
       "init",
-      "settings",
-      "mcp",
+      "memory",
+      "trace",
       "secret",
     ]) {
       expect(byName.has(name), `missing ${name}`).toBe(true);
@@ -32,7 +31,7 @@ describe("describeCliCommands", () => {
 
   it("carries each command's one-line description", () => {
     expect(byName.get("cost")?.description).toMatch(/cost/i);
-    expect(byName.get("init")?.description).toMatch(/scaffold/i);
+    expect(byName.get("init")?.description).toMatch(/workspace/i);
   });
 
   it("derives an argument hint from the command's declared arguments", () => {
@@ -52,6 +51,35 @@ describe("describeCliCommands", () => {
       "replay",
     ]) {
       expect(byName.get(name)?.description).toMatch(/retired/i);
+    }
+  });
+
+  it("keeps every command excised with the runtime registered as a stub", () => {
+    // ADR-043: a stale `oxagen sandbox …` must fail with guidance pointing at
+    // Stella, not with an unknown-command parse error.
+    for (const name of [
+      "sandbox",
+      "sandbox-template",
+      "code",
+      "eval",
+      "file-lock",
+      "a2a",
+      "models",
+      "skill",
+      "prompt",
+      "command",
+      "rules",
+      "settings",
+      "config",
+      "mcp",
+      "import",
+      "pr",
+      "recover",
+      "lineage",
+    ]) {
+      expect(byName.get(name)?.description, `missing ${name}`).toMatch(
+        /retired/i,
+      );
     }
   });
 });

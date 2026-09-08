@@ -1,23 +1,24 @@
 #!/usr/bin/env tsx
 /**
- * oxagen — agentic coding CLI powered by the Oxagen context engine.
+ * oxagen — the governance-operations CLI for the Oxagen control plane.
  *
  * Usage:
- *   oxagen config [key] [value]
- *   oxagen models list
+ *   oxagen login
+ *   oxagen budget show
  *   oxagen graph search -q "…"
+ *   oxagen trace --dispatch <id>
  *
- * The coding agent itself was retired in the Stella cutover — agentic work
- * lives in the `stella` CLI, which talks to Oxagen over MCP/API. The Commander
- * command tree lives in ./program.ts. This entry stays thin: settings
- * projection, then hand off to the tree.
+ * Oxagen governs, grounds, explains, meters and rates agents; it does not run
+ * them (ADR-043). Agentic coding lives in the `stella` CLI, which talks to
+ * Oxagen over MCP/API. The Commander command tree lives in ./program.ts; this
+ * entry stays thin — fatal-error plumbing, then hand off to the tree.
  */
 import { buildProgram } from "./program.js";
 import { debugLog, isDebugEnabled } from "./lib/debug-log.js";
 import { formatFatalError } from "./lib/fatal-error.js";
 
-// Top-level safety net. Without this, a common file error (e.g.
-// `oxagen code diff missing.txt`) prints a raw Node stack trace. Instead, write a
+// Top-level safety net. Without this, a common failure (e.g. a missing file
+// passed to `oxagen secret import -f`) prints a raw Node stack trace. Instead, write a
 // single clean `Error: <message>` line to stderr — the full stack only under
 // OXAGEN_CLI_DEBUG — best-effort log it, and exit non-zero. Registered before
 // main() so it also covers failures during command construction.
@@ -39,17 +40,6 @@ process.on("uncaughtException", (err) => {
 });
 
 async function main(): Promise<void> {
-  // Project settings.json (env, apiUrl, model) into the environment before any
-  // command runs — filling only unset vars, so the shell always wins. This is
-  // also what lets `OXAGEN_CLI_DEBUG=1` be enabled from settings.json `env`.
-  const { applySettingsToEnv } = await import("./settings/runtime.js");
-  applySettingsToEnv();
-  // Silence the benign "responseFormat not supported" AI SDK warning emitted by
-  // every generateObject call routed through the platform proxy (which handles
-  // JSON via prompt fallback, not schema response_format). Must run before any
-  // model call. See lib/ai-warnings.ts for why the fallback is correct by design.
-  const { installAiSdkWarningFilter } = await import("./lib/ai-warnings.js");
-  installAiSdkWarningFilter();
   // When OXAGEN_CLI_DEBUG=1, record the invocation to ~/.oxagen/logs/cli.output
   // before dispatching. Fire-and-forget: never blocks or breaks a command.
   void debugLog("invoke", "cli.start", {

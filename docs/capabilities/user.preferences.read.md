@@ -24,8 +24,6 @@ No fields.
 | `pendingPromptBehavior` | `"queue" \| "interrupt"` | How to handle a new prompt while a response is streaming. |
 | `defaultTextTier` | `"fast" \| "balanced" \| "precise" \| null` | User's preferred text model tier. `null` = workspace default. |
 | `defaultTextModel` | `string \| null` | Specific text model override. `null` = tier default. |
-| `defaultImageModel` | `string \| null` | Image model override. `null` = workspace default. |
-| `defaultVideoModel` | `string \| null` | Video model override. `null` = workspace default. |
 
 ## Roles
 

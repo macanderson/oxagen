@@ -12,7 +12,7 @@ import type {
   AgentDebugTraceInput,
   AgentDebugTraceOutput,
 } from "@oxagen/oxagen/contracts/agent.debug.trace";
-import { ExecutionNotFoundError } from "./subagent-errors";
+import { ExecutionNotFoundError } from "./execution-errors";
 import { agentTraceGetHandler } from "./agent.trace.get";
 import {
   parseStackFrames,
@@ -43,7 +43,7 @@ const MAX_TOOLCALL_SCAN = 200;
 // the model reads signal, not a chatty transcript (ADR-021 §3).
 const FAILURE_LOG_LEVELS = ["warn", "error", "fatal"] as const;
 
-/** Diagnosis schema for the optional model call — mirrors @oxagen/agent-engine's Diagnosis. */
+/** Diagnosis schema for the optional model call that explains a failed run. */
 const diagnosisSchema = z.object({
   problem: z.string(),
   expectedBehavior: z.string(),

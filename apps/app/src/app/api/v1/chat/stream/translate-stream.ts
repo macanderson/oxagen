@@ -8,7 +8,6 @@ import { resolveRenderDirective } from "@oxagen/oxagen/capability-meta";
 import { meterCreditsForUsage } from "@oxagen/billing";
 import {
   partType,
-  isRecord,
   errorMessageOf,
   formatStreamError,
   type TextDeltaPart,
@@ -226,33 +225,21 @@ export function createTurnTranslator(args: {
     } else if (pType === "tool-call") {
       const part = raw as ToolCallPart;
       toolStartedAt[part.toolCallId] = Date.now();
-      // Translate the model-safe tool name back to the real dotted capability
-      // name so the UI labels and routes (e.g. agent.code.execute →
-      // CodeExecuteCard) on the real name.
+      // Translate the model-safe tool name back to the real capability name
+      // so the UI labels and routes on the real name.
       const capability = toolNameMap[part.toolName] ?? part.toolName;
       toolCapability[part.toolCallId] = capability;
       flushText();
       // Reserve a terminal block; tool-result/tool-error fills it in.
       toolBlockIndex[part.toolCallId] = blocks.length;
-      if (capability === "execute_code") {
-        const inp = isRecord(part.input) ? part.input : {};
-        blocks.push({
-          type: "code-execute",
-          toolCallId: part.toolCallId,
-          language: typeof inp.language === "string" ? inp.language : "node",
-          code: typeof inp.code === "string" ? inp.code : "",
-          status: "running",
-        });
-      } else {
-        blocks.push({
-          type: "tool-call",
-          toolCallId: part.toolCallId,
-          capability,
-          inputPreview: part.input,
-          riskLevel: "low",
-          status: "running",
-        });
-      }
+      blocks.push({
+        type: "tool-call",
+        toolCallId: part.toolCallId,
+        capability,
+        inputPreview: part.input,
+        riskLevel: "low",
+        status: "running",
+      });
       emit({
         type: "tool-call-start",
         messageId: requestId,
@@ -280,14 +267,6 @@ export function createTurnTranslator(args: {
         if (blk && blk.type === "tool-call") {
           blk.status = "completed";
           blk.output = part.output;
-          blk.durationMs = durationMs;
-        } else if (blk && blk.type === "code-execute") {
-          const out = isRecord(part.output) ? part.output : {};
-          blk.status = "completed";
-          if (typeof out.stdout === "string") blk.stdout = out.stdout;
-          if (typeof out.stderr === "string") blk.stderr = out.stderr;
-          if (typeof out.exitCode === "number") blk.exitCode = out.exitCode;
-          if (typeof out.oomKilled === "boolean") blk.oomKilled = out.oomKilled;
           blk.durationMs = durationMs;
         }
       }
@@ -374,49 +353,6 @@ export function createTurnTranslator(args: {
           });
         }
       }
-      // Background-task lifecycle: when the agent dispatches a
-      // long-running Inngest job via agent.task.background.start, surface a live
-      // BackgroundTaskCard and persist a terminal block so the task is visible
-      // inline (and linked to the BackgroundTaskTray), not only after a refresh.
-      if (capabilityForResult === "start_background_task") {
-        const startOut = isRecord(rawResult) ? rawResult : null;
-        const taskId =
-          startOut !== null && typeof startOut.taskId === "string"
-            ? startOut.taskId
-            : null;
-        if (taskId !== null) {
-          const inngestRunId =
-            startOut !== null && typeof startOut.inngestRunId === "string"
-              ? startOut.inngestRunId
-              : undefined;
-          // kind (required) + label (optional) come from the tool input recorded
-          // on the reserved tool-call block for this call.
-          const reserved = blocks[toolBlockIndex[part.toolCallId] ?? -1];
-          const inputPreview =
-            reserved !== undefined && reserved.type === "tool-call"
-              ? reserved.inputPreview
-              : undefined;
-          const ip = isRecord(inputPreview) ? inputPreview : {};
-          const kind = typeof ip.kind === "string" ? ip.kind : "agent.task";
-          const label = typeof ip.label === "string" ? ip.label : undefined;
-          blocks.push({
-            type: "background-task",
-            taskId,
-            kind,
-            status: "pending",
-            ...(label !== undefined ? { label } : {}),
-            ...(inngestRunId !== undefined ? { inngestRunId } : {}),
-          });
-          emit({
-            type: "background-task-progress",
-            taskId,
-            kind,
-            status: "pending",
-            ...(label !== undefined ? { label } : {}),
-            ...(inngestRunId !== undefined ? { inngestRunId } : {}),
-          });
-        }
-      }
     } else if (pType === "tool-error") {
       // A tool whose execute() THREW surfaces as a `tool-error` part (not
       // `tool-result`). Without this arm the client's tool card would spin
@@ -430,11 +366,10 @@ export function createTurnTranslator(args: {
       const idx = toolBlockIndex[part.toolCallId];
       if (idx !== undefined) {
         const blk = blocks[idx];
-        if (blk && (blk.type === "tool-call" || blk.type === "code-execute")) {
+        if (blk && blk.type === "tool-call") {
           blk.status = "failed";
           blk.durationMs = durationMs;
-          if (blk.type === "tool-call") blk.errorReason = errorReason;
-          else blk.stderr = (blk.stderr ?? "") + errorReason;
+          blk.errorReason = errorReason;
         }
       }
       emit({
@@ -470,15 +405,30 @@ export function createTurnTranslator(args: {
   return { onPart, finish };
 }
 
+/** What the single-pass wrapper returns: the turn, plus the usage it emitted. */
+export interface TranslatedTurnWithUsage extends TranslatedTurn {
+  /**
+   * The client-shape usage emitted from the stream's `finish` part, so the
+   * caller can persist the SAME numbers on the message receipt. `null` when the
+   * stream carried no `finish` part (an aborted or errored turn) — the caller
+   * then emits from the turn's own aggregated usage instead.
+   */
+  usage: ClientTurnUsage | null;
+}
+
 /**
  * Single-pass wrapper: consume a whole `fullStream` into a `createTurnTranslator`
- * and return the accumulated turn. Unlike the engine path (which drives
- * `onPart` step-by-step and emits usage/error itself), this wrapper also handles
- * the `finish` part (→ one `usage` event) and `error` part (→ structured `error`
- * event), preserving the exact behaviour callers relied on before the engine
- * unification. Iterating `fullStream` never rejects: provider/gateway failures
- * arrive as an `error` PART, forwarded here as a structured error event rather
- * than letting the turn produce silent zero output.
+ * and return the accumulated turn. This is what the governed turn loop
+ * (`runGovernedTurn` in `@oxagen/agent`) is drained through: the loop hands back
+ * the raw AI-SDK stream and this is the only place its parts become the app's
+ * SSE wire format. On top of the stateful translator it also handles the
+ * `finish` part (→ one `usage` event) and the `error` part (→ structured
+ * `error` event). Iterating `fullStream` normally never rejects:
+ * provider/gateway failures arrive as an `error` PART, forwarded here as a
+ * structured error event rather than letting the turn produce silent zero
+ * output. A genuine throw (a client-disconnect abort) propagates to the
+ * caller's catch, which is why `translator` can be supplied from outside — the
+ * caller keeps a handle on the partial turn and can still persist it.
  */
 export async function translateAgentStream(args: {
   fullStream: AsyncIterable<unknown>;
@@ -489,7 +439,13 @@ export async function translateAgentStream(args: {
   /** Gateway model id (from modelIdOf(turnModel)) used to compute credits charged. */
   modelId: string;
   emit: (event: StreamEvent) => void;
-}): Promise<TranslatedTurn> {
+  /**
+   * Reuse a translator the caller already built. Pass one when the caller needs
+   * to flush a PARTIAL turn from its own catch block after a mid-stream throw;
+   * omit it and the wrapper owns a fresh translator for the whole turn.
+   */
+  translator?: TurnTranslator;
+}): Promise<TranslatedTurnWithUsage> {
   const {
     fullStream,
     requestId,
@@ -499,13 +455,16 @@ export async function translateAgentStream(args: {
     modelId,
     emit,
   } = args;
-  const translator = createTurnTranslator({
-    requestId,
-    toolNameMap,
-    orgSlug,
-    workspaceSlug,
-    emit,
-  });
+  const translator =
+    args.translator ??
+    createTurnTranslator({
+      requestId,
+      toolNameMap,
+      orgSlug,
+      workspaceSlug,
+      emit,
+    });
+  let usage: ClientTurnUsage | null = null;
 
   for await (const raw of fullStream) {
     const pType = partType(raw);
@@ -517,7 +476,7 @@ export async function translateAgentStream(args: {
           totalTokens?: number;
         };
       };
-      emitUsageEvent(emit, part.totalUsage, modelId);
+      usage = emitUsageEvent(emit, part.totalUsage, modelId);
     } else if (pType === "error") {
       // Forward a structured `error` event (NOT text) so the client shows a
       // readable toast instead of raw JSON. Never folded into assistantText —
@@ -536,5 +495,5 @@ export async function translateAgentStream(args: {
     }
   }
 
-  return translator.finish();
+  return { ...translator.finish(), usage };
 }

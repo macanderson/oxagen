@@ -16,6 +16,7 @@ export * from "./credits";
 export * from "./grants";
 export * from "./pricing";
 export * from "./turn-budget";
+export * from "./turn-credit-gate";
 export * from "./turn-budget-policy";
 export * from "./spend-budget";
 export * from "./spend-budget-store";

@@ -1,5 +1,10 @@
 # Customer-Built Capability Packages — Delivery Plan
 
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
+> `generate_svg`/`generate_image`/`generate_video`, the worked examples this
+> plan's phase gates are written against. See `spec.md`'s 2026-09-07 note —
+> the generic mechanism survives, the example capabilities don't.
+
 **Spec:** `docs/specs/customer-capabilities/spec.md` · **ADR:** ADR-034
 **Status:** Awaiting spec sign-off (do not start Phase 1+ before that; Phase 0
 is independently justified boilerplate deletion and may start immediately

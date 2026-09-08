@@ -46,13 +46,13 @@ describe("uniqueDirs", () => {
 describe("buildLauncherScript", () => {
   const script = buildLauncherScript(
     "/repo/node_modules/.bin/tsx",
-    "/repo/apps/cli/src/index.tsx",
+    "/repo/apps/cli/src/index.ts",
   );
 
   it("is a /bin/sh script that execs tsx against the source entry, passing args through", () => {
     expect(script.startsWith("#!/bin/sh\n")).toBe(true);
     expect(script).toContain('__OXAGEN_TSX="/repo/node_modules/.bin/tsx"');
-    expect(script).toContain('__OXAGEN_ENTRY="/repo/apps/cli/src/index.tsx"');
+    expect(script).toContain('__OXAGEN_ENTRY="/repo/apps/cli/src/index.ts"');
     expect(script).toContain('exec "$__OXAGEN_TSX" "$__OXAGEN_ENTRY" "$@"');
   });
 
@@ -69,7 +69,7 @@ describe("buildLauncherScript", () => {
 });
 
 describe("isOurLauncher / classifyBin", () => {
-  const srcEntry = "/repo/apps/cli/src/index.tsx";
+  const srcEntry = "/repo/apps/cli/src/index.ts";
   const ours = buildLauncherScript("/repo/node_modules/.bin/tsx", srcEntry);
 
   it("recognises a launcher this repo generated for this checkout", () => {
@@ -80,7 +80,7 @@ describe("isOurLauncher / classifyBin", () => {
   it("treats a launcher for a DIFFERENT checkout as external", () => {
     const other = buildLauncherScript(
       "/other/node_modules/.bin/tsx",
-      "/other/apps/cli/src/index.tsx",
+      "/other/apps/cli/src/index.ts",
     );
     expect(isOurLauncher(other, srcEntry)).toBe(false);
     expect(classifyBin(other, srcEntry)).toBe("external");

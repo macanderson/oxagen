@@ -95,7 +95,6 @@ const nextConfig = {
   // Server-only packages with native deps (docker, ssh2) must stay external
   // so webpack doesn't try to bundle their .node binaries into the client.
   serverExternalPackages: [
-    "@oxagen/sandbox",
     "@oxagen/agent",
     "@oxagen/engram",
     "blake3",

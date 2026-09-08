@@ -29,7 +29,7 @@ Include what you can of:
 
 In scope:
 
-- This repository and everything deployed from it: `app.oxagen.sh`, `api.oxagen.sh`, `mcp.oxagen.sh`, `docs.oxagen.sh`, `schemas.oxagen.sh`, `oxagen.sh`
+- This repository and everything deployed from it: `app.oxagen.sh`, `api.oxagen.sh`, `mcp.oxagen.sh`, `docs.oxagen.sh`, `oxagen.sh`
 - The `oxagen` CLI and its telemetry ingest path
 - Tenant-isolation boundaries: Postgres RLS, per-workspace Neo4j scoping, ClickHouse predicates
 - The capability kernel's IAM, entitlement, and billing gates (bypasses are high severity)

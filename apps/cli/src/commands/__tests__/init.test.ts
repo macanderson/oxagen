@@ -1,280 +1,340 @@
 /**
- * Unit tests for `oxagen init` — settings scaffolding + summary formatting.
+ * Unit tests for `oxagen init` — the workspace linker, the GitHub-connection
+ * step, the summary renderer, and the phase events runInit emits.
  *
- * Narrow scope per CLAUDE.md: tests cover only the pure functions exposed by
- * init.ts (settings file creation/merge and summary rendering).
+ * The platform seams (lib/api, lib/config, lib/linker) are mocked, so every
+ * path below runs offline and touches only a temp directory. `runInit` is the
+ * observable surface: it writes `.oxagen/workspace.json` and returns a result
+ * the CLI handler renders.
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import {
-  mkdtempSync,
-  rmSync,
-  readFileSync,
-  existsSync,
-  writeFileSync,
-  mkdirSync,
-} from "node:fs";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import type { Mock } from "vitest";
+import { mkdtempSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+vi.mock("../../lib/api.js", () => ({
+  apiGetOrThrow: vi.fn(),
+  apiPostOrThrow: vi.fn(),
+}));
+vi.mock("../../lib/config.js", () => ({ getToken: vi.fn() }));
+vi.mock("../../lib/linker.js", () => ({ resolveLinkedAccount: vi.fn() }));
+
 import {
-  ensureSettingsFiles,
   formatInitSummary,
+  handleInit,
   runInit,
   type InitResult,
   type InitProgressEvent,
 } from "../init.js";
+import {
+  readWorkspaceLink,
+  writeWorkspaceLink,
+  workspaceLinkPath,
+} from "../workspace-link.js";
+import { apiGetOrThrow, apiPostOrThrow } from "../../lib/api.js";
+import { getToken } from "../../lib/config.js";
+import { resolveLinkedAccount } from "../../lib/linker.js";
 
-// ---------------------------------------------------------------------------
-// Test helpers
-// ---------------------------------------------------------------------------
+const mockGet = apiGetOrThrow as unknown as Mock;
+const mockPost = apiPostOrThrow as unknown as Mock;
+const mockToken = getToken as unknown as Mock;
+const mockResolve = resolveLinkedAccount as unknown as Mock;
+
+const ACCOUNT = {
+  orgId: "org_1",
+  orgSlug: "acme",
+  orgName: "Acme Inc",
+  workspaceId: "ws_1",
+  workspaceSlug: "prod",
+  workspaceName: "Production",
+};
 
 let tmpDir: string;
+let out = "";
+let stdout: typeof process.stdout.write;
+let stderr: typeof process.stderr.write;
+let isTTY: boolean | undefined;
 
 beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), "oxagen-init-test-"));
+  out = "";
+  stdout = process.stdout.write.bind(process.stdout);
+  stderr = process.stderr.write.bind(process.stderr);
+  process.stdout.write = ((s: string) => {
+    out += s;
+    return true;
+  }) as typeof process.stdout.write;
+  process.stderr.write = (() => true) as typeof process.stderr.write;
+  isTTY = process.stdin.isTTY;
+  // Non-interactive by default: the GitHub connect prompt must never block.
+  Object.defineProperty(process.stdin, "isTTY", {
+    value: false,
+    configurable: true,
+  });
+  mockGet.mockReset();
+  mockPost.mockReset();
+  mockToken.mockReset();
+  mockResolve.mockReset();
 });
 
 afterEach(() => {
+  process.stdout.write = stdout;
+  process.stderr.write = stderr;
+  Object.defineProperty(process.stdin, "isTTY", {
+    value: isTTY,
+    configurable: true,
+  });
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
-// Build a minimal InitResult suitable for rendering tests
 function makeResult(overrides: Partial<InitResult> = {}): InitResult {
   return {
-    projectSettingsPath: join(tmpDir, ".oxagen", "settings.json"),
-    projectSettingsCreated: true,
-    userSettingsPath: join(tmpDir, "user-settings.json"),
-    userSettingsCreated: true,
+    workspaceLinkPath: workspaceLinkPath(tmpDir),
     workspaceLink: null,
     ...overrides,
   };
 }
 
 // ---------------------------------------------------------------------------
-// Settings scaffolding
-// ---------------------------------------------------------------------------
-
-describe("ensureSettingsFiles", () => {
-  it("creates both project and user settings files when they do not exist", () => {
-    const userPath = join(tmpDir, "user-settings.json");
-    const result = ensureSettingsFiles({
-      cwd: tmpDir,
-      userSettingsPath: userPath,
-    });
-
-    expect(result.userCreated).toBe(true);
-    expect(result.projectCreated).toBe(true);
-    expect(existsSync(result.userPath)).toBe(true);
-    expect(existsSync(result.projectPath)).toBe(true);
-  });
-
-  it("writes valid JSON to both files", () => {
-    const userPath = join(tmpDir, "user-settings.json");
-    ensureSettingsFiles({ cwd: tmpDir, userSettingsPath: userPath });
-
-    const projectRaw = readFileSync(
-      join(tmpDir, ".oxagen", "settings.json"),
-      "utf8",
-    );
-    const userRaw = readFileSync(userPath, "utf8");
-
-    const project = JSON.parse(projectRaw) as Record<string, unknown>;
-    const user = JSON.parse(userRaw) as Record<string, unknown>;
-
-    // Both should have the starter $schema field
-    expect(project["$schema"]).toContain("oxagen.sh");
-    expect(user["$schema"]).toContain("oxagen.sh");
-  });
-
-  it("does not clobber existing project settings", () => {
-    const userPath = join(tmpDir, "user-settings.json");
-    // Pre-create the .oxagen dir + settings with custom content
-    const oxagenDir = join(tmpDir, ".oxagen");
-    mkdirSync(oxagenDir, { recursive: true });
-    const projectPath = join(oxagenDir, "settings.json");
-    const customContent = JSON.stringify({
-      $schema: "https://schemas.oxagen.sh/oxagen-cli-settings-schema.json",
-      model: "my-custom-model",
-      permissions: {
-        allow: ["Bash(git*)"],
-        deny: [],
-      },
-    });
-    writeFileSync(projectPath, customContent, "utf8");
-
-    const result = ensureSettingsFiles({
-      cwd: tmpDir,
-      userSettingsPath: userPath,
-    });
-
-    expect(result.projectCreated).toBe(false);
-    // Original content must be preserved
-    const after = readFileSync(projectPath, "utf8");
-    const parsed = JSON.parse(after) as Record<string, unknown>;
-    expect(parsed["model"]).toBe("my-custom-model");
-    const perms = parsed["permissions"] as Record<string, unknown>;
-    expect(perms["allow"]).toContain("Bash(git*)");
-  });
-
-  it("does not clobber existing user settings", () => {
-    const userPath = join(tmpDir, "user-settings.json");
-    const customUserContent = JSON.stringify({
-      $schema: "https://schemas.oxagen.sh/oxagen-cli-settings-schema.json",
-      model: "my-global-model",
-    });
-    writeFileSync(userPath, customUserContent, "utf8");
-
-    const result = ensureSettingsFiles({
-      cwd: tmpDir,
-      userSettingsPath: userPath,
-    });
-
-    expect(result.userCreated).toBe(false);
-    const after = readFileSync(userPath, "utf8");
-    const parsed = JSON.parse(after) as Record<string, unknown>;
-    expect(parsed["model"]).toBe("my-global-model");
-  });
-
-  it("returns correct paths", () => {
-    const userPath = join(tmpDir, "user-settings.json");
-    const result = ensureSettingsFiles({
-      cwd: tmpDir,
-      userSettingsPath: userPath,
-    });
-
-    expect(result.projectPath).toBe(join(tmpDir, ".oxagen", "settings.json"));
-    expect(result.userPath).toBe(userPath);
-  });
-
-  it("is idempotent — second call reports created:false for both", () => {
-    const userPath = join(tmpDir, "user-settings.json");
-    ensureSettingsFiles({ cwd: tmpDir, userSettingsPath: userPath });
-    const second = ensureSettingsFiles({
-      cwd: tmpDir,
-      userSettingsPath: userPath,
-    });
-
-    expect(second.projectCreated).toBe(false);
-    expect(second.userCreated).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// formatInitSummary
+// Summary rendering
 // ---------------------------------------------------------------------------
 
 describe("formatInitSummary", () => {
-  it("shows 'Created' for newly created settings files", () => {
-    const summary = formatInitSummary(makeResult());
-    expect(summary).toContain("Created");
-  });
-
-  it("shows 'Found' for pre-existing settings files", () => {
-    const summary = formatInitSummary(
-      makeResult({ projectSettingsCreated: false, userSettingsCreated: false }),
+  it("names the workspace-link file it manages", () => {
+    expect(formatInitSummary(makeResult())).toContain(
+      join(tmpDir, ".oxagen", "workspace.json"),
     );
-    expect(summary).toContain("Found");
   });
 
-  it("shows precedence note for settings tiers", () => {
-    const summary = formatInitSummary(makeResult());
-    expect(summary).toContain("global");
-    expect(summary).toContain("project");
-    expect(summary).toContain("local");
+  it("reports the skip when --no-link was passed", () => {
+    expect(formatInitSummary(makeResult())).toContain("Skipped (--no-link)");
   });
 
   it("renders the linked workspace when the linker ran", () => {
-    const summary = formatInitSummary(
+    const out = formatInitSummary(
       makeResult({
         workspaceLink: {
           linked: true,
           orgSlug: "acme",
-          orgName: "Acme",
-          workspaceSlug: "core",
-          workspaceName: "Core",
-          repos: [{ provider: "github", fullName: "acme/repo" }],
+          orgName: "Acme Inc",
+          workspaceSlug: "prod",
+          workspaceName: "Production",
         },
       }),
     );
-    expect(summary).toContain("Acme / Core");
-    expect(summary).toContain("acme/repo");
+    expect(out).toContain("Acme Inc");
+    expect(out).toContain("Production");
   });
 
-  it("renders the skip reason when linking was skipped", () => {
-    const summary = formatInitSummary(
+  it("falls back to slugs when names are absent", () => {
+    const out = formatInitSummary(
       makeResult({
-        workspaceLink: { linked: false, skippedReason: "No platform session." },
+        workspaceLink: {
+          linked: true,
+          orgSlug: "acme",
+          workspaceSlug: "prod",
+        },
       }),
     );
-    expect(summary).toContain("No platform session.");
+    expect(out).toContain("acme / prod");
+  });
+
+  it("lists linked repos, truncating past five", () => {
+    const repos = Array.from({ length: 7 }, (_, i) => ({
+      provider: "github" as const,
+      fullName: `acme/repo-${i}`,
+    }));
+    const out = formatInitSummary(
+      makeResult({ workspaceLink: { linked: true, orgSlug: "a", repos } }),
+    );
+    expect(out).toContain("acme/repo-0");
+    expect(out).toContain("+2 more");
+    expect(out).not.toContain("acme/repo-6");
+  });
+
+  it("renders the skip reason when linking could not run", () => {
+    const out = formatInitSummary(
+      makeResult({
+        workspaceLink: {
+          linked: false,
+          skippedReason: "No platform session. Run `oxagen login`",
+        },
+      }),
+    );
+    expect(out).toContain("No platform session");
   });
 });
 
 // ---------------------------------------------------------------------------
-// runInit — onProgress
+// runInit — the linker step
 // ---------------------------------------------------------------------------
 
-describe("runInit onProgress", () => {
-  it("emits real phase-boundary events in order with no link", async () => {
-    const userPath = join(tmpDir, "user-settings.json");
+describe("runInit --no-link", () => {
+  it("skips the link phase entirely and emits no events", async () => {
     const events: InitProgressEvent[] = [];
-
-    await runInit({
+    const result = await runInit({
       cwd: tmpDir,
-      userSettingsPath: userPath,
       noLink: true,
       onProgress: (e) => {
         events.push(e);
       },
     });
-
-    expect(events.map((e) => `${e.phase}:${e.status}`)).toEqual([
-      "settings:start",
-      "settings:done",
-    ]);
-  });
-
-  it("never emits a link event when noLink is set", async () => {
-    const userPath = join(tmpDir, "user-settings.json");
-    const events: InitProgressEvent[] = [];
-
-    await runInit({
-      cwd: tmpDir,
-      userSettingsPath: userPath,
-      noLink: true,
-      onProgress: (e) => {
-        events.push(e);
-      },
-    });
-
-    expect(events.some((e) => e.phase === "link")).toBe(false);
-  });
-
-  it("awaits an async onProgress callback between phases", async () => {
-    const userPath = join(tmpDir, "user-settings.json");
-    const seen: string[] = [];
-
-    await runInit({
-      cwd: tmpDir,
-      userSettingsPath: userPath,
-      noLink: true,
-      onProgress: async (e) => {
-        // A real await gap — if runInit forgot to await onProgress, phases
-        // could interleave with this resolving late instead of in order.
-        await new Promise((r) => setTimeout(r, 1));
-        seen.push(`${e.phase}:${e.status}`);
-      },
-    });
-
-    expect(seen).toEqual(["settings:start", "settings:done"]);
+    expect(events).toEqual([]);
+    expect(result.workspaceLink).toBeNull();
+    expect(result.workspaceLinkPath).toBe(workspaceLinkPath(tmpDir));
+    expect(mockResolve).not.toHaveBeenCalled();
   });
 
   it("behaves identically when onProgress is omitted", async () => {
-    const userPath = join(tmpDir, "user-settings.json");
-    const result = await runInit({
+    const result = await runInit({ cwd: tmpDir, noLink: true });
+    expect(result.workspaceLink).toBeNull();
+  });
+});
+
+describe("runInit linker", () => {
+  it("skips with guidance when there is no platform session", async () => {
+    mockToken.mockReturnValue(undefined);
+    const result = await runInit({ cwd: tmpDir });
+    expect(result.workspaceLink?.linked).toBe(false);
+    expect(result.workspaceLink?.skippedReason).toContain("oxagen login");
+    expect(existsSync(workspaceLinkPath(tmpDir))).toBe(false);
+  });
+
+  it("emits start and done around the link phase", async () => {
+    mockToken.mockReturnValue("oxk_live_x");
+    mockResolve.mockResolvedValue(ACCOUNT);
+    mockGet.mockResolvedValue({ connections: [] });
+    const events: InitProgressEvent[] = [];
+    await runInit({
       cwd: tmpDir,
-      userSettingsPath: userPath,
-      noLink: true,
+      onProgress: (e) => {
+        events.push(e);
+      },
     });
-    expect(result.projectSettingsCreated).toBe(true);
+    expect(events).toEqual([
+      { phase: "link", status: "start" },
+      { phase: "link", status: "done" },
+    ]);
+  });
+
+  it("writes the workspace link the picker resolved", async () => {
+    mockToken.mockReturnValue("oxk_live_x");
+    mockResolve.mockResolvedValue(ACCOUNT);
+    mockGet.mockResolvedValue({ connections: [] });
+
+    const result = await runInit({ cwd: tmpDir });
+
+    expect(result.workspaceLink?.linked).toBe(true);
+    const written = readWorkspaceLink(tmpDir);
+    expect(written?.orgSlug).toBe("acme");
+    expect(written?.workspaceId).toBe("ws_1");
+    expect(written?.linkedAt).toEqual(expect.any(String));
+    expect(out).toContain("Linked: Acme Inc / Production");
+  });
+
+  it("is idempotent — reuses an existing link without re-prompting", async () => {
+    writeWorkspaceLink(tmpDir, {
+      ...ACCOUNT,
+      linkedAt: "2026-01-01T00:00:00Z",
+    });
+    mockToken.mockReturnValue("oxk_live_x");
+    mockGet.mockResolvedValue({ connections: [] });
+
+    const result = await runInit({ cwd: tmpDir });
+
+    expect(mockResolve).not.toHaveBeenCalled();
+    expect(result.workspaceLink?.linked).toBe(true);
+    expect(out).toContain("Already linked: Acme Inc / Production");
+  });
+
+  it("reports a picker failure as a skip rather than throwing", async () => {
+    mockToken.mockReturnValue("oxk_live_x");
+    mockResolve.mockRejectedValue(new Error("no organizations"));
+
+    const result = await runInit({ cwd: tmpDir });
+
+    expect(result.workspaceLink?.linked).toBe(false);
+    expect(result.workspaceLink?.skippedReason).toContain("no organizations");
+    expect(existsSync(workspaceLinkPath(tmpDir))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runInit — the GitHub connection step (best-effort, never fatal)
+// ---------------------------------------------------------------------------
+
+describe("runInit GitHub step", () => {
+  beforeEach(() => {
+    mockToken.mockReturnValue("oxk_live_x");
+    mockResolve.mockResolvedValue(ACCOUNT);
+  });
+
+  it("reports an existing connected GitHub connection", async () => {
+    mockGet.mockResolvedValue({
+      connections: [
+        {
+          id: "c1",
+          publicId: "con_1",
+          connectorId: "github",
+          displayName: "GitHub",
+          status: "connected",
+        },
+      ],
+    });
+    const result = await runInit({ cwd: tmpDir });
+    expect(out).toContain("GitHub connection: GitHub (connected)");
+    expect(result.workspaceLink?.linked).toBe(true);
+  });
+
+  it("ignores a github connection that is not yet connected", async () => {
+    mockGet.mockResolvedValue({
+      connections: [
+        {
+          id: "c1",
+          publicId: "con_1",
+          connectorId: "github",
+          displayName: "GitHub",
+          status: "pending_setup",
+        },
+      ],
+    });
+    await runInit({ cwd: tmpDir });
+    expect(out).toContain("No GitHub connection found");
+  });
+
+  it("tells a non-interactive caller to re-run interactively", async () => {
+    mockGet.mockResolvedValue({ connections: [] });
+    await runInit({ cwd: tmpDir });
+    expect(out).toContain("Run `oxagen init` interactively to connect");
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it("prints and continues when the connection check fails", async () => {
+    mockGet.mockRejectedValue(new Error("connections endpoint down"));
+    const result = await runInit({ cwd: tmpDir });
+    expect(out).toContain("GitHub connection check failed");
+    expect(out).toContain("connections endpoint down");
+    // Still linked: the GitHub step is best-effort.
+    expect(result.workspaceLink?.linked).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// handleInit — the CLI writer
+// ---------------------------------------------------------------------------
+
+describe("handleInit", () => {
+  it("prints the human summary by default", async () => {
+    await handleInit({ cwd: tmpDir, noLink: true });
+    expect(out).toContain("Workspace link:");
+    expect(out).toContain("Skipped (--no-link)");
+  });
+
+  it("prints the raw result with --json", async () => {
+    await handleInit({ cwd: tmpDir, noLink: true, json: true });
+    const parsed = JSON.parse(out) as InitResult;
+    expect(parsed.workspaceLink).toBeNull();
+    expect(parsed.workspaceLinkPath).toBe(workspaceLinkPath(tmpDir));
   });
 });

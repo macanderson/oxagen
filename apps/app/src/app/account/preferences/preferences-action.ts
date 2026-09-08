@@ -27,8 +27,6 @@ const PreferencesSchema = z.object({
   pendingPromptBehavior: z.enum(["queue", "interrupt"]),
   defaultTextTier: z.enum(["fast", "balanced", "precise"]).nullable(),
   defaultTextModel: z.string().min(1).nullable(),
-  defaultImageModel: z.string().min(1).nullable(),
-  defaultVideoModel: z.string().min(1).nullable(),
   timezone: z.string().min(1),
   language: z.string().min(2),
 });

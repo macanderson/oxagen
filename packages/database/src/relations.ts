@@ -8,7 +8,7 @@ import {
   relationshipTypes,
   schemaProperties,
 } from "./schema/schema-registry";
-import { organizations, orgUsers, invitations } from "./schema/org";
+import { organizations, orgUsers, invitations, dataPlanes } from "./schema/org";
 import {
   principals,
   roles,
@@ -22,7 +22,6 @@ import {
   sourceConnections,
   repositoryBindings,
   repositoryBindingHeads,
-  governedRepositorySelections,
 } from "./schema/ingestion";
 import { users, sessions, accounts, apiKeys } from "./schema/auth";
 import { workspaces, workspaceUsers } from "./schema/workspace";
@@ -32,40 +31,21 @@ import {
   agentExecutions,
   agentExecutionSteps,
   agentToolCalls,
-  agentPlans,
-  skills,
-  skillVersions,
   tools,
   toolVersions,
   contextRecords,
   contextRecordVersions,
   contextPromotions,
-  backgroundTasks,
   approvalRequests,
-  subagentFanouts,
-  subagentRuns,
   agentRuns,
   agentRunEvents,
   agentRunAttempts,
-  agentRunAttemptLeases,
-  agentRunCheckpoints,
   agentRunAttemptSeals,
   agentRunFinalizationGrants,
   agentRunFinalizationObligations,
 } from "./schema/agent";
 import { mcpServers, mcpConsents, mcpToolSnapshots } from "./schema/mcp";
 import { mcpServerChanges } from "./schema/security";
-import {
-  playbooks,
-  playbookVersions,
-  playbookSteps,
-  playbookEdges,
-  playbookTriggers,
-  playbookRuns,
-  playbookStepRuns,
-  playbookEvents,
-  playbookApprovals,
-} from "./schema/workflow";
 import { conversations, messages } from "./schema/chat";
 import {
   plans,
@@ -91,6 +71,18 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   paymentMethods: many(paymentMethods),
   invoices: many(invoices),
   apiKeys: many(apiKeys),
+  dataPlanes: many(dataPlanes),
+}));
+
+/**
+ * ADR-042 organisation-scoped store bindings. One row per (organisation, store
+ * kind); the `org` back-reference is the only join this table ever needs.
+ */
+export const dataPlanesRelations = relations(dataPlanes, ({ one }) => ({
+  org: one(organizations, {
+    fields: [dataPlanes.orgId],
+    references: [organizations.id],
+  }),
 }));
 
 export const invitationsRelations = relations(invitations, ({ one }) => ({
@@ -194,32 +186,11 @@ export const mcpServerChangesRelations = relations(
   }),
 );
 
-// Agent-runtime epic relations. Cross-domain joins (messages, execution
-// steps) stay app-enforced; in-domain links use Drizzle relations.
+// Agent relations. Cross-domain joins (messages, execution steps) stay
+// app-enforced; in-domain links use Drizzle relations.
 
-export const skillsRelations = relations(skills, ({ one, many }) => ({
-  workspace: one(workspaces, {
-    fields: [skills.workspaceId],
-    references: [workspaces.id],
-  }),
-  versions: many(skillVersions),
-}));
-
-export const skillVersionsRelations = relations(skillVersions, ({ one }) => ({
-  skill: one(skills, {
-    fields: [skillVersions.skillId],
-    references: [skills.id],
-  }),
-  parentVersion: one(skillVersions, {
-    fields: [skillVersions.parentVersionId],
-    references: [skillVersions.id],
-    relationName: "skill_version_parent",
-  }),
-}));
-
-// Workspace agent-asset registry (stella-cutover Wave 4): same shape as the
-// skills relations above — identity ↔ versions, plus the append-only
-// promotions ledger for context records.
+// Workspace agent-asset registry (stella-cutover Wave 4): identity ↔ versions,
+// plus the append-only promotions ledger for context records.
 
 export const toolsRelations = relations(tools, ({ one, many }) => ({
   workspace: one(workspaces, {
@@ -282,16 +253,6 @@ export const contextPromotionsRelations = relations(
   }),
 );
 
-export const backgroundTasksRelations = relations(
-  backgroundTasks,
-  ({ one }) => ({
-    workspace: one(workspaces, {
-      fields: [backgroundTasks.workspaceId],
-      references: [workspaces.id],
-    }),
-  }),
-);
-
 export const approvalRequestsRelations = relations(
   approvalRequests,
   ({ one }) => ({
@@ -301,24 +262,6 @@ export const approvalRequestsRelations = relations(
     }),
   }),
 );
-
-export const subagentFanoutsRelations = relations(
-  subagentFanouts,
-  ({ one, many }) => ({
-    parentMessage: one(messages, {
-      fields: [subagentFanouts.parentMessageId],
-      references: [messages.id],
-    }),
-    runs: many(subagentRuns),
-  }),
-);
-
-export const subagentRunsRelations = relations(subagentRuns, ({ one }) => ({
-  fanout: one(subagentFanouts, {
-    fields: [subagentRuns.fanoutId],
-    references: [subagentFanouts.id],
-  }),
-}));
 
 export const conversationsRelations = relations(
   conversations,
@@ -502,7 +445,6 @@ export const agentVersionsRelations = relations(
       references: [agents.id],
     }),
     executions: many(agentExecutions),
-    stepRuns: many(playbookStepRuns),
   }),
 );
 
@@ -542,154 +484,6 @@ export const agentToolCallsRelations = relations(agentToolCalls, ({ one }) => ({
     references: [agentExecutionSteps.id],
   }),
 }));
-
-export const agentPlansRelations = relations(agentPlans, ({ one }) => ({
-  workspace: one(workspaces, {
-    fields: [agentPlans.workspaceId],
-    references: [workspaces.id],
-  }),
-}));
-
-// ── Playbook (workflow domain) relations ──────────────────────────────────────
-
-export const playbooksRelations = relations(playbooks, ({ one, many }) => ({
-  workspace: one(workspaces, {
-    fields: [playbooks.workspaceId],
-    references: [workspaces.id],
-  }),
-  versions: many(playbookVersions),
-  triggers: many(playbookTriggers),
-  runs: many(playbookRuns),
-}));
-
-export const playbookVersionsRelations = relations(
-  playbookVersions,
-  ({ one, many }) => ({
-    playbook: one(playbooks, {
-      fields: [playbookVersions.playbookId],
-      references: [playbooks.id],
-    }),
-    steps: many(playbookSteps),
-    edges: many(playbookEdges),
-    runs: many(playbookRuns),
-  }),
-);
-
-export const playbookStepsRelations = relations(
-  playbookSteps,
-  ({ one, many }) => ({
-    version: one(playbookVersions, {
-      fields: [playbookSteps.playbookVersionId],
-      references: [playbookVersions.id],
-    }),
-    outboundEdges: many(playbookEdges, { relationName: "edge_source" }),
-    inboundEdges: many(playbookEdges, { relationName: "edge_target" }),
-    stepRuns: many(playbookStepRuns),
-  }),
-);
-
-export const playbookEdgesRelations = relations(playbookEdges, ({ one }) => ({
-  version: one(playbookVersions, {
-    fields: [playbookEdges.playbookVersionId],
-    references: [playbookVersions.id],
-  }),
-  sourceStep: one(playbookSteps, {
-    fields: [playbookEdges.sourceStepId],
-    references: [playbookSteps.id],
-    relationName: "edge_source",
-  }),
-  targetStep: one(playbookSteps, {
-    fields: [playbookEdges.targetStepId],
-    references: [playbookSteps.id],
-    relationName: "edge_target",
-  }),
-}));
-
-export const playbookTriggersRelations = relations(
-  playbookTriggers,
-  ({ one }) => ({
-    playbook: one(playbooks, {
-      fields: [playbookTriggers.playbookId],
-      references: [playbooks.id],
-    }),
-    workspace: one(workspaces, {
-      fields: [playbookTriggers.workspaceId],
-      references: [workspaces.id],
-    }),
-  }),
-);
-
-export const playbookRunsRelations = relations(
-  playbookRuns,
-  ({ one, many }) => ({
-    playbook: one(playbooks, {
-      fields: [playbookRuns.playbookId],
-      references: [playbooks.id],
-    }),
-    version: one(playbookVersions, {
-      fields: [playbookRuns.playbookVersionId],
-      references: [playbookVersions.id],
-    }),
-    workspace: one(workspaces, {
-      fields: [playbookRuns.workspaceId],
-      references: [workspaces.id],
-    }),
-    parentRun: one(playbookRuns, {
-      fields: [playbookRuns.parentRunId],
-      references: [playbookRuns.id],
-      relationName: "playbook_run_parent",
-    }),
-    childRuns: many(playbookRuns, { relationName: "playbook_run_parent" }),
-    stepRuns: many(playbookStepRuns),
-    events: many(playbookEvents),
-    approvals: many(playbookApprovals),
-  }),
-);
-
-export const playbookStepRunsRelations = relations(
-  playbookStepRuns,
-  ({ one, many }) => ({
-    run: one(playbookRuns, {
-      fields: [playbookStepRuns.playbookRunId],
-      references: [playbookRuns.id],
-    }),
-    step: one(playbookSteps, {
-      fields: [playbookStepRuns.playbookStepId],
-      references: [playbookSteps.id],
-    }),
-    agentVersion: one(agentVersions, {
-      fields: [playbookStepRuns.agentVersionId],
-      references: [agentVersions.id],
-    }),
-    events: many(playbookEvents),
-    approvals: many(playbookApprovals),
-  }),
-);
-
-export const playbookEventsRelations = relations(playbookEvents, ({ one }) => ({
-  run: one(playbookRuns, {
-    fields: [playbookEvents.playbookRunId],
-    references: [playbookRuns.id],
-  }),
-  stepRun: one(playbookStepRuns, {
-    fields: [playbookEvents.stepRunId],
-    references: [playbookStepRuns.id],
-  }),
-}));
-
-export const playbookApprovalsRelations = relations(
-  playbookApprovals,
-  ({ one }) => ({
-    run: one(playbookRuns, {
-      fields: [playbookApprovals.playbookRunId],
-      references: [playbookRuns.id],
-    }),
-    stepRun: one(playbookStepRuns, {
-      fields: [playbookApprovals.stepRunId],
-      references: [playbookStepRuns.id],
-    }),
-  }),
-);
 
 // ── Schema Registry relations (§4.1–§4.6) ────────────────────────────────────
 // Cross-domain joins are app-enforced; in-domain FK links use Drizzle relations.
@@ -798,14 +592,13 @@ export const schemaPropertiesRelations = relations(
 //
 // These are Drizzle query relations only — the underlying columns carry NO
 // database foreign keys, per the cross-schema storage rule. They exist so a
-// caller can traverse run → attempts → lease/checkpoints/seal → grant →
-// obligation in one typed query instead of hand-joining on app-enforced ids.
+// caller can traverse run → attempts → seal → grant → obligation in one typed
+// query instead of hand-joining on app-enforced ids.
 export const agentRunsFoundationRelations = relations(
   agentRuns,
   ({ many }) => ({
     attempts: many(agentRunAttempts),
     events: many(agentRunEvents),
-    checkpoints: many(agentRunCheckpoints),
   }),
 );
 
@@ -816,17 +609,12 @@ export const agentRunAttemptsRelations = relations(
       fields: [agentRunAttempts.runId],
       references: [agentRuns.id],
     }),
-    // Exactly one lease and at most one seal per attempt (unique indexes).
-    lease: one(agentRunAttemptLeases, {
-      fields: [agentRunAttempts.id],
-      references: [agentRunAttemptLeases.attemptId],
-    }),
+    // At most one seal per attempt (unique index).
     seal: one(agentRunAttemptSeals, {
       fields: [agentRunAttempts.id],
       references: [agentRunAttemptSeals.attemptId],
     }),
     events: many(agentRunEvents),
-    checkpoints: many(agentRunCheckpoints),
   }),
 );
 
@@ -841,34 +629,6 @@ export const agentRunEventsRelations = relations(agentRunEvents, ({ one }) => ({
     references: [agentRunAttempts.id],
   }),
 }));
-
-export const agentRunCheckpointsRelations = relations(
-  agentRunCheckpoints,
-  ({ one }) => ({
-    run: one(agentRuns, {
-      fields: [agentRunCheckpoints.runId],
-      references: [agentRuns.id],
-    }),
-    attempt: one(agentRunAttempts, {
-      fields: [agentRunCheckpoints.attemptId],
-      references: [agentRunAttempts.id],
-    }),
-    event: one(agentRunEvents, {
-      fields: [agentRunCheckpoints.eventId],
-      references: [agentRunEvents.id],
-    }),
-  }),
-);
-
-export const agentRunAttemptLeasesRelations = relations(
-  agentRunAttemptLeases,
-  ({ one }) => ({
-    attempt: one(agentRunAttempts, {
-      fields: [agentRunAttemptLeases.attemptId],
-      references: [agentRunAttempts.id],
-    }),
-  }),
-);
 
 export const agentRunAttemptSealsRelations = relations(
   agentRunAttemptSeals,
@@ -909,8 +669,8 @@ export const agentRunFinalizationObligationsRelations = relations(
   }),
 );
 
-// Governed repository bindings: the immutable version chain plus the two
-// mutable pointers admission resolves through.
+// Governed repository bindings: the immutable version chain plus the mutable
+// head pointer admission resolves through.
 export const repositoryBindingsRelations = relations(
   repositoryBindings,
   ({ one }) => ({
@@ -926,16 +686,6 @@ export const repositoryBindingHeadsRelations = relations(
   ({ one }) => ({
     currentBinding: one(repositoryBindings, {
       fields: [repositoryBindingHeads.currentBindingId],
-      references: [repositoryBindings.id],
-    }),
-  }),
-);
-
-export const governedRepositorySelectionsRelations = relations(
-  governedRepositorySelections,
-  ({ one }) => ({
-    primaryBinding: one(repositoryBindings, {
-      fields: [governedRepositorySelections.primaryBindingId],
       references: [repositoryBindings.id],
     }),
   }),

@@ -183,8 +183,6 @@ describe("workspace.model.settings.read route", () => {
     const invokeResult = {
       defaultTextTier: "balanced",
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     };
     mocks.invoke.mockResolvedValue(invokeResult);
     const res = await app.fetch(get(PATH));
@@ -208,8 +206,6 @@ describe("workspace.model.settings.write route", () => {
     const invokeResult = {
       defaultTextTier: "precise",
       defaultTextModel: "claude-4",
-      defaultImageModel: null,
-      defaultVideoModel: null,
     };
     mocks.invoke.mockResolvedValue(invokeResult);
 
@@ -406,8 +402,6 @@ describe("user.preferences.read route", () => {
       pendingPromptBehavior: "queue",
       defaultTextTier: null,
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     };
     mocks.invoke.mockResolvedValue(invokeResult);
 

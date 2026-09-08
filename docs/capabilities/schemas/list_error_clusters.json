@@ -1,13 +1,9 @@
 {
   "name": "list_error_clusters",
   "domain": "telemetry",
-  "description": "Cluster recent captured errors by fingerprint to see which error classes are recurring and how often across the org — the triage overview. Prefer this over reading raw errors when you want the SHAPE of what's failing platform-wide. Anti-trigger: to diagnose ONE specific failed execution (failing step, stack, suspect files) use agent.debug.trace; this is the fleet-wide histogram, not a single-run frame.",
+  "description": "Cluster recent captured errors by fingerprint to see which error classes are recurring and how often across the org — the triage overview. Prefer this over reading raw errors when you want the SHAPE of what's failing platform-wide. Anti-trigger: to diagnose ONE specific failed execution (failing step, stack, suspect files) use debug_execution; this is the fleet-wide histogram, not a single-run frame.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -31,11 +27,7 @@
       },
       "severity": {
         "type": "string",
-        "enum": [
-          "fatal",
-          "error",
-          "warn"
-        ]
+        "enum": ["fatal", "error", "warn"]
       },
       "source": {
         "type": "string"
@@ -71,11 +63,7 @@
             },
             "severity": {
               "type": "string",
-              "enum": [
-                "fatal",
-                "error",
-                "warn"
-              ]
+              "enum": ["fatal", "error", "warn"]
             },
             "source": {
               "type": "string",
@@ -128,9 +116,7 @@
             "description": "Effective lookback window in hours actually applied"
           }
         },
-        "required": [
-          "sinceHours"
-        ],
+        "required": ["sinceHours"],
         "additionalProperties": false
       }
     },

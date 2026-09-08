@@ -3,6 +3,15 @@ import { join } from "path";
 import { readFileSync, mkdirSync, existsSync } from "fs";
 import { atomicWriteFileSync } from "./atomic-write.js";
 
+/**
+ * The CLI's credential store, at `~/.config/oxagen/config.json`.
+ *
+ * It holds exactly the platform session (`oxagen login` writes it, `oxagen
+ * logout` clears it) plus the anonymous-telemetry preferences. The model keys,
+ * default model/effort, and TUI settings this file used to carry belonged to
+ * the local coding agent and went with it (ADR-043) — the CLI makes no LLM
+ * calls of its own, so there is no provider key to store.
+ */
 export interface CliConfig {
   token?: string;
   orgSlug?: string;
@@ -10,22 +19,6 @@ export interface CliConfig {
   apiUrl?: string;
   /** Web app base URL — where `oxagen login` opens the browser authorize page. */
   appUrl?: string;
-  model?: string;
-  /** Default reasoning effort for models that support it (low|medium|high|xhigh|max). */
-  effort?: "low" | "medium" | "high" | "xhigh" | "max";
-  /** TUI animation level (see getMotionMode) — set via /motion in the REPL. */
-  motion?: MotionMode;
-  /** Vercel AI Gateway key for the local agent loop (falls back to env / .env.local). */
-  gatewayKey?: string;
-  /**
-   * Anthropic API key — BYOK fallback when no gateway key exists anywhere.
-   * Anthropic models only; `gatewayKey` / `AI_GATEWAY_API_KEY` wins when present.
-   */
-  anthropicKey?: string;
-  /** Default verbose mode: capture + emit full per-turn telemetry. */
-  verbose?: boolean;
-  /** Model-runtime settings */
-  runtime?: RuntimeConfig;
   /** Anonymous usage-telemetry preferences (apps/cli/src/telemetry/usage.ts). */
   telemetry?: TelemetryConfig;
 }
@@ -44,47 +37,6 @@ export interface TelemetryConfig {
   disclosed?: boolean;
   /** Random per-install id (crypto.randomUUID()), generated on first enabled run. */
   installId?: string;
-}
-
-/**
- * Model-runtime config. Nested under `runtime` in the config file. Every field
- * is optional; unset fields fall back to the baked-in defaults in
- * `runtime/models.json`. Read/written through typed accessors in
- * `runtime/config.ts` (not the flat `oxagen config` command).
- */
-export interface RuntimeConfig {
-  /** Which model coordinates the agent: "on-device" or a cloud id like "haiku". */
-  coordinator?: string;
-  onDevice?: {
-    /** Auto-download the resolved model on first on-device coordinator use. */
-    autoDownload?: boolean;
-    /** "auto" (resolve best for device) or a pinned capability-table modelId. */
-    modelId?: string;
-    /** Override the weights cache directory (defaults to ~/.oxagen/models). */
-    cacheDir?: string;
-    /** Verify downloads against a checksum before caching. */
-    verifyChecksum?: boolean;
-    /** Quantization preference, best quality first (e.g. ["q8","q6","q5","q4"]). */
-    quantizationPreference?: ("q4" | "q5" | "q6" | "q8")[];
-  };
-}
-
-/**
- * TUI animation level:
- *   - "full"    — everything animates (default).
- *   - "reduced" — no decorative animation: the space-invaders duel / init
- *     easter-egg game and the prompt bar's rainbow border flash are off; the
- *     thinking indicator (useful progress feedback) stays.
- *   - "off"     — all animation off, including the thinking indicator.
- */
-export type MotionMode = "full" | "reduced" | "off";
-
-const MOTION_MODES: readonly string[] = ["full", "reduced", "off"];
-
-function asMotionMode(value: string | undefined): MotionMode | undefined {
-  return value !== undefined && MOTION_MODES.includes(value)
-    ? (value as MotionMode)
-    : undefined;
 }
 
 const CONFIG_DIR = join(homedir(), ".config", "oxagen");
@@ -153,24 +105,4 @@ export function getAppUrl(): string {
     readConfig().appUrl ??
     "https://app.oxagen.sh"
   );
-}
-
-/**
- * Resolve the animation level. Env beats persisted config (the convention for
- * every getter here): OXAGEN_CLI_MOTION → the legacy OXAGEN_CLI_FUN=0 opt-out
- * (which predates /motion and disabled exactly the decorative animations,
- * i.e. today's "reduced") → the /motion choice in config → "full".
- */
-export function getMotionMode(): MotionMode {
-  return (
-    asMotionMode(process.env["OXAGEN_CLI_MOTION"]) ??
-    (process.env["OXAGEN_CLI_FUN"] === "0" ? "reduced" : undefined) ??
-    asMotionMode(readConfig().motion) ??
-    "full"
-  );
-}
-
-/** Persist the animation level chosen with /motion. */
-export function setMotionMode(motion: MotionMode): void {
-  writeConfig({ motion });
 }

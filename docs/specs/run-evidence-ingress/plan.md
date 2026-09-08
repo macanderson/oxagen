@@ -1,5 +1,11 @@
 # Governed Run Evidence Ingress Implementation Plan
 
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
+> `edit_repo_file`/`agent.repo.edit`, the sandbox worker, and the repo-mutation
+> capabilities this plan targets. The evidence-ledger tables it introduced
+> (`agent_runs` and friends) survive as `@oxagen/run-ledger`; see `spec.md`'s
+> 2026-09-07 note for the full picture.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship one governed, sandbox-backed `edit_repo_file` run whose identity, authorization, ordered execution, retained evidence, provider receipts, and coarse workspace lineage are independently verifiable.

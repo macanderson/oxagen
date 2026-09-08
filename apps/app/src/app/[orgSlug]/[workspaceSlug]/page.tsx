@@ -3,7 +3,7 @@
  *
  * A metering-forward, graph-grounded workspace home: a KPI strip (spend, tokens,
  * runs, credit balance), a Knowledge-graph hero (live subgraph preview + node/
- * edge/inference stats + node-creation growth), agent activity, automations,
+ * edge/inference stats + node-creation growth), agent activity,
  * usage charts, memory capture, and source health — each independently
  * Suspense-streamed and fail-open (one tile's data source failing never blocks
  * the others). Ask remains the default conversational front door via the nav;
@@ -21,7 +21,6 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Section, LoadingState } from "./_shared/components";
 import { MeteringKpiStrip } from "./_overview/metering-kpi-strip";
 import { GraphHero } from "./_overview/graph-hero";
-import { AutomationsPanel } from "./_overview/automations-panel";
 import { UsagePanel } from "./_overview/usage-panel";
 import { MemoriesPanel } from "./_overview/memories-panel";
 import { SourcesTile } from "./_overview/sources-section";
@@ -56,7 +55,7 @@ export default async function WorkspaceOverviewPage({ params }: PageProps) {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Overview"
-        description="A live heads-up display of spend, activity, automations, memory, and knowledge-graph grounding for this workspace."
+        description="A live heads-up display of spend, activity, memory, and knowledge-graph grounding for this workspace."
       />
 
       {/* KPI strip — the metering wedge at a glance */}
@@ -67,11 +66,6 @@ export default async function WorkspaceOverviewPage({ params }: PageProps) {
       {/* Knowledge-graph hero — the grounding wedge, made visual */}
       <Section fallback={<LoadingState variant="cards" />}>
         <GraphHero {...tileProps} />
-      </Section>
-
-      {/* Automations */}
-      <Section fallback={<LoadingState variant="cards" />}>
-        <AutomationsPanel {...tileProps} />
       </Section>
 
       {/* Usage charts + Memory capture */}

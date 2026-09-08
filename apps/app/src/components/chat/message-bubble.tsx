@@ -9,11 +9,7 @@ import {
 } from "./tool-activity-group";
 import { ApprovalCard } from "./approval-card";
 import { ConsentCard } from "./consent-card";
-import { PlanCard, type AgentCapability } from "./plan-card";
-import { SubagentFanout } from "./subagent-fanout";
 import { MemoryCard } from "./memory-card";
-import { BackgroundTaskCard } from "./background-task-card";
-import { CodeExecuteCard } from "./code-execute-card";
 import { ReasoningCard } from "./reasoning-card";
 import {
   ActivityTimeline,
@@ -33,7 +29,6 @@ import type {
 import { MessageReceiptLine } from "./message-receipt";
 import { MarkdownMessage } from "./markdown-message";
 import { MessageFooter } from "./message-footer";
-import ImagePreview from "./registry-components/image-preview";
 import FileAttachment from "./registry-components/file-attachment";
 
 /**
@@ -76,13 +71,6 @@ export interface MessageBubbleCallbacks {
     decision: "granted" | "denied",
     grantAllTools: boolean,
   ) => Promise<{ ok: boolean; error?: string }>;
-  onResolvePlan?: (
-    planId: string,
-    decision: "approved" | "denied" | "amended",
-    amendedSteps?: import("./stream-event-types").PlanStep[],
-  ) => Promise<{ ok: boolean; error?: string }>;
-  onNavigateToChild?: (childMessageId: string) => void;
-  agentCapabilities?: readonly AgentCapability[];
 }
 
 export function MessageBubble({
@@ -148,8 +136,17 @@ export function MessageBubble({
           >
             {message.attachments.map((a) =>
               a.kind === "image" ? (
-                <div key={a.publicId} className="w-full max-w-[240px]">
-                  <ImagePreview url={a.url} alt={a.name} />
+                <div
+                  key={a.publicId}
+                  className="w-full max-w-[240px] overflow-hidden rounded-lg border bg-card"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- auth-gated same-origin asset URL; next/image would proxy/re-encode it and drop the session cookie */}
+                  <img
+                    src={a.url}
+                    alt={a.name}
+                    data-testid="message-image-attachment"
+                    className="block h-auto w-full object-contain"
+                  />
                 </div>
               ) : (
                 <FileAttachment
@@ -263,8 +260,6 @@ function toolCallBlockToItem(block: ToolCallContentBlock): ToolActivityItem {
     riskLevel: block.riskLevel,
     status: block.status,
     output: block.output,
-    stdout: block.stdout,
-    stderr: block.stderr,
     errorReason: block.errorReason,
     durationMs: block.durationMs,
   };
@@ -312,24 +307,7 @@ function renderBlock(
           riskLevel={block.riskLevel}
           status={block.status}
           output={block.output}
-          stdout={block.stdout}
-          stderr={block.stderr}
           errorReason={block.errorReason}
-          durationMs={block.durationMs}
-        />
-      );
-    case "code-execute":
-      return (
-        <CodeExecuteCard
-          key={`code-execute:${block.toolCallId}`}
-          toolCallId={block.toolCallId}
-          language={block.language}
-          code={block.code}
-          status={block.status}
-          stdout={block.stdout}
-          stderr={block.stderr}
-          exitCode={block.exitCode}
-          oomKilled={block.oomKilled}
           durationMs={block.durationMs}
         />
       );
@@ -360,48 +338,12 @@ function renderBlock(
           onResolved={callbacks?.onResolveConsent}
         />
       );
-    case "plan":
-      return (
-        <PlanCard
-          key={`plan:${block.planId}`}
-          planId={block.planId}
-          title={block.title}
-          steps={block.steps}
-          rationale={block.rationale}
-          status={block.status}
-          agentCapabilities={callbacks?.agentCapabilities}
-          onResolve={callbacks?.onResolvePlan}
-        />
-      );
-    case "subagent-fanout":
-      return (
-        <SubagentFanout
-          key={`fanout:${block.fanoutId}`}
-          fanoutId={block.fanoutId}
-          parentMessageId={block.parentMessageId}
-          subagents={block.children}
-          status={block.status}
-          results={block.results}
-          onSelectChild={callbacks?.onNavigateToChild}
-        />
-      );
     case "memory-recall":
       return (
         <MemoryCard
           key={`memory:${block.queryId}`}
           queryId={block.queryId}
           memories={block.memories}
-        />
-      );
-    case "background-task":
-      return (
-        <BackgroundTaskCard
-          key={`bgtask:${block.taskId}`}
-          taskId={block.taskId}
-          kind={block.kind}
-          label={block.label}
-          status={block.status}
-          inngestRunId={block.inngestRunId}
         />
       );
     case "component": {
@@ -460,7 +402,6 @@ function blockTone(
     case "component":
       return "done";
     case "tool-call":
-    case "code-execute":
       return block.status === "completed"
         ? "done"
         : block.status === "failed"
@@ -469,20 +410,6 @@ function blockTone(
     case "approval-request":
     case "consent-request":
       return block.resolution ? "done" : "running";
-    case "plan":
-      return block.status === "pending" ? "running" : "done";
-    case "subagent-fanout":
-      return block.status === "completed"
-        ? "done"
-        : block.status === "running"
-          ? "running"
-          : "failed";
-    case "background-task":
-      return block.status === "running"
-        ? "running"
-        : block.status === "failed"
-          ? "failed"
-          : "done";
     default: {
       const _exhaustive: never = block;
       return _exhaustive;
@@ -498,22 +425,14 @@ function blockKey(block: AssistantContentBlock, idx: number): string {
       return `reasoning:${block.reasoningId}`;
     case "tool-call":
       return `tool-call:${block.toolCallId}`;
-    case "code-execute":
-      return `code-execute:${block.toolCallId}`;
     case "component":
       return `component:${block.toolCallId}`;
     case "approval-request":
       return `approval:${block.approvalId}`;
     case "consent-request":
       return `consent:${block.approvalId}`;
-    case "plan":
-      return `plan:${block.planId}`;
-    case "subagent-fanout":
-      return `fanout:${block.fanoutId}`;
     case "memory-recall":
       return `memory:${block.queryId}`;
-    case "background-task":
-      return `bgtask:${block.taskId}`;
     case "text":
       return `text-${idx}`;
     default: {

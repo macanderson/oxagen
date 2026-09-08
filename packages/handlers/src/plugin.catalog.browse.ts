@@ -99,74 +99,16 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     offset: number;
   };
 
-  // ── agent_skill path — seeded skills from agent.skills table ────────────────
-  // Skills are seeded workspace-wide by db:seed-skills and are always considered
-  // installed (they are not tracked in plugin.installed_plugins). Skills are
-  // surfaced read-only here; no dual-write to installed_plugins occurs.
+  // ── agent_skill path ────────────────────────────────────────────────────────
+  // ADR-043 removed skills; `agent.skills` is dropped. The pluginType is still
+  // in the contract's enum, so an explicit request for it returns an empty page
+  // rather than an error. Narrowing the enum is a follow-up in packages/oxagen.
   if (pluginType === "agent_skill") {
-    let rows = await withTenantDb(async (tx) => {
-      if (!ctx.orgId) return [];
-      return tx
-        .select({
-          id: schema.skills.id,
-          slug: schema.skills.slug,
-          name: schema.skills.name,
-          description: schema.skills.description,
-          source: schema.skills.source,
-        })
-        .from(schema.skills)
-        .where(
-          and(
-            eq(schema.skills.orgId, ctx.orgId),
-            eq(schema.skills.workspaceId, ctx.workspaceId),
-            eq(schema.skills.enabled, true),
-            isNull(schema.skills.deletedAt),
-          ),
-        );
-    });
-
-    if (search) {
-      const lower = search.toLowerCase();
-      rows = rows.filter(
-        (r) =>
-          r.slug.toLowerCase().includes(lower) ||
-          r.name.toLowerCase().includes(lower) ||
-          (r.description ?? "").toLowerCase().includes(lower),
-      );
-    }
-
-    // Skills are installed-by-default; the installed filter is a no-op for
-    // installed:false (there are no un-installed skills in this set).
-    if (installed === false) {
-      rows = [];
-    }
-
-    const total = rows.length;
-    const page = rows.slice(offset, offset + limit);
-
     logger.info(
-      { limit, offset, total, orgId: ctx.orgId },
-      "plugin.catalog.browse agent_skill: ok",
+      { limit, offset, orgId: ctx.orgId },
+      "plugin.catalog.browse agent_skill: retired (ADR-043) — empty page",
     );
-
-    return {
-      servers: page.map((r) => ({
-        id: r.id,
-        name: r.slug,
-        title: r.name,
-        description: r.description ?? "",
-        icons: [],
-        transportTypes: [],
-        authKind: "none",
-        categories: ["agent_skill"],
-        version: "1.0.0",
-        pluginType: "agent_skill" as const,
-        tier: "free",
-        installed: true,
-      })),
-      nextOffset: offset + page.length < total ? offset + limit : null,
-      total,
-    };
+    return { servers: [], nextOffset: null, total: 0 };
   }
 
   // ── Static plugin path (agent_capability / knowledge_source / integration) ───

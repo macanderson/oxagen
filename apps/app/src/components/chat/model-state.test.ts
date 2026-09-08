@@ -15,10 +15,6 @@ import {
 } from "./model-state";
 
 describe("defaultModelState", () => {
-  it("has generate = null (text chat mode)", () => {
-    expect(defaultModelState.generate).toBeNull();
-  });
-
   it("has tier = 'fast'", () => {
     expect(defaultModelState.tier).toBe("fast");
   });
@@ -31,20 +27,14 @@ describe("defaultModelState", () => {
     expect(defaultModelState.effort).toBe("medium");
   });
 
-  it("has mediaTier = 'basic'", () => {
-    expect(defaultModelState.mediaTier).toBe("basic");
-  });
-
-  it("has mediaModel = null", () => {
-    expect(defaultModelState.mediaModel).toBeNull();
-  });
-
-  it("has seededImageModel = null", () => {
-    expect(defaultModelState.seededImageModel).toBeNull();
-  });
-
-  it("has seededVideoModel = null", () => {
-    expect(defaultModelState.seededVideoModel).toBeNull();
+  // ADR-043 removed image and video generation, so the composer state carries
+  // no generate mode, media tier or media model at all.
+  it("carries no media-generation fields (ADR-043)", () => {
+    expect(defaultModelState).not.toHaveProperty("generate");
+    expect(defaultModelState).not.toHaveProperty("mediaTier");
+    expect(defaultModelState).not.toHaveProperty("mediaModel");
+    expect(defaultModelState).not.toHaveProperty("seededImageModel");
+    expect(defaultModelState).not.toHaveProperty("seededVideoModel");
   });
 
   it("has the per-turn budget off by default", () => {
@@ -60,8 +50,6 @@ describe("buildSeededModelState", () => {
     const state = buildSeededModelState({
       textModel: "claude-sonnet-5",
       textTier: null,
-      imageModel: null,
-      videoModel: null,
     });
     expect(state.model).toBe("claude-sonnet-5");
     expect(state.tier).toBeNull();
@@ -71,8 +59,6 @@ describe("buildSeededModelState", () => {
     const state = buildSeededModelState({
       textModel: null,
       textTier: "balanced",
-      imageModel: null,
-      videoModel: null,
     });
     expect(state.model).toBeNull();
     expect(state.tier).toBe("balanced");
@@ -82,51 +68,15 @@ describe("buildSeededModelState", () => {
     const state = buildSeededModelState({
       textModel: null,
       textTier: null,
-      imageModel: null,
-      videoModel: null,
     });
     expect(state.tier).toBe("fast");
     expect(state.model).toBeNull();
-  });
-
-  it("stores seededImageModel", () => {
-    const state = buildSeededModelState({
-      textModel: null,
-      textTier: null,
-      imageModel: "flux-2-max",
-      videoModel: null,
-    });
-    expect(state.seededImageModel).toBe("flux-2-max");
-  });
-
-  it("stores seededVideoModel", () => {
-    const state = buildSeededModelState({
-      textModel: null,
-      textTier: null,
-      imageModel: null,
-      videoModel: "veo-3.0",
-    });
-    expect(state.seededVideoModel).toBe("veo-3.0");
-  });
-
-  it("starts in text mode regardless of seeded media models", () => {
-    const state = buildSeededModelState({
-      textModel: null,
-      textTier: null,
-      imageModel: "gpt-image-1",
-      videoModel: "veo-3.0",
-    });
-    expect(state.generate).toBeNull();
-    expect(state.mediaModel).toBeNull();
-    expect(state.mediaTier).toBe("basic");
   });
 
   it("always sets effort to 'medium'", () => {
     const state = buildSeededModelState({
       textModel: "some-model",
       textTier: "precise",
-      imageModel: null,
-      videoModel: null,
     });
     expect(state.effort).toBe("medium");
   });
@@ -135,8 +85,6 @@ describe("buildSeededModelState", () => {
     const state = buildSeededModelState({
       textModel: null,
       textTier: null,
-      imageModel: null,
-      videoModel: null,
     });
     expect(state.budgetEnabled).toBe(false);
     expect(state.budgetUsd).toBeNull();
@@ -148,8 +96,6 @@ describe("buildSeededModelState", () => {
     const state = buildSeededModelState({
       textModel: null,
       textTier: null,
-      imageModel: null,
-      videoModel: null,
       budget: {
         enabled: true,
         limitUsd: 2,
@@ -167,8 +113,6 @@ describe("buildSeededModelState", () => {
     const state = buildSeededModelState({
       textModel: null,
       textTier: null,
-      imageModel: null,
-      videoModel: null,
       budget: {
         enabled: false,
         limitUsd: 5,

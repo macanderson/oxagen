@@ -1,14 +1,9 @@
 {
   "name": "query_audit_log",
   "domain": "audit",
-  "description": "Query the org's security and automation audit events (security_events + playbook_events) with filters — actor, capability, outcome, event type, time range — returning a unified, time-ordered feed. Read-only.",
+  "description": "Query the org's security audit events (security_events) with filters — actor, capability, outcome, event type, time range — returning a unified, time-ordered feed. Read-only.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent",
-    "cli"
-  ],
+  "surfaces": ["api", "mcp", "agent", "cli"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": false,
@@ -27,11 +22,7 @@
     "properties": {
       "source": {
         "type": "string",
-        "enum": [
-          "all",
-          "security",
-          "playbook"
-        ],
+        "enum": ["all", "security"],
         "default": "all"
       },
       "eventType": {
@@ -45,15 +36,7 @@
       },
       "outcome": {
         "type": "string",
-        "enum": [
-          "allow",
-          "deny",
-          "error",
-          "success"
-        ]
-      },
-      "playbookRunId": {
-        "type": "string"
+        "enum": ["allow", "deny", "error", "success"]
       },
       "workspaceId": {
         "type": "string"
@@ -89,10 +72,7 @@
           "properties": {
             "source": {
               "type": "string",
-              "enum": [
-                "security",
-                "playbook"
-              ],
+              "enum": ["security"],
               "description": "Which audit spine the event came from"
             },
             "eventType": {
@@ -152,37 +132,6 @@
                   "type": "null"
                 }
               ]
-            },
-            "playbookRunId": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "sequence": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "eventData": {
-              "anyOf": [
-                {
-                  "type": "object",
-                  "additionalProperties": {}
-                },
-                {
-                  "type": "null"
-                }
-              ]
             }
           },
           "required": [
@@ -193,10 +142,7 @@
             "workspaceId",
             "capability",
             "outcome",
-            "requestId",
-            "playbookRunId",
-            "sequence",
-            "eventData"
+            "requestId"
           ],
           "additionalProperties": false
         },
@@ -217,13 +163,7 @@
         "type": "integer"
       }
     },
-    "required": [
-      "events",
-      "total",
-      "hasMore",
-      "limit",
-      "offset"
-    ],
+    "required": ["events", "total", "hasMore", "limit", "offset"],
     "additionalProperties": false
   }
 }

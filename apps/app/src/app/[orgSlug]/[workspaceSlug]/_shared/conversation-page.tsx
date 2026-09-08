@@ -6,17 +6,13 @@ import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
 import { firstNameOf } from "@/lib/utils";
 import { ChatShell, type ChatMessage } from "@/components/chat/chat-shell";
-import type { AgentCapability } from "@/components/chat/plan-card";
-import { listCapabilities, getSurfaces, invoke } from "@oxagen/oxagen";
+import { invoke } from "@oxagen/oxagen";
 import type { CapabilityContext } from "@oxagen/oxagen";
-import type { BackgroundTaskSnapshot } from "@/components/chat/background-task-tray";
-import type { PlanStep } from "@/components/chat/stream-event-types";
 import { loadEffectiveModelDefaults } from "@oxagen/ai";
 import { isLowBalance } from "@oxagen/billing";
 import { buildSeededModelState } from "@/components/chat/model-state";
 import type { WorkspaceBudgetGovernance } from "@/components/chat/model-state";
 import type { McpServerSummary } from "@/components/chat/mcp-types";
-import { loadCodeModeOptions } from "./code-mode-data";
 import { loadAgentOptions } from "./agent-options-data";
 import { userPreferencesReadHandler } from "@oxagen/handlers/user.preferences.read";
 import { userWorkspacePreferencesReadHandler } from "@oxagen/handlers/user.workspace_preferences.read";
@@ -38,7 +34,6 @@ import {
   purgeArchivedConversationsAction,
 } from "./conversation-actions";
 import { setDefaultAgentAction } from "./agent-prefs-actions";
-import { parseStoredCodeBinding } from "@/app/api/v1/chat/stream/code-binding";
 import { walkActiveBranch } from "./walk-active-branch";
 export { walkActiveBranch } from "./walk-active-branch";
 
@@ -96,31 +91,6 @@ export interface ConversationPageActions {
     decision: "granted" | "denied",
     grantAllTools: boolean,
   ) => Promise<{ ok: boolean; error?: string }>;
-  resolvePlanAction: (
-    ctx: {
-      orgSlug: string;
-      workspaceSlug: string;
-      orgId: string;
-      workspaceId: string;
-    },
-    planId: string,
-    decision: "approved" | "denied" | "amended",
-    amendedSteps?: PlanStep[],
-  ) => Promise<{ ok: boolean; error?: string }>;
-  cancelBackgroundTaskAction: (
-    ctx: {
-      orgSlug: string;
-      workspaceSlug: string;
-      orgId: string;
-      workspaceId: string;
-    },
-    taskId: string,
-    reason?: string,
-  ) => Promise<{ ok: boolean; error?: string }>;
-  readBackgroundTaskAction: (
-    ctx: { orgId: string; workspaceId: string },
-    taskId: string,
-  ) => Promise<BackgroundTaskSnapshot>;
 }
 
 interface ConversationPageProps {
@@ -200,14 +170,6 @@ export async function ConversationPage({
     activeLeafMessageId = conv.activeLeafMessageId ?? null;
   }
 
-  // Parse the conversation's locked coding target (claimed on its first code
-  // turn — see code-binding.ts). Tolerant: a null/corrupt column parses to null
-  // (unbound). Threaded to the composer, which forces the agent + repo + env
-  // selection to it and renders the pickers read-only for a bound conversation.
-  const conversationCodeBinding = conv
-    ? parseStoredCodeBinding(conv.codeBinding)
-    : null;
-
   const actionCtx = {
     orgSlug,
     workspaceSlug,
@@ -244,16 +206,6 @@ export async function ConversationPage({
     null,
     actionCtx,
   );
-  const boundResolvePlan = actions.resolvePlanAction.bind(null, actionCtx);
-  const boundCancelTask = actions.cancelBackgroundTaskAction.bind(
-    null,
-    actionCtx,
-  );
-  const boundReadTask = actions.readBackgroundTaskAction.bind(null, {
-    orgId: tenant.id,
-    workspaceId: workspace.id,
-  });
-
   // User preferences + effective model defaults — fetched in parallel with
   // the capability list. Failures are non-fatal: fall back to defaults so
   // the chat page never crashes due to a missing prefs row.
@@ -267,30 +219,17 @@ export async function ConversationPage({
     messageId: null,
   };
 
-  // Agent-surface capabilities feed the plan-card amend UX. Computed
-  // once per render here so the client doesn't refetch / refilter.
   const [
-    agentCapabilities,
     userPrefs,
     effectiveModelDefaults,
     initialConversations,
     availableMcpServers,
     budgetDefault,
-    codeModeOptions,
     workspaceBudgetGovernance,
     availableAgents,
     workspacePrefs,
     walletBalance,
   ] = await Promise.all([
-    Promise.resolve(
-      listCapabilities()
-        .filter((c) => getSurfaces(c).includes("agent"))
-        .map((c) => ({
-          name: c.name,
-          description: c.description,
-          riskLevel: c.agent?.riskLevel ?? "low",
-        })),
-    ),
     userPreferencesReadHandler({}, userCtx).catch((err: unknown) =>
       logAndFallback(err, "user-preferences read", {
         enterToSubmit: false as const,
@@ -383,10 +322,6 @@ export async function ConversationPage({
         graceOveragePct: 0.25,
       }),
     ),
-    // Repo + environment options for the composer's code-mode pickers.
-    // loadCodeModeOptions never throws (degrades to empty lists internally),
-    // so no .catch needed here.
-    loadCodeModeOptions(tenant.id, workspace.id, userCtx),
     // Workspace-level budget governance: resolved via invoke()
     // (Owner/Admin-managed governance state, not a user preference row) so
     // the composer can surface an enforced ceiling / seed a soft default.
@@ -422,9 +357,8 @@ export async function ConversationPage({
     // Selectable agents for the composer's agent picker. loadAgentOptions
     // never throws (degrades to an empty list internally), so no .catch here.
     loadAgentOptions(tenant.id, workspace.id, userCtx),
-    // Workspace user's coding defaults (default agent + repo/env) so the
-    // agent picker can seed the initial selection and prefill a code agent's
-    // repo/environment. runInTenantScope is required — the handler reads via
+    // Workspace user's default agent so the agent picker can seed the initial
+    // selection. runInTenantScope is required — the handler reads via
     // withTenantDb (RLS). Degrades to the no-defaults shape on any failure.
     runInTenantScope({ orgId: tenant.id, workspaceId: workspace.id }, () =>
       userWorkspacePreferencesReadHandler({}, userCtx),
@@ -468,8 +402,6 @@ export async function ConversationPage({
     ? buildSeededModelState({
         textModel: effectiveModelDefaults.text.model,
         textTier: effectiveModelDefaults.text.tier,
-        imageModel: effectiveModelDefaults.image.model,
-        videoModel: effectiveModelDefaults.video.model,
         budget: budgetDefault,
       })
     : undefined;
@@ -502,27 +434,17 @@ export async function ConversationPage({
             sendAction={sendAction}
             resolveApprovalAction={boundResolveApproval}
             resolveConsentAction={boundResolveConsent}
-            resolvePlanAction={boundResolvePlan}
-            fetchBackgroundTask={boundReadTask}
-            cancelBackgroundTask={boundCancelTask}
-            agentCapabilities={agentCapabilities as AgentCapability[]}
             orgSlug={orgSlug}
             workspaceSlug={workspaceSlug}
             enterToSubmit={userPrefs.enterToSubmit}
             pendingPromptBehavior={userPrefs.pendingPromptBehavior}
             initialModelState={initialModelState}
             availableMcpServers={availableMcpServers}
-            availableRepos={codeModeOptions.repos}
-            availableEnvironments={codeModeOptions.environments}
             availableAgents={availableAgents}
             defaultAgentId={workspacePrefs.defaultAgentId}
-            defaultRepoConnectionId={workspacePrefs.defaultRepoConnectionId}
-            defaultRepoSlug={workspacePrefs.defaultRepoSlug}
-            defaultEnvironmentId={workspacePrefs.defaultEnvironmentId}
             setDefaultAgentAction={setDefaultAgentAction.bind(null, navCtx)}
             workspaceBudgetGovernance={workspaceBudgetGovernance}
             agentId={boundAgentId ?? null}
-            conversationCodeBinding={conversationCodeBinding}
             walletBalanceCents={walletBalance?.balanceCents ?? null}
             userFirstName={firstNameOf(session.user.name)}
           />

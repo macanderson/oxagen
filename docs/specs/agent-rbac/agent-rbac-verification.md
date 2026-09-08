@@ -1,5 +1,9 @@
 # Agent RBAC — acceptance verification
 
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
+> `agent.subagent.dispatch` (criterion 7 below verifies behavior on a
+> capability that no longer exists). Kept as historical verification record.
+
 Branch `feat/agent-rbac` · PR #1075 · swept 2026-07-21.
 
 Verdict against the eight acceptance criteria in `spec.md` §2, **as amended by the

@@ -5,15 +5,12 @@ import { type ChatMessage } from "./message-bubble";
 import { type ComposerAction } from "./message-composer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChatShellClient } from "./chat-shell-client";
-import { BackgroundTaskTray } from "./background-task-tray";
 import { resolvedTierCatalog } from "@oxagen/ai";
 import type {
   ComposerModelState,
   WorkspaceBudgetGovernance,
 } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
-import type { RepoOption } from "./repo-selector";
-import type { EnvironmentOption } from "./environment-selector";
 import type { AgentOption } from "./agent-picker/agent-picker-types";
 
 export { type ChatMessage, type MessageAttachment } from "./message-bubble";
@@ -35,71 +32,45 @@ export function ChatShell({
   sendAction,
   resolveApprovalAction,
   resolveConsentAction,
-  resolvePlanAction,
-  fetchBackgroundTask,
-  cancelBackgroundTask,
-  initialBackgroundTaskIds,
-  agentCapabilities,
   orgSlug,
   workspaceSlug,
   enterToSubmit,
   pendingPromptBehavior,
   initialModelState,
   availableMcpServers,
-  availableRepos,
-  availableEnvironments,
   availableAgents,
   defaultAgentId,
-  defaultRepoConnectionId,
-  defaultRepoSlug,
-  defaultEnvironmentId,
   setDefaultAgentAction,
   workspaceBudgetGovernance,
   agentId,
-  conversationCodeBinding,
   walletBalanceCents,
   userFirstName,
 }: ChatShellProps) {
   return (
-    <>
-      <Suspense fallback={<MessagesSkeleton />}>
-        <AsyncShell
-          promise={messagesPromise}
-          walletBalanceCents={walletBalanceCents}
-          userFirstName={userFirstName}
-          conversationId={conversationId}
-          conversationPublicId={conversationPublicId ?? null}
-          activeLeafMessageId={activeLeafMessageId}
-          sendAction={sendAction}
-          resolveApprovalAction={resolveApprovalAction}
-          resolveConsentAction={resolveConsentAction}
-          resolvePlanAction={resolvePlanAction}
-          agentCapabilities={agentCapabilities}
-          orgSlug={orgSlug}
-          workspaceSlug={workspaceSlug}
-          enterToSubmit={enterToSubmit}
-          pendingPromptBehavior={pendingPromptBehavior}
-          initialModelState={initialModelState}
-          availableMcpServers={availableMcpServers}
-          availableRepos={availableRepos}
-          availableEnvironments={availableEnvironments}
-          availableAgents={availableAgents}
-          defaultAgentId={defaultAgentId}
-          defaultRepoConnectionId={defaultRepoConnectionId}
-          defaultRepoSlug={defaultRepoSlug}
-          defaultEnvironmentId={defaultEnvironmentId}
-          setDefaultAgentAction={setDefaultAgentAction}
-          workspaceBudgetGovernance={workspaceBudgetGovernance}
-          agentId={agentId}
-          conversationCodeBinding={conversationCodeBinding}
-        />
-      </Suspense>
-      <BackgroundTaskTray
-        initialTaskIds={initialBackgroundTaskIds}
-        fetchTask={fetchBackgroundTask}
-        cancelTask={cancelBackgroundTask}
+    <Suspense fallback={<MessagesSkeleton />}>
+      <AsyncShell
+        promise={messagesPromise}
+        walletBalanceCents={walletBalanceCents}
+        userFirstName={userFirstName}
+        conversationId={conversationId}
+        conversationPublicId={conversationPublicId ?? null}
+        activeLeafMessageId={activeLeafMessageId}
+        sendAction={sendAction}
+        resolveApprovalAction={resolveApprovalAction}
+        resolveConsentAction={resolveConsentAction}
+        orgSlug={orgSlug}
+        workspaceSlug={workspaceSlug}
+        enterToSubmit={enterToSubmit}
+        pendingPromptBehavior={pendingPromptBehavior}
+        initialModelState={initialModelState}
+        availableMcpServers={availableMcpServers}
+        availableAgents={availableAgents}
+        defaultAgentId={defaultAgentId}
+        setDefaultAgentAction={setDefaultAgentAction}
+        workspaceBudgetGovernance={workspaceBudgetGovernance}
+        agentId={agentId}
       />
-    </>
+    </Suspense>
   );
 }
 
@@ -111,25 +82,17 @@ async function AsyncShell({
   sendAction,
   resolveApprovalAction,
   resolveConsentAction,
-  resolvePlanAction,
-  agentCapabilities,
   orgSlug,
   workspaceSlug,
   enterToSubmit,
   pendingPromptBehavior,
   initialModelState,
   availableMcpServers,
-  availableRepos,
-  availableEnvironments,
   availableAgents,
   defaultAgentId,
-  defaultRepoConnectionId,
-  defaultRepoSlug,
-  defaultEnvironmentId,
   setDefaultAgentAction,
   workspaceBudgetGovernance,
   agentId,
-  conversationCodeBinding,
   walletBalanceCents,
   userFirstName,
 }: {
@@ -140,27 +103,19 @@ async function AsyncShell({
   sendAction: ComposerAction;
   resolveApprovalAction: ChatShellProps["resolveApprovalAction"];
   resolveConsentAction: ChatShellProps["resolveConsentAction"];
-  resolvePlanAction: ChatShellProps["resolvePlanAction"];
-  agentCapabilities?: ChatShellProps["agentCapabilities"];
   orgSlug: string;
   workspaceSlug: string;
   enterToSubmit?: boolean;
   pendingPromptBehavior?: "queue" | "interrupt";
   initialModelState?: ComposerModelState;
   availableMcpServers?: McpServerSummary[];
-  availableRepos?: RepoOption[];
-  availableEnvironments?: EnvironmentOption[];
   availableAgents?: AgentOption[];
   defaultAgentId?: string | null;
-  defaultRepoConnectionId?: string | null;
-  defaultRepoSlug?: string | null;
-  defaultEnvironmentId?: string | null;
   setDefaultAgentAction?: (
     agentId: string | null,
   ) => Promise<{ ok: boolean; error?: string }>;
   workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
   agentId?: string | null;
-  conversationCodeBinding?: ChatShellProps["conversationCodeBinding"];
   walletBalanceCents?: number | null;
   userFirstName?: string | null;
 }) {
@@ -184,8 +139,6 @@ async function AsyncShell({
       sendAction={sendAction}
       resolveApprovalAction={resolveApprovalAction}
       resolveConsentAction={resolveConsentAction}
-      resolvePlanAction={resolvePlanAction}
-      agentCapabilities={agentCapabilities}
       orgSlug={orgSlug}
       workspaceSlug={workspaceSlug}
       modelConfig={modelConfig}
@@ -193,17 +146,11 @@ async function AsyncShell({
       pendingPromptBehavior={pendingPromptBehavior}
       initialModelState={initialModelState}
       availableMcpServers={availableMcpServers}
-      availableRepos={availableRepos}
-      availableEnvironments={availableEnvironments}
       availableAgents={availableAgents}
       defaultAgentId={defaultAgentId}
-      defaultRepoConnectionId={defaultRepoConnectionId}
-      defaultRepoSlug={defaultRepoSlug}
-      defaultEnvironmentId={defaultEnvironmentId}
       setDefaultAgentAction={setDefaultAgentAction}
       workspaceBudgetGovernance={workspaceBudgetGovernance}
       agentId={agentId}
-      conversationCodeBinding={conversationCodeBinding}
     />
   );
 }

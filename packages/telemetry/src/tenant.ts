@@ -1,6 +1,37 @@
-import type { ResponseJSON } from "@clickhouse/client";
-import { requireScope, TenantScopeError } from "@oxagen/tenancy";
+import type { ClickHouseClient, ResponseJSON } from "@clickhouse/client";
+import {
+  assertDataPlaneUsable,
+  requireScope,
+  resolveDataPlane,
+  TenantScopeError,
+  type ClickHousePlaneConfig,
+} from "@oxagen/tenancy";
 import { clickhouse } from "./clickhouse";
+import { dedicatedClickhouse } from "./data-plane-client";
+
+/**
+ * Resolve which physical ClickHouse this organisation's telemetry lives on
+ * (ADR-042). `shared` — the default — returns the process singleton, so this is
+ * one already-resolved promise and a branch on the hot path.
+ *
+ * Fail-closed: a degraded or disabled plane throws `DataPlaneUnavailableError`
+ * rather than writing the organisation's traces into the platform store it
+ * explicitly moved them out of. That is a deliberate departure from the
+ * "telemetry never blocks the caller" rule elsewhere in this package: dropping
+ * a row on a breaker trip loses data, whereas falling back here would MISFILE
+ * it into another operator's store, which is a compliance breach rather than a
+ * gap.
+ */
+async function planeClient(orgId: string): Promise<ClickHouseClient> {
+  const plane = await resolveDataPlane(orgId, "clickhouse");
+  assertDataPlaneUsable(plane);
+  if (plane.mode === "shared") return clickhouse();
+  return dedicatedClickhouse({
+    orgId,
+    config: plane.config as ClickHousePlaneConfig,
+    configDigest: plane.configDigest,
+  });
+}
 
 /**
  * Insert rows into a ClickHouse table, stamping `org_id` and `workspace_id`
@@ -21,7 +52,8 @@ export async function chInsert(
     org_id: orgId,
     workspace_id: workspaceId,
   }));
-  await clickhouse().insert({ table, values, format: "JSONEachRow" });
+  const ch = await planeClient(orgId);
+  await ch.insert({ table, values, format: "JSONEachRow" });
 }
 
 /**
@@ -56,7 +88,8 @@ export async function chSelect<T>(q: {
       `ClickHouse read must filter by org_id: ${q.query.slice(0, 80)}`,
     );
   }
-  const result = await clickhouse().query({
+  const ch = await planeClient(orgId);
+  const result = await ch.query({
     query: q.query,
     query_params: { ...q.params, orgId, workspaceId },
     format: "JSON",

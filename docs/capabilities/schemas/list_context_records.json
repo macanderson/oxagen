@@ -1,0 +1,108 @@
+{
+  "name": "list_context_records",
+  "domain": "context",
+  "description": "List the steering context records registered in the active workspace, each with its lifecycle status and pinned active version",
+  "mode": "sync",
+  "surfaces": ["api", "agent", "mcp"],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": ["active", "retired", "superseded"]
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 200,
+        "default": 50
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "records": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Public record ID (ctr_…)"
+            },
+            "recordId": {
+              "type": "string",
+              "description": "The record's stable id (slug)"
+            },
+            "title": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "version": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "checksum": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "updatedAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "recordId",
+            "title",
+            "status",
+            "version",
+            "checksum",
+            "updatedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "total": {
+        "type": "integer",
+        "description": "Total records in the workspace matching the filter"
+      }
+    },
+    "required": ["records", "total"],
+    "additionalProperties": false
+  }
+}

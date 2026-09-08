@@ -22,8 +22,6 @@ afterEach(() => {
 
 const SEED: SessionSeed = {
   defaultAgentId: null,
-  defaultRepoKey: null,
-  defaultEnvId: null,
   textModel: null,
   textTier: "fast",
   budgetUsd: null,
@@ -34,51 +32,16 @@ function SelectionProbe() {
   return (
     <div>
       <output data-testid="sel">
-        {JSON.stringify({
-          agent: sel.selectedAgentId,
-          repo: sel.selectedRepoKey,
-          branch: sel.selectedBranch,
-          env: sel.selectedEnvId,
-          locked: sel.selectionLocked,
-        })}
+        {JSON.stringify({ agent: sel.selectedAgentId })}
       </output>
-      <button onClick={() => sel.setSelectedRepoKey("con_1::acme/site")}>
-        set-repo
+      <button onClick={() => sel.setSelectedAgentId("agt_direct")}>
+        set-agent
       </button>
-      <button
-        onClick={() =>
-          sel.applyAgentSelection({
-            agentId: "agt_x",
-            repoKey: "con_1::acme/platform",
-            envId: "env_1",
-          })
-        }
-      >
+      <button onClick={() => sel.applyAgentSelection({ agentId: "agt_x" })}>
         apply
       </button>
-      <button
-        onClick={() =>
-          sel.applyAgentSelection({
-            agentId: "agt_code",
-            repoKey: "con_1::acme/platform",
-            branch: "release/1.x",
-            envId: "env_1",
-          })
-        }
-      >
-        apply-with-branch
-      </button>
-      <button
-        onClick={() =>
-          sel.applyAgentSelection({
-            agentId: "agt_code",
-            repoKey: "con_1::acme/platform",
-            branch: null,
-            envId: "env_1",
-          })
-        }
-      >
-        apply-default-branch
+      <button onClick={() => sel.applyAgentSelection({ agentId: null })}>
+        apply-clear
       </button>
     </div>
   );
@@ -94,7 +57,6 @@ function ModelProbe() {
           effort: model.effort,
           budgetEnabled: model.budgetEnabled,
           budgetUsd: model.budgetUsd,
-          generate: model.generate,
         })}
       </output>
       <button onClick={() => setModel((s) => ({ ...s, effort: "high" }))}>
@@ -141,70 +103,37 @@ function providerWrap(children: React.ReactNode) {
 describe("selection bridge (flag on)", () => {
   it("legacy selection writes land in the unified store", () => {
     providerWrap(<SelectionProbe />);
-    fireEvent.click(screen.getByText("set-repo"));
-    expect(sessionState().repoKey).toBe("con_1::acme/site");
-    // Cascade rules still apply through the bridge — org derived from repo.
-    expect(sessionState().org).toBe("acme");
+    fireEvent.click(screen.getByText("set-agent"));
+    expect(sessionState().agentId).toBe("agt_direct");
   });
 
   it("applyAgentSelection maps atomically onto the store", () => {
     providerWrap(<SelectionProbe />);
     fireEvent.click(screen.getByText("apply"));
-    const s = sessionState();
-    expect(s.agentId).toBe("agt_x");
-    expect(s.repoKey).toBe("con_1::acme/platform");
-    expect(s.envId).toBe("env_1");
+    expect(sessionState().agentId).toBe("agt_x");
     const sel = JSON.parse(screen.getByTestId("sel").textContent ?? "{}") as {
       agent: string;
     };
     expect(sel.agent).toBe("agt_x");
   });
 
-  it("a branch chosen in the agent picker lands in the unified store", () => {
+  it("an explicit null agent clears the binding", () => {
     providerWrap(<SelectionProbe />);
-    fireEvent.click(screen.getByText("apply-with-branch"));
-    const s = sessionState();
-    expect(s.repoKey).toBe("con_1::acme/platform");
-    // The whole code target arrives in ONE patch, so applySessionPatch's
-    // repo→branch cascade must not wipe the branch the user just picked.
-    expect(s.branch).toBe("release/1.x");
-    expect(s.envId).toBe("env_1");
-    const sel = JSON.parse(screen.getByTestId("sel").textContent ?? "{}") as {
-      branch: string;
-    };
-    expect(sel.branch).toBe("release/1.x");
-  });
-
-  it("an explicit branch: null applies the repository default", () => {
-    providerWrap(<SelectionProbe />);
-    fireEvent.click(screen.getByText("apply-with-branch"));
-    expect(sessionState().branch).toBe("release/1.x");
-    // The picker always sends the whole target, so keeping "Repository
-    // default" arrives as an explicit null — it must clear the branch even
-    // though the repo itself didn't change (no cascade fires here).
-    fireEvent.click(screen.getByText("apply-default-branch"));
-    expect(sessionState().branch).toBeNull();
-  });
-
-  it("an apply that omits branch leaves the branch untouched", () => {
-    providerWrap(<SelectionProbe />);
-    fireEvent.click(screen.getByText("apply-with-branch"));
-    // `branch: undefined` is documented as "leave unchanged" — the same repo
-    // re-applied without a branch must not silently drop the user's choice.
     fireEvent.click(screen.getByText("apply"));
-    expect(sessionState().repoKey).toBe("con_1::acme/platform");
-    expect(sessionState().branch).toBe("release/1.x");
+    expect(sessionState().agentId).toBe("agt_x");
+    fireEvent.click(screen.getByText("apply-clear"));
+    expect(sessionState().agentId).toBeNull();
   });
 });
 
 describe("selection bridge (flag off)", () => {
   it("falls back to the self-contained local store", () => {
     render(<SelectionProbe />);
-    fireEvent.click(screen.getByText("set-repo"));
+    fireEvent.click(screen.getByText("set-agent"));
     const sel = JSON.parse(screen.getByTestId("sel").textContent ?? "{}") as {
-      repo: string;
+      agent: string;
     };
-    expect(sel.repo).toBe("con_1::acme/site");
+    expect(sel.agent).toBe("agt_direct");
   });
 });
 

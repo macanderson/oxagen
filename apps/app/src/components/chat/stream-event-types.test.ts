@@ -21,21 +21,14 @@ import type {
   ToolCallStatus,
   ApprovalResolution,
   ConsentResolution,
-  PlanDecision,
-  SubagentStatus,
   MemoryClass,
-  PlanStep,
   MemoryRecallHit,
-  SubagentChild,
   StreamEvent,
   TextContentBlock,
   ReasoningContentBlock,
   ToolCallContentBlock,
-  CodeExecuteContentBlock,
   ApprovalRequestContentBlock,
   ConsentRequestContentBlock,
-  PlanContentBlock,
-  SubagentFanoutContentBlock,
   MemoryRecallContentBlock,
   ComponentContentBlock,
   AssistantContentBlock,
@@ -121,7 +114,7 @@ describe("ToolCallContentBlock", () => {
     }
   });
 
-  it("accepts optional stdout/stderr/errorReason/durationMs/output", () => {
+  it("accepts optional errorReason/durationMs/output", () => {
     const block: ToolCallContentBlock = {
       type: "tool-call",
       toolCallId: "tc-xyz",
@@ -129,14 +122,10 @@ describe("ToolCallContentBlock", () => {
       inputPreview: null,
       riskLevel: "high",
       status: "completed",
-      stdout: "output",
-      stderr: "error",
       errorReason: "timeout",
       durationMs: 100,
       output: { result: 42 },
     };
-    expect(block.stdout).toBe("output");
-    expect(block.stderr).toBe("error");
     expect(block.errorReason).toBe("timeout");
     expect(block.durationMs).toBe(100);
   });
@@ -154,84 +143,6 @@ describe("ToolCallContentBlock", () => {
       };
       expect(block.riskLevel).toBe(riskLevel);
     }
-  });
-});
-
-// ── CodeExecuteContentBlock ───────────────────────────────────────────────────
-
-describe("CodeExecuteContentBlock", () => {
-  it("constructs with required fields for a node execution", () => {
-    const block: CodeExecuteContentBlock = {
-      type: "code-execute",
-      toolCallId: "ce-001",
-      language: "node",
-      code: "console.log(1)",
-      status: "running",
-    };
-    expect(block.type).toBe("code-execute");
-    expect(block.language).toBe("node");
-    expect(block.code).toBe("console.log(1)");
-    expect(block.status).toBe("running");
-  });
-
-  it("accepts 'python' and 'shell' language values", () => {
-    const pyBlock: CodeExecuteContentBlock = {
-      type: "code-execute",
-      toolCallId: "ce-002",
-      language: "python",
-      code: "print('hi')",
-      status: "completed",
-    };
-    const shBlock: CodeExecuteContentBlock = {
-      type: "code-execute",
-      toolCallId: "ce-003",
-      language: "shell",
-      code: "echo hi",
-      status: "completed",
-    };
-    expect(pyBlock.language).toBe("python");
-    expect(shBlock.language).toBe("shell");
-  });
-
-  it("accepts arbitrary language string (open union)", () => {
-    const block: CodeExecuteContentBlock = {
-      type: "code-execute",
-      toolCallId: "ce-004",
-      language: "ruby",
-      code: "puts 'hi'",
-      status: "failed",
-    };
-    expect(block.language).toBe("ruby");
-  });
-
-  it("accepts optional stdout/stderr/exitCode/oomKilled/durationMs", () => {
-    const block: CodeExecuteContentBlock = {
-      type: "code-execute",
-      toolCallId: "ce-005",
-      language: "node",
-      code: "process.exit(1)",
-      status: "failed",
-      stdout: "",
-      stderr: "Uncaught error",
-      exitCode: 1,
-      oomKilled: false,
-      durationMs: 250,
-    };
-    expect(block.exitCode).toBe(1);
-    expect(block.oomKilled).toBe(false);
-    expect(block.durationMs).toBe(250);
-  });
-
-  it("oomKilled can be true for OOM scenarios", () => {
-    const block: CodeExecuteContentBlock = {
-      type: "code-execute",
-      toolCallId: "ce-006",
-      language: "python",
-      code: "x = [0]*10**9",
-      status: "failed",
-      oomKilled: true,
-    };
-    expect(block.oomKilled).toBe(true);
   });
 });
 
@@ -305,122 +216,6 @@ describe("ConsentRequestContentBlock", () => {
       };
       expect(block.resolution).toBe(resolution);
     }
-  });
-});
-
-// ── PlanContentBlock ──────────────────────────────────────────────────────────
-
-describe("PlanContentBlock", () => {
-  it("constructs with steps array and pending status", () => {
-    const step: PlanStep = {
-      id: "step-1",
-      summary: "Fetch data",
-      intent: "retrieve",
-      capability: "data.fetch",
-      dependsOn: [],
-    };
-    const block: PlanContentBlock = {
-      type: "plan",
-      planId: "plan-001",
-      title: "Fetch and process",
-      steps: [step],
-      status: "pending",
-    };
-    expect(block.type).toBe("plan");
-    expect(block.planId).toBe("plan-001");
-    expect(block.steps).toHaveLength(1);
-    expect(block.status).toBe("pending");
-    expect(block.rationale).toBeUndefined();
-  });
-
-  it("accepts all PlanDecision values as status", () => {
-    const decisions: PlanDecision[] = ["approved", "denied", "amended"];
-    for (const status of decisions) {
-      const block: PlanContentBlock = {
-        type: "plan",
-        planId: "plan-002",
-        title: "T",
-        steps: [],
-        status,
-      };
-      expect(block.status).toBe(status);
-    }
-  });
-
-  it("accepts optional rationale", () => {
-    const block: PlanContentBlock = {
-      type: "plan",
-      planId: "plan-003",
-      title: "T",
-      steps: [],
-      status: "pending",
-      rationale: "Because efficiency",
-    };
-    expect(block.rationale).toBe("Because efficiency");
-  });
-});
-
-// ── SubagentFanoutContentBlock ────────────────────────────────────────────────
-
-describe("SubagentFanoutContentBlock", () => {
-  it("constructs with children array and status", () => {
-    const child: SubagentChild = {
-      childMessageId: "msg-child-1",
-      capability: "research.web",
-      label: "Web search",
-    };
-    const block: SubagentFanoutContentBlock = {
-      type: "subagent-fanout",
-      fanoutId: "fan-001",
-      parentMessageId: "msg-parent-1",
-      children: [child],
-      status: "running",
-    };
-    expect(block.type).toBe("subagent-fanout");
-    expect(block.children).toHaveLength(1);
-    const firstChild = block.children[0]!;
-    expect(firstChild.childMessageId).toBe("msg-child-1");
-    expect(firstChild.capability).toBe("research.web");
-    expect(firstChild.label).toBe("Web search");
-    expect(block.status).toBe("running");
-  });
-
-  it("SubagentChild label is optional", () => {
-    const child: SubagentChild = {
-      childMessageId: "msg-child-2",
-      capability: "data.process",
-    };
-    expect(child.label).toBeUndefined();
-  });
-
-  it("accepts all SubagentStatus values", () => {
-    const statuses: SubagentStatus[] = [
-      "running",
-      "completed",
-      "partial",
-      "timed_out",
-    ];
-    for (const status of statuses) {
-      const block: SubagentFanoutContentBlock = {
-        type: "subagent-fanout",
-        fanoutId: "fan-002",
-        parentMessageId: "msg-p",
-        children: [],
-        status,
-      };
-      expect(block.status).toBe(status);
-    }
-  });
-
-  it("SubagentChild accepts optional status and resultPreview", () => {
-    const child: SubagentChild = {
-      childMessageId: "msg-child-3",
-      capability: "analysis.text",
-      status: "completed",
-      resultPreview: { summary: "done" },
-    };
-    expect(child.status).toBe("completed");
-    expect(child.resultPreview).toEqual({ summary: "done" });
   });
 });
 
@@ -583,48 +378,6 @@ describe("TurnUsage", () => {
   });
 });
 
-// ── PlanStep ──────────────────────────────────────────────────────────────────
-
-describe("PlanStep", () => {
-  it("constructs with all required fields; capability is nullable", () => {
-    const step: PlanStep = {
-      id: "s-001",
-      summary: "Search the web",
-      intent: "retrieve information",
-      capability: null,
-      dependsOn: [],
-    };
-    expect(step.id).toBe("s-001");
-    expect(step.capability).toBeNull();
-    expect(step.dependsOn).toEqual([]);
-  });
-
-  it("accepts capability string and dependsOn array with ids", () => {
-    const step: PlanStep = {
-      id: "s-002",
-      summary: "Process results",
-      intent: "analyze",
-      capability: "data.process",
-      dependsOn: ["s-001"],
-      inputPreview: { raw: "some data" },
-    };
-    expect(step.capability).toBe("data.process");
-    expect(step.dependsOn).toContain("s-001");
-    expect(step.inputPreview).toEqual({ raw: "some data" });
-  });
-
-  it("inputPreview is optional", () => {
-    const step: PlanStep = {
-      id: "s-003",
-      summary: "Final step",
-      intent: "summarize",
-      capability: "summary.generate",
-      dependsOn: ["s-001", "s-002"],
-    };
-    expect(step.inputPreview).toBeUndefined();
-  });
-});
-
 // ── AssistantContentBlock union — discriminated narrowing ─────────────────────
 
 describe("AssistantContentBlock union discriminant", () => {
@@ -665,37 +418,6 @@ describe("AssistantContentBlock union discriminant", () => {
       throw new Error("narrowing failed");
     }
   });
-
-  it("narrows to CodeExecuteContentBlock via .type === 'code-execute'", () => {
-    const block: AssistantContentBlock = {
-      type: "code-execute",
-      toolCallId: "ce-1",
-      language: "node",
-      code: "1+1",
-      status: "completed",
-    };
-    if (block.type === "code-execute") {
-      expect(block.language).toBe("node");
-    } else {
-      throw new Error("narrowing failed");
-    }
-  });
-
-  it("narrows to PlanContentBlock via .type === 'plan'", () => {
-    const block: AssistantContentBlock = {
-      type: "plan",
-      planId: "p-1",
-      title: "Test plan",
-      steps: [],
-      status: "pending",
-    };
-    if (block.type === "plan") {
-      expect(block.planId).toBe("p-1");
-    } else {
-      throw new Error("narrowing failed");
-    }
-  });
-
   it("narrows to ComponentContentBlock via .type === 'component'", () => {
     const block: AssistantContentBlock = {
       type: "component",
@@ -755,21 +477,6 @@ describe("AssistantContentBlock union discriminant", () => {
       throw new Error("narrowing failed");
     }
   });
-
-  it("narrows to SubagentFanoutContentBlock via .type === 'subagent-fanout'", () => {
-    const block: AssistantContentBlock = {
-      type: "subagent-fanout",
-      fanoutId: "fan-x",
-      parentMessageId: "msg-p",
-      children: [],
-      status: "completed",
-    };
-    if (block.type === "subagent-fanout") {
-      expect(block.fanoutId).toBe("fan-x");
-    } else {
-      throw new Error("narrowing failed");
-    }
-  });
 });
 
 // ── StreamEvent union — key member shapes ─────────────────────────────────────
@@ -793,40 +500,16 @@ describe("StreamEvent union — member shapes", () => {
       type: "tool-call-start",
       messageId: "msg-2",
       toolCallId: "tc-ev",
-      capability: "search_web",
+      capability: "query_audit_log",
       inputPreview: { query: "test" },
       riskLevel: "low",
     };
     expect(evt.type).toBe("tool-call-start");
     if (evt.type === "tool-call-start") {
-      expect(evt.capability).toBe("search_web");
+      expect(evt.capability).toBe("query_audit_log");
       expect(evt.riskLevel).toBe("low");
     }
   });
-
-  it("'plan-proposed' event has planId, title, steps", () => {
-    const evt: StreamEvent = {
-      type: "plan-proposed",
-      planId: "plan-ev-1",
-      title: "My plan",
-      steps: [
-        {
-          id: "s1",
-          summary: "step one",
-          intent: "do",
-          capability: null,
-          dependsOn: [],
-        },
-      ],
-    };
-    expect(evt.type).toBe("plan-proposed");
-    if (evt.type === "plan-proposed") {
-      expect(evt.planId).toBe("plan-ev-1");
-      expect(evt.steps).toHaveLength(1);
-      expect(evt.rationale).toBeUndefined();
-    }
-  });
-
   it("'component' event has toolCallId, componentId, props", () => {
     const evt: StreamEvent = {
       type: "component",
@@ -945,34 +628,6 @@ describe("StreamEvent union — member shapes", () => {
       expect(evt.memories).toHaveLength(1);
     }
   });
-
-  it("'subagent-dispatched' event has fanoutId and children", () => {
-    const evt: StreamEvent = {
-      type: "subagent-dispatched",
-      fanoutId: "fan-ev",
-      parentMessageId: "msg-par",
-      children: [{ childMessageId: "c1", capability: "search.web" }],
-    };
-    expect(evt.type).toBe("subagent-dispatched");
-    if (evt.type === "subagent-dispatched") {
-      expect(evt.children).toHaveLength(1);
-      expect(evt.children[0]!.childMessageId).toBe("c1");
-    }
-  });
-
-  it("'tool-call-output' chunk has channel and data", () => {
-    const evt: StreamEvent = {
-      type: "tool-call-output",
-      toolCallId: "tc-out",
-      chunk: { channel: "stdout", data: "line 1\n" },
-    };
-    expect(evt.type).toBe("tool-call-output");
-    if (evt.type === "tool-call-output") {
-      expect(evt.chunk.channel).toBe("stdout");
-      expect(evt.chunk.data).toBe("line 1\n");
-    }
-  });
-
   it("'step-start' event has messageId and stepIndex", () => {
     const evt: StreamEvent = {
       type: "step-start",

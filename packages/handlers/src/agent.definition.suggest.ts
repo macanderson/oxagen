@@ -5,14 +5,13 @@
  * shaped exactly like `agent.definition.create` input. Nothing is persisted:
  * the model synthesises identity + config, and this handler then validates and
  * repairs the synthesis deterministically in code (drops hallucinated tool
- * refs, forces every trigger disabled, substitutes an out-of-workspace
- * ontology, de-conflicts a colliding slug) before returning it for review.
+ * refs, substitutes an out-of-workspace ontology, de-conflicts a colliding
+ * slug) before returning it for review.
  *
- * The HOW of turning a description into a valid config lives in the
- * `create-agent` builtin skill (packages/skills/skills/create-agent/skill.toml),
- * loaded as the system prompt, and the candidate assembly + synthesis schema +
- * deterministic repair are shared with `agent.definition.revise` in
- * ./agent-suggest-core.ts — this handler owns only the description prompt and
+ * The HOW of turning a description into a valid definition — the authoring
+ * system prompt, the candidate assembly, the synthesis schema and the
+ * deterministic repair — is shared with `agent.definition.revise` in
+ * ./agent-suggest-core.ts. This handler owns only the description prompt and
  * the fresh-slug derivation (a brand-new agent), returning the draft for review.
  */
 import { generateObjectFor } from "@oxagen/ai";
@@ -28,7 +27,6 @@ import {
   buildAgentSystemPrompt,
   clampSlug,
   deconflictSlug,
-  loadCreateAgentSkillBody,
   repairSynthesis,
   SLUG_MAX,
   synthesisSchema,
@@ -47,20 +45,16 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
     throw new AgentSuggestError("workspaceId is required (scoped capability).");
   }
 
-  const [skillBody, candidates] = await Promise.all([
-    loadCreateAgentSkillBody(ctx),
-    assembleCandidates(ctx),
-  ]);
+  const candidates = await assembleCandidates(ctx);
 
-  const system = buildAgentSystemPrompt(skillBody, candidates);
+  const system = buildAgentSystemPrompt(candidates);
 
   const prompt = [
     "Description of the agent to build:",
     input.description,
     input.nameHint ? `\nPreferred slug: ${input.nameHint}` : "",
-    input.agentTypeHint ? `\nPreferred agentType: ${input.agentTypeHint}` : "",
     "",
-    "Produce one complete draft agent configuration following the create-agent skill above.",
+    "Produce one complete draft agent definition following the authoring instructions above.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -113,7 +107,7 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
     slug = deconflicted;
   }
 
-  const { config, agentType, recommendations } = repairSynthesis(
+  const { config, recommendations } = repairSynthesis(
     object,
     candidates,
     warnings,
@@ -128,10 +122,9 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
   // pairs AGENT_ROLE_SPECS computes its grants from. Purely deterministic: no
   // model output feeds this decision.
   //
-  // Attendance: agent definitions are trigger-free — what starts a run lives
-  // in the automations subsystem, not the definition — so the definition
-  // carries no attended/unattended signal. Pass no trigger types — the
-  // suggestion defaults to the attended reading; the human-reviewed role
+  // Attendance: an agent definition is a registry record with no trigger
+  // fields, so it carries no attended/unattended signal. Pass no trigger types
+  // — the suggestion defaults to the attended reading; the human-reviewed role
   // picker and `assign_agent_role` remain the sole authority on the ceiling
   // actually attached.
   const suggestedRole = suggestNarrowestAgentRole(
@@ -148,7 +141,6 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       slug,
-      agentType,
       tools: config.agentTools.length,
       recommendations: recommendations.length,
       warnings: warnings.length,
@@ -162,7 +154,8 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
       slug,
       name: object.name.trim() || slug,
       description: object.description.trim() || object.name.trim() || slug,
-      agentType,
+      // ADR-043 removed code mode; every governed agent definition is "custom".
+      agentType: "custom",
       // `instructions` is optional on agentDefinitionConfigSchema but required on
       // the suggestion — synthesis guarantees a non-empty value, so re-attach it
       // explicitly to satisfy the contract's output shape.

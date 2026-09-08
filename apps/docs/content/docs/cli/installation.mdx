@@ -69,7 +69,7 @@ oxagen --version
 ```
 
 <Callout type="info">
-The bundle leaves two **optional** native dependencies (`duckdb`, `blake3`) external. If they are not present in the runtime environment the CLI still runs the full agent loop — it just skips persistent on-disk memory and any checkout-local cache that requires them. DuckDB is not used for a downloaded workspace-graph replica.
+The bundle is a single `.mjs` file with no native dependencies — it needs only Node 22 on `PATH`.
 </Callout>
 
 ## From npm

@@ -27,7 +27,7 @@ function defaultKeyFn(c: Context<AppEnv>): string {
 
 /**
  * Minimal in-memory, fixed-window rate limiter for the public, unauthenticated
- * routes (`/v1/telemetry/usage`, `/v1/cms/*`).
+ * routes (`/v1/telemetry/usage`).
  *
  * Rate limiting here is a SECONDARY defense. The primary one is each route's
  * `.strict()` schema validation, which bounds the damage even if a caller

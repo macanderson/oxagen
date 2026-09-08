@@ -79,8 +79,6 @@ const validInput = {
   pendingPromptBehavior: "queue" as const,
   defaultTextTier: "balanced" as const,
   defaultTextModel: "claude-3-sonnet",
-  defaultImageModel: null,
-  defaultVideoModel: null,
   timezone: "America/New_York",
   language: "en",
 };
@@ -114,8 +112,6 @@ describe("updatePreferencesAction", () => {
         pendingPromptBehavior: "queue",
         defaultTextTier: "balanced",
         defaultTextModel: "claude-3-sonnet",
-        defaultImageModel: null,
-        defaultVideoModel: null,
       }),
       expect.objectContaining({
         userId: "user-abc",
@@ -157,8 +153,6 @@ describe("updatePreferencesAction", () => {
       pendingPromptBehavior: "interrupt",
       defaultTextTier: "precise",
       defaultTextModel: null,
-      defaultImageModel: "flux-2-max",
-      defaultVideoModel: null,
       timezone: "UTC",
       language: "es",
     });
@@ -170,8 +164,6 @@ describe("updatePreferencesAction", () => {
       ...validInput,
       defaultTextTier: null,
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     });
     expect(result.ok).toBe(true);
   });

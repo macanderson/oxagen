@@ -14,8 +14,6 @@ import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
 import { bootstrapWorkspaceAgents } from "@oxagen/handlers/workspace-agents";
 import { seedWorkspaceDefaultRegistrySystem } from "@oxagen/handlers/workspace-registry-seed";
-import { seedWorkspaceDefaultCapabilitiesSystem } from "@oxagen/handlers/workspace-capability-seed";
-import { seedWorkspaceDefaultSkillsSystem } from "@oxagen/handlers/skill-workspace-seed";
 import { seedWorkspaceDefaultEnvironmentSystem } from "@oxagen/handlers/workspace-environment-seed";
 
 // Mirrors the workspace.create capability's defaultRoles (org Owner/Admin allow).
@@ -201,28 +199,6 @@ export async function createWorkspaceAction(
           logger.error(
             { err: seedErr, orgId: org.id, workspaceId },
             "[new-workspace] seedWorkspaceDefaultRegistrySystem failed — workspace was created; seed is recoverable via db:backfill-workspace-seeds",
-          );
-        }
-        try {
-          await seedWorkspaceDefaultCapabilitiesSystem({
-            orgId: org.id,
-            workspaceId,
-          });
-        } catch (seedErr) {
-          logger.error(
-            { err: seedErr, orgId: org.id, workspaceId },
-            "[new-workspace] seedWorkspaceDefaultCapabilitiesSystem failed — workspace was created; seed is recoverable via db:backfill-workspace-seeds",
-          );
-        }
-        try {
-          await seedWorkspaceDefaultSkillsSystem({
-            orgId: org.id,
-            workspaceId,
-          });
-        } catch (seedErr) {
-          logger.error(
-            { err: seedErr, orgId: org.id, workspaceId },
-            "[new-workspace] seedWorkspaceDefaultSkillsSystem failed — workspace was created; seed is recoverable via db:backfill-workspace-seeds",
           );
         }
         try {

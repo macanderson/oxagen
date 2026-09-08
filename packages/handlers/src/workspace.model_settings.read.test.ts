@@ -8,8 +8,6 @@ const mocks = vi.hoisted(() => ({
 const WS_ROW = {
   defaultTextTier: "balanced" as const,
   defaultTextModel: "anthropic/claude-sonnet-5",
-  defaultImageModel: null,
-  defaultVideoModel: null,
 };
 
 mocks.workspaceFindFirst.mockResolvedValue(WS_ROW);
@@ -63,8 +61,6 @@ describe("workspaceModelSettingsReadHandler (@oxagen/handlers)", () => {
     const result = await workspaceModelSettingsReadHandler({}, CTX);
     expect(result.defaultTextTier).toBeNull();
     expect(result.defaultTextModel).toBeNull();
-    expect(result.defaultImageModel).toBeNull();
-    expect(result.defaultVideoModel).toBeNull();
   });
 
   // ── happy path ────────────────────────────────────────────────────────────
@@ -73,8 +69,6 @@ describe("workspaceModelSettingsReadHandler (@oxagen/handlers)", () => {
     const result = await workspaceModelSettingsReadHandler({}, CTX);
     expect(result.defaultTextTier).toBe("balanced");
     expect(result.defaultTextModel).toBe("anthropic/claude-sonnet-5");
-    expect(result.defaultImageModel).toBeNull();
-    expect(result.defaultVideoModel).toBeNull();
   });
 
   // ── all null ──────────────────────────────────────────────────────────────
@@ -83,14 +77,10 @@ describe("workspaceModelSettingsReadHandler (@oxagen/handlers)", () => {
     mocks.workspaceFindFirst.mockResolvedValueOnce({
       defaultTextTier: null,
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     });
     const result = await workspaceModelSettingsReadHandler({}, CTX);
     expect(result.defaultTextTier).toBeNull();
     expect(result.defaultTextModel).toBeNull();
-    expect(result.defaultImageModel).toBeNull();
-    expect(result.defaultVideoModel).toBeNull();
   });
 
   // ── uses workspaceId from context ─────────────────────────────────────────

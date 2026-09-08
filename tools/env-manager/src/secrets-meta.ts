@@ -73,8 +73,7 @@ export const ALIAS: Record<string, string> = {
   // Email / SMTP (Resend)
   "oxagen-resend-api-key": "SMTP_PASSWORD",
   "oxagen-smtp-password": "SMTP_PASSWORD",
-  // Inngest / web intel / storage / sandbox
-  "oxagen-tavily-api-key": "TAVILY_API_KEY",
+  // Inngest / storage
   "oxagen-vercel-token": "VERCEL_TOKEN",
   // Linear
   "oxagen-linear-api-key": "LINEAR_API_KEY",

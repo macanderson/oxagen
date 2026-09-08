@@ -3,10 +3,7 @@
   "domain": "schema",
   "description": "AI iterative builder turn: takes conversation + current draft; returns assistant message + proposed mutation tool calls.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "agent"
-  ],
+  "surfaces": ["api", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -35,9 +32,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "message"
-    ],
+    "required": ["message"],
     "additionalProperties": false
   },
   "output": {
@@ -54,17 +49,14 @@
           "properties": {
             "capability": {
               "type": "string",
-              "description": "Contract name, e.g. schema.label.upsert"
+              "description": "Capability name, e.g. upsert_schema_label"
             },
             "input": {
               "type": "object",
               "additionalProperties": {}
             }
           },
-          "required": [
-            "capability",
-            "input"
-          ],
+          "required": ["capability", "input"],
           "additionalProperties": false
         }
       },
@@ -72,10 +64,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "assistantMessage",
-      "conversationId"
-    ],
+    "required": ["assistantMessage", "conversationId"],
     "additionalProperties": false
   }
 }

@@ -1,7 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { routerStatsList } from "@oxagen/oxagen/contracts/router.stats.list";
-import { summarizeRoutingStats } from "@oxagen/agent-engine";
 import { readRoutingStats } from "@oxagen/telemetry";
+import { summarizeRoutingStats } from "./lib/market-router";
 import { loadEffectiveRoutingPolicy } from "./lib/routing-policy";
 
 // list_routing_stats — the Pareto-curve read. Reads observed outcomes per (task

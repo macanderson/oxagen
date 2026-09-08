@@ -53,9 +53,9 @@ export const AGENT_ROLE_NAMES = [
 export type AgentRoleName = (typeof AGENT_ROLE_NAMES)[number];
 
 // `category` is a free-form per-contract string, not a fixed enum — a scan
-// of packages/oxagen/src/contracts/*.ts turns up ~50 distinct values
-// ("workspace", "skill", "schema", "plugin", "billing", "vcs", "execution",
-// "write", "destructive", ...), most of which are domain names rather than
+// of packages/oxagen/src/contracts/*.ts turns up dozens of distinct values
+// ("workspace", "schema", "plugin", "billing", "vcs", "read", "write",
+// "destructive", ...), most of which are domain names rather than
 // a read/write axis. These four are the literal read-like categories named
 // in the spec; every other category (including ones that are arguably safe
 // reads, e.g. "workspace" covers workspace.list) is treated as non-read for
@@ -173,8 +173,8 @@ export function makeAgentRolePublicId(
 // Generate a stable, collision-free public_id for a role_grant row.
 // Deterministic so re-runs are idempotent against the public_id UNIQUE
 // constraint. Hash the full capability id rather than truncating it: a
-// short prefix can collide across capabilities that share one (e.g.
-// agent.task.background.{start,read,cancel}) and silently drop grants.
+// short prefix can collide across capabilities that share one (e.g. a family
+// like agent.memory.{list,update,delete}) and silently drop grants.
 // Shared by tools/scripts/seed-iam-defaults.ts's human-role and Agent RBAC
 // phases alike (and MUST match packages/handlers/src/iam-provision.ts's
 // own makeRoleGrantPublicId, kept as a private duplicate there).

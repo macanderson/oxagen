@@ -78,30 +78,31 @@ describe("systemInstallInstructionsHandler", () => {
     );
   });
 
-  it("interpolates the workspaceSlug when provided", async () => {
-    const result = await systemInstallInstructionsHandler(
-      { client: "claude-code", workspaceSlug: "my-ws" },
-      CTX,
-    );
-    const allCommands = result.steps
-      .filter((s) => s.command)
-      .map((s) => s.command!)
-      .join("\n");
-    expect(allCommands).toContain("my-ws");
+  it("points every client at the API-key page — the key carries org+workspace scope", async () => {
+    for (const client of CLIENTS) {
+      const result = await systemInstallInstructionsHandler({ client }, CTX);
+      const allCommands = result.steps
+        .filter((s) => s.command)
+        .map((s) => s.command!)
+        .join("\n");
+      expect(allCommands).toContain("/developer/tokens");
+    }
   });
 
-  it("uses a placeholder when workspaceSlug is not provided", async () => {
-    // claude-code's `oxagen workspace use <slug>` step still surfaces the slug;
-    // the MCP connect URL itself is workspace-scoped by the API key, not the path.
-    const result = await systemInstallInstructionsHandler(
-      { client: "claude-code" },
-      CTX,
-    );
-    const allCommands = result.steps
-      .filter((s) => s.command)
-      .map((s) => s.command!)
-      .join("\n");
-    expect(allCommands).toContain("<your-workspace-slug>");
+  it("never instructs the user to install a coding agent or a runtime", async () => {
+    // ADR-043: Oxagen governs agents, it does not run them. These instructions
+    // connect an EXTERNAL client to the governed MCP gateway; they must never
+    // describe installing a sandbox, a worker, or an Oxagen-hosted coding agent.
+    for (const client of CLIENTS) {
+      const result = await systemInstallInstructionsHandler({ client }, CTX);
+      const text = result.steps
+        .map((s) => `${s.label}\n${s.command ?? ""}`)
+        .join("\n")
+        .toLowerCase();
+      expect(text).not.toContain("sandbox");
+      expect(text).not.toContain("skill");
+      expect(text).not.toContain("oxagen workspace use");
+    }
   });
 
   // ── error path ────────────────────────────────────────────────────────────

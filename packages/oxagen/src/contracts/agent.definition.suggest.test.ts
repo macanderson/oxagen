@@ -8,7 +8,7 @@ const VALID_CONFIG = {
     retrieval: { strategy: "hybrid" },
     budget: { maxHops: 2, maxNodes: 20 },
   },
-  agentTools: [{ type: "skill", ref: "summarization" }],
+  agentTools: [{ type: "function", ref: "recall_memory" }],
   instructions: "Scan deals and flag risk.",
 };
 
@@ -20,14 +20,12 @@ describe("agent.definition.suggest capability", () => {
     expect(parsed.description).toContain("Scan every new deal");
   });
 
-  it("accepts an optional kebab nameHint and agentTypeHint", () => {
+  it("accepts an optional kebab nameHint", () => {
     const parsed = agentDefinitionSuggest.input.parse({
       description: "Watch the repo and flag documentation drift on every push.",
       nameHint: "docs-drift-watcher",
-      agentTypeHint: "code",
     });
     expect(parsed.nameHint).toBe("docs-drift-watcher");
-    expect(parsed.agentTypeHint).toBe("code");
   });
 
   it("rejects a description shorter than 10 characters", () => {

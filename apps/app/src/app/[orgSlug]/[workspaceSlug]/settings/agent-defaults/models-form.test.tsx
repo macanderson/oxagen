@@ -4,7 +4,6 @@
  *
  * Covers:
  *   (a) Initial render — form renders with aria-label.
- *   (b) useRegisterFillableForm is called (field names verified via mock capture).
  *   (c) apply("all", values) round-trips textTier into the form state.
  *   (d) Happy path — submit calls updateWorkspaceModelsAction with current state.
  *   (e) Error path — action returns ok:false, error shown.
@@ -25,22 +24,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockUpdateAction, mockUseRegisterFillableForm } = vi.hoisted(() => {
+const { mockUpdateAction } = vi.hoisted(() => {
   const mockUpdateAction = vi.fn();
-  const mockUseRegisterFillableForm = vi.fn();
-  return { mockUpdateAction, mockUseRegisterFillableForm };
+  return { mockUpdateAction };
 });
 
 vi.mock("./models-action", () => ({
   updateWorkspaceModelsAction: mockUpdateAction,
 }));
-
-vi.mock("@/lib/page-context", () => ({
-  useRegisterFillableForm: mockUseRegisterFillableForm,
-}));
-
-// Capture the apply callback so we can test round-trips.
-let capturedApply: ((proposed: Record<string, unknown>) => void) | null = null;
 
 // ModelDefaultsFields stub — renders a testid and a button to change textTier
 vi.mock("@/components/settings/model-defaults-fields", () => ({
@@ -53,8 +44,6 @@ vi.mock("@/components/settings/model-defaults-fields", () => ({
     value: {
       textTier: string | null;
       textModel: string | null;
-      imageModel: string | null;
-      videoModel: string | null;
     };
     onChange: (v: typeof value) => void;
     disabled?: boolean;
@@ -110,8 +99,6 @@ const defaultProps = {
   initial: {
     textTier: "balanced" as const,
     textModel: null,
-    imageModel: null,
-    videoModel: null,
   },
   canEdit: true,
   orgSlug: "test-org",
@@ -125,17 +112,6 @@ const defaultProps = {
 describe("WorkspaceModelsForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    capturedApply = null;
-    // Set the implementation after clearAllMocks so we can capture the apply cb.
-    mockUseRegisterFillableForm.mockImplementation(
-      (spec: {
-        formId: string;
-        fields: unknown[];
-        apply: (proposed: Record<string, unknown>) => void;
-      }) => {
-        capturedApply = spec.apply;
-      },
-    );
   });
 
   afterEach(() => {
@@ -163,93 +139,7 @@ describe("WorkspaceModelsForm", () => {
     ).toBeInTheDocument();
   });
 
-  // ── (b) useRegisterFillableForm called ────────────────────────────────────
-
-  it("calls useRegisterFillableForm with a formId containing 'workspace-models'", () => {
-    render(<WorkspaceModelsForm {...defaultProps} />);
-    expect(mockUseRegisterFillableForm).toHaveBeenCalled();
-    const callArg = (
-      mockUseRegisterFillableForm.mock.calls[0] as unknown as [
-        { formId: string; fields: unknown[]; title: string },
-      ]
-    )[0];
-    expect(callArg.formId).toContain("workspace-models");
-  });
-
-  it("registers 4 fields", () => {
-    render(<WorkspaceModelsForm {...defaultProps} />);
-    const callArg = (
-      mockUseRegisterFillableForm.mock.calls[0] as unknown as [
-        { formId: string; fields: { name: string }[] },
-      ]
-    )[0];
-    expect(callArg.fields).toHaveLength(4);
-    const names = callArg.fields.map((f) => f.name);
-    expect(names).toContain("textTier");
-    expect(names).toContain("textModel");
-    expect(names).toContain("imageModel");
-    expect(names).toContain("videoModel");
-  });
-
   // ── (c) apply round-trip ──────────────────────────────────────────────────
-
-  it("apply updates textTier to 'fast' and that value is sent on submit", async () => {
-    mockUpdateAction.mockResolvedValue({ ok: true });
-
-    render(<WorkspaceModelsForm {...defaultProps} />);
-
-    expect(capturedApply).not.toBeNull();
-    // Apply a new textTier via the captured callback
-    act(() => {
-      capturedApply!({ textTier: "fast" });
-    });
-
-    // Submit the form
-    fireEvent.submit(
-      screen.getByRole("form", { name: /workspace ai model defaults/i }),
-    );
-
-    await waitFor(() => {
-      expect(mockUpdateAction).toHaveBeenCalledOnce();
-    });
-
-    const [arg] = mockUpdateAction.mock.calls[0] as [
-      {
-        orgSlug: string;
-        workspaceSlug: string;
-        defaultTextTier: string;
-        defaultTextModel: string | null;
-        defaultImageModel: string | null;
-        defaultVideoModel: string | null;
-      },
-    ];
-    expect(arg.defaultTextTier).toBe("fast");
-  });
-
-  it("apply ignores invalid textTier values", async () => {
-    mockUpdateAction.mockResolvedValue({ ok: true });
-
-    render(<WorkspaceModelsForm {...defaultProps} />);
-
-    expect(capturedApply).not.toBeNull();
-    // Pass invalid tier — should keep "balanced"
-    act(() => {
-      capturedApply!({ textTier: "ultra" });
-    });
-
-    fireEvent.submit(
-      screen.getByRole("form", { name: /workspace ai model defaults/i }),
-    );
-
-    await waitFor(() => {
-      expect(mockUpdateAction).toHaveBeenCalledOnce();
-    });
-
-    const [arg] = mockUpdateAction.mock.calls[0] as [
-      { defaultTextTier: string },
-    ];
-    expect(arg.defaultTextTier).toBe("balanced");
-  });
 
   // ── (d) Happy path ────────────────────────────────────────────────────────
 

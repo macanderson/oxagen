@@ -7,27 +7,28 @@ import {
   modelIdOf,
   loadEffectiveModelDefaults,
   resolvePrompt,
-  chatSystemPrompt,
   loadWorkspacePromptConfigSafe,
+  type ModelMessage,
 } from "@oxagen/ai";
 import {
   materializeTools,
   createApprovalRequest,
   waitForApproval,
+  runGovernedTurn,
+  buildChatSystemPrompt,
 } from "@oxagen/agent";
-import { createPlatformAgentAi } from "@oxagen/agent/adapters";
-import { executeTurn, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/agent-runner";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen/kernel";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { CHAT_CONTENT_MAX_CHARS } from "@oxagen/oxagen/contracts/chat.message.send";
-// Per-turn dollar budget (OXA — turn-budget). The gate itself (policy shape,
-// modes, the pure evaluator, createTurnBudgetGuard) lives in @oxagen/billing —
-// this route only resolves the effective policy and wires the hooks to its own
-// SSE/approval machinery.
+// Per-turn dollar budget + the pre-turn credit admission gate. Both live in
+// @oxagen/billing so this route and the app's chat route admit and bound a turn
+// by exactly the same rules — this surface only wires the hooks to its own SSE
+// and approval machinery.
 import {
   createTurnBudgetGuard,
+  evaluateTurnCreditGate,
   formatBudgetUsd,
   governedBudgetFromRead,
   requestTurnBudgetSchema,
@@ -39,7 +40,6 @@ import {
   type TurnBudgetPolicy,
 } from "@oxagen/billing";
 import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
-import type { ModelMessage } from "ai";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
 import {
@@ -48,6 +48,11 @@ import {
 } from "./chat-stream-translator";
 import { recallWorkspaceMemoryMessage } from "./chat-memory";
 
+// Request shape for POST /:org_slug/:workspace_slug/chat/stream.
+//
+// This is the ingress contract the surface has always published; every 400 a
+// caller depends on — malformed JSON, a missing/empty message, an oversized
+// body, a nonsense budget override — is defined here.
 const BodySchema = z.object({
   // Bound the message body — the shared per-message ingress cap (see
   // CHAT_CONTENT_MAX_CHARS in the chat.message.send contract) so every chat
@@ -62,10 +67,8 @@ const BodySchema = z.object({
   model: z.string().min(1).nullable().default(null),
   effort: z.enum(["low", "medium", "high"]).nullable().default(null),
   // Per-turn dollar-budget override. `null`/omitted means "no override for
-  // this turn" — the route falls back to the caller's saved default
-  // (budget.policy.read). An explicit object always wins, including an
-  // explicit `{ enabled: false }` that turns OFF a saved default for one
-  // turn. Same schema + precedence as the app chat route (@oxagen/billing).
+  // this turn" — the saved default applies. Same schema and precedence as the
+  // app chat route (@oxagen/billing).
   budget: requestTurnBudgetSchema.nullable().default(null),
 });
 
@@ -74,19 +77,60 @@ const VALID_ROLES = new Set(["user", "assistant", "system"]);
 
 export const chatStreamRoute = new Hono<AppEnv>();
 
+/**
+ * Resolve the org + workspace display names for the system prompt. Best-effort:
+ * the prompt names the scope the agent is answering about, so a failed read
+ * degrades to the URL slugs rather than failing the turn.
+ */
+async function resolveScopeNames(ctx: {
+  orgId: string;
+  workspaceId: string;
+  orgSlug: string;
+  workspaceSlug: string;
+}): Promise<{ orgName: string; workspaceName: string }> {
+  try {
+    return await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () =>
+        withTenantDb(async (tx) => {
+          const [org] = await tx
+            .select({ name: schema.organizations.name })
+            .from(schema.organizations)
+            .where(eq(schema.organizations.id, ctx.orgId))
+            .limit(1);
+          const [ws] = await tx
+            .select({ name: schema.workspaces.name })
+            .from(schema.workspaces)
+            .where(eq(schema.workspaces.id, ctx.workspaceId))
+            .limit(1);
+          return {
+            orgName: org?.name ?? ctx.orgSlug,
+            workspaceName: ws?.name ?? ctx.workspaceSlug,
+          };
+        }),
+    );
+  } catch {
+    return { orgName: ctx.orgSlug, workspaceName: ctx.workspaceSlug };
+  }
+}
+
 // POST /:org_slug/:workspace_slug/chat/stream
 //
-// Streams the agent reply as text/event-stream (SSE). Body: { content,
-// conversationId?, activeServerIds?, tier?, model?, effort?, budget? }.
+// Streams the governance agent's reply as text/event-stream (SSE). Body:
+// { content, conversationId?, activeServerIds?, tier?, model?, effort?, budget? }.
 // Each SSE line: `data: <JSON ApiStreamEvent>\n\n`
 // Terminal: `event: done\ndata: [DONE]\n\n`
 //
-// Runs the SAME engine the CLI and in-app chat use, workspace-optional
-// conversational mode — the multi-step tool loop (`stopWhen`), invoke()-gated
-// tools, per-turn memory recall and the USD budget guard. Raw AI-SDK parts are
-// forwarded to a stateful SSE translator
-// via `onStreamPart` so the client wire protocol is byte-identical to the
-// pre-engine single-`streamAgentReply` transport.
+// ADR-043: the turn is `runGovernedTurn` from @oxagen/agent — one bounded,
+// metered in-process loop over @oxagen/ai whose tools are materialised
+// capability contracts dispatched through kernel.invoke(). There is no sandbox,
+// no filesystem, no browser and no subagents behind it. This route is a THIN
+// adapter over that loop: the same loop serves the app's chat route, and the
+// two differ only in their wire format and what they persist.
+//
+// The raw AI-SDK parts are forwarded to ./chat-stream-translator, which is the
+// single source of truth for this surface's SSE shapes and also collects the
+// per-step execution record for the SOC 2 audit trail.
 chatStreamRoute.post("/", async (c) => {
   let rawBody: unknown;
   try {
@@ -113,16 +157,31 @@ chatStreamRoute.post("/", async (c) => {
     budget,
   } = parsed.data;
   const ctx = capabilityContext(c);
-  // A stable per-turn UUID: execution_step_id / reference_id in the metered AI
-  // port, executionRef for memory recall, and messageId in telemetry.
+  // A stable per-turn UUID: execution_step_id / reference_id in the metered
+  // @oxagen/ai call, executionRef for memory recall, and messageId in telemetry.
   const messageId = ctx.requestId;
-  // Same value the metered AI port receives, so skill_loads and token_usage
-  // are keyed identically for this turn (#2597).
   const capCtx: CapabilityContext = {
     ...ctx,
     messageId,
     executionStepId: messageId,
   };
+
+  // ── Pre-turn credit admission gate ─────────────────────────────────────────
+  // The top-level model call reaches @oxagen/ai directly, not through
+  // invoke(), so without this a turn that calls no tool would skip the balance
+  // check entirely and a suspended / depleted org would get a free model call.
+  // Blocks only on the affirmative billing outcomes and fails OPEN on anything
+  // else (see @oxagen/billing turn-credit-gate).
+  const creditGate = await runInTenantScope(
+    { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+    () => evaluateTurnCreditGate(ctx.orgId),
+  );
+  if (!creditGate.ok) {
+    return c.json(
+      { error: { code: creditGate.code, message: creditGate.message } },
+      402,
+    );
+  }
 
   // Resolve language model: explicit > tier > workspace/user defaults > system default.
   let resolvedModel = model;
@@ -148,6 +207,9 @@ chatStreamRoute.post("/", async (c) => {
   });
   const modelId = modelIdOf(turnModel);
   const turnEffort = effort && supportsReasoning(modelId) ? effort : undefined;
+
+  const orgSlug = c.req.param("org_slug") ?? "";
+  const workspaceSlug = c.req.param("workspace_slug") ?? "";
 
   // Load conversation history for multi-turn context.
   let historyMessages: ModelMessage[] = [];
@@ -182,16 +244,16 @@ chatStreamRoute.post("/", async (c) => {
       .reverse();
   }
 
-  // The engine appends the current user message (`instruction`) itself, so the
-  // history it receives must EXCLUDE it. Drop a trailing row that duplicates the
-  // current turn (e.g. a concurrent persist wrote it) so the model never sees the
-  // current turn twice.
+  // The turn loop appends the current user message (`instruction`) itself, so
+  // the history it receives must EXCLUDE it. Drop a trailing row that duplicates
+  // the current turn (e.g. a concurrent persist wrote it) so the model never
+  // sees the current turn twice.
   const lastHistory = historyMessages[historyMessages.length - 1];
   const alreadyInHistory =
     lastHistory !== undefined &&
     lastHistory.role === "user" &&
     lastHistory.content === content;
-  const historyForEngine: ModelMessage[] = alreadyInHistory
+  const historyForTurn: ModelMessage[] = alreadyInHistory
     ? historyMessages.slice(0, -1)
     : historyMessages;
 
@@ -251,8 +313,8 @@ chatStreamRoute.post("/", async (c) => {
           );
         } catch {
           // Client disconnected — the controller is closed. Latch it so the
-          // engine's synchronous onStreamPart taps become no-ops (a throw there
-          // would be misclassified as a stream error and trigger a retry).
+          // translator's synchronous emits become no-ops (a throw there would
+          // be misclassified as a stream error).
           closed = true;
         }
       }
@@ -265,11 +327,11 @@ chatStreamRoute.post("/", async (c) => {
       let assistantMsgId: string | null = null;
 
       try {
-        // Materialize tools + prompt config, AND kick off deterministic memory
-        // recall — all inside ONE tenant scope so recall runs CONCURRENTLY with
-        // tool materialization (no serial latency before the first token). The
-        // recalled block is injected per-turn by the engine AFTER the cached
-        // system prefix (ADR-021 §2/§8), never into the system block.
+        // Materialize tools + prompt config + scope names, AND kick off
+        // deterministic memory recall — all inside ONE tenant scope so recall
+        // runs CONCURRENTLY with tool materialization (no serial latency before
+        // the first token). The recalled block is injected per-turn AFTER the
+        // cached system prefix (ADR-021 §2/§8), never into the system block.
         const [
           { tools: agentTools, nameMap: toolNameMap, mutatingToolNames },
           promptConfig,
@@ -315,6 +377,13 @@ chatStreamRoute.post("/", async (c) => {
             ]),
         );
 
+        const { orgName, workspaceName } = await resolveScopeNames({
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          orgSlug,
+          workspaceSlug,
+        });
+
         // Per-turn dollar budget (OXA — turn-budget). Precedence is identical
         // to the app chat route (the adapters are the SAME @oxagen/billing
         // module): an explicit per-turn `budget` in the request body always
@@ -322,14 +391,11 @@ chatStreamRoute.post("/", async (c) => {
         // default via budget.policy.read (user-scoped; direct handler call, no
         // kernel). A missing user (API-key-only auth) or a failed read
         // degrades to TURN_BUDGET_OFF so a broken preferences row never blocks
-        // a turn. Workspace governance (OXA-2081) is read concurrently via
-        // invoke() — the metering/IAM chokepoint, `surface: "agent"` because
-        // the contract's surfaces are ["api","mcp","agent"] — and merged on
-        // top by resolveEffectiveTurnBudget, so a workspace ceiling binds
-        // API-key turns exactly like app turns. FAIL-OPEN but never silent: a
-        // governance read failure warns and resolves to null (the member's
-        // policy applies unchanged) — a broken governance row must never block
-        // a turn from running.
+        // a turn. Workspace governance is read concurrently via invoke() — the
+        // metering/IAM chokepoint, `surface: "agent"` because the contract's
+        // surfaces are ["api","mcp","agent"] — and merged on top by
+        // resolveEffectiveTurnBudget, so a workspace ceiling binds API-key
+        // turns exactly like app turns. FAIL-OPEN but never silent.
         const readMemberPolicy = async (): Promise<TurnBudgetPolicy> => {
           if (budget) return resolveTurnBudgetPolicy(budget, TURN_BUDGET_OFF);
           if (!ctx.userId) return TURN_BUDGET_OFF;
@@ -341,7 +407,7 @@ chatStreamRoute.post("/", async (c) => {
             // FAIL-OPEN but never silent: a persistent read failure disables
             // per-turn spend enforcement — that must be observable in logs.
             console.warn(
-              "[chat/stream] budget.policy.read failed — failing open to TURN_BUDGET_OFF:",
+              "[chat.stream] budget.policy.read failed — failing open to TURN_BUDGET_OFF:",
               String(err),
             );
             return TURN_BUDGET_OFF;
@@ -355,7 +421,7 @@ chatStreamRoute.post("/", async (c) => {
             return governedBudgetFromRead(raw as SavedWorkspaceGovernance);
           } catch (err) {
             console.warn(
-              "[chat/stream] workspace budget governance read failed — failing open to member policy:",
+              "[chat.stream] workspace budget governance read failed — failing open to member policy:",
               String(err),
             );
             return null;
@@ -370,10 +436,9 @@ chatStreamRoute.post("/", async (c) => {
         );
 
         // createTurnBudgetGuard returns undefined when the policy is off, so an
-        // unbudgeted turn passes no guard at all (unbounded, byte-identical to
-        // before this feature). The hooks are the ONLY surface-specific part of
-        // enforcement — the policy shape, the mode ladder, and the pure evaluator
-        // all live in @oxagen/billing.
+        // unbudgeted turn passes no guard at all. The hooks are the ONLY
+        // surface-specific part of enforcement — the policy shape, the mode
+        // ladder, and the pure evaluator all live in @oxagen/billing.
         const budgetGuard = createTurnBudgetGuard(turnBudgetPolicy, modelId, {
           onWithinGrace: (verdict) => {
             emit({
@@ -434,57 +499,48 @@ chatStreamRoute.post("/", async (c) => {
         });
 
         // Stateful SSE translator — the single source of truth for the part→SSE
-        // mapping (byte-identical to the pre-engine transport) + per-step
-        // execution collection.
+        // mapping on this surface, plus the per-step execution collection.
         const translator = createApiStreamTranslator({ toolNameMap, emit });
 
-        // Metered AI port (@oxagen/ai). Surface "api" so token usage/credits
-        // attribute to the API surface, matching the prior telemetry.
-        const ai = createPlatformAgentAi(capCtx, messageId, "api");
-
-        const result = await executeTurn("api-chat", {
-          ai,
-          instruction: content,
-          // The recalled-memory message rides history directly, in the exact
-          // position the engine's MemoryProvider used to inject it — after the
-          // cached system prefix, immediately before the instruction. The
-          // provider-shaped adapter is gone (#1236): there is no mid-turn
-          // recallContext() callback on any engine any more.
-          history: recalledMemory
-            ? [...historyForEngine, recalledMemory]
-            : historyForEngine,
+        const turn = await runGovernedTurn({
+          telemetry: {
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+            surface: "api",
+            messageId,
+          },
+          model: turnModel,
+          // @oxagen/agent owns the governance agent's prompt — one baseline,
+          // shared with the app surface. `chat.system` is append-only, so a
+          // workspace can add instructions but never replace the governance
+          // contract.
           system: resolvePrompt({
             key: "chat.system",
-            baseline: chatSystemPrompt({
-              orgSlug: "",
-              workspaceSlug: "",
-              orgName: ctx.orgId,
-              workspaceName: ctx.workspaceId,
+            baseline: buildChatSystemPrompt({
+              orgSlug,
+              workspaceSlug,
+              orgName,
+              workspaceName,
             }),
             config: promptConfig,
           }),
-          model: modelId,
-          ...(turnEffort ? { effort: turnEffort } : {}),
-          // Runaway backstop for the agentic tool loop, NOT a functional limit.
-          maxSteps: DEFAULT_MAX_AGENT_STEPS,
-          // Byte-identical client behaviour: no step retries (a retry would
-          // re-forward a step's already-streamed parts) and no context-overflow
-          // re-run — an overflow surfaces via the catch as a single `error` event,
-          // as it did before the engine unification.
-          maxRetries: 0,
-          maxOverflowRetries: 0,
-          // No `workspace` ⇒ conversational mode: no filesystem tools; the
-          // materialized invoke()-gated capability ToolSet is injected here.
-          extraTools: agentTools,
-          // Mutating capability aliases: the engine's read/write partitioning
-          // input (the TS dispatch barrier before the cutover, Stella's
-          // read_only bit after).
+          history: historyForTurn,
+          // The recalled-memory block rides as a volatile per-turn USER message
+          // between history and the instruction — never in the cached system
+          // prefix (ADR-021 §2/§8).
+          contextMessages: [recalledMemory],
+          instruction: content,
+          tools: agentTools,
           mutatingToolNames,
+          ...(turnEffort ? { effort: turnEffort } : {}),
+          ...(budgetGuard !== undefined ? { budgetGuard } : {}),
           // Client-disconnect abort stops the loop.
-          signal: c.req.raw.signal,
-          onStreamPart: (part) => translator.onPart(part),
-          budgetGuard,
+          abortSignal: c.req.raw.signal,
         });
+
+        for await (const part of turn.fullStream) {
+          translator.onPart(part);
+        }
 
         const {
           assistantText,
@@ -492,23 +548,23 @@ chatStreamRoute.post("/", async (c) => {
           streamErrored,
         } = translator.finish();
 
-        // ONE aggregated usage event from the engine's summed per-step usage —
-        // same single event, same position (last before `[DONE]`), byte-identical
-        // shape to the pre-engine single-`finish` usage. Credits are charged per
-        // step inside the metered AI port; this is display-only.
+        // ONE aggregated usage event for the turn, in the same position (last
+        // before `[DONE]`) and the same shape the surface has always emitted.
+        // Credits are charged inside @oxagen/ai's metered stream; this is the
+        // display copy of the same totals.
+        const usage = await turn.usage;
         emit({
           type: "usage",
           usage: {
-            promptTokens: result.usage.inputTokens ?? 0,
-            completionTokens: result.usage.outputTokens ?? 0,
-            totalTokens: result.usage.totalTokens ?? 0,
+            promptTokens: usage.inputTokens,
+            completionTokens: usage.outputTokens,
+            totalTokens: usage.totalTokens,
           },
         });
 
         // Persist user message + assistant reply for conversation threading.
-        // Skip on a defensive mid-stream error part: the assistantText is
-        // partial/untrustworthy and must not be written as a successful turn
-        // (the engine normally THROWS such errors to the catch below instead).
+        // Skip on a mid-stream error part: the assistantText is partial and
+        // must not be written as a successful turn.
         if (
           !streamErrored &&
           conversationId &&
@@ -634,9 +690,10 @@ chatStreamRoute.post("/", async (c) => {
           }
         }
       } catch (err) {
-        // The engine THROWS on a provider/stream error, a context overflow (with
-        // maxOverflowRetries: 0), or a client-disconnect abort. Skip persistence
-        // (the assistantText is partial/untrustworthy) and surface a typed error.
+        // Reached on a materializeTools failure, an IAM/kernel panic, or a
+        // client-disconnect abort thrown out of the stream iteration. Skip
+        // persistence (the assistantText is partial/untrustworthy) and surface
+        // a typed error event.
         const message = err instanceof Error ? err.message : "Stream error";
         emit({ type: "error", message });
       } finally {

@@ -306,3 +306,179 @@ describe("agent.trace.get handler", () => {
     expect(out.children).toHaveLength(0);
   });
 });
+
+describe("agent.trace.get handler — payload sizing and previews", () => {
+  beforeEach(() => vi.mocked(withTenantDb).mockReset());
+
+  function stepRow(over: Partial<StepRow> = {}): StepRow {
+    return {
+      id: "aesuuid_1",
+      publicId: "aes_1",
+      executionId: "aexuuid_root",
+      stepNumber: 1,
+      stepType: "tool_call",
+      status: "completed",
+      failureReason: null,
+      startedAt: null,
+      completedAt: null,
+      latencyMs: 100,
+      inputTokens: null,
+      outputTokens: null,
+      ...over,
+    };
+  }
+
+  function toolRow(over: Partial<ToolRow> = {}): ToolRow {
+    return {
+      id: "atcuuid_1",
+      publicId: "atc_1",
+      executionStepId: "aesuuid_1",
+      toolName: "get_ontology_neighbors",
+      toolType: "capability",
+      status: "completed",
+      latencyMs: 5,
+      inputTokens: null,
+      outputTokens: null,
+      requestPayload: null,
+      responsePayload: null,
+      ...over,
+    };
+  }
+
+  it("reports zero bytes and a null preview for absent payloads", async () => {
+    setup({
+      root: exec(),
+      steps: [stepRow()],
+      tools: [toolRow({ requestPayload: null, responsePayload: undefined })],
+    });
+    const out = await agentTraceGetHandler({ executionId: "aex_root" }, CTX);
+    const call = out.steps[0]!.toolCalls[0]!;
+    expect(call.requestBytes).toBe(0);
+    expect(call.responseBytes).toBe(0);
+    expect(call.responsePreview).toBeNull();
+    // Null timestamps on a step stay null rather than becoming "Invalid Date".
+    expect(out.steps[0]!.startedAt).toBeNull();
+    expect(out.steps[0]!.completedAt).toBeNull();
+  });
+
+  it("degrades to zero bytes and a null preview for an unserializable payload", async () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    setup({
+      root: exec(),
+      steps: [stepRow()],
+      tools: [toolRow({ requestPayload: circular, responsePayload: circular })],
+    });
+    const out = await agentTraceGetHandler({ executionId: "aex_root" }, CTX);
+    const call = out.steps[0]!.toolCalls[0]!;
+    expect(call.requestBytes).toBe(0);
+    expect(call.responseBytes).toBe(0);
+    expect(call.responsePreview).toBeNull();
+  });
+
+  it("truncates an oversized response preview with an ellipsis", async () => {
+    setup({
+      root: exec(),
+      steps: [stepRow()],
+      tools: [toolRow({ responsePayload: { blob: "x".repeat(900) } })],
+    });
+    const out = await agentTraceGetHandler({ executionId: "aex_root" }, CTX);
+    const preview = out.steps[0]!.toolCalls[0]!.responsePreview!;
+    expect(preview).toHaveLength(501); // 500 chars + the ellipsis
+    expect(preview.endsWith("…")).toBe(true);
+  });
+
+  it("leaves a step's toolCalls empty when no call references it", async () => {
+    setup({
+      root: exec(),
+      steps: [stepRow()],
+      tools: [toolRow({ executionStepId: "aesuuid_other" })],
+    });
+    const out = await agentTraceGetHandler({ executionId: "aex_root" }, CTX);
+    expect(out.steps[0]!.toolCalls).toEqual([]);
+  });
+
+  it("maps null execution timestamps to null", async () => {
+    setup({ root: exec({ startedAt: null, completedAt: null }) });
+    const out = await agentTraceGetHandler({ executionId: "aex_root" }, CTX);
+    expect(out.startedAt).toBeNull();
+    expect(out.completedAt).toBeNull();
+  });
+});
+
+describe("agent.trace.get handler — turn metrics", () => {
+  beforeEach(() => vi.mocked(withTenantDb).mockReset());
+
+  function step(over: Partial<StepRow>): StepRow {
+    return {
+      id: `aesuuid_${over.publicId ?? "x"}`,
+      publicId: "aes_x",
+      executionId: "aexuuid_root",
+      stepNumber: 1,
+      stepType: "tool_call",
+      status: "completed",
+      failureReason: null,
+      startedAt: null,
+      completedAt: null,
+      latencyMs: null,
+      inputTokens: null,
+      outputTokens: null,
+      ...over,
+    };
+  }
+
+  it("derives one turn per step and classifies each outcome", async () => {
+    setup({
+      root: exec(),
+      steps: [
+        step({
+          publicId: "aes_ok",
+          status: "completed",
+          inputTokens: 3,
+          outputTokens: 4,
+          latencyMs: 11,
+        }),
+        step({ publicId: "aes_fail", stepNumber: 2, status: "failed" }),
+        step({ publicId: "aes_run", stepNumber: 3, status: "running" }),
+      ],
+    });
+    const out = await agentTraceGetHandler({ executionId: "aex_root" }, CTX);
+    expect(out.turnMetrics).toEqual([
+      {
+        turnId: "aes_ok",
+        compileMs: 11,
+        tokens: 7,
+        cacheHitRate: 0,
+        toolCalls: 0,
+        outcome: "success",
+      },
+      // Null token counts fall back to 0; a null latency to 0 compileMs.
+      {
+        turnId: "aes_fail",
+        compileMs: 0,
+        tokens: 0,
+        cacheHitRate: 0,
+        toolCalls: 0,
+        outcome: "failure",
+      },
+      {
+        turnId: "aes_run",
+        compileMs: 0,
+        tokens: 0,
+        cacheHitRate: 0,
+        toolCalls: 0,
+        outcome: "interrupted",
+      },
+    ]);
+    expect(out.replayDeterministic).toBe(true);
+  });
+
+  it("flags the trace as non-deterministic when a turn reports negative tokens", async () => {
+    setup({
+      root: exec(),
+      steps: [step({ publicId: "aes_bad", inputTokens: -5, outputTokens: 1 })],
+    });
+    const out = await agentTraceGetHandler({ executionId: "aex_root" }, CTX);
+    expect(out.replayDeterministic).toBe(false);
+  });
+});

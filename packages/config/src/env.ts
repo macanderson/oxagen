@@ -63,12 +63,9 @@ export const baseEnvSchema = z.object({
 
   // Distributed rate limiter (apps/api/src/middleware/distributed-rate-limit.ts).
   // Per-workspace (fallback: per-org, then per-IP) fixed-window budgets, in
-  // requests per minute, for the expensive chat + agent-execution surfaces.
+  // requests per minute, for the expensive chat surface.
   //  - RATE_LIMIT_CHAT_PER_MIN:       chat send / stream (/v1/**/chat/*).
-  //  - RATE_LIMIT_AGENT_EXEC_PER_MIN: agent code-exec / compose / sandbox ops /
-  //                                   background-task start, and the A2A RPC.
   RATE_LIMIT_CHAT_PER_MIN: z.coerce.number().int().positive().default(60),
-  RATE_LIMIT_AGENT_EXEC_PER_MIN: z.coerce.number().int().positive().default(30),
 
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),
@@ -176,11 +173,12 @@ export const baseEnvSchema = z.object({
   STORAGE_FS_ROOT: z.string().min(1).optional(),
 
   // Vercel AI Gateway — the platform's default AI auth boundary.
-  // AI_GATEWAY_API_KEY authenticates every model call (text, image, embeddings,
-  // video). The OXAGEN_LLM_* tiers are white-labeled model handles ("Oxagen
-  // Mini/Plus/Max") resolving to concrete model ids in `creator/model` form.
-  // Defaults mirror the registry staticValues so local dev and tests resolve a
-  // tier without extra configuration.
+  // AI_GATEWAY_API_KEY authenticates every model call (text and embeddings).
+  // The OXAGEN_LLM_* tiers are white-labeled model handles ("Oxagen
+  // Fast/Balanced/Precise") resolving to concrete model ids in `creator/model`
+  // form. Defaults mirror the registry staticValues so local dev and tests
+  // resolve a tier without extra configuration. ADR-043 removed image and video
+  // generation, so text is the only tier family left.
   AI_GATEWAY_API_KEY: z.string().optional(),
   // Which provider serves LANGUAGE models. The gateway is the default and the
   // metered path; "openrouter" selects a direct OpenAI-compatible provider for
@@ -190,8 +188,8 @@ export const baseEnvSchema = z.object({
   // here, because a silent failover would move spend to another vendor's bill
   // and skip the metering the gateway exists to provide.
   //
-  // Image, video and embeddings stay on the gateway either way — OpenRouter
-  // serves none of them. See packages/ai/src/models.ts.
+  // Embeddings stay on the gateway either way — OpenRouter does not serve them.
+  // See packages/ai/src/models.ts.
   OXAGEN_MODEL_PROVIDER: z.enum(["gateway", "openrouter"]).default("gateway"),
   // Required only when OXAGEN_MODEL_PROVIDER=openrouter; optional here so every
   // other deployment stays valid without it.
@@ -199,29 +197,6 @@ export const baseEnvSchema = z.object({
   OXAGEN_LLM_FAST: z.string().default("anthropic/claude-haiku-4.5"),
   OXAGEN_LLM_BALANCED: z.string().default("anthropic/claude-sonnet-5"),
   OXAGEN_LLM_PRECISE: z.string().default("anthropic/claude-fable-5"),
-  // CLI turn-pipeline overrides. Optional: the CLI resolves the fast tier for the
-  // evaluator and the precise tier for the advisor when these are unset.
-  OXAGEN_LLM_EVALUATOR: z.string().optional(),
-  OXAGEN_LLM_ADVISOR: z.string().optional(),
-  // Best-of-N comparative selector override. Optional: defaults to the
-  // flagship Anthropic model (Fable 5) when unset — see select.ts's
-  // DEFAULT_SELECTOR_MODEL.
-  OXAGEN_LLM_SELECTOR: z.string().optional(),
-  // "1" makes buildWorkspaceTools structurally deny edit_file/write_file on
-  // test-shaped paths (SWE-bench-style anti-reward-hacking guard).
-  OXAGEN_FORBID_TEST_EDITS: z.string().optional(),
-
-  // Media-generation tiers. Image and video each expose a "basic" (default,
-  // cheaper) and "advanced" tier that resolve to concrete gateway model ids,
-  // mirroring the text tiers above. The composer's image/video model picker
-  // shows "basic" as the default and "advanced" in the primary list; @oxagen/ai
-  // resolves them via imageTierModelId / videoTierModelId.
-  OXAGEN_LLM_IMAGE_BASIC: z.string().default("openai/gpt-image-1"),
-  OXAGEN_LLM_IMAGE_ADVANCED: z.string().default("bfl/flux-2-max"),
-  OXAGEN_LLM_VIDEO_BASIC: z
-    .string()
-    .default("google/veo-3.0-fast-generate-001"),
-  OXAGEN_LLM_VIDEO_ADVANCED: z.string().default("google/veo-3.0-generate-001"),
 
   // ── Email (transactional, via @oxagen/notifications SMTP transport) ──
   // Optional in the base schema (not every service sends mail); the
@@ -308,51 +283,6 @@ export const baseEnvSchema = z.object({
   // SDK. Optional: unset = ClickHouse error_events recording only, no webhook.
   ALERT_WEBHOOK_URL: z.string().url().optional(),
 
-  // When true (default off in prod), agent.code.execute is
-  // materialized as an agent tool. Set true on Vercel once the Modal
-  // runner is deployed (see ops/modal/README.md).
-  // Accept "true"/"false" and "1"/"0" — a value pasted as 1/0 (a natural way
-  // to express a boolean) still validates instead of failing env validation.
-  SANDBOX_ENABLED: z
-    .enum(["true", "false", "1", "0"])
-    .optional()
-    .transform((v) => v === "true" || v === "1"),
-  // Driver selection for @oxagen/sandbox. `modal` routes through the
-  // hosted Firecracker runner; `docker` runs Dockerode locally; `vercel`
-  // runs Firecracker microVMs via @vercel/sandbox (first-party, no extra
-  // deployment needed on Vercel Functions). Unset = auto-detect (modal if
-  // MODAL_RUNNER_URL is present, else docker). See docs/adr/ADR-011-vercel-sandbox-driver.md.
-  SANDBOX_DRIVER: z.enum(["modal", "docker", "vercel"]).optional(),
-  MODAL_RUNNER_URL: z.string().url().optional(),
-  MODAL_RUNNER_TOKEN: z.string().min(16).optional(),
-  // Vercel Sandbox driver credentials. All three are optional
-  // in the base schema because Vercel Functions auto-resolve auth via OIDC
-  // (VERCEL_OIDC_TOKEN injected by the runtime). Only required for local
-  // dev when SANDBOX_DRIVER=vercel outside a Vercel project.
-  VERCEL_SANDBOX_TOKEN: z.string().min(1).optional(),
-  VERCEL_SANDBOX_TEAM_ID: z.string().min(1).optional(),
-  VERCEL_SANDBOX_PROJECT_ID: z.string().min(1).optional(),
-
-  // Which engine runs an agent turn. `stella` hands the turn to a
-  // `stella-serve` sidecar over loopback, and is the only value — the
-  // TypeScript step loop `ts` once named has been deleted. Unset = `stella`.
-  //
-  // The variable outlives the choice it used to express because a deployment
-  // still carrying `OXAGEN_ENGINE=ts` must be told so: the enum rejects it at
-  // boot, and `agent-runner`'s RETIRED_ENGINES turns the same value into a
-  // sentence naming what happened for a worker that reads `process.env`
-  // directly.
-  //
-  // Stella needs a `stella-serve` binary on the worker — STELLA_SERVE_BIN,
-  // else `stella-serve` on PATH. A missing binary fails the turn; there is no
-  // longer another engine to fall back to.
-  OXAGEN_ENGINE: z.enum(["stella"]).optional(),
-  STELLA_SERVE_BIN: z.string().min(1).optional(),
-  // Sidecars run one per worker slot, never one per worker process — several
-  // of stella's credential/config knobs are process-global, so two tenants
-  // sharing one engine process share that state.
-  OXAGEN_WORKER_CONCURRENCY: z.coerce.number().int().positive().optional(),
-
   // Vercel-native master key (KEK) used to wrap OAuth token data
   // encryption keys. Base64-encoded 256-bit (32-byte) key. Required in
   // production (enforced by the auth startup guard); optional in
@@ -380,10 +310,6 @@ export const baseEnvSchema = z.object({
   // privacy.data.erase defaults to 30; 0 forces immediate erasure (test envs).
   PRIVACY_ERASURE_GRACE_DAYS: z.coerce.number().int().nonnegative().optional(),
 
-  // Tavily web-search API key (web.search capability). Optional in the base
-  // schema; packages/web throws a precise error at call time when it is absent.
-  TAVILY_API_KEY: z.string().min(1).optional(),
-
   // Row-Level Security enforcement gate. Fail-CLOSED in production:
   // when unset, this defaults ON in any production runtime (NODE_ENV or
   // VERCEL_ENV = "production") and OFF everywhere else (dev/test/preview seeding
@@ -398,9 +324,6 @@ export const baseEnvSchema = z.object({
     .union([z.literal("true"), z.literal("false")])
     .optional()
     .transform((v) => (v === undefined ? isProductionRuntime() : v === "true")),
-
-  // ── CLI debugging ──
-  OXAGEN_CODE_GRAPH_DEBUG: z.string().optional(),
 
   // ── Billing / usage-meter tuning (see @oxagen/billing pricing.ts) ──
   // Target *blended* gross margin across all products, in (0,1). When set,
@@ -423,39 +346,11 @@ export const baseEnvSchema = z.object({
   OXAGEN_USAGE_DISCOUNT_INCREMENT: z.coerce.number().gt(0).default(50),
   OXAGEN_USAGE_DISCOUNT_CEILING_USD: z.coerce.number().gt(0).default(250),
 
-  // ── SWE-bench optimization: spec-first oracle & adaptive ladder ──
-  // F2 spec-first oracle: at mid-judge, if no failing test reproduction exists,
-  // inject a corrective instruction instead of generic completeness feedback.
-  // Enforces test-before-patch discipline to prevent wrong-spec patches.
-  OXAGEN_SPEC_GATE: z
-    .union([
-      z.literal("1"),
-      z.literal("true"),
-      z.literal("0"),
-      z.literal("false"),
-    ])
-    .optional()
-    .transform((v) => v === "1" || v === "true"),
-  // Deterministic judge-skip / adaptive compute ladder (docs/adr/ADR-021-inference-doctrine.md §1). ON by
-  // DEFAULT: when executed evidence (oracle flipped + tests green + diff size,
-  // or a read-only turn with no diff) already settles completeness, the frontier
-  // completeness judge is skipped. Set to 0/false to OPT OUT and force the judge
-  // to run every round. Normalized boolean = "judge-skip enabled".
-  OXAGEN_LADDER: z
-    .union([
-      z.literal("1"),
-      z.literal("true"),
-      z.literal("0"),
-      z.literal("false"),
-    ])
-    .optional()
-    .transform((v) => v !== "0" && v !== "false"),
-  // Diff line count threshold for fast-path submission (default 120).
-  // When oracle flipped + tests green + diff ≤ budget, skip judge.
-  OXAGEN_DIFF_BUDGET: z.coerce.number().positive().default(120),
-  // Hard cap on ladder rung (0–3); prevents escalation beyond specified level.
-  // 0 = fast-path only, 3 = no cap (default).
-  OXAGEN_LADDER_MAX_RUNG: z.coerce.number().int().min(0).max(3).default(3),
+  // Comma-separated HTTPS ingest endpoints this deployment serves for Stella
+  // operational telemetry (create_stella_enrollment). Optional — resolveAllowedEndpoints()
+  // in packages/handlers/src/telemetry.stella.enroll.ts falls back to the public
+  // endpoint when unset.
+  STELLA_TELEMETRY_INGEST_ENDPOINTS: z.string().optional(),
 });
 
 // The exact set of keys this schema validates. `normalizeEnv` only ever

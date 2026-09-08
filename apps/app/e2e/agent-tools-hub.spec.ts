@@ -2,12 +2,13 @@
  * agent-tools-hub.spec.ts
  *
  * E2E for the consolidated Agent Tools IA:
- *   1. Workbench → Agent Tools hub — the single home for everything an agent can
- *      be equipped with: All Tools / Skills / MCP Servers / Capabilities tabs.
+ *   1. Agents → Tools hub — the single home for everything an agent can be
+ *      equipped with: All Tools / MCP Servers / Capabilities tabs. (ADR-043
+ *      removed the Skills tab with the runtime.)
  *   2. Marketplace is two-sided — Agent Tools + Integrations — and the root
  *      redirects to the Agent Tools side.
- *   3. Legacy URLs (workbench/skills, marketplace/{browse,installed,mcp},
- *      settings/{plugins,skills}) redirect to their new homes.
+ *   3. Legacy URLs (marketplace/{browse,installed,mcp}, settings/plugins)
+ *      redirect to their new homes.
  *   4. The Agent Builder's Equip step exposes the inline
  *      "Install more from Marketplace" flow (choke-point-gated installs).
  *   5. Mobile (390px): sidebar bottom bar carries the Workbench destinations and
@@ -50,12 +51,7 @@ test.describe("Agent Tools consolidated IA", () => {
     await expect(page).not.toHaveURL(/\/login/);
 
     // Sub-tabs of the hub.
-    for (const label of [
-      "All Tools",
-      "Skills",
-      "MCP Servers",
-      "Capabilities",
-    ]) {
+    for (const label of ["All Tools", "MCP Servers", "Capabilities"]) {
       await expect(
         page
           .getByRole("tab", { name: label })
@@ -65,16 +61,6 @@ test.describe("Agent Tools consolidated IA", () => {
     }
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "01-agent-tools-hub-all-tools.png"),
-      fullPage: true,
-    });
-
-    // Skills tab renders the skills panel (creation lives here now).
-    await gotoStable(page, `${ws}/workbench/tools/skills`);
-    await expect(page.getByTestId("new-skill-btn")).toBeVisible({
-      timeout: 20_000,
-    });
-    await page.screenshot({
-      path: path.join(SCREENSHOTS_DIR, "02-agent-tools-skills.png"),
       fullPage: true,
     });
 
@@ -110,10 +96,10 @@ test.describe("Agent Tools consolidated IA", () => {
     await expect(page.getByTestId("marketplace-browse-tab-bar")).toBeVisible({
       timeout: 20_000,
     });
-    // Agent-tool type chips only — no knowledge-source tab anywhere.
+    // Agent-tool type chips only — no skill/knowledge-source tab anywhere.
     await expect(
       page.getByTestId("marketplace-browse-tab-agent_skill"),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(
       page.getByTestId("marketplace-browse-tab-mcp_server"),
     ).toBeVisible();
@@ -147,12 +133,10 @@ test.describe("Agent Tools consolidated IA", () => {
 
     // ── 3. Legacy redirects ─────────────────────────────────────────────────
     const redirects: Array<[string, RegExp]> = [
-      [`${ws}/workbench/skills`, /\/workbench\/tools\/skills$/],
       [`${ws}/marketplace/browse`, /\/marketplace\/agent-tools$/],
       [`${ws}/marketplace/installed`, /\/workbench\/tools\/capabilities$/],
       [`${ws}/marketplace/mcp`, /\/workbench\/tools\/mcp$/],
       [`${ws}/settings/plugins`, /\/workbench\/tools\/capabilities$/],
-      [`${ws}/settings/skills`, /\/workbench\/tools\/skills$/],
       // The whole Studio section renamed to Workbench — old URLs 301 across.
       [`${ws}/studio`, /\/workbench\/agents$/],
       [`${ws}/studio/tools/mcp`, /\/workbench\/tools\/mcp$/],
@@ -186,11 +170,14 @@ test.describe("Agent Tools consolidated IA", () => {
     await expect(browseBtn).toBeVisible({ timeout: 15_000 });
     await browseBtn.click();
 
-    // The Agent Tools Marketplace modal opens with the three-tab taxonomy.
+    // The Agent Tools Marketplace modal opens with the surviving two-tab
+    // taxonomy — ADR-043 removed the skill packs.
     await expect(page.getByText("Agent Tools Marketplace")).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByTestId("marketplace-tab-agent_skill")).toBeVisible();
+    await expect(page.getByTestId("marketplace-tab-agent_skill")).toHaveCount(
+      0,
+    );
     await expect(page.getByTestId("marketplace-tab-mcp_server")).toBeVisible();
     await expect(
       page.getByTestId("marketplace-tab-agent_capability"),
@@ -212,21 +199,22 @@ test.describe("Agent Tools consolidated IA", () => {
     });
     const ws = `/${orgSlug}/default`;
 
-    // Mobile bottom bar shows the primary destinations (Ask/Overview/
-    // Knowledge/Automations). After the web-app-2.0 nav re-group, Agents is no
-    // longer a top-level bar tab — it moved into the "More" overflow sheet,
-    // still one tap away.
+    // Mobile bottom bar shows the primary destinations (Overview / Sessions /
+    // Knowledge / Agents — the first four sidebar items); everything past
+    // them (Tools, Environments, Marketplace, Settings) lands in the "More"
+    // overflow sheet.
     await gotoStable(page, `${ws}/workbench/agents`);
     const nav = page.getByRole("navigation", { name: /mobile navigation/i });
     await expect(nav).toBeVisible({ timeout: 20_000 });
-    // A primary destination renders directly in the bar.
+    // Primary destinations render directly in the bar.
     await expect(nav.getByRole("link", { name: "Sessions" })).toBeVisible();
-    // Agents is reachable via the "More" sheet.
+    await expect(nav.getByRole("link", { name: "Agents" })).toBeVisible();
+    // Tools is reachable via the "More" sheet.
     await nav.getByRole("button", { name: /more navigation/i }).click();
     const moreNav = page.getByRole("navigation", {
       name: /more destinations/i,
     });
-    await expect(moreNav.getByRole("link", { name: "Agents" })).toBeVisible();
+    await expect(moreNav.getByRole("link", { name: "Tools" })).toBeVisible();
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "08-mobile-bottom-bar.png"),
       fullPage: false,

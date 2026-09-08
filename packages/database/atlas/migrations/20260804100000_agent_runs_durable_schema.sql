@@ -3,7 +3,7 @@
 --
 -- Purpose: the two tables every other Phase-2 piece (worker pool, checkpoint
 -- writer, SSE resume subscription, ClickHouse ingestion, ADR-028 replay)
--- builds on top of. `executeTurn` (packages/agent-runner) starts persisting a
+-- builds on top of. `executeTurn` (packages/run-ledger) starts persisting a
 -- run row per turn here, across every platform surface.
 --
 -- Design:

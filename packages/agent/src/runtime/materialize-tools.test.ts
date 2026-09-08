@@ -32,29 +32,6 @@ const FIXTURE = [
     agent: { riskLevel: "low" as const },
     input: z.object({ formId: z.string(), values: z.record(z.unknown()) }),
   },
-  {
-    // Sandbox-exec family member — only materializes when isSandboxAvailable()
-    // is true, so it is filtered out of the default (sandbox-off) tool set and
-    // never perturbs the exact-set assertions above. The model-facing output
-    // clip is exercised against it in its own describe block below.
-    // (execute_code is the ONE model-facing survivor of the family — the
-    // durable session tools are Workbench-only, asserted below.)
-    name: "execute_code",
-    description: "run code in an ephemeral sandbox",
-    surfaces: ["agent"] as const,
-    agent: { riskLevel: "low" as const },
-    input: z.object({ command: z.string() }),
-  },
-  {
-    // Durable sandbox session tool — Workbench/human-only. NEVER materialized
-    // as an LLM tool, even with a driver configured (the model editing files
-    // through a self-started session was the defect this policy fixes).
-    name: "run_sandbox_command",
-    description: "run a command in a durable sandbox session",
-    surfaces: ["agent"] as const,
-    agent: { riskLevel: "low" as const },
-    input: z.object({ command: z.string() }),
-  },
 ];
 
 vi.mock("@oxagen/oxagen", () => ({
@@ -199,12 +176,6 @@ vi.mock("@oxagen/tenancy", () => ({
   },
 }));
 
-// Stub @oxagen/sandbox so isSandboxAvailable() is mockable and never tries to
-// detect a real driver.
-vi.mock("@oxagen/sandbox", () => ({
-  isSandboxAvailable: vi.fn(() => false),
-}));
-
 // Stub @modelcontextprotocol/sdk/client/auth.js — UnauthorizedError used by the MCP contributor.
 vi.mock("@modelcontextprotocol/sdk/client/auth.js", () => ({
   UnauthorizedError: class UnauthorizedError extends Error {
@@ -301,7 +272,6 @@ import {
   type AgentRunIAMContext,
   type AgentRunIAMResolution,
 } from "@oxagen/oxagen/iam";
-import { isSandboxAvailable } from "@oxagen/sandbox";
 import { connectMcp, listMcpToolDescriptors } from "../dispatch/mcp-client";
 import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
 import { pluginForContract } from "@oxagen/oxagen/plugins";
@@ -1096,131 +1066,19 @@ describe("materializeTools — entitlement filter (WP4)", () => {
   });
 });
 
-// P0 token flood: the sandbox-exec capabilities return RAW stdout/stderr, so a
-// `cat bigfile` / verbose test run would stream megabytes into model context.
-// materializeTools clips the model-facing envelope (30k stdout / 10k stderr,
-// middle-out) at the tool seam — NOT in the handler, which is also driven
-// programmatically by ModalSandboxWorkspace and needs the exact, unclipped bytes.
-describe("materializeTools — model-facing sandbox output clip (P0 token flood)", () => {
+// The tool-LIST filter (UX layer) a surface uses to narrow the advertised set
+// below the run's allowlist. The kernel gate stays the enforcement boundary.
+describe("materializeTools — excludeCapabilities", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
-    // execute_code only materializes when a sandbox driver is configured.
-    vi.mocked(isSandboxAvailable).mockReturnValue(true);
-    mocks.insertToolInvocation.mockClear();
-    mocks.insertToolInvocation.mockResolvedValue(undefined);
-  });
-  afterEach(() => {
-    // Restore the file-wide default so no other describe sees sandbox-on.
-    vi.mocked(isSandboxAvailable).mockReturnValue(false);
   });
 
-  async function runExec(result: unknown): Promise<Record<string, unknown>> {
-    vi.mocked(invoke).mockResolvedValueOnce(result);
-    const { tools } = await materializeTools(CTX);
-    const t = tools["execute_code"] as unknown as {
-      execute: (i: unknown) => Promise<unknown>;
-    };
-    expect(t).toBeDefined();
-    return (await t.execute({ command: "cat big" })) as Record<string, unknown>;
-  }
-
-  it("clips oversized stdout to the 30k cap, middle-out, with a marker", async () => {
-    const huge = "x".repeat(200_000);
-    const out = await runExec({
-      exitCode: 0,
-      stdout: huge,
-      stderr: "",
-      timedOut: false,
+  it("withholds capabilities named in excludeCapabilities", async () => {
+    const { tools, nameMap } = await materializeTools(CTX, {
+      excludeCapabilities: new Set(["fill_form"]),
     });
-    const stdout = out.stdout as string;
-    expect(stdout).toContain("truncated from the middle");
-    expect(stdout.length).toBeLessThan(30_500); // ~30k budget + short marker
-    // Head + tail preserved (both ends are the same char here, so check length + edges).
-    expect(stdout.startsWith("x")).toBe(true);
-    expect(stdout.endsWith("x")).toBe(true);
-    // Non-clipped fields pass through untouched.
-    expect(out.exitCode).toBe(0);
-  });
-
-  it("clips oversized stderr to the tighter 10k cap", async () => {
-    const hugeErr = "e".repeat(50_000);
-    const out = await runExec({
-      exitCode: 1,
-      stdout: "ok",
-      stderr: hugeErr,
-      timedOut: false,
-    });
-    const stderr = out.stderr as string;
-    expect(stderr).toContain("truncated from the middle");
-    expect(stderr.length).toBeLessThan(10_500);
-    expect(out.stdout).toBe("ok"); // small stdout untouched
-  });
-
-  it("leaves output under the caps byte-for-byte unchanged", async () => {
-    const out = await runExec({
-      exitCode: 0,
-      stdout: "hello\nworld\n",
-      stderr: "warn",
-      timedOut: false,
-    });
-    expect(out.stdout).toBe("hello\nworld\n");
-    expect(out.stderr).toBe("warn");
-  });
-
-  it("records the PRE-clip output size in tool_invocations telemetry", async () => {
-    const huge = "x".repeat(200_000);
-    await runExec({ exitCode: 0, stdout: huge, stderr: "", timedOut: false });
-    expect(mocks.insertToolInvocation).toHaveBeenCalled();
-    // vi.fn() mock.calls tightens to [] in hoisted mocks — cast through unknown
-    // to reach the row arg (same pattern as the failure-telemetry test above).
-    const row = (
-      mocks.insertToolInvocation.mock.calls.at(-1) as unknown as [
-        Record<string, unknown>,
-      ]
-    )[0];
-    // Telemetry measured the full ~200k handler output, not the ~30k clipped envelope.
-    expect(row.output_size_bytes as number).toBeGreaterThan(100_000);
-  });
-
-  it("does not touch a non-sandbox capability's output (even with a stdout field)", async () => {
-    vi.mocked(invoke).mockResolvedValueOnce({ stdout: "z".repeat(200_000) });
-    const { tools } = await materializeTools(CTX);
-    const out = (await (
-      tools["capA"] as unknown as { execute: (i: unknown) => Promise<unknown> }
-    ).execute({ x: "hi" })) as Record<string, unknown>;
-    expect((out.stdout as string).length).toBe(200_000); // passthrough, unclipped
-  });
-});
-
-// Sandbox tool exposure policy: the engine's workspace toolset is the only
-// sanctioned way for a model to touch a repository. The durable sandbox
-// session/management family is Workbench/human-only (never an LLM tool),
-// and the chat route additionally withholds overlapping mutation paths in
-// code mode via `excludeCapabilities`.
-describe("materializeTools — sandbox tool exposure policy", () => {
-  beforeEach(() => {
-    vi.mocked(invoke).mockReset();
-    vi.mocked(isSandboxAvailable).mockReturnValue(true);
-  });
-  afterEach(() => {
-    vi.mocked(isSandboxAvailable).mockReturnValue(false);
-  });
-
-  it("never materializes the Workbench-only sandbox session family, even with a driver configured", async () => {
-    const { tools, nameMap } = await materializeTools(CTX);
-    // The one model-facing survivor of the family is present…
-    expect(tools["execute_code"]).toBeDefined();
-    // …but the durable session tool is withheld despite surfaces:["agent"]
-    // and an available driver.
-    expect(tools["run_sandbox_command"]).toBeUndefined();
-    expect(Object.values(nameMap)).not.toContain("run_sandbox_command");
-  });
-
-  it("withholds capabilities named in excludeCapabilities (code-mode overlap filter)", async () => {
-    const { tools } = await materializeTools(CTX, {
-      excludeCapabilities: new Set(["execute_code"]),
-    });
-    expect(tools["execute_code"]).toBeUndefined();
+    expect(tools["fill_form"]).toBeUndefined();
+    expect(Object.values(nameMap)).not.toContain("fill_form");
     // Unrelated capabilities are untouched by the exclusion.
     expect(tools["capA"]).toBeDefined();
   });

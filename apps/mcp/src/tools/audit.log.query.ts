@@ -7,7 +7,7 @@ import { buildContext } from "../context";
 export const schema = {
   ...auditLogQuery.input.shape,
   source: auditLogQuery.input.shape.source.describe(
-    "Which audit spine(s) to query: 'all', 'security' (auth/IAM/capability), or 'playbook' (automation)",
+    "Which audit spine to query: 'all' or 'security' (auth/IAM/capability)",
   ),
   eventType: auditLogQuery.input.shape.eventType.describe(
     "Exact event-type match, e.g. 'billing.plan_changed' or 'run_completed'",

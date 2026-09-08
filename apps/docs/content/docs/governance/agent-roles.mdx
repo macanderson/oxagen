@@ -50,7 +50,7 @@ A role does not describe what the agent *does*. It describes the **most** the ag
 ```
 role            = the CEILING   (what this agent may ever do)
 agent config    = the REQUEST   (what this agent asks to do — its tools,
-                                 graph access, budgets, skills, subagents)
+                                 graph access, and budgets)
 effective scope = ceiling ∩ request
 ```
 
@@ -63,7 +63,6 @@ The two are intersected on every dimension, and the narrower side always wins:
 | Graph budget | Element-wise minimum — hops, nodes, traversal time. |
 | Node & relationship types | Set intersection of the role's scope and the agent's `scopeToTypes`. |
 | MCP servers | The role's rules are evaluated first-match-wins against each server the agent equips. |
-| Skills & subagents | Set intersection of what the role permits and what the agent equips. |
 
 Two consequences follow, and both are deliberate:
 
@@ -83,14 +82,6 @@ You cannot attach a role to an agent that grants capabilities you do not hold yo
 This closes the obvious escalation route. Without it, any member could mint an agent, hand it an Operator role, and use it as a privilege-laundering proxy. With it, delegation can only ever move sideways or down.
 
 In the builder, roles above your own access render disabled with an explanation rather than failing at save time. That is a convenience, not the enforcement — the check runs again on the server for every assignment.
-
-### Subagents only narrow
-
-The same rule extends down the dispatch chain. When an agent dispatches a subagent, the subagent runs at **the intersection of its own scope and its parent's** — never wider. A chain of delegations can only ever get more restrictive, no matter how long it is, so an agent cannot escape its ceiling by dispatching its way around it.
-
-### Inbound agent-to-agent calls
-
-An agent reached over A2A resolves as its own principal intersected with the calling agent's scope. A caller cannot lend a target agent permissions the caller does not have.
 
 ## Choosing a role
 

@@ -33,8 +33,6 @@ const WorkspaceModelsSchema = z.object({
   workspaceSlug: z.string().min(1),
   defaultTextTier: z.enum(["fast", "balanced", "precise"]).nullable(),
   defaultTextModel: z.string().min(1).nullable(),
-  defaultImageModel: z.string().min(1).nullable(),
-  defaultVideoModel: z.string().min(1).nullable(),
 });
 
 export type WorkspaceModelsInput = z.infer<typeof WorkspaceModelsSchema>;
@@ -76,14 +74,8 @@ export async function updateWorkspaceModelsAction(
     };
   }
 
-  const {
-    orgSlug,
-    workspaceSlug,
-    defaultTextTier,
-    defaultTextModel,
-    defaultImageModel,
-    defaultVideoModel,
-  } = parsed.data;
+  const { orgSlug, workspaceSlug, defaultTextTier, defaultTextModel } =
+    parsed.data;
 
   // Resolve org + workspace — notFound() on slug mismatch prevents cross-tenant writes.
   const org = await resolveOrg(orgSlug);
@@ -132,8 +124,6 @@ export async function updateWorkspaceModelsAction(
           {
             defaultTextTier,
             defaultTextModel,
-            defaultImageModel,
-            defaultVideoModel,
           },
           ctx,
           { surface: "agent" },

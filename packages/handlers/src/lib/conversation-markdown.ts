@@ -33,7 +33,6 @@ export type ExportBlock =
       /** Compact JSON result, only when small enough to inline (≤200 chars). */
       resultPreview?: string;
     }
-  | { kind: "code"; language: string; code: string }
   | { kind: "attachment"; name: string; url: string };
 
 export interface ExportMessage {
@@ -193,19 +192,11 @@ export function messageToBlocks(row: ExportMessageRow): ExportBlock[] {
           out.push(tool);
           break;
         }
-        case "code-execute": {
-          if (typeof block.code === "string") {
-            out.push({
-              kind: "code",
-              language:
-                typeof block.language === "string" ? block.language : "",
-              code: block.code,
-            });
-          }
-          break;
-        }
         default:
-          // Non-exportable block types (approvals, plans, components, …) — skip.
+          // Non-exportable block types (approvals, components, …) — skip.
+          // ADR-043 retired the execution block types (code, diffs, terminal
+          // output, generated media); a historical row still carrying one
+          // falls through here and is dropped rather than rendered.
           break;
       }
     }
@@ -274,8 +265,6 @@ function markdownForBlock(block: ExportBlock): string {
       if (block.resultPreview) lines.push(`result: ${block.resultPreview}`);
       return "```\n" + lines.join("\n") + "\n```";
     }
-    case "code":
-      return "```" + block.language + "\n" + block.code + "\n```";
     case "attachment":
       return `**Attachment:** [${block.name}](${block.url})`;
   }

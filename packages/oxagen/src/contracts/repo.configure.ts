@@ -8,7 +8,7 @@ export const repoConfigure = registerCapability({
     "Set repo-specific filters, sync cadence, and field mappings. Specializes connection.configure for code repository connectors.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: {
     requiresApproval: false,

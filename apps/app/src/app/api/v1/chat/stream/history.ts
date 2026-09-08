@@ -103,18 +103,6 @@ export function summarizeCompletedActions(
         actions.push(artifact ? `${b.capability} → ${artifact}` : b.capability);
         break;
       }
-      case "code-execute": {
-        if (b.status !== "completed") break;
-        describedToolCallIds.add(b.toolCallId);
-        actions.push(`code execution (${b.language})`);
-        break;
-      }
-      case "plan":
-        actions.push(`created the plan "${b.title}"`);
-        break;
-      case "subagent-fanout":
-        actions.push(`dispatched ${b.children.length} sub-agent(s)`);
-        break;
       default:
         break; // text/reasoning aren't standalone actions
     }

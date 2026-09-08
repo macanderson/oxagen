@@ -1,5 +1,12 @@
 # xmcp Migration Plan: `apps/mcp`
 
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
+> `agent.skill.list`, `agent.code.execute`, `agent.plan.approve`/`create`,
+> `agent.skill.load`, and `agent.subagent.aggregate`/`dispatch` — the tool file
+> example and the "not yet exposed" follow-up list below both cite capabilities
+> that no longer exist. The xmcp migration itself (the framework choice) is
+> unaffected.
+
 > Status: DRAFT — ready for implementation as a single PR  
 > Last updated: 2026-05-30  
 > Author: agent

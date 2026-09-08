@@ -497,13 +497,13 @@ When an authenticated user reads user.preferences, the system SHALL fetch the us
 <!-- test: user.preferences.read.test.ts:returned preferences -->
 
 - **WHEN** ctx.userId is set AND user_preferences row exists for userId
-- **THEN** fetch user_preferences row; return {fontSize, density, enterToSubmit, pendingPromptBehavior, defaultTextTier, defaultTextModel, defaultImageModel, defaultVideoModel}
+- **THEN** fetch user_preferences row; return {fontSize, density, enterToSubmit, pendingPromptBehavior, defaultTextTier, defaultTextModel}
 
 #### Scenario: User reads preferences (no row, defaults returned)
 <!-- test: user.preferences.read.test.ts:no row — returning schema defaults -->
 
 - **WHEN** ctx.userId is set AND no user_preferences row exists
-- **THEN** return schema defaults {fontSize: "medium", density: "comfortable", enterToSubmit: false, pendingPromptBehavior: "queue", defaultTextTier: null, defaultTextModel: null, defaultImageModel: null, defaultVideoModel: null}
+- **THEN** return schema defaults {fontSize: "medium", density: "comfortable", enterToSubmit: false, pendingPromptBehavior: "queue", defaultTextTier: null, defaultTextModel: null}
 
 #### Scenario: Unauthenticated user attempts read
 <!-- test: user.preferences.read.test.ts -->
@@ -526,7 +526,7 @@ When an authenticated user writes user.preferences, the system SHALL upsert the 
 <!-- test: user.preferences.write.test.ts:preferences updated -->
 
 - **WHEN** ctx.userId is set AND no user_preferences row exists AND input provides some fields
-- **THEN** build insertValues with userId, createdByUserId, updatedByUserId, fontSize (or default "medium"), density (or default "comfortable"), enterToSubmit (or default false), pendingPromptBehavior (or default "queue"), plus any provided model fields; execute insert onConflictDoUpdate; re-read row; return full {fontSize, density, enterToSubmit, pendingPromptBehavior, defaultTextTier, defaultTextModel, defaultImageModel, defaultVideoModel}
+- **THEN** build insertValues with userId, createdByUserId, updatedByUserId, fontSize (or default "medium"), density (or default "comfortable"), enterToSubmit (or default false), pendingPromptBehavior (or default "queue"), plus any provided model fields; execute insert onConflictDoUpdate; re-read row; return full {fontSize, density, enterToSubmit, pendingPromptBehavior, defaultTextTier, defaultTextModel}
 
 #### Scenario: User updates existing preferences (update)
 <!-- test: user.preferences.write.test.ts -->

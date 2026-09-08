@@ -8,4 +8,5 @@ export {
   pluginForContract,
   validateOxagenPluginContracts,
   clearPluginRegistryForTests,
+  registerOxagenPluginForTests,
 } from "./registry";

@@ -3,11 +3,7 @@
   "domain": "plugin",
   "description": "Fetch the typed config schema for a connector plugin, used to drive dynamic form rendering during install and configure flows.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -29,9 +25,7 @@
         "description": "Connector plugin identifier (e.g. 'github', 'google-drive')"
       }
     },
-    "required": [
-      "pluginId"
-    ],
+    "required": ["pluginId"],
     "additionalProperties": false
   },
   "output": {
@@ -78,10 +72,7 @@
                 "type": "boolean"
               }
             },
-            "required": [
-              "name",
-              "verified"
-            ],
+            "required": ["name", "verified"],
             "additionalProperties": false
           }
         },
@@ -173,10 +164,7 @@
                               "type": "string"
                             }
                           },
-                          "required": [
-                            "value",
-                            "label"
-                          ],
+                          "required": ["value", "label"],
                           "additionalProperties": false
                         }
                       },
@@ -188,10 +176,7 @@
                           },
                           "value": {}
                         },
-                        "required": [
-                          "field",
-                          "value"
-                        ],
+                        "required": ["field", "value"],
                         "additionalProperties": false
                       },
                       "validation": {
@@ -226,28 +211,23 @@
                           }
                         },
                         "additionalProperties": false
+                      },
+                      "format": {
+                        "type": "string",
+                        "enum": ["json"]
                       }
                     },
-                    "required": [
-                      "key",
-                      "label",
-                      "widget"
-                    ],
+                    "required": ["key", "label", "widget"],
                     "additionalProperties": false
                   }
                 }
               },
-              "required": [
-                "id",
-                "kind"
-              ],
+              "required": ["id", "kind"],
               "additionalProperties": false
             }
           }
         },
-        "required": [
-          "schemes"
-        ],
+        "required": ["schemes"],
         "additionalProperties": false
       },
       "config": {
@@ -302,10 +282,7 @@
                         "type": "string"
                       }
                     },
-                    "required": [
-                      "value",
-                      "label"
-                    ],
+                    "required": ["value", "label"],
                     "additionalProperties": false
                   }
                 },
@@ -317,10 +294,7 @@
                     },
                     "value": {}
                   },
-                  "required": [
-                    "field",
-                    "value"
-                  ],
+                  "required": ["field", "value"],
                   "additionalProperties": false
                 },
                 "validation": {
@@ -355,20 +329,18 @@
                     }
                   },
                   "additionalProperties": false
+                },
+                "format": {
+                  "type": "string",
+                  "enum": ["json"]
                 }
               },
-              "required": [
-                "key",
-                "label",
-                "widget"
-              ],
+              "required": ["key", "label", "widget"],
               "additionalProperties": false
             }
           }
         },
-        "required": [
-          "fields"
-        ],
+        "required": ["fields"],
         "additionalProperties": false
       },
       "recordTypes": {
@@ -376,10 +348,7 @@
         "properties": {
           "selectionMode": {
             "type": "string",
-            "enum": [
-              "single",
-              "multi"
-            ]
+            "enum": ["single", "multi"]
           },
           "defaultAll": {
             "type": "boolean"
@@ -402,19 +371,12 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "id",
-                "displayName",
-                "defaultEnabled"
-              ],
+              "required": ["id", "displayName", "defaultEnabled"],
               "additionalProperties": false
             }
           }
         },
-        "required": [
-          "selectionMode",
-          "items"
-        ],
+        "required": ["selectionMode", "items"],
         "additionalProperties": false
       },
       "filters": {
@@ -439,9 +401,7 @@
                 }
               }
             },
-            "required": [
-              "enabled"
-            ],
+            "required": ["enabled"],
             "additionalProperties": false
           },
           "labelFilters": {
@@ -457,9 +417,7 @@
                 }
               }
             },
-            "required": [
-              "enabled"
-            ],
+            "required": ["enabled"],
             "additionalProperties": false
           }
         },
@@ -470,11 +428,7 @@
         "properties": {
           "delivery": {
             "type": "string",
-            "enum": [
-              "webhook",
-              "polling",
-              "manual"
-            ]
+            "enum": ["webhook", "polling", "manual"]
           },
           "pollingSupported": {
             "type": "boolean"
@@ -491,16 +445,11 @@
                 "minimum": 0
               }
             },
-            "required": [
-              "defaultIntervalSeconds",
-              "minIntervalSeconds"
-            ],
+            "required": ["defaultIntervalSeconds", "minIntervalSeconds"],
             "additionalProperties": false
           }
         },
-        "required": [
-          "delivery"
-        ],
+        "required": ["delivery"],
         "additionalProperties": false
       },
       "defaultFieldMappings": {
@@ -513,11 +462,7 @@
         }
       }
     },
-    "required": [
-      "apiVersion",
-      "kind",
-      "metadata"
-    ],
+    "required": ["apiVersion", "kind", "metadata"],
     "additionalProperties": false
   }
 }

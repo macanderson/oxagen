@@ -155,38 +155,6 @@ describe("staticValueFor — extended cases", () => {
   });
 });
 
-// The DEFAULT is the whole point of these three flags, so it is asserted
-// rather than left to a reviewer's memory: shipping the wrong one either
-// strands the durable-run queue or mints finalization obligations no deployed
-// worker can satisfy (docs/specs/run-evidence-ingress/
-// 02-run-attempt-foundation-plan.md, PR 1A/1B split).
-describe("durable-run gate defaults", () => {
-  it("OXAGEN_DURABLE_RUNS defaults OFF — the router stays unmounted", () => {
-    for (const env of ["development", "preview", "production"] as const) {
-      expect(staticValueFor("OXAGEN_DURABLE_RUNS", env)).toBe("false");
-    }
-  });
-
-  it("OXAGEN_V1_RUN_ADMISSION_ENABLED defaults ON — PR 1A must not close the v1 queue", () => {
-    // Closing legacy admission is PR 1B's cutover, and it may only happen
-    // after already-enqueued v1 work has drained.
-    for (const env of ["development", "preview", "production"] as const) {
-      expect(staticValueFor("OXAGEN_V1_RUN_ADMISSION_ENABLED", env)).toBe(
-        "true",
-      );
-    }
-  });
-
-  it("OXAGEN_RUN_V2_CLAIMS_ENABLED defaults OFF — v2 execution waits for PR 2B", () => {
-    // Every v2 seal mints a one-shot finalization grant and a durable
-    // obligation. Until PR 2B deploys the consumer, each one would be an
-    // obligation nothing can discharge.
-    for (const env of ["development", "preview", "production"] as const) {
-      expect(staticValueFor("OXAGEN_RUN_V2_CLAIMS_ENABLED", env)).toBe("false");
-    }
-  });
-});
-
 describe("requiredKeysFor — boundary cases", () => {
   it("a key scoped services:['api'] must NOT appear for service 'website'", () => {
     // DATABASE_URL services: ["api", "app", "mcp", "admin"] — not website

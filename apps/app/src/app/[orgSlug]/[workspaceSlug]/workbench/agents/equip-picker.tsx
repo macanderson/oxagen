@@ -1,13 +1,14 @@
 "use client";
 /**
- * equip-picker.tsx — the reusable 4-tab picker for the Agent Builder's Equip
- * step.
+ * equip-picker.tsx — the reusable 2-tab picker for the Agent Builder's tool
+ * allowlist step.
  *
- * An agent loads ONE uniform list of things — skills, tools (capabilities), MCP
- * servers, and subagents — modeled as AgentTool { type, ref, config? }. This
- * component surfaces the four available pools as tabs and toggles each item in
- * or out of the caller-owned agentTools[] via onChange. It holds no state of
- * its own; the builder owns the list.
+ * An agent's allowlist is ONE uniform list — capabilities and MCP servers —
+ * modeled as AgentTool { type, ref, config? }. Per ADR-043 the skill and
+ * subagent pools are gone with the runtime. This component surfaces the two
+ * remaining pools as tabs and toggles each item in or out of the caller-owned
+ * agentTools[] via onChange. It holds no state of its own; the builder owns
+ * the list.
  */
 import * as React from "react";
 import { Check, Plus, ShieldAlert, ShoppingBag } from "lucide-react";
@@ -23,17 +24,6 @@ import {
 } from "@/components/ui/tabs";
 import type { AgentToolRow } from "@/lib/workbench/tools";
 
-export interface SkillOption {
-  ref: string;
-  name: string;
-  description: string;
-  enabled: boolean;
-}
-export interface SubagentOption {
-  ref: string;
-  name: string;
-  slug: string;
-}
 export interface McpOption {
   ref: string;
   name: string;
@@ -43,9 +33,7 @@ export interface McpOption {
 }
 
 export interface EquipSources {
-  skills: SkillOption[];
   tools: AgentToolRow[];
-  subagents: SubagentOption[];
   mcp: McpOption[];
 }
 
@@ -56,9 +44,9 @@ export interface EquipPickerProps {
   disabled?: boolean;
   /**
    * When set, renders an "Install more from Marketplace" affordance below the
-   * pools so new skills / MCP servers / capabilities can be installed without
-   * leaving the wizard. Callers gate this on manage rights — installs flow
-   * through the agent-tools choke point (lib/agent-tools/install-actions).
+   * pools so new MCP servers / capabilities can be installed without leaving
+   * the wizard. Callers gate this on manage rights — installs flow through the
+   * agent-tools choke point (lib/agent-tools/install-actions).
    */
   onBrowseMarketplace?: () => void;
 }
@@ -161,40 +149,12 @@ export function EquipPicker({
     value.filter((t) => t.type === type).length;
 
   return (
-    <Tabs defaultValue="skills">
+    <Tabs defaultValue="tools">
       <TabsList variant="underline" className="relative mb-4">
-        <TabsTab value="skills">Skills ({count("skill")})</TabsTab>
-        <TabsTab value="tools">Tools ({count("function")})</TabsTab>
+        <TabsTab value="tools">Capabilities ({count("function")})</TabsTab>
         <TabsTab value="mcp">MCP ({count("mcp_server")})</TabsTab>
-        <TabsTab value="agents">Subagents ({count("agent")})</TabsTab>
         <TabsIndicator />
       </TabsList>
-
-      {/* Skills */}
-      <TabsPanel value="skills" className="flex flex-col gap-2">
-        {sources.skills.length === 0 ? (
-          <EmptyPool label="skills" />
-        ) : (
-          sources.skills.map((s) => (
-            <EquipRow
-              key={s.ref}
-              title={s.name}
-              subtitle={s.description}
-              meta={
-                !s.enabled ? (
-                  <Badge variant="outline" className="text-[10px]">
-                    disabled
-                  </Badge>
-                ) : undefined
-              }
-              added={has(value, "skill", s.ref)}
-              disabled={disabled}
-              onToggle={() => onChange(toggle(value, "skill", s.ref))}
-              testId={`equip-skill-${s.ref}`}
-            />
-          ))
-        )}
-      </TabsPanel>
 
       {/* Tools (capabilities) */}
       <TabsPanel value="tools" className="flex flex-col gap-2">
@@ -260,25 +220,6 @@ export function EquipPicker({
               disabled={disabled}
               onToggle={() => onChange(toggle(value, "mcp_server", m.ref))}
               testId={`equip-mcp-${m.ref}`}
-            />
-          ))
-        )}
-      </TabsPanel>
-
-      {/* Subagents */}
-      <TabsPanel value="agents" className="flex flex-col gap-2">
-        {sources.subagents.length === 0 ? (
-          <EmptyPool label="subagents" />
-        ) : (
-          sources.subagents.map((a) => (
-            <EquipRow
-              key={a.ref}
-              title={a.name}
-              subtitle={a.slug}
-              added={has(value, "agent", a.ref)}
-              disabled={disabled}
-              onToggle={() => onChange(toggle(value, "agent", a.ref))}
-              testId={`equip-agent-${a.ref}`}
             />
           ))
         )}

@@ -18,6 +18,7 @@ import {
 } from "@oxagen/telemetry";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { assertRlsConnectionSafe } from "@oxagen/database";
+import { bootstrapDataPlaneResolver } from "@oxagen/database/data-plane";
 import { extractBearerToken } from "./context";
 
 // Refuse to boot if a production runtime disabled RLS enforcement, or if
@@ -34,6 +35,9 @@ initTracer();
 // xmcp has no lifecycle hook — this module-level call runs once when the
 // middleware bundle is loaded, before any tool invocation can occur.
 // Idempotent: safe if the module is re-evaluated in dev hot-reload.
+// ADR-042: wire the organisation-scoped data-plane resolver before any
+// scoped store access. Inert until an org has a data_planes row.
+bootstrapDataPlaneResolver();
 bootstrapIAMRuntime();
 // Wire the billing admission gate (suspended / zero-balance refusal +
 // auto-reload) into kernel.invoke(), alongside the IAM gate.

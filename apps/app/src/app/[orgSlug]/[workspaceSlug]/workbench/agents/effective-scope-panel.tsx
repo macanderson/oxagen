@@ -2,7 +2,7 @@
 /**
  * effective-scope-panel.tsx — the Review step's single accountability view of
  * the agent's EFFECTIVE scope (role ceiling ∩ agent configuration) across
- * all four dimensions: capabilities, graph, MCP, skills/subagents.
+ * all three dimensions: capabilities, graph, MCP.
  *
  * Display-only: the numbers come from computeEffectiveScopeView, which calls
  * the resolver's own exported intersection helpers — nothing here enforces.
@@ -266,33 +266,6 @@ export function EffectiveScopePanel(props: EffectiveScopeInput) {
               ? `Equipped servers: ${view.mcp.equippedServers.join(", ")}`
               : "No MCP servers equipped."}
           </p>
-        </DimensionCard>
-
-        {/* ── Skills & subagents ────────────────────────────────────────── */}
-        <DimensionCard title="Skills & subagents" testId="scope-skills">
-          <p data-testid="scope-skills-list">
-            {view.skills.equipped.length > 0
-              ? `Skills: ${view.skills.effective.join(", ")}` +
-                (view.skills.effective.length < view.skills.equipped.length
-                  ? ` (${view.skills.equipped.length - view.skills.effective.length} outside the role ceiling)`
-                  : "")
-              : "No skills equipped."}
-          </p>
-          <p data-testid="scope-subagents-list">
-            {view.subagents.equipped.length > 0
-              ? `Subagents: ${view.subagents.effective.join(", ")}` +
-                (view.subagents.effective.length <
-                view.subagents.equipped.length
-                  ? ` (${view.subagents.equipped.length - view.subagents.effective.length} outside the role ceiling)`
-                  : "")
-              : "No subagents equipped."}
-          </p>
-          {!view.skills.constrained && !view.subagents.constrained ? (
-            <p>
-              The role does not constrain these — the agent loads only what it
-              equips.
-            </p>
-          ) : null}
         </DimensionCard>
       </div>
     </section>

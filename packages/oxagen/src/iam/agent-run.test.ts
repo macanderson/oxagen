@@ -214,7 +214,7 @@ describe("canonicalGrantCeiling()", () => {
             roleId: "role_agent",
             capabilityId: "test.read",
             effect: "allow",
-            conditions: { resourceScope: { skills: { slugs: ["s1"] } } },
+            conditions: { resourceScope: { agents: { refs: ["s1"] } } },
           },
         ],
       }),
@@ -234,7 +234,7 @@ describe("canonicalGrantCeiling()", () => {
       (canonical["role_grants"] as Record<string, unknown>[])[0]?.[
         "conditions"
       ],
-    ).toEqual({ resourceScope: { skills: { slugs: ["s1"] } } });
+    ).toEqual({ resourceScope: { agents: { refs: ["s1"] } } });
   });
 
   it("emits null (never undefined) for an absent narrowing — undefined is not canonicalizable", () => {

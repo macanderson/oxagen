@@ -1,9 +1,17 @@
+// schema.export.ts — build a ZIP of one schema-registry version.
+//
+// The ZIP is assembled here with fflate and persisted through the shared asset
+// chokepoint. It used to compose the `create_archive` capability, which ADR-043
+// removed along with the rest of the generation surface; exporting your own
+// ontology is governance, not generation, so the ~20 lines of zip + persist it
+// actually needed were inlined rather than keeping a capability alive for one
+// caller.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { schemaExport } from "@oxagen/oxagen/contracts/schema.export";
-import { invoke } from "@oxagen/oxagen/kernel";
 import { schema as db, withTenantDb } from "@oxagen/database";
 import { eq, and, isNull } from "drizzle-orm";
 import { getOrCreateRegistry } from "./schema.versioning";
+import { persistGeneratedAsset } from "./generated-asset.persist";
 import { logger } from "./logger";
 
 export const schemaExportHandler: CapabilityHandler<
@@ -96,12 +104,12 @@ export const schemaExportHandler: CapabilityHandler<
     },
   );
 
-  // Build the §15 ZIP layout as archive.create entries
+  // Build the §15 ZIP layout:
   // manifest.json + schemas/<name>/labels/<Label>.json + schemas/<name>/relationships/<TYPE>.json
   //
   // Schema/label/relationship names are free-form tenant input (the
-  // upsert_schema_label contract only bounds length), and archive.create writes
-  // entry names into the ZIP verbatim. Every name that becomes a path segment is
+  // upsert_schema_label contract only bounds length), and entry names are
+  // written into the ZIP verbatim. Every name that becomes a path segment is
   // therefore flattened through safePathSegment so an authored name can never
   // introduce a separator or a `..` hop into the archive.
 
@@ -170,30 +178,57 @@ export const schemaExportHandler: CapabilityHandler<
     }
   }
 
-  // Invoke archive.create
-  const archiveResult = (await invoke(
-    "create_archive",
-    {
-      archiveName: `schema-export-v${versionNumber}`,
-      entries,
-    },
-    ctx,
-    { surface: "api" },
-  )) as { assetId: string; serveUrl: string; publicId: string };
+  // An export is attributed to the user who asked for it — the asset row's
+  // ownership column is NOT NULL and drives the `user` access policy — so an
+  // API-key-only principal has no one to own the archive.
+  if (!ctx.userId) {
+    throw new Error(
+      "schema.export requires an authenticated user (not an API-key-only principal)",
+    );
+  }
+
+  // zipSync is fine here: every entry is a small JSON document already resident
+  // in memory, so there is nothing to stream.
+  const { zipSync } = await import("fflate");
+  const encoder = new TextEncoder();
+  const zipInput: Record<string, Uint8Array> = {};
+  for (const entry of entries) {
+    zipInput[entry.name] = encoder.encode(entry.text);
+  }
+  const zipBytes = zipSync(zipInput, { level: 6 });
+
+  const archiveName = `schema-export-v${versionNumber}`;
+  const asset = await persistGeneratedAsset({
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+    userId: ctx.userId,
+    kind: "archive",
+    mimeType: "application/zip",
+    bytes: zipBytes,
+    prompt: "",
+    model: "",
+    displayName: archiveName,
+    // Visible to the workspace: a schema export is a shared governance
+    // artifact, not a personal download.
+    accessPolicy: "org",
+    messageId: ctx.messageId ?? undefined,
+  });
 
   logger.info(
     {
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       versionNumber,
-      assetId: archiveResult.assetId,
+      assetId: asset.id,
+      entryCount: entries.length,
+      sizeBytes: asset.sizeBytes,
     },
     "schema.export: created archive",
   );
 
   return {
-    assetId: archiveResult.assetId,
-    serveUrl: archiveResult.serveUrl,
+    assetId: asset.id,
+    serveUrl: asset.serveUrl,
     versionId: targetPublicId,
     versionNumber,
   };

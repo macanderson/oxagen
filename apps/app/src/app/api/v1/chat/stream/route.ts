@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getSessionOrRedirect } from "@/lib/session";
 import {
   resolveOrg,
@@ -15,34 +15,22 @@ import {
   supportsVideoInput,
   modelIdOf,
   loadEffectiveModelDefaults,
-  resolvePrompt,
-  chatSystemPrompt,
-  codeModeSystemPrompt,
   loadWorkspacePromptConfig,
-  tool,
-  type ToolSet,
+  resolvePrompt,
   type ModelMessage,
-  type SkillIndexEntry,
 } from "@oxagen/ai";
 import {
   materializeTools,
   createApprovalRequest,
   waitForApproval,
+  runGovernedTurn,
+  buildChatSystemPrompt,
 } from "@oxagen/agent";
-import {
-  createPlatformAgentAi,
-  ModalSandboxWorkspace,
-  isSandboxAvailable,
-} from "@oxagen/agent/adapters";
-import { resolveGitHubToken } from "@oxagen/handlers/lib/github-token";
 import { parseMentions } from "@oxagen/ai/mentions";
-import { executeTurn, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/agent-runner";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { invoke, isCodeAgentType } from "@oxagen/oxagen";
+import { invoke } from "@oxagen/oxagen";
 import { CHAT_CONTENT_MAX_CHARS } from "@oxagen/oxagen/contracts/chat.message.send";
-import { formFill } from "@oxagen/oxagen/contracts/form.fill";
-import { fieldDescriptorSchema } from "@oxagen/oxagen/contracts/form.fill";
 import { randomUUID } from "node:crypto";
 import type {
   StreamEvent,
@@ -52,19 +40,16 @@ import type {
 } from "@/components/chat/stream-event-types";
 import { autoTitleConversation } from "./auto-title";
 import {
-  parseStoredCodeBinding,
-  resolveCodeBinding,
-  toStoredCodeBinding,
-} from "./code-binding";
-import {
   buildRecentTurns,
   extractToolActivity,
   generateTurnSuggestions,
   type TurnSuggestion,
 } from "./suggest-prompts";
-import { streamMediaGeneration } from "./media-generation";
-import { inferMediaIntent } from "./infer-media-intent";
-import { createTurnTranslator, emitUsageEvent } from "./translate-stream";
+import {
+  createTurnTranslator,
+  emitUsageEvent,
+  translateAgentStream,
+} from "./translate-stream";
 import { formatStreamError } from "./stream-parts";
 import {
   buildHistoryMessages,
@@ -80,7 +65,6 @@ import {
   resolveGroundingCitations,
 } from "./recall-context";
 import { buildPageContextMessage } from "./page-context";
-import { evaluateTurnCreditGate } from "./credit-gate";
 import {
   applyAgentBinding,
   type AgentBindingDefinition,
@@ -91,6 +75,7 @@ import {
 // its own SSE/approval machinery.
 import {
   createTurnBudgetGuard,
+  evaluateTurnCreditGate,
   formatBudgetUsd,
   resolveEffectiveTurnBudget,
   TURN_BUDGET_OFF,
@@ -101,15 +86,11 @@ import {
   type SavedWorkspaceGovernance,
 } from "@oxagen/billing";
 import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
-import {
-  isCurrentUserTurnAtHead,
-  CHAT_MAX_RETRIES,
-  CHAT_MAX_OVERFLOW_RETRIES,
-} from "./history-dedup";
+import { isCurrentUserTurnAtHead } from "./history-dedup";
 
 // Side-effect imports: bind every handler into the shared kernel BEFORE
-// materializeTools runs so invoke() can resolve both agent.* and all
-// non-agent.* agent-surface capabilities (form.fill, svg.generate, etc.).
+// materializeTools runs so invoke() can resolve every agent-surface capability
+// the turn's tools dispatch to.
 import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 
@@ -132,23 +113,16 @@ const BodySchema = z.object({
   // Reasoning effort for reasoning-capable models. Forwarded to streamAgentReply
   // only when the resolved model actually supports reasoning (guard below).
   effort: z.enum(["low", "medium", "high"]).nullable().default(null),
-  // Media-generation intent. When set, this turn generates an image/video using
-  // a media model instead of running the text agent. `mediaModel` is an explicit
-  // gateway id; otherwise `mediaTier` (basic/advanced, default basic) resolves
-  // one from the OXAGEN_LLM_{IMAGE,VIDEO}_* env.
-  generate: z.enum(["image", "video"]).nullable().default(null),
-  mediaTier: z.enum(["basic", "advanced"]).nullable().default(null),
-  mediaModel: z.string().min(1).nullable().default(null),
+  // ADR-043: the media-generation intent fields (`generate` / `mediaTier` /
+  // `mediaModel`) were removed with the image/video capabilities.
   // True when the client created this conversation on this turn (first message).
   // Used to trigger auto-title generation after the assistant replies.
   newConversation: z.boolean().default(false),
   // Per-turn MCP server allowlist: publicIds of servers the user has activated
   // in the chat composer. When non-empty, only those servers' tools are loaded.
   activeServerIds: z.array(z.string()).optional().default([]),
-  // Session-level skill pinning: skill slugs to pre-load into the system prompt.
-  // Pinned skills are injected directly (no tool call needed), so the model
-  // applies them from the first turn. Capped at 5 to bound prompt bloat.
-  skills: z.array(z.string().min(1).max(64)).max(5).optional().default([]),
+  // ADR-043: session-level skill pinning (`skills`) was removed with the skill
+  // system.
   // Attachments for this turn — IDS ONLY (never base64/bytes through this
   // 32 KiB body). Each publicId is re-resolved server-side below (ownership +
   // status='ready' + kind ∈ {image,video} allowlist) before its bytes are
@@ -176,21 +150,6 @@ const BodySchema = z.object({
     .object({
       route: z.string().min(1).max(2048),
       entitySummary: z.string().max(500).optional(),
-      fillableForm: z
-        .object({
-          formId: z.string().min(1).max(256),
-          title: z.string().min(1).max(256),
-          // Hard cap: 60 fields, each string capped to 256 chars.
-          fields: z
-            .array(
-              fieldDescriptorSchema.extend({
-                name: z.string().min(1).max(256),
-                label: z.string().min(1).max(256),
-              }),
-            )
-            .max(60),
-        })
-        .optional(),
     })
     .nullable()
     .default(null),
@@ -202,69 +161,19 @@ const BodySchema = z.object({
   // lives in @oxagen/billing (turn-budget-policy) so every chat surface
   // validates and resolves budgets identically.
   budget: requestTurnBudgetSchema.nullable().default(null),
-  // Code mode (forced repo + environment selection in the composer). When
-  // present, the turn runs the coding engine against a durable sandbox with the
-  // repo cloned and the environment's vault secrets injected, using the
-  // code-mode system prompt and the full workspace toolset (read_file/write_file/
-  // edit_file/list_dir/glob/grep/bash). `null`/omitted ⇒ normal chat.
-  // owner/name come from the client's repo picker (the workspace GitHub token
-  // gates access, exactly like repo.branch.create); the sandbox only activates
-  // when a driver is configured (SANDBOX_ENABLED) — otherwise the turn still uses
-  // the code-mode prompt but advertises no filesystem tools and says so.
-  code: z
-    .object({
-      connectionId: z.string().min(1),
-      owner: z.string().min(1).max(256),
-      name: z.string().min(1).max(256),
-      defaultBranch: z.string().min(1).max(256).nullable().default(null),
-      environmentId: z.string().min(1),
-      // Human label for the environment so the agent context shows the name,
-      // not the opaque env_… id. Optional/nullable for older clients.
-      environmentName: z.string().max(256).nullable().default(null),
-      sandboxSessionId: z.string().min(1).nullable().default(null),
-    })
-    .nullable()
-    .default(null),
+  // ADR-043: code mode (`code` — repo + sandbox environment) was removed with
+  // the runtime. Oxagen governs agents; it does not run them, so a conversation
+  // is no longer grounded in a repository.
   // Selected/bound agent (OXA app-agent-selector + Workbench chat↔agent binding) —
   // the publicId (`agt_…`) of the agent chosen in the composer (or threaded
   // from the Ask page's `?agent=<publicId>` URL param), or null/omitted for the
   // default (generic chat) agent. When present, this turn is BOUND to that
-  // agent: its instructions ride the system prompt, its equipped skills + MCP
-  // servers extend the toolset, and a code agent (agentType === "code") forces
-  // code mode ON. A code agent is also the AUTHORITATIVE gate for code mode:
-  // only a code agent may bind the sandbox + code tools, so a `code` payload
-  // sent alongside a non-code agent is ignored server-side (see the code-mode
-  // branch below). Absent `agentId`, every downstream value is untouched
+  // agent: its instructions ride the system prompt and its equipped MCP servers
+  // extend the toolset. Absent `agentId`, every downstream value is untouched
   // (byte-for-byte the pre-binding behavior).
   agentId: z.string().min(1).max(64).nullable().default(null),
-  // Pinned chat context (org/repo + environment) the user stuck to this
-  // conversation via the composer's context bar. Unlike `code` this is
-  // LIGHTWEIGHT — no sandbox — it just tells the agent which repository /
-  // environment the user means so it doesn't have to ask. Rides as a per-turn
-  // user context message (ADR-021 §2), never the cached system prompt. The
-  // composer only sends it when pinned AND not in code mode (code already
-  // conveys the same target), so the two never double up.
-  pinnedContext: z
-    .object({
-      repo: z
-        .object({
-          connectionId: z.string().min(1),
-          owner: z.string().min(1).max(256),
-          name: z.string().min(1).max(256),
-          defaultBranch: z.string().min(1).max(256).nullable().default(null),
-        })
-        .nullable()
-        .default(null),
-      environment: z
-        .object({
-          id: z.string().min(1),
-          name: z.string().min(1).max(256),
-        })
-        .nullable()
-        .default(null),
-    })
-    .nullable()
-    .default(null),
+  // ADR-043: the pinned repo/environment chat context (`pinnedContext`) went
+  // with the code target it named.
 });
 
 // Maximum number of prior messages to include in the context window. Keeps
@@ -331,18 +240,12 @@ export async function POST(request: NextRequest): Promise<Response> {
     tier,
     model,
     effort,
-    generate,
-    mediaTier,
-    mediaModel,
     newConversation,
     activeServerIds,
-    skills: pinnedSkillSlugs,
     agentId,
     pageContext,
     attachments,
     budget: requestBudget,
-    code: codeModeRaw,
-    pinnedContext,
   } = parsed.data;
 
   let tenant: Awaited<ReturnType<typeof resolveOrg>>;
@@ -428,53 +331,6 @@ export async function POST(request: NextRequest): Promise<Response> {
   // a stray `effort` for a non-reasoning model is dropped rather than forwarded.
   const turnEffort =
     effort && supportsReasoning(modelIdOf(turnModel)) ? effort : undefined;
-
-  // ── Media-generation branch ───────────────────────────────────────────────
-  // This turn generates an image/video instead of running the text agent when
-  // media intent is present. There is no manual "Generate image / video"
-  // toggle in the app — an explicit `generate` (from API clients) still wins,
-  // but otherwise we INFER intent from the prompt ("make me a logo", "create a
-  // short video of waves"). inferMediaIntent is conservative and never fires on
-  // attachment or code-mode turns, so ordinary chat is unaffected. Resolve the
-  // media model (explicit per-turn → effective workspace/user default → tier
-  // default inside streamMediaGeneration).
-  const effectiveGenerate =
-    generate ??
-    inferMediaIntent(content, {
-      hasAttachments: attachments.length > 0,
-      isCodeMode: codeModeRaw != null,
-    });
-  if (effectiveGenerate) {
-    let resolvedMediaModel = mediaModel;
-    if (!resolvedMediaModel) {
-      try {
-        const mediaDefaults = await loadEffectiveModelDefaults({
-          userId: session.user.id,
-          workspaceId: workspace.id,
-        });
-        resolvedMediaModel =
-          effectiveGenerate === "image"
-            ? (mediaDefaults.image.model ?? null)
-            : (mediaDefaults.video.model ?? null);
-      } catch {
-        // Fall through to tier default inside streamMediaGeneration.
-      }
-    }
-    return streamMediaGeneration({
-      kind: effectiveGenerate,
-      prompt: content,
-      mediaModel: resolvedMediaModel,
-      mediaTier: mediaTier ?? "basic",
-      userId: session.user.id,
-      conversationId,
-      messageId: parentMessageId,
-      telemetry: {
-        orgId: tenant.id,
-        workspaceId: workspace.id,
-        executionStepId: parentMessageId ?? randomUUID(),
-      },
-    });
-  }
 
   // ── Attachments (Phase 1 images + Phase 2 video) ──────────────────────────
   // Resolve the current turn's attachment publicIds org-scoped (ownership +
@@ -716,11 +572,6 @@ export async function POST(request: NextRequest): Promise<Response> {
       // the engine throws instead, so we reproduce that behaviour explicitly.
       let translator: ReturnType<typeof createTurnTranslator> | null = null;
 
-      // Code mode: a durable sandbox workspace bound to the selected repo for
-      // this turn. Declared here so the finally can always tear the session
-      // down. Null unless the turn is a code-mode turn with a configured driver.
-      let codeWorkspace: ModalSandboxWorkspace | null = null;
-
       // Persist the assistant reply so it survives a refresh and is included in
       // the next turn's history. Best-effort: a DB failure here must
       // NOT corrupt the SSE response the client already consumed, and must not
@@ -822,66 +673,11 @@ export async function POST(request: NextRequest): Promise<Response> {
           clientIp,
         };
 
-        // ── Conversation code binding (locked coding target) ────────────────
-        // The repo + environment + agent chosen on a conversation's FIRST
-        // code-mode turn is persisted on the conversation row and locked for
-        // its lifetime (claimed in the code-mode block below). Resolve this
-        // turn against the stored binding FIRST so a stale client or a
-        // mid-conversation picker change can never retarget the sandbox —
-        // matching the CLI, where the repo is the launch cwd, pinned for the
-        // whole session. Fail-open: a read failure degrades to unbound
-        // (request values stand), never a dead turn.
-        let storedCodeBinding: ReturnType<typeof parseStoredCodeBinding> = null;
-        if (conversationId) {
-          try {
-            const [conversationRow] = await runInTenantScope(
-              { orgId: tenant.id, workspaceId: workspace.id },
-              () =>
-                withTenantDb((tx) =>
-                  tx
-                    .select({ codeBinding: schema.conversations.codeBinding })
-                    .from(schema.conversations)
-                    .where(
-                      and(
-                        eq(schema.conversations.id, conversationId),
-                        eq(schema.conversations.orgId, tenant.id),
-                        eq(schema.conversations.workspaceId, workspace.id),
-                      ),
-                    )
-                    .limit(1),
-                ),
-            );
-            storedCodeBinding = parseStoredCodeBinding(
-              conversationRow?.codeBinding,
-            );
-          } catch (err) {
-            logger.warn(
-              { err: String(err), conversationId, requestId },
-              "[chat/stream] code-binding read failed — running turn unbound",
-            );
-          }
-        }
-        const bindingResolution = resolveCodeBinding({
-          stored: storedCodeBinding,
-          requestedAgentId: agentId,
-          requestedCode: codeModeRaw,
-        });
-        const effectiveAgentId = bindingResolution.agentId;
-        for (const message of bindingResolution.warnings) {
-          emit({ type: "warning", message, code: "code_binding_locked" });
-        }
-
         // ── Optional agent binding (launch a published agent into this session) ─
         // When the request carries an `agentId`, load that agent's definition ONCE
         // and merge its config into THIS turn BEFORE tools + prompt are assembled:
         //   • instructions → appended to the system-prompt baseline (below),
-        //   • skill agentTools → unioned into the pinned-skill slugs,
-        //   • mcp_server agentTools → unioned into the MCP server allowlist,
-        //   • agentType "code"/"coding" → the ONLY thing that can put a turn
-        //     in coding flow: `useCodeModePrompt` and the authoritative
-        //     `codeMode` gate below both derive from `agentIsCode`. A `code`
-        //     payload without a code agent is dropped regardless of what the
-        //     client sent.
+        //   • mcp_server agentTools → unioned into the MCP server allowlist.
         // Absent an agent, every effective value is exactly the request value.
         //
         // FAIL-OPEN: a failed/denied agent.definition.get must NEVER break the
@@ -890,17 +686,8 @@ export async function POST(request: NextRequest): Promise<Response> {
         // the handler reads through withTenantDb. { surface: "agent" } — the
         // contract's `surfaces` list is ["api","mcp","agent"], not "app".
         let boundInstructions = "";
-        let effectiveSkillSlugs = pinnedSkillSlugs;
         let effectiveServerIds = activeServerIds;
-        let agentIsCode = false;
-        // `useCodeModePrompt` drives the code-mode SYSTEM PROMPT; the sandbox
-        // is still only bound when `codeMode` (the authoritative value
-        // computed below) carries a repo/env. Both derive from the AGENT
-        // DEFINITION: without a code agent there is no coding flow, so the
-        // prompt starts false and only `binding.codeMode` (= is-code-agent)
-        // can raise it. A coding agent with no repo degrades to the code-mode
-        // prompt with no filesystem tools (see the code-mode block below).
-        let useCodeModePrompt = false;
+        const effectiveAgentId = agentId;
         if (effectiveAgentId) {
           try {
             const def = await runInTenantScope(
@@ -910,18 +697,12 @@ export async function POST(request: NextRequest): Promise<Response> {
                   surface: "agent",
                 }),
             );
-            agentIsCode = isCodeAgentType(
-              (def as AgentBindingDefinition).agentType,
-            );
             const binding = applyAgentBinding({
               def: def as AgentBindingDefinition,
-              skills: pinnedSkillSlugs,
               serverAllowlist: activeServerIds,
             });
             boundInstructions = binding.instructions;
-            effectiveSkillSlugs = binding.skills;
             effectiveServerIds = binding.serverAllowlist;
-            useCodeModePrompt = binding.codeMode;
           } catch (err) {
             logger.warn(
               { err, agentId: effectiveAgentId, requestId },
@@ -930,28 +711,9 @@ export async function POST(request: NextRequest): Promise<Response> {
           }
         }
 
-        // ── Authoritative code-mode gate (agent-definition–driven) ──────────
-        // Coding flow exists ONLY when the bound agent's definition marks it
-        // a code agent. A `code` payload without one is dropped, and a stored
-        // binding whose agent no longer resolves as code is likewise inert.
-        // Hoisted ABOVE materializeTools so the capability tool list can
-        // exclude the mutation paths that overlap the engine's repo-bound
-        // workspace toolset.
-        const codeMode = agentIsCode ? bindingResolution.code : null;
-        if (!agentIsCode && bindingResolution.code) {
-          emit({
-            type: "warning",
-            message:
-              "Repository tools are only available to coding agents — this turn runs without them.",
-            code: "code_mode_requires_code_agent",
-          });
-        }
-
         const [
           { tools: agentTools, nameMap: toolNameMap, mutatingToolNames },
           promptConfig,
-          skillIndex,
-          pinnedSkillBodies,
           recalledMemory,
           turnBudgetPolicy,
           workspaceBudgetGovernance,
@@ -960,18 +722,6 @@ export async function POST(request: NextRequest): Promise<Response> {
           () =>
             Promise.all([
               materializeTools(capCtx, {
-                // Code mode binds the engine's repo-bound workspace toolset
-                // (read_file/edit_file/bash …) — the ONLY sanctioned way for
-                // the model to touch the repository. Exclude the capability
-                // tools that overlap it: execute_code runs in a separate
-                // ephemeral sandbox (the model would "verify" its edits in a
-                // box that doesn't contain them) and edit_repo_file spawns a
-                // nested clone-edit-PR loop. (The durable sandbox session
-                // family is Workbench-only and never materialized — see
-                // WORKBENCH_ONLY_SANDBOX_CAPS in materialize-tools.ts.)
-                excludeCapabilities: codeMode
-                  ? new Set(["execute_code", "edit_repo_file"])
-                  : undefined,
                 // Effective allowlist = request activeServerIds ∪ any mcp_server
                 // refs from the bound agent (unchanged when no agent is bound).
                 serverAllowlist:
@@ -990,66 +740,6 @@ export async function POST(request: NextRequest): Promise<Response> {
                 },
               }),
               loadWorkspacePromptConfig(workspace.id).catch(() => ({})),
-              // Skill index for progressive disclosure: fetch enabled skills
-              // so the prompt shows available slugs (~15 tokens each).
-              withTenantDb((tx) =>
-                tx
-                  .select({
-                    slug: schema.skills.slug,
-                    description: schema.skills.description,
-                  })
-                  .from(schema.skills)
-                  .where(
-                    and(
-                      eq(schema.skills.orgId, tenant.id),
-                      eq(schema.skills.workspaceId, workspace.id),
-                      eq(schema.skills.enabled, true),
-                      isNull(schema.skills.deletedAt),
-                    ),
-                  ),
-              )
-                .then((rows): SkillIndexEntry[] =>
-                  rows.map((r) => ({
-                    slug: r.slug,
-                    description: r.description ?? "",
-                  })),
-                )
-                .catch((): SkillIndexEntry[] => []),
-              // Session-level pinned skills: resolve bodies for requested slugs.
-              // Only loads enabled, non-deleted skills the user explicitly pinned
-              // (plus any skill refs contributed by the bound agent — union
-              // computed above; identical to pinnedSkillSlugs when unbound).
-              effectiveSkillSlugs.length > 0
-                ? withTenantDb((tx) =>
-                    tx
-                      .select({
-                        slug: schema.skills.slug,
-                        body: schema.skillVersions.body,
-                      })
-                      .from(schema.skills)
-                      .innerJoin(
-                        schema.skillVersions,
-                        eq(
-                          schema.skillVersions.id,
-                          schema.skills.activeVersionId,
-                        ),
-                      )
-                      .where(
-                        and(
-                          eq(schema.skills.orgId, tenant.id),
-                          eq(schema.skills.workspaceId, workspace.id),
-                          eq(schema.skills.enabled, true),
-                          isNull(schema.skills.deletedAt),
-                          sql`${schema.skills.slug} = ANY(${effectiveSkillSlugs})`,
-                        ),
-                      ),
-                  )
-                    .then(
-                      (rows): Array<{ slug: string; body: string }> =>
-                        rows.map((r) => ({ slug: r.slug, body: r.body })),
-                    )
-                    .catch((): Array<{ slug: string; body: string }> => [])
-                : Promise.resolve([] as Array<{ slug: string; body: string }>),
               // Deterministic memory recall for this turn: query workspace memory
               // with the latest user text so relevant prior lessons are injected
               // BEFORE the model runs — the agent never re-discovers something it
@@ -1151,72 +841,11 @@ export async function POST(request: NextRequest): Promise<Response> {
         // and typing never bust the Anthropic prompt-cache breakpoint on the
         // byte-stable system prefix (docs/adr/ADR-021 §2). This mirrors the
         // code-mode / pinned / references context messages below.
-        //
-        // When a fillableForm is present, also register a request-scoped
-        // `page_form_fill` tool that routes through the kernel.invoke() boundary
-        // (IAM + metering).
         const pageContextMessage = buildPageContextMessage(pageContext);
-        let pageFormFillTool: ToolSet | undefined;
 
-        if (pageContext?.fillableForm) {
-          const { route: pcRoute, entitySummary: pcEntitySummary } =
-            pageContext;
-          const { fields: pcFields } = pageContext.fillableForm;
-          pageFormFillTool = {
-            page_form_fill: tool({
-              description:
-                "Fill or suggest values for the page form the user is currently viewing. " +
-                "Call this when the user asks to fill, update, or change the form. " +
-                "Pass a clear natural-language instruction describing the desired changes. " +
-                "If the request is ambiguous, ask a clarifying question instead.",
-              inputSchema: z.object({
-                instruction: z
-                  .string()
-                  .min(1)
-                  .describe(
-                    "Natural-language instruction describing the desired form changes.",
-                  ),
-              }),
-              execute: async (input: { instruction: string }) => {
-                const { instruction } = input;
-                const rawResult = await invoke(
-                  "fill_form",
-                  {
-                    route: pcRoute,
-                    entitySummary: pcEntitySummary,
-                    instruction,
-                    fields: pcFields.map((f) => ({
-                      name: f.name,
-                      label: f.label,
-                      type: f.type,
-                      current: f.current,
-                      options: f.options,
-                      required: f.required,
-                    })),
-                  },
-                  capCtx,
-                  { surface: "agent" },
-                );
-                return formFill.output.parse(rawResult);
-              },
-            }),
-          };
-        }
-
-        // Merge the page_form_fill tool (when present) alongside the
-        // materialized agent tools. The toolNameMap does not need an entry for
-        // page_form_fill — translate-stream.ts already falls back to
-        // toolNameMap[name] ?? name so it will display as "page_form_fill".
-        const allTools = pageFormFillTool
-          ? { ...agentTools, ...pageFormFillTool }
-          : agentTools;
-
-        // Run the SAME engine the CLI uses — one engine owning retry,
-        // compaction and loop detection — instead of a hand-rolled streamText
-        // loop. No `workspace` ⇒ no filesystem tools; the
-        // materialized capability ToolSet is injected via `extraTools`. The raw
-        // AI-SDK parts are forwarded to the stateful SSE translator via
-        // `onStreamPart` so the client wire protocol is byte-identical.
+        // The raw AI-SDK parts are forwarded to the stateful SSE translator via
+        // the turn loop's stream-part hook so the client wire protocol is
+        // stable.
         translator = createTurnTranslator({
           requestId,
           toolNameMap,
@@ -1224,10 +853,6 @@ export async function POST(request: NextRequest): Promise<Response> {
           workspaceSlug,
           emit,
         });
-
-        // Metered AI port (@oxagen/ai). Surface "app" so token usage/credits
-        // attribute to the app surface, matching the pre-unification telemetry.
-        const ai = createPlatformAgentAi(capCtx, capCtx.messageId, "app");
 
         const modelId = modelIdOf(turnModel);
 
@@ -1320,120 +945,6 @@ export async function POST(request: NextRequest): Promise<Response> {
           },
         );
 
-        // ── Code mode: bind the durable sandbox workspace ─────────────────────
-        // When this conversation's coding target is active (`codeMode` — the
-        // code agent + effective repo/env resolved through the conversation
-        // code binding and the authoritative agent gate above
-        // materializeTools), run the coding engine against a sandbox with the
-        // repo cloned. The per-turn repo/env context rides as a USER message
-        // (ADR-021 §2), never the cached system prompt.
-        let codeContextMessage: ModelMessage | undefined;
-        if (codeMode) {
-          const branch = codeMode.defaultBranch ?? "main";
-          const sandboxOn = isSandboxAvailable();
-          codeContextMessage = {
-            role: "user",
-            content:
-              "## Code mode context\n" +
-              `Repository: ${codeMode.owner}/${codeMode.name} (branch ${branch})\n` +
-              // Show the human environment label, not the opaque env_… id.
-              `Environment: ${codeMode.environmentName ?? codeMode.environmentId}\n` +
-              (sandboxOn
-                ? "A sandbox with this repository checked out is bound to this turn — use the file and bash tools to read, edit, build, and test."
-                : "No code sandbox is configured on this deployment, so repository tools are unavailable this turn — give read-only guidance and say so."),
-          };
-          if (sandboxOn) {
-            const token = await runInTenantScope(
-              { orgId: tenant.id, workspaceId: workspace.id },
-              () => resolveGitHubToken(capCtx),
-            ).catch((err) => {
-              // Best-effort: the sandbox still boots without a token (private
-              // repos just fail to clone downstream). Log so a missing token is
-              // diagnosable rather than a silent, confusing clone failure.
-              logger.warn(
-                { err: String(err), requestId },
-                "[chat/stream] GitHub token resolution failed — sandbox will run unauthenticated",
-              );
-              return undefined;
-            });
-            // First code turn of this conversation: claim the binding
-            // atomically (WHERE code_binding IS NULL — a concurrent first
-            // turn can never overwrite a winner). Fire-and-forget + fail-open:
-            // a claim failure only means the next turn re-attempts; the turn
-            // itself proceeds.
-            if (conversationId && !storedCodeBinding && effectiveAgentId) {
-              const bindingToClaim = toStoredCodeBinding(
-                codeMode,
-                effectiveAgentId,
-              );
-              runInTenantScope(
-                { orgId: tenant.id, workspaceId: workspace.id },
-                () =>
-                  withTenantDb((tx) =>
-                    tx
-                      .update(schema.conversations)
-                      .set({ codeBinding: bindingToClaim })
-                      .where(
-                        and(
-                          eq(schema.conversations.id, conversationId),
-                          isNull(schema.conversations.codeBinding),
-                        ),
-                      ),
-                  ),
-              ).catch((err) => {
-                logger.warn(
-                  { err: String(err), conversationId, requestId },
-                  "[chat/stream] code-binding claim failed — next turn retries",
-                );
-              });
-            }
-            codeWorkspace = new ModalSandboxWorkspace({
-              ctx: capCtx,
-              // Stable per-(workspace, conversation, connection, REPO) key so
-              // every turn of one conversation reuses ONE warm sandbox.
-              // owner/name is part of the key: a different repo must never
-              // silently reuse a previous repo's warm clone (the conversation
-              // binding already makes a mid-conversation switch impossible —
-              // this is defense in depth).
-              sessionKey: `chat:${workspace.id}:${conversationId ?? requestId}:${codeMode.connectionId}:${codeMode.owner}/${codeMode.name}`,
-              environmentId: codeMode.environmentId,
-              repo: {
-                owner: codeMode.owner,
-                repo: codeMode.name,
-                ref: branch,
-                token,
-              },
-            });
-          }
-        }
-
-        // Pinned chat context — the lightweight (no-sandbox) sibling of code
-        // mode. Only present when the user pinned a repo/env AND is not in code
-        // mode (the composer enforces that), so it never duplicates the
-        // code-mode message. Rides as a per-turn USER message (ADR-021 §2).
-        let pinnedContextMessage: ModelMessage | undefined;
-        if (
-          !codeMode &&
-          pinnedContext &&
-          (pinnedContext.repo || pinnedContext.environment)
-        ) {
-          const lines: string[] = ["## Pinned chat context"];
-          if (pinnedContext.repo) {
-            const branch =
-              pinnedContext.repo.defaultBranch ?? "the default branch";
-            lines.push(
-              `Repository: ${pinnedContext.repo.owner}/${pinnedContext.repo.name} (default branch ${branch})`,
-            );
-          }
-          if (pinnedContext.environment) {
-            lines.push(`Environment: ${pinnedContext.environment.name}`);
-          }
-          lines.push(
-            "The user pinned this to the conversation — treat it as the repository/environment they mean for repository, pull-request, diff, and CI requests unless they say otherwise. Do not ask which repository they mean.",
-          );
-          pinnedContextMessage = { role: "user", content: lines.join("\n") };
-        }
-
         // ── @-mention references ──────────────────────────────────────────────
         // The user message may embed [:type|:slug|:location|:label] tokens
         // inserted by the composer's @-mention picker. Hydrate each unique
@@ -1497,13 +1008,10 @@ export async function POST(request: NextRequest): Promise<Response> {
                 `  properties: ${json.length > 600 ? `${json.slice(0, 600)}…` : json}`,
               );
             }
-            // A repository mention doubles as repo context when nothing is
-            // pinned and code mode is off — same guidance the pinned-context
-            // message gives, sourced from the mention's hydrated coordinates.
+            // A repository mention carries its coordinates as context — the
+            // agent can name the repo it was asked about without a lookup.
             if (
               mention.type === "repository" &&
-              !codeMode &&
-              !pinnedContext?.repo &&
               row &&
               typeof row.properties["owner"] === "string" &&
               typeof row.properties["name"] === "string"
@@ -1547,106 +1055,93 @@ export async function POST(request: NextRequest): Promise<Response> {
           }
         }
 
-        const result = await executeTurn("chat", {
-          ai,
-          instruction: content,
-          ...(codeWorkspace ? { workspace: codeWorkspace } : {}),
-          // Current-turn image attachments (Phase 1) — resolved + fetched
-          // above, org-scoped. Omitted entirely for a no-attachment turn so
-          // the engine's plain-string content shape is unchanged (byte-
-          // identical to before this feature for every existing caller).
-          ...(imageAttachments.length > 0 ? { images: imageAttachments } : {}),
-          // Current-turn video attachments (Phase 2) — only ever populated
-          // when decideAttachmentRouting sent the turn down the video-capable
-          // path (otherwise videos arrive as keyframe images above). Passed as
-          // AI-SDK file parts by the engine.
-          ...(videoAttachments.length > 0 ? { videos: videoAttachments } : {}),
-          // Context messages, then the recalled-memory message LAST — the
-          // exact position the engine's MemoryProvider used to inject it:
-          // after the cached system prefix and every synthetic context block,
-          // immediately before the instruction. The provider-shaped adapter is
-          // gone (#1236's app-surface twin): no engine makes a mid-turn
-          // recallContext() callback any more.
-          history: [
-            ...historyForEngine,
-            ...([
-              codeContextMessage,
-              pinnedContextMessage,
-              referencesContextMessage,
-              pageContextMessage,
-              recalledMemory.message,
-            ].filter(Boolean) as ModelMessage[]),
-          ],
-          // Prompt layering: base (chat OR coding) → bound agent instructions.
-          // The coding CONTRACT (codeModeSystemPrompt) must always sit ABOVE the
-          // customer's agent instructions, so the bound instructions are
-          // appended AFTER the base prompt, never merged into it.
-          // `boundInstructions` is "" for an unbound turn ⇒ byte-identical
-          // baseline. `useCodeModePrompt` is true when the request enabled code
-          // mode OR the bound agent is a coding agent. Volatile page context is
-          // NOT folded in here — it rides as a per-turn user message
-          // (pageContextMessage) so the cached prefix stays byte-stable.
-          system: resolvePrompt({
-            key: "chat.system",
-            baseline:
-              (useCodeModePrompt
-                ? codeModeSystemPrompt({
-                    orgSlug,
-                    workspaceSlug,
-                    orgName: tenant.name,
-                    workspaceName: workspace.name,
-                    skillIndex,
-                    pinnedSkillBodies,
-                  })
-                : chatSystemPrompt({
-                    orgSlug,
-                    workspaceSlug,
-                    orgName: tenant.name,
-                    workspaceName: workspace.name,
-                    skillIndex,
-                    pinnedSkillBodies,
-                  })) +
-              // Fold the bound agent's own instructions into the system prompt
-              // so selecting an agent actually shapes its behavior, not just
-              // the UI. `boundInstructions` is "" for an unbound turn ⇒
-              // byte-identical baseline. Appended last so it can refine the
-              // baseline.
-              (boundInstructions
-                ? `\n\n---\n\n## Agent instructions\n\n${boundInstructions}`
-                : ""),
-            config: promptConfig,
-          }),
-          model: modelId,
-          ...(turnEffort ? { effort: turnEffort } : {}),
-          // Runaway backstop for the agentic tool loop, NOT a functional limit.
-          // Loop ends naturally on the model's final answer.
-          maxSteps: DEFAULT_MAX_AGENT_STEPS,
-          // Resilience: allow a small number of transient retries so a single
-          // 429/5xx from the gateway does not kill the whole turn, and re-enable
-          // the engine's context-overflow compaction retry (engine.ts:372) so an
-          // overflow triggers one compact-and-retry instead of a hard error
-          // event. The translator only forwards a step's parts once it finishes,
-          // so a retried step does not double-stream to the client.
-          maxRetries: CHAT_MAX_RETRIES,
-          maxOverflowRetries: CHAT_MAX_OVERFLOW_RETRIES,
-          extraTools: allTools,
-          // Mutating capability aliases run behind the engine's exclusive
-          // dispatch barrier (agent-engine v2 Phase 0) instead of the AI SDK's
-          // unbounded parallel execution.
-          mutatingToolNames,
-          // NO `trace`: createClickHouseTraceStore writes up to 200 chars of the
-          // raw instruction into ClickHouse, violating the chat surface's
-          // hash-only prompt policy (C5). Per-step usage/credits still flow
-          // through the metered AI port's streamAgentReply.
-          signal: request.signal,
-          onStreamPart: (part) => translator?.onPart(part),
-          // Per-turn dollar budget (OXA — turn-budget). undefined when the
-          // resolved policy is off — an unbudgeted turn runs exactly as
-          // before this feature.
-          budgetGuard,
+        // ── The system prompt ──────────────────────────────────────────────
+        // `@oxagen/agent` owns the governance agent's baseline: the prompt and
+        // the tool surface it describes are one artifact and must change
+        // together (there is no second copy in @oxagen/ai's registry). A bound
+        // agent's own instructions ride BELOW it in a labelled section, so the
+        // governance contract always sits above customer text, and
+        // `resolvePrompt` then appends the workspace's additional
+        // instructions. `chat.system` is append-only — a workspace can add to
+        // this prompt, never replace it.
+        //
+        // Everything interpolated here is stable for the conversation, so the
+        // Anthropic prompt-cache breakpoint on the system prefix keeps hitting;
+        // volatile per-turn context rides as USER messages (ADR-021 §2).
+        const systemPrompt = resolvePrompt({
+          key: "chat.system",
+          baseline:
+            buildChatSystemPrompt({
+              orgSlug,
+              workspaceSlug,
+              orgName: tenant.name,
+              workspaceName: workspace.name,
+            }) +
+            (boundInstructions
+              ? `\n\n---\n\n## Agent instructions\n\n${boundInstructions}`
+              : ""),
+          config: promptConfig,
         });
 
-        const { assistantText, persistedBlocks } = translator.finish();
+        // ── The governed turn ──────────────────────────────────────────────
+        // ADR-043 §2: one thin, bounded, metered in-process loop over
+        // @oxagen/ai with tools materialised from capability contracts. It
+        // hands back the raw AI-SDK stream; `translateAgentStream` is the only
+        // place those parts become this surface's SSE wire format. Tool
+        // approval/consent pauses are already wired through
+        // `materializeTools`' hooks above — the loop just keeps streaming
+        // across them.
+        const turn = await runGovernedTurn({
+          telemetry: {
+            orgId: tenant.id,
+            workspaceId: workspace.id,
+            surface: "app",
+            messageId: capCtx.messageId,
+          },
+          model: turnModel,
+          system: systemPrompt,
+          history: historyForEngine,
+          contextMessages: [
+            recalledMemory.message,
+            pageContextMessage,
+            referencesContextMessage,
+          ],
+          instruction: content,
+          attachments: [
+            ...imageAttachments.map((a) => ({
+              kind: "image" as const,
+              data: new Uint8Array(a.data),
+              mediaType: a.mediaType,
+            })),
+            ...videoAttachments.map((a) => ({
+              kind: "file" as const,
+              data: new Uint8Array(a.data),
+              mediaType: a.mediaType,
+            })),
+          ],
+          tools: agentTools,
+          mutatingToolNames,
+          effort: turnEffort ?? null,
+          ...(budgetGuard !== undefined ? { budgetGuard } : {}),
+          abortSignal: request.signal,
+        });
+
+        const {
+          assistantText,
+          persistedBlocks,
+          usage: usageFromStream,
+        } = await translateAgentStream({
+          fullStream: turn.fullStream,
+          requestId,
+          toolNameMap,
+          orgSlug,
+          workspaceSlug,
+          modelId,
+          emit,
+          // The translator is owned by the enclosing scope so the catch below
+          // can still flush and persist a partial turn after a mid-stream throw.
+          translator,
+        });
 
         // ── Per-turn next-step suggestions ─────────────────────────────────
         // Kick off conversation-aware suggestion generation NOW — the moment the
@@ -1666,8 +1161,6 @@ export async function POST(request: NextRequest): Promise<Response> {
             // of generic next steps. Both values already exist for memory
             // capture above; this adds no extra work to the turn.
             toolActivity: extractToolActivity(persistedBlocks),
-            changedFiles: result.changedFiles,
-            codeMode: useCodeModePrompt,
             orgId: tenant.id,
             workspaceId: workspace.id,
             messageId: requestId,
@@ -1702,12 +1195,14 @@ export async function POST(request: NextRequest): Promise<Response> {
           ];
         }
 
-        // ONE aggregated usage event from the engine's summed per-step usage
-        // (each step's own `finish` is suppressed by the translator). Credits are
-        // charged per step inside streamAgentReply's onFinish — the ledger fans
-        // out to one row per step sharing this turn's messageId, summing to the
-        // same total the client sees here (C4).
-        const emittedUsage = emitUsageEvent(emit, result.usage, modelId);
+        // ONE aggregated usage event for the turn. `translateAgentStream`
+        // already emitted it from the stream's `finish` part (whose `totalUsage`
+        // sums every step of the tool loop); we reuse those exact numbers for
+        // the persisted receipt so the live event and the stored receipt can
+        // never disagree. A stream that carried no `finish` part (aborted /
+        // errored) falls back to the loop's own aggregated usage.
+        const emittedUsage =
+          usageFromStream ?? emitUsageEvent(emit, await turn.usage, modelId);
 
         await persistAssistantTurn(assistantText, blocksToPersist, {
           model: modelId,
@@ -1765,26 +1260,10 @@ export async function POST(request: NextRequest): Promise<Response> {
           ...(code !== undefined ? { code } : {}),
         });
       } finally {
-        // Release the code-mode sandbox back to 'idle' WITHOUT tearing it down,
-        // so the next turn of this conversation reconnects to the SAME warm
-        // sandbox and its working tree (including uncommitted edits). The
-        // sandbox-reaper drops it ~2-3 min after the last turn — recovering any
-        // uncommitted work to a recovery branch first (spec:
-        // sandbox-session-lifecycle). Must run whether the turn succeeded or threw.
-        //
-        // Guarded: a throwing release() must never skip the [DONE] sentinel and
-        // the close() below, or the client's EventSource reader hangs until its
-        // own timeout on every failed teardown.
-        if (codeWorkspace) {
-          try {
-            await codeWorkspace.release();
-          } catch (releaseErr) {
-            logger.warn(
-              { err: String(releaseErr), requestId },
-              "[chat/stream] sandbox release failed — reaper will collect it",
-            );
-          }
-        }
+        // Terminate the SSE response whether the turn succeeded or threw: the
+        // client's reader waits on the [DONE] sentinel and hangs until its own
+        // timeout without it. There is nothing else to release — ADR-043 left
+        // the turn with no sandbox, no session and no external process.
         if (!closed) {
           try {
             controller.enqueue(encoder.encode("event: done\ndata: [DONE]\n\n"));

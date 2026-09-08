@@ -118,15 +118,13 @@ export interface InteractiveLoginResult {
 
 /**
  * UI-agnostic core of the browser-based PKCE login flow: runs `browserLogin`
- * and persists the resulting session via `writeConfig` — the exact same
- * persistence path `oxagen login` uses. Shared by the one-shot CLI path
- * (`handleLogin` below) and the REPL's Ink-native `/login` panel (see
- * `repl/login-panel.tsx`), so there is exactly one implementation of "run
- * browser login and persist the session."
+ * and persists the resulting session via `writeConfig`. `handleLogin` below is
+ * the one-shot CLI path over it, so there is exactly one implementation of
+ * "run browser login and persist the session."
  *
  * `onStatus`/`signal` are passed straight through to `browserLogin` — see its
- * docs for why they exist (an Ink-mounted caller can't touch process.stdout,
- * and needs to be able to cancel a pending wait on Esc).
+ * docs for why they exist (a caller that owns the terminal can't write to
+ * process.stdout, and needs to be able to cancel a pending wait).
  */
 export async function runBrowserLogin(
   onStatus?: (line: string) => void,

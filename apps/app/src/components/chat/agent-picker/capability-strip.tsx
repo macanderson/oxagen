@@ -1,15 +1,19 @@
 "use client";
 import * as React from "react";
-import { Bot, Puzzle, Server, Sparkles, Wrench } from "lucide-react";
+import { Puzzle, Server, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AgentToolRef } from "./agent-picker-types";
 
 /**
- * capability-strip.tsx — a compact, human-readable summary of an agent's
- * configured tools/skills for a picker row. Renders a "3 skills · 2 MCP ·
- * 5 tools" count summary plus up to a few named chips (prettified refs) with a
- * "+N" overflow, so a user can tell at a glance what an agent can do without
- * ever seeing a raw slug or UUID.
+ * capability-strip.tsx — a compact, human-readable summary of an agent's tool
+ * allowlist for a picker row. Renders a "2 MCP · 5 tools" count summary plus up
+ * to a few named chips (prettified refs) with a "+N" overflow, so a user can
+ * tell at a glance what an agent may call without ever seeing a raw slug or
+ * UUID.
+ *
+ * `AgentToolRef.type` is an open string (ADR-043 retired the `skill` and
+ * `agent` kinds but a legacy definition may still carry one), so an unknown
+ * kind falls back to the generic tool icon and noun rather than crashing.
  */
 
 /** Max named chips shown before collapsing the rest into a "+N" overflow chip. */
@@ -20,37 +24,35 @@ export const MAX_NAMED_CHIPS_V2 = 3;
 
 type ToolKind = AgentToolRef["type"];
 
-// Display order — skills and MCP servers are the most meaningful to a human
-// scanning agents, so they lead; bare functions and sub-agents trail.
-const KIND_ORDER: readonly ToolKind[] = [
-  "skill",
-  "mcp_server",
-  "function",
-  "agent",
-];
+// Display order — MCP servers lead (a whole server is the coarser, more
+// meaningful unit when scanning agents); individual capabilities trail. An
+// unrecognised kind sorts last.
+const KIND_ORDER: readonly ToolKind[] = ["mcp_server", "function"];
 
-const KIND_ICON: Record<
-  ToolKind,
-  React.ComponentType<{ className?: string }>
-> = {
-  skill: Sparkles,
+/**
+ * Fold an unrecognised kind onto `function`. ADR-043 retired the `skill` and
+ * `agent` kinds, but a legacy agent definition can still carry one; without
+ * this the summary would emit two separate "N tools" segments (one per unknown
+ * kind) for what the user reads as a single bucket.
+ */
+function normalizeKind(kind: ToolKind): ToolKind {
+  return KIND_ORDER.includes(kind) ? kind : "function";
+}
+
+function kindIndex(kind: ToolKind): number {
+  const i = KIND_ORDER.indexOf(normalizeKind(kind));
+  return i === -1 ? KIND_ORDER.length : i;
+}
+
+const KIND_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   mcp_server: Server,
   function: Wrench,
-  agent: Bot,
 };
 
 /** Singular/plural noun for a kind's count in the summary line. */
 function kindNoun(kind: ToolKind, count: number): string {
-  switch (kind) {
-    case "skill":
-      return count === 1 ? "skill" : "skills";
-    case "mcp_server":
-      return "MCP";
-    case "function":
-      return count === 1 ? "tool" : "tools";
-    case "agent":
-      return count === 1 ? "agent" : "agents";
-  }
+  if (kind === "mcp_server") return "MCP";
+  return count === 1 ? "tool" : "tools";
 }
 
 /**
@@ -74,7 +76,7 @@ export function prettifyRef(ref: string): string {
 export interface ToolRefSummary {
   /** Count per kind, in display order; kinds with zero are omitted. */
   counts: Array<{ kind: ToolKind; count: number }>;
-  /** The summary line text, e.g. "3 skills · 2 MCP · 5 tools". */
+  /** The summary line text, e.g. "2 MCP · 5 tools". */
   label: string;
   /** Total number of refs. */
   total: number;
@@ -85,24 +87,22 @@ export function summarizeToolRefs(
   toolRefs: readonly AgentToolRef[],
 ): ToolRefSummary {
   const byKind = new Map<ToolKind, number>();
-  for (const t of toolRefs) byKind.set(t.type, (byKind.get(t.type) ?? 0) + 1);
-  const counts = KIND_ORDER.filter((k) => (byKind.get(k) ?? 0) > 0).map(
-    (kind) => ({
-      kind,
-      count: byKind.get(kind) ?? 0,
-    }),
-  );
+  for (const t of toolRefs) {
+    const kind = normalizeKind(t.type);
+    byKind.set(kind, (byKind.get(kind) ?? 0) + 1);
+  }
+  const counts = [...byKind.entries()]
+    .sort(([a], [b]) => kindIndex(a) - kindIndex(b))
+    .map(([kind, count]) => ({ kind, count }));
   const label = counts
     .map(({ kind, count }) => `${count} ${kindNoun(kind, count)}`)
     .join(" · ");
   return { counts, label, total: toolRefs.length };
 }
 
-/** Ordered list of refs (skills/MCP first) for the named-chip row. */
+/** Ordered list of refs (MCP servers first) for the named-chip row. */
 function orderedRefs(toolRefs: readonly AgentToolRef[]): AgentToolRef[] {
-  return [...toolRefs].sort(
-    (a, b) => KIND_ORDER.indexOf(a.type) - KIND_ORDER.indexOf(b.type),
-  );
+  return [...toolRefs].sort((a, b) => kindIndex(a.type) - kindIndex(b.type));
 }
 
 const UUID_RE =
@@ -133,7 +133,7 @@ export interface CapabilityStripProps {
    * chat_ux_v2: caps named chips at `MAX_NAMED_CHIPS_V2` (vs. the legacy
    * `MAX_NAMED_CHIPS`), never surfaces a chip that looks like a raw id/UUID
    * (folded into the overflow count instead), and labels the overflow chip
-   * "+N skills" rather than a bare "+N". Defaults to false — legacy render
+   * "+N tools" rather than a bare "+N". Defaults to false — legacy render
    * stays byte-identical.
    */
   v2?: boolean;
@@ -164,7 +164,7 @@ export function CapabilityStrip({
         {summary.label}
       </span>
       {named.map((t, i) => {
-        const Icon = KIND_ICON[t.type];
+        const Icon = KIND_ICON[t.type] ?? Wrench;
         return (
           <span
             key={`${t.type}:${t.ref}:${i}`}
@@ -179,7 +179,7 @@ export function CapabilityStrip({
       {overflow > 0 && (
         <span className="inline-flex items-center rounded border border-border bg-muted/50 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
           <Puzzle className="mr-1 size-3 shrink-0" />+{overflow}
-          {v2 ? " skills" : ""}
+          {v2 ? " tools" : ""}
         </span>
       )}
     </div>

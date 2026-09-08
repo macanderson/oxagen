@@ -8,7 +8,7 @@
  *      stale launchers, and copies in other repos' `node_modules/.bin` — so a
  *      published/older build can never shadow the working tree.
  *   2. (Re)installs a tiny shell launcher that execs the repo-local `tsx`
- *      against `apps/cli/src/index.tsx`. No build, no watch, no `dist`: every
+ *      against `apps/cli/src/index.ts`. No build, no watch, no `dist`: every
  *      invocation runs the current source, so you always get the latest version.
  *
  * Why a launcher, not a symlink to `dist/index.js`: the CLI imports workspace
@@ -47,7 +47,7 @@ import {
 } from "./lib/cli-dev";
 
 const ROOT = resolve(process.cwd());
-const SRC_ENTRY = resolve(ROOT, "apps/cli/src/index.tsx");
+const SRC_ENTRY = resolve(ROOT, "apps/cli/src/index.ts");
 const TSX_BIN = resolve(ROOT, "node_modules/.bin/tsx");
 const LOCAL_BIN = resolve(homedir(), ".local/bin");
 

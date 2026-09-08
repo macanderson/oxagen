@@ -24,8 +24,6 @@ import {
   emitMcpRuleAudit,
 } from "./mcp-rbac";
 import { mcpServerToolKey } from "@oxagen/oxagen/iam";
-import { isSandboxAvailable } from "@oxagen/sandbox";
-import { clipMiddle } from "@oxagen/agent-engine";
 import {
   getPluginTypeContributors,
   type ContributedRawTool,
@@ -136,11 +134,9 @@ export interface MaterializeOptions {
    */
   allowlist?: ReadonlySet<string>;
   /**
-   * Capability names to withhold from the model for THIS turn. Used by the
-   * chat route in code mode to drop `execute_code`/`edit_repo_file` when the
-   * engine's repo-bound workspace toolset (read_file/edit_file/bash …) is
-   * present — advertising two overlapping mutation paths makes the model edit
-   * in the wrong sandbox. Tool-LIST filter only (UX layer); the kernel gate
+   * Capability names to withhold from the model for THIS turn. A surface uses
+   * it to narrow the advertised set below the run's allowlist without changing
+   * the run's governance. Tool-LIST filter only (UX layer); the kernel gate
    * stays the security enforcement boundary.
    */
   excludeCapabilities?: Set<string>;
@@ -173,13 +169,13 @@ export interface MaterializeOptions {
 export interface MaterializedTools {
   tools: ToolSet;
   // model-safe tool name → real capability name (e.g.
-  // "agent_code_execute" → "agent.code.execute"). The route translates
+  // "mcp_1f2e_search" → "mcp.1f2e….search"). The route translates
   // tool-call stream events back to the real name for the UI.
   nameMap: Record<string, string>;
   // Model-safe aliases of every tool that must serialize rather than run
-  // beside other calls in the same step (see isMutatingCapability). Passed
-  // through to RunCodingAgentOptions.mutatingToolNames, which the Stella tool
-  // mapping negates into each advertised schema's `read_only` bit.
+  // beside other calls in the same step (see isMutatingCapability). A turn
+  // loop reads this to decide which advertised tools may be dispatched
+  // concurrently and which must run one at a time.
   //
   // Includes external plugin/MCP tools, whose semantics this process cannot
   // know. They used to keep the shared concurrent lane on that same "unknown
@@ -189,9 +185,9 @@ export interface MaterializedTools {
 
 // Provider tool-name constraint enforced by the Vercel AI Gateway (and the
 // OpenAI / Anthropic / Bedrock backends it routes to): a function/tool name
-// must match ^[a-zA-Z0-9_-]{1,128}$. Oxagen capability names are dotted
-// (e.g. "agent.code.execute", "form.fill"), and MCP synthetic keys embed
-// dots too ("mcp.<serverId>.<tool>"), so passing them verbatim makes the
+// must match ^[a-zA-Z0-9_-]{1,128}$. Some Oxagen capability names are dotted
+// (e.g. "agent.memory.recall"), and MCP synthetic keys embed dots too
+// ("mcp.<serverId>.<tool>"), so passing them verbatim makes the
 // gateway reject EVERY tool-bearing turn with a 400
 // ("tools.0.custom.name: String should match pattern ..."). Present the model
 // a sanitized alias instead; the tool's execute() closure still invokes the
@@ -202,83 +198,6 @@ export function toModelToolName(capabilityName: string): string {
   return capabilityName
     .replace(/[^a-zA-Z0-9_-]/g, "_")
     .slice(0, MODEL_TOOL_NAME_MAX);
-}
-
-// The sandbox-execution capability family (verb-first snake_case, ADR-025):
-// the one-shot code runner plus the durable sandbox session tools. All require
-// SANDBOX_ENABLED + a configured driver, so they are gated together.
-const SANDBOX_FAMILY = new Set<string>([
-  "execute_code", // was agent.code.execute
-  "start_sandbox", // was agent.sandbox.start
-  "run_sandbox_command", // was agent.sandbox.exec
-  "snapshot_sandbox", // was agent.sandbox.snapshot
-  "stop_sandbox", // was agent.sandbox.stop
-]);
-
-// Sandbox SESSION + management capabilities are Workbench/human tools, not
-// model tools. The engine's workspace toolset (read_file/edit_file/bash …,
-// packages/agent-engine) is the ONLY sanctioned way for a model to touch a
-// repository: it operates inside the conversation-bound sandbox that actually
-// holds the repo clone. These capabilities instead target self-started
-// sessions with NO repo in them — a model "editing files" through
-// run_sandbox_command writes into an empty sandbox and burns a high-risk
-// approval per call — so they are never materialized as LLM tools. Humans
-// keep them through the Workbench Sandboxes UI
-// (apps/app/src/lib/workbench/sandboxes.ts); api/mcp/cli surfaces are
-// unaffected. The one model-facing survivor of the family is `execute_code`
-// (one-shot ephemeral compute), which the code-mode route additionally
-// excludes via `excludeCapabilities` when the workspace toolset is bound.
-const WORKBENCH_ONLY_SANDBOX_CAPS = new Set<string>([
-  "start_sandbox",
-  "run_sandbox_command",
-  "snapshot_sandbox",
-  "stop_sandbox",
-  "list_sandboxes",
-  "rename_sandbox",
-  "read_sandbox_file",
-  "list_sandbox_files",
-  "list_sandbox_logs",
-]);
-
-// Model-facing output caps for the sandbox-exec capabilities (P0 token flood).
-// execute_code / run_sandbox_command return RAW stdout/stderr; a `cat bigfile`,
-// verbose pytest, or `npm install` would otherwise stream megabytes straight
-// into the model's context window. Mirrors the engine tools' 30k budget, with a
-// tighter cap on the (usually noisier, less load-bearing) stderr stream.
-const EXEC_STDOUT_MAX = 30_000; // chars
-const EXEC_STDERR_MAX = 10_000; // chars
-
-/**
- * Clip the stdout/stderr of a sandbox-exec tool result to their model-context
- * budgets, MIDDLE-OUT, BEFORE the envelope is returned to the AI SDK. No-op for
- * every non-sandbox capability and for results that carry no string
- * stdout/stderr (start/snapshot/stop return neither), so it's safe to gate on
- * the whole {@link SANDBOX_FAMILY}.
- *
- * CRITICAL — this lives at the tool-materialization seam, NOT in the handlers:
- * the same handlers are also driven programmatically by ModalSandboxWorkspace
- * (readFile base64-decodes stdout; getChangedFiles splits it into the commit
- * file list; diff returns it verbatim), which needs the EXACT, unclipped bytes.
- * Clipping in the handler would corrupt file reads and silently drop files from
- * commits. Returns a shallow copy so the original result — already measured by
- * byteSize() for the pre-clip telemetry row above — is never mutated. Pure.
- */
-function clipExecOutput(capName: string, result: unknown): unknown {
-  if (!SANDBOX_FAMILY.has(capName)) return result;
-  if (result === null || typeof result !== "object") return result;
-  const r = result as Record<string, unknown>;
-  const hasStdout = typeof r.stdout === "string";
-  const hasStderr = typeof r.stderr === "string";
-  if (!hasStdout && !hasStderr) return result;
-  return {
-    ...r,
-    ...(hasStdout
-      ? { stdout: clipMiddle(r.stdout as string, EXEC_STDOUT_MAX) }
-      : {}),
-    ...(hasStderr
-      ? { stderr: clipMiddle(r.stderr as string, EXEC_STDERR_MAX) }
-      : {}),
-  };
 }
 
 const RISK_ORDER: Record<string, number> = { low: 0, medium: 1, high: 2 };
@@ -293,10 +212,9 @@ function passesRisk(
 }
 
 /**
- * Concurrency class for the engine's dispatch: a capability classified
+ * Concurrency class for the turn loop's dispatch: a capability classified
  * MUTATING serializes; everything else may run alongside other calls in the
- * same step. The Stella tool mapping negates this into each advertised
- * schema's `read_only` bit.
+ * same step.
  *
  * Delegates to `@oxagen/oxagen`'s {@link capabilityMutates} rather than
  * deciding anything itself, so the contract type, this classifier and the
@@ -306,7 +224,7 @@ function passesRisk(
  * `agent.riskLevel`, or `requiresApproval` — three fields that grade how
  * DANGEROUS a capability is, standing in for whether it writes. Those are
  * different questions, and 219 of 271 agent-surface capabilities were reaching
- * the engine marked concurrent-safe on the strength of it (#2600).
+ * dispatch marked concurrent-safe on the strength of it (#2600).
  */
 export function isMutatingCapability(cap: AnyCapability): boolean {
   return capabilityMutates(cap);
@@ -355,12 +273,6 @@ export async function materializeTools(
 ): Promise<MaterializedTools> {
   const { listCapabilities, getSurfaces } = await getOxagenRegistry();
   const all = listCapabilities();
-  // agent.code.execute requires a configured sandbox driver. Gate
-  // materialization on isSandboxAvailable() — the single source of truth that
-  // checks SANDBOX_ENABLED=true AND that the configured driver has the required
-  // credentials. The tool is only advertised to the model when it can actually
-  // execute; a non-functional tool is never shown.
-  const sandboxAvailable = isSandboxAvailable();
   const out: Record<string, Tool> = {};
   const nameMap: Record<string, string> = {};
 
@@ -406,8 +318,8 @@ export async function materializeTools(
   // If an agentRun context arrives WITHOUT its resolution, fail closed for
   // capability tools: an unattended automation must never see tools its
   // ceiling was never computed for. Scope: capability/function tools only —
-  // MCP tools, skills, and subagent refs are governed at their own seams
-  // (spec Phase 4), not here.
+  // MCP tools are governed at their own seam (the resourceScope.mcp rules
+  // below), not here.
   const agentRun = ctx.agentRun;
   const agentRunResolution: AgentRunIAMResolution | null =
     agentRun?.principalKind === "agent" ? (agentRun.resolution ?? null) : null;
@@ -422,8 +334,8 @@ export async function materializeTools(
       },
       "[agent-rbac] ctx.agentRun present without a populated resolution — " +
         "failing closed: no capability tools will be materialized for this " +
-        "turn. The attacher must populate agentRun.resolution before " +
-        "materializeTools (see turn-driver.ts).",
+        "turn. The caller must populate agentRun.resolution before " +
+        "calling materializeTools.",
     );
   }
   // Run-constant resolver inputs (a run is pinned to one org+workspace; one
@@ -437,7 +349,6 @@ export async function materializeTools(
 
   for (const cap of all) {
     if (!getSurfaces(cap).includes("agent")) continue;
-    if (WORKBENCH_ONLY_SANDBOX_CAPS.has(cap.name)) continue;
     if (opts.excludeCapabilities?.has(cap.name)) continue;
     if (opts.allowlist && !opts.allowlist.has(cap.name)) continue;
     if (!passesRisk(cap, opts.riskCeiling)) continue;
@@ -458,14 +369,6 @@ export async function materializeTools(
       });
       if (perms.outcome === "deny") continue;
     }
-    // Gate the entire sandbox-execution family on a configured driver: both the
-    // one-shot execute_code and the durable sandbox session tools require
-    // SANDBOX_ENABLED + a driver. Advertising a tool the model cannot actually
-    // run wastes billed steps on guaranteed failures (ADR-021 §3). (ADR-025:
-    // capability names are verb-first snake_case; the former dotted
-    // agent.code.execute / agent.sandbox.* set maps to these canonical names.)
-    if (!sandboxAvailable && SANDBOX_FAMILY.has(cap.name)) continue;
-
     // Entitlement filter: if this capability is claimed by a plugin, verify the
     // org has that plugin installed and enabled. Lazily fetch the entitled set
     // on first plugin-claimed contract to avoid DB round-trips when no plugin
@@ -575,10 +478,7 @@ export async function materializeTools(
             } catch {
               /* telemetry must never fail the call */
             }
-            // Cap the model-facing envelope AFTER byteSize() recorded the true
-            // (pre-clip) output size above, so a sandbox-exec token flood can't
-            // blow the context window. No-op for every other capability.
-            return clipExecOutput(cap.name, result);
+            return result;
           } catch (err) {
             try {
               await insertToolInvocation(

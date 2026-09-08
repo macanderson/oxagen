@@ -3,7 +3,7 @@
  * computation (role ceiling ∩ agent config). The intersection itself is the
  * resolver's exported helpers; these tests pin the view-model mapping around
  * them: mode min, budget element-wise min, labels from scopeToTypes,
- * capability grouping, MCP rule summaries, skills/subagent narrowing, and the
+ * capability grouping, MCP rule summaries, and the
  * degraded states (unknown grants, unpublished custom-role ceiling).
  */
 import { describe, expect, it } from "vitest";
@@ -179,49 +179,5 @@ describe("computeEffectiveScopeView — MCP dimension", () => {
     });
     expect(view.mcp.rules).toBeNull();
     expect(view.ceilingKnown).toBe(false);
-  });
-});
-
-describe("computeEffectiveScopeView — skills & subagents", () => {
-  const tools: AgentTool[] = [
-    { type: "skill", ref: "release-notes" },
-    { type: "skill", ref: "sql-audit" },
-    { type: "agent", ref: "agt_child" },
-  ];
-
-  it("effective = equipped when the role does not constrain the dimension", () => {
-    const view = computeEffectiveScopeView({
-      role: role({}),
-      graph: GRAPH,
-      agentTools: tools,
-    });
-    expect(view.skills.effective).toEqual(["release-notes", "sql-audit"]);
-    expect(view.skills.constrained).toBe(false);
-    expect(view.subagents.effective).toEqual(["agt_child"]);
-  });
-
-  it("set-intersects a skills ceiling with the equipped list", () => {
-    const view = computeEffectiveScopeView({
-      role: role({
-        resourceScope: { skills: { slugs: ["release-notes"] } },
-      }),
-      graph: GRAPH,
-      agentTools: tools,
-    });
-    expect(view.skills.effective).toEqual(["release-notes"]);
-    expect(view.skills.constrained).toBe(true);
-    expect(view.skills.equipped).toEqual(["release-notes", "sql-audit"]);
-  });
-
-  it("set-intersects a subagent refs ceiling with the equipped list", () => {
-    const view = computeEffectiveScopeView({
-      role: role({
-        resourceScope: { agents: { refs: ["agt_other"] } },
-      }),
-      graph: GRAPH,
-      agentTools: tools,
-    });
-    expect(view.subagents.effective).toEqual([]);
-    expect(view.subagents.constrained).toBe(true);
   });
 });

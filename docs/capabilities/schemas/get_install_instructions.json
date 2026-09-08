@@ -1,13 +1,9 @@
 {
   "name": "get_install_instructions",
   "domain": "system",
-  "description": "Return step-by-step MCP/CLI installation instructions for a given AI client (claude-code, cursor, claude-desktop, codex, vscode). Uses the production Vercel app domains from CLAUDE.md. Returns a structured steps list and a render directive for the install-instructions chat component. This is the end-to-end proof of the component registry pipeline.",
+  "description": "Return step-by-step MCP/CLI installation instructions for a given AI client (claude-code, cursor, claude-desktop, codex, vscode). Snippets point at the app and MCP hosts configured in APP_URL / MCP_URL. Returns a structured steps list and a render directive for the install-instructions chat component.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -26,21 +22,13 @@
     "properties": {
       "client": {
         "type": "string",
-        "enum": [
-          "claude-code",
-          "cursor",
-          "claude-desktop",
-          "codex",
-          "vscode"
-        ]
+        "enum": ["claude-code", "cursor", "claude-desktop", "codex", "vscode"]
       },
       "workspaceSlug": {
         "type": "string"
       }
     },
-    "required": [
-      "client"
-    ],
+    "required": ["client"],
     "additionalProperties": false
   },
   "output": {
@@ -49,13 +37,7 @@
     "properties": {
       "client": {
         "type": "string",
-        "enum": [
-          "claude-code",
-          "cursor",
-          "claude-desktop",
-          "codex",
-          "vscode"
-        ]
+        "enum": ["claude-code", "cursor", "claude-desktop", "codex", "vscode"]
       },
       "steps": {
         "type": "array",
@@ -70,9 +52,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "label"
-          ],
+          "required": ["label"],
           "additionalProperties": false
         }
       },
@@ -87,18 +67,11 @@
             "additionalProperties": {}
           }
         },
-        "required": [
-          "componentId",
-          "props"
-        ],
+        "required": ["componentId", "props"],
         "additionalProperties": false
       }
     },
-    "required": [
-      "client",
-      "steps",
-      "render"
-    ],
+    "required": ["client", "steps", "render"],
     "additionalProperties": false
   }
 }

@@ -68,32 +68,44 @@ describe("CHAT_COMPONENTS — config-derived completeness", () => {
     expect(keys.length).toBe(Object.keys(CHAT_COMPONENTS).length);
   });
 
-  it("contains 'svg-preview' as a registered componentId", () => {
-    expect(CHAT_COMPONENTS).toHaveProperty("svg-preview");
-  });
-
-  it("contains 'mermaid-diagram' as a registered componentId", () => {
-    expect(CHAT_COMPONENTS).toHaveProperty("mermaid-diagram");
-  });
-
-  it("contains 'image-preview' as a registered componentId", () => {
-    expect(CHAT_COMPONENTS).toHaveProperty("image-preview");
-  });
-
   it("contains 'install-instructions' as a registered componentId", () => {
     expect(CHAT_COMPONENTS).toHaveProperty("install-instructions");
   });
 
-  it("contains 'make-video-form' as a registered componentId", () => {
-    expect(CHAT_COMPONENTS).toHaveProperty("make-video-form");
-  });
-
-  it("contains 'video-result' as a registered componentId", () => {
-    expect(CHAT_COMPONENTS).toHaveProperty("video-result");
-  });
-
   it("contains 'connection-create-inline' as a registered componentId", () => {
     expect(CHAT_COMPONENTS).toHaveProperty("connection-create-inline");
+  });
+
+  it("contains the governance-surface componentIds", () => {
+    expect(CHAT_COMPONENTS).toHaveProperty("capability-result");
+    expect(CHAT_COMPONENTS).toHaveProperty("graph-node-card");
+    expect(CHAT_COMPONENTS).toHaveProperty("agent-definition-list-card");
+    expect(CHAT_COMPONENTS).toHaveProperty("install-instructions");
+  });
+
+  it("no longer registers a renderer for an excised runtime capability (ADR-043)", () => {
+    for (const retired of [
+      "svg-preview",
+      "image-preview",
+      "make-video-form",
+      "video-result",
+      "mermaid-diagram",
+      "workflow-progress",
+      "automation-create-inline",
+      "research-swarm-card",
+      "web-search-card",
+      "capability-chain-card",
+      "code-diff",
+      "terminal-trace",
+      "file-tree",
+      "coding-trace-panel",
+      "workspace-context-panel",
+      "pr-stats",
+      "ci-status",
+      "html-artifact",
+    ]) {
+      expect(CHAT_COMPONENTS).not.toHaveProperty(retired);
+    }
   });
 
   it("does NOT contain an unregistered componentId 'unknown-widget'", () => {
