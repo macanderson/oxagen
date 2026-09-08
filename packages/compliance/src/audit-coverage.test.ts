@@ -108,6 +108,7 @@ const REQUIRED_EMIT_PREFIXES: readonly string[] = [
   "plugin.org.", // org-level plugin governance (install / uninstall / enable)
   "plugin.workspace.", // workspace-level plugin enable/disable
   "plugin.credential.", // plugin credential set / reauth
+  "secret.", // workspace secret reveal / export / set / unset / delete / import
   "plugin.registry.", // MCP registry source add / remove
   "plugin.settings.set_auth_alerts", // org auth-alert notification policy
   "privacy.", // GDPR export / erasure requests

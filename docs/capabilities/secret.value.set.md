@@ -35,6 +35,7 @@ Inserts or updates the `(key, environment)` override row in the `environments`
 vault tables (PostgreSQL). When the key is sensitive, `value` is envelope-encrypted
 (`value_enc` + `value_kms_key_id`); otherwise stored as plaintext text. Metering,
 IAM, and audit run through the kernel.
+- **Writes a `secret.value_changed` row to `security_events`** (`capability: set_secret_value`). Before ADR-050 this action left no audit trail anywhere — `secret_access_log` records reads, not writes.
 
 ## API
 

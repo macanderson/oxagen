@@ -53,7 +53,8 @@ describe("security event taxonomy invariants", () => {
 
   it("includes exactly the expected plugin.* governance event types", () => {
     // SOC2 CC6.3/CC6.8 drift guard — privileged plugin mutations (install,
-    // uninstall, enabled-state change, denylist add/remove) must stay auditable.
+    // uninstall, enabled-state change, denylist add/remove, credential set and
+    // revoke) must stay auditable.
     const pluginTypes = SECURITY_EVENT_TYPES.filter((t) =>
       t.startsWith("plugin."),
     );
@@ -63,8 +64,27 @@ describe("security event taxonomy invariants", () => {
       "plugin.enabled_changed",
       "plugin.denylist_added",
       "plugin.denylist_removed",
+      // oxagen#2533 — a plugin's stored OAuth token or secret (CC6.1).
+      "plugin.credential_set",
+      "plugin.credential_revoked",
     ];
     expect([...pluginTypes].sort()).toEqual([...expected].sort());
+  });
+
+  it("includes exactly the expected secret.* lifecycle event types", () => {
+    // oxagen#2527. Reveal and export are reads and are in this family anyway:
+    // reading a secret in the clear is the privileged act an audit trail exists
+    // to catch. The same drift guard shape as the plugin family above.
+    const secretTypes = SECURITY_EVENT_TYPES.filter((t) =>
+      t.startsWith("secret."),
+    );
+    const expected = [
+      "secret.revealed",
+      "secret.exported",
+      "secret.value_changed",
+      "secret.key_deleted",
+    ];
+    expect([...secretTypes].sort()).toEqual([...expected].sort());
   });
 
   it("includes exactly the four governed-run integrity event types", () => {
