@@ -74,3 +74,4 @@ first. Move a row into its epic when one fits.
 - [ADR-047](./ADR-047-no-provider-posture-matrix.md) — No provider-posture matrix; handle divergence at the gateway
 - [ADR-048](./ADR-048-one-path-glob.md) — One path glob, in a package with no dependencies
 - [ADR-049](./ADR-049-dod-recheck-reruns-the-old-run.md) — The DoD recheck re-runs the old run rather than reporting a new check
+- [ADR-050](./ADR-050-secret-access-in-the-main-audit-log.md) — Privileged secret access is recorded in the main audit log, not only beside it
