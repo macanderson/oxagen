@@ -79,6 +79,7 @@ module "network" {
   name               = "oxagen"
   region             = var.region
   availability_zones = var.availability_zones
+  ami_id             = var.node_ami
 
   tags = { Brand = local.brand }
 }
@@ -86,6 +87,7 @@ module "network" {
 module "app" {
   source = "../../modules/app-node"
 
+  ami_id            = var.node_ami
   name              = "oxagen-app"
   region            = var.region
   account_id        = var.account_id

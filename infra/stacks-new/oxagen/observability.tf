@@ -26,7 +26,7 @@
 # ---------------------------------------------------------------------------
 
 locals {
-  log_group_services = ["docs", "stella", "app", "api", "mcp", "neo4j", "caddy"]
+  log_group_services = ["docs", "stella", "app", "api", "mcp", "neo4j", "caddy", "clickhouse"]
 }
 
 resource "aws_cloudwatch_log_group" "service" {

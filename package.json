@@ -38,6 +38,7 @@
     "schema:manifest:check": "tsx packages/database/src/storage-manifest/cli.ts --check",
     "db:check": "tsx --env-file-if-exists=.env.local tools/scripts/db-check.ts",
     "db:lint-migrations": "tsx tools/scripts/db-lint-migrations.ts",
+    "check:db-migrate-script": "bash infra/tools/tests/render-remote-migration.test.sh",
     "db:reset": "tsx --env-file-if-exists=.env.local tools/scripts/db-reset.ts",
     "db:seed-iam": "tsx --env-file-if-exists=.env.local tools/scripts/seed-iam-defaults.ts",
     "check:manifest": "node tools/scripts/check_manifest.mjs",

@@ -172,7 +172,7 @@ jobs:
           pnpm turbo run lint typecheck --concurrency=3 $TURBO_FILTER
 
       - name: Manifest, contracts, env invariants
-        run: pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations
+        run: pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations && pnpm check:db-migrate-script
 
       # Unconditional, and that is the whole point. The affected-package gate
       # (`turbo … --filter=…[origin/main]`) selects a package only when it or one

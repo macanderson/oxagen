@@ -195,7 +195,7 @@ export {
   computeDecayedSaliences,
   DEFAULT_DECAY_CONFIG,
 } from "./decay";
-export type { DecayConfig } from "./decay";
+export type { DecayConfig, DecayStats } from "./decay";
 
 // Reinforcement
 export { ReinforcementTracker } from "./reinforcement";
