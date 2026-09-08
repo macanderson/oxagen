@@ -16,7 +16,7 @@
  */
 
 import { randomBytes } from "node:crypto";
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import { gotoStable } from "./nav";
 
 export interface FreshUser {
@@ -56,14 +56,35 @@ export async function signUpFreshUser(
   await page.fill('input[name="name"]', name);
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', password);
-  await page.getByRole("button", { name: /create account/i }).click();
-
-  // Better Auth sets the session cookies and the client calls
-  // router.push("/new-organization") directly (signup path). This is a
-  // client-side History API navigation — Playwright observes it reliably.
-  await page.waitForURL((url) => url.pathname === "/new-organization", {
-    timeout: 20_000,
-  });
+  // Submit, and retry the submit rather than only waiting on it.
+  //
+  // The button is server-rendered, so Playwright can click it before React has
+  // attached the submit handler — and that click is simply lost. Nothing about
+  // it looks like a failure until the wait below times out twenty seconds
+  // later, which is why this read as a navigation flake for weeks (#2559).
+  //
+  // The evidence is a trace of the FAILING attempt, which only existed once
+  // #2758 made Playwright keep one (run 34183682257, three specs, all here):
+  // at timeout the page is still the signup form — "Create an account", the
+  // provider buttons, the fields — and the network log for the whole attempt
+  // contains no POST to the auth endpoint at all. The click did not submit.
+  //
+  // `toPass` retries the block, so a lost click is clicked again. It cannot
+  // double-submit a successful one: a click that did register navigates well
+  // inside the five seconds below, `waitForURL` returns, and the block passes
+  // on its first iteration without ever reaching a second click.
+  const submit = page.getByRole("button", { name: /create account/i });
+  await expect(async () => {
+    if (new URL(page.url()).pathname !== "/new-organization") {
+      await submit.click();
+    }
+    // Better Auth sets the session cookies and the client calls
+    // router.push("/new-organization") directly (signup path) — a client-side
+    // History API navigation.
+    await page.waitForURL((url) => url.pathname === "/new-organization", {
+      timeout: 5_000,
+    });
+  }).toPass({ timeout: 30_000 });
 
   // ── 3. Complete org onboarding ───────────────────────────────────────────
   await page.waitForSelector('input[name="name"]', {
