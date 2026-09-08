@@ -7,7 +7,30 @@
  * and evicting TTL-expired records. Those live behind the explicit
  * `updateSalience` / `updateConfidence` / `evictExpired` methods below; nothing
  * on the read/write turn path calls them.
+ *
+ * ## Phase D: the pass exists; the schedule is deferred, and why
+ *
+ * `runConsolidation` (`../consolidation/run`) is that pipeline, and it is
+ * tested against this store. Nothing calls it on a timer, and that is recorded
+ * here rather than fixed because there is currently nothing to attach a timer
+ * to: **no code in this repository constructs an `EpisodicStore`.**
+ *
+ *     rg -na "createStore|DuckDBEpisodicStore" --glob '!packages/engram/**'
+ *     # a changelog entry, a release note, and one comment in a shell script
+ *
+ * The CLI daemon that used to open one is gone, and every remaining import of
+ * `@oxagen/engram` outside this package is a `import type`. A schedule added
+ * today would be a caller with nothing to call it — the same shape as the
+ * unreferenced maintenance functions #1418 was filed about, one level up.
+ *
+ * So the wiring a host owes is: construct a store, call `runConsolidation`
+ * on a timer, and call `reinforce` when a turn ends with the ids `compile`
+ * put in the window. The durable half of that is done — the counts and the
+ * last-reinforcement time survive a restart, which the in-memory
+ * `ReinforcementTracker` could never manage — so a host adds a schedule, not a
+ * storage design.
  */
+import type { DecayStats } from "../decay";
 import type { MemoryRecord, Namespace, RecordKind } from "../types";
 
 /**
@@ -85,8 +108,42 @@ export interface EpisodicStore {
   /**
    * Consolidation-only: set a record's salience in place. The id is unchanged
    * (salience is not part of the content hash). No-op if the id is absent.
+   *
+   * `reinforcedAt` persists the record's last-reinforcement time alongside the
+   * salience. Decay measures its half-life from that rather than from
+   * `createdAt`, so without it a retrieval buys a capped constant against an
+   * exponential instead of resetting the clock (#1367) — and the field was
+   * unwritable, so that branch was dead in every deployment (#1418).
    */
-  updateSalience(id: string, salience: number): Promise<void>;
+  updateSalience(
+    id: string,
+    salience: number,
+    reinforcedAt?: number,
+  ): Promise<void>;
+
+  /**
+   * Record that these records were retrieved, and optionally how the turn that
+   * used them went. Increments each record's durable retrieval count, its
+   * success or failure count when an outcome is given, and stamps
+   * `lastReinforcedAt`.
+   *
+   * Durable is the point. `ReinforcementTracker` keeps the same counts in a
+   * `Map` that dies with the process, so a restart reset every memory's
+   * observed usefulness to zero and decay ran as if nothing had ever been
+   * retrieved (#1418).
+   */
+  reinforce(
+    ids: string[],
+    outcome: "success" | "failure" | null,
+    at: number,
+  ): Promise<void>;
+
+  /**
+   * The durable usage counts for every record in `namespace`, in the shape
+   * decay wants. This is what lets a consolidation pass reconcile salience
+   * from history rather than from whatever this process happens to remember.
+   */
+  readDecayStats(namespace: Namespace): Promise<Map<string, DecayStats>>;
 
   /**
    * Consolidation-only: set a record's confidence in place (id unchanged).

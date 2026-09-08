@@ -214,6 +214,15 @@ export type {
   DistillationResult,
   DistillationLlmOptions,
 } from "./consolidation/distill";
+export {
+  runConsolidation,
+  DEFAULT_CONSOLIDATION_CONFIG,
+} from "./consolidation/run";
+export type {
+  ConsolidationConfig,
+  ConsolidationReport,
+  NamespaceReport,
+} from "./consolidation/run";
 export { deduplicateSemanticRecords } from "./consolidation/dedupe";
 export type { DedupeResult } from "./consolidation/dedupe";
 export { detectContradiction, resolveConflict } from "./consolidation/resolve";
