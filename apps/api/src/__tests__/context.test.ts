@@ -220,6 +220,42 @@ describe("capabilityContext requireOrg", () => {
     expect(body.orgId).toBe("");
   });
 
+  it("requires an org but not a workspace when requireWorkspace is false (#1203)", async () => {
+    // The shape a bootstrap route needs: the caller has an org and is asking
+    // for their first workspace. Before this existed the only way to get past
+    // the workspace check was requireOrg:false, which dropped the org check
+    // too.
+    const res = await withContext(
+      {},
+      (c) => capabilityContext(c, { requireWorkspace: false }),
+      { orgId: "o1", workspaceId: null, userId: "u1", apiKeyId: null },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { orgId: string; workspaceId: string };
+    expect(body.orgId).toBe("o1");
+    expect(body.workspaceId).toBe("");
+  });
+
+  it("still refuses a missing org when only the workspace check is waived", async () => {
+    const res = await withContext(
+      {},
+      (c) => capabilityContext(c, { requireWorkspace: false }),
+      { orgId: null, workspaceId: null, userId: "u1", apiKeyId: null },
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("scope");
+  });
+
+  it("keeps requireOrg:false switching off both checks, as its callers rely on", async () => {
+    const res = await withContext(
+      {},
+      (c) => capabilityContext(c, { requireOrg: false }),
+      { orgId: null, workspaceId: null, userId: null, apiKeyId: null },
+    );
+    expect(res.status).toBe(200);
+  });
+
   it("surface is always 'api'", async () => {
     const res = await withContext({}, (c) => capabilityContext(c), {
       orgId: "o1",

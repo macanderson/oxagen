@@ -7,6 +7,40 @@ import {
 } from "./permissions.ts";
 import type { Permissions } from "./schema.ts";
 
+describe("matchGlob: `**/` means zero or more leading segments (#1387)", () => {
+  // Compiled with the slash literal, `**/x` required at least one directory —
+  // so a deny rule written for a secret at the workspace root did not match it.
+  it("matches the file at the root, which is the case that was missed", () => {
+    expect(matchGlob("**/.env", ".env")).toBe(true);
+    expect(matchGlob("**/secrets.txt", "secrets.txt")).toBe(true);
+    expect(matchGlob("**/*.pem", "key.pem")).toBe(true);
+  });
+
+  it("still matches it at any depth", () => {
+    expect(matchGlob("**/.env", "config/.env")).toBe(true);
+    expect(matchGlob("**/.env", "a/b/c/.env")).toBe(true);
+  });
+
+  it("does not swallow the segment boundary", () => {
+    // `.*\\.env` would match this; `(?:.*/)?\\.env` does not. A rule for
+    // `.env` should not reach a file that merely ends in those characters.
+    expect(matchGlob("**/.env", "foo.env")).toBe(false);
+    expect(matchGlob("**/secrets.txt", "my-secrets.txt")).toBe(false);
+  });
+
+  it("leaves a single `*` crossing separators, as documented", () => {
+    // Narrowing this would shrink allow rules already written against it, so
+    // the fix is scoped to `**/` and this pins the boundary.
+    expect(matchGlob("a/*", "a/b/c")).toBe(true);
+    expect(matchGlob("mcp__github__*", "mcp__github__create_issue")).toBe(true);
+  });
+
+  it("is unchanged for a pattern with no `**/` in it", () => {
+    expect(matchGlob("delete_*", "delete_repo")).toBe(true);
+    expect(matchGlob("delete_*", "create_repo")).toBe(false);
+  });
+});
+
 describe("matchGlob", () => {
   it("matches exact names", () => {
     expect(matchGlob("delete_repo", "delete_repo")).toBe(true);

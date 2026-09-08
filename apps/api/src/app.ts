@@ -559,6 +559,20 @@ orgScoped.route("/graph/stats", graphStatsRoute);
 orgScoped.route("/ontology/query", ontologyQueryRoute);
 orgScoped.route("/ontology/neighbors", ontologyNeighborsRoute);
 orgScoped.route("/audit/log/query", auditLogQueryRoute);
+// Creating a workspace needs an org and cannot need a workspace: the caller is
+// asking for their first one. Mounted only under the workspace-scoped group, the
+// REST surface could not take a new account past org creation — every attempt
+// 404'd in workspaceMiddleware before the handler ran, so a non-browser client
+// had to drive the web UI or write rows by hand (#1203).
+//
+// The workspace-scoped mount above stays. Creating a workspace while scoped to
+// another one is an odd shape, but it is a path clients may already call, and
+// this change is about opening the bootstrap route rather than closing that one.
+const orgOnlyScoped = new Hono<AppEnv>();
+orgOnlyScoped.use("*", authMiddleware, orgMiddleware);
+orgOnlyScoped.route("/workspaces", workspaceCreateRoute);
+app.route("/v1/:org_slug", orgOnlyScoped);
+
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);
 
 // Public OAuth callback — HMAC-verified state param is the security boundary.

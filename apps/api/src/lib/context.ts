@@ -22,16 +22,31 @@ function extractClientIp(c: Context<AppEnv>): string | null {
   return realIp?.trim() || null;
 }
 
+/**
+ * Build the capability context for a request.
+ *
+ * The two scopes are checked separately because a route can legitimately need
+ * one and not the other. Creating a workspace is the case that forced this:
+ * it needs an org and cannot need a workspace, since the caller is asking for
+ * their first one. `requireOrg: false` used to switch off both checks, so the
+ * only choices were "both" or "neither" — and a bootstrap route had to take
+ * "neither", losing the org check it did want (#1203).
+ *
+ * `requireWorkspace` defaults to whatever `requireOrg` is, so the two existing
+ * shapes — no options, and `{ requireOrg: false }` — behave exactly as before.
+ */
 export function capabilityContext(
   c: Context<AppEnv>,
-  options: { requireOrg?: boolean } = {},
+  options: { requireOrg?: boolean; requireWorkspace?: boolean } = {},
 ): CapabilityContext {
   const orgId = c.get("orgId");
   const workspaceId = c.get("workspaceId");
-  if (options.requireOrg !== false) {
-    if (!orgId || !workspaceId) {
-      throw new HTTPException(400, { message: "Org/workspace scope required" });
-    }
+  const { requireOrg = true, requireWorkspace = requireOrg } = options;
+  if (requireOrg && !orgId) {
+    throw new HTTPException(400, { message: "Org scope required" });
+  }
+  if (requireWorkspace && !workspaceId) {
+    throw new HTTPException(400, { message: "Workspace scope required" });
   }
   return {
     orgId: orgId ?? "",
