@@ -22,11 +22,28 @@
  */
 
 # ---------------------------------------------------------------------------
-# CloudWatch Log Groups — one per service, plus Neo4j
+# CloudWatch Log Groups — one per service, plus the two engines on the node
 # ---------------------------------------------------------------------------
 
 locals {
-  log_group_services = ["docs", "stella", "app", "api", "mcp", "neo4j", "caddy", "clickhouse"]
+  log_group_services = ["docs", "stella", "app", "api", "mcp", "neo4j", "caddy", "clickhouse", "worker"]
+}
+
+# `/oxagen-app/worker` already exists. It was created by the first thing that
+# wrote to it rather than by this stack, so it had no retention policy, no
+# tags, and no subscription filter — the archive and the error-alarm wiring
+# below both iterate `aws_cloudwatch_log_group.service`, so the worker's logs
+# were the one service's logs that were neither archived to S3 nor watched.
+# The worker is where a turn actually fails, which makes it the least useful
+# gap of the nine.
+#
+# Adopted rather than recreated: without this block the apply fails with
+# `ResourceAlreadyExistsException`, and deleting the group first would throw
+# away the history. The block is a no-op once the resource is in state and can
+# be removed on any later change.
+import {
+  to = aws_cloudwatch_log_group.service["worker"]
+  id = "/oxagen-app/worker"
 }
 
 resource "aws_cloudwatch_log_group" "service" {
