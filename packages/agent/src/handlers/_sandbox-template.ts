@@ -35,6 +35,12 @@ import type { CapabilityContext } from "../types";
  *
  * Pinning it for real is the follow-up (#2724). Until then this is the honest
  * answer, and it is the same one its four siblings already gave.
+ *
+ * Refusing stops the next run from degrading silently; it does not tell the
+ * owner of a template that already had it that the mode was never enforced.
+ * `tools/scripts/find-static-egress-templates.ts` names those rows, which is
+ * the half that matters to somebody who allowlisted an address on the other
+ * end and has been trusting a control they did not have.
  */
 export function driverNetworkForMode(
   mode: SandboxNetworkMode,
