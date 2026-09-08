@@ -1,5 +1,7 @@
 # SCR corpus drift check (oxagen #1320), extended to the compiled AGENTS.md
-# summary of that same corpus (oxagen #2684).
+# summary of that same corpus (oxagen #2684) and to the DoD caller stubs
+# (oxagen #2661) — three things replicated across the same five repos, with
+# one failure mode between them: a change lands in some of them.
 #
 # ADR-038 replicated docs/scr/ byte-identically across the five org repos and
 # accepted cross-repo drift as a known cost. docs/scr/README.md declares that
@@ -46,7 +48,14 @@ on:
   # re-run this just as reliably as a docs/scr/ edit does.
   push:
     branches: [main]
-    paths: ["docs/scr/**", "AGENTS.md"]
+    paths:
+      - "docs/scr/**"
+      - "AGENTS.md"
+      # The DoD caller stubs are the other thing replicated across those four
+      # repos, and they drift the same way (oxagen#2661). A change to either
+      # workflow here is usually the change the callers have to follow.
+      - ".github/workflows/dod-check.yml"
+      - ".github/workflows/dod-recheck.yml"
 
 permissions:
   contents: read
@@ -73,6 +82,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.SCR_CORPUS_TOKEN || secrets.GITHUB_TOKEN }}
         run: node tools/scripts/scr-corpus-check.mjs
+
+      # The DoD caller stubs are replicated across the same four repos, for the
+      # same reason and with the same failure mode: a fix lands here and
+      # reaches three of four. It rides this job rather than a workflow of its
+      # own because it asks the identical question of the identical repos and
+      # needs no dependencies either. It fails open on a network or rate-limit
+      # error, so a GitHub outage cannot be what blocks a merge here.
+      - name: Compare the DoD caller stubs across the four repos
+        env:
+          GITHUB_TOKEN: ${{ secrets.SCR_CORPUS_TOKEN || secrets.GITHUB_TOKEN }}
+        run: node tools/scripts/check-dod-stub-parity.mjs
 
       # Exit 2 means the check could not run — bad token, network, truncated
       # tree. That must fail the job rather than file a drift issue: reporting
