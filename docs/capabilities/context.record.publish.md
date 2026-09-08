@@ -33,6 +33,7 @@ Publish a steering context record into the workspace agent-asset registry — th
 ## Side effects
 
 Inserts/updates `agent.context_records` and inserts `agent.context_record_versions`; repoints `context_records.active_version_id` at the new version. Never mutates an existing version row. Lifecycle status is NOT changed here — that is `context.record.promote`'s job.
+- **A promoted record now steers every turn in the workspace.** It enters as a volatile message immediately after the system prompt, before recalled memory and the instruction — not in the cached prefix (ADR-051). Publishing alone does not steer: the record has to be promoted to `active` with a pinned version.
 
 ## Errors
 

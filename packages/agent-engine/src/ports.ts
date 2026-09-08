@@ -88,6 +88,28 @@ export interface AgentAi {
   generateObject<T>(args: ObjectRunArgs<T>): Promise<ObjectRunResult<T>>;
 }
 
+/**
+ * The workspace's published steering policy — its context records.
+ *
+ * A workspace can publish a record, promote it through the hash-chained
+ * ledger, and until this port existed no agent run behaved any differently:
+ * the registry stored governance and nothing applied it (oxagen#2592).
+ *
+ * It returns pre-formatted text rather than structured records, exactly like
+ * `MemoryProvider.recallContext`, because the host is what knows the record
+ * vocabulary and the engine is what knows where a message goes. The engine
+ * never learns what a context record is.
+ *
+ * Steering, not enforcement. A record carrying an enforcement grant is the
+ * decision-rules engine's to act on; this port only puts its text in front of
+ * the model. Both governing the same action from two layers is how a denial
+ * ends up depending on which one ran first.
+ */
+export interface SteeringProvider {
+  /** This turn's steering text, or "" when the workspace has published none. */
+  loadSteering(): Promise<string>;
+}
+
 /** Episodic/recalled memory. CLI: local DuckDB/engram. Platform: `agent.memory.*`. */
 export interface MemoryProvider {
   recallContext(): Promise<string>;

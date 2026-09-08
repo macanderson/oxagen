@@ -281,6 +281,85 @@ describe("runStellaTurn", () => {
     );
   });
 
+  test("the workspace's steering records reach the turn (#2592)", async () => {
+    // A workspace could publish a context record, promote it through the
+    // ledger, and no run behaved differently. Nothing read them into a turn.
+    const loadSteering = vi.fn(async () => "never use console.log");
+    const { fake, lease } = leaseFor([{ kind: "complete", text: "ok" }]);
+
+    await runStellaTurn(baseOptions({ steering: { loadSteering } }), { lease });
+
+    expect(loadSteering).toHaveBeenCalledTimes(1);
+    const messages = fake.turnRequest!.messages as {
+      role: string;
+      content?: string;
+    }[];
+    expect(messages.map((m) => m.role)).toEqual(["system", "user", "user"]);
+    expect(messages[1]!.content).toBe("never use console.log");
+    expect(messages[2]!.content).toBe("do the thing");
+  });
+
+  test("steering comes before recalled memory, and both before the instruction", async () => {
+    // Policy first, memory second: the more specific, more recent thing is the
+    // one the model should be holding when it reads the instruction.
+    const { fake, lease } = leaseFor([{ kind: "complete", text: "ok" }]);
+    await runStellaTurn(
+      baseOptions({
+        steering: { loadSteering: async () => "POLICY" },
+        memory: {
+          recallContext: async () => "MEMORY",
+          remember: () => undefined,
+        },
+      }),
+      { lease },
+    );
+    const messages = fake.turnRequest!.messages as {
+      role: string;
+      content?: string;
+    }[];
+    expect(messages.map((m) => m.content)).toEqual([
+      expect.any(String),
+      "POLICY",
+      "MEMORY",
+      "do the thing",
+    ]);
+  });
+
+  test("a workspace with no steering assembles exactly as before", async () => {
+    // The cache argument depends on this: a surface that publishes nothing must
+    // not gain an empty message that changes the transcript's shape.
+    const { fake, lease } = leaseFor([{ kind: "complete", text: "ok" }]);
+    await runStellaTurn(
+      baseOptions({ steering: { loadSteering: async () => "" } }),
+      { lease },
+    );
+    const messages = fake.turnRequest!.messages as { role: string }[];
+    expect(messages.map((m) => m.role)).toEqual(["system", "user"]);
+  });
+
+  test("a steering read failure degrades the turn instead of killing it", async () => {
+    // And it is surfaced, so a registry outage is distinguishable from a
+    // workspace that published nothing — the two looking identical is the
+    // silence #2592 is about.
+    const onError = vi.fn();
+    const { lease } = leaseFor([{ kind: "complete", text: "ok" }]);
+    const result = await runStellaTurn(
+      baseOptions({
+        onError,
+        steering: {
+          loadSteering: async () => {
+            throw new Error("registry down");
+          },
+        },
+      }),
+      { lease },
+    );
+    expect(result.text).toBe("ok");
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: "steering-load" }),
+    );
+  });
+
   test("forwards raw frames to onStreamPart even when they have no CodingEvent", async () => {
     const parts: unknown[] = [];
     const { lease } = leaseFor([

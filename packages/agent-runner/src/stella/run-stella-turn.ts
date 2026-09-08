@@ -133,9 +133,21 @@ export async function runStellaTurn(
   const tools = buildToolSet(opts);
   const mutating = mutatingToolSet(opts.mutatingToolNames);
 
+  const steering = await steeringOnce(opts);
   const recalled = await recallOnce(opts);
   const history: ModelMessage[] = [
     ...(opts.history ?? []),
+    // The workspace's published steering policy, in the same volatile position
+    // as recalled memory and for the same reason: the system block is a
+    // prompt-cache contract, and records that differ per workspace would
+    // fragment that cache across every workspace on the platform. Records
+    // change at human speed, so a per-workspace prefix would mostly hit — but
+    // "mostly" is a cache key argument, and the steer is strong enough here,
+    // one message from the instruction (oxagen#2592).
+    //
+    // Before recalled memory: policy is what the model should read first, and
+    // memory is the more recent, more specific thing to hold in mind last.
+    ...(steering ? [{ role: "user" as const, content: steering }] : []),
     // The volatile recalled-memory message, placed exactly where the TS loop
     // places it: AFTER the cached system block, immediately before the
     // instruction, and as `user` rather than `system` so the platform's LLM
@@ -433,6 +445,24 @@ export function stopReasonFor(
     return "max-steps";
   }
   return undefined;
+}
+
+/**
+ * The workspace's steering policy for this turn, or "" when there is none.
+ *
+ * Same contract as {@link recallOnce}: a failure degrades the turn to no
+ * steering and is surfaced, never swallowed. A registry outage must not fail a
+ * turn — but it must not silently look like a workspace that published nothing
+ * either, which is the state oxagen#2592 was filed about.
+ */
+async function steeringOnce(opts: RunCodingAgentOptions): Promise<string> {
+  if (!opts.steering) return "";
+  try {
+    return await opts.steering.loadSteering();
+  } catch (error) {
+    opts.onError?.({ phase: "steering-load", error });
+    return "";
+  }
 }
 
 async function recallOnce(opts: RunCodingAgentOptions): Promise<string> {
