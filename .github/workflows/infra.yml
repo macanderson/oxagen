@@ -113,7 +113,8 @@ jobs:
           # Dropped from both matrices until its state is remote. That is a
           # one-time hand migration -- apply once with a local backend, add the
           # `backend "s3"` block, `tofu init -migrate-state` -- after which
-          # this filter comes out and the stack is managed like any other.
+          # this filter and the warning below come out and the stack is
+          # managed like any other. #2775 carries that work and the steps.
           stacks=$(echo "$stacks" | grep -vx 'bootstrap' || true)
 
           # Removing it must not turn a bootstrap-only change green by
