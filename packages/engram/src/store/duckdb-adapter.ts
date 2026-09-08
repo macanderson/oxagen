@@ -5,6 +5,7 @@
  * append latency and excellent analytical query performance. The store
  * is backed by a file on disk (or in-memory for tests).
  */
+import { createRequire } from "node:module";
 import type { Database, Connection } from "duckdb";
 import type { DecayStats } from "../decay";
 import type { MemoryRecord, Namespace, RecordKind } from "../types";
@@ -70,8 +71,14 @@ function rowToRecord(row: Record<string, unknown>): MemoryRecord {
       row["provenance"] as string,
     ) as MemoryRecord["provenance"],
     causality: JSON.parse(row["causality"] as string) as string[],
-    ttl: (row["ttl"] as number | null) ?? undefined,
-    createdAt: row["created_at"] as number,
+    // Both are BIGINT columns, and DuckDB hands those back as JavaScript
+    // BigInt. The casts these two used to carry said `number` and changed
+    // nothing, so every record read from the store carried a bigint in a field
+    // typed number: `new Date(createdAt)` threw "Cannot convert a BigInt value
+    // to a number", and MemoryRecordSchema rejected its own stored records.
+    // `toCount` is the coercion the column type has needed all along.
+    ttl: toOptionalCount(row["ttl"]),
+    createdAt: toCount(row["created_at"]),
     // Read back so decay's durable branch is reachable. It never was: the type
     // has carried this field since #1367 and no column held it, so every
     // record came out of the store with it undefined and decay always fell
@@ -154,14 +161,24 @@ export class DuckDBEpisodicStore implements EpisodicStore {
   private ready: Promise<void>;
 
   constructor(opts: DuckDBAdapterOpts) {
-    // duckdb is an optional native (CJS) module. Guard the synchronous require
-    // so a missing binary degrades to a clear, typed error at construction
+    // duckdb is an optional native (CJS) module. Guard the synchronous load so
+    // a missing binary degrades to a clear, typed error at construction
     // (createStore) time instead of an opaque MODULE_NOT_FOUND that takes down
     // the caller with no hint that the fix is installing the optional dep.
+    //
+    // Loaded through `createRequire`, not a bare `require`. This package is
+    // ESM ("type": "module"), where `require` is not defined — so the bare
+    // call threw `ReferenceError: require is not defined` in every real
+    // process, and this catch reported it as a missing optional dependency
+    // that was in fact installed. Vitest's module runner supplies a `require`,
+    // so the adapter's own tests passed while nothing else could open a store
+    // at all; `duckdb-adapter.esm.test.ts` is the one that runs it as a
+    // separate ESM process, which is the only place the difference shows.
     let duckdb: typeof import("duckdb");
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports -- duckdb uses CJS
-      duckdb = require("duckdb") as typeof import("duckdb");
+      duckdb = createRequire(import.meta.url)(
+        "duckdb",
+      ) as typeof import("duckdb");
     } catch (err) {
       throw new NativeModuleUnavailableError("duckdb", err);
     }

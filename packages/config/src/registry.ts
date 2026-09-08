@@ -929,6 +929,46 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "https://api.oxagen.sh/v1/telemetry/stella/operational",
   },
+  OXAGEN_CONTEXT_ORG: {
+    group: "Context provider",
+    description:
+      "The organisation whose memory @oxagen/context-provider serves. Required, with no " +
+      "default: the Context Graph Protocol carries no tenant, so one process serves one " +
+      "workspace and which one is a deployment decision. A process started without it refuses " +
+      "rather than guessing.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "acme",
+  },
+  OXAGEN_CONTEXT_WORKSPACE: {
+    group: "Context provider",
+    description:
+      "The workspace whose memory @oxagen/context-provider serves. Required, with no default, " +
+      "for the reason OXAGEN_CONTEXT_ORG is.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "platform",
+  },
+  ENGRAM_DUCKDB_PATH: {
+    group: "Context provider",
+    description:
+      "The engram DuckDB file @oxagen/context-provider reads. Unset means an in-memory store, " +
+      "so every query answers with nothing — the right answer for a misconfigured process, " +
+      "rather than someone else's memory. DuckDB opens a file as a single writer, so the " +
+      "process that writes this database and the process that serves it must be different.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "/var/lib/oxagen/engram.duckdb",
+  },
   OXAGEN_WORKER_CONCURRENCY: {
     group: "Inngest",
     description:
