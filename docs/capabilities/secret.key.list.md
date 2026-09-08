@@ -40,6 +40,7 @@ context; it takes no request fields.
 ## Side effects
 
 None — read-only against the `environments` vault tables (PostgreSQL).
+- **Writes no audit row.** It returns key names and metadata, never a value, so nothing privileged is disclosed. The handler carries an explicit `audit-exempt` reason (ADR-050).
 
 ## API
 

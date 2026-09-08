@@ -85,6 +85,22 @@ export const SECURITY_EVENT_TYPES = [
   // (packages/plugins/src/entitlements/entitlement-service.ts).
   "plugin.denylist_added",
   "plugin.denylist_removed",
+  // Plugin credential lifecycle (oxagen#2533). Storing or deleting a plugin's
+  // OAuth token or secret is a privileged credential change (SOC2 CC6.1). Both
+  // handlers used to carry an audit-exempt comment saying no fitting type
+  // existed, which was true and is why these are here.
+  "plugin.credential_set",
+  "plugin.credential_revoked",
+  // Secret lifecycle (oxagen#2527). Reveal and export are reads, and they are
+  // in this list because reading a secret in the clear is the privileged act an
+  // audit trail exists to catch — the other two mutate. All four also write
+  // environments.secret_access_log, which is a richer per-secret record; these
+  // rows are what make the same access visible to anyone querying the main
+  // audit log. ADR-050 says why both, rather than one or the other.
+  "secret.revealed",
+  "secret.exported",
+  "secret.value_changed",
+  "secret.key_deleted",
   // Security policy
   "security.mfa_policy_updated",
   "security.session_revoked",

@@ -49,6 +49,7 @@ When `commit: false` — none (pure parse + diff). When `commit: true` — upser
 keys and writes values (default or per-environment overrides) into the
 `environments` vault tables (PostgreSQL); sensitive values are envelope-encrypted.
 Metering, IAM, and audit run through the kernel.
+- **Writes one `secret.value_changed` row to `security_events`** (`capability: import_env_secrets`) when the import is committed. A dry run changes no secret and writes no row (ADR-050).
 
 ## API
 

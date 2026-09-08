@@ -39,6 +39,7 @@ Inserts or updates the key row in `environments` vault tables (PostgreSQL). When
 `defaultValue` is set and `sensitive` is true, the value is envelope-encrypted
 (`value_enc` + `value_kms_key_id`); otherwise it is stored as plaintext text.
 Metering, IAM, and audit run through the kernel.
+- **Writes a `secret.value_changed` row to `security_events`** (`capability: upsert_secret_key`). Upsert accepts a `defaultValue`, so it can write secret material (ADR-050).
 
 ## API
 

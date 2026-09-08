@@ -31,6 +31,7 @@ Owner/Admin only.
 Soft-deletes the key row and hard-deletes every per-environment override row in
 the `environments` vault tables (PostgreSQL). Metering, IAM, and audit run
 through the kernel.
+- **Writes a `secret.key_deleted` row to `security_events`**. Before ADR-050 this action left no audit trail anywhere.
 
 ## API
 

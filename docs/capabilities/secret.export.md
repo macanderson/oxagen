@@ -39,6 +39,7 @@ export is recorded. Owner/Admin only.
 on every call (Spec §7.3). Sensitive values are decrypted in-memory via
 `@oxagen/crypto`; plaintext is never logged. Metering, IAM, and audit run through
 the kernel.
+- **Writes a `secret.exported` row to `security_events`** as well, so the access is visible to the main audit log query and the audit-log UI, not only to `secret_access_log` (ADR-050).
 
 ## API
 
