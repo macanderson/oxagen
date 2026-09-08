@@ -360,6 +360,45 @@ describe("runStellaTurn", () => {
     );
   });
 
+  test("reports what the turn spent advertising its tools (#2611)", async () => {
+    // 45,007 tokens across 271 tools, and nobody could see the number without
+    // measuring it by hand. Now it is on the result of every turn.
+    const { lease } = leaseFor([{ kind: "complete", text: "ok" }]);
+    const result = await runStellaTurn(baseOptions(), { lease });
+
+    expect(result.toolList).toBeDefined();
+    expect(result.toolList!.count).toBeGreaterThanOrEqual(0);
+    expect(result.toolList!.bytes).toBeGreaterThan(0);
+    expect(result.toolList!.estimatedTokens).toBe(
+      Math.round(result.toolList!.bytes / 4),
+    );
+  });
+
+  test("refuses a turn that advertises more tools than the provider takes (#2611)", async () => {
+    // Before the request, naming the provider and the cap -- rather than
+    // surfacing whatever the gateway returns for a request it was never going
+    // to accept.
+    const tools: Record<string, unknown> = {};
+    for (let i = 0; i < 129; i++) {
+      tools[`tool_${i}`] = tool({
+        description: `does ${i}`,
+        inputSchema: z.object({}),
+        execute: async () => "ok",
+      });
+    }
+    const { lease } = leaseFor([{ kind: "complete", text: "ok" }]);
+
+    await expect(
+      runStellaTurn(
+        baseOptions({
+          model: "openai/gpt-5",
+          extraTools: tools as ToolSet,
+        }),
+        { lease },
+      ),
+    ).rejects.toThrow(/openai accepts at most 128 tools/);
+  });
+
   test("forwards raw frames to onStreamPart even when they have no CodingEvent", async () => {
     const parts: unknown[] = [];
     const { lease } = leaseFor([
