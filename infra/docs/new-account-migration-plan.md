@@ -234,7 +234,21 @@ user-requested tradeoffs, not drift.
 - `oxagen-platform/docs/ops/aws-deployment-plan.md` describes an
   architecture that was never built and should be corrected or retired so
   it stops reading as the current plan.
-- `tools/node/deploy-service.sh` and `tools/install-node-scripts.sh`
-  hardcode the old account's bucket name, region, and instance id. A
-  new-account variant (or a parametrized version of both) is needed before
-  the deploy pipeline can target this node.
+- `tools/install-node-scripts.sh` and `tools/node/deploy-service.sh` are
+  done (#2649). Both take the new account's node and bucket by default. The
+  old account's values survive in each as a documented fallback, so a node
+  this repository has not touched since the cutover keeps deploying — read
+  the comment above each default before changing it.
+- `tools/run-db-migrations.sh` was a deeper gap than the account ids this
+  section first described. It did not merely name the old account: it ran
+  `docker exec` against a Postgres container on the instance and read the
+  password from `/oxagen-data/postgres/password`. Neither exists here.
+  Postgres in this account is Aurora Serverless v2, reachable over the VPC
+  and not from the box's own loopback, so repointing the instance id and
+  bucket would have produced a script that connected to nothing.
+
+  Rewritten in #2652: it resolves the `oxagen-postgres` writer endpoint,
+  runs Atlas against it from the app node over SSM with no `docker exec`
+  anywhere, reads the password from `/oxagen-app/postgres/password`, and
+  reports status only unless given `--apply`. Still to do: run it against
+  the cluster once. Nobody has, so the path is written and not yet proven.
