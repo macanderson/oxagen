@@ -103,4 +103,8 @@ jobs:
               --query 'Parameters[].{name:Name,type:Type,modified:LastModifiedDate}' \
               --output table 2>&1 || true
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          # Both places on purpose. The step summary is where a person
+          # reads it; the log is where a script or an agent can quote it,
+          # and GitHub exposes no API for a summary. An answer only one of
+          # them can reach is half a diagnostic.
+          } | tee -a "$GITHUB_STEP_SUMMARY"
