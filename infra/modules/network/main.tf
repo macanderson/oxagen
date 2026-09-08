@@ -131,9 +131,6 @@ resource "aws_route_table_association" "private" {
 # NAT instance
 # ---------------------------------------------------------------------------
 
-data "aws_ssm_parameter" "al2023" {
-  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64"
-}
 
 resource "aws_security_group" "nat" {
   name        = "${var.name}-nat"
@@ -188,7 +185,7 @@ resource "aws_iam_instance_profile" "nat" {
 }
 
 resource "aws_instance" "nat" {
-  ami                    = data.aws_ssm_parameter.al2023.value
+  ami                    = var.ami_id
   instance_type          = var.nat_instance_type
   subnet_id              = aws_subnet.public[0].id
   iam_instance_profile   = aws_iam_instance_profile.nat.name
