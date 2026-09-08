@@ -11,6 +11,7 @@
 // restore-on-reap, tenant scoping, and exec metering. File reads/writes are
 // implemented as base64-framed shell commands over the same `execInSession`
 // primitive `agent.sandbox.files.list` already uses — no per-driver FS surface.
+import { globToRegExp } from "@oxagen/glob";
 import {
   isSandboxAvailable,
   WORKSPACE_ROOT,
@@ -481,25 +482,3 @@ export class ModalSandboxWorkspace implements Workspace {
 // Inline glob helper — identical algorithm to GitHubWorkspace and the engine's
 // internal glob (neither is importable here), so glob() matches across backends.
 // ---------------------------------------------------------------------------
-function globToRegExp(pattern: string): RegExp {
-  let re = "";
-  for (let i = 0; i < pattern.length; i++) {
-    const c = pattern[i];
-    if (c === "*") {
-      if (pattern[i + 1] === "*") {
-        re += ".*";
-        i++;
-        if (pattern[i + 1] === "/") i++;
-      } else {
-        re += "[^/]*";
-      }
-    } else if (c === "?") {
-      re += "[^/]";
-    } else if (".+^${}()|[]\\".includes(c as string)) {
-      re += "\\" + c;
-    } else {
-      re += c;
-    }
-  }
-  return new RegExp("^" + re + "$");
-}

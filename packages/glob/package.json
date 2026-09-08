@@ -1,13 +1,12 @@
 {
-  "name": "@oxagen/agent-engine",
+  "name": "@oxagen/glob",
   "version": "2.1.1",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./router/rate-card": "./src/router/rate-card.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -15,16 +14,11 @@
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
-  "dependencies": {
-    "@oxagen/glob": "workspace:*",
-    "ai": "7.0.14",
-    "typescript": "6.0.3",
-    "zod": "3.25.76"
-  },
   "devDependencies": {
     "@types/node": "25.9.1",
     "@vitest/coverage-v8": "2.1.9",
     "eslint": "9.39.4",
+    "typescript": "6.0.3",
     "vitest": "2.1.9"
   }
 }

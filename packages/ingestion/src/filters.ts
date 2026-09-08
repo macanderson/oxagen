@@ -13,6 +13,7 @@
  * are supported — which covers 100% of real-world connector filter patterns.
  */
 
+import { globToRegExp } from "@oxagen/glob";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -75,32 +76,6 @@ export interface DeliveryConfig {
  *   "*.lock"           → matches "package-lock.json", "yarn.lock"
  *   "dist/**"          → matches "dist/index.js"
  */
-function globToRegExp(pattern: string): RegExp {
-  let reStr = "";
-  let i = 0;
-  while (i < pattern.length) {
-    const ch = pattern[i] ?? "";
-    if (ch === "*" && pattern[i + 1] === "*") {
-      // ** — matches anything including slashes
-      reStr += ".*";
-      i += 2;
-      // consume optional trailing slash
-      if (pattern[i] === "/") i++;
-    } else if (ch === "*") {
-      // * — matches anything except /
-      reStr += "[^/]*";
-      i++;
-    } else if (ch === "?") {
-      reStr += "[^/]";
-      i++;
-    } else {
-      // Escape special regex characters
-      reStr += ch.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-      i++;
-    }
-  }
-  return new RegExp(`^${reStr}$`);
-}
 
 /**
  * Returns true if `value` matches ANY of the provided glob patterns.
