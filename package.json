@@ -46,7 +46,7 @@
     "check:vision": "node --env-file-if-exists=.env.local tools/scripts/vision-gate.mjs",
     "check:manifest:tickets": "tsx --env-file-if-exists=.env.local tools/scripts/ensure-manifest-tickets.ts",
     "e2e:failure-ticket": "tsx --env-file-if-exists=.env.local tools/scripts/ensure-e2e-failure-ticket.ts",
-    "check:contracts": "node tools/scripts/check-contracts.mjs && node tools/scripts/check-naming.mjs && node tools/scripts/check-artifact-formats.mjs && node tools/scripts/check-control-bytes.mjs && node tools/scripts/check-main-concurrency.mjs",
+    "check:contracts": "node tools/scripts/check-contracts.mjs && node tools/scripts/check-naming.mjs && node tools/scripts/check-artifact-formats.mjs && node tools/scripts/check-control-bytes.mjs && node tools/scripts/check-main-concurrency.mjs && node tools/scripts/check-coverage-gates.mjs",
     "check:control-bytes": "node tools/scripts/check-control-bytes.mjs",
     "check:artifact-formats": "node tools/scripts/check-artifact-formats.mjs",
     "check:naming": "node tools/scripts/check-naming.mjs",
