@@ -56,9 +56,26 @@ ingestion. What is still open:
 
 - Whether the new account has equivalent keys to move to, and what the re-wrap
   path is for ciphertext already written under the old key.
-- The second alias. `alias/oxagen/auth-tokens-prod` and
-  `AUTH_TOKEN_ENCRYPTION_KEY` have not been checked the same way. Assume
-  nothing from the ingestion answer; run the same two `get-parameter` calls.
+
+## The second alias is settled, and it is not in use
+
+The same two calls, on 2026-09-08:
+
+```
+/oxagen/production/AWS_KMS_AUTH_TOKENS_KEY_ARN  — no such parameter
+/oxagen/production/AUTH_TOKEN_ENCRYPTION_KEY    — present, 43 characters
+```
+
+43 characters is `openssl rand -base64 32` without padding, and the registry
+says what it is: a base64 256-bit KEK that wraps OAuth token encryption keys.
+A local symmetric key, not a KMS reference. Nothing in `packages/` or `apps/`
+reads a KMS ARN for auth tokens at all — the only mentions of
+`alias/oxagen/auth-tokens-prod` are this file and the Terraform below that
+creates it.
+
+So that alias is created here and used by nothing. Deleting it breaks nothing,
+and the ingestion key above is the only thread still attached to this account
+(#2680).
 
 The cutover checklist is marked complete, and this stack was last touched in
 June by a commit about something else — those two facts together are why the
