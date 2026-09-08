@@ -46,6 +46,24 @@ import { pathToFileURL } from "node:url";
 export const ESCAPE_HATCH_LABEL = "no-issue";
 
 /**
+ * Label for a substantial PR that deliberately closes no issue.
+ *
+ * `no-issue` says *this change is trivial*. A large one that closes nothing —
+ * an audit, a mechanical refactor, a sweep that FILES issues rather than
+ * closing them — could claim neither that nor a `Closes #N` without saying
+ * something untrue, so it stayed red on a real and valid PR. #1941 changed
+ * 3,285 files, filed about 1,020 issues, closed none, and sat red on `dod`
+ * alone while every other check passed; two automated passes stopped at it
+ * rather than pick a false label (#2551).
+ *
+ * A second label rather than widening `no-issue`, because the two are
+ * different claims and a reviewer should be able to tell them apart at a
+ * glance: one says the change is too small to need an issue, the other says it
+ * is large and closes none.
+ */
+export const CLOSES_NOTHING_LABEL = "closes-nothing";
+
+/**
  * The `state_reason` values that close an issue without claiming its DoD was
  * met, so the close guard must not reopen them.
  *
@@ -304,12 +322,42 @@ export function dodStatus(issueBody) {
  */
 export function verdict(pr, issues) {
   const labels = pr.labels ?? [];
-  if (labels.includes(ESCAPE_HATCH_LABEL)) {
-    return { ok: true, waived: true, refsOnly: false, reasons: [] };
-  }
+  const waiver = [ESCAPE_HATCH_LABEL, CLOSES_NOTHING_LABEL].find((label) =>
+    labels.includes(label),
+  );
 
   const links = linkedIssues(pr.body);
   const refs = referencedIssues(pr.body);
+
+  // A waiver is a claim that this PR closes nothing, so it waives only when
+  // that is true. Applied before the body was parsed, the label short-circuited
+  // everything — a PR carrying `Closes #N` AND a waiver skipped its issue's DoD
+  // entirely, which is a way past the gate rather than an exit from it. Found
+  // by Sourcery on #2742; `no-issue` had the same hole and is fixed with it,
+  // since no open PR combines the two.
+  if (waiver) {
+    if (links.length === 0) {
+      return {
+        ok: true,
+        waived: true,
+        waivedBy: waiver,
+        refsOnly: false,
+        reasons: [],
+      };
+    }
+    return {
+      ok: false,
+      waived: false,
+      waivedBy: waiver,
+      refsOnly: false,
+      reasons: [
+        `This PR carries the \`${waiver}\` label but its description closes ` +
+          `${links.map((l) => l.ref ?? `#${l.number}`).join(", ")}. The label ` +
+          "says the PR closes no issue; the body says otherwise. Drop whichever " +
+          "one is wrong (SCR-003).",
+      ],
+    };
+  }
   if (links.length === 0 && refs.length === 0) {
     return {
       ok: false,
@@ -317,8 +365,10 @@ export function verdict(pr, issues) {
       refsOnly: false,
       reasons: [
         "This PR links no issue. Add a closing reference (`Closes #123`) if it " +
-          "finishes one, `Refs #123` if it only advances one, or apply the " +
-          `\`${ESCAPE_HATCH_LABEL}\` label if the change is genuinely trivial (SCR-003).`,
+          "finishes one, `Refs #123` if it only advances one, or label it: " +
+          `\`${ESCAPE_HATCH_LABEL}\` if the change is genuinely trivial, ` +
+          `\`${CLOSES_NOTHING_LABEL}\` if it is substantial and closes no ` +
+          "issue by design (SCR-003).",
       ],
     };
   }
@@ -359,7 +409,12 @@ export function verdict(pr, issues) {
  */
 export function formatVerdict(result) {
   if (result.waived) {
-    return `SCR-003 DoD check waived by the \`${ESCAPE_HATCH_LABEL}\` label.`;
+    const label = result.waivedBy ?? ESCAPE_HATCH_LABEL;
+    const why =
+      label === CLOSES_NOTHING_LABEL
+        ? "this PR closes no issue by design"
+        : "this change is trivial";
+    return `SCR-003 DoD check waived by the \`${label}\` label — ${why}.`;
   }
   if (result.refsOnly) {
     return (
