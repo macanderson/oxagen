@@ -20,6 +20,41 @@ describe("parseRule", () => {
   });
 });
 
+describe("a `**/` deny rule reaches the workspace root (#1387)", () => {
+  const permissions = {
+    deny: ["Write(**/.env)"],
+  } as unknown as Permissions;
+
+  it("denies the write the rule was written for", () => {
+    // `.env` at the root is the file this rule exists to protect, and it was
+    // the one path the rule did not cover.
+    const r = evaluateLocalPermission(
+      "write_file",
+      { path: ".env" },
+      permissions,
+    );
+    expect(r.decision).toBe("deny");
+    expect(r.rule).toBe("Write(**/.env)");
+  });
+
+  it("still denies it in a subdirectory", () => {
+    expect(
+      evaluateLocalPermission(
+        "write_file",
+        { path: "config/.env" },
+        permissions,
+      ).decision,
+    ).toBe("deny");
+  });
+
+  it("does not deny an unrelated file that ends the same way", () => {
+    expect(
+      evaluateLocalPermission("write_file", { path: "sample.env" }, permissions)
+        .decision,
+    ).toBe("allow");
+  });
+});
+
 describe("evaluateLocalPermission", () => {
   it("allows everything when no permissions are configured", () => {
     expect(
