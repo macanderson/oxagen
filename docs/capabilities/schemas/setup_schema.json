@@ -1,7 +1,7 @@
 {
   "name": "setup_schema",
   "domain": "schema",
-  "description": "Interactive LLM-assisted registry walkthrough: recommend → intent Q&A (schema.chat) → apply → activate.",
+  "description": "Interactive LLM-assisted registry walkthrough: recommend → intent Q&A (run_schema_chat) → apply → activate.",
   "mode": "sync",
   "surfaces": [
     "api",

@@ -19,7 +19,8 @@
     "./types": "./src/types.ts",
     "./iam": "./src/iam/index.ts",
     "./contracts": "./src/contracts/index.ts",
-    "./plugins": "./src/plugins/index.ts"
+    "./plugins": "./src/plugins/index.ts",
+    "./tacho/schemas": "./src/tacho/schemas.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -32,6 +33,7 @@
     "@oxagen/agent-artifacts": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/sandbox": "workspace:*",
+    "@oxagen/tacho": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "zod": "3.25.76"
   },

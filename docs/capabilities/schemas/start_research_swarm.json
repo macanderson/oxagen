@@ -1,7 +1,7 @@
 {
   "name": "start_research_swarm",
   "domain": "research",
-  "description": "Fan out parallel web searches for a topic, generate diverse query variations, and dispatch them as concurrent subagent tasks. Returns a swarmId to poll via research.swarm.status.",
+  "description": "Fan out parallel web searches for a topic, generate diverse query variations, and dispatch them as concurrent subagent tasks. Returns a swarmId to poll via get_research_status.",
   "mode": "async",
   "surfaces": [
     "api",
@@ -77,11 +77,11 @@
     "properties": {
       "swarmId": {
         "type": "string",
-        "description": "Unique ID for this research swarm — pass to research.swarm.status"
+        "description": "Unique ID for this research swarm — pass to get_research_status"
       },
       "dispatchId": {
         "type": "string",
-        "description": "Subagent fanout dispatch ID from agent.subagent.dispatch"
+        "description": "Subagent fanout dispatch ID from dispatch_subagent"
       },
       "status": {
         "const": "running"

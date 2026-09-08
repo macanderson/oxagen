@@ -1,7 +1,7 @@
 {
   "name": "get_research_status",
   "domain": "research",
-  "description": "Poll the status of a running research swarm. Returns task completion progress and the web-search results collected by each subagent so the agent can summarize or package them as a governed artifact. Delegates to agent.subagent.aggregate internally.",
+  "description": "Poll the status of a running research swarm. Returns task completion progress and the web-search results collected by each subagent so the agent can summarize or package them as a governed artifact. Delegates to aggregate_subagents internally.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -34,7 +34,7 @@
     "properties": {
       "swarmId": {
         "type": "string",
-        "description": "Swarm ID returned by research.swarm.start"
+        "description": "Swarm ID returned by start_research_swarm"
       }
     },
     "required": [

@@ -18,6 +18,7 @@ import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq, isNull } from "drizzle-orm";
 import { actorCanManageApiKeys, generateApiKey } from "./lib/api-key-authz";
 import { requestsReservedStellaTelemetryPurpose } from "./lib/stella-telemetry-enrollment";
+import { requestsReservedTachoPurpose } from "./lib/tacho-enrollment";
 import { logger } from "./logger";
 
 export const apiKeyRotateHandler: CapabilityHandler<
@@ -80,6 +81,18 @@ export const apiKeyRotateHandler: CapabilityHandler<
     if (!oldKey) {
       throw new Error(
         "Not found: API key does not exist, is not in this org, or is already revoked",
+      );
+    }
+
+    if (requestsReservedTachoPurpose(oldKey.scope)) {
+      logger.warn(
+        { orgId: ctx.orgId, keyPublicId: oldKey.publicId },
+        "api.key.rotate: rejected — reserved Tacho host purpose",
+      );
+      throw new CapabilityError(
+        "rotate_api_key",
+        "authz_denied",
+        "Forbidden: enrolled Tacho host keys require operator rotation",
       );
     }
 

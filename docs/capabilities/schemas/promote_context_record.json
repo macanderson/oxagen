@@ -1,0 +1,94 @@
+{
+  "name": "promote_context_record",
+  "domain": "context",
+  "description": "Append a lifecycle action (promote / retire / supersede) to a context record's hash-chained promotions ledger and apply it to the record — mirrors Stella's promotions.jsonl: chain_digest = sha256(prev_digest + canonical row)",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "record_id": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Public record ID (ctr_…) or its stable id (slug)"
+      },
+      "action": {
+        "type": "string",
+        "enum": [
+          "promote",
+          "retire",
+          "supersede"
+        ],
+        "description": "promote pins a version active; retire ends the record's life; supersede marks it replaced"
+      },
+      "version_id": {
+        "type": "string"
+      },
+      "policy_version": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The governance policy version this action was taken under"
+      }
+    },
+    "required": [
+      "record_id",
+      "action",
+      "policy_version"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "recordId": {
+        "type": "string",
+        "description": "Public record ID (ctr_…)"
+      },
+      "action": {
+        "type": "string",
+        "enum": [
+          "promote",
+          "retire",
+          "supersede"
+        ]
+      },
+      "seq": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "This entry's position in the record's chain"
+      },
+      "chainDigest": {
+        "type": "string",
+        "description": "SHA-256 hex chain digest of this ledger entry"
+      },
+      "status": {
+        "type": "string",
+        "description": "The record's lifecycle status after the action"
+      }
+    },
+    "required": [
+      "recordId",
+      "action",
+      "seq",
+      "chainDigest",
+      "status"
+    ],
+    "additionalProperties": false
+  }
+}

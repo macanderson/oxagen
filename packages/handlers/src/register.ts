@@ -1098,6 +1098,60 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .telemetryStellaIngestHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "create_tacho_enrollment",
+    async () =>
+      (await import("./tacho.enrollment.create"))
+        .tachoEnrollmentCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "revoke_tacho_enrollment",
+    async () =>
+      (await import("./tacho.enrollment.revoke"))
+        .tachoEnrollmentRevokeHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "ingest_tacho_events",
+    async () =>
+      (await import("./tacho.events.ingest"))
+        .tachoEventsIngestHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_tacho_bundle",
+    async () =>
+      (await import("./tacho.bundle.get"))
+        .tachoBundleGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "dispatch_tacho_command",
+    async () =>
+      (await import("./tacho.command.dispatch"))
+        .tachoCommandDispatchHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "fetch_tacho_commands",
+    async () =>
+      (await import("./tacho.command.fetch"))
+        .tachoCommandFetchHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_tacho_hosts",
+    async () =>
+      (await import("./tacho.host.list"))
+        .tachoHostListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_tacho_sessions",
+    async () =>
+      (await import("./tacho.session.list"))
+        .tachoSessionListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_tacho_session",
+    async () =>
+      (await import("./tacho.session.get"))
+        .tachoSessionGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "list_capability_registry",
     async () =>
       (await import("./capability.registry.list"))

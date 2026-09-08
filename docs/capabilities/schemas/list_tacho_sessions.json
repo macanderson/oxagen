@@ -1,0 +1,263 @@
+{
+  "name": "list_tacho_sessions",
+  "domain": "tacho",
+  "description": "List Tacho sessions in this workspace, newest first, optionally filtered by host, outcome, or start time.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "hostEnrollmentId": {
+        "type": "string"
+      },
+      "outcome": {
+        "type": "string",
+        "enum": [
+          "running",
+          "completed",
+          "aborted",
+          "crashed",
+          "unknown"
+        ]
+      },
+      "since": {
+        "type": "string"
+      },
+      "includeChildren": {
+        "type": "boolean",
+        "default": false
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200,
+        "default": 50
+      },
+      "cursor": {
+        "type": "string",
+        "maxLength": 256
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sessions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "sessionUuid": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "harnessSessionId": {
+              "type": "string"
+            },
+            "hostEnrollmentId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "agentKey": {
+              "type": "string"
+            },
+            "parentSessionUuid": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "subagentType": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "runtime": {
+              "type": "string"
+            },
+            "harness": {
+              "type": "string"
+            },
+            "harnessVersion": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "outcome": {
+              "type": "string",
+              "enum": [
+                "running",
+                "completed",
+                "aborted",
+                "crashed",
+                "unknown"
+              ]
+            },
+            "enforcementTier": {
+              "type": "string",
+              "enum": [
+                "gateway",
+                "harness",
+                "observe"
+              ]
+            },
+            "startedAt": {
+              "type": "string"
+            },
+            "lastEventAt": {
+              "type": "string"
+            },
+            "endedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "cwd": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "gitBranch": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "modelInitial": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "numTurns": {
+              "type": "integer"
+            },
+            "numToolCalls": {
+              "type": "integer"
+            },
+            "numModelCalls": {
+              "type": "integer"
+            },
+            "totalCostMicros": {
+              "type": "integer"
+            },
+            "seqCount": {
+              "type": "integer"
+            },
+            "chainVerified": {
+              "type": "boolean"
+            },
+            "unobservedTail": {
+              "type": "boolean"
+            },
+            "title": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "sessionUuid",
+            "harnessSessionId",
+            "hostEnrollmentId",
+            "agentKey",
+            "parentSessionUuid",
+            "subagentType",
+            "runtime",
+            "harness",
+            "harnessVersion",
+            "outcome",
+            "enforcementTier",
+            "startedAt",
+            "lastEventAt",
+            "endedAt",
+            "cwd",
+            "gitBranch",
+            "modelInitial",
+            "numTurns",
+            "numToolCalls",
+            "numModelCalls",
+            "totalCostMicros",
+            "seqCount",
+            "chainVerified",
+            "unobservedTail",
+            "title"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "nextCursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "sessions",
+      "nextCursor"
+    ],
+    "additionalProperties": false
+  }
+}

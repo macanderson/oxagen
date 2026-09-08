@@ -4476,6 +4476,123 @@
       }
     },
     {
+      "name": "get_tacho_bundle",
+      "file": "tacho.bundle.get.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": ["api"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "dispatch_tacho_command",
+      "file": "tacho.command.dispatch.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": ["api"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "fetch_tacho_commands",
+      "file": "tacho.command.fetch.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": ["api"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "create_tacho_enrollment",
+      "file": "tacho.enrollment.create.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": ["api"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "revoke_tacho_enrollment",
+      "file": "tacho.enrollment.revoke.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": ["api"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "ingest_tacho_events",
+      "file": "tacho.events.ingest.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": ["api"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_tacho_hosts",
+      "file": "tacho.host.list.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": ["api"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_tacho_session",
+      "file": "tacho.session.get.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": ["api"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_tacho_sessions",
+      "file": "tacho.session.list.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": ["api"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "list_error_clusters",
       "file": "telemetry.error.cluster.ts",
       "domain": "telemetry",

@@ -929,6 +929,48 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "https://api.oxagen.sh/v1/telemetry/stella/operational",
   },
+  TACHO_ENROLLMENT_SIGNING_SECRET: {
+    group: "Inngest",
+    description:
+      "HMAC secret this deployment signs Tacho host enrollments with (create_tacho_enrollment). " +
+      "The collector on an enrolled host verifies the enrollment document against its own copy " +
+      "of the same secret, named by the document's verification_secret_env; the two are " +
+      "distributed out of band. Unset means the capability refuses to enrol a host.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "",
+  },
+  TACHO_BUNDLE_SIGNING_PRIVATE_KEY: {
+    group: "Inngest",
+    description:
+      "Ed25519 private key (PKCS#8 PEM, newlines as \\n) this deployment signs Tacho policy " +
+      "bundles with (get_tacho_bundle). The matching public key travels to each host at " +
+      "enrollment so tacho-hook verifies a cached bundle offline and fails closed on one it " +
+      "cannot verify. Unset means enrollment and bundle capabilities refuse.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "",
+  },
+  TACHO_INGEST_ENDPOINTS: {
+    group: "Inngest",
+    description:
+      "Comma-separated HTTPS base URLs of this deployment's Tacho machine endpoints " +
+      "(the /v1/tacho prefix). create_tacho_enrollment refuses to sign an enrollment pointing " +
+      "anywhere else, so an operator cannot aim a fleet of hosts at a third party. Defaults to " +
+      "the public endpoint; plaintext entries are dropped.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "https://api.oxagen.sh/v1/tacho",
+  },
   OXAGEN_WORKER_CONCURRENCY: {
     group: "Inngest",
     description:

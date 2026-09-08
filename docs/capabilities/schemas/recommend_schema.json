@@ -1,7 +1,7 @@
 {
   "name": "recommend_schema",
   "domain": "schema",
-  "description": "AI onboarding: read existing graph (graph.stats + graph_observed_labels ClickHouse telemetry + sampled ontology.query) and the workspace's enabled schemas → propose a starter schema or additions.",
+  "description": "AI onboarding: read existing graph (get_graph_stats + graph_observed_labels ClickHouse telemetry + sampled query_ontology) and the workspace's enabled schemas → propose a starter schema or additions.",
   "mode": "sync",
   "surfaces": [
     "api",

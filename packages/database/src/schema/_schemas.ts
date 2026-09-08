@@ -27,6 +27,11 @@ export const iamSchema = pgSchema("iam");
 // The foundation lands `retention_policy_versions` here; the manifest/blob
 // ledger follows in the evidence-ledger PR. See schema/run-evidence-foundation.ts.
 export const evidenceSchema = pgSchema("evidence");
+// tacho — hosts, sessions, and control state for agents Oxagen does not run
+// (docs/specs/tacho/spec.md, data-model.md section 3). Its own schema so the
+// evidence-adjacent tables (checkpoints, incidents) can carry append-only
+// grants without a per-table convention inside `agent`.
+export const tachoSchema = pgSchema("tacho");
 export const privacySchema = pgSchema("privacy");
 export const schemaRegistrySchema = pgSchema("schema_registry");
 export const environmentsSchema = pgSchema("environments");

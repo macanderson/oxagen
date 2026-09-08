@@ -138,6 +138,9 @@ importers:
         specifier: 3.25.76
         version: 3.25.76
     devDependencies:
+      '@oxagen/tacho':
+        specifier: workspace:*
+        version: link:../../packages/tacho
       '@vitest/coverage-v8':
         specifier: 2.1.9
         version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0))
@@ -1385,6 +1388,9 @@ importers:
       '@oxagen/storage':
         specifier: workspace:*
         version: link:../storage
+      '@oxagen/tacho':
+        specifier: workspace:*
+        version: link:../tacho
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry
@@ -1686,6 +1692,9 @@ importers:
       '@oxagen/sandbox':
         specifier: workspace:*
         version: link:../sandbox
+      '@oxagen/tacho':
+        specifier: workspace:*
+        version: link:../tacho
       '@oxagen/tenancy':
         specifier: workspace:*
         version: link:../tenancy
@@ -1968,6 +1977,9 @@ importers:
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
+      '@oxagen/tacho':
+        specifier: workspace:*
+        version: link:../tacho
       '@oxagen/tenancy':
         specifier: workspace:*
         version: link:../tenancy

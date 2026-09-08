@@ -1,0 +1,910 @@
+{
+  "name": "get_tacho_session",
+  "domain": "tacho",
+  "description": "Read one Tacho session's flight-recorder index: totals, subagent chains, model usage, files, commands, incidents, and checkpoints.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sessionUuid": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "required": [
+      "sessionUuid"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "session": {
+        "type": "object",
+        "properties": {
+          "sessionUuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "harnessSessionId": {
+            "type": "string"
+          },
+          "hostEnrollmentId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "agentKey": {
+            "type": "string"
+          },
+          "parentSessionUuid": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "subagentType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runtime": {
+            "type": "string"
+          },
+          "harness": {
+            "type": "string"
+          },
+          "harnessVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "running",
+              "completed",
+              "aborted",
+              "crashed",
+              "unknown"
+            ]
+          },
+          "enforcementTier": {
+            "type": "string",
+            "enum": [
+              "gateway",
+              "harness",
+              "observe"
+            ]
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "lastEventAt": {
+            "type": "string"
+          },
+          "endedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cwd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gitBranch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "modelInitial": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "numTurns": {
+            "type": "integer"
+          },
+          "numToolCalls": {
+            "type": "integer"
+          },
+          "numModelCalls": {
+            "type": "integer"
+          },
+          "totalCostMicros": {
+            "type": "integer"
+          },
+          "seqCount": {
+            "type": "integer"
+          },
+          "chainVerified": {
+            "type": "boolean"
+          },
+          "unobservedTail": {
+            "type": "boolean"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "anthropicUserEmail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entrypoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "terminalType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "permissionModeInitial": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "permissionModeFinal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "endReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "terminalReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projectDir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gitRemoteDigest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gitHeadShaStart": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "worktreeBranch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inputTokens": {
+            "type": "integer"
+          },
+          "outputTokens": {
+            "type": "integer"
+          },
+          "cacheReadTokens": {
+            "type": "integer"
+          },
+          "cacheCreationTokens": {
+            "type": "integer"
+          },
+          "thinkingTokens": {
+            "type": "integer"
+          },
+          "durationMs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "linesAdded": {
+            "type": "integer"
+          },
+          "linesRemoved": {
+            "type": "integer"
+          },
+          "numSubagents": {
+            "type": "integer"
+          },
+          "policyDenies": {
+            "type": "integer"
+          },
+          "genesisHash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastHash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "completenessGaps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "replayGrade": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "toolsAvailable": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mcpServers": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "envSnapshot": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "sessionUuid",
+          "harnessSessionId",
+          "hostEnrollmentId",
+          "agentKey",
+          "parentSessionUuid",
+          "subagentType",
+          "runtime",
+          "harness",
+          "harnessVersion",
+          "outcome",
+          "enforcementTier",
+          "startedAt",
+          "lastEventAt",
+          "endedAt",
+          "cwd",
+          "gitBranch",
+          "modelInitial",
+          "numTurns",
+          "numToolCalls",
+          "numModelCalls",
+          "totalCostMicros",
+          "seqCount",
+          "chainVerified",
+          "unobservedTail",
+          "title",
+          "anthropicUserEmail",
+          "entrypoint",
+          "terminalType",
+          "permissionModeInitial",
+          "permissionModeFinal",
+          "effort",
+          "endReason",
+          "terminalReason",
+          "projectDir",
+          "gitRemoteDigest",
+          "gitHeadShaStart",
+          "worktreeBranch",
+          "inputTokens",
+          "outputTokens",
+          "cacheReadTokens",
+          "cacheCreationTokens",
+          "thinkingTokens",
+          "durationMs",
+          "linesAdded",
+          "linesRemoved",
+          "numSubagents",
+          "policyDenies",
+          "genesisHash",
+          "lastHash",
+          "completenessGaps",
+          "replayGrade",
+          "toolsAvailable",
+          "mcpServers",
+          "envSnapshot"
+        ],
+        "additionalProperties": false
+      },
+      "children": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "sessionUuid": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "harnessSessionId": {
+              "type": "string"
+            },
+            "hostEnrollmentId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "agentKey": {
+              "type": "string"
+            },
+            "parentSessionUuid": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "subagentType": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "runtime": {
+              "type": "string"
+            },
+            "harness": {
+              "type": "string"
+            },
+            "harnessVersion": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "outcome": {
+              "type": "string",
+              "enum": [
+                "running",
+                "completed",
+                "aborted",
+                "crashed",
+                "unknown"
+              ]
+            },
+            "enforcementTier": {
+              "type": "string",
+              "enum": [
+                "gateway",
+                "harness",
+                "observe"
+              ]
+            },
+            "startedAt": {
+              "type": "string"
+            },
+            "lastEventAt": {
+              "type": "string"
+            },
+            "endedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "cwd": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "gitBranch": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "modelInitial": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "numTurns": {
+              "type": "integer"
+            },
+            "numToolCalls": {
+              "type": "integer"
+            },
+            "numModelCalls": {
+              "type": "integer"
+            },
+            "totalCostMicros": {
+              "type": "integer"
+            },
+            "seqCount": {
+              "type": "integer"
+            },
+            "chainVerified": {
+              "type": "boolean"
+            },
+            "unobservedTail": {
+              "type": "boolean"
+            },
+            "title": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "sessionUuid",
+            "harnessSessionId",
+            "hostEnrollmentId",
+            "agentKey",
+            "parentSessionUuid",
+            "subagentType",
+            "runtime",
+            "harness",
+            "harnessVersion",
+            "outcome",
+            "enforcementTier",
+            "startedAt",
+            "lastEventAt",
+            "endedAt",
+            "cwd",
+            "gitBranch",
+            "modelInitial",
+            "numTurns",
+            "numToolCalls",
+            "numModelCalls",
+            "totalCostMicros",
+            "seqCount",
+            "chainVerified",
+            "unobservedTail",
+            "title"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "models": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "model": {
+              "type": "string"
+            },
+            "canonicalModel": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "provider": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "requests": {
+              "type": "integer"
+            },
+            "inputTokens": {
+              "type": "integer"
+            },
+            "outputTokens": {
+              "type": "integer"
+            },
+            "cacheReadTokens": {
+              "type": "integer"
+            },
+            "cacheCreationTokens": {
+              "type": "integer"
+            },
+            "thinkingTokens": {
+              "type": "integer"
+            },
+            "costMicros": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "canonicalModel",
+            "provider",
+            "requests",
+            "inputTokens",
+            "outputTokens",
+            "cacheReadTokens",
+            "cacheCreationTokens",
+            "thinkingTokens",
+            "costMicros"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "reads": {
+              "type": "integer"
+            },
+            "writes": {
+              "type": "integer"
+            },
+            "edits": {
+              "type": "integer"
+            },
+            "deletes": {
+              "type": "integer"
+            },
+            "firstSeq": {
+              "type": "integer"
+            },
+            "lastSeq": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "path",
+            "reads",
+            "writes",
+            "edits",
+            "deletes",
+            "firstSeq",
+            "lastSeq"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "commands": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "seq": {
+              "type": "integer"
+            },
+            "toolUseId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "commandHead": {
+              "type": "string"
+            },
+            "bashCommand": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "status": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "durationMs": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "decision": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "policyRule": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "seq",
+            "toolUseId",
+            "commandHead",
+            "bashCommand",
+            "status",
+            "durationMs",
+            "decision",
+            "policyRule"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "incidents": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "incidentId": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "severity": {
+              "type": "integer"
+            },
+            "detectedAt": {
+              "type": "string"
+            },
+            "detectedBy": {
+              "type": "string"
+            },
+            "resolvedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "incidentId",
+            "kind",
+            "severity",
+            "detectedAt",
+            "detectedBy",
+            "resolvedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "checkpointCount": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "session",
+      "children",
+      "models",
+      "files",
+      "commands",
+      "incidents",
+      "checkpointCount"
+    ],
+    "additionalProperties": false
+  }
+}

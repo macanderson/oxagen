@@ -226,6 +226,12 @@
                           }
                         },
                         "additionalProperties": false
+                      },
+                      "format": {
+                        "type": "string",
+                        "enum": [
+                          "json"
+                        ]
                       }
                     },
                     "required": [
@@ -355,6 +361,12 @@
                     }
                   },
                   "additionalProperties": false
+                },
+                "format": {
+                  "type": "string",
+                  "enum": [
+                    "json"
+                  ]
                 }
               },
               "required": [

@@ -26,6 +26,7 @@ export * from "./ai";
 export * from "./eval";
 export * from "./cms";
 export * from "./ratelimit";
+export * from "./tacho";
 
 // Relations must be exported for Drizzle to include them in the schema
 export * from "../relations";

@@ -1,0 +1,212 @@
+{
+  "name": "fetch_tacho_commands",
+  "domain": "tacho",
+  "description": "Acknowledge applied Tacho commands and fetch the pending ones with the host's control envelope.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "host_enrollment_id": {
+        "type": "string"
+      },
+      "acknowledgements": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "command_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "outcome": {
+              "type": "string",
+              "enum": [
+                "delivered",
+                "applied",
+                "expired",
+                "failed"
+              ]
+            },
+            "detail": {
+              "type": "string",
+              "maxLength": 512
+            },
+            "applied_at_seq": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "session_uuid": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "command_id",
+            "outcome"
+          ],
+          "additionalProperties": false
+        },
+        "default": []
+      },
+      "daemon": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "uptime_s": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "spool_depth": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "hooks_ok": {
+            "type": "boolean"
+          },
+          "otel_ok": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "host_enrollment_id"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "acknowledged": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "control": {
+        "type": "object",
+        "properties": {
+          "host_status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "suspended",
+              "revoked"
+            ]
+          },
+          "deny_generation": {
+            "type": "object",
+            "properties": {
+              "org": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "workspace": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "org",
+              "workspace"
+            ],
+            "additionalProperties": false
+          },
+          "bundle_etag": {
+            "type": "string",
+            "minLength": 1
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "command": {
+                  "type": "string",
+                  "enum": [
+                    "pause",
+                    "resume",
+                    "cancel",
+                    "message",
+                    "revoke",
+                    "refresh_bundle",
+                    "kill"
+                  ]
+                },
+                "session_uuid": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "payload": {
+                  "type": "object",
+                  "additionalProperties": {}
+                },
+                "issued_at": {
+                  "type": "string"
+                },
+                "expires_at": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "command",
+                "session_uuid",
+                "payload",
+                "issued_at",
+                "expires_at"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "host_status",
+          "deny_generation",
+          "bundle_etag",
+          "commands"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "acknowledged",
+      "control"
+    ],
+    "additionalProperties": false
+  }
+}

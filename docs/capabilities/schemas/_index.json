@@ -1,5 +1,5 @@
 {
-  "generatedCount": 335,
+  "generatedCount": 350,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -568,6 +568,26 @@
       "consumes": []
     },
     {
+      "name": "create_stella_enrollment",
+      "domain": "telemetry",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "create_tacho_enrollment",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "create_trace_dataset",
       "domain": "eval",
       "surfaces": [
@@ -878,6 +898,16 @@
       "consumes": []
     },
     {
+      "name": "dispatch_tacho_command",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "draft_skill",
       "domain": "skill",
       "surfaces": [
@@ -1014,6 +1044,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "fetch_tacho_commands",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -1773,6 +1813,26 @@
       "consumes": []
     },
     {
+      "name": "get_tacho_bundle",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_tacho_session",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_usage_breakdown",
       "domain": "billing",
       "surfaces": [
@@ -1871,6 +1931,16 @@
     {
       "name": "ingest_stella_operational_telemetry",
       "domain": "telemetry",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "ingest_tacho_events",
+      "domain": "tacho",
       "surfaces": [
         "api"
       ],
@@ -2030,6 +2100,18 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_context_records",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "agent",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -2522,6 +2604,38 @@
       "consumes": []
     },
     {
+      "name": "list_tacho_hosts",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_tacho_sessions",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_tool_declarations",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "agent",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_workspace_members",
       "domain": "workspace",
       "surfaces": [
@@ -2712,6 +2826,16 @@
       "consumes": []
     },
     {
+      "name": "promote_context_record",
+      "domain": "context",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "promote_memory",
       "domain": "agent",
       "surfaces": [
@@ -2730,6 +2854,26 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "publish_context_record",
+      "domain": "context",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "publish_tool_declaration",
+      "domain": "tool",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -3098,7 +3242,8 @@
       "domain": "api_key",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3117,11 +3262,22 @@
       "consumes": []
     },
     {
+      "name": "revoke_tacho_enrollment",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "rotate_api_key",
       "domain": "api_key",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],

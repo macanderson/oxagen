@@ -35,6 +35,7 @@
     "@oxagen/sandbox": "workspace:*",
     "@oxagen/skills": "workspace:*",
     "@oxagen/storage": "workspace:*",
+    "@oxagen/tacho": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "@oxagen/web": "workspace:*",

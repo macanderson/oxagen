@@ -8,6 +8,7 @@
 // Note: these imports trigger the registerCapability() side-effects inside
 // each file, so this barrel also serves as the registration entrypoint.
 
+import type { CapabilityDeclaration } from "../types";
 import { apiKeyCreate } from "./api.key.create";
 import { apiKeyRevoke } from "./api.key.revoke";
 import { archiveCreate } from "./archive.create";
@@ -57,6 +58,15 @@ import { agentDebugTrace } from "./agent.debug.trace";
 import { telemetryErrorCluster } from "./telemetry.error.cluster";
 import { telemetryStellaEnroll } from "./telemetry.stella.enroll";
 import { telemetryStellaIngest } from "./telemetry.stella.ingest";
+import { tachoEnrollmentCreate } from "./tacho.enrollment.create";
+import { tachoEnrollmentRevoke } from "./tacho.enrollment.revoke";
+import { tachoEventsIngest } from "./tacho.events.ingest";
+import { tachoBundleGet } from "./tacho.bundle.get";
+import { tachoCommandDispatch } from "./tacho.command.dispatch";
+import { tachoCommandFetch } from "./tacho.command.fetch";
+import { tachoHostList } from "./tacho.host.list";
+import { tachoSessionList } from "./tacho.session.list";
+import { tachoSessionGet } from "./tacho.session.get";
 import { agentUiRender } from "./agent.ui.render";
 import { documentsGenerate } from "./document.generate";
 import { documentsPdfCreate } from "./document.pdf.create";
@@ -614,6 +624,15 @@ export {
   telemetryErrorCluster,
   telemetryStellaEnroll,
   telemetryStellaIngest,
+  tachoEnrollmentCreate,
+  tachoEnrollmentRevoke,
+  tachoEventsIngest,
+  tachoBundleGet,
+  tachoCommandDispatch,
+  tachoCommandFetch,
+  tachoHostList,
+  tachoSessionList,
+  tachoSessionGet,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,
@@ -875,7 +894,9 @@ export {
  *
  * Add one entry here whenever a new contract file is added to this directory.
  */
-export const contracts = [
+// Annotated wide on purpose: the inferred tuple type of ~350 contracts exceeds
+// what the compiler will serialize into a declaration file.
+export const contracts: readonly CapabilityDeclaration[] = [
   apiKeyCreate,
   apiKeyRevoke,
   archiveCreate,
@@ -963,6 +984,15 @@ export const contracts = [
   telemetryErrorCluster,
   telemetryStellaEnroll,
   telemetryStellaIngest,
+  tachoEnrollmentCreate,
+  tachoEnrollmentRevoke,
+  tachoEventsIngest,
+  tachoBundleGet,
+  tachoCommandDispatch,
+  tachoCommandFetch,
+  tachoHostList,
+  tachoSessionList,
+  tachoSessionGet,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,

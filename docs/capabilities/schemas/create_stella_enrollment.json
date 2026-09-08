@@ -1,0 +1,107 @@
+{
+  "name": "create_stella_enrollment",
+  "domain": "telemetry",
+  "description": "Mint a signed Stella enterprise-telemetry enrollment and its bound API key for this workspace.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      },
+      "endpoint": {
+        "type": "string",
+        "format": "uri",
+        "maxLength": 512
+      },
+      "credentialEnv": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "modelCatalog": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "provider": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "required": [
+            "provider",
+            "model"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "validityDays": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 90,
+        "default": 90
+      }
+    },
+    "required": [
+      "name",
+      "endpoint",
+      "credentialEnv",
+      "modelCatalog"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "enrollmentId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "apiKeyPublicId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "apiKey": {
+        "type": "string",
+        "minLength": 1
+      },
+      "managedSettings": {
+        "type": "object",
+        "additionalProperties": {}
+      },
+      "expiresAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "enrollmentId",
+      "apiKeyPublicId",
+      "apiKey",
+      "managedSettings",
+      "expiresAt"
+    ],
+    "additionalProperties": false
+  }
+}

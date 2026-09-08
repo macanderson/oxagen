@@ -1,0 +1,467 @@
+{
+  "name": "create_tacho_enrollment",
+  "domain": "tacho",
+  "description": "Enrol a machine as a Tacho host: mint its scoped API key, signed enrollment, and initial policy bundle.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "hostname": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 253
+      },
+      "osUser": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "platform": {
+        "type": "string",
+        "enum": [
+          "darwin",
+          "linux",
+          "win32"
+        ]
+      },
+      "osVersion": {
+        "type": "string",
+        "maxLength": 128
+      },
+      "arch": {
+        "type": "string",
+        "maxLength": 32
+      },
+      "devicePublicKey": {
+        "type": "string"
+      },
+      "harnesses": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "claude-code"
+          ]
+        }
+      },
+      "claudeVersion": {
+        "type": "string",
+        "maxLength": 32
+      },
+      "claudeExecpath": {
+        "type": "string",
+        "maxLength": 1024
+      },
+      "nodeVersion": {
+        "type": "string",
+        "maxLength": 32
+      },
+      "wrapperVersion": {
+        "type": "string",
+        "maxLength": 32
+      },
+      "shell": {
+        "type": "string",
+        "maxLength": 128
+      },
+      "managed": {
+        "type": "boolean",
+        "default": false
+      },
+      "validityDays": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 365,
+        "default": 180
+      }
+    },
+    "required": [
+      "hostname",
+      "osUser",
+      "platform",
+      "devicePublicKey",
+      "harnesses"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "hostEnrollmentId": {
+        "type": "string"
+      },
+      "agentKey": {
+        "type": "string",
+        "minLength": 1
+      },
+      "apiKeyPublicId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "apiKey": {
+        "type": "string",
+        "minLength": 1
+      },
+      "enrollment": {
+        "type": "object",
+        "properties": {
+          "claims": {
+            "type": "object",
+            "properties": {
+              "schema": {
+                "const": "oxagen.tacho.host-enrollment.v1"
+              },
+              "issuer": {
+                "type": "string",
+                "minLength": 1
+              },
+              "audience": {
+                "type": "string",
+                "minLength": 1
+              },
+              "host_enrollment_id": {
+                "type": "string"
+              },
+              "organization_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "agent_key": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ingest_endpoint": {
+                "type": "string",
+                "format": "uri"
+              },
+              "bundle_endpoint": {
+                "type": "string",
+                "format": "uri"
+              },
+              "commands_endpoint": {
+                "type": "string",
+                "format": "uri"
+              },
+              "credential_env": {
+                "type": "string"
+              },
+              "device_key_fingerprint": {
+                "type": "string",
+                "minLength": 1
+              },
+              "harnesses": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "claude-code"
+                  ]
+                }
+              },
+              "issued_at_unix_s": {
+                "type": "integer"
+              },
+              "expires_at_unix_s": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "schema",
+              "issuer",
+              "audience",
+              "host_enrollment_id",
+              "organization_id",
+              "workspace_id",
+              "agent_key",
+              "ingest_endpoint",
+              "bundle_endpoint",
+              "commands_endpoint",
+              "credential_env",
+              "device_key_fingerprint",
+              "harnesses",
+              "issued_at_unix_s",
+              "expires_at_unix_s"
+            ],
+            "additionalProperties": false
+          },
+          "signature_hex": {
+            "type": "string"
+          },
+          "verification_secret_env": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "claims",
+          "signature_hex",
+          "verification_secret_env"
+        ],
+        "additionalProperties": false
+      },
+      "policyBundle": {
+        "type": "object",
+        "properties": {
+          "schema": {
+            "const": "tacho.bundle.v1"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "etag": {
+            "type": "string",
+            "minLength": 1
+          },
+          "issued_at": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string"
+          },
+          "host_enrollment_id": {
+            "type": "string"
+          },
+          "host_status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "suspended",
+              "revoked"
+            ]
+          },
+          "deny_generation": {
+            "type": "object",
+            "properties": {
+              "org": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "workspace": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "org",
+              "workspace"
+            ],
+            "additionalProperties": false
+          },
+          "permissions": {
+            "type": "object",
+            "properties": {
+              "allow": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 512
+                }
+              },
+              "deny": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 512
+                }
+              },
+              "ask": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 512
+                }
+              }
+            },
+            "required": [
+              "allow",
+              "deny",
+              "ask"
+            ],
+            "additionalProperties": false
+          },
+          "tools": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "risk_grade": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "critical"
+                  ]
+                },
+                "read_only": {
+                  "type": "boolean"
+                },
+                "capability_id": {
+                  "type": "string",
+                  "maxLength": 256
+                }
+              },
+              "required": [
+                "risk_grade",
+                "read_only"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "budget": {
+            "type": "object",
+            "properties": {
+              "session_limit_usd": {
+                "type": "number",
+                "minimum": 0
+              },
+              "daily_limit_usd": {
+                "type": "number",
+                "minimum": 0
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "observed",
+                  "enforced"
+                ]
+              }
+            },
+            "required": [
+              "mode"
+            ],
+            "additionalProperties": false
+          },
+          "context": {
+            "type": "object",
+            "properties": {
+              "system": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 16384
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "system"
+            ],
+            "additionalProperties": false
+          },
+          "retention": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "digest_only",
+                  "content_exact"
+                ]
+              },
+              "classes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 64
+                }
+              }
+            },
+            "required": [
+              "mode",
+              "classes"
+            ],
+            "additionalProperties": false
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "observe",
+              "enforce"
+            ]
+          },
+          "signature": {
+            "type": "object",
+            "properties": {
+              "key_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "alg": {
+                "const": "ed25519"
+              },
+              "sig": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "key_id",
+              "alg",
+              "sig"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "schema",
+          "version",
+          "etag",
+          "issued_at",
+          "expires_at",
+          "host_enrollment_id",
+          "host_status",
+          "deny_generation",
+          "permissions",
+          "tools",
+          "budget",
+          "context",
+          "retention",
+          "mode",
+          "signature"
+        ],
+        "additionalProperties": false
+      },
+      "bundlePublicKeyPem": {
+        "type": "string",
+        "minLength": 1
+      },
+      "expiresAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "hostEnrollmentId",
+      "agentKey",
+      "apiKeyPublicId",
+      "apiKey",
+      "enrollment",
+      "policyBundle",
+      "bundlePublicKeyPem",
+      "expiresAt"
+    ],
+    "additionalProperties": false
+  }
+}
