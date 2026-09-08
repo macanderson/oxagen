@@ -1,3 +1,4 @@
+import { assertWithinToolLimit, measureToolList } from "./tool-budget";
 /**
  * Run one turn on the Stella engine — the only engine — against the contract
  * `RunCodingAgentOptions`/`RunCodingAgentResult` still name.
@@ -165,9 +166,16 @@ export async function runStellaTurn(
   let steps = 0;
   let budgetStopped = false;
 
+  const toolSchemas = await toToolSchemas(tools, mutating);
+  // Before the request, so a turn that cannot be accepted says why rather than
+  // surfacing whatever the gateway returns for a request it was never going to
+  // take (oxagen#2611).
+  assertWithinToolLimit(opts.model, toolSchemas);
+  const toolList = measureToolList(toolSchemas);
+
   const request: TurnRequest = {
     provider_id: "oxagen-host",
-    tools: await toToolSchemas(tools, mutating),
+    tools: toolSchemas,
     messages: toCompletionMessages({
       system: opts.system,
       history,
@@ -239,6 +247,7 @@ export async function runStellaTurn(
       usageTotals,
       transcript: lastSeenTranscript,
       stopReason,
+      toolList,
     });
   }
 
@@ -253,6 +262,7 @@ export async function runStellaTurn(
     steps,
     opts,
     onEvent,
+    toolList,
     usageTotals,
     transcript: lastSeenTranscript,
     ...(budgetStopped ? { stopReason: "budget" as const } : {}),
@@ -485,6 +495,7 @@ async function assembleResult(args: {
   usageTotals: readonly CompletionUsage[];
   transcript?: ModelMessage[];
   stopReason?: RunCodingAgentResult["stopReason"];
+  toolList: RunCodingAgentResult["toolList"];
 }): Promise<RunCodingAgentResult> {
   const { opts, onEvent } = args;
 
@@ -509,6 +520,9 @@ async function assembleResult(args: {
     usage: sumUsage(args.usageTotals),
     messages,
     ...(args.stopReason ? { stopReason: args.stopReason } : {}),
+    // What this turn spent advertising its tools, so the number is visible per
+    // turn rather than something somebody has to measure by hand (#2611).
+    ...(args.toolList ? { toolList: args.toolList } : {}),
   };
 }
 

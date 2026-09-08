@@ -477,6 +477,22 @@ export interface RunCodingAgentResult {
    * tell the user WHY the turn cut off. Absent on a natural finish.
    */
   stopReason?: TurnStopReason;
+  /**
+   * What the turn spent advertising its tools, before the model said anything.
+   *
+   * Measured on this repository's own surface it was 45,007 tokens across 271
+   * tools — 92.4% of the cacheable prefix, against 3,704 tokens of instructions
+   * somebody wrote and reviewed. Nobody could see that without measuring it by
+   * hand (oxagen#2611). `estimatedTokens` is bytes/4 and is named an estimate;
+   * `bytes` is exact.
+   *
+   * Absent on a path that does not measure it.
+   */
+  toolList?: {
+    count: number;
+    bytes: number;
+    estimatedTokens: number;
+  };
 }
 
 // ── Turn defaults ────────────────────────────────────────────────────────────
