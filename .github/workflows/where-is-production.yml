@@ -37,6 +37,16 @@ jobs:
   describe:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # The role's trust policy keys on the OIDC `sub` claim, and that claim only
+    # carries `environment:production` when the JOB declares one. Without this
+    # line the assume fails with "Not authorized to perform
+    # sts:AssumeRoleWithWebIdentity" -- which reads like a missing permission
+    # and is actually a missing claim (run 34181668242).
+    #
+    # It is the same line pipeline.yml's deploy jobs carry, and it also puts
+    # this behind whatever reviewers that environment requires, which is the
+    # right gate for something holding a production credential.
+    environment: production
     permissions:
       contents: read
       # Mints the OIDC token the role trusts. Job-scoped, and this workflow has
