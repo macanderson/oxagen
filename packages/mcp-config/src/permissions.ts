@@ -44,6 +44,13 @@ export interface PermissionResult {
  *   - `*` compiles to `.*`, which crosses every separator. It is safe on flat
  *     tool names but NOT on structured values: `https://*.corp.com/*` also
  *     matches `https://evil.com/x.corp.com/y`. See checkServerUrl in managed.ts.
+ *   - A double star followed by a separator is the one exception, and it means
+ *     what every glob a user has met means by it: zero or more leading path
+ *     segments. Compiled with the slash literal it required at least one
+ *     directory, so a deny rule for a dotfile anywhere denied `config/.env` and
+ *     permitted `.env` — the root file being the one such a rule is written
+ *     for (#1387). A single `*` keeps its old meaning, because narrowing it
+ *     would silently shrink allow rules already in use.
  *   - Matching is byte-exact and case-sensitive, with no normalization of the
  *     value, so a denylist entry is only as good as the exact spelling it was
  *     written against.
@@ -60,7 +67,12 @@ export function matchGlob(pattern: string, value: string): boolean {
   // Convert glob pattern to regex:
   // Escape regex special chars except *, then replace * with .*
   const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
-  const regexStr = `^${escaped.replace(/\*/g, ".*")}$`;
+  // One pass, so a leading double-star-slash is never re-read as two `*`s: it
+  // becomes an optional run of segments, and every other run of `*` keeps `.*`.
+  const body = escaped.replace(/\*\*\/|\*+/g, (token) =>
+    token === "**/" ? "(?:.*/)?" : ".*",
+  );
+  const regexStr = `^${body}$`;
   try {
     return new RegExp(regexStr).test(value);
   } catch {
