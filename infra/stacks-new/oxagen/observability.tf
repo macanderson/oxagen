@@ -2,7 +2,7 @@
  * Logging, an error/warning/incident event stream, and long-term archival.
  *
  * Everything lands in CloudWatch Logs first — the node's containers, Aurora,
- * Redshift, the ALB — and from there splits two ways:
+ * the ALB — and from there splits two ways:
  *
  *   1. Every log line is shipped to S3 via Kinesis Data Firehose for
  *      long-term archival (lifecycle down to Glacier Deep Archive; see

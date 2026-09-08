@@ -1,18 +1,19 @@
 /**
  * The Oxagen brand in the new account: the `oxagen.sh` zone, the static
  * marketing site, the VPC + ALB + app node that serves docs, app, api and
- * mcp, and (in data-services.tf) Aurora PostgreSQL Serverless v2 and
- * Redshift Serverless. `stella.oxagen.sh`'s alias record lives in
+ * mcp, and (in data-services.tf) Aurora PostgreSQL Serverless v2.
+ * `stella.oxagen.sh`'s alias record lives in
  * `stacks-new/stella`, same split as the old account, because the hostname
  * is Oxagen's but the resource belongs to Stella's own state and Resource
  * Group.
  *
  * Differences from `stacks/oxagen` in the old account, and why:
  *
- *   - Postgres moves to Aurora Serverless v2 and ClickHouse's role moves to
- *     Redshift Serverless — both now scale close enough to zero to beat
- *     self-hosting at this traffic level (see data-services.tf). Neo4j stays
- *     self-hosted on the app node: Neptune Analytics, Amazon's only graph
+ *   - Postgres moves to Aurora Serverless v2, which now scales close enough
+ *     to zero to beat self-hosting at this traffic level (see
+ *     data-services.tf). ClickHouse was to follow it to Redshift Serverless;
+ *     that plan is withdrawn (#2693) and it stays on the app node. Neo4j
+ *     stays there too: Neptune Analytics, Amazon's only graph
  *     product with native vector search, has a real floor cost that does not
  *     reach zero even paused, and Neo4j 5.11+ already gives this app vector
  *     indexes today.

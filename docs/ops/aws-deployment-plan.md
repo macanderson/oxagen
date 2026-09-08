@@ -18,12 +18,13 @@ is actually running in `578673726240` today — one self-hosted EC2 node
 behind Caddy running Postgres/Neo4j/ClickHouse in Docker, plus the five
 platform services as plain Node processes, not the ECS/managed-store
 architecture this document specifies. A second migration to a new account
-(`916294258235`) is in progress there now; `docs/new-account-migration-plan.md`
-in that repo is the live decision record and cutover checklist — Aurora
-Serverless v2 and Redshift Serverless replace Postgres and ClickHouse,
-Neo4j stays self-hosted, and the app node sits behind a VPC/ALB. Read that
-repo before making any AWS infrastructure decision; do not resume executing
-the plan below.
+(`916294258235`) is complete; `infra/docs/new-account-migration-plan.md`
+**in this repository** is the live decision record and cutover checklist —
+Aurora Serverless v2 replaces Postgres, while ClickHouse and Neo4j both stay
+self-hosted on the app node, and that node sits behind a VPC/ALB. Redshift
+Serverless was to take ClickHouse's role; that decision is withdrawn (#2693).
+Read `infra/` before making any AWS infrastructure decision; do not resume
+executing the plan below.
 
 **Why this is being left in place rather than deleted:** §4's code-level
 TODOs (an S3 storage driver behind `packages/storage`, an `output:

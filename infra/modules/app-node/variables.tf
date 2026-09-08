@@ -29,7 +29,7 @@ variable "availability_zone" {
 }
 
 variable "instance_type" {
-  description = "Graviton instance type. `t4g.medium` is the floor for Caddy, a handful of small Node processes, and Neo4j sharing the box — Postgres and ClickHouse have moved to Aurora and Redshift Serverless, so this carries one engine rather than three."
+  description = "Graviton instance type. `t4g.medium` is the floor for Caddy, a handful of small Node processes, and both ClickHouse and Neo4j sharing the box. Postgres moved to Aurora, so this carries two engines rather than three — ClickHouse stayed (#2693)."
   type        = string
   default     = "t4g.medium"
 }

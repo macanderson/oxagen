@@ -101,9 +101,9 @@ mkdir -p /data/{postgres,neo4j/data,neo4j/logs,clickhouse,clickhouse-config}
 # ---------------------------------------------------------------------------
 # ClickHouse: size its logging to this node, not to the machine it imagines
 #
-# This module is not instantiated by stacks-new/ — the new account uses
-# Redshift Serverless for analytics and runs no self-hosted ClickHouse, so
-# the incident below cannot recur there. Carried anyway: the fix was
+# This module is not instantiated by stacks-new/ — the new account runs
+# ClickHouse on the app node instead of a dedicated data node, so the
+# incident below reaches it by a different module. Carried anyway: the fix was
 # measured by hand on the old node and lived only on a laptop and in a
 # now-archived repository, and a module that is still in the tree can still
 # be stood up.

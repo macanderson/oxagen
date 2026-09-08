@@ -5,10 +5,10 @@ world.
 
 **This is the old account (`578673726240`), deliberately.** It targets
 `modules/data-node`'s combined instance — Postgres, ClickHouse and Neo4j
-together on one box. The new account has no equivalent instance: Postgres
-is Aurora Serverless v2, ClickHouse's role is Redshift Serverless (both
-managed AWS services, not reachable via an SSM port-forward to an EC2
-instance), and Neo4j runs on the shared app node instead of a dedicated data
+together on one box. The new account has no equivalent instance: Postgres is
+Aurora Serverless v2, a managed service not reachable via an SSM port-forward
+to an EC2 instance, and ClickHouse and Neo4j both run on the shared app node
+rather than a dedicated data node — reachable the same way, against that
 node. See `docs/new-account-migration-plan.md`.
 
 ## Why there is tooling at all

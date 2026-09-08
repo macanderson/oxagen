@@ -50,10 +50,3 @@ output "postgres" {
     username = aws_rds_cluster.postgres.master_username
   }
 }
-
-output "redshift" {
-  description = "Password lives at /oxagen-app/redshift/password in Parameter Store, not here."
-  value = {
-    endpoint = aws_redshiftserverless_workgroup.oxagen.endpoint
-  }
-}

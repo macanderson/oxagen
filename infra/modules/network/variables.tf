@@ -16,17 +16,22 @@ variable "vpc_cidr" {
 
 variable "availability_zones" {
   description = <<-EOT
-    Three AZs, in order. An ALB needs subnets in at least two; Redshift
-    Serverless refuses to provision at all unless its subnet group spans at
-    least three, each with enough free IPs — the stricter requirement here,
-    so it sets the floor for both public and private subnet counts even
-    though only one AZ's private subnet carries anything (the app node).
+    Three AZs, in order. An ALB needs subnets in at least two. The third was
+    Redshift Serverless's floor — it refused to provision unless its subnet
+    group spanned three — and Redshift is gone (#2693).
+
+    Three is kept anyway, and the reason is worth stating rather than left as
+    a number nobody can justify: dropping to two destroys a public and a
+    private subnet, which is a change with real blast radius made to save
+    nothing. Only one AZ's private subnet carries anything today (the app
+    node). Reducing it is a deliberate decision for someone with a reason,
+    not a tidy-up that rides a removal.
   EOT
   type        = list(string)
 
   validation {
-    condition     = length(var.availability_zones) >= 3
-    error_message = "Redshift Serverless requires subnets across at least three availability zones."
+    condition     = length(var.availability_zones) >= 2
+    error_message = "An ALB needs subnets in at least two availability zones."
   }
 }
 
