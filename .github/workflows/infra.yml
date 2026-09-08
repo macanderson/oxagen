@@ -80,11 +80,52 @@ jobs:
           # green here — including a change that broke planning outright.
           # A manual dispatch had the same hole from the other end: it carries
           # no base ref, so the fallback diffs one arbitrary commit.
+          bootstrap_touched=no
+          if echo "$changed" | grep -q '^infra/stacks-new/bootstrap/'; then
+            bootstrap_touched=yes
+          fi
+
           if echo "$changed" | grep -qE '^infra/modules/|^\.github/workflows/infra\.yml$' \
             || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             stacks=$(find infra/stacks-new -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
           else
             stacks=$(echo "$changed" | sed -n 's#^infra/stacks-new/\([^/]*\)/.*#\1#p' | sort -u)
+          fi
+
+          # `bootstrap` is not one of the stacks CI can speak for. It creates
+          # the state bucket and lock table every other stack's remote state
+          # lives in, and it keeps its own state on a local backend -- so a
+          # runner starts from an EMPTY state, sees all five resources as
+          # absent, and plans to create the bucket and table that already
+          # exist and are in use.
+          #
+          # That is not a hypothetical. `apply (bootstrap)` is first in the
+          # matrix and the matrix is `fail-fast: true`, so its failure
+          # cancelled every sibling apply: runs 34214816966 and 34215070294
+          # both died on `BucketAlreadyExists` plus `ResourceInUseException:
+          # Table already exists: oxagen-tflock`, and NOTHING has been applied
+          # from `main` since the infrastructure moved into this repository.
+          # `main` still carries an un-applied node replacement because of it.
+          #
+          # Its plan was the quieter half of the same bug: green, and reporting
+          # five creations that must never happen.
+          #
+          # Dropped from both matrices until its state is remote. That is a
+          # one-time hand migration -- apply once with a local backend, add the
+          # `backend "s3"` block, `tofu init -migrate-state` -- after which
+          # this filter and the warning below come out and the stack is
+          # managed like any other. #2775 carries that work and the steps.
+          stacks=$(echo "$stacks" | grep -vx 'bootstrap' || true)
+
+          # Removing it must not turn a bootstrap-only change green by
+          # accident. An empty matrix skips the job, and a skipped job reports
+          # success -- the exact hole the comment above this one describes.
+          if [ "$bootstrap_touched" = "yes" ]; then
+            echo "::warning title=bootstrap not planned or applied::\
+          infra/stacks-new/bootstrap changed. CI cannot plan or apply it: its \
+          state is on a local backend, so a runner would try to re-create the \
+          state bucket and lock table. Apply this stack by hand, or migrate \
+          its state into S3 and take the filter out of discover."
           fi
 
           if [ -z "$stacks" ]; then
