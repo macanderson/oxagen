@@ -73,3 +73,4 @@ first. Move a row into its epic when one fits.
 - [ADR-046](./ADR-046-per-commit-ci-concurrency-on-main.md) — A push to main gets its own CI concurrency group
 - [ADR-047](./ADR-047-no-provider-posture-matrix.md) — No provider-posture matrix; handle divergence at the gateway
 - [ADR-048](./ADR-048-one-path-glob.md) — One path glob, in a package with no dependencies
+- [ADR-049](./ADR-049-dod-recheck-reruns-the-old-run.md) — The DoD recheck re-runs the old run rather than reporting a new check
