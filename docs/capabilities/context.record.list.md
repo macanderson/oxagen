@@ -36,6 +36,7 @@ List the steering context records registered in the active workspace, each with 
 ## Side effects
 
 None — read-only.
+- Records shown here with status `active` and a pinned version are the ones steering turns in this workspace (ADR-051).
 
 ## Errors
 

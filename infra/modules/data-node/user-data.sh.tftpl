@@ -34,6 +34,27 @@ curl -fsSL \
   -o /usr/local/lib/docker/cli-plugins/docker-compose
 chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
+# Cap every container's logs before the daemon starts, rather than per service
+# in the compose file below. There is no /etc/docker/daemon.json on this node
+# and json-file has no default limit, so a container logs until the disk is
+# gone. Caddy -- which is NOT in the compose below and so a per-service block
+# would have missed -- was already at 166 MB when #1305 was investigated.
+#
+# Logs were not what filled the root volume that day (release directories
+# were), and this is the secondary item #1305 keeps rather than the cause. It
+# is here because the daemon-wide default is one file and covers containers
+# this compose does not define.
+#
+# 10m x 3 matches what deploy-service.sh already passes per app container, so
+# the two halves of the box agree.
+mkdir -p /etc/docker
+cat > /etc/docker/daemon.json <<'DAEMONEOF'
+{
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "10m", "max-file": "3" }
+}
+DAEMONEOF
+
 systemctl enable --now docker
 
 # ---------------------------------------------------------------------------

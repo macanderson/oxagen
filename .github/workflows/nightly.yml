@@ -309,6 +309,14 @@ jobs:
       - name: Build app (playwright.config webServer runs `pnpm start` in CI)
         run: pnpm turbo run build --filter=@oxagen/app
       - name: E2e suite
+        env:
+          # Trace EVERY attempt, keeping only the failures. The default
+          # `on-first-retry` starts tracing at the retry, so a flake's first
+          # attempt -- the one that failed -- is never recorded, and what the
+          # artifact holds is a trace of the retry that passed. That is what
+          # #2559 has been trying to diagnose from. Costs wall clock on every
+          # attempt, which the nightly can afford and a pull request cannot.
+          PLAYWRIGHT_TRACE_ALL: "1"
         run: pnpm test:e2e
 
       # Playwright writes a trace and an `error-context.md` per failure into

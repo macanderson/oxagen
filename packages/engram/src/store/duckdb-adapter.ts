@@ -6,6 +6,7 @@
  * is backed by a file on disk (or in-memory for tests).
  */
 import type { Database, Connection } from "duckdb";
+import type { DecayStats } from "../decay";
 import type { MemoryRecord, Namespace, RecordKind } from "../types";
 import type { EpisodicQuery, EpisodicStore } from "./episodic";
 import { tokenizeLexicalQuery } from "./lexical-tokenize";
@@ -71,7 +72,25 @@ function rowToRecord(row: Record<string, unknown>): MemoryRecord {
     causality: JSON.parse(row["causality"] as string) as string[],
     ttl: (row["ttl"] as number | null) ?? undefined,
     createdAt: row["created_at"] as number,
+    // Read back so decay's durable branch is reachable. It never was: the type
+    // has carried this field since #1367 and no column held it, so every
+    // record came out of the store with it undefined and decay always fell
+    // back to createdAt (#1418).
+    lastReinforcedAt: toOptionalCount(row["last_reinforced_at"]),
   };
+}
+
+/** DuckDB returns BIGINT as a BigInt; decay wants a number, and 0 means absent. */
+function toCount(value: unknown): number {
+  if (typeof value === "bigint") return Number(value);
+  if (typeof value === "number") return value;
+  return 0;
+}
+
+/** As above, but absent stays absent — a zero timestamp is not a timestamp. */
+function toOptionalCount(value: unknown): number | undefined {
+  const n = toCount(value);
+  return n > 0 ? n : undefined;
 }
 
 const CREATE_TABLE_SQL = `
@@ -89,9 +108,32 @@ const CREATE_TABLE_SQL = `
     provenance      JSON NOT NULL,
     causality       JSON NOT NULL,
     ttl             BIGINT,
-    created_at      BIGINT NOT NULL
+    created_at      BIGINT NOT NULL,
+    -- Durable reinforcement. These four are the ONLY columns a consolidation
+    -- pass writes, and none of them is part of the content address, so
+    -- reinforcing a record never changes its id (#1418).
+    last_reinforced_at BIGINT,
+    retrieval_count    BIGINT NOT NULL DEFAULT 0,
+    success_count      BIGINT NOT NULL DEFAULT 0,
+    failure_count      BIGINT NOT NULL DEFAULT 0
   )
 `;
+
+// The INSERTs below name their columns rather than relying on position. They
+// did not, and adding these four broke every write with "table has 18 columns
+// but 14 values were supplied" — a positional insert makes any new column a
+// breaking change, which is the opposite of what a defaulted column should be.
+// A database written before those four columns existed still opens, and adding
+// them is the whole migration: every one is nullable or defaulted, so no row
+// needs rewriting and there is nothing to undo. DuckDB has no migration
+// framework here, and `IF NOT EXISTS` is what makes this safe to run at every
+// open rather than once.
+const ADD_COLUMN_SQL: readonly string[] = [
+  `ALTER TABLE episodic_records ADD COLUMN IF NOT EXISTS last_reinforced_at BIGINT`,
+  `ALTER TABLE episodic_records ADD COLUMN IF NOT EXISTS retrieval_count BIGINT DEFAULT 0`,
+  `ALTER TABLE episodic_records ADD COLUMN IF NOT EXISTS success_count BIGINT DEFAULT 0`,
+  `ALTER TABLE episodic_records ADD COLUMN IF NOT EXISTS failure_count BIGINT DEFAULT 0`,
+];
 
 const INDEX_SQL = `
   CREATE INDEX IF NOT EXISTS idx_episodic_ns_created
@@ -140,10 +182,22 @@ export class DuckDBEpisodicStore implements EpisodicStore {
     return new Promise((resolve, reject) => {
       this.conn.run(CREATE_TABLE_SQL, (err) => {
         if (err) return reject(err);
-        this.conn.run(INDEX_SQL, (err2) => {
-          if (err2) return reject(err2);
-          resolve();
-        });
+        // Applied in order, before the index, so a database from an older
+        // build has every column the queries below assume.
+        const addColumns = (i: number): void => {
+          if (i >= ADD_COLUMN_SQL.length) {
+            this.conn.run(INDEX_SQL, (err2) => {
+              if (err2) return reject(err2);
+              resolve();
+            });
+            return;
+          }
+          this.conn.run(ADD_COLUMN_SQL[i]!, (errN) => {
+            if (errN) return reject(errN);
+            addColumns(i + 1);
+          });
+        };
+        addColumns(0);
       });
     });
   }
@@ -177,7 +231,11 @@ export class DuckDBEpisodicStore implements EpisodicStore {
     await this.ready;
     const values = recordToRow(record);
     await this.runSql(
-      `INSERT OR IGNORE INTO episodic_records VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR IGNORE INTO episodic_records
+             (id, kind, namespace_org, namespace_workspace, namespace_session,
+              namespace_agent, body, embedding, salience, confidence,
+              provenance, causality, ttl, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       values,
     );
   }
@@ -192,7 +250,11 @@ export class DuckDBEpisodicStore implements EpisodicStore {
       for (const record of records) {
         const values = recordToRow(record);
         await this.runSql(
-          `INSERT OR IGNORE INTO episodic_records VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT OR IGNORE INTO episodic_records
+             (id, kind, namespace_org, namespace_workspace, namespace_session,
+              namespace_agent, body, embedding, salience, confidence,
+              provenance, causality, ttl, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           values,
         );
       }
@@ -341,12 +403,29 @@ export class DuckDBEpisodicStore implements EpisodicStore {
     }));
   }
 
-  async updateSalience(id: string, salience: number): Promise<void> {
+  async updateSalience(
+    id: string,
+    salience: number,
+    reinforcedAt?: number,
+  ): Promise<void> {
     await this.ready;
-    await this.runSql(`UPDATE episodic_records SET salience = ? WHERE id = ?`, [
-      salience,
-      id,
-    ]);
+    if (reinforcedAt === undefined) {
+      await this.runSql(
+        `UPDATE episodic_records SET salience = ? WHERE id = ?`,
+        [salience, id],
+      );
+      return;
+    }
+    // Never move the timestamp backwards. A consolidation pass replaying an
+    // older observation must not make a record look less recently used than
+    // the store already knows it to be.
+    await this.runSql(
+      `UPDATE episodic_records
+         SET salience = ?,
+             last_reinforced_at = GREATEST(COALESCE(last_reinforced_at, 0), ?)
+       WHERE id = ?`,
+      [salience, reinforcedAt, id],
+    );
   }
 
   async updateConfidence(id: string, confidence: number): Promise<void> {
@@ -355,6 +434,52 @@ export class DuckDBEpisodicStore implements EpisodicStore {
       `UPDATE episodic_records SET confidence = ? WHERE id = ?`,
       [confidence, id],
     );
+  }
+
+  async reinforce(
+    ids: string[],
+    outcome: "success" | "failure" | null,
+    at: number,
+  ): Promise<void> {
+    await this.ready;
+    if (ids.length === 0) return;
+
+    // One statement for the whole batch. A turn reinforces every record that
+    // was in its context window, so per-id round trips would put the cost of
+    // remembering on the hot path -- which is the reason this was never wired
+    // to it. It is not on the hot path here either; batching keeps it cheap
+    // enough that it never becomes a reason to skip.
+    const placeholders = ids.map(() => "?").join(", ");
+    const successDelta = outcome === "success" ? 1 : 0;
+    const failureDelta = outcome === "failure" ? 1 : 0;
+    await this.runSql(
+      `UPDATE episodic_records
+          SET retrieval_count = COALESCE(retrieval_count, 0) + 1,
+              success_count   = COALESCE(success_count, 0) + ?,
+              failure_count   = COALESCE(failure_count, 0) + ?,
+              last_reinforced_at = GREATEST(COALESCE(last_reinforced_at, 0), ?)
+        WHERE id IN (${placeholders})`,
+      [successDelta, failureDelta, at, ...ids],
+    );
+  }
+
+  async readDecayStats(namespace: Namespace): Promise<Map<string, DecayStats>> {
+    await this.ready;
+    const rows = await this.querySql(
+      `SELECT id, retrieval_count, success_count, last_reinforced_at
+         FROM episodic_records
+        WHERE namespace_org = ? AND namespace_workspace = ?`,
+      [namespace.org, namespace.workspace],
+    );
+    const stats = new Map<string, DecayStats>();
+    for (const row of rows) {
+      stats.set(row["id"] as string, {
+        retrievals: toCount(row["retrieval_count"]),
+        successes: toCount(row["success_count"]),
+        lastRetrievedAt: toOptionalCount(row["last_reinforced_at"]),
+      });
+    }
+    return stats;
   }
 
   async evictExpired(namespace: Namespace, now: number): Promise<number> {

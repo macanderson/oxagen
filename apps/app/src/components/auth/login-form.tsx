@@ -45,6 +45,18 @@ export function LoginForm({ mode = "signin" }: { mode?: "signin" | "signup" }) {
       router.push(mode === "signup" ? "/new-organization" : "/");
       router.refresh();
     } catch (err) {
+      // Keep the stack. `setError` renders `err.message` and drops everything
+      // else, which is why a real signup failure has been unattributable: the
+      // form shows a sentence and nothing records where it was thrown.
+      //
+      // oxagen#2559 is the specimen — signup intermittently fails with
+      // "Cannot read properties of undefined (reading 'includes')" and the
+      // nightly e2e traces carry only that sentence. The error is thrown inside
+      // the auth client before it issues a request, and the frame is what nobody
+      // has. Logging it puts the stack in the browser console, which the e2e
+      // capture already records into the trace, and in a real user's console
+      // if it ever happens to them.
+      console.error(`[auth] ${mode} failed`, err);
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setPending(false);

@@ -71,6 +71,53 @@ log() { printf '==> %s\n' "$*"; }
 fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
+# Space, before anything is written.
+#
+# The prune at the bottom runs only after a HEALTHY deploy, which is right --
+# a failed deploy must not delete the candidates you would roll back to. The
+# consequence is that a run of failing deploys writes a new release directory
+# every attempt and deletes nothing. That is how the 20 GB root volume of
+# `oxagen-data` filled on 2026-08-25 and took SSM command execution down with
+# it for 8.5 hours, while every public site kept serving so nothing alerted
+# (#1305).
+#
+# Checking here is what turns that into a refusal. What this may delete is
+# only what the post-deploy prune would already delete: releases BEYOND the
+# retention window. `current` and the newest KEEP_RELEASES are never touched,
+# so the rollback guarantee is exactly as it was.
+#
+# The floor is a variable because the right number is per-node -- 3 GB clears
+# the largest artifact this repository ships with room to unpack it, and a node
+# with a bigger disk or a bigger service should say so rather than edit this.
+# ---------------------------------------------------------------------------
+
+readonly MIN_FREE_MB="${MIN_FREE_MB:-3072}"
+
+# -P for POSIX output (one line per filesystem, never wrapped), -m for MB.
+free_mb() { df -Pm "$ROOT" | awk 'NR==2 {print $4}'; }
+
+# shellcheck disable=SC2012 # names here are timestamps this script generates,
+# so they sort lexicographically and contain nothing `ls` would mangle.
+prune_beyond_retention() {
+  [[ -d $RELEASES ]] || return 0
+  ls -1 "$RELEASES" | sort -r | tail -n "+$((KEEP_RELEASES + 1))" | while read -r old; do
+    [[ $RELEASES/$old == "$(readlink -f "$CURRENT" 2>/dev/null)" ]] && continue
+    log "reclaiming space: pruning release $old (already beyond the $KEEP_RELEASES kept)"
+    rm -rf "${RELEASES:?}/$old"
+  done
+}
+
+if [[ $(free_mb) -lt $MIN_FREE_MB ]]; then
+  log "only $(free_mb) MB free under $ROOT (want $MIN_FREE_MB) — pruning beyond the retention window"
+  prune_beyond_retention
+  log "$(free_mb) MB free after pruning"
+fi
+
+if [[ $(free_mb) -lt $MIN_FREE_MB ]]; then
+  fail "only $(free_mb) MB free under $ROOT, need $MIN_FREE_MB. Refusing to unpack: a deploy that fills the root volume takes SSM down with it, and then nothing can reach this node to fix it (#1305)."
+fi
+
+# ---------------------------------------------------------------------------
 # Fetch and unpack. Nothing that follows touches the running service, so a
 # broken artifact fails here with the old one still serving.
 # ---------------------------------------------------------------------------

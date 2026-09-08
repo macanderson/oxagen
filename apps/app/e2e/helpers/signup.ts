@@ -59,11 +59,34 @@ export async function signUpFreshUser(
   await page.getByRole("button", { name: /create account/i }).click();
 
   // Better Auth sets the session cookies and the client calls
-  // router.push("/new-organization") directly (signup path). This is a
-  // client-side History API navigation — Playwright observes it reliably.
-  await page.waitForURL((url) => url.pathname === "/new-organization", {
-    timeout: 20_000,
-  });
+  // router.push("/new-organization") directly (signup path) — a client-side
+  // History API navigation.
+  try {
+    await page.waitForURL((url) => url.pathname === "/new-organization", {
+      timeout: 20_000,
+    });
+  } catch (err) {
+    // The form catches every error out of the auth client and renders it into
+    // an alert, so a signup that fails for a PRODUCT reason looks from here
+    // exactly like a navigation that did not happen. That is why #2559 read as
+    // a navigation flake for weeks.
+    //
+    // Run 34185226553 is the specimen: the form sat on screen showing
+    // "Cannot read properties of undefined (reading 'includes')", made no
+    // request at all, and reported only a URL timeout. Reading the alert turns
+    // six hours of tracing into one line of output.
+    const alert = await page
+      .getByRole("alert")
+      .first()
+      .textContent()
+      .catch(() => null);
+    if (alert?.trim()) {
+      throw new Error(
+        `signup did not navigate to /new-organization; the form reported: ${alert.trim()}`,
+      );
+    }
+    throw err;
+  }
 
   // ── 3. Complete org onboarding ───────────────────────────────────────────
   await page.waitForSelector('input[name="name"]', {

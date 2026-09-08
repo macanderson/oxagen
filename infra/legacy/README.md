@@ -56,9 +56,30 @@ ingestion. What is still open:
 
 - Whether the new account has equivalent keys to move to, and what the re-wrap
   path is for ciphertext already written under the old key.
-- The second alias. `alias/oxagen/auth-tokens-prod` and
-  `AUTH_TOKEN_ENCRYPTION_KEY` have not been checked the same way. Assume
-  nothing from the ingestion answer; run the same two `get-parameter` calls.
+
+## The second alias: nothing can use it, whatever the parameters say
+
+`alias/oxagen/auth-tokens-prod` is referenced by this file and by the Terraform
+below that creates it, and by nothing else. `AWS_KMS_AUTH*` appears nowhere in
+`packages/` or `apps/`, and the registry describes `AUTH_TOKEN_ENCRYPTION_KEY`
+as a base64 256-bit KEK generated with `openssl rand -base64 32` — a local
+symmetric key the code uses directly, with no KMS call in the path.
+
+That is a fact about the code, so it holds regardless of what any parameter
+store contains: even if a `AWS_KMS_AUTH_TOKENS_KEY_ARN` existed somewhere, no
+shipping code would read it.
+
+**What is NOT established, and the distinction matters.** Reading
+`/oxagen/production/*` with a contributor's credentials reads the store in
+`578673726240` — this account. The deploy node lives in `916294258235` and
+reads its OWN store, so those two prefixes are different objects with the same
+name. A read from here describes the pre-cutover deployment, not the running
+one, and cannot tell a live setting from a leftover.
+
+So the ingestion answer above should be read the same way: it is what THIS
+account's parameter store says, which is what the platform used before the
+cutover. Confirming it for the running platform needs a read in
+`916294258235`. #2680 carries that.
 
 The cutover checklist is marked complete, and this stack was last touched in
 June by a commit about something else — those two facts together are why the
