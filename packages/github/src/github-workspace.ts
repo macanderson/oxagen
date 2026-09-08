@@ -1,34 +1,11 @@
+import { globToRegExp } from "@oxagen/glob";
 import type { Workspace, CommandResult } from "@oxagen/agent-engine";
 import type { GitHubClient } from "./types";
 
 // ---------------------------------------------------------------------------
 // Inline glob helper
 // Cannot import from @oxagen/agent-engine internals (not part of public API).
-// Algorithm identical to packages/agent-engine/src/internal/glob.ts.
 // ---------------------------------------------------------------------------
-
-function globToRegExp(pattern: string): RegExp {
-  let re = "";
-  for (let i = 0; i < pattern.length; i++) {
-    const c = pattern[i];
-    if (c === "*") {
-      if (pattern[i + 1] === "*") {
-        re += ".*";
-        i++;
-        if (pattern[i + 1] === "/") i++;
-      } else {
-        re += "[^/]*";
-      }
-    } else if (c === "?") {
-      re += "[^/]";
-    } else if (".+^${}()|[]\\".includes(c as string)) {
-      re += "\\" + c;
-    } else {
-      re += c;
-    }
-  }
-  return new RegExp("^" + re + "$");
-}
 
 // ---------------------------------------------------------------------------
 // Constants

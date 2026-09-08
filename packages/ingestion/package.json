@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@oxagen/ai": "workspace:*",
+    "@oxagen/glob": "workspace:*",
     "@oxagen/ontology": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "yaml": "2.9.0",

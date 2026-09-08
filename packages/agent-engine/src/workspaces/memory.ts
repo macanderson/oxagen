@@ -1,5 +1,5 @@
 import type { CommandResult, Workspace } from "../types";
-import { globToRegExp } from "../internal/glob";
+import { globToRegExp } from "@oxagen/glob";
 import { describeEditFailure } from "../tools";
 
 export class MemoryWorkspace implements Workspace {
