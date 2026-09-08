@@ -154,7 +154,7 @@ describe("ghJson", () => {
   });
 
   it("rejects with a parse error when gh emits non-JSON (the color-corruption failure class)", async () => {
-    execOk("[1mnot json[0m");
+    execOk("\u001b[1mnot json\u001b[0m");
     await expect(ghJson(["api", "x"])).rejects.toThrow(SyntaxError);
   });
 

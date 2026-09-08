@@ -23,6 +23,10 @@ import { rm, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { signUpFreshUser } from "./helpers/signup";
 import { gotoStable } from "./helpers/nav";
+import {
+  installNavInstrumentation,
+  attachNavLogs,
+} from "./helpers/nav-instrumentation";
 
 const SCREENSHOTS_DIR = path.resolve(
   import.meta.dirname,
@@ -38,8 +42,13 @@ test.beforeAll(async () => {
 test.describe("Account settings — sidebar is the single navigation", () => {
   test("account sub-pages are reachable via the shell sidebar, no tab strip", async ({
     page,
-  }) => {
+  }, testInfo) => {
     test.setTimeout(90_000);
+
+    // #2559 diagnostic capture — see helpers/nav-instrumentation.ts. Installed
+    // before signup so it is in place for every navigation in this test, not
+    // just the three under direct suspicion.
+    const nav = installNavInstrumentation(page);
 
     // ── 1. Fresh user, then land on Profile ──────────────────────────────
     await signUpFreshUser(page, { orgPrefix: "acct-nav" });
@@ -83,10 +92,18 @@ test.describe("Account settings — sidebar is the single navigation", () => {
     });
 
     // ── 3. Preferences via sidebar → URL + form (parity proof) ───────────
-    await preferencesLink.click();
-    await page.waitForURL((url) => url.pathname === "/account/preferences", {
-      timeout: 15_000,
-    });
+    // Register the navigation wait BEFORE the click (Promise.all), not
+    // after — a wait registered after the click can miss a navigation that
+    // already resolved, and (per #2559) reports the anti-pattern's own
+    // failure shape rather than the click's. This does not fix the
+    // underlying race (see nav-instrumentation.ts / the #2559 findings);
+    // it only makes this spec's own reporting honest about what happened.
+    await Promise.all([
+      page.waitForURL((url) => url.pathname === "/account/preferences", {
+        timeout: 15_000,
+      }),
+      preferencesLink.click(),
+    ]);
     await expect(
       page.getByRole("form", { name: /preferences settings/i }),
     ).toBeVisible({ timeout: 15_000 });
@@ -96,12 +113,15 @@ test.describe("Account settings — sidebar is the single navigation", () => {
       path: path.join(SCREENSHOTS_DIR, "02-preferences.png"),
       fullPage: true,
     });
+    await attachNavLogs(testInfo, nav, "01-preferences");
 
     // ── 4. Security via sidebar → MFA "not enrolled" state ───────────────
-    await securityLink.click();
-    await page.waitForURL((url) => url.pathname === "/account/security", {
-      timeout: 15_000,
-    });
+    await Promise.all([
+      page.waitForURL((url) => url.pathname === "/account/security", {
+        timeout: 15_000,
+      }),
+      securityLink.click(),
+    ]);
     await expect(page.getByText(/multi-factor authentication/i)).toBeVisible({
       timeout: 15_000,
     });
@@ -111,12 +131,15 @@ test.describe("Account settings — sidebar is the single navigation", () => {
       path: path.join(SCREENSHOTS_DIR, "03-security.png"),
       fullPage: true,
     });
+    await attachNavLogs(testInfo, nav, "02-security");
 
     // ── 5. Privacy via sidebar → export/erase controls ───────────────────
-    await privacyLink.click();
-    await page.waitForURL((url) => url.pathname === "/account/privacy", {
-      timeout: 15_000,
-    });
+    await Promise.all([
+      page.waitForURL((url) => url.pathname === "/account/privacy", {
+        timeout: 15_000,
+      }),
+      privacyLink.click(),
+    ]);
     await expect(
       page.getByRole("heading", { name: /export your data/i }),
     ).toBeVisible({ timeout: 15_000 });
@@ -134,5 +157,6 @@ test.describe("Account settings — sidebar is the single navigation", () => {
       path: path.join(SCREENSHOTS_DIR, "04-privacy.png"),
       fullPage: true,
     });
+    await attachNavLogs(testInfo, nav, "03-privacy");
   });
 });

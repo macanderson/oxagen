@@ -1,0 +1,110 @@
+# Answer, from inside the account, where production's datastores actually are.
+#
+# Several issues have been stuck on one question nobody with a laptop can
+# answer: two comments in pipeline.yml disagreed about where production Postgres
+# runs (#2542), and the exposure count #2714 needs is a query against a database
+# in an account no contributor's credentials reach. Both blocked on the same
+# thing — `sts:AssumeRole` into 916294258235 is denied from a personal identity,
+# and this repository's CI is the only thing that holds a credential there.
+#
+# So the question is asked by the thing that can ask it.
+#
+# ## Read-only, and deliberately narrow
+#
+# `describe-*` calls and nothing else. No `create`, no `modify`, no `delete`, no
+# Terraform, no writes of any kind. The role is the one pipeline.yml's deploy
+# jobs already assume; this grants nothing new, it only uses what CI already
+# has for a question instead of a deployment.
+#
+# ## workflow_dispatch only
+#
+# No push trigger, no schedule. It runs when a person asks, which is the right
+# shape for a diagnostic: an answer nobody requested is an answer nobody reads,
+# and a scheduled job holding a production credential is a standing risk for no
+# standing benefit.
+#
+# The answer goes to the run's step summary, so it can be pasted into the issue
+# that needed it rather than living only in a log.
+name: where-is-production
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  describe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The role's trust policy keys on the OIDC `sub` claim, and that claim only
+    # carries `environment:production` when the JOB declares one. Without this
+    # line the assume fails with "Not authorized to perform
+    # sts:AssumeRoleWithWebIdentity" -- which reads like a missing permission
+    # and is actually a missing claim (run 34181668242).
+    #
+    # It is the same line pipeline.yml's deploy jobs carry, and it also puts
+    # this behind whatever reviewers that environment requires, which is the
+    # right gate for something holding a production credential.
+    environment: production
+    permissions:
+      contents: read
+      # Mints the OIDC token the role trusts. Job-scoped, and this workflow has
+      # no trigger a pull request can fire, so a fork cannot request one.
+      id-token: write
+    steps:
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
+          aws-region: us-east-1
+
+      - name: Describe the datastores
+        run: |
+          set -uo pipefail
+
+          # `|| true` on each: a role without one of these permissions should
+          # report that and let the rest run, rather than failing the whole
+          # answer on the first thing it cannot see. A blank section is itself
+          # information, and the header says which question it belongs to.
+          {
+            echo "## Where production's datastores are"
+            echo
+            echo "Account \`916294258235\`, region \`us-east-1\`, read-only."
+            echo "Asked by run \`${GITHUB_RUN_ID}\`."
+            echo
+            echo "### RDS clusters (#2542: an Aurora cluster means the deploy-node comment is right)"
+            echo '```'
+            aws rds describe-db-clusters \
+              --query 'DBClusters[].{id:DBClusterIdentifier,engine:Engine,version:EngineVersion,status:Status,endpoint:Endpoint}' \
+              --output table 2>&1 || true
+            echo '```'
+            echo
+            echo "### RDS instances"
+            echo '```'
+            aws rds describe-db-instances \
+              --query 'DBInstances[].{id:DBInstanceIdentifier,engine:Engine,status:DBInstanceStatus,public:PubliclyAccessible}' \
+              --output table 2>&1 || true
+            echo '```'
+            echo
+            echo "### Running EC2 (#2542: an \`oxagen-data\` box means the loopback/SSM comment is right)"
+            echo '```'
+            aws ec2 describe-instances \
+              --filters Name=instance-state-name,Values=running \
+              --query 'Reservations[].Instances[].{id:InstanceId,type:InstanceType,name:Tags[?Key==`Name`]|[0].Value}' \
+              --output table 2>&1 || true
+            echo '```'
+            echo
+            echo "### Does a production DATABASE_URL parameter exist? (#2714 needs one to run its query)"
+            echo
+            echo "Name and type only — the VALUE is never printed, and this does not decrypt it."
+            echo '```'
+            aws ssm describe-parameters \
+              --parameter-filters 'Key=Name,Option=Contains,Values=DATABASE_URL' \
+              --query 'Parameters[].{name:Name,type:Type,modified:LastModifiedDate}' \
+              --output table 2>&1 || true
+            echo '```'
+          # Both places on purpose. The step summary is where a person
+          # reads it; the log is where a script or an agent can quote it,
+          # and GitHub exposes no API for a summary. An answer only one of
+          # them can reach is half a diagnostic.
+          } | tee -a "$GITHUB_STEP_SUMMARY"

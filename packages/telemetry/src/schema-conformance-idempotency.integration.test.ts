@@ -116,7 +116,7 @@ async function cleanup(eventIds: string[]): Promise<void> {
 }
 
 describe.skipIf(!chUp)(
-  "schema_conformance_events — ReplacingMergeTree idempotency (integration) [skipped: local ClickHouse unreachable at :8123]",
+  "schema_conformance_events — ReplacingMergeTree idempotency (integration)",
   () => {
     it("collapses two inserts sharing the same deterministic event_id into ONE row after merge", async () => {
       const { clickhouse } = await import("./clickhouse");

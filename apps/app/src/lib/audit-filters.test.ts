@@ -4,7 +4,11 @@ import {
   encodeAuditFilter,
   hasActiveFilter,
   eventTypesInGroup,
+  EVENT_TYPE_GROUPS,
+  FILTERABLE_EVENT_TYPES,
+  SECURITY_EVENT_TYPES,
 } from "./audit-filters";
+import { RESERVED_SECURITY_EVENT_TYPES } from "@oxagen/compliance";
 
 describe("parseAuditFilter", () => {
   it("parses repeated and comma-joined event_type, dropping unknowns", () => {
@@ -119,5 +123,54 @@ describe("helpers", () => {
     expect(auth.length).toBeGreaterThan(0);
     expect(auth.every((t) => t.startsWith("auth."))).toBe(true);
     expect(eventTypesInGroup("nope")).toEqual([]);
+  });
+});
+
+/**
+ * #2528. The filter offered every DECLARED type, including eight the taxonomy
+ * itself marks as having no emitter. Selecting one returns zero rows, which
+ * reads as "this never happened" — when the true answer is "we do not log this
+ * yet". In a compliance tool that is the difference that matters, and the
+ * filter had no way to express it.
+ */
+describe("the filter only offers types something writes", () => {
+  it("offers no reserved type", () => {
+    for (const reserved of RESERVED_SECURITY_EVENT_TYPES) {
+      expect(FILTERABLE_EVENT_TYPES, reserved).not.toContain(reserved);
+    }
+  });
+
+  it("names a specific one, so the assertion is legible", () => {
+    // Both were selectable before, and both return zero rows forever.
+    expect(FILTERABLE_EVENT_TYPES).not.toContain("auth.token_refreshed");
+    expect(FILTERABLE_EVENT_TYPES).not.toContain("plugin.denylist_added");
+  });
+
+  it("keeps offering the ones that are logged", () => {
+    expect(FILTERABLE_EVENT_TYPES).toContain("auth.sign_in");
+    expect(FILTERABLE_EVENT_TYPES).toContain("capability.invoke_denied");
+    expect(FILTERABLE_EVENT_TYPES.length).toBeGreaterThan(0);
+  });
+
+  it("drops a reserved type from its group listing too", () => {
+    // The group chips build from the same subset, so `auth.*` must not offer
+    // a type the `auth` group cannot produce.
+    expect(eventTypesInGroup("auth")).not.toContain("auth.token_refreshed");
+    expect(eventTypesInGroup("auth")).toContain("auth.sign_in");
+  });
+
+  it("drops a group that is entirely reserved rather than showing an empty chip", () => {
+    // Every plugin.denylist_* type is reserved, but plugin.installed is not,
+    // so the group survives — this pins that the chips come from the subset.
+    expect(EVENT_TYPE_GROUPS).toContain("plugin");
+    expect(eventTypesInGroup("plugin")).not.toContain("plugin.denylist_added");
+  });
+
+  it("still parses a reserved type out of a URL, so old links and rows survive", () => {
+    // Narrowing what the UI OFFERS must not narrow what it can read: a
+    // bookmarked filter, or a historical row, still has to resolve.
+    const f = parseAuditFilter({ event_type: ["auth.token_refreshed"] });
+    expect(f.eventTypes).toEqual(["auth.token_refreshed"]);
+    expect(SECURITY_EVENT_TYPES).toContain("auth.token_refreshed");
   });
 });

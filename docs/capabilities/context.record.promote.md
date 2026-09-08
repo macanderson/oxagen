@@ -33,6 +33,7 @@ Append a lifecycle action to a context record's hash-chained promotions ledger (
 ## Side effects
 
 Inserts one `agent.context_promotions` row and updates `context_records.status` (and, for promote, `active_version_id`). The approver recorded on the ledger row is the calling user.
+- **Promoting a record is what makes it steer.** From the next turn, every active record in the workspace is rendered into the turn's messages (ADR-051). Before this, a promoted record changed nothing about how an agent behaved.
 
 ## Errors
 

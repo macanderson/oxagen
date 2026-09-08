@@ -64,6 +64,14 @@ export interface UsageTokens {
    * way — see engine.ts).
    */
   cachedInputTokens?: number;
+  /**
+   * Prompt tokens WRITTEN into the provider's cache — also a SUBSET of
+   * `inputTokens` and disjoint from `cachedInputTokens`. The AI SDK reports it
+   * beside the read count as `usage.inputTokenDetails.cacheWriteTokens`;
+   * adapters flatten it here the same way. Priced at the cache-write rate,
+   * which the engine could not see at all before #1411.
+   */
+  cacheWriteTokens?: number;
 }
 
 export interface ObjectRunResult<T> {
@@ -78,6 +86,28 @@ export interface ObjectRunResult<T> {
 export interface AgentAi {
   stream(args: ModelRunArgs): StreamRunResult;
   generateObject<T>(args: ObjectRunArgs<T>): Promise<ObjectRunResult<T>>;
+}
+
+/**
+ * The workspace's published steering policy — its context records.
+ *
+ * A workspace can publish a record, promote it through the hash-chained
+ * ledger, and until this port existed no agent run behaved any differently:
+ * the registry stored governance and nothing applied it (oxagen#2592).
+ *
+ * It returns pre-formatted text rather than structured records, exactly like
+ * `MemoryProvider.recallContext`, because the host is what knows the record
+ * vocabulary and the engine is what knows where a message goes. The engine
+ * never learns what a context record is.
+ *
+ * Steering, not enforcement. A record carrying an enforcement grant is the
+ * decision-rules engine's to act on; this port only puts its text in front of
+ * the model. Both governing the same action from two layers is how a denial
+ * ends up depending on which one ran first.
+ */
+export interface SteeringProvider {
+  /** This turn's steering text, or "" when the workspace has published none. */
+  loadSteering(): Promise<string>;
 }
 
 /** Episodic/recalled memory. CLI: local DuckDB/engram. Platform: `agent.memory.*`. */

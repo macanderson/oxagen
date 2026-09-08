@@ -36,6 +36,7 @@
     "@oxagen/database": "workspace:*",
     "@oxagen/engram": "workspace:*",
     "@oxagen/github": "workspace:*",
+    "@oxagen/glob": "workspace:*",
     "@oxagen/iam": "workspace:*",
     "@oxagen/mcp-config": "workspace:*",
     "@oxagen/ontology": "workspace:*",

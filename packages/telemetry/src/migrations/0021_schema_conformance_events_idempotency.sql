@@ -47,15 +47,26 @@
 --   package, and far cheaper than a live INSERT-SELECT migration for a table
 --   with no durable/billing dependents.
 --
--- KNOWN DEFECT — THE DROP REPLAYS
---   migrate() (packages/telemetry/src/migrate.ts) keeps no applied-migrations
---   ledger: it replays schema.sql and every file in this directory on every
---   run. So this is NOT a one-time rebuild — each deploy (and each local
---   `pnpm db:migrate`) drops schema_conformance_events and recreates it empty,
---   discarding the whole 90-day window. The statements are individually
---   idempotent, which is what the rest of this directory relies on, but
---   DROP TABLE is not replay-safe. Fixing this needs either a ledger in
---   migrate() or a rebuild expressed as a rename to a NEW table name.
+-- THE DROP NO LONGER REPLAYS (#2632, #2637)
+--   migrate() (packages/telemetry/src/migrate.ts) now keeps an
+--   applied-migrations ledger (`_migrations`): once any call has run this
+--   file, a later, non-overlapping call skips it instead of re-running it —
+--   so an ordinary sequential deploy (or local `pnpm db:migrate`) no longer
+--   drops schema_conformance_events and discards its 90-day window. Existing
+--   deployments were bootstrapped into the ledger without re-executing this
+--   DROP one more time (see PRE_LEDGER_BASELINE_CUTOVER in migrate.ts).
+--
+--   migrate.ts also serializes concurrent calls IN ONE PROCESS, so two
+--   `migrate()` calls fired together from the same module (proven by
+--   migrate-concurrency.integration.test.ts) cannot both replay this DROP
+--   either. The one gap neither guard closes is two SEPARATE processes
+--   racing this file before either has recorded it — module state cannot
+--   span processes, and ClickHouse has no lock migrate() could take out
+--   across DDL statements to close it from the SQL side. That is accepted
+--   for now because production runs ClickHouse migrations as a single
+--   serialized step rather than fanning them out (see migrate.ts's
+--   "Same-process concurrency guard" comment); #2687 tracks a real
+--   cross-process guard if that ever changes.
 
 DROP TABLE IF EXISTS schema_conformance_events;
 

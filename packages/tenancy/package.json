@@ -10,11 +10,13 @@
     "./testing": "./src/testing.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
-    "test:unit": "vitest run"
+    "test:coverage": "vitest run --coverage",
+    "test:unit": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "2.1.9",
     "typescript": "6.0.3",
     "vitest": "2.1.9"
   }

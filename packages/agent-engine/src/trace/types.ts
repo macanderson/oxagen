@@ -154,16 +154,34 @@ export interface JudgeVerdict {
   complete: boolean;
   /** 0–100 confidence in the verdict. */
   confidence: number;
-  /** Concrete gaps the judge found (empty when complete). */
+  /**
+   * Concrete gaps the judge found. Normally empty when complete — but a panel
+   * keeps a real dissenting judge's findings even when the majority says
+   * complete, because they are the best evidence the panel produced and
+   * dropping them is how the revise loop stopped hearing about real gaps
+   * (#1427).
+   */
   findings: string[];
-  /** What the agent still needs to do (empty when complete). */
+  /** What the agent still needs to do (see {@link JudgeVerdict.findings}). */
   remainingWork: string[];
   /** The judge's chain of thought. */
   reasoning: string;
   /** Model slug used for the judgement — always distinct from the executor. */
   model: string;
-  /** True when the verdict came from the heuristic fallback (model unavailable). */
+  /**
+   * True when ANY judge behind this verdict was the heuristic fallback rather
+   * than a model. For a panel this is `some`, not `every`: "was this entirely
+   * guesswork" is not the question a consumer is asking, and answering it made
+   * a panel where two of three judges were degraded report `fallback: false`
+   * (#1427).
+   */
   fallback: boolean;
+  /**
+   * How many judges behind this verdict were degraded, out of how many ran. A
+   * consumer can then see `2 of 3 judges were heuristic` and decide, rather
+   * than reading one boolean that flattens it.
+   */
+  degradedJudges?: { degraded: number; total: number };
   usage: UsageTotals;
 }
 

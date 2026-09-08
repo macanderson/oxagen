@@ -814,6 +814,20 @@ orgScoped.route("/audit/log/query", auditLogQueryRoute);
 // A2A Agent Card management read (metered, IAM-gated) — the governed parity
 // surface for the card; the transport itself lives at /a2a + /.well-known.
 orgScoped.route("/a2a/card", a2aCardGetRoute);
+// Creating a workspace needs an org and cannot need a workspace: the caller is
+// asking for their first one. Mounted only under the workspace-scoped group, the
+// REST surface could not take a new account past org creation — every attempt
+// 404'd in workspaceMiddleware before the handler ran, so a non-browser client
+// had to drive the web UI or write rows by hand (#1203).
+//
+// The workspace-scoped mount above stays. Creating a workspace while scoped to
+// another one is an odd shape, but it is a path clients may already call, and
+// this change is about opening the bootstrap route rather than closing that one.
+const orgOnlyScoped = new Hono<AppEnv>();
+orgOnlyScoped.use("*", authMiddleware, orgMiddleware);
+orgOnlyScoped.route("/workspaces", workspaceCreateRoute);
+app.route("/v1/:org_slug", orgOnlyScoped);
+
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);
 
 // OpenAI-compatible agent LLM proxy (ADR-019 B4): the CLI routes ALL model

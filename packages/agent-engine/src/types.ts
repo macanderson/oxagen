@@ -2,6 +2,7 @@ import type { ModelMessage, ToolSet } from "ai";
 import type {
   AgentAi,
   MemoryProvider,
+  SteeringProvider,
   TraceStore,
   FileLockProvider,
   DiagnosticsProvider,
@@ -19,6 +20,8 @@ import type {
  * - `trace-record` — writing the turn trace failed.
  * - `file-lock-release` — the turn-end batch lock release failed (the lock TTL is
  *   the ultimate backstop).
+ * - `steering-load` — the workspace's published context records could not be
+ *   read; the turn proceeds with no steering rather than failing.
  * - `budget-wait-slow` — NOT an error but an observability breadcrumb: an
  *   interactive budget-approval wait has been pending a long time (the human's
  *   decision still ends it; nothing was auto-denied).
@@ -26,6 +29,11 @@ import type {
 export type EngineNonFatalPhase =
   | "memory-recall"
   | "memory-remember"
+  // The workspace's steering records could not be read. The turn proceeds
+  // unsteered rather than failing, so this is the only thing that separates
+  // "the registry was unreachable" from "the workspace published nothing" —
+  // and those looking identical is what oxagen#2592 was about.
+  | "steering-load"
   | "trace-record"
   | "file-lock-release"
   | "budget-wait-slow";
@@ -332,6 +340,12 @@ export interface RunCodingAgentOptions {
    */
   askUser?: AskUserCallback;
   memory?: MemoryProvider;
+  /**
+   * The workspace's published steering policy. Omitted on a surface that has
+   * none to publish (the CLI reads `.stella/rules/*.toml` itself), in which
+   * case the turn is assembled exactly as it was before this existed.
+   */
+  steering?: SteeringProvider;
   trace?: TraceStore;
   /**
    * Transactional file-lock lease (ADR-021). Omitted (undefined) ⇒
@@ -448,6 +462,12 @@ export interface RunCodingAgentResult {
     totalTokens?: number;
     /** Prompt tokens served from the provider cache (a cache "hit"). */
     cachedInputTokens?: number;
+    /**
+     * Prompt tokens WRITTEN into the provider cache. A subset of `inputTokens`
+     * disjoint from `cachedInputTokens`, priced at the cache-write rate — 25%
+     * above fresh input on Anthropic, equal to it everywhere else (#1411).
+     */
+    cacheWriteTokens?: number;
   };
   messages: ModelMessage[];
   /**
@@ -457,6 +477,22 @@ export interface RunCodingAgentResult {
    * tell the user WHY the turn cut off. Absent on a natural finish.
    */
   stopReason?: TurnStopReason;
+  /**
+   * What the turn spent advertising its tools, before the model said anything.
+   *
+   * Measured on this repository's own surface it was 45,007 tokens across 271
+   * tools — 92.4% of the cacheable prefix, against 3,704 tokens of instructions
+   * somebody wrote and reviewed. Nobody could see that without measuring it by
+   * hand (oxagen#2611). `estimatedTokens` is bytes/4 and is named an estimate;
+   * `bytes` is exact.
+   *
+   * Absent on a path that does not measure it.
+   */
+  toolList?: {
+    count: number;
+    bytes: number;
+    estimatedTokens: number;
+  };
 }
 
 // ── Turn defaults ────────────────────────────────────────────────────────────

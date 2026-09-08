@@ -154,6 +154,23 @@ export const MemoryRecordSchema = z.object({
   ttl: z.number().int().positive().optional(),
   /** Unix ms creation timestamp. */
   createdAt: z.number().int().positive(),
+  /**
+   * Unix ms of the most recent reinforcement — the last time this record was
+   * retrieved and had that retrieval written back. Absent means it has never
+   * been reinforced since it was created.
+   *
+   * Decay measures its half-life from this rather than from `createdAt`, which
+   * is what makes a retrieval genuinely reset the clock instead of buying a
+   * capped constant against an exponential (#1367). Optional so records
+   * written before it existed still parse; `effectiveSalience` falls back to
+   * `createdAt`, which is exactly the old behaviour for a record nothing has
+   * reinforced.
+   *
+   * It is deliberately NOT part of the content address: `computeRecordId`
+   * hashes kind + namespace + body (+ occurrence for episodic), so reinforcing
+   * a record never changes its id.
+   */
+  lastReinforcedAt: z.number().int().positive().optional(),
 });
 
 export type MemoryRecord = z.infer<typeof MemoryRecordSchema>;

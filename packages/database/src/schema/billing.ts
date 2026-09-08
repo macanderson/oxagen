@@ -386,6 +386,34 @@ export const orgBillingSettings = billingSchema.table(
       withTimezone: true,
       mode: "date",
     }),
+    // The Stripe idempotency key for the low-balance episode currently in
+    // flight, or NULL when no reload is outstanding. Written BEFORE the card is
+    // charged and cleared only once the credits are granted, so a retry of a
+    // charged-but-ungranted reload sends Stripe the same key and is
+    // de-duplicated no matter how much later it runs. It replaces a key derived
+    // from the calendar hour, which a retry 40 seconds after the charge could
+    // cross — charging the card twice for one top-up (#1420).
+    autoReloadEpisodeKey: text("auto_reload_episode_key"),
+    // When the open episode claimed its key. Stripe forgets an idempotency key
+    // after 24 hours, after which the same key would charge again, so an
+    // episode older than that stops retrying and alerts instead.
+    autoReloadEpisodeStartedAt: timestamp("auto_reload_episode_started_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+
+    // ── Cost-meter carry ────────────────────────────────────────────────────────
+    // Fractional credits owed but not yet debited, in MICRO-credits (1 credit =
+    // 1,000,000 here). The ledger is whole credits, so a call worth 0.0014 of a
+    // credit used to be rounded UP to one — charging a 200-token embedding 739x
+    // its cost (#1413). The meter now banks the fraction here and debits a whole
+    // credit only once the fractions add up to one, which is exact over a
+    // sequence of calls and keeps the ledger integral. Always in [0, 1e6).
+    meterCarryMicroCredits: bigint("meter_carry_micro_credits", {
+      mode: "bigint",
+    })
+      .notNull()
+      .default(sql`0`),
 
     // ── Low-balance warning ─────────────────────────────────────────────────────
     // Surface a dismissible re-up banner when balance drops below this.
@@ -426,6 +454,18 @@ export const orgBillingSettings = billingSchema.table(
       "org_billing_settings_dunning_state_check",
       sql`${t.dunningState} IN ('active','grace','suspended')`,
     ),
+    // Only the lower bound. Between transactions the carry is under one credit,
+    // but the statement that accumulates it writes the running total before the
+    // same transaction reduces it to the remainder, so an upper bound here would
+    // reject the meter's own write.
+    meterCarryNonNegativeCheck: check(
+      "org_billing_settings_meter_carry_non_negative",
+      sql`${t.meterCarryMicroCredits} >= 0`,
+    ),
+    // Ops reconciliation: which orgs are charged but not granted right now.
+    openReloadEpisodeIdx: index("org_billing_settings_open_reload_episode_idx")
+      .on(t.autoReloadEpisodeStartedAt)
+      .where(sql`${t.autoReloadEpisodeKey} IS NOT NULL`),
   }),
 );
 

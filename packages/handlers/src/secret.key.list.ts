@@ -1,3 +1,4 @@
+// audit-exempt: read-only. Returns key NAMES and metadata, never a value, so nothing privileged is disclosed. Reading a value is secret.reveal, which emits secret.revealed. Covered by the kernel capability.invoke_* audit.
 import { listSecretKeys } from "@oxagen/plugins";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 

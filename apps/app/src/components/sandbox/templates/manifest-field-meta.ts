@@ -135,8 +135,8 @@ export const NETWORK_MODE_META: Record<
   },
   static_egress: {
     label: "Static egress IP",
-    help: "Outbound traffic exits through a stable IP, for allow-listing on a downstream firewall.",
-    provisionable: true,
+    help: "Outbound traffic exits through a stable IP, for allow-listing on a downstream firewall. Not available yet: no egress address is pinned, so a run using this mode is refused rather than given ordinary public egress.",
+    provisionable: false,
   },
   aws_privatelink: {
     label: "AWS PrivateLink",

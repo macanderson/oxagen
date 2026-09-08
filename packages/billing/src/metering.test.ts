@@ -19,6 +19,7 @@ const consumeState: { chargedCents: bigint; shortfallCents: bigint } = {
 const consumeCredits = vi.fn(async () => ({
   ...consumeState,
   balanceCents: 0n,
+  carryMicroCents: 0n,
 }));
 
 const effectiveBalanceState: { value: bigint } = { value: 0n };
@@ -101,9 +102,12 @@ describe("chargeUsageCredits", () => {
     expect(result.creditsCharged).toBe(20n);
     expect(result.shortfallCredits).toBe(0n);
     expect(result.costUsdMicros).toBe(60_000);
+    // The meter hands over MICRO-credits — 19.914 of a credit, exact — and
+    // consumeCredits decides what whole credits that becomes. Rounding here
+    // instead is what charged a fraction of a credit as a whole one (#1413).
     expect(consumeCredits).toHaveBeenCalledWith({
       orgId: "org-1",
-      requestedCents: 20n,
+      requestedMicroCents: 19_914_000n,
       reason: "consume_token_overage",
       referenceType: "token_usage",
       referenceId: "msg-1",
@@ -123,7 +127,7 @@ describe("chargeUsageCredits", () => {
     expect(result.creditsCharged).toBe(5n);
     expect(result.shortfallCredits).toBe(15n);
     expect(consumeCredits).toHaveBeenCalledWith(
-      expect.objectContaining({ requestedCents: 20n }),
+      expect.objectContaining({ requestedMicroCents: 19_914_000n }),
     );
   });
 

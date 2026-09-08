@@ -31,6 +31,7 @@ overrides are unaffected. Owner/Admin only.
 
 Hard-deletes the `(key, environment)` override row in the `environments` vault
 tables (PostgreSQL). Metering, IAM, and audit run through the kernel.
+- **Writes a `secret.value_changed` row to `security_events`** (`capability: unset_secret_value`). The capability field is what tells an unset from a set in a query (ADR-050).
 
 ## API
 

@@ -114,8 +114,10 @@ describe("against the real registry", () => {
     const cap = getCapability(
       "suggest_connection_mappings",
     ) as unknown as RegistryCapability;
-    expect(cap, "suggest_connection_mappings is no longer registered")
-      .toBeDefined();
+    expect(
+      cap,
+      "suggest_connection_mappings is no longer registered",
+    ).toBeDefined();
     expect(isMutatingCapability(cap)).toBe(true);
   });
 });

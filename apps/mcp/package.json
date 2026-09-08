@@ -3,13 +3,14 @@
   "version": "2.1.1",
   "private": true,
   "scripts": {
-    "dev": "xmcp dev",
     "build": "xmcp build",
+    "dev": "xmcp dev",
+    "lint": "eslint src --max-warnings 0",
     "start": "node dist/http.js",
     "start:stdio": "node dist/stdio.js",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint src --max-warnings 0",
-    "test:unit": "vitest run"
+    "test:coverage": "vitest run --coverage",
+    "test:unit": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@clickhouse/client": "1.19.0",

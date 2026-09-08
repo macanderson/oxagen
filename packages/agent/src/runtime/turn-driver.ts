@@ -159,6 +159,7 @@ import {
   loadAuthorizationSnapshot,
   resolveAgentRunAuthzContext,
 } from "@oxagen/iam";
+import { createSteeringProvider } from "./steering-records";
 import {
   executeTurn,
   parseRunSpecV1,
@@ -643,6 +644,12 @@ export function createPlatformTurnDriver(): TurnDriver {
             extraTools,
             mutatingToolNames,
             budgetGuard,
+            // The workspace's published steering policy. Until this was passed,
+            // a workspace could publish a context record, promote it through
+            // the ledger, and no run behaved differently (oxagen#2592). A read
+            // failure surfaces as a `steering-load` non-fatal and the turn runs
+            // unsteered — a registry outage must not fail a durable run.
+            steering: createSteeringProvider(run.workspaceId),
             // Lease loss OR a cancel request both abort this same signal — see
             // @oxagen/agent-worker's worker.ts; this driver doesn't need to
             // know which.

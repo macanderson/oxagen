@@ -7,12 +7,33 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # A push to main gets a group of its own, per commit; everything else groups
+  # by ref so a new push supersedes the run before it.
+  #
+  # The paragraph below has described the eviction since 2026-08-27, and on
+  # 2026-09-07 it stopped being a footnote: merges arrived every 10-20 minutes
+  # against a run that takes ~75, so each new one evicted the queued run before
+  # it started and NOTHING finished for hours. Eight commits reached main
+  # undeployed, because deploy-web and deploy-node run only after the check
+  # passes and no check ever did. Cancelled runs read as ordinary cleanup, so
+  # nothing went red (#2730).
+  #
+  # Per-commit on main means a queued run cannot be evicted, which is what makes
+  # 'every commit on main gets a finished check' true rather than usually true.
+  # It costs concurrent runners during a burst; that is the trade, and the
+  # alternative was silently not deploying.
+  group: >-
+    ci-${{ github.ref }}${{
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
+        && format('-{0}', github.sha) || ''
+    }}
   # Auto-cancel superseded runs for PRs only. A push-to-main run used to carry
   # the prod migrate job, and cancelling the whole run mid-`atlas migrate apply`
   # would strand prod behind the committed migrations. That job is retired
-  # (#1341) and production migrates over SSM from oxagen-aws-infra instead, so
-  # nothing in a main run is mid-flight against a real database today. It stays
+  # (#1341), so nothing in a main run is mid-flight against a real database
+  # today. Production applies are dispatched by hand through `db-migrate.yml`;
+  # the migrate job's retirement comment below has the detail, including which
+  # of the two named routes is the stale one (#2542, #2652). It stays
   # off for main anyway, because the deploy jobs are, and half a deploy is worse
   # than a slow one.
   #
@@ -23,11 +44,13 @@ concurrency:
   # 71007b78's run on 2026-08-27 — cancelled with zero jobs, moments after
   # 2a3fae4d was pushed behind it.
   #
-  # It costs nothing operationally: the evicting commit contains the evicted
-  # one, so its run covers both and its deploy ships both. What it does mean is
-  # that "every commit on main had its own green run" is false, and anything
-  # assuming one run per commit — a bisect over run history, say — will find
-  # gaps that are not failures.
+  # That reasoning held only while a run finished before the next merge. It
+  # said the evicting commit contains the evicted one so its run covers both —
+  # true, and irrelevant once the evicting run is itself evicted. Under
+  # sustained merge pressure the chain never terminates and no commit is
+  # covered by anything. The per-commit group above is why that can no longer
+  # happen on main; pull requests keep the old behaviour, where superseding is
+  # what you want.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -150,6 +173,17 @@ jobs:
 
       - name: Manifest, contracts, env invariants
         run: pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations
+
+      # Unconditional, and that is the whole point. The affected-package gate
+      # (`turbo … --filter=…[origin/main]`) selects a package only when it or one
+      # of its dependencies changed, and @oxagen/compliance declares no
+      # dependency on @oxagen/handlers — deliberately, to keep it a leaf. So a PR
+      # touching ONLY packages/handlers never ran the one guard that checks a
+      # privileged handler emits its audit row, which is exactly the shape of PR
+      # that adds an unaudited handler (#2526). Running it here costs seconds and
+      # does not reintroduce the dependency.
+      - name: SOC2 audit coverage (runs on every PR, not only compliance ones)
+        run: pnpm check:audit-coverage
 
       # UI Capability Parity is now a hard gate (web-app-2.0 Phase 0). --strict
       # fails only on NON-grandfathered forward gaps: every app-layer capability
@@ -582,7 +616,25 @@ jobs:
   #                       RLS suite, and seeds platform defaults
   #   rds-compatibility   applies it again from empty as a NON-superuser role,
   #                       which is what a managed target actually is (#1347)
-  # and in production, oxagen-aws-infra's run-db-migrations.sh over SSM.
+  # In production: `db-migrate.yml`, dispatched by hand. It applies the same
+  # committed Atlas migrations against `PRODUCTION_DATABASE_URL`, and its
+  # `environment: production` is what puts required reviewers in front of an
+  # apply. That is the path to reach for.
+  #
+  # NOT `oxagen-aws-infra`'s `run-db-migrations.sh`, which earlier comments here
+  # named as the production route. It still targets the account the 2026-08-27
+  # cutover left behind — it SSM-targets the old combined data node and
+  # `docker exec`s a Postgres container the new account does not have (#2652).
+  #
+  # Where production Postgres is *intended* to be, since two comments in this
+  # file disagreed and one sent people hunting for a connection string that
+  # could not exist (#2542): Aurora PostgreSQL Serverless v2, cluster
+  # `oxagen-postgres`, declared at `infra/stacks-new/oxagen/data-services.tf`'s
+  # `aws_rds_cluster.postgres`. Intended, not observed — that is Terraform in
+  # this repository, and drift between it and the account is the sort of thing
+  # that produced #2542 in the first place. #2542's first item is an
+  # `aws rds describe-db-clusters` confirming it, which needs credentials no
+  # contributor here has, so nothing below states it as an observation.
   #
   # What is NOT covered, named so its absence is trackable rather than merely
   # true — retiring a job silently is how the last two months happened:
@@ -794,6 +846,16 @@ jobs:
             --manifest-path "$RUNNER_TEMP/stella-src/Cargo.toml"
           echo "STELLA_SERVE_ARTIFACT=$RUNNER_TEMP/stella-src/target/release/stella-serve" >> "$GITHUB_ENV"
 
+      # The binary is built here and runs in a container chosen in
+      # package-for-node.sh. glibc is backward compatible and not forward
+      # compatible, so a builder newer than that image ships a binary that
+      # cannot load — and the sidecar pool starts lazily, so the container
+      # stays healthy while every turn that reaches the engine dies (#2685).
+      # Free to check at this point: the artifact already exists.
+      - name: stella-serve loads in the image it ships to
+        if: matrix.service == 'worker'
+        run: tools/scripts/check-glibc-parity.sh "$STELLA_SERVE_ARTIFACT"
+
       - name: Package ${{ matrix.service }}
         run: |
           set -euo pipefail
@@ -802,40 +864,10 @@ jobs:
           set +a
           tools/scripts/package-for-node.sh ${{ matrix.service }}
 
-      # TEMPORARY, and it deletes itself the moment the deploy goes green.
-      #
-      # This has now masked two different failures in a row, which is the cost
-      # of a mask outliving its cause. It was added for #2619, a real
-      # AccessDenied: the deploy role's policy enumerates each artifact key and
-      # `worker` was missing from it. That is fixed — the key is in
-      # infra/stacks-new/ci-deploy/roles.tf's `platform_services` and the stack
-      # is applied, so the tarball reaches the node.
-      #
-      # It then hid #2676, which is what the node was actually failing on: the
-      # worker bundle threw ERR_INVALID_ARG_TYPE at module init, so every
-      # deploy failed its health check with no previous release to roll back
-      # to. Fixed in the same PR as this comment.
-      #
-      # Tolerating it for `worker` only, rather than removing the target from
-      # the matrix: removing it would mean the worker silently stops deploying,
-      # and someone has to remember to put it back. This way the step starts
-      # passing on its own and the next step below goes quiet — at which point
-      # both are deleted. Do not renew this mask for a third cause; a failure
-      # that survives the fix above is a red deploy that should be read.
       - uses: ./.github/actions/ship-to-node
         id: ship
-        continue-on-error: ${{ matrix.service == 'worker' }}
         with:
           service: ${{ matrix.service }}
           directory: dist-deploy/${{ matrix.service }}
           hostname: ${{ matrix.hostname }}
 
-      - name: Report an unprovisioned worker deploy
-        if: steps.ship.outcome == 'failure'
-        run: |
-          echo "::warning title=worker deploy not provisioned::\
-          Shipping the worker artifact failed. Until #2619's OpenTofu apply \
-          runs, the deploy role cannot write _deploy/worker-standalone.tgz. \
-          Every other service ships through the identical step. Delete this \
-          step and the continue-on-error above once the apply has happened."
-          exit 0

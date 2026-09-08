@@ -34,6 +34,9 @@ import {
   loadManagedConfig,
   getManagedServers,
   checkToolDenied,
+  validateServerAgainstPolicy,
+  formatViolation,
+  isManagedServer,
 } from "@oxagen/mcp-config/managed";
 import type {
   McpServerConfig,
@@ -73,31 +76,6 @@ const logger = pino({
 function stdioSpawnEnabled(): boolean {
   const v = process.env.OXAGEN_ALLOW_STDIO_MCP;
   return v === "1" || v === "true";
-}
-
-// Minimal glob → RegExp: `*` matches any run of chars, `?` a single char;
-// everything else is literal. Used only for the org-managed command allowlist.
-function globToRegExp(glob: string): RegExp {
-  const escaped = glob
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*/g, ".*")
-    .replace(/\?/g, ".");
-  return new RegExp(`^${escaped}$`);
-}
-
-/**
- * Defense-in-depth on top of the env gate: when the org managed policy declares
- * an `allowedCommands` allowlist, a stdio server's `command` must match one of
- * its globs. An empty/absent allowlist means "no additional restriction" (the
- * env gate remains the deciding factor).
- */
-function commandAllowedByPolicy(
-  command: string,
-  policy: ManagedPolicy | undefined,
-): boolean {
-  const patterns = policy?.allowedCommands;
-  if (!patterns || patterns.length === 0) return true;
-  return patterns.some((p) => globToRegExp(p).test(command));
 }
 
 /**
@@ -188,6 +166,31 @@ async function contributeFileBasedMcpTools(
     // Skip disabled servers
     if ("disabled" in config && config.disabled) continue;
 
+    // Managed policy, before anything is spawned or any request leaves the
+    // machine. This is the enforcement point managed.ts's header always named
+    // and nothing ever called, which is why `allowedServerUrls` governed
+    // nothing (#1383). It runs for EVERY transport — a config file can be
+    // edited directly, so checking only at `oxagen mcp add` time would not be
+    // a boundary either.
+    //
+    // An org-provisioned server is exempt: the org wrote it, so refusing it
+    // against the org's own allowlist would only ever be self-contradiction —
+    // and it is the caller of `isManagedServer`, which had none.
+    if (!isManagedServer(serverName, managed)) {
+      const violation = validateServerAgainstPolicy(
+        serverName,
+        config,
+        managed,
+      );
+      if (violation) {
+        logger.warn(
+          { serverName, violationType: violation.type },
+          `skipping MCP server: ${formatViolation(violation)}`,
+        );
+        continue;
+      }
+    }
+
     // stdio-transport servers spawn a local process — handled by a dedicated,
     // security-gated branch (see stdioSpawnEnabled + connectMcpStdio below).
     if (config.transport === "stdio") {
@@ -196,13 +199,6 @@ async function contributeFileBasedMcpTools(
         logger.warn(
           { serverName, command: config.command },
           "skipping stdio MCP server: local process spawning is disabled — set OXAGEN_ALLOW_STDIO_MCP=1 in a trusted local/CLI runtime to enable",
-        );
-        continue;
-      }
-      if (!commandAllowedByPolicy(config.command, managed?.managedPolicy)) {
-        logger.warn(
-          { serverName, command: config.command },
-          "skipping stdio MCP server: command not permitted by managed policy allowedCommands",
         );
         continue;
       }

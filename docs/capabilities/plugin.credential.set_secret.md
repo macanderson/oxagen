@@ -31,6 +31,7 @@ Org Owner, Org Admin, Workspace Owner.
 
 - Postgres: upserts a row in `plugin.credentials` with encrypted `secret_ciphertext`.
 - ClickHouse: emits `plugin.credential.set` event (value never included in telemetry).
+- **Writes a `plugin.credential_set` row to `security_events`**. Storing a plugin's OAuth token or secret is a privileged credential change (SOC2 CC6.1); before ADR-050 the taxonomy had no fitting type and the handler was explicitly exempt.
 
 ## Surfaces
 

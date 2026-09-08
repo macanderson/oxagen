@@ -20,6 +20,7 @@ mocks.chargeImageCredits.mockResolvedValue({
   creditsMetered: 1n,
   creditsCharged: 1n,
   shortfallCredits: 0n,
+  rateCardMiss: false,
 });
 
 vi.mock("ai", () => ({ generateImage: mocks.generateImage }));
@@ -74,6 +75,7 @@ beforeEach(() => {
     creditsMetered: 1n,
     creditsCharged: 1n,
     shortfallCredits: 0n,
+    rateCardMiss: false,
   });
 });
 
@@ -170,6 +172,7 @@ describe("generateImageFor (@oxagen/ai)", () => {
         creditsMetered: 1n,
         creditsCharged: 1n,
         shortfallCredits: 0n,
+        rateCardMiss: false,
       };
     });
 
@@ -193,6 +196,7 @@ describe("generateImageFor (@oxagen/ai)", () => {
         creditsMetered: 1n,
         creditsCharged: 1n,
         shortfallCredits: 0n,
+        rateCardMiss: false,
       };
     });
 

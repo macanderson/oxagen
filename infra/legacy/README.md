@@ -21,18 +21,69 @@ moved away from and which has not been decommissioned.
 Both aliases exist in that account today, and the platform's vault
 (`packages/plugins/src/vault/vault-secret-service.ts`) takes a KMS key id from
 configuration rather than a hardcoded ARN. So whether the running platform
-still encrypts against these keys is a question about deployed configuration,
+still encrypts against these keys was a question about deployed configuration,
 not something the code answers.
+
+**It has been asked, and the answer is yes.** On 2026-09-06 the deployed
+configuration read:
+
+```
+/oxagen/production/INGESTION_CRYPTO_PROVIDER  = kms
+/oxagen/production/AWS_KMS_INGESTION_KEY_ARN  = arn:aws:kms:us-east-2:578673726240:key/…
+```
+
+The platform in `916294258235` wraps ingestion connector credentials with a key
+in **this** account. `packages/crypto/src/ingestion.ts` names that ARN as
+required when the provider is `kms`, so it is the key in use rather than a
+leftover setting.
+
+That makes this account load-bearing, not merely undecommissioned. Deleting the
+key stops new encryption, which is an outage; it also makes every credential
+already wrapped with it permanently undecryptable, which no rotation recovers.
+Settle #2680 before anything here is deleted.
+
+Both parameters are SecureString. Read without `--with-decryption` they return
+ciphertext, which reads like a non-answer — that is how this went unestablished
+for as long as it did.
 
 Deleting the Terraform would not delete the keys. It would delete the only
 record of how they were made.
 
 ## What nobody has established
 
-Whether the new account has equivalent keys, and which account the running
-platform actually uses. The cutover checklist is marked complete, and this
-stack was last touched in June by a commit about something else — those two
-facts together are why this needs a person rather than a guess.
+Which account the running platform uses is settled above: this one, for
+ingestion. What is still open:
+
+- Whether the new account has equivalent keys to move to, and what the re-wrap
+  path is for ciphertext already written under the old key.
+
+## The second alias: nothing can use it, whatever the parameters say
+
+`alias/oxagen/auth-tokens-prod` is referenced by this file and by the Terraform
+below that creates it, and by nothing else. `AWS_KMS_AUTH*` appears nowhere in
+`packages/` or `apps/`, and the registry describes `AUTH_TOKEN_ENCRYPTION_KEY`
+as a base64 256-bit KEK generated with `openssl rand -base64 32` — a local
+symmetric key the code uses directly, with no KMS call in the path.
+
+That is a fact about the code, so it holds regardless of what any parameter
+store contains: even if a `AWS_KMS_AUTH_TOKENS_KEY_ARN` existed somewhere, no
+shipping code would read it.
+
+**What is NOT established, and the distinction matters.** Reading
+`/oxagen/production/*` with a contributor's credentials reads the store in
+`578673726240` — this account. The deploy node lives in `916294258235` and
+reads its OWN store, so those two prefixes are different objects with the same
+name. A read from here describes the pre-cutover deployment, not the running
+one, and cannot tell a live setting from a leftover.
+
+So the ingestion answer above should be read the same way: it is what THIS
+account's parameter store says, which is what the platform used before the
+cutover. Confirming it for the running platform needs a read in
+`916294258235`. #2680 carries that.
+
+The cutover checklist is marked complete, and this stack was last touched in
+June by a commit about something else — those two facts together are why the
+rest of this needs a person rather than a guess.
 
 Nothing here is applied by CI. `infra/stacks-new/` is the live account and is
 applied by `.github/workflows/infra.yml`; this directory is deliberately

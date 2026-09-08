@@ -158,6 +158,7 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 - **Coverage ratchet**: thresholds only go up, capped at 90. Never reduce a threshold. Keep at least 2.5% headroom below actual coverage.
 - **Lint**: zero warnings. `eslint-disable` requires inline comment explaining why.
 - **LLM calls**: all LLM calls must go through `@oxagen/ai` (re-exports `streamText`/`generateText`/`generateObject`/`embed`). Never import directly from `ai`. The `@oxagen/ai` layer emits metering, duration tracking, surface tagging, and prompt hashing to ClickHouse. Use `modelIdOf()` for model resolution — never hard-code slugs.
+- **Tool list**: a turn advertises its whole tool set before anyone speaks, and that is most of what it sends — measured here at 45,007 tokens across 271 tools against 3,704 tokens of instructions (#2611). `RunCodingAgentResult.toolList` reports the count, the exact bytes and a bytes/4 token estimate for every turn, so the cost is visible rather than something to measure by hand. A turn is refused before the request when its provider publishes a cap it exceeds — OpenAI takes 128 tools — with a `ToolLimitExceededError` naming the provider, the cap and the count. A provider with no verified published cap is not checked: inventing one would refuse turns that work. The table is `PROVIDER_TOOL_LIMITS` in `packages/agent-runner/src/stella/tool-budget.ts`.
 - **`bootstrapEntitlementRuntime()`** must be called at startup of any new runtime that invokes capability-gated handlers; forgetting silently skips the entitlement gate.
 
 ## Local Development
@@ -175,6 +176,8 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 ## CI Config
 
 `.github/workflows/pipeline.yml` runs: lint → typecheck → unit tests → build → `check:manifest` → `check:contracts` → `db:lint-migrations`. Gate mirrors this exactly. `vision-gate.yml` additionally LLM-judges the PR diff against `docs/VISION.md` (advisory). CI runs inside `ghcr.io/macanderson/oxagen-ci-*` containers with Atlas baked in.
+
+**Concurrency**: a push to `main` gets its own group, keyed by commit; everything else groups by ref so a new push supersedes the run before it. GitHub keeps one *queued* run per group, so a shared group means a third merge evicts the second before it starts — and when merges outpace the run, that chain never terminates. Nothing finishes, `deploy-web`/`deploy-node` never run because they need a passing check, and cancelled runs read as ordinary cleanup so nothing goes red. That took out eight deploys on 2026-09-07 (#2730). ADR-046 has the reasoning and what it costs; `tools/scripts/check-main-concurrency.mjs` fails `check:contracts` if the expression loses `github.sha`, because reverting it would look like a tidy-up.
 
 **Pre-commit hooks** (lefthook): Biome format (staged files), ESLint fix (staged files), staged-file typecheck via `tools/scripts/typecheck-staged.mjs`, atlas-validate (only when migration files are staged). **Pre-push hooks**: `check:contracts` + `env:check` only — no test suites (those run in CI).
 
@@ -268,7 +271,10 @@ macanderson org repos.
   CI — not just the implementation. A PR that advances an issue without
   finishing it links it with `Refs #N` rather than `Closes #N`: `Refs`
   does not close, so the merge gate does not hold that PR against the
-  issue's DoD. A PR may carry both, and is gated only on what it closes.
+  issue's DoD. A PR may carry both, and is gated only on what it closes. A
+  PR that closes nothing is waived by a label, and which one is a claim:
+  `no-issue` for a trivial change, `closes-nothing` for a substantial one
+  that closes no issue by design.
 - **[SCR-004](docs/scr/SCR-004-residue-becomes-issues.md) — Fix over
   file:** Fix what you notice in the PR you are making; two unrelated fixes
   in one PR is fine. File an issue only when a fix cannot responsibly ride

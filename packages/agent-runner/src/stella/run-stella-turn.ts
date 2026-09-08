@@ -1,3 +1,4 @@
+import { assertWithinToolLimit, measureToolList } from "./tool-budget";
 /**
  * Run one turn on the Stella engine — the only engine — against the contract
  * `RunCodingAgentOptions`/`RunCodingAgentResult` still name.
@@ -133,9 +134,21 @@ export async function runStellaTurn(
   const tools = buildToolSet(opts);
   const mutating = mutatingToolSet(opts.mutatingToolNames);
 
+  const steering = await steeringOnce(opts);
   const recalled = await recallOnce(opts);
   const history: ModelMessage[] = [
     ...(opts.history ?? []),
+    // The workspace's published steering policy, in the same volatile position
+    // as recalled memory and for the same reason: the system block is a
+    // prompt-cache contract, and records that differ per workspace would
+    // fragment that cache across every workspace on the platform. Records
+    // change at human speed, so a per-workspace prefix would mostly hit — but
+    // "mostly" is a cache key argument, and the steer is strong enough here,
+    // one message from the instruction (oxagen#2592).
+    //
+    // Before recalled memory: policy is what the model should read first, and
+    // memory is the more recent, more specific thing to hold in mind last.
+    ...(steering ? [{ role: "user" as const, content: steering }] : []),
     // The volatile recalled-memory message, placed exactly where the TS loop
     // places it: AFTER the cached system block, immediately before the
     // instruction, and as `user` rather than `system` so the platform's LLM
@@ -153,9 +166,16 @@ export async function runStellaTurn(
   let steps = 0;
   let budgetStopped = false;
 
+  const toolSchemas = await toToolSchemas(tools, mutating);
+  // Before the request, so a turn that cannot be accepted says why rather than
+  // surfacing whatever the gateway returns for a request it was never going to
+  // take (oxagen#2611).
+  assertWithinToolLimit(opts.model, toolSchemas);
+  const toolList = measureToolList(toolSchemas);
+
   const request: TurnRequest = {
     provider_id: "oxagen-host",
-    tools: await toToolSchemas(tools, mutating),
+    tools: toolSchemas,
     messages: toCompletionMessages({
       system: opts.system,
       history,
@@ -227,6 +247,7 @@ export async function runStellaTurn(
       usageTotals,
       transcript: lastSeenTranscript,
       stopReason,
+      toolList,
     });
   }
 
@@ -241,6 +262,7 @@ export async function runStellaTurn(
     steps,
     opts,
     onEvent,
+    toolList,
     usageTotals,
     transcript: lastSeenTranscript,
     ...(budgetStopped ? { stopReason: "budget" as const } : {}),
@@ -435,6 +457,24 @@ export function stopReasonFor(
   return undefined;
 }
 
+/**
+ * The workspace's steering policy for this turn, or "" when there is none.
+ *
+ * Same contract as {@link recallOnce}: a failure degrades the turn to no
+ * steering and is surfaced, never swallowed. A registry outage must not fail a
+ * turn — but it must not silently look like a workspace that published nothing
+ * either, which is the state oxagen#2592 was filed about.
+ */
+async function steeringOnce(opts: RunCodingAgentOptions): Promise<string> {
+  if (!opts.steering) return "";
+  try {
+    return await opts.steering.loadSteering();
+  } catch (error) {
+    opts.onError?.({ phase: "steering-load", error });
+    return "";
+  }
+}
+
 async function recallOnce(opts: RunCodingAgentOptions): Promise<string> {
   if (!opts.memory) return "";
   try {
@@ -455,6 +495,7 @@ async function assembleResult(args: {
   usageTotals: readonly CompletionUsage[];
   transcript?: ModelMessage[];
   stopReason?: RunCodingAgentResult["stopReason"];
+  toolList: RunCodingAgentResult["toolList"];
 }): Promise<RunCodingAgentResult> {
   const { opts, onEvent } = args;
 
@@ -479,6 +520,9 @@ async function assembleResult(args: {
     usage: sumUsage(args.usageTotals),
     messages,
     ...(args.stopReason ? { stopReason: args.stopReason } : {}),
+    // What this turn spent advertising its tools, so the number is visible per
+    // turn rather than something somebody has to measure by hand (#2611).
+    ...(args.toolList ? { toolList: args.toolList } : {}),
   };
 }
 

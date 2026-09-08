@@ -30,6 +30,7 @@ Org Owner, Org Admin.
 
 - Postgres: deletes the `mcp.credentials` row for the (workspace × org listing); the encrypted secret material is destroyed.
 - ClickHouse: the kernel records the privileged invocation via the `capability.invoke_*` audit trail (no secret material is ever logged).
+- **Writes a `plugin.credential_revoked` row to `security_events`**. Deleting a plugin's stored credential is a privileged credential change (SOC2 CC6.1); before ADR-050 the taxonomy had no fitting type and the handler was explicitly exempt.
 
 ## Surfaces
 

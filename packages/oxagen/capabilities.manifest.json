@@ -4497,7 +4497,7 @@
       "surfaces": ["api"],
       "layers": {
         "schema": true,
-        "api": false,
+        "api": true,
         "unit": false,
         "docs": false
       }
@@ -4745,6 +4745,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "unit": true,
         "docs": true
       }
     },
@@ -4772,6 +4773,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "unit": true,
         "docs": true
       }
     },

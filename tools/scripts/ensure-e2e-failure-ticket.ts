@@ -25,6 +25,9 @@
  *   GITHUB_REPOSITORY     — e.g. oxagen-ai/oxagen-monorepo
  */
 
+import { appendFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
 const API_KEY = process.env["LINEAR_API_KEY"];
 const PROJECT_ID = process.env["LINEAR_PROJECT_ID"];
 const GITHUB_RUN_ID = process.env["GITHUB_RUN_ID"] ?? "unknown";
@@ -281,13 +284,95 @@ async function main(): Promise<void> {
   log(`created tracker ${issue.identifier} (${issue.url}).`);
 }
 
-main().catch((err: unknown) => {
-  // Best-effort: log but do not re-throw. The e2e job is already failing;
-  // we must not compound that with a ticket-script error surfaced to CI.
+/**
+ * Is this the shape of failure that will happen again tomorrow?
+ *
+ * A rejected key is permanent: every nightly failure from now on goes
+ * unticketed until someone rotates it. A timeout or a 5xx is one bad night. The
+ * two want different loudness, and telling them apart is the whole point —
+ * before this, both were a line in a log nobody opens (#2555).
+ */
+export function isPermanentFailure(err: unknown): boolean {
+  const message = (
+    err instanceof Error ? err.message : String(err)
+  ).toLowerCase();
+  return (
+    message.includes("authentication") ||
+    message.includes("not authenticated") ||
+    message.includes("unauthorized") ||
+    message.includes("invalid api key") ||
+    message.includes("forbidden")
+  );
+}
+
+/**
+ * What a reader should see, and where.
+ *
+ * `::error::` is a GitHub workflow command: it puts an annotation on the run
+ * summary page even when the step's own conclusion is success, which is exactly
+ * the gap here — the step reported green while its log said FAILED, so the only
+ * way to learn no ticket was filed was to open a passing step.
+ *
+ * The step still exits 0. The e2e job's conclusion belongs to the tests: a
+ * Linear outage must not turn a green suite red, and it must not make an
+ * already-red one look like a different problem.
+ */
+export function failureReport(err: unknown): {
+  annotation: string;
+  summary: string;
+} {
+  const detail = err instanceof Error ? err.message : String(err);
+  const permanent = isPermanentFailure(err);
+  const headline = permanent
+    ? "The nightly e2e failure ticket was NOT filed, and will not be filed until someone fixes the Linear key."
+    : "The nightly e2e failure ticket was not filed this run.";
+  return {
+    annotation: `::error title=e2e failure ticket not filed::${headline} ${detail}`,
+    summary: [
+      "### e2e failure ticket not filed",
+      "",
+      headline,
+      "",
+      `Reason: \`${detail}\``,
+      "",
+      permanent
+        ? "This is a rejected credential, not a blip. Every red nightly from here on goes untracked. See #2555."
+        : "This looks like a one-off. If it repeats, see #2555.",
+    ].join("\n"),
+  };
+}
+
+/** Write the report where a reader will see it without opening a green log. */
+export function reportFailure(err: unknown): void {
+  const { annotation, summary } = failureReport(err);
   console.error(
     "[e2e-failure-ticket] FAILED:",
     err instanceof Error ? err.message : err,
   );
-  // Exit 0 intentionally — the job is already red; this is telemetry.
-  process.exit(0);
-});
+  console.log(annotation);
+  const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+  if (summaryPath) {
+    try {
+      appendFileSync(summaryPath, `${summary}\n`);
+    } catch {
+      // The annotation above already carries the message; a summary that
+      // cannot be written must not become a second failure.
+    }
+  }
+}
+
+// Only run when invoked as a script. Importing this module — which the test
+// does — must not fire a Linear call.
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (invokedDirectly) {
+  main().catch((err: unknown) => {
+    reportFailure(err);
+    // Exit 0 intentionally — the job is already red; this is telemetry, and
+    // the annotation above is what makes it visible without changing the
+    // job's verdict.
+    process.exit(0);
+  });
+}

@@ -46,6 +46,24 @@ import { pathToFileURL } from "node:url";
 export const ESCAPE_HATCH_LABEL = "no-issue";
 
 /**
+ * Label for a substantial PR that deliberately closes no issue.
+ *
+ * `no-issue` says *this change is trivial*. A large one that closes nothing —
+ * an audit, a mechanical refactor, a sweep that FILES issues rather than
+ * closing them — could claim neither that nor a `Closes #N` without saying
+ * something untrue, so it stayed red on a real and valid PR. #1941 changed
+ * 3,285 files, filed about 1,020 issues, closed none, and sat red on `dod`
+ * alone while every other check passed; two automated passes stopped at it
+ * rather than pick a false label (#2551).
+ *
+ * A second label rather than widening `no-issue`, because the two are
+ * different claims and a reviewer should be able to tell them apart at a
+ * glance: one says the change is too small to need an issue, the other says it
+ * is large and closes none.
+ */
+export const CLOSES_NOTHING_LABEL = "closes-nothing";
+
+/**
  * The `state_reason` values that close an issue without claiming its DoD was
  * met, so the close guard must not reopen them.
  *
@@ -230,36 +248,180 @@ export function referencedIssues(prBody) {
 }
 
 /**
+ * Does `prBody` name this exact issue, either as a close or as a `Refs`?
+ *
+ * Lives here rather than inline in `dod-recheck.yml` for the reason
+ * `closeExemptFromDod` does: a workflow's `script:` block is reachable by no
+ * test, and this predicate decides whether a stale red check ever gets
+ * re-run — a wrong answer here is a workflow that runs and does nothing.
+ *
+ * It is the shape that made that a real risk. `linkedIssues` and
+ * `referencedIssues` return `{ owner, repo, number }` records, not numbers, so
+ * comparing a list of them against an issue number matches nothing and fails
+ * silently. Same-repo references carry `null` for owner/repo, which is why the
+ * caller's repository is filled in before comparing (#2638).
+ */
+export function referencesIssue(prBody, { owner, repo, number }) {
+  return [...linkedIssues(prBody), ...referencedIssues(prBody)].some(
+    (ref) =>
+      ref.number === number &&
+      (ref.owner ?? owner) === owner &&
+      (ref.repo ?? repo) === repo,
+  );
+}
+
+/**
+ * Headings this corpus writes its done conditions under (oxagen#1407).
+ *
+ * The template teaches one spelling; the gate reads the ones already in the
+ * tracker. Recognising only `Definition of done` made every pre-template issue
+ * a migration, and the migration was invisible until someone opened a PR
+ * against an old issue and got a red check for a reason unrelated to their
+ * change — a per-issue tax paid at the worst moment, by whoever happened to be
+ * closing it. A census of macanderson/stella's open non-epic issues found 36
+ * under `Done when`, 11 under `What "done" looks like`, and a further 60 under
+ * `Done means` that had already been migrated by hand (macanderson/stella#5193).
+ *
+ * Bare `Done` is deliberately **excluded**. It is short enough to head a
+ * section written for another purpose, and the cost of the two directions is
+ * not symmetric: a wrongly-recognised section makes this gate read some other
+ * checklist as the definition of done, which is the "a measurement that did not
+ * happen reads as success" failure the gate exists to prevent. Leaving those
+ * issues to fail loudly costs their closer one edit, and `verdict` now tells
+ * them exactly which edit to make.
+ *
+ * Anchored to a heading or a bold label, so a mention of the phrase in prose is
+ * not a section.
+ */
+const DOD_HEADING = new RegExp(
+  String.raw`^\s*(?:#{1,6}\s*|\*\*)\s*` +
+    String.raw`(?:definition of done|done means|done when|what ["']?done["']? looks like)\b`,
+  "gim",
+);
+
+/** The `##`/`**` run in front of a heading, stripped to get its text. */
+const HEADING_PREFIX = /^\s*(?:#{1,6}\s*|\*\*)\s*/;
+
+/**
  * Read the DoD checklist state out of an issue body.
  *
- * Only the section under a "Definition of done" heading or bold label counts.
- * Scanning the whole body would sweep in unrelated task lists — a Context
- * section listing options, say — and block merges on boxes that were never a
- * DoD. When no such section exists, `present` is false and the caller decides
- * what that means.
+ * Only the section under one of `DOD_HEADING`'s spellings counts. Scanning the
+ * whole body would sweep in unrelated task lists — a Context section listing
+ * options, say — and block merges on boxes that were never a DoD.
+ *
+ * `present` requires **both** a recognised heading and at least one `- [ ]`
+ * item under it. A section with no checkboxes is a paragraph, and `verdict`
+ * passes on `unchecked.length === 0`, so counting it as present would make the
+ * gate unfailable for exactly the issues whose conditions were written as
+ * prose. That hole predates the widened heading set — a canonical
+ * `## Definition of done` followed by plain bullets already passed verifying
+ * nothing — and widening the headings without closing it would have opened it
+ * to the whole `Done when` cohort at once.
+ *
+ * `heading` reports the matched heading text, or `null` when no recognised
+ * heading was found at all. The two absences need different remedies, so the
+ * caller must be able to tell "no section" from "a section with no boxes".
+ *
+ * **Every** recognised section is read, not just the first. Widening the
+ * heading set means one issue can now carry two of them, and a hand migration
+ * is what produces that: stella#5193 moved 60 issues onto the canonical
+ * heading, and leaving the old prose section above the new checklist is the
+ * ordinary result. Stopping at the first heading would fail such an issue —
+ * the legacy section holds no boxes — even though its ticked checklist sits
+ * directly below, which is the "red for a reason unrelated to the diff"
+ * failure this whole change exists to remove.
+ *
+ * Aggregating is also the conservative direction. Reading every checklist can
+ * only add unchecked items, never hide one, so no arrangement of sections can
+ * make the gate pass an issue that a single-section read would have failed. A
+ * checkbox is counted once even when sections overlap, because a bold label
+ * does not close the `##` section containing it.
  */
 export function dodStatus(issueBody) {
-  if (!issueBody) return { present: false, checked: 0, unchecked: [] };
+  const absent = { present: false, heading: null, checked: 0, unchecked: [] };
+  if (!issueBody) return absent;
 
   const body = withoutNonProse(issueBody);
-  const heading = body.match(/^\s*(?:#{1,6}\s*|\*\*)\s*definition of done\b/im);
-  if (!heading) return { present: false, checked: 0, unchecked: [] };
 
-  const after = body.slice(heading.index + heading[0].length);
-  // The DoD section ends at the next heading of any level, so a later
-  // "### Notes" section's task list is not counted against the DoD.
-  const endMatch = after.match(/^\s*#{1,6}\s+\S/m);
-  const section = endMatch ? after.slice(0, endMatch.index) : after;
-
+  let firstHeading = null;
+  let checklistHeading = null;
   let checked = 0;
   const unchecked = [];
-  for (const line of section.split("\n")) {
-    const item = line.match(/^\s*[-*]\s*\[( |x|X)\]\s*(.*)$/);
-    if (!item) continue;
-    if (item[1] === " ") unchecked.push(item[2].trim());
-    else checked += 1;
+  const counted = new Set();
+
+  for (const heading of body.matchAll(DOD_HEADING)) {
+    const label = heading[0].replace(HEADING_PREFIX, "").trim();
+    if (firstHeading === null) firstHeading = label;
+
+    const start = heading.index + heading[0].length;
+    const after = body.slice(start);
+    // The DoD section ends at the next heading of any level, so a later
+    // "### Notes" section's task list is not counted against the DoD.
+    const endMatch = after.match(/^\s*#{1,6}\s+\S/m);
+    const section = endMatch ? after.slice(0, endMatch.index) : after;
+
+    let offset = start;
+    for (const line of section.split("\n")) {
+      const at = offset;
+      offset += line.length + 1;
+      const item = line.match(/^\s*[-*]\s*\[( |x|X)\]\s*(.*)$/);
+      if (!item || counted.has(at)) continue;
+      counted.add(at);
+      if (checklistHeading === null) checklistHeading = label;
+      if (item[1] === " ") unchecked.push(item[2].trim());
+      else checked += 1;
+    }
   }
-  return { present: true, checked, unchecked };
+
+  if (firstHeading === null) return absent;
+  if (checked === 0 && unchecked.length === 0) {
+    return { present: false, heading: firstHeading, checked: 0, unchecked: [] };
+  }
+  return { present: true, heading: checklistHeading, checked, unchecked };
+}
+
+/**
+ * Say what edit an issue needs before its close can be verified (oxagen#1400).
+ *
+ * The old text said "refile it with the task template", which, read literally,
+ * means close this issue and open a new one — applied to an issue with
+ * comments, cross-references, a parent epic and a `Closes` link from the very
+ * PR being blocked, that destroys the thing the gate protects. It was also the
+ * *only* instruction given, so the message named the one remedy that must not
+ * be taken and omitted the one that should.
+ *
+ * This check is nearly always the only red on an otherwise green PR, failing
+ * for a reason unrelated to the diff, and it is read by someone who has never
+ * seen it before. The message is the whole interface of the gate, so it names
+ * the edit and where to make it.
+ *
+ * `heading` is the recognised heading found without checkboxes, or `null` when
+ * no done-conditions section was found at all. The two have different fixes.
+ */
+function missingDodReason(ref, heading) {
+  if (heading) {
+    return (
+      `${ref} has a "${heading}" section, but nothing in it is a checkbox — ` +
+      "so there is no state for this gate to read.\n" +
+      "  Edit the ISSUE (not this PR) and rewrite that section's bullets as " +
+      "`- [ ]` items stating the conditions this close must satisfy, then tick " +
+      "the ones that are genuinely done. Keep the prose around them.\n" +
+      "  Do NOT close and reopen the issue — its history, links and parent are " +
+      "the point."
+    );
+  }
+  return (
+    `${ref} states no done conditions this gate can read.\n` +
+    "  Edit the ISSUE (not this PR): add a `## Definition of done` heading " +
+    "followed by `- [ ]` boxes stating the conditions this close must satisfy, " +
+    "then tick them.\n" +
+    "  If the issue already has a done-conditions paragraph under some other " +
+    "heading, convert that paragraph into boxes under one of the headings this " +
+    "gate reads — `Definition of done`, `Done means`, `Done when`, " +
+    '`What "done" looks like` — and keep the prose.\n' +
+    "  Do NOT close and reopen the issue — its history, links and parent are " +
+    "the point."
+  );
 }
 
 /**
@@ -281,12 +443,42 @@ export function dodStatus(issueBody) {
  */
 export function verdict(pr, issues) {
   const labels = pr.labels ?? [];
-  if (labels.includes(ESCAPE_HATCH_LABEL)) {
-    return { ok: true, waived: true, refsOnly: false, reasons: [] };
-  }
+  const waiver = [ESCAPE_HATCH_LABEL, CLOSES_NOTHING_LABEL].find((label) =>
+    labels.includes(label),
+  );
 
   const links = linkedIssues(pr.body);
   const refs = referencedIssues(pr.body);
+
+  // A waiver is a claim that this PR closes nothing, so it waives only when
+  // that is true. Applied before the body was parsed, the label short-circuited
+  // everything — a PR carrying `Closes #N` AND a waiver skipped its issue's DoD
+  // entirely, which is a way past the gate rather than an exit from it. Found
+  // by Sourcery on #2742; `no-issue` had the same hole and is fixed with it,
+  // since no open PR combines the two.
+  if (waiver) {
+    if (links.length === 0) {
+      return {
+        ok: true,
+        waived: true,
+        waivedBy: waiver,
+        refsOnly: false,
+        reasons: [],
+      };
+    }
+    return {
+      ok: false,
+      waived: false,
+      waivedBy: waiver,
+      refsOnly: false,
+      reasons: [
+        `This PR carries the \`${waiver}\` label but its description closes ` +
+          `${links.map((l) => l.ref ?? `#${l.number}`).join(", ")}. The label ` +
+          "says the PR closes no issue; the body says otherwise. Drop whichever " +
+          "one is wrong (SCR-003).",
+      ],
+    };
+  }
   if (links.length === 0 && refs.length === 0) {
     return {
       ok: false,
@@ -294,8 +486,10 @@ export function verdict(pr, issues) {
       refsOnly: false,
       reasons: [
         "This PR links no issue. Add a closing reference (`Closes #123`) if it " +
-          "finishes one, `Refs #123` if it only advances one, or apply the " +
-          `\`${ESCAPE_HATCH_LABEL}\` label if the change is genuinely trivial (SCR-003).`,
+          "finishes one, `Refs #123` if it only advances one, or label it: " +
+          `\`${ESCAPE_HATCH_LABEL}\` if the change is genuinely trivial, ` +
+          `\`${CLOSES_NOTHING_LABEL}\` if it is substantial and closes no ` +
+          "issue by design (SCR-003).",
       ],
     };
   }
@@ -311,10 +505,7 @@ export function verdict(pr, issues) {
   for (const issue of issues) {
     const status = dodStatus(issue.body);
     if (!status.present) {
-      reasons.push(
-        `${issue.ref} has no "Definition of done" section — refile it with the task ` +
-          "template so the close can be verified (SCR-003).",
-      );
+      reasons.push(missingDodReason(issue.ref, status.heading));
       continue;
     }
     if (status.unchecked.length > 0) {
@@ -336,7 +527,12 @@ export function verdict(pr, issues) {
  */
 export function formatVerdict(result) {
   if (result.waived) {
-    return `SCR-003 DoD check waived by the \`${ESCAPE_HATCH_LABEL}\` label.`;
+    const label = result.waivedBy ?? ESCAPE_HATCH_LABEL;
+    const why =
+      label === CLOSES_NOTHING_LABEL
+        ? "this PR closes no issue by design"
+        : "this change is trivial";
+    return `SCR-003 DoD check waived by the \`${label}\` label — ${why}.`;
   }
   if (result.refsOnly) {
     return (

@@ -35,11 +35,14 @@ import {
   judgeCompleteness,
   judgePanel,
   buildRevisionPrompt,
+  resolveReviseMinConfidence,
+  isUnexaminedComplete,
 } from "../evaluate/judge";
 import { enhancePrompt } from "../evaluate/prompt-enhancer";
 import { createSpecTestTracker } from "../oracle/spec-test";
 import {
   runMutationGate,
+  describeMutationScore,
   applyGateToVerdict,
   resolveMutationVerifyEnabled,
   type MutationGateResult,
@@ -417,6 +420,12 @@ export interface RunTurnResult {
     totalTokens?: number;
     /** Prompt tokens served from the provider cache (a cache "hit"), summed across rounds. */
     cachedInputTokens?: number;
+    /**
+     * Prompt tokens WRITTEN into the provider cache, summed across rounds.
+     * Priced at the cache-write rate, which Anthropic sets 25% above fresh
+     * input — the spend guard could not see these at all before #1414.
+     */
+    cacheWriteTokens?: number;
   };
   /** The full, persisted record of how this turn was handled. */
   trace: TurnTrace;
@@ -684,8 +693,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
             inputTokens: usage.inputTokens,
             outputTokens: usage.outputTokens,
             // No execution round has run yet at the scope-review gate, so no
-            // provider cache reads have happened either — always 0 here.
+            // provider cache reads or writes have happened either — 0 both.
             cachedInputTokens: 0,
+            cacheWriteTokens: 0,
           },
           trace,
         };
@@ -706,6 +716,10 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   // line's cache "hit" counter). Tracked alongside — not inside — UsageTotals,
   // which is cost accounting and has no cache field.
   let cachedInputTokens = 0;
+  // Cache-WRITE tokens summed the same way. Kept beside the read counter rather
+  // than folded into it: they are disjoint subsets of the input tokens and are
+  // priced differently, which is the whole of #1411/#1414.
+  let cacheWriteTokens = 0;
 
   // Per-turn budget baseline: the engine guard sees only ONE round's usage, but
   // the budget is a per-TURN cap, so carry a running baseline of the tokens
@@ -718,6 +732,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     inputTokens: 0,
     outputTokens: 0,
     cachedInputTokens: 0,
+    cacheWriteTokens: 0,
   };
   // Budget-guard tier-escalation repricing. The caller's guard prices the whole
   // turn against ONE reference model, but market-router `enforce` mode can
@@ -735,17 +750,20 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     inputTokens: 0,
     outputTokens: 0,
     cachedInputTokens: 0,
+    cacheWriteTokens: 0,
   };
   const escalationFactor = (u: {
     inputTokens?: number;
     outputTokens?: number;
     cachedInputTokens?: number;
+    cacheWriteTokens?: number;
   }): number => {
     if (routed.model === initialWorkerModel) return 1;
     const usage = {
       inputTokens: u.inputTokens ?? 0,
       outputTokens: u.outputTokens ?? 0,
       cachedTokens: u.cachedInputTokens ?? 0,
+      cacheWriteTokens: u.cacheWriteTokens ?? 0,
     };
     const base = estimateCostUsd(initialWorkerModel, usage);
     if (base <= 0) return 1;
@@ -766,11 +784,16 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
           budgetBaseline.cachedInputTokens +
           budgetEscalationPremium.cachedInputTokens +
           (u.cachedInputTokens ?? 0) * f;
+        const cacheWriteTokens =
+          budgetBaseline.cacheWriteTokens +
+          budgetEscalationPremium.cacheWriteTokens +
+          (u.cacheWriteTokens ?? 0) * f;
         return opts.budgetGuard!({
           inputTokens,
           outputTokens,
           totalTokens: inputTokens + outputTokens,
           cachedInputTokens,
+          cacheWriteTokens,
         });
       }
     : undefined;
@@ -895,6 +918,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     budgetBaseline.inputTokens = usage.inputTokens;
     budgetBaseline.outputTokens = usage.outputTokens;
     budgetBaseline.cachedInputTokens = cachedInputTokens;
+    budgetBaseline.cacheWriteTokens = cacheWriteTokens;
     // Capture bash command outputs THIS round so the judge sees test results
     // (the decisive completeness signal), not just the command strings.
     const roundCommandOutputs: Array<{
@@ -1027,6 +1051,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
           cachedInputTokens:
             (phaseAResult.usage.cachedInputTokens ?? 0) +
             (phaseBResult.usage.cachedInputTokens ?? 0),
+          cacheWriteTokens:
+            (phaseAResult.usage.cacheWriteTokens ?? 0) +
+            (phaseBResult.usage.cacheWriteTokens ?? 0),
         },
       };
       // Reset prompt to original for the end-of-round judge input below.
@@ -1052,6 +1079,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     lastText = result.text;
     totalSteps += result.steps;
     cachedInputTokens += result.usage.cachedInputTokens ?? 0;
+    cacheWriteTokens += result.usage.cacheWriteTokens ?? 0;
 
     // Union the git-diff file list into filesTouched. This is the ground truth
     // for what changed and supplements tool-call events (which may not fire in
@@ -1234,18 +1262,29 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         },
       );
       mutationGates.push(gate);
-      if (gate.status !== "skipped") {
+      // Report every gate that actually re-ran something. The guard used to
+      // be `status !== "skipped"`, which excluded the only status the third
+      // label below can carry — so a timeout or a collection error, the two
+      // cases #1359 and #1362 moved out of `witnessed`, printed nothing at
+      // all and told the operator *less* than the wrong answer used to.
+      // `runs.length === 0` is the one skip with nothing to say: no witness
+      // command was re-run, so there is no measurement to report as missing.
+      if (gate.runs.length > 0) {
         opts.onStage?.({
           kind: "judge",
+          // A skipped gate is not a vacuous one: it established nothing, and
+          // saying "VACUOUS" would report a non-answer as a finding. Both the
+          // label and the score line below say when a measurement did not
+          // happen rather than printing a number for it (#1351, #1359).
           label:
             gate.status === "witnessed"
               ? "mutation gate: tests fail without the fix — the green is real"
-              : "mutation gate: VACUOUS — tests still pass without the fix",
+              : gate.status === "vacuous"
+                ? "mutation gate: VACUOUS — tests still pass without the fix"
+                : `mutation gate: could not check — ${gate.reason}`,
           detail:
             `${gate.runs.length} witness run(s) · ${gate.durationMs}ms` +
-            (gate.score
-              ? ` · mutant kill rate ${Math.round(gate.score.killRate * 100)}%`
-              : ""),
+            (gate.score ? ` · ${describeMutationScore(gate.score)}` : ""),
         });
         phases.push(
           phaseStat(
@@ -1314,6 +1353,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
           inputTokens: result.usage.inputTokens,
           outputTokens: result.usage.outputTokens,
           cachedInputTokens: result.usage.cachedInputTokens,
+          cacheWriteTokens: result.usage.cacheWriteTokens,
         });
         budgetEscalationPremium.inputTokens +=
           (f - 1) * (result.usage.inputTokens ?? 0);
@@ -1321,6 +1361,8 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
           (f - 1) * (result.usage.outputTokens ?? 0);
         budgetEscalationPremium.cachedInputTokens +=
           (f - 1) * (result.usage.cachedInputTokens ?? 0);
+        budgetEscalationPremium.cacheWriteTokens +=
+          (f - 1) * (result.usage.cacheWriteTokens ?? 0);
       }
     }
 
@@ -1330,15 +1372,31 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     // complete — revising it doubles turn cost for marginal expected gain.
     // Confident-incomplete verdicts still revise. Tune/disable via
     // OXAGEN_REVISE_MIN_CONFIDENCE (default 40; 0 restores always-revise).
-    const reviseMinConfidence = Number(
-      process.env["OXAGEN_REVISE_MIN_CONFIDENCE"] ?? 40,
+    const reviseMinConfidence = resolveReviseMinConfidence(process.env);
+
+    // The floor is asymmetric, and #1390 is right that an unexamined `complete`
+    // deserves as much suspicion as an unexamined `incomplete`. It applies to
+    // the case where the asymmetry is not defensible: a DEGRADED judge that
+    // said complete. That verdict is not a judgement at all — the heuristic
+    // cannot read the diff, and it returns `complete` for any turn with a file
+    // or a command in it — so a low-confidence one is exactly "we could not
+    // judge", and shipping it as done is the failure the issue names.
+    //
+    // A REAL judge's low-confidence `complete` is left alone, and that is the
+    // argued half: it read the same evidence a revise round would hand back to
+    // the agent, and asking the agent to "finish" work a judge just called done
+    // spends a full round to re-derive the same verdict. Low confidence there
+    // is a reason to surface the verdict, not to spend on it.
+    const unexaminedComplete = isUnexaminedComplete(
+      verdict,
+      reviseMinConfidence,
     );
     const canRevise =
-      !verdict.complete &&
       round < maxRounds &&
       !opts.readOnly &&
       !opts.signal?.aborted &&
-      verdict.confidence >= reviseMinConfidence;
+      (unexaminedComplete ||
+        (!verdict.complete && verdict.confidence >= reviseMinConfidence));
     if (!canRevise) break;
     prompt = buildRevisionPrompt(verdict);
 
@@ -1443,6 +1501,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       cachedInputTokens,
+      cacheWriteTokens,
     },
     trace,
   };
@@ -1891,6 +1950,7 @@ async function runBare(
       inputTokens: result.usage.inputTokens,
       outputTokens: result.usage.outputTokens,
       cachedInputTokens: result.usage.cachedInputTokens,
+      cacheWriteTokens: result.usage.cacheWriteTokens,
     },
     trace,
   };

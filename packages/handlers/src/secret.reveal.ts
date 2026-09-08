@@ -1,6 +1,7 @@
 import { revealSecret } from "@oxagen/plugins";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { logger } from "./logger";
+import { emitSecurityEvent } from "@oxagen/database/security";
 
 // Privileged + audited (Spec §7.3). The service writes environments.secret_access_log
 // on every call. Owner/Admin enforcement comes from the contract's IAM gate on
@@ -25,6 +26,19 @@ export const secretRevealHandler: CapabilityHandlerFn = async (input, ctx) => {
       },
       { keyId, environmentId: environmentId ?? null },
     );
+    // Audit the privileged access in the MAIN security log. The service also
+    // writes environments.secret_access_log; ADR-050 says why both.
+    emitSecurityEvent({
+      eventType: "secret.revealed",
+      actorUserId: ctx.userId ?? null,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      capability: "reveal_secret",
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: ctx.requestId ?? null,
+    });
     logger.info(
       {
         orgId: ctx.orgId,

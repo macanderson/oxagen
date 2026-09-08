@@ -267,8 +267,10 @@ describe("a Stella agent asking the ontology", () => {
 
     // The engine got an answer it can hand the model. `ToolOutput` is a
     // discriminated union, so asserting the arm is the assertion.
-    expect("ok" in output, `the graph read failed: ${JSON.stringify(output)}`)
-      .toBe(true);
+    expect(
+      "ok" in output,
+      `the graph read failed: ${JSON.stringify(output)}`,
+    ).toBe(true);
     const content = (output as { ok: { content: string } }).ok.content;
     expect(content).toContain("Renewal at risk");
     expect(content).toContain("HAS_ISSUE");

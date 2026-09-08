@@ -6,6 +6,7 @@
  * penalized. Over time, useful memories float up and noise sinks down.
  */
 import type { EpisodicStore } from "./store/episodic";
+import type { DecayStats } from "./decay";
 
 export interface ReinforcementStats {
   recordId: string;
@@ -92,11 +93,21 @@ export class ReinforcementTracker {
 
   /**
    * Get stats map for use with decay functions.
+   *
+   * `lastRetrievedAt` is carried through because decay measures its half-life
+   * from the last reinforcement. This tracker has always recorded that
+   * timestamp and this method used to drop it, which is precisely why decay
+   * could only run from `createdAt` and a retrieval bought a capped constant
+   * instead of resetting the clock (#1367).
    */
-  getStatsMap(): Map<string, { retrievals: number; successes: number }> {
-    const map = new Map<string, { retrievals: number; successes: number }>();
+  getStatsMap(): Map<string, DecayStats> {
+    const map = new Map<string, DecayStats>();
     for (const [id, s] of this.stats) {
-      map.set(id, { retrievals: s.retrievalCount, successes: s.successCount });
+      map.set(id, {
+        retrievals: s.retrievalCount,
+        successes: s.successCount,
+        lastRetrievedAt: s.lastRetrievedAt,
+      });
     }
     return map;
   }
@@ -113,7 +124,18 @@ export class ReinforcementTracker {
    */
   async applyToStore(
     store: EpisodicStore,
-    updateSalience: (recordId: string, newSalience: number) => Promise<void>,
+    /**
+     * Persist the reconciled salience. The third argument is the record's
+     * last-reinforcement time: a store that persists it into
+     * `MemoryRecord.lastReinforcedAt` makes recency survive a process restart,
+     * which this tracker's in-memory map cannot. The parameter is optional so
+     * an existing two-argument writer still satisfies the type.
+     */
+    updateSalience: (
+      recordId: string,
+      newSalience: number,
+      reinforcedAt?: number,
+    ) => Promise<void>,
   ): Promise<{ boosted: number; penalized: number }> {
     let boosted = 0;
     let penalized = 0;
@@ -149,7 +171,7 @@ export class ReinforcementTracker {
       // and skips the record entirely, so the store keeps the stale salience
       // with nothing recording that the reconciliation never landed.
       if (target !== record.salience) {
-        await updateSalience(id, target);
+        await updateSalience(id, target, s.lastRetrievedAt || undefined);
       }
       s.appliedRetrievalCount = s.retrievalCount;
       this.stats.set(id, s);

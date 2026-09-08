@@ -193,14 +193,67 @@ describe("wrapToolsWithSpeculation — invalidation", () => {
     await bashPending;
   });
 
-  it("does NOT invalidate on known-pure tools", async () => {
-    const { tools, calls } = makeTools();
-    const wrapped = wrapToolsWithSpeculation(tools);
+  // Replaces "does NOT invalidate on known-pure tools", which asserted the
+  // #1428 defect: the cache surviving a human pause is the bug, not the
+  // contract. `ask_user` hands the workspace to a person for as long as they
+  // take to answer, and the person answering is the one most likely to edit it.
+  it("read -> ask_user -> read serves the content written during the pause (#1428)", async () => {
+    // The file really changes while the human is answering, which is the shape
+    // the issue describes: the person being asked is the one editing.
+    let content = "before the question";
+    const { tools, calls } = makeTools({
+      read_file: async () => content,
+    });
+    let answered!: (v: string) => void;
+    const asked = new Promise<string>((r) => (answered = r));
+    const wrapped = wrapToolsWithSpeculation({
+      ...tools,
+      ask_user: { execute: async () => asked },
+    } as unknown as ToolSet);
+
+    await run(wrapped, "search", { query: "hit" });
+    await settle(); // src/a.ts is now cached, holding the old content
+
+    const pending = run(wrapped, "ask_user", { question: "which?" });
+    content = "edited by the human"; // the workspace moves under the pause
+    answered("that one");
+    await pending;
+
+    const after = await run(wrapped, "read_file", { path: "src/a.ts" });
+    expect(after).toBe("edited by the human");
+    expect(calls["read_file"]!.length).toBeGreaterThan(0);
+  });
+
+  it("does not invalidate on the way IN to ask_user", async () => {
+    // The trailing edge is the one that matters. Dropping the cache when the
+    // question is posed would discard entries that are still good, since
+    // nothing has changed at that instant.
+    const { tools } = makeTools();
+    let last: SpeculationStats | undefined;
+    const wrapped = wrapToolsWithSpeculation(tools, {
+      onStats: (s) => (last = s),
+    });
     await run(wrapped, "search", { query: "hit" });
     await settle();
+    const before = last!.invalidations;
     await run(wrapped, "ask_user", { question: "which?" });
-    await run(wrapped, "read_file", { path: "src/a.ts" });
-    expect(calls["read_file"]).toHaveLength(2); // cache survived, hit served
+    expect(last!.invalidations).toBe(before + 1);
+  });
+
+  it("suspends speculation while ask_user waits on a human (#1428)", async () => {
+    let answer!: (v: string) => void;
+    const gate = new Promise<string>((r) => (answer = r));
+    const { tools, calls } = makeTools({ ask_user: () => gate });
+    const wrapped = wrapToolsWithSpeculation(tools);
+
+    const pending = run(wrapped, "ask_user", { question: "which?" });
+    await run(wrapped, "search", { query: "hit" }); // completes during the pause
+    await settle();
+    // Nothing was speculated against a workspace a human is holding open.
+    expect(calls["read_file"]).toHaveLength(0);
+
+    answer("that one");
+    await pending;
   });
 
   it("passes through tools with no execute untouched", () => {

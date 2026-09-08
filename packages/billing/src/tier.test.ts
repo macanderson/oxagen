@@ -60,7 +60,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-const { resolveOrgTier } = await import("./tier");
+const {
+  resolveOrgTier,
+  resolveOrgTierDetailed,
+  ENTITLED_SUBSCRIPTION_STATUSES,
+} = await import("./tier");
 
 describe("resolveOrgTier", () => {
   beforeEach(() => {
@@ -128,3 +132,77 @@ describe("resolveOrgTier", () => {
 
 // Needed for beforeEach to be available in the module scope (vi.mock hoisted above import)
 import { beforeEach } from "vitest";
+
+/**
+ * #1384. `resolveOrgTier` decides whether IAM runs at all — `checkIAM` bypasses
+ * the resolver entirely below `enterprise` — so every way this under-reports a
+ * tier is a way to switch a security control off.
+ */
+describe("resolveOrgTier as a security input (#1384)", () => {
+  beforeEach(() => {
+    txState.subRows = [];
+    txState.orgRows = [];
+    txState.dbCalls = 0;
+  });
+
+  it("counts a trial as entitled, like every other subscription query", () => {
+    // checkout.ts, grants.ts and seats.ts all read IN ('active','trialing');
+    // this one read = 'active' and was the outlier.
+    expect(ENTITLED_SUBSCRIPTION_STATUSES).toContain("active");
+    expect(ENTITLED_SUBSCRIPTION_STATUSES).toContain("trialing");
+  });
+
+  it("does not let a lapsing billing state unenforce a security control", () => {
+    // Whether a past-due org keeps a FEATURE is a billing question; losing IAM
+    // must not be a consequence of a missed payment.
+    expect(ENTITLED_SUBSCRIPTION_STATUSES).toContain("past_due");
+    expect(ENTITLED_SUBSCRIPTION_STATUSES).toContain("paused");
+  });
+
+  it("reports an enterprise trial as enterprise", async () => {
+    txState.subRows = [{ tier: "enterprise" }];
+    const resolution = await resolveOrgTierDetailed("org_1");
+    expect(resolution.tier).toBe("enterprise");
+    expect(resolution.established).toBe(true);
+    expect(resolution.source).toBe("subscription");
+  });
+
+  it("marks a genuinely free org as ESTABLISHED free", async () => {
+    txState.orgRows = [{ planType: null }];
+    const resolution = await resolveOrgTierDetailed("org_1");
+    expect(resolution).toMatchObject({
+      tier: "free",
+      established: true,
+      source: "organization",
+    });
+  });
+
+  it("marks an org nothing knows about as NOT established", async () => {
+    // No subscription and no organizations row: the org is unaccounted for,
+    // which is a different fact from "this org is on the free plan" — and only
+    // the second is a reason to switch IAM off.
+    const resolution = await resolveOrgTierDetailed("org_missing");
+    expect(resolution.tier).toBe("free");
+    expect(resolution.established).toBe(false);
+    expect(resolution.source).toBe("absent-org");
+  });
+
+  it("keeps the pre-org case established, so create_org still works", async () => {
+    const resolution = await resolveOrgTierDetailed("");
+    expect(resolution).toMatchObject({
+      established: true,
+      source: "no-org-id",
+    });
+    expect(txState.dbCalls).toBe(0);
+  });
+
+  it("keeps resolveOrgTier's answer unchanged for every existing caller", async () => {
+    txState.subRows = [{ tier: "scale" }];
+    expect(await resolveOrgTier("org_1")).toBe("scale");
+    txState.subRows = [];
+    txState.orgRows = [{ planType: "build" }];
+    expect(await resolveOrgTier("org_1")).toBe("build");
+    txState.orgRows = [];
+    expect(await resolveOrgTier("org_1")).toBe("free");
+  });
+});

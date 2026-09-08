@@ -5,9 +5,10 @@
 # so a plan can run automatically on a diff nobody has read yet.
 #
 # A push to the default branch assumes `gha-infra-apply`, which is pinned to
-# the `production` environment. Required reviewers are configured there, in
-# repository settings, rather than here — that gate is the control on the only
-# role in this account that can write.
+# the `production` environment. What that environment actually enforces is a
+# deployment branch policy naming `main` alone — and deliberately no required
+# reviewer, so a push to `main` applies with no human in the loop. See the note
+# on the apply job for why, and how to verify both.
 #
 # Both roles are defined in infra/stacks-new/ci-deploy/infra-apply.tf, so this
 # workflow's own permissions are reviewable in the same pull request as the
@@ -208,6 +209,10 @@ jobs:
     # be assumed by a job that does not declare it. That half is real and is
     # what makes the `if:` above the second line of defence rather than the
     # only one.
+    #
+    # Both halves are checked rather than assumed (#2679):
+    #   gh api repos/macanderson/oxagen/environments/production \
+    #     --jq "[.protection_rules[]?.type]"   -> ["branch_policy"]
     environment: production
     strategy:
       fail-fast: true   # a later stack may depend on an earlier one
