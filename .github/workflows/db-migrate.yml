@@ -43,9 +43,16 @@ concurrency:
 jobs:
   migrate:
     runs-on: ubuntu-latest
-    # Uses the GitHub Environment of the same name if it exists, so environment
-    # protection rules (required reviewers) gate production applies. Repo-level
-    # secrets still resolve when no environment secret shadows them.
+    # Uses the GitHub Environment of the same name if it exists, so its secrets
+    # resolve here; repo-level secrets still resolve when no environment secret
+    # shadows them.
+    #
+    # It gates nothing. This comment used to say required reviewers stood in
+    # front of a production apply. They do not: the `production` environment
+    # carries one protection rule and it is a branch policy
+    # (`gh api repos/macanderson/oxagen/environments`), so a dispatch applies
+    # with no second person involved. Naming a reviewer that does not exist is
+    # worse than naming none, because it is the reason someone stops looking.
     environment: ${{ github.event.inputs.target }}
     env:
       # Mirror pipeline.yml: pick the prod or preview connection string. Atlas's
