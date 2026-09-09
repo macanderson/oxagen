@@ -108,13 +108,29 @@ runs:
           case "$status" in InProgress|Pending|Delayed) sleep 10 ;; *) break ;; esac
         done
 
-        aws ssm get-command-invocation --command-id "$command_id" \
-          --instance-id "$INSTANCE" --query StandardOutputContent --output text || true
-        aws ssm get-command-invocation --command-id "$command_id" \
-          --instance-id "$INSTANCE" --query StandardErrorContent --output text || true
+        # The node's own output is the only place the reason for a failed
+        # deploy exists. A read that fails must say so: a full root disk once
+        # took an account switch to diagnose because the failure printed
+        # nothing and the job went on as if it had.
+        if ! invocation=$(aws ssm get-command-invocation \
+              --command-id "$command_id" --instance-id "$INSTANCE" --output json); then
+          echo "::error::could not read the result of ssm command $command_id on $INSTANCE. Its status is $status and nothing else is known; read the invocation in the SSM console."
+          invocation='{}'
+        fi
+        jq -r '.StandardOutputContent // empty' <<<"$invocation"
+        stderr=$(jq -r '.StandardErrorContent // empty' <<<"$invocation")
+        if [ -n "$stderr" ]; then
+          echo "::group::$SERVICE: stderr from the node"
+          printf '%s\n' "$stderr"
+          echo "::endgroup::"
+        fi
 
         if [ "$status" != "Success" ]; then
-          echo "::error::$SERVICE deploy finished as $status. The node rolls back to the previous release when the new one fails its health check, so a service that was already running is still serving its last good build."
+          # The last stderr line is the node's own reason (deploy-service.sh
+          # writes one `error:` line per failure), so it rides in the
+          # annotation where the run summary shows it.
+          reason=$(printf '%s\n' "$stderr" | sed -e '/^[[:space:]]*$/d' | tail -n 1)
+          echo "::error::$SERVICE deploy finished as $status${reason:+: $reason}. The node rolls back to the previous release when the new one fails its health check, so a service that was already running is still serving its last good build."
           exit 1
         fi
 

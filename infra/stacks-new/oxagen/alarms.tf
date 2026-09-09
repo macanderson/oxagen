@@ -229,3 +229,45 @@ resource "aws_cloudwatch_metric_alarm" "aurora_cpu" {
   alarm_actions = [aws_sns_topic.alerts.arn]
   tags          = { Brand = local.brand }
 }
+
+# A full disk is the failure none of the alarms above can see. EC2 measures
+# the instance from outside; a root volume at 100% passes every status check
+# and keeps serving, and the only thing that breaks is the next deploy, which
+# fails on the node with no output at all. That is how deploys died for days
+# in August and how the node refilled to 87% within an hour of its 2026-09-09
+# replacement. The CloudWatch agent (modules/app-node/monitoring.tf) reports
+# the number; this reads it.
+#
+# 80% is chosen against what needs the room: deploy-service.sh refuses to
+# unpack with under 3 GB free, and on the 40 GB root disk 80% leaves 8 GB.
+# Missing data is BREACHING because the agent is the only source, so no
+# metric means no agent, and that is the state a replacement leaves the node
+# in until State Manager has run.
+resource "aws_cloudwatch_metric_alarm" "node_disk" {
+  for_each = {
+    root = "/"
+    data = "/data"
+  }
+
+  alarm_name        = "oxagen-node-disk-${each.key}"
+  alarm_description = "The app node's ${each.value} filesystem is over 80% full. Under 3 GB free and deploys refuse to unpack; at 100% SSM stops executing and the box cannot be reached to fix it."
+
+  namespace   = "CWAgent"
+  metric_name = "disk_used_percent"
+  statistic   = "Maximum"
+  dimensions = {
+    InstanceId = module.app.instance_id
+    path       = each.value
+    fstype     = "xfs"
+  }
+
+  period              = 300
+  evaluation_periods  = 2
+  threshold           = 80
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "breaching"
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+  tags          = { Brand = local.brand }
+}
