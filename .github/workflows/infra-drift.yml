@@ -1,0 +1,168 @@
+# infra-drift.yml — does the account still match the configuration?
+#
+# `infra.yml` answers that only for the stacks a diff touched, and only when
+# somebody opens a pull request. Nothing asked it on a schedule, so drift that
+# arrived without a commit was invisible until the next unrelated change
+# planned it — at which point it reads as that change's fault.
+#
+# It is not hypothetical here. Every apply from `main` was cancelled for weeks
+# by a failing `bootstrap` stack, so a merged node replacement sat unapplied
+# and `main` and the account disagreed the whole time. Nothing said so. The
+# same weeks had a hand-run ClickHouse container the configuration did not
+# describe, and a log group nothing managed.
+#
+# Runs read-only, as `gha-infra-plan`. It cannot change anything, which is why
+# it is safe to run unattended on a schedule.
+#
+# Reports by opening ONE issue and closing it again when the account comes
+# back into line. A monitor that only ever files gets muted, and a muted
+# monitor is worse than none — it is the one that was reporting correctly on
+# the day nobody read it.
+name: infra drift
+
+on:
+  schedule:
+    # 13:00 UTC — morning in US Pacific, so a drift found overnight is read at
+    # the start of a working day rather than at the end of one.
+    - cron: "0 13 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+
+concurrency:
+  group: infra-drift
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  TF_IN_AUTOMATION: "1"
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: opentofu/setup-opentofu@592200bd4b9bbf4772ace78f887668b1aee8f716 # v1.0.5
+        with:
+          tofu_version: 1.8.5
+
+      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: arn:aws:iam::916294258235:role/gha-infra-plan
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Plan every stack
+        id: plan
+        run: |
+          set -uo pipefail
+          drifted=""
+          failed=""
+
+          # `bootstrap` is skipped for the reason discover skips it: its state
+          # is on a local backend, so a runner reads an empty state and would
+          # report all five of its resources as drift, every day, forever.
+          # #2775 is the migration that lets this cover it.
+          for stack in $(find infra/stacks-new -mindepth 1 -maxdepth 1 -type d -printf '%f\n' \
+                          | grep -vx bootstrap | sort); do
+            echo "::group::$stack"
+            (
+              cd "infra/stacks-new/$stack"
+              tofu init -input=false -no-color
+              tofu plan -input=false -no-color -lock-timeout=5m -detailed-exitcode
+            ) > "/tmp/plan-$stack.txt" 2>&1
+            code=$?
+            tail -c 8000 "/tmp/plan-$stack.txt"
+            echo "::endgroup::"
+
+            # -detailed-exitcode: 0 clean, 2 changes, anything else an error.
+            # Treating 1 as drift would file an issue about a broken credential
+            # and call it drift, which sends the reader to the wrong place.
+            case "$code" in
+              0) echo "  $stack: clean" ;;
+              2) echo "  $stack: DRIFT"; drifted="$drifted $stack" ;;
+              *) echo "  $stack: plan FAILED (exit $code)"; failed="$failed $stack" ;;
+            esac
+          done
+
+          {
+            echo "drifted=${drifted# }"
+            echo "failed=${failed# }"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: File, update, or close the drift issue
+        uses: actions/github-script@v7
+        env:
+          DRIFTED: ${{ steps.plan.outputs.drifted }}
+          FAILED: ${{ steps.plan.outputs.failed }}
+        with:
+          script: |
+            const fs = require('fs')
+            const drifted = (process.env.DRIFTED || '').split(' ').filter(Boolean)
+            const failed  = (process.env.FAILED  || '').split(' ').filter(Boolean)
+            const LABEL = 'infra-drift'
+            const { owner, repo } = context.repo
+
+            const existing = (await github.rest.issues.listForRepo({
+              owner, repo, state: 'open', labels: LABEL,
+            })).data[0]
+
+            // Clean means clean. A failed plan is not a clean plan, so it does
+            // not close anything — the same fail-open discipline the main
+            // canary uses: a recovery is claimed off an answer, never off the
+            // absence of one.
+            if (drifted.length === 0 && failed.length === 0) {
+              if (existing) {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: existing.number,
+                  body: `Every stack plans clean as of ${new Date().toISOString()}. Closing.`,
+                })
+                await github.rest.issues.update({
+                  owner, repo, issue_number: existing.number, state: 'closed',
+                })
+              }
+              core.info('no drift')
+              return
+            }
+
+            const section = (name, list) => list.length
+              ? `\n**${name}:** ${list.map(s => `\`${s}\``).join(', ')}\n`
+              : ''
+
+            let body = `The account no longer matches what \`main\` says it is.\n`
+              + section('Drifted', drifted)
+              + section('Plan failed', failed)
+              + `\nRun: ${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}\n`
+
+            for (const stack of [...drifted, ...failed]) {
+              let plan = ''
+              try {
+                plan = fs.readFileSync(`/tmp/plan-${stack}.txt`, 'utf8').slice(-6000)
+              } catch { plan = '(plan output unavailable)' }
+              body += `\n<details><summary><code>${stack}</code></summary>\n\n`
+                + '```terraform\n' + plan + '\n```\n\n</details>\n'
+            }
+
+            body += `\nDrift is not automatically wrong — an import or a hand-run `
+              + `change can be deliberate. What it always means is that the `
+              + `configuration is no longer the record, and the next apply from `
+              + `\`main\` will act on this diff whether or not anyone intended it.\n`
+
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: existing.number, body,
+              })
+              core.setFailed(`drift still open: ${[...drifted, ...failed].join(', ')}`)
+              return
+            }
+
+            await github.rest.issues.create({
+              owner, repo, labels: [LABEL, 'triage'],
+              title: 'Infrastructure has drifted from the configuration',
+              body,
+            })
+            core.setFailed(`drift: ${[...drifted, ...failed].join(', ')}`)
