@@ -38,12 +38,17 @@ Vercel serves this directory as-is (framework preset: Other, root directory
   it clones a page. `vercel.json` redirects the human-facing
   `/research/deterministic-systems-optimizations-for-ai-agents` path to
   `/read?e=page-flip-reader`; there is no `index.html` at that path.
-- `fonts/` — Aeonik + Aeonik Mono variable fonts (copied from
-  `packages/ui/src/styles/fonts/`), plus Literata variable serif
-  (normal + italic, latin subset, from Google Fonts) for the book reader —
-  all cached immutable for a year.
-- `favicon.svg` — the Oxagen hexagon mark, solid gold (it carried a
-  three-stop ember gradient until the palette change described below).
+- `fonts/` — Space Grotesk at 400/500/600/700 (the house typeface, vendored
+  from the brand kit by `node tools/scripts/sync-brand-assets.mjs`), plus
+  Literata variable serif (normal + italic, latin subset) which only the book
+  reader offers as a long-form reading option — all cached immutable for a
+  year. The Aeonik binaries this replaced were removed with the house system;
+  Space Grotesk is what the wordmarks are cut from, so the running text and the
+  logo are the same design.
+- `favicon.svg` — the house `Ox` lettermark: the word's own first two letters
+  in Space Grotesk, ONE colour, adaptive to the tab's colour scheme. It is
+  never the wordmark and never a lockup, and it never carries the gold — the
+  metal belongs to the `x` of the word.
 - `og.png` / `research-assets/book-og.png` — social share cards referenced by
   the Open Graph tags on `index.html` and `read/index.html` respectively.
 - `overview-video.html` — a standalone Stella overview page. Nothing on the
@@ -55,8 +60,9 @@ Vercel serves this directory as-is (framework preset: Other, root directory
 `assets/oxagen.css` holds the palette in **two layers**, and the split is the
 whole discipline:
 
-- **Primitives** — the `--st-*` table, Stella's canonical colours byte-for-byte.
-  This is the only place in the site a hex may appear.
+- **Primitives** — the `--st-*` table, the house palette byte-for-byte from
+  `tokens/house-tokens.css` in the brand kit. This is the only place in the
+  site a hex may appear.
 - **Semantics** — `--ground`, `--gold`, `--ink-3` and the rest, each aliasing a
   primitive. Rules and pages name these.
 
@@ -65,8 +71,8 @@ it never means writing a colour into a rule or a page.
 
 The same table is what `assets/tui/*.svg` is drawn in, which is the point: the
 product screenshots and the page around them are one surface. Gold (`--gold`,
-`#EFC53F`) is identity and action only, never a state; `--pass` and `--fail`
-carry state.
+`#D6962C`) is identity and at most one action per screen, never a state and
+never a surface; `--pass` and `--fail` carry state.
 
 Four rules hold the look together. Breaking one is a review question, not a
 matter of taste:

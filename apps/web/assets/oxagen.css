@@ -1,9 +1,9 @@
 /* ==========================================================================
    oxagen.sh — shared shell
-   Palette: Stella's canonical token table, byte-for-byte, so the site, the app
-   (@oxagen/ui) and the terminal it ships are one surface. Values are verified
-   against the live stylesheet at stella.oxagen.sh, whose --st-* primitives this
-   file reproduces; the Rust source of the same table is
+   Palette: the Oxagen house brand system, byte-for-byte, so this site, the app
+   (@oxagen/ui) and the terminal Stella ships are one surface. The generated
+   source of these values is tokens/house-tokens.css in
+   macanderson/oxagen-house-brand; the Rust copy of the same table is
    crates/stella-tui-theme/src/token.rs.
    Two layers: --st-* primitives hold every hex, --<name> semantics alias them.
    Repoint an alias to reskin; never re-hex, and never hardcode a palette value
@@ -14,12 +14,12 @@
 
 :root {
   /* ── LAYER 1 · PRIMITIVES ────────────────────────────────────────────────
-     Stella's canonical --st-* table, byte-for-byte off the live stylesheet at
-     stella.oxagen.sh, so the site, the app and the terminal it ships all name
-     the same colours the same way. This is the ONLY place a hex appears.
+     The house table, byte-for-byte off tokens/house-tokens.css, so the site,
+     the app and the terminal all name the same colours the same way. This is
+     the ONLY place a hex appears.
      The light-mode paper ramp (--st-paper*) is deliberately omitted: this site
      is dark-only, and a paper ramp here would be tokens nothing can consume. */
-  --st-void: #050507; /* below the canvas */
+  --st-void: #0A0A09; /* below the canvas */
   --st-bg: #10100F; /* the canvas */
   --st-panel: #181715; /* panels, cards, code blocks */
   --st-hl: #201F1C; /* selected and hover rows */
@@ -90,21 +90,37 @@
   );
 }
 
+/* Space Grotesk — the house typeface, self-hosted. Four static weights, the
+   subset the brand kit measured the wordmarks against: the `oxagen` and
+   `stella*` marks are this font's own outlines, so any other face would put
+   the running text and the logo in two unrelated designs.
+   There is no house mono: "Space Grotesk is not a code face", so terminal
+   output and code take the system monospace stack (see .mono below). */
 @font-face {
-  font-family: "Aeonik";
-  src:
-    url("/fonts/Aeonik-VF.woff2") format("woff2-variations"),
-    url("/fonts/Aeonik-VF.woff2") format("woff2");
-  font-weight: 100 900;
+  font-family: "Space Grotesk";
+  src: url("/fonts/space-grotesk-latin-400.woff2") format("woff2");
+  font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
-  font-family: "Aeonik Mono";
-  src:
-    url("/fonts/AeonikMono-VF.woff2") format("woff2-variations"),
-    url("/fonts/AeonikMono-VF.woff2") format("woff2");
-  font-weight: 100 900;
+  font-family: "Space Grotesk";
+  src: url("/fonts/space-grotesk-latin-500.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("/fonts/space-grotesk-latin-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("/fonts/space-grotesk-latin-700.woff2") format("woff2");
+  font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
@@ -129,10 +145,9 @@ body {
   background: var(--ground);
   color: var(--ink);
   font:
-    400 16px / 1.62 "Aeonik",
-    system-ui,
-    -apple-system,
-    "Segoe UI",
+    400 16px / 1.62 "Space Grotesk",
+    "Helvetica Neue",
+    Arial,
     sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -147,8 +162,10 @@ h2,
 h3,
 h4 {
   margin: 0;
-  font-weight: 640;
-  letter-spacing: -0.02em;
+  /* 600 is the weight the kit sets the wordmark at — headings and the logo
+     read as one design because they are one weight of one face. */
+  font-weight: 600;
+  letter-spacing: -0.015em;
   line-height: 1.1;
   text-wrap: balance;
 }
@@ -185,7 +202,8 @@ hr {
   margin: 0;
 }
 .mono {
-  font-family: "Aeonik Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
 }
 .wrap {
   width: min(1180px, calc(100% - 40px));
@@ -264,7 +282,7 @@ hr {
 
 /* ============ eyebrow / section head ============ */
 .eyebrow {
-  font-family: "Aeonik Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11.5px;
   font-weight: 560;
   letter-spacing: 0.24em;
@@ -389,18 +407,19 @@ hr {
   width: min(1180px, calc(100% - 40px));
   margin-inline: auto;
 }
+/* The brand slot holds the WORDMARK and nothing else. Oxagen's logo is the
+   word; the `Ox` lettermark is for square slots (the favicon) and is never set
+   beside the word — the mark IS the word's first two letters, so the two
+   together read as one misspelt word. The mark is sized by height, because a
+   wordmark is far wider than it is tall. */
 .brand {
   display: flex;
   align-items: center;
-  gap: 9px;
   color: var(--ink);
-  font-weight: 660;
-  font-size: 18.5px;
-  letter-spacing: -0.02em;
 }
 .brand svg {
-  width: 28px;
-  height: 28px;
+  width: auto;
+  height: 22px;
 }
 .nav-links {
   display: flex;
@@ -515,7 +534,7 @@ hr {
   place-items: center;
   border: 1px solid var(--line);
   color: var(--gold);
-  font-family: "Aeonik Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   align-self: start;
   margin-top: 2px;
@@ -537,7 +556,7 @@ hr {
 }
 .drop-foot {
   padding: 9px 12px;
-  font-family: "Aeonik Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -619,7 +638,7 @@ hr {
     visibility: visible;
   }
   .drawer h5 {
-    font-family: "Aeonik Mono", monospace;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 10.5px;
     letter-spacing: 0.2em;
     text-transform: uppercase;
@@ -661,7 +680,7 @@ hr {
   padding: 9px 12px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
-  font-family: "Aeonik Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11.5px;
   color: var(--muted);
 }
@@ -741,7 +760,7 @@ hr {
   padding: 10px 13px;
   background: var(--panel);
   border-top: 1px solid var(--line);
-  font-family: "Aeonik Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   color: var(--ink-3);
   min-height: 38px;
@@ -792,7 +811,7 @@ hr {
 }
 
 figcaption {
-  font-family: "Aeonik Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   color: var(--ink-3);
   padding-top: 10px;
@@ -810,7 +829,7 @@ figcaption b {
   border: 1px solid var(--rule);
   border-radius: var(--r);
   overflow: hidden;
-  font-family: "Aeonik Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
   line-height: 1.75;
   display: flex;
@@ -931,7 +950,7 @@ figcaption b {
 }
 
 .snippet {
-  font-family: "Aeonik Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12.3px;
   line-height: 1.8;
   color: var(--ink-3);
@@ -973,7 +992,7 @@ figcaption b {
 }
 .spec dt,
 .spec .k {
-  font-family: "Aeonik Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11.5px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1016,7 +1035,7 @@ figcaption b {
   border-right: 1px solid var(--line);
   border-bottom: 2px solid transparent;
   padding: 12px 17px;
-  font-family: "Aeonik Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
   letter-spacing: 0.17em;
   text-transform: uppercase;
@@ -1060,7 +1079,7 @@ figcaption b {
   border: 1px solid var(--rule);
   border-radius: var(--r);
   overflow: hidden;
-  font-family: "Aeonik Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   box-shadow: 0 26px 70px -34px rgba(0, 0, 0, 0.9);
 }
 .panel-bar {
@@ -1257,7 +1276,7 @@ figcaption b {
   padding: 24px;
 }
 .step-num {
-  font-family: "Aeonik Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11.5px;
   letter-spacing: 0.2em;
   color: var(--gold);
@@ -1329,7 +1348,7 @@ figcaption b {
   }
 }
 .tick-item {
-  font-family: "Aeonik Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12.5px;
   color: var(--faint);
   white-space: nowrap;
@@ -1358,7 +1377,7 @@ figcaption b {
   padding: 15px 18px;
 }
 .install code {
-  font-family: "Aeonik Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 14px;
   color: var(--ink);
   display: inline-flex;
@@ -1429,7 +1448,7 @@ figcaption b {
 .field label {
   font-size: 12.5px;
   color: var(--ink-3);
-  font-family: "Aeonik Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -1543,7 +1562,7 @@ footer {
   max-width: 30ch;
 }
 .foot-col h4 {
-  font-family: "Aeonik Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10.5px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
