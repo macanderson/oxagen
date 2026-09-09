@@ -1,7 +1,7 @@
 /**
  * tool-call-summary — extracts a short, human one-liner from a tool call's
  * input so the compact activity row can show WHAT a call is doing without
- * expanding the full structured tree. A `search_web` call whose input is
+ * expanding the full structured tree. A `query_audit_log` call whose input is
  * `{ query: "tide tables for Monterey" }` summarises as that query string.
  *
  * We pick the most salient string field in a fixed priority order, preferring

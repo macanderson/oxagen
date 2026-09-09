@@ -16,12 +16,10 @@
  */
 import {
   intersectEffectiveScope,
-  type AgentsScope,
   type EffectiveResourceScope,
   type GraphScope,
   type McpRule,
   type ResourceScopeCondition,
-  type SkillsScope,
 } from "@oxagen/oxagen/iam";
 import type { AgentTool } from "@oxagen/oxagen/agent-schema";
 import type {
@@ -87,14 +85,6 @@ export interface McpDimensionView {
   equippedServers: string[];
 }
 
-export interface RefsDimensionView {
-  /** ceiling ∩ equipped refs; null = role unrestricted ⇒ effective = equipped. */
-  effective: string[];
-  equipped: string[];
-  /** True when the role constrains this dimension at all. */
-  constrained: boolean;
-}
-
 export interface EffectiveScopeView {
   roleName: string | null;
   /** False for custom roles: their resource-scope ceiling is not published
@@ -103,8 +93,6 @@ export interface EffectiveScopeView {
   capabilities: CapabilityDimensionView;
   graph: GraphDimensionView;
   mcp: McpDimensionView;
-  skills: RefsDimensionView;
-  subagents: RefsDimensionView;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -123,17 +111,12 @@ function ceilingScope(
   if (condition.graph !== undefined) scope.graph = condition.graph;
   if (condition.mcp !== undefined)
     scope.mcp = { ruleSets: [condition.mcp.rules] };
-  if (condition.skills !== undefined) scope.skills = condition.skills;
-  if (condition.agents !== undefined) scope.agents = condition.agents;
   return scope;
 }
 
 /** The declared (requested) side: the agent's own configuration expressed in
  *  the same shape, so one intersectEffectiveScope call covers every dimension. */
-function declaredScope(
-  graph: DeclaredGraphState,
-  tools: AgentTool[],
-): EffectiveResourceScope {
+function declaredScope(graph: DeclaredGraphState): EffectiveResourceScope {
   const graphScope: GraphScope = {
     mode: graph.mode,
     budget: {
@@ -150,9 +133,7 @@ function declaredScope(
     graphScope.labels = [...graph.scopeToTypes];
     graphScope.relationshipTypes = [...graph.scopeToTypes];
   }
-  const skills: SkillsScope = { slugs: toolRefs(tools, "skill") };
-  const agents: AgentsScope = { refs: toolRefs(tools, "agent") };
-  return { graph: graphScope, skills, agents };
+  return { graph: graphScope };
 }
 
 function grantsByEffect(
@@ -186,9 +167,9 @@ export function computeEffectiveScopeView(
   const { role, graph, agentTools } = input;
 
   const ceiling = ceilingScope(role?.resourceScope ?? null);
-  const declared = declaredScope(graph, agentTools);
+  const declared = declaredScope(graph);
   // The resolver's own narrowing — graph labels/rel-types set-intersect,
-  // mode min, budget element-wise min; skills/agents refs set-intersect.
+  // mode min, budget element-wise min.
   const effective = intersectEffectiveScope(ceiling, declared);
 
   const grants = role?.grants ?? [];
@@ -206,9 +187,6 @@ export function computeEffectiveScopeView(
 
   const mcpRules = role?.resourceScope?.mcp?.rules ?? null;
 
-  const equippedSkills = toolRefs(agentTools, "skill");
-  const equippedSubagents = toolRefs(agentTools, "agent");
-
   return {
     roleName: role?.roleName ?? null,
     ceilingKnown: role !== undefined && role.resourceScope !== null,
@@ -222,16 +200,6 @@ export function computeEffectiveScopeView(
       rules: mcpRules,
       summary: mcpRules ? summarizeMcpRules(mcpRules) : null,
       equippedServers: toolRefs(agentTools, "mcp_server"),
-    },
-    skills: {
-      effective: effective.skills?.slugs ?? equippedSkills,
-      equipped: equippedSkills,
-      constrained: role?.resourceScope?.skills?.slugs !== undefined,
-    },
-    subagents: {
-      effective: effective.agents?.refs ?? equippedSubagents,
-      equipped: equippedSubagents,
-      constrained: role?.resourceScope?.agents?.refs !== undefined,
     },
   };
 }

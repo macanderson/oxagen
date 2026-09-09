@@ -108,7 +108,6 @@ describe("chip count invariant — always exactly 3", () => {
       const chips = deriveSuggestions({
         pathname,
         entity: null,
-        fillableForm: null,
       });
       expect(chips).toHaveLength(3);
     });
@@ -125,7 +124,6 @@ describe("auto-submit contract — content is always non-empty", () => {
   const prompts = deriveSuggestions({
     pathname: "/acme/prod/ask",
     entity: null,
-    fillableForm: null,
   });
 
   for (const { prompt, label } of prompts) {
@@ -191,17 +189,14 @@ describe("auto-submit contract — action is invoked with FormData on click", ()
       ...deriveSuggestions({
         pathname: "/acme/prod/ask",
         entity: null,
-        fillableForm: null,
       }),
       ...deriveSuggestions({
         pathname: "/acme/billing",
         entity: null,
-        fillableForm: null,
       }),
       ...deriveSuggestions({
         pathname: "/acme/prod/settings",
         entity: null,
-        fillableForm: null,
       }),
     ];
     for (const { prompt } of allChips) {

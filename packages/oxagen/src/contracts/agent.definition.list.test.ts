@@ -37,7 +37,7 @@ describe("agent.definition.list capability", () => {
           avatarUrl: 'avatar:v1:{"emoji":"🤖","bg":"#0ea5e9","mode":"full"}',
           summary: "Answers QA questions grounded in the workspace graph.",
           toolRefs: [
-            { type: "skill", ref: "web-search" },
+            { type: "function", ref: "recall_memory" },
             { type: "mcp_server", ref: "github" },
           ],
         },
@@ -62,7 +62,7 @@ describe("agent.definition.list capability", () => {
     expect(out.agents).toHaveLength(2);
     expect(out.agents[0]!.managed).toBe(true);
     expect(out.agents[0]!.toolRefs).toEqual([
-      { type: "skill", ref: "web-search" },
+      { type: "function", ref: "recall_memory" },
       { type: "mcp_server", ref: "github" },
     ]);
     expect(out.agents[1]!.latestVersion).toBeNull();

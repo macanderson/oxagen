@@ -1,6 +1,6 @@
 # ADR-051: A workspace's context records enter the turn as volatile policy, not as prefix
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-043
 - **Date:** 2026-09-08
 - **Owners:** platform
 - **Related:** issue #2592 (records stored and never applied), issue #2580 (the
@@ -8,6 +8,22 @@
   `packages/agent-engine/src/ports.ts` (`SteeringProvider`),
   `packages/agent/src/runtime/steering-records.ts`,
   `packages/agent-runner/src/stella/run-stella-turn.ts`
+
+
+> **Superseded on 2026-09-08 by ADR-043 (runtime excision).** ADR-043 removed
+> `packages/agent-engine` (and with it the `SteeringProvider` port),
+> `run-stella-turn.ts`, and `packages/agent/src/runtime/turn-driver.ts` — the
+> whole in-repo turn assembly this ADR wires into. `steering-records.ts` was
+> deleted with them: it implemented a port that no longer exists and had no
+> other caller.
+>
+> What survives is the storage half: context records are still published,
+> promoted, versioned and listed (`context.record.*` routes, the MCP tool, the
+> handlers and the `agent_asset` schema all remain). What is gone is the path
+> that reads them *into a turn*, because Oxagen no longer runs turns — Stella
+> does. Re-landing this behaviour belongs on the governed tool gateway seam,
+> and **issue #2592 should be reopened against it** rather than left closed by
+> a mechanism this repo no longer contains.
 
 ## Context
 

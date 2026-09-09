@@ -1,7 +1,7 @@
 {
   "name": "query_audit_log",
   "domain": "audit",
-  "description": "Query the org's security and automation audit events (security_events + playbook_events) with filters — actor, capability, outcome, event type, time range — returning a unified, time-ordered feed. Read-only.",
+  "description": "Query the org's security audit events (security_events) with filters — actor, capability, outcome, event type, time range — returning a unified, time-ordered feed. Read-only.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -29,8 +29,7 @@
         "type": "string",
         "enum": [
           "all",
-          "security",
-          "playbook"
+          "security"
         ],
         "default": "all"
       },
@@ -51,9 +50,6 @@
           "error",
           "success"
         ]
-      },
-      "playbookRunId": {
-        "type": "string"
       },
       "workspaceId": {
         "type": "string"
@@ -90,8 +86,7 @@
             "source": {
               "type": "string",
               "enum": [
-                "security",
-                "playbook"
+                "security"
               ],
               "description": "Which audit spine the event came from"
             },
@@ -152,37 +147,6 @@
                   "type": "null"
                 }
               ]
-            },
-            "playbookRunId": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "sequence": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "eventData": {
-              "anyOf": [
-                {
-                  "type": "object",
-                  "additionalProperties": {}
-                },
-                {
-                  "type": "null"
-                }
-              ]
             }
           },
           "required": [
@@ -193,10 +157,7 @@
             "workspaceId",
             "capability",
             "outcome",
-            "requestId",
-            "playbookRunId",
-            "sequence",
-            "eventData"
+            "requestId"
           ],
           "additionalProperties": false
         },

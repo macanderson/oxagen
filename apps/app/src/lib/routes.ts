@@ -90,7 +90,7 @@ export const org = {
   // Org-level settings — editable by owners and admins only. There is
   // deliberately no `plugins` builder here: that route has no page behind it at
   // org scope; plugin management lives at workspace scope, under
-  // Workbench → Agent Tools.
+  // Agents → Tools.
   settings: {
     root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/general`,
     general: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/general`,
@@ -115,10 +115,11 @@ export const workspace = {
   // Sessions — the chat front door (full-page conversation-sessions surface).
   sessions: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/sessions`,
 
-  // Workbench — build interactive agents. Four first-class pages, each a
-  // sidebar destination: Agents (the builder), Agent Tools (the single home
-  // for everything an agent can be equipped with — skills, MCP servers,
-  // capabilities), Environments (env vars + secrets), and Sandboxes.
+  // Agents — the governed agent registry and everything an agent is bound to.
+  // Three first-class pages, each a sidebar destination: Agents (the registry +
+  // builder), Tools (the allowlist surface: MCP servers + capabilities), and
+  // Environments (env vars + secrets). The `workbench` path segment is retained
+  // for now so existing links keep resolving.
   workbench: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/workbench`,
     agents: (ctx: Required<ScopeContext>): string =>
@@ -127,30 +128,13 @@ export const workspace = {
       `${wsBase(ctx)}/workbench/agents/new`,
     agent: (ctx: Required<ScopeContext>, agentId: string): string =>
       `${wsBase(ctx)}/workbench/agents/${encodeURIComponent(agentId)}`,
-    // Environments — named env-var/secret sets agents run with. Promoted from
-    // workspace settings to a first-class Workbench page.
+    // Environments — named env-var/secret sets agents are bound to.
     environments: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/workbench/environments`,
-    // Sandboxes — durable code-agent sandboxes: warm one, drive a terminal,
-    // inspect its files. The detail page is keyed by the sbx_* session id.
-    sandboxes: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/workbench/sandboxes`,
-    sandbox: (ctx: Required<ScopeContext>, sessionId: string): string =>
-      `${wsBase(ctx)}/workbench/sandboxes/${encodeURIComponent(sessionId)}`,
-    // Repos (web-app-2.0) — the home for the headless repo.* family: sync, fork,
-    // create, edit→PR. Detail is keyed by the source connection id.
-    repos: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/workbench/repos`,
-    repo: (ctx: Required<ScopeContext>, connectionId: string): string =>
-      `${wsBase(ctx)}/workbench/repos/${encodeURIComponent(connectionId)}`,
-    // Agent Tools hub — All Tools / Skills / MCP Servers / Capabilities.
+    // Tools hub — All Tools / MCP Servers / Capabilities.
     tools: {
       root: (ctx: Required<ScopeContext>): string =>
         `${wsBase(ctx)}/workbench/tools`,
-      skills: (ctx: Required<ScopeContext>): string =>
-        `${wsBase(ctx)}/workbench/tools/skills`,
-      skill: (ctx: Required<ScopeContext>, skillSlug: string): string =>
-        `${wsBase(ctx)}/workbench/tools/skills/${encodeURIComponent(skillSlug)}`,
       mcp: (ctx: Required<ScopeContext>): string =>
         `${wsBase(ctx)}/workbench/tools/mcp`,
       capabilities: (ctx: Required<ScopeContext>): string =>
@@ -158,9 +142,9 @@ export const workspace = {
     },
   },
 
-  // Marketplace — discover + install, two sides: Agent Tools (skills, MCP
-  // servers, capabilities) and Integrations (data connectors). Managing what
-  // is already installed lives in Workbench → Agent Tools, not here.
+  // Marketplace — discover + install, two sides: Agent Tools (MCP servers +
+  // capabilities) and Integrations (data connectors). Managing what is already
+  // installed lives in Agents → Tools, not here.
   marketplace: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/marketplace`,
     agentTools: (ctx: Required<ScopeContext>): string =>
@@ -168,31 +152,13 @@ export const workspace = {
     integrations: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/marketplace/integrations`,
     // Legacy tabs — browse became the Agent Tools side; installed/mcp moved
-    // into Workbench → Agent Tools. Builders retarget so old callers keep working.
+    // into Agents → Tools. Builders retarget so old callers keep working.
     browse: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/marketplace/agent-tools`,
     installed: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/workbench/tools/capabilities`,
     mcp: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/workbench/tools/mcp`,
-  },
-
-  // Human-gated agent automation: the automations list + editor and parallel
-  // workflow/swarm runs (automation.* + workflow.*).
-  automations: {
-    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automations`,
-    automation: (ctx: Required<ScopeContext>, automationId: string): string =>
-      `${wsBase(ctx)}/automations/${encodeURIComponent(automationId)}`,
-    workflows: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/automations/workflows`,
-    // Fleet lineage explorer — the dispatch tree for one
-    // agent.subagent_fanouts row (query_lineage). Natural drill-through from a
-    // Workflows run's fan-out. `dispatchId` deep-links via `?dispatchId=`,
-    // mirroring how knowledge/graph/page.tsx deep-links `?focus=`.
-    lineage: (ctx: Required<ScopeContext>, dispatchId?: string): string =>
-      dispatchId
-        ? `${wsBase(ctx)}/automations/lineage?dispatchId=${encodeURIComponent(dispatchId)}`
-        : `${wsBase(ctx)}/automations/lineage`,
   },
 
   // Knowledge — Sources · Graph · Ontology · Memory. The graph explorer,
@@ -238,10 +204,6 @@ export const workspace = {
       `${wsBase(ctx)}/settings/agent-defaults`,
     github: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/github`,
-    plugins: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/settings/plugins`,
-    skills: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/settings/skills`,
     // MCP server registries — the catalog sources the marketplace and MCP
     // install flows discover servers from. Registry admin is a settings
     // concern; the servers themselves are managed in Workbench → Agent Tools.
@@ -267,15 +229,6 @@ export const workspace = {
       `${wsBase(ctx)}/settings/agent-defaults`,
     knowledge: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/knowledge/ontology`,
-  },
-
-  // Evals — score what actually ran and got billed (eval.* capability family).
-  evals: {
-    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/evals`,
-    dataset: (ctx: Required<ScopeContext>, datasetId: string): string =>
-      `${wsBase(ctx)}/evals/datasets/${encodeURIComponent(datasetId)}`,
-    run: (ctx: Required<ScopeContext>, runId: string): string =>
-      `${wsBase(ctx)}/evals/runs/${encodeURIComponent(runId)}`,
   },
 } as const;
 

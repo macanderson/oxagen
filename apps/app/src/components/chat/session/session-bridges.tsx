@@ -8,7 +8,7 @@
  * ONE store so the run payload, the SessionSettings surface, and the header
  * all agree. These bridges adapt `useChatSession()` to:
  *
- *   1. the `ChatSelectionStore` interface (agent + repo + env), consumed by
+ *   1. the `ChatSelectionStore` interface (the agent selection), consumed by
  *      `useComposerSelectionState()`;
  *   2. the `[ComposerModelState, setState]` tuple (model/tier/effort/budget/
  *      generate), consumed by the composer.
@@ -31,44 +31,30 @@ import { useChatSessionContext } from "./session-store";
 import type { ChatSessionState } from "./session-state";
 
 // ---------------------------------------------------------------------------
-// Bridge 1 — ChatSelectionStore (agent / repo / env)
+// Bridge 1 — ChatSelectionStore (the agent selection)
 // ---------------------------------------------------------------------------
 
 /**
  * The unified store presented as the legacy `ChatSelectionStore`, or null
  * when no session provider is mounted.
  *
- * `selectionLocked` maps to the CODE lock only (binding / first code turn) —
- * the legacy composer gates its repo/env pickers on this one boolean, and
- * repo/env editability must not regress on plain chats. The v2 agent lock
- * (after the first message) is still enforced by the store's write path;
- * legacy agent-chip writes after lock are simply rejected.
+ * There is no lock here. The only lock the composer chip ever honoured was the
+ * CODE lock — a coding target claimed on the first code turn — and it left with
+ * the runtime (ADR-043). `agentId` is now a per-turn parameter of the stream
+ * route, so the chip stays a live control for the whole conversation; the
+ * read-only agent affordance that survives is the v2 session-settings AgentRow,
+ * driven by `locks.agent` (server truth: `hasMessages`).
  */
 export function useSessionSelectionBridge(): ChatSelectionStore | null {
   const session = useChatSessionContext();
   return React.useMemo<ChatSelectionStore | null>(() => {
     if (!session) return null;
-    const { state, locks, updateSession, noteMessageSent } = session;
+    const { state, updateSession } = session;
     return {
       selectedAgentId: state.agentId,
-      selectedRepoKey: state.repoKey,
-      selectedBranch: state.branch,
-      selectedEnvId: state.envId,
-      selectionLocked: locks.code,
       setSelectedAgentId: (id) => updateSession({ agentId: id }),
-      setSelectedRepoKey: (key) => updateSession({ repoKey: key }),
-      setSelectedEnvId: (id) => updateSession({ envId: id }),
-      // One patch, so `applySessionPatch` sees repo and branch together: its
-      // repo→branch cascade only resets the branch when the patch doesn't
-      // carry one, which is exactly the "explicit branch wins" semantic.
       applyAgentSelection: (sel: AgentSelectionApply) =>
-        updateSession({
-          agentId: sel.agentId,
-          ...(sel.repoKey !== undefined ? { repoKey: sel.repoKey } : {}),
-          ...(sel.branch !== undefined ? { branch: sel.branch } : {}),
-          ...(sel.envId !== undefined ? { envId: sel.envId } : {}),
-        }),
-      lockSelection: () => noteMessageSent(null),
+        updateSession({ agentId: sel.agentId }),
     };
   }, [session]);
 }
@@ -89,10 +75,6 @@ export function composeModelState(
       tier: state.tier,
       model: state.model,
       effort: state.effort,
-      // Media generation is inferred from the prompt server-side
-      // (infer-media-intent.ts), so the composer never sets `generate` itself.
-      // `carrier.generate` (seeded null) flows through unchanged for any
-      // explicit API-seeded carrier.
       budgetEnabled: state.budgetUsd !== null,
       budgetUsd: state.budgetUsd,
       // v2 semantics: a cap always pauses-and-asks at the ceiling.
@@ -119,9 +101,9 @@ export function modelStateToSessionPatch(next: ComposerModelState): {
 
 /**
  * Drop-in replacement for the composer's `useState<ComposerModelState>`:
- * with a session provider mounted, model/tier/effort/budget/generate live in
- * the unified store (media tier/model and other carrier-only fields stay
- * local); without one, this IS a plain useState.
+ * with a session provider mounted, model/tier/effort/budget live in the
+ * unified store (other carrier-only fields stay local); without one, this IS a
+ * plain useState.
  */
 export function useSessionModelState(
   initial: ComposerModelState,
@@ -131,8 +113,8 @@ export function useSessionModelState(
   React.Dispatch<React.SetStateAction<ComposerModelState>>,
 ] {
   const session = useChatSessionContext();
-  // Carrier for the fields the session doesn't own (media tier/model, seeds,
-  // budget mode/grace) AND the full fallback state when no provider exists.
+  // Carrier for the fields the session doesn't own (seeds, budget
+  // mode/grace) AND the full fallback state when no provider exists.
   const [carrier, setCarrier] = React.useState<ComposerModelState>(initial);
 
   const composed = React.useMemo(

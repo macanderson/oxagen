@@ -9,8 +9,8 @@ import {
   graphBudgetSchema,
   parseAgentDefinition,
   parseAgentDefinitionConfig,
-  isCodeAgentType,
-  CODE_AGENT_TYPE,
+  agentToolTypeSchema,
+  agentLogEntryTypeSchema,
 } from "./agent-schema";
 
 const graph = {
@@ -25,7 +25,7 @@ const baseDefinition = {
   description: "Answers questions",
   version: "1",
   graph,
-  agentTools: [{ type: "skill" as const, ref: "coding" }],
+  agentTools: [{ type: "function" as const, ref: "recall_memory" }],
   tenantId: "org_1",
   workspaceId: "wks_1",
 };
@@ -175,18 +175,42 @@ describe("agentLogSchema", () => {
       }),
     ).toThrow();
   });
+});
 
-  describe("isCodeAgentType", () => {
-    it("is true only for the canonical code agentType", () => {
-      expect(isCodeAgentType(CODE_AGENT_TYPE)).toBe(true);
-      expect(isCodeAgentType("code")).toBe(true);
-    });
-    it("is false for chat / custom / empty / nullish types", () => {
-      expect(isCodeAgentType("custom")).toBe(false);
-      expect(isCodeAgentType("interactive_chat")).toBe(false);
-      expect(isCodeAgentType("")).toBe(false);
-      expect(isCodeAgentType(null)).toBe(false);
-      expect(isCodeAgentType(undefined)).toBe(false);
-    });
+// ADR-043 excised the execution runtime, so the definition record carries no
+// field describing HOW an agent runs. A grant names something the platform can
+// actually gate — a capability or a registered MCP server — and the log
+// vocabulary has no delegation entry, because there is no delegation.
+describe("agent definitions describe governance, not execution", () => {
+  it("allows exactly the two gateable tool kinds", () => {
+    expect(agentToolTypeSchema.options).toEqual(["function", "mcp_server"]);
   });
+
+  it.each(["skill", "agent", "sandbox", "code"])(
+    "rejects the removed %s tool kind",
+    (kind) => {
+      expect(agentToolTypeSchema.safeParse(kind).success).toBe(false);
+    },
+  );
+
+  it("rejects an agentTool of a removed kind inside a definition", () => {
+    expect(() =>
+      agentDefinitionConfigSchema.parse({
+        graph,
+        agentTools: [{ type: "skill", ref: "coding" }],
+      }),
+    ).toThrow();
+  });
+
+  it("carries no subagent_call log entry type", () => {
+    expect(agentLogEntryTypeSchema.options).not.toContain("subagent_call");
+    expect(agentLogEntryTypeSchema.options).toContain("tool_call");
+  });
+
+  it.each(["skills", "sandbox", "environment", "codeMode", "agentType"])(
+    "has no %s field on the versioned config body",
+    (field) => {
+      expect(agentDefinitionConfigSchema.keyof().options).not.toContain(field);
+    },
+  );
 });

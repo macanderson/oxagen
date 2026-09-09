@@ -23,7 +23,7 @@ Org roles govern the organization-level surfaces: members, access (IAM), securit
 | Role | Capabilities |
 |---|---|
 | **Owner** | Manage grants within this workspace; workspace settings; full operational access. |
-| **Member** | Run agents, approve tasks, edit playbooks, edit memories, configure triggers. |
+| **Member** | Run agents, resolve approvals, edit memories, configure agent triggers. |
 | **Viewer** | Read-only across the workspace. |
 
 Workspace roles are assigned per workspace. A user can be a **Member** in one workspace and a **Viewer** in another within the same organization.
@@ -63,10 +63,9 @@ Capabilities are organized into domains. The grants matrix at **Organization →
 
 | Domain | Example capabilities |
 |---|---|
-| `agent.*` | Run agents, dispatch subagents, execute code, manage plans |
+| `agent.*` | Define, deploy, and govern agents; recall and write memory; resolve approvals |
 | `chat.*` | Send messages, manage conversations |
 | `knowledge.*` | Manage graph, sources, memories |
-| `automation.*` | Create playbooks, configure triggers |
 | `billing.*` | Purchase credits, change subscription |
 | `org.*` | Manage members, roles, and org settings |
 | `workspace.*` | Create workspaces, manage workspace settings |
@@ -74,7 +73,7 @@ Capabilities are organized into domains. The grants matrix at **Organization →
 
 ## Agents as principals
 
-Every agent configuration is also a principal with its own grant matrix. When an agent runs a triggered or scheduled job, it uses its own grants — it cannot access capabilities its principal has not been granted, regardless of which human defined the playbook.
+Every agent configuration is also a principal with its own grant matrix. When an agent runs a triggered or scheduled job, it uses its own grants — it cannot access capabilities its principal has not been granted, regardless of which human defined the agent.
 
 When a human is actively in chat, the agent runs in delegated context: it borrows the human's effective grants for the session. Both the human and agent principals are recorded in the audit event.
 

@@ -28,8 +28,6 @@
         "enum": [
           "run",
           "principal",
-          "playbook",
-          "trigger",
           "event",
           "agent"
         ]
@@ -72,8 +70,6 @@
               "enum": [
                 "run",
                 "principal",
-                "playbook",
-                "trigger",
                 "event",
                 "agent"
               ],

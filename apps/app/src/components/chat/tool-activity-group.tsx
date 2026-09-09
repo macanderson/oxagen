@@ -211,8 +211,6 @@ export function ToolActivityGroup({ items, live }: ToolActivityGroupProps) {
                       riskLevel={item.riskLevel}
                       status={item.status}
                       output={item.output}
-                      stdout={item.stdout}
-                      stderr={item.stderr}
                       errorReason={item.errorReason}
                       durationMs={item.durationMs}
                       hideHeader

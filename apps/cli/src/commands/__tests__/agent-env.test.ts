@@ -2,8 +2,8 @@
  * `oxagen agent env …` output-discipline + wiring tests (ADR-023 §4).
  *
  * Agent handles resolve to public ids (agt_…) via the agent-definition list
- * (GET); env/template slugs resolve via their list endpoints. --json emits one
- * JSON line; pretty prints a summary/table; a missing --env is a usage error
+ * (GET); env slugs resolve via the environment list. --json emits one JSON
+ * line; pretty prints a summary/table; a missing --env is a usage error
  * (exit 2, no API call); API failures route to a uniform stderr error (exit 1).
  */
 import {
@@ -56,8 +56,6 @@ const BINDING = {
   environmentId: "env_1",
   environmentName: "Staging",
   environmentSlug: "staging",
-  sandboxTemplateId: "sbx_abc",
-  sandboxTemplateName: "SWE-bench prewarmed",
   isPrimary: true,
 };
 
@@ -84,27 +82,23 @@ describe("handleAgentEnvBind", () => {
     expect(mockPost).not.toHaveBeenCalled();
   });
 
-  it("resolves agent slug + env slug + template slug then binds", async () => {
+  it("resolves an agent slug + env slug then binds", async () => {
     mockGet.mockResolvedValueOnce({ agents: AGENTS });
     mockPost
       .mockResolvedValueOnce({
         environments: [{ id: "env_1", slug: "staging" }],
       })
-      .mockResolvedValueOnce({
-        templates: [{ id: "sbx_abc", slug: "swe-bench-prewarmed" }],
-      })
       .mockResolvedValueOnce({ binding: BINDING });
     const { writer, out } = makeWriter();
     await handleAgentEnvBind(
       "coder",
-      { env: "staging", template: "swe-bench-prewarmed", primary: true },
+      { env: "staging", primary: true },
       writer,
     );
     expect(mockGet).toHaveBeenCalledWith("agent/definitions");
     expect(mockPost).toHaveBeenLastCalledWith("agent/environment/bind", {
       agentId: "agt_code",
       environmentId: "env_1",
-      sandboxTemplateId: "sbx_abc",
       isPrimary: true,
     });
     expect(out.join("\n")).toContain("✓ bound coder → Staging (staging)");
@@ -112,9 +106,7 @@ describe("handleAgentEnvBind", () => {
   });
 
   it("passes an agt_ id and env_ id straight through (no lookups)", async () => {
-    mockPost.mockResolvedValueOnce({
-      binding: { ...BINDING, sandboxTemplateName: null },
-    });
+    mockPost.mockResolvedValueOnce({ binding: BINDING });
     const { writer } = makeWriter();
     await handleAgentEnvBind("agt_code", { env: "env_1" }, writer);
     expect(mockGet).not.toHaveBeenCalled();
@@ -188,19 +180,17 @@ describe("handleAgentEnvList", () => {
     });
     const text = out.join("\n");
     expect(text).toContain("Staging");
-    expect(text).toContain("SWE-bench prewarmed");
+    expect(text).toContain("staging");
     expect(text).toContain("★");
   });
 
-  it("shows the env-default hint when no template is pinned", async () => {
+  it("leaves the primary column blank for a non-primary binding", async () => {
     mockPost.mockResolvedValueOnce({
-      bindings: [
-        { ...BINDING, sandboxTemplateId: null, sandboxTemplateName: null },
-      ],
+      bindings: [{ ...BINDING, isPrimary: false }],
     });
     const { writer, out } = makeWriter();
     await handleAgentEnvList("agt_code", {}, writer);
-    expect(out.join("\n")).toContain("‹env default›");
+    expect(out.join("\n")).not.toContain("★");
   });
 
   it("emits a json array on stdout in --json mode", async () => {

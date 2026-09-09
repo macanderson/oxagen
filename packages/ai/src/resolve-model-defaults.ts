@@ -4,7 +4,9 @@
 // Precedence per dimension:
 //   workspace value ?? user value ?? null
 //
-// The text dimension resolves `model` and `tier` on two INDEPENDENT chains:
+// The text dimension is the ONLY stored default dimension (ADR-043 removed
+// image/video generation from the platform, and with it the stored media model
+// defaults). It resolves `model` and `tier` on two INDEPENDENT chains:
 //   text.model = workspace.model ?? user.model ?? null
 //   text.tier  = workspace.tier  ?? user.tier  ?? null
 //
@@ -28,15 +30,11 @@ export interface ModelDefaultsInput {
   user: {
     defaultTextTier: ModelTier | null;
     defaultTextModel: string | null;
-    defaultImageModel: string | null;
-    defaultVideoModel: string | null;
   } | null;
   /** Workspace-level model settings (or null if no workspace context). */
   workspace: {
     defaultTextTier: ModelTier | null;
     defaultTextModel: string | null;
-    defaultImageModel: string | null;
-    defaultVideoModel: string | null;
   } | null;
 }
 
@@ -50,8 +48,6 @@ export interface ResolvedModelDefaults {
     tier: ModelTier | null;
     model: string | null;
   };
-  image: { model: string | null };
-  video: { model: string | null };
   /**
    * True when the workspace explicitly sets that dimension, meaning the workspace
    * setting is shadowing the user's own preference. Useful for surfacing an
@@ -59,8 +55,6 @@ export interface ResolvedModelDefaults {
    */
   overriddenByWorkspace: {
     text: boolean;
-    image: boolean;
-    video: boolean;
   };
 }
 
@@ -82,40 +76,20 @@ export function resolveModelDefaults(
   const textTier: ModelTier | null =
     workspace?.defaultTextTier ?? user?.defaultTextTier ?? null;
 
-  // ── Image dimension ────────────────────────────────────────────────────────
-  const imageModel: string | null =
-    workspace?.defaultImageModel ?? user?.defaultImageModel ?? null;
-
-  // ── Video dimension ────────────────────────────────────────────────────────
-  const videoModel: string | null =
-    workspace?.defaultVideoModel ?? user?.defaultVideoModel ?? null;
-
-  // ── Override flags ─────────────────────────────────────────────────────────
-  // A dimension is "overridden by workspace" when the workspace explicitly sets
-  // at least one of its fields (non-null), regardless of whether the user also
-  // has a preference.
+  // ── Override flag ──────────────────────────────────────────────────────────
+  // The dimension is "overridden by workspace" when the workspace explicitly
+  // sets at least one of its fields (non-null), regardless of whether the user
+  // also has a preference.
   const wsOverridesText =
     (workspace?.defaultTextModel !== null &&
       workspace?.defaultTextModel !== undefined) ||
     (workspace?.defaultTextTier !== null &&
       workspace?.defaultTextTier !== undefined);
 
-  const wsOverridesImage =
-    workspace?.defaultImageModel !== null &&
-    workspace?.defaultImageModel !== undefined;
-
-  const wsOverridesVideo =
-    workspace?.defaultVideoModel !== null &&
-    workspace?.defaultVideoModel !== undefined;
-
   return {
     text: { tier: textTier, model: textModel },
-    image: { model: imageModel },
-    video: { model: videoModel },
     overriddenByWorkspace: {
       text: wsOverridesText,
-      image: wsOverridesImage,
-      video: wsOverridesVideo,
     },
   };
 }

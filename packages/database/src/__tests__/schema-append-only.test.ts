@@ -38,8 +38,6 @@ import {
   securityEvents,
   creditBalances,
   agentRunAttempts,
-  agentRunAttemptLeases,
-  agentRunCheckpoints,
   agentRunAttemptSeals,
   agentRunFinalizationGrants,
   agentRunFinalizationObligations,
@@ -80,12 +78,7 @@ describe("append-only tables: forbidden mutation columns", () => {
     // privilege posture itself is asserted against a live database in
     // integration/run-attempt-foundation.test.ts and
     // integration/authorization-foundation.test.ts.
-    //
-    // agent_run_attempt_leases is deliberately ABSENT: it is the one mutable
-    // row in the foundation (renew/append/fence/seal all advance it) and
-    // legitimately carries updated_at. Its DELETE is still revoked.
     ["agent_run_attempts", agentRunAttempts],
-    ["agent_run_checkpoints", agentRunCheckpoints],
     ["agent_run_attempt_seals", agentRunAttemptSeals],
     ["agent_run_finalization_grants", agentRunFinalizationGrants],
     ["agent_run_finalization_obligations", agentRunFinalizationObligations],
@@ -106,18 +99,6 @@ describe("append-only tables: forbidden mutation columns", () => {
       }
     });
   }
-
-  it("agent_run_attempt_leases is the documented mutable exception", () => {
-    // Guard against the opposite drift: if someone "tidies" the lease into an
-    // append-only shape, renew/fence/seal lose their only place to record
-    // progress and the fencing token stops being observable.
-    const cols = sqlColumnNames(agentRunAttemptLeases);
-    expect(cols).toContain("updated_at");
-    expect(cols).toContain("fenced_at");
-    expect(cols).toContain("lease_epoch");
-    // Still never soft-deletable — a fenced lease is evidence, not garbage.
-    expect(cols).not.toContain("deleted_at");
-  });
 });
 
 // ---------------------------------------------------------------------------

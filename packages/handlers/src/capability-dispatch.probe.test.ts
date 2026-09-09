@@ -13,10 +13,9 @@ const OLD_DOTTED_NAMES = [
   "chat.message.send",
   "agent.tool.list",
   "graph.ingest",
-  "agent.code.execute",
   "agent.memory.recall",
   "connection.list",
-  "workflow.run",
+  "audit.log.query",
 ];
 
 // Capabilities with NO kernel handler registration, excluded from the hasHandler
@@ -77,16 +76,17 @@ describe("ADR-025 naming realignment — dispatch probe", () => {
   // resolveHandler, which loads the handler MODULE by its snake key and returns
   // the concrete handler function. A dotted key here would throw "No handler
   // registered". Proves the realigned loader map dispatches end-to-end for the
-  // agent-runtime capabilities that were previously dotted call-sites.
+  // governance capabilities that were previously dotted call-sites.
   it("agent handler loaders actually load a function for snake names (real dispatch)", async () => {
-    // All agent-runtime (LOADERS-registered) capabilities — previously dotted keys.
+    // A representative slice of the LOADERS-registered capabilities in
+    // @oxagen/agent — previously dotted keys.
     for (const name of [
-      "execute_code",
       "list_agent_tools",
       "recall_memory",
       "deploy_agent",
       "get_agent_def",
-      "start_background_task",
+      "list_executions",
+      "resolve_approval",
     ]) {
       const fn = await agentResolveHandler(name);
       expect(typeof fn, `resolved handler for ${name}`).toBe("function");

@@ -1,5 +1,15 @@
 # A2A Agent Identity, Lineage & Live Subscription — Design Specification
 
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) removed
+> the A2A transport entirely as part of the agent-runtime excision — the
+> `.well-known/agent-card.json` discovery endpoint, `POST /a2a` JSON-RPC route,
+> the `a2a.card.get` capability, and the `agent.a2a_tasks` table are gone. This
+> spec is retained as a future-work design reference, not a description of a
+> live surface: third-party agent identity and interop return through the
+> evidence-ingress / MCP-gateway seam instead (ADR-040 Phase 2), not a
+> resurrected A2A JSON-RPC bridge. Read every section below as "this is what
+> A2A v1 looked like before the excision," not current behavior.
+
 Linear: [OXA-2063](https://linear.app/oxagen/issue/OXA-2063/a2a-agent-identity-lineage-and-live-subscription)
 (sub-issues OXA-2064–OXA-2069). Branch `feat/a2a-agent-identity-lineage`.
 

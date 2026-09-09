@@ -1,7 +1,7 @@
 {
   "name": "suggest_agent_def",
   "domain": "agent",
-  "description": "AI-assisted agent setup: turn a plain-language description of what an agent should do into a complete draft agent configuration (identity, instructions, graph access, tools), grounded in the workspace's real skills, ontologies, MCP servers, and capabilities via the create-agent skill. Returns a suggestion shaped exactly like agent.definition.create input, plus a rationale and any warnings — nothing is persisted; the caller reviews, edits, and saves the draft explicitly.",
+  "description": "AI-assisted agent setup: turn a plain-language description of what an agent should do into a complete draft agent configuration (identity, instructions, graph access, tools), grounded in the workspace's real ontologies, MCP servers, and governed capabilities. Returns a suggestion shaped exactly like agent.definition.create input, plus a rationale and any warnings — nothing is persisted; the caller reviews, edits, and saves the draft explicitly.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -31,9 +31,6 @@
         "description": "Plain-language description of what the agent should do — its job and what it may touch. At least 10 characters."
       },
       "nameHint": {
-        "type": "string"
-      },
-      "agentTypeHint": {
         "type": "string"
       }
     },
@@ -150,9 +147,7 @@
                       "type": "string",
                       "enum": [
                         "function",
-                        "mcp_server",
-                        "skill",
-                        "agent"
+                        "mcp_server"
                       ]
                     },
                     "ref": {
@@ -211,14 +206,13 @@
             "kind": {
               "type": "string",
               "enum": [
-                "mcp_server",
-                "skill"
+                "mcp_server"
               ],
-              "description": "What kind of thing to connect: an MCP server from the synced registry catalog, or a workspace skill that exists but is disabled."
+              "description": "What kind of thing to connect: an MCP server from the synced registry catalog."
             },
             "ref": {
               "type": "string",
-              "description": "Catalog identity for an mcp_server (registry server name, e.g. 'github/github-mcp-server') or the skill slug for a skill."
+              "description": "Catalog identity for an mcp_server (registry server name, e.g. 'github/github-mcp-server')."
             },
             "name": {
               "type": "string",

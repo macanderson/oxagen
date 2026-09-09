@@ -14,9 +14,10 @@
 # targets the combined data node `modules/data-node` builds — Postgres,
 # ClickHouse and Neo4j together on one instance tagged Name=oxagen-data — and
 # that shape has no equivalent in the new account. There, Postgres is Aurora
-# Serverless v2 and ClickHouse's role is Redshift Serverless (both managed,
-# neither reachable this way), and Neo4j runs on the shared app node instead
-# of a dedicated data node. See docs/new-account-migration-plan.md.
+# Serverless v2 (managed, not reachable this way), and ClickHouse and Neo4j
+# both run on the shared app node instead of a dedicated data node — so the
+# same port-forward works against that node, with a different instance tag.
+# See docs/new-account-migration-plan.md.
 #
 # Requires the AWS CLI, the Session Manager plugin, and credentials for account
 # 578673726240. Install the plugin with:

@@ -16,17 +16,22 @@ variable "vpc_cidr" {
 
 variable "availability_zones" {
   description = <<-EOT
-    Three AZs, in order. An ALB needs subnets in at least two; Redshift
-    Serverless refuses to provision at all unless its subnet group spans at
-    least three, each with enough free IPs — the stricter requirement here,
-    so it sets the floor for both public and private subnet counts even
-    though only one AZ's private subnet carries anything (the app node).
+    Three AZs, in order. An ALB needs subnets in at least two. The third was
+    Redshift Serverless's floor — it refused to provision unless its subnet
+    group spanned three — and Redshift is gone (#2693).
+
+    Three is kept anyway, and the reason is worth stating rather than left as
+    a number nobody can justify: dropping to two destroys a public and a
+    private subnet, which is a change with real blast radius made to save
+    nothing. Only one AZ's private subnet carries anything today (the app
+    node). Reducing it is a deliberate decision for someone with a reason,
+    not a tidy-up that rides a removal.
   EOT
   type        = list(string)
 
   validation {
-    condition     = length(var.availability_zones) >= 3
-    error_message = "Redshift Serverless requires subnets across at least three availability zones."
+    condition     = length(var.availability_zones) >= 2
+    error_message = "An ALB needs subnets in at least two availability zones."
   }
 }
 
@@ -46,4 +51,24 @@ variable "nat_instance_type" {
 variable "tags" {
   description = "Tags applied to every resource, carrying the owning brand."
   type        = map(string)
+}
+
+# The AMI is pinned, not resolved. It used to come from
+# `/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64` —
+# AWS's *latest* pointer, which moves every few weeks as Amazon publishes a new
+# image. `ami` forces replacement, so that configuration could never converge:
+# every plan after a new release proposed destroying and recreating this
+# instance, and an apply run for any other reason would have done it.
+#
+# On 2026-09-06 that gap was live. The pointer resolved to
+# ami-07987a01dcdb011ef while both running instances were on
+# ami-0cded71ff6ab7f608, and `tofu plan` read "4 to add, 3 to change, 10 to
+# destroy" — including the node every service runs on (#2682).
+#
+# Pinned here so replacing an instance is always something someone chose. Bump
+# it deliberately, in its own change, with the replacement sequenced against
+# whatever the instance carries.
+variable "ami_id" {
+  description = "AMI for this instance. Pinned deliberately; see the note above."
+  type        = string
 }

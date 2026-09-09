@@ -11,7 +11,6 @@ export type {
   GitHubBranch,
 } from "./types";
 export { createGitHubClient } from "./fetch-client";
-export { GitHubWorkspace } from "./github-workspace";
 export type {
   AppInstallationTokenArgs,
   InstallationTokenResult,

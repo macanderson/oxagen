@@ -3,13 +3,17 @@
 // shapes the chat.stream route has always emitted, while collecting per-step
 // execution metadata for the SOC 2 audit trail.
 //
-// It is the SINGLE source of truth for the part→SSE mapping. The route drives it
-// via the engine's `onStreamPart` tap (one part at a time, across the
-// engine's per-step model calls) instead of a hand-rolled `for await`
-// over a single `streamAgentReply` — so the multi-step tool loop (`stopWhen`),
-// invoke()-gated tools, per-turn memory recall, and the USD budget guard all
-// apply, with the client wire protocol byte-identical to before the engine
-// unification.
+// It is the SINGLE source of truth for the part→SSE mapping: one part in, the
+// SSE events for it out, plus the running per-step execution record. It knows
+// nothing about who is feeding it — it takes generic AI-SDK parts (text,
+// reasoning, step boundaries, tool calls/results, usage, error) and no others.
+//
+// RETAINED THROUGH ADR-043 and now driven by `runGovernedTurn` (@oxagen/agent),
+// whose raw AI-SDK `fullStream` chat.stream feeds through it one part at a
+// time. It survives the cut deliberately — it is the published REST chat wire
+// format and it is engine-agnostic. There was never a code/sandbox/media/
+// subagent branch here to strip: the coding-agent generative-UI mapping lived
+// on the client, not in this translator.
 
 // Minimal typed stream events emitted over SSE. UNCHANGED wire shapes — every
 // field name and event `type` matches the pre-engine chat.stream output. The
@@ -127,11 +131,10 @@ export interface ApiStreamTranslator {
  * SSE `ApiStreamEvent` shapes and accumulates per-step execution metadata.
  *
  * Note on `finish`: the translator collects the per-step token totals but does
- * NOT emit a `usage` event. With the engine's per-step loop each step yields its
- * own `finish` part; emitting per step would send multiple growing usage events.
- * The route emits ONE aggregated `usage` after the loop from the engine's summed
- * `result.usage` — the same single event, in the same position (last event
- * before `[DONE]`), that the single-step stream always emitted.
+ * NOT emit a `usage` event. The route emits ONE aggregated `usage` after the
+ * stream is drained, from `runGovernedTurn`'s own summed totals — the same
+ * single event, in the same position (last event before `[DONE]`), that this
+ * surface has always emitted.
  */
 export function createApiStreamTranslator(args: {
   toolNameMap: Record<string, string>;
@@ -279,9 +282,8 @@ export function createApiStreamTranslator(args: {
       });
     } else if (pType === "finish") {
       // Collect per-step token totals; do NOT emit usage here (see the factory
-      // doc comment). The route emits ONE aggregated usage after the loop from
-      // the engine's summed result.usage. With the engine's per-step loop this
-      // arm fires once per step — the LAST step carries the turn totals.
+      // doc comment). The route emits ONE aggregated usage after the stream is
+      // drained, from the governed turn's own summed totals.
       const { totalUsage } = raw as {
         totalUsage?: {
           inputTokens?: number;
@@ -295,9 +297,8 @@ export function createApiStreamTranslator(args: {
           totalUsage.outputTokens ?? collectedOutputTokens;
       }
     } else if (pType === "error") {
-      // Defensive backstop: the engine THROWS provider/stream errors to the
-      // route's catch rather than yielding an `error` part, but if one ever
-      // arrives here, surface it as a typed `error` SSE event and mark the turn
+      // A provider/gateway failure normally arrives as an `error` PART rather
+      // than a throw: surface it as a typed `error` SSE event and mark the turn
       // errored so the route skips persisting a partial reply.
       const errVal = (raw as { error?: unknown }).error;
       const message =

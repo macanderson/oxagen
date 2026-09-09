@@ -76,7 +76,7 @@ it("provisions one delegated agent principal and links it to the agent identity"
           retrieval: { strategy: "hybrid" },
           budget: { maxHops: 2, maxNodes: 20 },
         },
-        agentTools: [{ type: "skill", ref: "coding" }],
+        agentTools: [{ type: "function", ref: "recall_memory" }],
         instructions: "hi",
       },
     },

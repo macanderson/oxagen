@@ -15,19 +15,21 @@ import {
 const PROD_MCP_URL = process.env["MCP_URL"] ?? "https://mcp.oxagen.sh";
 const PROD_APP_URL = process.env["APP_URL"] ?? "https://app.oxagen.sh";
 
+// Where a human mints the API key every one of these clients authenticates
+// with. Org + workspace scope rides on the key itself, so the connect URL needs
+// no org/workspace path segment — but the page that ISSUES the key is org-scoped
+// and the contract's only input slug is the WORKSPACE slug, so the org segment
+// stays a placeholder the reader substitutes.
+const API_KEY_URL = `${PROD_APP_URL}/<your-org-slug>/developer/tokens`;
+
 // ── Step builders ─────────────────────────────────────────────────────────────
 
-function stepsForClaudeCode(wsSlug: string | undefined): InstallStep[] {
-  const ws = wsSlug ?? "<your-workspace-slug>";
+function stepsForClaudeCode(_wsSlug: string | undefined): InstallStep[] {
   const mcpUrl = `${PROD_MCP_URL}/mcp`;
   return [
     {
-      label: "Install the Oxagen CLI (requires Node 20+)",
-      command: "npm install -g @oxagen/cli",
-    },
-    {
-      label: "Authenticate and link your workspace",
-      command: `oxagen auth login && oxagen workspace use ${ws}`,
+      label: "Generate an API key — it carries your org + workspace scope",
+      command: API_KEY_URL,
     },
     {
       label: "Add the Oxagen MCP server to Claude Code",
@@ -38,7 +40,13 @@ function stepsForClaudeCode(wsSlug: string | undefined): InstallStep[] {
       command: "claude mcp list",
     },
     {
-      label: "Start a session — Oxagen tools are now available to the agent",
+      label:
+        "Start a session — Claude Code now reaches Oxagen's governed capabilities, and every tool call is metered and audited against your workspace",
+    },
+    {
+      label:
+        "Optional: install the Oxagen CLI to inspect the same fleet record from a terminal",
+      command: "npm install -g @oxagen/cli && oxagen login && oxagen init",
     },
   ];
 }
@@ -58,7 +66,7 @@ function stepsForCursor(_wsSlug: string | undefined): InstallStep[] {
     },
     {
       label: "Generate an API key at the Oxagen dashboard",
-      command: `${PROD_APP_URL}/settings/api-keys`,
+      command: API_KEY_URL,
     },
     {
       label: "Paste the API key into the Authorization header field in Cursor",
@@ -92,7 +100,7 @@ function stepsForClaudeDesktop(_wsSlug: string | undefined): InstallStep[] {
   return [
     {
       label: "Generate an API key",
-      command: `${PROD_APP_URL}/settings/api-keys`,
+      command: API_KEY_URL,
     },
     {
       label: "Open your Claude Desktop config file",
@@ -116,7 +124,7 @@ function stepsForCodex(_wsSlug: string | undefined): InstallStep[] {
   return [
     {
       label: "Generate an API key",
-      command: `${PROD_APP_URL}/settings/api-keys`,
+      command: API_KEY_URL,
     },
     {
       label: "Add the Oxagen MCP server to your codex.yaml",
@@ -161,7 +169,7 @@ function stepsForVscode(_wsSlug: string | undefined): InstallStep[] {
   return [
     {
       label: "Generate an API key",
-      command: `${PROD_APP_URL}/settings/api-keys`,
+      command: API_KEY_URL,
     },
     {
       label:

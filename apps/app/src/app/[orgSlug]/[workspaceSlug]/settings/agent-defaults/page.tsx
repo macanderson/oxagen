@@ -6,15 +6,10 @@
  *
  * All sub-tab reads run in parallel (one Promise.all): the shared
  * owner/admin role lookup + get_model_settings + get_budget_policy +
- * get_prompt_settings + get_workspace_user_preferences share ONE
- * runInTenantScope; the self-contained readers (readMemoryPolicyAction,
- * loadCodeModeOptions, loadAgentOptions — each already wraps its own
- * scope/never throws) run alongside. Each sub-tab keeps its own independent
- * save + feedback — there is no cross-tab save.
- *
- * The Models sub-tab additionally surfaces the "Your coding-agent
- * preferences" section (CodingAgentPreferencesForm), which writes the calling
- * user's own `user.workspace_preferences`.
+ * get_prompt_settings share ONE runInTenantScope; the self-contained
+ * readMemoryPolicyAction (which already wraps its own scope and never throws)
+ * runs alongside. Each sub-tab keeps its own independent save + feedback —
+ * there is no cross-tab save.
  */
 import type { Metadata } from "next";
 import { Cpu, Wallet } from "lucide-react";
@@ -24,10 +19,12 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
 // Side-effect import: bind every foundation handler so invoke() can resolve.
 import "@oxagen/handlers/register";
-import { resolvePrompt, chatSystemPrompt } from "@oxagen/ai";
+import { resolvePrompt } from "@oxagen/ai";
+// The chat baseline lives with the tool surface it describes (ADR-043) — there
+// is one copy, in @oxagen/agent, and this preview renders exactly it.
+import { buildChatSystemPrompt } from "@oxagen/agent";
 import type { WorkspaceModelSettingsReadOutput } from "@oxagen/oxagen/contracts/workspace.model_settings.read";
 import type { WorkspaceBudgetPolicyReadOutput } from "@oxagen/oxagen/contracts/workspace.budget_policy.read";
-import type { UserWorkspacePreferencesReadOutput } from "@oxagen/oxagen/contracts/user.workspace_preferences.read";
 import type { ModelDefaultsValue } from "@/components/settings/model-defaults-fields";
 import {
   resolveOrg,
@@ -36,8 +33,6 @@ import {
 } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
 import { getEnterpriseAccess } from "@/lib/enterprise";
-import { loadCodeModeOptions } from "@/app/[orgSlug]/[workspaceSlug]/_shared/code-mode-data";
-import { loadAgentOptions } from "@/app/[orgSlug]/[workspaceSlug]/_shared/agent-options-data";
 import { WorkspaceModelsForm } from "./models-form";
 import { WorkspaceBudgetForm } from "./budget-form";
 import { PromptSettingsForm } from "./prompt-settings-form";
@@ -45,7 +40,6 @@ import { SystemPromptReadonly } from "./system-prompt-readonly";
 import type { PromptSettingsReadOutput } from "./prompt-settings-action";
 import { MemoryPolicyForm } from "./memory-policy-form";
 import { readMemoryPolicyAction } from "./memory-policy-actions";
-import { CodingAgentPreferencesForm } from "./coding-agent-preferences-form";
 import { AgentDefaultsTabs } from "./agent-defaults-tabs";
 // Guard + type come from the boundary-agnostic sibling — importing them from
 // the "use client" tabs module would make isAgentDefaultsTab() a client
@@ -90,57 +84,39 @@ export default async function AgentDefaultsPage({
   };
 
   const [
-    { roleRows, modelSettings, budgetPolicy, promptSettings, codingPrefs },
+    { roleRows, modelSettings, budgetPolicy, promptSettings },
     enterpriseAccess,
     memoryPolicy,
-    codeModeOptions,
-    agentOptions,
   ] = await Promise.all([
     runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-      const [
-        roleRows,
-        modelSettings,
-        budgetPolicy,
-        promptSettings,
-        codingPrefs,
-      ] = await Promise.all([
-        withTenantDb((tx) =>
-          tx
-            .select({ role: schema.workspaceUsers.role })
-            .from(schema.workspaceUsers)
-            .where(
-              and(
-                eq(schema.workspaceUsers.workspaceId, ws.id),
-                eq(schema.workspaceUsers.userId, session.user.id),
-              ),
-            )
-            .limit(1),
-        ),
-        invoke("get_model_settings", {}, ctx, {
-          surface: "agent",
-        }) as Promise<WorkspaceModelSettingsReadOutput>,
-        invoke("get_budget_policy", {}, ctx, {
-          surface: "agent",
-        }) as Promise<WorkspaceBudgetPolicyReadOutput>,
-        invoke("get_prompt_settings", {}, ctx, {
-          surface: "agent",
-        }) as Promise<PromptSettingsReadOutput>,
-        invoke("get_workspace_user_preferences", {}, ctx, {
-          surface: "agent",
-        }) as Promise<UserWorkspacePreferencesReadOutput>,
-      ]);
-      return {
-        roleRows,
-        modelSettings,
-        budgetPolicy,
-        promptSettings,
-        codingPrefs,
-      };
+      const [roleRows, modelSettings, budgetPolicy, promptSettings] =
+        await Promise.all([
+          withTenantDb((tx) =>
+            tx
+              .select({ role: schema.workspaceUsers.role })
+              .from(schema.workspaceUsers)
+              .where(
+                and(
+                  eq(schema.workspaceUsers.workspaceId, ws.id),
+                  eq(schema.workspaceUsers.userId, session.user.id),
+                ),
+              )
+              .limit(1),
+          ),
+          invoke("get_model_settings", {}, ctx, {
+            surface: "agent",
+          }) as Promise<WorkspaceModelSettingsReadOutput>,
+          invoke("get_budget_policy", {}, ctx, {
+            surface: "agent",
+          }) as Promise<WorkspaceBudgetPolicyReadOutput>,
+          invoke("get_prompt_settings", {}, ctx, {
+            surface: "agent",
+          }) as Promise<PromptSettingsReadOutput>,
+        ]);
+      return { roleRows, modelSettings, budgetPolicy, promptSettings };
     }),
     getEnterpriseAccess(org.id),
     readMemoryPolicyAction({ orgSlug, workspaceSlug }),
-    loadCodeModeOptions(org.id, ws.id, ctx),
-    loadAgentOptions(org.id, ws.id, ctx),
   ]);
 
   const role = (roleRows[0]?.role ?? "").toLowerCase();
@@ -149,15 +125,13 @@ export default async function AgentDefaultsPage({
   const modelDefaultsInitial: ModelDefaultsValue = {
     textTier: modelSettings.defaultTextTier,
     textModel: modelSettings.defaultTextModel,
-    imageModel: modelSettings.defaultImageModel,
-    videoModel: modelSettings.defaultVideoModel,
   };
 
   // Effective system prompt: pure function of workspace context + the saved
   // Additional instructions — what admins see here is what the agent runs.
   const effectiveSystemPrompt = resolvePrompt({
     key: "chat.system",
-    baseline: chatSystemPrompt({
+    baseline: buildChatSystemPrompt({
       orgSlug,
       workspaceSlug,
       orgName: org.name,
@@ -170,8 +144,8 @@ export default async function AgentDefaultsPage({
     <AgentDefaultsTabs
       initialTab={initialTab}
       modelsPanel={
-        <div className="flex flex-col gap-8">
-          <div className="flex flex-col gap-5 max-w-2xl">
+        <div className="flex flex-col gap-5 max-w-2xl">
+          <div className="flex flex-col gap-5">
             <div className="flex items-start gap-3">
               <Cpu
                 className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground"
@@ -182,10 +156,9 @@ export default async function AgentDefaultsPage({
                   AI model defaults
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  The default text tier and image/video models applied to every
-                  agent run and Workbench generation in this workspace.
-                  Workspace defaults take precedence over personal preferences
-                  for all members.
+                  The default text tier or model applied to every agent turn in
+                  this workspace. Workspace defaults take precedence over
+                  personal preferences for all members.
                 </p>
               </div>
             </div>
@@ -197,18 +170,6 @@ export default async function AgentDefaultsPage({
               workspaceSlug={workspaceSlug}
             />
           </div>
-
-          <CodingAgentPreferencesForm
-            orgSlug={orgSlug}
-            workspaceSlug={workspaceSlug}
-            repos={codeModeOptions.repos}
-            environments={codeModeOptions.environments}
-            agents={agentOptions}
-            initialRepoConnectionId={codingPrefs.defaultRepoConnectionId}
-            initialRepoSlug={codingPrefs.defaultRepoSlug}
-            initialEnvironmentId={codingPrefs.defaultEnvironmentId}
-            initialAgentId={codingPrefs.defaultAgentId}
-          />
         </div>
       }
       budgetPanel={

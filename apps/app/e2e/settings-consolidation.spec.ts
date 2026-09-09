@@ -112,11 +112,11 @@ test.describe("settings/agent-defaults — Models · Budget · Prompts · Memory
     await expect(promptsTab).toBeVisible();
     await expect(memoryTab).toBeVisible();
 
-    // Models is the default sub-tab (bare URL, no ?tab=) — model defaults form
-    // + the previously-unwired "Your coding-agent preferences" section.
+    // Models is the default sub-tab (bare URL, no ?tab=) — the model defaults
+    // form. The coding-agent preferences section left with the runtime
+    // (ADR-043).
     await expect(page).toHaveURL(new RegExp(`${ws}/settings/agent-defaults$`));
     await expect(page.getByText("AI model defaults")).toBeVisible();
-    await expect(page.getByText("Your coding-agent preferences")).toBeVisible();
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "03-agent-defaults-models.png"),
       fullPage: false,

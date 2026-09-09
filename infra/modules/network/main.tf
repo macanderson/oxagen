@@ -1,17 +1,18 @@
 /**
- * A small VPC for one private app node, Aurora, and Redshift Serverless,
- * behind one public ALB.
+ * A small VPC for one private app node and Aurora, behind one public ALB.
  *
- * Two public subnets and two private subnets — the ALB's minimum and, not
- * coincidentally, also the minimum a DB subnet group needs for Aurora and
- * Redshift Serverless, both of which refuse to provision across only one AZ.
- * The app node itself still lives in exactly one of the two; the second
- * exists for the data services' subnet groups, not for a second copy of the
- * node.
+ * Two public subnets, the ALB's minimum, and three private ones. Aurora's
+ * subnet group needs two AZs and the ALB needs two, so two is the floor; the
+ * third private subnet was Redshift Serverless's floor and outlived it (see
+ * `availability_zones` in variables.tf for why it is kept).
+ *
+ * The app node lives in exactly one private subnet. The others carry no
+ * instance — they exist so the data services' subnet groups have AZs to
+ * span, not for a second copy of the node.
  *
  * A self-managed NAT instance instead of a NAT Gateway — see
  * `nat_instance_type` in variables.tf for the cost argument. The instance
- * runs one job: forward both private subnets' outbound traffic. It carries
+ * runs one job: forward every private subnet's outbound traffic. It carries
  * no application state, so losing it is a `tofu apply` away from a
  * replacement, not an incident.
  *
@@ -131,9 +132,6 @@ resource "aws_route_table_association" "private" {
 # NAT instance
 # ---------------------------------------------------------------------------
 
-data "aws_ssm_parameter" "al2023" {
-  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64"
-}
 
 resource "aws_security_group" "nat" {
   name        = "${var.name}-nat"
@@ -188,7 +186,7 @@ resource "aws_iam_instance_profile" "nat" {
 }
 
 resource "aws_instance" "nat" {
-  ami                    = data.aws_ssm_parameter.al2023.value
+  ami                    = var.ami_id
   instance_type          = var.nat_instance_type
   subnet_id              = aws_subnet.public[0].id
   iam_instance_profile   = aws_iam_instance_profile.nat.name

@@ -1,14 +1,16 @@
 # Oxagen CLI
 
-The Oxagen platform CLI: knowledge graph, agent memory, environments,
-secrets, sandboxes, evals, budgets, and workspace configuration from the
-terminal.
+The governance-operations CLI for the Oxagen control plane: spend ceilings and
+cost, run traces, knowledge-graph grounding, agent memory,
+environments, the credential vault, and audit logs — from the terminal.
 
-The interactive coding agent this CLI used to ship was retired in the Stella
-cutover — Stella owns all things agentic. For a terminal coding agent, use
-the `stella` CLI with the oxagen MCP server (see
-`docs/specs/agent-engine-v2/`); the retired commands remain as stubs that
-print exactly that.
+Oxagen **governs, grounds, explains, meters/bills and rates** agents; it does
+not run them ([ADR-043](../../docs/adr/ADR-043-runtime-excision.md)). The
+interactive coding agent this CLI used to ship — the REPL, sandboxes, skills,
+slash commands, evals, local rules and settings — is gone. Stella owns all
+things agentic: use the `stella` CLI with the oxagen MCP server. Every removed
+entry point stays registered as a stub that prints exactly that, so a stale
+script fails with guidance instead of an unknown-command error.
 
 Full reference: **https://docs.oxagen.sh/docs/cli**
 
@@ -73,57 +75,46 @@ https://docs.oxagen.sh/docs/cli/account-setup for the full setup.
 
 Run `oxagen --help` for the live, authoritative list; append `--help` to any
 command for its flags. The full command tree lives in
-`apps/cli/src/program.tsx` and is documented at
+`apps/cli/src/program.ts` and is documented at
 https://docs.oxagen.sh/docs/cli/commands.
 
-**Runs, cost, and observability**
+Everything except `cost`, `logs` and `telemetry` talks to the platform API and
+needs `oxagen login` first.
+
+**Meter and bill**
 
 ```bash
-oxagen init                # scaffold .oxagen/ settings, link a workspace
-oxagen pr status|watch     # watch CI on a pull request, merge when green
-oxagen trace <executionId> # a run as a span tree (steps, tool calls, children)
-oxagen logs                 # tail the CLI's own debug log
-oxagen cost                 # price tokens or roll up this project's recorded spend
-oxagen models                # inspect/select the coordinator model (on-device or cloud)
+oxagen budget show                  # spend ceilings with their live burn
+oxagen budget set --scope org --period month --limit 500
+oxagen cost --in 200000 --out 40000 # project cost from the baked-in rate card
+oxagen cost --rates                 # print the rate card
+oxagen router stats|preview|policy  # the verified-outcome market router
 ```
 
-**Knowledge graph & memory** (requires platform auth)
+**Explain** — traces and audit
 
 ```bash
-oxagen graph search|pull|status
-oxagen memory list|show|promote|candidates|import|rm
+oxagen trace <executionId>          # a run as a span tree (steps, tool calls, children)
+oxagen logs                         # tail the CLI's own debug log
+```
+
+**Ground** — knowledge graph and agent memory
+
+```bash
+oxagen graph search -q "…"
+oxagen memory list|show|edit|salience|promote|demote|candidates|citations|import|rm
 oxagen remember "<lesson>" --class RULE --enforcement 90
 ```
 
-**Configuration**
+**Govern** — workspace, agents, credentials
 
 ```bash
-oxagen config [key] [value]     # token, api-url, org, workspace, model
-oxagen settings show|get|set|validate|init   # layered settings.json
-```
-
-**Extensibility**
-
-```bash
-oxagen agent list|show|new              # named agent definitions
-oxagen agent env bind|unbind|list       # bind an agent to a platform environment
-oxagen command list|show|new            # custom slash commands (run them via stella)
-oxagen rules list|show|new|check        # workspace rules, hard-blocked at the tool layer
-oxagen mcp add|list|remove|enable|disable|check   # external MCP servers
-```
-
-**Platform resources** (require platform auth)
-
-```bash
-oxagen env list|get|create|update|rm|set-default    # workspace environments
-oxagen secret list|set|rm|reveal|import|export      # encrypted credential vault
-oxagen sandbox files|cat                            # inspect a durable sandbox session
-oxagen sandbox template list|get|create|rm|set-default|export|import
-oxagen conversation export <id>                     # export a conversation as md/pdf
-oxagen asset upload <url>                            # ingest a binary asset
-oxagen a2a card                                       # Agent2Agent card for this workspace
-oxagen recover [hash]                                 # restore agent work from the commit ledger
-oxagen file-lock list|acquire|release                # the same locks write_file/edit_file use
+oxagen init                                       # link this project to an org + workspace
+oxagen agent env bind|unbind|list                 # bind an agent to an environment
+oxagen env list|get|create|update|rm|set-default  # workspace environments
+oxagen secret list|set|rm|reveal|import|export    # encrypted credential vault
+oxagen conversation export <id>                   # export a conversation as md/pdf
+oxagen asset upload <url>                         # ingest a binary asset
 ```
 
 **Telemetry**
@@ -137,6 +128,18 @@ oxagen telemetry [on|off|status]    # anonymous usage telemetry (on by default)
 ```bash
 oxagen login / logout
 ```
+
+### Retired commands
+
+`sandbox`, `sandbox-template`, `code`, `eval`, `file-lock`, `a2a`, `models`,
+`skill`, `prompt`, `command`, `rules`, `settings`, `config`, `mcp`, `import`,
+`pr`, `recover`, `lineage`, plus the interactive surfaces (`view`, `agents`, `solve`,
+`daemon`, `replay`, `fleet`) and a bare `oxagen "<prompt>"`. Each prints a
+retirement notice and exits non-zero. Use the `stella` CLI instead.
+
+The CLI no longer reads `.oxagen/settings.json` — that file configured the
+local coding agent. The only project-local state it writes is
+`.oxagen/workspace.json` (the org + workspace binding `oxagen init` creates).
 
 ## Configuration
 

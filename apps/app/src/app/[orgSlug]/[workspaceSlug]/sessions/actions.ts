@@ -1,6 +1,6 @@
 "use server";
 import "@oxagen/handlers/register";
-// agent.* capabilities (approval.resolve, plan.approve, task.background.*) are
+// agent.* capabilities (approval.resolve, mcp_consent.resolve) are
 // supplied by a separate package; its register module must run to bind them
 // into the kernel before any invoke() here. Without it the kernel throws
 // "No handler registered for capability agent.approval.resolve".
@@ -14,12 +14,7 @@ import type { DbMessageRow, ConversationRow } from "@oxagen/database";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
 import { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.resolve";
 import { agentMcpConsentResolve } from "@oxagen/oxagen/contracts/agent.mcp_consent.resolve";
-import { agentPlanApprove } from "@oxagen/oxagen/contracts/agent.plan.approve";
-import { agentTaskBackgroundCancel } from "@oxagen/oxagen/contracts/agent.background_task.cancel";
-import { agentTaskBackgroundRead } from "@oxagen/oxagen/contracts/agent.background_task.read";
 import { invoke } from "@oxagen/oxagen";
-import type { PlanStep } from "@/components/chat/stream-event-types";
-import type { BackgroundTaskSnapshot } from "@/components/chat/background-task-tray";
 import { getSessionOrRedirect } from "@/lib/session";
 import { assertWorkspaceMember } from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
@@ -340,157 +335,6 @@ export async function resolveConsentAction(
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Failed to resolve consent",
-    };
-  }
-}
-
-export async function resolvePlanAction(
-  ctx: {
-    orgSlug: string;
-    workspaceSlug: string;
-    orgId: string;
-    workspaceId: string;
-  },
-  planId: string,
-  decision: "approved" | "denied" | "amended",
-  amendedSteps?: PlanStep[],
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const session = await getSessionOrRedirect();
-  await assertWorkspaceMember(ctx.workspaceId, session.user.id);
-  // The capability speaks `approve | deny | amend` (verb), the UI speaks
-  // `approved | denied | amended` (past tense). Map between them.
-  const verbMap: Record<typeof decision, "approve" | "deny" | "amend"> = {
-    approved: "approve",
-    denied: "deny",
-    amended: "amend",
-  };
-  const parsed = agentPlanApprove.input.safeParse({
-    planId,
-    decision: verbMap[decision],
-    amendedSteps: amendedSteps?.map((s) => ({
-      id: s.id,
-      summary: s.summary,
-      intent: s.intent,
-      capability: s.capability,
-      inputPreview: s.inputPreview ?? null,
-      dependsOn: s.dependsOn,
-    })),
-  });
-  if (!parsed.success)
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
-  try {
-    await invoke(
-      "approve_plan",
-      parsed.data,
-      capabilityContext({
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-        userId: session.user.id,
-      }),
-      { surface: "agent" },
-    );
-    revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/sessions`);
-    return { ok: true };
-  } catch (err) {
-    logger.error(
-      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, planId },
-      "[ask] resolvePlanAction failed",
-    );
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Failed to resolve plan",
-    };
-  }
-}
-
-export async function cancelBackgroundTaskAction(
-  ctx: {
-    orgSlug: string;
-    workspaceSlug: string;
-    orgId: string;
-    workspaceId: string;
-  },
-  taskId: string,
-  reason?: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const session = await getSessionOrRedirect();
-  await assertWorkspaceMember(ctx.workspaceId, session.user.id);
-  const parsed = agentTaskBackgroundCancel.input.safeParse({ taskId, reason });
-  if (!parsed.success)
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
-  try {
-    await invoke(
-      "cancel_background_task",
-      parsed.data,
-      capabilityContext({
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-        userId: session.user.id,
-      }),
-      { surface: "agent" },
-    );
-    revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/sessions`);
-    return { ok: true };
-  } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Failed to cancel task",
-    };
-  }
-}
-
-export async function readBackgroundTaskAction(
-  ctx: { orgId: string; workspaceId: string },
-  taskId: string,
-): Promise<BackgroundTaskSnapshot> {
-  const session = await getSessionOrRedirect();
-  await assertWorkspaceMember(ctx.workspaceId, session.user.id);
-  try {
-    const parsed = agentTaskBackgroundRead.input.safeParse({ taskId });
-    if (!parsed.success) {
-      throw new Error(parsed.error.issues[0]?.message ?? "Invalid task id");
-    }
-    const out = (await invoke(
-      "get_background_task",
-      parsed.data,
-      capabilityContext({
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-        userId: session.user.id,
-      }),
-      { surface: "agent" },
-    )) as import("@oxagen/oxagen/contracts/agent.background_task.read").AgentTaskBackgroundReadOutput;
-    return {
-      taskId: out.taskId,
-      kind: out.kind,
-      label: out.label,
-      status: out.status,
-      createdAt: out.createdAt,
-      startedAt: out.startedAt,
-      completedAt: out.completedAt,
-      failureReason: out.failureReason,
-    };
-  } catch (err) {
-    // The poller (background-task-tray) calls this inside Promise.allSettled
-    // and silently drops rejected results, freezing the row forever at its
-    // last known state. Instead of letting the failure vanish, log it with
-    // context and surface a terminal "failed" snapshot so the user sees the
-    // real outcome and polling stops.
-    const failureReason =
-      err instanceof Error ? err.message : "Failed to read task status";
-    logger.error(
-      { err, taskId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-      "[ask] readBackgroundTaskAction failed",
-    );
-    return {
-      taskId,
-      kind: "unknown",
-      label: null,
-      status: "failed",
-      createdAt: new Date().toISOString(),
-      startedAt: null,
-      completedAt: new Date().toISOString(),
-      failureReason,
     };
   }
 }

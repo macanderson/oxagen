@@ -76,28 +76,6 @@
           }
         ]
       },
-      "defaultImageModel": {
-        "anyOf": [
-          {
-            "type": "string",
-            "minLength": 1
-          },
-          {
-            "type": "null"
-          }
-        ]
-      },
-      "defaultVideoModel": {
-        "anyOf": [
-          {
-            "type": "string",
-            "minLength": 1
-          },
-          {
-            "type": "null"
-          }
-        ]
-      },
       "timezone": {
         "type": "string",
         "minLength": 1
@@ -164,26 +142,6 @@
           }
         ]
       },
-      "defaultImageModel": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ]
-      },
-      "defaultVideoModel": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ]
-      },
       "timezone": {
         "type": "string"
       },
@@ -198,8 +156,6 @@
       "pendingPromptBehavior",
       "defaultTextTier",
       "defaultTextModel",
-      "defaultImageModel",
-      "defaultVideoModel",
       "timezone",
       "language"
     ],

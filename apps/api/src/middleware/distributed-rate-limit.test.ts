@@ -138,17 +138,19 @@ describe("deriveBucketKey", () => {
     const c = fakeContext({
       headers: { "x-forwarded-for": "203.0.113.7, 10.0.0.1" },
     });
-    expect(deriveBucketKey(c, "agent")).toBe("agent:ip:203.0.113.7");
+    expect(deriveBucketKey(c, "chat")).toBe("chat:ip:203.0.113.7");
   });
 
   it('uses x-real-ip, then "unknown", when x-forwarded-for is absent', () => {
     expect(
       deriveBucketKey(
         fakeContext({ headers: { "x-real-ip": "198.51.100.9" } }),
-        "a2a",
+        "stella-telemetry",
       ),
-    ).toBe("a2a:ip:198.51.100.9");
-    expect(deriveBucketKey(fakeContext(), "a2a")).toBe("a2a:ip:unknown");
+    ).toBe("stella-telemetry:ip:198.51.100.9");
+    expect(deriveBucketKey(fakeContext(), "stella-telemetry")).toBe(
+      "stella-telemetry:ip:unknown",
+    );
   });
 });
 
@@ -348,13 +350,10 @@ describe("rateLimitBudgets", () => {
   // first — assert the memoization contract itself (same instance, one
   // requireEnv call) rather than re-asserting specific values per call.
   it("resolves the budgets from the validated env once, then memoizes the result", () => {
-    mocks.requireEnv.mockReturnValue({
-      RATE_LIMIT_CHAT_PER_MIN: 90,
-      RATE_LIMIT_AGENT_EXEC_PER_MIN: 45,
-    });
+    mocks.requireEnv.mockReturnValue({ RATE_LIMIT_CHAT_PER_MIN: 90 });
 
     const first = rateLimitBudgets();
-    expect(first).toEqual({ chat: 90, agentExec: 45 });
+    expect(first).toEqual({ chat: 90 });
 
     // Second call returns the SAME cached object without re-reading env — the
     // memoization that keeps app import from tripping env access at module load.

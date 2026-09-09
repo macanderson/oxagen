@@ -10,7 +10,6 @@
  * The bar is a controlled input; on Enter it dispatches intent via
  * classifyIntent and:
  *   - "navigate"  → router.push(href) + clear
- *   - "fill"      → calls fillFormAction + opens FillOverlay
  *   - "search"    → opens CommandMenu with the query pre-filled
  *   - "action"    → opens CommandMenu in action mode
  *   - "ask"       → opens AskDrawer with query as seed text, then clear
@@ -28,8 +27,6 @@ import { cn } from "@/lib/utils";
 import { usePageContext } from "@/lib/page-context";
 import { classifyIntent } from "@/lib/command-menu/intent-router";
 import { useRecent } from "@/lib/command-menu/use-recent";
-import { fillFormAction } from "./fill-action";
-import { useToast } from "@/components/ui/toast";
 import type { ScopeContext } from "@/lib/scope";
 
 // Module-level stable noop — useSyncExternalStore requires a *stable* subscribe
@@ -51,10 +48,7 @@ export function AskBar({ ctx, className }: AskBarProps) {
   const router = useRouter();
   const pageCtx = usePageContext();
   const { push: pushRecent } = useRecent();
-  const toast = useToast();
-
   const [value, setValue] = React.useState("");
-  const [isLoading, setIsLoading] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   // Keyboard-hint symbol is platform-dependent (⌘ on macOS, Ctrl elsewhere),
@@ -88,10 +82,6 @@ export function AskBar({ ctx, className }: AskBarProps) {
   const ctxRef = React.useRef(ctx);
   const pushRecentRef = React.useRef(pushRecent);
   const routerRef = React.useRef(router);
-  const toastRef = React.useRef(toast);
-  React.useEffect(() => {
-    toastRef.current = toast;
-  }, [toast]);
   React.useEffect(() => {
     pageCtxRef.current = pageCtx;
   }, [pageCtx]);
@@ -144,11 +134,7 @@ export function AskBar({ ctx, className }: AskBarProps) {
     const pc = pageCtxRef.current;
     const c = ctxRef.current;
 
-    const intent = classifyIntent({
-      query,
-      ctx: c,
-      hasFillableForm: pc.fillableForm !== null,
-    });
+    const intent = classifyIntent({ query, ctx: c });
 
     pushRecentRef.current(query);
 
@@ -157,50 +143,6 @@ export function AskBar({ ctx, className }: AskBarProps) {
         setValue("");
         routerRef.current.push(intent.href);
         return;
-
-      case "fill": {
-        const form = pc.fillableForm;
-        if (!form) {
-          pc.openAsk();
-          return;
-        }
-        setIsLoading(true);
-        try {
-          pc._setIsFilling(true);
-          const result = await fillFormAction({
-            spec: {
-              formId: form.formId,
-              title: form.title,
-              fields: form.fields,
-            },
-            instruction: query,
-            context: {
-              orgSlug: c.orgSlug,
-              workspaceSlug: c.workspaceSlug,
-              route:
-                typeof window !== "undefined" ? window.location.pathname : "",
-              entitySummary: pc.entity?.summary,
-            },
-          });
-          // A swallowed auth/IAM/billing denial or capability error returns an
-          // all-unchanged fallback carrying `error`. Surface it so the user
-          // sees an actionable message instead of the overlay silently not
-          // rendering (which reads as "the AI had no suggestions").
-          if (result.error) {
-            toastRef.current.add({
-              title: "Couldn't fill the form",
-              description: result.error,
-              type: "error",
-            });
-          }
-          pc._setFillResult(result);
-        } finally {
-          setIsLoading(false);
-          pc._setIsFilling(false);
-        }
-        setValue("");
-        return;
-      }
 
       case "search":
       case "action":
@@ -261,7 +203,6 @@ export function AskBar({ ctx, className }: AskBarProps) {
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Ask anything… Press / to focus"
-        disabled={isLoading}
         className={cn(
           "h-full w-full rounded-lg",
           "pl-8 pr-[4.5rem] text-sm",

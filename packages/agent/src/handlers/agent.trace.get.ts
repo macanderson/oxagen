@@ -6,7 +6,7 @@ import type {
   AgentTraceGetOutput,
   TraceExecutionNode,
 } from "@oxagen/oxagen/contracts/agent.trace.get";
-import { ExecutionNotFoundError } from "./subagent-errors";
+import { ExecutionNotFoundError } from "./execution-errors";
 
 export type { AgentTraceGetInput, AgentTraceGetOutput };
 

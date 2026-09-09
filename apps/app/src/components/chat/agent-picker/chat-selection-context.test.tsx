@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 /**
- * chat-selection-context.test.tsx — the shared selection store: the local
- * fallback (no provider), and the provider's initial resolution + persistence.
+ * chat-selection-context.test.tsx — the shared agent-selection store: the
+ * local fallback (no provider), and the provider's initial resolution +
+ * persistence. ADR-043 reduced the selection to the agent alone, so the
+ * repo/branch/environment half of these tests went with the runtime.
  */
 import { describe, it, expect, afterEach } from "vitest";
 import {
@@ -14,11 +16,9 @@ import {
 import {
   ChatSelectionProvider,
   useComposerSelectionState,
-  repoKeyForBinding,
 } from "./chat-selection-context";
 import { agentStorageKey, writeStoredAgentId } from "./agent-context";
 import type { AgentOption } from "./agent-picker-types";
-import type { StoredCodeBinding } from "@/app/api/v1/chat/stream/code-binding";
 
 afterEach(() => {
   cleanup();
@@ -30,67 +30,40 @@ const CODER: AgentOption = {
   slug: "coder",
   name: "Coder",
   description: null,
-  agentType: "code",
-  isCode: true,
+  agentType: "custom",
   avatarUrl: null,
   summary: null,
   managed: false,
   toolRefs: [],
 };
 
-const BINDING: StoredCodeBinding = {
-  version: 1,
-  agentId: "agt_code",
-  connectionId: "con_1",
-  owner: "acme",
-  name: "api",
-  defaultBranch: "main",
-  environmentId: "env_dev",
-  environmentName: "Dev",
-};
-
 function Probe() {
-  const {
-    selectedAgentId,
-    selectedRepoKey,
-    selectedEnvId,
-    selectionLocked,
-    applyAgentSelection,
-    lockSelection,
-  } = useComposerSelectionState();
+  const { selectedAgentId, applyAgentSelection } = useComposerSelectionState();
   return (
     <div>
       <span data-testid="agent">{selectedAgentId ?? "none"}</span>
-      <span data-testid="repo">{selectedRepoKey ?? "none"}</span>
-      <span data-testid="env">{selectedEnvId ?? "none"}</span>
-      <span data-testid="locked">{selectionLocked ? "yes" : "no"}</span>
       <button
         type="button"
-        onClick={() =>
-          applyAgentSelection({
-            agentId: "agt_code",
-            repoKey: "r1",
-            envId: "e1",
-          })
-        }
+        onClick={() => applyAgentSelection({ agentId: "agt_code" })}
       >
         apply
       </button>
-      <button type="button" onClick={() => lockSelection()}>
-        lock
+      <button
+        type="button"
+        onClick={() => applyAgentSelection({ agentId: "agt_other" })}
+      >
+        apply other
       </button>
     </div>
   );
 }
 
 describe("useComposerSelectionState — local fallback (no provider)", () => {
-  it("starts empty and applies an atomic selection", () => {
+  it("starts empty and applies a selection", () => {
     render(<Probe />);
     expect(screen.getByTestId("agent")).toHaveTextContent("none");
     fireEvent.click(screen.getByText("apply"));
     expect(screen.getByTestId("agent")).toHaveTextContent("agt_code");
-    expect(screen.getByTestId("repo")).toHaveTextContent("r1");
-    expect(screen.getByTestId("env")).toHaveTextContent("e1");
   });
 });
 
@@ -101,8 +74,6 @@ describe("ChatSelectionProvider — initial resolution", () => {
         agents={[CODER]}
         boundAgentId="agt_code"
         workspaceDefaultAgentId={null}
-        defaultRepoKey={null}
-        defaultEnvId={null}
         conversationId={null}
         workspaceSlug="ws"
         isNewConversation
@@ -119,8 +90,6 @@ describe("ChatSelectionProvider — initial resolution", () => {
         agents={[CODER]}
         boundAgentId={null}
         workspaceDefaultAgentId="agt_code"
-        defaultRepoKey={null}
-        defaultEnvId={null}
         conversationId={null}
         workspaceSlug="ws"
         isNewConversation
@@ -131,25 +100,6 @@ describe("ChatSelectionProvider — initial resolution", () => {
     expect(screen.getByTestId("agent")).toHaveTextContent("agt_code");
   });
 
-  it("prefills repo + env for a code-agent default", () => {
-    render(
-      <ChatSelectionProvider
-        agents={[CODER]}
-        boundAgentId="agt_code"
-        workspaceDefaultAgentId={null}
-        defaultRepoKey="con_1::acme/api"
-        defaultEnvId="env_dev"
-        conversationId="conv_1"
-        workspaceSlug="ws"
-        isNewConversation={false}
-      >
-        <Probe />
-      </ChatSelectionProvider>,
-    );
-    expect(screen.getByTestId("repo")).toHaveTextContent("con_1::acme/api");
-    expect(screen.getByTestId("env")).toHaveTextContent("env_dev");
-  });
-
   it("hydrates the per-conversation persisted selection over the workspace default", () => {
     writeStoredAgentId(agentStorageKey("ws", "conv_1"), "agt_persisted");
     render(
@@ -157,8 +107,6 @@ describe("ChatSelectionProvider — initial resolution", () => {
         agents={[CODER]}
         boundAgentId={null}
         workspaceDefaultAgentId="agt_code"
-        defaultRepoKey={null}
-        defaultEnvId={null}
         conversationId="conv_1"
         workspaceSlug="ws"
         isNewConversation={false}
@@ -175,8 +123,6 @@ describe("ChatSelectionProvider — initial resolution", () => {
         agents={[CODER]}
         boundAgentId={null}
         workspaceDefaultAgentId={null}
-        defaultRepoKey={null}
-        defaultEnvId={null}
         conversationId="conv_1"
         workspaceSlug="ws"
         isNewConversation={false}
@@ -193,100 +139,47 @@ describe("ChatSelectionProvider — initial resolution", () => {
   });
 });
 
-describe("repoKeyForBinding", () => {
-  it("builds the `${connectionId}::${owner}/${name}` key the loader uses", () => {
-    expect(repoKeyForBinding(BINDING)).toBe("con_1::acme/api");
-  });
-});
-
-describe("ChatSelectionProvider — locked code binding", () => {
-  it("forces the selection to the binding and reports it locked", () => {
-    render(
-      <ChatSelectionProvider
-        agents={[CODER]}
-        boundAgentId={null}
-        workspaceDefaultAgentId={null}
-        defaultRepoKey={null}
-        defaultEnvId={null}
-        conversationId="conv_1"
-        workspaceSlug="ws"
-        isNewConversation={false}
-        codeBinding={BINDING}
-      >
-        <Probe />
-      </ChatSelectionProvider>,
-    );
-    expect(screen.getByTestId("agent")).toHaveTextContent("agt_code");
-    expect(screen.getByTestId("repo")).toHaveTextContent("con_1::acme/api");
-    expect(screen.getByTestId("env")).toHaveTextContent("env_dev");
-    expect(screen.getByTestId("locked")).toHaveTextContent("yes");
-  });
-
-  it("rejects applyAgentSelection while locked (selection stays on the binding)", () => {
-    render(
-      <ChatSelectionProvider
-        agents={[CODER]}
-        boundAgentId={null}
-        workspaceDefaultAgentId={null}
-        defaultRepoKey={null}
-        defaultEnvId={null}
-        conversationId="conv_1"
-        workspaceSlug="ws"
-        isNewConversation={false}
-        codeBinding={BINDING}
-      >
-        <Probe />
-      </ChatSelectionProvider>,
-    );
-    act(() => {
-      // Apply tries to move to repoKey "r1" / envId "e1" — a locked store ignores it.
-      fireEvent.click(screen.getByText("apply"));
-    });
-    expect(screen.getByTestId("repo")).toHaveTextContent("con_1::acme/api");
-    expect(screen.getByTestId("env")).toHaveTextContent("env_dev");
-    // The bound agent never got re-persisted under a different value.
-    expect(screen.getByTestId("locked")).toHaveTextContent("yes");
-  });
-
-  it("does not seed a locked binding from localStorage — the binding wins", () => {
-    writeStoredAgentId(agentStorageKey("ws", "conv_1"), "agt_persisted");
-    render(
-      <ChatSelectionProvider
-        agents={[CODER]}
-        boundAgentId={null}
-        workspaceDefaultAgentId={null}
-        defaultRepoKey={null}
-        defaultEnvId={null}
-        conversationId="conv_1"
-        workspaceSlug="ws"
-        isNewConversation={false}
-        codeBinding={BINDING}
-      >
-        <Probe />
-      </ChatSelectionProvider>,
-    );
-    // Even with a persisted agent, the server binding is authoritative.
-    expect(screen.getByTestId("agent")).toHaveTextContent("agt_code");
-  });
-});
-
-describe("useComposerSelectionState — client-side lock", () => {
-  it("lockSelection() flips selectionLocked and freezes further edits (local fallback)", () => {
+// REGRESSION (e2e chat-agent-picker): the store has NO lock. It used to latch
+// on the first send, which froze the composer chip into a disabled "Agent
+// locked: <name>" button for the rest of the conversation. ADR-043 removed the
+// durable code binding that latch stood in for — `agentId` is a per-turn
+// parameter of /api/v1/chat/stream — so every apply must keep committing, for
+// the whole conversation, in BOTH stores.
+describe("useComposerSelectionState — no conversation lock", () => {
+  it("keeps accepting applies after a selection is made (local fallback)", () => {
     render(<Probe />);
-    expect(screen.getByTestId("locked")).toHaveTextContent("no");
+    fireEvent.click(screen.getByText("apply"));
+    expect(screen.getByTestId("agent")).toHaveTextContent("agt_code");
+    fireEvent.click(screen.getByText("apply other"));
+    expect(screen.getByTestId("agent")).toHaveTextContent("agt_other");
+  });
 
-    act(() => {
-      fireEvent.click(screen.getByText("lock"));
-    });
-    expect(screen.getByTestId("locked")).toHaveTextContent("yes");
-
-    // An apply after locking is rejected — the selection never leaves its
-    // initial empty state.
+  it("keeps accepting applies — and persisting them — in the provider store", () => {
+    render(
+      <ChatSelectionProvider
+        agents={[CODER]}
+        boundAgentId={null}
+        workspaceDefaultAgentId={null}
+        conversationId="conv_1"
+        workspaceSlug="ws"
+        isNewConversation={false}
+      >
+        <Probe />
+      </ChatSelectionProvider>,
+    );
     act(() => {
       fireEvent.click(screen.getByText("apply"));
     });
-    expect(screen.getByTestId("agent")).toHaveTextContent("none");
-    expect(screen.getByTestId("repo")).toHaveTextContent("none");
-    expect(screen.getByTestId("env")).toHaveTextContent("none");
+    expect(screen.getByTestId("agent")).toHaveTextContent("agt_code");
+
+    // A second apply — the "after a turn was sent" case — still commits and
+    // still writes through to the per-conversation key.
+    act(() => {
+      fireEvent.click(screen.getByText("apply other"));
+    });
+    expect(screen.getByTestId("agent")).toHaveTextContent("agt_other");
+    expect(window.localStorage.getItem(agentStorageKey("ws", "conv_1"))).toBe(
+      "agt_other",
+    );
   });
 });

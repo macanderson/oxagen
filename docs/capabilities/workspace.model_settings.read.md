@@ -8,7 +8,7 @@
 
 ## Intent
 
-Read the workspace-level model defaults. These settings govern which text tier, text model, image model, and video model are used when a user has no personal override. All workspace members (including Viewers) can read these settings.
+Read the workspace-level model defaults. These settings govern which text tier and text model are used when a user has no personal override. All workspace members (including Viewers) can read these settings.
 
 ## Input
 
@@ -20,8 +20,6 @@ No fields.
 |---|---|---|
 | `defaultTextTier` | `"fast" \| "balanced" \| "precise" \| null` | Workspace default text tier. `null` = platform default. |
 | `defaultTextModel` | `string \| null` | Specific text model override. `null` = tier default. |
-| `defaultImageModel` | `string \| null` | Image model override. `null` = platform default. |
-| `defaultVideoModel` | `string \| null` | Video model override. `null` = platform default. |
 
 ## Roles
 

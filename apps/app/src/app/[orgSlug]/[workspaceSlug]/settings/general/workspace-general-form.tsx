@@ -6,11 +6,7 @@ import { Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  useRegisterFillableForm,
-  useRegisterPageEntity,
-} from "@/lib/page-context";
-import type { FillableFormSpec, FieldDescriptor } from "@/lib/ask/fill-types";
+import { useRegisterPageEntity } from "@/lib/page-context";
 import { slugify } from "@/lib/slug";
 import { AvatarMaker } from "@/components/avatar/avatar-maker";
 import { updateWorkspaceGeneralAction } from "./actions";
@@ -73,71 +69,6 @@ export function WorkspaceGeneralForm({
       ? `Workspace "${values.name}". ${values.description}`
       : `Workspace "${values.name}".`,
   });
-
-  // -------------------------------------------------------------------------
-  // Build the FillableFormSpec from current values.
-  // Recomputed whenever values change so the fill engine always sees current state.
-  // -------------------------------------------------------------------------
-  const fields = React.useMemo<FieldDescriptor[]>(
-    () => [
-      {
-        name: "name",
-        label: "Workspace name",
-        type: "text",
-        current: values.name,
-        required: true,
-      },
-      {
-        name: "slug",
-        label: "Workspace slug",
-        type: "text",
-        current: values.slug,
-        required: true,
-      },
-      {
-        name: "description",
-        label: "Description",
-        type: "textarea",
-        current: values.description,
-        required: false,
-      },
-    ],
-    [values.name, values.slug, values.description],
-  );
-
-  const spec: FillableFormSpec = React.useMemo(
-    () => ({
-      formId: "workspace-general",
-      title: "Workspace settings",
-      fields,
-    }),
-    [fields],
-  );
-
-  // apply callback: receives AI-proposed values and merges them into local state.
-  const apply = React.useCallback(
-    (
-      proposed: Record<string, unknown>,
-      _mode: "field" | "all",
-      _fieldName?: string,
-    ) => {
-      setValues((prev) => ({
-        name: typeof proposed.name === "string" ? proposed.name : prev.name,
-        slug:
-          typeof proposed.slug === "string"
-            ? slugify(proposed.slug)
-            : prev.slug,
-        description:
-          typeof proposed.description === "string"
-            ? proposed.description
-            : prev.description,
-      }));
-    },
-    [],
-  );
-
-  // Register (and auto-unregister on unmount) with the B2 Ask system.
-  useRegisterFillableForm({ ...spec, apply });
 
   // -------------------------------------------------------------------------
   // Save handler — calls the server action, never throws on the happy path.

@@ -2,11 +2,6 @@ import {
   oxagenPluginManifestSchema,
   type OxagenPluginManifest,
 } from "./manifest";
-import { mediaVideoManifest } from "./catalog/media-video/manifest";
-import { mediaImageManifest } from "./catalog/media-image/manifest";
-import { mediaSvgManifest } from "./catalog/media-svg/manifest";
-import { documentsManifest } from "./catalog/documents/manifest";
-import { sweBenchEvalsManifest } from "./catalog/swe-bench-evals/manifest";
 import { listCapabilities } from "../registry";
 
 // ── Plugin registry — bundler double-eval safety ─────────────────────────────
@@ -37,11 +32,9 @@ function buildRegistry(): {
   const contractIndex = new Map<string, OxagenPluginManifest>();
 
   const allManifests: OxagenPluginManifest[] = [
-    mediaVideoManifest,
-    mediaImageManifest,
-    mediaSvgManifest,
-    documentsManifest,
-    sweBenchEvalsManifest,
+    // No built-in capability packs ship today: the media, documents and
+    // swe-bench packs left with the agent runtime (ADR-043). Customer packs
+    // register through the plugin catalog (ADR-034).
   ];
 
   for (const raw of allManifests) {
@@ -140,4 +133,29 @@ export function validateOxagenPluginContracts(): void {
 /** Test-only reset — clears the globalThis anchor so the registry rebuilds. */
 export function clearPluginRegistryForTests(): void {
   delete (globalRef as Partial<typeof globalRef>)[PLUGIN_REGISTRY_KEY];
+}
+
+/**
+ * Test-only registration of a plugin manifest. Production packs arrive through
+ * the plugin catalog (ADR-034); nothing ships built in, so tests that need a
+ * plugin-claimed contract register a fixture here and clear it afterwards.
+ */
+export function registerOxagenPluginForTests(raw: OxagenPluginManifest): void {
+  const parsed = oxagenPluginManifestSchema.parse(raw);
+  const store = getStore();
+  if (store.byId.has(parsed.id)) {
+    throw new Error(`Duplicate plugin id "${parsed.id}"`);
+  }
+  for (const contractName of parsed.contracts) {
+    const existing = store.contractIndex.get(contractName);
+    if (existing) {
+      throw new Error(
+        `Contract "${contractName}" is already claimed by plugin "${existing.id}"`,
+      );
+    }
+  }
+  store.byId.set(parsed.id, parsed);
+  for (const contractName of parsed.contracts) {
+    store.contractIndex.set(contractName, parsed);
+  }
 }

@@ -65,7 +65,6 @@ const CODER: AgentOption = {
   name: "Coder",
   description: "Writes and reviews production code end to end.",
   agentType: "code",
-  isCode: true,
   avatarUrl: null,
   summary: "Short summary",
   managed: false,

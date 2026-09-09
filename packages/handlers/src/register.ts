@@ -13,12 +13,6 @@ import {
 // on hot reload is a no-op instead of tripping the kernel's duplicate guard.
 registerHandlersOnce("@oxagen/handlers", () => {
   registerHandler(
-    "run_capability_chain",
-    async () =>
-      (await import("./agent.compose"))
-        .agentComposeHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "suggest_agent_def",
     async () =>
       (await import("./agent.definition.suggest"))
@@ -47,12 +41,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./agent.memory_policy.write"))
         .agentMemoryPolicyWriteHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "get_subagent_logs",
-    async () =>
-      (await import("./agent.subagent.logs"))
-        .agentSubagentLogsHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "create_api_key",
@@ -222,60 +210,7 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./chat.message.send"))
         .chatMessageSendHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "fill_form",
-    async () =>
-      (await import("./form.fill")).formFillHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "create_archive",
-    async () =>
-      (await import("./archive.create"))
-        .archiveCreateHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "generate_document",
-    async () =>
-      (await import("./document.generate"))
-        .documentsGenerateHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "create_pdf",
-    async () =>
-      (await import("./document.pdf.create"))
-        .documentsPdfCreateHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "generate_markdown",
-    async () =>
-      (await import("./markdown.generate"))
-        .markdownGenerateHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "generate_mermaid",
-    async () =>
-      (await import("./mermaid.generate"))
-        .mermaidGenerateHandler as CapabilityHandlerFn,
-  );
 
-  registerHandler(
-    "generate_video",
-    async () =>
-      (await import("./video.generate"))
-        .videoGenerateHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "generate_svg",
-    async () =>
-      (await import("./svg.generate"))
-        .svgGenerateHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "generate_image",
-    async () =>
-      (await import("./image.generate"))
-        .imageGenerateHandler as CapabilityHandlerFn,
-  );
   registerHandler(
     "get_install_instructions",
     async () =>
@@ -383,6 +318,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./workspace.settings.write"))
         .workspaceSettingsWriteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_data_plane",
+    async () =>
+      (await import("./org.data_plane.get"))
+        .orgDataPlaneGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_data_plane",
+    async () =>
+      (await import("./org.data_plane.set"))
+        .orgDataPlaneSetHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_org_settings",
@@ -560,24 +507,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .handler as CapabilityHandlerFn,
   );
   registerHandler(
-    "run_workflow",
-    async () =>
-      (await import("./workflow.run"))
-        .workflowRunHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "get_workflow_status",
-    async () =>
-      (await import("./workflow.status"))
-        .workflowStatusHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "cancel_workflow",
-    async () =>
-      (await import("./workflow.cancel"))
-        .workflowCancelHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "list_workspace_members",
     async () =>
       (await import("./workspace.member.list"))
@@ -608,124 +537,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .conversationChatHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "create_image",
-    async () =>
-      (await import("./image.create"))
-        .imageCreateHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "list_images",
-    async () =>
-      (await import("./image.list")).imageListHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "analyze_image",
-    async () =>
-      (await import("./image.analyze"))
-        .imageAnalyzeHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "create_document",
-    async () =>
-      (await import("./document.create"))
-        .documentCreateHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "list_documents",
-    async () =>
-      (await import("./document.list"))
-        .documentListHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "read_document",
-    async () =>
-      (await import("./document.read"))
-        .documentReadHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "list_automations",
-    async () =>
-      (await import("./automation.list"))
-        .automationListHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "get_automation",
-    async () =>
-      (await import("./automation.get"))
-        .automationGetHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "create_automation",
-    async () =>
-      (await import("./automation.create"))
-        .automationCreateHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "update_automation",
-    async () =>
-      (await import("./automation.update"))
-        .automationUpdateHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "enable_automation",
-    async () =>
-      (await import("./automation.enable"))
-        .automationEnableHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "disable_automation",
-    async () =>
-      (await import("./automation.disable"))
-        .automationDisableHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "trigger_automation",
-    async () =>
-      (await import("./automation.trigger"))
-        .automationTriggerHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "list_workspace_skills",
-    async () =>
-      (await import("./skill.workspace.list"))
-        .skillWorkspaceListHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "install_skill",
-    async () =>
-      (await import("./skill.workspace.install"))
-        .skillWorkspaceInstallHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "list_skill_versions",
-    async () =>
-      (await import("./skill.version.list"))
-        .skillVersionListHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "get_skill_version",
-    async () =>
-      (await import("./skill.version.get"))
-        .skillVersionGetHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "upload_skill_version",
-    async () =>
-      (await import("./skill.version.upload"))
-        .skillVersionUploadHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "activate_skill_version",
-    async () =>
-      (await import("./skill.version.activate"))
-        .skillVersionActivateHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "edit_skill",
-    async () =>
-      (await import("./skill.edit")).skillEditHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "publish_tool_declaration",
     async () =>
       (await import("./tool.declaration.publish"))
@@ -754,47 +565,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./context.record.promote"))
         .contextRecordPromoteHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "export_skill",
-    async () =>
-      (await import("./skill.export"))
-        .skillExportHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "get_skill_metrics",
-    async () =>
-      (await import("./skill.metrics.read"))
-        .skillMetricsReadHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "author_skill",
-    async () =>
-      (await import("./skill.author"))
-        .skillAuthorHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "draft_skill",
-    async () =>
-      (await import("./skill.draft")).skillDraftHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "revise_skill",
-    async () =>
-      (await import("./skill.revise"))
-        .skillReviseHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "create_skill",
-    async () =>
-      (await import("./skill.create"))
-        .skillCreateHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "set_skill_enabled",
-    async () =>
-      (await import("./skill.enable"))
-        .skillEnableHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "record_execution",
@@ -893,65 +663,10 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .graphSearchHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "search_web",
-    async () =>
-      (await import("./web.search")).webSearchHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "fetch_web_page",
-    async () =>
-      (await import("./web.fetch")).webFetchHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "start_research_swarm",
-    async () =>
-      (await import("./research.swarm.start"))
-        .researchSwarmStartHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "get_research_status",
-    async () =>
-      (await import("./research.swarm.status"))
-        .researchSwarmStatusHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "edit_repo_file",
-    async () =>
-      (await import("./agent.repo.edit"))
-        .agentRepoEditHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "create_repo",
-    async () =>
-      (await import("./repo.create")).repoCreateHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "put_repo_file",
-    async () =>
-      (await import("./repo.file.put"))
-        .repoFilePutHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "fork_repo",
-    async () =>
-      (await import("./repo.fork")).repoForkHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "create_branch",
-    async () =>
-      (await import("./repo.branch.create"))
-        .repoBranchCreateHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "list_branches",
     async () =>
       (await import("./repo.branch.list"))
         .repoBranchListHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "open_pr",
-    async () =>
-      (await import("./repo.pr.open")).repoPrOpenHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_pr",
@@ -1366,61 +1081,7 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./environment.set_default"))
         .environmentSetDefaultHandler as CapabilityHandlerFn,
   );
-  // Sandbox templates + portable artifacts + agent-environment bindings (Spec §5.2–§5.6).
-  registerHandler(
-    "create_sandbox_template",
-    async () =>
-      (await import("./sandbox.template.create"))
-        .sandboxTemplateCreateHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "list_sandbox_templates",
-    async () =>
-      (await import("./sandbox.template.list"))
-        .sandboxTemplateListHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "get_sandbox_template",
-    async () =>
-      (await import("./sandbox.template.get"))
-        .sandboxTemplateGetHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "update_sandbox_template",
-    async () =>
-      (await import("./sandbox.template.update"))
-        .sandboxTemplateUpdateHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "delete_sandbox_template",
-    async () =>
-      (await import("./sandbox.template.delete"))
-        .sandboxTemplateDeleteHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "set_default_sandbox_template",
-    async () =>
-      (await import("./sandbox.template.set_default"))
-        .sandboxTemplateSetDefaultHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "set_sandbox_template_tools",
-    async () =>
-      (await import("./sandbox.template.set_tools"))
-        .sandboxTemplateSetToolsHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "export_sandbox_template",
-    async () =>
-      (await import("./sandbox.template.export"))
-        .sandboxTemplateExportHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "import_sandbox_template",
-    async () =>
-      (await import("./sandbox.template.import"))
-        .sandboxTemplateImportHandler as CapabilityHandlerFn,
-  );
+  // Agent ↔ environment bindings — which vault an agent identity may resolve.
   registerHandler(
     "bind_agent_environment",
     async () =>
@@ -1489,65 +1150,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
   );
   // ── Evals v1 ──────────────────────────────────────────────────────────────────
   registerHandler(
-    "create_dataset",
-    async () =>
-      (await import("./eval.dataset.create"))
-        .evalDatasetCreateHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "list_datasets",
-    async () =>
-      (await import("./eval.dataset.list"))
-        .evalDatasetListHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "get_dataset",
-    async () =>
-      (await import("./eval.dataset.get"))
-        .evalDatasetGetHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "add_dataset_item",
-    async () =>
-      (await import("./eval.dataset_item.add"))
-        .evalDatasetItemAddHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "create_trace_dataset",
-    async () =>
-      (await import("./eval.dataset.from_traces"))
-        .evalDatasetFromTracesHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "start_eval_run",
-    async () =>
-      (await import("./eval.run.start"))
-        .evalRunStartHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "get_eval_status",
-    async () =>
-      (await import("./eval.run.status"))
-        .evalRunStatusHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "get_eval_run",
-    async () =>
-      (await import("./eval.run.get")).evalRunGetHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "list_eval_runs",
-    async () =>
-      (await import("./eval.run.list"))
-        .evalRunListHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "get_eval_run_series",
-    async () =>
-      (await import("./eval.run.series"))
-        .evalRunSeriesHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "get_routing_policy",
     async () =>
       (await import("./router.policy.get"))
@@ -1576,11 +1178,5 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./model.capability.list"))
         .modelCapabilityListHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "query_lineage",
-    async () =>
-      (await import("./lineage.query"))
-        .lineageQueryHandler as CapabilityHandlerFn,
   );
 });

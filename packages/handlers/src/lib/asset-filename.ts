@@ -1,5 +1,5 @@
 // asset-filename.ts — derive human-readable, URL-friendly filenames for stored
-// generated assets.
+// assets (conversation attachments and the conversation.export PDF).
 //
 // This is the SINGLE source of truth for an asset's filename, shared by:
 //   - conversation.files.list  → the name shown in the Conversation Files panel
@@ -36,8 +36,6 @@ const EXT_BY_MIME: Record<string, string> = {
   "application/zip": ".zip",
   "text/markdown": ".md",
   "text/plain": ".txt",
-  // Mermaid diagram source persisted by mermaid.generate.
-  "text/vnd.mermaid": ".mmd",
 };
 
 // Asset-kind → extension, used only when the mimeType is unknown/generic.
@@ -82,23 +80,23 @@ export function slugify(raw: string): string {
 const MAX_SLUG_LEN = 60;
 
 export interface AssetNameSource {
-  /** The generation prompt (provenance); may carry an instruction prefix. */
+  /** Provenance text (empty for a plain upload); may carry an instruction prefix. */
   prompt: string | null | undefined;
   kind: string;
   mimeType: string;
   /** User-facing id ("gen_…"), used for the fallback name. */
   publicId: string;
-  /** A clean title persisted by the generator (metadata.displayName), preferred. */
+  /** A clean title persisted alongside the asset (metadata.displayName), preferred. */
   displayName?: string | null;
 }
 
 /**
  * Derive the canonical, URL-friendly filename for an asset: a lowercase slug
- * carrying the correct extension, e.g. "uss-nautilus-the-first-nuclear-submarine.md".
+ * carrying the correct extension, e.g. "q3-planning-2026-07-07.pdf".
  *
  * Resolution order for the base name:
- *   1. An explicit clean title the generator stored (metadata.displayName).
- *   2. The prompt with any leading instruction verb stripped.
+ *   1. An explicit clean title the writer stored (metadata.displayName).
+ *   2. The provenance text with any leading instruction verb stripped.
  *   3. "<kind>-<last 8 of publicId>" when there is no usable text.
  */
 export function assetDisplayName(src: AssetNameSource): string {

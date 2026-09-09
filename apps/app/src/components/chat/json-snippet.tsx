@@ -8,8 +8,8 @@
  * editor: the pretty-printed JSON, syntax highlighted, clipped to a sane
  * height, with a one-click copy — nothing fancier.
  *
- * Highlighting reuses the shared shiki singleton (diff-syntax.ts) and its
- * dual-theme `.diff-token` colour swap, so this stays in lockstep with the
+ * Highlighting reuses the shared shiki singleton (json-syntax.ts) and its
+ * dual-theme `.syntax-token` colour swap, so this stays in lockstep with the
  * diff card's look and pays no extra grammar/engine cost. Rendering never
  * blocks on the highlighter: the snippet appears instantly as plain mono text
  * and colours in when tokens resolve.
@@ -18,11 +18,8 @@ import * as React from "react";
 import { Check, ChevronDown, ChevronUp, Copy } from "lucide-react";
 import { useCopyToClipboard } from "@/components/ui/copy-button";
 import { cn } from "@/lib/utils";
-import {
-  highlightLine,
-  type HighlightedToken,
-} from "./registry-components/diff-syntax";
-import "./registry-components/diff-token.css";
+import { highlightLine, type HighlightedToken } from "./json-syntax";
+import "./syntax-token.css";
 
 /** Lines shown before the snippet clips behind a "show all" toggle. */
 const DEFAULT_CLIP_LINES = 14;
@@ -105,7 +102,7 @@ export function JsonSnippet({
                   t.style ? (
                     <span
                       key={j}
-                      className="diff-token"
+                      className="syntax-token"
                       style={parseStyle(t.style)}
                     >
                       {t.content}

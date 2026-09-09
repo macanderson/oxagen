@@ -15,36 +15,11 @@ type LoaderEntry = () => Promise<
 >;
 
 // Single source of truth mapping capability name → handler module.
+// Every entry is a governance capability: the governed-tool catalogue, the
+// MCP registry + consent ledger, agent memory, approvals, the execution
+// evidence record, the agent-definition registry, and agent RBAC. Oxagen
+// governs agents; nothing here executes one (ADR-043).
 const LOADERS: Record<string, LoaderEntry> = {
-  execute_code: () => import("./agent.code.execute"),
-  // Durable sandbox sessions — long-lived, reconnectable sandboxes that persist
-  // across agent turns (clone → build → snapshot → PR). The one-shot
-  // agent.code.execute and these durable peers share the @oxagen/sandbox driver.
-  start_sandbox: () => import("./agent.sandbox.start"),
-  run_sandbox_command: () => import("./agent.sandbox.exec"),
-  snapshot_sandbox: () => import("./agent.sandbox.snapshot"),
-  stop_sandbox: () => import("./agent.sandbox.stop"),
-  rename_sandbox: () => import("./agent.sandbox.rename"),
-  list_sandboxes: () => import("./agent.sandbox.list"),
-  list_sandbox_files: () => import("./agent.sandbox_file.list"),
-  list_sandbox_logs: () => import("./agent.sandbox_log.list"),
-  read_sandbox_file: () => import("./agent.sandbox_file.read"),
-  // Browser automation inside a durable session — all seven thin wrappers live
-  // in one module (browser.ts) that drives `browserctl` via execInSession.
-  navigate_page: () => import("./browser"),
-  screenshot_page: () => import("./browser"),
-  fill_page: () => import("./browser"),
-  submit_page: () => import("./browser"),
-  click_page: () => import("./browser"),
-  refresh_page: () => import("./browser"),
-  read_page: () => import("./browser"),
-  // Cross-LLM proof-of-done: an independent vision model judges the screenshots.
-  verify_feature: () => import("./agent.feature.verify"),
-  // Code-execution surface peers of agent.code.execute. Co-located
-  // here so the whole sandboxed code surface registers through one path.
-  diff_code: () => import("./code.diff"),
-  patch_code: () => import("./code.patch"),
-  format_code: () => import("./code.format"),
   list_agent_tools: () => import("./agent.tool.list"),
   register_mcp_server: () => import("./agent.mcp.register"),
   list_mcp_servers: () => import("./agent.mcp.list"),
@@ -53,13 +28,6 @@ const LOADERS: Record<string, LoaderEntry> = {
   delete_mcp_server: () => import("./agent.mcp.delete"),
   resolve_mcp_consent: () => import("./agent.mcp_consent.resolve"),
   list_mcp_consents: () => import("./agent.mcp_consent.list"),
-  approve_plan: () => import("./agent.plan.approve"),
-  create_plan: () => import("./agent.plan.create"),
-  get_plan: () => import("./agent.plan.get"),
-  list_plans: () => import("./agent.plan.list"),
-  start_background_task: () => import("./agent.background_task.start"),
-  get_background_task: () => import("./agent.background_task.read"),
-  cancel_background_task: () => import("./agent.background_task.cancel"),
   recall_memory: () => import("./agent.memory.recall"),
   write_memory: () => import("./agent.memory.write"),
   list_memories: () => import("./agent.memory.list"),
@@ -85,20 +53,6 @@ const LOADERS: Record<string, LoaderEntry> = {
   list_memory_citations: () => import("./agent.memory_citation.list"),
   get_citation_stats: () => import("./agent.memory_citation.stats"),
   resolve_approval: () => import("./agent.approval.resolve"),
-  list_agent_skills: () => import("./agent.skill.list"),
-  load_skill: () => import("./agent.skill.load"),
-  aggregate_subagents: () => import("./agent.subagent.aggregate"),
-  cancel_subagent: () => import("./agent.subagent.cancel"),
-  dispatch_subagent: () => import("./agent.subagent.dispatch"),
-  // Manual acquire/force-release/introspection over the same transactional
-  // Postgres leases write_file/edit_file acquire automatically.
-  acquire_file_lock: () => import("./agent.file_lock.acquire"),
-  release_file_lock: () => import("./agent.file_lock.release"),
-  list_file_locks: () => import("./agent.file_lock.list"),
-  get_subagent_fanout: () => import("./agent.subagent_fanout.get"),
-  get_subagent_result: () => import("./agent.subagent_result.get"),
-  list_subagent_siblings: () => import("./agent.subagent.siblings"),
-  list_subagent_fanouts: () => import("./agent.subagent_fanout.list"),
   list_executions: () => import("./agent.execution.list"),
   get_execution_trace: () => import("./agent.trace.get"),
   debug_execution: () => import("./agent.debug.trace"),
@@ -106,14 +60,12 @@ const LOADERS: Record<string, LoaderEntry> = {
   // fingerprint. Pure SQL (ADR-021 §1), the counterpart to the single-execution
   // failure frame above.
   list_error_clusters: () => import("./telemetry.error.cluster"),
-  render_agent_ui: () => import("./agent.ui.render"),
   create_agent_def: () => import("./agent.definition.create"),
   delete_agent_def: () => import("./agent.definition.delete"),
   update_agent_def: () => import("./agent.definition.update"),
   publish_agent_def: () => import("./agent.definition.publish"),
   get_agent_def: () => import("./agent.definition.get"),
   list_agent_defs: () => import("./agent.definition.list"),
-  get_a2a_card: () => import("./a2a.card.get"),
   deploy_agent: () => import("./agent.deploy"),
   // Agent RBAC role assignment (docs/specs/agent-rbac/spec.md §3.2) — attach/
   // detach/inspect IAM roles on an agent's delegated principal.
@@ -128,22 +80,6 @@ const LOADERS: Record<string, LoaderEntry> = {
 export const agentHandlerNames: string[] = Object.keys(LOADERS);
 
 const cache = new Map<string, CapabilityHandlerFn>();
-
-// Capabilities whose handler module exports MORE than one `*Handler` function,
-// so the unique-export fallback in resolveHandler cannot pick the right one.
-// browser.ts is the only such module today: all seven browser capabilities are
-// thin wrappers over one shared `driveBrowser`, so they live together and each
-// needs its export named here. Without this, every one of them fails to resolve
-// at invoke time.
-const EXPORT_NAME_OVERRIDES: Record<string, string> = {
-  navigate_page: "browserNavigateHandler",
-  screenshot_page: "browserScreenshotHandler",
-  fill_page: "browserFillHandler",
-  submit_page: "browserSubmitHandler",
-  click_page: "browserClickHandler",
-  refresh_page: "browserRefreshHandler",
-  read_page: "browserReadHandler",
-};
 
 // Dot-segment camelCase derivation, e.g. "agent.code.execute" →
 // "agentCodeExecuteHandler". ADR-025 renamed every capability to verb-first
@@ -168,18 +104,17 @@ export async function resolveHandler(
   if (!loader)
     throw new Error(`No handler registered for capability ${capName}`);
   const mod = await loader();
-  const exportName =
-    EXPORT_NAME_OVERRIDES[capName] ?? toHandlerExportName(capName);
+  const exportName = toHandlerExportName(capName);
   let handler = (mod[exportName] ?? mod.default) as
     | CapabilityHandlerFn
     | undefined;
   if (typeof handler !== "function") {
     // A snake_case capability name does not camelize to its module's readable
-    // export name — "list_sandbox_files" derives "list_sandbox_filesHandler"
-    // while the module exports "agentSandboxFilesListHandler". Fall back to the
-    // module's single `*Handler` function export, which is unambiguous because
-    // a handler module normally exports exactly one. A module with several is
-    // listed in EXPORT_NAME_OVERRIDES above; anything else still fails loudly.
+    // export name — "list_memory_citations" derives
+    // "list_memory_citationsHandler" while the module exports
+    // "agentMemoryCitationListHandler". Fall back to the module's single
+    // `*Handler` function export, which is unambiguous because a handler module
+    // exports exactly one; anything else still fails loudly.
     const named = Object.entries(mod).filter(
       (entry): entry is [string, CapabilityHandlerFn] =>
         entry[0].endsWith("Handler") && typeof entry[1] === "function",

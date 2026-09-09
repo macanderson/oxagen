@@ -35,7 +35,6 @@ export type MentionType =
   | "file"
   | "directory"
   | "agent"
-  | "skill"
   | "tool"
   | "mcp_server"
   | "capability"
@@ -86,12 +85,6 @@ export const MENTION_TYPES: readonly MentionTypeInfo[] = [
     label: "Agent",
     pluralLabel: "Agents",
     summary: "An agent defined in this workspace.",
-  },
-  {
-    type: "skill",
-    label: "Skill",
-    pluralLabel: "Skills",
-    summary: "An installed agent skill.",
   },
   {
     type: "tool",

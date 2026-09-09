@@ -29,11 +29,10 @@ import type {
   agentRuns,
   agentRunEvents,
   agentRunAttempts,
-  agentRunAttemptLeases,
-  agentRunCheckpoints,
   agentRunAttemptSeals,
   agentRunFinalizationGrants,
   agentRunFinalizationObligations,
+  dataPlanes,
 } from "./schema/index";
 
 // ── Billing row types ────────────────────────────────────────────────────────
@@ -73,9 +72,12 @@ export type ConversationRow = InferSelectModel<typeof conversations>;
 /** Row type for `chat.messages` — used by the active-branch walker. */
 export type DbMessageRow = InferSelectModel<typeof messages>;
 
-// ── Content row types ──────────────────────────────────────────────────────────
+// ── Content row types ────────────────────────────────────────────────────────
 
-/** Row type for `content.generated_assets` (AI-generated image/video assets). */
+/**
+ * Row type for `content.generated_assets` — the workspace media reference row
+ * (chat/agent attachments, plus preserved generation history; see ADR-043).
+ */
 export type GeneratedAssetRow = InferSelectModel<typeof generatedAssets>;
 
 // ── IAM row types ────────────────────────────────────────────────────────────
@@ -146,7 +148,7 @@ export type ModelTier = (typeof modelTierEnum.enumValues)[number];
 
 // ── Agent-engine v2 durable-run row types (Phase 2a) ─────────────────────────
 // docs/specs/agent-engine-v2/plan.md Phase 2 — the run row + append-only
-// event log that packages/agent-runner's executeTurn persists to.
+// event log that packages/run-ledger's executeTurn persists to.
 
 /** Full SELECT row from `agent.agent_runs`. */
 export type AgentRunRow = InferSelectModel<typeof agentRuns>;
@@ -161,38 +163,16 @@ export type AgentRunEventRow = InferSelectModel<typeof agentRunEvents>;
 export type NewAgentRunEventRow = InferInsertModel<typeof agentRunEvents>;
 
 // ── Fenced attempt foundation row types ──────────────────────────────────────
-// docs/specs/run-evidence-ingress — the immutable attempt identity, its mutable
-// fenced lease, and the seal → grant → obligation chain every terminal outcome
-// writes in one transaction.
+// docs/specs/run-evidence-ingress — the immutable attempt identity and the
+// seal → grant → obligation chain every terminal outcome writes in one
+// transaction. The mutable fenced lease and the checkpoint table went with the
+// runtime in ADR-043.
 
 /** Full SELECT row from `agent.agent_run_attempts` (immutable). */
 export type AgentRunAttemptRow = InferSelectModel<typeof agentRunAttempts>;
 
 /** INSERT shape for `agent.agent_run_attempts`. */
 export type NewAgentRunAttemptRow = InferInsertModel<typeof agentRunAttempts>;
-
-/**
- * Full SELECT row from `agent.agent_run_attempt_leases` — the one mutable row
- * in the foundation (renew/append/seal update it; DELETE stays revoked).
- */
-export type AgentRunAttemptLeaseRow = InferSelectModel<
-  typeof agentRunAttemptLeases
->;
-
-/** INSERT shape for `agent.agent_run_attempt_leases`. */
-export type NewAgentRunAttemptLeaseRow = InferInsertModel<
-  typeof agentRunAttemptLeases
->;
-
-/** Full SELECT row from `agent.agent_run_checkpoints` (immutable). */
-export type AgentRunCheckpointRow = InferSelectModel<
-  typeof agentRunCheckpoints
->;
-
-/** INSERT shape for `agent.agent_run_checkpoints`. */
-export type NewAgentRunCheckpointRow = InferInsertModel<
-  typeof agentRunCheckpoints
->;
 
 /** Full SELECT row from `agent.agent_run_attempt_seals` (immutable). */
 export type AgentRunAttemptSealRow = InferSelectModel<
@@ -223,3 +203,15 @@ export type AgentRunFinalizationObligationRow = InferSelectModel<
 export type NewAgentRunFinalizationObligationRow = InferInsertModel<
   typeof agentRunFinalizationObligations
 >;
+
+// ── Organisation-scoped data planes (ADR-042) ────────────────────────────────
+
+/**
+ * Full SELECT row from `org.data_planes`. `configCiphertext` is the KMS
+ * envelope — it is opaque bytes here and must be decrypted through the
+ * resolver, never handed to a surface.
+ */
+export type DataPlaneRow = InferSelectModel<typeof dataPlanes>;
+
+/** INSERT shape for `org.data_planes`. */
+export type NewDataPlaneRow = InferInsertModel<typeof dataPlanes>;

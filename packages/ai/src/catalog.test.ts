@@ -8,10 +8,8 @@ import {
   supportsVision,
   supportsVideoInput,
   supportsText,
-  supportsMedia,
   capabilityLabel,
   TEXT_TIERS,
-  MEDIA_TIERS,
 } from "./catalog";
 
 describe("model catalog (@oxagen/ai/catalog)", () => {
@@ -81,12 +79,6 @@ describe("model catalog (@oxagen/ai/catalog)", () => {
     expect(supportsText("anthropic/claude-opus-4.8")).toBe(true);
   });
 
-  it("supportsMedia dispatches on kind", () => {
-    expect(supportsMedia("openai/gpt-image-1", "image")).toBe(true);
-    expect(supportsMedia("openai/gpt-image-1", "video")).toBe(false);
-    expect(supportsMedia("google/veo-3.0-generate-001", "video")).toBe(true);
-  });
-
   it("accepts either an id string or a resolved model object", () => {
     const opus = getModel("anthropic/claude-opus-4.8");
     expect(supportsReasoning(opus)).toBe(true);
@@ -98,22 +90,12 @@ describe("model catalog (@oxagen/ai/catalog)", () => {
     expect(capabilityLabel("video")).toBe("Video gen");
   });
 
-  it("exposes the three text tiers and two media tiers", () => {
-    expect(TEXT_TIERS.map((t) => t.id)).toEqual([
+  it("exposes the three text tiers — the only white-labeled tiers left (ADR-043)", () => {
+    expect(TEXT_TIERS.map((t: { id: string }) => t.id)).toEqual([
       "fast",
       "balanced",
       "precise",
     ]);
     expect(TEXT_TIERS[0]?.name).toBe("Oxagen Fast");
-    expect(MEDIA_TIERS.map((t) => t.id)).toEqual(["basic", "advanced"]);
-  });
-
-  it("every media env default resolves to a media-capable catalog entry", () => {
-    // Guards the env defaults (env.ts) against drift from the catalog — a basic
-    // image default that isn't an image model would silently break generation.
-    expect(supportsImage("openai/gpt-image-1")).toBe(true); // OXAGEN_LLM_IMAGE_BASIC
-    expect(supportsImage("bfl/flux-2-max")).toBe(true); // OXAGEN_LLM_IMAGE_ADVANCED
-    expect(supportsVideo("google/veo-3.0-fast-generate-001")).toBe(true); // OXAGEN_LLM_VIDEO_BASIC
-    expect(supportsVideo("google/veo-3.0-generate-001")).toBe(true); // OXAGEN_LLM_VIDEO_ADVANCED
   });
 });

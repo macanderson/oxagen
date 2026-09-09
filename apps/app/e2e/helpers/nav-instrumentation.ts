@@ -50,6 +50,69 @@ export interface NavInstrumentation {
   readonly logs: string[];
 }
 
+/**
+ * What one `window.fetch` call is asking for, decided without touching the
+ * network.
+ *
+ * `fetch` accepts three kinds of first argument — a string, a `URL`, or a
+ * `Request` — and this used to read `.url` off whichever one arrived. A `URL`
+ * has no `.url`, so a caller passing one got `undefined`, and the very next
+ * line called `.includes` on it. The diagnostic then threw inside the app's
+ * own fetch, before the real request was ever made.
+ *
+ * That is what broke signup in the two specs carrying this instrumentation:
+ * Better Auth's client passes a `URL`, so `signUp.email` rejected with
+ * "Cannot read properties of undefined (reading 'includes')", the form
+ * rendered it, no request left the browser, and the spec reported only a
+ * navigation timeout. Nightly run 34185226553 is the specimen — its trace
+ * holds 50 requests and not one POST.
+ *
+ * Exported, self-contained, and free of imports and closures for two reasons:
+ * a unit test drives it directly, and `installNavInstrumentation` serializes
+ * it into the page with `toString()`. One copy, checked where it is cheap to
+ * check. Anything it cannot classify is reported as not-RSC with an empty
+ * url, which makes the caller pass the request straight through.
+ */
+export function classifyFetchInput(
+  input: unknown,
+  init: unknown,
+): { url: string; isRscLike: boolean } {
+  let url = "";
+  try {
+    if (typeof input === "string") {
+      url = input;
+    } else if (input !== null && typeof input === "object") {
+      const asUrl = (input as { href?: unknown }).href;
+      const asRequest = (input as { url?: unknown }).url;
+      if (typeof asUrl === "string") url = asUrl;
+      else if (typeof asRequest === "string") url = asRequest;
+    }
+  } catch {
+    url = "";
+  }
+
+  let isRscLike = url.indexOf("_rsc=") !== -1;
+  try {
+    const fromInit = (init as { headers?: unknown } | null | undefined)
+      ?.headers;
+    const fromInput = (input as { headers?: unknown } | null | undefined)
+      ?.headers;
+    const source = fromInit ?? fromInput;
+    if (source !== undefined && source !== null) {
+      const headers = new Headers(source as HeadersInit);
+      isRscLike =
+        isRscLike ||
+        headers.get("RSC") === "1" ||
+        headers.get("Next-Router-State-Tree") !== null;
+    }
+  } catch {
+    // A header bag this cannot read says nothing about the request, and must
+    // not decide anything: the url check above stands on its own.
+  }
+
+  return { url, isRscLike };
+}
+
 export function installNavInstrumentation(page: Page): NavInstrumentation {
   const logs: string[] = [];
 
@@ -72,68 +135,71 @@ export function installNavInstrumentation(page: Page): NavInstrumentation {
     );
   });
 
-  // Installed via addInitScript so it runs before any application JS on
-  // every document the page loads (including the post-signup navigation),
-  // not just the current one.
-  void page.addInitScript(() => {
-    const emit = (line: string) => {
-      console.log(`__NAV_INSTRUMENT__ ${line}`);
-    };
+  // Built as script text rather than passed as a function so the classifier
+  // above can be shared with its unit test instead of copied into the page.
+  // Playwright serializes an addInitScript function to source either way.
+  //
+  // Runs before any application JS on every document the page loads
+  // (including the post-signup navigation), not just the current one.
+  void page.addInitScript({
+    content: `
+(() => {
+  const classifyFetchInput = ${classifyFetchInput.toString()};
 
-    const origPush = history.pushState.bind(history);
-    history.pushState = function patchedPushState(
-      ...args: Parameters<typeof origPush>
-    ) {
-      emit(`history.pushState -> ${String(args[2])}`);
-      return origPush(...args);
-    };
+  const emit = (line) => {
+    console.log("__NAV_INSTRUMENT__ " + line);
+  };
 
-    const origReplace = history.replaceState.bind(history);
-    history.replaceState = function patchedReplaceState(
-      ...args: Parameters<typeof origReplace>
-    ) {
-      emit(`history.replaceState -> ${String(args[2])}`);
-      return origReplace(...args);
-    };
+  const origPush = history.pushState.bind(history);
+  history.pushState = function patchedPushState(...args) {
+    emit("history.pushState -> " + String(args[2]));
+    return origPush(...args);
+  };
 
-    window.addEventListener("unhandledrejection", (ev) => {
-      emit(
-        `unhandledrejection: ${String((ev as PromiseRejectionEvent).reason)}`,
-      );
-    });
+  const origReplace = history.replaceState.bind(history);
+  history.replaceState = function patchedReplaceState(...args) {
+    emit("history.replaceState -> " + String(args[2]));
+    return origReplace(...args);
+  };
 
-    const origFetch = window.fetch.bind(window);
-    window.fetch = async (
-      ...args: Parameters<typeof origFetch>
-    ): ReturnType<typeof origFetch> => {
-      const [input, init] = args;
-      const url = typeof input === "string" ? input : (input as Request).url;
-      const reqForHeaders = input instanceof Request ? input : undefined;
-      const headers = new Headers(init?.headers ?? reqForHeaders?.headers);
-      const isRscLike =
-        headers.get("RSC") === "1" ||
-        headers.get("Next-Router-State-Tree") != null ||
-        url.includes("_rsc=");
-      if (!isRscLike) return origFetch(...args);
+  window.addEventListener("unhandledrejection", (ev) => {
+    emit("unhandledrejection: " + String(ev.reason));
+  });
 
-      emit(`fetch(rsc) start ${url}`);
+  const origFetch = window.fetch.bind(window);
+  window.fetch = async (...args) => {
+    // Observation must never break the call being observed. Anything this
+    // wrapper cannot work out about the request hands it straight to the
+    // real fetch, unwatched, rather than throwing into the app.
+    let target;
+    try {
+      target = classifyFetchInput(args[0], args[1]);
+    } catch (classifyErr) {
+      return origFetch(...args);
+    }
+    if (!target.isRscLike) return origFetch(...args);
+
+    const url = target.url;
+    emit("fetch(rsc) start " + url);
+    try {
+      const res = await origFetch(...args);
+      emit("fetch(rsc) headers " + url + " -> " + res.status);
       try {
-        const res = await origFetch(...args);
-        emit(`fetch(rsc) headers ${url} -> ${res.status}`);
-        try {
-          // Read a clone so the app's own consumer still gets a fresh,
-          // unconsumed body/stream.
-          await res.clone().text();
-          emit(`fetch(rsc) body ok ${url}`);
-        } catch (bodyErr) {
-          emit(`fetch(rsc) body ERROR ${url}: ${String(bodyErr)}`);
-        }
-        return res;
-      } catch (err) {
-        emit(`fetch(rsc) ERROR ${url}: ${String(err)}`);
-        throw err;
+        // Read a clone so the app's own consumer still gets a fresh,
+        // unconsumed body/stream.
+        await res.clone().text();
+        emit("fetch(rsc) body ok " + url);
+      } catch (bodyErr) {
+        emit("fetch(rsc) body ERROR " + url + ": " + String(bodyErr));
       }
-    };
+      return res;
+    } catch (err) {
+      emit("fetch(rsc) ERROR " + url + ": " + String(err));
+      throw err;
+    }
+  };
+})();
+`,
   });
 
   return { logs };

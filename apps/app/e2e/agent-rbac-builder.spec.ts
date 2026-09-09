@@ -10,7 +10,7 @@
  *      assign_agent_role (+ revoke_agent_role of the auto-assigned default).
  *   3. Review step: the effective-scope accountability view renders all four
  *      dimensions (capabilities counts, graph mode/budget, MCP posture,
- *      skills/subagents) for the selected role.
+ *      MCP posture) for the selected role.
  *   4. Agents list: the saved agent carries its role badge
  *      (list_agent_roles), and reopening the builder shows the persisted
  *      role as current.
@@ -102,11 +102,6 @@ test("role picker: select Operator → review effective scope → save → list 
   await expect(page.getByTestId("scope-mcp")).toContainText(
     /all mcp tool calls allowed/i,
   );
-  // Skills/subagents: nothing equipped — the real empty state renders, not hidden.
-  await expect(page.getByTestId("scope-skills-list")).toContainText(
-    /no skills equipped/i,
-  );
-
   await page.screenshot({
     path: path.join(SCREENSHOT_DIR, "agent-rbac-review-effective-scope.png"),
     fullPage: true,

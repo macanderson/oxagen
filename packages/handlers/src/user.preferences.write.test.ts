@@ -20,8 +20,6 @@ const UPDATED_ROW = {
   pendingPromptBehavior: "interrupt" as const,
   defaultTextTier: "precise" as const,
   defaultTextModel: "anthropic/claude-opus-4.8",
-  defaultImageModel: null,
-  defaultVideoModel: null,
   timezone: "America/New_York",
   language: "en",
 };
@@ -107,17 +105,13 @@ describe("userPreferencesWriteHandler (@oxagen/handlers)", () => {
       ...UPDATED_ROW,
       defaultTextTier: null,
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     });
     const result = await userPreferencesWriteHandler(
-      { defaultTextModel: null, defaultImageModel: null },
+      { defaultTextModel: null, defaultTextTier: null },
       CTX,
     );
     expect(result.defaultTextTier).toBeNull();
     expect(result.defaultTextModel).toBeNull();
-    expect(result.defaultImageModel).toBeNull();
-    expect(result.defaultVideoModel).toBeNull();
   });
 
   // ── missing row after upsert ───────────────────────────────────────────────

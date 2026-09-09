@@ -1,15 +1,13 @@
 /**
  * capture-writer.ts — an output seam so CLI command handlers can run either
- * against the real stdout/stderr (the `oxagen <cmd>` one-shot shell path,
- * unchanged) or against an in-memory buffer (the REPL inline-execution path,
- * see repl/cli-bridge.ts).
+ * against the real stdout/stderr (the `oxagen <cmd>` shell path) or against an
+ * in-memory buffer.
  *
- * The REPL is an Ink app: nothing may touch `process.stdout` / `console.log`
- * while Ink owns the terminal (raw mode + its own render tree), or the output
- * corrupts the UI. So every CLI command wired into the REPL's inline seam
- * takes an optional `CommandWriter` as its last argument — default is the real
- * process streams, the REPL passes `captureWriter()` instead and folds the
- * accumulated text into a single assistant message.
+ * Every command handler takes an optional `CommandWriter` as its last
+ * argument, defaulting to the real process streams. That keeps two things
+ * true: a handler's output is assertable in a unit test without patching
+ * `process.stdout`, and a caller that owns the terminal itself can collect the
+ * text instead of letting the handler write into its render tree.
  */
 
 export interface CommandWriter {

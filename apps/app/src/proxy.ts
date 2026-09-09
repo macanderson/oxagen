@@ -107,16 +107,6 @@ export function proxy(request: NextRequest): NextResponse {
       { from: "ask", to: "sessions", preserveTail: false },
       { from: "studio", to: "workbench", preserveTail: true },
       {
-        from: "workbench/skills",
-        to: "workbench/tools/skills",
-        preserveTail: true,
-      },
-      {
-        from: "settings/skills",
-        to: "workbench/tools/skills",
-        preserveTail: true,
-      },
-      {
         from: "settings/plugins",
         to: "workbench/tools/capabilities",
         preserveTail: false,

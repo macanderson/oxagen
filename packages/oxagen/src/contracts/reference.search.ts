@@ -30,7 +30,6 @@ export const REFERENCE_TYPES = [
   "file",
   "directory",
   "agent",
-  "skill",
   "tool",
   "mcp_server",
   "capability",

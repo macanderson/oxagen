@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * page-context/index.test.tsx — unit tests for PageContextProvider, usePageContext,
- * useRegisterPageEntity, and useRegisterFillableForm.
+ * and useRegisterPageEntity.
  */
 import { describe, it, expect, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
@@ -10,7 +10,6 @@ import {
   PageContextProvider,
   usePageContext,
   useRegisterPageEntity,
-  useRegisterFillableForm,
 } from "./index";
 
 // ---------------------------------------------------------------------------
@@ -41,9 +40,6 @@ describe("usePageContext", () => {
   it("provides default null values inside the provider", () => {
     const { result } = renderHook(() => usePageContext(), { wrapper });
     expect(result.current.entity).toBeNull();
-    expect(result.current.fillableForm).toBeNull();
-    expect(result.current.fillResult).toBeNull();
-    expect(result.current.isFilling).toBe(false);
   });
 
   it("provides ask open state (closed by default)", () => {
@@ -147,77 +143,5 @@ describe("useRegisterPageEntity", () => {
     kind = "organization";
     rerender();
     expect(result.current.entity?.kind).toBe("organization");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// useRegisterFillableForm
-// ---------------------------------------------------------------------------
-describe("useRegisterFillableForm", () => {
-  it("sets the fillable form on mount", () => {
-    const apply = vi.fn();
-    const { result } = renderHook(
-      () => {
-        useRegisterFillableForm({
-          formId: "create-project",
-          title: "Create Project",
-          fields: [{ name: "name", label: "Name", type: "text", current: "" }],
-          apply,
-        });
-        return usePageContext();
-      },
-      { wrapper },
-    );
-    expect(result.current.fillableForm).not.toBeNull();
-    expect(result.current.fillableForm?.formId).toBe("create-project");
-  });
-
-  it("clears fillable form on unmount", () => {
-    const apply = vi.fn();
-    const { result, unmount } = renderHook(
-      () => {
-        useRegisterFillableForm({
-          formId: "f1",
-          title: "Form 1",
-          fields: [],
-          apply,
-        });
-        return usePageContext();
-      },
-      { wrapper },
-    );
-    expect(result.current.fillableForm?.formId).toBe("f1");
-    unmount();
-    // After unmount the component tree is gone; form was set before unmount.
-    expect(result.current.fillableForm?.formId).toBe("f1");
-  });
-
-  it("stable apply ref — apply calls delegate to latest prop", () => {
-    const applyV1 = vi.fn();
-    const applyV2 = vi.fn();
-    let applyCurrent = applyV1;
-
-    const { result, rerender } = renderHook(
-      () => {
-        useRegisterFillableForm({
-          formId: "f2",
-          title: "Form 2",
-          fields: [],
-          apply: applyCurrent,
-        });
-        return usePageContext();
-      },
-      { wrapper },
-    );
-
-    // Initially apply is v1
-    result.current.fillableForm?.apply({}, "all");
-    expect(applyV1).toHaveBeenCalledOnce();
-
-    // Switch to v2 — the stable ref should now call v2
-    applyCurrent = applyV2;
-    rerender();
-    result.current.fillableForm?.apply({}, "field", "name");
-    expect(applyV2).toHaveBeenCalledOnce();
   });
 });

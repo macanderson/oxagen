@@ -9,7 +9,7 @@ import { renderHook } from "@testing-library/react";
 import * as React from "react";
 import { deriveSuggestions, useSuggestedPrompts } from "./suggested-prompts";
 import type { SuggestionCtx } from "./suggested-prompts";
-import type { PageEntity, RegisteredFillableForm } from "./types";
+import type { PageEntity } from "./types";
 
 // ---------------------------------------------------------------------------
 // Mock next/navigation — useSuggestedPrompts calls usePathname
@@ -25,9 +25,8 @@ vi.mock("next/navigation", () => ({
 function ctx(
   pathname: string,
   entity: PageEntity | null = null,
-  fillableForm: RegisteredFillableForm | null = null,
 ): SuggestionCtx {
-  return { pathname, entity, fillableForm };
+  return { pathname, entity };
 }
 
 // ---------------------------------------------------------------------------

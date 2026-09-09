@@ -4,10 +4,10 @@
  * instance, because a backup that runs on the machine it is backing up stops
  * running at exactly the moment it is needed — but a tighter schedule.
  *
- * This is the one store in the new account that cannot cheaply approach the
- * "restore within a minute of a crash" target: Aurora and Redshift both do
- * that natively as a byproduct of being managed services, but Neo4j here is
- * self-hosted with no built-in continuous-backup path, and building one
+ * The self-hosted stores in the new account cannot cheaply approach the
+ * "restore within a minute of a crash" target: Aurora does that natively as a
+ * byproduct of being a managed service, but Neo4j and ClickHouse both run on
+ * this node with no built-in continuous-backup path, and building one
  * (streaming its transaction log to S3) is disproportionate effort for a
  * pre-launch graph store. Hourly EBS snapshots are the accepted fallback —
  * up to an hour of graph writes lost on a worst-case crash, not a day.

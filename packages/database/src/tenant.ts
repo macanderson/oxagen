@@ -1,12 +1,41 @@
 import { sql } from "drizzle-orm";
-import { requireScope } from "@oxagen/tenancy";
+import {
+  assertDataPlaneUsable,
+  requireScope,
+  resolveDataPlane,
+  type PostgresPlaneConfig,
+} from "@oxagen/tenancy";
 import { isProductionRuntime } from "@oxagen/config/env";
 import { db, type Database } from "./client";
+import { dedicatedDb } from "./data-plane-pool";
 import { rlsEnforced } from "./tenant-flag";
 import { recordIfUnscoped } from "./unscoped-meter";
 
 /** The transaction handle Drizzle hands to a `.transaction(cb)` callback. */
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+/**
+ * Resolve which physical Postgres this organisation's tenant data lives on
+ * (ADR-042). `shared` — the default and, until a customer buys a dedicated
+ * plane, the only answer — returns the process singleton, so this is one
+ * already-resolved promise and a branch on the hot path.
+ *
+ * Fail-closed: `assertDataPlaneUsable` throws `DataPlaneUnavailableError` for a
+ * degraded or disabled plane instead of quietly using the shared singleton. A
+ * fallback there would write one tenant's rows into the platform store that
+ * tenant explicitly moved its data out of — the precise failure ADR-042 exists
+ * to make impossible.
+ */
+async function tenantPlaneDb(orgId: string): Promise<Database> {
+  const plane = await resolveDataPlane(orgId, "postgres");
+  assertDataPlaneUsable(plane);
+  if (plane.mode === "shared") return db();
+  return dedicatedDb({
+    orgId,
+    config: plane.config as PostgresPlaneConfig,
+    configDigest: plane.configDigest,
+  });
+}
 
 /**
  * Run DB work in a tenant-scoped transaction. Sets the per-transaction GUCs
@@ -23,7 +52,11 @@ export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 export async function withTenantDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
   const { orgId, workspaceId } = requireScope();
   const bypass = rlsEnforced() ? "off" : "on";
-  return db().transaction(async (tx) => {
+  // The SAME GUC/RLS setup runs on a dedicated plane as on the shared one — a
+  // customer-controlled endpoint is a second place the policies are enforced,
+  // never an excuse to skip them.
+  const database = await tenantPlaneDb(orgId);
+  return database.transaction(async (tx) => {
     await tx.execute(sql`
       select
         set_config('app.current_org_id', ${orgId}, true),
@@ -58,7 +91,8 @@ export async function withRepeatableReadTenantDb<T>(
 ): Promise<T> {
   const { orgId, workspaceId } = requireScope();
   const bypass = rlsEnforced() ? "off" : "on";
-  return db().transaction(async (tx) => {
+  const database = await tenantPlaneDb(orgId);
+  return database.transaction(async (tx) => {
     // Must be the first statement after BEGIN — Postgres rejects
     // SET TRANSACTION ISOLATION LEVEL once the transaction has read anything.
     await tx.execute(sql`set transaction isolation level repeatable read`);
@@ -95,6 +129,18 @@ export async function withSystemDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
   // enforcement on. withSystemDb is the intentional, audited RLS bypass — these
   // calls still must be counted or the gate is permanently unreachable.
   recordIfUnscoped("withSystemDb");
+  // ADR-042: withSystemDb ALWAYS uses the SHARED plane, deliberately, and never
+  // consults resolveDataPlane. Three reasons, each sufficient on its own:
+  //   1. Its callers are platform-level by definition — identity resolution,
+  //      billing/IAM/auth/org tables, the security-event audit write, cron
+  //      rollups. ADR-042 §2 keeps all of those on the shared plane; a
+  //      dedicated plane carries tenant DATA only.
+  //   2. It runs with NO active tenant scope in exactly the cases that matter
+  //      (resolving an org from a slug or an api key, a Stripe webhook), so
+  //      there is often no orgId to resolve a plane for.
+  //   3. The data-plane resolver itself reads org.data_planes through this
+  //      function. Making it plane-aware would be a cycle: to know which plane
+  //      to read from, read the table that says which plane to read from.
   return db().transaction(async (tx) => {
     await tx.execute(sql`select set_config('app.rls_bypass', 'on', true)`);
     return fn(tx);

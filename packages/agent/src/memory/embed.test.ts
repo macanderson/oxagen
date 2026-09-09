@@ -1,55 +1,37 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// agent/memory/embed.ts is a thin re-export of @oxagen/ai embedText.
-// Mock at the @oxagen/ai seam — do NOT mock the gateway SDK here; the vendor
-// SDK is an implementation detail of @oxagen/ai, not of this module.
-const mocks = vi.hoisted(() => ({
-  embedTextAI: vi.fn(),
+const { embedTextAIMock, embedManyAIMock } = vi.hoisted(() => ({
+  embedTextAIMock: vi.fn(),
+  embedManyAIMock: vi.fn(),
 }));
-
-mocks.embedTextAI.mockImplementation(async () =>
-  new Array(1536).fill(0).map((_, i) => i / 1536),
-);
 
 vi.mock("@oxagen/ai", () => ({
-  embedText: mocks.embedTextAI,
+  embedText: embedTextAIMock,
+  embedMany: embedManyAIMock,
 }));
 
-import { embedText } from "./embed";
+import { embedMany, embedText } from "./embed";
 
-describe("embedText (agent/memory wrapper)", () => {
-  beforeEach(() => {
-    mocks.embedTextAI.mockClear();
+const OPTS = {
+  telemetry: { orgId: "org_1", workspaceId: "ws_1", surface: "runner" },
+} as Parameters<typeof embedText>[1];
+
+beforeEach(() => {
+  embedTextAIMock.mockReset();
+  embedManyAIMock.mockReset();
+});
+
+describe("memory embedding wrappers", () => {
+  it("embedText delegates to the metered @oxagen/ai wrapper", async () => {
+    embedTextAIMock.mockResolvedValueOnce([0.1, 0.2]);
+    await expect(embedText("hello", OPTS)).resolves.toEqual([0.1, 0.2]);
+    expect(embedTextAIMock).toHaveBeenCalledWith("hello", OPTS);
   });
 
-  it("delegates text + telemetry opts to @oxagen/ai embedText and returns its vector", async () => {
-    const telemetry = {
-      orgId: "org_1",
-      workspaceId: "ws_1",
-      surface: "runner" as const,
-      executionStepId: "req_1",
-    };
-    const v = await embedText("hello world", { telemetry });
-    expect(v).toHaveLength(1536);
-    expect(mocks.embedTextAI).toHaveBeenCalledTimes(1);
-    const calls = mocks.embedTextAI.mock.calls as unknown[][];
-    const [text, opts] = calls[0]!;
-    expect(text).toBe("hello world");
-    // Telemetry opts are forwarded verbatim — embeddings are always metered
-    // now that EmbedTextOpts.telemetry is required.
-    expect(opts).toEqual({ telemetry });
-  });
-
-  it("forwards telemetry opts to @oxagen/ai embedText", async () => {
-    const tel = {
-      orgId: "org_1",
-      workspaceId: "ws_1",
-      surface: "runner" as const,
-      executionStepId: "req_1",
-    };
-    await embedText("test", { telemetry: tel });
-    const calls = mocks.embedTextAI.mock.calls as unknown[][];
-    const opts = calls[0]![1] as { telemetry?: unknown };
-    expect(opts?.telemetry).toEqual(tel);
+  it("embedMany batches through the metered @oxagen/ai wrapper in one call", async () => {
+    embedManyAIMock.mockResolvedValueOnce([[0.1], [0.2]]);
+    await expect(embedMany(["a", "b"], OPTS)).resolves.toEqual([[0.1], [0.2]]);
+    expect(embedManyAIMock).toHaveBeenCalledTimes(1);
+    expect(embedManyAIMock).toHaveBeenCalledWith(["a", "b"], OPTS);
   });
 });

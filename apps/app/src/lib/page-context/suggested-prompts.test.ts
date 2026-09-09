@@ -8,11 +8,11 @@
  * Contract:   each item has a non-empty label (≤40 chars) and a non-empty prompt.
  *
  * Scenario coverage:
- *   A. Settings route with a registered fillable form
- *   B. Billing route, no entity, no form
+ *   A. Settings route with a workspace entity
+ *   B. Billing route, no entity
  *   C. Conversation (/ask) route, with a workspace entity
- *   D. Default (workspace overview) route, no entity, no form
- *   E. Account route with a user entity and a form
+ *   D. Default (workspace overview) route, no entity
+ *   E. Account route with a user entity
  *   F. Knowledge route
  *   G. classifyRoute recognises all section strings
  */
@@ -26,7 +26,7 @@ import {
   type ConversationMessageSummary,
   type SuggestionCtx,
 } from "./suggested-prompts";
-import type { PageEntity, RegisteredFillableForm } from "./types";
+import type { PageEntity } from "./types";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -45,16 +45,6 @@ const profileEntity: PageEntity = {
   label: "Mac Anderson",
 };
 
-const mockForm: RegisteredFillableForm = {
-  formId: "workspace-general",
-  title: "Workspace Settings",
-  fields: [
-    { name: "name", label: "Name", type: "text", current: "Production" },
-    { name: "slug", label: "Slug", type: "text", current: "production" },
-  ],
-  apply: () => undefined,
-};
-
 // ---------------------------------------------------------------------------
 // Helper — build a minimal SuggestionCtx
 // ---------------------------------------------------------------------------
@@ -62,9 +52,8 @@ const mockForm: RegisteredFillableForm = {
 function ctx(
   pathname: string,
   entity: PageEntity | null = null,
-  fillableForm: RegisteredFillableForm | null = null,
 ): SuggestionCtx {
-  return { pathname, entity, fillableForm };
+  return { pathname, entity };
 }
 
 // ---------------------------------------------------------------------------
@@ -74,16 +63,13 @@ function ctx(
 describe("invariant: always exactly 3 SuggestedPrompts", () => {
   const cases: [string, SuggestionCtx][] = [
     [
-      "settings with form + entity",
-      ctx("/acme/prod/settings/general", wsEntity, mockForm),
+      "settings with workspace entity",
+      ctx("/acme/prod/settings/general", wsEntity),
     ],
-    ["billing no entity no form", ctx("/acme/billing/subscription")],
+    ["billing no entity", ctx("/acme/billing/subscription")],
     ["conversation with ws entity", ctx("/acme/prod/ask", wsEntity)],
-    ["default no entity no form", ctx("/acme/prod")],
-    [
-      "account with user entity + form",
-      ctx("/account/profile", profileEntity, mockForm),
-    ],
+    ["default no entity", ctx("/acme/prod")],
+    ["account with user entity", ctx("/account/profile", profileEntity)],
     ["knowledge no extras", ctx("/acme/prod/knowledge")],
   ];
 
@@ -104,26 +90,28 @@ describe("invariant: always exactly 3 SuggestedPrompts", () => {
 });
 
 // ---------------------------------------------------------------------------
-// A. Settings route with fillable form — first chip is always the fill chip
+// A. Settings route with a workspace entity
 // ---------------------------------------------------------------------------
 
-describe("A: settings route with fillable form", () => {
+describe("A: settings route with a workspace entity", () => {
   const prompts = deriveSuggestions(
-    ctx("/acme/prod/settings/general", wsEntity, mockForm),
+    ctx("/acme/prod/settings/general", wsEntity),
   );
 
-  it("slot 0 is the fill chip when a form is registered", () => {
-    expect(prompts[0]?.label).toMatch(/Fill/i);
-    expect(prompts[0]?.prompt).toMatch(/Workspace Settings/);
+  it("slot 0 is the entity chip for a workspace entity", () => {
+    expect(prompts[0]?.label).toBeDefined();
+    expect(prompts[0]?.prompt).toMatch(/Production/);
   });
 
-  it("slot 1 is the entity chip for a workspace entity", () => {
-    expect(prompts[1]?.label).toBeDefined();
-    expect(prompts[1]?.prompt).toMatch(/Production/);
-  });
-
-  it("slot 2 is a settings-specific chip", () => {
+  it("remaining slots are settings-specific chips", () => {
+    expect(prompts[1]?.prompt).toMatch(/setting/i);
     expect(prompts[2]?.prompt).toMatch(/setting/i);
+  });
+
+  it("never offers a form-fill chip (ADR-043 removed Ask-to-Fill)", () => {
+    expect(prompts.some((p) => p.label.toLowerCase().startsWith("fill"))).toBe(
+      false,
+    );
   });
 });
 
@@ -131,7 +119,7 @@ describe("A: settings route with fillable form", () => {
 // B. Billing route, no entity, no form
 // ---------------------------------------------------------------------------
 
-describe("B: billing route, no entity, no form", () => {
+describe("B: billing route, no entity", () => {
   const prompts = deriveSuggestions(ctx("/acme/billing/subscription"));
 
   it("prompts are billing-specific", () => {
@@ -139,7 +127,7 @@ describe("B: billing route, no entity, no form", () => {
     expect(texts).toMatch(/usage|cost|plan|billing/i);
   });
 
-  it("no fill chip (no form registered)", () => {
+  it("no fill chip (Ask-to-Fill removed)", () => {
     const fillChip = prompts.find((p) =>
       p.label.toLowerCase().startsWith("fill"),
     );
@@ -170,10 +158,10 @@ describe("C: conversation route with workspace entity", () => {
 });
 
 // ---------------------------------------------------------------------------
-// D. Default (workspace overview) route, no entity, no form
+// D. Default (workspace overview) route, no entity
 // ---------------------------------------------------------------------------
 
-describe("D: default route, no entity, no form", () => {
+describe("D: default route, no entity", () => {
   const prompts = deriveSuggestions(ctx("/acme/prod"));
 
   it("provides 3 generic orientation chips", () => {
@@ -187,22 +175,22 @@ describe("D: default route, no entity, no form", () => {
 });
 
 // ---------------------------------------------------------------------------
-// E. Account route with user entity and a form
+// E. Account route with a user entity
 // ---------------------------------------------------------------------------
 
-describe("E: account route with user entity + form", () => {
-  const prompts = deriveSuggestions(
-    ctx("/account/profile", profileEntity, mockForm),
-  );
+describe("E: account route with a user entity", () => {
+  const prompts = deriveSuggestions(ctx("/account/profile", profileEntity));
 
-  it("fill chip is slot 0", () => {
-    expect(prompts[0]?.label).toMatch(/Fill/i);
+  it("slot 0 is the profile entity chip", () => {
+    expect(prompts[0]?.prompt.toLowerCase()).toMatch(/profile/);
   });
 
-  it("entity chip references profile / user context", () => {
-    const entityChip = prompts[1];
-    expect(entityChip).toBeDefined();
-    expect(entityChip?.prompt.toLowerCase()).toMatch(/profile|settings|review/);
+  it("remaining chips reference account context", () => {
+    const texts = prompts
+      .slice(1)
+      .map((p) => p.prompt.toLowerCase())
+      .join(" ");
+    expect(texts).toMatch(/preference|security|account/);
   });
 });
 
@@ -253,7 +241,7 @@ describe("classifyRoute", () => {
 
 describe("no duplicate prompts across slots", () => {
   const variations: SuggestionCtx[] = [
-    ctx("/acme/prod/settings/general", wsEntity, mockForm),
+    ctx("/acme/prod/settings/general", wsEntity),
     ctx("/acme/billing"),
     ctx("/acme/prod/ask"),
     ctx("/account/profile", profileEntity),
@@ -323,7 +311,7 @@ describe("deriveConversationSuggestions — build-oriented fallback", () => {
     expect(labels).not.toContain("Explain This Code");
   });
 
-  it("every prompt pushes toward building/creating in Oxagen", () => {
+  it("every prompt pushes toward governing the fleet in Oxagen", () => {
     // Sample several distinct turn states so we cover a wide window of the bank.
     const seen = new Set<string>();
     for (let n = 0; n < 12; n++) {
@@ -334,7 +322,7 @@ describe("deriveConversationSuggestions — build-oriented fallback", () => {
       for (const s of deriveConversationSuggestions(h)) {
         seen.add(s.label);
         expect(s.prompt.toLowerCase()).toMatch(
-          /agent|automat|graph|mcp|eval|meter|bill|connect|skill|marketplace|api|fleet|workflow/,
+          /agent|graph|mcp|meter|bill|spend|budget|connect|audit|approval|access|trace|ground|compliance|usage|fleet/,
         );
       }
     }
@@ -373,22 +361,10 @@ describe("deriveSuggestions — conversation-history mode", () => {
     const prompts = deriveSuggestions({
       pathname: "/acme/prod/ask",
       entity: null,
-      fillableForm: null,
       conversationHistory,
     });
     expect(prompts).toHaveLength(3);
     const labels = prompts.map((p) => p.label);
     expect(labels).not.toContain("Summarize So Far");
-  });
-
-  it("prepends the form-fill chip but keeps 3 when a form is registered", () => {
-    const prompts = deriveSuggestions({
-      pathname: "/acme/prod/ask",
-      entity: null,
-      fillableForm: mockForm,
-      conversationHistory,
-    });
-    expect(prompts).toHaveLength(3);
-    expect(prompts[0]!.label.startsWith("Fill ")).toBe(true);
   });
 });

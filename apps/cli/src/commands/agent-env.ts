@@ -1,11 +1,12 @@
 /**
- * `oxagen agent env …` — bind agents to environments (and optionally a specific
- * sandbox template within one) over the org-scoped /v1 API (Spec §8). Thin
- * shells over the agent.environment.* capabilities so the CLI stays in parity
- * with the API, MCP, and agent surfaces.
+ * `oxagen agent env …` — bind agents to environments over the org-scoped /v1
+ * API (Spec §8). Thin shells over the agent.environment.* capabilities so the
+ * CLI stays in parity with the API, MCP, and agent surfaces.
  *
- * Verbs: bind <agent> --env <slug> [--template <slug>] [--primary], unbind
- * <agent> --env <slug>, list <agent> (--json).
+ * Verbs: bind <agent> --env <slug> [--primary], unbind <agent> --env <slug>,
+ * list <agent> (--json). The sandbox-template half of a binding went with the
+ * runtime (ADR-043) — an environment is now a governed configuration record,
+ * not an execution target.
  *
  * Agent addressing mirrors the rest of the platform: the `<agent>` argument is
  * an agent's public id (`agt_…`) or a slug / agent-key, resolved to its public
@@ -30,11 +31,6 @@ interface EnvSummary {
   slug: string;
 }
 
-interface TemplateSummary {
-  id: string;
-  slug: string;
-}
-
 interface AgentDefSummary {
   agentId: string; // public id (agt_…), per agent.definition.list
   slug: string;
@@ -47,8 +43,6 @@ interface AgentEnvironmentBinding {
   environmentId: string;
   environmentName: string;
   environmentSlug: string;
-  sandboxTemplateId: string | null;
-  sandboxTemplateName: string | null;
   isPrimary: boolean;
 }
 
@@ -86,30 +80,11 @@ async function resolveEnvironmentId(slugOrId: string): Promise<string> {
   return match.id;
 }
 
-async function resolveTemplateId(
-  slugOrId: string,
-  environmentId: string,
-): Promise<string> {
-  if (slugOrId.startsWith("sbx_")) return slugOrId;
-  const { templates } = await apiPostOrThrow<{ templates: TemplateSummary[] }>(
-    "sandbox/template/list",
-    { environmentId },
-  );
-  const match = templates.find(
-    (t) => t.slug.toLowerCase() === slugOrId.toLowerCase(),
-  );
-  if (!match)
-    throw new ApiError(
-      `No sandbox template with slug '${slugOrId}' in that environment.`,
-    );
-  return match.id;
-}
-
 // ── bind ─────────────────────────────────────────────────────────────────────
 
 export async function handleAgentEnvBind(
   agentHandle: string,
-  opts: { env?: string; template?: string; primary?: boolean; json?: boolean },
+  opts: { env?: string; primary?: boolean; json?: boolean },
   writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   const out = createOutput({ json: opts.json }, writer);
@@ -121,21 +96,16 @@ export async function handleAgentEnvBind(
   try {
     const agentId = await resolveAgentId(agentHandle);
     const environmentId = await resolveEnvironmentId(opts.env);
-    const sandboxTemplateId = opts.template
-      ? await resolveTemplateId(opts.template, environmentId)
-      : undefined;
     const body: Record<string, unknown> = { agentId, environmentId };
-    if (sandboxTemplateId) body.sandboxTemplateId = sandboxTemplateId;
     if (opts.primary) body.isPrimary = true;
     const { binding } = await apiPostOrThrow<{
       binding: AgentEnvironmentBinding;
     }>("agent/environment/bind", body);
-    out.data(binding, () => {
-      const tpl = binding.sandboxTemplateName
-        ? binding.sandboxTemplateName
-        : "‹env default template›";
-      return `✓ bound ${agentHandle} → ${binding.environmentName} (${binding.environmentSlug}) · template: ${tpl}${binding.isPrimary ? " · primary" : ""}`;
-    });
+    out.data(
+      binding,
+      () =>
+        `✓ bound ${agentHandle} → ${binding.environmentName} (${binding.environmentSlug})${binding.isPrimary ? " · primary" : ""}`,
+    );
   } catch (err) {
     out.error(err, "api");
   }
@@ -194,11 +164,10 @@ function renderBindings(bindings: AgentEnvironmentBinding[]): string {
   const rows = bindings.map((b) => [
     b.environmentName,
     b.environmentSlug,
-    b.sandboxTemplateName ?? "‹env default›",
     b.isPrimary ? "★" : "",
   ]);
   const lines: string[] = [];
-  printTable(["ENVIRONMENT", "SLUG", "TEMPLATE", "PRIMARY"], rows, {
+  printTable(["ENVIRONMENT", "SLUG", "PRIMARY"], rows, {
     write: (l) => void lines.push(l),
     writeErr: () => {},
   });

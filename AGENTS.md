@@ -2,13 +2,13 @@
 
 Oxagen is a metered, governed, graph-grounded control plane for teams that build and resell AI agents. [`docs/VISION.md`](docs/VISION.md) is the reference for feature direction; CI's Vision Gate (`pnpm check:vision`) judges every PR diff against it.
 
-Monorepo built around one primitive: a **capability kernel** that every surface (API, MCP, web app, CLI) calls through a single `invoke()` function — where governance (IAM + entitlement), metering (ClickHouse→Stripe), and lineage are enforced.
+Oxagen governs agents; it does not run them (ADR-043). Stella is the coding agent; Oxagen is the governor, grounder, explainer, meter and rater. Monorepo built around one primitive: a **capability kernel** that every surface (API, MCP, web app, CLI) calls through a single `invoke()` function — where governance (IAM + entitlement), metering (ClickHouse→Stripe), and lineage are enforced.
 
 ## Layout
 
 ```
-apps/       customer-facing applications (7: api, app, cli, docs, mcp, schemas, web)
-packages/   shared platform libraries (32 packages — single source of truth for platform code)
+apps/       customer-facing applications (6: api, app, cli, docs, mcp, web)
+packages/   shared platform libraries (27 packages — single source of truth for platform code)
 tools/      dev tooling (scripts, env-manager)
 docs/       capability specs, ADRs, architecture docs
 ```
@@ -20,9 +20,8 @@ docs/       capability specs, ADRs, architecture docs
 | `api` | `apps/api/src/app.ts` | Hono HTTP API + Inngest webhook handler |
 | `app` | `apps/app/src/app/` | Next.js 16 enterprise web app (App Router) |
 | `mcp` | `apps/mcp/src/` | MCP server exposing all platform capabilities as tools |
-| `cli` | `apps/cli/src/index.tsx` | Commander + Ink CLI; command modules in `src/commands/` (count drifts — don't hard-code it) |
+| `cli` | `apps/cli/src/index.ts` | Commander governance-ops CLI over the platform API; former coding-agent commands print a retirement notice |
 | `docs` | `apps/docs/src/` | Fumadocs documentation site |
-| `schemas` | `apps/schemas/` | Static JSON Schema hosting (schemas.oxagen.sh), generated from canonical Zod schemas |
 | `web` | `apps/web/` | oxagen.sh public website |
 
 ### Core Packages
@@ -30,15 +29,14 @@ docs/       capability specs, ADRs, architecture docs
 | Package | Key File | Purpose |
 |---|---|---|
 | `oxagen` | `src/kernel.ts` | Capability kernel — the one `invoke()` path |
-| `oxagen` | `src/contracts/` | ~349 registered capabilities (count drifts; Zod schemas + metadata) |
+| `oxagen` | `src/contracts/` | ~238 registered capabilities (count drifts; Zod schemas + metadata) |
 | `oxagen` | `src/iam/resolve.ts` | IAM policy resolution |
 | `oxagen` | `src/registry.ts` | Capability registry (`registerCapability`, `getCapability`) |
 | `oxagen` | `src/plugins/` | Plugin manifest registry + built-in plugin catalogs |
 | `handlers` | `src/register.ts` | All built-in capability handler registrations (lazy-loaded) |
-| `agent` | `src/runtime/materialize-tools.ts` | Agent tool list builder, MCP server auth, sandbox session management |
-| `agent` | `src/handlers/` | Agent capability handlers (sandbox, memory, subagent, MCP, triggers) |
-| `agent-engine` | `src/engine.ts` | Agent execution engine (tool loop, pipeline, spec/oracle/evaluate) |
-| `database` | `src/schema/` | 25 Drizzle Postgres schema files (20 domain + `_mixins`/`_schemas`/`index`/etc.) |
+| `agent` | `src/runtime/materialize-tools.ts` | Governed tool materialisation (IAM → entitlement → tool RBAC → consent → approval → telemetry per call), MCP gateway auth, `runGovernedTurn` for the in-app agent |
+| `agent` | `src/handlers/` | Agent registry, approval, MCP, memory, role, trace handlers |
+| `database` | `src/schema/` | 23 Drizzle Postgres schema files (org, auth, workspace, agent, chat, content, billing, reseller, security, iam, mcp, plugin, notification, privacy, ingestion, evidence, schema-registry, environments, ai, ratelimit + mixins) |
 | `inngest-functions` | `src/functions/` | Durable background jobs |
 | `ingestion` | `src/pipeline.ts` | Universal connector pipeline |
 | `billing` | `src/metering.ts` | Credit gate + usage metering |
@@ -47,6 +45,10 @@ docs/       capability specs, ADRs, architecture docs
 | `plugins` | `src/oauth/` | OAuth provider detection, state store, preregistered clients |
 | `plugins` | `src/credentials/` | Workspace credential management + KMS |
 | `tenancy` | `src/scope.ts` | `runInTenantScope`, `runWithPrincipal`, tenant context |
+| `tenancy` | `src/data-plane.ts` | Organisation-scoped data-plane resolver seam (ADR-042) |
+| `run-ledger` | `src/run-store.ts` | Durable run / attempt / event / seal / finalization evidence ledger (was `agent-runner`) |
+| `run-evidence` | `src/contextgraph.ts` | CGP conformance + RFC-8785 canonical digests for evidence envelopes |
+| `rules` | `src/gate.ts` | Workspace decision-rules gate in the kernel |
 | `telemetry` | `src/clickhouse.ts` | ClickHouse client + migration runner |
 | `telemetry` | `src/circuit-breaker.ts` | Circuit breaker for telemetry clients |
 | `auth` | | Better Auth integration (sessions, rate limits, org members) |
@@ -54,19 +56,12 @@ docs/       capability specs, ADRs, architecture docs
 | `ontology` | | Neo4j ontology contracts + graph queries |
 | `engram` | | Agent memory engram writer/bootstrap |
 | `storage` | `src/vercel-blob.ts` | Vercel Blob + filesystem blob driver |
-| `sandbox` | `src/vercel.ts` | Sandbox drivers: Docker, Modal, Vercel |
-| `skills` | `src/loader.ts` | Built-in agent skill loading + filesystem |
-| `prompt-templates` | `src/templates/` | YAML prompt templates for agent workflows |
-| `replay` | `src/recorder.ts` | Session recording, restore, bisect |
-| `bench` | | Benchmark harness (ingest, query, replay) |
-| `code-graph` | | Code relationship graph for CLI agent context |
 | `config` | | Shared configuration schema + resolution |
 | `crypto` | | Encryption utilities |
 | `github` | | GitHub App integration |
 | `mcp-config` | | MCP server configuration |
 | `notifications` | | Notification dispatch |
 | `compliance` | | Audit coverage + security event types |
-| `web` | `src/fetch.ts` | Web fetch + search utilities |
 | `ui` | | Shared component library (`@oxagen/ui`) |
 
 ## Capability System
@@ -207,7 +202,7 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 
 ### UI Component Import Convention
 
-**Never import `@oxagen/ui/components/*` directly in app code.** All Next.js apps (`apps/app`, `apps/docs`, …) must import UI components through their local re-export layer at `src/components/ui/<name>.tsx`. (`apps/admin` and `apps/website` do not exist in this monorepo — the 7 apps are `api`, `app`, `cli`, `docs`, `mcp`, `schemas`, `web`.)
+**Never import `@oxagen/ui/components/*` directly in app code.** All Next.js apps (`apps/app`, `apps/docs`, …) must import UI components through their local re-export layer at `src/components/ui/<name>.tsx`. (`apps/admin` and `apps/website` do not exist in this monorepo — the 6 apps are `api`, `app`, `cli`, `docs`, `mcp`, `web`.)
 
 ```ts
 // ✅ Correct — uses the app's re-export layer

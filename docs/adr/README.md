@@ -68,6 +68,8 @@ first. Move a row into its epic when one fits.
 - [ADR-039](./ADR-039-centralize-scr-enforcement-in-oxagen.md) — Centralize SCR enforcement in oxagen rather than replicating it
 - [ADR-040](./ADR-040-governance-plane-refocus.md) — Refocus Oxagen as an engine-agnostic governance plane
 - [ADR-041](./ADR-041-canonical-json-one-rule-not-one-implementation.md) — Canonical JSON — one rule, not one implementation
+- [ADR-042](./ADR-042-tenant-data-planes.md) — Organisation-scoped data planes: every store switches at the tenant
+- [ADR-043](./ADR-043-runtime-excision.md) — Excise the agent runtime: Oxagen governs agents, it does not run them
 - [ADR-044](./ADR-044-memory-record-merge-is-total.md) — Every field of a memory record has a merge rule
 - [ADR-045](./ADR-045-pin-cross-repo-reusable-workflows.md) — Cross-repo reusable workflows are pinned to a commit
 - [ADR-046](./ADR-046-per-commit-ci-concurrency-on-main.md) — A push to main gets its own CI concurrency group

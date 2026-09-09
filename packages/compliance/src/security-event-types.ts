@@ -104,6 +104,13 @@ export const SECURITY_EVENT_TYPES = [
   // Security policy
   "security.mfa_policy_updated",
   "security.session_revoked",
+  // Organisation-scoped data planes (ADR-042). Binding an organisation's
+  // store to a customer-controlled endpoint — or flipping one's mode, status,
+  // or credentials — moves where that tenant's traces, graph, and evidence
+  // physically live. That is the archetypal privileged configuration change a
+  // SOC2 CC6.1/CC6.8 auditor asks for by name, and it is emitted by the
+  // set_data_plane handler (packages/handlers/src/org.data_plane.set.ts).
+  "data_plane.updated",
   // Governed agent runs (docs/specs/run-evidence-ingress/spec.md). These four
   // are INTEGRITY failures, not ordinary denials: each one means some part of
   // the run-evidence chain was contradicted, and none can be produced by
@@ -124,7 +131,7 @@ export const SECURITY_EVENT_TYPES = [
   //                             than the seal it was minted for
   //
   // Only the first is spelled by live code (EVENT_SEQUENCE_CONFLICT_EVENT in
-  // packages/agent-runner/src/run-store.ts). The other three are RESERVED — no
+  // packages/run-ledger/src/run-store.ts). The other three are RESERVED — no
   // emitter: the detectors that would raise them are not yet wired.
   "agent_run.event_sequence_conflict",
   "agent_run.forged_decision_reference",

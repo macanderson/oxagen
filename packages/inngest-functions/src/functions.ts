@@ -2,19 +2,8 @@ import { billingDunningSweep } from "./functions/billing.dunning-sweep";
 import { stripeSyncSubscription } from "./functions/stripe.sync-subscription";
 import { stripeSyncInvoice } from "./functions/stripe.sync-invoice";
 import { chatPersistStream } from "./functions/chat.persist-stream";
-import { agentExecuteSubagent } from "./functions/agent.execute-subagent";
-import { agentAggregateFanout } from "./functions/agent.aggregate-fanout";
-import { agentBackgroundTaskExecute } from "./functions/agent.background-task.execute";
-import {
-  agentVideoRender,
-  agentVideoRenderOnFailure,
-} from "./functions/agent.video-render";
 import { securityAuditPartitionRollover } from "./functions/security.audit-partition-rollover";
 import { pluginOauthRefreshWatcher } from "./functions/plugin.oauth-refresh-watcher";
-import { agentWorkflowSupervisor } from "./functions/agent.workflow.supervisor";
-import { agentWorkflowTaskExecute } from "./functions/agent.workflow.task.execute";
-import { agentLeaseSweep } from "./functions/agent.lease-sweep";
-import { agentSandboxReaper } from "./functions/agent.sandbox-reaper";
 import {
   privacyExportProcess,
   privacyExportProcessOnFailure,
@@ -36,17 +25,11 @@ import { ingestionPollScheduler } from "./functions/ingestion.poll-scheduler";
 import { ingestionConnectionPoll } from "./functions/ingestion.connection-poll";
 import { ingestionWebhookProvision } from "./functions/ingestion.webhook-provision";
 import { ingestionWebhookRenew } from "./functions/ingestion.webhook-renew";
-import {
-  playbookTriggerMatch,
-  playbookTriggerMatchUpdated,
-} from "./functions/playbook.trigger.match";
-import { playbookRunExecute } from "./functions/playbook.run.execute";
 import { mcpToolSnapshotRetention } from "./functions/mcp.tool-snapshot-retention";
 import { pluginCatalogSync } from "./functions/plugin.catalog-sync";
 import { schemaReconcile } from "./functions/schema.reconcile";
 import { memoryDecayPass } from "./functions/memory.decay-pass";
 import { observabilityCaptureFailure } from "./functions/observability.capture-failure";
-import { evalRunExecute } from "./functions/eval.run.execute";
 
 // The DurableFunction objects returned by createFunction are also valid Inngest
 // function instances at runtime (they are Object.assign-ed Inngest functions).
@@ -58,17 +41,8 @@ export const functions: any[] = [
   stripeSyncSubscription,
   stripeSyncInvoice,
   chatPersistStream,
-  agentExecuteSubagent,
-  agentAggregateFanout,
-  agentBackgroundTaskExecute,
-  agentVideoRender,
-  agentVideoRenderOnFailure,
   securityAuditPartitionRollover,
   pluginOauthRefreshWatcher,
-  agentWorkflowSupervisor,
-  agentWorkflowTaskExecute,
-  agentLeaseSweep,
-  agentSandboxReaper,
   privacyExportProcess,
   privacyExportProcessOnFailure,
   privacyErasureExecute,
@@ -84,13 +58,9 @@ export const functions: any[] = [
   ingestionConnectionPoll,
   ingestionWebhookProvision,
   ingestionWebhookRenew,
-  playbookTriggerMatch,
-  playbookTriggerMatchUpdated,
-  playbookRunExecute,
   mcpToolSnapshotRetention,
   pluginCatalogSync,
   schemaReconcile,
   memoryDecayPass,
   observabilityCaptureFailure,
-  evalRunExecute,
 ].filter((fn): fn is NonNullable<typeof fn> => fn != null);

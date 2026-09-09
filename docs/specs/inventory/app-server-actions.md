@@ -3,6 +3,12 @@
 > Auto-extracted by spec-miner. Last mined: 2026-06-20.
 > Source: apps/app/src/app/actions/*.action.ts, apps/app/src/lib/actions/*.ts
 > Last verified: 2026-06-20 (commit 2f62850)
+>
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
+> `automation.create`/`automation.enable` and `video.generate`; the
+> `automation-inline.action.ts` and video-generate action files this spec
+> documented no longer exist in `apps/app/src`. Their Requirement sections
+> have been removed rather than kept as dead prose.
 
 **Description:** Next.js "use server" Server Actions that create a tenancy and authorization boundary between the frontend and the Oxagen capability handlers. Each action validates authentication (session + org/workspace membership), resolves real IDs from URL slugs (preventing IDOR), validates input against capability contracts, and routes through `invoke()` to emit metering, IAM, and audit signals.
 
@@ -158,74 +164,6 @@ Some actions transform the user-facing input into the shape expected by the capa
 <!-- test: createWorkspaceInlineAction.calls createWorkspaceAction with correct orgSlug and FormData containing name+slug -->
 - **WHEN** the action delegates to `createWorkspaceAction(orgSlug, formData)`
 - **THEN** the FormData contains `name` and `slug` keys with the input values
-
----
-
-### Requirement: Coerce trigger and step configurations for automation creation
-<!-- id: createAutomationInlineAction.triggerConfig -->
-<!-- entities: Automation, Input -->
-<!-- depends_on: Validate capability input against contract schema before invoking -->
-<!-- enforced: createAutomationInlineAction() -->
-
-For automation creation, the action coerces optional nested objects (`triggerConfig`, `steps`) to empty objects if not provided (e.g., `input.triggerConfig ?? {}`). This ensures the capability receives consistent input shape even when the user provides sparse input.
-
-#### Scenario: Trigger and step configs default to empty objects
-<!-- test: automation-inline.action.ts constructs contractInput with triggerConfig and steps -->
-- **WHEN** `triggerConfig` or `steps` are undefined
-- **THEN** they are coerced to `{}` and `[]` respectively before passing to `invoke()`
-
----
-
-### Requirement: Always create automations in disabled state, requiring explicit user enable
-<!-- id: createAutomationInlineAction.enabled -->
-<!-- entities: Automation -->
-<!-- depends_on: Coerce trigger and step configurations for automation creation -->
-<!-- enforced: createAutomationInlineAction() -->
-
-The action SHALL always set `enabled: false` when creating an automation, regardless of user input. This ensures automations are never active immediately after creation — the user must explicitly click an "Enable" button to activate the automation, providing a confirmation step against accidental activation.
-
-#### Scenario: Automation creation sets enabled to false
-<!-- test: automation-inline.action.ts always sets enabled: false -->
-- **WHEN** `createAutomationInlineAction()` builds the contract input
-- **THEN** the `enabled` field is hardcoded to `false`
-
----
-
-### Requirement: Route automation enable through invoke() with same tenant scope
-<!-- id: enableAutomationInlineAction.invoke -->
-<!-- entities: Automation, CapabilityContext -->
-<!-- enforced: enableAutomationInlineAction() -->
-
-When the user clicks the "Enable" button, the action calls `enableAutomationInlineAction()`, which follows the same pattern: authenticate, resolve tenant scope, assert membership, build context, and call `invoke("automation.enable", { automation_id }, ctx)`. This ensures the enable action is also metered, audited, and subject to entitlement checks.
-
-#### Scenario: Enable action succeeds
-<!-- test: automation-inline.action.ts enableAutomationInlineAction routes through invoke -->
-- **WHEN** `enableAutomationInlineAction()` is called with valid org/workspace/automation_id
-- **THEN** return `{ ok: true, result: <automation enable output> }`
-
-#### Scenario: Enable action fails
-- **WHEN** `invoke()` or scope resolution fails
-- **THEN** return `{ ok: false, error: <message> }`
-
----
-
-### Requirement: Queue async video generation jobs and return jobId
-<!-- id: videoGenerateAction.jobId -->
-<!-- entities: Video, Job, Capability -->
-<!-- depends_on: Route request through invoke() to emit metering, IAM, and audit signals -->
-<!-- enforced: videoGenerateAction() -->
-
-When video generation is requested, `invoke("video.generate", ...)` returns an object containing a `jobId`. The action SHALL wrap this in `{ ok: true, queued: true, jobId }`, signaling to the client that the job has been queued asynchronously (not yet complete). The client can poll or subscribe to job status using the jobId.
-
-#### Scenario: Video generation job is queued
-<!-- test: videoGenerateAction.returns ok:true with queued:true and a jobId -->
-- **WHEN** `invoke("video.generate", ...)` succeeds
-- **THEN** return `{ ok: true, queued: true, jobId: <value from handler> }`
-
-#### Scenario: Video generation job fails to queue
-<!-- test: videoGenerateAction.returns ok:false with error message when invoke throws an Error -->
-- **WHEN** `invoke()` throws an error
-- **THEN** return `{ ok: false, error: <message> }`
 
 ---
 

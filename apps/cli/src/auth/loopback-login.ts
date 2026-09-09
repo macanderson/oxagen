@@ -20,11 +20,10 @@
  *   doesn't complete the flow.
  *
  * UI-agnostic by design: status lines go through the optional `onStatus`
- * callback instead of a hardcoded `process.stdout.write` (default preserves
- * the original one-shot CLI behavior exactly), and the wait can be cancelled
- * early via an optional `signal` — both are what let the REPL's Ink-native
- * `/login` panel (see repl/login-panel.tsx) drive this exact flow without
- * ever touching the real terminal or readline while Ink owns raw mode.
+ * callback instead of a hardcoded `process.stdout.write` (the default
+ * preserves the one-shot CLI behavior exactly), and the wait can be cancelled
+ * early via an optional `signal`. Both keep this flow drivable by a caller
+ * that owns the terminal itself and must not write to it directly.
  */
 import * as http from "node:http";
 import * as os from "node:os";

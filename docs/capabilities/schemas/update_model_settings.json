@@ -49,28 +49,6 @@
             "type": "null"
           }
         ]
-      },
-      "defaultImageModel": {
-        "anyOf": [
-          {
-            "type": "string",
-            "minLength": 1
-          },
-          {
-            "type": "null"
-          }
-        ]
-      },
-      "defaultVideoModel": {
-        "anyOf": [
-          {
-            "type": "string",
-            "minLength": 1
-          },
-          {
-            "type": "null"
-          }
-        ]
       }
     },
     "additionalProperties": false
@@ -103,33 +81,11 @@
             "type": "null"
           }
         ]
-      },
-      "defaultImageModel": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ]
-      },
-      "defaultVideoModel": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ]
       }
     },
     "required": [
       "defaultTextTier",
-      "defaultTextModel",
-      "defaultImageModel",
-      "defaultVideoModel"
+      "defaultTextModel"
     ],
     "additionalProperties": false
   }

@@ -83,6 +83,8 @@ const MESSAGE_ROWS = [
         status: "success",
         durationMs: 300,
       },
+      // ADR-043 retired the execution block types; a historical row can still
+      // carry one and it must be dropped from the export, not rendered.
       {
         type: "code-execute",
         language: "ts",
@@ -161,7 +163,7 @@ describe("conversationExportHandler (@oxagen/handlers)", () => {
     expect(result.content).toContain(
       "tool: search_graph · status: success · duration: 300ms",
     );
-    expect(result.content).toContain("```ts\nconst x = 1;\n```");
+    expect(result.content).not.toContain("const x = 1;");
     expect(mocks.persist).not.toHaveBeenCalled();
   });
 

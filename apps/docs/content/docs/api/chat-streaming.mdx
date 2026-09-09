@@ -115,7 +115,7 @@ The `usage` event is emitted after the model call completes. It contains the tok
 Stream errors arrive as `error` events:
 
 ```
-data: {"type":"error","code":"capability_denied","message":"agent.code.execute requires approval","requestId":"req_…"}
+data: {"type":"error","code":"capability_denied","message":"org.member_role.change requires approval","requestId":"req_…"}
 ```
 
 After an `error` event, the stream closes. Reconnect with the same `conversationId` to continue the conversation.

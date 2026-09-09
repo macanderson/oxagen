@@ -338,11 +338,6 @@ export async function buildConversationPdf(
         drawMonoPanel(text, MUTED);
         break;
       }
-      case "code":
-        drawMonoPanel(
-          block.language ? `[${block.language}]\n${block.code}` : block.code,
-        );
-        break;
       case "attachment":
         drawParagraph(
           `Attachment: ${block.name} — ${block.url}`,

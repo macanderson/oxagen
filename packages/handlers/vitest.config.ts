@@ -40,9 +40,6 @@ export default defineConfig({
         "src/plugin.schema.get.ts",
         "src/plugin.schema.validate.ts",
         "src/plugin.settings.set_auth_alerts.ts",
-        // research.swarm.status.ts — depends on external job-store lookups;
-        // integration-tested at the API layer. Stub excluded from unit coverage.
-        "src/research.swarm.status.ts",
         // schema.*.ts — schema-registry handlers (registry versioning + drizzle
         // queries) backing the schema.* capabilities. Integration-tested at the
         // API layer (apps/api/src/__tests__/routes.schema.test.ts) rather than

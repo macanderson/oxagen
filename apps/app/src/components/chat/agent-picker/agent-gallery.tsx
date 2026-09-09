@@ -3,8 +3,6 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { AgentPickerPanel } from "./agent-picker-panel";
 import { useComposerSelectionState } from "./chat-selection-context";
-import type { RepoOption } from "../repo-selector";
-import type { EnvironmentOption } from "../environment-selector";
 import type { AgentOption } from "./agent-picker-types";
 
 /**
@@ -16,38 +14,21 @@ import type { AgentOption } from "./agent-picker-types";
  */
 export interface AgentGalleryProps {
   agents: AgentOption[];
-  repos: RepoOption[];
-  environments: EnvironmentOption[];
-  defaultRepoKey: string | null;
-  defaultEnvId: string | null;
   defaultAgentId: string | null;
   onSetDefaultAgent?: (agentId: string | null) => void;
   /** Scopes the v2 "Recent" row's persisted recency (see AgentPickerPanel). */
   workspaceSlug?: string;
-  /** With `workspaceSlug`, scopes the code-agent setup step's branch fetch. */
-  orgSlug?: string;
   className?: string;
 }
 
 export function AgentGallery({
   agents,
-  repos,
-  environments,
-  defaultRepoKey,
-  defaultEnvId,
   defaultAgentId,
   onSetDefaultAgent,
   workspaceSlug,
-  orgSlug,
   className,
 }: AgentGalleryProps) {
-  const {
-    selectedAgentId,
-    selectedRepoKey,
-    selectedBranch,
-    selectedEnvId,
-    applyAgentSelection,
-  } = useComposerSelectionState();
+  const { selectedAgentId, applyAgentSelection } = useComposerSelectionState();
 
   // A workspace with no agents keeps the plain empty state — nothing to pick.
   if (agents.length === 0) return null;
@@ -71,19 +52,11 @@ export function AgentGallery({
       <AgentPickerPanel
         variant="gallery"
         agents={agents}
-        repos={repos}
-        environments={environments}
-        defaultRepoKey={defaultRepoKey}
-        defaultEnvId={defaultEnvId}
         defaultAgentId={defaultAgentId}
         onSetDefaultAgent={onSetDefaultAgent}
         selectedAgentId={selectedAgentId}
-        selectedRepoKey={selectedRepoKey}
-        selectedEnvId={selectedEnvId}
-        selectedBranch={selectedBranch}
         onApply={applyAgentSelection}
         workspaceSlug={workspaceSlug}
-        orgSlug={orgSlug}
       />
     </div>
   );

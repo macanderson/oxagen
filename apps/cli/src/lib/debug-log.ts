@@ -8,11 +8,9 @@
  *
  *   ~/.oxagen/logs/cli.output
  *
- * `~/.oxagen/` is the same home root that holds the user-level `settings.json`
- * (see settings/resolve.ts `userSettingsFile()`), so the debug log lives beside
- * the global settings it belongs to. This is the machine-readable record you
- * `tail`/`jq` (or `oxagen logs`) to see exactly what the CLI is sending: the
- * command invoked, per-turn LLM telemetry, and local code-graph queries.
+ * `~/.oxagen/` is the CLI's own home root. This is the machine-readable record
+ * you `tail`/`jq` (or `oxagen logs`) to see exactly what the CLI is sending:
+ * the command invoked and every platform API request and response.
  *
  * Writes are best-effort and fire-and-forget: a failed log write must never
  * break a command or a turn. Callers use `void debugLog(...)`.

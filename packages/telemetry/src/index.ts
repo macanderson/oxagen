@@ -28,6 +28,13 @@ export * from "./stella-operational-events";
 export * from "./tacho-events";
 export * from "./tacho-events-ddl";
 export { chInsert, chSelect } from "./tenant";
+// ADR-042 dedicated-plane ClickHouse client lifecycle (rotation + shutdown).
+export {
+  closeDedicatedClickhouse,
+  dedicatedClickhouseCount,
+  evictOrgClickhouse,
+  MAX_DEDICATED_CLICKHOUSE_CLIENTS,
+} from "./data-plane-client";
 export * from "./eval-item-results";
 export * from "./router-outcomes";
 export {

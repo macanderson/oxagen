@@ -14,12 +14,13 @@
 # workflow's own permissions are reviewable in the same pull request as the
 # infrastructure it changes.
 #
-# That also means neither role exists until the ci-deploy stack has been
+# That also meant neither role existed until the ci-deploy stack had been
 # applied once, and the job that would apply it is the one that needs the
-# role: the first apply is done by hand (infra/README.md, "Applying from CI").
-# Until then a pull request still gets `fmt` and `validate`, which need no
-# credentials, and the plan itself is skipped with a warning rather than
-# failing every infrastructure change on a role no pull request can create.
+# role — so the first apply was done by hand (infra/README.md, "Applying from
+# CI"). That has happened: both roles exist in 916294258235, and the plan job
+# no longer tolerates a failure to assume `gha-infra-plan`. The apply job
+# still does, until one apply has been observed on `main` — see the note on
+# that step.
 
 name: infra
 
@@ -69,10 +70,62 @@ jobs:
           changed=$(git diff --name-only "$base" HEAD || true)
 
           # A module edit can change any stack that uses it, so widen to all.
-          if echo "$changed" | grep -q '^infra/modules/'; then
+          #
+          # An edit to this workflow does the same, and used to widen to
+          # nothing: `.github/workflows/infra.yml` is in the `paths` trigger
+          # above, so a workflow-only change starts a run, but no path under
+          # `infra/stacks-new/` changed, so `stacks` came out empty, the plan
+          # matrix was empty, and `plan` was skipped. A skipped job reports
+          # success, so a change to how planning works could only ever be
+          # green here — including a change that broke planning outright.
+          # A manual dispatch had the same hole from the other end: it carries
+          # no base ref, so the fallback diffs one arbitrary commit.
+          bootstrap_touched=no
+          if echo "$changed" | grep -q '^infra/stacks-new/bootstrap/'; then
+            bootstrap_touched=yes
+          fi
+
+          if echo "$changed" | grep -qE '^infra/modules/|^\.github/workflows/infra\.yml$' \
+            || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             stacks=$(find infra/stacks-new -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
           else
             stacks=$(echo "$changed" | sed -n 's#^infra/stacks-new/\([^/]*\)/.*#\1#p' | sort -u)
+          fi
+
+          # `bootstrap` is not one of the stacks CI can speak for. It creates
+          # the state bucket and lock table every other stack's remote state
+          # lives in, and it keeps its own state on a local backend -- so a
+          # runner starts from an EMPTY state, sees all five resources as
+          # absent, and plans to create the bucket and table that already
+          # exist and are in use.
+          #
+          # That is not a hypothetical. `apply (bootstrap)` is first in the
+          # matrix and the matrix is `fail-fast: true`, so its failure
+          # cancelled every sibling apply: runs 34214816966 and 34215070294
+          # both died on `BucketAlreadyExists` plus `ResourceInUseException:
+          # Table already exists: oxagen-tflock`, and NOTHING has been applied
+          # from `main` since the infrastructure moved into this repository.
+          # `main` still carries an un-applied node replacement because of it.
+          #
+          # Its plan was the quieter half of the same bug: green, and reporting
+          # five creations that must never happen.
+          #
+          # Dropped from both matrices until its state is remote. That is a
+          # one-time hand migration -- apply once with a local backend, add the
+          # `backend "s3"` block, `tofu init -migrate-state` -- after which
+          # this filter and the warning below come out and the stack is
+          # managed like any other. #2775 carries that work and the steps.
+          stacks=$(echo "$stacks" | grep -vx 'bootstrap' || true)
+
+          # Removing it must not turn a bootstrap-only change green by
+          # accident. An empty matrix skips the job, and a skipped job reports
+          # success -- the exact hole the comment above this one describes.
+          if [ "$bootstrap_touched" = "yes" ]; then
+            echo "::warning title=bootstrap not planned or applied::\
+          infra/stacks-new/bootstrap changed. CI cannot plan or apply it: its \
+          state is on a local backend, so a runner would try to re-create the \
+          state bucket and lock table. Apply this stack by hand, or migrate \
+          its state into S3 and take the filter out of discover."
           fi
 
           if [ -z "$stacks" ]; then
@@ -111,29 +164,23 @@ jobs:
           tofu init -backend=false -input=false -no-color
           tofu validate -no-color
 
-      # `continue-on-error` is deliberate and narrow: this is the only step
-      # that can fail for the bootstrap reason in the header, and everything
-      # that needs the role is gated on its outcome below. Once the role
-      # exists nothing here changes — the next run plans.
+      # No `continue-on-error`. It was here for the bootstrap in the header —
+      # the role did not exist and no pull request could create it — and
+      # `gha-infra-plan` now exists in 916294258235, so the reason is spent.
+      # Kept, it would mean the opposite of what it meant then: a revoked role
+      # or an edited trust policy would skip the plan and report green, and a
+      # plan that did not run must never read like a plan that found nothing.
       - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
         id: credentials
-        continue-on-error: true
         with:
           role-to-assume: arn:aws:iam::916294258235:role/gha-infra-plan
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: plan skipped
-        if: steps.credentials.outcome != 'success'
-        run: |
-          echo "::warning title=plan skipped (${{ matrix.stack }})::Could not assume gha-infra-plan in 916294258235. Until infra/stacks-new/ci-deploy has been applied once by hand this job runs fmt and validate only. See infra/README.md, 'Applying from CI'."
-
       - name: init
-        if: steps.credentials.outcome == 'success'
         working-directory: infra/stacks-new/${{ matrix.stack }}
         run: tofu init -input=false -no-color
 
       - name: plan
-        if: steps.credentials.outcome == 'success'
         id: plan
         working-directory: infra/stacks-new/${{ matrix.stack }}
         # -detailed-exitcode: 0 no changes, 2 changes, 1 error. Without it a
@@ -149,7 +196,7 @@ jobs:
           exit 0
 
       - name: comment
-        if: steps.credentials.outcome == 'success' && github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request'
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
           STACK: ${{ matrix.stack }}
@@ -169,28 +216,44 @@ jobs:
 
   apply:
     needs: discover
-    if: github.event_name != 'pull_request' && needs.discover.outputs.stacks != '[]'
+    # `github.ref` is part of the guard, not decoration. `workflow_dispatch`
+    # accepts any ref and is not a `pull_request`, so without this a dispatch
+    # against any branch reached this job — and this job assumes a role with
+    # AdministratorAccess and applies the Terraform from that branch.
+    #
+    # The `production` environment was supposed to be what stopped that. On
+    # 2026-09-06 it had no protection rules and no deployment branch policy, so
+    # it gated nothing and any branch could deploy to it — while the comment
+    # here claimed the opposite. That is #2679, and it is now settled two ways:
+    #
+    #   - The environment has a deployment branch policy naming `main` alone,
+    #     so the ref check below is a second line of defence rather than the
+    #     only one. Verify with:
+    #       gh api repos/macanderson/oxagen/environments/production/deployment-branch-policies
+    #
+    #   - There is deliberately NO required reviewer and no wait timer. A push
+    #     to `main` applies with no human in the loop, and that is a decision
+    #     rather than an omission (#2679, 2026-09-07): with no customers, the
+    #     round-trip costs more than the risk it removes. Revisit it before the
+    #     first paying customer, alongside the SCR-004 scope note that expires
+    #     on the same event.
+    #
+    # Recorded here because the previous comment's failure was not being wrong
+    # about a setting — it was that a control nobody had configured read as one
+    # that existed, which stops anyone asking.
+    if: >-
+      github.event_name != 'pull_request'
+      && github.ref == 'refs/heads/main'
+      && needs.discover.outputs.stacks != '[]'
     runs-on: ubuntu-latest
-    # What this environment enforces, checked rather than assumed (#2679):
+    # The apply role's trust policy names this environment, so the role cannot
+    # be assumed by a job that does not declare it. That half is real and is
+    # what makes the `if:` above the second line of defence rather than the
+    # only one.
     #
+    # Both halves are checked rather than assumed (#2679):
     #   gh api repos/macanderson/oxagen/environments/production \
-    #     --jq "[.protection_rules[]?.type]"                    -> ["branch_policy"]
-    #   gh api repos/macanderson/oxagen/environments/production/deployment-branch-policies \
-    #     --jq "[.branch_policies[]?.name]"                     -> ["main"]
-    #
-    # So: a deployment branch policy naming `main` alone, and NO required
-    # reviewer and no wait timer. The missing reviewer is a decision rather
-    # than an omission — with no customers the approval round-trip costs more
-    # than the risk it removes — and it should be revisited before the first
-    # paying customer.
-    #
-    # This comment used to say required reviewers lived here. They did not. A
-    # control that is documented and absent is worse than one known to be
-    # missing, because it stops anyone asking — which is the whole of #2679.
-    #
-    # The half that IS real: the apply role's trust policy names this
-    # environment, so the role cannot be assumed by a job that does not
-    # declare it.
+    #     --jq "[.protection_rules[]?.type]"   -> ["branch_policy"]
     environment: production
     strategy:
       fail-fast: true   # a later stack may depend on an earlier one
@@ -204,13 +267,18 @@ jobs:
         with:
           tofu_version: 1.8.5
 
-      # Gated for the same bootstrap reason as the plan job, and for one more:
-      # this runs on `main`, so failing here would leave the default branch
-      # permanently red on a role no change to this repository can create.
+      # Still gated, unlike the plan job above, and for a reason that outlived
+      # the bootstrap: this runs on `main`, so a failure here leaves the
+      # default branch red, which blocks every open pull request through the
+      # red-main hold. The plan job proves the OIDC provider and this
+      # repository's federation work, but not this role — `gha-infra-apply`
+      # is assumed under a different subject (`environment:production`), and
+      # nothing has exercised it yet.
       #
-      # A skip is not a pass. The step below writes a warning naming the stack
-      # that did not apply, so an un-applied change is visible rather than
-      # silent, and the gate clears itself the first time the role exists.
+      # Remove `continue-on-error` and the skip step below once one apply has
+      # actually run on `main`. Until then a skip is not a pass: the step
+      # writes a warning naming the stack that did not apply, so an un-applied
+      # change is visible rather than silent.
       - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
         id: credentials
         continue-on-error: true

@@ -81,26 +81,6 @@
           }
         ]
       },
-      "defaultImageModel": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ]
-      },
-      "defaultVideoModel": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ]
-      },
       "timezone": {
         "type": "string"
       },
@@ -115,8 +95,6 @@
       "pendingPromptBehavior",
       "defaultTextTier",
       "defaultTextModel",
-      "defaultImageModel",
-      "defaultVideoModel",
       "timezone",
       "language"
     ],

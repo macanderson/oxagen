@@ -60,19 +60,10 @@ Five built-in roles govern what principals can do:
 - **Owner** — full control, including billing and org deletion.
 - **Admin** — all operations except destructive org-level actions.
 - **Billing** — billing and subscription management only; no access to operational surfaces.
-- **Member** — run agents, approve tasks, edit playbooks and memories.
+- **Member** — run agents, resolve approvals, edit memories.
 - **Viewer** — read-only across the workspace.
 
 Org-level policies can lock capabilities so that workspace-level grants cannot override them. The resolution order is documented in [RBAC and roles](/docs/governance/rbac).
-
-## Code execution isolation
-
-When the agent runs code, it executes inside a hardened sandbox:
-
-- **Production:** Vercel Sandbox (Firecracker microVMs) — hardware virtualization boundary per invocation.
-- **Local development:** Docker containers with a strict host config policy.
-
-Both environments enforce: read-only rootfs, `--cap-drop=ALL`, `--no-new-privileges`, network denied by default, memory and CPU caps, and a 30-second wallclock timeout. See [Code execution security](/docs/security/code-execution).
 
 ## Sub-processors
 

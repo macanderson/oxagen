@@ -2,11 +2,18 @@
  * agent-suggest-core — shared AI-authoring core for agent definitions.
  *
  * Holds everything `agent.definition.suggest` (AI-create) and
- * `agent.definition.revise` (AI-edit) have in common: loading the create-agent
- * skill as the system prompt, assembling the workspace grounding candidates,
- * the synthesis schema the model is forced to, and the deterministic repair
- * pass that drops hallucinated refs, substitutes an out-of-workspace ontology,
- * and validates the final AgentDefinitionConfig.
+ * `agent.definition.revise` (AI-edit) have in common: the authoring system
+ * prompt, the workspace grounding candidates, the synthesis schema the model is
+ * forced to, and the deterministic repair pass that drops hallucinated refs,
+ * substitutes an out-of-workspace ontology, and validates the final
+ * AgentDefinitionConfig.
+ *
+ * ADR-043 scope: Oxagen governs agents, it does not run them. A definition is
+ * therefore a REGISTRY record — identity, versioned instructions, the graph
+ * scope it may reason over, the memory policy it inherits, and the allowlist of
+ * things it may reach (platform capabilities and registered MCP servers). There
+ * are no skills, no sandboxes, no code mode and no subagents to author, so the
+ * model is never shown any of that vocabulary.
  *
  * The ONLY thing the two callers own separately is the slug: `suggest` derives
  * and de-conflicts a fresh slug for a brand-new agent, whereas `revise` keeps
@@ -19,10 +26,8 @@ import { listCapabilities, getSurfaces } from "@oxagen/oxagen";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { agentDefinitionConfigSchema } from "@oxagen/oxagen/agent-schema";
 import { agentDefinitionSuggest } from "@oxagen/oxagen/contracts/agent.definition.suggest";
-import { createBuiltinSkillRegistry } from "@oxagen/skills";
+import type { AgentMemoryPolicyReadOutput } from "@oxagen/oxagen/contracts/agent.memory_policy.read";
 import { logger } from "./logger";
-
-export const CREATE_AGENT_SKILL_SLUG = "create-agent";
 
 /** Thrown when a suggestion/revision cannot be produced. Stable `.code` so
  *  callers can discriminate without string-matching. Shared by both the
@@ -36,41 +41,57 @@ export class AgentSuggestError extends Error {
 }
 
 /**
- * Load the create-agent skill body for use as the system prompt. Prefers the
- * workspace's tenant copy (seeded into every new workspace), falling back to
- * the EMBEDDED builtin for workspaces that predate the skill and have not been
- * backfilled. Mirrors agent.skill.load's resolution order. The builtin is
- * embedded module data (not a filesystem read), so this fallback is always
- * available in any bundle — it is what makes the create-agent path un-brickable.
+ * The authoring instructions the model follows — the HOW of turning a
+ * plain-language description into a valid governed-agent definition.
+ *
+ * This used to be loaded from a tenant-installed `create-agent` skill with an
+ * embedded builtin fallback. Skills are gone (ADR-043), and a governance
+ * product should not make its own authoring prompt a tenant-editable,
+ * un-versioned document anyway: it is platform behaviour, so it is code, and it
+ * ships identically in every bundle and every environment.
  */
-export async function loadCreateAgentSkillBody(
-  ctx: CapabilityContext,
-): Promise<string> {
-  try {
-    const loaded = (await invoke(
-      "load_skill",
-      { skillSlug: CREATE_AGENT_SKILL_SLUG },
-      ctx,
-    )) as { loaded: boolean; body: string };
-    if (loaded.loaded && loaded.body.trim()) return loaded.body;
-  } catch (err) {
-    logger.warn(
-      { err, workspaceId: ctx.workspaceId },
-      "agent-suggest-core: tenant create-agent skill load failed; trying builtin",
-    );
-  }
-
-  const registry = createBuiltinSkillRegistry();
-  const builtin = await registry.get(CREATE_AGENT_SKILL_SLUG);
-  if (builtin?.body?.trim()) return builtin.body;
-
-  // Unreachable in practice: create-agent is embedded module data that ships in
-  // every bundle. If this ever throws, the generated builtins module is missing
-  // the slug — a build/codegen defect, not a runtime/environment condition.
-  throw new AgentSuggestError(
-    "The create-agent skill is unavailable (embedded builtin missing — regenerate @oxagen/skills).",
-  );
-}
+export const AGENT_AUTHORING_SYSTEM_PROMPT = [
+  "You design GOVERNED AGENT DEFINITIONS for Oxagen.",
+  "",
+  "An agent definition is a registry record, not a program. It declares WHO the",
+  "agent is, WHAT knowledge it may reason over, and WHICH governed tools it may",
+  "reach. Oxagen does not execute code, run sandboxes, edit repositories, or",
+  "fan work out to subagents — never design for any of that, and never mention",
+  "it in the instructions you write.",
+  "",
+  "A definition has exactly four authored parts:",
+  "",
+  "1. IDENTITY — a kebab-case slug, a short name, and ONE sentence saying what",
+  "   the agent's job is. The description is what a human governs the agent by,",
+  "   so it must state the job, not the implementation.",
+  "",
+  "2. INSTRUCTIONS — the system prompt. Brief and imperative: what the agent",
+  "   does, the order it works in, the standards it holds to, and the boundaries",
+  "   it must not cross. Say what it must refuse. Do not restate the tool list;",
+  "   the allowlist already carries that.",
+  "",
+  "3. GRAPH ACCESS — bind the agent to ONE ontology from the candidates, choose",
+  "   `read` unless the agent must propose new nodes or edges (then `extend`),",
+  "   pick a retrieval strategy (`hybrid` is the sensible default), scope it to",
+  "   the node/edge types that keep the agent in its lane, and set a bounded",
+  "   budget (maxHops 2-3, maxNodes in the tens — never thousands).",
+  "",
+  "4. TOOL ALLOWLIST — the NARROWEST set of tools that does the job. Two kinds",
+  "   exist and no others: `function` (one platform capability invoked through",
+  "   the kernel, carrying its IAM, entitlement and metering gates) and",
+  "   `mcp_server` (a registered MCP connection, governed by the workspace's",
+  "   tool RBAC rules and consent ledger). Every ref MUST appear verbatim in the",
+  "   candidate lists. A tool you cannot justify against the description is a",
+  "   tool you must not grant.",
+  "",
+  "The workspace memory policy is shown for context. It is inherited, not",
+  "authored: never try to change it, and do not restate its numbers in the",
+  "instructions — write instructions that are correct under it (e.g. do not",
+  "tell the agent to rely on observations that will have decayed).",
+  "",
+  "Ground every choice in the candidate lists below. Never invent a ref, an",
+  "ontology id, or a capability name. Prefer granting nothing over guessing.",
+].join("\n");
 
 // ── Candidate assembly ───────────────────────────────────────────────────────
 
@@ -79,28 +100,24 @@ export interface Candidates {
   ontologies: Array<{ id: string; displayName: string }>;
   /** Agent-surface capabilities — refs for `function` tools. */
   functions: Array<{ name: string; description: string }>;
-  /** Enabled workspace skills — refs (slugs) for `skill` tools. Excludes disabled
-   *  skills, which are surfaced as recommendations (enable before equipping). */
-  skills: Array<{ slug: string; description: string }>;
   /** Registered MCP servers — refs (publicIds) for `mcp_server` tools. */
   mcpServers: Array<{ ref: string; name: string }>;
-  /** Active workspace agents — refs (slugs) for `agent` (subagent) tools. */
-  subagents: Array<{ slug: string; description: string }>;
   /** Every existing agent slug (any status) — for slug-collision de-conflict. */
   existingSlugs: string[];
   /**
    * SECOND TIER — connect-first recommendation candidates. These are NOT
-   * equipable (never in agentTools): the user must connect/enable them first.
+   * equipable (never in agentTools): the user must connect them first.
+   *
+   * Catalog MCP servers not registered in the workspace — refs are registry
+   * names (e.g. "github/github-mcp-server").
    */
-  /** Catalog MCP servers not registered in the workspace — refs are registry
-   *  names (e.g. "github/github-mcp-server"). */
   connectableMcpServers: Array<{
     ref: string;
     name: string;
     description: string;
   }>;
-  /** Workspace skills that exist but are disabled — refs are slugs. */
-  disabledSkills: Array<{ ref: string; name: string; description: string }>;
+  /** The workspace memory policy the agent inherits. Context only — never authored. */
+  memoryPolicy: AgentMemoryPolicyReadOutput | null;
 }
 
 /** Invoke a read capability, degrading to a fallback so one unavailable source
@@ -122,7 +139,7 @@ async function invokeSafe<T>(
 export async function assembleCandidates(
   ctx: CapabilityContext,
 ): Promise<Candidates> {
-  const [schemaOut, skillOut, mcpOut, agentOut, catalogOut, wsSkillOut] =
+  const [schemaOut, mcpOut, agentOut, catalogOut, memoryPolicy] =
     await Promise.all([
       invokeSafe<{
         schemas: Array<{
@@ -131,9 +148,6 @@ export async function assembleCandidates(
           enabled: boolean;
         }>;
       }>("list_schemas", ctx, { schemas: [] }),
-      invokeSafe<{
-        skills: Array<{ slug: string; name?: string; description: string }>;
-      }>("list_agent_skills", ctx, { skills: [] }),
       invokeSafe<{ servers: Array<{ publicId: string; name: string }> }>(
         "list_mcp_servers",
         ctx,
@@ -148,7 +162,7 @@ export async function assembleCandidates(
       }>("list_agent_defs", ctx, { agents: [] }),
       // Catalog MCP servers not yet installed in this workspace — recommendation
       // candidates. Ask for the not-installed slice directly; belt-and-suspenders
-      // dedup against agent.mcp.list below handles registries lagging the flag.
+      // dedup against the registered list below handles registries lagging the flag.
       invokeSafe<{
         servers: Array<{
           name: string;
@@ -166,47 +180,17 @@ export async function assembleCandidates(
           limit: 50,
         },
       ),
-      // Every workspace skill WITH its enabled flag — the only source that exposes
-      // disabled skills. Carries a publicId, not a slug; joined by name below.
-      invokeSafe<{
-        skills: Array<{
-          id: string;
-          name: string;
-          description: string;
-          enabled: boolean;
-        }>;
-      }>("list_workspace_skills", ctx, { skills: [] }),
+      invokeSafe<AgentMemoryPolicyReadOutput | null>(
+        "get_memory_policy",
+        ctx,
+        null,
+      ),
     ]);
 
   const functions = listCapabilities()
     .filter((c) => getSurfaces(c).includes("agent"))
     .filter((c) => c.name !== agentDefinitionSuggest.name)
     .map((c) => ({ name: c.name, description: c.description }));
-
-  // Disabled workspace skills → recover each slug by joining skill.workspace.list
-  // (has enabled + name) to agent.skill.list (has slug + name) on the name. A
-  // disabled skill whose slug can't be recovered is dropped — a recommendation
-  // needs a real slug ref the caller can enable.
-  const slugByName = new Map(
-    skillOut.skills
-      .filter((s): s is { slug: string; name: string; description: string } =>
-        Boolean(s.name),
-      )
-      .map((s) => [s.name.toLowerCase(), s.slug]),
-  );
-  const disabledSkills = wsSkillOut.skills
-    .filter((s) => !s.enabled)
-    .map((s) => {
-      const slug = slugByName.get(s.name.toLowerCase());
-      return slug
-        ? { ref: slug, name: s.name, description: s.description }
-        : null;
-    })
-    .filter(
-      (s): s is { ref: string; name: string; description: string } =>
-        s !== null,
-    );
-  const disabledSlugs = new Set(disabledSkills.map((s) => s.ref));
 
   // Catalog servers the workspace already has — matched by the catalog's canonical
   // registry NAME against installed server names/publicIds (never the display
@@ -232,17 +216,10 @@ export async function assembleCandidates(
       .filter((s) => s.enabled)
       .map((s) => ({ id: s.schemaName, displayName: s.displayName })),
     functions,
-    // Equippable skills exclude the disabled ones — those go to recommendations.
-    skills: skillOut.skills
-      .filter((s) => !disabledSlugs.has(s.slug))
-      .map((s) => ({ slug: s.slug, description: s.description })),
     mcpServers: mcpOut.servers.map((s) => ({ ref: s.publicId, name: s.name })),
-    subagents: agentOut.agents
-      .filter((a) => a.status === "active")
-      .map((a) => ({ slug: a.slug, description: a.description ?? "" })),
     existingSlugs: agentOut.agents.map((a) => a.slug),
     connectableMcpServers,
-    disabledSkills,
+    memoryPolicy,
   };
 }
 
@@ -262,24 +239,28 @@ export function formatCandidates(c: Candidates): string {
       c.functions.map((f) => `- ${f.name}: ${f.description}`),
     ),
     section(
-      "SKILL CANDIDATES (ref for agentTools of type 'skill')",
-      c.skills.map((s) => `- ${s.slug}: ${s.description}`),
-    ),
-    section(
       "MCP SERVER CANDIDATES (ref for agentTools of type 'mcp_server')",
       c.mcpServers.map((m) => `- ${m.ref} — ${m.name}`),
     ),
     section(
-      "SUBAGENT CANDIDATES (ref for agentTools of type 'agent')",
-      c.subagents.map((a) => `- ${a.slug}: ${a.description}`),
+      "INHERITED MEMORY POLICY (context only — never authored, never changed)",
+      c.memoryPolicy
+        ? [
+            `- observation half-life: ${c.memoryPolicy.halfLifeLowDays} days`,
+            `- rule half-life: ${c.memoryPolicy.halfLifeHighDays} days`,
+            `- recall threshold: ${c.memoryPolicy.recallThreshold}`,
+            `- compliance threshold: ${c.memoryPolicy.complianceThreshold}`,
+            `- decay floor: ${c.memoryPolicy.defaultDecayFloor}`,
+          ]
+        : [],
     ),
-    // SECOND TIER. These are deliberately fenced off from the equipable candidate
-    // lists above: they do not exist in the workspace yet, so they can only be
+    // SECOND TIER. Deliberately fenced off from the equipable candidate lists
+    // above: these do not exist in the workspace yet, so they can only be
     // RECOMMENDED (returned in `recommendations`), never equipped (`agentTools`).
     [
       "CONNECTABLE (recommendations ONLY — these are NOT equipable; never put them in agentTools).",
       "Recommend one when the description clearly needs it, with a reason tied to the description.",
-      "The caller connects the MCP server / enables the skill first, then equips it in a later edit.",
+      "The caller connects the MCP server first, then equips it in a later edit.",
     ].join("\n"),
     section(
       "CATALOG MCP SERVERS (recommend with kind 'mcp_server'; ref = the registry name shown)",
@@ -287,26 +268,19 @@ export function formatCandidates(c: Candidates): string {
         (s) => `- ${s.ref} — ${s.name}: ${s.description}`,
       ),
     ),
-    section(
-      "DISABLED WORKSPACE SKILLS (recommend with kind 'skill'; ref = the slug shown; enable before equipping)",
-      c.disabledSkills.map((s) => `- ${s.ref} — ${s.name}: ${s.description}`),
-    ),
   ].join("\n\n");
 }
 
-/** Assemble the shared system prompt: create-agent skill body + strictly-fenced
+/** Assemble the shared system prompt: the authoring instructions + strictly-fenced
  *  workspace candidates. Identical for suggest and revise — only the user prompt
  *  differs between the two. */
-export function buildAgentSystemPrompt(
-  skillBody: string,
-  candidates: Candidates,
-): string {
+export function buildAgentSystemPrompt(candidates: Candidates): string {
   return [
-    skillBody,
+    AGENT_AUTHORING_SYSTEM_PROMPT,
     "",
     "---",
     "",
-    "WORKSPACE CANDIDATES — you may ONLY reference items that appear below. Never invent a ref, ontology id, capability, skill, MCP server, or agent.",
+    "WORKSPACE CANDIDATES — you may ONLY reference items that appear below. Never invent a ref, ontology id, capability, or MCP server.",
     "",
     formatCandidates(candidates),
   ].join("\n");
@@ -325,18 +299,13 @@ export const synthesisSchema = z.object({
     .string()
     .min(1)
     .describe(
-      "ONE sentence stating the agent's job; drives routing and subagent selection.",
-    ),
-  agentType: z
-    .enum(["custom", "code"])
-    .describe(
-      "'code' ONLY when the agent must work over a repository; otherwise 'custom'.",
+      "ONE sentence stating the agent's job; drives routing and agent selection.",
     ),
   instructions: z
     .string()
     .min(1)
     .describe(
-      "The system prompt: what the agent does, its working order, standards, and boundaries. Brief and imperative. Do NOT inline knowledge available as a skill — equip the skill instead.",
+      "The system prompt: what the agent does, its working order, standards, and boundaries. Brief and imperative.",
     ),
   graph: z
     .object({
@@ -388,13 +357,11 @@ export const synthesisSchema = z.object({
   agentTools: z
     .array(
       z.object({
-        type: z
-          .enum(["function", "mcp_server", "skill", "agent"])
-          .describe("The kind of tool."),
+        type: z.enum(["function", "mcp_server"]).describe("The kind of tool."),
         ref: z
           .string()
           .describe(
-            "Reference matching the type: capability name (function), MCP server id (mcp_server), skill slug (skill), or agent slug (agent). MUST come from the candidate lists.",
+            "Reference matching the type: a capability name (function) or a registered MCP server id (mcp_server). MUST come from the candidate lists.",
           ),
       }),
     )
@@ -404,31 +371,26 @@ export const synthesisSchema = z.object({
   recommendations: z
     .array(
       z.object({
-        kind: z
-          .enum(["mcp_server", "skill"])
-          .describe(
-            "'mcp_server' for a CATALOG MCP SERVER; 'skill' for a DISABLED WORKSPACE SKILL. Both come ONLY from the CONNECTABLE lists.",
-          ),
         ref: z
           .string()
           .describe(
-            "The EXACT ref from a CONNECTABLE list — the registry name for an mcp_server, the slug for a skill. Never invent one; never a ref from the equipable candidate lists.",
+            "The EXACT registry name from the CATALOG MCP SERVERS list. Never invent one; never a ref from the equipable candidate lists.",
           ),
         name: z
           .string()
           .describe(
-            "The human-readable name shown for it in the CONNECTABLE list.",
+            "The human-readable name shown for it in the CATALOG MCP SERVERS list.",
           ),
         reason: z
           .string()
           .describe(
-            "Why THIS agent needs it, phrased against the user's description (e.g. 'watches PRs for schema changes — needs GitHub access'). One sentence.",
+            "Why THIS agent needs it, phrased against the user's description (e.g. 'answers questions about open PRs — needs GitHub access'). One sentence.",
           ),
       }),
     )
     .optional()
     .describe(
-      "Tools the agent SHOULD have that are not available in the workspace yet — connectable catalog MCP servers or disabled workspace skills. NEVER equip these (never in agentTools); the caller connects/enables them first. Omit anything already available; equip that instead.",
+      "MCP servers the agent SHOULD have that are not connected to the workspace yet. NEVER equip these (never in agentTools); the caller connects them first. Omit anything already registered; equip that instead.",
     ),
   rationale: z
     .string()
@@ -440,8 +402,15 @@ export const synthesisSchema = z.object({
 
 export type Synthesis = z.infer<typeof synthesisSchema>;
 export type AgentDefinitionConfig = z.infer<typeof agentDefinitionConfigSchema>;
+
+/**
+ * A connect-first recommendation. `kind` is always `"mcp_server"`: an MCP
+ * connection is the only thing a governed agent can be granted that the
+ * workspace might not have yet. The field is retained (rather than dropped)
+ * because both contracts' output schemas still carry it.
+ */
 export type Recommendation = {
-  kind: "mcp_server" | "skill";
+  kind: "mcp_server";
   ref: string;
   name: string;
   reason: string;
@@ -491,8 +460,6 @@ export function deconflictSlug(
 export interface RepairResult {
   /** The validated AgentDefinitionConfig, ready to feed create/update input. */
   config: AgentDefinitionConfig;
-  /** Normalized agentType ("code" only when the model explicitly chose it). */
-  agentType: "custom" | "code";
   /** Connect-first recommendations that survived validation. */
   recommendations: Recommendation[];
 }
@@ -512,12 +479,8 @@ export function repairSynthesis(
   warnings: string[],
 ): RepairResult {
   const functionRefs = new Set(candidates.functions.map((f) => f.name));
-  const skillRefs = new Set(candidates.skills.map((s) => s.slug));
   const mcpRefs = new Set(candidates.mcpServers.map((m) => m.ref));
-  const subagentRefs = new Set(candidates.subagents.map((a) => a.slug));
   const ontologyIds = new Set(candidates.ontologies.map((o) => o.id));
-
-  const agentType = object.agentType === "code" ? "code" : "custom";
 
   // Tools: drop any ref not present in the candidate list for its type.
   const agentTools: Array<{
@@ -528,11 +491,7 @@ export function repairSynthesis(
     const known =
       tool.type === "function"
         ? functionRefs.has(tool.ref)
-        : tool.type === "skill"
-          ? skillRefs.has(tool.ref)
-          : tool.type === "mcp_server"
-            ? mcpRefs.has(tool.ref)
-            : subagentRefs.has(tool.ref);
+        : mcpRefs.has(tool.ref);
     if (known) {
       agentTools.push({ type: tool.type, ref: tool.ref });
     } else {
@@ -542,77 +501,45 @@ export function repairSynthesis(
     }
   }
 
-  // Recommendations: catalog MCP servers + disabled skills the agent SHOULD have
-  // but that are not available yet. Validated against the connectable candidate
-  // lists; a ref that is actually already available is moved into agentTools
-  // (where it belongs) rather than recommended; unknown refs are dropped.
+  // Recommendations: catalog MCP servers the agent SHOULD have but that are not
+  // connected yet. Validated against the connectable candidate list; a ref that
+  // is actually already registered is moved into agentTools (where it belongs)
+  // rather than recommended; unknown refs are dropped.
   const connectableMcpByRef = new Map(
     candidates.connectableMcpServers.map((s) => [s.ref, s]),
   );
-  const disabledSkillByRef = new Map(
-    candidates.disabledSkills.map((s) => [s.ref, s]),
-  );
   const equippedMcp = new Set(
     agentTools.filter((t) => t.type === "mcp_server").map((t) => t.ref),
-  );
-  const equippedSkills = new Set(
-    agentTools.filter((t) => t.type === "skill").map((t) => t.ref),
   );
 
   const recommendations: Recommendation[] = [];
   const seenRec = new Set<string>();
 
   for (const rec of object.recommendations ?? []) {
-    const key = `${rec.kind}:${rec.ref}`;
-    if (seenRec.has(key)) continue;
-    seenRec.add(key);
+    if (seenRec.has(rec.ref)) continue;
+    seenRec.add(rec.ref);
 
-    if (rec.kind === "mcp_server") {
-      const cand = connectableMcpByRef.get(rec.ref);
-      if (cand) {
-        recommendations.push({
-          kind: "mcp_server",
-          ref: rec.ref,
-          name: cand.name,
-          reason: rec.reason,
-        });
-      } else if (mcpRefs.has(rec.ref)) {
-        // Already registered → it is equipable, not a recommendation. Move it.
-        if (!equippedMcp.has(rec.ref)) {
-          agentTools.push({ type: "mcp_server", ref: rec.ref });
-          equippedMcp.add(rec.ref);
-        }
-        warnings.push(
-          `Recommended MCP server "${rec.ref}" is already registered; equipped it as a tool instead.`,
-        );
-      } else {
-        warnings.push(
-          `Dropped recommended MCP server "${rec.ref}" — it is not in the connectable catalog.`,
-        );
+    const cand = connectableMcpByRef.get(rec.ref);
+    if (cand) {
+      recommendations.push({
+        kind: "mcp_server",
+        ref: rec.ref,
+        name: cand.name,
+        reason: rec.reason,
+      });
+    } else if (mcpRefs.has(rec.ref)) {
+      // Already registered → it is equipable, not a recommendation. Move it.
+      if (!equippedMcp.has(rec.ref)) {
+        agentTools.push({ type: "mcp_server", ref: rec.ref });
+        equippedMcp.add(rec.ref);
       }
+      warnings.push(
+        `Recommended MCP server "${rec.ref}" is already registered; equipped it as a tool instead.`,
+      );
     } else {
-      const cand = disabledSkillByRef.get(rec.ref);
-      if (cand) {
-        recommendations.push({
-          kind: "skill",
-          ref: rec.ref,
-          name: cand.name,
-          reason: rec.reason,
-        });
-      } else if (skillRefs.has(rec.ref)) {
-        // Enabled skill → equipable, not a recommendation. Move it.
-        if (!equippedSkills.has(rec.ref)) {
-          agentTools.push({ type: "skill", ref: rec.ref });
-          equippedSkills.add(rec.ref);
-        }
-        warnings.push(
-          `Recommended skill "${rec.ref}" is enabled; equipped it as a tool instead.`,
-        );
-      } else {
-        warnings.push(
-          `Dropped recommended skill "${rec.ref}" — it is not a disabled workspace skill.`,
-        );
-      }
+      warnings.push(
+        `Dropped recommended MCP server "${rec.ref}" — it is not in the connectable catalog.`,
+      );
     }
   }
 
@@ -670,5 +597,5 @@ export function repairSynthesis(
     );
   }
 
-  return { config, agentType, recommendations };
+  return { config, recommendations };
 }

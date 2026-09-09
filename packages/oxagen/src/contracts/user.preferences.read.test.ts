@@ -22,8 +22,6 @@ describe("user.preferences.read capability", () => {
       pendingPromptBehavior: "interrupt",
       defaultTextTier: "precise",
       defaultTextModel: "anthropic/claude-opus-4.8",
-      defaultImageModel: "bfl/flux-2-max",
-      defaultVideoModel: "google/veo-3.0-generate-001",
       timezone: "America/New_York",
       language: "en",
     });
@@ -39,15 +37,11 @@ describe("user.preferences.read capability", () => {
       pendingPromptBehavior: "queue",
       defaultTextTier: null,
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
       timezone: "UTC",
       language: "en",
     });
     expect(parsed.defaultTextTier).toBeNull();
     expect(parsed.defaultTextModel).toBeNull();
-    expect(parsed.defaultImageModel).toBeNull();
-    expect(parsed.defaultVideoModel).toBeNull();
   });
 
   it("rejects an invalid fontSize value in output", () => {
@@ -59,8 +53,6 @@ describe("user.preferences.read capability", () => {
         pendingPromptBehavior: "queue",
         defaultTextTier: null,
         defaultTextModel: null,
-        defaultImageModel: null,
-        defaultVideoModel: null,
       }),
     ).toThrow();
   });
@@ -74,8 +66,6 @@ describe("user.preferences.read capability", () => {
         pendingPromptBehavior: "queue",
         defaultTextTier: null,
         defaultTextModel: null,
-        defaultImageModel: null,
-        defaultVideoModel: null,
       }),
     ).toThrow();
   });

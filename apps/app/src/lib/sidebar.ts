@@ -13,12 +13,9 @@ import {
   ArrowLeft,
   BookOpen,
   Bot,
-  Box,
   Building2,
   CreditCard,
-  FlaskConical,
   Gauge,
-  GitBranch,
   KeyRound,
   Layers,
   LayoutDashboard,
@@ -34,7 +31,6 @@ import {
   User,
   Users,
   Wrench,
-  Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -76,23 +72,24 @@ export type SidebarConfig = {
 // Workspace mode config — IA spec §4 tree.
 // /{org}/{ws}/... — daily operational surface
 //
-// Groups:  primary (ask, knowledge)
+// Groups:  primary (overview, sessions, knowledge)
+//          tools   (agents, tools, environments — the "Agents" group)
 //          footer  (marketplace, settings — pinned to bottom)
 // ---------------------------------------------------------------------------
 
 const workspaceConfig: SidebarConfig = {
   mode: "workspace",
   groupLabel: "Workspace",
-  toolsLabel: "Workbench",
+  toolsLabel: "Agents",
   items: [
     {
       id: "overview",
       label: "Overview",
       icon: Gauge,
-      // Metering-forward workspace home (web-app-2.0): the HUD at the workspace
-      // root (`/{org}/{ws}`) — spend/tokens/runs, knowledge-graph grounding,
-      // activity, automations, memory, and source health. Now the FIRST tab and
-      // the default workspace landing; Sessions (the chat front door) is second.
+      // Metering-forward workspace home: the HUD at the workspace root
+      // (`/{org}/{ws}`) — spend/tokens/runs, knowledge-graph grounding,
+      // activity, memory, and source health. The FIRST tab and the default
+      // workspace landing; Sessions (the chat front door) is second.
       href: (ctx) =>
         ctx.workspaceSlug
           ? workspace.root(ctx as Required<ScopeContext>)
@@ -123,25 +120,10 @@ const workspaceConfig: SidebarConfig = {
           : `/${ctx.orgSlug}`,
       group: "primary",
     },
-    {
-      id: "automations",
-      label: "Automations",
-      icon: Zap,
-      // Human-gated agent automation, triggers, and parallel workflow/swarm
-      // runs (automation.* + workflow.*). Placed high (front-and-center) per
-      // the IA recommendation.
-      href: (ctx) =>
-        ctx.workspaceSlug
-          ? workspace.automations.root(ctx as Required<ScopeContext>)
-          : `/${ctx.orgSlug}`,
-      group: "primary",
-    },
-    // Workbench group — everything about building with agents. All four are
-    // first-class sidebar destinations (there is deliberately NO Workbench
-    // secondary nav): Agents (the builder), Agent Tools (the equip hub with
-    // its own All Tools / Skills / MCP Servers / Capabilities sections),
-    // Environments (env vars + secrets), and Sandboxes (durable code
-    // sandboxes + their templates).
+    // Agents group — the governed agent fleet. All three are first-class
+    // sidebar destinations (there is deliberately NO secondary nav): Agents
+    // (the registry + builder), Tools (the allowlist surface: MCP servers +
+    // capabilities), and Environments (env vars + secrets).
     {
       id: "agents",
       label: "Agents",
@@ -153,29 +135,8 @@ const workspaceConfig: SidebarConfig = {
       group: "tools",
     },
     {
-      id: "evals",
-      label: "Evals",
-      icon: FlaskConical,
-      // Score what actually ran and got billed against a dataset — the
-      // eval.* capability family's dataset list + run-detail surface.
-      // Previously a true nav orphan (no sidebar entry, no in-page inbound
-      // links) despite being fully built. group: "primary" surfaces it in the
-      // desktop sidebar (group-filtered render, see sidebar.tsx); it is
-      // declared here (after the "agents" entry, ahead of the tools-group
-      // items below, in raw array order) so the mobile bottom bar's unfiltered
-      // first-4 cut (MAX_BAR_ITEMS, mobile-bottom-bar.tsx) is unaffected —
-      // Evals overflows into the mobile "More" sheet alongside Agent
-      // Tools/Environments/Sandboxes/Marketplace/Settings rather than
-      // displacing Agents from the visible bar.
-      href: (ctx) =>
-        ctx.workspaceSlug
-          ? workspace.evals.root(ctx as Required<ScopeContext>)
-          : `/${ctx.orgSlug}`,
-      group: "primary",
-    },
-    {
-      id: "agent-tools",
-      label: "Agent Tools",
+      id: "tools",
+      label: "Tools",
       icon: Wrench,
       href: (ctx) =>
         ctx.workspaceSlug
@@ -194,33 +155,11 @@ const workspaceConfig: SidebarConfig = {
       group: "tools",
     },
     {
-      id: "sandboxes",
-      label: "Sandboxes",
-      icon: Box,
-      href: (ctx) =>
-        ctx.workspaceSlug
-          ? workspace.workbench.sandboxes(ctx as Required<ScopeContext>)
-          : `/${ctx.orgSlug}`,
-      group: "tools",
-    },
-    {
-      id: "repos",
-      label: "Repos",
-      icon: GitBranch,
-      // The whole headless repo.* family (sync, fork, create, edit→PR) gets a
-      // home in the Workbench group (web-app-2.0).
-      href: (ctx) =>
-        ctx.workspaceSlug
-          ? workspace.workbench.repos(ctx as Required<ScopeContext>)
-          : `/${ctx.orgSlug}`,
-      group: "tools",
-    },
-    {
       id: "marketplace",
       label: "Marketplace",
       icon: ShoppingBag,
       // Discovery + install surface, two sides: Agent Tools and Integrations.
-      // Managing what is installed lives in Workbench → Agent Tools.
+      // Managing what is installed lives in Agents → Tools.
       // No-workspaceSlug fallback mirrors every other workspace-mode item
       // above (org root). Must not point at org.settings.plugins() — that
       // route helper has no page behind it. resolveSidebarCtx recovers the
@@ -558,61 +497,36 @@ export function enumerateNavTargets(
       parent: "knowledge",
     });
     targets.push({
-      label: "Automations",
-      href: workspace.automations.root(wsCtx),
-      parent: "automations",
-    });
-    targets.push({
-      label: "Automations · Workflows",
-      href: workspace.automations.workflows(wsCtx),
-      parent: "automations",
-    });
-    targets.push({
       label: "Settings",
       href: workspace.settings.root(wsCtx),
       parent: "settings",
     });
 
-    // Workbench destinations — all four are first-class sidebar items.
+    // Agents-group destinations — all three are first-class sidebar items.
     targets.push({
       label: "Agents",
       href: workspace.workbench.agents(wsCtx),
       parent: "agents",
     });
     targets.push({
-      label: "Agent Tools",
+      label: "Tools",
       href: workspace.workbench.tools.root(wsCtx),
-      parent: "agent-tools",
+      parent: "tools",
     });
     targets.push({
-      label: "Agent Tools · Skills",
-      href: workspace.workbench.tools.skills(wsCtx),
-      parent: "agent-tools",
-    });
-    targets.push({
-      label: "Agent Tools · MCP Servers",
+      label: "Tools · MCP Servers",
       href: workspace.workbench.tools.mcp(wsCtx),
-      parent: "agent-tools",
+      parent: "tools",
     });
     targets.push({
-      label: "Agent Tools · Capabilities",
+      label: "Tools · Capabilities",
       href: workspace.workbench.tools.capabilities(wsCtx),
-      parent: "agent-tools",
+      parent: "tools",
     });
     targets.push({
       label: "Environments",
       href: workspace.workbench.environments(wsCtx),
       parent: "environments",
-    });
-    targets.push({
-      label: "Sandboxes",
-      href: workspace.workbench.sandboxes(wsCtx),
-      parent: "sandboxes",
-    });
-    targets.push({
-      label: "Repos",
-      href: workspace.workbench.repos(wsCtx),
-      parent: "repos",
     });
 
     // Knowledge tabs

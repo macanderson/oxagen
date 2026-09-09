@@ -61,16 +61,6 @@ test.describe("Page Screenshots", () => {
     });
   });
 
-  test("Settings Skills page", async ({ page }) => {
-    await page.goto(`${BASE}/${ORG}/${WS}/workbench/tools/skills`);
-    await page.waitForLoadState("networkidle");
-    await page.waitForTimeout(1000);
-    await page.screenshot({
-      path: `${SCREENSHOT_DIR}/04-settings-skills.png`,
-      fullPage: true,
-    });
-  });
-
   test("Settings page with sidebar nav", async ({ page }) => {
     await page.goto(`${BASE}/${ORG}/${WS}/settings/general`);
     await page.waitForLoadState("networkidle");

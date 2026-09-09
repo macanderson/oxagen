@@ -1,20 +1,6 @@
 {
   "capabilities": [
     {
-      "name": "get_a2a_card",
-      "file": "a2a.card.get.ts",
-      "domain": "a2a",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
       "name": "resolve_approval",
       "file": "agent.approval.resolve.ts",
       "domain": "agent",
@@ -26,79 +12,6 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "cancel_background_task",
-      "file": "agent.background_task.cancel.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "get_background_task",
-      "file": "agent.background_task.read.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "start_background_task",
-      "file": "agent.background_task.start.ts",
-      "domain": "agent",
-      "mode": "async",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "execute_code",
-      "file": "agent.code.execute.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "run_capability_chain",
-      "file": "agent.compose.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
         "docs": true
       }
     },
@@ -336,63 +249,6 @@
         "unit": true,
         "e2e": false,
         "docs": true
-      }
-    },
-    {
-      "name": "verify_feature",
-      "file": "agent.feature.verify.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "acquire_file_lock",
-      "file": "agent.file_lock.acquire.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "list_file_locks",
-      "file": "agent.file_lock.list.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "release_file_lock",
-      "file": "agent.file_lock.release.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
       }
     },
     {
@@ -768,77 +624,6 @@
       }
     },
     {
-      "name": "approve_plan",
-      "file": "agent.plan.approve.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "create_plan",
-      "file": "agent.plan.create.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "get_plan",
-      "file": "agent.plan.get.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "list_plans",
-      "file": "agent.plan.list.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "edit_repo_file",
-      "file": "agent.repo.edit.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "agent", "mcp"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": false,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
       "name": "assign_agent_role",
       "file": "agent.role.assign.ts",
       "domain": "agent",
@@ -895,278 +680,6 @@
       }
     },
     {
-      "name": "run_sandbox_command",
-      "file": "agent.sandbox.exec.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "list_sandboxes",
-      "file": "agent.sandbox.list.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": false,
-        "docs": false
-      }
-    },
-    {
-      "name": "rename_sandbox",
-      "file": "agent.sandbox.rename.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": false,
-        "docs": false
-      }
-    },
-    {
-      "name": "snapshot_sandbox",
-      "file": "agent.sandbox.snapshot.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "start_sandbox",
-      "file": "agent.sandbox.start.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "stop_sandbox",
-      "file": "agent.sandbox.stop.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "list_sandbox_files",
-      "file": "agent.sandbox_file.list.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "read_sandbox_file",
-      "file": "agent.sandbox_file.read.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "list_sandbox_logs",
-      "file": "agent.sandbox_log.list.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "list_agent_skills",
-      "file": "agent.skill.list.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "load_skill",
-      "file": "agent.skill.load.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "aggregate_subagents",
-      "file": "agent.subagent.aggregate.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "cancel_subagent",
-      "file": "agent.subagent.cancel.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "dispatch_subagent",
-      "file": "agent.subagent.dispatch.ts",
-      "domain": "agent",
-      "mode": "async",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "get_subagent_logs",
-      "file": "agent.subagent.logs.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "list_subagent_siblings",
-      "file": "agent.subagent.siblings.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "get_subagent_fanout",
-      "file": "agent.subagent_fanout.get.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "list_subagent_fanouts",
-      "file": "agent.subagent_fanout.list.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "get_subagent_result",
-      "file": "agent.subagent_result.get.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
       "name": "list_agent_tools",
       "file": "agent.tool.list.ts",
       "domain": "agent",
@@ -1194,18 +707,6 @@
         "unit": true,
         "e2e": false,
         "docs": true
-      }
-    },
-    {
-      "name": "render_agent_ui",
-      "file": "agent.ui.render.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["agent"],
-      "layers": {
-        "schema": true,
-        "docs": true,
-        "unit": true
       }
     },
     {
@@ -1251,20 +752,6 @@
       }
     },
     {
-      "name": "create_archive",
-      "file": "archive.create.ts",
-      "domain": "document",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
       "name": "upload_asset",
       "file": "asset.upload.ts",
       "domain": "asset",
@@ -1283,109 +770,6 @@
       "name": "query_audit_log",
       "file": "audit.log.query.ts",
       "domain": "audit",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "create_automation",
-      "file": "automation.create.ts",
-      "domain": "automation",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "disable_automation",
-      "file": "automation.disable.ts",
-      "domain": "automation",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "enable_automation",
-      "file": "automation.enable.ts",
-      "domain": "automation",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "get_automation",
-      "file": "automation.get.ts",
-      "domain": "automation",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "docs": true,
-        "unit": true,
-        "app": true
-      }
-    },
-    {
-      "name": "list_automations",
-      "file": "automation.list.ts",
-      "domain": "automation",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "app": true
-      }
-    },
-    {
-      "name": "trigger_automation",
-      "file": "automation.trigger.ts",
-      "domain": "automation",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "app": true
-      }
-    },
-    {
-      "name": "update_automation",
-      "file": "automation.update.ts",
-      "domain": "automation",
       "mode": "sync",
       "surfaces": ["api", "mcp", "agent", "cli"],
       "layers": {
@@ -1714,97 +1098,6 @@
       }
     },
     {
-      "name": "click_page",
-      "file": "browser.click.ts",
-      "domain": "browser",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "fill_page",
-      "file": "browser.fill.ts",
-      "domain": "browser",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "navigate_page",
-      "file": "browser.navigate.ts",
-      "domain": "browser",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "read_page",
-      "file": "browser.read.ts",
-      "domain": "browser",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "refresh_page",
-      "file": "browser.refresh.ts",
-      "domain": "browser",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "screenshot_page",
-      "file": "browser.screenshot.ts",
-      "domain": "browser",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "submit_page",
-      "file": "browser.submit.ts",
-      "domain": "browser",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
       "name": "get_user_budget",
       "file": "budget.policy.read.ts",
       "domain": "user",
@@ -1888,48 +1181,6 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "diff_code",
-      "file": "code.diff.ts",
-      "domain": "code",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "format_code",
-      "file": "code.format.ts",
-      "domain": "code",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "patch_code",
-      "file": "code.patch.ts",
-      "domain": "code",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
         "docs": true
       }
     },
@@ -2273,73 +1524,6 @@
       }
     },
     {
-      "name": "create_document",
-      "file": "document.create.ts",
-      "domain": "document",
-      "mode": "sync",
-      "surfaces": ["api", "mcp"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true
-      }
-    },
-    {
-      "name": "generate_document",
-      "file": "document.generate.ts",
-      "domain": "document",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "list_documents",
-      "file": "document.list.ts",
-      "domain": "document",
-      "mode": "sync",
-      "surfaces": ["api", "mcp"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true
-      }
-    },
-    {
-      "name": "create_pdf",
-      "file": "document.pdf.create.ts",
-      "domain": "document",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "read_document",
-      "file": "document.read.ts",
-      "domain": "document",
-      "mode": "sync",
-      "surfaces": ["api", "mcp"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true
-      }
-    },
-    {
       "name": "create_environment",
       "file": "environment.create.ts",
       "domain": "environment",
@@ -2412,168 +1596,6 @@
       "mode": "sync",
       "surfaces": ["api", "mcp", "agent"],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "create_dataset",
-      "file": "eval.dataset.create.ts",
-      "domain": "eval",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "create_trace_dataset",
-      "file": "eval.dataset.from_traces.ts",
-      "domain": "eval",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "get_dataset",
-      "file": "eval.dataset.get.ts",
-      "domain": "eval",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "list_datasets",
-      "file": "eval.dataset.list.ts",
-      "domain": "eval",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "add_dataset_item",
-      "file": "eval.dataset_item.add.ts",
-      "domain": "eval",
-      "mode": "batch",
-      "surfaces": ["api", "mcp", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "get_eval_run",
-      "file": "eval.run.get.ts",
-      "domain": "eval",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "list_eval_runs",
-      "file": "eval.run.list.ts",
-      "domain": "eval",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "get_eval_run_series",
-      "file": "eval.run.series.ts",
-      "domain": "eval",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "start_eval_run",
-      "file": "eval.run.start.ts",
-      "domain": "eval",
-      "mode": "async",
-      "surfaces": ["api", "mcp", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "get_eval_status",
-      "file": "eval.run.status.ts",
-      "domain": "eval",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "fill_form",
-      "file": "form.fill.ts",
-      "domain": "form",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
         "api": true,
         "mcp": true,
         "unit": true,
@@ -2680,59 +1702,6 @@
       }
     },
     {
-      "name": "analyze_image",
-      "file": "image.analyze.ts",
-      "domain": "image",
-      "mode": "sync",
-      "surfaces": ["api", "mcp"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true
-      }
-    },
-    {
-      "name": "create_image",
-      "file": "image.create.ts",
-      "domain": "image",
-      "mode": "sync",
-      "surfaces": ["api", "mcp"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true
-      }
-    },
-    {
-      "name": "generate_image",
-      "file": "image.generate.ts",
-      "domain": "image",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "list_images",
-      "file": "image.list.ts",
-      "domain": "image",
-      "mode": "sync",
-      "surfaces": ["api", "mcp"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true
-      }
-    },
-    {
       "name": "configure_integration",
       "file": "integration.configure.ts",
       "domain": "integration",
@@ -2833,49 +1802,6 @@
       }
     },
     {
-      "name": "query_lineage",
-      "file": "lineage.query.ts",
-      "domain": "lineage",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
-        "app": true
-      }
-    },
-    {
-      "name": "generate_markdown",
-      "file": "markdown.generate.ts",
-      "domain": "document",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "generate_mermaid",
-      "file": "mermaid.generate.ts",
-      "domain": "mermaid",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
       "name": "list_model_capabilities",
       "file": "model.capability.list.ts",
       "domain": "model",
@@ -2956,6 +1882,34 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_data_plane",
+      "file": "org.data_plane.get.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": ["api", "mcp"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "set_data_plane",
+      "file": "org.data_plane.set.ts",
+      "domain": "org",
+      "mode": "dedicated",
+      "surfaces": ["api", "mcp"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
         "docs": true
       }
     },
@@ -3416,20 +2370,6 @@
       }
     },
     {
-      "name": "create_branch",
-      "file": "repo.branch.create.ts",
-      "domain": "repo",
-      "mode": "sync",
-      "surfaces": ["agent", "api", "mcp"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": false,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
       "name": "list_branches",
       "file": "repo.branch.list.ts",
       "domain": "repo",
@@ -3451,8 +2391,7 @@
         "api": true,
         "mcp": true,
         "unit": false,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -3466,50 +2405,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "create_repo",
-      "file": "repo.create.ts",
-      "domain": "repo",
-      "mode": "sync",
-      "surfaces": ["agent", "api", "mcp"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": false,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "put_repo_file",
-      "file": "repo.file.put.ts",
-      "domain": "repo",
-      "mode": "sync",
-      "surfaces": ["agent", "api", "mcp"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": false,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "fork_repo",
-      "file": "repo.fork.ts",
-      "domain": "repo",
-      "mode": "sync",
-      "surfaces": ["agent", "api", "mcp"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": false,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -3523,8 +2419,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -3538,8 +2433,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -3552,8 +2446,7 @@
         "api": true,
         "mcp": true,
         "unit": false,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -3566,22 +2459,7 @@
         "api": true,
         "mcp": true,
         "unit": false,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "open_pr",
-      "file": "repo.pr.open.ts",
-      "domain": "repo",
-      "mode": "sync",
-      "surfaces": ["agent", "api", "mcp"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": false,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -3595,8 +2473,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -3610,38 +2487,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "start_research_swarm",
-      "file": "research.swarm.start.ts",
-      "domain": "research",
-      "mode": "async",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "get_research_status",
-      "file": "research.swarm.status.ts",
-      "domain": "research",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -3698,131 +2544,6 @@
         "mcp": true,
         "unit": false,
         "docs": true
-      }
-    },
-    {
-      "name": "create_sandbox_template",
-      "file": "sandbox.template.create.ts",
-      "domain": "sandbox",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "delete_sandbox_template",
-      "file": "sandbox.template.delete.ts",
-      "domain": "sandbox",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "export_sandbox_template",
-      "file": "sandbox.template.export.ts",
-      "domain": "sandbox",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "get_sandbox_template",
-      "file": "sandbox.template.get.ts",
-      "domain": "sandbox",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "import_sandbox_template",
-      "file": "sandbox.template.import.ts",
-      "domain": "sandbox",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "list_sandbox_templates",
-      "file": "sandbox.template.list.ts",
-      "domain": "sandbox",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "set_default_sandbox_template",
-      "file": "sandbox.template.set_default.ts",
-      "domain": "sandbox",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "set_sandbox_template_tools",
-      "file": "sandbox.template.set_tools.ts",
-      "domain": "sandbox",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "update_sandbox_template",
-      "file": "sandbox.template.update.ts",
-      "domain": "sandbox",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
       }
     },
     {
@@ -4250,218 +2971,6 @@
       }
     },
     {
-      "name": "author_skill",
-      "file": "skill.author.ts",
-      "domain": "skill",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "create_skill",
-      "file": "skill.create.ts",
-      "domain": "skill",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "draft_skill",
-      "file": "skill.draft.ts",
-      "domain": "skill",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "edit_skill",
-      "file": "skill.edit.ts",
-      "domain": "skill",
-      "mode": "sync",
-      "surfaces": ["api", "mcp"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true
-      }
-    },
-    {
-      "name": "set_skill_enabled",
-      "file": "skill.enable.ts",
-      "domain": "skill",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "export_skill",
-      "file": "skill.export.ts",
-      "domain": "skill",
-      "mode": "sync",
-      "surfaces": ["api", "mcp"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "app": true
-      }
-    },
-    {
-      "name": "get_skill_metrics",
-      "file": "skill.metrics.read.ts",
-      "domain": "skill",
-      "mode": "sync",
-      "surfaces": ["api", "mcp"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "app": true
-      }
-    },
-    {
-      "name": "revise_skill",
-      "file": "skill.revise.ts",
-      "domain": "skill",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": false,
-        "e2e": false,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "activate_skill_version",
-      "file": "skill.version.activate.ts",
-      "domain": "skill",
-      "mode": "sync",
-      "surfaces": ["api", "mcp"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "app": true
-      }
-    },
-    {
-      "name": "get_skill_version",
-      "file": "skill.version.get.ts",
-      "domain": "skill",
-      "mode": "sync",
-      "surfaces": ["api", "mcp"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "app": true
-      }
-    },
-    {
-      "name": "list_skill_versions",
-      "file": "skill.version.list.ts",
-      "domain": "skill",
-      "mode": "sync",
-      "surfaces": ["api", "mcp"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "app": true
-      }
-    },
-    {
-      "name": "upload_skill_version",
-      "file": "skill.version.upload.ts",
-      "domain": "skill",
-      "mode": "sync",
-      "surfaces": ["api", "mcp"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "app": true
-      }
-    },
-    {
-      "name": "install_skill",
-      "file": "skill.workspace.install.ts",
-      "domain": "skill",
-      "mode": "sync",
-      "surfaces": ["api", "mcp"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "app": true
-      }
-    },
-    {
-      "name": "list_workspace_skills",
-      "file": "skill.workspace.list.ts",
-      "domain": "skill",
-      "mode": "sync",
-      "surfaces": ["api", "mcp"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "app": true
-      }
-    },
-    {
-      "name": "generate_svg",
-      "file": "svg.generate.ts",
-      "domain": "svg",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
       "name": "get_install_instructions",
       "file": "system.install.instructions.ts",
       "domain": "system",
@@ -4714,96 +3223,6 @@
         "api": true,
         "docs": true,
         "unit": false,
-        "app": true
-      }
-    },
-    {
-      "name": "generate_video",
-      "file": "video.generate.ts",
-      "domain": "video",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "fetch_web_page",
-      "file": "web.fetch.ts",
-      "domain": "web",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "search_web",
-      "file": "web.search.ts",
-      "domain": "web",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "cancel_workflow",
-      "file": "workflow.cancel.ts",
-      "domain": "workflow",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "run_workflow",
-      "file": "workflow.run.ts",
-      "domain": "workflow",
-      "mode": "async",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "get_workflow_status",
-      "file": "workflow.status.ts",
-      "domain": "workflow",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
         "app": true
       }
     },

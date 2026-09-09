@@ -139,9 +139,7 @@
                     "type": "string",
                     "enum": [
                       "function",
-                      "mcp_server",
-                      "skill",
-                      "agent"
+                      "mcp_server"
                     ]
                   },
                   "ref": {

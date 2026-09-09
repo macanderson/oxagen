@@ -21,22 +21,6 @@ vi.mock("@oxagen/database", () => ({
       createdAt: "createdAt",
       deletedAt: "deletedAt",
     },
-    playbooks: {
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      publicId: "publicId",
-      name: "name",
-      slug: "slug",
-      status: "status",
-      deletedAt: "deletedAt",
-    },
-    playbookTriggers: {
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      publicId: "publicId",
-      triggerType: "triggerType",
-      isEnabled: "isEnabled",
-    },
     agents: {
       orgId: "orgId",
       workspaceId: "workspaceId",
@@ -103,10 +87,10 @@ describe("commandMenuSearchHandler", () => {
     expect(result.rows).toHaveLength(0);
   });
 
-  it("maps playbook Postgres rows into SearchResultRow with correct href", async () => {
+  it("maps agent Postgres rows into SearchResultRow with correct href", async () => {
     mockWithTenantDb.mockImplementation(
       async (fn: (tx: unknown) => Promise<unknown>) => {
-        // Simulate tx chain: .select().from().where().limit() → []
+        // Simulate tx chain: .select().from().where().limit() → rows
         const tx = {
           select: () => tx,
           from: () => tx,
@@ -115,8 +99,8 @@ describe("commandMenuSearchHandler", () => {
           limit: () =>
             Promise.resolve([
               {
-                publicId: "plb_abc",
-                name: "Churn Investigate",
+                publicId: "agt_abc",
+                name: "Churn Investigator",
                 status: "active",
               },
             ]),
@@ -127,7 +111,7 @@ describe("commandMenuSearchHandler", () => {
 
     const result = await commandMenuSearchHandler(
       {
-        kind: "playbook",
+        kind: "agent",
         query: "churn",
         orgSlug: "acme",
         workspaceSlug: "prod",
@@ -136,21 +120,21 @@ describe("commandMenuSearchHandler", () => {
     );
     expect(result.rows).toHaveLength(1);
     const row = result.rows[0];
-    expect(row?.kind).toBe("playbook");
-    expect(row?.label).toBe("Churn Investigate");
-    expect(row?.href).toBe("/acme/prod/automation/playbooks/plb_abc");
+    expect(row?.kind).toBe("agent");
+    expect(row?.label).toBe("Churn Investigator");
+    expect(row?.href).toBe("/acme/prod/agents/agt_abc");
     expect(row?.contextLine).toBe("Status: active");
     expect(row?.scope).toBe("Workspace: prod");
   });
 
   it("merges graph + Postgres results, deduplicates by href", async () => {
-    // Graph returns a node with the same entity
+    // Graph returns a node for the same entity, under a different route.
     mockInvoke.mockResolvedValue({
       nodes: [
         {
-          nodeId: "plb_abc",
-          label: "Playbook",
-          displayName: "Churn Investigate",
+          nodeId: "agt_abc",
+          label: "Agent",
+          displayName: "Churn Investigator",
           description: "Graph node",
         },
       ],
@@ -166,8 +150,8 @@ describe("commandMenuSearchHandler", () => {
           limit: () =>
             Promise.resolve([
               {
-                publicId: "plb_abc",
-                name: "Churn Investigate",
+                publicId: "agt_abc",
+                name: "Churn Investigator",
                 status: "active",
               },
             ]),
@@ -178,7 +162,7 @@ describe("commandMenuSearchHandler", () => {
 
     const result = await commandMenuSearchHandler(
       {
-        kind: "playbook",
+        kind: "agent",
         query: "churn",
         orgSlug: "acme",
         workspaceSlug: "prod",
@@ -186,15 +170,11 @@ describe("commandMenuSearchHandler", () => {
       ctx,
     );
 
-    // Postgres href: /acme/prod/automation/playbooks/plb_abc
-    // Graph href:    /acme/prod/knowledge/graph/plb_abc
-    // Different hrefs → no dedup; both appear.
-    // But we only tested "same href" dedup — here they differ.
-    // Just verify total ≤ 8 and Postgres row is first.
+    // Postgres href: /acme/prod/agents/agt_abc
+    // Graph href:    /acme/prod/knowledge/graph/agt_abc
+    // Different hrefs → no dedup; both appear, Postgres first.
     expect(result.rows.length).toBeLessThanOrEqual(8);
-    expect(result.rows[0]?.href).toBe(
-      "/acme/prod/automation/playbooks/plb_abc",
-    );
+    expect(result.rows[0]?.href).toBe("/acme/prod/agents/agt_abc");
   });
 
   it("slices merged results to max 8 rows", async () => {

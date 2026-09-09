@@ -37,8 +37,6 @@ import { SessionSettings } from "./session-settings";
 import { ChatSessionProvider, useChatSession } from "./session-store";
 import { sessionStorageKey, type SessionSeed } from "./session-state";
 import type { AgentOption } from "../agent-picker/agent-picker-types";
-import type { RepoOption } from "../repo-selector";
-import type { EnvironmentOption } from "../environment-selector";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
 
 afterEach(() => {
@@ -52,41 +50,11 @@ const CODER: AgentOption = {
   name: "Coder",
   description: null,
   agentType: "code",
-  isCode: true,
   avatarUrl: null,
   summary: null,
   managed: false,
   toolRefs: [],
 };
-
-const REPOS: RepoOption[] = [
-  {
-    key: "con_1::acme/platform",
-    connectionId: "con_1",
-    owner: "acme",
-    name: "platform",
-    defaultBranch: "main",
-  },
-  {
-    key: "con_1::acme/site",
-    connectionId: "con_1",
-    owner: "acme",
-    name: "site",
-    defaultBranch: "main",
-  },
-  {
-    key: "con_2::umbrella/labs",
-    connectionId: "con_2",
-    owner: "umbrella",
-    name: "labs",
-    defaultBranch: "develop",
-  },
-];
-
-const ENVIRONMENTS: EnvironmentOption[] = [
-  { id: "env_1", name: "Node 22", isDefault: true },
-  { id: "env_2", name: "Python 3.12", isDefault: false },
-];
 
 const MODEL_CONFIG: ResolvedTierCatalog = {
   text: {
@@ -94,20 +62,10 @@ const MODEL_CONFIG: ResolvedTierCatalog = {
     balanced: "anthropic/claude-sonnet-5",
     precise: "anthropic/claude-opus-4.8",
   },
-  image: {
-    basic: "google/gemini-3.1-flash-image-preview",
-    advanced: "bfl/flux-2-max",
-  },
-  video: {
-    basic: "google/veo-3.0-fast-generate-001",
-    advanced: "google/veo-3.0-generate-001",
-  },
 };
 
 const SEED: SessionSeed = {
   defaultAgentId: null,
-  defaultRepoKey: "con_1::acme/platform",
-  defaultEnvId: "env_1",
   textModel: null,
   textTier: "fast",
   budgetUsd: null,
@@ -129,18 +87,12 @@ function stateOf(): Record<string, unknown> {
 interface HarnessProps {
   variant?: "drawer" | "slide-over" | "rail";
   agents?: AgentOption[];
-  repos?: RepoOption[];
-  environments?: EnvironmentOption[];
-  branches?: string[] | null;
-  branchesLoading?: boolean;
-  defaultBranch?: string | null;
   walletBalanceUsd?: number | null;
   hasMessages?: boolean;
   conversationId?: string | null;
   isNewConversation?: boolean;
   onOpenAgentPicker?: () => void;
   onStartNewChat?: () => void;
-  onLoadBranches?: () => void;
 }
 
 function renderHarness(props: HarnessProps = {}) {
@@ -157,13 +109,7 @@ function renderHarness(props: HarnessProps = {}) {
       <SessionSettings
         variant={props.variant ?? "rail"}
         agents={props.agents ?? [CODER]}
-        repos={props.repos ?? REPOS}
-        environments={props.environments ?? ENVIRONMENTS}
         modelConfig={MODEL_CONFIG}
-        branches={props.branches ?? null}
-        branchesLoading={props.branchesLoading ?? false}
-        onLoadBranches={props.onLoadBranches ?? (() => {})}
-        defaultBranch={props.defaultBranch ?? null}
         walletBalanceUsd={props.walletBalanceUsd ?? null}
         onOpenAgentPicker={props.onOpenAgentPicker}
         onStartNewChat={props.onStartNewChat}
@@ -225,49 +171,10 @@ describe("SessionSettings — Agent row", () => {
   });
 });
 
-describe("SessionSettings — Code section", () => {
-  it("picking a different organization resets repo and branch (the store cascade)", () => {
-    renderHarness({ variant: "rail" });
-    // Exact match: the "labs" repo row's accessible name is "labs umbrella"
-    // (label + owner sublabel) — only the Organization row's name is bare "umbrella".
-    fireEvent.click(screen.getByRole("option", { name: "umbrella" }));
-    const s = stateOf();
-    expect(s.org).toBe("umbrella");
-    expect(s.repoKey).toBeNull();
-    expect(s.branch).toBeNull();
-  });
-
-  it("shows a warning message for a branch that no longer exists", () => {
-    window.localStorage.setItem(
-      sessionStorageKey("ws", "cnv_1"),
-      JSON.stringify({
-        v: 1,
-        agentId: null,
-        tier: "fast",
-        model: null,
-        effort: "medium",
-        budgetUsd: null,
-        org: "acme",
-        repoKey: "con_1::acme/platform",
-        branch: "feat/gone",
-        envId: "env_1",
-      }),
-    );
-    renderHarness({
-      conversationId: "cnv_1",
-      isNewConversation: false,
-      branches: ["main", "develop"],
-    });
-    expect(
-      screen.getByText("Branch feat/gone was deleted. Pick another branch."),
-    ).toBeInTheDocument();
-  });
-});
-
 describe("SessionSettings — picker chrome by variant", () => {
   it("drawer variant opens a picker as a full-screen pushed page with no popover role", () => {
     renderHarness({ variant: "drawer" });
-    fireEvent.click(screen.getByRole("button", { name: /^Repository:/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Model:/ }));
     expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     // The pushed page replaces the whole surface — the section headers are gone.

@@ -257,8 +257,6 @@ function makeAction(result: { ok: boolean } = { ok: true }) {
 
 const BASE_SEED: SessionSeed = {
   defaultAgentId: null,
-  defaultRepoKey: null,
-  defaultEnvId: null,
   textModel: null,
   textTier: "fast",
   budgetUsd: null,
@@ -370,24 +368,6 @@ describe("MessageComposer — chat_ux_v2 mobile row", () => {
     expect(
       screen.getByRole("button", {
         name: "Session settings, settings changed",
-      }),
-    ).toBeInTheDocument();
-  });
-
-  it("shows a destructive cog dot (taking precedence over the dirty accent) when the session has a broken selection", () => {
-    mockViewport.isMobile = true;
-    // A repoKey the composer's `availableRepos` doesn't resolve is a broken
-    // selection per sessionSelectionIssues — availableRepos is omitted here
-    // (defaults to []), so the seeded key never resolves.
-    renderWithSession(
-      {},
-      { ...BASE_SEED, defaultRepoKey: "con_x::ghost/repo" },
-    );
-    const dot = screen.getByTestId("composer-cog-dot");
-    expect(dot.className).toContain("bg-destructive");
-    expect(
-      screen.getByRole("button", {
-        name: "Session settings, attention needed",
       }),
     ).toBeInTheDocument();
   });

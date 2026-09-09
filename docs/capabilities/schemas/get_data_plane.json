@@ -1,0 +1,130 @@
+{
+  "name": "get_data_plane",
+  "domain": "org",
+  "description": "Read the organisation's data-plane binding for one store (postgres, neo4j, or clickhouse): shared or dedicated, its health status, endpoint host and database name, applied schema version, and the last verification/rotation timestamps. Never returns credentials or a connection string.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "configuration"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "postgres",
+          "neo4j",
+          "clickhouse"
+        ]
+      }
+    },
+    "required": [
+      "kind"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "postgres",
+          "neo4j",
+          "clickhouse"
+        ]
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "shared",
+          "dedicated"
+        ]
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "active",
+          "degraded",
+          "disabled"
+        ]
+      },
+      "host": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "database": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "schemaVersion": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "lastVerifiedAt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "rotatedAt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "kind",
+      "mode",
+      "status",
+      "host",
+      "database",
+      "schemaVersion",
+      "lastVerifiedAt",
+      "rotatedAt"
+    ],
+    "additionalProperties": false
+  }
+}

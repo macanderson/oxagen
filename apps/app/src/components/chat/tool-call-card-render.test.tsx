@@ -30,7 +30,7 @@ vi.mock("lucide-react", async (importOriginal) => {
 describe("ToolCallCard", () => {
   const baseProps = {
     toolCallId: "tc-1",
-    capability: "search_web",
+    capability: "query_audit_log",
     inputPreview: { query: "hello" },
     riskLevel: "low" as const,
     status: "completed" as const,
@@ -39,9 +39,9 @@ describe("ToolCallCard", () => {
 
   it("renders the human-readable label instead of the raw capability", () => {
     render(<ToolCallCard {...baseProps} />);
-    expect(screen.getByText("Search the web")).toBeInTheDocument();
+    expect(screen.getByText("Query the audit log")).toBeInTheDocument();
     // The raw dotted string never appears in the collapsed row.
-    expect(screen.queryByText("search_web")).not.toBeInTheDocument();
+    expect(screen.queryByText("query_audit_log")).not.toBeInTheDocument();
   });
 
   it("derives a label for uncurated capabilities", () => {
@@ -53,7 +53,7 @@ describe("ToolCallCard", () => {
   it("exposes the raw capability as the header button title", () => {
     render(<ToolCallCard {...baseProps} />);
     const toggle = screen.getByRole("button", { name: /tool call details/i });
-    expect(toggle).toHaveAttribute("title", "search_web");
+    expect(toggle).toHaveAttribute("title", "query_audit_log");
   });
 
   it("shows the raw capability inside the expanded body", async () => {
@@ -61,7 +61,7 @@ describe("ToolCallCard", () => {
     await userEvent.click(
       screen.getByRole("button", { name: /tool call details/i }),
     );
-    expect(screen.getByText("search_web")).toBeInTheDocument();
+    expect(screen.getByText("query_audit_log")).toBeInTheDocument();
   });
 
   it("never renders a risk badge, even for elevated risk", () => {
@@ -75,7 +75,7 @@ describe("ToolCallCard", () => {
 
   it("shows a muted 'failed' indicator (not destructive-red label) when the call failed", () => {
     render(<ToolCallCard {...baseProps} status="failed" />);
-    const label = screen.getByText("Search the web");
+    const label = screen.getByText("Query the audit log");
     expect(label.className).not.toContain("text-destructive");
     // The failure reads as a quiet muted word.
     const failed = screen.getByLabelText("Failed");
@@ -179,24 +179,16 @@ describe("ToolCallCard", () => {
     expect(screen.getByText("Connection refused")).toBeInTheDocument();
   });
 
-  it("renders stdout in output stream section", async () => {
-    render(
-      <ToolCallCard {...baseProps} status="completed" stdout="Hello stdout" />,
-    );
+  // ADR-043 removed the streaming stdout/stderr channel with the sandbox and
+  // shell tools: a governed capability call has an input and a result, never a
+  // terminal. A running call now shows a status line instead of a stream pane.
+  it("shows a waiting status while the call is running, and no output stream", async () => {
+    render(<ToolCallCard {...baseProps} status="running" />);
     await userEvent.click(
       screen.getByRole("button", { name: /tool call details/i }),
     );
-    expect(screen.getByText("Hello stdout")).toBeInTheDocument();
-  });
-
-  it("renders stderr in output stream section", async () => {
-    render(
-      <ToolCallCard {...baseProps} status="completed" stderr="Error output" />,
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: /tool call details/i }),
-    );
-    expect(screen.getByText("Error output")).toBeInTheDocument();
+    expect(screen.getByText("Waiting for the result…")).toBeInTheDocument();
+    expect(screen.queryByText("Output stream")).not.toBeInTheDocument();
   });
 
   it("defaultOpen=true opens the panel immediately", () => {
@@ -245,7 +237,7 @@ describe("ToolCallCard", () => {
   it("sets data-capability and data-status attributes", () => {
     const { container } = render(<ToolCallCard {...baseProps} />);
     const root = container.querySelector("[data-component='tool-call-card']");
-    expect(root).toHaveAttribute("data-capability", "search_web");
+    expect(root).toHaveAttribute("data-capability", "query_audit_log");
     expect(root).toHaveAttribute("data-status", "completed");
   });
 });

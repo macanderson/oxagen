@@ -21,12 +21,10 @@ import { AgentEnvironmentsCard } from "./agent-environments-card";
 import {
   readAgentBindingsAction,
   readEnvironmentOptionsAction,
-  readTemplateOptionsAction,
   bindAgentEnvironmentAction,
   unbindAgentEnvironmentAction,
   type AgentEnvironmentBinding,
   type EnvironmentOption,
-  type TemplateOption,
 } from "./environments-actions";
 
 interface PageProps {
@@ -38,10 +36,10 @@ interface PageProps {
 }
 
 /**
- * Workbench → Agents → [agentId]. Loads the agent definition and the four Equip
- * pools, then renders the Agent Builder in "edit" mode. A `managed` (built-in)
- * agent is read-only: the builder still renders for inspection but every
- * mutation is disabled. A non-manager also gets a read-only view.
+ * Agents → [agentId]. Loads the agent definition and the two allowlist pools,
+ * then renders the Agent Builder in "edit" mode. A `managed` (built-in) agent is
+ * read-only: the builder still renders for inspection but every mutation is
+ * disabled. A non-manager also gets a read-only view.
  */
 export default async function EditAgentPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug, agentId } = await params;
@@ -58,7 +56,7 @@ export default async function EditAgentPage({ params }: PageProps) {
     notFound();
   }
 
-  // Timeout-guarded so a slow/hanging equip source never blocks the builder.
+  // Timeout-guarded so a slow/hanging allowlist source never blocks the builder.
   const sources = await loadEquipSources(ctx, org.id, ws.id);
 
   const readOnly = agent.managed || !canManage;
@@ -107,7 +105,7 @@ export default async function EditAgentPage({ params }: PageProps) {
   // Environment bindings + the options that populate the bind form. Each read
   // degrades to empty so a failure never blocks the builder from rendering.
   const scope = { orgSlug, workspaceSlug };
-  const [bindings, environments, templates] = await Promise.all([
+  const [bindings, environments] = await Promise.all([
     readAgentBindingsAction({ ...scope, agentId: agent.publicId }).then(
       (d) => d,
       () => [] as AgentEnvironmentBinding[],
@@ -115,10 +113,6 @@ export default async function EditAgentPage({ params }: PageProps) {
     readEnvironmentOptionsAction(scope).then(
       (d) => d,
       () => [] as EnvironmentOption[],
-    ),
-    readTemplateOptionsAction(scope).then(
-      (d) => d,
-      () => [] as TemplateOption[],
     ),
   ]);
 
@@ -129,7 +123,7 @@ export default async function EditAgentPage({ params }: PageProps) {
         description={
           readOnly
             ? "Read-only agent view."
-            : "Edit this agent's identity, instructions, and equipment."
+            : "Edit this agent's identity, instructions, graph scope, and tool allowlist."
         }
         className="pb-0"
         breadcrumb={
@@ -157,18 +151,13 @@ export default async function EditAgentPage({ params }: PageProps) {
           name: agent.name,
           description: agent.description,
           avatarUrl: agent.avatarUrl,
-          agentType: agent.agentType,
           status: agent.status,
           deploymentStatus: agent.deploymentStatus,
           version: agent.version,
           isPublished: agent.isPublished,
           config: agent.config,
         }}
-        sources={{
-          ...sources,
-          // A subagent may not load itself; exclude the current agent from the pool.
-          subagents: sources.subagents.filter((a) => a.ref !== agent.publicId),
-        }}
+        sources={sources}
         installAction={installPlugin}
         installBulkAction={installBulkPlugin}
         roleOptions={roleOptions}
@@ -182,7 +171,6 @@ export default async function EditAgentPage({ params }: PageProps) {
         canManage={canManage && !agent.managed}
         bindings={bindings}
         environments={environments}
-        templates={templates}
         bindAction={bindAgentEnvironmentAction}
         unbindAction={unbindAgentEnvironmentAction}
       />

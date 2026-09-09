@@ -61,7 +61,7 @@ export const repoCiStatus = registerCapability({
     "Read CI check-run and commit-status results for a ref in a GitHub repository.",
   mode: "sync",
   surfaces: ["agent", "api", "mcp"],
-  layers: ["api", "mcp", "unit", "docs", "app"],
+  layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "vcs" },
   sensitivity: "low",

@@ -7,7 +7,7 @@ description: How Oxagen plugins extend the agent toolchain — plugin types, wor
 
 ## What are plugins?
 
-Plugins extend what Oxagen agents can do in a workspace. They can contribute external tools (MCP servers, integrations), built-in AI capabilities (image generation, document creation), domain-specific skills, or knowledge retrieval sources.
+Plugins extend what Oxagen agents can do in a workspace. They can contribute external tools (MCP servers, integrations), first-party capability packs, agent skills, or knowledge retrieval sources.
 
 Every plugin is **workspace-scoped**: you install a plugin directly into a workspace, and it is available only there. Installing a plugin into one workspace has no effect on other workspaces in the same org.
 
@@ -19,7 +19,7 @@ The platform supports five plugin types.
 |---|---|---|
 | `mcp_server` | MCP Servers | Tools served over the MCP protocol from an external endpoint. |
 | `integration` | Integrations | Connectors to third-party platforms (APIs, SaaS services). |
-| `agent_capability` | Agent Capabilities | First-party Oxagen capability packs (image, video, SVG, documents). Invoked internally — no external endpoint. |
+| `agent_capability` | Agent Capabilities | First-party Oxagen capability packs, invoked internally with no external endpoint. No built-in packs ship today — the media and document packs left with the agent runtime (ADR-043); customer packs register through the plugin catalog. |
 | `agent_skill` | Agent Skills | Reusable prompt or workflow skills agents can call by name. |
 | `knowledge_source` | Knowledge Sources | External retrieval sources the agent can query for context. |
 
@@ -39,12 +39,6 @@ After installing an MCP server or integration, a **Connect** button appears if t
 2. For **API key**: opens a modal where you paste your key. The secret is encrypted at rest and never exposed in the UI after saving.
 
 Until Connect is completed, the plugin is installed but its tools are not injected into the agent toolchain.
-
-## Oxagen Plugins (agent capabilities)
-
-Oxagen ships four first-party capability packs, all of type `agent_capability`. They have no external endpoint — they are invoked internally through the capability kernel. Install completes the setup; there is no Connect step.
-
-See [Oxagen Plugins](/docs/plugins/oxagen-plugins) for the list of available packs and the capabilities each one enables.
 
 ## Registries
 

@@ -902,7 +902,7 @@ CREATE POLICY tenant_isolation ON agent.agent_run_finalization_obligations
 -- ════════════════════════════════════════════════════════════════════════════
 -- Guarded: fresh clusters may lack the role. `REVOKE UPDATE, DELETE` on
 -- agent_run_events is safe for the drain window — the only writers are the
--- INSERT and SELECT in packages/agent-runner/src/run-store.ts; nothing in the
+-- INSERT and SELECT in packages/run-ledger/src/run-store.ts; nothing in the
 -- tree updates or deletes an event row, so no queued V1 work loses authority it
 -- needs (spec.md §"Launch changes", item 6).
 DO $$

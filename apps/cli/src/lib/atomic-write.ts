@@ -1,6 +1,6 @@
 /**
- * atomic-write.ts — Crash/truncation-safe file writes shared by the config and
- * settings writers (`../config/write.ts`, `../settings/write.ts`).
+ * atomic-write.ts — Crash/truncation-safe file writes, used by the credential
+ * store (`./config.ts`).
  *
  * A plain `writeFileSync` truncates the target before the new bytes land, so a
  * process killed mid-write (or two parallel CLI sessions writing the same

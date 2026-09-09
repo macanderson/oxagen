@@ -394,11 +394,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
         pageCtx.closeCommand();
         pageCtx.openAskWithText(rendered, template.autoSubmit);
       } else if (item.type === "recent") {
-        const intent = classifyIntent({
-          query: item.label,
-          ctx,
-          hasFillableForm: pageCtx.fillableForm !== null,
-        });
+        const intent = classifyIntent({ query: item.label, ctx });
         if (intent.type === "navigate") {
           pageCtx.closeCommand();
           router.push(intent.href);

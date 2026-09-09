@@ -24,7 +24,7 @@
  * client-only, so in practice they are the pre-hydration frame.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /** Categorical series ramp — the theme's `--chart-1..5`. */
 export const CHART_SERIES_TOKENS = [
@@ -107,12 +107,20 @@ export function useThemeColors<T extends readonly string[]>(
         (_, i) => (fallbacks as readonly string[])[i] ?? "#000000",
       ) as ColorsFor<T>,
   );
-  // The token list is a module-level constant at every call site; join it so a
-  // fresh array literal per render cannot restart the effect on every render.
+  // `tokens` / `fallbacks` are module-level constants at every call site, but
+  // they arrive as fresh array references each render. Hold them in refs so the
+  // effect reads the current values without listing them as dependencies, and
+  // key the effect on the joined token list — their stable identity — so a new
+  // array literal alone can never restart the subscription.
+  const tokensRef = useRef(tokens);
+  const fallbacksRef = useRef(fallbacks);
   const key = tokens.join(",");
   useEffect(() => {
+    tokensRef.current = tokens;
+    fallbacksRef.current = fallbacks;
     const root = document.documentElement;
-    const refresh = () => setColors(resolveThemeColors(tokens, fallbacks));
+    const refresh = () =>
+      setColors(resolveThemeColors(tokensRef.current, fallbacksRef.current));
     refresh();
     const observer = new MutationObserver(refresh);
     observer.observe(root, { attributes: true, attributeFilter: ["class"] });
@@ -122,8 +130,7 @@ export function useThemeColors<T extends readonly string[]>(
       observer.disconnect();
       media.removeEventListener("change", refresh);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` is the
-    // stable identity of `tokens`; `fallbacks` is a constant at every call site.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` IS the stable identity of `tokens`/`fallbacks`; both are module constants at every call site and are read through refs
   }, [key]);
   return colors;
 }

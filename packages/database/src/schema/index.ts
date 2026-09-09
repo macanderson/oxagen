@@ -7,7 +7,6 @@ export * from "./org";
 export * from "./auth";
 export * from "./workspace";
 export * from "./agent";
-export * from "./workflow";
 export * from "./chat";
 export * from "./content";
 export * from "./billing";
@@ -23,8 +22,6 @@ export * from "./run-evidence-foundation";
 export * from "./schema-registry";
 export * from "./environments";
 export * from "./ai";
-export * from "./eval";
-export * from "./cms";
 export * from "./ratelimit";
 export * from "./tacho";
 

@@ -12,7 +12,6 @@
     "@oxagen/handlers": "workspace:*",
     "@oxagen/ontology": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
-    "@oxagen/skills": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "execa": "9.6.1",
     "drizzle-orm": "0.45.2",

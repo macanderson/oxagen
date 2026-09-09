@@ -48,7 +48,6 @@ import {
   type McpRule,
   type McpRuleEffect,
   type McpScope,
-  type SkillsScope,
   type AgentsScope,
   type ResourceScopeCondition,
 } from "./conditions";
@@ -60,7 +59,6 @@ export type {
   McpRule,
   McpRuleEffect,
   McpScope,
-  SkillsScope,
   AgentsScope,
   ResourceScopeCondition,
 };
@@ -893,7 +891,6 @@ export interface EffectiveMcpScope {
 export interface EffectiveResourceScope {
   graph?: GraphScope;
   mcp?: EffectiveMcpScope;
-  skills?: SkillsScope;
   agents?: AgentsScope;
 }
 
@@ -986,15 +983,6 @@ function intersectMcpScope(
   return { ruleSets };
 }
 
-function intersectSkillsScope(
-  a: SkillsScope | undefined,
-  b: SkillsScope | undefined,
-): SkillsScope | undefined {
-  if (a === undefined && b === undefined) return undefined;
-  const slugs = intersectStringSets(a?.slugs, b?.slugs);
-  return slugs === undefined ? {} : { slugs };
-}
-
 function intersectAgentsScope(
   a: AgentsScope | undefined,
   b: AgentsScope | undefined,
@@ -1020,8 +1008,6 @@ export function intersectEffectiveScope(
   if (graph !== undefined) scope.graph = graph;
   const mcp = intersectMcpScope(a?.mcp, b?.mcp);
   if (mcp !== undefined) scope.mcp = mcp;
-  const skills = intersectSkillsScope(a?.skills, b?.skills);
-  if (skills !== undefined) scope.skills = skills;
   const agents = intersectAgentsScope(a?.agents, b?.agents);
   if (agents !== undefined) scope.agents = agents;
   return scope;
@@ -1035,7 +1021,6 @@ function toEffectiveScope(
   if (condition.graph !== undefined) scope.graph = condition.graph;
   if (condition.mcp !== undefined)
     scope.mcp = { ruleSets: [condition.mcp.rules] };
-  if (condition.skills !== undefined) scope.skills = condition.skills;
   if (condition.agents !== undefined) scope.agents = condition.agents;
   return scope;
 }

@@ -46,14 +46,13 @@ export const workspaces = workspaceSchema.table(
     // merges it atomically via jsonb `||`.
     promptConfig: jsonb("prompt_config").notNull().default(sql`'{}'::jsonb`),
     settings: jsonb("settings").notNull().default(sql`'{}'::jsonb`),
-    // Workspace-level model defaults. NULL means the workspace sets no default
-    // for that dimension and the user's own preference (or the system default)
-    // applies. An explicit value overrides user preferences for all members.
+    // Workspace-level text model defaults. NULL means the workspace sets no
+    // default and the user's own preference (or the system default) applies. An
+    // explicit value overrides user preferences for all members. Image/video
+    // defaults were dropped with media generation (ADR-043).
     // Uses the same model_tier enum declared in the auth schema (shared type).
     defaultTextTier: modelTierEnum("default_text_tier"),
     defaultTextModel: text("default_text_model"),
-    defaultImageModel: text("default_image_model"),
-    defaultVideoModel: text("default_video_model"),
   },
   (t) => ({
     orgSlugIdx: uniqueIndex("workspaces_org_slug_idx").on(t.orgId, t.slug),

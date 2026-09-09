@@ -1,0 +1,253 @@
+{
+  "name": "set_data_plane",
+  "domain": "org",
+  "description": "Bind one of the organisation's stores (postgres, neo4j, or clickhouse) to a dedicated customer-controlled endpoint, or return it to the shared platform plane. The connection config is envelope-encrypted at rest and is never readable back. Returns the redacted binding.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "configuration"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "postgres",
+          "neo4j",
+          "clickhouse"
+        ]
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "shared",
+          "dedicated"
+        ]
+      },
+      "config": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "host": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535,
+                "default": 5432
+              },
+              "database": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "username": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "password": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "ssl": {
+                "type": "boolean",
+                "default": true
+              },
+              "maxConnections": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              }
+            },
+            "required": [
+              "host",
+              "database",
+              "username",
+              "password"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "uri": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              },
+              "username": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "password": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "database": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "uri",
+              "username",
+              "password",
+              "database"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "maxLength": 2048
+              },
+              "username": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "password": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "database": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "url",
+              "username",
+              "password",
+              "database"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "required": [
+      "kind",
+      "mode"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "postgres",
+          "neo4j",
+          "clickhouse"
+        ]
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "shared",
+          "dedicated"
+        ]
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "active",
+          "degraded",
+          "disabled"
+        ]
+      },
+      "host": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "database": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "schemaVersion": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "lastVerifiedAt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "rotatedAt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "kind",
+      "mode",
+      "status",
+      "host",
+      "database",
+      "schemaVersion",
+      "lastVerifiedAt",
+      "rotatedAt"
+    ],
+    "additionalProperties": false
+  }
+}

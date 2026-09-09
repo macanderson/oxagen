@@ -14,6 +14,7 @@ import { setSecurityEventEmitter } from "@oxagen/oxagen/kernel";
 import { initTracer, recordSecurityEvent } from "@oxagen/telemetry";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { assertRlsConnectionSafe } from "@oxagen/database";
+import { bootstrapDataPlaneResolver } from "@oxagen/database/data-plane";
 import { isEmailVerificationRequired } from "@oxagen/auth";
 import { isEmailTransportConfigured } from "@oxagen/notifications";
 import { logger } from "./middleware/logger";
@@ -87,6 +88,9 @@ async function runBootstrap(): Promise<void> {
   // DB role silently bypasses RLS while enforcement is on.
   await assertRlsConnectionSafe();
 
+  // ADR-042: wire the organisation-scoped data-plane resolver before any
+  // scoped store access. Inert until an org has a data_planes row.
+  bootstrapDataPlaneResolver();
   bootstrapIAMRuntime();
   // Wire the billing admission gate (suspended / zero-balance refusal +
   // auto-reload) into contract.invoke(), alongside the IAM gate.

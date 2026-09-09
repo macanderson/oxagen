@@ -69,17 +69,12 @@ const ICON_MAP: Record<string, LucideIcon> = {
 // ── Per-type defaults ────────────────────────────────────────────────────────
 
 export const PLUGIN_TYPE_DEFAULTS: Record<
-  | "mcp_server"
-  | "integration"
-  | "agent_capability"
-  | "agent_skill"
-  | "knowledge_source",
+  "mcp_server" | "integration" | "agent_capability" | "knowledge_source",
   { iconName: string; color: string }
 > = {
   mcp_server: { iconName: "plug", color: "#3b82f6" },
   integration: { iconName: "package", color: "#4E6A7A" },
   agent_capability: { iconName: "brain-circuit", color: "#f59e0b" },
-  agent_skill: { iconName: "sparkles", color: "#10b981" },
   knowledge_source: { iconName: "book-open", color: "#0ea5e9" },
 };
 

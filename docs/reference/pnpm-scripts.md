@@ -36,7 +36,6 @@ are not listed here — run those via `pnpm --filter <pkg> <script>`.
 | `db:lint-migrations` | Statically lints the migration folder (naming, ordinal gaps/duplicates). | Part of `pnpm gate`; catches structural mistakes before `db:migrate` runs. |
 | `db:reset` | **Destructive.** Tears down Docker volumes and re-applies all migrations from scratch. | Local dev only, when the DB needs a clean slate. |
 | `db:seed-iam` | Seeds `org.role_grants` for every system role in every org from each contract's `defaultRoles`. | After adding/changing a capability's default IAM roles. |
-| `db:seed-skills` | **Deprecated** — no-op; skills are now seeded per-workspace at creation time. | Do not use; kept for historical reference. |
 | `db:seed-interactive-agent` | Ensures every workspace has the built-in `qa-chat` interactive agent published. | After changing the built-in agent config, or backfilling old workspaces. |
 | `db:backfill-iam` | Idempotently backfills IAM principals/roles for orgs created before IAM bootstrap existed. | One-time backfill after enabling `IAM_ENFORCEMENT_ENABLED`. |
 | `db:backfill-capabilities` | Backfills the default first-party `agent_capability` packs into pre-existing workspaces. | One-time backfill after adding new default capability packs. |
@@ -59,7 +58,6 @@ are not listed here — run those via `pnpm --filter <pkg> <script>`.
 | `release` | Runs the lockstep monorepo release (defaults to no bump — see `release:*`). | Rarely invoked directly; prefer `release:patch`/`minor`/`major`. |
 | `release:patch` / `release:minor` / `release:major` | Bumps every package's version in lockstep, regenerates AI release notes, tags, and propagates `PLATFORM_VERSION` to every Vercel project/environment. | Cutting a new platform release. |
 | `billing:stripe-sync` | Reconciles Stripe products/prices and `billing.plans` against `@oxagen/billing`'s pricing source of truth. `--apply` writes; default is dry-run/report. | After changing pricing in `packages/billing/src/pricing.ts`. |
-| `metrics:fanout` | Compares subagent-fanout ClickHouse metrics (calls-per-dispatch, fan-back ratio, token usage) before/after a cutover date. | Measuring the impact of a fanout/dispatch change. |
 
 ## Notes
 

@@ -11,30 +11,8 @@
 import type { CapabilityDeclaration } from "../types";
 import { apiKeyCreate } from "./api.key.create";
 import { apiKeyRevoke } from "./api.key.revoke";
-import { archiveCreate } from "./archive.create";
 import { assetUpload } from "./asset.upload";
 import { agentApprovalResolve } from "./agent.approval.resolve";
-import { agentCodeExecute } from "./agent.code.execute";
-import { agentSandboxStart } from "./agent.sandbox.start";
-import { agentSandboxExec } from "./agent.sandbox.exec";
-import { agentSandboxSnapshot } from "./agent.sandbox.snapshot";
-import { agentSandboxStop } from "./agent.sandbox.stop";
-import { agentSandboxRename } from "./agent.sandbox.rename";
-import { agentSandboxFilesList } from "./agent.sandbox_file.list";
-import { agentSandboxFileRead } from "./agent.sandbox_file.read";
-import { agentSandboxLogsList } from "./agent.sandbox_log.list";
-import { agentSandboxList } from "./agent.sandbox.list";
-import { browserNavigate } from "./browser.navigate";
-import { browserScreenshot } from "./browser.screenshot";
-import { browserFill } from "./browser.fill";
-import { browserSubmit } from "./browser.submit";
-import { browserClick } from "./browser.click";
-import { browserRefresh } from "./browser.refresh";
-import { browserRead } from "./browser.read";
-import { agentFeatureVerify } from "./agent.feature.verify";
-import { codeDiff } from "./code.diff";
-import { codePatch } from "./code.patch";
-import { codeFormat } from "./code.format";
 import { agentDefinitionCreate } from "./agent.definition.create";
 import { agentDefinitionDelete } from "./agent.definition.delete";
 import { agentDefinitionSuggest } from "./agent.definition.suggest";
@@ -48,7 +26,6 @@ import { agentRoleAssign } from "./agent.role.assign";
 import { agentRoleRevoke } from "./agent.role.revoke";
 import { agentRoleList } from "./agent.role.list";
 import { agentRoleGet } from "./agent.role.get";
-import { a2aCardGet } from "./a2a.card.get";
 import { agentDeploy } from "./agent.deploy";
 import { agentExecutionList } from "./agent.execution.list";
 import { modelCapabilityList } from "./model.capability.list";
@@ -67,11 +44,6 @@ import { tachoCommandFetch } from "./tacho.command.fetch";
 import { tachoHostList } from "./tacho.host.list";
 import { tachoSessionList } from "./tacho.session.list";
 import { tachoSessionGet } from "./tacho.session.get";
-import { agentUiRender } from "./agent.ui.render";
-import { documentsGenerate } from "./document.generate";
-import { documentsPdfCreate } from "./document.pdf.create";
-import { markdownGenerate } from "./markdown.generate";
-import { mermaidGenerate } from "./mermaid.generate";
 import { agentMcpList } from "./agent.mcp.list";
 import { agentMcpResolve } from "./agent.mcp.resolve";
 import { agentMcpRegister } from "./agent.mcp.register";
@@ -98,22 +70,6 @@ import { agentMemoryCitationStats } from "./agent.memory_citation.stats";
 import { agentMemoryDemote } from "./agent.memory.demote";
 import { agentMemoryPromotionDismiss } from "./agent.memory_promotion.dismiss";
 import { agentMemoryPromotionRationales } from "./agent.memory_promotion.rationales";
-import { agentPlanApprove } from "./agent.plan.approve";
-import { agentPlanCreate } from "./agent.plan.create";
-import { agentPlanGet } from "./agent.plan.get";
-import { agentPlanList } from "./agent.plan.list";
-import { agentFileLockAcquire } from "./agent.file_lock.acquire";
-import { agentFileLockRelease } from "./agent.file_lock.release";
-import { agentFileLockList } from "./agent.file_lock.list";
-import { agentSkillList } from "./agent.skill.list";
-import { agentSkillLoad } from "./agent.skill.load";
-import { agentSubagentFanoutGet } from "./agent.subagent_fanout.get";
-import { agentSubagentResultGet } from "./agent.subagent_result.get";
-import { agentSubagentSiblings } from "./agent.subagent.siblings";
-import { agentSubagentFanoutList } from "./agent.subagent_fanout.list";
-import { agentTaskBackgroundCancel } from "./agent.background_task.cancel";
-import { agentTaskBackgroundRead } from "./agent.background_task.read";
-import { agentTaskBackgroundStart } from "./agent.background_task.start";
 import { agentToolList } from "./agent.tool.list";
 import { billingCreditsPurchase } from "./billing.credits.purchase";
 import { billingSubscriptionRead } from "./billing.subscription.read";
@@ -144,7 +100,6 @@ import { conversationRename } from "./conversation.rename";
 import { conversationFilesList } from "./conversation.files.list";
 import { conversationExport } from "./conversation.export";
 import { conversationAttachmentAdd } from "./conversation.attachment.add";
-import { formFill } from "./form.fill";
 import { organizationCreate } from "./org.create";
 import { orgMemberAdd } from "./org.member.add";
 import { orgMemberInviteAccept } from "./org.member_invite.accept";
@@ -154,9 +109,6 @@ import { orgMemberRoleChange } from "./org.member_role.change";
 import { orgList } from "./org.list";
 import { workspaceCreate } from "./workspace.create";
 import { workspaceList } from "./workspace.list";
-import { videoGenerate } from "./video.generate";
-import { imageGenerate } from "./image.generate";
-import { svgGenerate } from "./svg.generate";
 import { systemInstallInstructions } from "./system.install.instructions";
 import { userPreferencesRead } from "./user.preferences.read";
 import { userPreferencesWrite } from "./user.preferences.write";
@@ -168,7 +120,6 @@ import { workspaceBudgetPolicyRead } from "./workspace.budget_policy.read";
 import { workspaceBudgetPolicyWrite } from "./workspace.budget_policy.write";
 import { billingBudgetGet } from "./billing.budget.get";
 import { billingBudgetSet } from "./billing.budget.set";
-import { lineageQuery } from "./lineage.query";
 import { workspaceModelSettingsRead } from "./workspace.model_settings.read";
 import { workspaceModelSettingsWrite } from "./workspace.model_settings.write";
 import { promptSettingsRead } from "./prompt.settings.read";
@@ -194,42 +145,14 @@ import { pluginSettingsGetAuthAlerts } from "./plugin.settings.get_auth_alerts";
 import { capabilityRegistryList } from "./capability.registry.list";
 import { capabilityRegistryGet } from "./capability.registry.get";
 import { iamRoleList } from "./iam.role.list";
-import { workflowRun } from "./workflow.run";
-import { workflowStatus } from "./workflow.status";
-import { workflowCancel } from "./workflow.cancel";
 import { conversationChat } from "./conversation.chat";
-import { imageCreate } from "./image.create";
-import { imageList } from "./image.list";
-import { imageAnalyze } from "./image.analyze";
-import { documentCreate } from "./document.create";
-import { documentList } from "./document.list";
-import { documentRead } from "./document.read";
-import { automationList } from "./automation.list";
-import { automationCreate } from "./automation.create";
-import { automationTrigger } from "./automation.trigger";
-import { automationEnable } from "./automation.enable";
-import { automationDisable } from "./automation.disable";
-import { automationGet } from "./automation.get";
 import { workspaceMemberList } from "./workspace.member.list";
 import { workspaceInviteSend } from "./workspace.invite.send";
-import { skillWorkspaceList } from "./skill.workspace.list";
-import { skillWorkspaceInstall } from "./skill.workspace.install";
-import { skillVersionList } from "./skill.version.list";
-import { skillVersionGet } from "./skill.version.get";
-import { skillVersionUpload } from "./skill.version.upload";
-import { skillVersionActivate } from "./skill.version.activate";
-import { skillEdit } from "./skill.edit";
-import { skillExport } from "./skill.export";
-import { skillMetricsRead } from "./skill.metrics.read";
-import { skillCreate } from "./skill.create";
-import { skillEnable } from "./skill.enable";
 import { toolDeclarationPublish } from "./tool.declaration.publish";
 import { toolDeclarationList } from "./tool.declaration.list";
 import { contextRecordPublish } from "./context.record.publish";
 import { contextRecordList } from "./context.record.list";
 import { contextRecordPromote } from "./context.record.promote";
-import { agentSubagentAggregate } from "./agent.subagent.aggregate";
-import { agentSubagentDispatch } from "./agent.subagent.dispatch";
 import { connectionList } from "./connection.list";
 import { connectionCreate } from "./connection.create";
 import { connectionGet } from "./connection.get";
@@ -240,25 +163,16 @@ import { connectionMappingsGet } from "./connection.mappings.get";
 import { connectionMappingsSet } from "./connection.mappings.set";
 import { privacyDataExport } from "./privacy.data.export";
 import { privacyDataErase } from "./privacy.data.erase";
-import { researchSwarmStart } from "./research.swarm.start";
-import { researchSwarmStatus } from "./research.swarm.status";
 import { graphNodeLabelsGet } from "./graph.node_label.get";
 import { knowledgeNodeRefSchema } from "./knowledge.node-ref";
 import { graphNodeGet } from "./graph.node.get";
 import { graphNodeSearch } from "./graph.node.search";
 import { graphSearch } from "./graph.search";
-import { webSearch } from "./web.search";
-import { webFetch } from "./web.fetch";
 import { pluginSchemaGet } from "./plugin.schema.get";
 import { pluginSchemaValidate } from "./plugin.schema.validate";
 import { pluginVersionList } from "./plugin.version.list";
-import { repoBranchCreate } from "./repo.branch.create";
 import { repoBranchList } from "./repo.branch.list";
 import { repoConfigure } from "./repo.configure";
-import { repoCreate } from "./repo.create";
-import { repoFilePut } from "./repo.file.put";
-import { repoFork } from "./repo.fork";
-import { repoPrOpen } from "./repo.pr.open";
 import { repoPrGet } from "./repo.pr.get";
 import { repoPrDiff } from "./repo.pr.diff";
 import { repoCiStatus } from "./repo.ci.status";
@@ -277,15 +191,12 @@ import { graphNodeList } from "./graph.node.list";
 import { graphStats } from "./graph.stats";
 import { ontologyQuery } from "./ontology.query";
 import { ontologyNeighbors } from "./ontology.neighbors";
-import { agentRepoEdit } from "./agent.repo.edit";
-import { agentCompose } from "./agent.compose";
-import { agentSubagentCancel } from "./agent.subagent.cancel";
-import { agentSubagentLogs } from "./agent.subagent.logs";
 import { apiKeyRotate } from "./api.key.rotate";
 import { auditLogQuery } from "./audit.log.query";
-import { automationUpdate } from "./automation.update";
 import { connectionPause } from "./connection.pause";
 import { connectionUpdate } from "./connection.update";
+import { orgDataPlaneGet } from "./org.data_plane.get";
+import { orgDataPlaneSet } from "./org.data_plane.set";
 import { orgSettingsRead } from "./org.settings.read";
 import { orgSettingsWrite } from "./org.settings.write";
 import { workspaceSettingsRead } from "./workspace.settings.read";
@@ -294,9 +205,6 @@ import { commandMenuSearch } from "./command.menu.search";
 import { commandMenuSuggest } from "./command.menu.suggest";
 import { referenceSearch } from "./reference.search";
 import { referenceCite } from "./reference.cite";
-import { skillAuthor } from "./skill.author";
-import { skillDraft } from "./skill.draft";
-import { skillRevise } from "./skill.revise";
 import { schemaRegistryGet } from "./schema.registry.get";
 import { schemaRegistryConfig } from "./schema.registry.config";
 import { schemaList } from "./schema.list";
@@ -327,15 +235,6 @@ import { environmentGet } from "./environment.get";
 import { environmentUpdate } from "./environment.update";
 import { environmentDelete } from "./environment.delete";
 import { environmentSetDefault } from "./environment.set_default";
-import { sandboxTemplateCreate } from "./sandbox.template.create";
-import { sandboxTemplateList } from "./sandbox.template.list";
-import { sandboxTemplateGet } from "./sandbox.template.get";
-import { sandboxTemplateUpdate } from "./sandbox.template.update";
-import { sandboxTemplateDelete } from "./sandbox.template.delete";
-import { sandboxTemplateSetDefault } from "./sandbox.template.set_default";
-import { sandboxTemplateSetTools } from "./sandbox.template.set_tools";
-import { sandboxTemplateExport } from "./sandbox.template.export";
-import { sandboxTemplateImport } from "./sandbox.template.import";
 import { agentEnvironmentBind } from "./agent.environment.bind";
 import { agentEnvironmentUnbind } from "./agent.environment.unbind";
 import { agentEnvironmentList } from "./agent.environment.list";
@@ -350,16 +249,6 @@ import { secretExport } from "./secret.export";
 // Memory decay policies.
 import { agentMemoryPolicyRead } from "./agent.memory_policy.read";
 import { agentMemoryPolicyWrite } from "./agent.memory_policy.write";
-import { evalDatasetCreate } from "./eval.dataset.create";
-import { evalDatasetList } from "./eval.dataset.list";
-import { evalDatasetGet } from "./eval.dataset.get";
-import { evalDatasetItemAdd } from "./eval.dataset_item.add";
-import { evalDatasetFromTraces } from "./eval.dataset.from_traces";
-import { evalRunStart } from "./eval.run.start";
-import { evalRunStatus } from "./eval.run.status";
-import { evalRunGet } from "./eval.run.get";
-import { evalRunList } from "./eval.run.list";
-import { evalRunSeries } from "./eval.run.series";
 import { routerPolicyGet } from "./router.policy.get";
 import { routerPolicySet } from "./router.policy.set";
 import { routerStatsList } from "./router.stats.list";
@@ -377,23 +266,6 @@ export {
   marketCandidateSchema,
 } from "./router-schema";
 
-// Shared eval.* schemas (not capabilities themselves) — re-exported so the
-// contracts array guard sees eval-schema.ts referenced, mirroring agent-schema.
-export {
-  evalDatasetItemSchema,
-  evalTargetSchema,
-  evalJudgeScoreSchema,
-  evalRunStatusSchema,
-} from "./eval-schema";
-export type {
-  EvalDatasetItem,
-  EvalTarget,
-  EvalJudgeScore,
-  EvalRunStatus,
-} from "./eval-schema";
-// Re-export shared Zod helpers used across schema.* contracts.
-// These are not capability contracts themselves but must appear here to satisfy
-// the check-contracts file-coverage guard (tools/scripts/check-contracts.mjs).
 export type {
   FieldError as SharedFieldError,
   PropertyInput as SharedPropertyInput,
@@ -469,39 +341,27 @@ export type {
 } from "./agent.memory_citation.list";
 
 // Sandbox-template value objects + portable manifest v1 (shared schema module).
+
+// ADR-042 data-plane wire schemas (not capabilities themselves) — re-exported
+// so surfaces and the app import one canonical shape, and so the contracts
+// guard sees this sibling module referenced.
 export {
-  sandboxProviderSchema,
-  sandboxResourcesSchema,
-  sandboxNetworkModeSchema,
-  sandboxNetworkSchema,
-  sandboxSecretSelectionSchema,
-  sandboxLiteralEnvSchema,
-  sandboxPackageManagerSchema,
-  sandboxTemplatePackageGroupSchema,
-  sandboxTemplatePackagesSchema,
-  sandboxToolKindSchema,
-  sandboxTemplateToolSchema,
-  manifestSecretKeySchema,
-  sandboxTemplateManifestSchema,
-  SANDBOX_TEMPLATE_MANIFEST_KIND,
-  SECRET_KEY_NAME_PATTERN,
-} from "./sandbox-template-manifest";
+  dataPlaneKindSchema,
+  dataPlaneModeSchema,
+  dataPlaneStatusSchema,
+  dataPlaneBindingSchema,
+  dataPlaneConfigSchema,
+  postgresPlaneConfigSchema,
+  neo4jPlaneConfigSchema,
+  clickhousePlaneConfigSchema,
+} from "./org.data_plane.shared";
 export type {
-  SandboxProvider,
-  SandboxResources,
-  SandboxNetworkMode,
-  SandboxNetwork,
-  SandboxSecretSelection,
-  SandboxLiteralEnv,
-  SandboxPackageManager,
-  SandboxTemplatePackageGroup,
-  SandboxTemplatePackages,
-  SandboxToolKind,
-  SandboxTemplateTool,
-  ManifestSecretKey,
-  SandboxTemplateManifest,
-  SandboxTemplateManifestInput,
-} from "./sandbox-template-manifest";
+  DataPlaneKindValue,
+  DataPlaneBindingDto,
+  PostgresPlaneConfigInput,
+  Neo4jPlaneConfigInput,
+  ClickHousePlaneConfigInput,
+} from "./org.data_plane.shared";
 
 // Shared reseller-revenue wire schemas (not capabilities themselves) — re-exported
 // so surfaces and the app import one canonical shape, and so the contracts guard
@@ -535,30 +395,8 @@ export type {
 export {
   apiKeyCreate,
   apiKeyRevoke,
-  archiveCreate,
   assetUpload,
   agentApprovalResolve,
-  agentCodeExecute,
-  agentSandboxStart,
-  agentSandboxExec,
-  agentSandboxSnapshot,
-  agentSandboxStop,
-  agentSandboxRename,
-  agentSandboxFilesList,
-  agentSandboxFileRead,
-  agentSandboxLogsList,
-  agentSandboxList,
-  browserNavigate,
-  browserScreenshot,
-  browserFill,
-  browserSubmit,
-  browserClick,
-  browserRefresh,
-  browserRead,
-  agentFeatureVerify,
-  codeDiff,
-  codePatch,
-  codeFormat,
   agentDefinitionCreate,
   agentDefinitionDelete,
   agentDefinitionSuggest,
@@ -572,16 +410,10 @@ export {
   agentRoleRevoke,
   agentRoleList,
   agentRoleGet,
-  a2aCardGet,
   agentDeploy,
   agentExecutionList,
   agentExecutionRecord,
   modelCapabilityList,
-  agentUiRender,
-  documentsGenerate,
-  documentsPdfCreate,
-  markdownGenerate,
-  mermaidGenerate,
   agentMcpList,
   agentMcpResolve,
   agentMcpRegister,
@@ -606,19 +438,6 @@ export {
   agentMemoryDemote,
   agentMemoryPromotionDismiss,
   agentMemoryPromotionRationales,
-  agentPlanApprove,
-  agentPlanCreate,
-  agentPlanGet,
-  agentPlanList,
-  agentFileLockAcquire,
-  agentFileLockRelease,
-  agentFileLockList,
-  agentSkillList,
-  agentSkillLoad,
-  agentSubagentFanoutGet,
-  agentSubagentFanoutList,
-  agentSubagentResultGet,
-  agentSubagentSiblings,
   agentTraceGet,
   agentDebugTrace,
   telemetryErrorCluster,
@@ -633,9 +452,6 @@ export {
   tachoHostList,
   tachoSessionList,
   tachoSessionGet,
-  agentTaskBackgroundCancel,
-  agentTaskBackgroundRead,
-  agentTaskBackgroundStart,
   agentToolList,
   billingCreditsPurchase,
   billingSubscriptionRead,
@@ -666,7 +482,6 @@ export {
   conversationFilesList,
   conversationExport,
   conversationAttachmentAdd,
-  formFill,
   organizationCreate,
   orgList,
   orgMemberAdd,
@@ -676,9 +491,6 @@ export {
   orgMemberRoleChange,
   workspaceCreate,
   workspaceList,
-  videoGenerate,
-  imageGenerate,
-  svgGenerate,
   systemInstallInstructions,
   userPreferencesRead,
   userPreferencesWrite,
@@ -688,7 +500,6 @@ export {
   budgetPolicyWrite,
   billingBudgetGet,
   billingBudgetSet,
-  lineageQuery,
   workspaceBudgetPolicyRead,
   workspaceBudgetPolicyWrite,
   workspaceModelSettingsRead,
@@ -716,42 +527,14 @@ export {
   capabilityRegistryList,
   capabilityRegistryGet,
   iamRoleList,
-  workflowRun,
-  workflowStatus,
-  workflowCancel,
   conversationChat,
-  imageCreate,
-  imageList,
-  imageAnalyze,
-  documentCreate,
-  documentList,
-  documentRead,
-  automationList,
-  automationCreate,
-  automationTrigger,
-  automationEnable,
-  automationDisable,
-  automationGet,
   workspaceMemberList,
   workspaceInviteSend,
-  skillWorkspaceList,
-  skillWorkspaceInstall,
-  skillVersionList,
-  skillVersionGet,
-  skillVersionUpload,
-  skillVersionActivate,
-  skillEdit,
-  skillExport,
-  skillMetricsRead,
-  skillCreate,
-  skillEnable,
   toolDeclarationPublish,
   toolDeclarationList,
   contextRecordPublish,
   contextRecordList,
   contextRecordPromote,
-  agentSubagentAggregate,
-  agentSubagentDispatch,
   connectionList,
   connectionCreate,
   connectionGet,
@@ -762,25 +545,16 @@ export {
   connectionMappingsSet,
   privacyDataExport,
   privacyDataErase,
-  researchSwarmStart,
-  researchSwarmStatus,
   graphNodeLabelsGet,
   knowledgeNodeRefSchema,
   graphNodeGet,
   graphNodeSearch,
   graphSearch,
-  webSearch,
-  webFetch,
   pluginSchemaGet,
   pluginSchemaValidate,
   pluginVersionList,
-  repoBranchCreate,
   repoBranchList,
   repoConfigure,
-  repoCreate,
-  repoFilePut,
-  repoFork,
-  repoPrOpen,
   repoPrGet,
   repoPrDiff,
   repoCiStatus,
@@ -799,15 +573,12 @@ export {
   graphStats,
   ontologyQuery,
   ontologyNeighbors,
-  agentRepoEdit,
-  agentCompose,
-  agentSubagentCancel,
-  agentSubagentLogs,
   apiKeyRotate,
   auditLogQuery,
-  automationUpdate,
   connectionPause,
   connectionUpdate,
+  orgDataPlaneGet,
+  orgDataPlaneSet,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,
@@ -816,9 +587,6 @@ export {
   commandMenuSuggest,
   referenceSearch,
   referenceCite,
-  skillAuthor,
-  skillDraft,
-  skillRevise,
   schemaRegistryGet,
   schemaRegistryConfig,
   schemaList,
@@ -848,15 +616,6 @@ export {
   environmentUpdate,
   environmentDelete,
   environmentSetDefault,
-  sandboxTemplateCreate,
-  sandboxTemplateList,
-  sandboxTemplateGet,
-  sandboxTemplateUpdate,
-  sandboxTemplateDelete,
-  sandboxTemplateSetDefault,
-  sandboxTemplateSetTools,
-  sandboxTemplateExport,
-  sandboxTemplateImport,
   agentEnvironmentBind,
   agentEnvironmentUnbind,
   agentEnvironmentList,
@@ -870,16 +629,6 @@ export {
   secretExport,
   agentMemoryPolicyRead,
   agentMemoryPolicyWrite,
-  evalDatasetCreate,
-  evalDatasetList,
-  evalDatasetGet,
-  evalDatasetItemAdd,
-  evalDatasetFromTraces,
-  evalRunStart,
-  evalRunStatus,
-  evalRunGet,
-  evalRunList,
-  evalRunSeries,
   routerPolicyGet,
   routerPolicySet,
   routerStatsList,
@@ -899,30 +648,8 @@ export {
 export const contracts: readonly CapabilityDeclaration[] = [
   apiKeyCreate,
   apiKeyRevoke,
-  archiveCreate,
   assetUpload,
   agentApprovalResolve,
-  agentCodeExecute,
-  agentSandboxStart,
-  agentSandboxExec,
-  agentSandboxSnapshot,
-  agentSandboxStop,
-  agentSandboxRename,
-  agentSandboxFilesList,
-  agentSandboxFileRead,
-  agentSandboxLogsList,
-  agentSandboxList,
-  browserNavigate,
-  browserScreenshot,
-  browserFill,
-  browserSubmit,
-  browserClick,
-  browserRefresh,
-  browserRead,
-  agentFeatureVerify,
-  codeDiff,
-  codePatch,
-  codeFormat,
   agentDefinitionCreate,
   agentDefinitionDelete,
   agentDefinitionSuggest,
@@ -937,11 +664,6 @@ export const contracts: readonly CapabilityDeclaration[] = [
   agentRoleList,
   agentRoleGet,
   agentDeploy,
-  agentUiRender,
-  documentsGenerate,
-  documentsPdfCreate,
-  markdownGenerate,
-  mermaidGenerate,
   agentMcpList,
   agentMcpResolve,
   agentMcpRegister,
@@ -966,19 +688,6 @@ export const contracts: readonly CapabilityDeclaration[] = [
   agentMemoryDemote,
   agentMemoryPromotionDismiss,
   agentMemoryPromotionRationales,
-  agentPlanApprove,
-  agentPlanCreate,
-  agentPlanGet,
-  agentPlanList,
-  agentFileLockAcquire,
-  agentFileLockRelease,
-  agentFileLockList,
-  agentSkillList,
-  agentSkillLoad,
-  agentSubagentFanoutGet,
-  agentSubagentFanoutList,
-  agentSubagentResultGet,
-  agentSubagentSiblings,
   agentTraceGet,
   agentDebugTrace,
   telemetryErrorCluster,
@@ -993,9 +702,6 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoHostList,
   tachoSessionList,
   tachoSessionGet,
-  agentTaskBackgroundCancel,
-  agentTaskBackgroundRead,
-  agentTaskBackgroundStart,
   agentToolList,
   billingCreditsPurchase,
   billingSubscriptionRead,
@@ -1026,7 +732,6 @@ export const contracts: readonly CapabilityDeclaration[] = [
   conversationFilesList,
   conversationExport,
   conversationAttachmentAdd,
-  formFill,
   organizationCreate,
   orgList,
   orgMemberAdd,
@@ -1036,9 +741,6 @@ export const contracts: readonly CapabilityDeclaration[] = [
   orgMemberRoleChange,
   workspaceCreate,
   workspaceList,
-  videoGenerate,
-  imageGenerate,
-  svgGenerate,
   systemInstallInstructions,
   userPreferencesRead,
   userPreferencesWrite,
@@ -1048,7 +750,6 @@ export const contracts: readonly CapabilityDeclaration[] = [
   budgetPolicyWrite,
   billingBudgetGet,
   billingBudgetSet,
-  lineageQuery,
   workspaceBudgetPolicyRead,
   workspaceBudgetPolicyWrite,
   workspaceModelSettingsRead,
@@ -1076,35 +777,9 @@ export const contracts: readonly CapabilityDeclaration[] = [
   capabilityRegistryList,
   capabilityRegistryGet,
   iamRoleList,
-  workflowRun,
-  workflowStatus,
-  workflowCancel,
   conversationChat,
-  imageCreate,
-  imageList,
-  imageAnalyze,
-  documentCreate,
-  documentList,
-  documentRead,
-  automationList,
-  automationCreate,
-  automationTrigger,
-  automationEnable,
-  automationDisable,
-  automationGet,
   workspaceMemberList,
   workspaceInviteSend,
-  skillWorkspaceList,
-  skillWorkspaceInstall,
-  skillVersionList,
-  skillVersionGet,
-  skillVersionUpload,
-  skillVersionActivate,
-  skillEdit,
-  skillExport,
-  skillMetricsRead,
-  skillCreate,
-  skillEnable,
   toolDeclarationPublish,
   toolDeclarationList,
   contextRecordPublish,
@@ -1113,8 +788,6 @@ export const contracts: readonly CapabilityDeclaration[] = [
   agentExecutionList,
   agentExecutionRecord,
   modelCapabilityList,
-  agentSubagentAggregate,
-  agentSubagentDispatch,
   connectionList,
   connectionCreate,
   connectionGet,
@@ -1125,24 +798,15 @@ export const contracts: readonly CapabilityDeclaration[] = [
   connectionMappingsSet,
   privacyDataExport,
   privacyDataErase,
-  researchSwarmStart,
-  researchSwarmStatus,
   graphNodeLabelsGet,
   graphNodeGet,
   graphNodeSearch,
   graphSearch,
-  webSearch,
-  webFetch,
   pluginSchemaGet,
   pluginSchemaValidate,
   pluginVersionList,
-  repoBranchCreate,
   repoBranchList,
   repoConfigure,
-  repoCreate,
-  repoFilePut,
-  repoFork,
-  repoPrOpen,
   repoPrGet,
   repoPrDiff,
   repoCiStatus,
@@ -1161,15 +825,12 @@ export const contracts: readonly CapabilityDeclaration[] = [
   graphStats,
   ontologyQuery,
   ontologyNeighbors,
-  agentRepoEdit,
-  agentCompose,
-  agentSubagentCancel,
-  agentSubagentLogs,
   apiKeyRotate,
   auditLogQuery,
-  automationUpdate,
   connectionPause,
   connectionUpdate,
+  orgDataPlaneGet,
+  orgDataPlaneSet,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,
@@ -1178,9 +839,6 @@ export const contracts: readonly CapabilityDeclaration[] = [
   commandMenuSuggest,
   referenceSearch,
   referenceCite,
-  skillAuthor,
-  skillDraft,
-  skillRevise,
   schemaRegistryGet,
   schemaRegistryConfig,
   schemaList,
@@ -1210,15 +868,6 @@ export const contracts: readonly CapabilityDeclaration[] = [
   environmentUpdate,
   environmentDelete,
   environmentSetDefault,
-  sandboxTemplateCreate,
-  sandboxTemplateList,
-  sandboxTemplateGet,
-  sandboxTemplateUpdate,
-  sandboxTemplateDelete,
-  sandboxTemplateSetDefault,
-  sandboxTemplateSetTools,
-  sandboxTemplateExport,
-  sandboxTemplateImport,
   agentEnvironmentBind,
   agentEnvironmentUnbind,
   agentEnvironmentList,
@@ -1232,17 +881,6 @@ export const contracts: readonly CapabilityDeclaration[] = [
   secretExport,
   agentMemoryPolicyRead,
   agentMemoryPolicyWrite,
-  a2aCardGet,
-  evalDatasetCreate,
-  evalDatasetList,
-  evalDatasetGet,
-  evalDatasetItemAdd,
-  evalDatasetFromTraces,
-  evalRunStart,
-  evalRunStatus,
-  evalRunGet,
-  evalRunList,
-  evalRunSeries,
   routerPolicyGet,
   routerPolicySet,
   routerStatsList,

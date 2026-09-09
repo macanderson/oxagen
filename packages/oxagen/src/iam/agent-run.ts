@@ -40,7 +40,7 @@
 // This module stays PURE — no I/O, no digest primitives, no DB. It owns the
 // shapes and the deterministic ordering; `@oxagen/iam` owns reading rows,
 // digesting the canonical form, and persisting decisions. That split is forced
-// as well as tidy: @oxagen/oxagen cannot import @oxagen/agent-runner (whose
+// as well as tidy: @oxagen/oxagen cannot import @oxagen/run-ledger (whose
 // canonicalJson/digestOfCanonicalJson helpers live there) without the cycle
 // oxagen → agent-runner → database → oxagen.
 
@@ -218,7 +218,7 @@ function byString<T>(pick: (item: T) => string) {
  * TypeScript.
  *
  * Returns a plain object (not a class, no `undefined` values) because the
- * canonical-JSON writer in `@oxagen/agent-runner` rejects `undefined` outright
+ * canonical-JSON writer in `@oxagen/run-ledger` rejects `undefined` outright
  * rather than coercing it to null — a silently-coerced field would change the
  * document a digest claims to cover.
  */

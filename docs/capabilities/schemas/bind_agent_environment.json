@@ -1,7 +1,7 @@
 {
   "name": "bind_agent_environment",
   "domain": "agent",
-  "description": "Bind an agent to an environment (and optionally a specific sandbox template within it). Upserts the binding; promoting one to primary atomically demotes the agent's previous primary.",
+  "description": "Bind an agent identity to an environment (a named vault of secrets it may resolve). Upserts the binding; promoting one to primary atomically demotes the agent's previous primary.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -31,17 +31,6 @@
       "environmentId": {
         "type": "string",
         "minLength": 1
-      },
-      "sandboxTemplateId": {
-        "anyOf": [
-          {
-            "type": "string",
-            "minLength": 1
-          },
-          {
-            "type": "null"
-          }
-        ]
       },
       "isPrimary": {
         "type": "boolean"
@@ -75,26 +64,6 @@
           "environmentSlug": {
             "type": "string"
           },
-          "sandboxTemplateId": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sandboxTemplateName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "isPrimary": {
             "type": "boolean"
           }
@@ -105,8 +74,6 @@
           "environmentId",
           "environmentName",
           "environmentSlug",
-          "sandboxTemplateId",
-          "sandboxTemplateName",
           "isPrimary"
         ],
         "additionalProperties": false

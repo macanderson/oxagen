@@ -17,7 +17,6 @@ describe("agent.environment.bind contract", () => {
       agentEnvironmentBind.input.parse({
         agentId: "a_1",
         environmentId: "env_1",
-        sandboxTemplateId: "sbx_1",
         isPrimary: true,
       }),
     ).not.toThrow();
@@ -25,7 +24,6 @@ describe("agent.environment.bind contract", () => {
       agentEnvironmentBind.input.parse({
         agentId: "a_1",
         environmentId: "env_1",
-        sandboxTemplateId: null,
       }),
     ).not.toThrow();
   });
@@ -43,8 +41,6 @@ describe("agent.environment.bind contract", () => {
           environmentId: "env_1",
           environmentName: "Production",
           environmentSlug: "production",
-          sandboxTemplateId: "sbx_1",
-          sandboxTemplateName: "SWE-bench",
           isPrimary: true,
         },
       }),

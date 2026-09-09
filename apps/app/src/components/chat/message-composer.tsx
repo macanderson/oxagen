@@ -43,9 +43,6 @@ import { BudgetControl } from "./budget-control";
 import { useSessionModelState } from "./session/session-bridges";
 import { FOCUS_COMPOSER_EVENT } from "./agent-picker/focus-composer-event";
 import { useChatSessionContext } from "./session/session-store";
-import { sessionSelectionIssues } from "./session/session-state";
-import { ComposerPrStatusChip } from "./composer-pr-status-chip";
-import type { ComposerPrStatus } from "./composer-pr-status-chip";
 import { SlashCommandMenu } from "./slash-command-menu";
 // Import from the client-safe subpath, NOT the @oxagen/ai barrel: the barrel
 // pulls telemetry/clickhouse/opentelemetry (async_hooks) into the client bundle
@@ -66,40 +63,23 @@ import { MentionMenu } from "./mentions/mention-menu";
 import { MentionChip } from "./mentions/mention-chip";
 import { useMentionSearch } from "./mentions/use-mention-search";
 import type { MentionSearchResult } from "./mentions/mention-meta";
-import type { RepoOption } from "./repo-selector";
-import type { EnvironmentOption } from "./environment-selector";
 import type { AgentOption } from "./agent-picker/agent-picker-types";
 import { AgentContextChip } from "./agent-picker/agent-context-chip";
 import { useComposerSelectionState } from "./agent-picker/chat-selection-context";
-import {
-  pinStorageKey,
-  readStoredPins,
-  writeStoredPins,
-  buildPinnedContext,
-  DRAFT_PREFIX,
-} from "./pinned-context";
 import { MessageQueue } from "./message-queue";
 import {
   AttachmentChip,
   hasInFlightUploads,
   type PendingAttachment,
 } from "./attachment-chip";
-import { extractVideoFrames } from "./extract-video-frames";
 import { AttachTray } from "./attach-tray";
 import { AttachPopover } from "./attach-popover";
 
-/** Images attach directly; videos attach too (Phase 2) — a video-capable model
- * receives the video file, otherwise the server falls back to keyframes the
- * composer extracts client-side (see extract-video-frames.ts). */
+/** Images and videos attach directly; a video needs a video-capable model. */
 const ATTACHMENT_ACCEPT = "image/*,video/*";
-/** Bounds a single turn's VISIBLE attachment count. Hidden video keyframes
- * don't count here; the total serialized set (visible + keyframes) is bounded
- * by the stream route's `attachments` array cap (BodySchema `.max(16)`). */
+/** Bounds a single turn's attachment count, under the stream route's
+ * `attachments` array cap (BodySchema `.max(16)`). */
 const MAX_ATTACHMENTS = 8;
-/** Keyframes sampled per attached video for the vision-only fallback path.
- * Kept low so a video + its frames stays well under the server's 16-attachment
- * cap even with a couple of videos in one turn. */
-const VIDEO_KEYFRAME_COUNT = 3;
 
 /**
  * Mirrors `ASSET_LIMITS` from packages/storage/src/assets.ts for the three
@@ -122,16 +102,13 @@ const ATTACHMENT_SIZE_LIMITS: Record<"image" | "video" | "document", number> = {
 type ClassifiedFile = { file: File; kind: "image" | "video" | "document" };
 
 /** The serializable subset of an uploaded attachment sent to the server —
- * mirrors `conversationAssetItem` minus fields the composer never needs, plus
- * the video↔keyframe link (Phase 2). */
+ * mirrors `conversationAssetItem` minus fields the composer never needs. */
 export interface UploadedAttachmentMeta {
   publicId: string;
   kind: string;
   name: string;
   mimeType: string;
   url: string;
-  /** Set on a keyframe image to the server publicId of its source video. */
-  keyframeForVideo?: string;
 }
 
 /** A pending @-mention plus the picked search row's display extras, so the
@@ -144,56 +121,31 @@ interface ComposerMention extends PendingMention {
 function toUploadedMeta(
   attachments: PendingAttachment[],
 ): UploadedAttachmentMeta[] {
-  // Map each video attachment's LOCAL id → its server publicId, so a keyframe
-  // (which references the video by local id, created before the video finished
-  // uploading) can be linked to the real publicId at submit time.
-  const videoPublicIdByLocalId = new Map<string, string>();
-  for (const a of attachments) {
-    if (a.status === "uploaded" && a.kind === "video" && a.publicId) {
-      videoPublicIdByLocalId.set(a.id, a.publicId);
-    }
-  }
-  return (
-    attachments
-      .filter(
-        (
-          a,
-        ): a is PendingAttachment &
-          Required<
-            Pick<
-              PendingAttachment,
-              "publicId" | "kind" | "mimeType" | "url" | "name"
-            >
-          > =>
-          a.status === "uploaded" &&
-          a.publicId !== undefined &&
-          a.kind !== undefined &&
-          a.mimeType !== undefined &&
-          a.url !== undefined &&
-          a.name !== undefined,
-      )
-      // Drop an orphan keyframe whose source video failed to upload — sending it
-      // as a plain image would misrepresent it as a user-picked picture.
-      .filter(
-        (a) =>
-          a.keyframeForVideoLocalId === undefined ||
-          videoPublicIdByLocalId.has(a.keyframeForVideoLocalId),
-      )
-      .map((a) => ({
-        publicId: a.publicId,
-        kind: a.kind,
-        name: a.name,
-        mimeType: a.mimeType,
-        url: a.url,
-        ...(a.keyframeForVideoLocalId
-          ? {
-              keyframeForVideo: videoPublicIdByLocalId.get(
-                a.keyframeForVideoLocalId,
-              )!,
-            }
-          : {}),
-      }))
-  );
+  return attachments
+    .filter(
+      (
+        a,
+      ): a is PendingAttachment &
+        Required<
+          Pick<
+            PendingAttachment,
+            "publicId" | "kind" | "mimeType" | "url" | "name"
+          >
+        > =>
+        a.status === "uploaded" &&
+        a.publicId !== undefined &&
+        a.kind !== undefined &&
+        a.mimeType !== undefined &&
+        a.url !== undefined &&
+        a.name !== undefined,
+    )
+    .map((a) => ({
+      publicId: a.publicId,
+      kind: a.kind,
+      name: a.name,
+      mimeType: a.mimeType,
+      url: a.url,
+    }));
 }
 
 /** Build the per-turn budget wire payload from a model-state snapshot. Shared
@@ -205,46 +157,6 @@ function budgetPayload(modelSnapshot: ComposerModelState) {
     limitUsd: modelSnapshot.budgetEnabled ? modelSnapshot.budgetUsd : null,
     mode: modelSnapshot.budgetMode,
     graceOveragePct: modelSnapshot.budgetGracePct,
-  };
-}
-
-/** The wire shape of the stream route's `code` BodySchema field. */
-export interface CodeModePayload {
-  connectionId: string;
-  owner: string;
-  name: string;
-  defaultBranch: string | null;
-  environmentId: string;
-  /** Human label for the environment, so the agent context shows the name, not
-   * the opaque `env_…` id. Null when the id couldn't be resolved to an option. */
-  environmentName: string | null;
-  sandboxSessionId: string | null;
-}
-
-/**
- * Build the `code` wire payload from the composer's code-mode state, or
- * `null` when code mode is off or a required selection is missing (the send
- * gate keeps the latter from ever reaching submit, but this stays defensive).
- * `sandboxSessionId` is always `null` here — reserved for future session reuse.
- */
-function codePayload(
-  codeMode: boolean,
-  repo: RepoOption | null,
-  environment: EnvironmentOption | null,
-  selectedBranch: string | null,
-): CodeModePayload | null {
-  if (!codeMode || !repo || !environment) return null;
-  return {
-    connectionId: repo.connectionId,
-    owner: repo.owner,
-    name: repo.name,
-    // The branch the sandbox checks out / the agent context reports. Honour
-    // the user's explicit branch pick (SELECTION store); `null` means "the
-    // repository's default branch", so fall back to it.
-    defaultBranch: selectedBranch ?? repo.defaultBranch,
-    environmentId: environment.id,
-    environmentName: environment.name,
-    sandboxSessionId: null,
   };
 }
 
@@ -436,11 +348,7 @@ export function MessageComposer({
   onInterrupt,
   initialModelState,
   availableMcpServers,
-  availableRepos,
-  availableEnvironments,
   availableAgents,
-  defaultRepoKey,
-  defaultEnvId,
   defaultAgentId,
   onSetDefaultAgent,
   workspaceBudgetGovernance,
@@ -448,7 +356,6 @@ export function MessageComposer({
   onInputHasContentChange,
   orgSlug,
   workspaceSlug,
-  codeSessionPr,
   onOpenSessionSettings,
   showComposerCog = false,
 }: {
@@ -479,16 +386,8 @@ export function MessageComposer({
   initialModelState?: ComposerModelState;
   /** Available MCP servers for the per-turn activation picker. */
   availableMcpServers?: McpServerSummary[];
-  /** GitHub repos usable as the code-mode target (see _shared/code-mode-data.ts). */
-  availableRepos?: RepoOption[];
-  /** Workspace environments usable as the code-mode target. */
-  availableEnvironments?: EnvironmentOption[];
-  /** Selectable agents for the agent picker; a code agent governs code mode. */
+  /** Selectable agents for the composer's agent picker. */
   availableAgents?: AgentOption[];
-  /** Prefill for a code agent's repo session (a `RepoOption.key`); from workspace prefs. */
-  defaultRepoKey?: string | null;
-  /** Prefill for a code agent's environment session; from workspace prefs. */
-  defaultEnvId?: string | null;
   /** The workspace user's current default agent (agt_… public id), or null. */
   defaultAgentId?: string | null;
   /** Toggle the workspace default agent from the picker's star. Omitted ⇒ star hidden. */
@@ -511,14 +410,6 @@ export function MessageComposer({
    * `false` → input is empty / cleared (show suggested prompts).
    */
   onInputHasContentChange?: (hasContent: boolean) => void;
-  /**
-   * The pull request the coding agent has opened for this conversation, if any.
-   * Rendered as a compact "PR #123 ●" chip in the composer footer whose status
-   * circle reflects live CI for the PR head (hover → per-check timing + tally).
-   * Null/omitted ⇒ no chip. Derived by the parent from the latest
-   * `agent.repo.edit` / `repo.pr.open` tool result in the conversation.
-   */
-  codeSessionPr?: ComposerPrStatus | null;
   /**
    * chat_ux_v2 condensed row only: opens the session-settings surface from the
    * cog button. Always used by v2Mobile (which always shows a cog — there is
@@ -560,61 +451,14 @@ export function MessageComposer({
     new Set(),
   );
 
-  // ── Code mode (OXA app-code-mode) ─────────────────────────────────────────
-  // Agent + code-session (repo/env) selection lives in a shared store so the
-  // composer chip and the empty-state gallery drive the SAME selection. Without
-  // a provider (a bare composer in tests) this transparently falls back to a
-  // self-contained local store, so the composer behaves identically either way.
-  const {
-    selectedAgentId,
-    selectedRepoKey,
-    selectedBranch,
-    selectedEnvId,
-    selectionLocked,
-    setSelectedRepoKey,
-    setSelectedEnvId,
-    applyAgentSelection,
-    lockSelection,
-  } = useComposerSelectionState();
-  const selectedRepo =
-    availableRepos?.find((r) => r.key === selectedRepoKey) ?? null;
-  const selectedEnv =
-    availableEnvironments?.find((e) => e.id === selectedEnvId) ?? null;
-
   // ── Agent selection (OXA app-agent-selector) ──────────────────────────────
-  // Code mode is derived SOLELY from the selected agent's identity: a code agent
-  // (isCode) runs the turn in a sandbox against a selected repo + environment
-  // and reveals that tooling; a chat agent — or no agent at all — keeps the
-  // plain composer. There is no manual toggle: an agentic coding flow requires a
-  // coding agent (and a repo + environment) by construction (see the send gate
-  // `codeGateBlocked` below).
-  const selectedAgent =
-    availableAgents?.find((a) => a.agentId === selectedAgentId) ?? null;
-  const codeMode = selectedAgent?.isCode ?? false;
-
-  // When code mode turns on, pre-fill the REQUIRED selections from the obvious
-  // workspace defaults so the user SEES a ready-to-send target (they can still
-  // change it before the first turn locks it): the default environment
-  // (isDefault), and the default repo — the workspace-default repo when set,
-  // else the sole option when there's exactly one. Skipped once locked (the
-  // selection is already forced to the binding).
-  React.useEffect(() => {
-    if (!codeMode || selectionLocked) return;
-    if (!selectedEnvId) {
-      const defaultEnv = availableEnvironments?.find((e) => e.isDefault);
-      if (defaultEnv) setSelectedEnvId(defaultEnv.id);
-    }
-    if (!selectedRepoKey) {
-      const repos = availableRepos ?? [];
-      const defaultRepo =
-        (defaultRepoKey ? repos.find((r) => r.key === defaultRepoKey) : null) ??
-        (repos.length === 1 ? repos[0] : null);
-      if (defaultRepo) setSelectedRepoKey(defaultRepo.key);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-derive when codeMode flips on; availableRepos/availableEnvironments are stable per render from server props
-  }, [codeMode]);
-
-  const codeGateBlocked = codeMode && (!selectedRepo || !selectedEnvId);
+  // The agent selection lives in a shared store so the composer chip and the
+  // empty-state gallery drive the SAME selection. Without a provider (a bare
+  // composer in tests) this transparently falls back to a self-contained local
+  // store, so the composer behaves identically either way.
+  const { selectedAgentId, applyAgentSelection } = useComposerSelectionState();
+  const selectedAgentName =
+    availableAgents?.find((a) => a.agentId === selectedAgentId)?.name ?? null;
 
   const formRef = React.useRef<HTMLFormElement>(null);
 
@@ -751,47 +595,6 @@ export function MessageComposer({
     return () => document.removeEventListener("keydown", onDocumentKeyDown);
   }, [composerCollapsed, expandComposer]);
 
-  // ── Pinned chat context (org/repo + environment) ──────────────────────────
-  // A pin sticks the current repo/environment selection to THIS conversation so
-  // the assistant knows which repo the user means on every future turn (see
-  // pinned-context.ts). Optional; repo/env are independent. Persistence is
-  // keyed per-conversation, with a workspace-scoped draft key for a new chat
-  // that migrates onto the real conversation key on first send.
-  const [isPinned, setIsPinned] = React.useState(false);
-  const pinKey = pinStorageKey(workspaceSlug, conversationId);
-  const prevPinKeyRef = React.useRef(pinKey);
-  React.useEffect(() => {
-    const prevKey = prevPinKeyRef.current;
-    prevPinKeyRef.current = pinKey;
-    let stored = readStoredPins(pinKey);
-    // Carry a draft pin onto the real conversation key the first time a new
-    // chat gets an id (draft -> conv). Never migrate conv -> conv: switching
-    // conversations must not leak one chat's pin into another.
-    if (!stored && prevKey !== pinKey && prevKey.startsWith(DRAFT_PREFIX)) {
-      const carried = readStoredPins(prevKey);
-      if (carried) {
-        writeStoredPins(pinKey, carried);
-        writeStoredPins(prevKey, null);
-        stored = carried;
-      }
-    }
-    if (stored) {
-      if (stored.repoKey) setSelectedRepoKey(stored.repoKey);
-      if (stored.envId) setSelectedEnvId(stored.envId);
-      setIsPinned(true);
-    } else {
-      setIsPinned(false);
-    }
-    // setSelectedRepoKey/setSelectedEnvId are stable store setters; they're
-    // listed so this only re-runs on a conversation switch (pinKey change).
-  }, [pinKey, setSelectedRepoKey, setSelectedEnvId]);
-
-  // No pin toggle and no per-turn repo/env selection handlers: the chat context
-  // is chosen ONCE when the agent is picked (a code agent's setup step asks for
-  // org → repository → branch) and is immutable for the rest of the
-  // conversation. The hydration effect above still reads a pin stored by an
-  // earlier version, so those conversations keep sending their `pinnedContext`.
-
   // ── Slash commands ────────────────────────────────────────────────────────
   // `slashQuery` is the text after a lone leading slash ("/ci" -> "ci"), or
   // null when the input isn't a slash command. The menu is an autocomplete
@@ -799,15 +602,8 @@ export function MessageComposer({
   // (its system prompt documents the commands — see @oxagen/ai slash-commands).
   const [slashQuery, setSlashQuery] = React.useState<string | null>(null);
   const [slashActiveIndex, setSlashActiveIndex] = React.useState(0);
-  // `clientAction` commands (`/pin`) are filtered out of the app's menu. The
-  // chat context is chosen once at agent-pick time and is immutable for the
-  // conversation, so offering `/pin` would be a control that cannot do
-  // anything. The CLI keeps its own pin semantics for `/pin`.
   const slashCommands = React.useMemo(
-    () =>
-      slashQuery === null
-        ? []
-        : matchSlashCommands(slashQuery).filter((c) => !c.clientAction),
+    () => (slashQuery === null ? [] : matchSlashCommands(slashQuery)),
     [slashQuery],
   );
   const slashOpen = slashQuery !== null && slashCommands.length > 0;
@@ -855,37 +651,13 @@ export function MessageComposer({
     setMentionActiveIndex(0);
   }, []);
 
-  // Ref mirror of the code-mode + pin + agent selection so dispatchQueued
-  // (queue-drain path) reads the CURRENT selection at drain time, same pattern
-  // as activeServerIdsRef/parentMessageIdRef below.
-  const codeStateRef = React.useRef({
-    codeMode,
-    selectedRepo,
-    selectedEnvId,
-    isPinned,
-    selectedEnv,
-    selectedAgentId,
-    selectedBranch,
-  });
+  // Ref mirror of the agent selection so dispatchQueued (queue-drain path)
+  // reads the CURRENT selection at drain time, same pattern as
+  // activeServerIdsRef/parentMessageIdRef below.
+  const selectedAgentIdRef = React.useRef(selectedAgentId);
   React.useEffect(() => {
-    codeStateRef.current = {
-      codeMode,
-      selectedRepo,
-      selectedEnvId,
-      isPinned,
-      selectedEnv,
-      selectedAgentId,
-      selectedBranch,
-    };
-  }, [
-    codeMode,
-    selectedRepo,
-    selectedEnvId,
-    isPinned,
-    selectedEnv,
-    selectedAgentId,
-    selectedBranch,
-  ]);
+    selectedAgentIdRef.current = selectedAgentId;
+  }, [selectedAgentId]);
 
   // Stable ref for the callback so the textarea onChange handler never
   // captures a stale closure — the identity of the ref never changes.
@@ -962,8 +734,8 @@ export function MessageComposer({
     const ta = formRef.current?.elements.namedItem(
       "content",
     ) as HTMLTextAreaElement | null;
-    // No `clientAction` branch: those commands are filtered out of this
-    // menu (see `slashCommands` above) — the app has no per-turn pinning.
+    // Every command is agent-interpreted (ADR-043 removed the one
+    // client-handled command), so this only ever fills the composer.
     if (ta) {
       ta.value = `/${command.name} `;
       ta.focus();
@@ -1185,48 +957,9 @@ export function MessageComposer({
   );
 
   /**
-   * Sample keyframes from a just-attached video and add them as HIDDEN image
-   * attachments linked to the video's local id, uploading each as kind=image.
-   * Best-effort: extractVideoFrames never throws (returns [] on an unsupported
-   * codec), in which case the turn relies on a video-capable model or the
-   * server returns a 422. Runs after the video is queued so the video
-   * chip appears immediately.
-   */
-  const attachVideoKeyframes = React.useCallback(
-    async (videoLocalId: string, file: File) => {
-      const frames = await extractVideoFrames(file, {
-        maxFrames: VIDEO_KEYFRAME_COUNT,
-      });
-      if (frames.length === 0) return;
-      const baseName = file.name.replace(/\.[^.]+$/, "") || "video";
-      const keyframes: PendingAttachment[] = frames.map((frame, i) => ({
-        id: newLocalId(),
-        // Wrap the blob as a File so the hidden attachment carries a stable
-        // name/type; it never renders a chip (hidden), so previewUrl is unused
-        // but kept non-empty for the shared cleanup path.
-        file: new File([frame.blob], `${baseName}-frame-${i + 1}.webp`, {
-          type: frame.blob.type || "image/webp",
-        }),
-        previewUrl: URL.createObjectURL(frame.blob),
-        status: "uploading",
-        progress: 0,
-        hidden: true,
-        keyframeForVideoLocalId: videoLocalId,
-        attemptKind: "image",
-      }));
-      setAttachments((prev) => [...prev, ...keyframes]);
-      queueMicrotask(() => {
-        for (const kf of keyframes)
-          uploadAttachment(kf.id, kf.file, "image", kf.file.name);
-      });
-    },
-    [newLocalId, uploadAttachment],
-  );
-
-  /**
    * Shared attachment-queueing core: size-checks a pre-classified batch
    * against `ATTACHMENT_SIZE_LIMITS`, respects the MAX_ATTACHMENTS room
-   * limit, and kicks off uploads (+ video keyframe sampling). Used by both
+   * limit, and kicks off uploads. Used by both
    * `addFiles` (legacy paste/drop/paperclip path — image/video only) and
    * `addClassifiedFiles` (chat_ux_v2 attach tray/popover — image/video/
    * document, since the server's "document" kind additionally accepts PDF)
@@ -1270,13 +1003,12 @@ export function MessageComposer({
           accepted.forEach(({ file, kind }, i) => {
             const a = next[i]!;
             uploadAttachment(a.id, file, kind, file.name);
-            if (kind === "video") void attachVideoKeyframes(a.id, file);
           });
         });
         return [...prev, ...next];
       });
     },
-    [attachVideoKeyframes, newLocalId, uploadAttachment],
+    [newLocalId, uploadAttachment],
   );
 
   /** Add newly picked/pasted/dropped files as pending attachments and start
@@ -1320,20 +1052,10 @@ export function MessageComposer({
     xhrsRef.current.get(id)?.abort();
     xhrsRef.current.delete(id);
     setAttachments((prev) => {
-      // Removing a video also removes its hidden keyframes (else they'd upload,
-      // block send via hasInFlightUploads, then be dropped as orphans at submit).
-      const removeIds = new Set<string>([id]);
       for (const a of prev) {
-        if (a.keyframeForVideoLocalId === id) removeIds.add(a.id);
+        if (a.id === id) URL.revokeObjectURL(a.previewUrl);
       }
-      for (const a of prev) {
-        if (removeIds.has(a.id)) {
-          xhrsRef.current.get(a.id)?.abort();
-          xhrsRef.current.delete(a.id);
-          URL.revokeObjectURL(a.previewUrl);
-        }
-      }
-      return prev.filter((a) => !removeIds.has(a.id));
+      return prev.filter((a) => a.id !== id);
     });
   }, []);
 
@@ -1399,34 +1121,19 @@ export function MessageComposer({
     [],
   );
 
-  // Resolve which text model is active (for reasoning capability check).
+  // Resolve which model is active (for the reasoning capability check).
   const resolvedTextModelId =
-    model.generate === null
-      ? (model.model ?? modelConfig.text[model.tier ?? "fast"])
-      : null;
-  const resolvedTextModel =
-    resolvedTextModelId !== null ? getModel(resolvedTextModelId) : undefined;
-  const showEffortControl =
-    model.generate === null && supportsReasoning(resolvedTextModel);
+    model.model ?? modelConfig.text[model.tier ?? "fast"];
+  const resolvedTextModel = getModel(resolvedTextModelId);
+  const showEffortControl = supportsReasoning(resolvedTextModel);
 
-  // Placeholder text varies by media mode; in v2 a selected agent names the
-  // recipient ("Message Software Architect…") so the pick → type flow reads
-  // as addressing someone.
+  // In v2 a selected agent names the recipient ("Message Software Architect…")
+  // so the pick → type flow reads as addressing someone.
   const placeholder = disabled
     ? (disabledReason ?? "Composer paused.")
-    : model.generate === "image"
-      ? "Describe the image you want…"
-      : model.generate === "video"
-        ? "Describe the video you want…"
-        : v2Active && selectedAgent
-          ? `Message ${selectedAgent.name}…`
-          : "Send a message…";
-
-  // Image/video generation is not a manual composer mode — the server
-  // infers it from the prompt (infer-media-intent.ts). `model.generate` stays a
-  // latent field of ComposerModelState (still honored for explicit API callers
-  // and the model picker's media catalog), so `generate === null` below is a
-  // defensive guard, never toggled on from the app UI.
+    : v2Active && selectedAgentName
+      ? `Message ${selectedAgentName}…`
+      : "Send a message…";
 
   /** Build a FormData for the current form state + a given model snapshot. */
   function buildFormData(
@@ -1449,45 +1156,23 @@ export function MessageComposer({
     if (attachmentsSnapshot.length > 0) {
       fd.set("attachments", JSON.stringify(attachmentsSnapshot));
     }
-    if (modelSnapshot.generate === null) {
-      if (modelSnapshot.model) {
-        fd.set("model", modelSnapshot.model);
-      } else {
-        fd.set("tier", modelSnapshot.tier ?? "fast");
-      }
-      // Effort only when the resolved model supports reasoning.
-      const resolvedId =
-        modelSnapshot.model ?? modelConfig.text[modelSnapshot.tier ?? "fast"];
-      const resolvedMeta = resolvedId ? getModel(resolvedId) : undefined;
-      if (supportsReasoning(resolvedMeta) && modelSnapshot.effort) {
-        fd.set("effort", modelSnapshot.effort);
-      }
+    if (modelSnapshot.model) {
+      fd.set("model", modelSnapshot.model);
     } else {
-      fd.set("generate", modelSnapshot.generate);
-      if (modelSnapshot.mediaModel) {
-        fd.set("mediaModel", modelSnapshot.mediaModel);
-      } else {
-        fd.set("mediaTier", modelSnapshot.mediaTier ?? "basic");
-      }
+      fd.set("tier", modelSnapshot.tier ?? "fast");
+    }
+    // Effort only when the resolved model supports reasoning.
+    const resolvedId =
+      modelSnapshot.model ?? modelConfig.text[modelSnapshot.tier ?? "fast"];
+    const resolvedMeta = resolvedId ? getModel(resolvedId) : undefined;
+    if (supportsReasoning(resolvedMeta) && modelSnapshot.effort) {
+      fd.set("effort", modelSnapshot.effort);
     }
     if (activeServerIds.size > 0) {
       fd.set("activeServerIds", JSON.stringify([...activeServerIds]));
     }
     fd.set("budget", JSON.stringify(budgetPayload(modelSnapshot)));
-    const code = codePayload(
-      codeMode,
-      selectedRepo,
-      selectedEnv,
-      selectedBranch,
-    );
-    if (code) fd.set("code", JSON.stringify(code));
     if (selectedAgentId) fd.set("agentId", selectedAgentId);
-    // Pinned chat context — only when pinned and NOT in code mode (code mode
-    // already conveys the repo/env via `code`, so the two never double up).
-    if (isPinned && !codeMode) {
-      const pinned = buildPinnedContext(selectedRepo, selectedEnv);
-      if (pinned) fd.set("pinnedContext", JSON.stringify(pinned));
-    }
     return fd;
   }
 
@@ -1513,10 +1198,7 @@ export function MessageComposer({
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (disabled) return;
-    // Code mode requires BOTH a repo and an environment before the first
-    // coding turn — the submit button is disabled for this too, but guard
-    // here as well since Enter/Cmd+Enter bypass the button.
-    if (codeGateBlocked || walletGateBlocked) return;
+    if (walletGateBlocked) return;
     // Never submit while an upload is still in flight — the model would
     // otherwise resolve an attachment the server hasn't finished persisting.
     if (hasInFlightUploads(attachments)) return;
@@ -1530,12 +1212,6 @@ export function MessageComposer({
     if (contentRaw.trim().length === 0) return;
 
     const attachmentsSnapshot = toUploadedMeta(attachments);
-
-    // A code turn binds the conversation's coding target for its lifetime — lock
-    // the pickers client-side now (repo/env/agent become read-only) so the user
-    // can't retarget mid-conversation. The server claims the durable binding on
-    // this same turn; locking here means the UI doesn't wait for a reload.
-    if (codeMode) lockSelection();
 
     // If a stream is in flight, honour the pending-prompt behavior.
     if (isStreaming && !pending) {
@@ -1620,47 +1296,23 @@ export function MessageComposer({
         fd.set("attachments", JSON.stringify(next.attachments));
       }
       const ms = next.modelState;
-      if (ms.generate === null) {
-        if (ms.model) {
-          fd.set("model", ms.model);
-        } else {
-          fd.set("tier", ms.tier ?? "fast");
-        }
-        const resolvedId = ms.model ?? modelConfig.text[ms.tier ?? "fast"];
-        const resolvedMeta = resolvedId ? getModel(resolvedId) : undefined;
-        if (supportsReasoning(resolvedMeta) && ms.effort) {
-          fd.set("effort", ms.effort);
-        }
+      if (ms.model) {
+        fd.set("model", ms.model);
       } else {
-        fd.set("generate", ms.generate);
-        if (ms.mediaModel) {
-          fd.set("mediaModel", ms.mediaModel);
-        } else {
-          fd.set("mediaTier", ms.mediaTier ?? "basic");
-        }
+        fd.set("tier", ms.tier ?? "fast");
+      }
+      const resolvedId = ms.model ?? modelConfig.text[ms.tier ?? "fast"];
+      const resolvedMeta = resolvedId ? getModel(resolvedId) : undefined;
+      if (supportsReasoning(resolvedMeta) && ms.effort) {
+        fd.set("effort", ms.effort);
       }
       const currentActiveServerIds = activeServerIdsRef.current;
       if (currentActiveServerIds.size > 0) {
         fd.set("activeServerIds", JSON.stringify([...currentActiveServerIds]));
       }
       fd.set("budget", JSON.stringify(budgetPayload(ms)));
-      const currentCode = codeStateRef.current;
-      const code = codePayload(
-        currentCode.codeMode,
-        currentCode.selectedRepo,
-        currentCode.selectedEnv,
-        currentCode.selectedBranch,
-      );
-      if (code) fd.set("code", JSON.stringify(code));
-      if (currentCode.selectedAgentId)
-        fd.set("agentId", currentCode.selectedAgentId);
-      if (currentCode.isPinned && !currentCode.codeMode) {
-        const pinned = buildPinnedContext(
-          currentCode.selectedRepo,
-          currentCode.selectedEnv,
-        );
-        if (pinned) fd.set("pinnedContext", JSON.stringify(pinned));
-      }
+      const currentAgentId = selectedAgentIdRef.current;
+      if (currentAgentId) fd.set("agentId", currentAgentId);
       // Defer the dispatch out of the caller (effect / event handler) so the
       // queue-drain doesn't cascade synchronously within a React effect
       // (satisfies react-hooks/set-state-in-effect) and so send-now doesn't
@@ -1834,7 +1486,7 @@ export function MessageComposer({
       return;
     }
 
-    if (pending || disabled || codeGateBlocked || walletGateBlocked) return;
+    if (pending || disabled || walletGateBlocked) return;
 
     if (enterToSubmit) {
       if (!e.shiftKey) {
@@ -1917,31 +1569,11 @@ export function MessageComposer({
         ? "Queue message"
         : "Send message";
 
-  // v2 condensed row cog dot (mobile always, desktop at mid-width): a broken
-  // selection (warning) takes precedence over the plain "settings differ from
-  // defaults" accent — it needs attention regardless of whether other
-  // settings also changed.
-  const v2SelectionIssues = React.useMemo(
-    () =>
-      chatSession
-        ? sessionSelectionIssues(chatSession.state, {
-            repos: availableRepos ?? [],
-            environments: availableEnvironments ?? [],
-            branches: null,
-          })
-        : [],
-    [chatSession, availableRepos, availableEnvironments],
-  );
-  const v2HasIssues = v2SelectionIssues.length > 0;
+  // v2 condensed row cog dot (mobile always, desktop at mid-width): an accent
+  // dot when the session settings differ from the workspace defaults.
   const v2IsDirty = chatSession?.isDirty ?? false;
-  const cogDotClass = v2HasIssues
-    ? "bg-destructive"
-    : v2IsDirty
-      ? "bg-primary"
-      : null;
-  const cogAriaLabel = `Session settings${
-    v2HasIssues ? ", attention needed" : v2IsDirty ? ", settings changed" : ""
-  }`;
+  const cogDotClass = v2IsDirty ? "bg-primary" : null;
+  const cogAriaLabel = `Session settings${v2IsDirty ? ", settings changed" : ""}`;
 
   return (
     <div className="flex flex-col">
@@ -2086,14 +1718,6 @@ export function MessageComposer({
         {disabled && disabledReason ? (
           <p className="text-xs text-muted-foreground">{disabledReason}</p>
         ) : null}
-        {codeGateBlocked && !collapsed ? (
-          <p
-            className="text-xs text-muted-foreground"
-            data-testid="code-mode-gate-hint"
-          >
-            Select a repository and environment to start coding.
-          </p>
-        ) : null}
         {walletGateBlocked && !collapsed ? (
           <p
             className="text-xs text-destructive"
@@ -2101,30 +1725,6 @@ export function MessageComposer({
           >
             Wallet balance is below your cap. Add funds or lower the cap.
           </p>
-        ) : null}
-
-        {/* NO repo / environment / pin selectors under the prompt. The chat
-          context is chosen ONCE, up front, when the agent is picked (a code
-          agent's setup step asks for org → repository → branch), and is then
-          immutable for the life of the conversation — so a per-turn selector
-          here would imply an editability the model doesn't have. The current
-          repository/branch is shown read-only behind the settings cog instead
-          (see SessionSettings / the composer options sheet). Only the open-PR
-          status chip remains: it is read-only output, not a control. */}
-        {/* The chip's CI fetch is org/workspace-scoped, so it only renders when
-          both slugs are known (the embedded panel omits them). */}
-        {!v2Condensed &&
-        !collapsed &&
-        codeSessionPr &&
-        orgSlug &&
-        workspaceSlug ? (
-          <div className="flex items-center justify-end px-1 pb-1">
-            <ComposerPrStatusChip
-              pr={codeSessionPr}
-              orgSlug={orgSlug}
-              workspaceSlug={workspaceSlug}
-            />
-          </div>
         ) : null}
 
         {/* v2 condensed row: ONE row replaces the entire toolbar below — plus
@@ -2202,7 +1802,6 @@ export function MessageComposer({
                 pending ||
                 disabled ||
                 uploadsInFlight ||
-                codeGateBlocked ||
                 walletGateBlocked ||
                 // Empty input disables send (attachments alone still send).
                 (inputEmpty && visibleAttachments.length === 0)
@@ -2235,11 +1834,9 @@ export function MessageComposer({
               ) : (
                 <>
                   {/* Model picker + agent picker + reasoning effort — inline on
-                desktop, in the overflow sheet on mobile. The agent picker:
-                selecting a code agent reveals the repo/code tooling + UI (and
-                runs the turn in the sandbox); a chat agent / the default keeps
-                the plain composer. Renders nothing when the workspace has no
-                agents, so agent-less workspaces are unaffected. */}
+                desktop, in the overflow sheet on mobile. The agent picker
+                renders nothing when the workspace has no agents, so agent-less
+                workspaces are unaffected. */}
                   {!isMobile && (
                     <>
                       <ModelPicker
@@ -2249,19 +1846,10 @@ export function MessageComposer({
                       />
                       <AgentContextChip
                         agents={availableAgents ?? []}
-                        repos={availableRepos ?? []}
-                        environments={availableEnvironments ?? []}
-                        defaultRepoKey={defaultRepoKey ?? null}
-                        defaultEnvId={defaultEnvId ?? null}
                         defaultAgentId={defaultAgentId ?? null}
                         onSetDefaultAgent={onSetDefaultAgent}
                         selectedAgentId={selectedAgentId}
-                        selectedRepoKey={selectedRepoKey}
-                        selectedEnvId={selectedEnvId}
-                        selectedBranch={selectedBranch}
                         onApply={applyAgentSelection}
-                        locked={selectionLocked}
-                        orgSlug={orgSlug}
                         workspaceSlug={workspaceSlug}
                       />
                       {showEffortControl && effortSelect}
@@ -2288,15 +1876,9 @@ export function MessageComposer({
                     </Button>
                   ) : null}
 
-                  {/* No manual image/video generation toggles: the system infers
-                media intent from the prompt server-side (infer-media-intent.ts)
-                and routes the turn to media generation when it's clearly asked
-                for. Attaching an image/video is the paperclip above. */}
-
-                  {/* Code mode is governed SOLELY by the selected agent's identity
-                (a code agent turns it on and reveals the repo/environment
-                pickers below) — there is no manual toggle. Selecting a coding
-                agent is the deliberate act that enters the agentic coding flow. */}
+                  {/* ADR-043: no image/video generation toggles and no code
+                mode — Oxagen governs agents, it does not run them. Attaching an
+                image or video for the model to READ is the paperclip above. */}
 
                   {!isMobile && (
                     <>
@@ -2344,14 +1926,8 @@ export function MessageComposer({
                   type="submit"
                   // Disabled while any attachment upload is still in flight — sending
                   // now would resolve a publicId the server hasn't finished persisting.
-                  // Also disabled while code mode is on but repo/environment aren't
-                  // both selected yet (see codeGateBlocked).
                   disabled={
-                    pending ||
-                    disabled ||
-                    uploadsInFlight ||
-                    codeGateBlocked ||
-                    walletGateBlocked
+                    pending || disabled || uploadsInFlight || walletGateBlocked
                   }
                   size="sm"
                   aria-label={
@@ -2363,10 +1939,7 @@ export function MessageComposer({
                   }
                   className={cn(isMobile && !composerCollapsed && "h-11")}
                   style={
-                    !pending &&
-                    !disabled &&
-                    !uploadsInFlight &&
-                    !codeGateBlocked
+                    !pending && !disabled && !uploadsInFlight
                       ? {
                           background: "var(--primary)",
                           border: "none",
@@ -2449,27 +2022,6 @@ export function MessageComposer({
               </SheetDescription>
             </SheetHeader>
             <SheetPanel className="gap-1">
-              {/* Read-only code context: the repository (and branch, when one
-                was chosen over the repo's default) this chat is grounded in. It
-                is NOT editable here — the target is chosen once with the agent
-                and is immutable for the conversation — so this row exists to
-                answer "what am I on?", which used to require the composer's
-                selector. Branch comes from the SELECTION store, not the session
-                store: this sheet only renders when the session store is absent
-                (see the `!v2Mobile` gate below), so reading the session here
-                could only ever yield null. */}
-              {selectedRepo ? (
-                <div
-                  className="flex min-h-11 items-center justify-between gap-2"
-                  data-testid="composer-options-code-context"
-                >
-                  <span className="text-sm">Repository</span>
-                  <span className="truncate text-sm text-muted-foreground">
-                    {selectedRepo.owner}/{selectedRepo.name}
-                    {selectedBranch ? ` · ${selectedBranch}` : ""}
-                  </span>
-                </div>
-              ) : null}
               <div className="flex min-h-11 items-center justify-between gap-2">
                 <span className="text-sm">Model</span>
                 <ModelPicker
@@ -2483,17 +2035,10 @@ export function MessageComposer({
                   <span className="text-sm">Agent</span>
                   <AgentContextChip
                     agents={availableAgents ?? []}
-                    repos={availableRepos ?? []}
-                    environments={availableEnvironments ?? []}
-                    defaultRepoKey={defaultRepoKey ?? null}
-                    defaultEnvId={defaultEnvId ?? null}
                     defaultAgentId={defaultAgentId ?? null}
                     onSetDefaultAgent={onSetDefaultAgent}
                     selectedAgentId={selectedAgentId}
-                    selectedRepoKey={selectedRepoKey}
-                    selectedEnvId={selectedEnvId}
                     onApply={applyAgentSelection}
-                    locked={selectionLocked}
                   />
                 </div>
               )}

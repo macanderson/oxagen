@@ -345,7 +345,7 @@ describe("ConversationFilesList", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("offers 'Download all' as a ZIP once MORE THAN ONE file exists", async () => {
+  it("shows the file count once MORE THAN ONE file exists, and never a ZIP link (ADR-043)", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -361,21 +361,15 @@ describe("ConversationFilesList", () => {
       ).toBeInTheDocument();
     });
 
-    // The header shows the count and a "Download all" anchor pointed at the
-    // conversation's archive route, marked `download` so the browser saves the
-    // streamed ZIP instead of navigating.
     expect(screen.getByText("4 files")).toBeInTheDocument();
-    const downloadAll = screen.getByLabelText(
-      "Download all 4 files as a ZIP archive",
-    );
-    expect(downloadAll).toHaveAttribute(
-      "href",
-      "/api/v1/conversations/conv_abc/assets/archive",
-    );
-    expect(downloadAll).toHaveAttribute("download");
+    // The archive route went with the runtime excision — no bulk ZIP anchor
+    // may survive pointing at a route that no longer exists.
+    expect(
+      screen.queryByLabelText(/Download all .* as a ZIP archive/),
+    ).toBeNull();
   });
 
-  it("hides 'Download all' when the conversation has only one file", async () => {
+  it("hides the file-count header when the conversation has only one file", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -390,11 +384,6 @@ describe("ConversationFilesList", () => {
         screen.getByText("quarterly-revenue-chart.png"),
       ).toBeInTheDocument();
     });
-    // A single file's row already has its own Download button — the bulk ZIP
-    // affordance only appears from the second file onward.
-    expect(
-      screen.queryByLabelText(/Download all .* as a ZIP archive/),
-    ).toBeNull();
     expect(screen.queryByText(/files$/)).toBeNull();
   });
 

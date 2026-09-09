@@ -7,20 +7,8 @@ const mocks = vi.hoisted(() => ({
   resolveOrgScope: vi.fn(),
   resolveSession: vi.fn(),
   resolveWorkspaceScope: vi.fn(),
-  requireEnv: vi.fn(),
   withSystemDb: vi.fn(),
 }));
-
-vi.mock("@oxagen/config/env", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@oxagen/config/env")>();
-  return {
-    ...original,
-    requireEnv: (keys: readonly string[]) =>
-      keys.includes("RATE_LIMIT_AGENT_EXEC_PER_MIN")
-        ? mocks.requireEnv(keys)
-        : original.requireEnv(keys as never),
-  };
-});
 
 vi.mock("@oxagen/database", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/database")>()),
@@ -127,10 +115,6 @@ beforeEach(() => {
     apiKeyId: "key_stella",
     orgId: KEY_ORG_ID,
     workspaceId: KEY_WORKSPACE_ID,
-  });
-  mocks.requireEnv.mockReturnValue({
-    RATE_LIMIT_CHAT_PER_MIN: 60,
-    RATE_LIMIT_AGENT_EXEC_PER_MIN: 30,
   });
   mocks.withSystemDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
