@@ -72,3 +72,18 @@ variable "node_ami" {
   description = "AMI for the app node and the NAT instance."
   type        = string
 }
+
+variable "alert_email" {
+  description = <<-EOT
+    Where alarms go. Empty means the alarms exist and record state but page
+    nobody — which is the honest default, because putting an address here is
+    a decision about who gets woken up and not something to inherit from a
+    template.
+
+    Set it in terraform.tfvars. AWS sends a confirmation mail that has to be
+    clicked before anything is delivered; until then the subscription reads
+    `PendingConfirmation` and the topic silently drops to no subscribers.
+  EOT
+  type        = string
+  default     = ""
+}
