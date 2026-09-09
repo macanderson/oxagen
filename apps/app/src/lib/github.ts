@@ -10,6 +10,8 @@
  * fetch live here rather than being duplicated per feature.
  */
 
+import { apiErrorMessage } from "./api-error";
+
 // Use relative /api so requests stay same-origin and the Better Auth session
 // cookie is forwarded automatically. next.config rewrites these to the Hono API.
 export const API_BASE = "/api";
@@ -88,11 +90,9 @@ export async function fetchGithubStatus(
     { credentials: "include", signal },
   );
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as {
-      error?: string;
-    } | null;
+    const body: unknown = await res.json().catch(() => null);
     throw new Error(
-      body?.error ?? `Failed to load GitHub status (${res.status})`,
+      apiErrorMessage(body, `Failed to load GitHub status (${res.status})`),
     );
   }
   return (await res.json()) as GithubStatusResponse;
