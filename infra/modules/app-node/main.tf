@@ -248,8 +248,25 @@ resource "aws_instance" "node" {
     http_put_response_hop_limit = 1
   }
 
+  # 20 GiB was 87% full, measured on the live node: 18G of 20G, 2.7G free.
+  #
+  # It is not a leak. `deploy-service.sh` keeps `KEEP_RELEASES=3` and prunes
+  # correctly; the arithmetic simply outgrew the disk. Three releases of `mcp`
+  # at ~1.8 GiB each is 5.3 GiB, three of `app` is 3.3 GiB, Docker's images
+  # and containers are another 3.3 GiB, and Amazon Linux is ~4 GiB.
+  #
+  # 2.7 GiB free is less than one `mcp` deploy needs, because a deploy unpacks
+  # the new release beside the three it is keeping before it prunes anything.
+  # A full root disk here fails in a way that is hard to read: an SSM command
+  # returns rc=1 with empty output, so the deploy that fills the disk reports
+  # nothing about why.
+  #
+  # 40 GiB leaves room for the retention policy that already exists rather
+  # than quietly requiring a smaller one, and costs about $1.60/month at gp3
+  # rates. Shrinking the release window to buy back a dollar would trade away
+  # the rollback depth that makes a bad deploy survivable.
   root_block_device {
-    volume_size = 20
+    volume_size = 40
     volume_type = "gp3"
     encrypted   = true
   }
