@@ -80,52 +80,11 @@ jobs:
           # green here — including a change that broke planning outright.
           # A manual dispatch had the same hole from the other end: it carries
           # no base ref, so the fallback diffs one arbitrary commit.
-          bootstrap_touched=no
-          if echo "$changed" | grep -q '^infra/stacks-new/bootstrap/'; then
-            bootstrap_touched=yes
-          fi
-
           if echo "$changed" | grep -qE '^infra/modules/|^\.github/workflows/infra\.yml$' \
             || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             stacks=$(find infra/stacks-new -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
           else
             stacks=$(echo "$changed" | sed -n 's#^infra/stacks-new/\([^/]*\)/.*#\1#p' | sort -u)
-          fi
-
-          # `bootstrap` is not one of the stacks CI can speak for. It creates
-          # the state bucket and lock table every other stack's remote state
-          # lives in, and it keeps its own state on a local backend -- so a
-          # runner starts from an EMPTY state, sees all five resources as
-          # absent, and plans to create the bucket and table that already
-          # exist and are in use.
-          #
-          # That is not a hypothetical. `apply (bootstrap)` is first in the
-          # matrix and the matrix is `fail-fast: true`, so its failure
-          # cancelled every sibling apply: runs 34214816966 and 34215070294
-          # both died on `BucketAlreadyExists` plus `ResourceInUseException:
-          # Table already exists: oxagen-tflock`, and NOTHING has been applied
-          # from `main` since the infrastructure moved into this repository.
-          # `main` still carries an un-applied node replacement because of it.
-          #
-          # Its plan was the quieter half of the same bug: green, and reporting
-          # five creations that must never happen.
-          #
-          # Dropped from both matrices until its state is remote. That is a
-          # one-time hand migration -- apply once with a local backend, add the
-          # `backend "s3"` block, `tofu init -migrate-state` -- after which
-          # this filter and the warning below come out and the stack is
-          # managed like any other. #2775 carries that work and the steps.
-          stacks=$(echo "$stacks" | grep -vx 'bootstrap' || true)
-
-          # Removing it must not turn a bootstrap-only change green by
-          # accident. An empty matrix skips the job, and a skipped job reports
-          # success -- the exact hole the comment above this one describes.
-          if [ "$bootstrap_touched" = "yes" ]; then
-            echo "::warning title=bootstrap not planned or applied::\
-          infra/stacks-new/bootstrap changed. CI cannot plan or apply it: its \
-          state is on a local backend, so a runner would try to re-create the \
-          state bucket and lock table. Apply this stack by hand, or migrate \
-          its state into S3 and take the filter out of discover."
           fi
 
           if [ -z "$stacks" ]; then
@@ -149,6 +108,24 @@ jobs:
       - uses: opentofu/setup-opentofu@592200bd4b9bbf4772ace78f887668b1aee8f716 # v1.0.5
         with:
           tofu_version: 1.8.5
+          # The wrapper this action installs by default swallows the one exit
+          # code this workflow reads. `tofu plan -detailed-exitcode` returns 2
+          # for "changes present", and the wrapper treats 2 exactly like 0:
+          #
+          #     if (exitCode === 0 || exitCode === 2) { return }
+          #
+          # so the shell always saw 0 and the plan comment below always said
+          # "no changes". Every infra pull request that changed production was
+          # summarised as changing nothing — including the one that added this
+          # line, whose plan moved the app node's root volume from 20 GB to 50.
+          # That is the surface a reviewer reads to decide whether merging
+          # touches production.
+          #
+          # Nothing here wants the wrapper's stdout/stderr outputs; the plan is
+          # read from plan.txt on disk. Without it tofu's own exit code reaches
+          # the script written for it, and that script's `-eq 1` error branch
+          # stops being unreachable.
+          tofu_wrapper: false
 
       # The static checks come first and need no credentials, so a stack that
       # does not parse fails here whether or not the account is reachable.
@@ -266,6 +243,10 @@ jobs:
       - uses: opentofu/setup-opentofu@592200bd4b9bbf4772ace78f887668b1aee8f716 # v1.0.5
         with:
           tofu_version: 1.8.5
+          # Off for the reason the plan job gives, and because `tofu apply`
+          # here reads its own exit code the same way with the wrapper gone:
+          # 0 applied, anything else failed.
+          tofu_wrapper: false
 
       # Still gated, unlike the plan job above, and for a reason that outlived
       # the bootstrap: this runs on `main`, so a failure here leaves the

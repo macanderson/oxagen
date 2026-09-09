@@ -214,6 +214,52 @@ data "aws_iam_policy_document" "oxagen_platform" {
     }
   }
 
+  # Port-forwarding to the node, which is the only way a runner can reach
+  # ClickHouse and Neo4j: both bind 127.0.0.1 there and neither is exposed to
+  # the VPC. Without this there is no path from a committed migration to the
+  # production copies of those two stores, and there was none — every
+  # `DB_MIGRATE_STORES=clickhouse,neo4j` in this repository runs against an
+  # ephemeral CI service container. Production ClickHouse had no schema at all
+  # from the 2026-08-27 cutover until it was noticed, and the API's
+  # error-reporting sink was failing on `Table oxagen.error_events does not
+  # exist` the whole time.
+  #
+  # Scoped by the same tag as the send above, so a replaced node is still
+  # reachable and nothing else in the account is.
+  statement {
+    sid       = "PortForwardToTheNode"
+    actions   = ["ssm:StartSession"]
+    resources = ["arn:aws:ec2:${var.region}:${var.account_id}:instance/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ssm:resourceTag/Name"
+      values   = [var.node_name]
+    }
+  }
+
+  # The document is a separate resource from the instance, for the reason the
+  # send statement above spells out: a tag condition would be evaluated
+  # against the document, which carries no tag, and deny the session.
+  #
+  # `AWS-StartPortForwardingSession` alone, not the whole document namespace —
+  # `AWS-StartInteractiveCommand` and `SSM-SessionManagerRunShell` are shells,
+  # and a role that may forward a port has no business getting one.
+  statement {
+    sid       = "PortForwardDocument"
+    actions   = ["ssm:StartSession"]
+    resources = ["arn:aws:ssm:${var.region}::document/AWS-StartPortForwardingSession"]
+  }
+
+  # Closing the tunnel. Scoped to sessions this role's own identity opened,
+  # which is what `$${aws:userid}` resolves to — a session started by anything
+  # else is not this role's to end.
+  statement {
+    sid       = "EndTheTunnel"
+    actions   = ["ssm:TerminateSession"]
+    resources = ["arn:aws:ssm:*:*:session/$${aws:userid}-*"]
+  }
+
   statement {
     sid       = "ReadCommandResult"
     actions   = ["ssm:GetCommandInvocation", "ssm:ListCommandInvocations"]

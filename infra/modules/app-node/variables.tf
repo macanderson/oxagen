@@ -111,25 +111,3 @@ variable "ami_id" {
   description = "AMI for this instance. Pinned deliberately; see the note above."
   type        = string
 }
-
-variable "root_volume_size" {
-  description = <<-EOT
-    Size in GB of the root disk. The platform's services live on it, under
-    /opt/oxagen/services, three releases each, and the container images
-    under /var/lib/docker.
-
-    Measured on the live node on 2026-09-09, an hour after a replacement:
-    18 GB of 20 used. The mcp artifact is 1.8 GB a release and app is 1.1 GB,
-    so their three kept releases alone are 8.7 GB; Docker holds 4 GB more and
-    the swapfile 2 GB. At 20 GB a fresh node starts at 87% and the next deploy
-    refuses to unpack for lack of the 3 GB it needs. 40 GB leaves room for
-    every service to grow one release without a page.
-
-    Growing this on a running instance changes the volume in place; nothing
-    is replaced. The filesystem does not grow on its own until the next boot,
-    so after an apply run this on the node once:
-    `growpart /dev/nvme0n1 1 && xfs_growfs /`.
-  EOT
-  type        = number
-  default     = 40
-}
