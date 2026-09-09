@@ -1,7 +1,6 @@
 # Terraform working state. The remote S3 backend is the source of truth; a
 # local copy is a stale second answer waiting to be applied by mistake.
 .terraform/
-.terraform.lock.hcl
 *.tfstate
 *.tfstate.*
 crash.log

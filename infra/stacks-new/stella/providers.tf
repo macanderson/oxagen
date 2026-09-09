@@ -1,5 +1,12 @@
 terraform {
-  required_version = ">= 1.6"
+  required_version = "~> 1.8"
+
+  # `>= 1.6` accepted anything, including a major release that has not shipped.
+  # CI pins 1.8.5 (`opentofu/setup-opentofu` in infra.yml), so the constraint
+  # was wider than the only version that actually runs these stacks, and a
+  # contributor on a newer local build could write state a CI apply then reads.
+  # `~> 1.8` allows the patch and minor line CI is on and refuses the next
+  # major, which is where state format changes live.
 
   required_providers {
     aws = {
