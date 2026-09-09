@@ -95,7 +95,7 @@ is actually running is what follows):
    oxagen.sh (S3 OAC)                            ACM cert, HTTP->HTTPS)
                                                        |
                                         ------- private subnet --------
-                                        EC2 t4g.medium app node:
+                                        EC2 t4g.large app node:
                                           Caddy -> docs/stella/app/api/mcp
                                           Neo4j (self-hosted, EBS volume)
                                                |                |
@@ -166,7 +166,7 @@ Rough, `us-east-1`, at effectively zero traffic:
 
 | Item | Old account | New account |
 |---|---|---|
-| Compute (app node) | ~$24/mo (t4g.medium, 3 engines) | ~$24/mo (t4g.medium, Neo4j + ClickHouse) |
+| Compute (app node) | ~$24/mo (t4g.medium, 3 engines) | ~$49/mo (t4g.large, Neo4j + ClickHouse; see §8) |
 | Postgres | included above | ~$0-5/mo (Aurora, scales to 0 ACU) |
 | ClickHouse | included above | included above (stays on the app node, #2693) |
 | ALB | none (Caddy terminates TLS) | ~$20/mo |
@@ -175,10 +175,10 @@ Rough, `us-east-1`, at effectively zero traffic:
 | S3 + CloudFront (marketing site) | ~$1-5/mo | ~$1-5/mo |
 | Logging/eventing (D9) | none | ~$3-10/mo (CloudWatch Logs storage, Firehose, Lambda, EventBridge — all near-zero at this log volume) |
 | S3 archive (14yr, D9) | none | ~$1-2/mo initially, grows slowly (Glacier Deep Archive is ~$0.001/GB-month) |
-| **Total** | **~$29-35/mo** | **~$55-80/mo** |
+| **Total** | **~$29-35/mo** | **~$80-105/mo** |
 
 The new account costs more, mostly because of the VPC/ALB security upgrade
-(~$23/mo of the difference) plus the observability pipeline — both explicit,
+(~$23/mo of the difference), the larger node (~$25/mo, §8) and the observability pipeline — both explicit,
 user-requested tradeoffs, not drift.
 
 ---
@@ -264,3 +264,28 @@ user-requested tradeoffs, not drift.
   anywhere, reads the password from `/oxagen-app/postgres/password`, and
   reports status only unless given `--apply`. Still to do: run it against
   the cluster once. Nobody has, so the path is written and not yet proven.
+
+---
+
+## 8. Decisions after the cutover (September 2026)
+
+The first Terraform apply from the monorepo was planned on 2026-09-06 and it
+proposed replacing the app node, the NAT instance and ten other resources.
+None of that was intended. Working out why produced the decisions below.
+Each is now in the Terraform; this section says what was decided and why,
+so the code and this record agree.
+
+| Decision | What was chosen | Why |
+|---|---|---|
+| The AMI is pinned | `node_ami` in `stacks-new/oxagen/terraform.tfvars` names one image id, used by both the app node and the NAT instance. | The instances used to read AWS's *latest* Amazon Linux pointer. That pointer moves every few weeks, and an AMI change replaces the instance, so every plan after a new image proposed a replacement nobody asked for. A pinned id makes replacing an instance a deliberate edit to one line. |
+| `user_data` changes are applied on purpose | The bootstrap script was applied on 2026-09-08. The node was replaced in a chosen window, with the Neo4j volume detached and reattached, and the ClickHouse and Neo4j credentials checked afterwards. | The script had moved on from what the running instance was launched with. The change was wanted, so it was applied deliberately rather than as a side effect of an unrelated merge. A replacement now brings the node back to serving on its own (`modules/app-node/user-data.sh.tftpl`). |
+| ClickHouse stays on the app node, under Terraform | Its password lives beside Neo4j's in `modules/app-node`; the container is declared in the node's bootstrap; its data is on the `/data` volume. Redshift Serverless was removed from the account on 2026-09-08. | ClickHouse is the analytics store the platform reads and writes. Redshift was provisioned and never used, and the maintainer's decision is that Oxagen uses AWS for infrastructure and hosting only, not for managed application services. D3 above is withdrawn. |
+| The node is a `t4g.large` | `instance_type` in `modules/app-node/variables.tf`. | Two databases on a `t4g.medium` left no memory headroom, and the process the OOM killer reaches for first is always a database. |
+| The root disk is 40 GB | `root_block_device` in `modules/app-node/main.tf`, with the measurement beside it. | A fresh node filled to 87% within an hour of the 2026-09-09 replacement: three kept releases of each service (mcp is 1.8 GB a release), 4 GB of Docker images and a 2 GB swapfile on 20 GB. Deploys then refuse to unpack. |
+| Disk use is measured and alarmed | The CloudWatch agent is installed by SSM State Manager (`modules/app-node/monitoring.tf`) and `stacks-new/oxagen/alarms.tf` alarms at 80% on `/` and `/data`. | EC2 cannot see how full a disk is from outside. A full root disk passed every status check for days in August while every deploy failed with no output. |
+| ClickHouse and Neo4j migrations reach production by hand | `.github/workflows/store-migrate.yml`, a manual dispatch that forwards the node's loopback ports to a runner and runs the repository's own runner; `apply=false` prints the pending list and writes nothing. | Production ClickHouse had no tables from the cutover until 2026-09-09: the store listens on loopback only and no path existed. Manual on purpose, matching Postgres: a schema change to a live store is read before it is applied. |
+| The `bootstrap` stack keeps its state in S3 | `platform/bootstrap/terraform.tfstate` in the state bucket, like every other stack. | Its state used to live on one laptop, so CI could not read it and planned to recreate the bucket and lock table on every run. The reason it was local — the bucket cannot exist before the stack that creates it — is true of the first apply only. |
+
+The plan for `stacks-new/oxagen` against the live account read `No changes`
+on 2026-09-08 after the node replacement, and again on 2026-09-09 before the
+disk and alarm changes above were opened as a pull request.

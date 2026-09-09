@@ -116,6 +116,16 @@ resource "aws_iam_role_policy_attachment" "ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# The CloudWatch agent (monitoring.tf) reports how full each disk is. That is
+# the one number EC2 cannot see from outside the instance, and a full root
+# disk reads as healthy on every metric AWS offers on its own. The managed
+# policy grants PutMetricData and a read of the agent's own
+# `AmazonCloudWatch-*` configuration parameter, nothing wider.
+resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
+  role       = aws_iam_role.node.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
 # The instance reads its own Neo4j password at boot. Scoped to this service's
 # own parameter prefix, so a compromise of the box does not enumerate every
 # secret in the account — the application config the node also reads lives
