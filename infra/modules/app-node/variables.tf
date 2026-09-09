@@ -29,9 +29,21 @@ variable "availability_zone" {
 }
 
 variable "instance_type" {
-  description = "Graviton instance type. `t4g.medium` is the floor for Caddy, a handful of small Node processes, and both ClickHouse and Neo4j sharing the box. Postgres moved to Aurora, so this carries two engines rather than three — ClickHouse stayed (#2693)."
+  description = <<-EOT
+    Graviton instance type. This box carries Caddy, six Node services, and
+    two databases — Neo4j and ClickHouse, which stayed self-hosted (#2693).
+
+    `t4g.medium` was the floor and it had stopped being enough. Measured on
+    the live node with ClickHouse not even running: 2184 MB of 3830 used,
+    1457 available, no swap. Adding ClickHouse back fits only by capping it
+    hard and trusting swap to absorb every spike — and the process the OOM
+    killer reaches for first is always a database.
+
+    `t4g.large` doubles memory for about $24/month. Two databases with no
+    headroom is a worse thing to be paying for.
+  EOT
   type        = string
-  default     = "t4g.medium"
+  default     = "t4g.large"
 }
 
 variable "alb_security_group_id" {

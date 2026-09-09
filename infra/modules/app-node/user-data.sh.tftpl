@@ -50,11 +50,15 @@ systemctl enable --now docker
 # Swap
 # ---------------------------------------------------------------------------
 
-# Two engines and six node services on 4 GiB have no headroom for a transient
-# spike, and the Linux OOM killer resolves that by killing the largest process
-# — which is always a database. Swap turns a crash into a slowdown. It is not
-# a substitute for memory: if this node swaps steadily, it is too small, and
-# `instance_type` in variables.tf is where that gets decided.
+# The Linux OOM killer resolves a memory spike by killing the largest process,
+# which on a box holding Neo4j and ClickHouse is always a database. Swap turns
+# that crash into a slowdown.
+#
+# It is a margin, not capacity. `instance_type` is where capacity is decided,
+# and it was raised to `t4g.large` in the same change that put ClickHouse back
+# here — sizing this node to hold two databases with room to spare rather than
+# to fit them exactly and hope. If this node swaps steadily, it is still too
+# small, and the fix is that variable rather than a bigger swapfile.
 if [[ ! -f /swapfile ]]; then
   dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
   chmod 600 /swapfile
@@ -180,11 +184,13 @@ cat > /data/clickhouse-config/zz-oxagen-limits.xml <<'CHXMLEOF'
     <text_log remove="1"/>
     <trace_log remove="1"/>
 
-    <!-- Sized to the container, not the host: ClickHouse reads total RAM, and
-         the stock 5 GB mark cache is five times this container's entire
-         limit. -->
+    <!-- Sized to the container, not the host. ClickHouse reads total RAM and
+         sizes from it, so on an 8 GiB box it would help itself to several
+         times what this container is allowed. 1.5 GiB against a 2 GiB
+         mem_limit leaves the container room to breathe before the cgroup
+         kills it, which is the failure this bounds. -->
     <mark_cache_size>268435456</mark_cache_size>
-    <max_server_memory_usage>805306368</max_server_memory_usage>
+    <max_server_memory_usage>1610612736</max_server_memory_usage>
 </clickhouse>
 CHXMLEOF
 chmod 644 /data/clickhouse-config/zz-oxagen-limits.xml
@@ -220,7 +226,7 @@ services:
     volumes:
       - /data/clickhouse:/var/lib/clickhouse
       - /data/clickhouse-config/zz-oxagen-limits.xml:/etc/clickhouse-server/config.d/zz-oxagen-limits.xml:ro
-    mem_limit: 1024m
+    mem_limit: 2048m
     ulimits:
       nofile:
         soft: 262144
