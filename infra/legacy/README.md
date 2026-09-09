@@ -32,15 +32,20 @@ configuration read:
 /oxagen/production/AWS_KMS_INGESTION_KEY_ARN  = arn:aws:kms:us-east-2:578673726240:key/…
 ```
 
-The platform in `916294258235` wraps ingestion connector credentials with a key
-in **this** account. `packages/crypto/src/ingestion.ts` names that ARN as
-required when the provider is `kms`, so it is the key in use rather than a
-leftover setting.
+That reading was the configured key, not a working one. The key's policy
+admits only `578673726240:root`, and the node role in `916294258235` was never
+granted anything on it, so every encrypt call from the new account failed with
+`kms:GenerateDataKey ... not authorized`. The GitHub connect flow returned 500
+at its OAuth callback every time it was tried after the cutover (2026-08-31,
+and twice on 2026-09-09). On 2026-09-09 every ciphertext column in production
+was empty, so nothing is wrapped with this key.
 
-That makes this account load-bearing, not merely undecommissioned. Deleting the
-key stops new encryption, which is an outage; it also makes every credential
-already wrapped with it permanently undecryptable, which no rotation recovers.
-Settle #2680 before anything here is deleted.
+**Since #2680 the platform encrypts with its own key**,
+`alias/oxagen-app/ingestion` in `916294258235`, created in
+`infra/stacks-new/oxagen/crypto.tf` beside the grant for the node role and
+the parameter that names it. Nothing in the new account depends on the key
+here. Deleting it is still a maintainer's call, and this directory still
+records how it was made.
 
 Both parameters are SecureString. Read without `--with-decryption` they return
 ciphertext, which reads like a non-answer — that is how this went unestablished
@@ -100,7 +105,9 @@ store. The new account points at the old account's key.
 
 The key itself is alive: `describe-key` in `us-east-2` returns `Enabled`,
 `CUSTOMER`-managed, `ENCRYPT_DECRYPT`, with no deletion scheduled. Ingestion
-works today, which is why nothing has surfaced this as an outage.
+did **not** work from the new account: the key policy names only the old
+account's root, so the reading above was a configured key the platform could
+never call. `crypto.tf` in the live stack replaced it.
 
 The cutover checklist is marked complete, and this stack was last touched in
 June by a commit about something else — those two facts together are why the

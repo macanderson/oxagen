@@ -50,3 +50,8 @@ output "postgres" {
     username = aws_rds_cluster.postgres.master_username
   }
 }
+
+output "ingestion_kms_key_arn" {
+  description = "The key connector credentials are wrapped with; also written to /oxagen/production/AWS_KMS_INGESTION_KEY_ARN"
+  value       = aws_kms_key.ingestion.arn
+}
