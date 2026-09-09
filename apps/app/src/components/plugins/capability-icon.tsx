@@ -90,7 +90,7 @@ interface CapabilityIconProps {
 
 export function CapabilityIcon({
   iconName,
-  color = "#777782",
+  color = "#8C877C",
   size = 32,
   className,
 }: CapabilityIconProps) {

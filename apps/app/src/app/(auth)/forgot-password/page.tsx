@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { OxagenLogo } from "@/components/ui/brand";
+import { OxagenWordmark } from "@/components/ui/brand";
 import { ForgotPasswordForm } from "./forgot-password-form";
 
 export default function ForgotPasswordPage() {
   return (
     <div className="w-full max-w-sm space-y-6">
       <div className="flex justify-center">
-        <OxagenLogo variant="vertical" size={40} />
+        <OxagenWordmark className="h-8" />
       </div>
 
       <div className="rounded-xl border bg-card p-8 shadow-xl space-y-6">

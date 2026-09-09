@@ -1,0 +1,97 @@
+{
+  "version": "2.1.0",
+  "name": "oxagen house system",
+  "built_on": "oxagen brand kit (Space Grotesk, Ink and Paper, Bronze Gold)",
+  "icons": {
+    "oxagen": {
+      "kind": "lettermark",
+      "text": "Ox",
+      "family": "Space Grotesk",
+      "weight": 700,
+      "tracking_em": -0.06,
+      "colours": 1,
+      "note": "one colour, taken from the surface; never the metal"
+    },
+    "stella": {
+      "kind": "glyph",
+      "text": "*",
+      "family": "Space Grotesk",
+      "weight": 600,
+      "colours": 1,
+      "note": "the metal"
+    }
+  },
+  "gold": {
+    "hex": "#D6962C",
+    "oklch": {
+      "L": 0.7189,
+      "C": 0.1375,
+      "H": 74.85
+    },
+    "reference": "#C58A32",
+    "lift": {
+      "L": 0.043,
+      "C": 0.014,
+      "H": 1.8
+    },
+    "bright": "#F1C364",
+    "deep": "#8B5E1A",
+    "on_ink": 7.49,
+    "deep_on_paper": 4.88
+  },
+  "tokens": {
+    "gold": "#D6962C",
+    "gold-bright": "#F1C364",
+    "gold-deep": "#8B5E1A",
+    "ink": "#10100F",
+    "void": "#0A0A09",
+    "panel": "#181715",
+    "hl": "#201F1C",
+    "border": "#292722",
+    "rule": "#34322D",
+    "paper": "#F2EEE5",
+    "paper-panel": "#F8F5EE",
+    "paper-border": "#D8CDBD",
+    "paper-rule": "#C9BFAE",
+    "text": "#F2EEE5",
+    "text-body": "#DDD8CD",
+    "muted": "#9B958A",
+    "dim": "#6E6A62",
+    "text-ink": "#10100F",
+    "text-ink-body": "#2A2823",
+    "muted-ink": "#6B665C",
+    "dim-ink": "#8C877C"
+  },
+  "type": {
+    "family": "Space Grotesk",
+    "weights": [
+      400,
+      500,
+      600,
+      700
+    ],
+    "logo_weight": 600,
+    "logo_em": 131.657,
+    "ratio": 1.2
+  },
+  "wordmarks": {
+    "oxagen": {
+      "text": "oxagen",
+      "accent": "x",
+      "box": [
+        453.868,
+        93.246
+      ],
+      "baseline": 66.915
+    },
+    "stella": {
+      "text": "stella*",
+      "accent": "*",
+      "box": [
+        405.544,
+        94.003
+      ],
+      "baseline": 92.16
+    }
+  }
+}

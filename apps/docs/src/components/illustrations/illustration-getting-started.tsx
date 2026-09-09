@@ -27,18 +27,18 @@ export function IllustrationGettingStarted({
       <title>A path drifting from sign-up to organization to workspace</title>
       <defs>
         <linearGradient id="ill-getting-started-g1" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="var(--_ember-a, #725A00)" />
-          <stop offset="1" stopColor="var(--_ember-c, #F7D96B)" />
+          <stop offset="0" stopColor="var(--_ember-a, #8B5E1A)" />
+          <stop offset="1" stopColor="var(--_ember-c, #F1C364)" />
         </linearGradient>
         <radialGradient id="ill-getting-started-glow">
           <stop
             offset="0"
-            stopColor="var(--_ember-b, #EFC53F)"
+            stopColor="var(--_ember-b, #D6962C)"
             stopOpacity={0.8}
           />
           <stop
             offset="1"
-            stopColor="var(--_ember-b, #EFC53F)"
+            stopColor="var(--_ember-b, #D6962C)"
             stopOpacity={0}
           />
         </radialGradient>

@@ -23,7 +23,7 @@ const PALETTE = [
   "#f97316", // orange
   "#84cc16", // lime
   "#06b6d4", // cyan
-  "#A9AAB5", // silver
+  "#9B958A", // silver
 ] as const;
 
 /**
@@ -31,7 +31,7 @@ const PALETTE = [
  * gold, which is the product's one "this is the machine's suggestion, look here"
  * colour; it is not in PALETTE, so an inferred edge never collides with a node.
  */
-export const INFERRED_EDGE_COLOR = "#EFC53F";
+export const INFERRED_EDGE_COLOR = "#D6962C";
 /** Colour used for confirmed graph edges. */
 export const CONFIRMED_EDGE_COLOR = "#94a3b8";
 

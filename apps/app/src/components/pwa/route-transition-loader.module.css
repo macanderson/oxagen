@@ -24,23 +24,10 @@
   }
 
   /* Dark variant: default */
-  .spinnerDark {
+  .spinner {
     display: block;
   }
 
-  .spinnerLight {
-    display: none;
-  }
-
-  @media (prefers-color-scheme: light) {
-    .spinnerDark {
-      display: none;
-    }
-
-    .spinnerLight {
-      display: block;
-    }
-  }
 
   .cssSpinner {
     width: 28px;

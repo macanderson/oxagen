@@ -94,7 +94,7 @@ export function ContextWindow() {
             style={{
               background: governed
                 ? "var(--success, #7BC98A)"
-                : "var(--_ember-b, #EFC53F)",
+                : "var(--_ember-b, #D6962C)",
               boxShadow: `0 0 10px ${governed ? "rgba(123,201,138,.8)" : "rgba(239,197,63,.8)"}`,
             }}
           />
@@ -108,7 +108,7 @@ export function ContextWindow() {
             style={{
               color: governed
                 ? "var(--success, #7BC98A)"
-                : "var(--_ember-b, #EFC53F)",
+                : "var(--_ember-b, #D6962C)",
             }}
           >
             {used}%
@@ -125,7 +125,7 @@ export function ContextWindow() {
             width: `${used}%`,
             background: governed
               ? "var(--success, #7BC98A)"
-              : "linear-gradient(90deg, var(--_ember-a,#725A00), var(--_ember-b,#EFC53F), var(--_ember-c,#F7D96B))",
+              : "linear-gradient(90deg, var(--_ember-a,#8B5E1A), var(--_ember-b,#D6962C), var(--_ember-c,#F1C364))",
           }}
         />
       </div>
@@ -142,7 +142,7 @@ export function ContextWindow() {
             ? "color-mix(in oklch, var(--foreground) 7%, transparent)"
             : governed
               ? "var(--success, #7BC98A)"
-              : "var(--_ember-b, #EFC53F)";
+              : "var(--_ember-b, #D6962C)";
           return (
             <span
               key={i}

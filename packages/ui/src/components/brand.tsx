@@ -1,28 +1,46 @@
 /**
- * Oxagen brand marks — the "o + cursor" identity.
+ * The Oxagen and Stella marks.
  *
- * LOGOMARK: the lowercase "o" letterform beside a terminal cursor block. This
- * is the canonical mark from `docs/brand/logos/svg/` — the geometry here is
- * `oxagen-glyph-adaptive.svg` verbatim (viewBox and path data unchanged), so
- * the rendered component and the shipped asset files cannot drift apart.
+ * Geometry comes from `./brand-marks.generated.ts`, extracted by
+ * `tools/scripts/sync-brand-assets.mjs` from the house brand kit
+ * (macanderson/oxagen-house-brand). Nothing here is drawn: both wordmarks are
+ * Space Grotesk's own outlines at weight 600, and both icons are the same face
+ * at display weight, so the marks and the product's running text cannot drift
+ * apart. To change a mark, change the kit and re-run the sync.
  *
- * The "o" is INK and inherits `currentColor`, so it flips with the app theme.
- * The cursor is the brand's own red-orange (--ox-cursor: #FF3D1F light /
- * #FF4B2A dark). That is deliberately NOT the ember accent: the brand asset
- * set defines the cursor in this hue, and the mark is kept faithful to those
- * files rather than recoloured to match the surrounding UI.
+ *   <OxagenWordmark className="h-7" />   // "oxagen", the x in gold — THE logo
+ *   <OxagenIcon className="size-7" />    // the one-colour "Ox" lettermark
+ *   <StellaWordmark className="h-7" />   // "stella*", the asterisk in gold
+ *   <StellaIcon className="size-7" />    // the asterisk alone, in gold
+ *   <BrandMark />                        // OxagenIcon at the app-chrome size
+ *   <NodeChip kind="document" id="…" />  // typed knowledge-graph node
+ *   <ConfidenceBar score={0.82} />       // edge-inference confidence
  *
- * WORDMARK: "oxagen" — always lowercase — set in Aeonik (weight 660), matching
- * the oxagen.sh lockup; the ink flips between modes via `text-foreground`. The
- * lowercase is enforced in CSS (.ox-wordmark) too.
+ * ── THE RULES THESE COMPONENTS ENCODE ────────────────────────────────────────
  *
- *   <OxagenLogomark className="h-7" />           // the o + cursor mark
- *   <OxagenWordmark className="text-xl" />       // "oxagen" wordmark text
- *   <BrandMark />                                // mark at the app-chrome size
- *   <OxagenLockup />                             // mark + wordmark, side by side
- *   <OxagenLogo variant="vertical" size={48} />  // full lockup API
- *   <NodeChip kind="document" id="doc_41be09" /> // typed knowledge-graph node
- *   <ConfidenceBar score={0.82} />               // edge-inference confidence
+ * OXAGEN'S LOGO IS THE WORDMARK. There is deliberately no Oxagen lockup export
+ * and no horizontal/vertical composition helper. The kit does emit a lockup —
+ * the Ox mark in a plate, a gap, then the word — and it is not used in the
+ * product: set plainly, `Ox oxagen` stutters, because the mark is the word's
+ * own first two letters at the word's own size. Use the wordmark; use the icon
+ * only where the slot is square and small (a favicon, an avatar, collapsed
+ * chrome), and then use it ALONE, never beside the word.
+ *
+ * STELLA'S MARK IS INSIDE ITS WORD. `stella*` already carries the asterisk, so
+ * the wordmark IS the Stella lockup and nothing is ever placed to its left.
+ *
+ * ONE GLYPH IS GOLD. The `x` of oxagen, the asterisk of stella — never a second
+ * one, never the whole word. The gold stays #D6962C in BOTH themes: the kit's
+ * "gold becomes its deep shade on paper" rule governs gold WORDS, not the mark,
+ * and the kit's own light and dark files both fill the accent with the metal.
+ *
+ * THE ICON IS ONE COLOUR. It takes the colour of whatever it sits on, so it can
+ * be placed and forgotten — and handed to an operating system that will tint it
+ * however it likes. It never carries the metal. StellaIcon is the exception the
+ * kit itself makes: the asterisk IS the metal, so it ships gold.
+ *
+ * MINIMUM SIZES. 88px for a wordmark, 24px for an icon. Below that, use the
+ * favicon asset instead of shrinking a mark past legibility.
  *
  * All marks are pure presentational (no hooks) so they render in Server
  * Components.
@@ -30,178 +48,193 @@
 
 import type { CSSProperties } from "react";
 import { cn } from "../lib/utils";
+import {
+  BRAND_GOLD,
+  OXAGEN,
+  STELLA,
+  type BrandGeometry,
+} from "./brand-marks.generated";
 
 /**
- * The mark's intrinsic aspect. The glyph is WIDE — an "o" beside a cursor
- * block — not square like the hex-cluster mark it replaces, so callers size it
- * by HEIGHT and let width follow. Forcing it into a square box would letterbox
- * the mark and paint it at ~63% of the height available to it.
+ * How a mark is coloured.
+ *
+ * `adaptive`  letters inherit currentColor and flip with the theme; the accent
+ *             glyph keeps the metal. This is the default and what almost every
+ *             surface wants.
+ * `mono`      the whole mark, accent included, collapses to currentColor. For
+ *             single-colour contexts: a print sheet, an embossed favicon, a
+ *             partner's one-colour lockup slot, a disabled state.
  */
-const MARK_W = 143;
-const MARK_H = 90;
-const MARK_ASPECT = MARK_W / MARK_H;
+export type LogoTone = "adaptive" | "mono";
 
-/** The mark's own viewBox, straight from oxagen-glyph-adaptive.svg. */
-const MARK_VIEWBOX = "-4.40 -80.00 143.40 90.20";
-
-/** The "o" letterform. */
-const O_PATH =
-  "M30 1.2Q22.4 1.2 16.7 -2.25Q11 -5.7 7.8 -12Q4.6 -18.3 4.6 -26.8Q4.6 -35.4 7.8 -41.65Q11 -47.9 16.7 -51.35Q22.4 -54.8 30 -54.8Q37.6 -54.8 43.3 -51.35Q49 -47.9 52.2 -41.65Q55.4 -35.4 55.4 -26.8Q55.4 -18.3 52.2 -12Q49 -5.7 43.3 -2.25Q37.6 1.2 30 1.2ZM30 -10.8Q35.4 -10.8 38.35 -14.95Q41.3 -19.1 41.3 -26.8Q41.3 -34.6 38.35 -38.7Q35.4 -42.8 30 -42.8Q24.6 -42.8 21.65 -38.7Q18.7 -34.6 18.7 -26.8Q18.7 -19.1 21.65 -14.95Q24.6 -10.8 30 -10.8Z";
-
-export type LogoTone = "gradient" | "mono-light" | "mono-dark" | "solid";
-
-function monoColor(tone: LogoTone): string | null {
-  if (tone === "mono-light") return "var(--ink-light)";
-  if (tone === "mono-dark") return "var(--ink-dark)";
-  if (tone === "solid") return "currentColor";
-  return null; // full colour — ink + brand cursor
-}
-
-/** The Oxagen logomark — the "o + cursor" mark. */
-export function OxagenLogomark({
+/** A wordmark: two paths, one of which is the single gold glyph. */
+function Wordmark({
+  geometry,
+  label,
+  tone,
   className,
-  tone = "gradient",
   style,
 }: {
+  geometry: BrandGeometry;
+  label: string;
+  tone: LogoTone;
   className?: string;
-  tone?: LogoTone;
   style?: CSSProperties;
 }) {
-  const mono = monoColor(tone);
-  const ink = mono ?? "currentColor";
-  // A mono tone flattens the whole mark to one colour; otherwise the cursor
-  // keeps its brand hue while the "o" tracks the surrounding text colour.
-  const cursor = mono ?? "var(--ox-cursor)";
+  const { viewBox, letters, accent } = geometry.wordmark;
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox={MARK_VIEWBOX}
+      viewBox={viewBox}
       fill="none"
       role="img"
-      aria-label="Oxagen logomark"
-      className={cn("text-foreground", className)}
+      aria-label={label}
+      // Sized by HEIGHT — a wordmark is much wider than it is tall, and a
+      // square box would letterbox it to a fraction of the space it was given.
+      className={cn("h-7 w-auto", className)}
       style={style}
     >
-      {/* The "o" — ink that flips with the theme (inherits text colour) */}
-      <path d={O_PATH} fill={ink} />
-      {/* The cursor block — the brand red-orange, or flattened by a mono tone */}
-      <rect x="74" y="-71" width="56" height="71" rx="3.4" fill={cursor} />
+      <path d={letters} fill="currentColor" />
+      <path d={accent} fill={tone === "mono" ? "currentColor" : BRAND_GOLD} />
     </svg>
   );
 }
 
-/** The Oxagen wordmark — lowercase "oxagen" text. Ink flips with theme. */
+/** An icon: one path, one colour, inside the kit's own 96-unit box. */
+function Icon({
+  geometry,
+  label,
+  fill,
+  className,
+  style,
+}: {
+  geometry: BrandGeometry;
+  label: string;
+  fill: string;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  const { viewBox, transform, path } = geometry.icon;
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox={viewBox}
+      fill="none"
+      role="img"
+      aria-label={label}
+      className={cn("size-7", className)}
+      style={style}
+    >
+      <g transform={transform}>
+        <path d={path} fill={fill} />
+      </g>
+    </svg>
+  );
+}
+
+/**
+ * THE Oxagen logo — "oxagen", lowercase, its `x` in gold. Use this everywhere a
+ * surface identifies itself as Oxagen. There is no lockup alternative.
+ */
 export function OxagenWordmark({
   className,
-  tone = "gradient",
+  tone = "adaptive",
   style,
 }: {
   className?: string;
   tone?: LogoTone;
   style?: CSSProperties;
 }) {
-  const mono = monoColor(tone);
-  const color = mono && mono !== "currentColor" ? mono : undefined;
   return (
-    <span
-      className={cn("ox-wordmark inline-block", className)}
-      style={color ? { color, ...style } : style}
-    >
-      oxagen
-    </span>
+    <Wordmark
+      geometry={OXAGEN}
+      label="oxagen"
+      tone={tone}
+      className={cn("text-foreground", className)}
+      style={style}
+    />
   );
 }
 
 /**
- * Brand mark — the o + cursor mark at the app-chrome size. Sized by HEIGHT
- * (`h-7 w-auto`), not `size-7`: the mark is wider than it is tall, so a square
- * box would letterbox it.
+ * The Oxagen icon — `Ox`, the word's own first two letters, one colour, taken
+ * from whatever it sits on. Square slots only, and always alone: putting it
+ * beside the wordmark rebuilds the lockup the product does not use.
+ */
+export function OxagenIcon({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <Icon
+      geometry={OXAGEN}
+      label="Oxagen"
+      fill="currentColor"
+      className={cn("text-foreground", className)}
+      style={style}
+    />
+  );
+}
+
+/**
+ * The Stella logo — `stella*`. The asterisk is the mark, and it is already in
+ * the word, so nothing is ever placed to its left. This is Stella's lockup.
+ */
+export function StellaWordmark({
+  className,
+  tone = "adaptive",
+  style,
+}: {
+  className?: string;
+  tone?: LogoTone;
+  style?: CSSProperties;
+}) {
+  return (
+    <Wordmark
+      geometry={STELLA}
+      label="stella"
+      tone={tone}
+      className={cn("text-foreground", className)}
+      style={style}
+    />
+  );
+}
+
+/**
+ * The Stella icon — the asterisk alone. Unlike the Ox lettermark this one IS
+ * the metal: the kit ships it gold, because a lone asterisk in ink reads as
+ * punctuation rather than a mark. `tone="mono"` flattens it for one-colour
+ * contexts.
+ */
+export function StellaIcon({
+  className,
+  tone = "adaptive",
+  style,
+}: {
+  className?: string;
+  tone?: LogoTone;
+  style?: CSSProperties;
+}) {
+  return (
+    <Icon
+      geometry={STELLA}
+      label="Stella"
+      fill={tone === "mono" ? "currentColor" : BRAND_GOLD}
+      className={className}
+      style={style}
+    />
+  );
+}
+
+/**
+ * The Oxagen icon at the app-chrome size — collapsed sidebars, tab strips,
+ * anywhere a square slot names the product. Alone: see OxagenIcon.
  */
 export function BrandMark({ className }: { className?: string }) {
-  return <OxagenLogomark className={cn("h-7 w-auto shrink-0", className)} />;
-}
-
-/** Brand lockup: mark + wordmark, side by side. Wordmark hides on mobile. */
-export function OxagenLockup({ className }: { className?: string }) {
-  return (
-    <span className={cn("flex items-center gap-2", className)}>
-      <BrandMark />
-      <OxagenWordmark className="hidden text-xl text-foreground sm:inline-block" />
-    </span>
-  );
-}
-
-/**
- * Full logo lockup API mirroring the design system.
- *   variant: mark | wordmark | horizontal | vertical
- *   tone:    gradient | mono-light | mono-dark | solid
- *   size:    mark height in px (wordmark scales relative to it)
- */
-export function OxagenLogo({
-  variant = "horizontal",
-  tone = "gradient",
-  size = 28,
-  className,
-}: {
-  variant?: "mark" | "wordmark" | "horizontal" | "vertical";
-  tone?: LogoTone;
-  size?: number;
-  className?: string;
-}) {
-  // `size` is the mark HEIGHT; width follows the mark's own aspect so the
-  // glyph is never squashed or letterboxed.
-  const markStyle: CSSProperties = { width: size * MARK_ASPECT, height: size };
-
-  if (variant === "mark") {
-    return (
-      <span
-        className={cn("inline-flex", className)}
-        style={markStyle}
-        aria-label="Oxagen"
-      >
-        <OxagenLogomark tone={tone} className="size-full" />
-      </span>
-    );
-  }
-  if (variant === "wordmark") {
-    return (
-      <OxagenWordmark
-        tone={tone}
-        className={cn("text-foreground", className)}
-      />
-    );
-  }
-  if (variant === "vertical") {
-    return (
-      <span
-        className={cn("inline-flex flex-col items-center", className)}
-        style={{ gap: size * 0.34 }}
-        aria-label="Oxagen"
-      >
-        <OxagenLogomark tone={tone} style={markStyle} className="shrink-0" />
-        <OxagenWordmark
-          tone={tone}
-          style={{ fontSize: size * 0.92 }}
-          className="text-foreground"
-        />
-      </span>
-    );
-  }
-  // horizontal (default)
-  return (
-    <span
-      className={cn("inline-flex items-center", className)}
-      style={{ gap: size * 0.42 }}
-      aria-label="Oxagen"
-    >
-      <OxagenLogomark tone={tone} style={markStyle} className="shrink-0" />
-      <OxagenWordmark
-        tone={tone}
-        style={{ fontSize: size * 1.02 }}
-        className="text-foreground"
-      />
-    </span>
-  );
+  return <OxagenIcon className={cn("size-7 shrink-0", className)} />;
 }
 
 /* ── Knowledge-graph brand primitives ──────────────────────────────────────── */

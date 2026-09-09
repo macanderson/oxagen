@@ -84,9 +84,9 @@ export function HexField({
     >
       <defs>
         <linearGradient id="oxHexEmber" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#725A00" />
-          <stop offset="0.5" stopColor="#EFC53F" />
-          <stop offset="1" stopColor="#F7D96B" />
+          <stop offset="0" stopColor="#8B5E1A" />
+          <stop offset="0.5" stopColor="#D6962C" />
+          <stop offset="1" stopColor="#F1C364" />
         </linearGradient>
       </defs>
       {FIELD.map((c, i) => {

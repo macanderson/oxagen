@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { OxagenLogomark } from "@oxagen/ui";
+import { OxagenIcon } from "@oxagen/ui";
 import { CopyCommand } from "@/components/landing/copy-command";
 import { InstallTerminal } from "@/components/landing/install-terminal";
 import { HexField } from "@/components/ui/hex-field";
@@ -75,7 +75,6 @@ export default function InstallPage(): ReactNode {
         <div className="relative z-10 mx-auto grid w-full max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-[1.05fr_1fr] lg:py-28">
           <div className="flex flex-col items-start text-left">
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-              <OxagenLogomark className="size-3.5" />
               <span className="ox-eyebrow !text-[11px] !tracking-[0.14em]">
                 Oxagen CLI
               </span>
@@ -112,7 +111,7 @@ export default function InstallPage(): ReactNode {
               </Link>
               <Link
                 href="/docs/cli"
-                className="inline-flex h-11 items-center rounded-lg border border-border bg-card/60 px-6 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:border-[var(--_ember-b,#EFC53F)]/60"
+                className="inline-flex h-11 items-center rounded-lg border border-border bg-card/60 px-6 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:border-[var(--_ember-b,#D6962C)]/60"
               >
                 CLI docs
               </Link>
@@ -204,7 +203,7 @@ export default function InstallPage(): ReactNode {
                 ],
               ].map(([t, d]) => (
                 <li key={t} className="flex gap-3">
-                  <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[var(--_ember-b,#EFC53F)]" />
+                  <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[var(--_ember-b,#D6962C)]" />
                   <span>
                     <span className="font-medium text-foreground">{t}.</span>{" "}
                     <span className="text-muted-foreground">{d}</span>
@@ -250,7 +249,7 @@ export default function InstallPage(): ReactNode {
         <HexField className="pointer-events-none absolute inset-0 -z-10 h-full w-full text-foreground opacity-40" />
         <div className="relative z-10 mx-auto w-full max-w-7xl px-6 py-20 lg:py-24">
           <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
-            <OxagenLogomark className="size-12" />
+            <OxagenIcon className="size-12" />
             <h2 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">
               Installed? <span className="lp-grad-text">Ask something.</span>
             </h2>
@@ -263,7 +262,7 @@ export default function InstallPage(): ReactNode {
           <div className="mt-12 grid gap-5 md:grid-cols-3">
             {NEXT_STEPS.map((s) => (
               <Link key={s.href} href={s.href} className="group">
-                <div className="flex h-full flex-col rounded-xl border border-border bg-background/60 p-6 backdrop-blur transition-colors hover:border-[var(--_ember-b,#EFC53F)]/60 hover:bg-muted/40">
+                <div className="flex h-full flex-col rounded-xl border border-border bg-background/60 p-6 backdrop-blur transition-colors hover:border-[var(--_ember-b,#D6962C)]/60 hover:bg-muted/40">
                   <h3 className="text-base font-semibold text-foreground group-hover:text-[var(--ember-ink)]">
                     {s.title}
                   </h3>

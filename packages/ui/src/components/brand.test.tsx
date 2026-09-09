@@ -1,154 +1,179 @@
 // @vitest-environment jsdom
 /**
- * brand.test.tsx — render tests for the "o + cursor" mark components.
+ * brand.test.tsx — render tests for the house marks.
  *
- * The logomark is an SVG (role=img) holding the "o" letterform plus the cursor
- * block; the wordmark is lowercase "oxagen" as real text. BrandMark renders the
- * mark directly. Note: SVG elements in JSDOM expose className as
- * SVGAnimatedString, not a plain string — use getAttribute("class").
+ * These lock down the rules the brand system cannot enforce by review alone:
+ * the geometry is the kit's (not hand-edited), exactly ONE glyph is gold, an
+ * icon is one colour, and NO component composes Oxagen's mark beside its word.
+ *
+ * Note: SVG elements in JSDOM expose className as SVGAnimatedString, not a
+ * plain string — use getAttribute("class").
  */
 
 import { render, cleanup } from "@testing-library/react";
 import { describe, expect, it, afterEach } from "vitest";
 import {
-  OxagenLogomark,
   OxagenWordmark,
+  OxagenIcon,
+  StellaWordmark,
+  StellaIcon,
   BrandMark,
-  OxagenLockup,
-  OxagenLogo,
   NodeChip,
   ConfidenceBar,
 } from "./brand";
+import * as brand from "./brand";
+import { BRAND_GOLD, OXAGEN, STELLA } from "./brand-marks.generated";
 
 afterEach(cleanup);
 
-describe("OxagenLogomark — render", () => {
-  it("renders an SVG with role=img", () => {
-    const { getByRole } = render(<OxagenLogomark />);
-    expect(getByRole("img", { name: "Oxagen logomark" })).toBeInTheDocument();
-  });
-
-  it("paints the cursor block in the brand cursor hue by default", () => {
-    const { container } = render(<OxagenLogomark />);
-    const cursor = container.querySelector("rect");
-    expect(cursor).toBeInTheDocument();
-    expect(cursor?.getAttribute("fill")).toBe("var(--ox-cursor)");
-  });
-
-  it("lets the 'o' inherit the surrounding text colour so it flips with the theme", () => {
-    const { container } = render(<OxagenLogomark />);
-    expect(container.querySelector("path")?.getAttribute("fill")).toBe(
-      "currentColor",
-    );
-  });
-
-  it("carries no gradient — the mark is flat ink plus a solid cursor", () => {
-    const { container } = render(<OxagenLogomark />);
-    expect(container.querySelector("linearGradient")).not.toBeInTheDocument();
-  });
-
-  it("flattens BOTH the 'o' and the cursor to one colour for a mono tone", () => {
-    const { container } = render(<OxagenLogomark tone="mono-light" />);
-    expect(container.querySelector("path")?.getAttribute("fill")).toBe(
-      "var(--ink-light)",
-    );
-    expect(container.querySelector("rect")?.getAttribute("fill")).toBe(
-      "var(--ink-light)",
-    );
-  });
-
-  it("keeps the canonical viewBox from oxagen-glyph-adaptive.svg", () => {
-    const { getByRole } = render(<OxagenLogomark />);
-    expect(getByRole("img").getAttribute("viewBox")).toBe(
-      "-4.40 -80.00 143.40 90.20",
-    );
-  });
-
-  it("accepts className via getAttribute", () => {
-    const { getByRole } = render(<OxagenLogomark className="h-7" />);
-    expect(getByRole("img").getAttribute("class")).toContain("h-7");
+/**
+ * The kit's pinned gold. If this ever changes the kit changed, and every asset
+ * in the repo has to be re-synced with it — the generated module and the CSS
+ * token file must not disagree.
+ */
+describe("the metal", () => {
+  it("is the house gold", () => {
+    expect(BRAND_GOLD).toBe("#D6962C");
   });
 });
 
-describe("OxagenWordmark — render", () => {
-  it("renders the Oxagen wordmark as text", () => {
-    const { getByText } = render(<OxagenWordmark />);
-    expect(getByText("oxagen")).toBeInTheDocument();
+describe("OxagenWordmark — THE Oxagen logo", () => {
+  it("renders an SVG labelled with the word", () => {
+    const { getByRole } = render(<OxagenWordmark />);
+    expect(getByRole("img", { name: "oxagen" })).toBeInTheDocument();
   });
 
-  it("uses the wordmark class", () => {
-    const { getByText } = render(<OxagenWordmark className="text-xl" />);
-    const el = getByText("oxagen");
-    expect(el.className).toContain("ox-wordmark");
-    expect(el.className).toContain("text-xl");
+  it("keeps the kit's own viewBox rather than re-fitting the word", () => {
+    const { getByRole } = render(<OxagenWordmark />);
+    expect(getByRole("img").getAttribute("viewBox")).toBe(OXAGEN.wordmark.viewBox);
   });
 
-  it("applies a mono color when toned", () => {
-    const { getByText } = render(<OxagenWordmark tone="mono-dark" />);
-    expect(getByText("oxagen").style.color).toBe("var(--ink-dark)");
-  });
-});
-
-describe("BrandMark — render", () => {
-  it("renders the o + cursor SVG", () => {
-    const { container } = render(<BrandMark />);
-    expect(container.querySelector("svg")).toBeInTheDocument();
+  it("draws exactly two paths: the letters, and the one gold glyph", () => {
+    const { container } = render(<OxagenWordmark />);
+    const paths = container.querySelectorAll("path");
+    expect(paths).toHaveLength(2);
+    expect(paths[0]?.getAttribute("fill")).toBe("currentColor");
+    expect(paths[1]?.getAttribute("fill")).toBe(BRAND_GOLD);
   });
 
-  it("merges custom className onto the mark", () => {
-    const { container } = render(<BrandMark className="custom-brand" />);
-    expect(container.querySelector("svg")?.getAttribute("class")).toContain(
-      "custom-brand",
-    );
+  it("keeps the metal on the x in BOTH themes — the accent is never theme-flipped", () => {
+    const { container } = render(<OxagenWordmark />);
+    const accent = container.querySelectorAll("path")[1];
+    expect(accent?.getAttribute("fill")).not.toContain("var(");
+  });
+
+  it("flattens the gold to currentColor for a mono tone", () => {
+    const { container } = render(<OxagenWordmark tone="mono" />);
+    for (const path of container.querySelectorAll("path")) {
+      expect(path.getAttribute("fill")).toBe("currentColor");
+    }
   });
 
   /**
-   * The mark is wider than it is tall, so it must be sized by HEIGHT. A square
-   * utility (`size-7`) would letterbox it down to ~63% of the available height.
+   * A wordmark is far wider than it is tall, so it must be sized by HEIGHT.
+   * A square utility would letterbox it to a fraction of its box.
    */
   it("sizes by height, not into a square box", () => {
-    const { container } = render(<BrandMark />);
-    const cls = container.querySelector("svg")?.getAttribute("class") ?? "";
+    const { getByRole } = render(<OxagenWordmark />);
+    const cls = getByRole("img").getAttribute("class") ?? "";
     expect(cls).toContain("h-7");
     expect(cls).toContain("w-auto");
     expect(cls).not.toContain("size-7");
   });
+
+  it("accepts a caller className", () => {
+    const { getByRole } = render(<OxagenWordmark className="h-10" />);
+    expect(getByRole("img").getAttribute("class")).toContain("h-10");
+  });
 });
 
-describe("OxagenLockup — render", () => {
-  it("renders both the mark SVG and the wordmark text", () => {
-    const { container, getByText } = render(<OxagenLockup />);
-    expect(container.querySelector("svg")).toBeInTheDocument();
-    expect(getByText("oxagen")).toBeInTheDocument();
+describe("OxagenIcon — the one-colour Ox lettermark", () => {
+  it("renders a single path that takes the colour of what it sits on", () => {
+    const { container } = render(<OxagenIcon />);
+    const paths = container.querySelectorAll("path");
+    expect(paths).toHaveLength(1);
+    expect(paths[0]?.getAttribute("fill")).toBe("currentColor");
   });
 
-  it("merges custom className on lockup span", () => {
-    const { container } = render(<OxagenLockup className="custom-lockup" />);
-    expect((container.firstChild as HTMLElement).className).toContain(
-      "custom-lockup",
+  it("never carries the metal — the gold belongs to the x of the word", () => {
+    const { container } = render(<OxagenIcon />);
+    expect(container.innerHTML).not.toContain(BRAND_GOLD);
+  });
+
+  it("keeps the kit's 96-unit box and its fitting transform", () => {
+    const { getByRole, container } = render(<OxagenIcon />);
+    expect(getByRole("img").getAttribute("viewBox")).toBe(OXAGEN.icon.viewBox);
+    expect(container.querySelector("g")?.getAttribute("transform")).toBe(
+      OXAGEN.icon.transform,
     );
   });
 });
 
-describe("OxagenLogo — variants", () => {
-  it("mark variant renders only the mark", () => {
-    const { container, queryByText } = render(<OxagenLogo variant="mark" />);
-    expect(container.querySelector("svg")).toBeInTheDocument();
-    expect(queryByText("oxagen")).not.toBeInTheDocument();
+describe("StellaWordmark — the mark is inside the word", () => {
+  it("renders the letters plus the gold asterisk", () => {
+    const { container, getByRole } = render(<StellaWordmark />);
+    expect(getByRole("img", { name: "stella" })).toBeInTheDocument();
+    const paths = container.querySelectorAll("path");
+    expect(paths).toHaveLength(2);
+    expect(paths[1]?.getAttribute("fill")).toBe(BRAND_GOLD);
   });
 
-  it("horizontal variant renders mark + wordmark", () => {
-    const { container, getByText } = render(
-      <OxagenLogo variant="horizontal" size={40} />,
+  it("keeps the kit's viewBox", () => {
+    const { getByRole } = render(<StellaWordmark />);
+    expect(getByRole("img").getAttribute("viewBox")).toBe(STELLA.wordmark.viewBox);
+  });
+});
+
+describe("StellaIcon — the asterisk IS the metal", () => {
+  it("ships gold, unlike the Ox lettermark", () => {
+    const { container } = render(<StellaIcon />);
+    expect(container.querySelector("path")?.getAttribute("fill")).toBe(BRAND_GOLD);
+  });
+
+  it("flattens for a mono tone", () => {
+    const { container } = render(<StellaIcon tone="mono" />);
+    expect(container.querySelector("path")?.getAttribute("fill")).toBe(
+      "currentColor",
     );
-    expect(container.querySelector("svg")).toBeInTheDocument();
-    expect(getByText("oxagen")).toBeInTheDocument();
+  });
+});
+
+describe("BrandMark — the icon at the app-chrome size", () => {
+  it("renders the Ox lettermark", () => {
+    const { getByRole } = render(<BrandMark />);
+    expect(getByRole("img", { name: "Oxagen" })).toBeInTheDocument();
   });
 
-  it("vertical variant renders mark + wordmark", () => {
-    const { container, getByText } = render(<OxagenLogo variant="vertical" />);
-    expect(container.querySelector("svg")).toBeInTheDocument();
-    expect(getByText("oxagen")).toBeInTheDocument();
+  it("merges a custom className", () => {
+    const { getByRole } = render(<BrandMark className="custom-brand" />);
+    expect(getByRole("img").getAttribute("class")).toContain("custom-brand");
+  });
+});
+
+/**
+ * The rule the product must not be able to break by accident: Oxagen's logo is
+ * the wordmark, so nothing in this module may hand a caller a composed lockup.
+ * If someone re-adds one, this fails before a reviewer has to notice.
+ */
+describe("no Oxagen lockup exists", () => {
+  it("exports no lockup or composed-logo component", () => {
+    for (const name of Object.keys(brand)) {
+      expect(name.toLowerCase()).not.toContain("lockup");
+    }
+    expect(brand).not.toHaveProperty("OxagenLogo");
+    expect(brand).not.toHaveProperty("OxagenLogomark");
+  });
+
+  it("renders no component that puts the Ox mark and the word together", () => {
+    const { container } = render(
+      <>
+        <OxagenWordmark />
+        <OxagenIcon />
+      </>,
+    );
+    // Two separate roots, deliberately composed by the TEST — no export does
+    // this for a caller.
+    expect(container.querySelectorAll("svg")).toHaveLength(2);
   });
 });
 

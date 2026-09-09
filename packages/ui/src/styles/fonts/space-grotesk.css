@@ -1,0 +1,63 @@
+/**
+ * Space Grotesk — the house typeface, self-hosted.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * This is the face the Oxagen house brand system is built on
+ * (macanderson/oxagen-house-brand). The wordmarks are not lettering: `oxagen`
+ * and `stella*` are this font's own outlines at weight 600, so the marks and
+ * the running text cannot drift apart. Using any other face would break that.
+ *
+ * The woff2 binaries beside this file are vendored by
+ *   node tools/scripts/sync-brand-assets.mjs
+ * straight from the kit's fonts/ directory — never hand-copied, never
+ * downloaded from a CDN. The src url()s are bundler-relative, so each app's
+ * Turbopack build fingerprints and emits them from this ONE shared location.
+ *
+ * FOUR STATIC WEIGHTS, not a variable font. The kit ships the subset the marks
+ * were measured against; four ~30KB files load faster than one 120KB variable
+ * face when the design only ever asks for four stops:
+ *
+ *   400 body   500 UI   600 headings + the wordmark   700 the Ox icon
+ *
+ * NO MONO FACE HERE, deliberately. The house rule is "Space Grotesk is not a
+ * code face": terminal output and code take the system monospace stack, which
+ * globals.css binds to --font-mono. Do not add a Space Grotesk Mono; there
+ * isn't one, and substituting a third-party mono would put a face in the
+ * product the kit never approved.
+ *
+ * LICENSE — SIL Open Font License 1.1 (see LICENSE-OFL.txt beside this file).
+ * Space Grotesk is by Florian Karsten. Self-hosting and redistribution are
+ * both permitted; the licence file must travel with the binaries.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("./space-grotesk-latin-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("./space-grotesk-latin-500.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("./space-grotesk-latin-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("./space-grotesk-latin-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}

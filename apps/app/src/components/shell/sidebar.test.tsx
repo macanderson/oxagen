@@ -190,9 +190,16 @@ describe("Sidebar — brand link", () => {
     expect(link).toHaveAttribute("href", "/acme/prod/sessions");
   });
 
-  it("shows BrandMark", () => {
+  /**
+   * Expanded, the brand header is the WORDMARK alone. Oxagen's logo is the
+   * wordmark, so the Ox lettermark must NOT sit beside it — that composition
+   * is the lockup the brand system does not use.
+   */
+  it("shows the wordmark alone when expanded, never the mark beside it", () => {
+    mockUseSidebar.mockReturnValue({ collapsed: false });
     render(<Sidebar ctx={ctx} user={user} />);
-    expect(screen.getByTestId("brand-mark")).toBeInTheDocument();
+    expect(screen.getByTestId("oxagen-wordmark")).toBeInTheDocument();
+    expect(screen.queryByTestId("brand-mark")).not.toBeInTheDocument();
   });
 });
 
@@ -203,10 +210,13 @@ describe("Sidebar — wordmark visibility", () => {
     expect(screen.getByTestId("oxagen-wordmark")).toBeInTheDocument();
   });
 
-  it("hides wordmark when collapsed", () => {
+  /** Collapsed, the slot is square and too narrow for a word, so the Ox
+   * lettermark stands in — still alone. */
+  it("swaps the wordmark for the mark when collapsed", () => {
     mockUseSidebar.mockReturnValue({ collapsed: true });
     render(<Sidebar ctx={ctx} user={user} />);
     expect(screen.queryByTestId("oxagen-wordmark")).not.toBeInTheDocument();
+    expect(screen.getByTestId("brand-mark")).toBeInTheDocument();
   });
 });
 

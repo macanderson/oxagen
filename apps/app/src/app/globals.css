@@ -3,16 +3,16 @@
  *
  * Pulls in the shared @oxagen/ui base which provides:
  *   - Tailwind v4 + design tokens (tokens.css)
- *   - Aeonik variable @font-face declarations (fonts/aeonik.css) — ACTIVE;
- *     self-hosted woff2 binaries live in packages/ui/src/styles/fonts/ and are
- *     emitted by this app's build from that one shared location
+ *   - Space Grotesk @font-face declarations (fonts/space-grotesk.css) — the
+ *     house typeface; self-hosted woff2 binaries live in
+ *     packages/ui/src/styles/fonts/ and are emitted by this app's build from
+ *     that one shared location
  *   - CSS custom properties: --font-sans / --font-display / --font-mono
  *   - Tailwind @theme font-family tokens: font-sans / font-display / font-mono
- *   - Base heading styles (Aeonik Fono, wt 500, tracking -0.025em)
+ *   - Base heading styles (Space Grotesk 600, tracking -0.015em)
  *   - Stock shadcn neutral tokens (glass/aurora utilities removed)
  *
- * See packages/ui/src/styles/fonts/README.md for the family/weight map and the
- * optional next/font/local preload migration (OXA-1508).
+ * See packages/ui/src/styles/fonts/README.md for the family/weight map.
  */
 @import "@oxagen/ui/styles/globals.css";
 
@@ -35,19 +35,10 @@
 /* Scan the components folder located one directory up */
 @source "../components";
 
-/* ── Page headings — Oxagen wordmark face (Aeonik) ──────────────────────────
- * The app sets its display headings in the SAME face as the oxagen wordmark /
- * logo (Aeonik → --font-wordmark), overriding the shared Aeonik Fono default
- * (--font-display) for h1–h3. Unlayered so it wins over the @layer base
- * heading rule in @oxagen/ui without an !important. Scoped to this app only —
- * docs/website keep Aeonik Fono. Case is left untouched; the lowercase
- * transform is reserved for the .ox-wordmark lockup itself. */
-h1,
-h2,
-h3 {
-  font-family: var(--font-wordmark);
-  letter-spacing: -0.02em;
-}
+/* Headings used to be overridden here to borrow the wordmark's face back from
+ * a separate display family. The house system is ONE face — --font-display and
+ * --font-wordmark both resolve to Space Grotesk — so the override said nothing
+ * and only fought the shared tracking. Removed with the house system. */
 
 /**
  * Appearance preferences — flash-free via data-* attributes on <html>.
