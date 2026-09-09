@@ -18,16 +18,10 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { formatError } from "./lib/format-error";
 import { collapseRedundantQuotes } from "./lib/normalize-env-file";
+import { ENV_TARGETS } from "./lib/env-targets";
 
 const ROOT = resolve(process.cwd());
 const VERCEL_TEAM_SLUG = process.env.VERCEL_TEAM_SLUG?.trim();
-const TARGETS = [
-  { name: "root", dir: ROOT },
-  { name: "@oxagen/app", dir: resolve(ROOT, "apps/app") },
-  { name: "@oxagen/website", dir: resolve(ROOT, "apps/website") },
-  { name: "@oxagen/api", dir: resolve(ROOT, "apps/api") },
-  { name: "@oxagen/mcp", dir: resolve(ROOT, "apps/mcp") },
-];
 
 async function pull(target: { name: string; dir: string }): Promise<void> {
   if (!existsSync(resolve(target.dir, ".vercel/project.json"))) {
@@ -65,7 +59,9 @@ async function pull(target: { name: string; dir: string }): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  for (const t of TARGETS) await pull(t);
+  for (const t of ENV_TARGETS) {
+    await pull({ name: t.name, dir: resolve(ROOT, t.dir) });
+  }
   console.log(kleur.green("[env-pull] done"));
 }
 
