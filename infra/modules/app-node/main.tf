@@ -255,9 +255,11 @@ resource "aws_instance" "node" {
   }
 
   user_data = templatefile("${path.module}/user-data.sh.tftpl", {
-    name          = var.name
-    region        = var.region
-    neo4j_version = var.neo4j_version
+    name             = var.name
+    region           = var.region
+    neo4j_version    = var.neo4j_version
+    clickhouse_image = var.clickhouse_image
+    deploy_bucket    = var.deploy_bucket
   })
   user_data_replace_on_change = true
 
