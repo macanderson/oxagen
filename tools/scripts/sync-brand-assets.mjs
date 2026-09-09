@@ -399,13 +399,30 @@ export const STELLA: BrandGeometry = ${JSON.stringify(data.stella, null, 2)};
 
 /* ── run ─────────────────────────────────────────────────────────────────── */
 
+/**
+ * The kit is a separate repository, so it is not always present — CI checks out
+ * this repo alone.
+ *
+ * A WRITE without it is an error: there is nothing to copy from. A `--check`
+ * without it says so and exits 0, because the alternative is a gate that fails
+ * on every machine that has not cloned a second repo, and a gate everyone
+ * learns to ignore is worse than no gate. It says it LOUDLY rather than
+ * skipping quietly: the one line names what was not checked, so a green run
+ * with that line in it cannot be read as "the assets were verified".
+ *
+ * What is lost is small and visible: the vendored files are committed, so the
+ * only drift this misses is someone hand-editing one, which shows up in the
+ * diff of the PR that does it.
+ */
 try {
   readFileSync(join(BRAND, "tokens/house-tokens.json"));
 } catch {
-  console.error(
-    `brand kit not found at ${BRAND}\n` +
-      `clone macanderson/oxagen-house-brand beside this repo, or set OXAGEN_HOUSE_BRAND.`,
-  );
+  const where = `clone macanderson/oxagen-house-brand beside this repo, or set OXAGEN_HOUSE_BRAND.`;
+  if (CHECK) {
+    console.log(`brand: SKIPPED — no house kit at ${BRAND}, so no asset was verified. ${where}`);
+    process.exit(0);
+  }
+  console.error(`brand kit not found at ${BRAND}\n${where}`);
   process.exit(2);
 }
 
