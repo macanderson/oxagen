@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { OxagenLockup, OxagenLogomark } from "@oxagen/ui";
+import { OxagenWordmark } from "@oxagen/ui";
 
 /**
  * Landing-group layout. Wraps the home marketing page with a lightweight,
@@ -70,7 +70,7 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
       <header className="sticky top-0 z-50 border-b border-border/70 bg-background/70 backdrop-blur-md">
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-6">
           <Link href="/" aria-label="Oxagen home" className="flex items-center">
-            <OxagenLockup />
+            <OxagenWordmark className="h-6" />
             <span className="ml-2 hidden text-sm font-medium text-muted-foreground sm:inline">
               Docs
             </span>
@@ -110,12 +110,8 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
       <footer className="border-t border-border bg-muted/20">
         <div className="mx-auto grid w-full max-w-7xl gap-10 px-6 py-14 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
-            <div className="flex items-center gap-2">
-              <OxagenLogomark className="size-6" />
-              <span className="ox-wordmark text-lg text-foreground">
-                oxagen
-              </span>
-            </div>
+            {/* The wordmark alone — never the mark beside the word. */}
+            <OxagenWordmark className="h-5" />
             <p className="mt-4 max-w-xs text-sm text-muted-foreground">
               Governed, auditable, tenant-isolated AI — every model call through
               one metered, IAM-gated, audit-logged chokepoint.

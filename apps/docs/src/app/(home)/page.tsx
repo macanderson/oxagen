@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { OxagenLogomark } from "@oxagen/ui";
+import { OxagenIcon } from "@oxagen/ui";
 import { HeroTerminal } from "@/components/landing/hero-terminal";
 import { ContextWindow } from "@/components/landing/context-window";
 import { CopyCommand } from "@/components/landing/copy-command";
@@ -104,7 +104,7 @@ export default function HomePage(): ReactNode {
         <div className="relative z-10 mx-auto grid w-full max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-[1.05fr_1fr] lg:py-28">
           <div className="flex flex-col items-start text-left">
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-              <OxagenLogomark className="size-3.5" />
+              <OxagenIcon className="size-3.5" />
               <span className="ox-eyebrow !text-[11px] !tracking-[0.14em]">
                 Governed AI · for the enterprise
               </span>
@@ -285,7 +285,7 @@ export default function HomePage(): ReactNode {
         />
         <HexField className="pointer-events-none absolute inset-0 -z-10 h-full w-full text-foreground opacity-40" />
         <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col items-center px-6 py-24 text-center">
-          <OxagenLogomark className="size-12" />
+          <OxagenIcon className="size-12" />
           <h2 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">
             Start with the context window{" "}
             <span className="lp-grad-text">open</span>.

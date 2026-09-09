@@ -1,4 +1,4 @@
-import { OxagenLogo } from "@/components/ui/brand";
+import { OxagenWordmark } from "@/components/ui/brand";
 import { TwoFactorForm } from "./two-factor-form";
 
 /**
@@ -11,7 +11,7 @@ export default function TwoFactorPage() {
   return (
     <div className="w-full max-w-sm space-y-6">
       <div className="flex justify-center">
-        <OxagenLogo variant="vertical" size={40} />
+        <OxagenWordmark className="h-8" />
       </div>
 
       <div className="rounded-xl border border-border/60 bg-card/80 p-8 shadow-xl space-y-6 backdrop-blur-xl">

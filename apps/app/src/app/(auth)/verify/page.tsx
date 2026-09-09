@@ -1,4 +1,4 @@
-import { OxagenLogo } from "@/components/ui/brand";
+import { OxagenWordmark } from "@/components/ui/brand";
 
 export default function VerifyPage(_props: {
   searchParams: Promise<{ email?: string }>;
@@ -6,7 +6,7 @@ export default function VerifyPage(_props: {
   return (
     <div className="w-full max-w-sm space-y-6">
       <div className="flex justify-center">
-        <OxagenLogo variant="vertical" size={40} />
+        <OxagenWordmark className="h-8" />
       </div>
 
       <div className="rounded-xl border bg-card p-8 shadow-md space-y-6">

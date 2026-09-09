@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { OxagenLogomark } from "@oxagen/ui";
+import { OxagenIcon } from "@oxagen/ui";
 import { CopyCommand } from "@/components/landing/copy-command";
 import { InstallTerminal } from "@/components/landing/install-terminal";
 import { HexField } from "@/components/ui/hex-field";
@@ -75,7 +75,7 @@ export default function InstallPage(): ReactNode {
         <div className="relative z-10 mx-auto grid w-full max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-[1.05fr_1fr] lg:py-28">
           <div className="flex flex-col items-start text-left">
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-              <OxagenLogomark className="size-3.5" />
+              <OxagenIcon className="size-3.5" />
               <span className="ox-eyebrow !text-[11px] !tracking-[0.14em]">
                 Oxagen CLI
               </span>
@@ -250,7 +250,7 @@ export default function InstallPage(): ReactNode {
         <HexField className="pointer-events-none absolute inset-0 -z-10 h-full w-full text-foreground opacity-40" />
         <div className="relative z-10 mx-auto w-full max-w-7xl px-6 py-20 lg:py-24">
           <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
-            <OxagenLogomark className="size-12" />
+            <OxagenIcon className="size-12" />
             <h2 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">
               Installed? <span className="lp-grad-text">Ask something.</span>
             </h2>

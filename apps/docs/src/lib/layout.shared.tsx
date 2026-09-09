@@ -1,5 +1,5 @@
 import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
-import { OxagenLogomark } from "@oxagen/ui";
+import { OxagenIcon } from "@oxagen/ui";
 
 /**
  * Shared layout options (nav title, links) consumed by both the docs layout
@@ -13,7 +13,7 @@ export function baseOptions(): BaseLayoutProps {
     nav: {
       title: (
         <span className="inline-flex items-center gap-2">
-          <OxagenLogomark className="size-5" />
+          <OxagenIcon className="size-5" />
           <span className="ox-wordmark text-lg text-foreground">Oxagen</span>
           <span className="text-sm font-medium text-muted-foreground">
             Docs
