@@ -1,0 +1,220 @@
+# store-migrate.yml — manual ClickHouse/Neo4j migration runner for production.
+#
+# Why this exists: there was no path at all from a committed migration to the
+# production copies of these two stores. `db-migrate.yml` beside this file
+# covers Postgres and only Postgres; every other
+# `DB_MIGRATE_STORES=clickhouse,neo4j` in this repository — four of them,
+# across pipeline.yml and nightly.yml — runs against an ephemeral CI service
+# container and never touches production.
+#
+# What that cost: production ClickHouse carried NO SCHEMA from the 2026-08-27
+# cutover onward. The `oxagen` database existed and was empty, and the API's
+# error-reporting sink failed on every capture with `Table oxagen.error_events
+# does not exist`. Nothing reported it, because a failing error reporter is
+# the one component whose failure it cannot report.
+#
+# Why a manual dispatch rather than a step in the deploy: it matches the
+# decision already made for Postgres next door. `pipeline.yml` used to apply
+# migrations to prod on every push and that job was retired (#1341). Schema
+# changes to a live store are read before they are applied, and this workflow
+# is where a person does the reading.
+#
+# Safe by default: `apply=false` opens the tunnel, proves it reaches the
+# store, and prints which migrations are pending — it writes nothing. Read
+# that list before re-running with `apply=true`. If it shows the entire
+# history pending against a store you believe is populated, STOP: the runner
+# treats a database with no pre-existing tables as a fresh deployment and will
+# execute every file, which is right for an empty store and wrong for one
+# whose ledger was lost.
+name: Store Migrate (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      stores:
+        description: Which stores to migrate
+        type: choice
+        options:
+          - clickhouse
+          - neo4j
+          - clickhouse,neo4j
+        default: clickhouse
+      apply:
+        description: "Apply migrations? Leave false for a read-only pending list."
+        type: boolean
+        default: false
+
+# Two migration runs against one store must never overlap. The runner has a
+# same-process guard (#2637) and nothing beyond it, so two workflow runs would
+# race for real.
+concurrency:
+  group: store-migrate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
+          aws-region: us-east-1
+
+      # The plugin is what turns `start-session` into a real tunnel; without it
+      # the command fails with an unhelpful "SessionManagerPlugin is not found".
+      - name: Install the Session Manager plugin
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/sm.deb \
+            "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb"
+          sudo dpkg -i /tmp/sm.deb
+          session-manager-plugin --version
+
+      # Resolved by tag for the same reason the deploy does it: the node is
+      # replaced whenever its user data changes, and a pinned id points at a
+      # terminated box after the first replacement.
+      - name: Find the node
+        id: node
+        run: |
+          set -euo pipefail
+          INSTANCE=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=oxagen-app" \
+                      "Name=instance-state-name,Values=running" \
+            --query 'Reservations[].Instances[].InstanceId' --output text)
+          if [ "$(printf '%s' "$INSTANCE" | wc -w)" -ne 1 ]; then
+            echo "::error::expected exactly one running instance tagged Name=oxagen-app, got: $INSTANCE"
+            exit 1
+          fi
+          echo "instance=$INSTANCE" >> "$GITHUB_OUTPUT"
+          echo "node: $INSTANCE"
+
+      # Both stores bind 127.0.0.1 on the node and neither is exposed to the
+      # VPC, so a forwarded port is the only way in. Backgrounded, then waited
+      # on: `start-session` does not return once the tunnel is up.
+      - name: Open the tunnels
+        run: |
+          set -euo pipefail
+          open_tunnel() {
+            local remote=$1 local_port=$2 label=$3
+            aws ssm start-session \
+              --target "${{ steps.node.outputs.instance }}" \
+              --document-name AWS-StartPortForwardingSession \
+              --parameters "{\"portNumber\":[\"$remote\"],\"localPortNumber\":[\"$local_port\"]}" \
+              > "/tmp/tunnel-$label.log" 2>&1 &
+            echo $! > "/tmp/tunnel-$label.pid"
+          }
+          open_tunnel 8123 8123 clickhouse
+          open_tunnel 7687 7687 neo4j
+
+          # Wait for the port rather than sleeping a guessed interval: SSM
+          # takes a few seconds and a fixed sleep is either too short on a bad
+          # day or wasted on a good one.
+          for port in 8123 7687; do
+            for _ in $(seq 1 30); do
+              if timeout 1 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+                echo "  port $port is open"
+                break
+              fi
+              sleep 2
+            done
+          done
+          echo "--- tunnel logs ---"
+          tail -3 /tmp/tunnel-*.log || true
+
+      - name: Read the production store config
+        run: |
+          set -euo pipefail
+          # Written to the environment file rather than echoed: these are
+          # SecureString values and a `set -x` here would print them.
+          for key in CLICKHOUSE_URL CLICKHOUSE_USERNAME CLICKHOUSE_PASSWORD CLICKHOUSE_DATABASE \
+                     NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD NEO4J_DATABASE; do
+            value=$(aws ssm get-parameter --name "/oxagen/production/$key" \
+              --with-decryption --query Parameter.Value --output text)
+            echo "::add-mask::$value"
+            echo "$key=$value" >> "$GITHUB_ENV"
+          done
+          echo "read 8 parameters"
+
+      # The read-only half. `db-migrate.ts` has no status mode, so this asks
+      # the ledger directly and diffs it against the files on disk — the same
+      # question `atlas migrate status` answers for Postgres next door.
+      - name: What is pending
+        run: |
+          set -euo pipefail
+          echo "== migration files in the repository =="
+          ls packages/telemetry/src/migrations/*.sql | xargs -n1 basename | sort > /tmp/on-disk.txt
+          wc -l < /tmp/on-disk.txt
+
+          # `_migrations`, column `filename` — the names the runner's own
+          # LEDGER_TABLE and appliedMigrations() use. Reading a table this
+          # workflow guessed the name of would report every file pending and
+          # look plausible, which is the failure worth avoiding here.
+          echo "== applied, according to ClickHouse =="
+          if curl -sf --max-time 15 --user "$CLICKHOUSE_USERNAME:$CLICKHOUSE_PASSWORD" \
+               "http://127.0.0.1:8123/" \
+               --data-binary "SELECT DISTINCT filename FROM ${CLICKHOUSE_DATABASE}._migrations ORDER BY filename" \
+               > /tmp/applied.txt 2>/dev/null; then
+            wc -l < /tmp/applied.txt
+          else
+            : > /tmp/applied.txt
+            echo "  (no ledger table — this store has never been migrated)"
+          fi
+
+          echo "== pending =="
+          comm -23 /tmp/on-disk.txt <(sort /tmp/applied.txt) | sed 's/^/  /'
+
+          echo
+          echo "Neo4j has no ledger to read, so nothing here can list its pending"
+          echo "constraints. Its migration is idempotent (CREATE ... IF NOT EXISTS)"
+          echo "and reports what it did when it runs."
+
+      - name: Apply
+        if: inputs.apply
+        run: |
+          set -euo pipefail
+          echo "applying to: ${{ inputs.stores }}"
+          DB_MIGRATE_STORES="${{ inputs.stores }}" \
+            npx tsx tools/scripts/db-migrate.ts
+
+      - name: Verify the schema landed
+        if: inputs.apply
+        run: |
+          set -euo pipefail
+          echo "== tables in ${CLICKHOUSE_DATABASE} =="
+          curl -sf --max-time 15 --user "$CLICKHOUSE_USERNAME:$CLICKHOUSE_PASSWORD" \
+            "http://127.0.0.1:8123/" \
+            --data-binary "SELECT count() FROM system.tables WHERE database = '${CLICKHOUSE_DATABASE}'"
+
+          # The table whose absence was the symptom. Named explicitly so a run
+          # that reports success while error reporting is still broken cannot
+          # read as green.
+          echo "== error_events exists? =="
+          curl -sf --max-time 15 --user "$CLICKHOUSE_USERNAME:$CLICKHOUSE_PASSWORD" \
+            "http://127.0.0.1:8123/" \
+            --data-binary "EXISTS TABLE ${CLICKHOUSE_DATABASE}.error_events"
+
+      - name: Close the tunnels
+        if: always()
+        run: |
+          for f in /tmp/tunnel-*.pid; do
+            [ -f "$f" ] || continue
+            kill "$(cat "$f")" 2>/dev/null || true
+          done
