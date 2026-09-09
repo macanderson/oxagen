@@ -1,0 +1,1663 @@
+{
+  "resourceLogs": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "host.arch",
+            "value": {
+              "stringValue": "arm64"
+            }
+          },
+          {
+            "key": "os.type",
+            "value": {
+              "stringValue": "darwin"
+            }
+          },
+          {
+            "key": "os.version",
+            "value": {
+              "stringValue": "25.5.0"
+            }
+          },
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "claude-code"
+            }
+          },
+          {
+            "key": "service.version",
+            "value": {
+              "stringValue": "2.1.263"
+            }
+          }
+        ],
+        "droppedAttributesCount": 0
+      },
+      "scopeLogs": [
+        {
+          "scope": {
+            "name": "com.anthropic.claude_code.events",
+            "version": "2.1.263"
+          },
+          "logRecords": [
+            {
+              "timeUnixNano": "1788861986945000000",
+              "observedTimeUnixNano": "1788861986945000000",
+              "body": {
+                "stringValue": "claude_code.api_request"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "2.1.263"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000067"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "dev@example.com"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_00000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "ghostty"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "api_request"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-09-08T10:06:26.945Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 104
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "c7f061a0-635d-443d-a047-afe15d480f86"
+                  }
+                },
+                {
+                  "key": "model",
+                  "value": {
+                    "stringValue": "claude-haiku-4-5-20251001"
+                  }
+                },
+                {
+                  "key": "input_tokens",
+                  "value": {
+                    "intValue": 10
+                  }
+                },
+                {
+                  "key": "output_tokens",
+                  "value": {
+                    "intValue": 208
+                  }
+                },
+                {
+                  "key": "cache_read_tokens",
+                  "value": {
+                    "intValue": 29370
+                  }
+                },
+                {
+                  "key": "cache_creation_tokens",
+                  "value": {
+                    "intValue": 644
+                  }
+                },
+                {
+                  "key": "cost_usd",
+                  "value": {
+                    "doubleValue": 0.005275
+                  }
+                },
+                {
+                  "key": "cost_usd_micros",
+                  "value": {
+                    "intValue": 5275
+                  }
+                },
+                {
+                  "key": "duration_ms",
+                  "value": {
+                    "intValue": 3363
+                  }
+                },
+                {
+                  "key": "request_id",
+                  "value": {
+                    "stringValue": "req_011CeqnX4spozvDDjitK9yAJ"
+                  }
+                },
+                {
+                  "key": "client_request_id",
+                  "value": {
+                    "stringValue": "2b489849-fd4c-4929-859f-ab8b93ce5dff"
+                  }
+                },
+                {
+                  "key": "speed",
+                  "value": {
+                    "stringValue": "normal"
+                  }
+                },
+                {
+                  "key": "query_source",
+                  "value": {
+                    "stringValue": "sdk"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0,
+              "flags": 1,
+              "traceId": "e564cee20ceeaf1bba6a6b8942667629",
+              "spanId": "b55656f3146b1818"
+            },
+            {
+              "timeUnixNano": "1788861986945000000",
+              "observedTimeUnixNano": "1788861986945000000",
+              "body": {
+                "stringValue": "claude_code.assistant_response"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "2.1.263"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000067"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "dev@example.com"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_00000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "ghostty"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "assistant_response"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-09-08T10:06:26.945Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 105
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "c7f061a0-635d-443d-a047-afe15d480f86"
+                  }
+                },
+                {
+                  "key": "response_length",
+                  "value": {
+                    "intValue": 123
+                  }
+                },
+                {
+                  "key": "response",
+                  "value": {
+                    "stringValue": "Explore agent completed. Files listed: README.md and probe.txt in the project directory, plus the git repository internals."
+                  }
+                },
+                {
+                  "key": "request_id",
+                  "value": {
+                    "stringValue": "req_011CeqnX4spozvDDjitK9yAJ"
+                  }
+                },
+                {
+                  "key": "message.uuid",
+                  "value": {
+                    "stringValue": "6d5bb8b0-ff41-48c4-96f1-6b5d02f9f29f"
+                  }
+                },
+                {
+                  "key": "model",
+                  "value": {
+                    "stringValue": "claude-haiku-4-5-20251001"
+                  }
+                },
+                {
+                  "key": "query_source",
+                  "value": {
+                    "stringValue": "sdk"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0,
+              "flags": 1,
+              "traceId": "e564cee20ceeaf1bba6a6b8942667629",
+              "spanId": "b55656f3146b1818"
+            },
+            {
+              "timeUnixNano": "1788861986946000000",
+              "observedTimeUnixNano": "1788861986946000000",
+              "body": {
+                "stringValue": "claude_code.hook_execution_start"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "2.1.263"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000067"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "dev@example.com"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_00000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "ghostty"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "hook_execution_start"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-09-08T10:06:26.946Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 106
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "c7f061a0-635d-443d-a047-afe15d480f86"
+                  }
+                },
+                {
+                  "key": "hook_event",
+                  "value": {
+                    "stringValue": "Stop"
+                  }
+                },
+                {
+                  "key": "hook_name",
+                  "value": {
+                    "stringValue": "Stop"
+                  }
+                },
+                {
+                  "key": "num_hooks",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "managed_only",
+                  "value": {
+                    "stringValue": "false"
+                  }
+                },
+                {
+                  "key": "hook_source",
+                  "value": {
+                    "stringValue": "merged"
+                  }
+                },
+                {
+                  "key": "safe_mode",
+                  "value": {
+                    "stringValue": "false"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0,
+              "flags": 1,
+              "traceId": "e564cee20ceeaf1bba6a6b8942667629",
+              "spanId": "b55656f3146b1818"
+            },
+            {
+              "timeUnixNano": "1788861986975000000",
+              "observedTimeUnixNano": "1788861986975000000",
+              "body": {
+                "stringValue": "claude_code.hook_execution_complete"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "2.1.263"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000067"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "dev@example.com"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_00000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "ghostty"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "hook_execution_complete"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-09-08T10:06:26.975Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 107
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "c7f061a0-635d-443d-a047-afe15d480f86"
+                  }
+                },
+                {
+                  "key": "hook_event",
+                  "value": {
+                    "stringValue": "Stop"
+                  }
+                },
+                {
+                  "key": "hook_name",
+                  "value": {
+                    "stringValue": "Stop"
+                  }
+                },
+                {
+                  "key": "num_hooks",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "num_success",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "num_blocking",
+                  "value": {
+                    "stringValue": "0"
+                  }
+                },
+                {
+                  "key": "num_non_blocking_error",
+                  "value": {
+                    "stringValue": "0"
+                  }
+                },
+                {
+                  "key": "num_cancelled",
+                  "value": {
+                    "stringValue": "0"
+                  }
+                },
+                {
+                  "key": "total_duration_ms",
+                  "value": {
+                    "stringValue": "29"
+                  }
+                },
+                {
+                  "key": "managed_only",
+                  "value": {
+                    "stringValue": "false"
+                  }
+                },
+                {
+                  "key": "hook_source",
+                  "value": {
+                    "stringValue": "merged"
+                  }
+                },
+                {
+                  "key": "safe_mode",
+                  "value": {
+                    "stringValue": "false"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0,
+              "flags": 1,
+              "traceId": "e564cee20ceeaf1bba6a6b8942667629",
+              "spanId": "b55656f3146b1818"
+            },
+            {
+              "timeUnixNano": "1788861986983000000",
+              "observedTimeUnixNano": "1788861986983000000",
+              "body": {
+                "stringValue": "claude_code.mcp_server_connection"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "2.1.263"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000067"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "dev@example.com"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_00000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "ghostty"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "mcp_server_connection"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-09-08T10:06:26.983Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 108
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "c7f061a0-635d-443d-a047-afe15d480f86"
+                  }
+                },
+                {
+                  "key": "status",
+                  "value": {
+                    "stringValue": "disconnected"
+                  }
+                },
+                {
+                  "key": "transport_type",
+                  "value": {
+                    "stringValue": "http"
+                  }
+                },
+                {
+                  "key": "server_scope",
+                  "value": {
+                    "stringValue": "user"
+                  }
+                },
+                {
+                  "key": "duration_ms",
+                  "value": {
+                    "stringValue": "22862"
+                  }
+                },
+                {
+                  "key": "is_plugin",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "server_name",
+                  "value": {
+                    "stringValue": "web-search-prime"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0
+            },
+            {
+              "timeUnixNano": "1788861986983000000",
+              "observedTimeUnixNano": "1788861986983000000",
+              "body": {
+                "stringValue": "claude_code.mcp_server_connection"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "2.1.263"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000067"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "dev@example.com"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_00000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "ghostty"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "mcp_server_connection"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-09-08T10:06:26.983Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 109
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "c7f061a0-635d-443d-a047-afe15d480f86"
+                  }
+                },
+                {
+                  "key": "status",
+                  "value": {
+                    "stringValue": "disconnected"
+                  }
+                },
+                {
+                  "key": "transport_type",
+                  "value": {
+                    "stringValue": "http"
+                  }
+                },
+                {
+                  "key": "server_scope",
+                  "value": {
+                    "stringValue": "user"
+                  }
+                },
+                {
+                  "key": "duration_ms",
+                  "value": {
+                    "stringValue": "22896"
+                  }
+                },
+                {
+                  "key": "is_plugin",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "server_name",
+                  "value": {
+                    "stringValue": "web-reader"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0
+            },
+            {
+              "timeUnixNano": "1788861986983000000",
+              "observedTimeUnixNano": "1788861986983000000",
+              "body": {
+                "stringValue": "claude_code.mcp_server_connection"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "2.1.263"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000067"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "dev@example.com"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_00000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "ghostty"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "mcp_server_connection"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-09-08T10:06:26.983Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 110
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "c7f061a0-635d-443d-a047-afe15d480f86"
+                  }
+                },
+                {
+                  "key": "status",
+                  "value": {
+                    "stringValue": "disconnected"
+                  }
+                },
+                {
+                  "key": "transport_type",
+                  "value": {
+                    "stringValue": "http"
+                  }
+                },
+                {
+                  "key": "server_scope",
+                  "value": {
+                    "stringValue": "user"
+                  }
+                },
+                {
+                  "key": "duration_ms",
+                  "value": {
+                    "stringValue": "22811"
+                  }
+                },
+                {
+                  "key": "is_plugin",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "server_name",
+                  "value": {
+                    "stringValue": "zread"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0
+            },
+            {
+              "timeUnixNano": "1788861986983000000",
+              "observedTimeUnixNano": "1788861986983000000",
+              "body": {
+                "stringValue": "claude_code.mcp_server_connection"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "2.1.263"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000067"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "dev@example.com"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_00000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "ghostty"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "mcp_server_connection"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-09-08T10:06:26.983Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 111
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "c7f061a0-635d-443d-a047-afe15d480f86"
+                  }
+                },
+                {
+                  "key": "status",
+                  "value": {
+                    "stringValue": "disconnected"
+                  }
+                },
+                {
+                  "key": "transport_type",
+                  "value": {
+                    "stringValue": "http"
+                  }
+                },
+                {
+                  "key": "server_scope",
+                  "value": {
+                    "stringValue": "user"
+                  }
+                },
+                {
+                  "key": "duration_ms",
+                  "value": {
+                    "stringValue": "23273"
+                  }
+                },
+                {
+                  "key": "is_plugin",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "server_name",
+                  "value": {
+                    "stringValue": "github"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0
+            },
+            {
+              "timeUnixNano": "1788861986983000000",
+              "observedTimeUnixNano": "1788861986983000000",
+              "body": {
+                "stringValue": "claude_code.mcp_server_connection"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "2.1.263"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000067"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "dev@example.com"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_00000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "ghostty"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "mcp_server_connection"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-09-08T10:06:26.983Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 112
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "c7f061a0-635d-443d-a047-afe15d480f86"
+                  }
+                },
+                {
+                  "key": "status",
+                  "value": {
+                    "stringValue": "disconnected"
+                  }
+                },
+                {
+                  "key": "transport_type",
+                  "value": {
+                    "stringValue": "claudeai-proxy"
+                  }
+                },
+                {
+                  "key": "server_scope",
+                  "value": {
+                    "stringValue": "claudeai"
+                  }
+                },
+                {
+                  "key": "duration_ms",
+                  "value": {
+                    "stringValue": "23312"
+                  }
+                },
+                {
+                  "key": "is_plugin",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "server_name",
+                  "value": {
+                    "stringValue": "claude.ai Gmail"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0
+            },
+            {
+              "timeUnixNano": "1788861986983000000",
+              "observedTimeUnixNano": "1788861986983000000",
+              "body": {
+                "stringValue": "claude_code.mcp_server_connection"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "2.1.263"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000067"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "dev@example.com"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_00000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "ghostty"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "mcp_server_connection"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-09-08T10:06:26.983Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 113
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "c7f061a0-635d-443d-a047-afe15d480f86"
+                  }
+                },
+                {
+                  "key": "status",
+                  "value": {
+                    "stringValue": "disconnected"
+                  }
+                },
+                {
+                  "key": "transport_type",
+                  "value": {
+                    "stringValue": "claudeai-proxy"
+                  }
+                },
+                {
+                  "key": "server_scope",
+                  "value": {
+                    "stringValue": "claudeai"
+                  }
+                },
+                {
+                  "key": "duration_ms",
+                  "value": {
+                    "stringValue": "23312"
+                  }
+                },
+                {
+                  "key": "is_plugin",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "server_name",
+                  "value": {
+                    "stringValue": "claude.ai Google Drive"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0
+            },
+            {
+              "timeUnixNano": "1788861986983000000",
+              "observedTimeUnixNano": "1788861986983000000",
+              "body": {
+                "stringValue": "claude_code.mcp_server_connection"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "2.1.263"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000067"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "dev@example.com"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_00000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "ghostty"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "mcp_server_connection"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-09-08T10:06:26.983Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 114
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "c7f061a0-635d-443d-a047-afe15d480f86"
+                  }
+                },
+                {
+                  "key": "status",
+                  "value": {
+                    "stringValue": "disconnected"
+                  }
+                },
+                {
+                  "key": "transport_type",
+                  "value": {
+                    "stringValue": "claudeai-proxy"
+                  }
+                },
+                {
+                  "key": "server_scope",
+                  "value": {
+                    "stringValue": "claudeai"
+                  }
+                },
+                {
+                  "key": "duration_ms",
+                  "value": {
+                    "stringValue": "22653"
+                  }
+                },
+                {
+                  "key": "is_plugin",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "server_name",
+                  "value": {
+                    "stringValue": "claude.ai Vercel"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0
+            },
+            {
+              "timeUnixNano": "1788861987004000000",
+              "observedTimeUnixNano": "1788861987004000000",
+              "body": {
+                "stringValue": "claude_code.mcp_server_connection"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "2.1.263"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000067"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "dev@example.com"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_00000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "ghostty"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "mcp_server_connection"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-09-08T10:06:27.004Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 115
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "c7f061a0-635d-443d-a047-afe15d480f86"
+                  }
+                },
+                {
+                  "key": "status",
+                  "value": {
+                    "stringValue": "disconnected"
+                  }
+                },
+                {
+                  "key": "transport_type",
+                  "value": {
+                    "stringValue": "stdio"
+                  }
+                },
+                {
+                  "key": "server_scope",
+                  "value": {
+                    "stringValue": "user"
+                  }
+                },
+                {
+                  "key": "duration_ms",
+                  "value": {
+                    "stringValue": "22361"
+                  }
+                },
+                {
+                  "key": "is_plugin",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "server_name",
+                  "value": {
+                    "stringValue": "motion"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0
+            },
+            {
+              "timeUnixNano": "1788861987008000000",
+              "observedTimeUnixNano": "1788861987008000000",
+              "body": {
+                "stringValue": "claude_code.mcp_server_connection"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "2.1.263"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000067"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "dev@example.com"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_00000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "ghostty"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "mcp_server_connection"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-09-08T10:06:27.008Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 116
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "c7f061a0-635d-443d-a047-afe15d480f86"
+                  }
+                },
+                {
+                  "key": "status",
+                  "value": {
+                    "stringValue": "disconnected"
+                  }
+                },
+                {
+                  "key": "transport_type",
+                  "value": {
+                    "stringValue": "stdio"
+                  }
+                },
+                {
+                  "key": "server_scope",
+                  "value": {
+                    "stringValue": "user"
+                  }
+                },
+                {
+                  "key": "duration_ms",
+                  "value": {
+                    "stringValue": "22902"
+                  }
+                },
+                {
+                  "key": "is_plugin",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "server_name",
+                  "value": {
+                    "stringValue": "zai-mcp-server"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -248,4 +248,16 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   //   manifest/blob ledger lands in the evidence-ledger PR. org_id +
   //   workspace_id both NOT NULL → standard tenant_isolation.
   { table: "evidence.retention_policy_versions", policyClass: "standard" },
+
+  // ── tacho.* — hosts, sessions, and control state for agents Oxagen does
+  //   not run (docs/specs/tacho/data-model.md section 3). All eight carry
+  //   org_id + workspace_id NOT NULL → standard tenant_isolation.
+  { table: "tacho.hosts", policyClass: "standard" },
+  { table: "tacho.sessions", policyClass: "standard" },
+  { table: "tacho.session_models", policyClass: "standard" },
+  { table: "tacho.session_files", policyClass: "standard" },
+  { table: "tacho.session_commands", policyClass: "standard" },
+  { table: "tacho.control_commands", policyClass: "standard" },
+  { table: "tacho.incidents", policyClass: "standard" },
+  { table: "tacho.checkpoints", policyClass: "standard" },
 ];

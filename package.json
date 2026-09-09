@@ -52,6 +52,7 @@
     "check:naming": "node tools/scripts/check-naming.mjs",
     "check:connector-schemas": "tsx tools/scripts/check-connector-schemas.ts",
     "check:contextgraph-fixtures": "tsx tools/scripts/check-contextgraph-fixtures.ts",
+    "check:tacho-fixtures": "tsx tools/scripts/check-tacho-fixtures.ts",
     "docs:schemas": "tsx tools/scripts/gen-capability-schemas.ts",
     "env:check": "tsx tools/scripts/env-check.ts",
     "check:audit-coverage": "pnpm --filter @oxagen/compliance exec vitest run src/audit-coverage.test.ts",

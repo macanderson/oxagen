@@ -1,6 +1,6 @@
 # Node-side deploy scripts
 
-These run on the shared application node (`i-094fcb34c7e715cf8`, account
+These run on the shared application node (tagged `Name=oxagen-app`, account
 `916294258235` — the account the 2026-08-27 cutover moved the live platform
 to), not on a developer's machine and not on a CI runner.
 `tools/install-node-scripts.sh` copies this directory to `/opt/oxagen/bin`.
@@ -86,7 +86,9 @@ quietly serving old code while the merge looks shipped.
 Roll back by hand with the release id:
 
 ```bash
-aws ssm start-session --target i-094fcb34c7e715cf8
+aws ssm start-session --target "$(aws ec2 describe-instances \
+  --filters Name=tag:Name,Values=oxagen-app Name=instance-state-name,Values=running \
+  --query 'Reservations[].Instances[].InstanceId' --output text)"
 ls /opt/oxagen/services/<service>/releases
 ```
 

@@ -90,6 +90,7 @@ module "app" {
 
   ami_id            = var.node_ami
   name              = "oxagen-app"
+  deploy_bucket     = "oxagen-deploy-${var.account_id}"
   region            = var.region
   account_id        = var.account_id
   vpc_id            = module.network.vpc_id

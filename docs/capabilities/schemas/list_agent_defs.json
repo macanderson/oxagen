@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "List the agent definitions in the current workspace with their identity, lifecycle status, deployment posture, and latest version number",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -24,7 +28,11 @@
     "properties": {
       "status": {
         "type": "string",
-        "enum": ["draft", "active", "archived"]
+        "enum": [
+          "draft",
+          "active",
+          "archived"
+        ]
       }
     },
     "additionalProperties": false
@@ -95,11 +103,18 @@
             },
             "status": {
               "type": "string",
-              "enum": ["draft", "active", "archived"]
+              "enum": [
+                "draft",
+                "active",
+                "archived"
+              ]
             },
             "deploymentStatus": {
               "type": "string",
-              "enum": ["inactive", "active"]
+              "enum": [
+                "inactive",
+                "active"
+              ]
             },
             "latestVersion": {
               "anyOf": [
@@ -122,13 +137,19 @@
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["function", "mcp_server"]
+                    "enum": [
+                      "function",
+                      "mcp_server"
+                    ]
                   },
                   "ref": {
                     "type": "string"
                   }
                 },
-                "required": ["type", "ref"],
+                "required": [
+                  "type",
+                  "ref"
+                ],
                 "additionalProperties": false
               },
               "default": []
@@ -153,7 +174,9 @@
         }
       }
     },
-    "required": ["agents"],
+    "required": [
+      "agents"
+    ],
     "additionalProperties": false
   }
 }

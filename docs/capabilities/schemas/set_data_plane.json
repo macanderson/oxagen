@@ -3,7 +3,10 @@
   "domain": "org",
   "description": "Bind one of the organisation's stores (postgres, neo4j, or clickhouse) to a dedicated customer-controlled endpoint, or return it to the shared platform plane. The connection config is envelope-encrypted at rest and is never readable back. Returns the redacted binding.",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -22,11 +25,18 @@
     "properties": {
       "kind": {
         "type": "string",
-        "enum": ["postgres", "neo4j", "clickhouse"]
+        "enum": [
+          "postgres",
+          "neo4j",
+          "clickhouse"
+        ]
       },
       "mode": {
         "type": "string",
-        "enum": ["shared", "dedicated"]
+        "enum": [
+          "shared",
+          "dedicated"
+        ]
       },
       "config": {
         "anyOf": [
@@ -69,7 +79,12 @@
                 "maximum": 100
               }
             },
-            "required": ["host", "database", "username", "password"],
+            "required": [
+              "host",
+              "database",
+              "username",
+              "password"
+            ],
             "additionalProperties": false
           },
           {
@@ -96,7 +111,12 @@
                 "maxLength": 128
               }
             },
-            "required": ["uri", "username", "password", "database"],
+            "required": [
+              "uri",
+              "username",
+              "password",
+              "database"
+            ],
             "additionalProperties": false
           },
           {
@@ -123,13 +143,21 @@
                 "maxLength": 128
               }
             },
-            "required": ["url", "username", "password", "database"],
+            "required": [
+              "url",
+              "username",
+              "password",
+              "database"
+            ],
             "additionalProperties": false
           }
         ]
       }
     },
-    "required": ["kind", "mode"],
+    "required": [
+      "kind",
+      "mode"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -138,15 +166,26 @@
     "properties": {
       "kind": {
         "type": "string",
-        "enum": ["postgres", "neo4j", "clickhouse"]
+        "enum": [
+          "postgres",
+          "neo4j",
+          "clickhouse"
+        ]
       },
       "mode": {
         "type": "string",
-        "enum": ["shared", "dedicated"]
+        "enum": [
+          "shared",
+          "dedicated"
+        ]
       },
       "status": {
         "type": "string",
-        "enum": ["active", "degraded", "disabled"]
+        "enum": [
+          "active",
+          "degraded",
+          "disabled"
+        ]
       },
       "host": {
         "anyOf": [

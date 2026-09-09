@@ -1,7 +1,7 @@
 account_id = "916294258235"
 
 # tofu -chdir=stacks-new/oxagen output app_node_instance_id
-node_instance_id = "i-094fcb34c7e715cf8"
+node_name = "oxagen-app"
 # tofu -chdir=stacks-new/oxagen output app_node_role_name
 node_role_name = "oxagen-app-node"
 

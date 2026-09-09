@@ -1,0 +1,728 @@
+{
+  "resourceLogs": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "host.arch",
+            "value": {
+              "stringValue": "arm64"
+            }
+          },
+          {
+            "key": "os.type",
+            "value": {
+              "stringValue": "darwin"
+            }
+          },
+          {
+            "key": "os.version",
+            "value": {
+              "stringValue": "25.5.0"
+            }
+          },
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "claude-code"
+            }
+          },
+          {
+            "key": "service.version",
+            "value": {
+              "stringValue": "2.1.263"
+            }
+          }
+        ],
+        "droppedAttributesCount": 0
+      },
+      "scopeLogs": [
+        {
+          "scope": {
+            "name": "com.anthropic.claude_code.events",
+            "version": "2.1.263"
+          },
+          "logRecords": [
+            {
+              "timeUnixNano": "1788861971926000000",
+              "observedTimeUnixNano": "1788861971926000000",
+              "body": {
+                "stringValue": "claude_code.tool_result"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "2.1.263"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000067"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "dev@example.com"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_00000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "ghostty"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "tool_result"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-09-08T10:06:11.926Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 60
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "c9d2d48b-6dd0-4099-bd02-5a0d5a8cfc86"
+                  }
+                },
+                {
+                  "key": "tool_name",
+                  "value": {
+                    "stringValue": "Bash"
+                  }
+                },
+                {
+                  "key": "tool_use_id",
+                  "value": {
+                    "stringValue": "toolu_0182kFvztaezmfGdJWnHLXXs"
+                  }
+                },
+                {
+                  "key": "success",
+                  "value": {
+                    "stringValue": "true"
+                  }
+                },
+                {
+                  "key": "duration_ms",
+                  "value": {
+                    "stringValue": "821"
+                  }
+                },
+                {
+                  "key": "tool_parameters",
+                  "value": {
+                    "stringValue": "{\"bash_command\":\"echo\",\"full_command\":\"echo tacho-probe\",\"description\":\"Echo tacho-probe\"}"
+                  }
+                },
+                {
+                  "key": "tool_input",
+                  "value": {
+                    "stringValue": "{\"command\":\"echo tacho-probe\",\"description\":\"Echo tacho-probe\"}"
+                  }
+                },
+                {
+                  "key": "tool_input_size_bytes",
+                  "value": {
+                    "stringValue": "63"
+                  }
+                },
+                {
+                  "key": "tool_result_size_bytes",
+                  "value": {
+                    "stringValue": "11"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0,
+              "flags": 1,
+              "traceId": "78b16d1faa892d51c1ec81226f8fcf0b",
+              "spanId": "6ea0402effec8b95"
+            },
+            {
+              "timeUnixNano": "1788861971926000000",
+              "observedTimeUnixNano": "1788861971926000000",
+              "body": {
+                "stringValue": "claude_code.hook_execution_start"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "2.1.263"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000067"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "dev@example.com"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_00000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "ghostty"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "hook_execution_start"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-09-08T10:06:11.926Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 61
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "c9d2d48b-6dd0-4099-bd02-5a0d5a8cfc86"
+                  }
+                },
+                {
+                  "key": "hook_event",
+                  "value": {
+                    "stringValue": "PostToolUse"
+                  }
+                },
+                {
+                  "key": "hook_name",
+                  "value": {
+                    "stringValue": "PostToolUse:Bash"
+                  }
+                },
+                {
+                  "key": "num_hooks",
+                  "value": {
+                    "stringValue": "2"
+                  }
+                },
+                {
+                  "key": "managed_only",
+                  "value": {
+                    "stringValue": "false"
+                  }
+                },
+                {
+                  "key": "hook_source",
+                  "value": {
+                    "stringValue": "merged"
+                  }
+                },
+                {
+                  "key": "safe_mode",
+                  "value": {
+                    "stringValue": "false"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0,
+              "flags": 1,
+              "traceId": "78b16d1faa892d51c1ec81226f8fcf0b",
+              "spanId": "6ea0402effec8b95"
+            },
+            {
+              "timeUnixNano": "1788861971954000000",
+              "observedTimeUnixNano": "1788861971954000000",
+              "body": {
+                "stringValue": "claude_code.hook_execution_complete"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "2.1.263"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000067"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "dev@example.com"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_00000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "ghostty"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "hook_execution_complete"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-09-08T10:06:11.954Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 62
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "c9d2d48b-6dd0-4099-bd02-5a0d5a8cfc86"
+                  }
+                },
+                {
+                  "key": "hook_event",
+                  "value": {
+                    "stringValue": "PostToolUse"
+                  }
+                },
+                {
+                  "key": "hook_name",
+                  "value": {
+                    "stringValue": "PostToolUse:Bash"
+                  }
+                },
+                {
+                  "key": "num_hooks",
+                  "value": {
+                    "stringValue": "2"
+                  }
+                },
+                {
+                  "key": "num_success",
+                  "value": {
+                    "stringValue": "2"
+                  }
+                },
+                {
+                  "key": "num_blocking",
+                  "value": {
+                    "stringValue": "0"
+                  }
+                },
+                {
+                  "key": "num_non_blocking_error",
+                  "value": {
+                    "stringValue": "0"
+                  }
+                },
+                {
+                  "key": "num_cancelled",
+                  "value": {
+                    "stringValue": "0"
+                  }
+                },
+                {
+                  "key": "total_duration_ms",
+                  "value": {
+                    "stringValue": "28"
+                  }
+                },
+                {
+                  "key": "managed_only",
+                  "value": {
+                    "stringValue": "false"
+                  }
+                },
+                {
+                  "key": "hook_source",
+                  "value": {
+                    "stringValue": "merged"
+                  }
+                },
+                {
+                  "key": "safe_mode",
+                  "value": {
+                    "stringValue": "false"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0,
+              "flags": 1,
+              "traceId": "78b16d1faa892d51c1ec81226f8fcf0b",
+              "spanId": "6ea0402effec8b95"
+            },
+            {
+              "timeUnixNano": "1788861971956000000",
+              "observedTimeUnixNano": "1788861971956000000",
+              "body": {
+                "stringValue": "claude_code.hook_execution_start"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "2.1.263"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000067"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "dev@example.com"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_00000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "ghostty"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "hook_execution_start"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-09-08T10:06:11.956Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 63
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "c9d2d48b-6dd0-4099-bd02-5a0d5a8cfc86"
+                  }
+                },
+                {
+                  "key": "hook_event",
+                  "value": {
+                    "stringValue": "PostToolBatch"
+                  }
+                },
+                {
+                  "key": "hook_name",
+                  "value": {
+                    "stringValue": "PostToolBatch"
+                  }
+                },
+                {
+                  "key": "num_hooks",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "managed_only",
+                  "value": {
+                    "stringValue": "false"
+                  }
+                },
+                {
+                  "key": "hook_source",
+                  "value": {
+                    "stringValue": "merged"
+                  }
+                },
+                {
+                  "key": "safe_mode",
+                  "value": {
+                    "stringValue": "false"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0,
+              "flags": 1,
+              "traceId": "78b16d1faa892d51c1ec81226f8fcf0b",
+              "spanId": "6ea0402effec8b95"
+            },
+            {
+              "timeUnixNano": "1788861972001000000",
+              "observedTimeUnixNano": "1788861972001000000",
+              "body": {
+                "stringValue": "claude_code.hook_execution_complete"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                  }
+                },
+                {
+                  "key": "app.version",
+                  "value": {
+                    "stringValue": "2.1.263"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-000000000067"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "dev@example.com"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_00000000000000000000000000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "ghostty"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "hook_execution_complete"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-09-08T10:06:12.001Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 64
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "c9d2d48b-6dd0-4099-bd02-5a0d5a8cfc86"
+                  }
+                },
+                {
+                  "key": "hook_event",
+                  "value": {
+                    "stringValue": "PostToolBatch"
+                  }
+                },
+                {
+                  "key": "hook_name",
+                  "value": {
+                    "stringValue": "PostToolBatch"
+                  }
+                },
+                {
+                  "key": "num_hooks",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "num_success",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "num_blocking",
+                  "value": {
+                    "stringValue": "0"
+                  }
+                },
+                {
+                  "key": "num_non_blocking_error",
+                  "value": {
+                    "stringValue": "0"
+                  }
+                },
+                {
+                  "key": "num_cancelled",
+                  "value": {
+                    "stringValue": "0"
+                  }
+                },
+                {
+                  "key": "total_duration_ms",
+                  "value": {
+                    "stringValue": "45"
+                  }
+                },
+                {
+                  "key": "managed_only",
+                  "value": {
+                    "stringValue": "false"
+                  }
+                },
+                {
+                  "key": "hook_source",
+                  "value": {
+                    "stringValue": "merged"
+                  }
+                },
+                {
+                  "key": "safe_mode",
+                  "value": {
+                    "stringValue": "false"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0,
+              "flags": 1,
+              "traceId": "78b16d1faa892d51c1ec81226f8fcf0b",
+              "spanId": "6ea0402effec8b95"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

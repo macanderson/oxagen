@@ -3,7 +3,12 @@
   "domain": "audit",
   "description": "Query the org's security audit events (security_events) with filters — actor, capability, outcome, event type, time range — returning a unified, time-ordered feed. Read-only.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent", "cli"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": false,
@@ -22,7 +27,10 @@
     "properties": {
       "source": {
         "type": "string",
-        "enum": ["all", "security"],
+        "enum": [
+          "all",
+          "security"
+        ],
         "default": "all"
       },
       "eventType": {
@@ -36,7 +44,12 @@
       },
       "outcome": {
         "type": "string",
-        "enum": ["allow", "deny", "error", "success"]
+        "enum": [
+          "allow",
+          "deny",
+          "error",
+          "success"
+        ]
       },
       "workspaceId": {
         "type": "string"
@@ -72,7 +85,9 @@
           "properties": {
             "source": {
               "type": "string",
-              "enum": ["security"],
+              "enum": [
+                "security"
+              ],
               "description": "Which audit spine the event came from"
             },
             "eventType": {
@@ -163,7 +178,13 @@
         "type": "integer"
       }
     },
-    "required": ["events", "total", "hasMore", "limit", "offset"],
+    "required": [
+      "events",
+      "total",
+      "hasMore",
+      "limit",
+      "offset"
+    ],
     "additionalProperties": false
   }
 }

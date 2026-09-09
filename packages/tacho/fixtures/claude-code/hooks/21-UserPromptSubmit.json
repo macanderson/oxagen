@@ -1,0 +1,32 @@
+{
+  "env": {
+    "CLAUDE_CODE_ENTRYPOINT": "sdk-cli",
+    "CLAUDE_EFFORT": "high",
+    "CLAUDE_CODE_BRIDGE_SESSION_ID": "session_0000000000000000000000000",
+    "SHELL": "/bin/zsh",
+    "CLAUDE_CODE_CHILD_SESSION": "1",
+    "CLAUDE_PID": "59942",
+    "CLAUDE_PROJECT_DIR": "/home/dev/proj",
+    "CLAUDE_CODE_WORKTREE_BASE_DIR": "${CLAUDE_PROJECT_DIR}/.worktrees",
+    "CLAUDE_CODE_SYNTAX_HIGHLIGHT": "true",
+    "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA": "1",
+    "CLAUDE_CODE_UNDERCOVER": "1",
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "CLAUDE_CODE_AGENT": "claude",
+    "PWD": "/home/dev/proj",
+    "CLAUDE_JOB_DIR": "/home/dev/.claude/jobs/job",
+    "CLAUDE_CODE_EXECPATH": "/home/dev/.local/share/claude/versions/2.1.263",
+    "CLAUDE_CODE_SESSION_ID": "340ed354-6344-4727-9f8b-1e40b5e12aa7",
+    "CLAUDECODE": "1",
+    "CLAUDE_CODE_MESSAGING_SOCKET": "/tmp/cc-socks/59942.sock"
+  },
+  "stdin": {
+    "session_id": "340ed354-6344-4727-9f8b-1e40b5e12aa7",
+    "transcript_path": "/home/dev/.claude/projects/-home-dev-proj/340ed354-6344-4727-9f8b-1e40b5e12aa7.jsonl",
+    "cwd": "/home/dev/proj",
+    "prompt_id": "c7f061a0-635d-443d-a047-afe15d480f86",
+    "permission_mode": "bypassPermissions",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "<task-notification>\n<task-id>aebd5e72360a0fb91</task-id>\n<tool-use-id>toolu_015RS92XewsETKAFSwTf9TpR</tool-use-id>\n<output-file>/tmp/claude-1000/-home-dev-proj/340ed354-6344-4727-9f8b-1e40b5e12aa7/tasks/aebd5e72360a0fb91.output</output-file>\n<status>completed</status>\n<summary>Agent \"List files in current directory\" finished</summary>\n<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>\n<result>Here are all the files in `/home/dev/proj`:\n\n**Project Root Files:**\n- `/home/dev/proj/README.md`\n- `/home/dev/proj/probe.txt`\n\n**Git Directory Files:**\nThe `.git` directory contains standard Git internal files:\n- Configuration files (config, HEAD, description)\n- Commit history and logs\n- Object database files\n- Sample git hooks\n- Index file\n\nThis appears to be a small project with just 2 main files (README.md and probe.txt) tracked in a Git repository.</result>\n<usage><subagent_tokens>12681</subagent_tokens><tool_uses>1</tool_uses><duration_ms>5855</duration_ms></usage>\n</task-notification>"
+  }
+}

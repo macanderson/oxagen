@@ -41,6 +41,18 @@ provider "aws" {
 
 resource "aws_s3_bucket" "tfstate" {
   bucket = "oxagen-tfstate-${var.account_id}"
+
+  # Losing this bucket does not lose one stack. It orphans every resource in
+  # the account at once: five stacks' state lives here, and without it
+  # Terraform believes nothing exists and plans to create all of it beside
+  # what is already running. There is no recovery short of importing the
+  # estate by hand.
+  #
+  # Versioning above means a deleted *object* is recoverable. A deleted
+  # bucket is not, and that is the case this guards.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_s3_bucket_versioning" "tfstate" {
@@ -75,5 +87,13 @@ resource "aws_dynamodb_table" "tflock" {
   attribute {
     name = "LockID"
     type = "S"
+  }
+
+  # Cheaper to lose than the bucket — the table holds no state, only locks —
+  # but losing it means concurrent applies stop being serialised, and two
+  # applies writing one state file is how an estate gets a state that
+  # describes neither.
+  lifecycle {
+    prevent_destroy = true
   }
 }

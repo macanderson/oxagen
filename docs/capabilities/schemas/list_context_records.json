@@ -3,7 +3,11 @@
   "domain": "context",
   "description": "List the steering context records registered in the active workspace, each with its lifecycle status and pinned active version",
   "mode": "sync",
-  "surfaces": ["api", "agent", "mcp"],
+  "surfaces": [
+    "api",
+    "agent",
+    "mcp"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -22,7 +26,11 @@
     "properties": {
       "status": {
         "type": "string",
-        "enum": ["active", "retired", "superseded"]
+        "enum": [
+          "active",
+          "retired",
+          "superseded"
+        ]
       },
       "limit": {
         "type": "integer",
@@ -102,7 +110,10 @@
         "description": "Total records in the workspace matching the filter"
       }
     },
-    "required": ["records", "total"],
+    "required": [
+      "records",
+      "total"
+    ],
     "additionalProperties": false
   }
 }

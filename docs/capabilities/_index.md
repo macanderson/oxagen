@@ -334,6 +334,18 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [system.install.instructions](system.install.instructions.md) — Return ordered, copy-ready MCP/CLI installation instructions per client
 
+## Tacho (9)
+
+- [tacho.bundle.get](tacho.bundle.get.md) — The signed policy bundle a host caches and evaluates locally (docs/specs/tacho/spec
+- [tacho.command.dispatch](tacho.command.dispatch.md) — Queue a control command for a host or one of its sessions (docs/specs/tacho/spec
+- [tacho.command.fetch](tacho.command.fetch.md) — The idle-host control poll: acknowledge the outcomes of commands the collector applied, and receive pending ones together with the same control envelope every ingest carries
+- [tacho.enrollment.create](tacho.enrollment.create.md) — Enrol a machine as a Tacho host (docs/specs/tacho/spec
+- [tacho.enrollment.revoke](tacho.enrollment.revoke.md) — Revoke a Tacho host
+- [tacho.events.ingest](tacho.events.ingest.md) — Ingest a batch of hash-chained tacho/1
+- [tacho.host.list](tacho.host.list.md) — List the machines enrolled as Tacho hosts in this workspace, newest first, with status, mode, harness and version facts, liveness (last seen, last ingest, hooks and OpenTelemetry health, spool depth), and counters (sessions, unobserved sessions, open incidents)
+- [tacho.session.get](tacho.session.get.md) — One session's flight-recorder index (docs/specs/tacho/data-model
+- [tacho.session.list](tacho.session.list.md) — List Tacho sessions in this workspace, newest first
+
 ## Telemetry (2)
 
 - [telemetry.error.cluster](telemetry.error.cluster.md) — Cluster recent captured errors by fingerprint to see which error classes are recurring and how often across the org — the triage overview

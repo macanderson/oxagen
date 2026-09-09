@@ -31,7 +31,21 @@ PORT=$4
 # New account's node — the 2026-08-27 cutover is complete and this is the
 # live target (both accounts' compute runs in us-east-1).
 REGION=us-east-1
-INSTANCE=i-094fcb34c7e715cf8
+# Resolved by tag, not pinned to an id. The node is replaced whenever its user
+# data changes, and on 2026-09-08 a replacement left every hardcoded copy of
+# this id pointing at a terminated box. Override with INSTANCE=... for the old
+# account's node, which carries a different tag.
+if [[ -z "${INSTANCE:-}" ]]; then
+  INSTANCE=$(aws ec2 describe-instances \
+    --region "$REGION" \
+    --filters "Name=tag:Name,Values=${NODE_NAME:-oxagen-app}" \
+              "Name=instance-state-name,Values=running" \
+    --query 'Reservations[].Instances[].InstanceId' --output text)
+  if [[ $(printf '%s' "$INSTANCE" | wc -w) -ne 1 ]]; then
+    echo "expected exactly one running instance tagged Name=${NODE_NAME:-oxagen-app}, got: $INSTANCE" >&2
+    exit 1
+  fi
+fi
 BUCKET=oxagen-deploy-916294258235
 STANDALONE="$APP_DIR/.next/standalone"
 

@@ -1,0 +1,55 @@
+{
+  "name": "revoke_tacho_enrollment",
+  "domain": "tacho",
+  "description": "Revoke a Tacho host enrollment: retire its API key and deny every session on the host at its next boundary.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "hostEnrollmentId": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string",
+        "maxLength": 512
+      }
+    },
+    "required": [
+      "hostEnrollmentId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "hostEnrollmentId": {
+        "type": "string"
+      },
+      "status": {
+        "const": "revoked"
+      },
+      "revokedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "hostEnrollmentId",
+      "status",
+      "revokedAt"
+    ],
+    "additionalProperties": false
+  }
+}

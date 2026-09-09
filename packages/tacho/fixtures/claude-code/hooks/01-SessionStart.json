@@ -1,0 +1,31 @@
+{
+  "env": {
+    "CLAUDE_CODE_ENTRYPOINT": "sdk-cli",
+    "CLAUDE_EFFORT": "high",
+    "CLAUDE_CODE_BRIDGE_SESSION_ID": "session_0000000000000000000000000",
+    "SHELL": "/bin/zsh",
+    "CLAUDE_CODE_CHILD_SESSION": "1",
+    "CLAUDE_PID": "59942",
+    "CLAUDE_PROJECT_DIR": "/home/dev/proj",
+    "CLAUDE_CODE_WORKTREE_BASE_DIR": "${CLAUDE_PROJECT_DIR}/.worktrees",
+    "CLAUDE_CODE_SYNTAX_HIGHLIGHT": "true",
+    "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA": "1",
+    "CLAUDE_CODE_UNDERCOVER": "1",
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "CLAUDE_CODE_AGENT": "claude",
+    "PWD": "/home/dev/proj",
+    "CLAUDE_JOB_DIR": "/home/dev/.claude/jobs/job",
+    "CLAUDE_CODE_EXECPATH": "/home/dev/.local/share/claude/versions/2.1.263",
+    "CLAUDE_ENV_FILE": "/home/dev/.claude/session-env/340ed354-6344-4727-9f8b-1e40b5e12aa7/sessionstart-hook-0.sh",
+    "CLAUDE_CODE_SESSION_ID": "340ed354-6344-4727-9f8b-1e40b5e12aa7",
+    "CLAUDECODE": "1",
+    "CLAUDE_CODE_MESSAGING_SOCKET": "/tmp/cc-socks/59942.sock"
+  },
+  "stdin": {
+    "session_id": "340ed354-6344-4727-9f8b-1e40b5e12aa7",
+    "transcript_path": "/home/dev/.claude/projects/-home-dev-proj/340ed354-6344-4727-9f8b-1e40b5e12aa7.jsonl",
+    "cwd": "/home/dev/proj",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+  }
+}

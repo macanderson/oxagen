@@ -51,7 +51,12 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
   return { ...real, insertEvents: mocks.insertEvents };
 });
 
-vi.mock("node:crypto", () => ({
+// Partial mock: only randomUUID is pinned. A total mock of node:crypto
+// breaks any transitive import that needs another export — @oxagen/telemetry
+// reaches @oxagen/tacho, whose chain.ts computes GENESIS_PREV_HASH with
+// createHash at module load.
+vi.mock("node:crypto", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:crypto")>()),
   randomUUID: () => "00000000-0000-0000-0000-000000000001",
 }));
 

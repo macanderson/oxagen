@@ -1,0 +1,230 @@
+{
+  "name": "list_tacho_hosts",
+  "domain": "tacho",
+  "description": "List the machines enrolled as Tacho hosts in this workspace with their status, liveness, and counters.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "active",
+          "paused",
+          "suspended",
+          "revoked"
+        ]
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200,
+        "default": 50
+      },
+      "cursor": {
+        "type": "string",
+        "maxLength": 256
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "hosts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "hostEnrollmentId": {
+              "type": "string"
+            },
+            "agentKey": {
+              "type": "string"
+            },
+            "hostname": {
+              "type": "string"
+            },
+            "platform": {
+              "type": "string",
+              "enum": [
+                "darwin",
+                "linux",
+                "win32"
+              ]
+            },
+            "osUser": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "active",
+                "paused",
+                "suspended",
+                "revoked"
+              ]
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "observe",
+                "enforce"
+              ]
+            },
+            "harnesses": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "claudeVersionAtEnroll": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "wrapperVersion": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "managed": {
+              "type": "boolean"
+            },
+            "lastSeenAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "lastIngestAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "hooksOk": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "otelOk": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "spoolDepth": {
+              "type": "integer"
+            },
+            "sessionsCount": {
+              "type": "integer"
+            },
+            "unobservedSessionsCount": {
+              "type": "integer"
+            },
+            "incidentsOpen": {
+              "type": "integer"
+            },
+            "expiresAt": {
+              "type": "string"
+            },
+            "revokedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "hostEnrollmentId",
+            "agentKey",
+            "hostname",
+            "platform",
+            "osUser",
+            "status",
+            "mode",
+            "harnesses",
+            "claudeVersionAtEnroll",
+            "wrapperVersion",
+            "managed",
+            "lastSeenAt",
+            "lastIngestAt",
+            "hooksOk",
+            "otelOk",
+            "spoolDepth",
+            "sessionsCount",
+            "unobservedSessionsCount",
+            "incidentsOpen",
+            "expiresAt",
+            "revokedAt",
+            "createdAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "nextCursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "hosts",
+      "nextCursor"
+    ],
+    "additionalProperties": false
+  }
+}

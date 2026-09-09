@@ -29,9 +29,21 @@ variable "availability_zone" {
 }
 
 variable "instance_type" {
-  description = "Graviton instance type. `t4g.medium` is the floor for Caddy, a handful of small Node processes, and both ClickHouse and Neo4j sharing the box. Postgres moved to Aurora, so this carries two engines rather than three — ClickHouse stayed (#2693)."
+  description = <<-EOT
+    Graviton instance type. This box carries Caddy, six Node services, and
+    two databases — Neo4j and ClickHouse, which stayed self-hosted (#2693).
+
+    `t4g.medium` was the floor and it had stopped being enough. Measured on
+    the live node with ClickHouse not even running: 2184 MB of 3830 used,
+    1457 available, no swap. Adding ClickHouse back fits only by capping it
+    hard and trusting swap to absorb every spike — and the process the OOM
+    killer reaches for first is always a database.
+
+    `t4g.large` doubles memory for about $24/month. Two databases with no
+    headroom is a worse thing to be paying for.
+  EOT
   type        = string
-  default     = "t4g.medium"
+  default     = "t4g.large"
 }
 
 variable "alb_security_group_id" {
@@ -43,6 +55,24 @@ variable "neo4j_version" {
   description = "Neo4j image tag. Community 5.11+ is required for native vector indexes, which is what makes self-hosting here — rather than Neptune Analytics — still able to serve embeddings."
   type        = string
   default     = "5-community"
+}
+
+variable "clickhouse_image" {
+  description = <<-EOT
+    ClickHouse's image. Pinned to a patch line rather than `latest`, so a
+    replacement of this node cannot also be a database upgrade nobody chose.
+  EOT
+  type        = string
+  default     = "clickhouse/clickhouse-server:24.8-alpine"
+}
+
+variable "deploy_bucket" {
+  description = <<-EOT
+    Where the node's own artifacts and scripts live. The bootstrap reads
+    `_bin/` and `_deploy/` out of it to bring the node back to serving after a
+    replacement, rather than to a placeholder that answers only /healthz.
+  EOT
+  type        = string
 }
 
 variable "data_volume_size" {

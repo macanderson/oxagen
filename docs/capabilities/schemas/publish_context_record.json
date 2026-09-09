@@ -3,7 +3,9 @@
   "domain": "context",
   "description": "Publish a steering context record into the workspace agent-asset registry — upserts the agent.context_records row by (workspace, record_id) and creates a new immutable version row when the canonical body changed. Idempotent on an unchanged body. Mirrors Stella's one-record-per-file .stella/rules/*.toml layout.",
   "mode": "sync",
-  "surfaces": ["api"],
+  "surfaces": [
+    "api"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -60,12 +62,18 @@
               "type": "string"
             }
           },
-          "required": ["type"],
+          "required": [
+            "type"
+          ],
           "additionalProperties": false
         }
       }
     },
-    "required": ["record_id", "title", "body"],
+    "required": [
+      "record_id",
+      "title",
+      "body"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -93,7 +101,13 @@
         "description": "false when the latest version already carries this checksum (idempotent)"
       }
     },
-    "required": ["publicId", "recordId", "version", "checksum", "published"],
+    "required": [
+      "publicId",
+      "recordId",
+      "version",
+      "checksum",
+      "published"
+    ],
     "additionalProperties": false
   }
 }

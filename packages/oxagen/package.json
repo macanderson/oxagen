@@ -19,7 +19,8 @@
     "./types": "./src/types.ts",
     "./iam": "./src/iam/index.ts",
     "./contracts": "./src/contracts/index.ts",
-    "./plugins": "./src/plugins/index.ts"
+    "./plugins": "./src/plugins/index.ts",
+    "./tacho/schemas": "./src/tacho/schemas.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -30,6 +31,7 @@
   "dependencies": {
     "@opentelemetry/api": "1.9.1",
     "@oxagen/config": "workspace:*",
+    "@oxagen/tacho": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "zod": "3.25.76"
   },
