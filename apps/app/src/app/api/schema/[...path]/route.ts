@@ -71,6 +71,17 @@ const PATH_TO_CAPABILITY: Record<string, string> = {
 // any already-canonical name in addition to the mapped URL paths.
 const KNOWN_CAPABILITIES = new Set(Object.values(PATH_TO_CAPABILITY));
 
+/**
+ * True for the error `AbortSignal.timeout()` raises (a DOMException named
+ * TimeoutError) and for a plain abort, which the AI SDK rethrows as-is.
+ */
+function isTimeout(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    (err.name === "TimeoutError" || err.name === "AbortError")
+  );
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
@@ -183,6 +194,13 @@ export async function POST(
     );
     if (message.includes("Forbidden") || message.includes("IAM")) {
       return NextResponse.json({ error: message }, { status: 403 });
+    }
+    // A handler that gave up on its own model call (AbortSignal.timeout in
+    // schema.chat) is a gateway timeout, not a bad request: the input was
+    // fine, the upstream was slow. 504 keeps it apart from validation errors
+    // in the client and in the logs.
+    if (isTimeout(err)) {
+      return NextResponse.json({ error: message }, { status: 504 });
     }
     return NextResponse.json({ error: message }, { status: 400 });
   }

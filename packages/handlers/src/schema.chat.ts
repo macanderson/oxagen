@@ -7,6 +7,19 @@ import { and, eq, isNull } from "drizzle-orm";
 import { getOrCreateRegistry } from "./schema.versioning";
 import { logger } from "./logger";
 
+/**
+ * Wall-clock bound on one schema-chat model call.
+ *
+ * The turn runs the precise tier and returns one buffered reply, so nothing
+ * reaches the client until the model is done. Every proxy in front of the app
+ * (the ALB's idle_timeout, Caddy's response_header_timeout) is set to 300 s;
+ * this sits under that so a stalled gateway call ends here, as an error the
+ * route can log and name, instead of as a bare 504 from a proxy while the
+ * server keeps working and paying for tokens. A 64 s turn was observed on
+ * 2026-09-09; this leaves room above it.
+ */
+export const SCHEMA_CHAT_MODEL_TIMEOUT_MS = 240_000;
+
 interface DraftSchema {
   name: string;
   labels: string[];
@@ -233,6 +246,7 @@ Draft version: ${input.draftVersionId ?? "current draft"}`;
     // Precise tier (claude-opus-4.8): reliable structured tool/mutation emission
     // for schema authoring — the balanced default routinely under-emitted edits.
     model: selectModel({ tier: "precise" }),
+    abortSignal: AbortSignal.timeout(SCHEMA_CHAT_MODEL_TIMEOUT_MS),
     telemetry: {
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,

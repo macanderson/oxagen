@@ -172,6 +172,17 @@ resource "aws_lb" "app" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = module.network.public_subnet_ids
 
+  # How long the ALB waits on the node before it answers 504 by itself. The
+  # default is 60 s. The schema builder's chat turn runs the precise model
+  # tier (anthropic/claude-opus-4.8) and returns one buffered JSON reply, and
+  # on 2026-09-09 one turn took 64 s: the ALB log has a 504 at 21:24:57Z
+  # with target_processing_time -1, and the app logged "schema.chat:
+  # generated response" with 34 mutations at 21:25:01Z. The user saw a 504
+  # and an answer that was already paid for was thrown away. Caddyfile.alb's
+  # response_header_timeout and SCHEMA_CHAT_MODEL_TIMEOUT_MS in
+  # packages/handlers/src/schema.chat.ts stay under this number on purpose.
+  idle_timeout = 300
+
   access_logs {
     bucket  = aws_s3_bucket.logs_archive.id
     prefix  = "alb"

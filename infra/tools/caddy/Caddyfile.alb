@@ -42,12 +42,17 @@
 		# These hold sessions and reach Aurora/ClickHouse/Neo4j over the network or
 		# loopback respectively.
 
+		# 300 s on app and api, matching the ALB's idle_timeout in
+		# stacks-new/oxagen/main.tf. A model turn that answers in one buffered
+		# reply can run past 60 s (a 64 s schema-chat turn on 2026-09-09), and
+		# the first of the two proxies to give up turns a finished answer into
+		# a 504. The handler bounds its own model call below this number.
 		@app host app.oxagen.sh
 		handle @app {
 			encode gzip zstd
 			reverse_proxy 127.0.0.1:3000 {
 				transport http {
-					response_header_timeout 60s
+					response_header_timeout 300s
 				}
 			}
 		}
@@ -57,7 +62,7 @@
 			encode gzip zstd
 			reverse_proxy 127.0.0.1:4000 {
 				transport http {
-					response_header_timeout 60s
+					response_header_timeout 300s
 				}
 			}
 		}
