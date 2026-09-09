@@ -1,0 +1,286 @@
+{
+  "resourceMetrics": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "host.arch",
+            "value": {
+              "stringValue": "arm64"
+            }
+          },
+          {
+            "key": "os.type",
+            "value": {
+              "stringValue": "darwin"
+            }
+          },
+          {
+            "key": "os.version",
+            "value": {
+              "stringValue": "25.5.0"
+            }
+          },
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "claude-code"
+            }
+          },
+          {
+            "key": "service.version",
+            "value": {
+              "stringValue": "2.1.263"
+            }
+          }
+        ],
+        "droppedAttributesCount": 0
+      },
+      "scopeMetrics": [
+        {
+          "scope": {
+            "name": "com.anthropic.claude_code",
+            "version": "2.1.263"
+          },
+          "metrics": [
+            {
+              "name": "claude_code.lines_of_code.count",
+              "description": "Count of lines of code modified, with the 'type' attribute indicating whether lines were added or removed and the 'model' attribute indicating which model made the change",
+              "unit": "",
+              "sum": {
+                "aggregationTemporality": 1,
+                "isMonotonic": true,
+                "dataPoints": [
+                  {
+                    "attributes": [
+                      {
+                        "key": "user.id",
+                        "value": {
+                          "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                        }
+                      },
+                      {
+                        "key": "session.id",
+                        "value": {
+                          "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                        }
+                      },
+                      {
+                        "key": "app.version",
+                        "value": {
+                          "stringValue": "2.1.263"
+                        }
+                      },
+                      {
+                        "key": "organization.id",
+                        "value": {
+                          "stringValue": "00000000-0000-4000-8000-000000000067"
+                        }
+                      },
+                      {
+                        "key": "user.email",
+                        "value": {
+                          "stringValue": "dev@example.com"
+                        }
+                      },
+                      {
+                        "key": "user.account_uuid",
+                        "value": {
+                          "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                        }
+                      },
+                      {
+                        "key": "user.account_id",
+                        "value": {
+                          "stringValue": "user_00000000000000000000000000"
+                        }
+                      },
+                      {
+                        "key": "terminal.type",
+                        "value": {
+                          "stringValue": "ghostty"
+                        }
+                      },
+                      {
+                        "key": "type",
+                        "value": {
+                          "stringValue": "added"
+                        }
+                      },
+                      {
+                        "key": "model",
+                        "value": {
+                          "stringValue": "claude-haiku-4-5-20251001"
+                        }
+                      }
+                    ],
+                    "startTimeUnixNano": "1788861974018000000",
+                    "timeUnixNano": "1788861974434000000",
+                    "asDouble": 1
+                  },
+                  {
+                    "attributes": [
+                      {
+                        "key": "user.id",
+                        "value": {
+                          "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                        }
+                      },
+                      {
+                        "key": "session.id",
+                        "value": {
+                          "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                        }
+                      },
+                      {
+                        "key": "app.version",
+                        "value": {
+                          "stringValue": "2.1.263"
+                        }
+                      },
+                      {
+                        "key": "organization.id",
+                        "value": {
+                          "stringValue": "00000000-0000-4000-8000-000000000067"
+                        }
+                      },
+                      {
+                        "key": "user.email",
+                        "value": {
+                          "stringValue": "dev@example.com"
+                        }
+                      },
+                      {
+                        "key": "user.account_uuid",
+                        "value": {
+                          "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                        }
+                      },
+                      {
+                        "key": "user.account_id",
+                        "value": {
+                          "stringValue": "user_00000000000000000000000000"
+                        }
+                      },
+                      {
+                        "key": "terminal.type",
+                        "value": {
+                          "stringValue": "ghostty"
+                        }
+                      },
+                      {
+                        "key": "type",
+                        "value": {
+                          "stringValue": "removed"
+                        }
+                      },
+                      {
+                        "key": "model",
+                        "value": {
+                          "stringValue": "claude-haiku-4-5-20251001"
+                        }
+                      }
+                    ],
+                    "startTimeUnixNano": "1788861974018000000",
+                    "timeUnixNano": "1788861974434000000",
+                    "asDouble": 0
+                  }
+                ]
+              }
+            },
+            {
+              "name": "claude_code.code_edit_tool.decision",
+              "description": "Count of code editing tool permission decisions (accept/reject) for Edit, Write, and NotebookEdit tools",
+              "unit": "",
+              "sum": {
+                "aggregationTemporality": 1,
+                "isMonotonic": true,
+                "dataPoints": [
+                  {
+                    "attributes": [
+                      {
+                        "key": "user.id",
+                        "value": {
+                          "stringValue": "0000000000000000000000000000000000000000000000000000000000000000"
+                        }
+                      },
+                      {
+                        "key": "session.id",
+                        "value": {
+                          "stringValue": "340ed354-6344-4727-9f8b-1e40b5e12aa7"
+                        }
+                      },
+                      {
+                        "key": "app.version",
+                        "value": {
+                          "stringValue": "2.1.263"
+                        }
+                      },
+                      {
+                        "key": "organization.id",
+                        "value": {
+                          "stringValue": "00000000-0000-4000-8000-000000000067"
+                        }
+                      },
+                      {
+                        "key": "user.email",
+                        "value": {
+                          "stringValue": "dev@example.com"
+                        }
+                      },
+                      {
+                        "key": "user.account_uuid",
+                        "value": {
+                          "stringValue": "00000000-0000-4000-8000-00000000acc7"
+                        }
+                      },
+                      {
+                        "key": "user.account_id",
+                        "value": {
+                          "stringValue": "user_00000000000000000000000000"
+                        }
+                      },
+                      {
+                        "key": "terminal.type",
+                        "value": {
+                          "stringValue": "ghostty"
+                        }
+                      },
+                      {
+                        "key": "decision",
+                        "value": {
+                          "stringValue": "accept"
+                        }
+                      },
+                      {
+                        "key": "source",
+                        "value": {
+                          "stringValue": "config"
+                        }
+                      },
+                      {
+                        "key": "tool_name",
+                        "value": {
+                          "stringValue": "Write"
+                        }
+                      },
+                      {
+                        "key": "language",
+                        "value": {
+                          "stringValue": "Plain text"
+                        }
+                      }
+                    ],
+                    "startTimeUnixNano": "1788861974016000000",
+                    "timeUnixNano": "1788861974434000000",
+                    "asDouble": 1
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

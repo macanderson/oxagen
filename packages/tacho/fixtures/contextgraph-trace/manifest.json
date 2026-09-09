@@ -1,0 +1,18 @@
+{
+  "upstream_repository": "https://github.com/macanderson/context-graph-protocol",
+  "upstream_commit": "98e32ff217e4e0b8e9be078131d0a0728eb77c06",
+  "upstream_path": "contextgraph-trace/fixtures",
+  "trace_format": "contextgraph-trace/0.1-sketch",
+  "files": {
+    "golden-resume.ndjson": "sha256:17a1901bdc71b8e799c618c2058c6097b6ec6541533dc3fd6d8638d047130efa",
+    "golden.ndjson": "sha256:70950c863d91c7c73356b01229b9aaf8f9dd71a9eb0971b9c6836d8784e37260",
+    "trip-assembly-budget-honesty.ndjson": "sha256:37927b196f8f43cbb0d47bc31392f909e994aabe49eeaada651a49a985017993",
+    "trip-citation-at-use.ndjson": "sha256:3ef2960a552b9037f62d1877daa584769530a019b4bd439570ffd0fc133c65a5",
+    "trip-deterministic-composition.ndjson": "sha256:03404b2d10d2ff9fb9a4c13a4cbee2509ac964405413ae320f858a57052fe88f",
+    "trip-effect-exactly-once.ndjson": "sha256:abe8632e4a1eb96365aba8bfb1e1a8bf68238f45521935d9f32f787f8d5f13d7",
+    "trip-resume-integrity.ndjson": "sha256:328773e7c854701869eb0c7a06414f530fded8c8868b622ed90cb68e9e7da0d2",
+    "trip-sequence-integrity.ndjson": "sha256:8a38fc04d112aac19b3ed481633be0e2934451b77c1d8a2836210e0be9988ce0",
+    "trip-staleness-at-use.ndjson": "sha256:0247f0044b241291160ddcc735295934364dfcd478f03f65f26ca5df96a7678e",
+    "trip-turn-loop-pairing.ndjson": "sha256:afd0ac0b74d33c8ab94c352872666fc064cea7cd70db080248bcacd8ad0a6539"
+  }
+}

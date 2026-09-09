@@ -1,0 +1,30 @@
+{
+  "name": "@oxagen/tacho",
+  "version": "2.1.1",
+  "private": true,
+  "description": "Tacho: the Oxagen wrapper that records, gates, and evidences Claude Code, Claude Agent SDK, and custom agents. Leaf package: no @oxagen/* runtime dependency.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./claude-code": "./src/claude-code/index.ts",
+    "./trace": "./src/trace/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --max-warnings 0",
+    "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "canonicalize": "1.0.8",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "25.9.1",
+    "@vitest/coverage-v8": "2.1.9",
+    "typescript": "6.0.3",
+    "vitest": "2.1.9"
+  }
+}
