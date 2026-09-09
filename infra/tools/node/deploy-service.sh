@@ -113,7 +113,25 @@ if [[ $(free_mb) -lt $MIN_FREE_MB ]]; then
   log "$(free_mb) MB free after pruning"
 fi
 
+# What the refusal has to answer is "what is holding the disk", and it did not:
+# it printed free megabytes and stopped, so diagnosing a recurrence meant
+# sending a shell command to the node to run `du` by hand. Every service's
+# footprint and Docker's are two commands, and they belong in the failure that
+# needs them. Best-effort on purpose -- a diagnostic that fails must not change
+# what the deploy does, and `set -e` is in force.
+report_space() {
+  echo "--- what is using $ROOT ---" >&2
+  du -xsh "$ROOT"/* 2>/dev/null | sort -rh >&2 || true
+  echo "--- docker ---" >&2
+  # `>&2` before `2>/dev/null`, not after: the other order points stdout at a
+  # stderr that is already /dev/null and prints nothing at all.
+  docker system df >&2 2>/dev/null || true
+  echo "--- filesystem ---" >&2
+  df -Ph "$ROOT" >&2 || true
+}
+
 if [[ $(free_mb) -lt $MIN_FREE_MB ]]; then
+  report_space
   fail "only $(free_mb) MB free under $ROOT, need $MIN_FREE_MB. Refusing to unpack: a deploy that fills the root volume takes SSM down with it, and then nothing can reach this node to fix it (#1305)."
 fi
 

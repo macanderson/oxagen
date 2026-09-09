@@ -50,6 +50,16 @@ jobs:
       - uses: opentofu/setup-opentofu@592200bd4b9bbf4772ace78f887668b1aee8f716 # v1.0.5
         with:
           tofu_version: 1.8.5
+          # Without this the `case "$code"` below can only ever reach its `0)`
+          # arm. The wrapper this action installs by default returns 0 for the
+          # exit code 2 that means "changes present":
+          #
+          #     if (exitCode === 0 || exitCode === 2) { return }
+          #
+          # so every stack would report `clean` every day, drifted or not, and a
+          # drift detector that cannot say "drift" is worse than none — it is the
+          # muted monitor this workflow exists to avoid being.
+          tofu_wrapper: false
 
       - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
         with:

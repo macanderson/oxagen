@@ -108,6 +108,24 @@ jobs:
       - uses: opentofu/setup-opentofu@592200bd4b9bbf4772ace78f887668b1aee8f716 # v1.0.5
         with:
           tofu_version: 1.8.5
+          # The wrapper this action installs by default swallows the one exit
+          # code this workflow reads. `tofu plan -detailed-exitcode` returns 2
+          # for "changes present", and the wrapper treats 2 exactly like 0:
+          #
+          #     if (exitCode === 0 || exitCode === 2) { return }
+          #
+          # so the shell always saw 0 and the plan comment below always said
+          # "no changes". Every infra pull request that changed production was
+          # summarised as changing nothing — including the one that added this
+          # line, whose plan moved the app node's root volume from 20 GB to 50.
+          # That is the surface a reviewer reads to decide whether merging
+          # touches production.
+          #
+          # Nothing here wants the wrapper's stdout/stderr outputs; the plan is
+          # read from plan.txt on disk. Without it tofu's own exit code reaches
+          # the script written for it, and that script's `-eq 1` error branch
+          # stops being unreachable.
+          tofu_wrapper: false
 
       # The static checks come first and need no credentials, so a stack that
       # does not parse fails here whether or not the account is reachable.
@@ -225,6 +243,10 @@ jobs:
       - uses: opentofu/setup-opentofu@592200bd4b9bbf4772ace78f887668b1aee8f716 # v1.0.5
         with:
           tofu_version: 1.8.5
+          # Off for the reason the plan job gives, and because `tofu apply`
+          # here reads its own exit code the same way with the wrapper gone:
+          # 0 applied, anything else failed.
+          tofu_wrapper: false
 
       # Still gated, unlike the plan job above, and for a reason that outlived
       # the bootstrap: this runs on `main`, so a failure here leaves the
