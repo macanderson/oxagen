@@ -7,7 +7,7 @@ output "public_subnet_ids" {
 }
 
 output "private_subnet_ids" {
-  description = "Both private subnets, one per AZ — for Aurora/Redshift's subnet groups, which require at least two."
+  description = "Every private subnet, one per AZ — for Aurora's subnet group, which requires at least two AZs."
   value       = aws_subnet.private[*].id
 }
 

@@ -65,8 +65,7 @@ const CONFIG_BLOB = {
     retrieval: { strategy: "hybrid" },
     budget: { maxHops: 2, maxNodes: 20 },
   },
-  agentTools: [{ type: "skill", ref: "summarization" }],
-  triggers: [{ type: "manual", enabled: true }],
+  agentTools: [{ type: "mcp_server", ref: "mcp_srv1" }],
   instructions: "Scan every deal and flag the risky ones for review.",
 };
 const CHECKSUM = computeConfigChecksum(CONFIG_BLOB);
@@ -158,7 +157,7 @@ describe("agentDefinitionSummarizeHandler", () => {
     };
     expect(call.model).toBe("mock-model");
     expect(call.prompt).toContain("Deal Scanner");
-    expect(call.prompt).toContain("skill:summarization");
+    expect(call.prompt).toContain("mcp_server:mcp_srv1");
     expect(call.telemetry.orgId).toBe(TEST_CTX.orgId);
     // The summary + checksum were persisted.
     expect(captured.set).toEqual({

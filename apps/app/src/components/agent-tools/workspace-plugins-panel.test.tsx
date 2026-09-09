@@ -150,14 +150,12 @@ type UninstallInput = {
 type InstallInput = {
   orgSlug: string;
   workspaceSlug: string;
-  workspaceId: string;
-  catalogServerId: string;
+  workspaceId?: string;
+  catalogServerId?: string;
   pluginType:
     | "mcp_server"
     | "integration"
-    | "content_tool"
     | "capability"
-    | "agent_skill"
     | "agent_capability"
     | "knowledge_source";
   pluginId?: string;
@@ -172,9 +170,7 @@ type InstallBulkInput = {
     pluginType:
       | "mcp_server"
       | "integration"
-      | "content_tool"
       | "capability"
-      | "agent_skill"
       | "agent_capability"
       | "knowledge_source";
     pluginId?: string;

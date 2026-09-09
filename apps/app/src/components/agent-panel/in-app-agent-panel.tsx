@@ -38,7 +38,6 @@ import type { ComposerAction } from "@/components/chat/message-composer";
 import type { ChatShellProps } from "@/components/chat/chat-shell";
 import type { ChatMessage } from "@/components/chat/message-bubble";
 import type { ChatPageContext } from "@/components/chat/chat-shell-client";
-import type { FormFillResult } from "@/lib/ask/fill-types";
 import {
   Menu,
   MenuTrigger,
@@ -53,7 +52,6 @@ import {
   wandSendAction,
   wandResolveApprovalAction,
   wandResolveConsentAction,
-  wandResolvePlanAction,
   loadAgentConversationAction,
 } from "@/app/[orgSlug]/shell-actions";
 
@@ -349,8 +347,7 @@ function AgentChatShell({
   /** Publish the active conversation's publicId up to the panel store. */
   onConversationPublicIdChange: (publicId: string | null) => void;
 }) {
-  const { fillableForm, entity, _setIsFilling, _setFillResult } =
-    usePageContext();
+  const { entity } = usePageContext();
   const pathname = usePathname();
 
   // The floating panel owns its conversation state — it has no RSC of its own to
@@ -415,31 +412,12 @@ function AgentChatShell({
     [onConversationPublicIdChange, reloadMessages],
   );
 
-  const buildPageContext = React.useCallback((): ChatPageContext | null => {
-    const route = pathname;
-    const entitySummary = entity?.summary ?? undefined;
-    if (!fillableForm) return { route, entitySummary };
-    return {
-      route,
-      entitySummary,
-      fillableForm: {
-        formId: fillableForm.formId,
-        title: fillableForm.title,
-        fields: fillableForm.fields,
-      },
-    };
-  }, [pathname, entity, fillableForm]);
-
-  const handleFormFillStart = React.useCallback(() => {
-    _setIsFilling(true);
-  }, [_setIsFilling]);
-
-  const handleFormFillEnd = React.useCallback(
-    (result: FormFillResult) => {
-      _setIsFilling(false);
-      _setFillResult(result);
-    },
-    [_setIsFilling, _setFillResult],
+  const buildPageContext = React.useCallback(
+    (): ChatPageContext => ({
+      route: pathname,
+      entitySummary: entity?.summary ?? undefined,
+    }),
+    [pathname, entity],
   );
 
   // Scoped send action: inject orgSlug + workspaceSlug into FormData.
@@ -496,21 +474,6 @@ function AgentChatShell({
     [orgSlug, workspaceSlug],
   );
 
-  const scopedResolvePlanAction = React.useCallback<
-    ChatShellProps["resolvePlanAction"]
-  >(
-    async (planId, decision, amendedSteps) => {
-      return wandResolvePlanAction(
-        orgSlug,
-        workspaceSlug,
-        planId,
-        decision,
-        amendedSteps,
-      );
-    },
-    [orgSlug, workspaceSlug],
-  );
-
   const pageCtx = buildPageContext();
 
   return (
@@ -532,13 +495,10 @@ function AgentChatShell({
         sendAction={scopedSendAction}
         resolveApprovalAction={scopedResolveApprovalAction}
         resolveConsentAction={scopedResolveConsentAction}
-        resolvePlanAction={scopedResolvePlanAction}
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
         modelConfig={modelConfig}
         pageContext={pageCtx}
-        onFormFillStart={handleFormFillStart}
-        onFormFillEnd={handleFormFillEnd}
         onConversationCreated={handleConversationCreated}
         reloadMessages={reloadMessages}
         showFiles={false}

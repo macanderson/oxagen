@@ -23,12 +23,11 @@ import { logger } from "../logger";
  *                                    created_at, last_used_at, scopes). NEVER the
  *                                    hashed or plaintext key material.
  *        - audit-log.json         — security_events for the subject/org.
- *        - generated-assets.json  — generated-asset METADATA.
  *        - members.json / workspaces.json — org scope only.
  *
  * Scope semantics:
  *   - `user` — the subject's own rows (conversations by userId, api keys created
- *     by the user, audit events actored by the user, assets owned by the user).
+ *     by the user, audit events actored by the user).
  *   - `org`  — every row scoped to the org (all conversations/keys/audit/assets
  *     in the org) plus members.json and workspaces.json. The subject profile is
  *     still included as the request originator.
@@ -239,40 +238,6 @@ export const [privacyExportProcess, privacyExportProcessOnFailure] =
                   : eq(schema.securityEvents.actorUserId, userId),
               );
             addJsonEntry(collected, "audit-log.json", auditRows);
-          });
-
-          // generated-assets.json — asset METADATA. sizeBytes is a bigint; coerce
-          // to a JSON-safe number (asset sizes are well below 2^53).
-          await collectOptional(exportId, "generated-assets.json", async () => {
-            const assetRows = await tx
-              .select({
-                id: schema.generatedAssets.publicId,
-                kind: schema.generatedAssets.kind,
-                accessPolicy: schema.generatedAssets.accessPolicy,
-                status: schema.generatedAssets.status,
-                mimeType: schema.generatedAssets.mimeType,
-                sizeBytes: schema.generatedAssets.sizeBytes,
-                storageProvider: schema.generatedAssets.storageProvider,
-                storageUrl: schema.generatedAssets.storageUrl,
-                prompt: schema.generatedAssets.prompt,
-                model: schema.generatedAssets.model,
-                conversationId: schema.generatedAssets.conversationId,
-                createdAt: schema.generatedAssets.createdAt,
-              })
-              .from(schema.generatedAssets)
-              .where(
-                scope === "org"
-                  ? eq(schema.generatedAssets.orgId, orgId)
-                  : eq(schema.generatedAssets.userId, userId),
-              );
-            addJsonEntry(
-              collected,
-              "generated-assets.json",
-              assetRows.map((row) => ({
-                ...row,
-                sizeBytes: row.sizeBytes == null ? null : Number(row.sizeBytes),
-              })),
-            );
           });
 
           // Org scope only: the org's members and workspaces.

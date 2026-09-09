@@ -3,17 +3,17 @@ import { registerCapability } from "../registry";
 
 // The connect-first recommendation shape — identical to agent.definition.suggest.
 // Tools the revised agent SHOULD have but that are not available in the
-// workspace yet (a catalog MCP server to connect, a disabled skill to enable).
+// workspace yet (a catalog MCP server to connect).
 const recommendationSchema = z.object({
   kind: z
-    .enum(["mcp_server", "skill"])
+    .enum(["mcp_server"])
     .describe(
-      "What to connect: an MCP server from the synced registry catalog, or a workspace skill that exists but is disabled.",
+      "What to connect: an MCP server from the synced registry catalog.",
     ),
   ref: z
     .string()
     .describe(
-      "Catalog identity for an mcp_server (registry server name, e.g. 'github/github-mcp-server') or the skill slug for a skill.",
+      "Catalog identity for an mcp_server (registry server name, e.g. 'github/github-mcp-server').",
     ),
   name: z.string().describe("Human-readable display name."),
   reason: z
@@ -27,7 +27,7 @@ export const agentDefinitionRevise = registerCapability({
   name: "revise_agent_def",
   domain: "agent",
   description:
-    "AI-driven edit of an existing agent definition: take a plain-language description of the change you want and the agent's current config, have the model design the revised configuration (identity, instructions, graph access, tools, triggers) grounded in the workspace's real skills, ontologies, MCP servers, and capabilities, then persist it as a NEW unpublished version — the version number is bumped. The agent's immutable slug never changes, and publishing stays a separate explicit step, so a revision never silently changes what is live. Returns the new version, a rationale, a human-readable change summary, any validation warnings, and connect-first recommendations.",
+    "AI-driven edit of an existing agent definition: take a plain-language description of the change you want and the agent's current config, have the model design the revised configuration (identity, instructions, graph access, tools) grounded in the workspace's real ontologies, MCP servers, and governed capabilities, then persist it as a NEW unpublished version — the version number is bumped. The agent's immutable slug never changes, and publishing stays a separate explicit step, so a revision never silently changes what is live. Returns the new version, a rationale, a human-readable change summary, any validation warnings, and connect-first recommendations.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
@@ -87,7 +87,7 @@ export const agentDefinitionRevise = registerCapability({
       .array(recommendationSchema)
       .default([])
       .describe(
-        "Tools the revised agent SHOULD have that are not yet available in the workspace — catalog MCP servers to connect, or disabled skills to enable. Never equipped automatically; the caller connects/enables them first, then revises again to equip them.",
+        "Tools the revised agent SHOULD have that are not yet available in the workspace — catalog MCP servers to connect. Never equipped automatically; the caller connects/enables them first, then revises again to equip them.",
       ),
   }),
 });

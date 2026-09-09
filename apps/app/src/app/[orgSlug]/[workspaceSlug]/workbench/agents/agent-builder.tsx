@@ -4,16 +4,15 @@
  * [agentId]).
  *
  * A useState-driven wizard (there is no Stepper primitive) that walks the
- * builder through the stages of defining an interactive agent. Create mode
- * leads with an AI-assisted "Describe" step (7 steps); edit mode omits it (6):
+ * builder through the stages of defining a governed agent. Create mode leads
+ * with an AI-assisted "Describe" step (7 steps); edit mode omits it (6):
  *
  *   0. Describe  — (create only) plain-language description → agent.definition
  *                  .suggest generates a complete config, pre-filled into the
  *                  editable steps below. Skippable — manual setup is always open.
- *   1. Identity  — name, slug, description, and the "code features" switch
- *                  (persisted as agentType "code" | "custom").
+ *   1. Identity  — name, slug, description, avatar.
  *   2. Prompt    — the inline system prompt / instructions.
- *   3. Equip     — the uniform agentTools[] picker (skills/tools/MCP/subagents).
+ *   3. Tools     — the agentTools[] allowlist picker (capabilities + MCP).
  *   4. Ground    — GraphAccess: ontology binding, mode, retrieval, budget.
  *   5. Access    — the agent's IAM role (Agent RBAC): the permission ceiling
  *                  the configuration is intersected with. Persisted separately
@@ -22,8 +21,9 @@
  *   6. Review    — summary + effective scope (role ∩ config) + Save draft /
  *                  Publish / Publish & Deploy.
  *
- * Triggers belong to automations/playbooks, not agent definitions — the
- * agent is a pure, portable definition with no trigger fields.
+ * Per ADR-043 there is no sandbox, repo, skill, subagent, or trigger surface
+ * here — Oxagen governs agents, it does not run them. The definition is a pure,
+ * portable governance object.
  *
  * All persistence flows through the server actions in ./actions.ts, which gate
  * every mutation on workspace Owner/Admin. A `readOnly` builder (managed agent
@@ -62,7 +62,6 @@ import {
   SelectPopup,
   SelectItem,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { CopyableId } from "@/components/knowledge/graph-explorer/copyable-id";
@@ -92,15 +91,6 @@ import {
 } from "./suggestion-mapping";
 import { RecommendedConnections } from "./recommended-connections";
 
-/**
- * Client-safe mirror of CODING_AGENT_TYPE / DEFAULT_AGENT_TYPE from
- * lib/workbench/agents.ts. That module is server-only (it imports the handler
- * kernel), so the two literal discriminators are duplicated here rather than
- * dragging server code into the client bundle. Keep in sync with agents.ts.
- */
-const CODING_AGENT_TYPE = "code";
-const DEFAULT_AGENT_TYPE = "custom";
-
 // DEFAULT_AGENT_ROLE_NAME ("Agent Contributor" — the role the backend
 // auto-assigns to every newly created agent, and the fallback when a
 // suggestion carries no suggestedRole) is imported from ./suggestion-mapping
@@ -121,7 +111,6 @@ export interface InitialAgent {
   description: string | null;
   /** Avatar value: https URL or designed-avatar spec string. Null when unset. */
   avatarUrl?: string | null;
-  agentType: string;
   status: "draft" | "active" | "archived";
   deploymentStatus: "inactive" | "active";
   version: number | null;
@@ -147,16 +136,16 @@ export interface AgentBuilderProps {
    */
   installAction: (input: {
     orgSlug: string;
-    workspaceSlug: string;
-    workspaceId: string;
-    catalogServerId: string;
+    workspaceSlug?: string;
+    workspaceId?: string;
+    catalogServerId?: string;
     pluginType: EquipInstallPluginType;
     pluginId?: string;
   }) => Promise<{ ok: boolean; orgListingId?: string; error?: string }>;
   installBulkAction: (input: {
     orgSlug: string;
-    workspaceSlug: string;
-    workspaceId: string;
+    workspaceSlug?: string;
+    workspaceId?: string;
     items: Array<{
       catalogServerId?: string;
       pluginType: EquipInstallPluginType;
@@ -178,9 +167,7 @@ export interface AgentBuilderProps {
 type EquipInstallPluginType =
   | "mcp_server"
   | "integration"
-  | "content_tool"
   | "capability"
-  | "agent_skill"
   | "agent_capability"
   | "knowledge_source";
 
@@ -193,7 +180,7 @@ type EquipInstallPluginType =
 const CORE_STEPS = [
   { key: "identity", label: "Identity" },
   { key: "prompt", label: "Prompt" },
-  { key: "equip", label: "Equip" },
+  { key: "equip", label: "Tools" },
   { key: "ground", label: "Ground" },
   { key: "access", label: "Access" },
   { key: "review", label: "Review" },
@@ -249,10 +236,6 @@ export function AgentBuilder({
   const [avatarUrl, setAvatarUrl] = React.useState(
     initialAgent?.avatarUrl ?? "",
   );
-  const [codeFeatures, setCodeFeatures] = React.useState(
-    (initialAgent?.agentType ?? DEFAULT_AGENT_TYPE) === CODING_AGENT_TYPE,
-  );
-
   // Prompt
   const [instructions, setInstructions] = React.useState(
     initialAgent?.config.instructions ?? "",
@@ -372,7 +355,6 @@ export function AgentBuilder({
     setSlug(p.slug);
     setSlugEdited(true);
     setDescription(p.description);
-    setCodeFeatures(p.codeFeatures);
     setInstructions(p.instructions);
     setAgentTools(p.agentTools);
     setOntologyId(p.ontologyId);
@@ -462,10 +444,6 @@ export function AgentBuilder({
     };
   }
 
-  function agentType(): string {
-    return codeFeatures ? CODING_AGENT_TYPE : DEFAULT_AGENT_TYPE;
-  }
-
   /**
    * Persist the role selection once the definition is saved (Agent RBAC
    * Phase 5a). A freshly-created agent already holds "Agent Contributor"
@@ -540,7 +518,6 @@ export function AgentBuilder({
         description: description.trim() || undefined,
         // null clears a previously-set avatar; a string sets it.
         avatarUrl: avatarUrl || null,
-        agentType: agentType(),
         config,
       });
       if (!res.ok) {
@@ -557,7 +534,6 @@ export function AgentBuilder({
       name: name.trim(),
       description: description.trim() || undefined,
       avatarUrl: avatarUrl || undefined,
-      agentType: agentType(),
       config,
     });
     if (!res.ok) {
@@ -807,7 +783,6 @@ export function AgentBuilder({
                 <RecommendedConnections
                   recommendations={recommendations}
                   orgSlug={orgSlug}
-                  workspaceSlug={workspaceSlug}
                 />
               </div>
               <button
@@ -855,15 +830,15 @@ export function AgentBuilder({
                   value={describeText}
                   disabled={disabled}
                   rows={6}
-                  placeholder="Describe what this agent should do — its job, what starts it, and what it may touch. Example: A release-notes writer that reads merged PRs from our GitHub repo each Friday and drafts a changelog grounded in the engineering ontology."
+                  placeholder="Describe what this agent is accountable for — its job, the knowledge it may reach, and the tools it may call. Example: A compliance analyst that answers questions about our SOC 2 controls, grounded in the governance ontology, and may read the audit log but change nothing."
                   onChange={(e) => setDescribeText(e.target.value)}
                   data-testid="agent-describe-input"
                 />
                 <p className="text-xs text-muted-foreground">
                   Oxagen drafts a complete configuration — identity, prompt,
                   tools, and graph access — grounded in this workspace&rsquo;s
-                  real skills and ontologies. You review and edit every field
-                  before anything is saved.
+                  real capabilities and ontologies. You review and edit every
+                  field before anything is saved.
                 </p>
               </div>
 
@@ -961,30 +936,9 @@ export function AgentBuilder({
                   value={description}
                   disabled={disabled}
                   rows={2}
-                  placeholder="What does this agent do? Drives routing and subagent selection."
+                  placeholder="What does this agent do? Drives routing and discovery."
                   onChange={(e) => setDescription(e.target.value)}
                   data-testid="agent-description-input"
-                />
-              </div>
-              <div className="flex items-start justify-between gap-3 rounded-md border bg-muted/20 px-3 py-3">
-                <div>
-                  <Label
-                    htmlFor="agent-code-features"
-                    className="text-sm font-medium"
-                  >
-                    Code features
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Enables the sandboxed coding path (file edits, terminal,
-                    repo tools). Off is a plain conversational / tool agent.
-                  </p>
-                </div>
-                <Switch
-                  id="agent-code-features"
-                  checked={codeFeatures}
-                  disabled={disabled}
-                  onCheckedChange={setCodeFeatures}
-                  data-testid="agent-code-features-switch"
                 />
               </div>
               <p className="text-xs text-muted-foreground">
@@ -1021,8 +975,8 @@ export function AgentBuilder({
           {step.key === "equip" ? (
             <div className="flex flex-col gap-3" data-testid="step-equip">
               <p className="text-sm text-muted-foreground">
-                Everything this agent loads — skills, tools, MCP servers, and
-                subagents — as one uniform list.
+                The allowlist this agent may call — capabilities and MCP servers
+                — as one uniform list.
               </p>
               <EquipPicker
                 sources={sources}
@@ -1052,7 +1006,6 @@ export function AgentBuilder({
               <RecommendedConnections
                 recommendations={recommendations}
                 orgSlug={orgSlug}
-                workspaceSlug={workspaceSlug}
               />
             </div>
           ) : null}
@@ -1235,15 +1188,11 @@ export function AgentBuilder({
                 <SummaryItem label="Name" value={name.trim() || "—"} />
                 <SummaryItem label="Slug" value={slug.trim() || "—"} mono />
                 <SummaryItem
-                  label="Code features"
-                  value={codeFeatures ? "On (coding)" : "Off (custom)"}
-                />
-                <SummaryItem
                   label="Instructions"
                   value={instructions.trim() ? "Set" : "Platform default"}
                 />
                 <SummaryItem
-                  label="Equipped"
+                  label="Allowlist"
                   value={`${agentTools.length} item${agentTools.length !== 1 ? "s" : ""}`}
                 />
                 <SummaryItem
@@ -1310,7 +1259,7 @@ export function AgentBuilder({
               ) : null}
 
               {/* Effective scope (Agent RBAC): role ceiling ∩ configuration
-                  across capabilities / graph / MCP / skills+subagents.
+                  across capabilities / graph / MCP.
                   Display-only — computed with the resolver's own exported
                   intersection helpers, never enforced here. */}
               <div className="border-t pt-4">

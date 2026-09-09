@@ -124,125 +124,6 @@ export const agentVersions = agentSchema.table(
   }),
 );
 
-// Skills (spec §6, agent-runtime epic). Logical identity + immutable
-// versions, mirroring the agents/tools/playbooks versioning pattern.
-export const skills = agentSchema.table(
-  "skills",
-  {
-    ...idMixin("skl"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    ...softDeleteMixin(),
-    name: text("name").notNull(),
-    slug: citext("slug").notNull(),
-    description: text("description"),
-    // builtin = shipped in packages/skills; tenant = workspace-authored.
-    source: citext("source").notNull(),
-    // Per-workspace enable toggle (distinct from soft-delete). Disabled skills
-    // are excluded from agent tool materialization but remain authorable.
-    enabled: boolean("enabled").notNull().default(true),
-    // Explicitly pinned active version, decoupled from skill_versions.is_latest.
-    // Same-schema FK to skill_versions.id (forward ref — Drizzle resolves lazily).
-    activeVersionId: uuid("active_version_id").references(
-      (): AnyPgColumn => skillVersions.id,
-    ),
-    // Audit of who/when last changed the active version. user-id is a
-    // cross-schema reference (auth.users) — app-enforced, no FK per storage rules.
-    activatedByUserId: uuid("activated_by_user_id"),
-    activatedAt: timestamp("activated_at", {
-      withTimezone: true,
-      mode: "date",
-    }),
-    // Fast-path list display: last invocation + total usage count.
-    lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: "date" }),
-    usageCount: integer("usage_count").notNull().default(0),
-    // Provenance for workspace-owned copies installed from a template.
-    installedFromSlug: citext("installed_from_slug"),
-  },
-  (t) => ({
-    workspaceSlugIdx: uniqueIndex("skills_workspace_slug_idx").on(
-      t.workspaceId,
-      t.slug,
-    ),
-    orgIdx: index("skills_org_idx").on(t.orgId, t.workspaceId),
-    // FK → agent.skill_versions (skills_active_version_id_skill_versions_id_fk).
-    // Index the FK so skill_versions mutations don't seq-scan skills.
-    activeVersionIdx: index("skills_active_version_idx").on(t.activeVersionId),
-  }),
-);
-
-export const skillVersions = agentSchema.table(
-  "skill_versions",
-  {
-    ...idMixin("slv"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    ...versionMixin(),
-    skillId: uuid("skill_id").notNull(),
-    body: text("body").notNull(),
-    // References from the .skill.md frontmatter (graph nodes, files, etc).
-    referencesPayload: jsonb("references_payload")
-      .notNull()
-      .default(sql`'[]'::jsonb`),
-    // Author-supplied summary of what changed in this version (commit message).
-    changeSummary: text("change_summary"),
-    // checksum: SHA-256 hex over body — immutability contract (see agent_versions).
-    checksum: text("checksum"),
-    // Markdown → TOML backfill provenance. NULL means "never converted", which
-    // is what makes the backfill idempotent. See migration
-    // 20260807090000_skill_versions_legacy_body.sql.
-    legacyBody: text("legacy_body"),
-    legacyBodyChecksum: text("legacy_body_checksum"),
-    migratedAt: timestamp("migrated_at", { withTimezone: true }),
-  },
-  (t) => ({
-    skillIdx: index("skill_versions_skill_idx").on(t.skillId),
-    skillLatestIdx: uniqueIndex("skill_versions_skill_latest_idx")
-      .on(t.skillId)
-      .where(sql`is_latest = true`),
-    skillVersionIdx: uniqueIndex("skill_versions_skill_version_idx").on(
-      t.skillId,
-      t.versionNumber,
-    ),
-    orgIdx: index("skill_versions_org_idx").on(t.orgId, t.workspaceId),
-  }),
-);
-
-// Background tasks tracking agent.task.background.* Inngest runs.
-export const backgroundTasks = agentSchema.table(
-  "background_tasks",
-  {
-    ...idMixin("bgt"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    kind: text("kind").notNull(),
-    label: text("label"),
-    inngestRunId: text("inngest_run_id").notNull().unique(),
-    status: text("status").notNull(),
-    inputPayload: jsonb("input_payload").notNull(),
-    resultPayload: jsonb("result_payload"),
-    failureReason: text("failure_reason"),
-    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
-    completedAt: timestamp("completed_at", {
-      withTimezone: true,
-      mode: "date",
-    }),
-    createdByUserId: uuid("created_by_user_id"),
-  },
-  (t) => ({
-    orgStatusIdx: index("background_tasks_org_status_idx").on(
-      t.orgId,
-      t.workspaceId,
-      t.status,
-    ),
-    orgIdx: index("background_tasks_org_idx").on(t.orgId, t.workspaceId),
-    statusCheck: check(
-      "background_tasks_status_check",
-      sql`${t.status} IN ('pending', 'running', 'completed', 'failed', 'cancelled')`,
-    ),
-  }),
-);
-
 // Approval requests: cross-domain references (execution_step_id, message_id,
 // tool_call_id) are app-enforced; FKs stay within the agent schema per
 // CLAUDE.md storage rules.
@@ -283,81 +164,6 @@ export const approvalRequests = agentSchema.table(
     riskLevelCheck: check(
       "approval_requests_risk_level_check",
       sql`${t.riskLevel} IN ('low', 'medium', 'high', 'critical')`,
-    ),
-  }),
-);
-
-// Subagent fanout aggregate; child runs join via subagent_runs.fanout_id.
-export const subagentFanouts = agentSchema.table(
-  "subagent_fanouts",
-  {
-    ...idMixin("fan"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    parentMessageId: uuid("parent_message_id").notNull(),
-    inngestEventId: text("inngest_event_id"),
-    status: text("status").notNull(),
-    totalChildren: integer("total_children").notNull(),
-    completedChildren: integer("completed_children").notNull().default(0),
-  },
-  (t) => ({
-    orgIdx: index("subagent_fanouts_org_idx").on(t.orgId, t.workspaceId),
-    parentMessageIdx: index("subagent_fanouts_parent_message_idx").on(
-      t.parentMessageId,
-    ),
-    statusCheck: check(
-      "subagent_fanouts_status_check",
-      sql`${t.status} IN ('pending', 'running', 'completed', 'partial', 'timed_out')`,
-    ),
-  }),
-);
-
-export const subagentRuns = agentSchema.table(
-  "subagent_runs",
-  {
-    ...idMixin("sar"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    fanoutId: uuid("fanout_id").notNull(),
-    childMessageId: uuid("child_message_id").notNull(),
-    capabilityName: text("capability_name").notNull(),
-    inputPayload: jsonb("input_payload").notNull(),
-    outputPayload: jsonb("output_payload"),
-    // Structural ≤280-char digest of the output, written by the executor at
-    // completion so agent.subagent.aggregate can return summaries instead of
-    // relaying full payloads into the parent LLM context
-    // (docs/specs/graph-mediated-fanout).
-    summary: text("summary"),
-    status: text("status").notNull(),
-    errorReason: text("error_reason"),
-    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
-    completedAt: timestamp("completed_at", {
-      withTimezone: true,
-      mode: "date",
-    }),
-    // Durable claim/lease (docs/specs/graph-mediated-fanout-phase2 §1).
-    // claimedBy = Inngest run id of the owning worker; leaseExpiresAt null means
-    // unclaimed or terminal. The lease sweeper requeues expired-lease rows until
-    // the attempt cap, so a dead worker's task is reclaimed without a coordinator.
-    claimedBy: text("claimed_by"),
-    leaseExpiresAt: timestamp("lease_expires_at", {
-      withTimezone: true,
-      mode: "date",
-    }),
-    attempts: integer("attempts").notNull().default(0),
-  },
-  (t) => ({
-    fanoutIdx: index("subagent_runs_fanout_idx").on(t.fanoutId),
-    statusIdx: index("subagent_runs_status_idx").on(t.status),
-    orgIdx: index("subagent_runs_org_idx").on(t.orgId, t.workspaceId),
-    // Partial index for the claim UPDATE and the lease sweeper — only
-    // non-terminal rows are ever scanned by either.
-    claimIdx: index("subagent_runs_claim_idx")
-      .on(t.orgId, t.status)
-      .where(sql`${t.status} IN ('pending', 'running')`),
-    statusCheck: check(
-      "subagent_runs_status_check",
-      sql`${t.status} IN ('pending', 'running', 'completed', 'failed')`,
     ),
   }),
 );
@@ -467,7 +273,7 @@ export const agentExecutionSteps = agentSchema.table(
       withTimezone: true,
       mode: "date",
     }),
-    // Durable claim/lease — same semantics as subagent_runs (spec §1): a lost
+    // Durable claim/lease (spec §1): a lost
     // worker's step becomes resweepable instead of stranding the execution.
     claimedBy: text("claimed_by"),
     leaseExpiresAt: timestamp("lease_expires_at", {
@@ -520,303 +326,27 @@ export const agentToolCalls = agentSchema.table(
   }),
 );
 
-// Durable code-agent sandbox sessions (spec §5.2 sandbox runtime).
-// One row per long-lived Modal (or future driver) sandbox; sessions are
-// reused across agent turns via session_key. snapshotId enables fast
-// restore after idle eviction. Status lifecycle: running → idle → stopped → gone.
-export const sandboxSessions = agentSchema.table(
-  "sandbox_sessions",
-  {
-    ...idMixin("sbx"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    ...softDeleteMixin(),
-    // Caller-supplied stable key (e.g. conversation id or agent-run id) used to
-    // reuse one durable sandbox across multiple agent turns. Nullable: ephemeral
-    // sandboxes (no reuse intent) carry no key.
-    sessionKey: text("session_key"),
-    // Sandbox driver identifier, e.g. "modal".
-    driver: text("driver").notNull(),
-    // Runtime image/language: node | python | shell | agent.
-    image: text("image").notNull(),
-    // Driver-issued live sandbox id (Modal `sb-...`). Mutable on restore.
-    sandboxId: text("sandbox_id").notNull(),
-    // Last filesystem snapshot id for warm restore; null before first snapshot.
-    snapshotId: text("snapshot_id"),
-    // Lifecycle status. DEFAULT 'running' — a row is created when the sandbox
-    // starts. Transitions: running → idle (TTL timer) → stopped (explicit) → gone
-    // (evicted/GC'd). CHECK constraint mirrors the IN list.
-    status: text("status").notNull().default("running"),
-    // Wall-clock of the most recent agent interaction (used by TTL logic).
-    lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: "date" }),
-    // Soft expiry: created_at + configured TTL. Null = no expiry.
-    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
-    // Arbitrary driver/caller metadata (image labels, resource class, etc.).
-    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
-    // ── Session lifecycle & work-recovery (spec: sandbox-session-lifecycle) ──
-    // Reap-eligible instant = last_used_at + grace; written when a turn releases
-    // the session to 'idle'. NULL while a turn is active ('running'), so the
-    // idle-grace reaper only ever considers genuinely released sessions.
-    graceDeadlineAt: timestamp("grace_deadline_at", {
-      withTimezone: true,
-      mode: "date",
-    }),
-    // Work-safety state, orthogonal to `status`. The reaper MUST capture
-    // uncommitted work to a recovery branch before it may flush a dirty sandbox;
-    // this column is the audit trail of that guarantee.
-    // none → pending → recovering → recovered | failed.
-    recoveryStatus: text("recovery_status").notNull().default("none"),
-    // Branch/commit the reaper pushed uncommitted work to (file recovery).
-    recoveryBranch: text("recovery_branch"),
-    recoveryCommit: text("recovery_commit"),
-    // Failure reason when recovery_status='failed' — the sandbox is RETAINED
-    // (never flushed) so the work can still be recovered manually or next tick.
-    recoveryError: text("recovery_error"),
-    recoveredAt: timestamp("recovered_at", {
-      withTimezone: true,
-      mode: "date",
-    }),
-    // When the reaper terminated the sandbox (distinct from an explicit stop).
-    flushedAt: timestamp("flushed_at", { withTimezone: true, mode: "date" }),
-    // Last-observed uncommitted-changes state (NULL = never checked). Powers the
-    // inspector's dirty indicator; the reaper always re-checks live before flush.
-    dirty: boolean("dirty"),
-    dirtyCheckedAt: timestamp("dirty_checked_at", {
-      withTimezone: true,
-      mode: "date",
-    }),
-  },
-  (t) => ({
-    orgIdx: index("sandbox_sessions_org_idx").on(t.orgId, t.workspaceId),
-    statusIdx: index("sandbox_sessions_status_idx").on(
-      t.orgId,
-      t.workspaceId,
-      t.status,
-    ),
-    // At most one live durable sandbox per (workspace, sessionKey).
-    sessionKeyUniq: uniqueIndex("sandbox_sessions_session_key_uniq")
-      .on(t.workspaceId, t.sessionKey)
-      .where(
-        sql`session_key IS NOT NULL AND status IN ('running','idle') AND deleted_at IS NULL`,
-      ),
-    // Reaper candidate scan: idle sessions past their grace deadline that the
-    // reaper has not yet flushed. Partial to stay tiny (only live-but-idle rows).
-    reapIdx: index("sandbox_sessions_reap_idx")
-      .on(t.graceDeadlineAt)
-      .where(sql`flushed_at IS NULL AND grace_deadline_at IS NOT NULL`),
-    statusCheck: check(
-      "sandbox_sessions_status_check",
-      sql`${t.status} IN ('running','idle','stopped','gone')`,
-    ),
-    recoveryStatusCheck: check(
-      "sandbox_sessions_recovery_status_check",
-      sql`${t.recoveryStatus} IN ('none','pending','recovering','recovered','failed')`,
-    ),
-    imageCheck: check(
-      "sandbox_sessions_image_check",
-      sql`${t.image} IN ('node','python','shell','agent')`,
-    ),
-  }),
-);
-
-// Agent plans: structured execution plans with approval gates.
-// Status flow: draft → awaiting_approval → approved | denied | amended → executing → completed.
-// Plans are immutable after approval.
-export const agentPlans = agentSchema.table(
-  "agent_plans",
-  {
-    ...idMixin("apl"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    status: text("status").notNull().default("draft"),
-    goals: jsonb("goals").notNull().default(sql`'[]'::jsonb`),
-    constraints: jsonb("constraints").notNull().default(sql`'[]'::jsonb`),
-    tasks: jsonb("tasks").notNull().default(sql`'[]'::jsonb`),
-    approvalRequired: boolean("approval_required").notNull().default(true),
-    messageId: uuid("message_id"),
-    approvedAt: timestamp("approved_at", { withTimezone: true, mode: "date" }),
-    approvedByUserId: uuid("approved_by_user_id"),
-    taskCount: integer("task_count").notNull().default(0),
-  },
-  (t) => ({
-    orgStatusIdx: index("agent_plans_org_status_idx").on(
-      t.orgId,
-      t.workspaceId,
-      t.status,
-    ),
-    orgIdx: index("agent_plans_org_idx").on(t.orgId, t.workspaceId),
-    messageIdx: index("agent_plans_message_idx").on(t.messageId),
-    statusCheck: check(
-      "agent_plans_status_check",
-      sql`${t.status} IN ('draft', 'awaiting_approval', 'approved', 'denied', 'amended', 'executing', 'completed')`,
-    ),
-  }),
-);
-
-// A2A (Agent2Agent) protocol tasks — durable state for the A2A transport
-// surface (POST /a2a JSON-RPC, alongside /mcp). One row per A2A task. The
-// external `public_id` (a2a_...) is the opaque `taskId` A2A clients see; the
-// caller-supplied A2A `contextId` groups tasks in one multi-turn conversation.
-// State uses the A2A lowercase wire strings (submitted/working/…); the CHECK
-// mirrors the A2A_TASK_STATES list. message_history and artifacts are stored as
-// the exact A2A wire JSON so tasks/get can round-trip them without translation.
-export const a2aTasks = agentSchema.table(
-  "a2a_tasks",
-  {
-    ...idMixin("a2a"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    ...softDeleteMixin(),
-    // A2A conversation-grouping id (opaque; caller-supplied or server-minted).
-    contextId: text("context_id").notNull(),
-    // A2A task lifecycle state (lowercase wire string). DEFAULT 'submitted'.
-    state: text("state").notNull().default("submitted"),
-    // The A2A Message[] history (user turn + agent reply) as wire JSON.
-    messageHistory: jsonb("message_history")
-      .notNull()
-      .default(sql`'[]'::jsonb`),
-    // The A2A Artifact[] produced by the agent as wire JSON.
-    artifacts: jsonb("artifacts").notNull().default(sql`'[]'::jsonb`),
-    // The current TaskStatus.message (agent-facing status text), if any.
-    statusMessage: jsonb("status_message"),
-    // Terminal error detail for failed/rejected tasks (null otherwise).
-    errorMessage: text("error_message"),
-    // Arbitrary caller/agent metadata carried on the task.
-    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
-    // Which agent this task is/was addressed to (routing input — the
-    // resolved skillId target). App-enforced ref to agent.agents.id; null
-    // when the task ran the generic chat baseline (no skillId, or an
-    // unknown/inactive one, which falls back rather than 500ing).
-    agentId: uuid("agent_id"),
-  },
-  (t) => ({
-    orgIdx: index("a2a_tasks_org_idx").on(t.orgId, t.workspaceId),
-    contextIdx: index("a2a_tasks_context_idx").on(t.workspaceId, t.contextId),
-    stateIdx: index("a2a_tasks_state_idx").on(t.orgId, t.workspaceId, t.state),
-    // "List this agent's A2A tasks" — paginated per performance conventions.
-    agentIdx: index("a2a_tasks_agent_idx").on(
-      t.orgId,
-      t.workspaceId,
-      t.agentId,
-    ),
-    stateCheck: check(
-      "a2a_tasks_state_check",
-      sql`${t.state} IN ('submitted','working','input-required','auth-required','completed','canceled','failed','rejected','unknown')`,
-    ),
-  }),
-);
-
-// ── File locks — the transactional lock authority (ADR-021 §5) ──────────────
+// ── Durable agent runs — the evidence ledger's run identity ─────────────────
 //
-// File locks are mutual-exclusion state, so Postgres is the source of truth,
-// NOT Neo4j: eventual graph projection cannot provide mutual exclusion. These
-// transactional rows are the sole file-lock authority.
+// One row per governed run, across every surface, written exclusively by
+// @oxagen/run-ledger. `surface` mirrors that package's PlatformSurface union
+// so the row and the seam can never drift into two vocabularies for the same
+// thing; ADR-043 added `external` to both for a `client_attested` submission
+// that no Oxagen surface admitted interactively.
 //
-// This extends the Inngest claim/lease mechanism (subagent_runs / execution
-// steps above) to file-path granularity rather than inventing a second lock
-// system: atomic acquire (advisory-lock + conditional upsert), TTL expiry, and
-// a monotonic fencing token per resource so a stale lease-holder's late write
-// is rejected at write time (verifyFileLease). One live lock per
-// (workspace, resource_key) is enforced by the partial unique index.
-export const fileLocks = agentSchema.table(
-  "file_locks",
-  {
-    ...idMixin("flk"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    // Normalized resource identity — a repo-relative path (local CLI) or a
-    // repository-scoped github:{owner}/{repo}:{path} key (platform).
-    resourceKey: text("resource_key").notNull(),
-    // Identity of the lock holder — an agent/session/mission/fleet-task id. Two
-    // concurrent holders MUST pass different values to see each other as
-    // conflicting; re-acquiring under the SAME holder renews instead of racing.
-    holder: text("holder").notNull(),
-    // Correlates every lock a turn/execution holds, for batch release-by-execution.
-    executionId: text("execution_id").notNull(),
-    // Monotonic per (workspace_id, resource_key), sourced from file_lock_fences
-    // (below). A takeover after expiry always issues a strictly higher token, so
-    // the previous holder's late write fails verifyFileLease.
-    fencingToken: bigint("fencing_token", { mode: "number" }).notNull(),
-    action: text("action").notNull().default("write"),
-    leaseExpiresAt: timestamp("lease_expires_at", {
-      withTimezone: true,
-      mode: "date",
-    }).notNull(),
-    // Soft-release marker (NOT a soft delete): the partial unique index below
-    // keys off it, so releasing frees the resource while keeping the row for a
-    // final projection. Expired-but-unreleased rows are treated as free by
-    // acquire (takeover) and reaped by sweepExpiredFileLeases.
-    releasedAt: timestamp("released_at", { withTimezone: true, mode: "date" }),
-  },
-  (t) => ({
-    // At most ONE live lock per resource per workspace — the core invariant.
-    activeUniq: uniqueIndex("file_locks_active_uniq")
-      .on(t.workspaceId, t.resourceKey)
-      .where(sql`released_at IS NULL`),
-    orgIdx: index("file_locks_org_idx").on(t.orgId, t.workspaceId),
-    // Batch release-by-execution (turn-end backstop) scans by execution_id.
-    executionIdx: index("file_locks_execution_idx")
-      .on(t.orgId, t.executionId)
-      .where(sql`released_at IS NULL`),
-    actionCheck: check(
-      "file_locks_action_check",
-      sql`${t.action} IN ('read', 'write')`,
-    ),
-  }),
-);
-
-// Durable, monotonic fencing-token counter per resource. Lives in its own table
-// (not derived from file_locks) precisely so the counter SURVIVES release: a
-// lock row can be released/reaped, but the next acquirer of the same resource
-// must still receive a strictly higher token than any prior holder ever held.
-// Bumped only on a SUCCESSFUL acquire (INSERT ... ON CONFLICT DO UPDATE
-// current_token + 1); a denied acquire never advances it.
-export const fileLockFences = agentSchema.table(
-  "file_lock_fences",
-  {
-    id: uuid("id").primaryKey().default(uuidv7Default),
-    ...orgScopeMixin(),
-    resourceKey: text("resource_key").notNull(),
-    currentToken: bigint("current_token", { mode: "number" })
-      .notNull()
-      .default(0),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => ({
-    resourceUniq: uniqueIndex("file_lock_fences_resource_uniq").on(
-      t.workspaceId,
-      t.resourceKey,
-    ),
-    orgIdx: index("file_lock_fences_org_idx").on(t.orgId, t.workspaceId),
-  }),
-);
-
-// ── Durable agent runs (agent-engine v2 Phase 2a; docs/specs/agent-engine-v2)
+// ADR-043 (runtime excision) removed the durable worker, and with it the
+// claim/lease trio (`claimed_by` / `lease_expires_at` / `attempts`) and the
+// engine-state checkpoint pair (`checkpoint` / `checkpoint_seq`). Oxagen
+// claims nothing, leases nothing and restores no engine state: an external
+// engine executes and submits, and this row records WHO was authorized to do
+// so. Attempt bookkeeping that survives is evidence, not scheduling —
+// `attempt_count` against the pinned `max_attempts` ceiling, and
+// `active_attempt_id`.
 //
-// The run row that packages/agent-runner's executeTurn persists to starting
-// in Phase 2 (plan.md): one row per turn, across every surface. `surface`
-// mirrors agent-runner's PlatformSurface union (execute-turn.ts) so the row
-// and the seam can never drift into two vocabularies for the same thing.
-//
-// Durable claim/lease trio (claimedBy/leaseExpiresAt/attempts) is the same
-// discipline as subagentRuns above: claimedBy is the owning worker's identity,
-// a null lease means unclaimed-or-terminal, and the lease sweeper requeues
-// expired-lease rows until the attempt cap so a killed worker's run is
-// reclaimed without a coordinator. One deliberate difference from
-// subagentRuns: the claim query here is cross-org — a small dedicated worker
-// pool claims ANY pending run via withSystemDb + FOR UPDATE SKIP LOCKED, not
-// one org's queue — so agent_runs_claim_idx (below) carries no org_id prefix.
-//
-// `spec` is the serialized RunSpec (instruction, model, option snapshot) —
-// data only, never the live engine ports/callbacks a worker constructs
-// in-process from it. `checkpoint`/`checkpointSeq` hold the LATEST checkpoint
-// only (messages digest + budget/oracle/loop state, one transaction with the
-// event append per plan.md Phase 2); the full history is agent_run_events.
+// `spec` is the serialized RunSpecV2 (trusted identity, bindings, engine
+// policy) — data only, never live engine ports or callbacks. The full
+// per-attempt history is agent_run_events, which is append-only and
+// digest-chained; there is no mutable pointer summarizing it.
 export const agentRuns = agentSchema.table(
   "agent_runs",
   {
@@ -826,21 +356,12 @@ export const agentRuns = agentSchema.table(
     surface: text("surface").notNull(),
     status: text("status").notNull().default("pending"),
     spec: jsonb("spec").notNull(),
-    // Durable claim/lease — see module comment above.
-    claimedBy: text("claimed_by"),
-    leaseExpiresAt: timestamp("lease_expires_at", {
-      withTimezone: true,
-      mode: "date",
-    }),
-    attempts: integer("attempts").notNull().default(0),
-    // Latest checkpoint only; append-only history lives in agent_run_events.
-    checkpoint: jsonb("checkpoint"),
-    checkpointSeq: integer("checkpoint_seq").notNull().default(0),
     result: jsonb("result"),
     error: text("error"),
-    // Set by the cancel path; the worker observes this and drops the run
-    // future (Stella-style structured cancellation, spec.md §4.2) instead of
-    // being torn down out-of-band.
+    // Set by the cancel path. Cooperative, not enforcement: the worker that
+    // used to observe it left with ADR-043, so this is now a governance
+    // signal an external engine's drain may honour, and the record that
+    // cancellation was requested either way.
     cancelRequested: boolean("cancel_requested").notNull().default(false),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
     completedAt: timestamp("completed_at", {
@@ -891,15 +412,15 @@ export const agentRuns = agentSchema.table(
     // identity and its canonical digest, so a swapped row is detectable.
     retentionPolicyId: uuid("retention_policy_id"),
     retentionPolicyDigest: text("retention_policy_digest"),
-    // Trusted engine policy. `attempts` above stays the V1 counter; V2 bounds
-    // retries against this pinned ceiling.
+    // Trusted engine policy: the pinned ceiling `attempt_count` is bounded
+    // against. The V1 `attempts` counter it used to coexist with went with the
+    // worker in ADR-043.
     maxAttempts: integer("max_attempts"),
 
     // ── Operational V2 pointers (mutable; see the immutability trigger) ──────
-    // The attempt currently holding a live lease, null between attempts.
+    // The attempt currently open (created, not yet sealed); null otherwise.
+    // Not a lease — the seal is the only fence (ADR-043).
     activeAttemptId: uuid("active_attempt_id"),
-    // Newest committed checkpoint, for successor restore.
-    latestCheckpointId: uuid("latest_checkpoint_id"),
     // Number of attempts ever created for this run, bounded by max_attempts.
     attemptCount: integer("attempt_count").notNull().default(0),
     // Next run-global event sequence to allocate. PostgreSQL-assigned inside
@@ -909,15 +430,14 @@ export const agentRuns = agentSchema.table(
   },
   (t) => ({
     orgIdx: index("agent_runs_org_idx").on(t.orgId, t.workspaceId),
-    // Cross-org on purpose (see module comment): the claim UPDATE and the
-    // lease sweeper scan across every tenant, so org_id would only shrink this
-    // index without ever appearing in their WHERE clause.
+    // Both partial indexes were cut for the worker's cross-org claim UPDATE
+    // and lease sweeper (hence no org_id prefix). Those queries left with the
+    // runtime; the indexes stay because "which runs are still open, oldest
+    // first" is now an OPERATOR question — the stuck-run and unsealed-attempt
+    // views the governance surfaces read.
     claimIdx: index("agent_runs_claim_idx")
       .on(t.status, t.createdAt)
       .where(sql`${t.status} IN ('pending', 'running')`),
-    // V2 claim dispatch: the V2 worker path claims only spec_version = 2 rows,
-    // and the V1 compatibility path only spec_version = 1, so neither scans
-    // the other's queue while both drain.
     v2ClaimIdx: index("agent_runs_v2_claim_idx")
       .on(t.status, t.createdAt)
       .where(sql`spec_version = 2 AND status IN ('pending', 'running')`),
@@ -928,9 +448,12 @@ export const agentRuns = agentSchema.table(
     parentRunIdx: index("agent_runs_parent_run_idx")
       .on(t.parentRunId)
       .where(sql`parent_run_id IS NOT NULL`),
+    // `external` is the post-ADR-043 addition: a `client_attested` submission
+    // from an engine Oxagen did not host has no interactive surface of origin.
+    // The other four are kept because historical rows carry them.
     surfaceCheck: check(
       "agent_runs_surface_check",
-      sql`${t.surface} IN ('chat', 'api-chat', 'a2a', 'repo-edit')`,
+      sql`${t.surface} IN ('chat', 'api-chat', 'a2a', 'repo-edit', 'external')`,
     ),
     statusCheck: check(
       "agent_runs_status_check",
@@ -1020,9 +543,9 @@ export const agentRuns = agentSchema.table(
 );
 
 // Append-only event log for agent_runs — the canonical source for resumable
-// SSE subscriptions, ClickHouse ingestion, and ADR-028 replay (spec.md §4.2:
-// "the event log is canonical"). Immutable child, same shape discipline as
-// file_lock_fences above: bare uuid pk (no idMixin/public_id — nothing
+// SSE subscriptions and ClickHouse ingestion (spec.md §4.2:
+// "the event log is canonical"). Immutable child: bare uuid pk
+// (no idMixin/public_id — nothing
 // external addresses one event row directly) and no updatedAt. `seq` is
 // app-assigned and monotonic per run starting at 1 — deliberately NOT a
 // serial/identity column, so the worker can assert the exact next value in
@@ -1044,7 +567,7 @@ export const agentRunEvents = agentSchema.table(
     id: uuid("id").primaryKey().default(uuidv7Default),
     ...orgScopeMixin(),
     // No cross-schema FK to agent_runs — app-enforced per CLAUDE.md storage
-    // rules (same convention as fileLocks.executionId etc. above).
+    // rules (same convention as the other cross-table ids in this schema).
     runId: uuid("run_id").notNull(),
     // 1 = legacy run-global record, 2 = fenced attempt record. Existing rows
     // backfill to 1 through the column default.
@@ -1167,9 +690,9 @@ export const agentRunEvents = agentSchema.table(
 // work. `arat_` is the public identity every API boundary and evidence receipt
 // uses. The resolved engine name/version/build digest is pinned here rather
 // than read back from a live worker, so evidence names the exact binary that
-// executed. A successor that restores an earlier attempt's checkpoint records
-// the complete restore tuple and keeps its OWN attempt identity — attempt IDs
-// are never reused (spec.md §"Attempt identity").
+// executed. A successor that resumes an earlier attempt records the restore
+// tuple and keeps its OWN attempt identity — attempt IDs are never reused
+// (spec.md §"Attempt identity").
 //
 // Immutable: append-only audit columns and the migration revokes UPDATE/DELETE.
 export const agentRunAttempts = agentSchema.table(
@@ -1182,8 +705,7 @@ export const agentRunAttempts = agentSchema.table(
     // 1-based, dense, and unique per run — the retry counter the pinned
     // max_attempts ceiling bounds.
     attemptNumber: integer("attempt_number").notNull(),
-    // Identity of the claiming worker process (same vocabulary as
-    // agent_runs.claimed_by).
+    // Identity of the external engine process that produced this attempt.
     workerId: text("worker_id").notNull(),
     claimedAt: timestamp("claimed_at", { withTimezone: true, mode: "date" })
       .notNull()
@@ -1192,11 +714,13 @@ export const agentRunAttempts = agentSchema.table(
     engineVersion: text("engine_version").notNull(),
     // Build or container-image digest of the engine that actually ran.
     engineBuildDigest: text("engine_build_digest").notNull(),
-    // ── Restore tuple: all four present, or all four absent ──────────────────
+    // ── Restore tuple: both present, or both absent ─────────────────────────
+    // The checkpoint half (`restored_checkpoint_id` / `restored_checkpoint_digest`)
+    // went with agent.agent_run_checkpoints in ADR-043: Oxagen no longer runs
+    // agents, so there is no engine state to restore — only the attempt
+    // provenance chain remains as evidence.
     resumedFromAttemptId: uuid("resumed_from_attempt_id"),
     resumedFromAttemptPublicId: citext("resumed_from_attempt_public_id"),
-    restoredCheckpointId: uuid("restored_checkpoint_id"),
-    restoredCheckpointDigest: text("restored_checkpoint_digest"),
   },
   (t) => ({
     runAttemptUniq: uniqueIndex("agent_run_attempts_run_attempt_uq").on(
@@ -1216,13 +740,9 @@ export const agentRunAttempts = agentSchema.table(
       sql`(
         ${t.resumedFromAttemptId} IS NULL
         AND ${t.resumedFromAttemptPublicId} IS NULL
-        AND ${t.restoredCheckpointId} IS NULL
-        AND ${t.restoredCheckpointDigest} IS NULL
       ) OR (
         ${t.resumedFromAttemptId} IS NOT NULL
         AND ${t.resumedFromAttemptPublicId} IS NOT NULL
-        AND ${t.restoredCheckpointId} IS NOT NULL
-        AND ${t.restoredCheckpointDigest} IS NOT NULL
       )`,
     ),
     // A successor may never restore from itself.
@@ -1232,147 +752,7 @@ export const agentRunAttempts = agentSchema.table(
     ),
     digestCheck: check(
       "agent_run_attempts_digest_check",
-      sql`${t.engineBuildDigest} ~ '^sha256:[0-9a-f]{64}$' AND (${t.restoredCheckpointDigest} IS NULL OR ${t.restoredCheckpointDigest} ~ '^sha256:[0-9a-f]{64}$')`,
-    ),
-  }),
-);
-
-// ── Mutable fenced lease (one per attempt) ───────────────────────────────────
-//
-// The ONLY mutable row in the attempt foundation, and the reason the plan calls
-// operational lease state "the exception": renew, append, and seal all update
-// it. It still denies DELETE — a fenced lease is evidence that an attempt lost
-// its claim, not garbage to collect.
-//
-// `lease_epoch` is the fencing token: unique per (run, epoch) and strictly
-// increasing, so a stale worker's late append is rejected at write time exactly
-// like agent.file_lock_fences does for file locks. `fenced_at` is the tombstone
-// the old attempt observes before it may perform any further mutation.
-export const agentRunAttemptLeases = agentSchema.table(
-  "agent_run_attempt_leases",
-  {
-    id: uuid("id").primaryKey().default(uuidv7Default),
-    ...orgScopeMixin(),
-    attemptId: uuid("attempt_id").notNull(),
-    runId: uuid("run_id").notNull(),
-    // Opaque bearer token the worker echoes on every fenced operation. Never
-    // derived from the attempt id — a leaked attempt id must not grant writes.
-    leaseToken: text("lease_token").notNull(),
-    leaseEpoch: bigint("lease_epoch", { mode: "number" }).notNull(),
-    workerId: text("worker_id").notNull(),
-    expiresAt: timestamp("expires_at", {
-      withTimezone: true,
-      mode: "date",
-    }).notNull(),
-    renewedAt: timestamp("renewed_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
-    fencedAt: timestamp("fenced_at", { withTimezone: true, mode: "date" }),
-    fencedReason: text("fenced_reason"),
-    // Advanced in the same transaction as the append, so the lease is the live
-    // pointer a successor and the finalizer both read.
-    lastRunSeq: bigint("last_run_seq", { mode: "number" }),
-    lastAttemptSeq: integer("last_attempt_seq"),
-    eventCount: integer("event_count").notNull().default(0),
-    finalEventDigest: text("final_event_digest"),
-    // Running digest over the ordered (attempt_seq, schema, type,
-    // payload_digest) tuples — the value the seal commits to.
-    eventStreamDigest: text("event_stream_digest"),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => ({
-    // Exactly one lease per attempt — a second claim must create a new attempt.
-    attemptUniq: uniqueIndex("agent_run_attempt_leases_attempt_uq").on(
-      t.attemptId,
-    ),
-    // The fencing invariant: an epoch is consumed once per run.
-    runEpochUniq: uniqueIndex("agent_run_attempt_leases_run_epoch_uq").on(
-      t.runId,
-      t.leaseEpoch,
-    ),
-    orgIdx: index("agent_run_attempt_leases_org_idx").on(
-      t.orgId,
-      t.workspaceId,
-    ),
-    // Lease-sweeper scan: live (unfenced) leases ordered by expiry. Partial so
-    // it stays proportional to running work, not to history.
-    sweepIdx: index("agent_run_attempt_leases_sweep_idx")
-      .on(t.expiresAt)
-      .where(sql`fenced_at IS NULL`),
-    epochCheck: check(
-      "agent_run_attempt_leases_epoch_check",
-      sql`${t.leaseEpoch} >= 1`,
-    ),
-    fenceCheck: check(
-      "agent_run_attempt_leases_fence_check",
-      sql`(${t.fencedAt} IS NULL AND ${t.fencedReason} IS NULL) OR (${t.fencedAt} IS NOT NULL AND ${t.fencedReason} IS NOT NULL)`,
-    ),
-    eventCountCheck: check(
-      "agent_run_attempt_leases_event_count_check",
-      sql`${t.eventCount} >= 0 AND (${t.eventCount} = 0) = (${t.finalEventDigest} IS NULL)`,
-    ),
-    digestCheck: check(
-      "agent_run_attempt_leases_digest_check",
-      sql`(${t.finalEventDigest} IS NULL OR ${t.finalEventDigest} ~ '^sha256:[0-9a-f]{64}$') AND (${t.eventStreamDigest} IS NULL OR ${t.eventStreamDigest} ~ '^sha256:[0-9a-f]{64}$')`,
-    ),
-  }),
-);
-
-// ── Immutable checkpoints ────────────────────────────────────────────────────
-//
-// Written in the SAME transaction as the append it terminates, bound to that
-// final event. Engine state itself is never stored here — it is a tenant-
-// encrypted blob referenced by public id, so a checkpoint row carries identity
-// and digests only.
-//
-// No public id by design: nothing external addresses one checkpoint. What
-// travels is `checkpoint_digest`, which the restoring successor records.
-export const agentRunCheckpoints = agentSchema.table(
-  "agent_run_checkpoints",
-  {
-    id: uuid("id").primaryKey().default(uuidv7Default),
-    ...orgScopeMixin(),
-    runId: uuid("run_id").notNull(),
-    attemptId: uuid("attempt_id").notNull(),
-    // The final event of the append this checkpoint terminates.
-    eventId: uuid("event_id").notNull(),
-    attemptSeq: integer("attempt_seq").notNull(),
-    runSeq: bigint("run_seq", { mode: "number" }).notNull(),
-    // Version of the engine-state serialization, so a restore can refuse an
-    // incompatible checkpoint rather than mis-parse it.
-    engineStateSchema: text("engine_state_schema").notNull(),
-    checkpointDigest: text("checkpoint_digest").notNull(),
-    // The attempt's stream digest as of this checkpoint — restoring a
-    // checkpoint restores a provable position in the event stream.
-    streamDigest: text("stream_digest").notNull(),
-    // `evb_` public id of the tenant-encrypted engine-state blob.
-    encryptedStateRef: text("encrypted_state_ref").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => ({
-    attemptSeqUniq: uniqueIndex("agent_run_checkpoints_attempt_seq_uq").on(
-      t.attemptId,
-      t.attemptSeq,
-    ),
-    // One checkpoint per event at most — the append transaction inserts either
-    // zero or one.
-    eventUniq: uniqueIndex("agent_run_checkpoints_event_uq").on(t.eventId),
-    orgIdx: index("agent_run_checkpoints_org_idx").on(t.orgId, t.workspaceId),
-    runSeqIdx: index("agent_run_checkpoints_run_seq_idx").on(t.runId, t.runSeq),
-    seqCheck: check(
-      "agent_run_checkpoints_seq_check",
-      sql`${t.attemptSeq} >= 1 AND ${t.runSeq} >= 1`,
-    ),
-    digestCheck: check(
-      "agent_run_checkpoints_digest_check",
-      sql`${t.checkpointDigest} ~ '^sha256:[0-9a-f]{64}$' AND ${t.streamDigest} ~ '^sha256:[0-9a-f]{64}$'`,
+      sql`${t.engineBuildDigest} ~ '^sha256:[0-9a-f]{64}$'`,
     ),
   }),
 );
@@ -1420,9 +800,12 @@ export const agentRunAttemptSeals = agentSchema.table(
       "agent_run_attempt_seals_terminal_status_check",
       sql`${t.terminalStatus} IN ('completed', 'failed', 'cancelled', 'denied', 'abandoned')`,
     ),
+    // `ingress` is the only kind a seal is written under today — evidence
+    // ingress stamps it. `worker` and `reclaimer` are the retired runtime's
+    // vocabulary, kept solely so historical rows stay valid (ADR-043).
     sealerKindCheck: check(
       "agent_run_attempt_seals_sealer_kind_check",
-      sql`${t.sealerKind} IN ('worker', 'reclaimer')`,
+      sql`${t.sealerKind} IN ('ingress', 'worker', 'reclaimer')`,
     ),
     // Zero-event seals carry no final-event evidence; non-zero seals carry all
     // of it. Anything else is an unprovable claim about the stream.
@@ -1548,10 +931,9 @@ export const agentRunFinalizationObligations = agentSchema.table(
 
 // ── Workspace agent-asset registry (stella-cutover Wave 4) ───────────────────
 //
-// Tool declarations + context records, mirroring the skills/skill_versions
-// pattern above exactly: a logical identity row keyed (workspace_id, slug)
-// plus immutable version snapshots, an explicitly pinned active_version_id,
-// and soft delete on the identity row only. Migration
+// Tool declarations + context records: a logical identity row keyed
+// (workspace_id, slug) plus immutable version snapshots, an explicitly pinned
+// active_version_id, and soft delete on the identity row only. Migration
 // 20260831120000_agent_asset_registry.sql.
 
 // Declared tool contracts (Stella ToolContract vocabulary): the JSON schema,

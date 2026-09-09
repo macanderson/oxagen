@@ -2,17 +2,17 @@ import { describe, it, expect } from "vitest";
 import {
   RATE_CARD,
   estimateCostUsd,
-} from "@oxagen/agent-engine/router/rate-card";
+} from "./rate-card";
 import { providerCostUsd, isRateCardMiss, PROVIDER_RATE_CARD } from "./pricing";
 
 /**
  * The two rate cards, held together.
  *
- * `packages/agent-engine/src/router/rate-card.ts` prices a model for the cost
- * router and for `oxagen cost`; `pricing.ts` prices the same model for the
- * credits we actually debit. They are separate files on purpose — the engine
- * ships in a standalone bin and must not pull in Stripe — so nothing but this
- * test stops them drifting, and for most of a generation of models nothing did:
+ * `rate-card.ts` prices a model for the routing policy preview and for
+ * `oxagen cost`; `pricing.ts` prices the same model for the credits we
+ * actually debit. They are separate files on purpose — the rate card is a pure
+ * table the CLI bundles without Stripe — so nothing but this test stops them
+ * drifting, and for most of a generation of models nothing did:
  * every family the router gained after `gpt-4o` was missing from the billing
  * card and billed at the Sonnet fallback instead (#1412).
  *

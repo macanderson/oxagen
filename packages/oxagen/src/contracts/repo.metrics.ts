@@ -7,7 +7,7 @@ export const repoMetrics = registerCapability({
   description: "Get sync statistics and metrics for a repository connection.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "ingestion" },
   sensitivity: "low",

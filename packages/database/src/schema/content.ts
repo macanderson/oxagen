@@ -1,9 +1,27 @@
+/**
+ * content — the blob reference/provenance row for workspace media.
+ *
+ * ADR-043 (runtime excision) retired the generation side of this domain: the
+ * `image.*` / `video.generate` / `document.*` capabilities and the
+ * `content.documents` table are gone with the runtime. What survives is the
+ * ATTACHMENT half — a user uploads a file and asks the governance agent about
+ * it, which is a governance-plane feature, not a runtime one. So this file
+ * carries exactly one table, backing `asset.upload` (its `user_upload` branch),
+ * `conversation.attachment.add` and `conversation.files.list`.
+ *
+ * The `generated` value of `source` and the `image`/`video` members of
+ * `generated_assets_kind_check` are deliberately LEFT IN PLACE: historical rows
+ * carry them, and narrowing a CHECK that existing data violates is a data
+ * migration, not a schema edit. New writes come from the upload path.
+ */
+
 import { bigint, check, index, jsonb, text, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { contentSchema } from "./_schemas";
 import { auditMixin, idMixin, orgScopeMixin, softDeleteMixin } from "./_mixins";
 
-// AI-generated media assets (image / video) produced from the in-app agent.
+// Workspace media assets — chat/agent attachments (source='user_upload') plus
+// preserved history from the retired generation path (source='generated').
 // The blob bytes live in file storage (Vercel Blob behind @oxagen/storage); this
 // row is the reference + provenance + access policy, per the four-store model.
 //
@@ -14,8 +32,8 @@ import { auditMixin, idMixin, orgScopeMixin, softDeleteMixin } from "./_mixins";
 //            shared conversation can see the asset)
 //   public — visible to anyone with the link
 // The column DEFAULTS to `user` (private); the create-path opts assets up to the
-// policy the surface wants. `status` is `ready` for synchronous image
-// generation and walks pending→ready/failed for async video renders.
+// policy the surface wants. `status` is `ready` for an upload; the
+// pending→ready/failed walk belonged to the retired async render path.
 export const generatedAssets = contentSchema.table(
   "generated_assets",
   {
@@ -27,11 +45,10 @@ export const generatedAssets = contentSchema.table(
     // policy). Distinct from auditMixin.createdByUserId (nullable audit field).
     userId: uuid("user_id").notNull(),
     kind: text("kind").notNull(),
-    // Provenance discriminator. 'generated' = produced by the in-app agent
-    // (has a real `prompt` + `model`); 'user_upload' = a chat/agent attachment
-    // the user supplied (no prompt — `prompt` defaults to ''). Reusing this
-    // table keeps conversation.files.list, the serve route, and access policy
-    // working for uploads without a second table.
+    // Provenance discriminator. 'user_upload' = a chat/agent attachment the
+    // user supplied (no prompt — `prompt` defaults to ''), the only value new
+    // writes use. 'generated' is preserved history from the retired in-app
+    // generation path (ADR-043).
     source: text("source").notNull().default("generated"),
     accessPolicy: text("access_policy").notNull().default("user"),
     status: text("status").notNull().default("ready"),
@@ -83,29 +100,5 @@ export const generatedAssets = contentSchema.table(
       "generated_assets_status_check",
       sql`${t.status} IN ('pending', 'ready', 'failed')`,
     ),
-  }),
-);
-
-// Editable text documents authored in the workspace (distinct from
-// generated_assets, which references binary blobs). Body lives inline in
-// `content`. Backs document.create / document.list / document.read.
-export const documents = contentSchema.table(
-  "documents",
-  {
-    ...idMixin("doc"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    ...softDeleteMixin(),
-    title: text("title").notNull(),
-    content: text("content").notNull().default(""),
-    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
-  },
-  (t) => ({
-    orgIdx: index("documents_org_idx").on(t.orgId, t.workspaceId),
-    // Documents list (unbounded, unindexed sort — also add .limit()! —
-    // 2026-07-11 audit §4.1 item 7).
-    workspaceCreatedIdx: index("documents_workspace_created_idx")
-      .on(t.workspaceId, t.createdAt)
-      .where(sql`${t.deletedAt} IS NULL`),
   }),
 );

@@ -3,8 +3,8 @@
  *
  * The edit counterpart to agent.definition.suggest (AI-create). Reads the
  * target agent's current config, has the model redesign it from a plain-language
- * change request — grounded in the same workspace candidates and create-agent
- * skill as suggest (see ./agent-suggest-core) — then persists the repaired
+ * change request — grounded in the same workspace candidates and authoring
+ * instructions as suggest (see ./agent-suggest-core) — then persists the repaired
  * config as a NEW unpublished version by composing agent.definition.update
  * (which bumps the version number). The agent's slug is immutable, so it is
  * never touched; publishing stays a separate explicit step, so a revision never
@@ -22,7 +22,6 @@ import {
   AgentSuggestError,
   assembleCandidates,
   buildAgentSystemPrompt,
-  loadCreateAgentSkillBody,
   repairSynthesis,
   synthesisSchema,
 } from "./agent-suggest-core";
@@ -56,7 +55,6 @@ function formatCurrentAgent(current: AgentDefinitionGetOutput): string {
     `- slug (IMMUTABLE — never change): ${current.slug}`,
     `- name: ${current.name}`,
     `- description: ${current.description ?? "(none)"}`,
-    `- agentType: ${current.agentType}`,
     "- config:",
     JSON.stringify(current.config, null, 2),
   ].join("\n");
@@ -83,12 +81,9 @@ export const agentDefinitionReviseHandler: CapabilityHandler<
   }
 
   // ── Ground the model exactly as suggest does, plus the current config ────────
-  const [skillBody, candidates] = await Promise.all([
-    loadCreateAgentSkillBody(ctx),
-    assembleCandidates(ctx),
-  ]);
+  const candidates = await assembleCandidates(ctx);
 
-  const system = buildAgentSystemPrompt(skillBody, candidates);
+  const system = buildAgentSystemPrompt(candidates);
 
   const prompt = [
     formatCurrentAgent(current),
@@ -96,7 +91,7 @@ export const agentDefinitionReviseHandler: CapabilityHandler<
     "CHANGE REQUEST:",
     input.prompt,
     "",
-    "Produce the COMPLETE revised agent configuration (not a diff) following the create-agent skill above.",
+    "Produce the COMPLETE revised agent definition (not a diff) following the authoring instructions above.",
     "Preserve everything the change request does not ask to alter. The slug is fixed and cannot change.",
     "Fill `changeSummary` with one bullet per change you made versus the current configuration.",
   ].join("\n");
@@ -134,7 +129,7 @@ export const agentDefinitionReviseHandler: CapabilityHandler<
 
   // ── Deterministic validation + repair (slug is fixed — not derived here) ─────
   const warnings: string[] = [];
-  const { config, agentType, recommendations } = repairSynthesis(
+  const { config, recommendations } = repairSynthesis(
     object,
     candidates,
     warnings,
@@ -148,7 +143,8 @@ export const agentDefinitionReviseHandler: CapabilityHandler<
       name: object.name.trim() || current.name,
       description:
         object.description.trim() || current.description || undefined,
-      agentType,
+      // agentType is deliberately not sent: ADR-043 removed code mode, so a
+      // revision never changes it — omitted leaves the stored value untouched.
       config,
     },
     ctx,
@@ -160,7 +156,6 @@ export const agentDefinitionReviseHandler: CapabilityHandler<
       workspaceId: ctx.workspaceId,
       agentId: current.publicId,
       version: updated.version,
-      agentType,
       tools: config.agentTools.length,
       changes: object.changeSummary.length,
       warnings: warnings.length,

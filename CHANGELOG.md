@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Breaking
+
+- **Agent runtime excised — Oxagen governs agents, it no longer runs them** ([ADR-043](docs/adr/ADR-043-runtime-excision.md)). Removed in one cut, with their API routes, MCP tools, CLI commands, handlers, Inngest functions, app pages, e2e specs, and docs:
+  - **Packages deleted:** `agent-engine`, `agent-worker`, `sandbox`, `skills`, `agent-artifacts`, `stella-engine-client`, and the search/fetch `web` package. `agent-runner` is renamed `run-ledger` (the run/attempt/event/seal evidence ledger stays; the Stella sidecar adapter and the v1 legacy run spec go).
+  - **Capability families removed:** `agent.sandbox*`, `sandbox.template.*`, `agent.code.execute`, `agent.compose`, `agent.feature.verify`, `agent.repo.edit`, `agent.subagent*`, `agent.background_task.*`, `agent.file_lock.*`, `agent.plan.*`, `agent.skill.*`, `skill.*`, `agent.ui.render`, `browser.*`, `code.*`, `form.fill`, `archive.create`, `image.*`, `video.generate`, `svg.generate`, `mermaid.generate`, `markdown.generate`, `document.*`, `research.swarm.*`, `web.*`, `eval.*`, `automation.*`, `workflow.*`, `a2a.card.get`, and the repository *mutation* half of `repo.*` (`create`, `fork`, `file.put`, `pr.open`, `branch.create`). The A2A JSON-RPC transport itself (`.well-known/agent-card.json`, `POST /a2a`) is also removed.
+  - **Tables dropped (Postgres):** `agent.skills`, `agent.skill_versions`, `agent.background_tasks`, `agent.subagent_fanouts`, `agent.subagent_runs`, `agent.sandbox_sessions`, `agent.agent_plans`, `agent.file_locks`, `agent.file_lock_fences`, `agent.agent_run_checkpoints`, `agent.agent_run_attempt_leases`, `environments.sandbox_templates`, `environments.sandbox_template_tools`, `eval.*`, `workflow.*` (playbooks), `content.documents`, `cms.*`, `ai.batch_jobs`, `ingestion.governed_repository_selections`, `agent.a2a_tasks`.
+  - **App routes removed:** workbench sandboxes/tools-skills-tab, `/evals`, and every automations/playbooks surface.
+  - The in-app agent stays as a thin, governed turn loop (`runGovernedTurn`) over the fleet record and knowledge graph — no sandbox, no file system, no browser, no subagents. Stella (`macanderson/stella`) is the reference coding-agent implementation and engine of record going forward.
+  - Documentation updated to match: `docs/capabilities/` (deleted pages for removed capabilities, regenerated `_index.md` and `schemas/`), `apps/docs/content/docs/` (rewrote `agent/overview.mdx` and `agent/tools-and-capabilities.mdx`, deleted `security/code-execution.mdx`, `capabilities/skill.author.mdx`, and the entire `a2a/` section), `docs/CODEMAPS/*`, `docs/ONBOARDING.md`, and `README.md`.
+
 ## v2.1.1
 
 This release delivers the full **Chat UX v2** rollout — a unified session-state model, a redesigned mobile and desktop chat shell, agent/session pickers, live cost estimation, wallet/budget gating, and multimodal attachments — alongside a repair of the previously-broken skill detail surface, a workspace-governance and hot-path performance pass across the chat and billing surfaces, a documentation overhaul (README/AGENTS/CLAUDE, plus new docs content for automations, billing, knowledge graph, and environments), and a long tail of stability fixes for billing, database schema drift, and CI/e2e flakiness.

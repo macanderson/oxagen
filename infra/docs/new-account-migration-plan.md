@@ -1,5 +1,13 @@
 # New-account migration plan — from `578673726240` to `916294258235`
 
+> **D3 is withdrawn (2026-09-08, #2693).** ClickHouse's role was to move to
+> Redshift Serverless. It never did — the Redshift workgroup was provisioned
+> and left empty while ClickHouse kept serving from the app node, so the
+> migration existed in this document and nowhere else. Redshift is removed and
+> ClickHouse stays self-hosted. Rows D2, D3 and D10 and the cost table below
+> are marked where they are affected; the rest of this document still
+> describes what runs.
+
 **Status:** Cutover complete · **Old account:** `578673726240` (`us-east-1`/`us-east-2`, not yet decommissioned) · **New account:** `916294258235` (`us-east-1`)
 
 **What's actually running today (2026-08-27):** everything. All three
@@ -44,15 +52,15 @@ still apply verbatim to the new account's zones and are not repeated here.
 | # | Decision | What was chosen | Why |
 |---|---|---|---|
 | D1 | Scope | All three brands (Oxagen, Stella, CGP) | Same reasoning the old account's README gives for one account: separate accounts isolate harder and need cross-account roles for no benefit at this stage. |
-| D2 | Data layer | Aurora PostgreSQL Serverless v2 + Redshift Serverless (managed) + self-hosted Neo4j (unmanaged, on the app node) | See §3. A pure "100% Amazon" answer for the graph piece (Neptune Analytics) has a real floor cost that never reaches zero; Aurora and Redshift both now genuinely scale to ~$0 idle, so they beat self-hosting outright. |
-| D3 | ClickHouse's role | Redshift Serverless | ClickHouse Cloud has no permanent free tier (~$66/mo minimum); Redshift Serverless bills per RPU-second and auto-pauses, which is cheaper at this traffic level and keeps the "100% Amazon" stack the user asked for. |
+| D2 | Data layer | Aurora PostgreSQL Serverless v2 (managed) + self-hosted ClickHouse and Neo4j (unmanaged, on the app node). ~~Redshift Serverless~~ withdrawn, #2693 | See §3. A pure "100% Amazon" answer for the graph piece (Neptune Analytics) has a real floor cost that never reaches zero; Aurora and Redshift both now genuinely scale to ~$0 idle, so they beat self-hosting outright. |
+| D3 | ClickHouse's role | ~~Redshift Serverless~~ **withdrawn #2693 — stays self-hosted on the app node** | ClickHouse Cloud has no permanent free tier (~$66/mo minimum); Redshift Serverless bills per RPU-second and auto-pauses, which is cheaper at this traffic level and keeps the "100% Amazon" stack the user asked for. |
 | D4 | Security posture | VPC + ALB in front of the app node, node in a private subnet | User-requested, budgeted at ~$30/month. Replaces the old account's public-IP-plus-Caddy-Let's-Encrypt design with ALB-terminated ACM certs. |
 | D5 | NAT | A self-managed `t4g.nano` NAT instance, not a NAT Gateway | ~$3/month vs. ~$32-45/month for a managed gateway, at traffic levels neither would notice. |
 | D6 | Cutover | Best-effort live migration | User-approved; accepts some risk of brief disruption rather than a fully staged maintenance window. |
 | D7 | Tagging | `Brand` (per-brand, as before) + `Application = oxagen.sh` (new, umbrella) | Both set via each stack's provider `default_tags`, so neither can be missed on a new resource. |
 | D8 | Scope exclusions | arenabench (its EC2 rigs, its Route 53 zone, its S3 bucket) and the GCP-fronted `oxagen.ai` services (`admin`/`api`/`clickhouse`/`mcp`/`pgadmin`/`redis`) | arenabench was already ejected to its own repository. The GCP services were never AWS infrastructure to begin with — this is an AWS account migration, not a rehost of something that already runs elsewhere. |
 | D9 | Logging/eventing | CloudWatch Logs (all services) -> S3 archive (Firehose, Glacier Deep Archive lifecycle, 14yr) + EventBridge (errors/warnings/incidents) | User-requested. EventBridge substituted for Kafka (MSK) or Redis (ElastiCache), both named as examples of "a channel to subscribe to" — both have a real always-on floor cost; EventBridge is pay-per-event. |
-| D10 | DB recovery | Aurora: 35-day continuous backup (max allowed, no extra cost). Redshift: automatic 30-min recovery points (fixed, not configurable). Neo4j: hourly EBS snapshots (was daily). | User asked for ~1-minute RPO, offered 1-day as a cost fallback. Aurora/Redshift hit the 1-minute ask natively. Neo4j is self-hosted with no continuous-backup mechanism; true 1-minute PITR would mean building custom transaction-log shipping, judged disproportionate — hourly is the accepted middle ground, not the 1-day fallback exactly, but far tighter than it. |
+| D10 | DB recovery | Aurora: 35-day continuous backup (max allowed, no extra cost). Neo4j **and ClickHouse**: hourly EBS snapshots (was daily). The Redshift row is withdrawn with D3 (#2693) — ClickHouse's recovery is the EBS snapshot, not a managed service's. | User asked for ~1-minute RPO, offered 1-day as a cost fallback. Aurora/Redshift hit the 1-minute ask natively. Neo4j is self-hosted with no continuous-backup mechanism; true 1-minute PITR would mean building custom transaction-log shipping, judged disproportionate — hourly is the accepted middle ground, not the 1-day fallback exactly, but far tighter than it. |
 
 ---
 
@@ -91,9 +99,11 @@ is actually running is what follows):
                                           Caddy -> docs/stella/app/api/mcp
                                           Neo4j (self-hosted, EBS volume)
                                                |                |
-                                        Aurora PG          Redshift
-                                        Serverless v2      Serverless
-                                        (private subnets)  (private subnets)
+                                          ClickHouse (self-hosted, #2693)
+                                               |
+                                        Aurora PG
+                                        Serverless v2
+                                        (private subnets)
 
    NAT instance (t4g.nano, public subnet) -- outbound only, for the
    private subnets' package pulls / container images / AWS API calls.
@@ -105,11 +115,13 @@ is actually running is what follows):
   (a 2024 feature); at zero customers this is now cheaper than a dedicated
   slice of a shared self-hosted box, and it is a genuine AWS-managed
   service rather than something this repository operates.
-- **ClickHouse's role -> Redshift Serverless.** 4 RPU minimum (reduced from
-  8 in mid-2025), billed per RPU-second, auto-pauses between queries.
-  ClickHouse Cloud's ~$66/month floor made it the more expensive of the two
-  managed options, so this is the one that stayed AWS-native by cost as
-  well as by preference.
+- **ClickHouse's role -> Redshift Serverless. Withdrawn (#2693).** The
+  reasoning below was sound and was never carried out: the workgroup was
+  created, nothing was pointed at it, and ClickHouse went on serving from the
+  app node. Self-hosting it beside Neo4j costs nothing beyond the instance
+  that is already running, which is cheaper than the 4-RPU floor it was
+  compared against. Kept here because the comparison is still the one to
+  redo if the analytics load ever outgrows the node.
 - **Neo4j stays self-hosted**, on the app node's own EBS volume, not
   Neptune. This is the one place "100% Amazon" was weighed against cost and
   lost: Neptune Analytics is Amazon's only graph product with native vector
@@ -154,9 +166,9 @@ Rough, `us-east-1`, at effectively zero traffic:
 
 | Item | Old account | New account |
 |---|---|---|
-| Compute (app node) | ~$24/mo (t4g.medium, 3 engines) | ~$24/mo (t4g.medium, Neo4j only) |
+| Compute (app node) | ~$24/mo (t4g.medium, 3 engines) | ~$24/mo (t4g.medium, Neo4j + ClickHouse) |
 | Postgres | included above | ~$0-5/mo (Aurora, scales to 0 ACU) |
-| ClickHouse / Redshift | included above | ~$0-5/mo (Redshift, auto-pauses) |
+| ClickHouse | included above | included above (stays on the app node, #2693) |
 | ALB | none (Caddy terminates TLS) | ~$20/mo |
 | NAT | none (public IP, no NAT needed) | ~$3/mo (NAT instance, not a gateway) |
 | Route 53 zones | ~$2/mo (4 zones, one excluded) | ~$1/mo (2 zones this stack owns) |
@@ -234,7 +246,21 @@ user-requested tradeoffs, not drift.
 - `oxagen-platform/docs/ops/aws-deployment-plan.md` describes an
   architecture that was never built and should be corrected or retired so
   it stops reading as the current plan.
-- `tools/node/deploy-service.sh` and `tools/install-node-scripts.sh`
-  hardcode the old account's bucket name, region, and instance id. A
-  new-account variant (or a parametrized version of both) is needed before
-  the deploy pipeline can target this node.
+- `tools/install-node-scripts.sh` and `tools/node/deploy-service.sh` are
+  done (#2649). Both take the new account's node and bucket by default. The
+  old account's values survive in each as a documented fallback, so a node
+  this repository has not touched since the cutover keeps deploying — read
+  the comment above each default before changing it.
+- `tools/run-db-migrations.sh` was a deeper gap than the account ids this
+  section first described. It did not merely name the old account: it ran
+  `docker exec` against a Postgres container on the instance and read the
+  password from `/oxagen-data/postgres/password`. Neither exists here.
+  Postgres in this account is Aurora Serverless v2, reachable over the VPC
+  and not from the box's own loopback, so repointing the instance id and
+  bucket would have produced a script that connected to nothing.
+
+  Rewritten in #2652: it resolves the `oxagen-postgres` writer endpoint,
+  runs Atlas against it from the app node over SSM with no `docker exec`
+  anywhere, reads the password from `/oxagen-app/postgres/password`, and
+  reports status only unless given `--apply`. Still to do: run it against
+  the cluster once. Nobody has, so the path is written and not yet proven.

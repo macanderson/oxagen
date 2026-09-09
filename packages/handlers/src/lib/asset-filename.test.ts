@@ -27,10 +27,6 @@ describe("extensionForAsset", () => {
     );
   });
 
-  it("maps Mermaid diagram source to .mmd", () => {
-    expect(extensionForAsset("text/vnd.mermaid", "document")).toBe(".mmd");
-  });
-
   it("maps SVG to .svg", () => {
     expect(extensionForAsset("image/svg+xml", "image")).toBe(".svg");
   });
@@ -182,10 +178,6 @@ describe("assetDispositionType", () => {
     expect(assetDispositionType("application/xhtml+xml")).toBe("attachment");
     expect(assetDispositionType("text/xml")).toBe("attachment");
     expect(assetDispositionType("application/xml")).toBe("attachment");
-  });
-
-  it("serves Mermaid source inline (text/*, safe under nosniff)", () => {
-    expect(assetDispositionType("text/vnd.mermaid")).toBe("inline");
   });
 
   it("downloads office/zip binaries", () => {

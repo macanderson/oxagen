@@ -23,8 +23,6 @@ export const workspaceModelSettingsReadHandler: CapabilityHandler<
       columns: {
         defaultTextTier: true,
         defaultTextModel: true,
-        defaultImageModel: true,
-        defaultVideoModel: true,
       },
     }),
   );
@@ -37,8 +35,6 @@ export const workspaceModelSettingsReadHandler: CapabilityHandler<
     return {
       defaultTextTier: null,
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     };
   }
 
@@ -50,7 +46,5 @@ export const workspaceModelSettingsReadHandler: CapabilityHandler<
   return {
     defaultTextTier: row.defaultTextTier ?? null,
     defaultTextModel: row.defaultTextModel ?? null,
-    defaultImageModel: row.defaultImageModel ?? null,
-    defaultVideoModel: row.defaultVideoModel ?? null,
   };
 };

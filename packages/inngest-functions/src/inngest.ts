@@ -38,104 +38,6 @@ type Events = {
       } | null;
     };
   };
-  "agent/subagent.dispatch": {
-    data: {
-      orgId: string;
-      workspaceId: string;
-      fanoutId: string;
-      depth?: number;
-    };
-  };
-  "agent/subagent.fanout.completed": {
-    data: {
-      orgId: string;
-      workspaceId: string;
-      fanoutId: string;
-      status: "completed" | "partial" | "failed";
-      completedChildren: number;
-      totalChildren: number;
-    };
-  };
-  "agent/subagent.aggregate.requested": {
-    data: {
-      orgId: string;
-      workspaceId: string;
-      fanoutId: string;
-      timeoutMs?: number;
-    };
-  };
-  "agent/subagent.aggregated": {
-    data: {
-      orgId: string;
-      workspaceId: string;
-      fanoutId: string;
-      status:
-        | "pending"
-        | "running"
-        | "completed"
-        | "partial"
-        | "failed"
-        | "timed_out";
-      totalChildren: number;
-      completedChildren: number;
-    };
-  };
-  "agent/task.background.start": {
-    data: {
-      orgId: string;
-      workspaceId: string;
-      taskId: string;
-      kind: string;
-      payload: unknown;
-    };
-  };
-  "agent/task.background.cancel": {
-    data: { orgId: string; taskId: string };
-  };
-  "agent/video.render": {
-    data: {
-      /** The `generated_assets.id` UUID row to update on completion/failure. */
-      assetId: string;
-      orgId: string;
-      workspaceId: string;
-      userId: string;
-      prompt: string;
-      /**
-       * Explicit gateway model id (e.g. "google/veo-3.0-fast-generate-001").
-       * Takes precedence over `mediaTier` if non-empty.
-       */
-      model: string;
-      /** White-labeled tier fallback when `model` is not provided. */
-      mediaTier: "basic" | "advanced";
-      /** Duration hint in seconds forwarded to the video model. */
-      durationSeconds?: number;
-      /** Aspect ratio in `{width}:{height}` format. */
-      aspectRatio?: string;
-    };
-  };
-  "agent/workflow.supervisor.start": {
-    data: {
-      orgId: string;
-      workspaceId: string;
-      executionId: string;
-      maxParallelism: number;
-      maxTasksGuard: number;
-    };
-  };
-  "agent/workflow.task.execute": {
-    data: {
-      orgId: string;
-      workspaceId: string;
-      executionId: string;
-      stepId: string;
-      taskIndex: number;
-      goal: string;
-      outputFormat: "json" | "csv";
-    };
-  };
-  "agent/workflow.cancel": {
-    data: { orgId: string; executionId: string };
-  };
   "privacy/export.process": {
     data: {
       exportId: string;
@@ -276,18 +178,6 @@ type Events = {
     };
   };
 
-  // ── Playbook execution ─────────────────────────────────────────────────────
-  // Fired after a playbook_runs row is inserted (status='pending') by either
-  // automation.trigger.ts (manual/api) or playbook.trigger.match.ts (event-driven).
-  // The executor picks it up and runs the steps end-to-end.
-  "playbook/run.execute": {
-    data: {
-      runId: string;
-      orgId: string;
-      workspaceId: string;
-    };
-  };
-
   // ── Schema reconciliation ─────────────────────────────────────────────────
   // Fired by schema.reconcile.dispatch handler to kick off an async reconcile job.
   // Workers coerce existing KnowledgeNode/relationship properties to the target schema version.
@@ -301,24 +191,6 @@ type Events = {
       versionId: string;
       /** When true, properties NOT in the target schema are pruned from existing nodes. */
       prune: boolean;
-    };
-  };
-
-  // ── Evals ─────────────────────────────────────────────────────────────────
-  // Fired by the eval.run.start handler after the eval_runs row is inserted.
-  // eval.run.execute runs every dataset item through the target + judge.
-  "eval/run.start": {
-    data: {
-      orgId: string;
-      workspaceId: string;
-      /** Internal UUID of the eval.eval_runs row. */
-      runId: string;
-      /** Public ID (evr_…) — the id carried on every ClickHouse item result. */
-      runPublicId: string;
-      /** Internal UUID of the dataset whose items are evaluated. */
-      datasetId: string;
-      /** Caller-supplied cap, further clamped by the run's own itemCount. */
-      maxItems: number | null;
     };
   };
 };

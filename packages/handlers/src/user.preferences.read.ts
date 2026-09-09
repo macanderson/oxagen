@@ -13,8 +13,6 @@ const PREF_DEFAULTS = {
   pendingPromptBehavior: "queue" as const,
   defaultTextTier: null,
   defaultTextModel: null,
-  defaultImageModel: null,
-  defaultVideoModel: null,
   timezone: "UTC",
   language: "en",
 };
@@ -39,8 +37,6 @@ export const userPreferencesReadHandler: CapabilityHandler<
         pendingPromptBehavior: true,
         defaultTextTier: true,
         defaultTextModel: true,
-        defaultImageModel: true,
-        defaultVideoModel: true,
         timezone: true,
         language: true,
       },
@@ -67,8 +63,6 @@ export const userPreferencesReadHandler: CapabilityHandler<
     pendingPromptBehavior: row.pendingPromptBehavior,
     defaultTextTier: row.defaultTextTier ?? null,
     defaultTextModel: row.defaultTextModel ?? null,
-    defaultImageModel: row.defaultImageModel ?? null,
-    defaultVideoModel: row.defaultVideoModel ?? null,
     timezone: row.timezone,
     language: row.language,
   };

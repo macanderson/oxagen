@@ -1,5 +1,0 @@
-schema_version = 1
-kind = "command"
-name = "summarize"
-description = "Summarize the given file."
-prompt = "Summarize $ARGUMENTS, leading with the conclusion."

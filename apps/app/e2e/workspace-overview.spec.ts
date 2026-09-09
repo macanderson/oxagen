@@ -33,7 +33,6 @@ test("workspace overview HUD: renders every section in its zero state", async ({
   // renders (with zeros) rather than the "requires billing access" card.
   const kpiStrip = page.getByTestId("overview-kpi-strip");
   const graphHero = page.getByTestId("overview-graph-hero");
-  const automationsPanel = page.getByTestId("overview-automations-panel");
   const usagePanel = page.getByTestId("overview-usage-panel");
   const memoriesPanel = page.getByTestId("overview-memories-panel");
   const sourcesTile = page.getByTestId("overview-sources-tile");
@@ -42,7 +41,6 @@ test("workspace overview HUD: renders every section in its zero state", async ({
   await expect(kpiStrip).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId("overview-kpi-spend")).toBeVisible();
   await expect(graphHero).toBeVisible();
-  await expect(automationsPanel).toBeVisible();
   await expect(usagePanel).toBeVisible();
   await expect(memoriesPanel).toBeVisible();
   await expect(sourcesTile).toBeVisible();
@@ -50,7 +48,6 @@ test("workspace overview HUD: renders every section in its zero state", async ({
 
   // Fresh org + workspace ⇒ empty everywhere.
   await expect(graphHero.getByText(/no graph data yet/i)).toBeVisible();
-  await expect(automationsPanel.getByText(/no automations yet/i)).toBeVisible();
   await expect(usagePanel.getByText(/no usage yet/i)).toBeVisible();
   await expect(
     memoriesPanel.getByText(/no memories captured yet/i),

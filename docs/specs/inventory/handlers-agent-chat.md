@@ -1,75 +1,13 @@
 # Spec: handlers-agent-chat
 
 > Auto-extracted by spec-miner. Last mined: 2026-06-20.
-> Source: agent.compose.ts, agent.execution.record.ts, agent.subagent.logs.ts, chat.message.send.ts, chat.message.execution.ts, conversation.chat.ts, conversation.list.ts, conversation.rename.ts, conversation.archive.ts, conversation.delete.ts, conversation.purge.ts, conversation.files.list.ts
+> Source: agent.execution.record.ts, chat.message.send.ts, chat.message.execution.ts, conversation.chat.ts, conversation.list.ts, conversation.rename.ts, conversation.archive.ts, conversation.delete.ts, conversation.purge.ts, conversation.files.list.ts
 > Last verified: 2026-06-20 (commit 2f628504)
-
----
-
-### Requirement: Plan multi-step capability chains from a goal
-<!-- id: agent.compose.planChain -->
-<!-- entities: Capability, PlannedStep -->
-<!-- enforced: agent.compose.planChain() -->
-
-The agent.compose handler SHALL plan a sequence of steps to accomplish a goal by querying available agent-surface capabilities, invoking an LLM to decompose the goal into concrete steps with inputs and dependency chains, and validating steps against the capability catalog. Each step's input may reference prior step outputs using `$steps.<id>.<dotpath>` binding syntax. The plan is constrained to a maximum number of steps (typically 10).
-
-#### Scenario: Plan with valid dependencies and bindings
-<!-- test: agent.compose test("readPath reads nested dot-paths") -->
-- **WHEN** a goal is provided with no context and autoExecute is false
-- **THEN** the LLM returns a plan with one or more PlannedStep objects, each with id, capability, rationale, inputJson, and dependsOn array
-
-#### Scenario: Dependency order is validated
-<!-- test: agent.compose test("topoSort orders dependencies before dependents") -->
-- **WHEN** steps declare dependsOn relationships
-- **THEN** executePlan respects topological order and skips steps whose dependencies failed
-
----
-
-### Requirement: Execute a planned step chain with auto-safety gates
-<!-- id: agent.compose.executePlan -->
-<!-- entities: PlannedStep, Capability, ComposeStepResult -->
-<!-- enforced: agent.compose.executePlan() -->
-<!-- depends_on: Plan multi-step capability chains from a goal -->
-
-Execute a topologically-sorted plan by invoking each step's capability through the kernel (which applies IAM, billing, and entitlement gates). Each step's planned input is JSON-parsed and resolved with bindings from prior successful step outputs. Steps with failed dependencies are skipped. Destructive or approval-required capabilities are never auto-executed — they remain planned (status: "skipped" with reason). All three execution flows (success, dependency-blocked, error) return a ComposeStepResult with status, input, output/error, and durationMs.
-
-#### Scenario: Step executes successfully with resolved bindings
-<!-- test: agent.compose test("resolveBindings resolves exact-match token to raw value") -->
-- **WHEN** a step is ready to execute and prior steps succeeded with outputs
-- **THEN** bindings like `$steps.step1.nodeId` are resolved to actual values and passed to invoke()
-
-#### Scenario: Destructive capability is skipped with clear reason
-<!-- test: agent.compose test("isSafeToAutoExecute returns false for sensitivity=destructive") -->
-- **WHEN** a planned step references a capability with sensitivity="destructive" or agent.requiresApproval=true
-- **THEN** the step is marked status="skipped" with error "Capability is destructive or requires approval — not auto-executed."
-
-#### Scenario: Dependent step is skipped when prerequisite fails
-- **WHEN** a step's dependency (listed in dependsOn) has status="error" or "skipped"
-- **THEN** this step is skipped with error "A prerequisite step did not complete successfully."
-
-#### Scenario: Cyclic plan halts all steps
-<!-- test: agent.compose test("topoSort throws on cycle") -->
-- **WHEN** planned steps form a dependency cycle (e.g., step1 depends on step2, step2 depends on step1)
-- **THEN** topoSort throws and all steps are returned as status="skipped" with error "Plan contains a dependency cycle."
-
----
-
-### Requirement: Summarize a capability chain outcome for user presentation
-<!-- id: agent.compose.summarize -->
-<!-- entities: ComposeStepResult -->
-<!-- enforced: agent.compose.summarize() -->
-<!-- depends_on: Execute a planned step chain with auto-safety gates -->
-<!-- triggers: Agent composition returns plan and summary to user -->
-
-After execution (or planning dry-run), an LLM summarizes the step results in 2-4 plain-language sentences, highlighting concrete outcomes (counts, names, ids) and calling out failures. If summary generation fails, fall back to counting successes. The summary is never null — a failure to generate via LLM still returns a best-effort fallback.
-
-#### Scenario: Summary for executed plan
-- **WHEN** executed=true and some steps succeeded
-- **THEN** summary states what was accomplished and includes concrete result details
-
-#### Scenario: Summary for dry-run plan
-- **WHEN** executed=false
-- **THEN** summary describes the PROPOSED capability chain (not yet executed)
+>
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
+> `agent.compose` (plan/execute/summarize a capability chain) and
+> `agent.subagent.logs` entirely; their Requirement/Invariant sections have
+> been removed from this file rather than kept as dead prose.
 
 ---
 
@@ -371,39 +309,6 @@ Assets with accessPolicy="user" are filtered in-process after the indexed DB sca
 
 ---
 
-### Invariant: Plan execution respects topological ordering of steps
-<!-- entities: PlannedStep -->
-<!-- enforced: agent.compose.executePlan() -->
-<!-- verified_by: agent.compose test("topoSort orders dependencies before dependents") -->
-
-Steps are executed in topological order derived from dependsOn edges. If a cycle is detected, topoSort throws and all steps are marked skipped. Steps with failed or skipped dependencies are never executed.
-
-> Last verified: 2026-06-20 (commit 2f628504)
-
----
-
-### Invariant: Binding resolution preserves value types for exact-match tokens
-<!-- entities: PlannedStep -->
-<!-- enforced: agent.compose.resolveBindings() -->
-<!-- verified_by: agent.compose test("resolveBindings resolves exact-match token to raw value") -->
-
-When a planned step's input contains a string that exactly matches `$steps.<id>.<path>` (no surrounding text), the resolved value preserves its original type (object, array, number, boolean). When the token is embedded in a larger string, the value is string-interpolated.
-
-> Last verified: 2026-06-20 (commit 2f628504)
-
----
-
-### Invariant: Destructive and approval-required capabilities are never auto-executed
-<!-- entities: Capability -->
-<!-- enforced: agent.compose.executePlan() -->
-<!-- verified_by: agent.compose test("isSafeToAutoExecute returns false for destructive") -->
-
-Any capability with sensitivity="destructive" or agent.requiresApproval=true is marked status="skipped" during execution with clear reason, never actually invoked. Only safe (read-only or reversible) capabilities are auto-executed.
-
-> Last verified: 2026-06-20 (commit 2f628504)
-
----
-
 ### Invariant: Execution records are atomic across root, steps, and tool calls
 <!-- entities: AgentExecution, AgentExecutionStep, AgentToolCall -->
 <!-- enforced: agent.execution.record(), chat.message.execution() -->
@@ -421,7 +326,3 @@ All inserts for a single execution (root record, steps, tool calls) occur within
 When a new conversation receives its first message, an LLM title-generation task is spawned asynchronously outside the message-send transaction. If title generation fails, the error is logged but does not fail the message send. The message send always returns successfully regardless of title generation outcome.
 
 > Last verified: 2026-06-20 (commit 2f628504)
-
----
-
-<!-- uncertainty: agent.subagent.logs handler's markdown rendering and asset persistence are read-only side effects (building and storing a document). The Requirement covers the transformation from aggregate data to markdown and the asset write, but the buildLogMarkdown function is a pure export and the asset persistence is delegated to persistGeneratedAsset, so the behavior is surfaced via the returned asset metadata (assetId, publicId, url). Actual markdown generation and query/result formatting are implementation details rather than contract boundaries. -->

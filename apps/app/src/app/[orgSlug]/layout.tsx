@@ -19,7 +19,6 @@ import { AppShell } from "@/components/shell/app-shell";
 import type { ShellNavData } from "@/components/shell/shell-nav-slots";
 import { PageContextProvider } from "@/lib/page-context";
 import { CommandMenu } from "@/components/shell/ask/command-menu";
-import { FillOverlay } from "@/components/shell/ask/fill-overlay";
 import { OrgOnlyMount } from "@/components/shell/ask/org-only-mount";
 import { resolvedTierCatalog } from "@oxagen/ai";
 import {
@@ -266,7 +265,6 @@ export default async function OrgLayout({
         </OrgOnlyMount>
 
         {/* Fill overlay — renders AI form-fill suggestions from AskBar */}
-        <FillOverlay />
 
         {/* Unified in-app agent panel — Linear-style overlay.
             Mounted once at the org layout boundary so it persists across navigation.

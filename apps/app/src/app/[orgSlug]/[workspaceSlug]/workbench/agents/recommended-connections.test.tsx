@@ -6,9 +6,10 @@
  * The suggest action is a Next server action (not a mockable /api SSE route), so
  * the AI-generated recommendations can't be stubbed through the e2e page flow —
  * see the note in e2e/workbench-agent-ai-setup.spec.ts. This component test covers
- * the panel directly instead: each recommendation renders its name + reason +
- * kind badge, and the Connect affordance links to the right surface (MCP server
- * → developer MCP page, skill → Workbench skills page) in a new tab.
+ * the panel directly instead: each connectable recommendation renders its name +
+ * reason + kind badge, the Connect affordance links to the developer MCP page in
+ * a new tab, and (ADR-043) a `skill` recommendation is filtered out entirely
+ * because skills no longer have a surface to connect on.
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup, within } from "@testing-library/react";
@@ -23,20 +24,16 @@ const MCP_REC: AgentRecommendation = {
   name: "GitHub",
   reason: "Watches merged PRs — needs GitHub access.",
 };
-const SKILL_REC: AgentRecommendation = {
+const SKILL_REC = {
   kind: "skill",
   ref: "changelog-formatter",
   name: "Changelog Formatter",
   reason: "Formats the drafted notes; currently disabled.",
-};
+} as unknown as AgentRecommendation;
 
 function renderPanel(recommendations: AgentRecommendation[]) {
   return render(
-    <RecommendedConnections
-      recommendations={recommendations}
-      orgSlug="acme"
-      workspaceSlug="eng"
-    />,
+    <RecommendedConnections recommendations={recommendations} orgSlug="acme" />,
   );
 }
 
@@ -48,7 +45,7 @@ describe("RecommendedConnections", () => {
   });
 
   it("renders the panel heading and every recommendation's name + reason", () => {
-    renderPanel([MCP_REC, SKILL_REC]);
+    renderPanel([MCP_REC]);
     expect(screen.getByTestId("agent-recommendations")).toBeInTheDocument();
     expect(screen.getByText("Recommended connections")).toBeInTheDocument();
 
@@ -56,22 +53,14 @@ describe("RecommendedConnections", () => {
     expect(
       screen.getByText("Watches merged PRs — needs GitHub access."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Changelog Formatter")).toBeInTheDocument();
-    expect(
-      screen.getByText("Formats the drafted notes; currently disabled."),
-    ).toBeInTheDocument();
   });
 
   it("labels each recommendation with its kind badge", () => {
-    renderPanel([MCP_REC, SKILL_REC]);
+    renderPanel([MCP_REC]);
     const mcpRow = screen.getByTestId(
       "agent-recommendation-github/github-mcp-server",
     );
     expect(within(mcpRow).getByText("MCP server")).toBeInTheDocument();
-    const skillRow = screen.getByTestId(
-      "agent-recommendation-changelog-formatter",
-    );
-    expect(within(skillRow).getByText("Skill")).toBeInTheDocument();
   });
 
   it("links an MCP-server recommendation to the developer MCP page in a new tab", () => {
@@ -84,12 +73,14 @@ describe("RecommendedConnections", () => {
     expect(connect.getAttribute("rel")).toContain("noreferrer");
   });
 
-  it("links a skill recommendation to the Workbench skills page in a new tab", () => {
-    renderPanel([SKILL_REC]);
-    const connect = screen.getByTestId(
-      "agent-recommendation-connect-changelog-formatter",
-    );
-    expect(connect.getAttribute("href")).toContain("/workbench/tools/skills");
-    expect(connect.getAttribute("target")).toBe("_blank");
+  it("filters out a skill recommendation — skills are retired (ADR-043)", () => {
+    const { container } = renderPanel([SKILL_REC]);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("renders only the connectable rows when kinds are mixed", () => {
+    renderPanel([MCP_REC, SKILL_REC]);
+    expect(screen.getByText("GitHub")).toBeInTheDocument();
+    expect(screen.queryByText("Changelog Formatter")).toBeNull();
   });
 });

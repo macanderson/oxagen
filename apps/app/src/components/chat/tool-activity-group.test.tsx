@@ -45,7 +45,7 @@ vi.mock("./tool-call-card", async (importOriginal) => {
 function item(over: Partial<ToolActivityItem> = {}): ToolActivityItem {
   return {
     toolCallId: "t1",
-    capability: "search_web",
+    capability: "query_audit_log",
     inputPreview: { query: "submarines" },
     riskLevel: "low",
     status: "completed",

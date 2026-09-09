@@ -66,13 +66,6 @@ export interface GenerateTurnSuggestionsInput {
   workspaceSlug?: string;
   /** Tool calls made this turn (see `extractToolActivity`). */
   toolActivity?: TurnToolActivity[];
-  /** Files the agent changed this turn (engine `result.changedFiles`). */
-  changedFiles?: string[];
-  /**
-   * True when the turn ran under the code-mode system prompt — steers the
-   * suggestions toward engineering tasks against the real repo.
-   */
-  codeMode?: boolean;
 }
 
 // Exactly 3 suggestions. The label cap keeps the chip compact; the prompt cap
@@ -106,10 +99,9 @@ const suggestionsSchema = z.object({
 /**
  * System prompt for the next-step suggestion engine. Kept as a function (not a
  * const) to mirror the `@oxagen/ai` prompt-builder convention and keep the call
- * site tidy. `codeMode` appends a coding-session steer so suggestions become
- * engineering tasks against the actual files/errors in play.
+ * site tidy.
  */
-function suggestionSystemPrompt(opts: { codeMode: boolean }): string {
+function suggestionSystemPrompt(): string {
   const lines = [
     "You are Oxagen's next-step suggestion engine. After each assistant reply",
     "the chat UI shows exactly 3 chips; each chip is a TASK the user can hand",
@@ -153,15 +145,6 @@ function suggestionSystemPrompt(opts: { codeMode: boolean }): string {
     'that again", "what can I do here", or a restatement of work already',
     "completed this turn.",
   ];
-  if (opts.codeMode) {
-    lines.push(
-      "",
-      "This conversation is a coding session against a real repository. Every",
-      "suggestion must be an engineering task — fix, test, refactor, wire,",
-      "migrate, ship — that names the actual files, branches, commands, or",
-      "errors from the tool activity below.",
-    );
-  }
   return lines.join("\n");
 }
 
@@ -177,7 +160,6 @@ function renderTranscript(turns: SuggestionTurn[]): string {
 
 /** Caps for the activity digest — keep the grounding rich but bounded. */
 const MAX_ACTIVITY_ENTRIES = 12;
-const MAX_CHANGED_FILES = 20;
 const MAX_INPUT_PREVIEW_CHARS = 160;
 
 /**
@@ -229,13 +211,10 @@ export function extractToolActivity(
 }
 
 /**
- * Render the turn's tool activity + changed files as a prompt section. Returns
- * "" when there is nothing to report so the caller can skip the section.
+ * Render the turn's tool activity as a prompt section. Returns "" when there is
+ * nothing to report so the caller can skip the section.
  */
-export function renderTurnActivity(
-  toolActivity: TurnToolActivity[],
-  changedFiles: string[],
-): string {
+export function renderTurnActivity(toolActivity: TurnToolActivity[]): string {
   const parts: string[] = [];
 
   if (toolActivity.length > 0) {
@@ -248,14 +227,6 @@ export function renderTurnActivity(
     const dropped = toolActivity.length - shown.length;
     if (dropped > 0) lines.push(`- …and ${dropped} more tool calls`);
     parts.push(`Tool activity this turn:\n${lines.join("\n")}`);
-  }
-
-  if (changedFiles.length > 0) {
-    const shown = changedFiles.slice(0, MAX_CHANGED_FILES);
-    const lines = shown.map((f) => `- ${f}`);
-    const dropped = changedFiles.length - shown.length;
-    if (dropped > 0) lines.push(`- …and ${dropped} more files`);
-    parts.push(`Files changed this turn:\n${lines.join("\n")}`);
   }
 
   return parts.join("\n\n");
@@ -348,10 +319,7 @@ export async function generateTurnSuggestions(
   if (input.orgSlug && input.workspaceSlug) {
     sections.push(`Workspace: ${input.orgSlug}/${input.workspaceSlug}`);
   }
-  const activity = renderTurnActivity(
-    input.toolActivity ?? [],
-    input.changedFiles ?? [],
-  );
+  const activity = renderTurnActivity(input.toolActivity ?? []);
   if (activity.length > 0) sections.push(activity);
   sections.push(`Conversation so far:\n\n${renderTranscript(turns)}`);
 
@@ -359,7 +327,7 @@ export async function generateTurnSuggestions(
     const generation = generateObjectFor({
       schema: suggestionsSchema,
       model: selectModel({ tier: "fast" }),
-      system: suggestionSystemPrompt({ codeMode: input.codeMode === true }),
+      system: suggestionSystemPrompt(),
       prompt: sections.join("\n\n"),
       // A little warmth so the trio varies turn-to-turn and surfaces ideas the
       // user has not considered — but not so hot the prompts drift off-topic.

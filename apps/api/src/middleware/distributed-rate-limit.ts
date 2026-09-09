@@ -23,8 +23,7 @@ import type { AppEnv } from "../app";
  * Semantics, per request:
  *   1. Skip (pass through, no counting) unless the method is one we limit —
  *      default POST only, so cheap GET reads that share a mounted path prefix
- *      (e.g. /agent/sandbox/list under an /agent/sandbox/* mount) are never
- *      throttled.
+ *      with a limited POST are never throttled.
  *   2. Derive the bucket key: workspace > org > client IP, prefixed with the
  *      route group so surfaces never share a bucket.
  *   3. ONE atomic upsert: INSERT ... ON CONFLICT DO UPDATE count = count + 1
@@ -271,22 +270,23 @@ export function distributedRateLimiter(
 }
 
 /**
- * Per-minute budgets for the two limited surface groups, resolved from the
- * validated env once and memoized. Wrapped in a function (called at first
- * request, not module load) so importing the app never triggers env access —
- * this mirrors breaker-config.ts's `breakerEnvConfig()` and keeps route tests
- * that mock requireEnv from tripping over the limiter wiring.
+ * Per-minute budget for the chat surface, resolved from the validated env once
+ * and memoized. Wrapped in a function (called at first request, not module
+ * load) so importing the app never triggers env access — this mirrors
+ * breaker-config.ts's `breakerEnvConfig()` and keeps route tests that mock
+ * requireEnv from tripping over the limiter wiring.
+ *
+ * Chat is the only env-tunable budget left. ADR-043 excised the agent runtime,
+ * and with it every surface that drew on RATE_LIMIT_AGENT_EXEC_PER_MIN (code
+ * execution, compose, sandbox ops, background tasks, the A2A transport); that
+ * env key is retired. The ceilings that remain on non-chat surfaces are
+ * constants at their mount points, because they bound an ingress rather than a
+ * per-deployment spend appetite.
  */
-let cachedBudgets: { chat: number; agentExec: number } | null = null;
-export function rateLimitBudgets(): { chat: number; agentExec: number } {
+let cachedBudgets: { chat: number } | null = null;
+export function rateLimitBudgets(): { chat: number } {
   if (cachedBudgets) return cachedBudgets;
-  const env = requireEnv([
-    "RATE_LIMIT_CHAT_PER_MIN",
-    "RATE_LIMIT_AGENT_EXEC_PER_MIN",
-  ] as const);
-  cachedBudgets = {
-    chat: env.RATE_LIMIT_CHAT_PER_MIN,
-    agentExec: env.RATE_LIMIT_AGENT_EXEC_PER_MIN,
-  };
+  const env = requireEnv(["RATE_LIMIT_CHAT_PER_MIN"] as const);
+  cachedBudgets = { chat: env.RATE_LIMIT_CHAT_PER_MIN };
   return cachedBudgets;
 }

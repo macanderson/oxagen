@@ -33,20 +33,6 @@ onlyBuiltDependencies:
 
 ignoredBuiltDependencies:
   - "@swc/core"
-  # Optional on-device runtime (apps/cli). We deliberately skip its install-time
-  # native build: node-llama-cpp fetches its prebuilt llama.cpp binary lazily on
-  # first use (when the developer opts into an on-device coordinator), so the
-  # shared install stays light and the CLI runs fine without it.
-  - node-llama-cpp
-  # Optional local code-graph embedding backend (apps/cli, via fastembed). Its
-  # install script ONLY downloads CUDA binaries for Linux/x64 GPU acceleration
-  # (script/install.js: shouldInstall is false on every other platform+arch,
-  # a pure no-op) — the CPU binary this feature actually uses is already
-  # bundled per-platform in the npm package and required directly by path
-  # (dist/binding.js), no install-time step needed. Same shape as
-  # node-llama-cpp: skipping the script keeps the shared install light and
-  # never blocks users who don't opt into local embeddings.
-  - onnxruntime-node
 
 allowBuilds:
   "@swc/core": true
@@ -56,14 +42,9 @@ allowBuilds:
   esbuild: true
   inngest-cli: true
   lefthook: true
-  node-llama-cpp: false
-  onnxruntime-node: false
   protobufjs: true
   sharp: true
   ssh2: true
-  tree-sitter-javascript: set this to true or false
-  tree-sitter-python: set this to true or false
-  tree-sitter-typescript: set this to true or false
   unrs-resolver: true
 
 minimumReleaseAgeExclude:

@@ -9,18 +9,17 @@ const SECURITY_OUTCOMES = ["allow", "deny", "error", "success"] as const;
 /**
  * audit.log.query — make the SOC 2 audit spine agent-queryable.
  *
- * Audit events are written everywhere (security_events for capability/auth/IAM
- * activity, playbook_events for the hash-chained automation spine) but until now
- * only export paths existed. This capability lets an admin (or the agent on
+ * Audit events are written to security_events for capability/auth/IAM
+ * activity, but until now only export paths existed. This capability lets an admin (or the agent on
  * their behalf) ask "who changed the billing plan last week?" with structured
  * filters, returning a unified, time-ordered event feed. Read-only, org-scoped.
  */
 
-const auditSource = z.enum(["all", "security", "playbook"]);
+const auditSource = z.enum(["all", "security"]);
 
 const auditEvent = z.object({
   source: z
-    .enum(["security", "playbook"])
+    .enum(["security"])
     .describe("Which audit spine the event came from"),
   eventType: z
     .string()
@@ -42,26 +41,13 @@ const auditEvent = z.object({
     .nullable()
     .describe("Authz outcome for security events (allow/deny/error/success)"),
   requestId: z.string().nullable(),
-  playbookRunId: z
-    .string()
-    .nullable()
-    .describe("Playbook run id for playbook_events"),
-  sequence: z
-    .number()
-    .int()
-    .nullable()
-    .describe("Per-run monotonic counter for playbook_events"),
-  eventData: z
-    .record(z.unknown())
-    .nullable()
-    .describe("Structured payload for playbook_events"),
 });
 
 export const auditLogQuery = registerCapability({
   name: "query_audit_log",
   domain: "audit",
   description:
-    "Query the org's security and automation audit events (security_events + playbook_events) with filters — actor, capability, outcome, event type, time range — returning a unified, time-ordered feed. Read-only.",
+    "Query the org's security audit events (security_events) with filters — actor, capability, outcome, event type, time range — returning a unified, time-ordered feed. Read-only.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"] as const,
   // "app": the org Governance hub invokes this for the denied-invocation feed
@@ -97,10 +83,6 @@ export const auditLogQuery = registerCapability({
       .enum(SECURITY_OUTCOMES)
       .optional()
       .describe("Filter security events by authz outcome"),
-    playbookRunId: z
-      .string()
-      .optional()
-      .describe("Filter playbook events to a single run"),
     workspaceId: z
       .string()
       .optional()

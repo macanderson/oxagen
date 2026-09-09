@@ -47,20 +47,8 @@ vi.mock("./approval-card", () => ({
   ApprovalCard: () => <div data-testid="approval-card" />,
 }));
 
-vi.mock("./plan-card", () => ({
-  PlanCard: () => <div data-testid="plan-card" />,
-}));
-
-vi.mock("./subagent-fanout", () => ({
-  SubagentFanout: () => <div data-testid="subagent-fanout" />,
-}));
-
 vi.mock("./memory-card", () => ({
   MemoryCard: () => <div data-testid="memory-card" />,
-}));
-
-vi.mock("./code-execute-card", () => ({
-  CodeExecuteCard: () => <div data-testid="code-execute-card" />,
 }));
 
 vi.mock("./reasoning-card", () => ({
@@ -98,14 +86,6 @@ vi.mock("./markdown-message", () => ({
 // imports inside message-footer-actions (which uses "use server" / server-only).
 vi.mock("./message-footer", () => ({
   MessageFooter: () => <div data-testid="message-footer" />,
-}));
-
-vi.mock("./registry-components/image-preview", () => ({
-  default: ({ url, alt }: { url?: string; alt: string }) => (
-    <div data-testid="image-preview" data-url={url}>
-      {alt}
-    </div>
-  ),
 }));
 
 vi.mock("./registry-components/file-attachment", () => ({
@@ -251,13 +231,6 @@ describe("MessageBubble", () => {
               status: "completed",
             },
             {
-              type: "code-execute",
-              toolCallId: "tc2",
-              language: "node",
-              code: "1+1",
-              status: "failed",
-            },
-            {
               type: "approval-request",
               approvalId: "ap1",
               capability: "enable_automation",
@@ -265,20 +238,6 @@ describe("MessageBubble", () => {
               riskLevel: "high",
               expiresAt: "2026-06-12T00:00:00Z",
               resolution: "approved",
-            },
-            {
-              type: "plan",
-              planId: "pl1",
-              title: "Plan",
-              steps: [],
-              status: "pending",
-            },
-            {
-              type: "subagent-fanout",
-              fanoutId: "f1",
-              parentMessageId: "m1",
-              children: [],
-              status: "running",
             },
             { type: "memory-recall", queryId: "q1", memories: [] },
             {
@@ -295,10 +254,7 @@ describe("MessageBubble", () => {
     expect(screen.getByTestId("reasoning-card")).toBeInTheDocument();
     // The lone tool-call block renders as a (single-item) activity group.
     expect(screen.getByTestId("tool-activity-group")).toBeInTheDocument();
-    expect(screen.getByTestId("code-execute-card")).toBeInTheDocument();
     expect(screen.getByTestId("approval-card")).toBeInTheDocument();
-    expect(screen.getByTestId("plan-card")).toBeInTheDocument();
-    expect(screen.getByTestId("subagent-fanout")).toBeInTheDocument();
     expect(screen.getByTestId("memory-card")).toBeInTheDocument();
     // Registered componentId renders the real registry component (lazy path).
     expect(await screen.findByTestId("known-component")).toHaveTextContent(
@@ -323,40 +279,12 @@ describe("MessageBubble", () => {
               status: "running",
             },
             {
-              type: "code-execute",
-              toolCallId: "tc2",
-              language: "python",
-              code: "pass",
-              status: "completed",
-            },
-            {
               type: "approval-request",
               approvalId: "ap1",
               capability: "y",
               inputPreview: {},
               riskLevel: "low",
               expiresAt: "2026-06-12T00:00:00Z",
-            },
-            {
-              type: "plan",
-              planId: "pl1",
-              title: "Plan",
-              steps: [],
-              status: "approved",
-            },
-            {
-              type: "subagent-fanout",
-              fanoutId: "f1",
-              parentMessageId: "m1",
-              children: [],
-              status: "completed",
-            },
-            {
-              type: "subagent-fanout",
-              fanoutId: "f2",
-              parentMessageId: "m1",
-              children: [],
-              status: "timed_out",
             },
           ],
         }}
@@ -365,10 +293,7 @@ describe("MessageBubble", () => {
     // All blocks render inside the timeline; each card type appears.
     expect(screen.getByTestId("activity-timeline")).toBeInTheDocument();
     expect(screen.getByTestId("tool-activity-group")).toBeInTheDocument();
-    expect(screen.getByTestId("code-execute-card")).toBeInTheDocument();
     expect(screen.getByTestId("approval-card")).toBeInTheDocument();
-    expect(screen.getByTestId("plan-card")).toBeInTheDocument();
-    expect(screen.getAllByTestId("subagent-fanout")).toHaveLength(2);
   });
 
   it("merges a run of consecutive tool-call blocks into one activity group", async () => {
@@ -486,9 +411,9 @@ describe("MessageBubble", () => {
     );
     const strip = screen.getByTestId("message-attachments");
     expect(strip).toBeInTheDocument();
-    const preview = screen.getByTestId("image-preview");
-    expect(preview).toHaveAttribute("data-url", "/api/v1/assets/gen_abc");
-    expect(preview).toHaveTextContent("screenshot.png");
+    const preview = screen.getByTestId("message-image-attachment");
+    expect(preview).toHaveAttribute("src", "/api/v1/assets/gen_abc");
+    expect(preview).toHaveAttribute("alt", "screenshot.png");
   });
 
   it("renders a non-image attachment via FileAttachment", async () => {
@@ -539,6 +464,6 @@ describe("MessageBubble", () => {
         }}
       />,
     );
-    expect(screen.getAllByTestId("image-preview")).toHaveLength(2);
+    expect(screen.getAllByTestId("message-image-attachment")).toHaveLength(2);
   });
 });

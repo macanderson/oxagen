@@ -7,11 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { slugify } from "@/lib/slug";
-import {
-  useRegisterFillableForm,
-  useRegisterPageEntity,
-} from "@/lib/page-context";
-import type { FieldDescriptor } from "@/lib/ask/fill-types";
+import { useRegisterPageEntity } from "@/lib/page-context";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,42 +55,6 @@ export function OrgGeneralForm({
     label: name,
     summary: `Organization "${name}" (slug: ${slug}).`,
   });
-
-  const orgFillFields = React.useMemo<FieldDescriptor[]>(
-    () => [
-      {
-        name: "name",
-        label: "Organization name",
-        type: "text",
-        current: name,
-        required: true,
-      },
-      {
-        name: "slug",
-        label: "Organization slug",
-        type: "text",
-        current: slug,
-        required: true,
-      },
-    ],
-    [name, slug],
-  );
-
-  const applyOrgFill = React.useCallback(
-    (proposed: Record<string, unknown>) => {
-      if (typeof proposed.name === "string") setName(proposed.name);
-      if (typeof proposed.slug === "string") setSlug(slugify(proposed.slug));
-    },
-    [],
-  );
-
-  useRegisterFillableForm({
-    formId: `org-general-${orgSlug}`,
-    title: "Organization Settings",
-    fields: orgFillFields,
-    apply: applyOrgFill,
-  });
-  // ─────────────────────────────────────────────────────────────────────────
 
   // While the slug is empty, keep deriving it from the name as the user types —
   // so an emptied slug refills the moment they edit the name.

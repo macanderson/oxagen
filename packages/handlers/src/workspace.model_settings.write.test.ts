@@ -9,9 +9,7 @@ const mocks = vi.hoisted(() => ({
 
 const UPDATED_ROW = {
   defaultTextTier: "fast" as const,
-  defaultTextModel: null,
-  defaultImageModel: "bfl/flux-2-max",
-  defaultVideoModel: null,
+  defaultTextModel: "openai/gpt-5.2" as string | null,
 };
 
 // Simulate drizzle's update().set().where().returning() chain
@@ -85,28 +83,26 @@ describe("workspaceModelSettingsWriteHandler (@oxagen/handlers)", () => {
 
   it("calls update().set().where().returning() and returns updated fields", async () => {
     const result = await workspaceModelSettingsWriteHandler(
-      { defaultTextTier: "fast", defaultImageModel: "bfl/flux-2-max" },
+      { defaultTextTier: "fast", defaultTextModel: "openai/gpt-5.2" },
       CTX,
     );
     expect(mocks.updateSet).toHaveBeenCalledTimes(1);
     expect(mocks.updateReturning).toHaveBeenCalledTimes(1);
     expect(result.defaultTextTier).toBe("fast");
-    expect(result.defaultImageModel).toBe("bfl/flux-2-max");
-    expect(result.defaultTextModel).toBeNull();
-    expect(result.defaultVideoModel).toBeNull();
+    expect(result.defaultTextModel).toBe("openai/gpt-5.2");
   });
 
   // ── clearing a field (explicit null) ──────────────────────────────────────
 
   it("returns null when a field is cleared with explicit null input", async () => {
     mocks.updateReturning.mockResolvedValueOnce([
-      { ...UPDATED_ROW, defaultImageModel: null },
+      { ...UPDATED_ROW, defaultTextModel: null },
     ]);
     const result = await workspaceModelSettingsWriteHandler(
-      { defaultImageModel: null },
+      { defaultTextModel: null },
       CTX,
     );
-    expect(result.defaultImageModel).toBeNull();
+    expect(result.defaultTextModel).toBeNull();
   });
 
   // ── empty input ───────────────────────────────────────────────────────────

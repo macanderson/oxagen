@@ -12,7 +12,8 @@
     "./security": "./src/security.ts",
     "./seed": "./src/seed.ts",
     "./tenant": "./src/tenant.ts",
-    "./tenant.mock": "./src/tenant.mock.ts"
+    "./tenant.mock": "./src/tenant.mock.ts",
+    "./data-plane": "./src/data-plane-resolver.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -24,7 +25,6 @@
     "atlas:status": "atlas migrate status --env local",
     "atlas:validate": "atlas migrate validate --dir \"file://atlas/migrations\"",
     "studio": "drizzle-kit studio",
-    "db:seed-books": "tsx --env-file-if-exists=.env.local src/seed-book-editions.ts",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run --config vitest.integration.config.ts"
@@ -32,6 +32,7 @@
   "dependencies": {
     "@oxagen/compliance": "workspace:*",
     "@oxagen/config": "workspace:*",
+    "@oxagen/crypto": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",

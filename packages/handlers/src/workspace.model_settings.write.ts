@@ -39,12 +39,6 @@ export const workspaceModelSettingsWriteHandler: CapabilityHandler<
   if ("defaultTextModel" in input) {
     updateSet.defaultTextModel = input.defaultTextModel;
   }
-  if ("defaultImageModel" in input) {
-    updateSet.defaultImageModel = input.defaultImageModel;
-  }
-  if ("defaultVideoModel" in input) {
-    updateSet.defaultVideoModel = input.defaultVideoModel;
-  }
 
   const [updated] = await withTenantDb((tx) =>
     tx
@@ -54,8 +48,6 @@ export const workspaceModelSettingsWriteHandler: CapabilityHandler<
       .returning({
         defaultTextTier: schema.workspaces.defaultTextTier,
         defaultTextModel: schema.workspaces.defaultTextModel,
-        defaultImageModel: schema.workspaces.defaultImageModel,
-        defaultVideoModel: schema.workspaces.defaultVideoModel,
       }),
   );
 
@@ -75,7 +67,5 @@ export const workspaceModelSettingsWriteHandler: CapabilityHandler<
   return {
     defaultTextTier: updated.defaultTextTier ?? null,
     defaultTextModel: updated.defaultTextModel ?? null,
-    defaultImageModel: updated.defaultImageModel ?? null,
-    defaultVideoModel: updated.defaultVideoModel ?? null,
   };
 };

@@ -1,5 +1,11 @@
 # Governed Repository Edit Implementation Plan
 
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
+> `edit_repo_file`/`agent.repo.edit`, its sandbox worker, and the repo-mutation
+> capabilities (`repo.create`/`fork`/`file.put`/`pr.open`/`branch.create`) this
+> plan wires up — none of it exists in the repository anymore. Kept as
+> historical design record; see `../spec.md`'s 2026-09-07 note.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the synchronous, caller-addressed repository editor with one agent-only asynchronous admission path whose root or child run is bound to a verified GitHub repository snapshot, executes only in a sandbox, and produces complete runner/provider evidence.

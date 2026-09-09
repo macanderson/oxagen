@@ -179,55 +179,13 @@ describe("mcpServerChangesRelations", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Skill relations
+// Approval relations
 // ---------------------------------------------------------------------------
-
-describe("skillsRelations", () => {
-  it("config callback returns workspace and versions relations", () => {
-    const result = invokeConfig(allRelations.skillsRelations);
-    expect(result).toHaveProperty("workspace");
-    expect(result).toHaveProperty("versions");
-  });
-});
-
-describe("skillVersionsRelations", () => {
-  it("config callback returns skill and parentVersion relations", () => {
-    const result = invokeConfig(allRelations.skillVersionsRelations);
-    expect(result).toHaveProperty("skill");
-    expect(result).toHaveProperty("parentVersion");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Background task / approval / subagent relations
-// ---------------------------------------------------------------------------
-
-describe("backgroundTasksRelations", () => {
-  it("config callback returns workspace relation", () => {
-    const result = invokeConfig(allRelations.backgroundTasksRelations);
-    expect(result).toHaveProperty("workspace");
-  });
-});
 
 describe("approvalRequestsRelations", () => {
   it("config callback returns message relation", () => {
     const result = invokeConfig(allRelations.approvalRequestsRelations);
     expect(result).toHaveProperty("message");
-  });
-});
-
-describe("subagentFanoutsRelations", () => {
-  it("config callback returns parentMessage and runs relations", () => {
-    const result = invokeConfig(allRelations.subagentFanoutsRelations);
-    expect(result).toHaveProperty("parentMessage");
-    expect(result).toHaveProperty("runs");
-  });
-});
-
-describe("subagentRunsRelations", () => {
-  it("config callback returns fanout relation", () => {
-    const result = invokeConfig(allRelations.subagentRunsRelations);
-    expect(result).toHaveProperty("fanout");
   });
 });
 
@@ -379,11 +337,10 @@ describe("agentsRelations", () => {
 });
 
 describe("agentVersionsRelations", () => {
-  it("config callback returns agent, executions, stepRuns relations", () => {
+  it("config callback returns agent and executions relations", () => {
     const result = invokeConfig(allRelations.agentVersionsRelations);
     expect(result).toHaveProperty("agent");
     expect(result).toHaveProperty("executions");
-    expect(result).toHaveProperty("stepRuns");
   });
 });
 
@@ -409,105 +366,6 @@ describe("agentToolCallsRelations", () => {
   it("config callback returns executionStep relation", () => {
     const result = invokeConfig(allRelations.agentToolCallsRelations);
     expect(result).toHaveProperty("executionStep");
-  });
-});
-
-describe("agentPlansRelations", () => {
-  it("config callback returns workspace relation", () => {
-    const result = invokeConfig(allRelations.agentPlansRelations);
-    expect(result).toHaveProperty("workspace");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Playbook / workflow relations
-// ---------------------------------------------------------------------------
-
-describe("playbooksRelations", () => {
-  it("config callback returns workspace, versions, triggers, runs relations", () => {
-    const result = invokeConfig(allRelations.playbooksRelations);
-    expect(result).toHaveProperty("workspace");
-    expect(result).toHaveProperty("versions");
-    expect(result).toHaveProperty("triggers");
-    expect(result).toHaveProperty("runs");
-  });
-});
-
-describe("playbookVersionsRelations", () => {
-  it("config callback returns playbook, steps, edges, runs relations", () => {
-    const result = invokeConfig(allRelations.playbookVersionsRelations);
-    expect(result).toHaveProperty("playbook");
-    expect(result).toHaveProperty("steps");
-    expect(result).toHaveProperty("edges");
-    expect(result).toHaveProperty("runs");
-  });
-});
-
-describe("playbookStepsRelations", () => {
-  it("config callback returns version, outboundEdges, inboundEdges, stepRuns", () => {
-    const result = invokeConfig(allRelations.playbookStepsRelations);
-    expect(result).toHaveProperty("version");
-    expect(result).toHaveProperty("outboundEdges");
-    expect(result).toHaveProperty("inboundEdges");
-    expect(result).toHaveProperty("stepRuns");
-  });
-});
-
-describe("playbookEdgesRelations", () => {
-  it("config callback returns version, sourceStep, targetStep relations", () => {
-    const result = invokeConfig(allRelations.playbookEdgesRelations);
-    expect(result).toHaveProperty("version");
-    expect(result).toHaveProperty("sourceStep");
-    expect(result).toHaveProperty("targetStep");
-  });
-});
-
-describe("playbookTriggersRelations", () => {
-  it("config callback returns playbook and workspace relations", () => {
-    const result = invokeConfig(allRelations.playbookTriggersRelations);
-    expect(result).toHaveProperty("playbook");
-    expect(result).toHaveProperty("workspace");
-  });
-});
-
-describe("playbookRunsRelations", () => {
-  it("config callback returns playbook, version, workspace, parentRun, childRuns, stepRuns, events, approvals", () => {
-    const result = invokeConfig(allRelations.playbookRunsRelations);
-    expect(result).toHaveProperty("playbook");
-    expect(result).toHaveProperty("version");
-    expect(result).toHaveProperty("workspace");
-    expect(result).toHaveProperty("parentRun");
-    expect(result).toHaveProperty("childRuns");
-    expect(result).toHaveProperty("stepRuns");
-    expect(result).toHaveProperty("events");
-    expect(result).toHaveProperty("approvals");
-  });
-});
-
-describe("playbookStepRunsRelations", () => {
-  it("config callback returns run, step, agentVersion, events, approvals relations", () => {
-    const result = invokeConfig(allRelations.playbookStepRunsRelations);
-    expect(result).toHaveProperty("run");
-    expect(result).toHaveProperty("step");
-    expect(result).toHaveProperty("agentVersion");
-    expect(result).toHaveProperty("events");
-    expect(result).toHaveProperty("approvals");
-  });
-});
-
-describe("playbookEventsRelations", () => {
-  it("config callback returns run and stepRun relations", () => {
-    const result = invokeConfig(allRelations.playbookEventsRelations);
-    expect(result).toHaveProperty("run");
-    expect(result).toHaveProperty("stepRun");
-  });
-});
-
-describe("playbookApprovalsRelations", () => {
-  it("config callback returns run and stepRun relations", () => {
-    const result = invokeConfig(allRelations.playbookApprovalsRelations);
-    expect(result).toHaveProperty("run");
-    expect(result).toHaveProperty("stepRun");
   });
 });
 

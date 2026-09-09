@@ -23,8 +23,6 @@ afterEach(() => {
 
 const SEED: SessionSeed = {
   defaultAgentId: null,
-  defaultRepoKey: null,
-  defaultEnvId: null,
   textModel: null,
   textTier: "fast",
   budgetUsd: null,

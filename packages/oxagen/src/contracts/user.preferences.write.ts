@@ -33,8 +33,6 @@ export const userPreferencesWrite = registerCapability({
       .nullable()
       .optional(),
     defaultTextModel: z.string().min(1).nullable().optional(),
-    defaultImageModel: z.string().min(1).nullable().optional(),
-    defaultVideoModel: z.string().min(1).nullable().optional(),
     // Account locale / regional settings
     timezone: z.string().min(1).optional(),
     language: z.string().min(2).optional(),
@@ -46,8 +44,6 @@ export const userPreferencesWrite = registerCapability({
     pendingPromptBehavior: z.enum(["queue", "interrupt"]),
     defaultTextTier: z.enum(["fast", "balanced", "precise"]).nullable(),
     defaultTextModel: z.string().nullable(),
-    defaultImageModel: z.string().nullable(),
-    defaultVideoModel: z.string().nullable(),
     timezone: z.string(),
     language: z.string(),
   }),

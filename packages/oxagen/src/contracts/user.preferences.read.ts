@@ -30,8 +30,6 @@ export const userPreferencesRead = registerCapability({
     pendingPromptBehavior: z.enum(["queue", "interrupt"]),
     defaultTextTier: z.enum(["fast", "balanced", "precise"]).nullable(),
     defaultTextModel: z.string().nullable(),
-    defaultImageModel: z.string().nullable(),
-    defaultVideoModel: z.string().nullable(),
     timezone: z.string(),
     language: z.string(),
   }),

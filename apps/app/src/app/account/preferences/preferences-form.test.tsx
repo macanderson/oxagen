@@ -61,8 +61,6 @@ vi.mock("@/components/settings/model-defaults-fields", () => ({
     value: {
       textTier: string | null;
       textModel: string | null;
-      imageModel: string | null;
-      videoModel: string | null;
     };
     onChange: (v: typeof value) => void;
     disabled?: boolean;
@@ -238,8 +236,6 @@ const initialProps: React.ComponentProps<typeof PreferencesForm>["initial"] = {
   pendingPromptBehavior: "queue",
   defaultTextTier: "balanced",
   defaultTextModel: "claude-3-sonnet",
-  defaultImageModel: null,
-  defaultVideoModel: null,
   timezone: "America/New_York",
   language: "en",
 };

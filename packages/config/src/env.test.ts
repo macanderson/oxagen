@@ -232,7 +232,6 @@ describe("promoted env vars", () => {
         "INGESTION_ENCRYPTION_KEY",
         "AUDIT_EXPORT_SIGNING_SECRET",
         "PRIVACY_ERASURE_GRACE_DAYS",
-        "TAVILY_API_KEY",
       ] as const,
       {},
     );
@@ -243,7 +242,6 @@ describe("promoted env vars", () => {
     expect(env.INGESTION_ENCRYPTION_KEY).toBeUndefined();
     expect(env.AUDIT_EXPORT_SIGNING_SECRET).toBeUndefined();
     expect(env.PRIVACY_ERASURE_GRACE_DAYS).toBeUndefined();
-    expect(env.TAVILY_API_KEY).toBeUndefined();
   });
 
   it("validates NEXT_PUBLIC_DOCS_URL and MCP_URL as URLs", () => {

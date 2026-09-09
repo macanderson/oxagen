@@ -39,27 +39,15 @@ import {
 import { notifications } from "../schema/notification";
 
 import {
-  playbooks,
-  playbookVersions,
-  playbookSteps,
-  playbookEdges,
-  playbookTriggers,
-  playbookRuns,
-  playbookStepRuns,
-  playbookEvents,
-  playbookApprovals,
-} from "../schema/workflow";
-
-import {
   organizations,
   orgUsers,
   orgSlugHistory,
   invitations,
 } from "../schema/org";
 
-import { generatedAssets, documents } from "../schema/content";
-
 import { conversations, messages } from "../schema/chat";
+
+import { generatedAssets } from "../schema/content";
 
 import { githubInstallations } from "../schema/ingestion";
 
@@ -75,16 +63,10 @@ import {
 import {
   agents,
   agentVersions,
-  skills,
-  skillVersions,
-  backgroundTasks,
   approvalRequests,
-  subagentFanouts,
-  subagentRuns,
   agentExecutions,
   agentExecutionSteps,
   agentToolCalls,
-  agentPlans,
 } from "../schema/agent";
 
 // ── Helper: assert a table is defined and call getTableConfig to trigger the
@@ -233,228 +215,6 @@ describe("notification.notifications", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// workflow schema
-// ═══════════════════════════════════════════════════════════════════════════
-
-describe("workflow.playbooks", () => {
-  smokeTable(playbooks, ["id", "name", "slug", "status", "visibility"]);
-
-  it("status CHECK includes draft, active, archived", () => {
-    const checks = getChecks(playbooks);
-    const statusCheck = checks.find((c) => c.name === "playbooks_status_check");
-    expect(statusCheck).toBeDefined();
-    const sql = flattenCheckSql(statusCheck!);
-    expect(sql).toContain("draft");
-    expect(sql).toContain("active");
-    expect(sql).toContain("archived");
-  });
-
-  it("visibility CHECK includes private, workspace, organization, marketplace", () => {
-    const checks = getChecks(playbooks);
-    const visCheck = checks.find(
-      (c) => c.name === "playbooks_visibility_check",
-    );
-    expect(visCheck).toBeDefined();
-    const sql = flattenCheckSql(visCheck!);
-    for (const v of ["private", "workspace", "organization", "marketplace"]) {
-      expect(sql).toContain(v);
-    }
-  });
-});
-
-describe("workflow.playbook_versions", () => {
-  smokeTable(playbookVersions, [
-    "id",
-    "playbook_id",
-    "version",
-    "is_published",
-  ]);
-
-  it("has playbook_version_uniq unique index", () => {
-    const cfg = getTableConfig(playbookVersions);
-    const idx = cfg.indexes.find(
-      (i) => i.config.name === "playbook_versions_playbook_version_uniq",
-    );
-    expect(idx).toBeDefined();
-  });
-});
-
-describe("workflow.playbook_steps", () => {
-  smokeTable(playbookSteps, [
-    "id",
-    "playbook_version_id",
-    "step_key",
-    "step_type",
-  ]);
-
-  it("step_type CHECK includes agent and tool", () => {
-    const checks = getChecks(playbookSteps);
-    const typeCheck = checks.find(
-      (c) => c.name === "playbook_steps_step_type_check",
-    );
-    expect(typeCheck).toBeDefined();
-    const sql = flattenCheckSql(typeCheck!);
-    expect(sql).toContain("agent");
-    expect(sql).toContain("tool");
-  });
-});
-
-describe("workflow.playbook_edges", () => {
-  smokeTable(playbookEdges, [
-    "id",
-    "playbook_version_id",
-    "source_step_id",
-    "target_step_id",
-    "edge_type",
-  ]);
-
-  it("edge_type CHECK includes default and conditional", () => {
-    const checks = getChecks(playbookEdges);
-    const typeCheck = checks.find(
-      (c) => c.name === "playbook_edges_edge_type_check",
-    );
-    expect(typeCheck).toBeDefined();
-    const sql = flattenCheckSql(typeCheck!);
-    expect(sql).toContain("default");
-    expect(sql).toContain("conditional");
-  });
-});
-
-describe("workflow.playbook_triggers", () => {
-  smokeTable(playbookTriggers, [
-    "id",
-    "playbook_id",
-    "trigger_type",
-    "is_enabled",
-  ]);
-
-  it("trigger_type CHECK includes event, schedule, api", () => {
-    const checks = getChecks(playbookTriggers);
-    const typeCheck = checks.find(
-      (c) => c.name === "playbook_triggers_trigger_type_check",
-    );
-    expect(typeCheck).toBeDefined();
-    const sql = flattenCheckSql(typeCheck!);
-    for (const v of ["event", "schedule", "api"]) {
-      expect(sql).toContain(v);
-    }
-  });
-});
-
-describe("workflow.playbook_runs", () => {
-  smokeTable(playbookRuns, [
-    "id",
-    "org_id",
-    "workspace_id",
-    "playbook_id",
-    "status",
-    "source",
-  ]);
-
-  it("status CHECK includes pending, running, completed, failed, cancelled", () => {
-    const checks = getChecks(playbookRuns);
-    const statusCheck = checks.find(
-      (c) => c.name === "playbook_runs_status_check",
-    );
-    expect(statusCheck).toBeDefined();
-    const sql = flattenCheckSql(statusCheck!);
-    for (const v of [
-      "pending",
-      "running",
-      "completed",
-      "failed",
-      "cancelled",
-    ]) {
-      expect(sql).toContain(v);
-    }
-  });
-
-  it("source CHECK includes api, event, manual", () => {
-    const checks = getChecks(playbookRuns);
-    const sourceCheck = checks.find(
-      (c) => c.name === "playbook_runs_source_check",
-    );
-    expect(sourceCheck).toBeDefined();
-    const sql = flattenCheckSql(sourceCheck!);
-    for (const v of ["api", "event", "manual"]) {
-      expect(sql).toContain(v);
-    }
-  });
-});
-
-describe("workflow.playbook_step_runs", () => {
-  smokeTable(playbookStepRuns, [
-    "id",
-    "playbook_run_id",
-    "playbook_step_id",
-    "status",
-    "attempt",
-  ]);
-
-  it("status CHECK includes pending, running, completed, failed, skipped, cancelled", () => {
-    const checks = getChecks(playbookStepRuns);
-    const statusCheck = checks.find(
-      (c) => c.name === "playbook_step_runs_status_check",
-    );
-    expect(statusCheck).toBeDefined();
-    const sql = flattenCheckSql(statusCheck!);
-    for (const v of [
-      "pending",
-      "running",
-      "completed",
-      "failed",
-      "skipped",
-      "cancelled",
-    ]) {
-      expect(sql).toContain(v);
-    }
-  });
-});
-
-describe("workflow.playbook_events", () => {
-  smokeTable(playbookEvents, [
-    "id",
-    "playbook_run_id",
-    "sequence",
-    "event_type",
-    "event_hash",
-  ]);
-
-  it("event_type CHECK includes run_started, step_completed, run_completed", () => {
-    const checks = getChecks(playbookEvents);
-    const typeCheck = checks.find(
-      (c) => c.name === "playbook_events_event_type_check",
-    );
-    expect(typeCheck).toBeDefined();
-    const sql = flattenCheckSql(typeCheck!);
-    for (const v of ["run_started", "step_completed", "run_completed"]) {
-      expect(sql).toContain(v);
-    }
-  });
-});
-
-describe("workflow.playbook_approvals", () => {
-  smokeTable(playbookApprovals, [
-    "id",
-    "playbook_run_id",
-    "step_run_id",
-    "status",
-  ]);
-
-  it("status CHECK includes pending, approved, denied, expired", () => {
-    const checks = getChecks(playbookApprovals);
-    const statusCheck = checks.find(
-      (c) => c.name === "playbook_approvals_status_check",
-    );
-    expect(statusCheck).toBeDefined();
-    const sql = flattenCheckSql(statusCheck!);
-    for (const v of ["pending", "approved", "denied", "expired"]) {
-      expect(sql).toContain(v);
-    }
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
 // org schema
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -559,7 +319,7 @@ describe("org.invitations", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// content schema
+// content schema — reduced to the attachment reference row by ADR-043
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("content.generated_assets", () => {
@@ -567,6 +327,7 @@ describe("content.generated_assets", () => {
     "id",
     "user_id",
     "kind",
+    "source",
     "access_policy",
     "status",
     "storage_provider",
@@ -574,9 +335,13 @@ describe("content.generated_assets", () => {
     "mime_type",
     "prompt",
     "model",
+    "conversation_id",
+    "message_id",
   ]);
 
-  it("kind CHECK includes image, video, document", () => {
+  it("kind CHECK still admits the preserved generation kinds", () => {
+    // image/video predate ADR-043 and existing rows carry them; narrowing the
+    // CHECK would be a data migration, not a schema edit.
     const checks = getChecks(generatedAssets);
     const kindCheck = checks.find(
       (c) => c.name === "generated_assets_kind_check",
@@ -584,6 +349,18 @@ describe("content.generated_assets", () => {
     expect(kindCheck).toBeDefined();
     const sql = flattenCheckSql(kindCheck!);
     for (const v of ["image", "video", "document"]) {
+      expect(sql).toContain(v);
+    }
+  });
+
+  it("source CHECK carries both the upload and legacy-generation values", () => {
+    const checks = getChecks(generatedAssets);
+    const sourceCheck = checks.find(
+      (c) => c.name === "generated_assets_source_check",
+    );
+    expect(sourceCheck).toBeDefined();
+    const sql = flattenCheckSql(sourceCheck!);
+    for (const v of ["generated", "user_upload"]) {
       expect(sql).toContain(v);
     }
   });
@@ -611,15 +388,11 @@ describe("content.generated_assets", () => {
       expect(sql).toContain(v);
     }
   });
-});
 
-describe("content.documents", () => {
-  smokeTable(documents, ["id", "org_id", "workspace_id", "title", "content"]);
-
-  it("has org_idx index", () => {
-    const cfg = getTableConfig(documents);
-    const idx = cfg.indexes.find((i) => i.config.name === "documents_org_idx");
-    expect(idx).toBeDefined();
+  it("indexes the conversation keyset the files list paginates on", () => {
+    const cfg = getTableConfig(generatedAssets);
+    const names = cfg.indexes.map((i) => i.config.name);
+    expect(names).toContain("generated_assets_conversation_created_idx");
   });
 });
 
@@ -821,47 +594,9 @@ describe("agent.agent_versions", () => {
   });
 });
 
-describe("agent.skills", () => {
-  it("triggers getTableConfig (ExtraConfigBuilder callback)", () => {
-    const cfg = getTableConfig(skills);
-    expect(cfg).toBeDefined();
-    expect(cfg.columns.length).toBeGreaterThan(0);
-  });
-});
-
-describe("agent.skill_versions", () => {
-  it("triggers getTableConfig", () => {
-    const cfg = getTableConfig(skillVersions);
-    expect(cfg).toBeDefined();
-  });
-});
-
-describe("agent.background_tasks", () => {
-  it("triggers getTableConfig", () => {
-    const cfg = getTableConfig(backgroundTasks);
-    expect(cfg).toBeDefined();
-    const cols = cfg.columns.map((c) => c.name);
-    expect(cols).toContain("id");
-  });
-});
-
 describe("agent.approval_requests", () => {
   it("triggers getTableConfig", () => {
     const cfg = getTableConfig(approvalRequests);
-    expect(cfg).toBeDefined();
-  });
-});
-
-describe("agent.subagent_fanouts", () => {
-  it("triggers getTableConfig", () => {
-    const cfg = getTableConfig(subagentFanouts);
-    expect(cfg).toBeDefined();
-  });
-});
-
-describe("agent.subagent_runs", () => {
-  it("triggers getTableConfig", () => {
-    const cfg = getTableConfig(subagentRuns);
     expect(cfg).toBeDefined();
   });
 });
@@ -885,15 +620,6 @@ describe("agent.agent_tool_calls", () => {
   it("triggers getTableConfig", () => {
     const cfg = getTableConfig(agentToolCalls);
     expect(cfg).toBeDefined();
-  });
-});
-
-describe("agent.agent_plans", () => {
-  it("triggers getTableConfig", () => {
-    const cfg = getTableConfig(agentPlans);
-    expect(cfg).toBeDefined();
-    const cols = cfg.columns.map((c) => c.name);
-    expect(cols).toContain("id");
   });
 });
 
@@ -1043,15 +769,13 @@ describe("ingestion.github_installations", () => {
 // its ExtraConfigBuilder body actually executes (coverage) and its index /
 // constraint names are asserted rather than assumed. The behavioural
 // invariants — the V1/V2 discriminant, the one-shot grant, deny narrowing —
-// live in schema-append-only.test.ts; live-database privilege and fence
-// behaviour live in integration/run-attempt-foundation.test.ts and
+// live in schema-append-only.test.ts; live-database privilege behaviour lives
+// in integration/run-attempt-foundation.test.ts and
 // integration/authorization-foundation.test.ts.
 // ═══════════════════════════════════════════════════════════════════════════
 
 import {
   agentRunAttempts,
-  agentRunAttemptLeases,
-  agentRunCheckpoints,
   agentRunAttemptSeals,
   agentRunFinalizationGrants,
   agentRunFinalizationObligations,
@@ -1059,7 +783,6 @@ import {
 import {
   repositoryBindings,
   repositoryBindingHeads,
-  governedRepositorySelections,
 } from "../schema/ingestion";
 import { retentionPolicyVersions } from "../schema/run-evidence-foundation";
 import {
@@ -1095,71 +818,6 @@ describe("agent.agent_run_attempts", () => {
     // digest is NOT NULL alongside name and version.
     const digest = cfg.columns.find((c) => c.name === "engine_build_digest");
     expect(digest?.notNull).toBe(true);
-  });
-});
-
-describe("agent.agent_run_attempt_leases", () => {
-  const cfg = smokeTable(agentRunAttemptLeases, [
-    "id",
-    "org_id",
-    "workspace_id",
-    "attempt_id",
-    "run_id",
-    "lease_token",
-    "lease_epoch",
-    "expires_at",
-    "fenced_at",
-  ]);
-
-  it("allows exactly one lease per attempt", () => {
-    const idx = cfg.indexes.find(
-      (i) => i.config.name === "agent_run_attempt_leases_attempt_uq",
-    );
-    expect(idx?.config.unique).toBe(true);
-  });
-
-  it("consumes each fencing epoch once per run", () => {
-    const idx = cfg.indexes.find(
-      (i) => i.config.name === "agent_run_attempt_leases_run_epoch_uq",
-    );
-    expect(idx?.config.unique).toBe(true);
-  });
-
-  it("scans only unfenced leases in the sweeper index", () => {
-    const idx = cfg.indexes.find(
-      (i) => i.config.name === "agent_run_attempt_leases_sweep_idx",
-    );
-    expect(idx?.config.where).toBeDefined();
-  });
-});
-
-describe("agent.agent_run_checkpoints", () => {
-  const cfg = smokeTable(agentRunCheckpoints, [
-    "id",
-    "org_id",
-    "workspace_id",
-    "run_id",
-    "attempt_id",
-    "event_id",
-    "attempt_seq",
-    "run_seq",
-    "checkpoint_digest",
-    "stream_digest",
-    "encrypted_state_ref",
-  ]);
-
-  it("binds each checkpoint to at most one event", () => {
-    const idx = cfg.indexes.find(
-      (i) => i.config.name === "agent_run_checkpoints_event_uq",
-    );
-    expect(idx?.config.unique).toBe(true);
-  });
-
-  it("stores engine state by encrypted reference, never inline", () => {
-    const cols = cfg.columns.map((c) => c.name);
-    expect(cols).toContain("encrypted_state_ref");
-    expect(cols).not.toContain("state");
-    expect(cols).not.toContain("checkpoint");
   });
 });
 
@@ -1286,25 +944,6 @@ describe("ingestion.repository_binding_heads", () => {
   it("keeps one head per (connection, provider repository)", () => {
     const idx = cfg.indexes.find(
       (i) => i.config.name === "repository_binding_heads_repository_uq",
-    );
-    expect(idx?.config.unique).toBe(true);
-  });
-});
-
-describe("ingestion.governed_repository_selections", () => {
-  const cfg = smokeTable(governedRepositorySelections, [
-    "id",
-    "org_id",
-    "workspace_id",
-    "connection_id",
-    "primary_binding_id",
-  ]);
-
-  it("allows exactly one primary binding per governed connection", () => {
-    // A connection with several repositories and no row has no primary, so
-    // admission fails closed rather than guessing.
-    const idx = cfg.indexes.find(
-      (i) => i.config.name === "governed_repository_selections_connection_uq",
     );
     expect(idx?.config.unique).toBe(true);
   });

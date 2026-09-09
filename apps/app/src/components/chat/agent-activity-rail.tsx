@@ -2,54 +2,29 @@
 
 /**
  * AgentActivityRail — the calm, always-present right rail for a chat surface.
- * Three titled cards, each with a collapse control and a graceful ambient
- * state, so the rail is reassuring even before the first turn:
+ * Two titled cards, each with a collapse control and a graceful ambient state,
+ * so the rail is reassuring even before the first turn:
  *
- *   • Progress — the live turn as ordered stages (reuses `CodingTraceStages`),
- *     with a compact "Working · N tools" / "Turn complete" status line above.
- *   • Context — the code grounding lifted OUT of the composer footer into a
- *     persistent card: repository, branch, environment, the open PR + live CI
- *     (reuses `ComposerPrStatusChip`), and the tools this turn touched. Reads
- *     the durable `conversationCodeBinding` AND the live picker selection
- *     (`useChatSelectionContext`), so it's populated even before a turn runs.
- *   • Outputs — files the assistant generated or edited (reuses
- *     `WorkspaceContextTabs`: conversation assets + the sandbox working tree).
+ *   • Progress — the live turn as an ordered list of governed tool calls, with
+ *     a compact "Working · N tools" / "Turn complete" status line above.
+ *   • Files — the conversation's attachments (reuses `WorkspaceContextTabs`).
+ *
+ * ADR-043 removed the third card (Context): it described the repository,
+ * branch, sandbox environment, and open PR a coding turn was grounded in, and
+ * Oxagen no longer runs coding turns. In chat_ux_v2 the writable Session panel
+ * (`sessionPanelSlot`) already occupies that slot.
  *
  * Pure client composition over existing state and components — no new stream
- * events, no engine changes, no new fetches beyond the CI poll the PR chip
- * already owns.
+ * events, no engine changes, no new fetches.
  */
 
 import * as React from "react";
-import {
-  ChevronDown,
-  ListTodo,
-  FolderGit2,
-  GitBranch,
-  GitPullRequest,
-  Server,
-  Wrench,
-  FolderOpen,
-  Lock,
-} from "lucide-react";
+import { ChevronDown, ListTodo, FolderOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  CodingTraceStages,
-  groupCodingTraceStages,
-  type CodingTraceStage,
-} from "./coding-trace-panel";
 import { WorkspaceContextTabs } from "./workspace-context-panel";
-import {
-  ComposerPrStatusChip,
-  type ComposerPrStatus,
-} from "./composer-pr-status-chip";
-import { useChatSelectionContext } from "./agent-picker/chat-selection-context";
-import { useSessionSelectionBridge } from "./session/session-bridges";
-import type { LiveFanout, LivePlan, LiveToolCall } from "./use-tool-stream";
+import { toolCallMeta } from "./tool-call-meta";
+import type { LiveToolCall } from "./use-tool-stream";
 import type { TurnUsage } from "./stream-event-types";
-import type { RepoOption } from "./repo-selector";
-import type { EnvironmentOption } from "./environment-selector";
-import type { StoredCodeBinding } from "@/app/api/v1/chat/stream/code-binding";
 
 // ---------------------------------------------------------------------------
 // Shared card chrome
@@ -169,19 +144,47 @@ function useV2CardOpenState(active: boolean, hasContent: boolean) {
 // Progress card
 // ---------------------------------------------------------------------------
 
-const STAGE_KEYS: CodingTraceStage[] = [
-  "plan",
-  "tool",
-  "code",
-  "subagent",
-  "result",
-];
+/** One governed tool call, in the order the turn invoked it. */
+export interface ProgressRow {
+  toolCallId: string;
+  capability: string;
+  status: LiveToolCall["status"];
+}
+
+/**
+ * Project the reducer's `order` + `toolCalls` into the rail's ordered rows.
+ * Pure and exported so the projection is unit-testable without mounting the
+ * rail: only `tool:*` entries produce a row, in first-appearance order, and an
+ * order key whose tool call has already been evicted is skipped.
+ */
+export function progressRows(
+  order: string[],
+  toolCalls: Record<string, LiveToolCall>,
+): ProgressRow[] {
+  const rows: ProgressRow[] = [];
+  for (const key of order) {
+    if (!key.startsWith("tool:")) continue;
+    const tc = toolCalls[key.slice("tool:".length)];
+    if (!tc) continue;
+    rows.push({
+      toolCallId: tc.toolCallId,
+      capability: tc.capability,
+      status: tc.status,
+    });
+  }
+  return rows;
+}
+
+const STATUS_DOT: Record<LiveToolCall["status"], string> = {
+  pending: "bg-muted-foreground/50",
+  running: "bg-info animate-pulse",
+  completed: "bg-success",
+  failed: "bg-destructive",
+};
 
 interface ProgressCardProps {
   order: string[];
-  plans: Record<string, LivePlan>;
   toolCalls: Record<string, LiveToolCall>;
-  activeFanouts: Record<string, LiveFanout>;
   turnUsage: TurnUsage | undefined;
   isStreaming: boolean;
   /** chat_ux_v2 desktop rail: idle-collapse + auto-expand, no helper caption. */
@@ -190,28 +193,16 @@ interface ProgressCardProps {
 
 function ProgressCard({
   order,
-  plans,
   toolCalls,
-  activeFanouts,
   turnUsage,
   isStreaming,
   v2 = false,
 }: ProgressCardProps) {
-  const groups = React.useMemo(
-    () =>
-      groupCodingTraceStages({
-        order,
-        plans,
-        toolCalls,
-        activeFanouts,
-        turnUsage,
-        isStreaming,
-      }),
-    [order, plans, toolCalls, activeFanouts, turnUsage, isStreaming],
+  const rows = React.useMemo(
+    () => progressRows(order, toolCalls),
+    [order, toolCalls],
   );
-  const totalRows = STAGE_KEYS.reduce((sum, s) => sum + groups[s].length, 0);
-  const toolCount = groups.tool.length + groups.code.length;
-  const hasContent = totalRows > 0;
+  const hasContent = rows.length > 0;
   const { open, onOpenChange } = useV2CardOpenState(isStreaming, hasContent);
   const idle = v2 && !hasContent && !isStreaming;
 
@@ -221,7 +212,7 @@ function ProgressCard({
       cardId="progress"
       title={idle ? "Progress · idle" : "Progress"}
       live={isStreaming}
-      badge={hasContent ? totalRows : undefined}
+      badge={hasContent ? rows.length : undefined}
       open={v2 ? open : undefined}
       onOpenChange={v2 ? onOpenChange : undefined}
     >
@@ -242,21 +233,45 @@ function ProgressCard({
               <span className="font-medium text-foreground">
                 {isStreaming ? "Working" : "Turn complete"}
               </span>
-              {toolCount > 0 ? (
-                <span className="text-muted-foreground">
-                  · {toolCount} tool{toolCount === 1 ? "" : "s"}
-                </span>
-              ) : null}
+              <span className="text-muted-foreground">
+                · {rows.length} tool{rows.length === 1 ? "" : "s"}
+              </span>
             </div>
           ) : null}
-          <CodingTraceStages groups={groups} />
+          <ul className="flex flex-col gap-1" data-testid="progress-rows">
+            {rows.map((row) => {
+              const { label, Icon } = toolCallMeta(row.capability);
+              return (
+                <li
+                  key={row.toolCallId}
+                  className="flex items-center gap-2 text-xs"
+                  data-testid="progress-row"
+                >
+                  <span
+                    className={cn(
+                      "size-1.5 shrink-0 rounded-full",
+                      STATUS_DOT[row.status],
+                    )}
+                    aria-hidden="true"
+                  />
+                  <Icon
+                    className="size-3.5 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <span className="truncate text-foreground" title={label}>
+                    {label}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       ) : (
         <p
           className="py-2 text-center text-xs text-muted-foreground"
           data-testid="progress-empty"
         >
-          No steps yet — send a message to start a task.
+          No steps yet — send a message to start a turn.
         </p>
       )}
     </RailCard>
@@ -264,235 +279,44 @@ function ProgressCard({
 }
 
 // ---------------------------------------------------------------------------
-// Context card
+// Files card
 // ---------------------------------------------------------------------------
-
-/** A single label → value row in the Context card. */
-function ContextRow({
-  icon: Icon,
-  label,
-  children,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <Icon
-        className="size-3.5 shrink-0 text-muted-foreground"
-        aria-hidden="true"
-      />
-      <span className="w-16 shrink-0 text-muted-foreground">{label}</span>
-      <span className="flex min-w-0 flex-1 items-center gap-1 text-foreground">
-        {children}
-      </span>
-    </div>
-  );
-}
-
-interface ContextCardProps {
-  codeSessionPr: ComposerPrStatus | null;
-  availableRepos?: RepoOption[];
-  availableEnvironments?: EnvironmentOption[];
-  conversationCodeBinding?: StoredCodeBinding | null;
-  toolCalls: Record<string, LiveToolCall>;
-  orgSlug: string;
-  workspaceSlug: string;
-}
 
 /**
- * Resolve the repo the conversation is coding against: the durable binding
- * takes precedence (it survives every turn), else the live picker selection
- * resolved against `availableRepos`. Returns null when nothing is chosen yet.
- */
-export function resolveContextRepo({
-  binding,
-  selectedRepoKey,
-  availableRepos,
-}: {
-  binding: StoredCodeBinding | null;
-  selectedRepoKey: string | null;
-  availableRepos: RepoOption[];
-}): { owner: string; name: string; branch: string | null } | null {
-  if (binding) {
-    return {
-      owner: binding.owner,
-      name: binding.name,
-      branch: binding.defaultBranch,
-    };
-  }
-  if (!selectedRepoKey) return null;
-  const repo = availableRepos.find((r) => r.key === selectedRepoKey);
-  return repo
-    ? { owner: repo.owner, name: repo.name, branch: repo.defaultBranch }
-    : null;
-}
-
-function ContextCard({
-  codeSessionPr,
-  availableRepos,
-  availableEnvironments,
-  conversationCodeBinding,
-  toolCalls,
-  orgSlug,
-  workspaceSlug,
-}: ContextCardProps) {
-  // chat_ux_v2: the unified session store (when mounted) is the source of
-  // truth — the legacy selection provider is only read when no session store
-  // wraps the tree, so this card can never disagree with the composer.
-  const sessionSelection = useSessionSelectionBridge();
-  const legacySelection = useChatSelectionContext();
-  const selection = sessionSelection ?? legacySelection;
-  const binding = conversationCodeBinding ?? null;
-
-  const repo = React.useMemo(
-    () =>
-      resolveContextRepo({
-        binding,
-        selectedRepoKey: selection?.selectedRepoKey ?? null,
-        availableRepos: availableRepos ?? [],
-      }),
-    [binding, selection?.selectedRepoKey, availableRepos],
-  );
-
-  // The PR head branch (when a PR exists this turn) is the most specific; else
-  // the repo's default branch.
-  const branch = codeSessionPr?.headRef ?? repo?.branch ?? null;
-
-  const envName = React.useMemo(() => {
-    if (binding?.environmentName) return binding.environmentName;
-    const id = binding?.environmentId ?? selection?.selectedEnvId ?? null;
-    if (!id) return null;
-    return (availableEnvironments ?? []).find((e) => e.id === id)?.name ?? null;
-  }, [binding, selection?.selectedEnvId, availableEnvironments]);
-
-  const locked = binding !== null || (selection?.selectionLocked ?? false);
-
-  // Distinct capabilities the agent invoked this turn — the "tools used" tally.
-  const toolCount = React.useMemo(
-    () => new Set(Object.values(toolCalls).map((tc) => tc.capability)).size,
-    [toolCalls],
-  );
-
-  return (
-    <RailCard icon={FolderGit2} cardId="context" title="Context">
-      {repo ? (
-        <div
-          className="flex flex-col gap-2 text-xs"
-          data-testid="context-grounded"
-        >
-          <ContextRow icon={FolderGit2} label="Repo">
-            <span className="truncate font-medium">
-              {repo.owner}/{repo.name}
-            </span>
-            {locked ? (
-              <Lock
-                className="size-3 shrink-0 text-muted-foreground"
-                aria-label="Locked to this conversation"
-              />
-            ) : null}
-          </ContextRow>
-          {branch ? (
-            <ContextRow icon={GitBranch} label="Branch">
-              <span className="truncate font-mono text-[11px]">{branch}</span>
-            </ContextRow>
-          ) : null}
-          {envName ? (
-            <ContextRow icon={Server} label="Env">
-              <span className="truncate">{envName}</span>
-            </ContextRow>
-          ) : null}
-          {codeSessionPr ? (
-            <ContextRow icon={GitPullRequest} label="PR">
-              <ComposerPrStatusChip
-                pr={codeSessionPr}
-                orgSlug={orgSlug}
-                workspaceSlug={workspaceSlug}
-              />
-            </ContextRow>
-          ) : null}
-          {toolCount > 0 ? (
-            <ContextRow icon={Wrench} label="Tools">
-              <span className="tabular-nums">{toolCount} used this turn</span>
-            </ContextRow>
-          ) : null}
-        </div>
-      ) : (
-        <div
-          className="flex flex-col items-center gap-1.5 py-3 text-center"
-          data-testid="context-empty"
-        >
-          <FolderGit2
-            className="size-5 text-muted-foreground/70"
-            aria-hidden="true"
-          />
-          <p className="text-xs font-medium text-foreground">
-            Not connected to a repository
-          </p>
-          <p className="text-[11px] text-muted-foreground">
-            Pick a code agent to work against a repo, branch, and environment.
-          </p>
-        </div>
-      )}
-    </RailCard>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Outputs card
-// ---------------------------------------------------------------------------
-
-interface OutputsCardProps {
-  conversationPublicId: string | null;
-  orgSlug: string;
-  workspaceSlug: string;
-  toolCalls: Record<string, LiveToolCall>;
-  /** chat_ux_v2 desktop rail: retitles "Outputs" → "Files", idle-collapse +
-   * auto-expand, no helper caption. */
-  v2?: boolean;
-}
-
-/**
- * Capabilities that produce or edit a file the Files card would show. There is
- * no cheap "how many files does this conversation have" count available here
- * (the actual list lives behind `WorkspaceContextTabs`'s own fetch, mounted
- * only once the card is open) — so the v2 idle/auto-expand decision is driven
- * by this turn's tool-call activity instead of a real count. Known limitation:
- * a conversation reloaded from history with PRE-EXISTING files but no file
- * tool calls THIS session starts collapsed at "Files · 0" until a new one
- * fires — accepted trade-off per the desktop-rail spec.
+ * Capabilities that produce or attach a file the Files card would show. There
+ * is no cheap "how many files does this conversation have" count available
+ * here (the actual list lives behind `WorkspaceContextTabs`'s own fetch,
+ * mounted only once the card is open) — so the v2 idle/auto-expand decision is
+ * driven by this turn's tool-call activity instead of a real count. Known
+ * limitation: a conversation reloaded from history with PRE-EXISTING files but
+ * no file tool calls THIS session starts collapsed at "Files · 0" until a new
+ * one fires — accepted trade-off per the desktop-rail spec.
  */
 const FILE_ACTIVITY_CAPABILITIES = new Set([
-  "generate_image",
-  "create_image",
-  "generate_svg",
-  "generate_mermaid",
-  "generate_video",
-  "generate_markdown",
-  "generate_document",
-  "create_document",
-  "create_pdf",
-  "edit_repo_file",
-  "put_repo_file",
   "upload_asset",
   "add_conversation_attachment",
-  "start_sandbox",
 ]);
 
-function hasFileToolActivity(toolCalls: Record<string, LiveToolCall>): boolean {
+export function hasFileToolActivity(
+  toolCalls: Record<string, LiveToolCall>,
+): boolean {
   return Object.values(toolCalls).some((tc) =>
     FILE_ACTIVITY_CAPABILITIES.has(tc.capability),
   );
 }
 
-function OutputsCard({
+interface FilesCardProps {
+  conversationPublicId: string | null;
+  toolCalls: Record<string, LiveToolCall>;
+  /** chat_ux_v2 desktop rail: idle-collapse + auto-expand, no helper caption. */
+  v2?: boolean;
+}
+
+function FilesCard({
   conversationPublicId,
-  orgSlug,
-  workspaceSlug,
   toolCalls,
   v2 = false,
-}: OutputsCardProps) {
+}: FilesCardProps) {
   const hasFiles = React.useMemo(
     () => hasFileToolActivity(toolCalls),
     [toolCalls],
@@ -504,18 +328,13 @@ function OutputsCard({
     <RailCard
       icon={FolderOpen}
       cardId="outputs"
-      title={v2 ? (idle ? "Files · 0" : "Files") : "Outputs"}
+      title={v2 ? (idle ? "Files · 0" : "Files") : "Files"}
       open={v2 ? open : undefined}
       onOpenChange={v2 ? onOpenChange : undefined}
     >
-      {/* Definite height so the tabs' inner `flex-1` panels can scroll. */}
+      {/* Definite height so the panel's inner `flex-1` body can scroll. */}
       <div className="flex h-56 flex-col">
-        <WorkspaceContextTabs
-          conversationPublicId={conversationPublicId}
-          orgSlug={orgSlug}
-          workspaceSlug={workspaceSlug}
-          toolCalls={toolCalls}
-        />
+        <WorkspaceContextTabs conversationPublicId={conversationPublicId} />
       </div>
     </RailCard>
   );
@@ -528,26 +347,15 @@ function OutputsCard({
 export interface AgentActivityRailProps {
   // Progress
   order: string[];
-  plans: Record<string, LivePlan>;
   toolCalls: Record<string, LiveToolCall>;
-  activeFanouts: Record<string, LiveFanout>;
   turnUsage: TurnUsage | undefined;
   isStreaming: boolean;
-  // Outputs + Context
+  // Files
   conversationPublicId: string | null;
-  orgSlug: string;
-  workspaceSlug: string;
-  // Context (code grounding)
-  codeSessionPr: ComposerPrStatus | null;
-  availableRepos?: RepoOption[];
-  availableEnvironments?: EnvironmentOption[];
-  conversationCodeBinding?: StoredCodeBinding | null;
   className?: string;
   /**
-   * chat_ux_v2 desktop rail: renders `sessionPanelSlot` first IN PLACE of the
-   * read-only Context card (which never renders in v2 — the session panel is
-   * the writable replacement), and applies the Progress/Files idle-collapse +
-   * auto-expand behavior. Defaults to the legacy three-card rail.
+   * chat_ux_v2 desktop rail: renders `sessionPanelSlot` first and applies the
+   * Progress/Files idle-collapse + auto-expand behavior.
    */
   v2?: boolean;
   /** v2 only: the SessionSettingsRail-wrapped panel rendered before Progress. */
@@ -555,27 +363,16 @@ export interface AgentActivityRailProps {
 }
 
 /**
- * The activity rail. Legacy: three cards (Progress / Context / Outputs),
- * rendered inside `ChatSelectionProvider` so Context can read the live
- * repo/env selection — both in the desktop `<aside>` and, below `lg`, the
- * mobile bottom sheet. chat_ux_v2 desktop (`v2`): `sessionPanelSlot` / Progress
- * / Files — Context is dropped (the session panel already shows repo/branch/
- * env, writably) and Progress/Files idle-collapse with auto-expand.
+ * The activity rail: Progress + Files, rendered both in the desktop `<aside>`
+ * and, below `lg`, the mobile bottom sheet. Under chat_ux_v2 the writable
+ * session panel is rendered above them via `sessionPanelSlot`.
  */
 export function AgentActivityRail({
   order,
-  plans,
   toolCalls,
-  activeFanouts,
   turnUsage,
   isStreaming,
   conversationPublicId,
-  orgSlug,
-  workspaceSlug,
-  codeSessionPr,
-  availableRepos,
-  availableEnvironments,
-  conversationCodeBinding,
   className,
   v2 = false,
   sessionPanelSlot,
@@ -588,28 +385,13 @@ export function AgentActivityRail({
       {v2 ? sessionPanelSlot : null}
       <ProgressCard
         order={order}
-        plans={plans}
         toolCalls={toolCalls}
-        activeFanouts={activeFanouts}
         turnUsage={turnUsage}
         isStreaming={isStreaming}
         v2={v2}
       />
-      {!v2 ? (
-        <ContextCard
-          codeSessionPr={codeSessionPr}
-          availableRepos={availableRepos}
-          availableEnvironments={availableEnvironments}
-          conversationCodeBinding={conversationCodeBinding}
-          toolCalls={toolCalls}
-          orgSlug={orgSlug}
-          workspaceSlug={workspaceSlug}
-        />
-      ) : null}
-      <OutputsCard
+      <FilesCard
         conversationPublicId={conversationPublicId}
-        orgSlug={orgSlug}
-        workspaceSlug={workspaceSlug}
         toolCalls={toolCalls}
         v2={v2}
       />

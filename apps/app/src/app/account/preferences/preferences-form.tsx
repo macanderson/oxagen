@@ -38,11 +38,7 @@ import {
 } from "@/components/settings/model-defaults-fields";
 import { updatePreferencesAction } from "./preferences-action";
 import type { PreferencesInput } from "./preferences-action";
-import {
-  useRegisterFillableForm,
-  useRegisterPageEntity,
-} from "@/lib/page-context";
-import type { FieldDescriptor } from "@/lib/ask/fill-types";
+import { useRegisterPageEntity } from "@/lib/page-context";
 import { TIMEZONE_OPTIONS, LANGUAGE_OPTIONS } from "./locale-constants";
 
 // ── Props ────────────────────────────────────────────────────────────────────
@@ -55,8 +51,6 @@ export interface PreferencesFormProps {
     pendingPromptBehavior: PendingPromptBehavior;
     defaultTextTier: "fast" | "balanced" | "precise" | null;
     defaultTextModel: string | null;
-    defaultImageModel: string | null;
-    defaultVideoModel: string | null;
     timezone: string;
     language: string;
   };
@@ -82,8 +76,6 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
   const [modelDefaults, setModelDefaults] = React.useState<ModelDefaultsValue>({
     textTier: initial.defaultTextTier,
     textModel: initial.defaultTextModel,
-    imageModel: initial.defaultImageModel,
-    videoModel: initial.defaultVideoModel,
   });
 
   const [status, setStatus] = React.useState<
@@ -98,129 +90,6 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
     summary:
       "User preferences for appearance, interactive agent, and model defaults.",
   });
-
-  const preferencesFields = React.useMemo<FieldDescriptor[]>(
-    () => [
-      {
-        name: "fontSize",
-        label: "Font size",
-        type: "select",
-        current: fontSize,
-        options: [
-          { label: "Small", value: "small" },
-          { label: "Medium", value: "medium" },
-          { label: "Large", value: "large" },
-        ],
-        required: false,
-      },
-      {
-        name: "density",
-        label: "Interface density",
-        type: "select",
-        current: density,
-        options: [
-          { label: "Compact", value: "compact" },
-          { label: "Comfortable", value: "comfortable" },
-          { label: "Spacious", value: "spacious" },
-        ],
-        required: false,
-      },
-      {
-        name: "enterToSubmit",
-        label: "Enter to submit messages",
-        type: "boolean",
-        current: enterToSubmit,
-        required: false,
-      },
-      {
-        name: "pendingPromptBehavior",
-        label: "Pending prompt behavior",
-        type: "select",
-        current: pendingPromptBehavior,
-        options: [
-          { label: "Queue it", value: "queue" },
-          { label: "Interrupt the response", value: "interrupt" },
-        ],
-        required: false,
-      },
-      {
-        name: "timezone",
-        label: "Timezone",
-        type: "select",
-        current: timezone,
-        options: TIMEZONE_OPTIONS,
-        required: false,
-      },
-      {
-        name: "language",
-        label: "Language",
-        type: "select",
-        current: language,
-        options: LANGUAGE_OPTIONS,
-        required: false,
-      },
-    ],
-    [
-      fontSize,
-      density,
-      enterToSubmit,
-      pendingPromptBehavior,
-      timezone,
-      language,
-    ],
-  );
-
-  const applyPreferences = React.useCallback(
-    (proposed: Record<string, unknown>) => {
-      if (
-        proposed.fontSize === "small" ||
-        proposed.fontSize === "medium" ||
-        proposed.fontSize === "large"
-      ) {
-        setFontSize(proposed.fontSize);
-        // Optimistically apply to the document so the change is visible immediately.
-        document.documentElement.dataset.fontSize = proposed.fontSize;
-      }
-      if (
-        proposed.density === "compact" ||
-        proposed.density === "comfortable" ||
-        proposed.density === "spacious"
-      ) {
-        setDensity(proposed.density);
-        document.documentElement.dataset.density = proposed.density;
-      }
-      if (typeof proposed.enterToSubmit === "boolean") {
-        setEnterToSubmit(proposed.enterToSubmit);
-      }
-      if (
-        proposed.pendingPromptBehavior === "queue" ||
-        proposed.pendingPromptBehavior === "interrupt"
-      ) {
-        setPendingPromptBehavior(proposed.pendingPromptBehavior);
-      }
-      if (
-        typeof proposed.timezone === "string" &&
-        proposed.timezone.length > 0
-      ) {
-        setTimezone(proposed.timezone);
-      }
-      if (
-        typeof proposed.language === "string" &&
-        proposed.language.length >= 2
-      ) {
-        setLanguage(proposed.language);
-      }
-    },
-    [],
-  );
-
-  useRegisterFillableForm({
-    formId: "account-preferences",
-    title: "Account Preferences",
-    fields: preferencesFields,
-    apply: applyPreferences,
-  });
-  // ─────────────────────────────────────────────────────────────────────────
 
   // ── Optimistic appearance application ──────────────────────────────────────
   // Write the dataset attributes immediately on change so the UI responds
@@ -250,8 +119,6 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
       pendingPromptBehavior,
       defaultTextTier: modelDefaults.textTier,
       defaultTextModel: modelDefaults.textModel,
-      defaultImageModel: modelDefaults.imageModel,
-      defaultVideoModel: modelDefaults.videoModel,
       timezone,
       language,
     };

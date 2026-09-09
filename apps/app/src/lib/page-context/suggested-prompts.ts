@@ -4,7 +4,6 @@
  *
  * The hook returns exactly 3 suggestions derived from the current screen context:
  *   - the registered page entity (kind + label)
- *   - the registered fillable form (title + fields)
  *   - the current pathname (route section: settings, billing, conversation, etc.)
  *
  * Design contract (stable — consumed by the chat agent's chip renderer):
@@ -21,7 +20,7 @@
 
 import { usePathname } from "next/navigation";
 import { usePageContext } from "./index";
-import type { PageEntity, RegisteredFillableForm } from "./types";
+import type { PageEntity } from "./types";
 
 // ---------------------------------------------------------------------------
 // Public type — the stable return-type contract for the chat agent.
@@ -59,7 +58,6 @@ export interface ConversationMessageSummary {
 export interface SuggestionCtx {
   pathname: string;
   entity: PageEntity | null;
-  fillableForm: RegisteredFillableForm | null;
   /**
    * Recent conversation messages (last ≤6) for context-aware suggestions.
    * When provided and non-empty the suggestions shift from page-context
@@ -124,75 +122,79 @@ export function lastAssistantText(
 }
 
 /**
- * Build-oriented suggestion bank for conversation mode (the no-LLM fallback).
+ * Governance-oriented suggestion bank for conversation mode (the no-LLM
+ * fallback).
  *
- * Every entry pushes the user toward CREATING something real in Oxagen — an
- * agent, an automation, a connector, a graph query, an eval suite, a billing
- * meter, an MCP tool, an API route — rather than passively summarizing the
- * thread. The per-turn LLM path (stream "suggested-prompts" event) is the
- * primary, conversation-specific source; this bank is what shows on an empty
- * state, a page reload, or when generation fails.
+ * Per ADR-043 Oxagen governs agents; it does not run them. Every entry pushes
+ * the user toward INTERROGATING the fleet record and the knowledge graph — what
+ * did my agents do, what context did they have, what did it cost, what is
+ * pending approval — or toward tightening the governance objects (contracts,
+ * tool allowlists, budgets, ontology). Nothing here proposes writing code,
+ * warming a sandbox, scheduling an automation, or running an eval. The per-turn
+ * LLM path (stream "suggested-prompts" event) is the primary,
+ * conversation-specific source; this bank is what shows on an empty state, a
+ * page reload, or when generation fails.
  */
 const BUILD_SUGGESTION_BANK: readonly SuggestedPrompt[] = [
   {
-    label: "Turn Into An Agent",
+    label: "Explain This Spend",
     prompt:
-      "Create a reusable Oxagen agent that performs the task from this conversation end to end. Derive its instructions from the exact approach we used, equip it with the specific tools and skills it needs, then run it once against a real example and show me the output so we can verify it matches what we produced here.",
+      "Break down what this workspace spent over the last 30 days by agent, model, and capability. Show me the three biggest line items, what changed versus the prior period, and which of them a budget policy would have caught.",
   },
   {
-    label: "Automate This",
+    label: "Audit Recent Runs",
     prompt:
-      "Design an automation that runs the work from this conversation end to end without me. Pick the right trigger (schedule, webhook, or event), wire in the concrete inputs we used, define what a failed run looks like and how I get notified, then do a dry run and show me the result.",
+      "Show me the agent executions recorded for this workspace in the last 7 days: which agent, which capability, the outcome, and the cost. Flag any run that failed, was denied by IAM, or exceeded its budget, and cite the audit records behind each.",
   },
   {
-    label: "Add To Knowledge Graph",
+    label: "Review Pending Approvals",
     prompt:
-      "Extract the concrete facts, entities, and relationships established in this conversation and write them into the workspace knowledge graph with the correct labels and properties. When done, run a graph query that retrieves what you added and show me the cited nodes so I can confirm future agents will find them.",
+      "List everything currently waiting on a human decision — approval-gated capability invocations and MCP consent requests — with who asked, what they want to do, and the blast radius if I approve. Order them by how long they have been waiting.",
   },
   {
-    label: "Expose As MCP Tool",
+    label: "Tighten A Tool Allowlist",
     prompt:
-      "Turn the capability from this conversation into an MCP tool I can call from my IDE and other agents. Define the contract — name, input schema, output shape, and error cases — using the real inputs and outputs we worked with here, wire it up, then invoke it once and show me the round-trip.",
+      "For the agents in this workspace, compare the capabilities and MCP tools each one is allowed to call against what it has actually called in the recorded evidence. Propose a narrowed allowlist per agent and tell me exactly what each removal would have blocked.",
   },
   {
-    label: "Set Up An Eval",
+    label: "Trace A Decision",
     prompt:
-      "Create an eval suite that scores the quality of what we produced in this conversation. Derive 3–5 concrete test cases from the actual inputs and expected outputs discussed here, define pass criteria, run the suite once, and report the scores with anything that failed.",
-  },
-  {
-    label: "Meter And Bill It",
-    prompt:
-      "Set up a usage meter for the capability we built in this conversation so consumption is tracked per customer. Choose the billable unit that matches how it is actually invoked, set an initial price, wire it into the billing loop, then simulate a few invocations and show me the metered events that land.",
-  },
-  {
-    label: "Connect A Data Source",
-    prompt:
-      "Identify the single data source that would most improve the work in this conversation, then connect it and map its entities into the knowledge graph. Explain the mapping choices, run the initial sync, and show me a graph query over the newly ingested data proving it landed.",
+      "Take the most recent notable agent execution and walk me through it end to end: the identity that invoked it, the graph context it was grounded in, every tool it called, the cost it accrued, and the audit record it produced. Cite the nodes it used.",
   },
   {
     label: "Query The Graph",
     prompt:
-      "Query the knowledge graph for entities and relationships connected to the specific topics of this conversation. Show me what exists, flag what is missing or stale relative to what we discussed, and propose the concrete writes that would close those gaps.",
+      "Query the knowledge graph for entities and relationships connected to the specific topics of this conversation. Show me what exists, flag what is missing or stale relative to what we discussed, and cite the nodes so I can inspect them.",
   },
   {
-    label: "Draft A Skill",
+    label: "Check Grounding Coverage",
     prompt:
-      "Package the approach we used in this conversation into a reusable agent skill: name it, write the instructions capturing each step and decision we made, declare when it should trigger, and register it in the workspace. Then show me the skill definition so I can review before my team starts using it.",
+      "Assess how well this workspace's knowledge graph covers what the agents are actually being asked. Show me which ontology labels agents cite most, which questions came back ungrounded, and which data source would close the biggest gap.",
   },
   {
-    label: "Publish To Marketplace",
+    label: "Connect A Data Source",
     prompt:
-      "Prepare what we built in this conversation for an Oxagen marketplace listing: write the listing description from its real capabilities, declare the tools and permissions it needs, set pricing, and walk me through the publish flow stopping before the final submit so I can review.",
+      "Identify the single data source that would most improve grounding for the work in this conversation, then connect it and map its entities into the knowledge graph. Explain the mapping choices and show me a graph query over the newly ingested data proving it landed.",
   },
   {
-    label: "Wire Up An API Route",
+    label: "Set A Budget Ceiling",
     prompt:
-      "Expose the capability from this conversation as a REST endpoint. Define the request and response shapes from the real data we handled, wire the route through the capability contract so it is governed and metered, then call it once with a sample payload and show me the response.",
+      "Recommend a period-to-date spend ceiling for this workspace based on the last 90 days of observed usage. Show the distribution, the headroom you are leaving, and what would have been blocked at that ceiling.",
   },
   {
-    label: "Scale With A Fleet",
+    label: "Review Access",
     prompt:
-      "Take the task we just did once and run it across many inputs with a fleet of subagents. Define the input list from the context of this conversation, dispatch the fan-out, aggregate the results into a single table, and flag any items that failed so I can rerun just those.",
+      "Show me who and what can act in this organization: members and their roles, API keys, agent principals, and the capabilities each is permitted to invoke. Flag anything over-permissioned relative to what it has actually used.",
+  },
+  {
+    label: "Prep A Compliance Answer",
+    prompt:
+      "Assemble the evidence an auditor would ask for about agent activity in this workspace: the audit trail, who approved what, retention posture, and where the gaps are. Cite the records, and be explicit about which controls are not yet in place.",
+  },
+  {
+    label: "Explain A Bill Line",
+    prompt:
+      "Take the largest line on the most recent invoice and reconstruct it from the metered events: which agents, which capabilities, how many invocations, and at what rate. Show me the arithmetic and where the numbers came from.",
   },
 ];
 
@@ -251,50 +253,26 @@ export function deriveConversationSuggestions(
  *   1. When conversation history is present (multi-turn), derive continuation
  *      suggestions from the last assistant reply — these are more relevant than
  *      page-context defaults mid-conversation.
- *   2. If a fillable form is registered, one chip always targets form-fill.
- *   3. Remaining slots are filled from entity + route context.
- *   4. Fallback chips are provided when nothing is registered.
+ *   2. Remaining slots are filled from entity + route context.
+ *   3. Fallback chips are provided when nothing is registered.
  *
  * Always returns exactly 3 items.
  */
 export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
-  const { pathname, entity, fillableForm, conversationHistory } = ctx;
+  const { pathname, entity, conversationHistory } = ctx;
   const section = classifyRoute(pathname);
 
   // ── Conversation-continuation mode (multi-turn) ───────────────────────────
   // When there are messages in the conversation, derive continuation suggestions
   // from the conversation history instead of the page-context defaults.
-  // A fillable form chip is still prepended if registered, since form-fill is
-  // always actionable regardless of conversation state.
   if (conversationHistory && conversationHistory.length > 0) {
     const convSuggestions = deriveConversationSuggestions(conversationHistory);
-    if (convSuggestions.length === 3) {
-      if (fillableForm) {
-        // Replace the last chip with the form-fill chip so form-fill stays accessible.
-        return [
-          {
-            label: `Fill ${fillableForm.title}`,
-            prompt: `Fill in the ${fillableForm.title} form for me based on the context and best practices.`,
-          },
-          convSuggestions[0]!,
-          convSuggestions[1]!,
-        ];
-      }
-      return convSuggestions;
-    }
+    if (convSuggestions.length === 3) return convSuggestions;
   }
 
   const suggestions: SuggestedPrompt[] = [];
 
-  // ── Slot 1: fill chip (when a form is registered) ─────────────────────────
-  if (fillableForm) {
-    suggestions.push({
-      label: `Fill ${fillableForm.title}`,
-      prompt: `Fill in the ${fillableForm.title} form for me based on the context and best practices.`,
-    });
-  }
-
-  // ── Slot 2: entity-aware chip ─────────────────────────────────────────────
+  // ── Slot 1: entity-aware chip ─────────────────────────────────────────────
   if (entity) {
     const entityLabel = entity.label ?? entity.kind;
     switch (entity.kind) {
@@ -325,7 +303,7 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
     }
   }
 
-  // ── Slot 3 (and fill if needed): route-section chips ─────────────────────
+  // ── Slot 2: route-section chips ──────────────────────────────────────────
   switch (section) {
     case "settings":
       suggestions.push({
@@ -333,13 +311,11 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
         prompt:
           "Review the current settings on this page and suggest optimal values based on best practices.",
       });
-      if (!fillableForm) {
-        suggestions.push({
-          label: "Explain These Settings",
-          prompt:
-            "Explain what each setting on this page does and how it affects my workspace.",
-        });
-      }
+      suggestions.push({
+        label: "Explain These Settings",
+        prompt:
+          "Explain what each setting on this page does and how it affects my workspace.",
+      });
       break;
 
     case "billing":
@@ -359,12 +335,12 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
       suggestions.push({
         label: "Continue The Thread",
         prompt:
-          "Pick up exactly where this conversation left off: restate the current goal in one line, then execute the next concrete step of the work and show me the result.",
+          "Pick up exactly where this conversation left off: restate the current question in one line, then answer the next part of it from the fleet record and the knowledge graph, citing what you used.",
       });
       suggestions.push({
-        label: "Verify The Work",
+        label: "Show The Evidence",
         prompt:
-          "Take the most recent thing we produced in this conversation and verify it holds up: check it against the original requirements, probe the likely edge cases, and report anything broken along with a proposed fix.",
+          "For the claims made in this conversation, show me the evidence behind them: the graph nodes cited, the executions and audit records they came from, and anything asserted without a citation.",
       });
       break;
 
@@ -479,7 +455,7 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
 /**
  * Returns exactly 3 context-aware suggested prompts for the current screen.
  *
- * Consumes `PageContext` (entity + fillableForm) and `usePathname()`.
+ * Consumes `PageContext` (entity) and `usePathname()`.
  * Must be called inside a `PageContextProvider` and a Next.js route.
  *
  * @param conversationHistory  Optional recent conversation messages. When
@@ -496,12 +472,7 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
 export function useSuggestedPrompts(
   conversationHistory?: ConversationMessageSummary[],
 ): SuggestedPrompt[] {
-  const { entity, fillableForm } = usePageContext();
+  const { entity } = usePageContext();
   const pathname = usePathname();
-  return deriveSuggestions({
-    pathname,
-    entity,
-    fillableForm,
-    conversationHistory,
-  });
+  return deriveSuggestions({ pathname, entity, conversationHistory });
 }

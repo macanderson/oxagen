@@ -1,5 +1,15 @@
 # Agent RBAC — Design Specification
 
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
+> `agent.code.execute`, `agent.subagent.dispatch`/`aggregate`, and
+> `agent.skill.load`/`agent.skill.list` — every capability this spec cites as
+> a worked example of role-vs-request intersection. The **mechanism**
+> survives (role is the ceiling, agent config is the request, effective scope
+> is the intersection — see `docs/guides` or `apps/docs/content/docs/governance/agent-roles.mdx`
+> for the current, capability-parity-checked description); the specific
+> dispatch-chain and skill-scoping examples below describe capabilities that
+> no longer exist.
+
 Status: **Proposed** - Author: platform - Date: 2026-07-07
 Related: `docs/specs/iam/plan.md`, `docs/adr/ADR-009` (unified capability/tool model), `ADR-013` (capability packs / entitlements), `ADR-014` (workspace-scoped MCP registry), `ADR-019` (unified agent engine), `ADR-022` (capability naming), `packages/oxagen/src/agent-schema.ts`.
 

@@ -1,0 +1,99 @@
+{
+  "name": "publish_context_record",
+  "domain": "context",
+  "description": "Publish a steering context record into the workspace agent-asset registry — upserts the agent.context_records row by (workspace, record_id) and creates a new immutable version row when the canonical body changed. Idempotent on an unchanged body. Mirrors Stella's one-record-per-file .stella/rules/*.toml layout.",
+  "mode": "sync",
+  "surfaces": ["api"],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "record_id": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The record's stable id — the .stella/rules/<record_id>.toml file stem; the workspace-unique key"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Human-readable record title"
+      },
+      "body": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The canonical record body (one TOML record per file)"
+      },
+      "provenance": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Provenance kind (e.g. file, commit, review)"
+            },
+            "uri": {
+              "type": "string"
+            },
+            "range": {
+              "type": "string"
+            },
+            "digest": {
+              "type": "string"
+            },
+            "method": {
+              "type": "string"
+            },
+            "by": {
+              "type": "string"
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": ["record_id", "title", "body"],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "publicId": {
+        "type": "string",
+        "description": "Public record ID (ctr_…)"
+      },
+      "recordId": {
+        "type": "string",
+        "description": "The record's stable id (slug)"
+      },
+      "version": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "checksum": {
+        "type": "string",
+        "description": "SHA-256 hex over the body"
+      },
+      "published": {
+        "type": "boolean",
+        "description": "false when the latest version already carries this checksum (idempotent)"
+      }
+    },
+    "required": ["publicId", "recordId", "version", "checksum", "published"],
+    "additionalProperties": false
+  }
+}

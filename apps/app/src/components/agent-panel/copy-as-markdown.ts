@@ -60,13 +60,6 @@ export function conversationToMarkdown(messages: ChatMessage[]): string {
               ),
             );
             break;
-          case "code-execute":
-            parts.push(
-              blockquote(
-                `💻 Code: ${(block as unknown as { type: "code-execute"; language: string; code: string }).language}\n\n\`\`\`${(block as unknown as { type: "code-execute"; language: string; code: string }).language}\n${(block as unknown as { type: "code-execute"; language: string; code: string }).code}\n\`\`\``,
-              ),
-            );
-            break;
           default:
             // Unknown or non-text block types — skip silently.
             break;

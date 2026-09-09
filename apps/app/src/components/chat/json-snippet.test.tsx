@@ -4,8 +4,8 @@
  *
  * The plain renderer for bulky tool results:
  *   - Pretty-prints the value as 2-space JSON in a <pre>
- *   - Syntax-highlights via the shared diff-syntax highlighter (mocked here —
- *     shiki needs WASM; the real tokenizer is covered by diff-syntax.test.ts)
+ *   - Syntax-highlights via the shared json-syntax highlighter (mocked here —
+ *     shiki needs WASM; the real tokenizer is shiki's own)
  *   - Clips past the line budget behind a "Show all N lines" toggle
  *   - Copies the full JSON via the icon button, even while clipped
  */
@@ -22,8 +22,8 @@ import { JsonSnippet, toPrettyJson } from "./json-snippet";
 
 afterEach(cleanup);
 
-vi.mock("./registry-components/diff-syntax", () => ({
-  // One cyan token per line — enough to prove tokens render with .diff-token.
+vi.mock("./json-syntax", () => ({
+  // One cyan token per line — enough to prove tokens render with .syntax-token.
   highlightLine: vi.fn(async (line: string) => [
     { content: line, style: "color:#0aa;--shiki-dark:#0ff" },
   ]),
@@ -86,10 +86,10 @@ describe("JsonSnippet", () => {
     );
   });
 
-  it("colours in asynchronously with .diff-token dual-theme spans", async () => {
+  it("colours in asynchronously with .syntax-token dual-theme spans", async () => {
     render(<JsonSnippet value={{ a: 1 }} />);
     await waitFor(() => {
-      expect(document.querySelector("span.diff-token")).not.toBeNull();
+      expect(document.querySelector("span.syntax-token")).not.toBeNull();
     });
   });
 });

@@ -22,8 +22,7 @@ const CONFIG = {
     retrieval: { strategy: "hybrid" as const },
     budget: { maxHops: 2, maxNodes: 20 },
   },
-  agentTools: [{ type: "skill" as const, ref: "coding" }],
-  triggers: [{ type: "manual" as const, enabled: true }],
+  agentTools: [{ type: "function" as const, ref: "recall_memory" }],
   instructions: "hi",
 };
 

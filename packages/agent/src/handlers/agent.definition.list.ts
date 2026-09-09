@@ -23,7 +23,11 @@ type AgentToolRef = { type: AgentToolType; ref: string };
  * agent's config is malformed, so anything that isn't a well-formed agentTool
  * entry (known `type`, non-empty string `ref`) is silently skipped rather than
  * thrown — unlike parseAgentDefinitionConfig, which is strict. Config payloads
- * (MCP auth, skill pins, budgets) are intentionally dropped; this is refs-only.
+ * (MCP auth, per-server tool narrowing) are intentionally dropped; this is
+ * refs-only. An entry whose `type` is no longer a gateable kind — a `skill` or
+ * `agent` grant persisted before ADR-043 — fails the schema probe and is
+ * dropped with the rest, so the list never advertises a grant the platform can
+ * no longer honour.
  */
 function extractAgentToolRefs(config: unknown): AgentToolRef[] {
   if (!config || typeof config !== "object") return [];

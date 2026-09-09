@@ -37,8 +37,6 @@ const FULL_ROW = {
   pendingPromptBehavior: "interrupt" as const,
   defaultTextTier: "precise" as const,
   defaultTextModel: "anthropic/claude-opus-4.8",
-  defaultImageModel: "bfl/flux-2-max",
-  defaultVideoModel: "google/veo-3.0-generate-001",
   timezone: "America/New_York",
   language: "en",
 };
@@ -68,8 +66,6 @@ describe("userPreferencesReadHandler (@oxagen/handlers)", () => {
     expect(result.pendingPromptBehavior).toBe("interrupt");
     expect(result.defaultTextTier).toBe("precise");
     expect(result.defaultTextModel).toBe("anthropic/claude-opus-4.8");
-    expect(result.defaultImageModel).toBe("bfl/flux-2-max");
-    expect(result.defaultVideoModel).toBe("google/veo-3.0-generate-001");
     expect(result.timezone).toBe("America/New_York");
     expect(result.language).toBe("en");
   });
@@ -85,8 +81,6 @@ describe("userPreferencesReadHandler (@oxagen/handlers)", () => {
     expect(result.pendingPromptBehavior).toBe("queue");
     expect(result.defaultTextTier).toBeNull();
     expect(result.defaultTextModel).toBeNull();
-    expect(result.defaultImageModel).toBeNull();
-    expect(result.defaultVideoModel).toBeNull();
     expect(result.timezone).toBe("UTC");
     expect(result.language).toBe("en");
   });
@@ -98,14 +92,10 @@ describe("userPreferencesReadHandler (@oxagen/handlers)", () => {
       ...FULL_ROW,
       defaultTextTier: null,
       defaultTextModel: null,
-      defaultImageModel: null,
-      defaultVideoModel: null,
     });
     const result = await userPreferencesReadHandler({}, CTX);
     expect(result.defaultTextTier).toBeNull();
     expect(result.defaultTextModel).toBeNull();
-    expect(result.defaultImageModel).toBeNull();
-    expect(result.defaultVideoModel).toBeNull();
   });
 
   // ── DB query uses caller's userId ─────────────────────────────────────────

@@ -39,19 +39,15 @@ Model IDs are maintained in `src/catalog.ts`. The catalog is the single source o
 | `fast` | `OXAGEN_LLM_FAST` | `anthropic/claude-haiku-4.5` |
 | `balanced` | `OXAGEN_LLM_BALANCED` | `anthropic/claude-sonnet-5` |
 | `precise` | `OXAGEN_LLM_PRECISE` | `anthropic/claude-fable-5` |
-| `image.basic` | `OXAGEN_LLM_IMAGE_BASIC` | `openai/gpt-image-1` |
-| `image.advanced` | `OXAGEN_LLM_IMAGE_ADVANCED` | `bfl/flux-2-max` |
-| `video.basic` | `OXAGEN_LLM_VIDEO_BASIC` | `google/veo-3.0-fast-generate-001` |
-| `video.advanced` | `OXAGEN_LLM_VIDEO_ADVANCED` | `google/veo-3.0-generate-001` |
+
+ADR-043 removed image and video generation, so text is the only tier family.
 
 ## Source layout
 
 - `src/stream.ts` — `streamAgentReply()`: wraps `streamText`; enforces IAM, meters tokens, emits telemetry
 - `src/generate-object.ts` — `generateObjectFor()`: structured output via Zod schema; same boundary guarantees as stream
-- `src/generate-image.ts` — `generateImageFor()`: image generation; meters by image count and size
-- `src/generate-video.ts` — `generateVideoFor()`: video generation; meters by asset and duration
 - `src/embed.ts` — `embedText()`: text embedding via `text-embedding-3-small`; meters embedding tokens
-- `src/models.ts` — `selectModel()`, `selectImageModel()`, `selectVideoModel()`: gateway model factories; reads tier env vars
+- `src/models.ts` — `selectModel()`: the gateway model factory; reads the tier env vars
 - `src/catalog.ts` — `gatewayModels` constant and capability helpers; client-safe (no provider SDK imports)
 - `src/load-effective-model-defaults.ts` — server-only; loads user + workspace model preferences from the DB
 - `src/resolve-model-defaults.ts` — pure resolver for model defaults; client-safe

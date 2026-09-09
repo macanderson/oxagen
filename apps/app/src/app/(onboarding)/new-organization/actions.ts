@@ -19,8 +19,6 @@ import { getSessionOrRedirect } from "@/lib/session";
 import { bootstrapOrgIAM } from "@oxagen/handlers/iam-provision";
 import { bootstrapWorkspaceAgents } from "@oxagen/handlers/workspace-agents";
 import { seedWorkspaceDefaultRegistrySystem } from "@oxagen/handlers/workspace-registry-seed";
-import { seedWorkspaceDefaultCapabilitiesSystem } from "@oxagen/handlers/workspace-capability-seed";
-import { seedWorkspaceDefaultSkillsSystem } from "@oxagen/handlers/skill-workspace-seed";
 import { seedWorkspaceDefaultEnvironmentSystem } from "@oxagen/handlers/workspace-environment-seed";
 
 // An avatar URL we already own — served from our Vercel Blob store. Such URLs
@@ -258,28 +256,6 @@ export async function createOrgAction(
       logger.error(
         { err: seedErr, orgId: result.orgId, workspaceId: result.workspaceId },
         "[onboarding] seedWorkspaceDefaultRegistrySystem failed — org/workspace created; seed is recoverable via db:backfill-workspace-seeds",
-      );
-    }
-    try {
-      await seedWorkspaceDefaultCapabilitiesSystem({
-        orgId: result.orgId,
-        workspaceId: result.workspaceId,
-      });
-    } catch (seedErr) {
-      logger.error(
-        { err: seedErr, orgId: result.orgId, workspaceId: result.workspaceId },
-        "[onboarding] seedWorkspaceDefaultCapabilitiesSystem failed — org/workspace created; seed is recoverable via db:backfill-workspace-seeds",
-      );
-    }
-    try {
-      await seedWorkspaceDefaultSkillsSystem({
-        orgId: result.orgId,
-        workspaceId: result.workspaceId,
-      });
-    } catch (seedErr) {
-      logger.error(
-        { err: seedErr, orgId: result.orgId, workspaceId: result.workspaceId },
-        "[onboarding] seedWorkspaceDefaultSkillsSystem failed — org/workspace created; seed is recoverable via db:backfill-workspace-seeds",
       );
     }
     try {

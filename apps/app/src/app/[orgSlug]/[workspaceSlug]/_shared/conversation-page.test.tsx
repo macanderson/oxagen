@@ -225,7 +225,6 @@ const actions = {
   sendMessageAction: vi.fn(),
   resolveApprovalAction: vi.fn(),
   resolveConsentAction: vi.fn(),
-  resolvePlanAction: vi.fn(),
   cancelBackgroundTaskAction: vi.fn(),
   readBackgroundTaskAction: vi.fn(),
 } as unknown as Parameters<typeof ConversationPage>[0]["actions"];
@@ -300,7 +299,7 @@ describe("ConversationPage — non-fatal degrade logging", () => {
   });
 });
 
-describe("ConversationPage — conversation code binding", () => {
+describe("ConversationPage — no conversation code binding (ADR-043)", () => {
   afterEach(() => {
     shellSpy.props = null;
     vi.mocked(withTenantDb).mockReset();
@@ -308,9 +307,11 @@ describe("ConversationPage — conversation code binding", () => {
     vi.mocked(withTenantDb).mockImplementation(async () => []);
   });
 
-  it("parses code_binding off the loaded conversation and threads it to ChatShell", async () => {
-    // The conversation query is the FIRST withTenantDb call — return a bound row.
-    const boundRow = {
+  it("never threads a code binding to ChatShell, even for a legacy bound row", async () => {
+    // A row written before the runtime excision can still carry code_binding
+    // JSON. The page must ignore it outright — a conversation is no longer
+    // grounded in a repository, so there is nothing for the shell to bind.
+    const legacyBoundRow = {
       id: "conv-uuid",
       publicId: "cnv_1",
       activeLeafMessageId: null,
@@ -325,42 +326,19 @@ describe("ConversationPage — conversation code binding", () => {
         environmentName: "Dev",
       },
     };
-    vi.mocked(withTenantDb).mockImplementationOnce(async () => [boundRow]);
+    vi.mocked(withTenantDb).mockImplementationOnce(async () => [
+      legacyBoundRow,
+    ]);
 
     await renderPage();
 
     expect(shellSpy.props).not.toBeNull();
-    expect(shellSpy.props!.conversationCodeBinding).toEqual({
-      version: 1,
-      agentId: "agt_code",
-      connectionId: "con_1",
-      owner: "acme",
-      name: "api",
-      defaultBranch: "main",
-      environmentId: "env_dev",
-      environmentName: "Dev",
-    });
+    expect(shellSpy.props).not.toHaveProperty("conversationCodeBinding");
   });
 
-  it("passes a null binding for a conversation whose code_binding is unset", async () => {
-    const unboundRow = {
-      id: "conv-uuid-2",
-      publicId: "cnv_2",
-      activeLeafMessageId: null,
-      codeBinding: null,
-    };
-    vi.mocked(withTenantDb).mockImplementationOnce(async () => [unboundRow]);
-
-    await renderPage();
-
-    expect(shellSpy.props).not.toBeNull();
-    expect(shellSpy.props!.conversationCodeBinding).toBeNull();
-  });
-
-  it("passes a null binding when there is no conversation at all", async () => {
-    // Default mock returns [] → no conversation row → null binding.
+  it("renders a conversation with no code binding at all", async () => {
     await renderPage();
     expect(shellSpy.props).not.toBeNull();
-    expect(shellSpy.props!.conversationCodeBinding).toBeNull();
+    expect(shellSpy.props).not.toHaveProperty("conversationCodeBinding");
   });
 });

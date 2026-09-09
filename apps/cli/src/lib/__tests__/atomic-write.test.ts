@@ -1,10 +1,9 @@
 /**
- * Unit coverage for atomic-write.ts (item 9, fix/cli-config-truth): both
- * config/write.ts and settings/write.ts now route their scope-file writes
- * through `atomicWriteFileSync` instead of a plain `writeFileSync`, so a
- * process kill (or a second parallel CLI session writing the same file — this
- * repo's tree is worked by several parallel agent sessions at once) can never
- * strand a truncated/partial JSON file.
+ * Unit coverage for atomic-write.ts (item 9, fix/cli-config-truth):
+ * `lib/config.ts` routes its writes through `atomicWriteFileSync` instead of a
+ * plain `writeFileSync`, so a process kill (or a second parallel CLI session
+ * writing the same file — this repo's tree is worked by several parallel agent
+ * sessions at once) can never strand a truncated/partial JSON file.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {

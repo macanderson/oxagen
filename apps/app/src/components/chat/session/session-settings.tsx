@@ -3,9 +3,9 @@
  * session-settings.tsx — the ONE SessionSettings component, rendered three
  * ways (`variant: "drawer" | "slide-over" | "rail"`) by `session-settings-host.tsx`.
  * Reads and writes ONLY through `useChatSession()` — there is no local copy of
- * agent/model/effort/budget/org/repo/branch/env/output state anywhere in this
- * file, so a settings-panel-vs-composer mismatch is structurally impossible
- * (see `session-state.ts`'s module doc).
+ * agent/model/effort/budget state anywhere in this file, so a
+ * settings-panel-vs-composer mismatch is structurally impossible (see
+ * `session-state.ts`'s module doc).
  *
  * Picker chrome differs by variant, content does not: `variant="drawer"`
  * pushes a full-screen page (an internal stack of one, `pushed`) with ZERO
@@ -21,17 +21,11 @@ import {
   ChevronRight,
   Lock,
   Sparkles,
-  Building2,
-  FolderGit2,
-  GitBranch,
-  Server,
   Wallet,
 } from "lucide-react";
 import { cn, formatCentsCompact } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Spinner } from "@/components/ui/spinner";
 import {
   SegmentedControl,
   SegmentedControlItem,
@@ -48,33 +42,18 @@ import {
   BUDGET_PRESETS_USD,
   BUDGET_MIN_USD,
   BUDGET_STEP_USD,
-  sessionSelectionIssues,
 } from "./session-state";
-import {
-  SessionPickerList,
-  ModelPickerRows,
-  type SessionPickerGroup,
-  type SessionPickerRow,
-} from "./session-pickers";
+import { ModelPickerRows } from "./session-pickers";
 import { AgentAvatar } from "../agent-picker/agent-avatar";
 import type { AgentOption } from "../agent-picker/agent-picker-types";
-import type { RepoOption } from "../repo-selector";
-import type { EnvironmentOption } from "../environment-selector";
 
 export type SessionSettingsVariant = "drawer" | "slide-over" | "rail";
 
-type PickerKind = "model" | "org" | "repo" | "branch" | "environment";
+type PickerKind = "model";
 
 const PICKER_TITLES: Record<PickerKind, string> = {
   model: "Model",
-  org: "Organization",
-  repo: "Repository",
-  branch: "Branch",
-  environment: "Environment",
 };
-
-/** Sentinel row id for "use the repository's default branch" (branch: null). */
-const DEFAULT_BRANCH_ROW_ID = "__repo_default__";
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -93,76 +72,6 @@ function formatBudgetChip(n: number): string {
 
 function isPresetBudget(v: number): boolean {
   return (BUDGET_PRESETS_USD as readonly number[]).includes(v);
-}
-
-// ---------------------------------------------------------------------------
-// Code-section picker group builders (pure — no hooks)
-// ---------------------------------------------------------------------------
-
-function buildOrgGroup(repos: RepoOption[]): SessionPickerGroup {
-  const owners = Array.from(new Set(repos.map((r) => r.owner))).sort((a, b) =>
-    a.localeCompare(b),
-  );
-  return { id: "orgs", rows: owners.map((o) => ({ id: o, label: o })) };
-}
-
-function buildRepoGroup(
-  repos: RepoOption[],
-  org: string | null,
-): SessionPickerGroup {
-  const filtered = org ? repos.filter((r) => r.owner === org) : repos;
-  return {
-    id: "repos",
-    rows: filtered.map((r) => ({
-      id: r.key,
-      label: r.name,
-      sublabel: r.owner,
-    })),
-  };
-}
-
-function buildEnvironmentGroup(
-  environments: EnvironmentOption[],
-): SessionPickerGroup {
-  return {
-    id: "environments",
-    rows: environments.map((e) => ({
-      id: e.id,
-      label: e.name,
-      badge: e.isDefault ? (
-        <Badge variant="outline" size="sm">
-          Default
-        </Badge>
-      ) : undefined,
-    })),
-  };
-}
-
-function buildBranchGroup(
-  branches: string[] | null,
-  defaultBranch: string | null,
-): SessionPickerGroup {
-  const rows: SessionPickerRow[] = [
-    {
-      id: DEFAULT_BRANCH_ROW_ID,
-      label: defaultBranch
-        ? `Repository default (${defaultBranch})`
-        : "Repository default",
-    },
-  ];
-  for (const name of branches ?? []) {
-    rows.push({
-      id: name,
-      label: name,
-      badge:
-        name === defaultBranch ? (
-          <Badge variant="outline" size="sm">
-            Default
-          </Badge>
-        ) : undefined,
-    });
-  }
-  return { id: "branches", rows };
 }
 
 // ---------------------------------------------------------------------------
@@ -282,7 +191,7 @@ interface PickerFieldRowProps {
   warning?: string | null;
   locked?: boolean;
   ariaLabel: string;
-  /** Side effect on open (both the drawer push and the popover open) — e.g. loading branches. */
+  /** Side effect on open (both the drawer push and the popover open). */
   onOpen?: () => void;
   /** Drawer only: pushes the full-screen picker page. */
   onPush?: () => void;
@@ -390,13 +299,7 @@ function PickerFieldRow({
 export interface SessionSettingsProps {
   variant: SessionSettingsVariant;
   agents: AgentOption[];
-  repos: RepoOption[];
-  environments: EnvironmentOption[];
   modelConfig: ResolvedTierCatalog;
-  branches: string[] | null;
-  branchesLoading: boolean;
-  onLoadBranches: () => void;
-  defaultBranch: string | null;
   walletBalanceUsd: number | null;
   onOpenAgentPicker?: () => void;
   onStartNewChat?: () => void;
@@ -406,13 +309,7 @@ export interface SessionSettingsProps {
 export function SessionSettings({
   variant,
   agents,
-  repos,
-  environments,
   modelConfig,
-  branches,
-  branchesLoading,
-  onLoadBranches,
-  defaultBranch,
   walletBalanceUsd,
   onOpenAgentPicker,
   onStartNewChat,
@@ -423,21 +320,6 @@ export function SessionSettings({
   const [customBudgetOpen, setCustomBudgetOpen] = React.useState(false);
 
   const currentAgent = agents.find((a) => a.agentId === state.agentId) ?? null;
-  const currentRepo = state.repoKey
-    ? (repos.find((r) => r.key === state.repoKey) ?? null)
-    : null;
-  const currentEnv = state.envId
-    ? (environments.find((e) => e.id === state.envId) ?? null)
-    : null;
-  const effectiveDefaultBranch =
-    defaultBranch ?? currentRepo?.defaultBranch ?? null;
-
-  const issues = React.useMemo(
-    () => sessionSelectionIssues(state, { repos, environments, branches }),
-    [state, repos, environments, branches],
-  );
-  const issueFor = (field: "repo" | "branch" | "environment") =>
-    issues.find((i) => i.field === field)?.message ?? null;
 
   const modelLabel = state.model
     ? (getModel(state.model)?.name ?? state.model)
@@ -480,65 +362,6 @@ export function SessionSettings({
               updateSession({ model: id });
               onSelected?.();
             }}
-          />
-        );
-      case "org":
-        return (
-          <SessionPickerList
-            groups={[buildOrgGroup(repos)]}
-            selectedId={state.org}
-            onSelect={(id) => {
-              updateSession({ org: id });
-              onSelected?.();
-            }}
-            searchPlaceholder="Search organizations"
-            emptyMessage="No organizations available"
-          />
-        );
-      case "repo":
-        return (
-          <SessionPickerList
-            groups={[buildRepoGroup(repos, state.org)]}
-            selectedId={state.repoKey}
-            onSelect={(id) => {
-              updateSession({ repoKey: id });
-              onSelected?.();
-            }}
-            searchPlaceholder="Search repositories"
-            emptyMessage="No repositories available"
-          />
-        );
-      case "branch":
-        return branchesLoading ? (
-          <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-            <Spinner size="sm" label="Loading branches" />
-            Loading branches…
-          </div>
-        ) : (
-          <SessionPickerList
-            groups={[buildBranchGroup(branches, effectiveDefaultBranch)]}
-            selectedId={state.branch ?? DEFAULT_BRANCH_ROW_ID}
-            onSelect={(id) => {
-              updateSession({
-                branch: id === DEFAULT_BRANCH_ROW_ID ? null : id,
-              });
-              onSelected?.();
-            }}
-            searchPlaceholder="Search branches"
-            emptyMessage="No branches found"
-          />
-        );
-      case "environment":
-        return (
-          <SessionPickerList
-            groups={[buildEnvironmentGroup(environments)]}
-            selectedId={state.envId}
-            onSelect={(id) => {
-              updateSession({ envId: id });
-              onSelected?.();
-            }}
-            searchPlaceholder="Search environments"
-            emptyMessage="No environments available"
           />
         );
     }
@@ -666,67 +489,6 @@ export function SessionSettings({
           </p>
         </div>
       </section>
-
-      {/* Code */}
-      <section className="flex flex-col gap-1">
-        <h3 className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Code
-        </h3>
-        <PickerFieldRow
-          variant={variant}
-          icon={Building2}
-          label="Organization"
-          value={state.org ?? "Not set"}
-          locked={locks.code}
-          ariaLabel={`Organization: ${state.org ?? "not set"}`}
-          onPush={() => setPushed("org")}
-          popoverContent={pickerContentFor("org")}
-        />
-        <PickerFieldRow
-          variant={variant}
-          icon={FolderGit2}
-          label="Repository"
-          value={currentRepo ? currentRepo.name : "Not set"}
-          sublabel={currentRepo ? currentRepo.owner : null}
-          warning={issueFor("repo")}
-          locked={locks.code}
-          ariaLabel={`Repository: ${currentRepo ? `${currentRepo.owner}/${currentRepo.name}` : "not set"}`}
-          onPush={() => setPushed("repo")}
-          popoverContent={pickerContentFor("repo")}
-        />
-        <PickerFieldRow
-          variant={variant}
-          icon={GitBranch}
-          label="Branch"
-          value={
-            state.branch ??
-            (effectiveDefaultBranch
-              ? `Default (${effectiveDefaultBranch})`
-              : "Repository default")
-          }
-          warning={issueFor("branch")}
-          ariaLabel={`Branch: ${state.branch ?? "repository default"}`}
-          onOpen={onLoadBranches}
-          onPush={() => setPushed("branch")}
-          popoverContent={pickerContentFor("branch")}
-        />
-        <PickerFieldRow
-          variant={variant}
-          icon={Server}
-          label="Environment"
-          value={currentEnv ? currentEnv.name : "Not set"}
-          warning={issueFor("environment")}
-          locked={locks.code}
-          ariaLabel={`Environment: ${currentEnv?.name ?? "not set"}`}
-          onPush={() => setPushed("environment")}
-          popoverContent={pickerContentFor("environment")}
-        />
-      </section>
-
-      {/* No "Output" section: image/video generation is inferred from the
-          prompt server-side (see infer-media-intent.ts) — there is no manual
-          "Generate image / video" toggle. Just ask ("make me a logo", "create
-          a short video of …") and the turn routes to media generation. */}
 
       {/* Footer */}
       <div className="flex flex-col gap-2 border-t border-border pt-3">

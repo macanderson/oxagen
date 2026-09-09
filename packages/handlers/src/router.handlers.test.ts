@@ -4,7 +4,7 @@
 // (get_routing_policy / set_routing_policy / list_routing_stats /
 // preview_routing_decision) and the shared loadEffectiveRoutingPolicy helper.
 // @oxagen/database (withTenantDb) and @oxagen/telemetry (readRoutingStats) are
-// mocked; @oxagen/agent-engine's pure decision core runs for real, so the tests
+// mocked; the pure decision core in lib/market-router runs for real, so the tests
 // exercise the true resolution / decision logic end to end from the handler.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -19,9 +19,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...real, withTenantDb: mocks.withTenantDb };
 });
 
-vi.mock("@oxagen/telemetry", () => ({
-  readRoutingStats: mocks.readRoutingStats,
-}));
+// Spread the real module: lib/market-router resolves tier → gateway slug through
+// @oxagen/ai, which transitively pulls other @oxagen/telemetry exports, so a
+// bare factory mock would break the import graph rather than just this one read.
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/telemetry")>();
+  return { ...real, readRoutingStats: mocks.readRoutingStats };
+});
 
 import { routerPolicyGetHandler } from "./router.policy.get";
 import { routerPolicySetHandler } from "./router.policy.set";

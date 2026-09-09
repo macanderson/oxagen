@@ -1,6 +1,0 @@
-schema_version = 1
-kind = "command"
-name = "review"
-description = "Review a file for bugs and style."
-prompt = "Review $1 focusing on $2.\n\nFull args: $ARGUMENTS"
-model = "balanced"

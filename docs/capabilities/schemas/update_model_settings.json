@@ -3,11 +3,7 @@
   "domain": "workspace",
   "description": "Update the workspace-level model defaults (partial update — only provided fields are changed)",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -28,11 +24,7 @@
         "anyOf": [
           {
             "type": "string",
-            "enum": [
-              "fast",
-              "balanced",
-              "precise"
-            ]
+            "enum": ["fast", "balanced", "precise"]
           },
           {
             "type": "null"
@@ -40,28 +32,6 @@
         ]
       },
       "defaultTextModel": {
-        "anyOf": [
-          {
-            "type": "string",
-            "minLength": 1
-          },
-          {
-            "type": "null"
-          }
-        ]
-      },
-      "defaultImageModel": {
-        "anyOf": [
-          {
-            "type": "string",
-            "minLength": 1
-          },
-          {
-            "type": "null"
-          }
-        ]
-      },
-      "defaultVideoModel": {
         "anyOf": [
           {
             "type": "string",
@@ -83,11 +53,7 @@
         "anyOf": [
           {
             "type": "string",
-            "enum": [
-              "fast",
-              "balanced",
-              "precise"
-            ]
+            "enum": ["fast", "balanced", "precise"]
           },
           {
             "type": "null"
@@ -103,34 +69,9 @@
             "type": "null"
           }
         ]
-      },
-      "defaultImageModel": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ]
-      },
-      "defaultVideoModel": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ]
       }
     },
-    "required": [
-      "defaultTextTier",
-      "defaultTextModel",
-      "defaultImageModel",
-      "defaultVideoModel"
-    ],
+    "required": ["defaultTextTier", "defaultTextModel"],
     "additionalProperties": false
   }
 }

@@ -1,11 +1,11 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { routerDecisionPreview } from "@oxagen/oxagen/contracts/router.decision.preview";
+import { readRoutingStats } from "@oxagen/telemetry";
 import {
   decideMarketRoute,
   deriveTaskClass,
   normalizeRoutingPolicy,
-} from "@oxagen/agent-engine";
-import { readRoutingStats } from "@oxagen/telemetry";
+} from "./lib/market-router";
 import { loadEffectiveRoutingPolicy } from "./lib/routing-policy";
 
 // preview_routing_decision — a pure dry run: derive the task class, read observed

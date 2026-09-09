@@ -3,7 +3,7 @@
      added or deleted, so it goes stale silently -- two deleted packages and six
      missing ones were found here at once (#2631). If you add or remove a package,
      either re-run that command or edit this table by hand.
-     Last reconciled against `packages/` on 2026-09-04. -->
+     Last reconciled against `packages/` on 2026-09-07 (ADR-043 excision pass). -->
 
 # Dependencies & Integrations
 
@@ -16,7 +16,6 @@
 | **Inngest** | Background job orchestration | `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY` | `@oxagen/inngest-functions` |
 | **Stripe** | Billing, subscriptions, credits | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | `@oxagen/billing` |
 | **Vercel Blob** | File/asset storage | `BLOB_READ_WRITE_TOKEN` | `@oxagen/storage` |
-| **Vercel Sandbox** | Code execution sandbox | `VERCEL_SANDBOX_*` | `@oxagen/sandbox` |
 | **AI Gateway** | LLM proxy (all models) | `AI_GATEWAY_API_KEY` | `@oxagen/ai` |
 | **GitHub App** | OAuth, webhooks, repo sync | `GITHUB_APP_*` | `@oxagen/github` |
 | **AWS KMS** | Credential encryption (optional) | `AWS_KMS_INGESTION_KEY_ARN` | `@oxagen/crypto` |
@@ -28,10 +27,6 @@
 | `OXAGEN_LLM_FAST` | Fast model (Haiku-class) |
 | `OXAGEN_LLM_BALANCED` | Balanced model (Sonnet-class) |
 | `OXAGEN_LLM_PRECISE` | Precise model (Opus-class) |
-| `OXAGEN_LLM_ADVISOR` | Advisor/evaluator model |
-| `OXAGEN_LLM_EVALUATOR` | Evaluation tasks |
-| `OXAGEN_LLM_IMAGE_BASIC/ADVANCED` | Image generation |
-| `OXAGEN_LLM_VIDEO_BASIC/ADVANCED` | Video generation |
 
 All inference routes through **Vercel AI Gateway** (`@ai-sdk/openai-compatible`).
 Package: `packages/ai/src/` — stream, generate-object, prompts registry.
@@ -78,14 +73,11 @@ xmcp                    MCP server framework (streamable HTTP)
 | Package | Consumers | Role |
 |---------|-----------|------|
 | `@oxagen/oxagen` | api, app, mcp, handlers | Contracts (Zod schemas), CapabilityContext |
-| `@oxagen/handlers` | api, app, mcp | Business logic handlers (473 total .ts incl. tests / 270 non-test) |
+| `@oxagen/handlers` | api, app, mcp | Business logic handlers (~224 non-test files, count drifts) |
 | `@oxagen/database` | api, app, handlers, agent, billing, ... | Drizzle schema + client |
 | `@oxagen/auth` | api, app, mcp | Better Auth, session/API-key resolution |
-| `@oxagen/agent` | api, app | Agent runtime, memory, dispatch |
-| `@oxagen/agent-artifacts` | cli, app, handlers, skills, oxagen | Agent/skill/command artifact format + serialization |
-| `@oxagen/agent-engine` | agent, api | Pipeline, planner, fleet, evaluator |
-| `@oxagen/agent-runner` | api, handlers, inngest-functions, agent, agent-worker | Agent run context, orchestration, Stella client |
-| `@oxagen/agent-worker` | agent-runner | Long-running worker for agent dispatch |
+| `@oxagen/agent` | api, app | Governed in-app agent turn loop, MCP tool gateway, agent registry handlers |
+| `@oxagen/run-ledger` | api, handlers, inngest-functions, agent | Durable run/attempt/event/seal evidence ledger (formerly `agent-runner`) |
 | `@oxagen/engram` | cli, agent | Local DuckDB memory, context compilation, replay |
 | `@oxagen/ai` | api, app, cli, mcp | AI SDK wrappers, prompt registry |
 | `@oxagen/billing` | api, app | Stripe, credits, usage |
@@ -95,9 +87,7 @@ xmcp                    MCP server framework (streamable HTTP)
 | `@oxagen/run-evidence` | iam | Evidence canonicalization (CGP frames, JSON digests) |
 | `@oxagen/inngest-functions` | api, app | All Inngest function definitions |
 | `@oxagen/tenancy` | api, mcp, handlers | Org/workspace boundary enforcement |
-| `@oxagen/sandbox` | api, agent | Code execution sandbox (Vercel) |
 | `@oxagen/storage` | api, app, handlers | Vercel Blob abstraction |
-| `@oxagen/stella-engine-client` | agent-runner | Stella agent engine client (run submission, polling) |
 | `@oxagen/crypto` | api, plugins, ingestion | AES-256-GCM / KMS encryption |
 | `@oxagen/github` | api, ingestion | GitHub App client, OAuth |
 | `@oxagen/notifications` | api, app | Notification delivery |
@@ -105,12 +95,16 @@ xmcp                    MCP server framework (streamable HTTP)
 | `@oxagen/telemetry` | api, app, cli | OpenTelemetry tracing |
 | `@oxagen/config` | api, app, cli, mcp | Shared runtime config |
 | `@oxagen/ontology` | api, handlers | Ontology query/management |
-| `@oxagen/rules` | api, app, mcp, agent-worker | Workspace rules engine (access control, guardrails) |
-| `@oxagen/skills` | api, cli | Skill filesystem scanner |
+| `@oxagen/rules` | api, app, mcp | Workspace rules engine (access control, guardrails) |
 | `@oxagen/ui` | app | coss ui component system (Base UI–based; migrated off shadcn/Radix) |
-| `@oxagen/web` | app | Shared web utilities |
 | `@oxagen/functions` | api, app | Shared function utilities |
 | `@oxagen/mcp-config` | cli, mcp | MCP server config schema |
+
+ADR-043 (runtime excision, 2026-09-07) removed `@oxagen/agent-artifacts`,
+`@oxagen/agent-engine`, `@oxagen/agent-worker`, `@oxagen/sandbox`,
+`@oxagen/skills`, `@oxagen/stella-engine-client`, and the search/fetch
+`@oxagen/web` package entirely; `@oxagen/agent-runner` was renamed
+`@oxagen/run-ledger`.
 
 ## Tooling Packages
 

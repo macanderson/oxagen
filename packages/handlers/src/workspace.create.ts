@@ -11,8 +11,6 @@ import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
 import { bootstrapWorkspaceAgents } from "./workspace-agents";
 import { seedWorkspaceDefaultRegistry } from "./workspace-registry-seed";
-import { seedWorkspaceDefaultCapabilities } from "./workspace-capability-seed";
-import { seedWorkspaceDefaultSkills } from "./skill-workspace-seed";
 import { seedWorkspaceDefaultEnvironment } from "./workspace-environment-seed";
 
 export const workspaceCreateHandler: CapabilityHandler<
@@ -130,14 +128,6 @@ export const workspaceCreateHandler: CapabilityHandler<
 
     // Seed the default MCP registry for the new workspace (idempotent).
     await seedWorkspaceDefaultRegistry({ orgId: ctx.orgId, workspaceId });
-
-    // Seed the default first-party capability packs (documents/media) so the
-    // in-app agent can invoke them immediately without capability_not_installed.
-    await seedWorkspaceDefaultCapabilities({ orgId: ctx.orgId, workspaceId });
-
-    // Seed workspace-owned editable copies of all builtin skill templates so
-    // agents can invoke them immediately without a separate install (idempotent).
-    await seedWorkspaceDefaultSkills({ orgId: ctx.orgId, workspaceId });
 
     // Seed the default environment so runs always resolve to a default (idempotent).
     await seedWorkspaceDefaultEnvironment({ orgId: ctx.orgId, workspaceId });

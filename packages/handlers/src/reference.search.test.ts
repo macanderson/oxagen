@@ -4,7 +4,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 // ── Hoisted mock state ─────────────────────────────────────────────────────────
 // vi.hoisted so the schema objects and mock fns exist when the vi.mock factories
 // run. Postgres rows are keyed by table marker (`__table`) so a single
-// withTenantDb mock can serve every arm (repositories, agents, skills, mcp
+// withTenantDb mock can serve every arm (repositories, agents, mcp
 // servers, external tools) from one lookup table set per test.
 const H = vi.hoisted(() => {
   const table = (name: string, cols: Record<string, string>) => ({
@@ -27,18 +27,6 @@ const H = vi.hoisted(() => {
       name: "name",
       description: "description",
       status: "status",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      deletedAt: "deletedAt",
-    }),
-    skills: table("skills", {
-      publicId: "publicId",
-      slug: "slug",
-      name: "name",
-      description: "description",
-      source: "source",
-      enabled: "enabled",
-      usageCount: "usageCount",
       orgId: "orgId",
       workspaceId: "workspaceId",
       deletedAt: "deletedAt",
@@ -337,33 +325,31 @@ describe("referenceSearchHandler", () => {
         status: "active",
       },
     ]);
-    setRows("skills", [
+    setRows("mcpServers", [
       {
-        publicId: "skl_1",
-        slug: "s1",
-        name: "Skill One",
-        description: null,
-        source: "builtin",
+        publicId: "mcp_1",
+        name: "GitHub",
+        transportType: "http",
+        endpointUrl: "https://example.test/mcp",
+        healthStatus: "healthy",
         enabled: true,
-        usageCount: 0,
       },
       {
-        publicId: "skl_2",
-        slug: "s2",
-        name: "Skill Two",
-        description: null,
-        source: "builtin",
+        publicId: "mcp_2",
+        name: "Supabase",
+        transportType: "http",
+        endpointUrl: "https://example.test/mcp2",
+        healthStatus: "healthy",
         enabled: true,
-        usageCount: 0,
       },
     ]);
 
     const { results } = await referenceSearchHandler(
-      { query: "", types: ["agent", "skill"], limit: 3 },
+      { query: "", types: ["agent", "mcp_server"], limit: 3 },
       ctx,
     );
 
-    // 4 distinct rows after dedup (agt_1, agt_2, skl_1, skl_2), sliced to 3.
+    // 4 distinct rows after dedup (agt_1, agt_2, mcp_1, mcp_2), sliced to 3.
     expect(results).toHaveLength(3);
     const keys = results.map((r) => `${r.type} ${r.slug} ${r.location}`);
     expect(new Set(keys).size).toBe(keys.length); // no duplicates survived

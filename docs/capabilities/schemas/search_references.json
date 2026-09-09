@@ -3,11 +3,7 @@
   "domain": "reference",
   "description": "Tenant-scoped autocomplete search across every referenceable platform object — connected repositories and branches, code-graph files/directories, agents, skills, agent tools, MCP servers, capabilities, and knowledge-graph nodes/edges. Returns typed rows (type, slug, location, label, description, properties) ready to become @-mention tokens; pass `slug` for exact-id resolution of an existing mention.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -40,7 +36,6 @@
             "file",
             "directory",
             "agent",
-            "skill",
             "tool",
             "mcp_server",
             "capability",
@@ -80,7 +75,6 @@
                 "file",
                 "directory",
                 "agent",
-                "skill",
                 "tool",
                 "mcp_server",
                 "capability",
@@ -129,9 +123,7 @@
         }
       }
     },
-    "required": [
-      "results"
-    ],
+    "required": ["results"],
     "additionalProperties": false
   }
 }

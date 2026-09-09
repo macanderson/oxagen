@@ -1,7 +1,6 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
-import { useRegisterFillableForm } from "@/lib/page-context";
 import { FieldFillTransition } from "@/components/ui/field-fill-transition";
 import { AvatarMaker } from "@/components/avatar/avatar-maker";
 import { Input } from "@/components/ui/input";
@@ -10,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { updateProfileAction, type ProfileInput } from "./profile-action";
 import { ConnectedAccounts } from "./connected-accounts";
 import { SetPasswordForm } from "./set-password-form";
-import type { FillableFormSpec, FieldDescriptor } from "@/lib/ask/fill-types";
 import type { ConnectedAccountsState } from "./security-types";
 import { account } from "@/lib/routes";
 
@@ -25,7 +23,7 @@ export interface ProfileFormProps {
 }
 
 export function ProfileForm({
-  userId,
+  userId: _userId,
   initialDisplayName,
   email,
   initialAvatarUrl,
@@ -39,48 +37,6 @@ export function ProfileForm({
     "idle" | "saving" | "saved" | "error"
   >("idle");
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
-
-  // Ask-to-Fill registration — lets the AI suggest profile values
-  const fields: FieldDescriptor[] = [
-    {
-      name: "displayName",
-      label: "Display name",
-      type: "text",
-      current: displayName,
-      required: true,
-    },
-    {
-      name: "avatarUrl",
-      label: "Avatar URL",
-      type: "text",
-      current: avatarUrl,
-      required: false,
-    },
-  ];
-
-  const spec: FillableFormSpec = {
-    formId: `account-profile-${userId}`,
-    title: "Profile",
-    fields,
-  };
-
-  useRegisterFillableForm({
-    ...spec,
-    apply: (values: Record<string, unknown>, mode, fieldName) => {
-      if (mode === "field" && fieldName === "displayName") {
-        if (typeof values.displayName === "string")
-          setDisplayName(values.displayName);
-      } else if (mode === "field" && fieldName === "avatarUrl") {
-        if (typeof values.avatarUrl === "string")
-          setAvatarUrl(values.avatarUrl);
-      } else {
-        if (typeof values.displayName === "string")
-          setDisplayName(values.displayName);
-        if (typeof values.avatarUrl === "string")
-          setAvatarUrl(values.avatarUrl);
-      }
-    },
-  });
 
   const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();

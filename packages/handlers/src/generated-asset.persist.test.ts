@@ -37,7 +37,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     ...real,
     db: () => tx,
     // withSystemDb passthrough: the handler uses withSystemDb for both
-    // persistGeneratedAsset and createPendingGeneratedAsset inserts.
+    // persistGeneratedAsset inserts.
     // Forward fn to a fake tx that exposes the insert + select mocks.
     withSystemDb: async (
       fn: (tx: Record<string, unknown>) => Promise<unknown>,
@@ -248,21 +248,6 @@ describe("displayName → metadata", () => {
     const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(row.metadata).toBeUndefined();
   });
-
-  it("stores displayName for a pending (video) asset too", async () => {
-    const { createPendingGeneratedAsset } = await import(
-      "./generated-asset.persist"
-    );
-    await createPendingGeneratedAsset({
-      ...BASE,
-      kind: "video",
-      accessPolicy: "org",
-      mimeType: "video/mp4",
-      displayName: "Arctic Transit Animation",
-    });
-    const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(row.metadata).toEqual({ displayName: "Arctic Transit Animation" });
-  });
 });
 
 describe("conversation linkage (resolveConversationId)", () => {
@@ -356,54 +341,5 @@ describe("conversation linkage (resolveConversationId)", () => {
     const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(mocks.msgSelect).toHaveBeenCalledTimes(1);
     expect(row.conversationId).toBeUndefined();
-  });
-
-  it("resolves conversationId from messageId for a pending (video) asset too", async () => {
-    mocks.msgSelect.mockResolvedValueOnce([{ conversationId: "conv-video" }]);
-    const { createPendingGeneratedAsset } = await import(
-      "./generated-asset.persist"
-    );
-    await createPendingGeneratedAsset({
-      ...BASE,
-      kind: "video",
-      accessPolicy: "org",
-      mimeType: "video/mp4",
-      messageId: "msg-vid",
-    });
-    const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(row.conversationId).toBe("conv-video");
-    expect(row.messageId).toBe("msg-vid");
-  });
-});
-
-describe("createPendingGeneratedAsset", () => {
-  it("inserts a pending row with no blob yet and returns the serving URL", async () => {
-    const { createPendingGeneratedAsset } = await import(
-      "./generated-asset.persist"
-    );
-    const out = await createPendingGeneratedAsset({
-      ...BASE,
-      kind: "video",
-      accessPolicy: "org",
-      mimeType: "video/mp4",
-      conversationId: "conv-1",
-      messageId: "msg-1",
-    });
-
-    // No upload happens up front for an async render.
-    expect(mocks.put).not.toHaveBeenCalled();
-
-    const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(row.status).toBe("pending");
-    expect(row.kind).toBe("video");
-    expect(row.accessPolicy).toBe("org");
-    expect(row.storageKey).toBe("");
-    expect(row.mimeType).toBe("video/mp4");
-    expect(row.storageUrl).toBeUndefined();
-    expect(row.sizeBytes).toBeUndefined();
-
-    expect(out.id).toBe("asset-uuid");
-    expect(out.publicId).toBe("gen_ABC");
-    expect(out.serveUrl).toBe("/api/v1/assets/gen_ABC");
   });
 });

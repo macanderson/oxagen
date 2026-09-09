@@ -8,7 +8,7 @@ As the agent works, it learns things: that a test is flaky for a specific reason
 Memory is **workspace-scoped**: shared across every session, one-shot run, and fleet subagent in the workspace — not per-conversation, and never leaked across workspaces or organizations.
 
 <Callout type="info">
-**Memory is not the knowledge graph.** Agent memory is *experiential* — what the agent **learned** from doing work. The [knowledge graph](/docs/cli/knowledge-graph) is *structural* — what your code and entities **are**. The [agent engine](/docs/cli/agent-engine) draws on both: memory tells it what worked last time, the graph tells it how the system is wired.
+**Memory is not the knowledge graph.** Agent memory is *experiential* — what an agent **learned** from doing work. The [knowledge graph](/docs/cli/knowledge-graph) is *structural* — what your code and entities **are**. An agent draws on both: memory tells it what worked last time, the graph tells it how the system is wired.
 </Callout>
 
 ## The two axes
@@ -123,9 +123,11 @@ oxagen memory import docs/conventions/*.md          # preview
 oxagen memory import docs/conventions/*.md --yes     # commit
 ```
 
-## How the agent uses memory automatically
+## How agents use memory automatically
 
-You rarely call these by hand mid-task. During the [enhance stage](/docs/cli/agent-engine#the-pipeline) the agent recalls relevant memories semantically and folds them into context; when a turn had to be corrected, the pipeline records a `gotcha` memory so the next run avoids the same mistake. RULE-class memories with high enforcement are surfaced as instructions the worker must honor.
+You rarely call these by hand mid-task. An agent connected to Oxagen over MCP recalls relevant memories semantically before it acts and folds them into its context; when a turn has to be corrected, it records a `gotcha` memory so the next run avoids the same mistake. RULE-class memories with high enforcement are surfaced as instructions the agent must honor.
+
+The CLI commands on this page are the **curation** surface for that loop: review what was learned, promote what has proven out, demote or delete what has not.
 
 ## Governance
 
@@ -134,5 +136,4 @@ Memory writes are governed by the same IAM model as every capability and produce
 ## Related
 
 - [Knowledge graph from the CLI](/docs/cli/knowledge-graph) — the structural context memory sits alongside.
-- [The agent engine](/docs/cli/agent-engine) — where recall and gotcha-writing happen in the turn.
 - [In-app agent memory](/docs/agent/memory) — the same memory, viewed and managed from the web app.

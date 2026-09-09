@@ -29,7 +29,7 @@ variable "availability_zone" {
 }
 
 variable "instance_type" {
-  description = "Graviton instance type. `t4g.medium` is the floor for Caddy, a handful of small Node processes, and Neo4j sharing the box — Postgres and ClickHouse have moved to Aurora and Redshift Serverless, so this carries one engine rather than three."
+  description = "Graviton instance type. `t4g.medium` is the floor for Caddy, a handful of small Node processes, and both ClickHouse and Neo4j sharing the box. Postgres moved to Aurora, so this carries two engines rather than three — ClickHouse stayed (#2693)."
   type        = string
   default     = "t4g.medium"
 }
@@ -60,4 +60,24 @@ variable "backup_retention_days" {
 variable "tags" {
   description = "Tags applied to every resource, carrying the owning brand."
   type        = map(string)
+}
+
+# The AMI is pinned, not resolved. It used to come from
+# `/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64` —
+# AWS's *latest* pointer, which moves every few weeks as Amazon publishes a new
+# image. `ami` forces replacement, so that configuration could never converge:
+# every plan after a new release proposed destroying and recreating this
+# instance, and an apply run for any other reason would have done it.
+#
+# On 2026-09-06 that gap was live. The pointer resolved to
+# ami-07987a01dcdb011ef while both running instances were on
+# ami-0cded71ff6ab7f608, and `tofu plan` read "4 to add, 3 to change, 10 to
+# destroy" — including the node every service runs on (#2682).
+#
+# Pinned here so replacing an instance is always something someone chose. Bump
+# it deliberately, in its own change, with the replacement sequenced against
+# whatever the instance carries.
+variable "ami_id" {
+  description = "AMI for this instance. Pinned deliberately; see the note above."
+  type        = string
 }

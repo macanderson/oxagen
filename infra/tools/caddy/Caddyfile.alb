@@ -39,7 +39,7 @@
 		}
 
 		# --- Applications -----------------------------------------------------
-		# These hold sessions and reach Aurora/Redshift/Neo4j over the network or
+		# These hold sessions and reach Aurora/ClickHouse/Neo4j over the network or
 		# loopback respectively.
 
 		@app host app.oxagen.sh

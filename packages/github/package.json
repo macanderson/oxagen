@@ -16,10 +16,8 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@oxagen/agent-engine": "workspace:*",
     "@oxagen/crypto": "workspace:*",
     "@oxagen/database": "workspace:*",
-    "@oxagen/glob": "workspace:*",
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {

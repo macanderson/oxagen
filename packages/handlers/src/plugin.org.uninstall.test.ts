@@ -64,15 +64,15 @@ beforeEach(() => {
 });
 
 describe("plugin.org.uninstall", () => {
-  it("soft-deletes the listing and deletes mcp servers — never sandbox templates", async () => {
+  it("soft-deletes the listing and hard-deletes its mcp servers", async () => {
     const result = await handler({ orgListingId: "porg-1" }, ctx as never);
 
     expect(result).toEqual({ ok: true });
     // The plugin listing is soft-deleted (update), mcp servers hard-deleted.
     expect(state.updates).toContain(schema.pluginInstalledPlugins);
     expect(state.deletes).toContain(schema.mcpServers);
-    // Templates are retained.
-    expect(state.deletes).not.toContain(schema.sandboxTemplates);
-    expect(state.updates).not.toContain(schema.sandboxTemplates);
+    // Nothing else in the workspace is touched.
+    expect(state.deletes).toEqual([schema.mcpServers]);
+    expect(state.updates).toEqual([schema.pluginInstalledPlugins]);
   });
 });

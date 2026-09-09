@@ -24,14 +24,10 @@ export const workspaceModelSettingsWrite = registerCapability({
       .nullable()
       .optional(),
     defaultTextModel: z.string().min(1).nullable().optional(),
-    defaultImageModel: z.string().min(1).nullable().optional(),
-    defaultVideoModel: z.string().min(1).nullable().optional(),
   }),
   output: z.object({
     defaultTextTier: z.enum(["fast", "balanced", "precise"]).nullable(),
     defaultTextModel: z.string().nullable(),
-    defaultImageModel: z.string().nullable(),
-    defaultVideoModel: z.string().nullable(),
   }),
 });
 

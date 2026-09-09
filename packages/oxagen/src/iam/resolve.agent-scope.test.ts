@@ -109,19 +109,18 @@ describe("intersectEffectiveScope — dimension-wise intersection", () => {
     expect(merged.graph?.relationshipTypes).toBeUndefined();
   });
 
-  it("skills.slugs and agents.refs intersect as sets, undefined = unrestricted", () => {
+  it("agents.refs intersect as sets, undefined = unrestricted", () => {
     const a: EffectiveResourceScope = {
-      skills: { slugs: ["research", "summarize"] },
       agents: { refs: ["reviewer", "planner"] },
     };
     const b: EffectiveResourceScope = {
-      skills: { slugs: ["summarize"] },
       agents: {},
     };
     const merged = intersectEffectiveScope(a, b);
-    expect(merged.skills?.slugs).toEqual(["summarize"]);
     // agents.refs undefined on b → a's set passes through unrestricted-on-b-side.
     expect(merged.agents?.refs).toEqual(["reviewer", "planner"]);
+    const c: EffectiveResourceScope = { agents: { refs: ["planner"] } };
+    expect(intersectEffectiveScope(a, c).agents?.refs).toEqual(["planner"]);
   });
 
   it("graph.budget takes the element-wise min of both ceilings", () => {
@@ -408,13 +407,13 @@ describe("resolveAgentEffectivePermissions — role-grant ceilings", () => {
         roleId: ROLE_ID,
         capabilityId: CAPABILITY,
         effect: "allow",
-        conditionsJsonb: { resourceScope: { skills: { slugs: ["research"] } } },
+        conditionsJsonb: { resourceScope: { agents: { refs: ["research"] } } },
       },
     ];
     const grants: Grant[] = [grantWithScope(HUMAN_ID, {}, "allow")];
     const result = resolveAgentEffectivePermissions(
       baseInput({ grants, roles: [role], roleGrants }),
     );
-    expect(result.resourceScope.skills?.slugs).toEqual(["research"]);
+    expect(result.resourceScope.agents?.refs).toEqual(["research"]);
   });
 });

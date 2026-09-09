@@ -1,144 +1,95 @@
 ---
 title: CLI quickstart
-description: Your first agentic coding session — the REPL, one-shot runs, permission modes, fleets, and grounding the agent in your knowledge graph.
+description: Link a project to a workspace, then read a trace, check the spend ceiling, and ground a question in the knowledge graph.
 ---
 
-This walkthrough assumes you've [installed the CLI](/docs/cli/installation) and [provided a gateway key](/docs/cli/account-setup#1-provide-a-gateway-key-for-the-agent-loop). Run the commands from the root of a project you want the agent to work on.
+This walkthrough assumes you've [installed the CLI](/docs/cli/installation) and [authenticated it](/docs/cli/account-setup). Run the commands from the root of a project whose agents you want to govern.
 
-## Interactive REPL
-
-Run `oxagen` with no arguments in a terminal to open the interactive session:
+## 1. Link the project
 
 ```bash
-oxagen
+oxagen init
 ```
 
-Type a request and press Enter. The agent reads relevant files, proposes edits, runs commands, and reports back. By default the REPL runs in **ask** mode: it pauses for your approval before editing a file or running a shell command.
+`init` resolves an org and workspace — picking interactively when you belong to more than one — and writes `.oxagen/workspace.json`. Every other command reads that file to scope itself, so you don't pass `--org`/`--workspace` on each invocation.
 
-<TuiInteractiveAnswer />
-
-Every action is shown as it happens — tool calls, the agent's streaming answer — and `/hud` opens a heads-up display of every agent running this session (the current turn, any subagents it dispatched, and background monitors), with elapsed time, model, and cost per agent.
-
-Type `/` to open the menu of in-session [slash commands](/docs/cli/repl-commands) — set a model, switch permission mode, browse memories, review a diff — or run one of [your own](/docs/cli/custom-commands). Press `Ctrl-C` to interrupt a turn, and again to exit.
-
-A simple lookup question ("what's the flag to enable verbose mode?") answers directly, skipping the planner and completeness-judge steps a genuine coding task pays for — the REPL classifies the prompt's intent for free before choosing a path, so a factual question gets a fast answer without losing grounding (the agent still reads relevant files and your knowledge graph).
-
-### Copy, paste, and scroll
-
-The REPL uses your terminal's native text selection by default: drag to select, `Cmd`/`Ctrl-C` to copy, and it copies clean text — no escape sequences. Keyboard scrolling always works (`PageUp`/`PageDown`, `Ctrl-U`/`Ctrl-D`, or `Up`/`Down`/`Home`/`End` on an empty input). If you want the CLI's own mouse handling instead (click-to-position, wheel scroll through the emulator) — which takes over native selection — opt in with `/mouse` or `OXAGEN_CLI_MOUSE=1`.
-
-Pasting a single line inserts it in full at any length. Pasting multiple lines collapses to a preview chip (first and last few lines, with a line count) that still sends the full pasted text on submit — so a long paste doesn't flood the input, but nothing is lost.
-
-## One-shot runs
-
-Pass a prompt as an argument to run a single task and exit — ideal for scripts, git hooks, and CI:
+It then checks whether the workspace has a GitHub connection and offers to create one, so the knowledge graph has a source to ground on. Re-running `init` later reuses the existing link instead of re-prompting.
 
 ```bash
-oxagen "add a unit test for parseConfig covering the empty-input case"
+oxagen init --no-link   # skip the linker (CI, or when the link already exists)
 ```
 
-You can also pipe input in:
+## 2. Check what you're allowed to spend
 
 ```bash
-git diff | oxagen "write a concise commit message for this diff"
+oxagen budget show
 ```
 
-One-shot runs are **ungated** by default (the agent edits and runs commands without prompting), so it can complete unattended. Constrain it with a [permission mode](#permission-modes) when you want a safety rail.
+This prints each configured spend ceiling — the org's and the active workspace's — with its live burn: period-to-date spend, projection to the end of the period, and whether the admission gate is currently denying.
 
-## Permission modes
-
-The `--mode` flag controls what the agent may do without asking:
-
-| Mode | Behavior |
-|---|---|
-| `ask` | Prompt before each file edit or command. (Default in the REPL.) |
-| `auto-edit` | Apply file edits automatically; still prompt for shell commands. (`accept-edits` is accepted too.) |
-| `bypass` | Run everything without prompting. |
-| `readonly` | Read, search, and explain only — no edits, no commands. |
+Set one (org Owner, Admin, or Billing only):
 
 ```bash
-# Let it edit freely but confirm any shell command:
-oxagen --mode auto-edit "refactor the date helpers into a single module"
-
-# Investigate without touching anything:
-oxagen --mode readonly "where is rate limiting implemented and is it per-org?"
+oxagen budget set --scope workspace --period monthly --limit 500
 ```
 
-`--readonly` is shorthand for `--mode readonly`.
+See [Spend budgets](/docs/cli/budget) for the threshold ladder and the rolling-window form.
 
-## Choose a model
+## 3. Price a workload before you run it
 
-The agent uses a current Claude Sonnet model by default. Override it per run, per shell, or persistently — models are plain Vercel AI Gateway slugs (`vendor/model`):
+`oxagen cost` makes no network call — it prices token counts against the rate card baked into the CLI:
 
 ```bash
-oxagen -m anthropic/claude-opus-4.1 "design a migration plan for the events table"
-
-export OXAGEN_MODEL="anthropic/claude-sonnet-5"   # this shell
-oxagen config model anthropic/claude-sonnet-5      # persisted
+oxagen cost --in 200000 --out 40000
 ```
 
-If the gateway reports a slug as unknown, it has likely drifted — set a current one with `oxagen config model <slug>`.
+With no `--model` it compares every priced model cheapest-first and reports the spread. Add `-m <slug>` for one model, or `--rates` to dump the card.
 
-`-m/--model` sets the **worker** — the model that edits code. The pipeline also uses a separate judge and triage model, each independently configurable; see [Per-role models](/docs/cli/models#per-role-models-worker-judge-triage).
+## 4. Explain what an agent did
 
-## Dispatch a fleet
-
-For a larger goal, `oxagen agents` plans it into tasks and runs several agents in parallel:
+Given an execution id, render the run as a span tree — every step, tool call, and child execution:
 
 ```bash
-oxagen agents "add input validation to every public API route"
+oxagen trace exec_01J8…
+oxagen trace exec_01J8… --json
 ```
 
-- `--concurrency <n>` — how many agents run at once (default 4).
-- Each agent runs in its own git worktree by default and merges the work back, so parallel agents never clobber each other's files. Pass `--no-isolate` to run them all directly against the working tree instead.
-- `--readonly` — analysis-only fleet (no edits or commands).
+Child executions appear nested under the step that spawned them, so one trace covers a whole fan-out.
 
-```bash
-oxagen agents --concurrency 6 "migrate components off the deprecated Button API"
-```
-
-For detached, long-lived sessions you can supervise from any terminal, see [Fleet](/docs/cli/fleet). Run [`oxagen view`](/docs/cli/commands#oxagen-view-audit-agent-work) to audit what agents have done here — recent runs with their model, duration, and real cost, plus code-graph stats and daemon/auth health.
-
-## Query shared workspace context
-
-If you've [authenticated against the platform](/docs/cli/account-setup#4-authenticate-the-cli), query the governed workspace graph directly:
+## 5. Ground a question in the graph
 
 ```bash
 oxagen graph search -q "where do we enforce tenant isolation?" -n 5
 ```
 
-The query runs online and returns only the bounded results your current workspace grants allow. It does not download a local workspace replica or automatically inject the result into a later agent turn. The exact checkout code graph remains local. See [Knowledge graph from the CLI](/docs/cli/knowledge-graph) for the full boundary.
+The query runs online and returns only the bounded results your current workspace grants allow — there is no local replica of the workspace graph. See [Knowledge graph from the CLI](/docs/cli/knowledge-graph).
 
-## Speed up repeated runs
-
-The context daemon keeps indexes and the code graph warm between invocations, so subsequent turns start faster:
+## 6. Curate what agents have learned
 
 ```bash
-oxagen daemon start
-oxagen daemon status
-oxagen daemon stop
+oxagen memory candidates                 # OBSERVATIONs ripe for promotion
+oxagen memory show mem_01J8…
+oxagen memory promote mem_01J8… --to RULE --enforcement 90 --rationale "Confirmed across 3 runs"
+oxagen remember "staging Postgres is on 5433, not 5432" --class RULE
 ```
 
-## Review what happened
+Promotions and demotions are recorded as auditable events. See [Memory from the CLI](/docs/cli/memory).
 
-Inspect exactly how a past turn was handled — prompt, context, model, scores, and the completeness judge's verdict:
+## 7. Manage environments and secrets
 
 ```bash
-oxagen replay --list      # list recent turns
-oxagen replay             # replay the latest
-oxagen replay 3           # replay the 3rd-most-recent turn
+oxagen env list
+oxagen secret list                       # masked metadata only
+oxagen secret set DATABASE_URL "postgres://…" --env staging
+oxagen secret reveal DATABASE_URL --env staging   # recorded to the access log
 ```
 
-And see what your runs cost, rolled up by model:
+## Where the coding agent went
 
-```bash
-oxagen cost --session
-```
+Nothing in this CLI runs an agent. Oxagen governs, grounds, explains, meters and rates them; the agent itself is [Stella](https://github.com/macanderson/stella), which connects to Oxagen over MCP and the platform API. Invoking a retired command (`oxagen sandbox`, `oxagen eval`, a bare `oxagen "<prompt>"`, …) prints a notice saying exactly that and exits non-zero.
 
 ## Next steps
 
-- [In-REPL slash commands](/docs/cli/repl-commands) — every `/command` in the interactive session.
-- [The agent engine](/docs/cli/agent-engine) — how a turn is planned, executed, and verified.
 - [Command reference](/docs/cli/commands) — every command and flag.
-- [Custom commands, agents & rules](/docs/cli/custom-commands) — extend the CLI with your own.
-- [Memory from the CLI](/docs/cli/memory) and [Knowledge graph from the CLI](/docs/cli/knowledge-graph) — local experiential context and explicit shared-context queries.
+- [Spend budgets](/docs/cli/budget) — the ceilings that gate agent runs.
+- [Memory from the CLI](/docs/cli/memory) and [Knowledge graph from the CLI](/docs/cli/knowledge-graph) — the two grounding surfaces.

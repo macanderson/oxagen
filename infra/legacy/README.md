@@ -51,8 +51,8 @@ record of how they were made.
 
 ## What nobody has established
 
-Which account the running platform uses is settled above: this one, for
-ingestion. What is still open:
+Which account the running platform uses is settled above, from the new
+account's own store: the old one, for ingestion. What is still open:
 
 - Whether the new account has equivalent keys to move to, and what the re-wrap
   path is for ciphertext already written under the old key.
@@ -69,6 +69,14 @@ That is a fact about the code, so it holds regardless of what any parameter
 store contains: even if a `AWS_KMS_AUTH_TOKENS_KEY_ARN` existed somewhere, no
 shipping code would read it.
 
+The parameter store agrees, checked in the new account rather than assumed:
+`/oxagen/production/AUTH_TOKEN_ENCRYPTION_KEY` there is 43 characters of key
+material, not an ARN — base64 of 32 bytes, as the registry describes.
+`/oxagen/production/INGESTION_ENCRYPTION_KEY` is the same shape, and is the
+`local` provider's key, unused while the provider is `kms`. So the
+cross-account dependency is exactly one key, and
+`alias/oxagen/auth-tokens-prod` is not it.
+
 **What is NOT established, and the distinction matters.** Reading
 `/oxagen/production/*` with a contributor's credentials reads the store in
 `578673726240` — this account. The deploy node lives in `916294258235` and
@@ -76,10 +84,23 @@ reads its OWN store, so those two prefixes are different objects with the same
 name. A read from here describes the pre-cutover deployment, not the running
 one, and cannot tell a live setting from a leftover.
 
-So the ingestion answer above should be read the same way: it is what THIS
-account's parameter store says, which is what the platform used before the
-cutover. Confirming it for the running platform needs a read in
-`916294258235`. #2680 carries that.
+**That read has now been done.** On 2026-09-08, against
+`916294258235`/`us-east-1` — identity and parameter fetched in one command so
+the account cannot be assumed:
+
+```
+identity: 916294258235 / us-east-1
+/oxagen/production/INGESTION_CRYPTO_PROVIDER = kms
+/oxagen/production/AWS_KMS_INGESTION_KEY_ARN = arn:aws:kms:us-east-2:578673726240:key/...
+```
+
+Version 1, written 2026-08-26 and never changed. So this is the running
+platform's own configuration, not a pre-cutover reading taken from the wrong
+store. The new account points at the old account's key.
+
+The key itself is alive: `describe-key` in `us-east-2` returns `Enabled`,
+`CUSTOMER`-managed, `ENCRYPT_DECRYPT`, with no deletion scheduled. Ingestion
+works today, which is why nothing has surfaced this as an outage.
 
 The cutover checklist is marked complete, and this stack was last touched in
 June by a commit about something else — those two facts together are why the

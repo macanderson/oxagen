@@ -2,16 +2,11 @@
 import * as React from "react";
 import type {
   ApprovalResolution,
-  BackgroundTaskStatus,
   ConsentResolution,
   MemoryClass,
   MemoryRecallHit,
-  PlanDecision,
-  PlanStep,
   RiskLevel,
   StreamEvent,
-  SubagentChild,
-  SubagentStatus,
   ToolCallStatus,
   TurnBudgetModeName,
   TurnBudgetNoticeState,
@@ -30,8 +25,6 @@ export interface LiveToolCall {
   inputPreview: unknown;
   riskLevel: RiskLevel;
   status: ToolCallStatus;
-  stdout: string;
-  stderr: string;
   output?: unknown;
   errorReason?: string;
   durationMs?: number;
@@ -100,22 +93,6 @@ export interface LivePendingConsent {
   resolution?: ConsentResolution;
 }
 
-export interface LivePlan {
-  planId: string;
-  title: string;
-  steps: PlanStep[];
-  rationale?: string;
-  status: "pending" | PlanDecision;
-}
-
-export interface LiveFanout {
-  fanoutId: string;
-  parentMessageId: string;
-  children: SubagentChild[];
-  status: SubagentStatus;
-  results?: Array<{ childMessageId: string; output: unknown }>;
-}
-
 export interface LiveMemoryRecall {
   queryId: string;
   memories: MemoryRecallHit[];
@@ -163,16 +140,6 @@ export interface LiveBudgetNotice {
   mode: TurnBudgetModeName;
 }
 
-/** A live background task dispatched this turn, surfaced as an inline card. */
-export interface LiveBackgroundTask {
-  taskId: string;
-  kind: string;
-  label?: string;
-  status: BackgroundTaskStatus;
-  inngestRunId?: string;
-  progressPct?: number;
-}
-
 export interface ToolStreamState {
   messages: Record<string, LiveAssistantMessage>;
   toolCalls: Record<string, LiveToolCall>;
@@ -185,14 +152,10 @@ export interface ToolStreamState {
   pendingApprovals: Record<string, LivePendingApproval>;
   /** Live first-use external-MCP consent prompts, keyed by approvalId. */
   pendingConsents: Record<string, LivePendingConsent>;
-  plans: Record<string, LivePlan>;
-  activeFanouts: Record<string, LiveFanout>;
   memoryRecalls: Record<string, LiveMemoryRecall>;
   memoryWrites: Record<string, LiveMemoryWrite>;
   /** Live component directives received this turn, keyed by toolCallId. */
   components: Record<string, LiveComponent>;
-  /** Live background tasks dispatched this turn, keyed by taskId. */
-  backgroundTasks: Record<string, LiveBackgroundTask>;
   /**
    * Ordered list of timeline-entry keys in first-appearance order. Each key is
    * `<kind>:<id>` (e.g. "reasoning:abc", "tool:xyz", "text:msg:3", "step:0").
@@ -248,12 +211,9 @@ export const INITIAL_STATE: ToolStreamState = {
   textSegments: {},
   pendingApprovals: {},
   pendingConsents: {},
-  plans: {},
-  activeFanouts: {},
   memoryRecalls: {},
   memoryWrites: {},
   components: {},
-  backgroundTasks: {},
   order: [],
   activeTextKey: null,
   turnUsage: undefined,
@@ -395,8 +355,6 @@ export function reducer(
               inputPreview: undefined,
               riskLevel: "low",
               status: "pending",
-              stdout: "",
-              stderr: "",
               partialInput: "",
               startedAt: Date.now(),
             } satisfies LiveToolCall),
@@ -432,8 +390,6 @@ export function reducer(
             inputPreview: e.inputPreview,
             riskLevel: e.riskLevel,
             status: "running",
-            stdout: existing?.stdout ?? "",
-            stderr: existing?.stderr ?? "",
             output: existing?.output,
             errorReason: existing?.errorReason,
             durationMs: existing?.durationMs,
@@ -443,18 +399,6 @@ export function reducer(
         },
         order: withOrder(state.order, `tool:${e.toolCallId}`),
         activeTextKey: null,
-      };
-    }
-    case "tool-call-output": {
-      const existing = state.toolCalls[e.toolCallId];
-      if (!existing) return state;
-      const key = e.chunk.channel;
-      return {
-        ...state,
-        toolCalls: {
-          ...state.toolCalls,
-          [e.toolCallId]: { ...existing, [key]: existing[key] + e.chunk.data },
-        },
       };
     }
     case "tool-call-end": {
@@ -531,64 +475,6 @@ export function reducer(
         },
       };
     }
-    case "plan-proposed": {
-      return {
-        ...state,
-        plans: {
-          ...state.plans,
-          [e.planId]: {
-            planId: e.planId,
-            title: e.title,
-            steps: e.steps,
-            rationale: e.rationale,
-            status: "pending",
-          },
-        },
-        order: withOrder(state.order, `plan:${e.planId}`),
-        activeTextKey: null,
-      };
-    }
-    case "plan-resolved": {
-      const existing = state.plans[e.planId];
-      if (!existing) return state;
-      return {
-        ...state,
-        plans: {
-          ...state.plans,
-          [e.planId]: { ...existing, status: e.decision },
-        },
-      };
-    }
-    case "subagent-dispatched": {
-      return {
-        ...state,
-        activeFanouts: {
-          ...state.activeFanouts,
-          [e.fanoutId]: {
-            fanoutId: e.fanoutId,
-            parentMessageId: e.parentMessageId,
-            children: e.children.map((c) => ({
-              ...c,
-              status: "running" as SubagentStatus,
-            })),
-            status: "running",
-          },
-        },
-        order: withOrder(state.order, `fanout:${e.fanoutId}`),
-        activeTextKey: null,
-      };
-    }
-    case "subagent-completed": {
-      const existing = state.activeFanouts[e.fanoutId];
-      if (!existing) return state;
-      return {
-        ...state,
-        activeFanouts: {
-          ...state.activeFanouts,
-          [e.fanoutId]: { ...existing, status: e.status, results: e.results },
-        },
-      };
-    }
     case "memory-recalled": {
       return {
         ...state,
@@ -629,34 +515,6 @@ export function reducer(
           },
         },
         order: withOrder(state.order, `component:${e.toolCallId}`),
-        activeTextKey: null,
-      };
-    }
-    case "background-task-progress": {
-      const existing = state.backgroundTasks[e.taskId];
-      return {
-        ...state,
-        backgroundTasks: {
-          ...state.backgroundTasks,
-          [e.taskId]: {
-            ...(existing ?? {
-              taskId: e.taskId,
-              kind: e.kind,
-              status: e.status,
-            }),
-            taskId: e.taskId,
-            kind: e.kind,
-            ...(e.label !== undefined ? { label: e.label } : {}),
-            status: e.status,
-            ...(e.inngestRunId !== undefined
-              ? { inngestRunId: e.inngestRunId }
-              : {}),
-            ...(e.progressPct !== undefined
-              ? { progressPct: e.progressPct }
-              : {}),
-          },
-        },
-        order: withOrder(state.order, `bgtask:${e.taskId}`),
         activeTextKey: null,
       };
     }

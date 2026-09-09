@@ -1,94 +1,68 @@
 #!/usr/bin/env bash
 #
-# Apply the platform's Atlas migrations to the Postgres running on the node.
+# Apply the platform's Atlas migrations to the production Aurora cluster.
 #
-#   tools/run-db-migrations.sh <packages/database dir>
+#   infra/tools/run-db-migrations.sh <packages/database dir> [--apply]
 #
-# Runs on the instance rather than from a laptop because the database binds to
-# loopback and is reachable only through SSM — and port-forwarding needs the
-# session-manager-plugin, which cannot be installed without an interactive
-# sudo. Applying from the box sidesteps that entirely.
+# Without --apply this prints the pending list and changes nothing. Read that
+# list before applying: an empty revision table shows the entire history as
+# pending, and applying from there tries to re-create objects that already
+# exist.
+#
+# Runs the migration from the app node rather than from a laptop or a CI
+# runner because Aurora's security group admits 5432 from the app node's
+# security group and nothing else (stacks-new/oxagen/data-services.tf's
+# aws_security_group.aurora). .github/workflows/db-migrate.yml is the same
+# migration from a hosted runner, which is outside the VPC — it now says so
+# and stops rather than hanging. This script is the path that works.
 #
 # Uses the repository's `ci` Atlas environment, which takes DATABASE_URL and
 # the migration directory and nothing else — no dev database, no drizzle
 # export, so nothing here needs Node or the workspace installed remotely.
 #
-# BROKEN for the new account (916294258235) as written, and left pointed at
-# the old one (578673726240) deliberately rather than half-fixed: the whole
-# mechanism below assumes Postgres runs as a Docker container on the target
-# instance (`docker exec oxagen-data-postgres-1`, password at
-# /oxagen-data/postgres/password). The new account moved Postgres to Aurora
-# PostgreSQL Serverless v2 (stacks-new/oxagen/data-services.tf) — there is no
-# local Postgres container to exec into on the new node, and the password
-# lives at /oxagen-app/postgres/password instead. Swapping just INSTANCE and
-# BUCKET here would point a real migration run at the new node and then fail
-# inside the SSM command (or worse, on an account where some other container
-# happens to share that name) rather than doing anything useful. This needs a
-# rewrite — apply Atlas directly against the Aurora endpoint over the VPC,
-# from the node, with no docker exec — before it can run against the new
-# account. Tracked as #2652.
+# The cluster endpoint is resolved HERE and substituted into the remote
+# script, not looked up on the node: the node's role grants ssm:GetParameter
+# on its own /oxagen-app/* prefix and no RDS permissions at all
+# (infra/modules/app-node/main.tf). The password is read the other way round —
+# on the node, inside a tracing-off window — so it never reaches this machine.
 
-set -euo pipefail
-
-# The header above explains why this cannot work against the current account.
-# It used to explain it and then run anyway, which is a comment doing a guard's
-# job: someone reading the usage line and not the thirty above it would fire an
-# SSM command at a decommissioned instance — or, as the header warns, at
-# whatever else in some account answers to that container name.
+# render_remote_migration BUCKET HOST PORT DATABASE USER APPLY ALLOW_DIRTY
 #
-# Refusing is the conservative direction. The script does not become correct by
-# being attempted, and the working route already exists.
-if [[ "${RUN_DB_MIGRATIONS_I_KNOW_THIS_IS_BROKEN:-}" != "1" ]]; then
-  cat >&2 <<'REFUSED'
-run-db-migrations.sh does not work against the current AWS account.
+# APPLY is "1" to apply, anything else for a status-only dry run.
+# ALLOW_DIRTY is "1" to pass --allow-dirty to `atlas migrate apply`.
+# Writes the rendered script to stdout. Fails if any placeholder survives.
+render_remote_migration() {
+  if [[ $# -ne 7 ]]; then
+    echo "render_remote_migration: expected 7 arguments, got $#" >&2
+    return 2
+  fi
 
-It targets the pre-cutover account (578673726240) and assumes Postgres runs as
-a Docker container on the instance. The current account (916294258235) runs
-Aurora PostgreSQL Serverless v2, so there is no container to exec into and the
-password lives at a different SSM path. See the header, and #2652.
+  local bucket=$1 host=$2 port=$3 database=$4 user=$5 apply=$6 allow_dirty=$7
+  local arg name
 
-To apply production migrations, dispatch .github/workflows/db-migrate.yml with
-target: production. It applies the same committed Atlas migrations and its
-`environment: production` puts required reviewers in front of the apply.
+  # An empty value renders a script that fails somewhere further in, on a
+  # message about the wrong thing — `s3://` with no bucket reads as a broken
+  # URL rather than as a missing argument.
+  local -a names=(bucket host port database user apply allow_dirty)
+  local i=0
+  for arg in "$bucket" "$host" "$port" "$database" "$user" "$apply" "$allow_dirty"; do
+    name=${names[$i]}
+    i=$((i + 1))
+    if [[ -z $arg ]]; then
+      echo "render_remote_migration: $name is empty" >&2
+      return 2
+    fi
+  done
 
-If you are working ON this script, set
-RUN_DB_MIGRATIONS_I_KNOW_THIS_IS_BROKEN=1.
-REFUSED
-  exit 1
-fi
+  local apply_flag="0"
+  [[ $apply == "1" ]] && apply_flag="1"
 
-if [[ $# -ne 1 ]]; then
-  echo "usage: $0 <packages/database dir>" >&2
-  exit 2
-fi
+  local dirty_flag=""
+  [[ $allow_dirty == "1" ]] && dirty_flag="--allow-dirty"
 
-DB_DIR=$(cd "$1" && pwd)
-REGION=us-east-1
-INSTANCE=i-023d002d6e44f8f84
-BUCKET=oxagen-deploy-578673726240
-
-[[ -d "$DB_DIR/atlas/migrations" ]] || { echo "error: no atlas/migrations under $DB_DIR" >&2; exit 1; }
-
-TARBALL="${TMPDIR:-/tmp}/atlas-migrations.tgz"
-rm -f "$TARBALL"
-
-# COPYFILE_DISABLE stops macOS tar writing an AppleDouble `._name` sidecar for
-# every file carrying extended attributes. Atlas hashes the whole migration
-# directory, so those sidecars land as unknown migration files and every
-# command fails with "checksum mismatch" naming a `._` file that was never
-# authored.
-COPYFILE_DISABLE=1 tar --exclude '._*' --exclude '.DS_Store' \
-  -czf "$TARBALL" -C "$DB_DIR" atlas atlas.hcl
-echo "==> packaged $(ls "$DB_DIR/atlas/migrations"/*.sql | wc -l | tr -d ' ') migrations"
-
-aws s3 cp "$TARBALL" "s3://$BUCKET/_deploy/atlas-migrations.tgz" --only-show-errors
-echo "==> uploaded"
-
-REMOTE_FILE=$(mktemp "${TMPDIR:-/tmp}/mig-remote-XXXXXX")
-PARAMS_FILE=$(mktemp "${TMPDIR:-/tmp}/mig-params-XXXXXX")
-trap 'rm -f "$REMOTE_FILE" "$PARAMS_FILE"' EXIT
-
-cat > "$REMOTE_FILE" <<'REMOTE'
+  local rendered
+  rendered=$(
+    cat <<'REMOTE'
 set -euxo pipefail
 
 # Atlas is a single static binary; fetch it once rather than adding a package
@@ -111,34 +85,201 @@ tar -xzf /tmp/atlas.tgz -C /opt/oxagen/db
 # echoes the database password into the SSM command output — which is stored
 # in CloudTrail and returned to whoever ran the command. That happened once
 # here and cost a credential rotation. Anything touching a secret runs inside
-# this window.
+# this window, including the check below, which tests the password without
+# printing it.
 set +x
-PGPW=$(aws ssm get-parameter --region us-east-1 --name /oxagen-data/postgres/password --with-decryption --query Parameter.Value --output text)
-export DATABASE_URL="postgres://oxagen:${PGPW}@localhost:5432/oxagen?sslmode=disable"
-set -x
+PGPW=$(aws ssm get-parameter --region us-east-1 --name /oxagen-app/postgres/password --with-decryption --query Parameter.Value --output text)
 
-atlas migrate status --env ci || true
-atlas migrate apply --env ci --allow-dirty
-echo "--- applied; table count ---"
-set +x
-docker exec -e PGPASSWORD="$PGPW" oxagen-data-postgres-1 \
-  psql -U oxagen -d oxagen -tAc \
-  "select count(*) from information_schema.tables where table_schema='public'"
-set -x
-REMOTE
-
-# The heredoc above is quoted, which is what stops $PGPW being interpolated
-# here — the whole point of the tracing dance inside it. That also means $BUCKET
-# cannot expand, which is why the download used to carry a literal bucket name
-# that drifted from the variable the upload uses: changing BUCKET moved the
-# upload and left the download fetching from the old one. Substituting the one
-# placeholder keeps both halves on the same variable without unquoting anything
-# that matters (#2652).
-sed -i.bak "s|__BUCKET__|${BUCKET}|g" "$REMOTE_FILE"
-rm -f "$REMOTE_FILE.bak"
-if grep -q '__BUCKET__' "$REMOTE_FILE"; then
-  echo "error: bucket placeholder not substituted" >&2
+# The password goes into a URL, so a character with meaning in a URL would be
+# read as structure rather than as password. Terraform generates this one with
+# `special = false` (stacks-new/oxagen/data-services.tf's random_password
+# "aurora"), so it is alphanumeric by construction — this catches a hand
+# rotation that broke that assumption, and says so, instead of failing later
+# on a connection error naming the wrong host.
+if ! printf '%s' "$PGPW" | grep -qE '^[A-Za-z0-9]+$'; then
+  set -x
+  echo "error: the password at /oxagen-app/postgres/password is not alphanumeric" >&2
+  echo "error: it needs percent-encoding before it can go in DATABASE_URL" >&2
   exit 1
+fi
+
+# sslmode=require, not disable: Aurora is reached over the VPC rather than
+# over loopback, so the session is worth encrypting. `require` asks for TLS
+# without verifying the CA, which is what lets this run with no RDS CA bundle
+# staged on the node.
+export DATABASE_URL="postgres://__PGUSER__:${PGPW}@__PGHOST__:__PGPORT__/__PGDB__?sslmode=require"
+set -x
+
+# Not `|| true`. A status that cannot run is a database this script cannot
+# reach, and continuing to the apply from there only moves the same failure
+# somewhere harder to read.
+atlas migrate status --env ci
+
+__TAIL__
+REMOTE
+  )
+
+  # The apply is rendered in or left out, rather than guarded by a runtime
+  # `if`. A dry run then cannot apply because the text that would apply is not
+  # in the script that reaches the node — a stronger claim than a branch that
+  # was not taken, and one a reader of the SSM command output can check.
+  local tail
+  if [[ $apply_flag == "1" ]]; then
+    local apply_line="atlas migrate apply --env ci"
+    [[ -n $dirty_flag ]] && apply_line="$apply_line $dirty_flag"
+    tail="$apply_line
+echo \"--- applied; status after apply (expect no pending) ---\"
+atlas migrate status --env ci"
+  else
+    tail='echo "--- dry run: nothing was applied. Re-run with --apply. ---"'
+  fi
+  rendered=${rendered//__TAIL__/$tail}
+
+  rendered=${rendered//__BUCKET__/$bucket}
+  rendered=${rendered//__PGHOST__/$host}
+  rendered=${rendered//__PGPORT__/$port}
+  rendered=${rendered//__PGDB__/$database}
+  rendered=${rendered//__PGUSER__/$user}
+
+  # The pre-existing bucket bug was a placeholder nobody substituted, so the
+  # renderer refuses to emit one rather than letting the node discover it.
+  if [[ $rendered == *__* ]]; then
+    echo "render_remote_migration: unsubstituted placeholder in rendered script" >&2
+    printf '%s\n' "$rendered" | grep -n '__' >&2
+    return 1
+  fi
+
+  printf '%s\n' "$rendered"
+}
+
+# ---------------------------------------------------------------------------
+# Everything above is definitions; everything below runs.
+#
+# infra/tools/tests/render-remote-migration.test.sh sources this file to render
+# the remote script and read it, which is the only way to check what will run on
+# the node without an account to run it in. Returning here is what makes that
+# safe: a source gets the function and none of the SSM calls.
+# ---------------------------------------------------------------------------
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+  return 0
+fi
+
+set -euo pipefail
+
+APPLY=0
+DB_DIR_ARG=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --apply) APPLY=1; shift ;;
+    -h|--help)
+      echo "usage: $0 <packages/database dir> [--apply]" >&2
+      exit 0
+      ;;
+    -*)
+      echo "error: unknown option $1" >&2
+      echo "usage: $0 <packages/database dir> [--apply]" >&2
+      exit 2
+      ;;
+    *)
+      if [[ -n $DB_DIR_ARG ]]; then
+        echo "error: unexpected argument $1" >&2
+        exit 2
+      fi
+      DB_DIR_ARG=$1
+      shift
+      ;;
+  esac
+done
+
+if [[ -z $DB_DIR_ARG ]]; then
+  echo "usage: $0 <packages/database dir> [--apply]" >&2
+  exit 2
+fi
+
+DB_DIR=$(cd "$DB_DIR_ARG" && pwd)
+REGION=us-east-1
+
+# The current account (916294258235). Both values are copied from
+# stacks-new/ci-deploy: node_instance_id in terraform.tfvars, and the bucket
+# aws_s3_bucket.deploy builds as oxagen-deploy-<account_id>.
+INSTANCE=${INSTANCE:-i-094fcb34c7e715cf8}
+BUCKET=${BUCKET:-oxagen-deploy-916294258235}
+
+CLUSTER=${CLUSTER:-oxagen-postgres}
+PGDB=${PGDB:-oxagen}
+PGUSER=${PGUSER:-oxagen}
+
+# Off by default. --allow-dirty lets Atlas apply over a schema holding objects
+# its revision table does not know about, which is the right answer exactly
+# once — the first apply against a cluster something else already populated —
+# and a way to double-create objects every other time.
+ALLOW_DIRTY=${ALLOW_DIRTY:-0}
+
+[[ -d "$DB_DIR/atlas/migrations" ]] || { echo "error: no atlas/migrations under $DB_DIR" >&2; exit 1; }
+
+# Resolving the endpoint here is also the cheapest proof that the caller's
+# credentials reach the right account: the cluster is only in 916294258235.
+if [[ -n ${AURORA_ENDPOINT:-} ]]; then
+  PGHOST=$AURORA_ENDPOINT
+  PGPORT=${AURORA_PORT:-5432}
+  echo "==> using AURORA_ENDPOINT from the environment"
+else
+  echo "==> resolving the $CLUSTER writer endpoint"
+  read -r PGHOST PGPORT < <(
+    aws rds describe-db-clusters --region "$REGION" \
+      --db-cluster-identifier "$CLUSTER" \
+      --query 'DBClusters[0].[Endpoint,Port]' --output text
+  ) || true
+fi
+
+if [[ -z ${PGHOST:-} || $PGHOST == "None" ]]; then
+  echo "error: could not resolve the writer endpoint for cluster '$CLUSTER' in $REGION." >&2
+  echo "error: the cluster lives in account 916294258235 — check which account these credentials reach." >&2
+  echo "error: set AURORA_ENDPOINT to skip this lookup." >&2
+  exit 1
+fi
+PGPORT=${PGPORT:-5432}
+echo "==> cluster $CLUSTER on port $PGPORT"
+
+# A dead or unregistered instance otherwise costs ten minutes of polling and
+# then reports "InProgress", which reads as slow rather than as wrong.
+ONLINE=$(aws ssm describe-instance-information --region "$REGION" \
+  --filters "Key=InstanceIds,Values=$INSTANCE" \
+  --query 'length(InstanceInformationList)' --output text 2>/dev/null || echo 0)
+if [[ $ONLINE != "1" ]]; then
+  echo "error: instance $INSTANCE is not registered with SSM in $REGION." >&2
+  echo "error: nothing can run on it, so this would poll and then time out." >&2
+  exit 1
+fi
+
+TARBALL="${TMPDIR:-/tmp}/atlas-migrations.tgz"
+rm -f "$TARBALL"
+
+# COPYFILE_DISABLE stops macOS tar writing an AppleDouble `._name` sidecar for
+# every file carrying extended attributes. Atlas hashes the whole migration
+# directory, so those sidecars land as unknown migration files and every
+# command fails with "checksum mismatch" naming a `._` file that was never
+# authored.
+COPYFILE_DISABLE=1 tar --exclude '._*' --exclude '.DS_Store' \
+  -czf "$TARBALL" -C "$DB_DIR" atlas atlas.hcl
+echo "==> packaged $(find "$DB_DIR/atlas/migrations" -name '*.sql' | wc -l | tr -d ' ') migrations"
+
+aws s3 cp "$TARBALL" "s3://$BUCKET/_deploy/atlas-migrations.tgz" --only-show-errors
+echo "==> uploaded to s3://$BUCKET/_deploy/"
+
+REMOTE_FILE=$(mktemp "${TMPDIR:-/tmp}/mig-remote-XXXXXX")
+PARAMS_FILE=$(mktemp "${TMPDIR:-/tmp}/mig-params-XXXXXX")
+trap 'rm -f "$REMOTE_FILE" "$PARAMS_FILE"' EXIT
+
+render_remote_migration \
+  "$BUCKET" "$PGHOST" "$PGPORT" "$PGDB" "$PGUSER" "$APPLY" "$ALLOW_DIRTY" \
+  > "$REMOTE_FILE"
+
+if [[ $APPLY == "1" ]]; then
+  echo "==> APPLYING migrations"
+else
+  echo "==> dry run (status only); pass --apply to apply"
 fi
 
 python3 - "$REMOTE_FILE" "$PARAMS_FILE" <<'PY'
@@ -151,12 +292,21 @@ CMD=$(aws ssm send-command --region "$REGION" --instance-ids "$INSTANCE" \
   --query 'Command.CommandId' --output text)
 echo "==> ssm command $CMD"
 
+st=Pending
 for _ in $(seq 1 60); do
   st=$(aws ssm get-command-invocation --region "$REGION" --command-id "$CMD" --instance-id "$INSTANCE" --query Status --output text 2>/dev/null || echo Pending)
   [[ $st == InProgress || $st == Pending ]] || break
   sleep 10
 done
 echo "==> $st"
-aws ssm get-command-invocation --region "$REGION" --command-id "$CMD" --instance-id "$INSTANCE" --query StandardOutputContent --output text 2>/dev/null | tail -12
+aws ssm get-command-invocation --region "$REGION" --command-id "$CMD" --instance-id "$INSTANCE" --query StandardOutputContent --output text 2>/dev/null | tail -20
 echo "--- stderr ---"
-aws ssm get-command-invocation --region "$REGION" --command-id "$CMD" --instance-id "$INSTANCE" --query StandardErrorContent --output text 2>/dev/null | tail -12
+aws ssm get-command-invocation --region "$REGION" --command-id "$CMD" --instance-id "$INSTANCE" --query StandardErrorContent --output text 2>/dev/null | tail -20
+
+# A migration that failed used to leave this script exiting 0, so the caller —
+# and anything wrapping it — read a failed apply as a successful one. The
+# status is the result, so it is the exit code.
+if [[ $st != "Success" ]]; then
+  echo "==> FAILED: ssm command $CMD finished as $st" >&2
+  exit 1
+fi

@@ -1,13 +1,13 @@
 /**
- * page.tsx — Workspace → Workbench → Agent Tools → All Tools.
+ * page.tsx — Workspace → Agents → Tools → All Tools.
  *
  * Human-legible, read-only catalog of every agent tool available in this
  * workspace (the same list `agent.tool.list` surfaces to the Agent Builder's
  * Equip step). Data is loaded server-side via `resolveWorkbenchScope` +
  * `listAgentTools`; the client panel (`ToolsCatalog`) owns search, filtering,
- * and the row detail Sheet. No mutations happen on this tab — Skills, MCP
- * Servers, and Capabilities are managed in their sibling tabs; NEW tools are
- * installed from the Marketplace (Agent Tools side).
+ * and the row detail Sheet. No mutations happen on this tab — MCP Servers and
+ * Capabilities are managed in their sibling tabs; NEW tools are installed from
+ * the Marketplace (Agent Tools side).
  */
 import type { Metadata } from "next";
 import { logger } from "@oxagen/handlers/logger";
@@ -17,7 +17,7 @@ import { workspace } from "@/lib/routes";
 import { ToolsCatalog } from "./tools-catalog";
 
 export const metadata: Metadata = {
-  title: "Agent Tools | Workbench",
+  title: "Tools | Agents",
 };
 
 interface PageProps {
@@ -51,9 +51,9 @@ export default async function WorkbenchToolsPage({ params }: PageProps) {
       <div className="flex flex-col gap-1">
         <h2 className="text-lg font-semibold">All Tools</h2>
         <p className="text-sm text-muted-foreground">
-          Every tool available to agents in this workspace — from skills, MCP
-          servers, and capabilities — after allowlist and risk filtering. Equip
-          tools in the Agent Builder; install more from the Marketplace.
+          Every tool available to agents in this workspace — MCP servers and
+          capabilities — after allowlist and risk filtering. Allowlist tools per
+          agent in the Agent Builder; install more from the Marketplace.
         </p>
       </div>
       <ToolsCatalog tools={tools} marketplaceHref={marketplaceHref} />

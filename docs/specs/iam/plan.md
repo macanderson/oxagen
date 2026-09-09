@@ -1,5 +1,11 @@
 # IAM — Implementation Plan (Wave 1: The Spine)
 
+> **2026-09-07 note:** [ADR-043](../../adr/ADR-043-runtime-excision.md) deleted
+> `agent.plan.approve` and `agent.code.execute` (and their handler files
+> referenced below) along with the rest of the agent runtime. The IAM default-
+> role table entries for them no longer apply; the resolution mechanism they
+> illustrated is unaffected.
+
 Sequenced delivery plan for the load-bearing foundation that every operational surface in v2 depends on. Built from [`../information-architecture/spec.md`](../information-architecture/spec.md) §§ 9, 12, 15.
 
 Status: **ready to execute** — Wave 1 only. Waves 5 + 6 (Access surface UI, SSO/SCIM, Compliance dashboards) will appear in this file as separate phases when their predecessors land.

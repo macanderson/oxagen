@@ -12,44 +12,12 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "acquire_file_lock",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "skill",
-      "name": "activate_skill_version",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "conversation",
       "name": "add_conversation_attachment",
       "reads": [],
       "surfaces": [
         "agent",
         "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "eval",
-      "name": "add_dataset_item",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
         "mcp"
       ],
       "writes": []
@@ -68,38 +36,6 @@
     {
       "domain": "plugin",
       "name": "add_plugin_registry",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "aggregate_subagents",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "image",
-      "name": "analyze_image",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "approve_plan",
       "reads": [],
       "surfaces": [
         "agent",
@@ -152,17 +88,6 @@
       "writes": []
     },
     {
-      "domain": "skill",
-      "name": "author_skill",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "bind_agent_environment",
       "reads": [],
@@ -176,39 +101,6 @@
     {
       "domain": "plugin",
       "name": "browse_plugin_catalog",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "cancel_background_task",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "cancel_subagent",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "workflow",
-      "name": "cancel_workflow",
       "reads": [],
       "surfaces": [
         "agent",
@@ -245,17 +137,6 @@
       "reads": [],
       "surfaces": [
         "agent"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "browser",
-      "name": "click_page",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
       ],
       "writes": []
     },
@@ -327,66 +208,11 @@
       "writes": []
     },
     {
-      "domain": "document",
-      "name": "create_archive",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "automation",
-      "name": "create_automation",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "repo",
-      "name": "create_branch",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "connection",
       "name": "create_connection",
       "reads": [],
       "surfaces": [
         "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "eval",
-      "name": "create_dataset",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "document",
-      "name": "create_document",
-      "reads": [],
-      "surfaces": [
         "api",
         "mcp"
       ],
@@ -404,51 +230,8 @@
       "writes": []
     },
     {
-      "domain": "image",
-      "name": "create_image",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "org",
       "name": "create_org",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "document",
-      "name": "create_pdf",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "create_plan",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "repo",
-      "name": "create_repo",
       "reads": [],
       "surfaces": [
         "agent",
@@ -478,17 +261,6 @@
       "writes": []
     },
     {
-      "domain": "sandbox",
-      "name": "create_sandbox_template",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "schema",
       "name": "create_schema_version",
       "reads": [],
@@ -500,24 +272,11 @@
       "writes": []
     },
     {
-      "domain": "skill",
-      "name": "create_skill",
+      "domain": "telemetry",
+      "name": "create_stella_enrollment",
       "reads": [],
       "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "eval",
-      "name": "create_trace_dataset",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
+        "api"
       ],
       "writes": []
     },
@@ -642,17 +401,6 @@
       "writes": []
     },
     {
-      "domain": "sandbox",
-      "name": "delete_sandbox_template",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "schema",
       "name": "delete_schema",
       "reads": [],
@@ -728,33 +476,10 @@
       "writes": []
     },
     {
-      "domain": "code",
-      "name": "diff_code",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "schema",
       "name": "diff_schema_versions",
       "reads": [],
       "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "automation",
-      "name": "disable_automation",
-      "reads": [],
-      "surfaces": [
-        "agent",
         "api",
         "cli",
         "mcp"
@@ -784,74 +509,8 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "dispatch_subagent",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "skill",
-      "name": "draft_skill",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "edit_repo_file",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "skill",
-      "name": "edit_skill",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "automation",
-      "name": "enable_automation",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "privacy",
       "name": "erase_data",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "execute_code",
       "reads": [],
       "surfaces": [
         "agent",
@@ -883,17 +542,6 @@
       "writes": []
     },
     {
-      "domain": "sandbox",
-      "name": "export_sandbox_template",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "schema",
       "name": "export_schema",
       "reads": [],
@@ -909,148 +557,6 @@
       "name": "export_secrets",
       "reads": [],
       "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "skill",
-      "name": "export_skill",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "web",
-      "name": "fetch_web_page",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "form",
-      "name": "fill_form",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "browser",
-      "name": "fill_page",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "repo",
-      "name": "fork_repo",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "code",
-      "name": "format_code",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "document",
-      "name": "generate_document",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "image",
-      "name": "generate_image",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "document",
-      "name": "generate_markdown",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "mermaid",
-      "name": "generate_mermaid",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "svg",
-      "name": "generate_svg",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "video",
-      "name": "generate_video",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "a2a",
-      "name": "get_a2a_card",
-      "reads": [],
-      "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -1081,29 +587,6 @@
     {
       "domain": "plugin",
       "name": "get_auth_alerts",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "automation",
-      "name": "get_automation",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "get_background_task",
       "reads": [],
       "surfaces": [
         "agent",
@@ -1190,12 +673,11 @@
       "writes": []
     },
     {
-      "domain": "eval",
-      "name": "get_dataset",
+      "domain": "org",
+      "name": "get_data_plane",
       "reads": [],
       "surfaces": [
         "api",
-        "cli",
         "mcp"
       ],
       "writes": []
@@ -1207,39 +689,6 @@
       "surfaces": [
         "agent",
         "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "eval",
-      "name": "get_eval_run",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "eval",
-      "name": "get_eval_run_series",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "eval",
-      "name": "get_eval_status",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
         "mcp"
       ],
       "writes": []
@@ -1377,17 +826,6 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "get_plan",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "plugin",
       "name": "get_plugin_schema",
       "reads": [],
@@ -1465,17 +903,6 @@
       "writes": []
     },
     {
-      "domain": "research",
-      "name": "get_research_status",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "billing",
       "name": "get_reseller_stripe_status",
       "reads": [],
@@ -1498,43 +925,12 @@
       "writes": []
     },
     {
-      "domain": "sandbox",
-      "name": "get_sandbox_template",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "schema",
       "name": "get_schema_registry",
       "reads": [],
       "surfaces": [
         "api",
         "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "skill",
-      "name": "get_skill_metrics",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "skill",
-      "name": "get_skill_version",
-      "reads": [],
-      "surfaces": [
-        "api",
         "mcp"
       ],
       "writes": []
@@ -1547,41 +943,6 @@
         "agent",
         "api",
         "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "get_subagent_fanout",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "get_subagent_logs",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": [
-        "postgres:content.generated_assets"
-      ]
-    },
-    {
-      "domain": "agent",
-      "name": "get_subagent_result",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
         "mcp"
       ],
       "writes": []
@@ -1631,17 +992,6 @@
       "writes": []
     },
     {
-      "domain": "workflow",
-      "name": "get_workflow_status",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "workspace",
       "name": "get_workspace_settings",
       "reads": [],
@@ -1666,17 +1016,6 @@
     {
       "domain": "secret",
       "name": "import_env_secrets",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "sandbox",
-      "name": "import_sandbox_template",
       "reads": [],
       "surfaces": [
         "agent",
@@ -1729,16 +1068,6 @@
       "writes": []
     },
     {
-      "domain": "skill",
-      "name": "install_skill",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "list_agent_defs",
       "reads": [],
@@ -1773,34 +1102,11 @@
     },
     {
       "domain": "agent",
-      "name": "list_agent_skills",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
       "name": "list_agent_tools",
       "reads": [],
       "surfaces": [
         "agent",
         "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "automation",
-      "name": "list_automations",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
         "mcp"
       ],
       "writes": []
@@ -1839,6 +1145,17 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "list_context_records",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "conversation",
       "name": "list_conversation_files",
       "reads": [],
@@ -1855,27 +1172,6 @@
       "reads": [],
       "surfaces": [
         "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "eval",
-      "name": "list_datasets",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "document",
-      "name": "list_documents",
-      "reads": [],
-      "surfaces": [
         "api",
         "mcp"
       ],
@@ -1904,30 +1200,8 @@
       "writes": []
     },
     {
-      "domain": "eval",
-      "name": "list_eval_runs",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "list_executions",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "list_file_locks",
       "reads": [],
       "surfaces": [
         "agent",
@@ -1942,16 +1216,6 @@
       "reads": [],
       "surfaces": [
         "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "image",
-      "name": "list_images",
-      "reads": [],
-      "surfaces": [
         "api",
         "mcp"
       ],
@@ -2069,17 +1333,6 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "list_plans",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "plugin",
       "name": "list_plugin_registries",
       "reads": [],
@@ -2168,53 +1421,6 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "list_sandbox_files",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "list_sandbox_logs",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "sandbox",
-      "name": "list_sandbox_templates",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "list_sandboxes",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "schema",
       "name": "list_schema_versions",
       "reads": [],
@@ -2249,29 +1455,8 @@
       "writes": []
     },
     {
-      "domain": "skill",
-      "name": "list_skill_versions",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "list_subagent_fanouts",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "list_subagent_siblings",
+      "domain": "tool",
+      "name": "list_tool_declarations",
       "reads": [],
       "surfaces": [
         "agent",
@@ -2291,29 +1476,8 @@
       "writes": []
     },
     {
-      "domain": "skill",
-      "name": "list_workspace_skills",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "workspace",
       "name": "list_workspaces",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "load_skill",
       "reads": [],
       "surfaces": [
         "agent",
@@ -2334,41 +1498,8 @@
       "writes": []
     },
     {
-      "domain": "browser",
-      "name": "navigate_page",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "repo",
-      "name": "open_pr",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "parse_memory_import",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "code",
-      "name": "patch_code",
       "reads": [],
       "surfaces": [
         "agent",
@@ -2455,6 +1586,15 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "promote_context_record",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "promote_memory",
       "reads": [],
@@ -2473,6 +1613,24 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "publish_context_record",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tool",
+      "name": "publish_tool_declaration",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -2509,17 +1667,6 @@
       "writes": []
     },
     {
-      "domain": "repo",
-      "name": "put_repo_file",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "audit",
       "name": "query_audit_log",
       "reads": [],
@@ -2532,53 +1679,8 @@
       "writes": []
     },
     {
-      "domain": "lineage",
-      "name": "query_lineage",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "ontology",
       "name": "query_ontology",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "document",
-      "name": "read_document",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "browser",
-      "name": "read_page",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "read_sandbox_file",
       "reads": [],
       "surfaces": [
         "agent",
@@ -2633,32 +1735,10 @@
       "writes": []
     },
     {
-      "domain": "browser",
-      "name": "refresh_page",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "register_mcp_server",
       "reads": [],
       "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "release_file_lock",
-      "reads": [],
-      "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -2694,27 +1774,6 @@
         "agent",
         "api",
         "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "rename_sandbox",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "render_agent_ui",
-      "reads": [],
-      "surfaces": [
-        "agent"
       ],
       "writes": []
     },
@@ -2783,17 +1842,6 @@
       "writes": []
     },
     {
-      "domain": "skill",
-      "name": "revise_skill",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "revoke_agent_role",
       "reads": [],
@@ -2838,45 +1886,12 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "run_capability_chain",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "run_sandbox_command",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "schema",
       "name": "run_schema_chat",
       "reads": [],
       "surfaces": [
         "agent",
         "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "workflow",
-      "name": "run_workflow",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
       ],
       "writes": []
     },
@@ -2896,17 +1911,6 @@
       "name": "save_reseller_attribution_rule",
       "reads": [],
       "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "browser",
-      "name": "screenshot_page",
-      "reads": [],
-      "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -2958,17 +1962,6 @@
       "writes": []
     },
     {
-      "domain": "web",
-      "name": "search_web",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "chat",
       "name": "send_message",
       "reads": [],
@@ -3011,19 +2004,18 @@
       "writes": []
     },
     {
-      "domain": "environment",
-      "name": "set_default_environment",
+      "domain": "org",
+      "name": "set_data_plane",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
       "writes": []
     },
     {
-      "domain": "sandbox",
-      "name": "set_default_sandbox_template",
+      "domain": "environment",
+      "name": "set_default_environment",
       "reads": [],
       "surfaces": [
         "agent",
@@ -3076,30 +2068,8 @@
       "writes": []
     },
     {
-      "domain": "sandbox",
-      "name": "set_sandbox_template_tools",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "secret",
       "name": "set_secret_value",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "skill",
-      "name": "set_skill_enabled",
       "reads": [],
       "surfaces": [
         "agent",
@@ -3133,85 +2103,8 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "snapshot_sandbox",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "start_background_task",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "eval",
-      "name": "start_eval_run",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "research",
-      "name": "start_research_swarm",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "start_sandbox",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "billing",
       "name": "start_subscription_upgrade",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "stop_sandbox",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "browser",
-      "name": "submit_page",
       "reads": [],
       "surfaces": [
         "agent",
@@ -3320,18 +2213,6 @@
       "writes": []
     },
     {
-      "domain": "automation",
-      "name": "trigger_automation",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "unbind_agent_environment",
       "reads": [],
@@ -3371,18 +2252,6 @@
       "surfaces": [
         "agent",
         "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "automation",
-      "name": "update_automation",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
         "mcp"
       ],
       "writes": []
@@ -3496,17 +2365,6 @@
       "writes": []
     },
     {
-      "domain": "sandbox",
-      "name": "update_sandbox_template",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "user",
       "name": "update_user_budget",
       "reads": [],
@@ -3554,16 +2412,6 @@
       "reads": [],
       "surfaces": [
         "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "skill",
-      "name": "upload_skill_version",
-      "reads": [],
-      "surfaces": [
         "api",
         "mcp"
       ],
@@ -3653,17 +2501,6 @@
     },
     {
       "domain": "agent",
-      "name": "verify_feature",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
       "name": "write_memory",
       "reads": [],
       "surfaces": [
@@ -3674,7 +2511,7 @@
       "writes": []
     }
   ],
-  "contentHash": "f81ff6559e97af5409fcbc6143116ad0a8d50af11f17a43ed1941ddfb7d2e1e7",
+  "contentHash": "a9d420c5094531bb8aeee8b5506025c4928617ca55bed0e94bb954f0f67eb58d",
   "domains": [
     {
       "name": "agent",
@@ -3700,14 +2537,10 @@
         "neo4j:SkillVersion",
         "neo4j:Tool",
         "neo4j:ToolVersion",
-        "postgres:agent.a2a_tasks",
         "postgres:agent.agent_execution_steps",
         "postgres:agent.agent_executions",
-        "postgres:agent.agent_plans",
-        "postgres:agent.agent_run_attempt_leases",
         "postgres:agent.agent_run_attempt_seals",
         "postgres:agent.agent_run_attempts",
-        "postgres:agent.agent_run_checkpoints",
         "postgres:agent.agent_run_events",
         "postgres:agent.agent_run_finalization_grants",
         "postgres:agent.agent_run_finalization_obligations",
@@ -3716,17 +2549,9 @@
         "postgres:agent.agent_versions",
         "postgres:agent.agents",
         "postgres:agent.approval_requests",
-        "postgres:agent.background_tasks",
         "postgres:agent.context_promotions",
         "postgres:agent.context_record_versions",
         "postgres:agent.context_records",
-        "postgres:agent.file_lock_fences",
-        "postgres:agent.file_locks",
-        "postgres:agent.sandbox_sessions",
-        "postgres:agent.skill_versions",
-        "postgres:agent.skills",
-        "postgres:agent.subagent_fanouts",
-        "postgres:agent.subagent_runs",
         "postgres:agent.tool_versions",
         "postgres:agent.tools"
       ]
@@ -3737,7 +2562,6 @@
         "postgres"
       ],
       "tables": [
-        "postgres:ai.batch_jobs",
         "postgres:ai.response_cache"
       ]
     },
@@ -3803,17 +2627,6 @@
       ]
     },
     {
-      "name": "cms",
-      "stores": [
-        "postgres"
-      ],
-      "tables": [
-        "postgres:cms.book_access_codes",
-        "postgres:cms.book_editions",
-        "postgres:cms.leads"
-      ]
-    },
-    {
       "name": "content",
       "stores": [
         "blob",
@@ -3824,7 +2637,6 @@
         "blob:avatar",
         "blob:generated_asset",
         "neo4j:Document",
-        "postgres:content.documents",
         "postgres:content.generated_assets"
       ]
     },
@@ -3836,8 +2648,6 @@
       "tables": [
         "postgres:environments.agent_environment_bindings",
         "postgres:environments.environments",
-        "postgres:environments.sandbox_template_tools",
-        "postgres:environments.sandbox_templates",
         "postgres:environments.secret_access_log",
         "postgres:environments.secret_keys",
         "postgres:environments.secret_values"
@@ -3846,16 +2656,12 @@
     {
       "name": "eval",
       "stores": [
-        "clickhouse",
-        "postgres"
+        "clickhouse"
       ],
       "tables": [
         "clickhouse:eval_item_results",
         "clickhouse:eval_results",
-        "clickhouse:eval_runs",
-        "postgres:eval.eval_dataset_items",
-        "postgres:eval.eval_datasets",
-        "postgres:eval.eval_runs"
+        "clickhouse:eval_runs"
       ]
     },
     {
@@ -3910,7 +2716,6 @@
         "postgres:ingestion.deletion_jobs",
         "postgres:ingestion.entity_type_mappings",
         "postgres:ingestion.github_installations",
-        "postgres:ingestion.governed_repository_selections",
         "postgres:ingestion.oauth_accounts",
         "postgres:ingestion.oauth_tokens",
         "postgres:ingestion.repository_binding_heads",
@@ -3951,6 +2756,7 @@
       ],
       "tables": [
         "neo4j:Tenant",
+        "postgres:org.data_planes",
         "postgres:org.invitations",
         "postgres:org.org_slug_history",
         "postgres:org.org_users",
@@ -4026,21 +2832,11 @@
     {
       "name": "workflow",
       "stores": [
-        "neo4j",
-        "postgres"
+        "neo4j"
       ],
       "tables": [
         "neo4j:Playbook",
-        "neo4j:PlaybookVersion",
-        "postgres:workflow.playbook_approvals",
-        "postgres:workflow.playbook_edges",
-        "postgres:workflow.playbook_events",
-        "postgres:workflow.playbook_runs",
-        "postgres:workflow.playbook_step_runs",
-        "postgres:workflow.playbook_steps",
-        "postgres:workflow.playbook_triggers",
-        "postgres:workflow.playbook_versions",
-        "postgres:workflow.playbooks"
+        "neo4j:PlaybookVersion"
       ]
     },
     {
@@ -4068,10 +2864,8 @@
         "auth",
         "billing",
         "chat",
-        "cms",
         "content",
         "environments",
-        "eval",
         "evidence",
         "iam",
         "ingestion",
@@ -4083,12 +2877,11 @@
         "ratelimit",
         "schema_registry",
         "security",
-        "workflow",
         "workspace"
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 138
+      "tableCount": 107
     },
     {
       "domains": [
@@ -5951,6 +4744,12 @@
     {
       "columns": [
         {
+          "name": "orgId",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
           "name": "publicId",
           "nullable": true,
           "primaryKey": true,
@@ -5960,11 +4759,12 @@
       "domain": "agent",
       "id": "neo4j:Tool",
       "meta": {
-        "constraints": "tool_public_id"
+        "constraints": "tool_public_id",
+        "indexes": "tool_org"
       },
       "name": "Tool",
       "store": "neo4j",
-      "tenantScoped": false
+      "tenantScoped": true
     },
     {
       "columns": [
@@ -6019,124 +4819,6 @@
       "name": "Workspace",
       "store": "neo4j",
       "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "context_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "state",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "message_history",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "artifacts",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "status_message",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "error_message",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "metadata",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "agent_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        }
-      ],
-      "domain": "agent",
-      "id": "postgres:agent.a2a_tasks",
-      "name": "a2a_tasks",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
     },
     {
       "columns": [
@@ -6452,242 +5134,6 @@
           "type": "uuid"
         },
         {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "goals",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "constraints",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "tasks",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "approval_required",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "boolean"
-        },
-        {
-          "name": "message_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "approved_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "approved_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "task_count",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        }
-      ],
-      "domain": "agent",
-      "id": "postgres:agent.agent_plans",
-      "name": "agent_plans",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "attempt_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "run_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "lease_token",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "lease_epoch",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "bigint"
-        },
-        {
-          "name": "worker_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "expires_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "renewed_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "fenced_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "fenced_reason",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "last_run_seq",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "bigint"
-        },
-        {
-          "name": "last_attempt_seq",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "event_count",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "final_event_digest",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "event_stream_digest",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "agent",
-      "id": "postgres:agent.agent_run_attempt_leases",
-      "name": "agent_run_attempt_leases",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
           "name": "org_id",
           "nullable": false,
           "primaryKey": false,
@@ -6876,111 +5322,11 @@
           "nullable": true,
           "primaryKey": false,
           "type": "citext"
-        },
-        {
-          "name": "restored_checkpoint_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "restored_checkpoint_digest",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
         }
       ],
       "domain": "agent",
       "id": "postgres:agent.agent_run_attempts",
       "name": "agent_run_attempts",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "run_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "attempt_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "event_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "attempt_seq",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "run_seq",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "bigint"
-        },
-        {
-          "name": "engine_state_schema",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "checkpoint_digest",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "stream_digest",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "encrypted_state_ref",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "agent",
-      "id": "postgres:agent.agent_run_checkpoints",
-      "name": "agent_run_checkpoints",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
@@ -7348,36 +5694,6 @@
           "type": "jsonb"
         },
         {
-          "name": "claimed_by",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "lease_expires_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "attempts",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "checkpoint",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "checkpoint_seq",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
           "name": "result",
           "nullable": true,
           "primaryKey": false,
@@ -7529,12 +5845,6 @@
         },
         {
           "name": "active_attempt_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "latest_checkpoint_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -8011,118 +6321,6 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "kind",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "label",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "inngest_run_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "input_payload",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "result_payload",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "failure_reason",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "started_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "completed_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "agent",
-      "id": "postgres:agent.background_tasks",
-      "name": "background_tasks",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
           "name": "created_by_user_id",
           "nullable": true,
           "primaryKey": false,
@@ -8418,827 +6616,6 @@
           "type": "uuid"
         },
         {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "resource_key",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "current_token",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "bigint"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "agent",
-      "id": "postgres:agent.file_lock_fences",
-      "name": "file_lock_fences",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "resource_key",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "holder",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "execution_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "fencing_token",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "bigint"
-        },
-        {
-          "name": "action",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "lease_expires_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "released_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "agent",
-      "id": "postgres:agent.file_locks",
-      "name": "file_locks",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "session_key",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "driver",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "image",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "sandbox_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "snapshot_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "last_used_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "expires_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "metadata",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "grace_deadline_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "recovery_status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "recovery_branch",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "recovery_commit",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "recovery_error",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "recovered_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "flushed_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "dirty",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "boolean"
-        },
-        {
-          "name": "dirty_checked_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "agent",
-      "id": "postgres:agent.sandbox_sessions",
-      "name": "sandbox_sessions",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "version_number",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "is_latest",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "boolean"
-        },
-        {
-          "name": "parent_version_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "published_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "skill_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "body",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "references_payload",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "change_summary",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "checksum",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "legacy_body",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "legacy_body_checksum",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "migrated_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "agent",
-      "id": "postgres:agent.skill_versions",
-      "name": "skill_versions",
-      "rls": "standard_or_builtin",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "name",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "slug",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "description",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "source",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "enabled",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "boolean"
-        },
-        {
-          "name": "active_version_id",
-          "nullable": true,
-          "primaryKey": false,
-          "references": "postgres:agent.skill_versions",
-          "type": "uuid"
-        },
-        {
-          "name": "activated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "activated_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "last_used_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "usage_count",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "installed_from_slug",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "citext"
-        }
-      ],
-      "domain": "agent",
-      "id": "postgres:agent.skills",
-      "name": "skills",
-      "rls": "standard_or_builtin",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "parent_message_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "inngest_event_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "total_children",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "completed_children",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        }
-      ],
-      "domain": "agent",
-      "id": "postgres:agent.subagent_fanouts",
-      "name": "subagent_fanouts",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "fanout_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "child_message_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "capability_name",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "input_payload",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "output_payload",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "summary",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "error_reason",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "started_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "completed_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "claimed_by",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "lease_expires_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "attempts",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        }
-      ],
-      "domain": "agent",
-      "id": "postgres:agent.subagent_runs",
-      "name": "subagent_runs",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
           "name": "public_id",
           "nullable": false,
           "primaryKey": false,
@@ -9469,154 +6846,6 @@
       "domain": "agent",
       "id": "postgres:agent.tools",
       "name": "tools",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "provider",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "provider_batch_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "surface",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "model",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "request_count",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "succeeded_count",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "errored_count",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "expired_count",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "canceled_count",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "metadata",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "submitted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "completed_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "ai",
-      "id": "postgres:ai.batch_jobs",
-      "name": "batch_jobs",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
@@ -10204,18 +7433,6 @@
         },
         {
           "name": "default_text_model",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "default_image_model",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "default_video_model",
           "nullable": true,
           "primaryKey": false,
           "type": "text"
@@ -12433,439 +9650,6 @@
           "type": "uuid"
         },
         {
-          "name": "code",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "lead_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "book_slug",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "issue_reason",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "parent_code_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "last_edition_slug",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "consumed_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "expires_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "ip",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "user_agent",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        }
-      ],
-      "domain": "cms",
-      "id": "postgres:cms.book_access_codes",
-      "name": "book_access_codes",
-      "store": "postgres",
-      "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "slug",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "book_slug",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "format",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "title",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "html",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "published",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "boolean"
-        }
-      ],
-      "domain": "cms",
-      "id": "postgres:cms.book_editions",
-      "name": "book_editions",
-      "store": "postgres",
-      "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "email",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "first_name",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "last_name",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "job_title",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "company",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "company_size",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "company_size"
-        },
-        {
-          "name": "mobile_phone",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "country",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "state",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "city",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "address_1",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "address_2",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "referral_source",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "referral_source"
-        },
-        {
-          "name": "tracking_code",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "source",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "page_path",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "message",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "marketing_consent",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "boolean"
-        }
-      ],
-      "domain": "cms",
-      "id": "postgres:cms.leads",
-      "name": "leads",
-      "store": "postgres",
-      "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "title",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "content",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "metadata",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        }
-      ],
-      "domain": "content",
-      "id": "postgres:content.documents",
-      "name": "documents",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
           "name": "org_id",
           "nullable": false,
           "primaryKey": false,
@@ -13050,12 +9834,6 @@
           "type": "uuid"
         },
         {
-          "name": "sandbox_template_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
           "name": "is_primary",
           "nullable": false,
           "primaryKey": false,
@@ -13165,236 +9943,6 @@
       "domain": "environments",
       "id": "postgres:environments.environments",
       "name": "environments",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "sandbox_template_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "kind",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "ref",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "config",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        }
-      ],
-      "domain": "environments",
-      "id": "postgres:environments.sandbox_template_tools",
-      "name": "sandbox_template_tools",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "environment_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "name",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "slug",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "description",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "is_default",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "boolean"
-        },
-        {
-          "name": "is_active",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "boolean"
-        },
-        {
-          "name": "provider",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "runtime",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "resources",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "network",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "secret_selection",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "literal_env",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "packages",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        }
-      ],
-      "domain": "environments",
-      "id": "postgres:environments.sandbox_templates",
-      "name": "sandbox_templates",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
@@ -13647,348 +10195,6 @@
       "domain": "environments",
       "id": "postgres:environments.secret_values",
       "name": "secret_values",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "dataset_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "input",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "expected_output",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "metadata",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        }
-      ],
-      "domain": "eval",
-      "id": "postgres:eval.eval_dataset_items",
-      "name": "eval_dataset_items",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "name",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "slug",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "description",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "source",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "item_count",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        }
-      ],
-      "domain": "eval",
-      "id": "postgres:eval.eval_datasets",
-      "name": "eval_datasets",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "dataset_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "name",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "target",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "judge_model",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "pass_threshold",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "numeric"
-        },
-        {
-          "name": "status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "item_count",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "completed_count",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "failed_count",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "avg_score",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "numeric"
-        },
-        {
-          "name": "score_breakdown",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "started_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "completed_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "failed_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "failure_reason",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        }
-      ],
-      "domain": "eval",
-      "id": "postgres:eval.eval_runs",
-      "name": "eval_runs",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
@@ -15315,70 +11521,6 @@
       "name": "github_installations",
       "store": "postgres",
       "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "connection_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "primary_binding_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "selected_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "selected_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "ingestion",
-      "id": "postgres:ingestion.governed_repository_selections",
-      "name": "governed_repository_selections",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
     },
     {
       "columns": [
@@ -16864,6 +13006,125 @@
       "id": "postgres:notification.notifications",
       "name": "notifications",
       "rls": "workspace_nullable",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "deleted_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "deleted_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
+          "name": "kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "mode",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "config_ciphertext",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bytea"
+        },
+        {
+          "name": "config_key_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "config_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "schema_version",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "last_verified_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "rotated_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "org",
+      "id": "postgres:org.data_planes",
+      "name": "data_planes",
+      "rls": "org_only",
       "store": "postgres",
       "tenantScoped": true
     },
@@ -18458,777 +14719,6 @@
           "type": "uuid"
         },
         {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "playbook_run_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "step_run_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "comments",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "expires_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "resolved_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "resolved_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        }
-      ],
-      "domain": "workflow",
-      "id": "postgres:workflow.playbook_approvals",
-      "name": "playbook_approvals",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "playbook_version_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "source_step_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "target_step_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "edge_type",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "condition",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "priority",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "workflow",
-      "id": "postgres:workflow.playbook_edges",
-      "name": "playbook_edges",
-      "store": "postgres",
-      "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "playbook_run_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "step_run_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "sequence",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "event_type",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "event_data",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "prev_event_hash",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "event_hash",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "occurred_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "workflow",
-      "id": "postgres:workflow.playbook_events",
-      "name": "playbook_events",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "playbook_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "playbook_version_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "trigger_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "parent_run_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "source",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "input",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "output",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "error",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "inngest_run_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "started_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "completed_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "started_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "workflow",
-      "id": "postgres:workflow.playbook_runs",
-      "name": "playbook_runs",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "playbook_run_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "playbook_step_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "attempt",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "input",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "output",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "error",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "agent_version_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "started_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "completed_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "workflow",
-      "id": "postgres:workflow.playbook_step_runs",
-      "name": "playbook_step_runs",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "playbook_version_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "step_key",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "name",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "step_type",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "is_async",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "boolean"
-        },
-        {
-          "name": "exit_on_error",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "boolean"
-        },
-        {
-          "name": "timeout_seconds",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "config",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "workflow",
-      "id": "postgres:workflow.playbook_steps",
-      "name": "playbook_steps",
-      "store": "postgres",
-      "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "playbook_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "pinned_version_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "trigger_type",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "config",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "is_enabled",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "boolean"
-        }
-      ],
-      "domain": "workflow",
-      "id": "postgres:workflow.playbook_triggers",
-      "name": "playbook_triggers",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "playbook_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "version",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "change_summary",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "is_published",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "boolean"
-        },
-        {
-          "name": "published_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "workflow",
-      "id": "postgres:workflow.playbook_versions",
-      "name": "playbook_versions",
-      "store": "postgres",
-      "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "name",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "slug",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "description",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "active_version_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "tags",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "visibility",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        }
-      ],
-      "domain": "workflow",
-      "id": "postgres:workflow.playbooks",
-      "name": "playbooks",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
           "name": "org_id",
           "nullable": false,
           "primaryKey": false,
@@ -19652,18 +15142,6 @@
         },
         {
           "name": "default_text_model",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "default_image_model",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "default_video_model",
           "nullable": true,
           "primaryKey": false,
           "type": "text"

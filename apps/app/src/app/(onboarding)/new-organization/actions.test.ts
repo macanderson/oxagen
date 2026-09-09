@@ -37,8 +37,6 @@ const {
   mockBootstrapOrgIAM,
   mockBootstrapWorkspaceAgents,
   mockSeedRegistry,
-  mockSeedCapabilities,
-  mockSeedSkills,
   mockSeedEnvironment,
   mockOrgCreateParse,
   mockWsCreateParse,
@@ -51,8 +49,6 @@ const {
   mockBootstrapOrgIAM: vi.fn(),
   mockBootstrapWorkspaceAgents: vi.fn(),
   mockSeedRegistry: vi.fn(),
-  mockSeedCapabilities: vi.fn(),
-  mockSeedSkills: vi.fn(),
   mockSeedEnvironment: vi.fn(),
   mockOrgCreateParse: vi.fn(),
   mockWsCreateParse: vi.fn(),
@@ -97,12 +93,6 @@ vi.mock("@oxagen/handlers/workspace-agents", () => ({
 }));
 vi.mock("@oxagen/handlers/workspace-registry-seed", () => ({
   seedWorkspaceDefaultRegistrySystem: mockSeedRegistry,
-}));
-vi.mock("@oxagen/handlers/workspace-capability-seed", () => ({
-  seedWorkspaceDefaultCapabilitiesSystem: mockSeedCapabilities,
-}));
-vi.mock("@oxagen/handlers/skill-workspace-seed", () => ({
-  seedWorkspaceDefaultSkillsSystem: mockSeedSkills,
 }));
 vi.mock("@oxagen/handlers/workspace-environment-seed", () => ({
   seedWorkspaceDefaultEnvironmentSystem: mockSeedEnvironment,
@@ -234,8 +224,6 @@ describe("createOrgAction", () => {
     mockBootstrapOrgIAM.mockResolvedValue(undefined);
     mockBootstrapWorkspaceAgents.mockResolvedValue(undefined);
     mockSeedRegistry.mockResolvedValue("mreg_onboarding_123");
-    mockSeedCapabilities.mockResolvedValue(undefined);
-    mockSeedSkills.mockResolvedValue({ scanned: 3, inserted: 3 });
     mockSeedEnvironment.mockResolvedValue("env-seed-789");
     // By default, let mocks return null so real schema runs
     mockOrgCreateParse.mockReturnValue(null);
@@ -414,18 +402,6 @@ describe("createOrgAction", () => {
       workspaceId: "ws-456",
     });
 
-    expect(mockSeedCapabilities).toHaveBeenCalledOnce();
-    expect(mockSeedCapabilities).toHaveBeenCalledWith({
-      orgId: "org-123",
-      workspaceId: "ws-456",
-    });
-
-    expect(mockSeedSkills).toHaveBeenCalledOnce();
-    expect(mockSeedSkills).toHaveBeenCalledWith({
-      orgId: "org-123",
-      workspaceId: "ws-456",
-    });
-
     expect(mockSeedEnvironment).toHaveBeenCalledOnce();
     expect(mockSeedEnvironment).toHaveBeenCalledWith({
       orgId: "org-123",
@@ -453,20 +429,6 @@ describe("createOrgAction", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("seed failure in seedWorkspaceDefaultCapabilitiesSystem does NOT reject the action", async () => {
-    mockSeedCapabilities.mockRejectedValue(
-      new Error("capabilities seed failed"),
-    );
-    const result = await createOrgAction(makeFormData());
-    expect(result.ok).toBe(true);
-  });
-
-  it("seed failure in seedWorkspaceDefaultSkillsSystem does NOT reject the action", async () => {
-    mockSeedSkills.mockRejectedValue(new Error("skills seed failed"));
-    const result = await createOrgAction(makeFormData());
-    expect(result.ok).toBe(true);
-  });
-
   it("seed failure in seedWorkspaceDefaultEnvironmentSystem does NOT reject the action", async () => {
     mockSeedEnvironment.mockRejectedValue(new Error("environment seed failed"));
     const result = await createOrgAction(makeFormData());
@@ -477,8 +439,6 @@ describe("createOrgAction", () => {
     const result = await createOrgAction(makeFormData({ name: "" }));
     expect(result.ok).toBe(false);
     expect(mockSeedRegistry).not.toHaveBeenCalled();
-    expect(mockSeedCapabilities).not.toHaveBeenCalled();
-    expect(mockSeedSkills).not.toHaveBeenCalled();
     expect(mockSeedEnvironment).not.toHaveBeenCalled();
   });
 
@@ -487,8 +447,6 @@ describe("createOrgAction", () => {
     const result = await createOrgAction(makeFormData());
     expect(result.ok).toBe(false);
     expect(mockSeedRegistry).not.toHaveBeenCalled();
-    expect(mockSeedCapabilities).not.toHaveBeenCalled();
-    expect(mockSeedSkills).not.toHaveBeenCalled();
     expect(mockSeedEnvironment).not.toHaveBeenCalled();
   });
 });

@@ -18,12 +18,13 @@ is actually running in `578673726240` today — one self-hosted EC2 node
 behind Caddy running Postgres/Neo4j/ClickHouse in Docker, plus the five
 platform services as plain Node processes, not the ECS/managed-store
 architecture this document specifies. A second migration to a new account
-(`916294258235`) is in progress there now; `docs/new-account-migration-plan.md`
-in that repo is the live decision record and cutover checklist — Aurora
-Serverless v2 and Redshift Serverless replace Postgres and ClickHouse,
-Neo4j stays self-hosted, and the app node sits behind a VPC/ALB. Read that
-repo before making any AWS infrastructure decision; do not resume executing
-the plan below.
+(`916294258235`) is complete; `infra/docs/new-account-migration-plan.md`
+**in this repository** is the live decision record and cutover checklist —
+Aurora Serverless v2 replaces Postgres, while ClickHouse and Neo4j both stay
+self-hosted on the app node, and that node sits behind a VPC/ALB. Redshift
+Serverless was to take ClickHouse's role; that decision is withdrawn (#2693).
+Read `infra/` before making any AWS infrastructure decision; do not resume
+executing the plan below.
 
 **Why this is being left in place rather than deleted:** §4's code-level
 TODOs (an S3 storage driver behind `packages/storage`, an `output:
@@ -82,7 +83,7 @@ migration completes, and is a prerequisite for customer-hosted deployments.
 | Jobs | Inngest Cloud | ADR-002 |
 | Sandbox | Modal (prod) / Vercel Sandbox / Docker | `packages/sandbox` |
 | Secrets | Env vars, fanned out to Vercel projects | ADR-004 |
-| KMS | **Planned, never applied** — `infra/environments/production` declares `oxagen/ingestion-prod` and `oxagen/auth-tokens-prod`, but no such aliases exist in the account (verified via `aws kms list-aliases`, 2026-08-26) | `infra/environments/production` |
+| KMS | **Both aliases exist**, in `578673726240`/`us-east-2` — `alias/oxagen/ingestion-prod` and `alias/oxagen/auth-tokens-prod`, confirmed by `aws kms list-aliases --region us-east-2` on 2026-09-08. The earlier "no such aliases exist" reading (2026-08-26) was taken in a different region; this stack's backend and keys are `us-east-2` and nothing else in the estate is. The ingestion key is live and production wraps with it — see #2680 and `infra/legacy/README.md` | `infra/legacy/environments/production` |
 | CI | GitHub Actions, `ghcr.io/oxageninc/oxagen-ci-*` images | `.github/workflows/pipeline.yml` |
 
 Only `infra/bootstrap` was ever actually applied — the state backend

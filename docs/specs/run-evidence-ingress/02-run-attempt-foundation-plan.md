@@ -40,11 +40,11 @@ PR 1A must deploy before any drain. PR 1B is deliberately post-PR 2B: it cannot 
 
 **Files:**
 
-- Create: `packages/agent-runner/src/run-spec-v2.ts`
-- Create: `packages/agent-runner/src/run-spec-v2.test.ts`
-- Create: `packages/agent-runner/src/run-errors.ts`
-- Modify: `packages/agent-runner/src/index.ts`
-- Modify: `packages/agent-runner/package.json`
+- Create: `packages/run-ledger/src/run-spec-v2.ts`
+- Create: `packages/run-ledger/src/run-spec-v2.test.ts`
+- Create: `packages/run-ledger/src/run-errors.ts`
+- Modify: `packages/run-ledger/src/index.ts`
+- Modify: `packages/run-ledger/package.json`
 - Modify: `pnpm-lock.yaml`
 
 - [ ] Write parser tests first for every unknown field, malformed digest, internal/public ID confusion, unpinned repository field, non-sandbox workspace, invalid engine version, and caller-provided trusted binding.
@@ -53,8 +53,8 @@ PR 1A must deploy before any drain. PR 1B is deliberately post-PR 2B: it cannot 
 - [ ] Implement `parseRunSpecV2(raw)` for persisted trusted data and `buildTrustedRunSpecV2(input)` for server-resolved inputs. Keep goal/preferences in a separate caller-influence object so they cannot be spread into trusted fields.
 - [ ] Require `workspace_policy.sandbox_required === true`, an immutable `repository_binding_public_id` plus base commit/tree, exact agent version checksum, trusted `engine_policy.max_attempts`, immutable retention-policy public ID plus digest, and an admission deny-generation vector.
 - [ ] Test canonical spec digest generation and row/spec identity comparison helpers.
-- [ ] Run `pnpm --filter @oxagen/agent-runner test:unit -- src/run-spec-v2.test.ts`; expect pass.
-- [ ] Run `pnpm --filter @oxagen/agent-runner typecheck`; expect pass.
+- [ ] Run `pnpm --filter @oxagen/run-ledger test:unit -- src/run-spec-v2.test.ts`; expect pass.
+- [ ] Run `pnpm --filter @oxagen/run-ledger typecheck`; expect pass.
 - [ ] Commit: `feat(runner): define trusted run spec v2`
 
 ## Task 2: Expand the PostgreSQL Run and IAM Model
@@ -112,12 +112,12 @@ PR 1A must deploy before any drain. PR 1B is deliberately post-PR 2B: it cannot 
 
 **Files:**
 
-- Create: `packages/agent-runner/src/finalization-grant.ts`
-- Create: `packages/agent-runner/src/event-payload-registry.ts`
-- Create: `packages/agent-runner/src/event-payload-registry.test.ts`
-- Modify: `packages/agent-runner/src/run-store.ts`
-- Modify: `packages/agent-runner/src/run-store.test.ts`
-- Modify: `packages/agent-runner/src/index.ts`
+- Create: `packages/run-ledger/src/finalization-grant.ts`
+- Create: `packages/run-ledger/src/event-payload-registry.ts`
+- Create: `packages/run-ledger/src/event-payload-registry.test.ts`
+- Modify: `packages/run-ledger/src/run-store.ts`
+- Modify: `packages/run-ledger/src/run-store.test.ts`
+- Modify: `packages/run-ledger/src/index.ts`
 - Modify: `packages/agent-worker/src/types.ts`
 - Modify: `packages/agent-worker/src/seq.ts`
 - Create: `packages/agent-worker/src/seq.test.ts`
@@ -133,8 +133,8 @@ PR 1A must deploy before any drain. PR 1B is deliberately post-PR 2B: it cannot 
 - [ ] Implement `sealAttempt` for worker-observed terminal paths to append/validate the terminal event, fence the lease, insert the immutable seal, non-expiring one-shot finalization grant, and finalization obligation atomically. Copy the grant's `afg_` public ID into the obligation as the stable `submission_id`; return the sealed attempt handle.
 - [ ] Implement a distinct reclaimer-only zero-event seal path. When no event was accepted it records `event_count = 0`, nullable final-event digest, and the canonical empty stream digest without synthesizing a terminal event. `reclaimExpiredAttempts` uses that or the last accepted event as applicable, creates a successor only when `attempt_count < max_attempts`, and otherwise marks the run failed after sealing the final attempt. Never reuse an old attempt or retry without a pinned bound.
 - [ ] Test the V1/V2 discriminant and readers, zero-event abandoned attempts using a canonical empty-event sentinel, stable submission ID, non-expiring grant issuance, resolved engine/build identity, retry-cap exhaustion, normal-terminal crash recovery, restored checkpoint provenance, concurrent claims, renewal at expiry, rollback on checkpoint failure, and decimal-string SSE sequences.
-- [ ] Run `pnpm --filter @oxagen/agent-runner test:unit -- src/run-store.test.ts`; expect pass.
-- [ ] Run `pnpm --filter @oxagen/agent-runner test:unit -- src/event-payload-registry.test.ts`; expect pass with forbidden-content sentinels.
+- [ ] Run `pnpm --filter @oxagen/run-ledger test:unit -- src/run-store.test.ts`; expect pass.
+- [ ] Run `pnpm --filter @oxagen/run-ledger test:unit -- src/event-payload-registry.test.ts`; expect pass with forbidden-content sentinels.
 - [ ] Run `pnpm --filter @oxagen/agent-worker test:unit -- src/seq.test.ts`; expect pass.
 - [ ] Commit: `feat(runner): fence events to immutable attempts`
 
@@ -207,8 +207,8 @@ PR 1A must deploy before any drain. PR 1B is deliberately post-PR 2B: it cannot 
 
 **Files:**
 
-- Create: `packages/agent-runner/src/run-spec-v1-legacy.ts`
-- Create: `packages/agent-runner/src/run-spec-v1-legacy.test.ts`
+- Create: `packages/run-ledger/src/run-spec-v1-legacy.ts`
+- Create: `packages/run-ledger/src/run-spec-v1-legacy.test.ts`
 - Modify: `packages/agent/src/types.ts`
 - Modify: `packages/agent/src/runtime/turn-driver.ts`
 - Modify: `packages/agent/src/runtime/turn-driver.test.ts`
@@ -233,7 +233,7 @@ PR 1A must deploy before any drain. PR 1B is deliberately post-PR 2B: it cannot 
 - [ ] Test row/spec mismatch, missing initiating principal, missing agent version, wrong tenant, V1 code-mode method-gate rejection, reads while admission is off, queued V1 claim/drain, contract migration refusal with one nonterminal code-mode row, explicitly legacy non-evidence V1 behavior, V1 historical SSE using `seq`, V2 SSE using decimal `run_seq`, and V2 agent-run context hydration.
 - [ ] Run `pnpm --filter @oxagen/agent test:unit -- src/runtime/turn-driver.test.ts`; expect pass.
 - [ ] Run `pnpm --filter @oxagen/api test:unit -- routes.agent-run.test.ts`; expect pass.
-- [ ] Run `pnpm --filter @oxagen/agent-runner test:unit -- src/run-spec-v1-legacy.test.ts`; expect pass.
+- [ ] Run `pnpm --filter @oxagen/run-ledger test:unit -- src/run-spec-v1-legacy.test.ts`; expect pass.
 - [ ] Run `pnpm --filter @oxagen/database test:unit -- src/__tests__/schema-smoke.test.ts`; expect pass.
 - [ ] Run `pnpm schema:manifest && pnpm schema:manifest:check`; expect pass.
 - [ ] Run `pnpm --filter @oxagen/database atlas:validate`; expect pass only after the zero-row contract precondition fixture succeeds.

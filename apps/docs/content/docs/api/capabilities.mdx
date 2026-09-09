@@ -7,7 +7,7 @@ description: The full list of Oxagen capabilities available via the REST API, th
 
 Every capability is declared once, in the platform contract registry. A declaration says:
 
-- The capability's `name` (for example, `execute_code`)
+- The capability's `name` (for example, `recall_memory`)
 - Its input and output schemas (Zod)
 - Which surfaces it is exposed on: `api`, `mcp`, and/or `agent`
 - Its risk level, and whether it needs approval before it runs
@@ -25,14 +25,13 @@ fourth appears only when it is the only way to keep the name unique.
 
 | Shape | Examples |
 |---|---|
-| `verb_noun` | `list_conversations`, `execute_code`, `upload_asset` |
-| `verb_noun_qualifier` | `list_agent_tools`, `cancel_background_task`, `set_plugin_secret` |
+| `verb_noun` | `list_conversations`, `recall_memory`, `upload_asset` |
+| `verb_noun_qualifier` | `list_agent_tools`, `resolve_mcp_consent`, `set_plugin_secret` |
 
 Names are globally unique across the registry, and a capability's name is the
 same string everywhere — REST route dispatch, MCP tool name, model-facing tool
 name, IAM grants, audit records, and metering. There is no separate
-model-facing spelling. The agent engine's primitive tools (`read_file`,
-`bash`, `code_graph`, …) already read as verb-first names and keep them.
+model-facing spelling.
 
 **Names are stable, and there is no alias layer.** If a capability is ever
 renamed, the old name stops resolving — the registry does not carry a
@@ -48,22 +47,21 @@ A selection of the capabilities available in the current release, grouped by dom
 
 | Capability               | Surfaces        | Risk   |
 | ------------------------ | --------------- | ------ |
+| `create_agent_def`       | API, MCP, agent | Medium |
+| `list_agent_defs`        | API, MCP, agent | Low    |
+| `deploy_agent`           | API, MCP, agent | Medium |
+| `assign_agent_role`      | API, MCP, agent | High   |
+| `revoke_agent_role`      | API, MCP, agent | High   |
+| `bind_agent_environment` | API, MCP, agent | Medium |
 | `list_agent_tools`       | API, MCP, agent | Low    |
-| `list_agent_skills`      | API, MCP, agent | Low    |
-| `load_skill`             | API, MCP, agent | Low    |
 | `list_mcp_servers`       | API, MCP, agent | Low    |
 | `register_mcp_server`    | API, MCP        | Medium |
-| `create_plan`            | API, MCP, agent | Low    |
-| `approve_plan`           | API, agent      | Low    |
 | `resolve_approval`       | API, agent      | Low    |
-| `dispatch_subagent`      | API, MCP, agent | Medium |
-| `aggregate_subagents`    | API, MCP, agent | Low    |
-| `execute_code`           | API, MCP, agent | High   |
+| `resolve_mcp_consent`    | API, agent      | Low    |
 | `recall_memory`          | API, MCP, agent | Low    |
 | `write_memory`           | API, MCP, agent | Low    |
-| `start_background_task`  | API, MCP, agent | Medium |
-| `get_background_task`    | API, MCP, agent | Low    |
-| `cancel_background_task` | API, MCP, agent | Medium |
+| `list_executions`        | API, MCP, agent | Low    |
+| `get_execution_trace`    | API, MCP, agent | Low    |
 
 ### Chat and conversations
 
@@ -81,17 +79,6 @@ A selection of the capabilities available in the current release, grouped by dom
 | Capability     | Surfaces        | Risk |
 | -------------- | --------------- | ---- |
 | `upload_asset` | API, MCP, agent | Low  |
-
-### Content generation
-
-| Capability          | Surfaces        | Risk   |
-| ------------------- | --------------- | ------ |
-| `generate_document` | API, MCP, agent | Low    |
-| `create_pdf`        | API, MCP, agent | Low    |
-| `generate_image`    | API, MCP, agent | Low    |
-| `generate_svg`      | API, MCP, agent | Low    |
-| `generate_video`    | API, MCP, agent | Medium |
-| `fill_form`         | API, MCP, agent | Low    |
 
 ### Organization and workspace
 
@@ -178,7 +165,7 @@ Run `pnpm check:manifest --json` in the monorepo to print the full route/tool pa
 
 These flows only exist in the app UI. They have no contract, so you cannot reach them from the API or MCP:
 
-- In-stream plan approval. It needs the chat UI's live stream — call `approve_plan` afterwards instead.
+- In-stream tool-call approval. It needs the chat UI's live stream — call `resolve_approval` afterwards instead.
 - The Stripe Customer Portal redirect. For programmatic upgrades, use `start_subscription_upgrade`.
 - OAuth plugin credential flows, which require a browser redirect.
 

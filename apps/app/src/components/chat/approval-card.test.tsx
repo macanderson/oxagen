@@ -259,8 +259,6 @@ import type { SessionSeed } from "./session/session-state";
 
 const SEED: SessionSeed = {
   defaultAgentId: null,
-  defaultRepoKey: null,
-  defaultEnvId: null,
   textModel: null,
   textTier: "fast",
   budgetUsd: null,

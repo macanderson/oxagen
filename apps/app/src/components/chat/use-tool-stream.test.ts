@@ -12,10 +12,6 @@
  *   tool-call-end        — sets status/output/durationMs on existing; no-op on unknown id
  *   approval-required    — creates pending approval; hasBlockingApproval logic
  *   approval-resolved    — sets resolution; no-op on unknown id; reset clears pending state
- *   plan-proposed        — creates plan in "pending" state
- *   plan-resolved        — sets decision; no-op on unknown id
- *   subagent-dispatched  — creates fanout with running children
- *   subagent-completed   — sets status/results; no-op on unknown id
  *   memory-recalled      — keyed by queryId
  *   memory-written       — keyed by memoryId
  *   component            — keyed by toolCallId
@@ -145,8 +141,6 @@ describe("tool-call-start", () => {
     expect(tc).toBeDefined();
     expect(tc?.status).toBe("running");
     expect(tc?.capability).toBe("fs.read");
-    expect(tc?.stdout).toBe("");
-    expect(tc?.stderr).toBe("");
     expect(typeof tc?.startedAt).toBe("number");
   });
 
@@ -164,68 +158,6 @@ describe("tool-call-start", () => {
       }),
     );
     expect(Object.keys(s.toolCalls)).toHaveLength(2);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// tool-call-output
-// ---------------------------------------------------------------------------
-
-describe("tool-call-output", () => {
-  it("appends to stdout channel", () => {
-    let s = stateWithRunningTool();
-    s = reducer(
-      s,
-      event({
-        type: "tool-call-output",
-        toolCallId: TOOL_ID,
-        chunk: { channel: "stdout", data: "line1\n" },
-      }),
-    );
-    s = reducer(
-      s,
-      event({
-        type: "tool-call-output",
-        toolCallId: TOOL_ID,
-        chunk: { channel: "stdout", data: "line2\n" },
-      }),
-    );
-    expect(s.toolCalls[TOOL_ID]?.stdout).toBe("line1\nline2\n");
-  });
-
-  it("appends to stderr channel separately from stdout", () => {
-    let s = stateWithRunningTool();
-    s = reducer(
-      s,
-      event({
-        type: "tool-call-output",
-        toolCallId: TOOL_ID,
-        chunk: { channel: "stdout", data: "out" },
-      }),
-    );
-    s = reducer(
-      s,
-      event({
-        type: "tool-call-output",
-        toolCallId: TOOL_ID,
-        chunk: { channel: "stderr", data: "err" },
-      }),
-    );
-    expect(s.toolCalls[TOOL_ID]?.stdout).toBe("out");
-    expect(s.toolCalls[TOOL_ID]?.stderr).toBe("err");
-  });
-
-  it("returns the same state reference when toolCallId is unknown", () => {
-    const s = INITIAL_STATE;
-    const next = reducer(
-      s,
-      event({
-        type: "tool-call-output",
-        toolCallId: "unknown",
-        chunk: { channel: "stdout", data: "x" },
-      }),
-    );
-    expect(next).toBe(s);
   });
 });
 
@@ -484,132 +416,6 @@ describe("hasBlockingApproval logic", () => {
       (a) => a.resolution === undefined,
     );
     expect(hasBlocking).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// plan-proposed / plan-resolved
-// ---------------------------------------------------------------------------
-
-describe("plan-proposed", () => {
-  it("creates a plan in pending status keyed by planId", () => {
-    const s = reducer(
-      INITIAL_STATE,
-      event({
-        type: "plan-proposed",
-        planId: "plan-1",
-        title: "Research task",
-        steps: [
-          {
-            id: "s1",
-            summary: "Look it up",
-            intent: "search",
-            capability: "search_web",
-            dependsOn: [],
-          },
-        ],
-        rationale: "Because",
-      }),
-    );
-    const p = s.plans["plan-1"];
-    expect(p?.status).toBe("pending");
-    expect(p?.title).toBe("Research task");
-    expect(p?.steps).toHaveLength(1);
-  });
-});
-
-describe("plan-resolved", () => {
-  it("sets decision on an existing plan", () => {
-    let s = reducer(
-      INITIAL_STATE,
-      event({
-        type: "plan-proposed",
-        planId: "plan-1",
-        title: "T",
-        steps: [],
-      }),
-    );
-    s = reducer(
-      s,
-      event({ type: "plan-resolved", planId: "plan-1", decision: "approved" }),
-    );
-    expect(s.plans["plan-1"]?.status).toBe("approved");
-  });
-
-  it("returns same state reference on unknown planId", () => {
-    const s = INITIAL_STATE;
-    const next = reducer(
-      s,
-      event({ type: "plan-resolved", planId: "nope", decision: "denied" }),
-    );
-    expect(next).toBe(s);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// subagent-dispatched / subagent-completed
-// ---------------------------------------------------------------------------
-
-describe("subagent-dispatched", () => {
-  it("creates fanout with running status and children", () => {
-    const s = reducer(
-      INITIAL_STATE,
-      event({
-        type: "subagent-dispatched",
-        fanoutId: "fan-1",
-        parentMessageId: MSG_ID,
-        children: [
-          {
-            childMessageId: "child-1",
-            capability: "fetch_web_page",
-            label: "Fetch",
-          },
-        ],
-      }),
-    );
-    const f = s.activeFanouts["fan-1"];
-    expect(f?.status).toBe("running");
-    expect(f?.children).toHaveLength(1);
-    expect(f?.children[0]?.status).toBe("running");
-  });
-});
-
-describe("subagent-completed", () => {
-  it("sets status and results on existing fanout", () => {
-    let s = reducer(
-      INITIAL_STATE,
-      event({
-        type: "subagent-dispatched",
-        fanoutId: "fan-1",
-        parentMessageId: MSG_ID,
-        children: [{ childMessageId: "child-1", capability: "fetch_web_page" }],
-      }),
-    );
-    s = reducer(
-      s,
-      event({
-        type: "subagent-completed",
-        fanoutId: "fan-1",
-        status: "completed",
-        results: [{ childMessageId: "child-1", output: { ok: true } }],
-      }),
-    );
-    const f = s.activeFanouts["fan-1"]!;
-    expect(f.status).toBe("completed");
-    expect(f.results).toHaveLength(1);
-  });
-
-  it("returns same state reference on unknown fanoutId", () => {
-    const s = INITIAL_STATE;
-    const next = reducer(
-      s,
-      event({
-        type: "subagent-completed",
-        fanoutId: "nope",
-        status: "completed",
-      }),
-    );
-    expect(next).toBe(s);
   });
 });
 

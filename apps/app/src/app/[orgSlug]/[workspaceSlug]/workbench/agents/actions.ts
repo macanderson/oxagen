@@ -67,7 +67,6 @@ const createSchema = z.object({
   description: z.string().optional(),
   // https:// URL or "avatar:v1:<json>" designed-avatar string; omit to leave unset.
   avatarUrl: avatarUrlSchema.optional(),
-  agentType: z.string().min(1),
   config: configSchema,
 });
 
@@ -78,7 +77,6 @@ const updateSchema = z.object({
   description: z.string().optional(),
   // Omit = unchanged, a value = set, null = clear the avatar.
   avatarUrl: avatarUrlSchema.nullable().optional(),
-  agentType: z.string().min(1).optional(),
   config: configSchema,
 });
 
@@ -97,7 +95,7 @@ const deploySchema = z.object({
 // AI-assisted setup. Mirrors agent.definition.suggest's input: a plain-language
 // description plus an optional preferred slug. Nothing is persisted here, so no
 // canManage-gated write follows — but the gate still applies, since generating a
-// suggestion reads workspace skills/ontologies and spends model budget.
+// suggestion reads workspace tools/ontologies and spends model budget.
 const suggestSchema = z.object({
   ...scopeShape,
   description: z
@@ -170,16 +168,8 @@ export async function createAgentAction(
       error: parsed.error.issues[0]?.message ?? "Invalid input",
     };
   }
-  const {
-    orgSlug,
-    workspaceSlug,
-    slug,
-    name,
-    description,
-    avatarUrl,
-    agentType,
-    config,
-  } = parsed.data;
+  const { orgSlug, workspaceSlug, slug, name, description, avatarUrl, config } =
+    parsed.data;
 
   const { ctx, canManage } = await resolveWorkbenchScope(
     orgSlug,
@@ -193,7 +183,6 @@ export async function createAgentAction(
       name,
       description,
       avatarUrl,
-      agentType,
       config,
     });
     // Fire the summary regeneration off the just-created agent (fail-open).
@@ -236,7 +225,6 @@ export async function updateAgentAction(
     name,
     description,
     avatarUrl,
-    agentType,
     config,
   } = parsed.data;
 
@@ -252,7 +240,6 @@ export async function updateAgentAction(
       name,
       description,
       avatarUrl,
-      agentType,
       config,
     });
     // Regenerate the summary against the just-saved config (fail-open).
@@ -360,7 +347,7 @@ export async function suggestAgentAction(
     rationale: string;
     warnings: string[];
     // Tools the agent SHOULD have that are not yet available in the workspace
-    // (catalog MCP servers, disabled skills). Never in suggestion.config
+    // (catalog MCP servers not yet registered). Never in suggestion.config
     // .agentTools — the caller connects/enables these first, then equips them.
     recommendations: AgentRecommendation[];
     // The narrowest system agent role that can still run the draft (Agent RBAC

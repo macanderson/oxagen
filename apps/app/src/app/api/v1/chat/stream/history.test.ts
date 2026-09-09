@@ -56,44 +56,6 @@ function fileComponent(
 }
 
 describe("summarizeCompletedActions", () => {
-  it("lists completed tool calls and marks them DONE", () => {
-    const blocks: AssistantContentBlock[] = [
-      toolCall("tc1", "generate_markdown"),
-      fileComponent("tc1", "uss-nautilus-the-first-nuclear-submarine.md"),
-      toolCall("tc2", "generate_mermaid"),
-      toolCall("tc3", "generate_svg"),
-    ];
-    const summary = summarizeCompletedActions(blocks);
-    expect(summary).toContain("DONE, do not repeat");
-    expect(summary).toContain(
-      "generate_markdown → uss-nautilus-the-first-nuclear-submarine.md",
-    );
-    expect(summary).toContain("generate_mermaid");
-    expect(summary).toContain("generate_svg");
-  });
-
-  it("includes code executions and plans", () => {
-    const blocks: AssistantContentBlock[] = [
-      {
-        type: "code-execute",
-        toolCallId: "c1",
-        language: "python",
-        code: "print(1)",
-        status: "completed",
-      } as AssistantContentBlock,
-      {
-        type: "plan",
-        planId: "p1",
-        title: "Expand the ontology",
-        steps: [],
-        status: "pending",
-      } as AssistantContentBlock,
-    ];
-    const summary = summarizeCompletedActions(blocks);
-    expect(summary).toContain("code execution (python)");
-    expect(summary).toContain('created the plan "Expand the ontology"');
-  });
-
   it("omits errored tool calls (they may be retried)", () => {
     const blocks: AssistantContentBlock[] = [
       toolCall("tc1", "generate_image", "failed"),

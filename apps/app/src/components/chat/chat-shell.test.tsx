@@ -5,9 +5,7 @@
  * Unit tests for the ChatShell RSC wrapper:
  *   1. Shows MessagesSkeleton fallback while promise is pending
  *   2. After promise resolves, ChatShellClient receives correct props
- *   3. BackgroundTaskTray is always rendered (outside Suspense)
- *   4. Works with null conversationId
- *   5. Works when initialBackgroundTaskIds is empty/undefined
+ *   3. Works with null conversationId
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -51,21 +49,6 @@ vi.mock("./chat-shell-client", () => ({
   ),
 }));
 
-vi.mock("./background-task-tray", () => ({
-  BackgroundTaskTray: ({
-    initialTaskIds,
-  }: {
-    initialTaskIds?: string[];
-    fetchTask?: unknown;
-    cancelTask?: unknown;
-  }) => (
-    <div
-      data-testid="background-task-tray"
-      data-task-ids={JSON.stringify(initialTaskIds ?? [])}
-    />
-  ),
-}));
-
 vi.mock("@/components/ui/skeleton", () => ({
   Skeleton: ({ className }: { className?: string }) => (
     <div data-testid="skeleton" className={className} />
@@ -76,7 +59,6 @@ vi.mock("./message-bubble", () => ({ ChatMessage: {} }));
 vi.mock("./message-composer", () => ({ ComposerAction: {} }));
 vi.mock("./mcp-types", () => ({}));
 vi.mock("./model-picker", () => ({ ComposerModelState: {} }));
-vi.mock("./plan-card", () => ({ AgentCapability: {} }));
 vi.mock("./stream-event-types", () => ({}));
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -90,8 +72,6 @@ type MinimalProps = Pick<
   | "sendAction"
   | "resolveApprovalAction"
   | "resolveConsentAction"
-  | "resolvePlanAction"
-  | "fetchBackgroundTask"
   | "orgSlug"
   | "workspaceSlug"
 >;
@@ -105,19 +85,6 @@ function makeProps(overrides: Partial<ChatShellProps> = {}): ChatShellProps {
     sendAction: vi.fn() as unknown as ChatShellProps["sendAction"],
     resolveApprovalAction: vi.fn(() => Promise.resolve({ ok: true })),
     resolveConsentAction: vi.fn(() => Promise.resolve({ ok: true })),
-    resolvePlanAction: vi.fn(() => Promise.resolve({ ok: true })),
-    fetchBackgroundTask: vi.fn((_taskId: string) =>
-      Promise.resolve({
-        taskId: "task_1",
-        kind: "generic",
-        status: "running" as const,
-        label: "Test task",
-        createdAt: new Date().toISOString(),
-        startedAt: null,
-        completedAt: null,
-        progress: 0,
-      }),
-    ) as ChatShellProps["fetchBackgroundTask"],
     orgSlug: "my-org",
     workspaceSlug: "my-workspace",
   };
@@ -149,25 +116,6 @@ describe("ChatShell", () => {
 
     // ChatShellClient should NOT be rendered yet
     expect(screen.queryByTestId("chat-shell-client")).toBeNull();
-  });
-
-  it("renders BackgroundTaskTray outside Suspense immediately", async () => {
-    const neverResolves = new Promise<never>(() => {
-      /* intentionally pending */
-    });
-
-    await act(async () => {
-      render(
-        <ChatShell
-          {...makeProps({
-            messagesPromise: neverResolves as unknown as Promise<[]>,
-          })}
-        />,
-      );
-    });
-
-    // BackgroundTaskTray must be present even while Suspense fallback is showing
-    expect(screen.getByTestId("background-task-tray")).toBeInTheDocument();
   });
 
   it("renders ChatShellClient with correct props after promise resolves", async () => {
@@ -262,70 +210,5 @@ describe("ChatShell", () => {
 
     const client = screen.getByTestId("chat-shell-client");
     expect(client).toHaveAttribute("data-conversation-id", "null");
-  });
-
-  it("works when initialBackgroundTaskIds is undefined", async () => {
-    const neverResolves = new Promise<never>(() => {
-      /* intentionally pending */
-    });
-
-    await act(async () => {
-      render(
-        <ChatShell
-          {...makeProps({
-            messagesPromise: neverResolves as unknown as Promise<[]>,
-            initialBackgroundTaskIds: undefined,
-          })}
-        />,
-      );
-    });
-
-    const tray = screen.getByTestId("background-task-tray");
-    expect(tray).toBeInTheDocument();
-    expect(tray).toHaveAttribute("data-task-ids", "[]");
-  });
-
-  it("works when initialBackgroundTaskIds is empty array", async () => {
-    const neverResolves = new Promise<never>(() => {
-      /* intentionally pending */
-    });
-
-    await act(async () => {
-      render(
-        <ChatShell
-          {...makeProps({
-            messagesPromise: neverResolves as unknown as Promise<[]>,
-            initialBackgroundTaskIds: [],
-          })}
-        />,
-      );
-    });
-
-    const tray = screen.getByTestId("background-task-tray");
-    expect(tray).toBeInTheDocument();
-    expect(tray).toHaveAttribute("data-task-ids", "[]");
-  });
-
-  it("passes initialBackgroundTaskIds to BackgroundTaskTray", async () => {
-    const neverResolves = new Promise<never>(() => {
-      /* intentionally pending */
-    });
-
-    await act(async () => {
-      render(
-        <ChatShell
-          {...makeProps({
-            messagesPromise: neverResolves as unknown as Promise<[]>,
-            initialBackgroundTaskIds: ["task_1", "task_2"],
-          })}
-        />,
-      );
-    });
-
-    const tray = screen.getByTestId("background-task-tray");
-    expect(tray).toHaveAttribute(
-      "data-task-ids",
-      JSON.stringify(["task_1", "task_2"]),
-    );
   });
 });
