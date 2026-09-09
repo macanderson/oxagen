@@ -56,12 +56,39 @@ runs:
       shell: bash
       env:
         SERVICE: ${{ inputs.service }}
-        INSTANCE: i-094fcb34c7e715cf8
+        NODE_NAME: oxagen-app
         BUCKET: oxagen-deploy-916294258235
       run: |
         set -euo pipefail
         aws s3 cp "/tmp/$SERVICE-standalone.tgz" \
           "s3://$BUCKET/_deploy/$SERVICE-standalone.tgz" --only-show-errors
+
+        # Resolved by tag, not pinned. This used to be a literal instance id,
+        # and the node is replaced whenever its user data changes -- so a
+        # replacement left every deploy failing `InvalidInstanceId` against a
+        # terminated box. Nothing noticed for two hours, because the ALB
+        # health-checks a placeholder Caddy that user data brings up before
+        # any service is deployed, so the target read healthy while five
+        # hostnames served 503.
+        #
+        # `running` only: a replacement leaves the old instance in
+        # `shutting-down` and then `terminated` for a while, and both still
+        # carry the tag.
+        INSTANCE=$(aws ec2 describe-instances \
+          --filters "Name=tag:Name,Values=$NODE_NAME" \
+                    "Name=instance-state-name,Values=running" \
+          --query 'Reservations[].Instances[].InstanceId' --output text)
+
+        # Exactly one, or stop. Zero means there is nothing to deploy to and
+        # the artifact upload above is the whole of what this job did; more
+        # than one means a replacement is mid-flight and picking either is a
+        # coin toss that silently deploys to the box about to disappear.
+        count=$(printf '%s\n' $INSTANCE | grep -c . || true)
+        if [ "$count" != "1" ]; then
+          echo "::error::expected exactly one running instance tagged Name=$NODE_NAME, found $count ($INSTANCE). Refusing to guess which box to deploy $SERVICE to."
+          exit 1
+        fi
+        echo "node: $INSTANCE"
 
         command_id=$(aws ssm send-command \
           --instance-ids "$INSTANCE" \

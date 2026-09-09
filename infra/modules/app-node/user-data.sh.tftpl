@@ -2,12 +2,26 @@
 #
 # Bootstrap for the Oxagen app node.
 #
-# Runs once on first boot, and again whenever this file changes — the
-# instance is replaced on edit, which is safe because Neo4j's data lives on a
-# separate EBS volume that survives the replacement. Written to be re-runnable
-# rather than assumed-once, same discipline as the old account's data-node
-# bootstrap: it formats the data volume only if it has no filesystem, and
-# `docker compose up -d` converges rather than recreates.
+# Runs once on first boot, and again whenever this file changes — the instance
+# is replaced on edit. Written to be re-runnable rather than assumed-once, same
+# discipline as the old account's data-node bootstrap: it formats the data
+# volume only if it has no filesystem, and `docker compose up -d` converges
+# rather than recreates.
+#
+# This file used to say the replacement was safe "because Neo4j's data lives on
+# a separate EBS volume that survives it". Neo4j's does. Nothing else did, and
+# the sentence stopped anyone asking what else was on the box.
+#
+# On 2026-09-08 a replacement took the root disk with the platform's six
+# services, ClickHouse and the real Caddyfile on it, and brought the node back
+# carrying a placeholder that answers /healthz and 503s everything else. The
+# target group read healthy. Five hostnames served 503 for two hours and
+# nothing reported it.
+#
+# So this bootstrap returns the node to SERVING rather than to a placeholder:
+# both engines, the node scripts from the deploy bucket, and every service that
+# has an artifact there. A replacement is a recovery, not an outage waiting for
+# someone to notice.
 
 set -euxo pipefail
 
@@ -33,7 +47,24 @@ chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 systemctl enable --now docker
 
 # ---------------------------------------------------------------------------
-# Neo4j's data volume
+# Swap
+# ---------------------------------------------------------------------------
+
+# Two engines and six node services on 4 GiB have no headroom for a transient
+# spike, and the Linux OOM killer resolves that by killing the largest process
+# — which is always a database. Swap turns a crash into a slowdown. It is not
+# a substitute for memory: if this node swaps steadily, it is too small, and
+# `instance_type` in variables.tf is where that gets decided.
+if [[ ! -f /swapfile ]]; then
+  dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
+  chmod 600 /swapfile
+  mkswap /swapfile >/dev/null
+  grep -q '^/swapfile' /etc/fstab || echo "/swapfile none swap sw 0 0" >> /etc/fstab
+fi
+swapon -a || true
+
+# ---------------------------------------------------------------------------
+# The data volume — Neo4j and ClickHouse both live on it
 # ---------------------------------------------------------------------------
 
 DATA_DEV=""
@@ -123,6 +154,96 @@ cd /opt/oxagen/neo4j
 docker compose --env-file .env up -d
 
 # ---------------------------------------------------------------------------
+# ClickHouse
+# ---------------------------------------------------------------------------
+
+# Self-hosted on this node rather than a managed service (#2693), and declared
+# here rather than started by hand — which is how it actually ran from the
+# 2026-08-27 cutover until a node replacement removed it and nothing brought it
+# back. Its data is on /data, so it survives a replacement exactly as Neo4j's
+# does; only the container was ever missing.
+mkdir -p /data/clickhouse /data/clickhouse-config
+
+# The logging defaults are the dangerous part, not the cache sizes.
+# `metric_log` and `asynchronous_metric_log` write a row a second and the
+# shipped level is <trace>. On the old data node that produced 68M rows of
+# metric logging over a database holding ten rows of real data, and merging the
+# backlog held the box at its CPU burst ceiling for 26 hours — see
+# macanderson/oxagen#1305. Mounted as a single file so ClickHouse's own
+# docker_related_config.xml survives.
+cat > /data/clickhouse-config/zz-oxagen-limits.xml <<'CHXMLEOF'
+<clickhouse>
+    <logger><level>warning</level></logger>
+
+    <asynchronous_metric_log remove="1"/>
+    <metric_log remove="1"/>
+    <text_log remove="1"/>
+    <trace_log remove="1"/>
+
+    <!-- Sized to the container, not the host: ClickHouse reads total RAM, and
+         the stock 5 GB mark cache is five times this container's entire
+         limit. -->
+    <mark_cache_size>268435456</mark_cache_size>
+    <max_server_memory_usage>805306368</max_server_memory_usage>
+</clickhouse>
+CHXMLEOF
+chmod 644 /data/clickhouse-config/zz-oxagen-limits.xml
+
+CLICKHOUSE_PASSWORD=$(aws ssm get-parameter \
+  --region "$REGION" \
+  --name "/$NAME/clickhouse/password" \
+  --with-decryption \
+  --query 'Parameter.Value' \
+  --output text)
+
+mkdir -p /opt/oxagen/clickhouse
+umask 077
+cat > /opt/oxagen/clickhouse/.env <<ENVEOF
+CLICKHOUSE_PASSWORD=$CLICKHOUSE_PASSWORD
+ENVEOF
+chmod 600 /opt/oxagen/clickhouse/.env
+
+cat > /opt/oxagen/clickhouse/docker-compose.yml <<'COMPOSEEOF'
+name: oxagen-clickhouse
+
+services:
+  clickhouse:
+    image: ${clickhouse_image}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8123:8123"
+      - "127.0.0.1:9000:9000"
+    environment:
+      CLICKHOUSE_USER: oxagen
+      CLICKHOUSE_PASSWORD: $${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DB: oxagen
+    volumes:
+      - /data/clickhouse:/var/lib/clickhouse
+      - /data/clickhouse-config/zz-oxagen-limits.xml:/etc/clickhouse-server/config.d/zz-oxagen-limits.xml:ro
+    mem_limit: 1024m
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: "${region}"
+        awslogs-group: /oxagen-app/clickhouse
+        awslogs-create-group: "true"
+        awslogs-stream: clickhouse
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+COMPOSEEOF
+
+cd /opt/oxagen/clickhouse
+docker compose --env-file .env up -d
+
+# ---------------------------------------------------------------------------
 # Caddy — a placeholder config that answers /healthz, so the ALB's health
 # check goes green before tools/install-node-scripts.sh has ever run. The
 # real Caddyfile and the platform's own services arrive by the deploy path.
@@ -130,9 +251,20 @@ docker compose --env-file .env up -d
 
 mkdir -p /opt/oxagen/bin /opt/oxagen/services /opt/oxagen/caddy
 
+# This placeholder deliberately does NOT answer /healthz 200.
+#
+# It used to, so the target group would go green before the deploy path had
+# ever run. That is what made 2026-09-08 invisible: the node came back with
+# only this config, the ALB called it healthy, and five hostnames served 503
+# for two hours with every dashboard green. A health check that passes while
+# nothing is served is not a health check.
+#
+# Unhealthy is the honest answer until a real service is behind it. The
+# bootstrap below is what makes that recoverable without a person: if it
+# succeeds the real Caddyfile replaces this within a few minutes, and if it
+# fails the node stays visibly unhealthy instead of quietly wrong.
 cat > /opt/oxagen/caddy/Caddyfile <<'CADDYEOF'
 :80 {
-	respond /healthz 200
 	respond 503
 }
 CADDYEOF
@@ -148,5 +280,50 @@ docker run -d \
   --log-opt awslogs-stream=caddy \
   -v /opt/oxagen/caddy:/etc/caddy \
   caddy:2
+
+# ---------------------------------------------------------------------------
+# Back to serving
+# ---------------------------------------------------------------------------
+
+# The node scripts and the platform's services used to arrive only by a deploy
+# somebody triggered. That made a replacement a half-built box: the engines ran
+# and nothing else did, and the next deploy failed anyway because CI addressed
+# the old instance by id. Both halves are fixed — CI resolves the node by tag
+# now — and this is the half that belongs on the node.
+#
+# `tools/install-node-scripts.sh` uploads to the same two prefixes this reads,
+# and stays the way a CHANGE to those scripts reaches the node. Its header's
+# reasoning — that nothing should sync them mid-deploy, because a script
+# rewriting itself during a deploy fails worse than a stale one — is about
+# steady state and is untouched. This is boot, where the alternative to
+# fetching them is not having them.
+aws s3 sync "s3://${deploy_bucket}/_bin/" /opt/oxagen/bin/ --region "$REGION" --only-show-errors
+chmod 0755 /opt/oxagen/bin/*.sh || true
+
+# The real Caddyfile, replacing the 503 placeholder above. Absent on a first
+# ever provision, which is why this does not fail the boot.
+if aws s3 cp "s3://${deploy_bucket}/_caddy/Caddyfile" /opt/oxagen/caddy/Caddyfile \
+     --region "$REGION" --only-show-errors; then
+  docker exec oxagen-caddy caddy reload \
+    --config /etc/caddy/Caddyfile --adapter caddyfile || true
+fi
+
+# Every service with an artifact. Read from the bucket rather than listed here,
+# so adding a service to the platform does not also mean editing this file and
+# replacing the node to apply it.
+#
+# `|| true` per service on purpose: one service whose artifact is stale or
+# broken must not stop the other five coming back. deploy-service.sh rolls a
+# failed service back to its previous release on its own, and the endpoint
+# check in CI is what judges the result. Losing five to save one is the wrong
+# trade during a recovery.
+if [[ -x /opt/oxagen/bin/deploy-service.sh ]]; then
+  for artifact in $(aws s3 ls "s3://${deploy_bucket}/_deploy/" --region "$REGION" \
+                      | awk '{print $4}' | grep -E '\-standalone\.tgz$' || true); do
+    service="$${artifact%-standalone.tgz}"
+    echo "restoring $service"
+    /opt/oxagen/bin/deploy-service.sh "$service" || echo "WARNING: $service did not come back"
+  done
+fi
 
 echo "oxagen app node bootstrap complete"

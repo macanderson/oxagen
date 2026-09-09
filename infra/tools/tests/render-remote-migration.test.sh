@@ -97,7 +97,8 @@ SCRIPT=$(cat "$TOOLS/run-db-migrations.sh")
 lacks "$SCRIPT" "docker exec" "script: no docker exec anywhere"
 lacks "$SCRIPT" "i-023d002d6e44f8f84" "script: retired instance is gone"
 lacks "$SCRIPT" "oxagen-deploy-578673726240" "script: retired deploy bucket is gone"
-contains "$SCRIPT" "i-094fcb34c7e715cf8" "script: targets the current app node"
+lacks "$SCRIPT" "i-094fcb34c7e715cf8" "script: pins no instance id"
+contains "$SCRIPT" "tag:Name,Values=" "script: resolves the app node by tag"
 contains "$SCRIPT" "oxagen-deploy-916294258235" "script: targets the current deploy bucket"
 contains "$SCRIPT" "oxagen-postgres" "script: names the Aurora cluster"
 

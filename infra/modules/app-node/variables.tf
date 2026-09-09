@@ -45,6 +45,24 @@ variable "neo4j_version" {
   default     = "5-community"
 }
 
+variable "clickhouse_image" {
+  description = <<-EOT
+    ClickHouse's image. Pinned to a patch line rather than `latest`, so a
+    replacement of this node cannot also be a database upgrade nobody chose.
+  EOT
+  type        = string
+  default     = "clickhouse/clickhouse-server:24.8-alpine"
+}
+
+variable "deploy_bucket" {
+  description = <<-EOT
+    Where the node's own artifacts and scripts live. The bootstrap reads
+    `_bin/` and `_deploy/` out of it to bring the node back to serving after a
+    replacement, rather than to a placeholder that answers only /healthz.
+  EOT
+  type        = string
+}
+
 variable "data_volume_size" {
   description = "Size in GB of Neo4j's durable data volume, separate from the root disk."
   type        = number

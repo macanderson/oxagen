@@ -32,17 +32,45 @@ data "aws_iam_policy_document" "stella" {
   }
 
   statement {
-    sid     = "RestartService"
-    actions = ["ssm:SendCommand"]
-    resources = [
-      aws_ssm_document.deploy_service.arn,
-      "arn:aws:ec2:${var.region}:${var.account_id}:instance/${var.node_instance_id}",
-    ]
+    sid       = "RestartService"
+    actions   = ["ssm:SendCommand"]
+    resources = [aws_ssm_document.deploy_service.arn]
+  }
+
+  # The instance is named by TAG, not by id. An id is not a stable name for
+  # this thing: the node is replaced whenever its user data changes, and on
+  # 2026-09-08 one such replacement left every deploy failing
+  # `InvalidInstanceId` against a terminated box while the ALB still read
+  # healthy, because user data brings up a placeholder Caddy that answers
+  # /healthz. Production served 503 for two hours.
+  #
+  # A separate statement from the document above, and it has to be: a tag
+  # condition on a statement that also names the document would be evaluated
+  # against the document, which carries no such tag, and deny the send.
+  statement {
+    sid       = "RestartServiceOnTheNode"
+    actions   = ["ssm:SendCommand"]
+    resources = ["arn:aws:ec2:${var.region}:${var.account_id}:instance/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ssm:resourceTag/Name"
+      values   = [var.node_name]
+    }
   }
 
   statement {
     sid       = "ReadCommandResult"
     actions   = ["ssm:GetCommandInvocation", "ssm:ListCommandInvocations"]
+    resources = ["*"]
+  }
+
+  # Resolving the node by tag needs this. DescribeInstances takes no
+  # resource-level scope, so `*` here is the only spelling AWS accepts; it
+  # reads instance metadata and mutates nothing.
+  statement {
+    sid       = "FindTheNode"
+    actions   = ["ec2:DescribeInstances"]
     resources = ["*"]
   }
 }
@@ -159,17 +187,45 @@ data "aws_iam_policy_document" "oxagen_platform" {
   }
 
   statement {
-    sid     = "RestartServices"
-    actions = ["ssm:SendCommand"]
-    resources = [
-      aws_ssm_document.deploy_service.arn,
-      "arn:aws:ec2:${var.region}:${var.account_id}:instance/${var.node_instance_id}",
-    ]
+    sid       = "RestartServices"
+    actions   = ["ssm:SendCommand"]
+    resources = [aws_ssm_document.deploy_service.arn]
+  }
+
+  # The instance is named by TAG, not by id. An id is not a stable name for
+  # this thing: the node is replaced whenever its user data changes, and on
+  # 2026-09-08 one such replacement left every deploy failing
+  # `InvalidInstanceId` against a terminated box while the ALB still read
+  # healthy, because user data brings up a placeholder Caddy that answers
+  # /healthz. Production served 503 for two hours.
+  #
+  # A separate statement from the document above, and it has to be: a tag
+  # condition on a statement that also names the document would be evaluated
+  # against the document, which carries no such tag, and deny the send.
+  statement {
+    sid       = "RestartServicesOnTheNode"
+    actions   = ["ssm:SendCommand"]
+    resources = ["arn:aws:ec2:${var.region}:${var.account_id}:instance/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ssm:resourceTag/Name"
+      values   = [var.node_name]
+    }
   }
 
   statement {
     sid       = "ReadCommandResult"
     actions   = ["ssm:GetCommandInvocation", "ssm:ListCommandInvocations"]
+    resources = ["*"]
+  }
+
+  # Resolving the node by tag needs this. DescribeInstances takes no
+  # resource-level scope, so `*` here is the only spelling AWS accepts; it
+  # reads instance metadata and mutates nothing.
+  statement {
+    sid       = "FindTheNode"
+    actions   = ["ec2:DescribeInstances"]
     resources = ["*"]
   }
 
