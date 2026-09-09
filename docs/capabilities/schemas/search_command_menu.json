@@ -3,7 +3,10 @@
   "domain": "command",
   "description": "Full-text entity search for the Command Menu. Accepts an optional entity-kind filter and a query string, returns up to 8 typed rows (label, scope, contextLine, href) composed from the ontology graph and operational Postgres tables, filtered to the caller's tenant grants.",
   "mode": "sync",
-  "surfaces": ["api", "agent"],
+  "surfaces": [
+    "api",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -22,7 +25,12 @@
     "properties": {
       "kind": {
         "type": "string",
-        "enum": ["run", "principal", "event", "agent"]
+        "enum": [
+          "run",
+          "principal",
+          "event",
+          "agent"
+        ]
       },
       "query": {
         "type": "string",
@@ -41,7 +49,11 @@
         "description": "Workspace slug for href construction"
       }
     },
-    "required": ["query", "orgSlug", "workspaceSlug"],
+    "required": [
+      "query",
+      "orgSlug",
+      "workspaceSlug"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -55,7 +67,12 @@
           "properties": {
             "kind": {
               "type": "string",
-              "enum": ["run", "principal", "event", "agent"],
+              "enum": [
+                "run",
+                "principal",
+                "event",
+                "agent"
+              ],
               "description": "Entity kind"
             },
             "id": {
@@ -85,12 +102,21 @@
               "description": "Route the menu pushes when this item is selected"
             }
           },
-          "required": ["kind", "id", "label", "scope", "contextLine", "href"],
+          "required": [
+            "kind",
+            "id",
+            "label",
+            "scope",
+            "contextLine",
+            "href"
+          ],
           "additionalProperties": false
         }
       }
     },
-    "required": ["rows"],
+    "required": [
+      "rows"
+    ],
     "additionalProperties": false
   }
 }

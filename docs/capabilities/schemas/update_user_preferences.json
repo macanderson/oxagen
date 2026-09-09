@@ -3,7 +3,11 @@
   "domain": "user",
   "description": "Update the calling user's UI and model preferences (partial update — only provided fields are changed)",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -22,24 +26,39 @@
     "properties": {
       "fontSize": {
         "type": "string",
-        "enum": ["small", "medium", "large"]
+        "enum": [
+          "small",
+          "medium",
+          "large"
+        ]
       },
       "density": {
         "type": "string",
-        "enum": ["compact", "comfortable", "spacious"]
+        "enum": [
+          "compact",
+          "comfortable",
+          "spacious"
+        ]
       },
       "enterToSubmit": {
         "type": "boolean"
       },
       "pendingPromptBehavior": {
         "type": "string",
-        "enum": ["queue", "interrupt"]
+        "enum": [
+          "queue",
+          "interrupt"
+        ]
       },
       "defaultTextTier": {
         "anyOf": [
           {
             "type": "string",
-            "enum": ["fast", "balanced", "precise"]
+            "enum": [
+              "fast",
+              "balanced",
+              "precise"
+            ]
           },
           {
             "type": "null"
@@ -74,24 +93,39 @@
     "properties": {
       "fontSize": {
         "type": "string",
-        "enum": ["small", "medium", "large"]
+        "enum": [
+          "small",
+          "medium",
+          "large"
+        ]
       },
       "density": {
         "type": "string",
-        "enum": ["compact", "comfortable", "spacious"]
+        "enum": [
+          "compact",
+          "comfortable",
+          "spacious"
+        ]
       },
       "enterToSubmit": {
         "type": "boolean"
       },
       "pendingPromptBehavior": {
         "type": "string",
-        "enum": ["queue", "interrupt"]
+        "enum": [
+          "queue",
+          "interrupt"
+        ]
       },
       "defaultTextTier": {
         "anyOf": [
           {
             "type": "string",
-            "enum": ["fast", "balanced", "precise"]
+            "enum": [
+              "fast",
+              "balanced",
+              "precise"
+            ]
           },
           {
             "type": "null"

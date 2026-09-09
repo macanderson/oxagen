@@ -196,6 +196,15 @@ import { authCliTokenRoute } from "./routes/v1/auth.cli.token";
 import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
 import { telemetryStellaEnrollRoute } from "./routes/v1/telemetry.stella.enroll";
 import { telemetryStellaIngestRoute } from "./routes/v1/telemetry.stella.ingest";
+import { tachoBundleGetRoute } from "./routes/v1/tacho.bundle.get";
+import { tachoCommandDispatchRoute } from "./routes/v1/tacho.command.dispatch";
+import { tachoCommandFetchRoute } from "./routes/v1/tacho.command.fetch";
+import { tachoEnrollmentCreateRoute } from "./routes/v1/tacho.enrollment.create";
+import { tachoEnrollmentRevokeRoute } from "./routes/v1/tacho.enrollment.revoke";
+import { tachoEventsIngestRoute } from "./routes/v1/tacho.events.ingest";
+import { tachoHostListRoute } from "./routes/v1/tacho.host.list";
+import { tachoSessionGetRoute } from "./routes/v1/tacho.session.get";
+import { tachoSessionListRoute } from "./routes/v1/tacho.session.list";
 
 export type AppEnv = {
   Variables: {
@@ -313,6 +322,51 @@ stellaTelemetryScoped.use(
 stellaTelemetryScoped.route("/", telemetryStellaIngestRoute);
 app.route("/v1/telemetry/stella", stellaTelemetryScoped);
 
+// Tacho hosts speak to Oxagen with their enrolled API key, whose scope pins
+// org and workspace, so the machine routes sit on a static path outside the
+// slug group. Same pre-auth ceilings as the Stella intake: a per-IP bucket
+// for shared NATs and a per-credential bucket for one abused key.
+app.use(
+  "/v1/tacho/*",
+  distributedRateLimiter({
+    keyPrefix: "tacho-preauth-ip",
+    max: 6_000,
+    bucketKey: trustedVercelIpBucketKey,
+    methods: "all",
+    failClosedOnStoreError: true,
+  }),
+);
+app.use(
+  "/v1/tacho/*",
+  distributedRateLimiter({
+    keyPrefix: "tacho-preauth-credential",
+    max: 120,
+    bucketKey: authorizationFingerprintBucketKey,
+    methods: "all",
+    failClosedOnStoreError: true,
+  }),
+);
+// Post-auth ceiling for an enrolled Tacho host, in requests/minute. A constant
+// for the same reason as STELLA_TELEMETRY_PER_MIN above: ADR-043 retired
+// RATE_LIMIT_AGENT_EXEC_PER_MIN, whose value this limiter used to borrow, and a
+// drain rate belongs to the ingress rather than to a per-deployment knob. The
+// value matches the retired budget's default so the effective limit is unchanged.
+const TACHO_HOST_PER_MIN = 30;
+
+const tachoScoped = new Hono<AppEnv>();
+tachoScoped.use("*", authMiddleware);
+tachoScoped.use(
+  "*",
+  distributedRateLimiter({
+    keyPrefix: "tacho-host",
+    max: TACHO_HOST_PER_MIN,
+  }),
+);
+tachoScoped.route("/", tachoEventsIngestRoute);
+tachoScoped.route("/", tachoBundleGetRoute);
+tachoScoped.route("/", tachoCommandFetchRoute);
+app.route("/v1/tacho", tachoScoped);
+
 // Distributed, workspace-keyed rate limiters for the expensive surfaces. Budgets
 // are env-tunable (requests/minute) with conservative defaults; the store is
 // Postgres so the limit is global across serverless instances (the in-memory
@@ -337,6 +391,14 @@ orgScoped.route("/workspaces", workspaceCreateRoute);
 // auth this router applies — not beside the ingest route, whose API-key gate
 // an already-enrolled machine could otherwise use to mint more enrollments.
 orgScoped.route("/telemetry/stella/enrollments", telemetryStellaEnrollRoute);
+// Tacho operator actions: enrol and revoke hosts, command them, and read the
+// fleet. Session auth with the org role checked in the handlers.
+orgScoped.route("/tacho/enrollments", tachoEnrollmentCreateRoute);
+orgScoped.route("/tacho/enrollments/revoke", tachoEnrollmentRevokeRoute);
+orgScoped.route("/tacho/commands", tachoCommandDispatchRoute);
+orgScoped.route("/tacho/hosts", tachoHostListRoute);
+orgScoped.route("/tacho/sessions", tachoSessionListRoute);
+orgScoped.route("/tacho/sessions/get", tachoSessionGetRoute);
 orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
 orgScoped.route(
   "/billing/subscription/upgrade/start",

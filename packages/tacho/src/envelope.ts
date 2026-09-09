@@ -477,6 +477,9 @@ export const BODY_MEMBER_NAMES = Object.keys(allFacts.shape) as Array<
   keyof typeof allFacts.shape
 >;
 
+/** The merged fact shape, for tooling that derives storage types from it. */
+export const BODY_FACTS_SHAPE = allFacts.shape;
+
 // ---------------------------------------------------------------------------
 // Kinds and their bodies
 // ---------------------------------------------------------------------------

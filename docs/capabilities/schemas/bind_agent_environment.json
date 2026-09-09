@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "Bind an agent identity to an environment (a named vault of secrets it may resolve). Upserts the binding; promoting one to primary atomically demotes the agent's previous primary.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -32,7 +36,10 @@
         "type": "boolean"
       }
     },
-    "required": ["agentId", "environmentId"],
+    "required": [
+      "agentId",
+      "environmentId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -72,7 +79,9 @@
         "additionalProperties": false
       }
     },
-    "required": ["binding"],
+    "required": [
+      "binding"
+    ],
     "additionalProperties": false
   }
 }

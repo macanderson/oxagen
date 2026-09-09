@@ -1,4 +1,4 @@
-h1:KkkJg94Qnp3Kn1+teeizZsm9qRgAytoth1SQEBRa5VQ=
+h1:EO3pgX1QCy98ioorg6dJqPzBLY8vi0GI0tiUZepOOpg=
 20260611233016_initial_schema.sql h1:zDxoHTpnCTjbF+5PvUDeUGvyJCb6yhltPOFOw1pdqMQ=
 20260612000959_add_agent_execution_step_timing.sql h1:d6h37F1Jf3ze2TIHheAB3P9PR0hbcaenjF15U45v2ak=
 20260612052000_regrant_oxagen_app.sql h1:Xh0Mx6rfN3XHIBA7nIlNhADsWGfC1mZtn25NsnrIZXo=
@@ -96,3 +96,4 @@ h1:KkkJg94Qnp3Kn1+teeizZsm9qRgAytoth1SQEBRa5VQ=
 20260907160000_drop_media_model_defaults.sql h1:NsnZQzp/W2duXcJNx5s51rtPggrS5VMoIeProHAp0lQ=
 20260908010000_secret_and_plugin_credential_security_events.sql h1:pWvf7HzZt2UC+9M0eSj3YCdCVfBZwF0+U3j/j3FDVdE=
 20260908020000_event_type_check_readmits_data_plane_updated.sql h1:j59kJ4BUc99gpSgWS+XVFDv+vqSRvltra2vrnQiayN0=
+20260908120000_tacho_control_plane.sql h1:MnyTzpckpOGDHbGQ50jD6oTpbncRZnKN+iR5D4n9guc=

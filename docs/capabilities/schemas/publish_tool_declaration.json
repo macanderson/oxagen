@@ -3,7 +3,9 @@
   "domain": "tool",
   "description": "Publish a tool declaration into the workspace agent-asset registry — upserts the agent.tools row by (workspace, name) and creates a new immutable tool_versions row when the canonical manifest changed. Idempotent on an unchanged manifest.",
   "mode": "sync",
-  "surfaces": ["api"],
+  "surfaces": [
+    "api"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -41,7 +43,12 @@
       },
       "risk_grade": {
         "type": "string",
-        "enum": ["low", "medium", "high", "critical"],
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
         "description": "Declared risk grade of invoking this tool"
       },
       "policy_group": {
@@ -49,7 +56,12 @@
       },
       "source": {
         "type": "string",
-        "enum": ["builtin", "custom", "mcp", "foundry"],
+        "enum": [
+          "builtin",
+          "custom",
+          "mcp",
+          "foundry"
+        ],
         "description": "Where the declaration came from"
       },
       "manifest": {
@@ -92,7 +104,13 @@
         "description": "false when the latest version already carries this checksum (idempotent)"
       }
     },
-    "required": ["publicId", "slug", "version", "checksum", "published"],
+    "required": [
+      "publicId",
+      "slug",
+      "version",
+      "checksum",
+      "published"
+    ],
     "additionalProperties": false
   }
 }

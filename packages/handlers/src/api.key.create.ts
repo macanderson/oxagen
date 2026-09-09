@@ -22,6 +22,7 @@ import {
   generateApiKey,
 } from "./lib/api-key-authz";
 import { requestsReservedStellaTelemetryPurpose } from "./lib/stella-telemetry-enrollment";
+import { requestsReservedTachoPurpose } from "./lib/tacho-enrollment";
 import { logger } from "./logger";
 
 export const apiKeyCreateHandler: CapabilityHandler<
@@ -51,6 +52,18 @@ export const apiKeyCreateHandler: CapabilityHandler<
   // The generic key-management capability must never mint the server-owned
   // enrollment marker. Provisioning is a separate operator workflow; allowing
   // callers to self-assert this purpose would bypass the intake trust boundary.
+  if (requestsReservedTachoPurpose(input.scope)) {
+    logger.warn(
+      { orgId: ctx.orgId },
+      "api.key.create: rejected — reserved Tacho host purpose",
+    );
+    throw new CapabilityError(
+      "create_api_key",
+      "authz_denied",
+      "Forbidden: reserved API-key scope purpose",
+    );
+  }
+
   if (requestsReservedStellaTelemetryPurpose(input.scope)) {
     logger.warn(
       { orgId: ctx.orgId },

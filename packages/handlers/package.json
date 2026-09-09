@@ -30,6 +30,7 @@
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/plugins": "workspace:*",
     "@oxagen/storage": "workspace:*",
+    "@oxagen/tacho": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "drizzle-orm": "0.45.2",

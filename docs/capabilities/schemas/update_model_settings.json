@@ -3,7 +3,11 @@
   "domain": "workspace",
   "description": "Update the workspace-level model defaults (partial update — only provided fields are changed)",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -24,7 +28,11 @@
         "anyOf": [
           {
             "type": "string",
-            "enum": ["fast", "balanced", "precise"]
+            "enum": [
+              "fast",
+              "balanced",
+              "precise"
+            ]
           },
           {
             "type": "null"
@@ -53,7 +61,11 @@
         "anyOf": [
           {
             "type": "string",
-            "enum": ["fast", "balanced", "precise"]
+            "enum": [
+              "fast",
+              "balanced",
+              "precise"
+            ]
           },
           {
             "type": "null"
@@ -71,7 +83,10 @@
         ]
       }
     },
-    "required": ["defaultTextTier", "defaultTextModel"],
+    "required": [
+      "defaultTextTier",
+      "defaultTextModel"
+    ],
     "additionalProperties": false
   }
 }

@@ -29,6 +29,7 @@
     "@opentelemetry/semantic-conventions": "1.41.1",
     "@oxagen/compliance": "workspace:*",
     "@oxagen/config": "workspace:*",
+    "@oxagen/tacho": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "zod": "3.25.76"
   },

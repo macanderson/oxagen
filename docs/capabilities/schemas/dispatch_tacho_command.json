@@ -1,0 +1,91 @@
+{
+  "name": "dispatch_tacho_command",
+  "domain": "tacho",
+  "description": "Queue a pause, resume, cancel, message, revoke, refresh_bundle, or kill command for a Tacho host or session.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "hostEnrollmentId": {
+        "type": "string"
+      },
+      "sessionUuid": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "command": {
+        "type": "string",
+        "enum": [
+          "pause",
+          "resume",
+          "cancel",
+          "message",
+          "revoke",
+          "refresh_bundle",
+          "kill"
+        ]
+      },
+      "payload": {
+        "type": "object",
+        "additionalProperties": {},
+        "default": {}
+      },
+      "expiresInS": {
+        "type": "integer",
+        "minimum": 10,
+        "maximum": 86400,
+        "default": 3600
+      }
+    },
+    "required": [
+      "hostEnrollmentId",
+      "command"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "commandId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "outcome": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "delivered",
+          "applied",
+          "expired",
+          "failed"
+        ]
+      },
+      "issuedAt": {
+        "type": "string"
+      },
+      "expiresAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "commandId",
+      "outcome",
+      "issuedAt",
+      "expiresAt"
+    ],
+    "additionalProperties": false
+  }
+}
