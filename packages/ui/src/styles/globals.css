@@ -480,7 +480,7 @@
     --sidebar-primary-foreground: var(--ox-ink);
     --sidebar-accent: var(--_stone-800);
     --sidebar-accent-foreground: var(--_ink-white);
-    --sidebar-border: oklch(0.296 0.013 285.6 / 0.6); /* #2C2C33 — st-rule, softened */
+    --sidebar-border: color-mix(in oklch, var(--ox-rule) 60%, transparent); /* the heavier rule on ink, softened */
     --sidebar-ring: var(--ring);
 
     /* Card header: flat — matches the card surface exactly, no shaded band.
@@ -610,7 +610,7 @@
       --sidebar-primary-foreground: var(--ox-ink);
       --sidebar-accent: var(--_stone-800);
       --sidebar-accent-foreground: var(--_ink-white);
-      --sidebar-border: oklch(0.296 0.013 285.6 / 0.6); /* #2C2C33 — st-rule, softened */
+      --sidebar-border: color-mix(in oklch, var(--ox-rule) 60%, transparent); /* the heavier rule on ink, softened */
       --sidebar-ring: var(--ring);
 
       /* Card header: flat — matches the card surface exactly, no shaded band.
@@ -1129,9 +1129,9 @@
   .ox-grad-surface {
     background-image: linear-gradient(
       100deg,
-      var(--_ember-a, #725a00) 0%,
-      var(--_ember-b, #efc53f) 46%,
-      var(--_ember-c, #f7d96b) 100%
+      var(--_ember-a, #8B5E1A) 0%,
+      var(--_ember-b, #D6962C) 46%,
+      var(--_ember-c, #F1C364) 100%
     );
   }
 

@@ -9,7 +9,9 @@
  *
  * Covers:
  *   - PwaSplash <img> src values use /spinner/ (the real asset dir), never /pwa/
- *   - An image load error swaps both gifs for the pure-CSS ring fallback
+ *   - The splash renders ONE spinner, not a per-theme pair: the house asset
+ *     carries its own light/dark and reduced-motion rules
+ *   - An image load error swaps the spinner for the pure-CSS ring fallback
  *   - RouteTransitionLoader never emits a /pwa/ src
  */
 
@@ -28,10 +30,12 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("PwaSplash — spinner asset paths", () => {
-  it("renders both gif <img>s using /spinner/ and never /pwa/", () => {
+  it("renders one spinner <img> using /spinner/ and never /pwa/", () => {
     const { container } = render(<PwaSplash />);
     const imgs = Array.from(container.querySelectorAll("img"));
-    expect(imgs).toHaveLength(2);
+    // ONE asset: the house spinner adapts to the colour scheme from inside the
+    // file, so there is no dark/light pair to render.
+    expect(imgs).toHaveLength(1);
     for (const img of imgs) {
       const src = img.getAttribute("src") ?? "";
       expect(src).toContain("/spinner/");
@@ -39,18 +43,17 @@ describe("PwaSplash — spinner asset paths", () => {
     }
   });
 
-  it("points the dark and light gifs at the correct assets", () => {
+  it("points at the house spinner asset", () => {
     const { container } = render(<PwaSplash />);
     const srcs = Array.from(container.querySelectorAll("img")).map((i) =>
       i.getAttribute("src"),
     );
-    expect(srcs).toContain("/spinner/oxagen-spinner-assemble-dark.gif");
-    expect(srcs).toContain("/spinner/oxagen-spinner-assemble-light.gif");
+    expect(srcs).toContain("/spinner/oxagen-spinner.svg");
   });
 });
 
 describe("PwaSplash — CSS fallback on image error", () => {
-  it("swaps both gifs for the pure-CSS ring when a gif fails to load", () => {
+  it("swaps the spinner for the pure-CSS ring when the asset fails to load", () => {
     const { container } = render(<PwaSplash />);
     const firstImg = container.querySelector("img");
     expect(firstImg).not.toBeNull();

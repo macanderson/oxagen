@@ -19,8 +19,8 @@ export function IllustrationByokSpot({ className }: { className?: string }) {
       </title>
       <defs>
         <linearGradient id="ill-byok-spot-g1" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="var(--_ember-a, #725A00)" />
-          <stop offset="1" stopColor="var(--_ember-c, #F7D96B)" />
+          <stop offset="0" stopColor="var(--_ember-a, #8B5E1A)" />
+          <stop offset="1" stopColor="var(--_ember-c, #F1C364)" />
         </linearGradient>
       </defs>
 

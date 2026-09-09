@@ -23,18 +23,18 @@ export function IllustrationEnterprise({ className }: { className?: string }) {
       <title>An organization branching into isolated workspace nodes</title>
       <defs>
         <linearGradient id="ill-enterprise-g1" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="var(--_ember-a, #725A00)" />
-          <stop offset="1" stopColor="var(--_ember-c, #F7D96B)" />
+          <stop offset="0" stopColor="var(--_ember-a, #8B5E1A)" />
+          <stop offset="1" stopColor="var(--_ember-c, #F1C364)" />
         </linearGradient>
         <radialGradient id="ill-enterprise-glow">
           <stop
             offset="0"
-            stopColor="var(--_ember-b, #EFC53F)"
+            stopColor="var(--_ember-b, #D6962C)"
             stopOpacity={0.75}
           />
           <stop
             offset="1"
-            stopColor="var(--_ember-b, #EFC53F)"
+            stopColor="var(--_ember-b, #D6962C)"
             stopOpacity={0}
           />
         </radialGradient>

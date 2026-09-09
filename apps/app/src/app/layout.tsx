@@ -89,8 +89,8 @@ export const viewport: Viewport = {
   // ivory paper on light. (Manifest theme_color is a single value for the
   // standalone PWA toolbar — kept on the charcoal.)
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#0A0A0C" },
-    { media: "(prefers-color-scheme: light)", color: "#F7F4ED" },
+    { media: "(prefers-color-scheme: dark)", color: "#10100F" },
+    { media: "(prefers-color-scheme: light)", color: "#F2EEE5" },
   ],
 };
 

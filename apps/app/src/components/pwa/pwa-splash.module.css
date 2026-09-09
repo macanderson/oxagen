@@ -27,7 +27,7 @@
   justify-content: center;
 
   /* Dark background matches the PWA manifest background_color. */
-  background-color: #0a0a0c;
+  background-color: #10100F;
 
   /* Fade transition on dismiss — disabled under reduced-motion. */
   opacity: 1;
@@ -36,7 +36,7 @@
 
 @media (prefers-color-scheme: light) {
   .splash {
-    background-color: #f7f4ed;
+    background-color: #F2EEE5;
   }
 }
 
@@ -68,30 +68,17 @@
   }
 }
 
-/* ── Spinner theme variants (only visible while the splash is shown) ── */
-.spinnerDark {
+/* ── The spinner. One asset: the house SVG carries its own light/dark and its
+      own reduced-motion rule, so there is nothing to switch here. ── */
+.spinner {
   display: block;
 }
 
-.spinnerLight {
-  display: none;
-}
-
-@media (prefers-color-scheme: light) {
-  .spinnerDark {
-    display: none;
-  }
-
-  .spinnerLight {
-    display: block;
-  }
-}
-
-/* ── CSS fallback spinner (shown when GIF assets fail to load) ── */
+/* ── CSS fallback spinner (shown if the SVG fails to load) ── */
 .cssSpinner {
   width: 60px;
   height: 60px;
-  /* Default color for dark background (#0A0A0C) */
+  /* Default color for dark background (#10100F) */
   color: #d8d2cb;
   border: 4px solid color-mix(in srgb, currentColor 25%, transparent);
   border-top-color: currentColor;
@@ -101,7 +88,7 @@
 
 @media (prefers-color-scheme: light) {
   .cssSpinner {
-    /* Color for light background (#F7F4ED) */
+    /* Color for light background (#F2EEE5) */
     color: #3e3a34;
   }
 }

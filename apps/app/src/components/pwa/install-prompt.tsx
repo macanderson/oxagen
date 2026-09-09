@@ -293,7 +293,7 @@ const bannerStyles = {
   } satisfies React.CSSProperties,
   inner: {
     background: "#262624",
-    color: "#F4F1EA",
+    color: "#F2EEE5",
     borderRadius: "16px 16px 12px 12px",
     boxShadow: "0 -2px 16px rgba(0,0,0,0.4)",
     padding: "14px 16px 14px 20px",
@@ -316,8 +316,8 @@ const bannerStyles = {
     flexShrink: 0,
   } satisfies React.CSSProperties,
   installBtn: {
-    background: "#EFC53F",
-    color: "#0A0A0C",
+    background: "#D6962C",
+    color: "#10100F",
     border: "none",
     borderRadius: 8,
     padding: "12px 16px",
@@ -331,7 +331,7 @@ const bannerStyles = {
   dismissBtn: {
     background: "transparent",
     border: "none",
-    color: "#F4F1EA",
+    color: "#F2EEE5",
     cursor: "pointer",
     fontSize: 20,
     lineHeight: 1,

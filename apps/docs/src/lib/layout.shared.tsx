@@ -1,20 +1,20 @@
 import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
-import { OxagenIcon } from "@oxagen/ui";
+import { OxagenWordmark } from "@oxagen/ui";
 
 /**
  * Shared layout options (nav title, links) consumed by both the docs layout
  * and any future home/landing layout.
  *
- * The nav title is the Oxagen brand lockup: the nebula-gradient ring logomark +
- * the "Oxagen" wordmark in Aeonik Fono, with a muted "Docs" qualifier.
+ * The nav title is the Oxagen WORDMARK plus a muted "Docs" qualifier. The Ox
+ * lettermark is deliberately not placed beside it: Oxagen's logo is the
+ * wordmark, and mark-then-word is the lockup the brand system does not use.
  */
 export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
       title: (
         <span className="inline-flex items-center gap-2">
-          <OxagenIcon className="size-5" />
-          <span className="ox-wordmark text-lg text-foreground">Oxagen</span>
+          <OxagenWordmark className="h-5" />
           <span className="text-sm font-medium text-muted-foreground">
             Docs
           </span>

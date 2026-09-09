@@ -50,11 +50,11 @@ export function RouteTransitionLoader() {
         <span className={styles.cssSpinner} aria-hidden="true" />
       ) : (
         <Image
-          src="/spinner/oxagen-spinner-assemble.svg"
+          src="/spinner/oxagen-spinner.svg"
           alt=""
           width={72}
           height={72}
-          className={styles.spinnerDark}
+          className={styles.spinner}
           aria-hidden="true"
           onError={() => setImgFailed(true)}
         />

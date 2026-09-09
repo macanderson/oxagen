@@ -22,18 +22,18 @@ export function IllustrationGovernance({ className }: { className?: string }) {
       </title>
       <defs>
         <linearGradient id="ill-governance-g1" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0" stopColor="var(--_ember-c, #F7D96B)" />
-          <stop offset="1" stopColor="var(--_ember-a, #725A00)" />
+          <stop offset="0" stopColor="var(--_ember-c, #F1C364)" />
+          <stop offset="1" stopColor="var(--_ember-a, #8B5E1A)" />
         </linearGradient>
         <radialGradient id="ill-governance-glow">
           <stop
             offset="0"
-            stopColor="var(--_ember-b, #EFC53F)"
+            stopColor="var(--_ember-b, #D6962C)"
             stopOpacity={0.8}
           />
           <stop
             offset="1"
-            stopColor="var(--_ember-b, #EFC53F)"
+            stopColor="var(--_ember-b, #D6962C)"
             stopOpacity={0}
           />
         </radialGradient>
