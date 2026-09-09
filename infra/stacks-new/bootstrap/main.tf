@@ -3,11 +3,19 @@
  * table for locking. Every other stack under `stacks-new/` depends on this
  * one having been applied first.
  *
- * Deliberately a local backend for this stack alone — it creates the bucket
- * every other stack's remote state lives in, so it cannot depend on that
- * bucket existing yet. State for `stacks-new/bootstrap` itself stays on disk;
- * it changes only when this account's backend infrastructure changes, which
- * is close to never.
+ * Its own state lives in that same bucket, under `platform/bootstrap/`, like
+ * every other stack's. The bucket cannot exist before the first apply of the
+ * stack that creates it, and that is the only apply for which it matters:
+ * once the bucket exists the stack can keep its state there. State kept on
+ * one machine instead meant CI read an empty state, planned to create the
+ * bucket and the lock table a second time, and failed every apply.
+ *
+ * ## Recreating the backend from nothing
+ *
+ * If the account is ever rebuilt: comment out the `backend "s3"` block
+ * below, `tofu init` and `tofu apply` with the local backend the block's
+ * absence gives you, then put the block back and run `tofu init
+ * -migrate-state` to move the state into the bucket it just created.
  *
  * New account, new bucket: the old account's `oxagen-tfstate-578673726240`
  * stays exactly as it is and is not touched by anything under `stacks-new/`.
@@ -24,6 +32,14 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+  }
+
+  backend "s3" {
+    bucket         = "oxagen-tfstate-916294258235"
+    key            = "platform/bootstrap/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "oxagen-tflock"
+    encrypt        = true
   }
 }
 
