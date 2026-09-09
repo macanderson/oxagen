@@ -87,9 +87,21 @@ resource "aws_rds_cluster" "postgres" {
 
   enabled_cloudwatch_logs_exports = ["postgresql"]
 
-  # No customers yet, so no final snapshot to preserve on a deliberate
-  # teardown. Revisit before this cluster carries anything worth keeping.
-  skip_final_snapshot = true
+  # This said "no customers yet, so no final snapshot to preserve on a
+  # deliberate teardown — revisit before this cluster carries anything worth
+  # keeping." It carries the platform's 88 Atlas migrations and every row
+  # behind them, so that revisit is overdue.
+  #
+  # A destroy here is not recoverable by any backup policy above: the 35-day
+  # continuous backup is deleted with the cluster it belongs to. The final
+  # snapshot is what outlives it.
+  skip_final_snapshot       = false
+  final_snapshot_identifier = "oxagen-postgres-final"
+
+  # AWS-side, and the one of these three that a console click or a stray
+  # `aws rds delete-db-cluster` also has to get past. Turning it off is its
+  # own apply, which is the pause this is for.
+  deletion_protection = true
 
   serverlessv2_scaling_configuration {
     min_capacity = 0
@@ -97,6 +109,21 @@ resource "aws_rds_cluster" "postgres" {
   }
 
   tags = { Brand = local.brand }
+
+  # Terraform-side, and deliberately redundant with the two above. They guard
+  # different things: this one refuses to *plan* a destroy, so the failure
+  # arrives while someone is still reading a diff, rather than after
+  # `-auto-approve` has already run.
+  #
+  # That distinction is not theoretical here. `.github/workflows/infra.yml`
+  # applies `main` with `-auto-approve` and no required reviewer, so the
+  # window between "a config edit removes this cluster" and "the cluster is
+  # gone" is one merge. On 2026-09-08 a merge in exactly that shape replaced
+  # the app node and took production down for two hours; the same shape
+  # pointed here deletes the database instead.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_rds_cluster_instance" "postgres" {
