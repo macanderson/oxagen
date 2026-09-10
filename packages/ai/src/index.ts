@@ -167,3 +167,10 @@ export type {
   CredentialProbeResult,
   ProbeModelCredentialArgs,
 } from "./credential-probe";
+
+// The ledger reason a caller must pass alongside `fundedBy`. Re-exported from
+// @oxagen/billing so a package that calls `generateObjectFor` needs one import
+// rather than a second dependency edge — @oxagen/engram takes @oxagen/ai and
+// nothing else, and the reason is not a good enough reason to widen that.
+export { CREDIT_REASONS } from "@oxagen/billing";
+export type { CreditReason } from "@oxagen/billing";

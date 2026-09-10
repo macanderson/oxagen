@@ -13,7 +13,15 @@ const { generateObjectFor, selectModel } = vi.hoisted(() => ({
   generateObjectFor: vi.fn(),
   selectModel: vi.fn(() => ({ modelId: "test/fast" })),
 }));
-vi.mock("@oxagen/ai", () => ({ generateObjectFor, selectModel }));
+vi.mock("@oxagen/ai", () => ({
+  generateObjectFor,
+  selectModel,
+  // distill reads a ledger reason off this. A partial factory returns undefined
+  // for what it omits, and the property read then throws inside distill's try —
+  // which its catch turns into a silent fall back to the heuristic, so every LLM
+  // assertion below fails on a spy that was never called.
+  CREDIT_REASONS: { CONSUME_ASSISTANT_TOKENS: "consume_assistant_tokens" },
+}));
 
 // Import after the mock is registered.
 import {
@@ -51,6 +59,9 @@ const TELEMETRY = {
     surface: "ingestion" as const,
     messageId: null,
   },
+  // The caller resolves funding at its request boundary and hands it down
+  // (ADR-053 §3); these fixtures exercise the platform-funded path.
+  fundedBy: "platform" as const,
 };
 
 const cluster = [
