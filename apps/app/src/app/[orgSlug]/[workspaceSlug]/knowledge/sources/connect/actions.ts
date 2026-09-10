@@ -42,6 +42,7 @@ import {
   resolveOrg,
   resolveWorkspace,
   assertOrgMember,
+  assertWorkspaceMember,
   getOrgRole,
 } from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
@@ -125,6 +126,9 @@ async function resolveScope(orgSlug: string, workspaceSlug: string) {
   const ws = await resolveWorkspace(org.id, workspaceSlug);
   // IDOR guard: caller must be an org member before anything else runs.
   await assertOrgMember(org.id, session.user.id);
+  // And a member of THIS workspace: a server action is a direct POST, so the
+  // workspace layout's assertWorkspaceMember never runs.
+  await assertWorkspaceMember(ws.id, session.user.id);
   return { session, org, ws };
 }
 

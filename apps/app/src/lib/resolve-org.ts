@@ -354,6 +354,15 @@ export const assertOrgMember = cache(
   },
 );
 
+// Every role Set below is lowercase, and every read that compares against one
+// lowercases first. `org_users.role` is written in BOTH casings today — the
+// lowercase membership role by org.create and the invite-accept path, TitleCase
+// by workspace.invite.send's mapRole() and org.member.role.change, which writes
+// the IAM role NAME. The column's CHECK is `lower(role) IN (...)`, so both are
+// valid rows; comparing case-sensitively meant that promoting a member through
+// the governed capability locked them out of billing, plugin governance, the
+// audit export and the org privacy export.
+
 /** Roles permitted to manage plugins (MCP servers, integrations, content tools). */
 const MCP_MANAGER_ROLES = new Set(["owner", "admin"]);
 
@@ -377,7 +386,7 @@ export const assertMcpManager = cache(
         )
         .limit(1),
     );
-    const role = rows[0]?.role;
+    const role = rows[0]?.role?.toLowerCase();
     if (!role || !MCP_MANAGER_ROLES.has(role)) {
       notFound();
     }
@@ -417,7 +426,7 @@ export const assertBillingManager = cache(
         )
         .limit(1),
     );
-    const role = rows[0]?.role;
+    const role = rows[0]?.role?.toLowerCase();
     if (!role || !BILLING_MANAGER_ROLES.has(role)) {
       notFound();
     }
@@ -443,7 +452,7 @@ const ORG_ADMIN_ROLES = new Set(["owner", "admin"]);
  */
 export const assertOrgAdmin = cache(
   async (orgId: string, userId: string): Promise<void> => {
-    const role = await getOrgRole(orgId, userId);
+    const role = (await getOrgRole(orgId, userId))?.toLowerCase();
     if (!role || !ORG_ADMIN_ROLES.has(role)) {
       notFound();
     }
@@ -563,7 +572,7 @@ export const getOrgRole = cache(
  */
 export const assertSecurityManager = cache(
   async (orgId: string, userId: string): Promise<void> => {
-    const role = await getOrgRole(orgId, userId);
+    const role = (await getOrgRole(orgId, userId))?.toLowerCase();
     if (!role || !SECURITY_MANAGER_ROLES.has(role)) {
       notFound();
     }

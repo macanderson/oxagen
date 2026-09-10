@@ -24,12 +24,14 @@ const {
   mockResolveOrg,
   mockResolveWorkspace,
   mockAssertOrgMember,
+  mockAssertWorkspaceMember,
   mockInvoke,
 } = vi.hoisted(() => ({
   mockGetSessionOrRedirect: vi.fn(),
   mockResolveOrg: vi.fn(),
   mockResolveWorkspace: vi.fn(),
   mockAssertOrgMember: vi.fn(),
+  mockAssertWorkspaceMember: vi.fn(),
   mockInvoke: vi.fn(),
 }));
 
@@ -42,6 +44,7 @@ vi.mock("@/lib/resolve-org", () => ({
   getOrgRole: vi.fn().mockResolvedValue("owner"),
   resolveWorkspace: mockResolveWorkspace,
   assertOrgMember: mockAssertOrgMember,
+  assertWorkspaceMember: mockAssertWorkspaceMember,
 }));
 
 vi.mock("@oxagen/oxagen", () => ({
@@ -81,6 +84,7 @@ describe("updateModelSettingsAction", () => {
     mockResolveOrg.mockResolvedValue(mockOrg);
     mockResolveWorkspace.mockResolvedValue(mockWorkspace);
     mockAssertOrgMember.mockResolvedValue(undefined);
+    mockAssertWorkspaceMember.mockResolvedValue(undefined);
     mockInvoke.mockResolvedValue({
       defaultTextTier: "balanced",
       defaultTextModel: "claude-3-sonnet",

@@ -61,11 +61,14 @@ export const privacyDataEraseHandler: CapabilityHandler<
         )
         .limit(1),
     );
-    // org_users.role stores the lowercase membership role ("owner" | "admin" |
-    // "member" — see seed.ts / organization.create.ts / the invite contract enum).
-    // Compare against the lowercase value, NOT the capitalized SystemOrgRole
-    // ("Owner") used by the IAM defaultRoles layer — those are different concepts.
-    const role = membership[0]?.role;
+    // org_users.role holds the membership role, NOT the capitalized
+    // SystemOrgRole ("Owner") the IAM defaultRoles layer uses — those are
+    // different concepts. It is written in both casings, though: lowercase by
+    // organization.create and the invite-accept path, TitleCase by
+    // workspace.invite.send's mapRole() and org.member.role.change. The column's
+    // CHECK is `lower(role) IN (...)`, so both are valid rows and a
+    // case-sensitive compare would deny a legitimately promoted owner.
+    const role = membership[0]?.role?.toLowerCase();
     if (role !== "owner") {
       throw new Error("Forbidden: org erasure requires owner role");
     }
