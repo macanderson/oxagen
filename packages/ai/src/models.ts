@@ -1,8 +1,8 @@
-import { gateway } from "@ai-sdk/gateway";
+import { createGateway, gateway } from "@ai-sdk/gateway";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { wrapLanguageModel } from "ai";
 import type { LanguageModel } from "ai";
-import type { LanguageModelV4 } from "@ai-sdk/provider";
+import type { EmbeddingModelV4, LanguageModelV4 } from "@ai-sdk/provider";
 import { requireEnv } from "@oxagen/config/env";
 import type { ResolvedTierCatalog } from "./catalog";
 
@@ -76,6 +76,19 @@ export function modelIdOf(model: LanguageModel): string {
   return typeof model === "string" ? model : model.modelId;
 }
 
+/**
+ * A customer's own model-vendor key (ADR-053 §2), resolved per organisation by
+ * `resolveModelFundingSource` and handed here so the provider client is built
+ * on it instead of on the process environment. `digest` is the client cache
+ * key: a rotated key produces a new digest, so the client built on the old key
+ * is dropped rather than reused. Never log the key.
+ */
+export interface ModelCredential {
+  provider: "openrouter" | "gateway";
+  apiKey: string;
+  digest: string;
+}
+
 export interface ModelSelector {
   /**
    * Explicit Vercel AI Gateway model id in `creator/model` form, e.g.
@@ -85,6 +98,12 @@ export interface ModelSelector {
   model?: string;
   /** White-labeled tier; resolves to a gateway id from the `OXAGEN_LLM_*` env. */
   tier?: OxagenTier;
+  /**
+   * The organisation's own key. When set, the language model is built on it
+   * and the platform key is never read. When absent, the platform provider
+   * from `OXAGEN_MODEL_PROVIDER` serves the call.
+   */
+  credential?: ModelCredential;
 }
 
 const TIER_ENV_KEY = {
@@ -152,7 +171,61 @@ export function selectModel(selector: ModelSelector = {}): LanguageModel {
   ] as const);
   const modelId =
     selector.model ?? tierFromEnv(env, selector.tier ?? DEFAULT_TIER);
-  return applyDevtools(languageProvider().languageModel(modelId));
+  return applyDevtools(
+    languageProvider(selector.credential).languageModel(modelId),
+  );
+}
+
+/**
+ * Provider clients built on a customer's key, by key digest. Bounded because
+ * a client holds an HTTP agent: the map is cleared once it passes the bound,
+ * which is cheaper than an eviction policy for a table that stays small — one
+ * entry per organisation that has brought a key and prompted recently.
+ */
+const credentialClients = new Map<string, LanguageProviderClient>();
+const CREDENTIAL_CLIENT_BOUND = 256;
+
+function cachedCredentialClient(
+  credential: ModelCredential,
+  build: () => LanguageProviderClient,
+): LanguageProviderClient {
+  const key = `${credential.provider}:${credential.digest}`;
+  const hit = credentialClients.get(key);
+  if (hit) return hit;
+  if (credentialClients.size >= CREDENTIAL_CLIENT_BOUND)
+    credentialClients.clear();
+  const client = build();
+  credentialClients.set(key, client);
+  return client;
+}
+
+/** Test seam: forget every client built on a customer key. */
+export function resetCredentialClientsForTests(): void {
+  credentialClients.clear();
+}
+
+interface LanguageProviderClient {
+  languageModel: (id: string) => LanguageModelV4;
+}
+
+/**
+ * The provider that serves embeddings. The platform key's gateway by default;
+ * a customer's key only when it is a gateway key, because OpenRouter does not
+ * serve embeddings. The caller learns which one answered from the second
+ * field, so it can bill an embedding the platform paid for and not one the
+ * customer did.
+ */
+export function embeddingProvider(credential?: ModelCredential): {
+  provider: { embeddingModel: (id: string) => EmbeddingModelV4 };
+  fundedBy: "platform" | "org";
+} {
+  if (credential?.provider === "gateway") {
+    return {
+      provider: createGateway({ apiKey: credential.apiKey }),
+      fundedBy: "org",
+    };
+  }
+  return { provider: gateway, fundedBy: "platform" };
 }
 
 /**
@@ -178,9 +251,20 @@ export function selectModel(selector: ModelSelector = {}): LanguageModel {
  * env vars are for, so the id is whatever the environment says and a typo
  * fails loudly at call time.
  */
-function languageProvider(): {
-  languageModel: (id: string) => LanguageModelV4;
-} {
+function languageProvider(
+  credential?: ModelCredential,
+): LanguageProviderClient {
+  // A customer's key wins outright (ADR-053 §2): the platform provider switch
+  // below is about which key OXAGEN pays with, and it is not consulted when
+  // Oxagen is not paying. Built once per key and reused across turns.
+  if (credential) {
+    return cachedCredentialClient(credential, () =>
+      credential.provider === "gateway"
+        ? createGateway({ apiKey: credential.apiKey })
+        : openRouterClient(credential.apiKey),
+    );
+  }
+
   const { OXAGEN_MODEL_PROVIDER, OPENROUTER_API_KEY } = requireEnv([
     "OXAGEN_MODEL_PROVIDER",
     "OPENROUTER_API_KEY",
@@ -199,10 +283,15 @@ function languageProvider(): {
     );
   }
 
+  return openRouterClient(OPENROUTER_API_KEY);
+}
+
+/** The OpenRouter client, on whichever key is paying. */
+function openRouterClient(apiKey: string): LanguageProviderClient {
   return createOpenAICompatible({
     name: "openrouter",
     baseURL: "https://openrouter.ai/api/v1",
-    apiKey: OPENROUTER_API_KEY,
+    apiKey,
     // Without this, `generateObject` cannot return an object on this provider
     // at all. The SDK declines to send a JSON response format and falls back
     // to a tool call instead, whose arguments come back from Anthropic

@@ -422,6 +422,12 @@ export const orgBillingSettings = billingSchema.table(
     })
       .notNull()
       .default(sql`500`),
+    // ADR-053 §3: monthly cap on assistant tokens the PLATFORM key pays for,
+    // in credit cents. NULL is "no cap", an operator's choice and never the
+    // default. Irrelevant to an organisation on its own key.
+    assistantSpendCapCents: bigint("assistant_spend_cap_cents", {
+      mode: "bigint",
+    }).default(sql`2000`),
 
     // ── Dunning (failed-payment recovery) ───────────────────────────────────────
     // CHECK: dunning_state IN ('active','grace','suspended').

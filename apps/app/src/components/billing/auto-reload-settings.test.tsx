@@ -46,6 +46,7 @@ const settings: OrgBillingSettings = {
   autoReloadPaymentMethodId: null,
   lastAutoReloadAt: null,
   lowBalanceThresholdCents: 500,
+  assistantSpendCapCents: null,
   dunningState: "active",
   delinquentSince: null,
   graceEndsAt: null,
