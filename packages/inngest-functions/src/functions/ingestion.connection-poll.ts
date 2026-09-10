@@ -223,7 +223,7 @@ export const [ingestionConnectionPoll] = createFunction(
         await step.sendEvent(
           `emit-${b}-${i}`,
           slice.map((rec) => ({
-            name: "ingestion/entity.received" as never,
+            name: "ingestion/entity.received",
             data: {
               connectionId,
               workspaceId,

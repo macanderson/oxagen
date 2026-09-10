@@ -132,7 +132,10 @@ export const baseEnvSchema = z.object({
   MICROSOFT_DATA_CLIENT_SECRET: z.string().optional(),
 
   STRIPE_SECRET_KEY: z.string().startsWith("sk_"),
-  STRIPE_PUBLISHABLE_KEY: z.string().startsWith("pk_"),
+  // Optional, and no service reads it: the browser reads the NEXT_PUBLIC_
+  // prefixed name below. It was required at boot, so every service would have
+  // refused to start without a value nothing consumes.
+  STRIPE_PUBLISHABLE_KEY: z.string().startsWith("pk_").optional(),
   STRIPE_WEBHOOK_SECRET: z.string().startsWith("whsec_"),
   // Client-side billing components read the NEXT_PUBLIC_ prefixed
   // name; the server keeps the unprefixed key for server-only routes.
