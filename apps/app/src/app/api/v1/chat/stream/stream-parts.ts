@@ -95,10 +95,27 @@ export interface StreamErrorInfo {
  * string, a plain prose string, or an `Error` with a prose message. Whatever the
  * shape, callers get a code+message they can render as a toast instead of dumping
  * raw JSON onto the page. Always returns a non-empty `message`.
+ *
+ * A typed error thrown IN-PROCESS (BudgetExceededError, InsufficientCreditsError,
+ * TenantScopeError — every one of them a plain Error subclass carrying a stable
+ * `code`) never crosses HTTP on this path, so there is no envelope to unwrap; its
+ * code lives on the object itself. `codeOnError` recovers it, so a spend-ceiling
+ * denial reaches the toast as "budget_exceeded" rather than as an uncoded
+ * "Request failed" (#1456). An envelope code still wins when both are present:
+ * the envelope is the more specific, transport-shaped answer.
  */
 const GENERIC_STREAM_ERROR = "Something went wrong. Please try again.";
 
 export function formatStreamError(value: unknown): StreamErrorInfo {
+  // A stable `code` carried on the thrown object itself — the in-process typed
+  // errors (@oxagen/billing, @oxagen/tenancy) all expose one. Used only when the
+  // parsed shape below yields no code of its own.
+  const ownCode = codeOnError(value);
+  const withOwnCode = (info: StreamErrorInfo): StreamErrorInfo =>
+    info.code === undefined && ownCode !== undefined
+      ? { ...info, code: ownCode }
+      : info;
+
   // Unwrap an Error to its message string first — envelopes usually arrive that
   // way (a fetch failure stringifies the response body into the Error message).
   const candidate = value instanceof Error ? value.message : value;
@@ -110,17 +127,31 @@ export function formatStreamError(value: unknown): StreamErrorInfo {
   const record = toRecord(candidate);
   if (record !== null) {
     const info = infoFromRecord(record);
-    return info ?? { message: GENERIC_STREAM_ERROR };
+    return info === null
+      ? withOwnCode({ message: GENERIC_STREAM_ERROR })
+      : withOwnCode(info);
   }
 
   // Plain prose — the candidate string (or the Error's message) is the message.
   if (typeof candidate === "string" && candidate.trim().length > 0) {
-    return { message: candidate };
+    return withOwnCode({ message: candidate });
   }
   if (value instanceof Error && value.message.trim().length > 0) {
-    return { message: value.message };
+    return withOwnCode({ message: value.message });
   }
-  return { message: GENERIC_STREAM_ERROR };
+  return withOwnCode({ message: GENERIC_STREAM_ERROR });
+}
+
+/**
+ * The stable, non-blank string `code` on a thrown Error, if it carries one.
+ * Duck-typed rather than imported so this module keeps no dependency on
+ * @oxagen/billing or @oxagen/tenancy — the same reason apps/api's error
+ * middleware duck-types the billing codes it maps to 402.
+ */
+function codeOnError(value: unknown): string | undefined {
+  if (!(value instanceof Error)) return undefined;
+  const code = (value as unknown as Record<string, unknown>)["code"];
+  return typeof code === "string" && code.trim().length > 0 ? code : undefined;
 }
 
 /**
