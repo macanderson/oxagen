@@ -153,18 +153,25 @@ export async function signUpFreshUser(
     }
   }
 
-  // Navigate to the ask page. /{orgSlug}/default redirects to
-  // /{orgSlug}/default/ask (server-side 307), and the workspace shell can fire a
-  // further client redirect; under the Next dev server this races the default
-  // `waitUntil: "load"` and throws `net::ERR_ABORTED` / "interrupted by another
-  // navigation". gotoStable navigates with `waitUntil: "commit"` + retry so the
-  // commit is immune to a later redirect/abort and a cold compile is retried.
-  await gotoStable(page, `/${orgSlug}/default/ask`);
+  // Land on the workspace chat front door. This used to target
+  // /{orgSlug}/default/ask, which no longer exists as a route — proxy.ts 301s
+  // the legacy `ask` segment to `sessions` (WS_RENAMES; asserted by
+  // src/proxy.test.ts "301s legacy /ask → /sessions"), so every spec's setup
+  // was paying a redirect hop to reach the same page. Target /sessions
+  // directly. The old comment here also claimed /{orgSlug}/default 307s to
+  // /ask; it does not — that path renders the workspace Overview page.
+  //
+  // The workspace shell can still fire a client redirect after commit; under
+  // the Next dev server that races the default `waitUntil: "load"` and throws
+  // `net::ERR_ABORTED` / "interrupted by another navigation". gotoStable
+  // navigates with `waitUntil: "commit"` + retry so the commit is immune to a
+  // later redirect/abort and a cold compile is retried.
+  await gotoStable(page, `/${orgSlug}/default/sessions`);
 
   // Verify auth gate passed.
   if (page.url().includes("/login")) {
     throw new Error(
-      `signUpFreshUser: session not valid after signup (redirected to /login from /${orgSlug}/default/ask)`,
+      `signUpFreshUser: session not valid after signup (redirected to /login from /${orgSlug}/default/sessions)`,
     );
   }
 
@@ -178,11 +185,11 @@ export async function signUpFreshUser(
     if (!is404) break;
     if (attempt === 4) {
       throw new Error(
-        `signUpFreshUser: org route /${orgSlug}/default/ask still 404s after signup — org creation did not land`,
+        `signUpFreshUser: org route /${orgSlug}/default/sessions still 404s after signup — org creation did not land`,
       );
     }
     await page.waitForTimeout(2_000);
-    await gotoStable(page, `/${orgSlug}/default/ask`);
+    await gotoStable(page, `/${orgSlug}/default/sessions`);
   }
 
   return { email, password, name, orgSlug };
