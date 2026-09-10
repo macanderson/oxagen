@@ -404,3 +404,73 @@ describe("threshold constants", () => {
     expect(CONFIRM_THRESHOLD).toBe(0.92);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pass B with the embedding backend unavailable.
+//
+// Witness for the outage that emptied a whole GitHub backfill: the embedding
+// call was unguarded, so a failure aborted dedup before the node was written,
+// and nothing replays an ingestion step once its retries are spent. Every
+// record that arrived during the outage was lost. A duplicate principal is
+// recoverable; a discarded record is not.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("resolveEntity — Pass B when the embedder cannot answer", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.createAliasEdge.mockResolvedValue(undefined);
+    // Pass A misses, so Pass B is the path under test.
+    mockSessionReturning([]);
+    mocks.upsertEntityNode.mockResolvedValue({ nodeId: "new-node-id" });
+  });
+
+  it("writes the entity instead of throwing", async () => {
+    mocks.embedText.mockRejectedValue(new Error("gateway 429 rate_limit"));
+
+    const result = await resolveEntity(makeMutation(), "org-1");
+
+    expect(result.principalNodeId).toBe("new-node-id");
+    expect(result.action).toBe("created_principal");
+    expect(mocks.upsertEntityNode).toHaveBeenCalledTimes(1);
+  });
+
+  it("flags the entity as resolved without similarity matching", async () => {
+    mocks.embedText.mockRejectedValue(new Error("gateway 401 auth"));
+
+    const result = await resolveEntity(makeMutation(), "org-1");
+
+    expect(result.similarityDeferred).toBe(true);
+  });
+
+  it("does not run the vector search when there is no vector", async () => {
+    mocks.embedText.mockRejectedValue(new Error("gateway down"));
+
+    await resolveEntity(makeMutation(), "org-1");
+
+    // One session for Pass A only. A second would mean the similarity query
+    // ran with no embedding to search on.
+    expect(mocks.scopedSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("still honours a strict-mode rejection", async () => {
+    mocks.embedText.mockRejectedValue(new Error("gateway down"));
+    mocks.upsertEntityNode.mockResolvedValue({
+      nodeId: null,
+      rejected: true,
+      conformanceScore: 0.2,
+    });
+
+    const result = await resolveEntity(makeMutation(), "org-1");
+
+    expect(result.action).toBe("rejected_nonconformant");
+    expect(result.principalNodeId).toBeNull();
+    expect(result.rejected).toBe(true);
+  });
+
+  it("leaves the healthy path unflagged", async () => {
+    mocks.embedText.mockResolvedValue([0.1, 0.2, 0.3]);
+
+    const result = await resolveEntity(makeMutation(), "org-1");
+
+    expect(result.similarityDeferred).toBeUndefined();
+  });
+});

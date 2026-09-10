@@ -252,6 +252,41 @@ describe("ingestion.pipeline Inngest function", () => {
       );
     });
 
+    // Witness: the node is written at step 4, before the embed at step 5. An
+    // embedding failure that throws spends the step's retries, fails the run,
+    // and skips the change event — leaving automations blind to an entity that
+    // is in the graph. The vector is the only thing genuinely missing.
+    it("completes the run when embedding fails", async () => {
+      mocks.embedEntity.mockRejectedValueOnce(new Error("gateway 429"));
+      const sendEvent = vi.fn().mockResolvedValue(undefined);
+      const step = makeStep({ sendEvent });
+
+      const result = await capturedHandler!({
+        event: { data: BASE_EVENT },
+        step,
+      });
+
+      expect(result).toEqual({
+        naturalKey: "github:conn-abc:42",
+        action: "created_principal",
+      });
+      expect(sendEvent).toHaveBeenCalledWith(
+        "schedule-change-event",
+        expect.any(Object),
+      );
+    });
+
+    it("reports an entity that was stored but not embedded", async () => {
+      mocks.embedEntity.mockRejectedValueOnce(new Error("gateway 429"));
+
+      await capturedHandler!({ event: { data: BASE_EVENT }, step: makeStep() });
+
+      expect(mocks.loggerWarn).toHaveBeenCalledWith(
+        expect.objectContaining({ naturalKey: "github:conn-abc:42" }),
+        expect.stringContaining("stored but not embedded"),
+      );
+    });
+
     it("calls getConnector with the connectorType", async () => {
       const step = makeStep();
       await capturedHandler!({ event: { data: BASE_EVENT }, step });
@@ -422,7 +457,12 @@ describe("ingestion.pipeline Inngest function", () => {
       ).rejects.toThrow("Neo4j unavailable");
     });
 
-    it("propagates embedEntity error for retry", async () => {
+    // The embed is the one failure here that must NOT propagate. Every other
+    // step in this block runs before the node exists, so retrying them is the
+    // right answer; step 5 runs after the upsert, and failing the run there
+    // costs the change event and leaves automations blind to an entity that is
+    // already in the graph. Only the vector is missing.
+    it("does not propagate an embedEntity error", async () => {
       mocks.getConnector.mockReturnValue({ normalizeRecord: () => NORMALIZED });
       mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
         fn({
@@ -438,7 +478,7 @@ describe("ingestion.pipeline Inngest function", () => {
       const step = makeStep();
       await expect(
         capturedHandler!({ event: { data: BASE_EVENT }, step }),
-      ).rejects.toThrow("AI Gateway timeout");
+      ).resolves.toMatchObject({ action: "created_principal" });
     });
   });
 
